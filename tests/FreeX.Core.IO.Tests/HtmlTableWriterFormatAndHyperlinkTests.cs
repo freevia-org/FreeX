@@ -95,4 +95,67 @@ public sealed class HtmlTableWriterFormatAndHyperlinkTests
         html.Should().Contain(">Plain<");
         html.Should().NotContain("<a href=");
     }
+
+    // R175 F2 (HtmlTableWriter half): AppendBorder read border.Color directly, unlike the
+    // ResolveFontColor/ResolveFillColor calls a few lines above it in the same BuildCss method, so a
+    // border set via the ribbon's Theme Colors picker saved to .html/.mht with the color baked in at
+    // load time instead of the CURRENT workbook theme. Exercises the real Save (HtmlFileAdapter) call
+    // site so both the writer and its production caller are covered, not just the private helper.
+    [Fact]
+    public void Save_ThemeColoredBorder_UsesCurrentThemeColor_NotTheColorBakedAtLoadTime()
+    {
+        var wb = new Workbook("Untitled");
+        var sheet = wb.AddSheet("Sheet1");
+
+        var oldTheme = WorkbookTheme.Office;
+        var staleBakedColor = oldTheme.GetColor(WorkbookThemeColorSlot.Accent1);
+        var newTheme = oldTheme.WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(200, 20, 20));
+        wb.Theme = newTheme;
+
+        var border = new CellBorder(
+            BorderStyle.Thick,
+            staleBakedColor,
+            new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1));
+        var style = new CellStyle { BorderTop = border };
+        var styleId = wb.RegisterStyle(style);
+        var cell = Cell.FromValue(new TextValue("x"));
+        cell.StyleId = styleId;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), cell);
+
+        var expected = border.ResolveColor(newTheme);
+        expected.Should().NotBe(staleBakedColor, "the test theme swap must actually change Accent1");
+        var expectedHex = $"#{expected.R:X2}{expected.G:X2}{expected.B:X2}";
+        var staleHex = $"#{staleBakedColor.R:X2}{staleBakedColor.G:X2}{staleBakedColor.B:X2}";
+
+        var html = SaveToString(wb);
+
+        html.Should().Contain($"border-top:3px solid {expectedHex};",
+            "the exported border must follow the CURRENT theme's Accent1, not the color baked in at load time");
+        html.Should().NotContain(staleHex,
+            "the exported border must not still show the stale load-time color after the theme changed");
+    }
+
+    [Fact]
+    public void Save_ExplicitRgbBorder_StillExportsItsOwnColor_NoRegression()
+    {
+        // Sibling/no-regression case: a border with NO ThemeColor (a plain RGB swatch, not a Theme
+        // Color) must keep exporting its own authored color regardless of the workbook theme.
+        var wb = new Workbook("Untitled");
+        var sheet = wb.AddSheet("Sheet1");
+
+        var explicitColor = new CellColor(10, 200, 30);
+        wb.Theme = wb.Theme.WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(200, 20, 20));
+
+        var border = new CellBorder(BorderStyle.Thick, explicitColor, ThemeColor: null);
+        var style = new CellStyle { BorderTop = border };
+        var styleId = wb.RegisterStyle(style);
+        var cell = Cell.FromValue(new TextValue("x"));
+        cell.StyleId = styleId;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), cell);
+
+        var html = SaveToString(wb);
+
+        html.Should().Contain("border-top:3px solid #0AC81E;",
+            "an explicit-RGB border must keep exporting its own authored color regardless of the workbook theme");
+    }
 }

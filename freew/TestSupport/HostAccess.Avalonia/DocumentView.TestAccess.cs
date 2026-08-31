@@ -278,6 +278,12 @@ public sealed partial class DocumentView
 
     internal Rect? CaretRectForTest => TryGetCaretRect(out var rect) ? rect : null;
 
+    /// <summary>Insertion-point caret rect for the active shape-text edit, or null when not editing shape text
+    /// or the caret has no matching layout stop -- mirrors <see cref="CaretRectForTest"/>/<see cref="HfCaretRectForTest"/>
+    /// for the shape-text caret painted by DrawFloatingShape.</summary>
+    internal Rect? ShapeCaretRectForTest =>
+        TryGetActiveShapeCaretStop(out var stop) ? new Rect(stop.X, stop.Y, 1.5, stop.Height) : null;
+
     internal double HorizontalPageExtentForTest =>
         _surfacePlan.UsesProjectedPageFlow
             ? _surfacePlan.ScrollableWidthForPages(_pageCount)

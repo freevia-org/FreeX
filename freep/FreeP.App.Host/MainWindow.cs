@@ -4247,8 +4247,8 @@ public sealed partial class MainWindow : Window,
     private bool FileNew() => RunFileCommand(_fileSession.NewAsync());
     private bool FileOpen() => RunFileCommand(_fileSession.OpenAsync());
     private bool FileOpenPath(string path) => RunFileCommand(_fileSession.OpenPathAsync(path));
-    private bool FileSave() => RunFileCommand(_fileSession.SaveAsync());
-    private bool FileSaveAs() => RunFileCommand(_fileSession.SaveAsAsync());
+    private bool FileSave() => RecordSavePointIfSucceeded(RunFileCommand(_fileSession.SaveAsync()));
+    private bool FileSaveAs() => RecordSavePointIfSucceeded(RunFileCommand(_fileSession.SaveAsAsync()));
     private bool FileExportPdf() => RunFileCommand(_fileSession.ExportPdfAsync());
     private bool FileExportNotesPagePdf() => RunFileCommand(_fileSession.ExportNotesPagePdfAsync());
     private bool FileExportImages() => RunFileCommand(_fileSession.ExportImagesAsync());
@@ -4257,6 +4257,18 @@ public sealed partial class MainWindow : Window,
 
     private static bool RunFileCommand(Task<PresentationFileCommandResult> command) =>
         command.GetAwaiter().GetResult().Succeeded;
+
+    /// <summary>
+    /// R175-shared-undo-across-save-F2: Save/Save As completing successfully is exactly the moment
+    /// FreeX's WorkbookSession.RecordUndoSavePoint captures -- see
+    /// PresentationWorkareaSession.NotifySaved for what this records and why.
+    /// </summary>
+    private bool RecordSavePointIfSucceeded(bool succeeded)
+    {
+        if (succeeded)
+            _workareaSession.NotifySaved();
+        return succeeded;
+    }
 
     private static bool RunOptionalFileCommand(Task<PresentationFileCommandResult?> command) =>
         command.GetAwaiter().GetResult()?.Succeeded == true;

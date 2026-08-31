@@ -42,6 +42,14 @@ public sealed class PresentationFileLifecycleAdapter : IPresentationFileLifecycl
     public void MarkSavedWithPath(string path, bool suppressRecentFiles) =>
         _workflow.MarkSavedWithPath(path, suppressRecentFiles);
 
+    /// <summary>See <see cref="FileCommandWorkflow.MarkSavedAtUndoDepth"/>.</summary>
+    public void MarkSavedAtUndoDepth(int undoDepthAtSave, long undoStackVersionAtSave) =>
+        _workflow.MarkSavedAtUndoDepth(undoDepthAtSave, undoStackVersionAtSave);
+
+    /// <summary>See <see cref="FileCommandWorkflow.TryMarkCleanIfAtSavePoint"/>.</summary>
+    public bool TryMarkCleanIfAtSavePoint(int currentUndoDepth, long currentUndoStackVersion) =>
+        _workflow.TryMarkCleanIfAtSavePoint(currentUndoDepth, currentUndoStackVersion);
+
     public Task<bool> NewAsync(string action, Func<Task> loadNewPresentationAsync) =>
         _newAsync(action, loadNewPresentationAsync);
 

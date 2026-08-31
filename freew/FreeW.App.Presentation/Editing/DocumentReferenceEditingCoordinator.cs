@@ -1303,32 +1303,46 @@ public sealed class DocumentReferenceEditingCoordinator
 
         if (document.Blocks.Any(TableOfFigures.IsTableOfFiguresParagraph))
         {
-            var labelText = TableOfFigures.ExistingLabelText(document) ?? Captions.FigureLabelText;
-            TableOfFigures.EnsureStyles(document, labelText);
-            // Mirror RefreshGeneratedRegion's own insert-index choice so the rebuilt entries' tab stop is
-            // sized from the section the existing region actually lives in.
-            var figuresInsertIndex = FirstIndexOrFallback(
-                document,
-                block => TableOfFigures.IsTableOfFiguresParagraph(block, labelText),
-                document.Blocks.Count);
-            var paragraphs = figurePageTextResolverFactory is null
-                ? TableOfFigures.Build(
-                    document,
-                    labelText,
-                    BuildPageTextResolver(ResolveBlockPages(blockPageResolutionFactory)),
-                    figuresInsertIndex)
-                : TableOfFigures.BuildWithTableAddresses(
-                    document,
-                    labelText,
-                    figurePageTextResolverFactory(),
-                    figuresInsertIndex);
-            if (RefreshGeneratedRegion(
-                    block => TableOfFigures.IsTableOfFiguresParagraph(block, labelText),
-                    document.Blocks.Count,
-                    paragraphs,
-                    "Update Table of Figures").Applied)
+            // A document can hold more than one distinct-label caption table at once (e.g. a Table of
+            // Figures AND a Table of Tables), so every distinct label present must be refreshed here, not
+            // just the first one encountered -- otherwise Update Fields silently leaves every region past
+            // the first stale. ExistingLabelTexts can come back empty for a malformed/legacy region that
+            // IsTableOfFiguresParagraph still recognises (e.g. a bare entry-style paragraph with neither a
+            // native field nor a heading); fall back to the default Figure label in that case, mirroring
+            // the single-label code this replaces.
+            var labelTexts = TableOfFigures.ExistingLabelTexts(document);
+            if (labelTexts.Count == 0)
+                labelTexts = [Captions.FigureLabelText];
+
+            foreach (var labelText in labelTexts)
             {
-                refreshedCount++;
+                TableOfFigures.EnsureStyles(document, labelText);
+                // Mirror RefreshGeneratedRegion's own insert-index choice so the rebuilt entries' tab stop
+                // is sized from the section the existing region actually lives in. Recomputed fresh for
+                // each label since an earlier label's own refresh in this loop can shift block indices.
+                var figuresInsertIndex = FirstIndexOrFallback(
+                    document,
+                    block => TableOfFigures.IsTableOfFiguresParagraph(block, labelText),
+                    document.Blocks.Count);
+                var paragraphs = figurePageTextResolverFactory is null
+                    ? TableOfFigures.Build(
+                        document,
+                        labelText,
+                        BuildPageTextResolver(ResolveBlockPages(blockPageResolutionFactory)),
+                        figuresInsertIndex)
+                    : TableOfFigures.BuildWithTableAddresses(
+                        document,
+                        labelText,
+                        figurePageTextResolverFactory(),
+                        figuresInsertIndex);
+                if (RefreshGeneratedRegion(
+                        block => TableOfFigures.IsTableOfFiguresParagraph(block, labelText),
+                        document.Blocks.Count,
+                        paragraphs,
+                        "Update Table of Figures").Applied)
+                {
+                    refreshedCount++;
+                }
             }
         }
 

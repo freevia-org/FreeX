@@ -252,9 +252,26 @@ public static class TableOfFigures
 
     /// <summary>
     /// Infers the caption label from native field ownership first, then from a generated table heading,
-    /// so Update Fields preserves the user's selected label.
+    /// so Update Fields preserves the user's selected label. Returns only the FIRST label found in
+    /// document order -- when a document contains more than one distinct caption-table label (e.g. both
+    /// a "Table of Figures" and a "Table of Tables"), use <see cref="ExistingLabelTexts"/> instead so a
+    /// refresh can address every region rather than just the first one encountered.
     /// </summary>
-    public static string? ExistingLabelText(TextDocument document)
+    public static string? ExistingLabelText(TextDocument document) =>
+        EnumerateExistingLabelTexts(document).FirstOrDefault();
+
+    /// <summary>
+    /// Every distinct caption label for which <paramref name="document"/> contains a generated
+    /// table-of-figures-style region, in first-appearance document order (native field ownership first,
+    /// then plain generated headings -- mirroring <see cref="ExistingLabelText"/>'s own priority, just
+    /// without stopping at the first match). Use this to refresh/rebuild ALL of a document's caption
+    /// tables rather than only the first-encountered label's, e.g. when a document has both a Table of
+    /// Figures and a Table of Tables.
+    /// </summary>
+    public static IReadOnlyList<string> ExistingLabelTexts(TextDocument document) =>
+        EnumerateExistingLabelTexts(document).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+    private static IEnumerable<string> EnumerateExistingLabelTexts(TextDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
 
@@ -262,10 +279,17 @@ public static class TableOfFigures
         {
             if (TryGetNativeLabel(paragraph.SpanningFieldStart, out var nativeLabel)
                 || TryGetNativeLabel(paragraph.SpanningFieldOwner, out nativeLabel))
-                return nativeLabel;
+            {
+                yield return nativeLabel;
+                continue;
+            }
+
             foreach (var run in paragraph.Runs)
                 if (TryGetNativeLabel(run.ComplexField, out nativeLabel))
-                    return nativeLabel;
+                {
+                    yield return nativeLabel;
+                    break;
+                }
         }
 
         foreach (var block in document.Blocks)
@@ -278,18 +302,25 @@ public static class TableOfFigures
 
             var heading = paragraph.PlainText.Trim();
             if (string.Equals(heading, "Table of Figures", StringComparison.Ordinal))
-                return Captions.FigureLabelText;
+            {
+                yield return Captions.FigureLabelText;
+                continue;
+            }
             if (string.Equals(heading, "Table of Tables", StringComparison.Ordinal))
-                return Captions.TableLabelText;
+            {
+                yield return Captions.TableLabelText;
+                continue;
+            }
             if (string.Equals(heading, "Table of Equations", StringComparison.Ordinal))
-                return Captions.EquationLabelText;
+            {
+                yield return Captions.EquationLabelText;
+                continue;
+            }
 
             const string prefix = "Table of ";
             if (heading.StartsWith(prefix, StringComparison.Ordinal) && heading.Length > prefix.Length)
-                return SingularizeHeadingLabel(heading[prefix.Length..]);
+                yield return SingularizeHeadingLabel(heading[prefix.Length..]);
         }
-
-        return null;
     }
 
     /// <summary>

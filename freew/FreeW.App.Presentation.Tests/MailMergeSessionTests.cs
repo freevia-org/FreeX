@@ -182,4 +182,42 @@ public sealed class MailMergeSessionTests
         wpf.Should().NotContain("MailMerge.BuildMergeFieldInstruction(trimmed)");
         avalonia.Should().NotContain("MailMerge.BuildMergeFieldInstruction(trimmed)");
     }
+
+    /// <summary>
+    /// r175 remediation. Clear() reset Data/Template/CurrentIndex/Mode/Mapping but left
+    /// HasFilteredRecipients untouched, so filtering a list to zero rows and then starting a new
+    /// normal document (Clear()) left the session claiming "filtered" for a session whose Data is
+    /// null and was never (re)loaded -- reintroducing the r174 fabricated-cause message through a
+    /// second door. Reset lives on Clear() itself (the sole model-owned mutator that nulls Data)
+    /// rather than as a second call site callers must remember, so it cannot be forgotten again.
+    /// </summary>
+    [Fact]
+    public void Clear_ResetsFilteredRecipientsMarker()
+    {
+        var session = new MailMergeSession { HasFilteredRecipients = true };
+
+        session.Clear();
+
+        session.HasFilteredRecipients.Should().BeFalse(
+            "a cleared session has no recipient list at all, so no filter can explain its emptiness");
+    }
+
+    /// <summary>
+    /// Sibling path: Load() is the other model-owned mutator of Data (besides ApplyRecipientFilter,
+    /// which deliberately sets the marker true). It already reset the marker correctly, but only
+    /// because MailMergeSessionWorkflow.LoadRecipients repeated the reset one line after calling it
+    /// (see MailMergeSessionWorkflowTests.LoadRecipients_AfterFilteringToZero_ClearsTheFilteredMarker).
+    /// This asserts Load() now does it itself, so a caller that forgets the workflow's follow-up line
+    /// -- or a future direct caller of Load() -- can no longer resurrect the bug.
+    /// </summary>
+    [Fact]
+    public void Load_ResetsFilteredRecipientsMarkerEvenWhenPreviouslyFiltered()
+    {
+        var session = new MailMergeSession { HasFilteredRecipients = true };
+
+        session.Load(new MergeData(["Name"], []));
+
+        session.HasFilteredRecipients.Should().BeFalse(
+            "a freshly loaded recipient list restores the full list, so any earlier filter no longer explains an empty one");
+    }
 }

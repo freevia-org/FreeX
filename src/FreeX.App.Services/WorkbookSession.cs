@@ -6077,7 +6077,14 @@ public sealed class WorkbookSession : IDisposable
         return !previous.SetEquals(_groupedSheetIds);
     }
 
-    private void RefreshSheetTabsForActiveSheet()
+    // R175: public (not private, like its many internal call sites) so a caller that mutates
+    // workbook-level state OUTSIDE the generic ExecuteReviewCommand/AffectedCells path -- e.g. a
+    // WorkbookTheme swap, which ApplySuccessfulEditResult only re-derives SheetTabs for when the
+    // edit's AffectedCells happen to land on a different sheet -- can force SheetTabs to
+    // re-resolve (each entry's TabColor now follows Sheet.ResolveTabColor against the CURRENT
+    // theme) without that unrelated side effect. Idempotent: every existing internal caller already
+    // invokes this purely to refresh the tab list, so an extra external call is always safe.
+    public void RefreshSheetTabsForActiveSheet()
     {
         SetGroupedSheetIds(_groupedSheetIds.ToArray(), ActiveSheet.Id);
         var selection = _sheetSelectionService.SelectSheet(

@@ -249,9 +249,10 @@ public static class ExcelWorksheetNavigationPlanner
     }
 
     /// <summary>
-    /// Resolves an Arrow, Enter, or Tab target on a protected sheet, skipping cells that the
-    /// workbook protection policy does not allow the user to select. Other navigation keys retain
-    /// their original target. Returns null when no selectable cell remains before the sheet edge.
+    /// Resolves an Arrow, Enter, Tab, Home, End, Page Up, or Page Down target on a protected
+    /// sheet, skipping cells that the workbook protection policy does not allow the user to
+    /// select. Other navigation keys retain their original target. Returns null when no
+    /// selectable cell remains before the sheet edge.
     /// </summary>
     public static CellAddress? ResolveProtectedSheetTarget(
         Workbook workbook,
@@ -304,6 +305,17 @@ public static class ExcelWorksheetNavigationPlanner
             ExcelWorksheetNavigationKey.Right => (0, 1),
             ExcelWorksheetNavigationKey.Enter => shiftHeld ? (-1, 0) : (1, 0),
             ExcelWorksheetNavigationKey.Tab => shiftHeld ? (0, -1) : (0, 1),
+            // Home/Ctrl+Home land at the leftmost (and, with Ctrl, topmost) reachable cell, so a
+            // locked landing cell is skipped by continuing rightward -- away from the left edge
+            // the jump aimed for and back toward the rest of the row -- mirroring how Right
+            // already skips a locked cell in that same direction.
+            ExcelWorksheetNavigationKey.Home => (0, 1),
+            // Ctrl+End (the only End variant reaching protected navigation -- plain End only
+            // arms sticky End-mode) lands at the bottom-right of the used range, so a locked
+            // landing cell is skipped by continuing leftward, the mirror image of Home.
+            ExcelWorksheetNavigationKey.End => (0, -1),
+            ExcelWorksheetNavigationKey.PageUp => (-1, 0),
+            ExcelWorksheetNavigationKey.PageDown => (1, 0),
             _ => null
         };
 

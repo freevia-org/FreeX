@@ -61,7 +61,29 @@ public sealed class DuplicateSheetsCommand : IWorkbookCommand, IWholeWorkbookRec
         var appliedDuplicates = new List<DuplicateSheetCommand>(_duplicates.Count);
         foreach (var duplicate in _duplicates)
         {
-            var outcome = duplicate.Apply(ctx);
+            CommandOutcome outcome;
+            try
+            {
+                outcome = duplicate.Apply(ctx);
+            }
+            catch (Exception ex)
+            {
+                // R175-auditB-F1: duplicate can throw PARTWAY through its own multi-step sheet-copy
+                // mutation (cell/style/drawing/table cloning) rather than merely returning a failed
+                // CommandOutcome. This is worse than the ordinary rollback-family gap elsewhere in
+                // this round: Apply has no outer try/catch of its own, so an uncaught exception here
+                // would skip the RevertDuplicates(appliedDuplicates) call below entirely -- losing
+                // every EARLIER successful duplicate too, not just this one -- and _applied is only
+                // set true at the very end of a fully successful Apply, so even the caller's
+                // best-effort Revert(ctx) would no-op on its `if (!_applied) return;` guard and never
+                // touch any of it. Mirror CompositeWorkbookCommand's fix: best-effort revert the
+                // throwing child first, then unwind every already-applied sibling here (the same
+                // order the mutations actually happened in, LIFO via RevertDuplicates), and return a
+                // failure outcome that carries the original exception rather than losing it.
+                try { duplicate.Revert(ctx); } catch { }
+                RevertDuplicates(ctx, appliedDuplicates);
+                return new CommandOutcome(false, $"{Label}: {ex.Message}");
+            }
             if (!outcome.Success)
             {
                 RevertDuplicates(ctx, appliedDuplicates);
@@ -79,7 +101,21 @@ public sealed class DuplicateSheetsCommand : IWorkbookCommand, IWholeWorkbookRec
             targetIndex = ctx.Workbook.Sheets.Count;
 
         _moveCopies ??= new MoveSheetsCommand(copyIds, targetIndex);
-        var moveOutcome = _moveCopies.Apply(ctx);
+        CommandOutcome moveOutcome;
+        try
+        {
+            moveOutcome = _moveCopies.Apply(ctx);
+        }
+        catch (Exception ex)
+        {
+            // R175-auditB-F1: same reasoning as the duplicate-loop catch above -- _moveCopies can
+            // throw partway through its own multi-step move, and since _applied is still false at
+            // this point, the caller's Revert(ctx) would otherwise no-op and leave every duplicate
+            // sheet this Apply already created permanently in the workbook.
+            try { _moveCopies.Revert(ctx); } catch { }
+            RevertDuplicates(ctx, appliedDuplicates);
+            return new CommandOutcome(false, $"{Label}: {ex.Message}");
+        }
         if (!moveOutcome.Success)
         {
             RevertDuplicates(ctx, appliedDuplicates);

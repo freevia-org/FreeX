@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using Free.Shared.Shell;
@@ -116,9 +117,14 @@ public sealed partial class SlidePane : Border
         _list.HorizontalContentAlignment = isSlideSorter
             ? HorizontalAlignment.Left
             : HorizontalAlignment.Stretch;
-        ScrollViewer.SetHorizontalScrollBarVisibility(
-            _list,
-            isSlideSorter ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled);
+        // Always Disabled (not Auto for Slide Sorter): a plain WrapPanel does not implement
+        // IScrollInfo, so when a ScrollViewer's horizontal scrolling is anything but Disabled it
+        // measures the WrapPanel's content with an unconstrained (PositiveInfinity) width -- the
+        // panel then never wraps at all, laying every slide and section header out on one single,
+        // horizontally-scrolling line instead of the intended multi-row grid. Disabled keeps the
+        // measure width equal to the real viewport, which is what lets both normal row-wrapping and
+        // (below) the section header's full-row Width binding work at all.
+        ScrollViewer.SetHorizontalScrollBarVisibility(_list, ScrollBarVisibility.Disabled);
         _newSlideButton.HorizontalAlignment = isSlideSorter
             ? HorizontalAlignment.Left
             : HorizontalAlignment.Stretch;
@@ -310,6 +316,27 @@ public sealed partial class SlidePane : Border
             Background = Brushes.Transparent,
             BorderThickness = new Thickness(0),
         };
+        if (_isSlideSorter)
+        {
+            // The Slide Sorter's ItemsPanel is a WrapPanel, which never stretches a
+            // child to fill its line -- every item (including this header) is sized
+            // to its own DesiredSize. Without an explicit Width, a section header
+            // measures only as wide as its label text and lands as a small pill
+            // wherever it happens to fall in the wrap, instead of acting as a
+            // full-width divider between the slides of adjacent sections. Binding
+            // Width to the hosting ScrollViewer's ViewportWidth (rather than the
+            // ListBox's own ActualWidth, which includes the space reserved for a
+            // visible vertical scrollbar) makes the header exactly as wide as the
+            // area actually available to the WrapPanel, so it cannot fit on the
+            // same line as any slide thumbnail and is forced onto a full line of
+            // its own -- both before and after it.
+            item.SetBinding(
+                FrameworkElement.WidthProperty,
+                new Binding(nameof(ScrollViewer.ViewportWidth))
+                {
+                    RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(ScrollViewer), 1),
+                });
+        }
         item.MouseEnter += (_, _) => chrome.Background = hoverBackground;
         item.MouseLeave += (_, _) => chrome.Background = normalBackground;
         item.PreviewMouseLeftButtonDown += (_, e) =>
