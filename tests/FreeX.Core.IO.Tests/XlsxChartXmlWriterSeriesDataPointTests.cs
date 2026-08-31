@@ -135,6 +135,54 @@ public sealed class XlsxChartXmlWriterSeriesDataPointTests
         point.FillColor.Should().BeNull();
     }
 
+    [Fact]
+    public void ScatterChart_DenseDataPointOverrides_UseLastDuplicateFormats()
+    {
+        var workbook = new Workbook("DenseScatterPointFormats");
+        var sheet = workbook.AddSheet("Data");
+        for (uint column = 1; column <= 25; column++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, 1, column), new TextValue($"S{column}"));
+            sheet.SetCell(new CellAddress(sheet.Id, 2, column), new NumberValue(column));
+            sheet.SetCell(new CellAddress(sheet.Id, 3, column), new NumberValue(column * 10));
+        }
+
+        var pointFills = new List<ChartPointFillFormat>();
+        var pointMarkers = new List<ChartPointMarkerFormat>();
+        for (var seriesIndex = 0; seriesIndex < 24; seriesIndex++)
+        {
+            pointFills.Add(new ChartPointFillFormat(seriesIndex, 1, new CellColor(0x00, 0x80, 0x00)));
+            pointMarkers.Add(new ChartPointMarkerFormat(seriesIndex, 1, ChartMarkerStyle.Circle, MarkerSize: 5));
+        }
+
+        // The writer previously used LastOrDefault for both lists. Keep that precedence while
+        // indexing every dense override once instead of rescanning both lists for every <c:dPt>.
+        pointFills.Add(new ChartPointFillFormat(7, 1, new CellColor(0xFF, 0x00, 0x00)));
+        pointMarkers.Add(new ChartPointMarkerFormat(7, 1, ChartMarkerStyle.Square, MarkerSize: 10));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Scatter,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 25)),
+            FirstRowIsHeader = true,
+            PointFillColors = pointFills,
+            PointMarkerFormats = pointMarkers,
+        });
+
+        var chartDoc = LoadChartXml(SaveToBytes(workbook));
+        var series = chartDoc.Descendants(ChartNs + "ser").ToArray();
+        series.Should().HaveCount(24);
+        series.Should().OnlyContain(item => item.Elements(ChartNs + "dPt").Count() == 1);
+
+        var duplicateSeries = series.Single(item => item.Element(ChartNs + "idx")!.Attribute("val")!.Value == "7");
+        var duplicatePoint = duplicateSeries.Element(ChartNs + "dPt")!;
+        duplicatePoint.Element(ChartNs + "spPr")!.Element(DrawingNs + "solidFill")!
+            .Element(DrawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("FF0000");
+        duplicatePoint.Element(ChartNs + "marker")!.Element(ChartNs + "symbol")!
+            .Attribute("val")!.Value.Should().Be("square");
+        duplicatePoint.Element(ChartNs + "marker")!.Element(ChartNs + "size")!
+            .Attribute("val")!.Value.Should().Be("10");
+    }
+
     private static byte[] SaveToBytes(Workbook workbook)
     {
         using var stream = new MemoryStream();
