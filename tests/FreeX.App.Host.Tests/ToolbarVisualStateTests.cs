@@ -30,6 +30,15 @@ public sealed class ToolbarVisualStateTests
             HorizontalAlignment: HorizontalAlignment.General,
             WrapText: true,
             FontName: "Aptos",
-            FontSizeText: "11"));
+            FontSizeText: "11",
+            NumberFormatText: "General"));
+    }
+
+    [Fact]
+    public void From_CapturesBuiltInPercentageFormatForHomeSelector()
+    {
+        var state = ToolbarVisualState.From(new CellStyle { NumberFormat = "0%" });
+
+        state.NumberFormatText.Should().Be("0%");
     }
 }

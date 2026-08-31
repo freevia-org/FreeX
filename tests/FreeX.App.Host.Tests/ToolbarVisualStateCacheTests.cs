@@ -28,7 +28,8 @@ public sealed class ToolbarVisualStateCacheTests
             HorizontalAlignment: HorizontalAlignment.General,
             WrapText: false,
             FontName: "Calibri",
-            FontSizeText: "11"));
+            FontSizeText: "11",
+            NumberFormatText: "General"));
         return;
 
         ToolbarVisualState CreateState()

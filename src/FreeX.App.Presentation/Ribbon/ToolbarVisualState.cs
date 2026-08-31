@@ -13,7 +13,8 @@ public sealed record ToolbarVisualState(
     CellHAlign HorizontalAlignment,
     bool WrapText,
     string FontName,
-    string FontSizeText)
+    string FontSizeText,
+    string NumberFormatText)
 {
     public static ToolbarVisualState From(CellStyle style) =>
         new(
@@ -25,5 +26,6 @@ public sealed record ToolbarVisualState(
             style.HorizontalAlignment,
             style.WrapText,
             style.FontName,
-            style.FontSize.ToString("0.#"));
+            style.FontSize.ToString("0.#"),
+            style.NumberFormat);
 }
