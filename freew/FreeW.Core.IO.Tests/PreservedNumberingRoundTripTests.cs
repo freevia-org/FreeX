@@ -49,6 +49,21 @@ public class PreservedNumberingRoundTripTests
         return zip.GetEntry(entryPath) is not null;
     }
 
+    private static Dictionary<string, byte[]> PackageContents(byte[] docx)
+    {
+        using var zip = new ZipArchive(new MemoryStream(docx), ZipArchiveMode.Read);
+        return zip.Entries.ToDictionary(
+            entry => entry.FullName,
+            entry =>
+            {
+                using var stream = entry.Open();
+                using var buffer = new MemoryStream();
+                stream.CopyTo(buffer);
+                return buffer.ToArray();
+            },
+            StringComparer.Ordinal);
+    }
+
     /// <summary>
     /// Hand-authors a minimal-but-valid docx package whose two body paragraphs reference a numbering definition
     /// (numId 12) that FreeW's reader does NOT map to one of its own list kinds — its w:num points at an abstract
@@ -303,7 +318,7 @@ public class PreservedNumberingRoundTripTests
     [Fact]
     public void FreeWAuthoredStyles_NoNumbering_RoundTripUnchanged_NoPreservedNumbering()
     {
-        // A FreeW-authored-styles document with no style-level numbering must be byte-equivalent to before:
+        // A FreeW-authored-styles document with no style-level numbering must preserve every package part:
         // the styles carry no w:numPr, NO numbering part is emitted, and the plan stays null.
         var doc = new TextDocument();
         doc.Styles["Heading1"] = new DocumentStyle
@@ -322,12 +337,12 @@ public class PreservedNumberingRoundTripTests
             .Single(s => s.Attribute(W + "styleId")!.Value == "Heading1");
         styleEl.Descendants(W + "numPr").Should().BeEmpty();
 
-        // Byte-equivalence: read back and re-write yields the identical package (the plan stays null because
-        // no style/paragraph carries preserved numbering).
+        // Content-equivalence: read back and re-write yields identical entries. Compare the entry payloads
+        // rather than raw ZIP bytes because ZIP headers contain wall-clock timestamps.
         var read = ReadDoc(first);
         read.Styles["Heading1"].PreservedNumbering.Should().BeNull();
         var second = WriteBytes(read);
-        second.Should().Equal(first);
+        PackageContents(second).Should().BeEquivalentTo(PackageContents(first));
     }
 
     // --- Preserve-alongside: foreign numbering survives ---------------------------------------------
