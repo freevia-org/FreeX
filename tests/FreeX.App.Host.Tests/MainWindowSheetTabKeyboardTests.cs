@@ -660,6 +660,8 @@ public sealed class MainWindowSheetTabKeyboardTests
         source.Should().Contain("SheetTabContextMenuAction.Unhide => SheetCtxUnhide_Click,");
         source.Should().Contain("SheetTabContextMenuAction.SelectAllSheets => SheetCtxSelectAllSheets_Click,");
         source.Should().Contain("SheetTabContextMenuAction.UngroupSheets => SheetCtxUngroupSheets_Click,");
+        source.Should().Contain("SheetTabContextMenuAction.LinkToThisSheet => SheetCtxLinkToThisSheet_Click,");
+        source.Should().Contain("SheetTabLinkFormatter.BuildClipboardText(tab.Name)");
 
         static string Slice(string text, string startMarker, string endMarker)
         {

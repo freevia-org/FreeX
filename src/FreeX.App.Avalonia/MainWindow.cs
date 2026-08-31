@@ -4650,6 +4650,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (commonCommands.TryGetValue(SheetTabContextMenuAction.UngroupSheets, out var ungroup))
             yield return CreateSheetTabContextMenuItem(tab, UiText.Get(ungroup.ResourceKey), UngroupSheets, isIdle);
         yield return new Separator();
+        yield return CreateSheetTabContextMenuItem(
+            tab,
+            Header(SheetTabContextMenuAction.LinkToThisSheet),
+            async () => await CopySheetTabLinkToClipboardAsync(tab),
+            Enabled(SheetTabContextMenuAction.LinkToThisSheet));
+        yield return new Separator();
         yield return CreateSheetTabContextMenuItem(tab, UiText.Get("MainWindow_Header_MoveLeft"), MoveActiveSheetLeft, isIdle && sheetTabIndex > 0);
         yield return CreateSheetTabContextMenuItem(
             tab,

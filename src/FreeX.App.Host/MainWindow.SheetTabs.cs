@@ -1690,8 +1690,41 @@ public partial class MainWindow
             SheetTabContextMenuAction.Unhide => SheetCtxUnhide_Click,
             SheetTabContextMenuAction.SelectAllSheets => SheetCtxSelectAllSheets_Click,
             SheetTabContextMenuAction.UngroupSheets => SheetCtxUngroupSheets_Click,
+            SheetTabContextMenuAction.LinkToThisSheet => SheetCtxLinkToThisSheet_Click,
             _ => null
         };
+
+    private void SheetCtxLinkToThisSheet_Click(object sender, RoutedEventArgs e)
+    {
+        var tab = GetContextMenuTab(sender);
+        if (tab is null)
+            return;
+
+        try
+        {
+            var write = _platformClipboard.WriteAsync(new PlatformClipboardContent(
+                    Text: SheetTabLinkFormatter.BuildClipboardText(tab.Name)))
+                .AsTask()
+                .GetAwaiter()
+                .GetResult();
+            if (!write.IsSuccess)
+                throw new InvalidOperationException(write.ErrorMessage);
+
+            ShowOwnedMessage(
+                UiText.Get("SheetTabContext_LinkCopied"),
+                UiText.Get("SheetTabContext_LinkToThisSheet"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            ShowOwnedMessage(
+                UiText.Format("SheetTabContext_LinkCopyFailed", ex.Message),
+                UiText.Get("SheetTabContext_LinkToThisSheet"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+    }
 
     private bool TryHandleFocusedSheetTabKeyboardNavigation(System.Windows.Input.KeyEventArgs e)
     {

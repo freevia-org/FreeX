@@ -44,7 +44,9 @@ public static class SheetTabContextMenuPlanner
             new("MainWindow_Header_SelectAllSheets", SheetTabContextMenuAction.SelectAllSheets, KeyTip: "A", CommandName: "Select All Sheets", IsEnabled: state.CanSelectAllSheets),
             .. (state.CanUngroupSheets
                 ? new[] { new SheetTabContextMenuCommand("MainWindow_Header_UngroupSheets", SheetTabContextMenuAction.UngroupSheets, KeyTip: "G", CommandName: "Ungroup Sheets") }
-                : Array.Empty<SheetTabContextMenuCommand>())
+                : Array.Empty<SheetTabContextMenuCommand>()),
+            SheetTabContextMenuCommand.Separator,
+            new("SheetTabContext_LinkToThisSheet", SheetTabContextMenuAction.LinkToThisSheet, KeyTip: "L", CommandName: "Link to this Sheet")
         ]);
     }
 
@@ -97,5 +99,6 @@ public enum SheetTabContextMenuAction
     Hide,
     Unhide,
     SelectAllSheets,
-    UngroupSheets
+    UngroupSheets,
+    LinkToThisSheet
 }

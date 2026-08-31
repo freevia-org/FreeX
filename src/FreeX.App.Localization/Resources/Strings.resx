@@ -20855,4 +20855,13 @@ and {0} more.</value>
   <data name="WorkbookPerformance_ReportHelpText" xml:space="preserve">
     <value>Reports formatting-only cells that extend worksheet used ranges. This report does not change the workbook.</value>
   </data>
+  <data name="SheetTabContext_LinkToThisSheet" xml:space="preserve">
+    <value>Link to this Sheet</value>
+  </data>
+  <data name="SheetTabContext_LinkCopied" xml:space="preserve">
+    <value>Link to this sheet copied to the clipboard.</value>
+  </data>
+  <data name="SheetTabContext_LinkCopyFailed" xml:space="preserve">
+    <value>Could not copy the sheet link: {0}</value>
+  </data>
 </root>

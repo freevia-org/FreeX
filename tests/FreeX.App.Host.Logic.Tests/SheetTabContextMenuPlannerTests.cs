@@ -28,7 +28,9 @@ public sealed class SheetTabContextMenuPlannerTests
             "Hide",
             "Unhide",
             "—",
-            "SelectAllSheets");
+            "SelectAllSheets",
+            "—",
+            "LinkToThisSheet");
     }
 
     [Fact]
@@ -48,10 +50,11 @@ public sealed class SheetTabContextMenuPlannerTests
             "MainWindow_Header_TabColor",
             "MainWindow_Header_Hide",
             "MainWindow_Header_Unhide",
-            "MainWindow_Header_SelectAllSheets");
+            "MainWindow_Header_SelectAllSheets",
+            "SheetTabContext_LinkToThisSheet");
 
         commands.Select(command => command.KeyTip).Should().Equal(
-            "I", "E", "R", "M", "V", "P", "T", "H", "U", "A");
+            "I", "E", "R", "M", "V", "P", "T", "H", "U", "A", "L");
 
         commands.Select(command => command.CommandName).Should().Equal(
             "Insert",
@@ -63,7 +66,8 @@ public sealed class SheetTabContextMenuPlannerTests
             "Tab Color",
             "Hide",
             "Unhide",
-            "Select All Sheets");
+            "Select All Sheets",
+            "Link to this Sheet");
     }
 
     [Fact]
@@ -102,7 +106,8 @@ public sealed class SheetTabContextMenuPlannerTests
             SheetTabContextMenuAction.TabColor,
             SheetTabContextMenuAction.Hide,
             SheetTabContextMenuAction.Unhide,
-            SheetTabContextMenuAction.SelectAllSheets);
+            SheetTabContextMenuAction.SelectAllSheets,
+            SheetTabContextMenuAction.LinkToThisSheet);
 
         commands.Where(command => command.Action is
                 SheetTabContextMenuAction.DeleteSheet or
@@ -117,7 +122,8 @@ public sealed class SheetTabContextMenuPlannerTests
                 SheetTabContextMenuAction.Rename or
                 SheetTabContextMenuAction.MoveOrCopy or
                 SheetTabContextMenuAction.ProtectSheet or
-                SheetTabContextMenuAction.TabColor)
+                SheetTabContextMenuAction.TabColor or
+                SheetTabContextMenuAction.LinkToThisSheet)
             .Should()
             .OnlyContain(command => command.IsEnabled);
     }
@@ -133,6 +139,15 @@ public sealed class SheetTabContextMenuPlannerTests
         SheetTabContextMenuPlanner.BuildSheetTabCommands()
             .Select(command => command.Action)
             .Should().NotContain(SheetTabContextMenuAction.UngroupSheets);
+    }
+
+    [Theory]
+    [InlineData("Sheet1", "#Sheet1!A1")]
+    [InlineData("Data Sheet", "#'Data Sheet'!A1")]
+    [InlineData("O'Brien", "#'O''Brien'!A1")]
+    public void BuildClipboardText_CreatesANavigableInternalSheetLink(string sheetName, string expected)
+    {
+        SheetTabLinkFormatter.BuildClipboardText(sheetName).Should().Be(expected);
     }
 
     [Fact]
