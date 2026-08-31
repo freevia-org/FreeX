@@ -19821,7 +19821,7 @@ public sealed partial class DocumentView : Control
         }
     }
 
-    private void Backspace()
+    internal void Backspace()
     {
         // AV-CCEDIT: deleting inside a content control is a form-field edit (see InsertText).
         if (TryBackspaceContentControlText())
@@ -25610,7 +25610,7 @@ public sealed partial class DocumentView : Control
 
     // ---- Caret movement -------------------------------------------------------------------------
 
-    private void MoveCaret(int delta, bool extend)
+    internal void MoveCaret(int delta, bool extend)
     {
         _pendingRunFmt = null; // BZ5: discard pending format on caret movement
         // AV-TBL: when caret is in a cell, navigate within the cell's paragraph, then cross to
@@ -25637,7 +25637,7 @@ public sealed partial class DocumentView : Control
     //         (Word behaviour).
     // Shift+Tab → previous cell.
     // Never inserts a literal tab character when the caret is in a table.
-    private void TabNavigateCell(bool forward)
+    internal void TabNavigateCell(bool forward)
     {
         if (_cellCaret is not { } cc)
             return;
