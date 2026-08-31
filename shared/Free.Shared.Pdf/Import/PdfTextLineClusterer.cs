@@ -95,9 +95,8 @@ public static class PdfTextLineClusterer
 
     private static double? CalculateModalFontSize(IEnumerable<PdfTextGlyphMetrics> metrics)
     {
-        var counts = new Dictionary<double, int>();
-        double? modalFontSize = null;
-        var modalCount = 0;
+        var counts = new Dictionary<double, (int Count, int FirstIndex)>();
+        var nextIndex = 0;
 
         foreach (var item in metrics)
         {
@@ -105,17 +104,22 @@ public static class PdfTextLineClusterer
                 continue;
 
             var bucket = Math.Round(item.FontSize * 2) / 2;
-            var count = counts.TryGetValue(bucket, out var currentCount)
-                ? currentCount + 1
-                : 1;
-            counts[bucket] = count;
+            counts[bucket] = counts.TryGetValue(bucket, out var current)
+                ? (current.Count + 1, current.FirstIndex)
+                : (1, nextIndex++);
+        }
 
-            // Strictly greater preserves the first bucket when frequencies tie, matching GroupBy's
-            // encounter ordering without materializing and sorting every group.
-            if (count > modalCount)
+        double? modalFontSize = null;
+        var modalCount = 0;
+        var modalFirstIndex = int.MaxValue;
+        foreach (var (bucket, frequency) in counts)
+        {
+            if (frequency.Count > modalCount ||
+                (frequency.Count == modalCount && frequency.FirstIndex < modalFirstIndex))
             {
                 modalFontSize = bucket;
-                modalCount = count;
+                modalCount = frequency.Count;
+                modalFirstIndex = frequency.FirstIndex;
             }
         }
 
