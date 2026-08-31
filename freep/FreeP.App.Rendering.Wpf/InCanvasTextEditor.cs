@@ -93,7 +93,8 @@ public sealed class InCanvasTextEditor : IDisposable
 
         var body = TextBodyFlowDocumentConverter.FromFlowDocument(
             _richBox.Document,
-            _shapeParagraphBody);
+            _shapeParagraphBody,
+            CurrentSlideIds());
         _editSession.SynchronizeBody(body);
         hyperlink = _editSession.GetSelectedRunHyperlink(
             new InCanvasEditorTextSelection(selection.Value.Start, selection.Value.End));
@@ -315,7 +316,8 @@ public sealed class InCanvasTextEditor : IDisposable
 
         var newBody = TextBodyFlowDocumentConverter.FromFlowDocument(
             doc,
-            _shapeParagraphBody);
+            _shapeParagraphBody,
+            CurrentSlideIds());
         var decision = editSession?.Commit(newBody)
             ?? new InCanvasTextEditDecision(InCanvasTextEditOutcome.Unchanged, null);
 
@@ -500,7 +502,8 @@ public sealed class InCanvasTextEditor : IDisposable
 
         var current = TextBodyFlowDocumentConverter.FromFlowDocument(
             _richBox.Document,
-            _shapeParagraphBody);
+            _shapeParagraphBody,
+            CurrentSlideIds());
         (int Start, int End)? selection = CurrentSelection();
         _editSession.SynchronizeBody(current);
         if (!mutate(_editSession, selection))

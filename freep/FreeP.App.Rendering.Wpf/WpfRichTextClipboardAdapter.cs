@@ -213,7 +213,12 @@ internal static class WpfRichTextClipboardAdapter
         if (payload is null)
             return false;
 
-        var currentBody = TextBodyFlowDocumentConverter.FromFlowDocument(box.Document, originalBody);
+        // The destination document can already carry a foreign slide jump from an earlier native
+        // WPF paste, so resolve it here too rather than letting this paste commit it along.
+        var currentBody = TextBodyFlowDocumentConverter.FromFlowDocument(
+            box.Document,
+            originalBody,
+            destinationSlideIds);
         var selection = CurrentSelection(box.Document, box.Selection);
         var body = InCanvasRichClipboardPlanner.Apply(
             currentBody,
