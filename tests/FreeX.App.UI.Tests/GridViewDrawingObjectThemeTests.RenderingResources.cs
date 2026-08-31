@@ -67,9 +67,9 @@ public sealed partial class GridViewDrawingObjectThemeTests
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.Pictures.cs");
         var renderWorksheetBackground = source[
             source.IndexOf("private void RenderWorksheetBackground", StringComparison.Ordinal)..
-            source.IndexOf("private ImageBrush GetWorksheetBackgroundBrush", StringComparison.Ordinal)];
+            source.IndexOf("internal ImageBrush GetWorksheetBackgroundBrush", StringComparison.Ordinal)];
         var getBrush = source[
-            source.IndexOf("private ImageBrush GetWorksheetBackgroundBrush", StringComparison.Ordinal)..
+            source.IndexOf("internal ImageBrush GetWorksheetBackgroundBrush", StringComparison.Ordinal)..
             source.IndexOf("private static bool TryLoadWorksheetBackgroundImage", StringComparison.Ordinal)];
 
         source.Should().Contain("private ImageBrush? _worksheetBackgroundBrushCache;");
@@ -93,10 +93,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
             var visual = new System.Windows.Media.DrawingVisual();
             using (var drawingContext = visual.RenderOpen())
             {
-                var drawCommentIndicator = typeof(GridView).GetMethod(
-                    "DrawCommentIndicator",
-                    BindingFlags.Instance | BindingFlags.NonPublic);
-                drawCommentIndicator!.Invoke(grid, [drawingContext, new Rect(30, 18, 60, 24), CellCommentDisplayKind.Note]);
+                grid.DrawCommentIndicator(drawingContext, new Rect(30, 18, 60, 24), CellCommentDisplayKind.Note);
             }
 
             var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(

@@ -16,10 +16,7 @@ public sealed class GridViewSelectionMergedSingleCellLayoutTests
     private static SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout? InvokeCalculateSelectionRangeLayout(
         GridView grid, ViewportModel viewport, GridRange range, double rowHeaderWidth, double columnHeaderHeight)
     {
-        var method = typeof(GridView).GetMethod("CalculateSelectionRangeLayout", BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        return (SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout?)method!.Invoke(
-            grid, [viewport, range, rowHeaderWidth, columnHeaderHeight]);
+        return (SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout?)grid.CalculateSelectionRangeLayout(viewport, range, rowHeaderWidth, columnHeaderHeight);
     }
 
     private static void SetMergeLookup(GridView grid, Dictionary<(uint Row, uint Col), GridRange> mergeLookup)

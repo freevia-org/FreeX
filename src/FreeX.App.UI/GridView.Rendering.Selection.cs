@@ -1239,7 +1239,7 @@ public partial class GridView
             selectionLayout.Rect.Bottom);
     }
 
-    private SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout? CalculateSelectionRangeLayout(
+    internal SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout? CalculateSelectionRangeLayout(
         ViewportModel viewport,
         GridRange range,
         double rowHeaderWidth,
@@ -1260,7 +1260,7 @@ public partial class GridView
         return CalculateVisibleSelectionLayout(viewport, range, rowHeaderWidth, columnHeaderHeight);
     }
 
-    private SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout? CalculateVisibleSingleCellSelectionLayout(
+    internal SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout? CalculateVisibleSingleCellSelectionLayout(
         ViewportModel viewport,
         GridRange range,
         double rowHeaderWidth,

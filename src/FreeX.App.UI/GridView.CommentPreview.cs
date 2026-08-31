@@ -119,7 +119,7 @@ public partial class GridView
         RefreshActiveCommentPopupPlacement();
     }
 
-    private void UpdateCommentPreviewForPointer(Point pos)
+    internal void UpdateCommentPreviewForPointer(Point pos)
     {
         if (IsInlineCommentEditorOpen())
             return;

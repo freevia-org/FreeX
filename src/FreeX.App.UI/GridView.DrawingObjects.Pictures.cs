@@ -424,7 +424,7 @@ public partial class GridView
         return (rowOffset, colOffset);
     }
 
-    private ImageBrush GetWorksheetBackgroundBrush(WorksheetBackgroundImage background, ImageSource image)
+    internal ImageBrush GetWorksheetBackgroundBrush(WorksheetBackgroundImage background, ImageSource image)
     {
         var (rowScrollOffset, colScrollOffset) = GetWorksheetBackgroundScrollOffsets();
 

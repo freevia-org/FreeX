@@ -416,7 +416,7 @@ public partial class GridView
     /// GridView.CommentPreview.cs's own choice to position hover chrome by hand in grid-local
     /// coordinates instead of PlacementMode.
     /// </summary>
-    private void UpdateHyperlinkScreenTip(Point pos)
+    internal void UpdateHyperlinkScreenTip(Point pos)
     {
         if (HyperlinkTooltips is { Count: > 0 } tooltips &&
             TryHitTestHyperlinkCell(pos, out var address) &&
@@ -484,7 +484,7 @@ public partial class GridView
         return _hyperlinkScreenTipBorder;
     }
 
-    private void DismissHyperlinkScreenTip()
+    internal void DismissHyperlinkScreenTip()
     {
         if (_hyperlinkScreenTipBorder is { Visibility: Visibility.Visible } border)
             border.Visibility = Visibility.Collapsed;

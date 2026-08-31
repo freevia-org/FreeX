@@ -86,8 +86,6 @@ public sealed class FreeXCleanupMED11Tests
 
     private static ImageBrush InvokeGetWorksheetBackgroundBrush(GridView grid, WorksheetBackgroundImage background, ImageSource image)
     {
-        var method = typeof(GridView).GetMethod("GetWorksheetBackgroundBrush", BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        return (ImageBrush)method!.Invoke(grid, [background, image])!;
+        return (ImageBrush)grid.GetWorksheetBackgroundBrush(background, image)!;
     }
 }
