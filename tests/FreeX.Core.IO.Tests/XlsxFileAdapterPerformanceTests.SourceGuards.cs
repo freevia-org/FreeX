@@ -513,6 +513,32 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void ChartExSeriesTitles_IndexVerbatimAndEmbeddedEntriesWithoutLinqRescans()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxChartXmlWriter.ChartEx.cs");
+        var buildStart = source.IndexOf("    private static IEnumerable<XElement> BuildChartExSeries(", StringComparison.Ordinal);
+        var titleStart = source.IndexOf("    private static XElement? ToChartExSeriesTitleXml(", StringComparison.Ordinal);
+        var lookupStart = source.IndexOf("    private sealed class ChartExSeriesTitleLookup", StringComparison.Ordinal);
+        var valueStripStart = source.IndexOf("    private static uint GetChartExSeriesValueStrip", StringComparison.Ordinal);
+        var build = source[buildStart..titleStart];
+        var title = source[titleStart..lookupStart];
+        var lookup = source[lookupStart..valueStripStart];
+
+        build.Should().Contain("ChartExSeriesTitleLookup.Create(chart)");
+        title.Should().Contain("titleLookup.TryGetVerbatim(seriesIndex, out var verbatim)")
+            .And.NotContain(".FirstOrDefault(",
+                "each chartEx series title should use the precomputed lookup instead of rescanning formula entries");
+        lookup.Should().Contain("if (chart.VerbatimSeriesFormulas is not { Count: > 0 } verbatimSeries)")
+            .And.Contain("return null;",
+                "the common chartEx path with no verbatim formulas must not allocate title lookup dictionaries")
+            .And.Contain("verbatimBySeriesIndex.TryAdd(verbatim.SeriesIndex, verbatim)")
+            .And.Contain("embeddedBySeriesIndex.TryAdd(embedded.SeriesIndex, embedded)",
+                "first duplicate series entries must retain the prior FirstOrDefault semantics")
+            .And.NotContain(".FirstOrDefault(",
+                "lookup construction should scan each source collection exactly once");
+    }
+
+    [Fact]
     public void SavePostProcessing_BatchesSourcePackageReplayWorksheetMetadataXmlWrites()
     {
         var adapterSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxFileAdapter.SavePostProcessing.cs");
