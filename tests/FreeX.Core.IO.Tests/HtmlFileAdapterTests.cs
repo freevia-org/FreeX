@@ -209,6 +209,43 @@ public sealed class HtmlFileAdapterTests
     }
 
     [Fact]
+    public void Save_LargeMergeDoesNotMaterializeEveryCoveredCell()
+    {
+        const uint mergedRows = 100_000;
+        const uint mergedColumns = 20;
+        var wb = new Workbook("Untitled");
+        var sheet = wb.AddSheet("Sheet1");
+        var anchor = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(anchor, new TextValue("Merged"));
+        sheet.AddMergedRegion(new GridRange(
+            anchor,
+            new CellAddress(sheet.Id, mergedRows, mergedColumns)));
+
+        new HtmlFileAdapter().Save(wb, Stream.Null);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        new HtmlFileAdapter().Save(wb, Stream.Null);
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        allocatedBytes.Should().BeLessThan(
+            500_000,
+            "HTML export should query the merge index for emitted cells instead of allocating " +
+            "one HashSet entry for each of the 2,000,000 covered cells");
+    }
+
+    [Fact]
+    public void Save_MergeCoverageSourceGuardUsesSheetIndexInsteadOfExpandingAllCells()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoSource("HtmlTableWriter.cs");
+
+        source.Should().Contain("var mergeRegion = hasMergedRegions ? sheet.GetMergeRegion(address) : null;");
+        source.Should().NotContain("foreach (var addr in region.AllCells())");
+    }
+
+    [Fact]
     public void RoundTrip_PreservesValuesAndMergeGeometry()
     {
         var wb = new Workbook("Untitled");
