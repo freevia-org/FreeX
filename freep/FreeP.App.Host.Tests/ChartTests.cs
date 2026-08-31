@@ -2810,6 +2810,127 @@ public sealed class ChartTests : IDisposable
     }
 
     [Fact]
+    public void Edit_NativeDenseChartEx_UpdatesReverseOrderedReferencedDataInLinearDocumentOrder()
+    {
+        const int seriesCount = 256;
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        XNamespace cxNs = chartExUri;
+        var nativeData = Enumerable.Range(1, seriesCount)
+            .Reverse()
+            .Select(id => CreateChartExValueData(cxNs, id, id));
+        var nativeSeries = Enumerable.Range(1, seriesCount)
+            .Select(id =>
+            {
+                var element = CreateChartExSeries(cxNs, $"Original {id}", id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                element.Add(new XElement(cxNs + "histogramExtension", new XAttribute("binCount", id)));
+                return element;
+            });
+        var preserved = new XDocument(
+            new XElement(cxNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                new XElement(cxNs + "chartData",
+                    new XElement(cxNs + "data",
+                        new XAttribute("id", 0),
+                        new XElement(cxNs + "strDim",
+                            new XAttribute("type", "cat"),
+                            new XElement(cxNs + "lvl",
+                                new XElement(cxNs + "pt", new XAttribute("idx", 0), "Original category")))),
+                    nativeData),
+                new XElement(cxNs + "chart",
+                    new XElement(cxNs + "plotArea",
+                        new XElement(cxNs + "plotAreaRegion", nativeSeries)))));
+        var chart = new ChartShape
+        {
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = preserved.ToString(SaveOptions.DisableFormatting),
+            RegenerateWorkbookOnSave = true,
+            Categories = { "Edited category" },
+        };
+        foreach (var id in Enumerable.Range(1, seriesCount))
+        {
+            var series = new ChartSeries { Name = $"Edited {id}" };
+            series.Values.Add(id + 0.5);
+            chart.Series.Add(series);
+        }
+
+        var written = WriteChartExDocument(chart);
+        written.Descendants(cxNs + "data").Select(data => (int)data.Attribute("id")!)
+            .Should().Equal(new[] { 0 }.Concat(Enumerable.Range(1, seriesCount).Reverse()));
+        written.Descendants(cxNs + "strDim").Single().Descendants(cxNs + "pt").Single().Value
+            .Should().Be("Edited category");
+        var writtenData = written.Descendants(cxNs + "data")
+            .Where(data => data.Element(cxNs + "numDim") is not null)
+            .ToDictionary(data => (int)data.Attribute("id")!);
+        foreach (var id in Enumerable.Range(1, seriesCount))
+        {
+            writtenData[id].Descendants(cxNs + "pt").Single().Value.Should().Be((id + 0.5).ToString(
+                "G",
+                System.Globalization.CultureInfo.InvariantCulture));
+        }
+        written.Descendants(cxNs + "series")
+            .Select(item => item.Element(cxNs + "tx")!.Element(cxNs + "txData")!.Element(cxNs + "v")!.Value)
+            .Should().Equal(Enumerable.Range(1, seriesCount).Select(id => $"Edited {id}"));
+        written.Descendants(cxNs + "histogramExtension")
+            .Select(extension => (int)extension.Attribute("binCount")!)
+            .Should().Equal(Enumerable.Range(1, seriesCount));
+    }
+
+    [Fact]
+    public void Edit_NativeChartEx_InvalidDataCatalogOrReferenceAbortsWithoutPartialDataMutation()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        XNamespace cxNs = chartExUri;
+        var cases = new (string Name, object[] DataIds, string? SeriesDataId)[]
+        {
+            ("duplicate data id", new object[] { 1, 1 }, "1"),
+            ("malformed data id", new object[] { "invalid" }, "1"),
+            ("malformed series data id", new object[] { 1 }, "invalid"),
+            ("missing series data id", new object[] { 1 }, null),
+            ("unresolved series data id", new object[] { 1 }, "99"),
+        };
+
+        foreach (var testCase in cases)
+        {
+            var preserved = new XDocument(
+                new XElement(cxNs + "chartSpace",
+                    new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                    new XElement(cxNs + "chartData",
+                        new XElement(cxNs + "data",
+                            new XAttribute("id", 0),
+                            new XElement(cxNs + "strDim",
+                                new XAttribute("type", "cat"),
+                                new XElement(cxNs + "lvl",
+                                    new XElement(cxNs + "pt", new XAttribute("idx", 0), "Original category")))),
+                        testCase.DataIds.Select(id => CreateChartExValueData(cxNs, id, 10))),
+                    new XElement(cxNs + "chart",
+                        new XElement(cxNs + "plotArea",
+                            new XElement(cxNs + "plotAreaRegion",
+                                CreateChartExSeries(cxNs, "Original series", testCase.SeriesDataId))))));
+            var chart = new ChartShape
+            {
+                IsChartEx = true,
+                ChartExLayoutId = "histogram",
+                PreservedChartExXml = preserved.ToString(SaveOptions.DisableFormatting),
+                RegenerateWorkbookOnSave = true,
+                Categories = { "Edited category" },
+            };
+            var editedSeries = new ChartSeries { Name = "Edited series" };
+            editedSeries.Values.Add(20);
+            chart.Series.Add(editedSeries);
+
+            var written = WriteChartExDocument(chart);
+            written.Descendants(cxNs + "strDim").Single().Descendants(cxNs + "pt").Single().Value
+                .Should().Be("Original category", testCase.Name);
+            written.Descendants(cxNs + "numDim").SelectMany(dimension => dimension.Descendants(cxNs + "pt"))
+                .Should().OnlyContain(point => point.Value == "10", testCase.Name);
+            written.Descendants(cxNs + "series").Single()
+                .Element(cxNs + "tx")!.Element(cxNs + "txData")!.Element(cxNs + "v")!.Value
+                .Should().Be("Original series", testCase.Name);
+        }
+    }
+
+    [Fact]
     public void Read_NativeDenseChartEx_ResolvesReversedDataIds()
     {
         const int seriesCount = 256;
