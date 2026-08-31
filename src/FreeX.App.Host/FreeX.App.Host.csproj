@@ -4,6 +4,12 @@
   <Import Project="../../shared/Free.Shared.Shell/BrandAssets.props" />
 
   <ItemGroup>
+    <!-- The print-path border tests drive PrintRenderer.DrawPrintedBorderEdge directly rather than
+         by reflection, so a change to its signature is a build error in the test lane. -->
+    <InternalsVisibleTo Include="FreeX.App.Host.Logic.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../FreeX.Core.Model/FreeX.Core.Model.csproj" />
     <ProjectReference Include="../FreeX.Core.Formula/FreeX.Core.Formula.csproj" />
     <ProjectReference Include="../FreeX.Core.Calc/FreeX.Core.Calc.csproj" />

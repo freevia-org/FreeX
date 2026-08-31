@@ -159,6 +159,7 @@ public static class DocumentIndex
         }
 
         string? currentHeading = null;
+        var bookmarkRanges = new BookmarkRangeCache(document);
         foreach (var root in Ordered(roots.Values, options.CultureName))
         {
             var heading = AlphabeticHeading(root.Label, options.CultureName);
@@ -175,6 +176,7 @@ public static class DocumentIndex
                 document,
                 pageTextOf,
                 pageReferenceOf,
+                bookmarkRanges,
                 EntryStyleIdFor(identifier),
                 options.CultureName);
         }
@@ -342,6 +344,7 @@ public static class DocumentIndex
         TextDocument document,
         Func<int, string?>? pageTextOf,
         Func<int, IndexPageReferenceAddress?>? pageReferenceOf,
+        BookmarkRangeCache bookmarkRanges,
         string entryStyleId,
         string cultureName)
     {
@@ -350,7 +353,7 @@ public static class DocumentIndex
             .Select(occurrence => new
             {
                 Occurrence = occurrence,
-                Reference = ResolvePageReference(document, occurrence, pageTextOf, pageReferenceOf)
+                Reference = ResolvePageReference(document, occurrence, pageTextOf, pageReferenceOf, bookmarkRanges)
             })
             .GroupBy(
                 item => item.Reference.Identity,
@@ -411,7 +414,16 @@ public static class DocumentIndex
         paragraphs.Add(paragraph);
 
         foreach (var child in Ordered(node.Children.Values, cultureName))
-            AppendNode(paragraphs, child, depth + 1, document, pageTextOf, pageReferenceOf, entryStyleId, cultureName);
+            AppendNode(
+                paragraphs,
+                child,
+                depth + 1,
+                document,
+                pageTextOf,
+                pageReferenceOf,
+                bookmarkRanges,
+                entryStyleId,
+                cultureName);
     }
 
     /// <summary>
@@ -535,11 +547,12 @@ public static class DocumentIndex
         TextDocument document,
         IndexOccurrence occurrence,
         Func<int, string?>? pageTextOf,
-        Func<int, IndexPageReferenceAddress?>? pageReferenceOf)
+        Func<int, IndexPageReferenceAddress?>? pageReferenceOf,
+        BookmarkRangeCache bookmarkRanges)
     {
         if (occurrence.Mark.BookmarkName.Length > 0)
         {
-            if (ResolveBookmarkRange(document, occurrence.Mark.BookmarkName) is not { } range)
+            if (bookmarkRanges.Resolve(occurrence.Mark.BookmarkName) is not { } range)
             {
                 return new ResolvedIndexPageReference(
                     "broken-bookmark:" + occurrence.Mark.BookmarkName,
@@ -646,9 +659,11 @@ public static class DocumentIndex
                 (numeric + rowOffset).ToString(System.Globalization.CultureInfo.InvariantCulture))
             : new IndexPageReferenceAddress(reference.PhysicalPageIndex + rowOffset, reference.DisplayText);
 
-    private static BookmarkBlockRange? ResolveBookmarkRange(TextDocument document, string bookmarkName)
+    private static BookmarkBlockRange? ResolveBookmarkRange(
+        TextDocument document,
+        string bookmarkName,
+        IReadOnlyList<DocumentBodyParagraphLocation> paragraphs)
     {
-        var paragraphs = DocumentBodyParagraphs.Enumerate(document).ToList();
         for (var startParagraphIndex = 0; startParagraphIndex < paragraphs.Count; startParagraphIndex++)
         {
             var startLocation = paragraphs[startParagraphIndex];
@@ -697,6 +712,26 @@ public static class DocumentIndex
         return target is { } found
             ? new BookmarkBlockRange(found.BlockIndex, found.TableRowIndex, found.BlockIndex, found.TableRowIndex)
             : null;
+    }
+
+    private sealed class BookmarkRangeCache
+    {
+        private readonly TextDocument _document;
+        private readonly Dictionary<string, BookmarkBlockRange?> _ranges = new(StringComparer.Ordinal);
+        private List<DocumentBodyParagraphLocation>? _bodyParagraphs;
+
+        public BookmarkRangeCache(TextDocument document) => _document = document;
+
+        public BookmarkBlockRange? Resolve(string bookmarkName)
+        {
+            if (_ranges.TryGetValue(bookmarkName, out var range))
+                return range;
+
+            _bodyParagraphs ??= DocumentBodyParagraphs.Enumerate(_document).ToList();
+            range = ResolveBookmarkRange(_document, bookmarkName, _bodyParagraphs);
+            _ranges.Add(bookmarkName, range);
+            return range;
+        }
     }
 
     private sealed record IndexOccurrence(IndexMark Mark, int? BlockIndex, int? TableRowIndex = null);

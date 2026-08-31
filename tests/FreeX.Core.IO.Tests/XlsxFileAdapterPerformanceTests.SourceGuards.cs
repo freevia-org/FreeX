@@ -86,7 +86,19 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         method.Should().Contain("var pivotXml = XlsxPackageXmlEditor.LoadXml(entry);");
         method.Should().Contain("changed |= RewritePreservedPivotPageFieldSelections");
         method.Should().Contain("changed |= RewritePreservedPivotDataFieldSummaries");
+        method.Should().Contain("var fieldMetadata = PreservedPivotFieldMetadata.Create(pivot);");
+        method.Should().Contain("RewritePreservedPivotFieldAxes(root, pivot, cache, fieldMetadata, workbookNs)");
+        method.Should().Contain("RewritePreservedPivotFieldItemFilters(root, cache, fieldMetadata, workbookNs)");
+        method.Should().Contain("RewritePreservedPivotPageFieldSelections(root, cache, fieldMetadata, workbookNs)");
         method.Should().Contain("if (changed)");
+        source.Should().Contain("private sealed class PreservedPivotFieldMetadata");
+        source.Should().Contain("axisBySourceFieldIndex.TryAdd(field.SourceFieldIndex, \"axisRow\")");
+        source.Should().Contain("axisBySourceFieldIndex.TryAdd(field.SourceFieldIndex, \"axisCol\")");
+        source.Should().Contain("axisBySourceFieldIndex.TryAdd(field.SourceFieldIndex, \"axisPage\")");
+        source.Should().NotContain("desiredRowIndexes.Contains(index)",
+            "preserved pivot-field axis rewrites must use the per-pivot index instead of linear list scans per native field");
+        source.Should().NotContain("FindPreservedPivotField(",
+            "preserved item-filter rewrites must use the precomputed last-match model lookup");
     }
 
     [Fact]

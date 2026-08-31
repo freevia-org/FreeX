@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -25,19 +24,20 @@ public sealed class R175_PrintedCellBorderThemeColorTests
     private static readonly Point P2 = new(20, 22);
 
     /// <summary>
-    /// Renders a single vertical border edge via the print path's private DrawPrintedBorderEdge and
+    /// Renders a single vertical border edge via the print path's internal DrawPrintedBorderEdge and
     /// returns the RGB sampled from the middle of the painted line.
     /// </summary>
     private static Color RenderBorderLineColor(CellBorder border, WorkbookTheme theme)
     {
-        var method = typeof(PrintRenderer).GetMethod("DrawPrintedBorderEdge", BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull();
 
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
             // Positional: DrawPrintedBorderEdge(dc, border, p1, p2, theme, blackAndWhite = false).
-            method!.Invoke(null, [dc, border, P1, P2, theme, false]);
+            // Direct call, not reflection: DrawPrintedBorderEdge is internal and this assembly
+            // has InternalsVisibleTo, so a change to its signature is a build error right here
+            // rather than a runtime TargetParameterCountException from a positional array.
+            PrintRenderer.DrawPrintedBorderEdge(dc, border, P1, P2, theme, false);
         }
 
         const int width = 40;

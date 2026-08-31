@@ -131,25 +131,21 @@ internal static class TesterReleaseSmoke
     {
         try
         {
-            var drawBorderEdge = typeof(GridView).GetMethod(
-                "DrawBorderEdge",
-                BindingFlags.NonPublic | BindingFlags.Static)
-                ?? throw new MissingMethodException(nameof(GridView), "DrawBorderEdge");
             var border = new CellBorder(BorderStyle.Thin, CellColor.Black);
             foreach (var scale in new[] { 1.0, 1.25, 1.5 })
             {
                 var visual = new DrawingVisual();
                 using (var context = visual.RenderOpen())
                 {
-                    // The theme argument (5th) is required since DrawBorderEdge began re-resolving
+                    // A theme is required since DrawBorderEdge began re-resolving
                     // CellBorder.ThemeColor against the live theme; this probe uses a literal-RGB
                     // border, so Office resolves to exactly that colour and pixel snapping is
-                    // unaffected. Reflection binds positionally, so a signature change here surfaces
-                    // only as a TargetParameterCountException in this release-gate check.
+                    // unaffected. This is a compiled call (DrawBorderEdge is internal and this tool
+                    // has InternalsVisibleTo), so the next signature change breaks the build here
+                    // instead of surfacing as a runtime failure once the release gate runs.
                     foreach (var y in new[] { 10.0, 15.5 })
-                        drawBorderEdge.Invoke(
-                            null,
-                            [context, border, new Point(10, y), new Point(90, y), WorkbookTheme.Office, null, null, scale]);
+                        GridView.DrawBorderEdge(
+                            context, border, new Point(10, y), new Point(90, y), WorkbookTheme.Office, null, null, scale);
                 }
 
                 var bitmap = new RenderTargetBitmap(
