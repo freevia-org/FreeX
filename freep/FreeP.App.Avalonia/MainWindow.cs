@@ -7524,7 +7524,8 @@ public sealed partial class MainWindow : Window,
 
     private void QueueClipboardPaste()
     {
-        if (TryQueueActiveRichClipboard(static editor => editor.PasteClipboardAsync()))
+        var command = PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditPasteCommand);
+        if (TryQueueActiveRichClipboard(static editor => editor.PasteClipboardAsync(), command))
             return;
 
         var request = _clipboardService.PreparePaste(Editor);
@@ -7548,7 +7549,7 @@ public sealed partial class MainWindow : Window,
                 ReportClipboardWriteFailureIfAny(
                     succeeded,
                     failureCommandName,
-                    textEditor.LastWriteFailureMessage);
+                    textEditor.LastClipboardFailureMessage);
             }
         });
         return true;

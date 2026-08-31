@@ -109,6 +109,37 @@ public sealed record InCanvasRichClipboardPayload(
             RunFromStyle(typingStyle));
     }
 
+    /// <summary>
+    /// Wraps a bare bitmap from the system clipboard -- one an image tool put there with no text,
+    /// RTF, or XAML alongside it -- as a single inline-image run, the same shape a rich payload
+    /// carrying an image uses. This is what lets the in-canvas editors paste a screenshot through
+    /// the normal payload path instead of leaving the key for the toolkit's own paste to handle.
+    /// </summary>
+    public static InCanvasRichClipboardPayload FromInlineImage(byte[] bytes, string contentType)
+    {
+        ArgumentNullException.ThrowIfNull(bytes);
+        ArgumentException.ThrowIfNullOrWhiteSpace(contentType);
+
+        var body = new TextBody();
+        body.Paragraphs.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run
+                {
+                    Text = "￼",
+                    InlineImage = new ImagePart { Bytes = bytes, ContentType = contentType },
+                },
+            },
+        });
+
+        return new InCanvasRichClipboardPayload(
+            body,
+            InCanvasTextEditPlanner.ExtractPlainText(body),
+            ImageBytes: bytes,
+            ImageContentType: contentType);
+    }
+
     internal InCanvasRichClipboardPayload DeepClone() => new(
         TextBodyModelCloner.CloneTextBody(Body)!,
         PlainText,
