@@ -9,25 +9,25 @@ public sealed class HyperlinkDialogPlannerTests
     [Fact]
     public void DialogSize_MatchesSharedWpfLogicalEvidenceTarget()
     {
-        HyperlinkDialogPlanner.Width.Should().Be(560);
-        HyperlinkDialogPlanner.Height.Should().Be(300);
-        HyperlinkDialogPlanner.MinWidth.Should().Be(520);
-        HyperlinkDialogPlanner.MinHeight.Should().Be(300);
+        HyperlinkDialogPlanner.Width.Should().Be(760);
+        HyperlinkDialogPlanner.Height.Should().Be(338);
+        HyperlinkDialogPlanner.MinWidth.Should().Be(720);
+        HyperlinkDialogPlanner.MinHeight.Should().Be(338);
     }
 
     [Fact]
     public void PresentationMetrics_MatchWpfHyperlinkDialogConsumers()
     {
-        HyperlinkDialogPlanner.DialogMargin.Should().Be(16);
-        HyperlinkDialogPlanner.LinkTypeColumnWidth.Should().Be(170);
+        HyperlinkDialogPlanner.DialogMargin.Should().Be(10);
+        HyperlinkDialogPlanner.LinkTypeColumnWidth.Should().Be(132);
         HyperlinkDialogPlanner.LinkTypeColumnGap.Should().Be(12);
-        HyperlinkDialogPlanner.LabelColumnWidth.Should().Be(110);
+        HyperlinkDialogPlanner.LabelColumnWidth.Should().Be(88);
         HyperlinkDialogPlanner.FieldHeight.Should().Be(24);
         HyperlinkDialogPlanner.FieldBottomMargin.Should().Be(8);
         HyperlinkDialogPlanner.ButtonGap.Should().Be(8);
         HyperlinkDialogPlanner.SecondaryButtonWidth.Should().Be(96);
         HyperlinkDialogPlanner.ActionButtonWidth.Should().Be(72);
-        HyperlinkDialogPlanner.LinkTypeListHeight.Should().Be(96);
+        HyperlinkDialogPlanner.LinkTypeListHeight.Should().Be(148);
     }
 
     [Fact]
@@ -159,7 +159,7 @@ public sealed class HyperlinkDialogPlannerTests
     }
 
     [Fact]
-    public void Prefill_FromBlankCellUsesDefaultWebTarget()
+    public void Prefill_FromBlankCellStartsWithAnEmptyAddress()
     {
         var sheetId = SheetId.New();
         var address = new CellAddress(sheetId, 1, 1);
@@ -167,7 +167,7 @@ public sealed class HyperlinkDialogPlannerTests
 
         HyperlinkDialogPrefill.FromCell(sheet, address).Should().Be(new HyperlinkDialogPrefill(
             HyperlinkTargetKind.ExistingFileOrWebPage,
-            "https://",
+            "",
             "",
             "",
             ""));
@@ -183,7 +183,7 @@ public sealed class HyperlinkDialogPlannerTests
 
         HyperlinkDialogPrefill.FromCell(sheet, address).Should().Be(new HyperlinkDialogPrefill(
             HyperlinkTargetKind.ExistingFileOrWebPage,
-            "https://",
+            "",
             "Quarterly report",
             "",
             ""));

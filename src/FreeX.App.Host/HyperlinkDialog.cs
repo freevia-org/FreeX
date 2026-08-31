@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using Free.Shared.Shell;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 
@@ -13,6 +14,7 @@ public sealed class HyperlinkDialog : Window
     private readonly TextBox _displayBox = new();
     private readonly Button _screenTipButton = new() { Content = UiText.Get("Hyperlink_ScreenTip") };
     private readonly Button _bookmarkButton = new() { Content = UiText.Get("Hyperlink_Bookmark") };
+    private readonly Button _browseButton = new() { Content = "_Browse..." };
     private readonly ListBox _linkTypes = new();
     private readonly Label _targetLabel;
     private string _screenTip = "";
@@ -20,7 +22,7 @@ public sealed class HyperlinkDialog : Window
 
     public HyperlinkDialogPlan Result { get; private set; }
 
-    public HyperlinkDialog(string target = "https://", string displayText = "")
+    public HyperlinkDialog(string target = "", string displayText = "", string? currentFilePath = null)
     {
         Result = CreateResult(target, displayText);
         Title = UiText.Get("Hyperlink_InsertHyperlink");
@@ -30,7 +32,28 @@ public sealed class HyperlinkDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var root = new DockPanel { Margin = new Thickness(16) };
+        var root = new Grid { Margin = new Thickness(HyperlinkDialogPlanner.DialogMargin) };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var headerGrid = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LabelColumnWidth) });
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.SecondaryButtonWidth + HyperlinkDialogPlanner.ButtonGap) });
+        var displayLabel = new Label
+        {
+            Content = UiText.Get("Hyperlink_TextToDisplay2"),
+            Target = _displayBox,
+            Padding = new Thickness(0),
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+        };
+        _displayBox.Text = displayText;
+        _displayBox.Height = HyperlinkDialogPlanner.FieldHeight;
+        headerGrid.Children.Add(displayLabel);
+        headerGrid.Children.Add(_displayBox);
+        Grid.SetColumn(_displayBox, 1);
         var linkTypePanel = new StackPanel
         {
             Width = HyperlinkDialogPlanner.LinkTypeColumnWidth,
@@ -50,40 +73,117 @@ public sealed class HyperlinkDialog : Window
         AutomationProperties.SetHelpText(_linkTypes, UiText.Get("Hyperlink_ChooseTheKindOfHyperlinkToInsert"));
         linkTypePanel.Children.Add(new Label { Content = UiText.Get("Hyperlink_LinkTo"), Target = _linkTypes, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         linkTypePanel.Children.Add(_linkTypes);
-        DockPanel.SetDock(linkTypePanel, Dock.Left);
-        root.Children.Add(linkTypePanel);
-
-        var grid = DialogGrid(3);
-        AddTextRow(grid, 0, UiText.Get("Hyperlink_TextToDisplay2"), _displayBox, displayText);
         AutomationProperties.SetName(_displayBox, UiText.Get("Hyperlink_TextToDisplay"));
         AutomationProperties.SetAutomationId(_displayBox, "HyperlinkDisplayTextBox");
         AutomationProperties.SetHelpText(_displayBox, UiText.Get("Hyperlink_EnterTheTextShownInTheCellForTheHyperlink"));
-        _targetLabel = AddTextRow(grid, 1, UiText.Get("Hyperlink_Address"), _targetBox, target);
+
+        _screenTipButton.Click += ScreenTipButton_Click;
+        _bookmarkButton.Click += BookmarkButton_Click;
+        _browseButton.Click += BrowseButton_Click;
+        _browseButton.MinWidth = HyperlinkDialogPlanner.SecondaryButtonWidth;
+        AutomationProperties.SetName(_browseButton, "Browse for a file");
+        AutomationProperties.SetAutomationId(_browseButton, "HyperlinkBrowseButton");
+        AutomationProperties.SetHelpText(_browseButton, "Choose a local file for this hyperlink.");
+
+        var folderText = new TextBox
+        {
+            Text = CurrentFolderText(currentFilePath),
+            IsReadOnly = true,
+            IsTabStop = false,
+            Height = HyperlinkDialogPlanner.FieldHeight,
+            VerticalContentAlignment = System.Windows.VerticalAlignment.Center,
+        };
+        AutomationProperties.SetName(folderText, "Current folder");
+        AutomationProperties.SetAutomationId(folderText, "HyperlinkCurrentFolderText");
+        var browseGrid = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+        browseGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LabelColumnWidth) });
+        browseGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        browseGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.SecondaryButtonWidth + HyperlinkDialogPlanner.ButtonGap) });
+        var folderLabel = new Label
+        {
+            Content = "Look _in:",
+            Target = folderText,
+            Padding = new Thickness(0),
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+        };
+        browseGrid.Children.Add(folderLabel);
+        browseGrid.Children.Add(folderText);
+        Grid.SetColumn(folderText, 1);
+        browseGrid.Children.Add(_browseButton);
+        Grid.SetColumn(_browseButton, 2);
+        _browseButton.HorizontalAlignment = System.Windows.HorizontalAlignment.Right;
+
+        var currentFolderContext = new ListBox
+        {
+            ItemsSource = CurrentFolderContext(currentFilePath),
+            SelectedIndex = 0,
+            IsTabStop = false,
+        };
+        AutomationProperties.SetName(currentFolderContext, "Current folder link location");
+        AutomationProperties.SetAutomationId(currentFolderContext, "HyperlinkCurrentFolderContext");
+
+        var detailPanel = new Grid();
+        detailPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        detailPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        detailPanel.Children.Add(browseGrid);
+        detailPanel.Children.Add(currentFolderContext);
+        Grid.SetRow(currentFolderContext, 1);
+
+        var mainGrid = new Grid();
+        mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LinkTypeColumnWidth) });
+        mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LinkTypeColumnGap) });
+        mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        mainGrid.Children.Add(linkTypePanel);
+        mainGrid.Children.Add(detailPanel);
+        Grid.SetColumn(detailPanel, 2);
+
+        var addressGrid = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+        addressGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LabelColumnWidth) });
+        addressGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        addressGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.SecondaryButtonWidth + HyperlinkDialogPlanner.ButtonGap) });
+        _targetLabel = new Label
+        {
+            Content = UiText.Get("Hyperlink_Address"),
+            Target = _targetBox,
+            Padding = new Thickness(0),
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+        };
+        _targetBox.Text = target;
+        _targetBox.Height = HyperlinkDialogPlanner.FieldHeight;
+        addressGrid.Children.Add(_targetLabel);
+        addressGrid.Children.Add(_targetBox);
+        Grid.SetColumn(_targetBox, 1);
+        addressGrid.Children.Add(_bookmarkButton);
+        Grid.SetColumn(_bookmarkButton, 2);
+        _bookmarkButton.HorizontalAlignment = System.Windows.HorizontalAlignment.Right;
         AutomationProperties.SetAutomationId(_targetBox, "HyperlinkTargetTextBox");
         _linkTypes.SelectionChanged += (_, _) => UpdateTargetFieldForLinkType();
         UpdateTargetFieldForLinkType();
-        _screenTipButton.Click += ScreenTipButton_Click;
-        _bookmarkButton.Click += BookmarkButton_Click;
         AutomationProperties.SetName(_screenTipButton, UiText.Get("Hyperlink_SetScreenTip"));
         AutomationProperties.SetAutomationId(_screenTipButton, "HyperlinkScreenTipButton");
         AutomationProperties.SetHelpText(_screenTipButton, UiText.Get("Hyperlink_SetTheTextShownWhenPointingToTheHyperlink"));
         AutomationProperties.SetName(_bookmarkButton, UiText.Get("Hyperlink_SelectPlaceInDocument"));
         AutomationProperties.SetAutomationId(_bookmarkButton, "HyperlinkBookmarkButton");
         AutomationProperties.SetHelpText(_bookmarkButton, UiText.Get("Hyperlink_ChooseABookmarkDefinedNameOrCellReferenceInThisWorkbook"));
-        var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 12) };
         _screenTipButton.Width = HyperlinkDialogPlanner.SecondaryButtonWidth;
-        _screenTipButton.Margin = new Thickness(0, 0, HyperlinkDialogPlanner.ButtonGap, 0);
         _bookmarkButton.Width = HyperlinkDialogPlanner.SecondaryButtonWidth;
-        buttonRow.Children.Add(_screenTipButton);
-        buttonRow.Children.Add(_bookmarkButton);
-        grid.Children.Add(buttonRow);
-        Grid.SetRow(buttonRow, 2);
-        Grid.SetColumn(buttonRow, 1);
+        headerGrid.Children.Add(_screenTipButton);
+        Grid.SetColumn(_screenTipButton, 2);
+        _screenTipButton.HorizontalAlignment = System.Windows.HorizontalAlignment.Right;
 
-        grid.Children.Add(DialogButtonRowFactory.Create(Accept, HyperlinkDialogPlanner.ActionButtonWidth));
-        Grid.SetRow(grid.Children[^1], 3);
-        Grid.SetColumnSpan(grid.Children[^1], 2);
-        root.Children.Add(grid);
+        var actionButtons = DialogButtonRowFactory.Create(
+            Accept,
+            HyperlinkDialogPlanner.ActionButtonWidth,
+            new Thickness(0, 8, 0, 0));
+
+        root.Children.Add(headerGrid);
+        Grid.SetRow(headerGrid, 0);
+        root.Children.Add(mainGrid);
+        Grid.SetRow(mainGrid, 1);
+        root.Children.Add(addressGrid);
+        Grid.SetRow(addressGrid, 2);
+        root.Children.Add(actionButtons);
+        Grid.SetRow(actionButtons, 3);
         Content = root;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
@@ -184,6 +284,37 @@ public sealed class HyperlinkDialog : Window
         _bookmarkButton.ToolTip = string.IsNullOrWhiteSpace(_bookmark) ? null : _bookmark;
     }
 
+    private void BrowseButton_Click(object sender, RoutedEventArgs e)
+    {
+        var result = WpfFileDialogService.ShowOpenDialog(
+            this,
+            "All files (*.*)|*.*",
+            title: "Select a file to link to");
+        if (!result.Chosen)
+            return;
+
+        _targetBox.Text = result.FileName!;
+        DialogFocus.FocusAndSelect(_targetBox);
+    }
+
+    private static string CurrentFolderText(string? currentFilePath)
+    {
+        var directory = string.IsNullOrWhiteSpace(currentFilePath)
+            ? null
+            : System.IO.Path.GetDirectoryName(currentFilePath);
+        return string.IsNullOrWhiteSpace(directory) ? "Current Folder" : directory;
+    }
+
+    private static IReadOnlyList<string> CurrentFolderContext(string? currentFilePath)
+    {
+        var fileName = string.IsNullOrWhiteSpace(currentFilePath)
+            ? null
+            : System.IO.Path.GetFileName(currentFilePath);
+        return string.IsNullOrWhiteSpace(fileName)
+            ? ["Current Folder", "Use Browse... to choose a file"]
+            : ["Current Folder", fileName, "Use Browse... to choose another file"];
+    }
+
     private void FocusInitialKeyboardTarget()
     {
         DialogFocus.FocusAndSelect(_targetBox);
@@ -199,36 +330,4 @@ public sealed class HyperlinkDialog : Window
             .DescribeValidationError(error)
             .Message.Resolve(UiText.Get, UiText.Format);
 
-    private static Grid DialogGrid(int inputRows)
-    {
-        var grid = new Grid { Margin = new Thickness(16) };
-        for (var index = 0; index < inputRows; index++)
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LabelColumnWidth) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        return grid;
-    }
-
-    private static Label AddTextRow(Grid grid, int row, string label, TextBox box, string value)
-    {
-        var labelControl = new Label
-        {
-            Content = label,
-            Target = box,
-            Padding = new Thickness(0),
-            VerticalAlignment = System.Windows.VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, HyperlinkDialogPlanner.ButtonGap, HyperlinkDialogPlanner.FieldBottomMargin)
-        };
-        grid.Children.Add(labelControl);
-        Grid.SetRow(labelControl, row);
-        Grid.SetColumn(labelControl, 0);
-
-        box.Text = value;
-        box.Margin = new Thickness(0, 0, 0, HyperlinkDialogPlanner.FieldBottomMargin);
-        grid.Children.Add(box);
-        Grid.SetRow(box, row);
-        Grid.SetColumn(box, 1);
-        return labelControl;
-    }
 }
