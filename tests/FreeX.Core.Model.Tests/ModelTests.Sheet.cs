@@ -205,4 +205,39 @@ public partial class SheetTests
         allocated.Should().BeLessThan(1_000);
         stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(500));
     }
+
+    [Fact]
+    public void GetUsedRange_RepeatedCallsReuseCachedStyleOnlyBounds()
+    {
+        const int runCount = 20_000;
+        var sheet = new Sheet(SheetId.New(), "StyleHeavy");
+        var runs = new StyleOnlyRun[runCount];
+        for (var index = 0; index < runs.Length; index++)
+            runs[index] = new StyleOnlyRun((uint)index + 1, 2, 50, new StyleId(1));
+        sheet.SetStyleOnlyRuns(runs);
+
+        var expected = new GridRange(
+            new CellAddress(sheet.Id, 1, 2),
+            new CellAddress(sheet.Id, (uint)runCount, 50));
+        sheet.GetUsedRange().Should().Be(expected);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        const int repetitions = 10_000;
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        GridRange? range = null;
+        for (var index = 0; index < repetitions; index++)
+            range = sheet.GetUsedRange();
+        stopwatch.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        range.Should().Be(expected);
+        allocated.Should().BeLessThan(1_000);
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(500));
+        Console.WriteLine(
+            $"GetUsedRange cached style bounds repeated {repetitions}x over {runCount:N0} runs: " +
+            $"{stopwatch.Elapsed.TotalMilliseconds:F2} ms, {allocated:N0} bytes allocated.");
+    }
 }
