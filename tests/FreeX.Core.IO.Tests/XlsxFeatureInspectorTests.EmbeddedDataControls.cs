@@ -148,6 +148,19 @@ public partial class XlsxFeatureInspectorTests
 
 
     [Fact]
+    public void Inspect_RichDataPackageWithEmptyStructureTable_DetectsLinkedDataTypesConservatively()
+    {
+        using var package = CreatePackageWithContent(
+            ("xl/richData/rdrichvalue.xml", "<rvData/ >"),
+            ("xl/richData/rdRichValueStructure.xml", "<rvStructures/ >"));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.LinkedDataTypes);
+    }
+
+
+    [Fact]
     public void Inspect_RelationshipOnlyRichDataReference_DetectsLinkedDataTypes()
     {
         using var package = CreatePackageWithContent(("xl/_rels/workbook.xml.rels", """
