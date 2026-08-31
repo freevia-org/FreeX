@@ -141,10 +141,15 @@ internal static class TesterReleaseSmoke
                 var visual = new DrawingVisual();
                 using (var context = visual.RenderOpen())
                 {
+                    // The theme argument (5th) is required since DrawBorderEdge began re-resolving
+                    // CellBorder.ThemeColor against the live theme; this probe uses a literal-RGB
+                    // border, so Office resolves to exactly that colour and pixel snapping is
+                    // unaffected. Reflection binds positionally, so a signature change here surfaces
+                    // only as a TargetParameterCountException in this release-gate check.
                     foreach (var y in new[] { 10.0, 15.5 })
                         drawBorderEdge.Invoke(
                             null,
-                            [context, border, new Point(10, y), new Point(90, y), null, null, scale]);
+                            [context, border, new Point(10, y), new Point(90, y), WorkbookTheme.Office, null, null, scale]);
                 }
 
                 var bitmap = new RenderTargetBitmap(

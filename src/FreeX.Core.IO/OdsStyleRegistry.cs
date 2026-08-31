@@ -237,21 +237,29 @@ internal sealed class OdsStyleRegistry
         return styleElement;
     }
 
-    private static bool AddBorder(XElement cellProps, XName attr, CellBorder border)
+    private bool AddBorder(XElement cellProps, XName attr, CellBorder border)
     {
+        // freex-theme-border-color-F1: ODF has no theme-color concept, so a theme-backed edge
+        // (CellBorder.ThemeColor) must be flattened through the workbook's CURRENT theme — exactly like
+        // the font color this registry already writes via style.ResolveFontColor(_workbook.Theme).
+        // Reading border.Color raw exported the RGB baked in at load time, so a theme change recolored
+        // the exported fonts but left the borders on the old palette. Resolved once and used for the
+        // default test, the visible fo:border, and the freex round-trip hint alike, so all three agree.
+        var resolvedColor = border.ResolveColor(_workbook.Theme);
+
         // An invisible border (Style=None) with the default black color carries no information and is
         // skipped. But Excel sometimes stores a colored border whose style is None; the model treats that
         // color as significant (CellBorder compares Style AND Color), so we must still persist it via the
         // freex hint to round-trip it exactly — without emitting a visible fo:border.
-        var isDefault = border.Style == BorderStyle.None && border.Color == CellColor.Black;
+        var isDefault = border.Style == BorderStyle.None && resolvedColor == CellColor.Black;
         if (isDefault)
             return false;
 
         if (border.Style != BorderStyle.None)
-            cellProps.SetAttributeValue(attr, OdsBorder.ToOdf(border));
+            cellProps.SetAttributeValue(attr, OdsBorder.ToOdf(border, resolvedColor));
         // Carry an exact-style hint per edge so the border style enum + color recover precisely.
         cellProps.SetAttributeValue(OdsFileAdapter.StyleNs + ("freex-" + attr.LocalName),
-            ((int)border.Style).ToString(CultureInfo.InvariantCulture) + ":" + HexColor(border.Color));
+            ((int)border.Style).ToString(CultureInfo.InvariantCulture) + ":" + HexColor(resolvedColor));
         return true;
     }
 
