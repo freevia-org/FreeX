@@ -52,6 +52,7 @@ public sealed partial class Sheet
     /// <summary>Sets a style-only override for an empty cell.</summary>
     public void SetStyleOnly(uint row, uint col, StyleId styleId)
     {
+        InvalidateStyleOnlyUsedRange();
         var key = (row, col);
         var runStyleId = TryGetStyleOnlyRun(row, col);
         if (runStyleId.HasValue)
@@ -76,14 +77,19 @@ public sealed partial class Sheet
     {
         var key = (row, col);
         var isRunBacked = TryGetStyleOnlyRun(row, col).HasValue;
-        if (_styleOnly.Remove(key) && !isRunBacked)
+        var removedOverlay = _styleOnly.Remove(key);
+        if (removedOverlay && !isRunBacked)
             _styleOnlyOverlayNewCellCount--;
 
+        var addedTombstone = false;
         if (isRunBacked)
         {
             _styleOnlyRunTombstones ??= [];
-            _styleOnlyRunTombstones.Add(key);
+            addedTombstone = _styleOnlyRunTombstones.Add(key);
         }
+
+        if (removedOverlay || addedTombstone)
+            InvalidateStyleOnlyUsedRange();
 
         // R92-render-cellstyle-inheritance-5-3: the row/column-format provenance tag (if any)
         // describes THIS style-only entry -- once the entry itself is gone (superseded by a real
@@ -95,6 +101,7 @@ public sealed partial class Sheet
     /// <summary>Removes all style-only overrides for empty cells.</summary>
     public void ClearStyleOnlyEntries()
     {
+        InvalidateStyleOnlyUsedRange();
         _styleOnly.Clear();
         _styleOnlyRuns = null;
         _styleOnlyRunTombstones?.Clear();
@@ -105,6 +112,7 @@ public sealed partial class Sheet
     /// <summary>Replaces the compressed style-only base runs used by bulk importers.</summary>
     public void SetStyleOnlyRuns(IReadOnlyList<StyleOnlyRun> runs)
     {
+        InvalidateStyleOnlyUsedRange();
         _styleOnlyRuns = NormalizeStyleOnlyRuns(runs);
         _styleOnlyRunTombstones?.Clear();
         _styleOnlyRunCellCount = 0;
@@ -153,6 +161,69 @@ public sealed partial class Sheet
 
         foreach (var entry in _styleOnly)
         {
+            if (TryGetStyleOnlyRun(entry.Key.Row, entry.Key.Col).HasValue)
+                continue;
+
+            yield return (entry.Key, entry.Value);
+        }
+    }
+
+    /// <summary>
+    /// Enumerates style-only entries inside <paramref name="range"/>. Compressed runs are clipped
+    /// to the requested rows and columns before their individual cells are expanded, so a caller
+    /// operating on a narrow selection does not materialize unrelated style-only cells elsewhere
+    /// on the sheet.
+    /// </summary>
+    public IEnumerable<((uint Row, uint Col) Key, StyleId StyleId)> GetStyleOnlyEntries(GridRange range)
+    {
+        if (range.Start.Sheet != Id)
+            yield break;
+
+        if (_styleOnlyRuns is { Count: > 0 } runs)
+        {
+            foreach (var run in runs)
+            {
+                // NormalizeStyleOnlyRuns keeps runs ordered by row, then starting column. Once the
+                // row has passed the selection there can be no later intersecting run.
+                if (run.Row < range.Start.Row)
+                    continue;
+                if (run.Row > range.End.Row)
+                    break;
+
+                var startCol = Math.Max(run.StartCol, range.Start.Col);
+                var endCol = Math.Min(run.EndCol, range.End.Col);
+                if (startCol > endCol)
+                    continue;
+
+                var col = startCol;
+                while (true)
+                {
+                    var key = (run.Row, col);
+                    if (_styleOnly.TryGetValue(key, out var overlayStyleId))
+                    {
+                        yield return (key, overlayStyleId);
+                    }
+                    else if (_styleOnlyRunTombstones?.Contains(key) != true)
+                    {
+                        yield return (key, run.StyleId);
+                    }
+
+                    if (col == endCol)
+                        break;
+
+                    col++;
+                }
+            }
+        }
+
+        foreach (var entry in _styleOnly)
+        {
+            if (entry.Key.Row < range.Start.Row || entry.Key.Row > range.End.Row ||
+                entry.Key.Col < range.Start.Col || entry.Key.Col > range.End.Col)
+            {
+                continue;
+            }
+
             if (TryGetStyleOnlyRun(entry.Key.Row, entry.Key.Col).HasValue)
                 continue;
 

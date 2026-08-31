@@ -573,6 +573,10 @@ public sealed class InCanvasTextEditPlanner
         && a.BulletFontFollowsText == b.BulletFontFollowsText
         && a.SpaceBeforePt == b.SpaceBeforePt
         && a.SpaceAfterPt == b.SpaceAfterPt
+        && a.SpaceBeforePercent == b.SpaceBeforePercent
+        && a.SpaceAfterPercent == b.SpaceAfterPercent
+        && a.LineSpacingPercent == b.LineSpacingPercent
+        && a.LineSpacingPointsExact == b.LineSpacingPointsExact
         && TabStopsEqual(a.TabStops, b.TabStops);
 
     private static bool ImagePartsEqual(ImagePart? a, ImagePart? b)

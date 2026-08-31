@@ -284,10 +284,12 @@ public static class CrossReferences
             CrossRefInsertAs.PageNumber => "1",
             CrossRefInsertAs.HeadingNumber => HeadingNumberAt(doc, target.BlockIndex),
             CrossRefInsertAs.ParagraphNumber => ParagraphNumberAt(doc, target.BlockIndex),
+            // No source run exists yet at insertion time (the field is being freshly created), so this
+            // stays block-only comparison -- unchanged from before the r174 shared tie-break.
             CrossRefInsertAs.AboveBelow when type is CrossRefType.Footnote or CrossRefType.Endnote
                 => ResolveNoteDisplayText(doc, type, target, target.Display)
-                    + " " + AboveBelow(target.BlockIndex, sourceBlockIndex),
-            CrossRefInsertAs.AboveBelow => AboveBelow(target.BlockIndex, sourceBlockIndex),
+                    + " " + AboveBelow(target.BlockIndex, null, sourceBlockIndex, null),
+            CrossRefInsertAs.AboveBelow => AboveBelow(target.BlockIndex, null, sourceBlockIndex, null),
             _ => target.Display
         };
     }
@@ -309,6 +311,20 @@ public static class CrossReferences
     /// Optional display-text resolver for the target page. Hosts use this for section restarts, Roman or
     /// letter formats, and chapter prefixes. A null or empty result falls back to <paramref name="pageOf"/>.
     /// </param>
+    /// <param name="sourceRunIndex">
+    /// The field run's own index within <paramref name="sourceParagraph"/> (or, when that is omitted,
+    /// within the sole paragraph at <paramref name="sourceBlockIndex"/>) -- used by above/below to order
+    /// the field against a target that shares its block. Paragraph-local: a table cell's run 0 is not the
+    /// same position as another cell's run 0, which is exactly why <paramref name="sourceParagraph"/>
+    /// matters for a table block.
+    /// </param>
+    /// <param name="sourceParagraph">
+    /// The paragraph that owns the field run, needed to place <paramref name="sourceRunIndex"/> on the
+    /// same whole-block axis as the target (see <paramref name="sourceRunIndex"/>) whenever
+    /// <paramref name="sourceBlockIndex"/> is a table -- one block index spans every cell's paragraphs, so
+    /// the run index alone cannot say which cell it belongs to. Omit only when the block is a standalone
+    /// paragraph (it is then inferred), which every existing single-paragraph caller relies on.
+    /// </param>
     public static string ResolveField(
         TextDocument doc,
         CrossReferenceField field,
@@ -316,17 +332,28 @@ public static class CrossReferences
         int sourceBlockIndex,
         Func<int, int?>? pageOf = null,
         Func<int, string?>? pageTextOf = null,
-        int? sourceRunIndex = null)
+        int? sourceRunIndex = null,
+        Paragraph? sourceParagraph = null)
     {
         ArgumentNullException.ThrowIfNull(doc);
         ArgumentNullException.ThrowIfNull(field);
 
+        // A block that is itself a Paragraph (not a Table) has exactly one candidate paragraph, so the
+        // caller's own paragraph reference is unambiguous and callers that only ever address standalone
+        // paragraphs (most existing REF/NOTEREF call sites and tests) do not need to supply it.
+        var effectiveSourceParagraph = sourceParagraph
+            ?? (sourceBlockIndex >= 0 && sourceBlockIndex < doc.Blocks.Count
+                && doc.Blocks[sourceBlockIndex] is Paragraph soleParagraph
+                    ? soleParagraph
+                    : null);
+        var sourceRunOrdinal = RunOrdinalInBlock(doc, sourceBlockIndex, effectiveSourceParagraph, sourceRunIndex);
+
         return field.Kind switch
         {
-            CrossRefFieldKind.Ref => ResolveBookmarkedRef(doc, field, cached, sourceBlockIndex),
+            CrossRefFieldKind.Ref => ResolveBookmarkedRef(doc, field, cached, sourceBlockIndex, sourceRunOrdinal),
             CrossRefFieldKind.PageRef => ResolveBookmarkedPageRef(doc, field, cached, pageOf, pageTextOf),
             CrossRefFieldKind.NoteRef => ResolveNoteRef(
-                doc, field, cached, sourceBlockIndex, sourceRunIndex),
+                doc, field, cached, sourceBlockIndex, sourceRunOrdinal),
             _ => cached
         };
     }
@@ -614,7 +641,7 @@ public static class CrossReferences
     }
 
     private static string ResolveBookmarkedRef(
-        TextDocument doc, CrossReferenceField field, string cached, int sourceBlockIndex)
+        TextDocument doc, CrossReferenceField field, string cached, int sourceBlockIndex, int? sourceRunOrdinal)
     {
         if (FindBookmarkBlock(doc, field.Target) is not { } location)
             return cached;
@@ -626,7 +653,11 @@ public static class CrossReferences
                 => TryBookmarkedText(doc, field.Target, out var bookmarkedText) ? bookmarkedText : cached,
             CrossRefInsertAs.HeadingNumber => NonEmptyOrCached(HeadingNumberAt(doc, targetBlock), cached),
             CrossRefInsertAs.ParagraphNumber => NonEmptyOrCached(ParagraphNumberAt(doc, targetBlock), cached),
-            CrossRefInsertAs.AboveBelow => AboveBelow(targetBlock, sourceBlockIndex),
+            // r174 remediation: previously AboveBelow(targetBlock, sourceBlockIndex) with no run
+            // comparison at all, so two REF targets sharing sourceBlockIndex (e.g. two cells of the same
+            // table) always answered "above" regardless of which one is textually first.
+            CrossRefInsertAs.AboveBelow => AboveBelow(
+                targetBlock, location.RunOrdinalInBlock, sourceBlockIndex, sourceRunOrdinal),
             _ => cached
         };
     }
@@ -656,7 +687,7 @@ public static class CrossReferences
         CrossReferenceField field,
         string cached,
         int sourceBlockIndex,
-        int? sourceRunIndex)
+        int? sourceRunOrdinal)
     {
         var marker = FindBookmarkedNoteMarker(doc, field.Target);
         if (marker is null
@@ -677,12 +708,15 @@ public static class CrossReferences
         var number = noteMarker.Footnote
             ? NoteDisplayNumber(doc, footnote: true, noteMarker.Id, doc.FootnoteNumbering, cached)
             : NoteDisplayNumber(doc, footnote: false, noteMarker.Id, doc.EndnoteNumbering, cached);
+        // r174 remediation: noteMarker.RunOrdinalInBlock (unlike the paragraph-local RunIndex used
+        // elsewhere for anchor insertion) is comparable across paragraphs of the SAME block, so a note in
+        // a different cell of the same table as the field is no longer always reported "above".
         return field.InsertAs == CrossRefInsertAs.AboveBelow
             ? number + " " + AboveBelow(
                 noteMarker.BlockIndex,
-                noteMarker.RunIndex,
+                noteMarker.RunOrdinalInBlock,
                 sourceBlockIndex,
-                sourceRunIndex)
+                sourceRunOrdinal)
             : number;
     }
 
@@ -717,7 +751,8 @@ public static class CrossReferences
                         footnote,
                         blockIndex,
                         runIndex,
-                        FindBookmarkAroundRun(paragraph, runIndex));
+                        FindBookmarkAroundRun(paragraph, runIndex),
+                        RunOrdinalInBlock(doc, blockIndex, paragraph, runIndex));
                 }
             }
         }
@@ -756,10 +791,11 @@ public static class CrossReferences
                     continue;
 
                 var marker = markers[0];
+                var runOrdinal = RunOrdinalInBlock(doc, blockIndex, paragraph, marker.RunIndex);
                 if (marker.Run.FootnoteId is { } footnoteId)
-                    return new NoteMarker(footnoteId, true, blockIndex, marker.RunIndex, bookmarkName);
+                    return new NoteMarker(footnoteId, true, blockIndex, marker.RunIndex, bookmarkName, runOrdinal);
                 if (marker.Run.EndnoteId is { } endnoteId)
-                    return new NoteMarker(endnoteId, false, blockIndex, marker.RunIndex, bookmarkName);
+                    return new NoteMarker(endnoteId, false, blockIndex, marker.RunIndex, bookmarkName, runOrdinal);
             }
         }
 
@@ -793,12 +829,17 @@ public static class CrossReferences
         return null;
     }
 
+    // RunIndex stays paragraph-local (it feeds PlanInsertion's anchor-around-this-run insertion, which
+    // operates directly against this marker's own paragraph and needs no cross-paragraph comparability).
+    // RunOrdinalInBlock is the separate, whole-block-flattened position AboveBelow's tie-break actually
+    // needs; null for the legacy-numeric-id fallback markers, which carry no located position at all.
     private readonly record struct NoteMarker(
         int Id,
         bool Footnote,
         int? BlockIndex,
         int? RunIndex,
-        string? Anchor);
+        string? Anchor,
+        int? RunOrdinalInBlock = null);
 
     private static IEnumerable<Paragraph> ParagraphsIn(Block block)
     {
@@ -830,7 +871,10 @@ public static class CrossReferences
 
     // TableRowIndex is the logical row inside the containing table when the bookmark was found in a
     // table's own row (directly or in a row cell's nested table); null for a body paragraph bookmark.
-    private readonly record struct BookmarkBlockLocation(int BlockIndex, int? TableRowIndex);
+    // RunOrdinalInBlock is the whole-block-flattened position of the bookmark's start (see
+    // RunOrdinalInBlock), so AboveBelow can order it against a source run in a DIFFERENT paragraph of the
+    // same block -- e.g. a REF field in one table cell targeting a bookmark in another cell of that table.
+    private readonly record struct BookmarkBlockLocation(int BlockIndex, int? TableRowIndex, int? RunOrdinalInBlock = null);
 
     private static BookmarkBlockLocation? FindBookmarkBlock(TextDocument doc, string name)
     {
@@ -843,17 +887,25 @@ public static class CrossReferences
             {
                 for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
                 {
-                    if (ParagraphsInRow(table.Rows[rowIndex]).Any(paragraph =>
-                            paragraph.BookmarkNames.Contains(name, StringComparer.Ordinal)))
-                        return new BookmarkBlockLocation(blockIndex, rowIndex);
+                    var rowParagraph = ParagraphsInRow(table.Rows[rowIndex]).FirstOrDefault(paragraph =>
+                        paragraph.BookmarkNames.Contains(name, StringComparer.Ordinal));
+                    if (rowParagraph is not null)
+                        return new BookmarkBlockLocation(
+                            blockIndex,
+                            rowIndex,
+                            RunOrdinalInBlock(doc, blockIndex, rowParagraph, BookmarkStartRunIndex(rowParagraph, name)));
                 }
 
                 continue;
             }
 
-            if (ParagraphsIn(doc.Blocks[blockIndex]).Any(paragraph =>
-                    paragraph.BookmarkNames.Contains(name, StringComparer.Ordinal)))
-                return new BookmarkBlockLocation(blockIndex, null);
+            var bodyParagraph = ParagraphsIn(doc.Blocks[blockIndex]).FirstOrDefault(paragraph =>
+                paragraph.BookmarkNames.Contains(name, StringComparer.Ordinal));
+            if (bodyParagraph is not null)
+                return new BookmarkBlockLocation(
+                    blockIndex,
+                    null,
+                    RunOrdinalInBlock(doc, blockIndex, bodyParagraph, BookmarkStartRunIndex(bodyParagraph, name)));
         }
 
         return null;
@@ -1044,25 +1096,67 @@ public static class CrossReferences
     private static string NonEmptyOrCached(string value, string cached) =>
         value.Length > 0 ? value : cached;
 
-    private static string AboveBelow(int? targetBlockIndex, int sourceBlockIndex) =>
-        targetBlockIndex is { } target && target > sourceBlockIndex ? "below" : "above";
-
+    // r174 remediation: REF and NOTEREF now share this ONE tie-break (previously REF's own AboveBelow(2
+    // args) never compared a run position at all, so two REF targets in the same top-level block --
+    // e.g. two cells of one table -- always answered "above"). targetRunOrdinal/sourceRunOrdinal are not
+    // paragraph-local run indexes: they are RunOrdinalInBlock's whole-block-flattened positions, so they
+    // stay comparable even when the target and source sit in DIFFERENT paragraphs of the same block (two
+    // table cells). A null on either side (unknown position, or the ResolveText/PlanInsertion callers
+    // that have no source run yet) falls back to the prior block-only comparison.
     private static string AboveBelow(
         int? targetBlockIndex,
-        int? targetRunIndex,
+        int? targetRunOrdinal,
         int sourceBlockIndex,
-        int? sourceRunIndex)
+        int? sourceRunOrdinal)
     {
         if (targetBlockIndex is not { } targetBlock)
             return "above";
         if (targetBlock != sourceBlockIndex)
             return targetBlock > sourceBlockIndex ? "below" : "above";
-        return targetRunIndex is { } targetRun
-            && sourceRunIndex is { } sourceRun
+        return targetRunOrdinal is { } targetRun
+            && sourceRunOrdinal is { } sourceRun
             && targetRun > sourceRun
                 ? "below"
                 : "above";
     }
+
+    // The zero-based ordinal of the run at `runIndexInParagraph` within `paragraph`, counting every run
+    // across the WHOLE top-level block in document order -- i.e. flattening every paragraph the block
+    // contains (every row/cell of a table, via ParagraphsIn) onto one axis. A block index alone only
+    // distinguishes above/below at whole-block granularity; two different paragraphs that share one block
+    // index (two cells of the same table) are otherwise incomparable, since a paragraph-local run index
+    // means nothing outside the paragraph that owns it. Returns null when blockIndex is out of range,
+    // paragraph is null, the run index is null, or paragraph cannot be located inside that block.
+    private static int? RunOrdinalInBlock(TextDocument doc, int blockIndex, Paragraph? paragraph, int? runIndexInParagraph)
+    {
+        if (paragraph is null
+            || runIndexInParagraph is not { } runIndex
+            || blockIndex < 0
+            || blockIndex >= doc.Blocks.Count)
+            return null;
+
+        var ordinal = 0;
+        foreach (var candidate in ParagraphsIn(doc.Blocks[blockIndex]))
+        {
+            if (ReferenceEquals(candidate, paragraph))
+                return ordinal + runIndex;
+            ordinal += candidate.Runs.Count;
+        }
+
+        return null;
+    }
+
+    // The run index within `paragraph` where bookmark `name`'s text range starts, or 0 (the paragraph's
+    // own start) when the bookmark carries no explicit run-level boundary -- e.g. a whole-paragraph body
+    // bookmark recorded only via Paragraph.BookmarkName/BookmarkNames. Mirrors FindBookmarkAroundRun's own
+    // boundary lookup; used only to give the above/below tie-break a run-level position for a bookmarked
+    // REF target, the same granularity FindNoteMarker/FindBookmarkedNoteMarker already give a note marker.
+    private static int BookmarkStartRunIndex(Paragraph paragraph, string name) =>
+        paragraph.BookmarkBoundaries.FirstOrDefault(boundary =>
+            boundary.Kind == BookmarkBoundaryKind.Start
+            && string.Equals(boundary.Name, name, StringComparison.Ordinal)) is { } start
+            ? start.RunIndex
+            : 0;
 
     // The bookmark name on the body paragraph at blockIndex, or null when it carries none.
     private static string? AnchorAt(TextDocument doc, int blockIndex) =>

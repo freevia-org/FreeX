@@ -2753,7 +2753,11 @@ public sealed class WorkbookSession : IDisposable
     public WorkbookCellEditResult SetSelectedSheetTabColor(CellColor? color)
     {
         var selectedSheetIds = CurrentGroupedStructureSheetIds();
-        if (selectedSheetIds.All(sheetId => Workbook.GetSheet(sheetId)?.TabColor == color))
+        // A sheet whose tab colour is a live theme link is never "already" the picked RGB: applying the
+        // pick must still clear TabThemeColor, so only literal-RGB matches count as a no-op.
+        if (selectedSheetIds.All(sheetId => Workbook.GetSheet(sheetId) is { } sheet
+                ? sheet.TabThemeColor is null && sheet.TabColor == color
+                : color is null))
         {
             return new WorkbookCellEditResult(
                 true,

@@ -46,7 +46,17 @@ internal static class XlsxSqrefParser
             : null;
     }
 
-    public static bool TryParseRangeToken(string token, SheetId sheet, out GridRange range)
+    public static bool TryParseCellRangeToken(string token, SheetId sheet, out GridRange range) =>
+        TryParseRangeTokenCore(token, sheet, allowWholeRowOrColumn: false, out range);
+
+    public static bool TryParseRangeToken(string token, SheetId sheet, out GridRange range) =>
+        TryParseRangeTokenCore(token, sheet, allowWholeRowOrColumn: true, out range);
+
+    private static bool TryParseRangeTokenCore(
+        string token,
+        SheetId sheet,
+        bool allowWholeRowOrColumn,
+        out GridRange range)
     {
         range = default;
         var parts = token.Split(':');
@@ -69,7 +79,8 @@ internal static class XlsxSqrefParser
             return true;
         }
 
-        return TryParseWholeColumnOrRowRange(parts[0], parts[1], sheet, out range);
+        return allowWholeRowOrColumn &&
+            TryParseWholeColumnOrRowRange(parts[0], parts[1], sheet, out range);
     }
 
     private static string? NormalizeCellRangeToken(string token)

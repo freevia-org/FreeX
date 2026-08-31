@@ -39,7 +39,7 @@ public sealed partial class Sheet
             ShowZeros                     = ShowZeros,
             FullCalculationOnLoad         = FullCalculationOnLoad,
             PhoneticProperties            = PhoneticProperties,
-            AutoFilter                    = CloneAutoFilter(AutoFilter),
+            AutoFilter                    = WorksheetAutoFilterCloner.Clone(AutoFilter),
             SmartTags                     = SmartTags,
             DataConsolidation             = DataConsolidation,
             SortState                     = SortState,
@@ -110,10 +110,10 @@ public sealed partial class Sheet
             ProtectionMetadata            = ProtectionMetadata?.Clone(),
             // Previously missed fields:
             BackgroundImage               = BackgroundImage,
-            RowPageBreaksMetadata         = ClonePageBreaksMetadata(RowPageBreaksMetadata),
-            ColumnPageBreaksMetadata      = ClonePageBreaksMetadata(ColumnPageBreaksMetadata),
-            CellWatchesMetadata           = CloneCellWatchesMetadata(CellWatchesMetadata),
-            IgnoredErrorsMetadata         = CloneIgnoredErrorsMetadata(IgnoredErrorsMetadata),
+            RowPageBreaksMetadata         = WorksheetMetadataCloner.ClonePageBreaks(RowPageBreaksMetadata),
+            ColumnPageBreaksMetadata      = WorksheetMetadataCloner.ClonePageBreaks(ColumnPageBreaksMetadata),
+            CellWatchesMetadata           = WorksheetMetadataCloner.CloneCellWatches(CellWatchesMetadata),
+            IgnoredErrorsMetadata         = WorksheetMetadataCloner.CloneIgnoredErrors(IgnoredErrorsMetadata),
         };
 
         // Multi-area print areas: remap all areas to the new sheet id.
@@ -181,6 +181,7 @@ public sealed partial class Sheet
         foreach (var table in StructuredTables)
             copy.StructuredTables.Add(CloneStructuredTable(table, newId));
 
+        copy.ConditionalFormats.EnsureCapacity(ConditionalFormats.Count);
         foreach (var cf in ConditionalFormats)
             copy.ConditionalFormats.Add(CloneConditionalFormat(cf, newId, Name, newName));
 
@@ -261,10 +262,8 @@ public sealed partial class Sheet
 
     private static PivotTableModel ClonePivotTable(PivotTableModel pt, SheetId sourceSheetId, SheetId newId)
     {
-        var clonedPt = new PivotTableModel
+        var state = pt.CaptureCopyState() with
         {
-            Name        = pt.Name,
-            CacheId     = pt.CacheId,
             // Only remap SourceRange onto the copy when it actually points at the sheet being
             // duplicated -- a cross-sheet SourceRange (e.g. a pivot table on its own sheet reading
             // data from a Data sheet, Excel's normal "PivotTable on new sheet, data on the original
@@ -291,69 +290,9 @@ public sealed partial class Sheet
             // patch-save guard gracefully treats an empty PackagePart as "needs a full regenerate"
             // rather than colliding, and the full-write path (XlsxPivotTableWriter) always mints a
             // fresh part path regardless of this field.
-            PackagePart = string.Empty,
-            CreatedVersion = pt.CreatedVersion,
-            UpdatedVersion = pt.UpdatedVersion,
-            MinRefreshableVersion = pt.MinRefreshableVersion,
-            DataOnRows = pt.DataOnRows,
-            FirstHeaderRow = pt.FirstHeaderRow,
-            FirstDataRow = pt.FirstDataRow,
-            FirstDataColumn = pt.FirstDataColumn,
-            ShowSubtotals = pt.ShowSubtotals,
-            SubtotalPlacement = pt.SubtotalPlacement,
-            ShowRowGrandTotals = pt.ShowRowGrandTotals,
-            ShowColumnGrandTotals = pt.ShowColumnGrandTotals,
-            RepeatItemLabels = pt.RepeatItemLabels,
-            BlankLineAfterItems = pt.BlankLineAfterItems,
-            ReportLayout = pt.ReportLayout,
-            CompactRowLabelIndent = pt.CompactRowLabelIndent,
-            StyleName = pt.StyleName,
-            ShowRowHeaders = pt.ShowRowHeaders,
-            ShowColumnHeaders = pt.ShowColumnHeaders,
-            ShowRowStripes = pt.ShowRowStripes,
-            ShowColumnStripes = pt.ShowColumnStripes,
-            ShowFieldHeaders = pt.ShowFieldHeaders,
-            ShowContextualTooltips = pt.ShowContextualTooltips,
-            ShowPropertiesInTooltips = pt.ShowPropertiesInTooltips,
-            ShowClassicLayout = pt.ShowClassicLayout,
-            MergeAndCenterLabels = pt.MergeAndCenterLabels,
-            ShowItemsWithNoDataOnRows = pt.ShowItemsWithNoDataOnRows,
-            ShowItemsWithNoDataOnColumns = pt.ShowItemsWithNoDataOnColumns,
-            PageOverThenDown = pt.PageOverThenDown,
-            PageWrap = pt.PageWrap,
-            EmptyValueText = pt.EmptyValueText,
-            ApplyNumberFormats = pt.ApplyNumberFormats,
-            ApplyBorderFormats = pt.ApplyBorderFormats,
-            ApplyFontFormats = pt.ApplyFontFormats,
-            ApplyPatternFormats = pt.ApplyPatternFormats,
-            AutofitColumnsOnUpdate = pt.AutofitColumnsOnUpdate,
-            PreserveFormattingOnUpdate = pt.PreserveFormattingOnUpdate,
-            ShowExpandCollapseButtons = pt.ShowExpandCollapseButtons,
-            EnableDrill = pt.EnableDrill,
-            AsteriskTotals = pt.AsteriskTotals,
-            MultipleFieldFilters = pt.MultipleFieldFilters,
-            EnableFieldDialog = pt.EnableFieldDialog,
-            EnableFieldProperties = pt.EnableFieldProperties,
-            EnableDataValueEditing = pt.EnableDataValueEditing,
-            PrintTitles = pt.PrintTitles,
-            PrintExpandCollapseButtons = pt.PrintExpandCollapseButtons,
-            AltTextTitle = pt.AltTextTitle,
-            AltTextDescription = pt.AltTextDescription,
-            DataCaption = pt.DataCaption,
-            GrandTotalCaption = pt.GrandTotalCaption,
-            MissingCaption = pt.MissingCaption,
-            ErrorCaption = pt.ErrorCaption
+            PackagePart = string.Empty
         };
-        clonedPt.RowFields.AddRange(pt.RowFields);
-        clonedPt.ColumnFields.AddRange(pt.ColumnFields);
-        clonedPt.PageFields.AddRange(pt.PageFields);
-        clonedPt.DataFields.AddRange(pt.DataFields);
-        clonedPt.CalculatedFields.AddRange(pt.CalculatedFields);
-        clonedPt.CalculatedItems.AddRange(pt.CalculatedItems);
-        clonedPt.LabelFilters.AddRange(pt.LabelFilters);
-        clonedPt.ValueFilters.AddRange(pt.ValueFilters);
-        clonedPt.Sorts.AddRange(pt.Sorts);
-        return clonedPt;
+        return PivotTableModel.FromCopyState(state);
     }
 
     /// <summary>
@@ -390,25 +329,12 @@ public sealed partial class Sheet
         int? overrideTableId = null,
         string? overrideName = null)
     {
-        var clonedTable = new StructuredTableModel
+        var state = table.CaptureCopyState() with
         {
             Id = overrideTableId ?? table.Id,
             Name = overrideName ?? table.Name,
             DisplayName = overrideName ?? table.DisplayName,
             Range = RemapRange(table.Range, newId),
-            HasAutoFilter = table.HasAutoFilter,
-            TotalsRowShown = table.TotalsRowShown,
-            HeaderRowCount = table.HeaderRowCount,
-            TotalsRowCount = table.TotalsRowCount,
-            InsertRow = table.InsertRow,
-            InsertRowShift = table.InsertRowShift,
-            Published = table.Published,
-            Comment = table.Comment,
-            StyleName = table.StyleName,
-            ShowFirstColumn = table.ShowFirstColumn,
-            ShowLastColumn = table.ShowLastColumn,
-            ShowRowStripes = table.ShowRowStripes,
-            ShowColumnStripes = table.ShowColumnStripes,
             // R128-model-table-clone-packagepart: deliberately NOT table.PackagePart, mirroring the
             // R127B fix applied to PivotTableModel above (and PivotCacheModel/SlicerModel/TimelineModel
             // in DuplicateSheetCommand.cs / DuplicateSheetDrawingCloner.cs). PackagePart is the exact
@@ -434,102 +360,34 @@ public sealed partial class Sheet
             NativeStyleInfoAttributes = table.NativeStyleInfoAttributes is null
                 ? null
                 : new Dictionary<string, string>(table.NativeStyleInfoAttributes, StringComparer.Ordinal),
-            NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls?.ToArray()
+            NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls?.ToArray(),
+            FilterColumns = table.FilterColumns
+                .Select(column => StructuredTableModel.DeepCloneFilterColumn(column))
+                .ToArray()
         };
-        clonedTable.Columns.AddRange(table.Columns);
-        clonedTable.FilterColumns.AddRange(table.FilterColumns.Select(CloneStructuredTableFilterColumn));
-        return clonedTable;
+        return StructuredTableModel.FromCopyState(state);
     }
-
-    private static StructuredTableFilterColumnModel CloneStructuredTableFilterColumn(StructuredTableFilterColumnModel column) =>
-        new(
-            column.ColumnId,
-            column.Values.ToArray(),
-            column.IncludeBlank,
-            column.CustomFilters.Select(CloneStructuredTableCustomFilter).ToArray(),
-            column.CustomFiltersAnd,
-            column.CustomFiltersAndRaw,
-            column.NativeCustomFiltersAttributes is null
-                ? null
-                : new Dictionary<string, string>(column.NativeCustomFiltersAttributes, StringComparer.Ordinal),
-            column.NativeFilterXmls.ToArray(),
-            column.NativeAttributes is null
-                ? null
-                : new Dictionary<string, string>(column.NativeAttributes, StringComparer.Ordinal));
-
-    private static StructuredTableCustomFilterModel CloneStructuredTableCustomFilter(StructuredTableCustomFilterModel filter) =>
-        new(
-            filter.Operator,
-            filter.Value,
-            filter.NativeAttributes is null
-                ? null
-                : new Dictionary<string, string>(filter.NativeAttributes, StringComparer.Ordinal));
 
     private static ConditionalFormat CloneConditionalFormat(ConditionalFormat cf, SheetId newId, string sourceSheetName, string newSheetName)
     {
-        IReadOnlyList<GridRange>? remappedAdditional = cf.AdditionalRanges is null
-            ? null
-            : cf.AdditionalRanges.Select(r => RemapRange(r, newId)).ToList();
-
-        var clonedFormat = new ConditionalFormat
-        {
-            AppliesTo            = RemapRange(cf.AppliesTo, newId),
-            AdditionalRanges     = remappedAdditional,
-            Priority             = cf.Priority,
-            RuleType             = cf.RuleType,
-            Operator             = cf.Operator,
-            Value1               = cf.Value1,
-            Value2               = cf.Value2,
-            FormatIfTrue         = cf.FormatIfTrue?.Clone(),
-            MinColor             = cf.MinColor,
-            MidColor             = cf.MidColor,
-            MaxColor             = cf.MaxColor,
-            UseThreeColorScale   = cf.UseThreeColorScale,
-            MinThresholdType     = cf.MinThresholdType,
-            MinThresholdValue    = cf.MinThresholdValue,
-            MinThresholdGreaterThanOrEqual = cf.MinThresholdGreaterThanOrEqual,
-            MidThresholdType     = cf.MidThresholdType,
-            MidThresholdValue    = cf.MidThresholdValue,
-            MidThresholdGreaterThanOrEqual = cf.MidThresholdGreaterThanOrEqual,
-            MaxThresholdType     = cf.MaxThresholdType,
-            MaxThresholdValue    = cf.MaxThresholdValue,
-            MaxThresholdGreaterThanOrEqual = cf.MaxThresholdGreaterThanOrEqual,
-            DataBarColor         = cf.DataBarColor,
-            DataBarMinThresholdType = cf.DataBarMinThresholdType,
-            DataBarMinThresholdValue = cf.DataBarMinThresholdValue,
-            DataBarMaxThresholdType = cf.DataBarMaxThresholdType,
-            DataBarMaxThresholdValue = cf.DataBarMaxThresholdValue,
-            DataBarShowValue     = cf.DataBarShowValue,
-            DataBarMinLength     = cf.DataBarMinLength,
-            DataBarMaxLength     = cf.DataBarMaxLength,
-            DataBarGradient      = cf.DataBarGradient,
-            DataBarBorder        = cf.DataBarBorder,
-            DataBarAxisPosition  = cf.DataBarAxisPosition,
-            DataBarAxisColor     = cf.DataBarAxisColor,
-            DataBarNegativeFillColor = cf.DataBarNegativeFillColor,
-            DataBarNegativeBorderColor = cf.DataBarNegativeBorderColor,
-            AboveAverage         = cf.AboveAverage,
-            EqualAverage         = cf.EqualAverage,
-            StdDevCount          = cf.StdDevCount,
-            FormulaText          = RewriteSameSheetQualifiedFormula(cf.FormulaText, sourceSheetName, newSheetName),
-            IconSetStyle         = cf.IconSetStyle,
-            IconSetShowValue     = cf.IconSetShowValue,
-            IconSetReverse       = cf.IconSetReverse,
-            TopBottomRank        = cf.TopBottomRank,
-            TopBottomPercent     = cf.TopBottomPercent,
-            TextRuleText         = cf.TextRuleText,
-            DateOccurringPeriod  = cf.DateOccurringPeriod,
-            StopIfTrue           = cf.StopIfTrue,
-            NativeAttributes     = cf.NativeAttributes,
-            NativeChildXmls      = ConditionalFormatNativeMetadata.RemoveX14IdNativeChildXmls(cf.NativeChildXmls),
-            NativePayloadAttributes = cf.NativePayloadAttributes,
-            NativePayloadChildXmls = cf.NativePayloadChildXmls,
-            NativeContainerAttributes = cf.NativeContainerAttributes,
-            NativeContainerChildXmls = cf.NativeContainerChildXmls
-        };
-        clonedFormat.IconSetThresholds.AddRange(cf.IconSetThresholds);
-        clonedFormat.IconOverrides.AddRange(cf.IconOverrides);
+        var clonedFormat = cf.Clone(Guid.NewGuid());
+        clonedFormat.AppliesTo = RemapRange(cf.AppliesTo, newId);
+        clonedFormat.AdditionalRanges = RemapRanges(cf.AdditionalRanges, newId);
+        clonedFormat.FormulaText = RewriteSameSheetQualifiedFormula(cf.FormulaText, sourceSheetName, newSheetName);
         return clonedFormat;
+    }
+
+    private static IReadOnlyList<GridRange>? RemapRanges(
+        IReadOnlyList<GridRange>? ranges,
+        SheetId newId)
+    {
+        if (ranges is null)
+            return null;
+
+        var remapped = new List<GridRange>(ranges.Count);
+        for (var index = 0; index < ranges.Count; index++)
+            remapped.Add(RemapRange(ranges[index], newId));
+        return remapped;
     }
 
     private static DataValidation CloneDataValidation(DataValidation dv, SheetId newId, string sourceSheetName, string newSheetName)
@@ -728,50 +586,6 @@ public sealed partial class Sheet
 
         foreach (var row in SubtotalRows)
             copy.SubtotalRows.Add(row);
-    }
-
-    private static WorksheetPageBreaksMetadataModel? ClonePageBreaksMetadata(WorksheetPageBreaksMetadataModel? metadata)
-    {
-        if (metadata is null)
-            return null;
-
-        return new WorksheetPageBreaksMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(metadata.NativeAttributes, StringComparer.Ordinal),
-            BreakNativeAttributes = metadata.BreakNativeAttributes.ToDictionary(
-                pair => pair.Key,
-                pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal))
-        };
-    }
-
-    private static WorksheetCellWatchesMetadataModel? CloneCellWatchesMetadata(WorksheetCellWatchesMetadataModel? metadata)
-    {
-        if (metadata is null)
-            return null;
-
-        return new WorksheetCellWatchesMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(metadata.NativeAttributes, StringComparer.Ordinal),
-            WatchNativeAttributes = metadata.WatchNativeAttributes.ToDictionary(
-                pair => pair.Key,
-                pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal),
-                StringComparer.OrdinalIgnoreCase)
-        };
-    }
-
-    private static WorksheetIgnoredErrorsMetadataModel? CloneIgnoredErrorsMetadata(WorksheetIgnoredErrorsMetadataModel? metadata)
-    {
-        if (metadata is null)
-            return null;
-
-        return new WorksheetIgnoredErrorsMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(metadata.NativeAttributes, StringComparer.Ordinal),
-            ErrorNativeAttributes = metadata.ErrorNativeAttributes.ToDictionary(
-                pair => pair.Key,
-                pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal),
-                StringComparer.OrdinalIgnoreCase)
-        };
     }
 
     private static WorksheetSingleXmlCellsModel? CloneSingleXmlCells(WorksheetSingleXmlCellsModel? model)

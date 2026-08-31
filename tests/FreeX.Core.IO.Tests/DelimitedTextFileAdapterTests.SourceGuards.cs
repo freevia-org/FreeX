@@ -52,6 +52,17 @@ public sealed partial class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Save_ReadsNumberFormatWithoutCloningTheWholeCellStyle()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoSource("DelimitedTextWorkbookWriter.cs");
+
+        source.Should().Contain("numberFormat = workbook.GetStyleNumberFormat(cell.StyleId);");
+        source.Should().NotContain(
+            "workbook.GetStyle(cell.StyleId)",
+            "the dense export path only needs an immutable format string and must not allocate a defensive style clone per cell");
+    }
+
+    [Fact]
     public void Save_UsesSinglePassDateTimeShapeProbeWithoutLinq()
     {
         var source = TestWorkspaceFiles.ReadCoreIoSource("DelimitedTextWorkbookWriter.cs");

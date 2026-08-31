@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -309,5 +310,76 @@ public sealed class WorkbookReferenceNavigatorTests
             ["zName", "Alpha"]);
 
         choices.Should().Equal("B5", "D10", "Alpha", "zName");
+    }
+
+    [Fact]
+    public void BuildReferenceChoices_TrimsBeforeDeduplicatingAndPreservesFirstTierSpelling()
+    {
+        var choices = WorkbookReferenceNavigator.BuildReferenceChoices(
+            " B5 ",
+            ["b5", " D10 ", "d10"],
+            ["zName", "Alpha", "  D10  ", "alpha"]);
+
+        choices.Should().Equal("B5", "D10", "Alpha", "zName");
+    }
+
+    [Fact]
+    public void BuildReferenceChoices_BlankInputsFallBackToA1()
+    {
+        var choices = WorkbookReferenceNavigator.BuildReferenceChoices(
+            " ",
+            ["", "\t"],
+            ["  "]);
+
+        choices.Should().Equal("A1");
+    }
+
+    [Fact]
+    public void BuildReferenceChoices_UsesOrdinalIgnoreCaseSetInsteadOfRepeatedListScans()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookReferenceNavigator.cs"));
+
+        source.Should().Contain("new HashSet<string>(StringComparer.OrdinalIgnoreCase)");
+        source.Should().Contain("if (!seen.Add(trimmed))");
+        source.Should().NotContain("choices.Any(existing =>");
+    }
+
+    [BenchmarkFact]
+    public void Benchmark_BuildReferenceChoices_ThirtyThousandUniqueNames_RemainsLinearAfterSorting()
+    {
+        const int nameCount = 30_000;
+        var names = Enumerable.Range(0, nameCount)
+            .Select(index => $"Name{nameCount - index:D5}")
+            .ToArray();
+
+        _ = WorkbookReferenceNavigator.BuildReferenceChoices("A1", ["B2"], ["Warmup"]);
+        _ = GC.GetAllocatedBytesForCurrentThread();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var startedAt = Stopwatch.GetTimestamp();
+        var choices = WorkbookReferenceNavigator.BuildReferenceChoices("A1", ["B2"], names);
+        var elapsed = Stopwatch.GetElapsedTime(startedAt);
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            "PERF WORKBOOK_REFERENCE_CHOICES " +
+            $"names={nameCount} elapsed_ms={elapsed.TotalMilliseconds:F2} " +
+            $"allocated_bytes={allocatedBytes:N0}");
+
+        choices.Should().HaveCount(nameCount + 2);
+        choices[0].Should().Be("A1");
+        choices[1].Should().Be("B2");
+        choices[2].Should().Be("Name00001");
+        choices[^1].Should().Be($"Name{nameCount:D5}");
+        allocatedBytes.Should().BeLessThan(4 * 1024 * 1024,
+            "deduplication should allocate one lookup set instead of one capturing predicate per candidate");
+        elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2),
+            "deduplication should use hash lookups instead of roughly 450 million prior-item comparisons");
     }
 }

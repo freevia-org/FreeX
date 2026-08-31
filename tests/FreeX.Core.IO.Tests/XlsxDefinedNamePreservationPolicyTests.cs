@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Diagnostics;
 using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.Model;
@@ -126,6 +127,85 @@ public sealed class XlsxDefinedNamePreservationPolicyTests
         foreach (var attribute in source.Attributes().Where(attribute => attribute.Name.LocalName != "comment"))
             target.Attribute(attribute.Name)!.Value.Should().Be(attribute.Value);
         XlsxDefinedNamePreservationPolicy.BackfillMissingAttributes(source, target).Should().BeFalse();
+    }
+
+    [Fact]
+    public void FirstElementIndex_PreservesFirstDuplicateAndSeparatesGlobalFromScopedNames()
+    {
+        var firstGlobal = CreateDefinedName("Shared", "first", null);
+        var caseVariantDuplicate = CreateDefinedName("shared", "duplicate", null);
+        var scoped = CreateDefinedName("Shared", "scoped", 0);
+
+        var index = XlsxDefinedNamePreservationPolicy.CreateFirstElementIndex(
+            [firstGlobal, caseVariantDuplicate, scoped]);
+
+        index.Should().HaveCount(2);
+        index[XlsxDefinedNamePreservationPolicy.GetKey(firstGlobal)].Should().BeSameAs(firstGlobal);
+        index[XlsxDefinedNamePreservationPolicy.GetKey(scoped)].Should().BeSameAs(scoped);
+
+        var appended = CreateDefinedName("Added", "appended", 1);
+        index.TryAdd(XlsxDefinedNamePreservationPolicy.GetKey(appended), appended).Should().BeTrue();
+        index[XlsxDefinedNamePreservationPolicy.GetKey(appended)].Should().BeSameAs(appended);
+    }
+
+    [Fact]
+    public void DefinedNamePreservers_IndexTargetsOnceWithoutPerSourceTargetRescans()
+    {
+        var fullSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorkbookMetadataPreserver.cs");
+        var fullMethod = fullSource[
+            fullSource.IndexOf("private static bool MergeDefinedNames", StringComparison.Ordinal)..
+            fullSource.IndexOf("private static void InsertCustomWorkbookViewsInOrder", StringComparison.Ordinal)];
+        var patchSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxFileAdapter.SourcePackageSnapshot.cs");
+        var patchMethod = patchSource[
+            patchSource.IndexOf("private static void RestorePatchWorkbookDefinedNames", StringComparison.Ordinal)..
+            patchSource.IndexOf("private static readonly string[] RestoredDefinedNamesPrecedingSiblings", StringComparison.Ordinal)];
+
+        fullMethod.Should().Contain("CreateFirstElementIndex(");
+        fullMethod.Should().Contain("existingNamesByKey.TryGetValue(key, out var existingElement)");
+        fullMethod.Should().Contain("existingNamesByKey.TryAdd(key, candidate)");
+        fullMethod.Should().NotContain(".FirstOrDefault(");
+        patchMethod.Should().Contain("CreateFirstElementIndex(");
+        patchMethod.Should().Contain("existingNamesByKey.TryGetValue(key, out var existing)");
+        patchMethod.Should().Contain("existingNamesByKey.TryAdd(key, resurrected)");
+        patchMethod.Should().NotContain(".FirstOrDefault(");
+    }
+
+    [BenchmarkFact]
+    public void Benchmark_FirstElementIndexTenThousandNames_ReportsTimingAndAllocation()
+    {
+        const int nameCount = 10_000;
+        const int iterations = 5;
+        var names = Enumerable.Range(0, nameCount)
+            .Select(index => CreateDefinedName($"Name{index}", $"Sheet1!$A${index + 1}", index % 4))
+            .ToArray();
+
+        XlsxDefinedNamePreservationPolicy.CreateFirstElementIndex(names).Should().HaveCount(nameCount);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var elapsed = new double[iterations];
+        var found = 0;
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        for (var iteration = 0; iteration < iterations; iteration++)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var index = XlsxDefinedNamePreservationPolicy.CreateFirstElementIndex(names);
+            for (var nameIndex = 0; nameIndex < names.Length; nameIndex++)
+            {
+                if (index.ContainsKey(XlsxDefinedNamePreservationPolicy.GetKey(names[nameIndex])))
+                    found++;
+            }
+            stopwatch.Stop();
+            elapsed[iteration] = stopwatch.Elapsed.TotalMilliseconds;
+        }
+
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        found.Should().Be(nameCount * iterations);
+        Console.WriteLine(
+            "PERF DEFINED_NAME_INDEX " +
+            $"names={nameCount} steps={iterations} mean_ms={elapsed.Average():F2} " +
+            $"max_ms={elapsed.Max():F2} allocated_bytes={allocatedBytes:N0}");
     }
 
     [Theory]

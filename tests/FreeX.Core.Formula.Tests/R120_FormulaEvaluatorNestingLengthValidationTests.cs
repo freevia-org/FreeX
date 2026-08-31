@@ -103,6 +103,16 @@ public sealed class R120_FormulaEvaluatorNestingLengthValidationTests
     }
 
     [Fact]
+    public void ValidateFunctionNestingDepth_InvalidArity_DoesNotThrow()
+    {
+        var ast = FormulaEvaluator.ParseFormula("IF(1)");
+
+        var act = () => FormulaEvaluator.ValidateFunctionNestingDepth(ast);
+
+        act.Should().NotThrow("the standalone nesting validator must not enforce function arity");
+    }
+
+    [Fact]
     public void ValidateFormulaEntryLength_ExceedsMax_Throws()
     {
         var enteredText = "=" + string.Join("+", Enumerable.Repeat("1", 5000));

@@ -2244,7 +2244,8 @@ public partial class MainWindow
     private void ColorSheetTabs(SheetId sheetId, IReadOnlyCollection<SheetId> sheetIds)
     {
         var sheet = _workbook.GetSheet(sheetId);
-        if (!TryShowColorPicker("Tab Color", sheet?.TabColor ?? new CellColor(15, 109, 140), allowNoColor: true, out var tabColor, out _))
+        var seedColor = sheet?.ResolveTabColor(_workbook.Theme) ?? new CellColor(15, 109, 140);
+        if (!TryShowColorPicker("Tab Color", seedColor, allowNoColor: true, out var tabColor, out _))
             return;
 
         ApplySelectedSheetTabColor(tabColor);

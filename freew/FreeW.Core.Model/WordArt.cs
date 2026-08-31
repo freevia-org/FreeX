@@ -2,7 +2,7 @@
 
 // MODEL-DESIGN CHOICE (roadmap item X2, WordArt / decorative text):
 // WordArt is modelled as an OPTIONAL INLINE RUN MARK (Run.WordArt) exactly like Run.Shape / Run.Equation /
-// Run.Image â€” the established FreeW pattern for every inline feature, so WordArt flows through the existing
+// Run.Image — the established FreeW pattern for every inline feature, so WordArt flows through the existing
 // run sequence (table cells, headers/footers, hyperlink/comment wrapping) with zero new plumbing.
 //
 // In modern Word, WordArt is a text box (wps:wsp) whose run text carries DrawingML *text effects* on its

@@ -144,4 +144,122 @@ public sealed class R32_MoveCopyRangeMergedCellTests
         outcome.ErrorMessage.Should().Be("Cannot copy a range that intersects merged cells.");
         sheet.MergedRegions.Should().BeEquivalentTo([source, siblingMerge]);
     }
+
+    [Fact]
+    public void Copy_ContainedSourceMergeThatAlsoOverlapsDestination_RemainsExempt()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(workbook);
+
+        var source = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 4)); // A1:D1
+        sheet.AddMergedRegion(source);
+        sheet.SetCell(source.Start, Cell.FromValue(new TextValue("overlap")));
+
+        var command = new CopyRangeCommand(
+            sheet.Id,
+            source,
+            new CellAddress(sheet.Id, 1, 3)); // C1:F1 overlaps the source merge
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue(outcome.ErrorMessage);
+        var translated = new GridRange(
+            new CellAddress(sheet.Id, 1, 3),
+            new CellAddress(sheet.Id, 1, 6));
+        sheet.MergedRegions.Should().Equal(source, translated);
+
+        command.Revert(ctx);
+
+        sheet.MergedRegions.Should().Equal(source);
+        sheet.GetCell(source.Start)!.Value.Should().Be(new TextValue("overlap"));
+    }
+
+    [Fact]
+    public void Copy_PartiallyIntersectingSourceMerge_IsRejectedBeforeMutatingDestination()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(workbook);
+
+        var source = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 2)); // A1:B1
+        var partialMerge = new GridRange(
+            new CellAddress(sheet.Id, 1, 2),
+            new CellAddress(sheet.Id, 1, 3)); // B1:C1 intersects but is not contained
+        sheet.AddMergedRegion(partialMerge);
+        sheet.SetCell(source.Start, Cell.FromValue(new TextValue("source")));
+
+        var destination = new CellAddress(sheet.Id, 1, 5);
+        sheet.SetCell(destination, Cell.FromValue(new TextValue("unchanged")));
+        var command = new CopyRangeCommand(sheet.Id, source, destination);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be("Cannot copy a range that intersects merged cells.");
+        sheet.MergedRegions.Should().Equal(partialMerge);
+        sheet.GetCell(source.Start)!.Value.Should().Be(new TextValue("source"));
+        sheet.GetCell(destination)!.Value.Should().Be(new TextValue("unchanged"));
+    }
+
+    [Fact]
+    public void Copy_MultipleContainedMerges_ApplyAndRevertPreserveMergeOrdering()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(workbook);
+
+        var firstSourceMerge = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 2));
+        var secondSourceMerge = new GridRange(
+            new CellAddress(sheet.Id, 1, 3),
+            new CellAddress(sheet.Id, 1, 4));
+        var unrelatedMerge = new GridRange(
+            new CellAddress(sheet.Id, 5, 1),
+            new CellAddress(sheet.Id, 5, 2));
+        sheet.AddMergedRegion(firstSourceMerge);
+        sheet.AddMergedRegion(secondSourceMerge);
+        sheet.AddMergedRegion(unrelatedMerge);
+
+        var source = new GridRange(firstSourceMerge.Start, secondSourceMerge.End); // A1:D1
+        var command = new CopyRangeCommand(sheet.Id, source, new CellAddress(sheet.Id, 3, 1));
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue(outcome.ErrorMessage);
+        var firstTranslatedMerge = new GridRange(
+            new CellAddress(sheet.Id, 3, 1),
+            new CellAddress(sheet.Id, 3, 2));
+        var secondTranslatedMerge = new GridRange(
+            new CellAddress(sheet.Id, 3, 3),
+            new CellAddress(sheet.Id, 3, 4));
+        sheet.MergedRegions.Should().Equal(
+            firstSourceMerge,
+            secondSourceMerge,
+            unrelatedMerge,
+            firstTranslatedMerge,
+            secondTranslatedMerge);
+
+        command.Revert(ctx);
+
+        sheet.MergedRegions.Should().Equal(firstSourceMerge, secondSourceMerge, unrelatedMerge);
+    }
+
+    [Fact]
+    public void Copy_MergeValidationAndUndoUseLinearMembershipShapes()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+            "src", "FreeX.Core.Commands", "CopyRangeCommand.cs");
+
+        source.Should().Contain("foreach (var range in sheet.MergedRegions)");
+        source.Should().Contain("continue;", "contained source merges must remain exempt from collision checks");
+        source.Should().Contain("new HashSet<GridRange>(_addedMergedRegions)");
+        source.Should().NotContain("!copiedMerges.Contains(range)");
+        source.Should().NotContain("!added.Contains(range)");
+    }
 }

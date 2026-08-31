@@ -46,14 +46,17 @@ public sealed class FreeWPictureImportWorkflowTests
         var picker = FreeWPictureImportPlanner.CreateRequest().PickerPlan;
 
         picker.PictureFiles.Patterns.Should().Equal(
-            "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tif", "*.tiff", "*.svg");
+            "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tif", "*.tiff", "*.svg", "*.wmf", "*.emf");
         picker.PictureFiles.MimeTypes.Should().Equal(
-            "image/png", "image/jpeg", "image/gif", "image/bmp", "image/tiff", "image/svg+xml");
+            "image/png", "image/jpeg", "image/gif", "image/bmp", "image/tiff", "image/svg+xml",
+            "image/x-wmf", "image/x-emf");
         picker.FileTypes.SelectMany(type => type.Patterns).Should().Contain("*.*");
         picker.BuildWpfFilter().Should()
             .Contain("*.gif")
             .And.Contain("*.tiff")
             .And.Contain("*.svg")
+            .And.Contain("*.wmf")
+            .And.Contain("*.emf")
             .And.EndWith("All files (*.*)|*.*");
     }
 
@@ -63,6 +66,10 @@ public sealed class FreeWPictureImportWorkflowTests
     [InlineData("photo.tiff", FreeWPictureImportSourceKind.PreservedRaster)]
     [InlineData("diagram.svg", FreeWPictureImportSourceKind.Svg)]
     [InlineData("photo.webp", FreeWPictureImportSourceKind.NativeRasterization)]
+    // Round 172: metafiles must be PRESERVED, never rasterized -- rasterizing would re-label the
+    // bytes as PNG and throw away the vector original that Word round-trips.
+    [InlineData("drawing.wmf", FreeWPictureImportSourceKind.PreservedRaster)]
+    [InlineData("drawing.EMF", FreeWPictureImportSourceKind.PreservedRaster)]
     public void SourceClassificationOwnsPreservationAndRasterizationPolicy(
         string sourceName,
         FreeWPictureImportSourceKind expected)

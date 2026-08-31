@@ -73,13 +73,59 @@ public sealed class CompositeWorkbookCommand : IWorkbookCommand, IEstimatesMemor
             }
             catch (Exception ex)
             {
-                // An inner command threw mid-apply: roll back the sub-commands that
-                // already succeeded so the composite stays atomic, then surface a
-                // failure outcome rather than leaving the operation half-applied.
+                // An inner command threw mid-apply. Roll back in two stages so the composite
+                // stays atomic, then surface a failure outcome rather than leaving the
+                // operation half-applied.
+                //
+                // Stage 1 -- the THROWING command itself. It is deliberately absent from
+                // _applied (it never returned an outcome), but an IWorkbookCommand that mutates
+                // in several steps can already have changed the workbook before it threw:
+                // EditCellsCommand, for instance, captures each cell's CellEditCompanionSnapshot
+                // into _snapshot and THEN writes that cell, one at a time inside a loop, so a
+                // throw on cell K leaves cells 0..K-1 written. Its Revert() replays the
+                // snapshots it managed to capture, so it CAN undo a partial apply -- we just
+                // have to ask it. Best-effort and wrapped in its own try/catch: a command whose
+                // Revert is unhappy about half-applied state must not abort the sibling
+                // rollback below, and `ex` (not the revert's own failure) is what the caller
+                // needs to see in the returned outcome.
+                try
+                {
+                    command.Revert(ctx);
+                }
+                catch
+                {
+                    // Best-effort: nothing more can be done for this command, and the original
+                    // failure is the one worth reporting.
+                }
+
+                // Stage 2 -- the siblings that fully succeeded before it.
                 RevertApplied(ctx);
                 return new CommandOutcome(false, $"{Label}: {ex.Message}");
             }
 
+            // R175-commands-composite-failure-outcome-audit-1: note the deliberate asymmetry with
+            // the catch above -- the failing command is NOT reverted here, and must not be.
+            //
+            // A command that THREW is mid-flight by definition: it entered Apply and never
+            // returned, so asking it to roll back is always the right call (CommandBus.Execute
+            // makes the same call via TryRevert on its own throw path). A command that RETURNED a
+            // failure outcome is a different animal: the overwhelmingly common case is a clean
+            // up-front rejection (protection guards, "target no longer exists", invalid input)
+            // that never touched the workbook, and a Revert on that path is actively destructive
+            // for any command that snapshots INSIDE Apply after its guards. SetCalculationMode-
+            // Command is the worked example: it returns failure on an undefined mode BEFORE
+            // assigning _previousMode, so _previousMode still holds default(WorkbookCalculation-
+            // Mode) == Automatic -- reverting it would silently flip a Manual workbook to
+            // Automatic, corrupting a setting the command never wrote. 74 of the 236 Revert
+            // implementations audited have no never-applied guard and would misbehave the same way.
+            //
+            // Nor is there any signal here to tell "failed after mutating" from "rejected up
+            // front". An audit of the failure returns in FreeX.Core.Commands found no command that
+            // mutates the workbook and then returns a failure outcome -- the convention is
+            // validate-then-mutate -- so the correct place to hold this line is that convention,
+            // not a blanket rollback that would break the well-behaved majority. If a
+            // mutate-then-fail command is ever introduced, give it the guard its Revert needs and
+            // have it throw (or revert itself) rather than reverting from here.
             if (!outcome.Success)
             {
                 RevertApplied(ctx);

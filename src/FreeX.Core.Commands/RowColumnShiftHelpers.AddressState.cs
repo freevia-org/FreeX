@@ -25,11 +25,11 @@ internal static partial class RowColumnShiftHelpers
             sheet.FrozenCols,
             sheet.SplitRow,
             sheet.SplitColumn,
-            ClonePageBreaksMetadata(sheet.RowPageBreaksMetadata),
-            ClonePageBreaksMetadata(sheet.ColumnPageBreaksMetadata),
+            WorksheetMetadataCloner.ClonePageBreaks(sheet.RowPageBreaksMetadata),
+            WorksheetMetadataCloner.ClonePageBreaks(sheet.ColumnPageBreaksMetadata),
             CaptureList(workbook.WatchedCells),
-            CloneCellWatchesMetadata(sheet.CellWatchesMetadata),
-            CloneIgnoredErrorsMetadata(sheet.IgnoredErrorsMetadata),
+            WorksheetMetadataCloner.CloneCellWatches(sheet.CellWatchesMetadata),
+            WorksheetMetadataCloner.CloneIgnoredErrors(sheet.IgnoredErrorsMetadata),
             sheet.AutoFilter,
             sheet.SmartTags,
             sheet.DataConsolidation,
@@ -86,7 +86,7 @@ internal static partial class RowColumnShiftHelpers
 
         var snapshots = new List<TextBoxAddressSnapshot>(sheet.TextBoxes.Count);
         foreach (var textBox in sheet.TextBoxes)
-            snapshots.Add(new TextBoxAddressSnapshot(textBox, textBox.Anchor, textBox.Width, textBox.Height));
+            snapshots.Add(new TextBoxAddressSnapshot(textBox, textBox.Anchor, textBox.Width, textBox.Height, textBox.Hyperlink));
 
         return snapshots;
     }
@@ -98,7 +98,7 @@ internal static partial class RowColumnShiftHelpers
 
         var snapshots = new List<DrawingShapeAddressSnapshot>(sheet.DrawingShapes.Count);
         foreach (var shape in sheet.DrawingShapes)
-            snapshots.Add(new DrawingShapeAddressSnapshot(shape, shape.Anchor, shape.Width, shape.Height));
+            snapshots.Add(new DrawingShapeAddressSnapshot(shape, shape.Anchor, shape.Width, shape.Height, shape.Hyperlink));
 
         return snapshots;
     }
@@ -126,7 +126,8 @@ internal static partial class RowColumnShiftHelpers
                 picture.SourceColumnCount,
                 [.. picture.Cells],
                 picture.Width,
-                picture.Height));
+                picture.Height,
+                picture.Hyperlink));
         }
 
         return snapshots;
@@ -319,12 +320,12 @@ internal static partial class RowColumnShiftHelpers
         sheet.FrozenCols = snapshot.FrozenCols;
         sheet.SplitRow = snapshot.SplitRow;
         sheet.SplitColumn = snapshot.SplitColumn;
-        sheet.RowPageBreaksMetadata = ClonePageBreaksMetadata(snapshot.RowPageBreaksMetadata);
-        sheet.ColumnPageBreaksMetadata = ClonePageBreaksMetadata(snapshot.ColumnPageBreaksMetadata);
+        sheet.RowPageBreaksMetadata = WorksheetMetadataCloner.ClonePageBreaks(snapshot.RowPageBreaksMetadata);
+        sheet.ColumnPageBreaksMetadata = WorksheetMetadataCloner.ClonePageBreaks(snapshot.ColumnPageBreaksMetadata);
 
         RestoreWatchedCells(workbook, snapshot);
-        sheet.CellWatchesMetadata = CloneCellWatchesMetadata(snapshot.CellWatchesMetadata);
-        sheet.IgnoredErrorsMetadata = CloneIgnoredErrorsMetadata(snapshot.IgnoredErrorsMetadata);
+        sheet.CellWatchesMetadata = WorksheetMetadataCloner.CloneCellWatches(snapshot.CellWatchesMetadata);
+        sheet.IgnoredErrorsMetadata = WorksheetMetadataCloner.CloneIgnoredErrors(snapshot.IgnoredErrorsMetadata);
         sheet.AutoFilter = snapshot.AutoFilter;
         sheet.SmartTags = snapshot.SmartTags;
         sheet.DataConsolidation = snapshot.DataConsolidation;
@@ -339,6 +340,9 @@ internal static partial class RowColumnShiftHelpers
             // (see ResizeSpanForShift) back to the exact pre-edit size, not just the pre-edit anchor.
             entry.TextBox.Width = entry.Width;
             entry.TextBox.Height = entry.Height;
+            // freex-hyperlinks F1: undo ShiftDrawingObjectHyperlinkForShift's target rewrite back to
+            // the exact pre-edit hyperlink.
+            entry.TextBox.Hyperlink = entry.Hyperlink;
             sheet.TextBoxes.Add(entry.TextBox);
         }
 
@@ -348,6 +352,7 @@ internal static partial class RowColumnShiftHelpers
             entry.Shape.Anchor = entry.Anchor;
             entry.Shape.Width = entry.Width;
             entry.Shape.Height = entry.Height;
+            entry.Shape.Hyperlink = entry.Hyperlink;
             sheet.DrawingShapes.Add(entry.Shape);
         }
 
@@ -359,6 +364,7 @@ internal static partial class RowColumnShiftHelpers
             entry.Picture.IsLinkedToSourceRange = entry.IsLinkedToSourceRange;
             entry.Picture.Width = entry.Width;
             entry.Picture.Height = entry.Height;
+            entry.Picture.Hyperlink = entry.Hyperlink;
 
             // P23: undo a structural edit that had refreshed a linked picture's rendered
             // snapshot (RefreshLinkedPictureSnapshot) must also put the geometry/cell cache back,
@@ -793,10 +799,18 @@ internal static partial class RowColumnShiftHelpers
             return;
         }
 
-        // Consume the live list against the shifted side of each original->shifted pair, one live
-        // occurrence per pair, so duplicate addresses are handled correctly.
-        var unmatchedLive = new List<CellAddress>(workbook.WatchedCells);
+        // Count live occurrences once so reconciliation remains linear even for large Watch Windows.
+        // Each surviving original consumes at most one live occurrence of its shifted address.
+        var liveOccurrences = new Dictionary<CellAddress, WatchedCellOccurrenceCounts>(
+            workbook.WatchedCells.Count);
+        foreach (var address in workbook.WatchedCells)
+        {
+            liveOccurrences.TryGetValue(address, out var counts);
+            liveOccurrences[address] = counts with { Available = counts.Available + 1 };
+        }
+
         var restored = new List<CellAddress>(snapshot.WatchedCells.Count);
+        var consumedCount = 0;
         foreach (var (original, shifted) in pairs)
         {
             if (shifted is not { } survived)
@@ -807,21 +821,35 @@ internal static partial class RowColumnShiftHelpers
                 continue;
             }
 
-            var index = unmatchedLive.IndexOf(survived);
-            if (index < 0)
+            if (!liveOccurrences.TryGetValue(survived, out var counts) ||
+                counts.Consumed >= counts.Available)
                 continue; // user removed this watch after the command ran; don't resurrect it.
 
-            unmatchedLive.RemoveAt(index);
+            liveOccurrences[survived] = counts with { Consumed = counts.Consumed + 1 };
+            consumedCount++;
             restored.Add(original);
         }
 
-        // Whatever remains in unmatchedLive was added by the user after the command ran (it was never
-        // produced by the shift) — keep it, unshifted, after undo instead of silently discarding it.
-        restored.AddRange(unmatchedLive);
+        // Skip the first consumed occurrences of each shifted address, exactly matching the old
+        // first-IndexOf/remove behavior. Append unmatched/user-added watches in their live order.
+        restored.EnsureCapacity(restored.Count + workbook.WatchedCells.Count - consumedCount);
+        foreach (var address in workbook.WatchedCells)
+        {
+            var counts = liveOccurrences[address];
+            if (counts.Consumed > 0)
+            {
+                liveOccurrences[address] = counts with { Consumed = counts.Consumed - 1 };
+                continue;
+            }
+
+            restored.Add(address);
+        }
 
         workbook.WatchedCells.Clear();
         workbook.WatchedCells.AddRange(restored);
     }
+
+    private readonly record struct WatchedCellOccurrenceCounts(int Available, int Consumed);
 
     private static WorksheetCellWatchesMetadataModel? ShiftCellWatchesMetadata(
         WorksheetCellWatchesMetadataModel? metadata,
@@ -874,7 +902,7 @@ internal static partial class RowColumnShiftHelpers
         if (!string.IsNullOrWhiteSpace(autoFilter.Reference) && shiftedReference is null)
             return null;
 
-        var shiftedColumns = ShiftAutoFilterColumns(autoFilter, shiftedReference, shift).ToList();
+        var shiftedColumns = ShiftAutoFilterColumns(autoFilter, shiftedReference, shift);
         var changed =
             !ReferencesEqual(autoFilter.Reference, shiftedReference) ||
             !AutoFilterColumnsEqual(autoFilter.FilterColumns, shiftedColumns);
@@ -890,21 +918,23 @@ internal static partial class RowColumnShiftHelpers
         return clone;
     }
 
-    private static IEnumerable<WorksheetAutoFilterColumnModel> ShiftAutoFilterColumns(
+    private static List<WorksheetAutoFilterColumnModel> ShiftAutoFilterColumns(
         WorksheetAutoFilterModel autoFilter,
         string? shiftedReference,
         AddressShift shift)
     {
+        var shiftedColumns = new List<WorksheetAutoFilterColumnModel>(autoFilter.FilterColumns.Count);
         if (shift.Axis != AddressShiftAxis.Columns ||
             string.IsNullOrWhiteSpace(autoFilter.Reference) ||
             string.IsNullOrWhiteSpace(shiftedReference) ||
             !TryParseSingleReference(autoFilter.Reference, shift, out var oldRange) ||
             !TryParseSingleReference(shiftedReference, shift, out var newRange))
         {
-            return autoFilter.FilterColumns.Select(column => WorksheetAutoFilterCloner.CloneColumn(column));
+            foreach (var column in autoFilter.FilterColumns)
+                shiftedColumns.Add(WorksheetAutoFilterCloner.CloneColumn(column));
+            return shiftedColumns;
         }
 
-        var shiftedColumns = new List<WorksheetAutoFilterColumnModel>();
         foreach (var column in autoFilter.FilterColumns)
         {
             if (column.ColumnId < 0)
@@ -1136,6 +1166,7 @@ internal static partial class RowColumnShiftHelpers
                 else
                     entry.TextBox.Width = ResizeSpanForShift(sheet, entry.Anchor, entry.Width, shift);
             }
+            entry.TextBox.Hyperlink = ShiftDrawingObjectHyperlinkForShift(entry.Hyperlink, shift);
             sheet.TextBoxes.Add(entry.TextBox);
         }
     }
@@ -1157,6 +1188,7 @@ internal static partial class RowColumnShiftHelpers
                 else
                     entry.Shape.Width = ResizeSpanForShift(sheet, entry.Anchor, entry.Width, shift);
             }
+            entry.Shape.Hyperlink = ShiftDrawingObjectHyperlinkForShift(entry.Hyperlink, shift);
             sheet.DrawingShapes.Add(entry.Shape);
         }
     }
@@ -1198,6 +1230,8 @@ internal static partial class RowColumnShiftHelpers
                 RefreshLinkedPictureSnapshot(workbook, sheet, entry.Picture, newRange);
             }
 
+            entry.Picture.Hyperlink = ShiftDrawingObjectHyperlinkForShift(entry.Hyperlink, shift);
+
             sheet.Pictures.Add(entry.Picture);
         }
     }
@@ -1235,6 +1269,45 @@ internal static partial class RowColumnShiftHelpers
         shiftedAnchor = default;
         return false;
     }
+
+    /// <summary>
+    /// freex-hyperlinks F1: rewrites a drawing object's internal ('Place in This Document')
+    /// <see cref="DrawingObjectHyperlink.Target"/> for a row/column insert or delete, mirroring
+    /// DrawingObjectHyperlinkRewriter (SheetCommands.cs, R107) which already does the identical
+    /// rewrite -- via the same <see cref="FormulaRewriter.Rewrite"/> call -- for Rename Sheet and
+    /// Delete Sheet. ShiftDrawingShapes/ShiftTextBoxes/ShiftPictures relocate a shape/textbox/
+    /// picture's Anchor (and, for pictures, LinkedSourceRange) on every structural row/column edit
+    /// but never touched this field, so the hyperlink kept pointing at the pre-shift cell forever
+    /// (it is written back into the drawing XML verbatim on every save --
+    /// XlsxWorksheetDrawingObjectWriter.BuildObjectHyperlinkElement). An external ("Existing File
+    /// or Web Page") hyperlink -- TargetMode == "External" -- is left completely untouched: only an
+    /// internal target (TargetMode null) can possibly be a cell/sheet reference at all.
+    /// </summary>
+    private static DrawingObjectHyperlink? ShiftDrawingObjectHyperlinkForShift(
+        DrawingObjectHyperlink? hyperlink, AddressShift shift)
+    {
+        if (hyperlink is null || hyperlink.TargetMode is not null)
+            return hyperlink;
+
+        var rewritten = FormulaRewriter.Rewrite(hyperlink.Target, ToRewriteOperation(shift), shift.SheetName);
+        return rewritten is null || rewritten == hyperlink.Target ? hyperlink : hyperlink with { Target = rewritten };
+    }
+
+    /// <summary>
+    /// Converts this row/column-shift helper's own <see cref="AddressShift"/> value into the
+    /// equivalent <see cref="FreeX.Core.Formula.RewriteOperation"/> so <see cref="FormulaRewriter"/>
+    /// can be reused for <see cref="ShiftDrawingObjectHyperlinkForShift"/> exactly as it already is
+    /// for every other reference-bearing field (formulas, named ranges, hyperlink bookmarks) this
+    /// same structural edit rewrites.
+    /// </summary>
+    private static RewriteOperation ToRewriteOperation(AddressShift shift) => (shift.Axis, shift.Kind) switch
+    {
+        (AddressShiftAxis.Rows, AddressShiftKind.Insert) => new InsertRowsOp(shift.SheetName, shift.Start, shift.Count),
+        (AddressShiftAxis.Rows, AddressShiftKind.Delete) => new DeleteRowsOp(shift.SheetName, shift.Start, shift.Count),
+        (AddressShiftAxis.Columns, AddressShiftKind.Insert) => new InsertColsOp(shift.SheetName, shift.Start, shift.Count),
+        (AddressShiftAxis.Columns, AddressShiftKind.Delete) => new DeleteColsOp(shift.SheetName, shift.Start, shift.Count),
+        _ => throw new InvalidOperationException($"Unhandled AddressShift axis/kind combination: {shift.Axis}/{shift.Kind}")
+    };
 
     /// <summary>
     /// R86-commands-insert-move-refadjust-5-2: Excel's default "Move and size with cells"
@@ -2064,102 +2137,27 @@ internal static partial class RowColumnShiftHelpers
                 && table.Range.End.Row >= shift.Start
                 && table.Range.End.Row <= shift.End);
 
-        var clone = new StructuredTableModel
+        var state = table.CaptureCopyState() with
         {
-            Id = table.Id,
-            Name = table.Name,
-            DisplayName = table.DisplayName,
             Range = range,
-            HasAutoFilter = table.HasAutoFilter,
             TotalsRowShown = totalsRowShown,
-            HeaderRowCount = table.HeaderRowCount,
-            TotalsRowCount = table.TotalsRowCount,
-            InsertRow = table.InsertRow,
-            InsertRowShift = table.InsertRowShift,
-            Published = table.Published,
-            Comment = table.Comment,
-            StyleName = table.StyleName,
-            ShowFirstColumn = table.ShowFirstColumn,
-            ShowLastColumn = table.ShowLastColumn,
-            ShowRowStripes = table.ShowRowStripes,
-            ShowColumnStripes = table.ShowColumnStripes,
-            PackagePart = table.PackagePart,
             NativeSortStateXml = ShiftSortStateNativeXml(table.NativeSortStateXml, shift),
             NativeAttributes = CloneReadOnlyDictionary(table.NativeAttributes),
             NativeChildXmls = table.NativeChildXmls?.ToArray(),
             NativeAutoFilterAttributes = CloneReadOnlyDictionary(table.NativeAutoFilterAttributes),
             NativeAutoFilterChildXmls = table.NativeAutoFilterChildXmls?.ToArray(),
             NativeStyleInfoAttributes = CloneReadOnlyDictionary(table.NativeStyleInfoAttributes),
-            NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls?.ToArray()
+            NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls?.ToArray(),
+            Columns = ReconcileStructuredTableColumns(table, range, shift),
+            FilterColumns = ReconcileStructuredTableFilterColumns(table, range, shift)
         };
-        clone.Columns.AddRange(ReconcileStructuredTableColumns(table, range, shift));
-        clone.FilterColumns.AddRange(ReconcileStructuredTableFilterColumns(table, range, shift));
-        return clone;
+        return StructuredTableModel.FromCopyState(state);
     }
 
     private static StructuredTableFilterColumnModel CloneStructuredTableFilterColumn(
         StructuredTableFilterColumnModel column,
         int? columnId = null) =>
-        new(
-            columnId ?? column.ColumnId,
-            column.Values.ToArray(),
-            column.IncludeBlank,
-            column.CustomFilters.Select(filter => new StructuredTableCustomFilterModel(
-                filter.Operator,
-                filter.Value,
-                CloneReadOnlyDictionary(filter.NativeAttributes))).ToArray(),
-            column.CustomFiltersAnd,
-            column.CustomFiltersAndRaw,
-            CloneReadOnlyDictionary(column.NativeCustomFiltersAttributes),
-            column.NativeFilterXmls.ToArray(),
-            CloneReadOnlyDictionary(column.NativeAttributes));
-
-    private static WorksheetPageBreaksMetadataModel? ClonePageBreaksMetadata(
-        WorksheetPageBreaksMetadataModel? metadata)
-    {
-        if (metadata is null)
-            return null;
-
-        return new WorksheetPageBreaksMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(metadata.NativeAttributes, StringComparer.Ordinal),
-            BreakNativeAttributes = metadata.BreakNativeAttributes.ToDictionary(
-                pair => pair.Key,
-                pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal))
-        };
-    }
-
-    private static WorksheetCellWatchesMetadataModel? CloneCellWatchesMetadata(
-        WorksheetCellWatchesMetadataModel? metadata)
-    {
-        if (metadata is null)
-            return null;
-
-        return new WorksheetCellWatchesMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(metadata.NativeAttributes, StringComparer.Ordinal),
-            WatchNativeAttributes = metadata.WatchNativeAttributes.ToDictionary(
-                pair => pair.Key,
-                pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal),
-                StringComparer.OrdinalIgnoreCase)
-        };
-    }
-
-    private static WorksheetIgnoredErrorsMetadataModel? CloneIgnoredErrorsMetadata(
-        WorksheetIgnoredErrorsMetadataModel? metadata)
-    {
-        if (metadata is null)
-            return null;
-
-        return new WorksheetIgnoredErrorsMetadataModel
-        {
-            NativeAttributes = new Dictionary<string, string>(metadata.NativeAttributes, StringComparer.Ordinal),
-            ErrorNativeAttributes = metadata.ErrorNativeAttributes.ToDictionary(
-                pair => pair.Key,
-                pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal),
-                StringComparer.OrdinalIgnoreCase)
-        };
-    }
+        StructuredTableModel.DeepCloneFilterColumn(column, columnId);
 
     private static IReadOnlyDictionary<string, string>? CloneReadOnlyDictionary(
         IReadOnlyDictionary<string, string>? source) =>
@@ -2498,9 +2496,13 @@ internal readonly record struct StyleOnlyEntry(uint Row, uint Col, StyleId Style
 // R86-commands-insert-move-refadjust-5-2: Width/Height are captured alongside Anchor so a row/column
 // insert or delete that grows/shrinks the object's span (see ResizeSpanForShift) can be undone back
 // to its exact pre-edit size, not just its pre-edit anchor cell.
-internal readonly record struct TextBoxAddressSnapshot(TextBoxModel TextBox, CellAddress Anchor, double Width, double Height);
+// freex-hyperlinks F1: Hyperlink is captured alongside Anchor/Width/Height so a row/column insert
+// or delete that rewrites the object's internal ('Place in This Document') hyperlink target (see
+// ShiftDrawingObjectHyperlinkForShift) can be undone back to its exact pre-edit target, not just
+// its pre-edit position/size.
+internal readonly record struct TextBoxAddressSnapshot(TextBoxModel TextBox, CellAddress Anchor, double Width, double Height, DrawingObjectHyperlink? Hyperlink);
 
-internal readonly record struct DrawingShapeAddressSnapshot(DrawingShapeModel Shape, CellAddress Anchor, double Width, double Height);
+internal readonly record struct DrawingShapeAddressSnapshot(DrawingShapeModel Shape, CellAddress Anchor, double Width, double Height, DrawingObjectHyperlink? Hyperlink);
 
 internal readonly record struct PictureAddressSnapshot(
     PictureModel Picture,
@@ -2511,7 +2513,8 @@ internal readonly record struct PictureAddressSnapshot(
     uint SourceColumnCount,
     IReadOnlyList<PictureCellSnapshot> Cells,
     double Width,
-    double Height);
+    double Height,
+    DrawingObjectHyperlink? Hyperlink);
 
 internal readonly record struct SparklineAddressSnapshot(
     SparklineModel Sparkline,

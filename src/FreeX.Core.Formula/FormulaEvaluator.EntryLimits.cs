@@ -57,39 +57,28 @@ public sealed partial class FormulaEvaluator
     /// (non-nested) function calls -- e.g. <c>=SUM(f1(),f2(),...,f100())</c> -- is left alone, since
     /// none of those individually nest more than one level deep.
     /// </summary>
-    public static void ValidateFunctionNestingDepth(FormulaNode root)
-    {
-        if (GetFunctionNestingDepth(root) > MaxNestedFunctionLevels)
-        {
-            throw new FormulaParseException(
-                $"Formula contains too many nested function levels; maximum is {MaxNestedFunctionLevels}.");
-        }
-    }
+    public static void ValidateFunctionNestingDepth(FormulaNode root) =>
+        ValidateFormulaEntryAstCore(root, validateArity: false, validateNesting: true);
 
     /// <summary>
-    /// Returns the deepest chain of <see cref="FunctionCallNode"/> nesting reachable from
-    /// <paramref name="root"/> -- 0 if no function call is reachable at all, otherwise 1 plus the
-    /// deepest nesting reachable through any of a function call's own arguments. Non-function
-    /// structural nodes (binary/unary operators, unions, array constants, etc.) are transparent:
-    /// they don't add a level themselves, they just pass the deepest level found in their operands
-    /// through, mirroring how Excel only counts actual function-in-function nesting, not every
-    /// syntactic grouping. Covers the exact same <see cref="FormulaNode"/> subtype family as
-    /// <see cref="ValidateBuiltInFunctionArity"/>'s walk.
-    ///
-    /// Deliberately iterative (an explicit heap-allocated <see cref="Stack{T}"/> of
-    /// work-items) rather than a natively-recursive method call per node. A chained-operator
-    /// formula such as <c>1+1+1+...+1</c> parses to a purely left-deep <see cref="BinaryOpNode"/>
-    /// chain -- <see cref="Parser.ParseAddition"/> and its sibling precedence levels build that
-    /// shape with a <c>while</c> loop, so it is NOT bounded by <see cref="Parser.EnterParseFrame"/>'s
-    /// recursion-depth guard (<see cref="FormulaSafetyLimits.MaxParseDepth"/>) the way genuinely
-    /// recursive-descent constructs (nested parens/calls/braces) are; only its raw token count is
-    /// bounded (<see cref="FormulaSafetyLimits.MaxParseTokens"/> = 16,384). A chain thousands of
-    /// levels deep -- entirely possible within Excel's own 8,192-character formula-length limit --
-    /// would overflow the native call stack if this walk recursed one C# method call per
-    /// <see cref="BinaryOpNode"/> level; using an explicit stack keeps the walk safe regardless of
-    /// how deep that chain gets.
+    /// Validates all entry-time constraints that require walking a parsed formula tree. Arity is
+    /// checked before a recorded nesting violation is reported, preserving the historical
+    /// validation order while traversing the tree only once.
     /// </summary>
-    private static int GetFunctionNestingDepth(FormulaNode root)
+    internal static void ValidateFormulaEntryAst(FormulaNode root) =>
+        ValidateFormulaEntryAstCore(root, validateArity: true, validateNesting: true);
+
+    /// <summary>
+    /// Iteratively walks the complete formula-node family. Children are pushed in reverse source
+    /// order so the stack processes them in the same left-to-right depth-first order as the former
+    /// recursive arity validator. This also keeps left-deep operator chains with thousands of nodes
+    /// within the formula-entry limit on the managed heap instead of consuming one native call-stack
+    /// frame per node.
+    /// </summary>
+    private static void ValidateFormulaEntryAstCore(
+        FormulaNode root,
+        bool validateArity,
+        bool validateNesting)
     {
         var pending = new Stack<(FormulaNode Node, int FunctionDepth)>();
         pending.Push((root, 0));
@@ -103,18 +92,21 @@ public sealed partial class FormulaEvaluator
             {
                 case FunctionCallNode call:
                 {
-                    var childDepth = functionDepth + 1;
-                    if (childDepth > maxDepth)
+                    if (validateArity)
+                        ValidateBuiltInCallArity(call);
+
+                    var childDepth = validateNesting ? functionDepth + 1 : 0;
+                    if (validateNesting && childDepth > maxDepth)
                         maxDepth = childDepth;
 
-                    foreach (var argument in call.Arguments)
-                        pending.Push((argument, childDepth));
+                    for (var i = call.Arguments.Count - 1; i >= 0; i--)
+                        pending.Push((call.Arguments[i], childDepth));
                     break;
                 }
 
                 case BinaryOpNode binaryOp:
-                    pending.Push((binaryOp.Left, functionDepth));
                     pending.Push((binaryOp.Right, functionDepth));
+                    pending.Push((binaryOp.Left, functionDepth));
                     break;
 
                 case UnaryOpNode unaryOp:
@@ -122,36 +114,43 @@ public sealed partial class FormulaEvaluator
                     break;
 
                 case IntersectionNode intersection:
-                    pending.Push((intersection.Left, functionDepth));
                     pending.Push((intersection.Right, functionDepth));
+                    pending.Push((intersection.Left, functionDepth));
                     break;
 
                 case NamedRangeEndpointNode endpoint:
-                    pending.Push((endpoint.Start, functionDepth));
                     pending.Push((endpoint.End, functionDepth));
+                    pending.Push((endpoint.Start, functionDepth));
                     break;
 
                 case UnionNode union:
-                    foreach (var area in union.Areas)
-                        pending.Push((area, functionDepth));
+                    for (var i = union.Areas.Count - 1; i >= 0; i--)
+                        pending.Push((union.Areas[i], functionDepth));
                     break;
 
                 case ArrayConstantNode array:
-                    foreach (var row in array.Rows)
-                        foreach (var cell in row)
-                            pending.Push((cell, functionDepth));
+                    for (var rowIndex = array.Rows.Count - 1; rowIndex >= 0; rowIndex--)
+                    {
+                        var row = array.Rows[rowIndex];
+                        for (var cellIndex = row.Count - 1; cellIndex >= 0; cellIndex--)
+                            pending.Push((row[cellIndex], functionDepth));
+                    }
                     break;
 
                 // NumberNode, StringNode, BooleanNode, OmittedArgumentNode, CellRefNode,
                 // RangeRefNode, FullColumnRangeRefNode, FullRowRangeRefNode, NamedRangeNode,
                 // StructuredReferenceNode, StructuredCurrentRowReferenceNode, and ErrorNode are all
-                // leaves with no nested FormulaNode operands to walk -- same leaf set
-                // ValidateBuiltInFunctionArity's own switch documents.
+                // leaves for this validation walk. RangeRefNode's endpoints are sealed CellRefNode
+                // leaves, so no function subtree can be hidden inside them.
                 default:
                     break;
             }
         }
 
-        return maxDepth;
+        if (validateNesting && maxDepth > MaxNestedFunctionLevels)
+        {
+            throw new FormulaParseException(
+                $"Formula contains too many nested function levels; maximum is {MaxNestedFunctionLevels}.");
+        }
     }
 }

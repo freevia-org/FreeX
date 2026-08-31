@@ -42,6 +42,14 @@ public enum PrintPreviewPaintKind
     /// the arrow / flag / rating-bar / star icon-set glyph shapes.
     /// </summary>
     Polygon,
+
+    /// <summary>
+    /// R168-presentation-preview-headerfooter-picture-1: an encoded raster image (PNG/JPEG bytes)
+    /// painted into a rectangle. Added so the preview can show a header/footer <c>&amp;G</c> picture
+    /// as the picture it is; a backend that cannot decode the bytes should fall back to the same
+    /// <see cref="PrintPreviewInstructionBuilder.PicturePlaceholderFill"/> box it used before.
+    /// </summary>
+    Image,
 }
 
 /// <summary>
@@ -61,8 +69,35 @@ public readonly record struct PrintPreviewPaintInstruction(
     string Text,
     PageTextFont Font,
     PageTextAlignment Alignment,
-    IReadOnlyList<LayoutPoint>? Points = null)
+    IReadOnlyList<LayoutPoint>? Points = null,
+    byte[]? ImageBytes = null,
+    string ImageContentType = "")
 {
+    /// <summary>
+    /// R168-presentation-preview-headerfooter-picture-1: an encoded raster image painted into
+    /// <paramref name="bounds"/>. The bytes are passed through untouched (no platform image type
+    /// leaks into this model); a backend paints them with whatever decoder it has.
+    /// </summary>
+    public static PrintPreviewPaintInstruction Image(
+        LayoutRect bounds,
+        byte[] imageBytes,
+        string contentType) =>
+        new(
+            PrintPreviewPaintKind.Image,
+            bounds.Left,
+            bounds.Top,
+            bounds.Width,
+            bounds.Height,
+            null,
+            null,
+            0,
+            "",
+            default,
+            PageTextAlignment.Left,
+            null,
+            imageBytes,
+            contentType);
+
     /// <summary>A filled/outlined rectangle from a top-left corner plus size.</summary>
     public static PrintPreviewPaintInstruction Rectangle(
         LayoutRect bounds,
@@ -356,7 +391,15 @@ public static class PrintPreviewInstructionBuilder
                     PageTextAlignment.Left));
         }
 
-        // 11. Header / footer bands.
+        // 11. Header / footer bands -- pictures first, then the band text beside them.
+        // R168-presentation-preview-headerfooter-picture-1: the render model used to drop header/
+        // footer pictures entirely, so this preview showed the band's text and nothing else. Unlike
+        // the worksheet-picture step above, these are painted as the real image: the bounds come from
+        // the same shared planner the print and PDF paths use, so the preview shows what will print.
+        foreach (var picture in layout.HeaderFooterPictureBlocks)
+            instructions.Add(PrintPreviewPaintInstruction.Image(
+                picture.Bounds, picture.ImageBytes, picture.ContentType));
+
         foreach (var run in layout.HeaderRuns)
             instructions.Add(PrintPreviewPaintInstruction.TextRun(
                 run.TextOrigin, run.Bounds.Width, run.Text, BandFont, run.Alignment));

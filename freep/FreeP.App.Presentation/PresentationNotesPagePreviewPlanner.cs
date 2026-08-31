@@ -579,14 +579,6 @@ public static class PresentationNotesPagePreviewPlanner
         return result;
     }
 
-    /// <summary>
-    /// Average width, in points, of one Helvetica glyph at font-size 1 (a conservative
-    /// approximation since the portable PDF writer has no real font-metrics table). Used only to
-    /// decide word-wrap break points; it deliberately over-estimates slightly so wrapped lines
-    /// never run past the notes-box width in the rendered PDF.
-    /// </summary>
-    private const double AverageGlyphWidthPerFontSize = 0.55;
-
     private static IReadOnlyList<PresentationNotesPageNoteLine> SplitStyledNoteLines(
         TextBody? notes,
         double notesBoxWidth,
@@ -598,8 +590,11 @@ public static class PresentationNotesPagePreviewPlanner
         if (paragraphs.Count == 0 || paragraphs.All(paragraph => string.IsNullOrWhiteSpace(paragraph.Text)))
             return [];
 
+        // r173 remediation: budget by MEASURED width, not by a character count derived from a
+        // flat average. The exporter positions runs with real Helvetica advance widths, so a
+        // character-count budget let a line the wrapper believed fitted be drawn past the notes
+        // box -- and, for a bold capitalised run, clean off the page.
         var maxWidth = Math.Max(1, notesBoxWidth - (2 * inset));
-        var maxChars = Math.Max(1, (int)(maxWidth / Math.Max(0.01, fontSize * AverageGlyphWidthPerFontSize)));
 
         var lines = new List<PresentationNotesPageNoteLine>();
         foreach (var paragraph in paragraphs)
@@ -612,7 +607,8 @@ public static class PresentationNotesPagePreviewPlanner
                 var prefixedLine = PrefixLine(logicalLines[index], prefix);
                 lines.AddRange(WrapStyledParagraph(
                     prefixedLine,
-                    maxChars,
+                    maxWidth,
+                    fontSize,
                     paragraph.ContinuationPrefix));
             }
         }
@@ -686,19 +682,35 @@ public static class PresentationNotesPagePreviewPlanner
     }
 
     /// <summary>
-    /// Breaks one paragraph into lines that each fit within <paramref name="maxChars"/>,
-    /// wrapping at word boundaries. A single word longer than <paramref name="maxChars"/> is
-    /// hard-broken so it never overruns the notes box width.
+    /// Breaks one paragraph into lines whose MEASURED width fits <paramref name="maxWidth"/>,
+    /// wrapping at word boundaries. A single word too wide for any line is hard-broken so it never
+    /// overruns the notes box. Widths come from the same Helvetica advance tables the exporter
+    /// positions runs with, taking the wider of the regular and bold face per character, so the
+    /// wrap decision and the rendered result cannot disagree.
     /// </summary>
     private static IReadOnlyList<string> WrapParagraph(
         string paragraph,
-        int maxChars,
+        double maxWidth,
+        double fontSize,
         string continuationPrefix = "")
     {
         if (paragraph.Length == 0)
             return [string.Empty];
 
-        if (paragraph.Length <= maxChars)
+        double Measure(string text) =>
+            PresentationNotesPagePdfExporter.MeasureWidestFaceRunWidth(text, fontSize);
+
+        // The smallest prefix of a word that still exceeds the box, used to hard-break a single
+        // word too long to fit on any line.
+        int LongestPrefixThatFits(string word)
+        {
+            var count = 0;
+            while (count < word.Length && Measure(word[..(count + 1)]) <= maxWidth)
+                count++;
+            return Math.Max(1, count);
+        }
+
+        if (Measure(paragraph) <= maxWidth)
             return [paragraph];
 
         var words = paragraph.Split(' ');
@@ -708,7 +720,7 @@ public static class PresentationNotesPagePreviewPlanner
         foreach (var word in words)
         {
             var candidateWord = word;
-            while (candidateWord.Length > maxChars)
+            while (Measure(candidateWord) > maxWidth)
             {
                 if (current.Length > 0)
                 {
@@ -716,18 +728,19 @@ public static class PresentationNotesPagePreviewPlanner
                     current.Clear();
                 }
 
-                lines.Add(candidateWord[..maxChars]);
-                candidateWord = candidateWord[maxChars..];
+                var take = LongestPrefixThatFits(candidateWord);
+                lines.Add(candidateWord[..take]);
+                candidateWord = candidateWord[take..];
             }
 
-            var separatorLength = current.Length > 0 ? 1 : 0;
-            if (current.Length + separatorLength + candidateWord.Length > maxChars)
+            var separator = current.Length > 0 ? " " : string.Empty;
+            if (Measure(current.ToString() + separator + candidateWord) > maxWidth)
             {
                 if (current.Length > 0)
                     lines.Add(current.ToString());
                 current.Clear();
                 if (!string.IsNullOrEmpty(continuationPrefix) &&
-                    candidateWord.Length + continuationPrefix.Length <= maxChars)
+                    Measure(continuationPrefix + candidateWord) <= maxWidth)
                 {
                     current.Append(continuationPrefix);
                 }
@@ -749,11 +762,12 @@ public static class PresentationNotesPagePreviewPlanner
 
     private static IReadOnlyList<PresentationNotesPageNoteLine> WrapStyledParagraph(
         IReadOnlyList<NoteTextSegment> segments,
-        int maxChars,
+        double maxWidth,
+        double fontSize,
         string continuationPrefix)
     {
         var paragraph = string.Concat(segments.Select(segment => segment.Text));
-        var wrappedLines = WrapParagraph(paragraph, maxChars, continuationPrefix);
+        var wrappedLines = WrapParagraph(paragraph, maxWidth, fontSize, continuationPrefix);
         var result = new List<PresentationNotesPageNoteLine>(wrappedLines.Count);
         var cursor = 0;
         for (var lineIndex = 0; lineIndex < wrappedLines.Count; lineIndex++)

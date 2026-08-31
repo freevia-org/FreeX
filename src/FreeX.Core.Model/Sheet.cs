@@ -185,6 +185,8 @@ public sealed partial class Sheet
     private MergeRegionIndex? _mergeIndex;
     private GridRange? _usedRangeCache;
     private bool _usedRangeCacheDirty = true;
+    private GridRange? _styleOnlyUsedRangeCache;
+    private bool _styleOnlyUsedRangeCacheDirty = true;
     private int _contentVersion;
 
     /// <summary>Unique identifier for this sheet.</summary>
@@ -226,8 +228,29 @@ public sealed partial class Sheet
     /// </summary>
     public void NotifyContentRecalculated() => _contentVersion++;
 
+    private string _name;
+
+    /// <summary>
+    /// Raised after the display name changes so an owning workbook can keep its name index current.
+    /// The old and new values are nullable to keep the notification safe when callers bypass
+    /// nullable annotations at runtime.
+    /// </summary>
+    internal event Action<Sheet, string?, string?>? NameChanged;
+
     /// <summary>Display name of the sheet (shown on tab).</summary>
-    public string Name { get; set; }
+    public string Name
+    {
+        get => _name;
+        set
+        {
+            if (string.Equals(_name, value, StringComparison.Ordinal))
+                return;
+
+            var oldName = _name;
+            _name = value;
+            NameChanged?.Invoke(this, oldName, value);
+        }
+    }
 
     /// <summary>Column widths override (1-based column index → width in characters).</summary>
     public Dictionary<uint, double> ColumnWidths { get; } = [];
@@ -950,7 +973,7 @@ public sealed partial class Sheet
     public Sheet(SheetId id, string name)
     {
         Id = id;
-        Name = name;
+        _name = name;
     }
 
     /// <summary>Pre-size cell storage for bulk writers.</summary>
@@ -1549,7 +1572,7 @@ public sealed partial class Sheet
             _usedRangeCacheDirty = false;
         }
 
-        return MergeStyleOnlyIntoUsedRange(_usedRangeCache);
+        return MergeUsedRanges(_usedRangeCache, GetStyleOnlyUsedRange());
     }
 
     /// <summary>
@@ -1685,36 +1708,35 @@ public sealed partial class Sheet
     private readonly record struct SpillMember(ScalarValue Value, uint AnchorRow, uint AnchorCol);
 
     /// <summary>
-    /// Widens <paramref name="valueRange"/> (the cached value/spill bounding box) to also cover any
-    /// style-only (formatting-only, empty) cells. Style-only writes don't flow through
-    /// <see cref="TrackUsedRangeCellSet"/>/<see cref="TrackUsedRangeCellCleared"/>, so this is
-    /// recomputed on every call instead of being folded into the incremental cache — cheap since it
-    /// only walks the (typically small) style-only overlay dictionary plus the compressed run list,
-    /// not the full grid.
+    /// Returns the cached bounding range of style-only (formatting-only, empty) cells. This cache is
+    /// independent from the value/spill used-range cache because style-only mutations flow through
+    /// a separate API surface; see <see cref="InvalidateStyleOnlyUsedRange"/>.
     /// </summary>
-    private GridRange? MergeStyleOnlyIntoUsedRange(GridRange? valueRange)
+    private GridRange? GetStyleOnlyUsedRange()
+    {
+        if (_styleOnlyUsedRangeCacheDirty)
+        {
+            _styleOnlyUsedRangeCache = ComputeStyleOnlyUsedRange();
+            _styleOnlyUsedRangeCacheDirty = false;
+        }
+
+        return _styleOnlyUsedRangeCache;
+    }
+
+    private GridRange? ComputeStyleOnlyUsedRange()
     {
         if (_styleOnly.Count == 0 && _styleOnlyRuns is not { Count: > 0 })
-            return valueRange;
+            return null;
 
-        uint minRow, maxRow, minCol, maxCol;
-        if (valueRange is { } range)
-        {
-            minRow = range.Start.Row;
-            maxRow = range.End.Row;
-            minCol = range.Start.Col;
-            maxCol = range.End.Col;
-        }
-        else
-        {
-            minRow = uint.MaxValue;
-            maxRow = 0;
-            minCol = uint.MaxValue;
-            maxCol = 0;
-        }
+        var minRow = uint.MaxValue;
+        uint maxRow = 0;
+        var minCol = uint.MaxValue;
+        uint maxCol = 0;
+        var found = false;
 
         foreach (var (row, col) in _styleOnly.Keys)
         {
+            found = true;
             if (row < minRow) minRow = row;
             if (row > maxRow) maxRow = row;
             if (col < minCol) minCol = col;
@@ -1725,17 +1747,66 @@ public sealed partial class Sheet
         {
             foreach (var run in runs)
             {
+                var effectiveStartCol = run.StartCol;
+                var hasEffectiveCell = true;
+                while (_styleOnlyRunTombstones?.Contains((run.Row, effectiveStartCol)) == true &&
+                       !_styleOnly.ContainsKey((run.Row, effectiveStartCol)))
+                {
+                    if (effectiveStartCol == run.EndCol)
+                    {
+                        hasEffectiveCell = false;
+                        break;
+                    }
+
+                    effectiveStartCol++;
+                }
+
+                if (!hasEffectiveCell)
+                    continue;
+
+                found = true;
+                var effectiveEndCol = run.EndCol;
+                while (effectiveEndCol > effectiveStartCol &&
+                       _styleOnlyRunTombstones?.Contains((run.Row, effectiveEndCol)) == true &&
+                       !_styleOnly.ContainsKey((run.Row, effectiveEndCol)))
+                {
+                    effectiveEndCol--;
+                }
+
                 if (run.Row < minRow) minRow = run.Row;
                 if (run.Row > maxRow) maxRow = run.Row;
-                if (run.StartCol < minCol) minCol = run.StartCol;
-                if (run.EndCol > maxCol) maxCol = run.EndCol;
+                if (effectiveStartCol < minCol) minCol = effectiveStartCol;
+                if (effectiveEndCol > maxCol) maxCol = effectiveEndCol;
             }
         }
+
+        if (!found)
+            return null;
 
         return new GridRange(
             new CellAddress(Id, minRow, minCol),
             new CellAddress(Id, maxRow, maxCol));
     }
+
+    private static GridRange? MergeUsedRanges(GridRange? valueRange, GridRange? styleOnlyRange)
+    {
+        if (valueRange is not { } values)
+            return styleOnlyRange;
+        if (styleOnlyRange is not { } styles)
+            return valueRange;
+
+        return new GridRange(
+            new CellAddress(
+                values.Start.Sheet,
+                Math.Min(values.Start.Row, styles.Start.Row),
+                Math.Min(values.Start.Col, styles.Start.Col)),
+            new CellAddress(
+                values.End.Sheet,
+                Math.Max(values.End.Row, styles.End.Row),
+                Math.Max(values.End.Col, styles.End.Col)));
+    }
+
+    private void InvalidateStyleOnlyUsedRange() => _styleOnlyUsedRangeCacheDirty = true;
 
     private void TrackUsedRangeCellSet(uint row, uint col)
     {

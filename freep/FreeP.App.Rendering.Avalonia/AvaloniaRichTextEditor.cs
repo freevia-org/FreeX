@@ -62,6 +62,9 @@ internal sealed class AvaloniaRichTextEditor : Grid
     private readonly MenuItem _cutContextMenuItem;
     private readonly MenuItem _pasteContextMenuItem;
     private string? _lastWriteFailureMessage;
+    // Resolved lazily on every paste rather than captured once: the editor outlives individual
+    // Presentation snapshots, and slides can be added or removed while the caret sits here.
+    private readonly Func<IReadOnlyCollection<string>?>? _destinationSlideIdsProvider;
 
     internal AvaloniaRichTextEditor(
         TextBody? body,
@@ -73,7 +76,8 @@ internal sealed class AvaloniaRichTextEditor : Grid
         IPlatformClipboard? clipboard = null,
         TextBody? layoutBody = null,
         MasterTextStyles? masterTextStyles = null,
-        SlideCompositor.TextStyleCategory category = SlideCompositor.TextStyleCategory.Other)
+        SlideCompositor.TextStyleCategory category = SlideCompositor.TextStyleCategory.Other,
+        Func<IReadOnlyCollection<string>?>? destinationSlideIdsProvider = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fallbackFontFamily);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(fallbackFontSizePt);
@@ -86,6 +90,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         _styleCategory = category;
         _navigateInlineTableCell = navigateInlineTableCell;
         _cancelInlineTableCellEdit = cancelInlineTableCellEdit;
+        _destinationSlideIdsProvider = destinationSlideIdsProvider;
         _richTextView = new AvaloniaRichTextEditingSurface();
         var textWrapping = body?.Wrap == false
             ? TextWrapping.NoWrap
@@ -348,7 +353,11 @@ internal sealed class AvaloniaRichTextEditor : Grid
         if (resolution.Source == PresentationClipboardPasteSource.Text)
             _session.ReplaceSelectionWithPlainText(Selection, content.Text!, out caret);
         else
-            _session.ApplyClipboardPayload(resolution.Payload, Selection, out caret);
+            _session.ApplyClipboardPayload(
+                resolution.Payload,
+                Selection,
+                out caret,
+                _destinationSlideIdsProvider?.Invoke());
         ApplyBufferText(caret);
         return true;
     }
@@ -771,7 +780,8 @@ internal sealed class AvaloniaRichTextEditor : Grid
             fallbackFontSizePt: _fallbackFontSizePt,
             navigateInlineTableCell: NavigateInlineTableCell,
             cancelInlineTableCellEdit: CancelInlineTableCellEdit,
-            clipboard: _clipboard)
+            clipboard: _clipboard,
+            destinationSlideIdsProvider: _destinationSlideIdsProvider)
         {
             Width = Math.Max(1, hit.Bounds.Width),
             Height = Math.Max(1, hit.Bounds.Height),

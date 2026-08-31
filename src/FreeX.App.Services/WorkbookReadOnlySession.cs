@@ -1,3 +1,4 @@
+using Free.Shared.IO;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
@@ -187,52 +188,11 @@ public sealed class WorkbookReadOnlySession
 
     /// <summary>
     /// Best-effort check of whether <paramref name="filePath"/> can currently be written back to.
-    /// Checks the OS read-only attribute first (the common case: Explorer's Read-only checkbox,
-    /// or <c>attrib +r</c>), then falls back to a lightweight open-for-write probe so a read-only
-    /// network share, a read-only-mounted volume, or a denied ACL are caught too -- none of those
-    /// necessarily set the DOS read-only attribute. A transient sharing violation (e.g. another
-    /// process briefly holding an exclusive handle) is deliberately NOT treated as read-only: it
-    /// says nothing about the file's durable write permission, and misclassifying it would force
-    /// an otherwise-editable file through Save As.
+    /// Delegates to the shared <see cref="FileWriteRestrictionProbe"/>, which FreeW and FreeP open
+    /// through as well so all three apps classify a read-only source file identically.
     /// </summary>
-    private static bool IsFileWriteRestricted(string? filePath)
-    {
-        if (string.IsNullOrWhiteSpace(filePath))
-            return false;
-
-        try
-        {
-            if (!File.Exists(filePath))
-                return false;
-
-            if (File.GetAttributes(filePath).HasFlag(FileAttributes.ReadOnly))
-                return true;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return true;
-        }
-        catch (IOException)
-        {
-            return false;
-        }
-
-        try
-        {
-            using var probe = new FileStream(filePath, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return true;
-        }
-        catch (IOException)
-        {
-            // Locked by another process, a network hiccup, etc. -- not necessarily a write
-            // restriction, so don't force the file read-only on a transient failure.
-            return false;
-        }
-    }
+    private static bool IsFileWriteRestricted(string? filePath) =>
+        FileWriteRestrictionProbe.IsWriteRestricted(filePath);
 
     public void ApplyPromptDecision(bool openReadOnly) => IsReadOnly = openReadOnly;
 

@@ -1,5 +1,5 @@
 using System;
-using System.Diagnostics;
+using System.Reflection;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
 using FluentAssertions;
@@ -35,6 +35,27 @@ public class R115_ViewportTerminalScanSkipTests
         return sheet;
     }
 
+    // R115-viewport-terminal-scan-skip-assertion (sweep112 F1): the two tests below used to infer
+    // "the O(1) lower-bound skip fired" purely from wall-clock elapsed time (100 calls under an
+    // arbitrary 200ms threshold meant to sit between a measured ~520-557ms slow path and a measured
+    // ~6-23ms fast path). That is both flaky (a loaded CI/dev machine can push the fast path itself
+    // past 200ms) and blind (a regression that silently disables the fast path and always falls back
+    // to the O(n) scan could still finish under 200ms on fast-enough hardware). The skip condition is
+    // actually a pure O(1) function of the sheet's hidden/custom-size COUNTS
+    // (ComputeTerminalRowThresholdLowerBound / ComputeTerminalColThresholdLowerBound in
+    // ViewportService.Metrics.cs), so we invoke it directly via reflection and assert the analytic
+    // property that guarantees the scan is skippable, instead of inferring it from timing.
+    private static uint InvokeComputeTerminalRowThresholdLowerBound(Sheet sheet, uint maxRow, double availableHeight)
+    {
+        var method = typeof(ViewportService).GetMethod(
+            "ComputeTerminalRowThresholdLowerBound",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        method.Should().NotBeNull(
+            "ComputeTerminalRowThresholdLowerBound must still exist as the O(1) lower-bound guard " +
+            "BuildTerminalRowMetrics consults before running its expensive reverse scan");
+        return (uint)method!.Invoke(null, [sheet, maxRow, availableHeight])!;
+    }
+
     [Fact]
     public void ComputeRowMetricsSummary_NearTopWithHiddenTrailingBlock_SkipsExpensiveTerminalScan()
     {
@@ -45,20 +66,20 @@ public class R115_ViewportTerminalScanSkipTests
         // window, so the reverse scan's result would be discarded even if it ran.
         var request = new ViewportRequest(1, 1, 600, 800);
 
-        var stopwatch = Stopwatch.StartNew();
-        for (var i = 0; i < 100; i++)
-        {
-            // 100 calls to emulate a sustained mouse-wheel scroll burst (matching the finding's
-            // evidence methodology of how often UpdateViewport fires while scrolling).
-            service.ComputeRowMetricsSummary(workbook, sheet.Id, request);
-        }
-        stopwatch.Stop();
+        // Analytic proof (deterministic, hardware-independent): the O(1) lower bound must place the
+        // terminal window's earliest possible start strictly above the requested row, which is
+        // exactly the condition BuildTerminalRowMetrics checks (ViewportService.Metrics.cs:515)
+        // before ever entering the reverse scan loop.
+        var lowerBound = InvokeComputeTerminalRowThresholdLowerBound(sheet, CellAddress.MaxRow, request.AvailableHeight);
+        lowerBound.Should().BeGreaterThan(
+            request.TopRow,
+            "the O(1) lower bound must prove a near-top request can never fall inside the terminal " +
+            "band so the expensive reverse row scan is skipped entirely, not merely discarded after running");
 
-        // Before the fix this burst walks ~1,047,617 rows PER call (measured ~520ms for 100 calls in
-        // Release on this machine) purely to discover the scan's result is unused; after the fix the
-        // O(1) lower bound proves the requested window can't be in the terminal band and the scan
-        // never runs (measured ~6ms for 100 calls). 200ms sits comfortably between the two.
-        stopwatch.ElapsedMilliseconds.Should().BeLessThan(200);
+        // Functional correctness: the summary must still report the true near-top visible band, not
+        // some artifact of the hidden trailing block.
+        var (lastVisibleRow, _) = service.ComputeRowMetricsSummary(workbook, sheet.Id, request);
+        lastVisibleRow.Should().BeLessThan(1000u);
     }
 
     [Fact]
@@ -68,16 +89,17 @@ public class R115_ViewportTerminalScanSkipTests
         var service = new ViewportService();
         var request = new ViewportRequest(1, 1, 600, 800);
 
-        var stopwatch = Stopwatch.StartNew();
-        for (var i = 0; i < 100; i++)
-        {
-            service.GetViewport(workbook, sheet.Id, request);
-        }
-        stopwatch.Stop();
+        var lowerBound = InvokeComputeTerminalRowThresholdLowerBound(sheet, CellAddress.MaxRow, request.AvailableHeight);
+        lowerBound.Should().BeGreaterThan(
+            request.TopRow,
+            "the O(1) lower bound must prove a near-top request can never fall inside the terminal " +
+            "band so the expensive reverse row scan is skipped entirely, not merely discarded after running");
 
-        // Measured ~557ms for 100 calls before the fix vs. ~23ms after; 200ms sits comfortably
-        // between the two.
-        stopwatch.ElapsedMilliseconds.Should().BeLessThan(200);
+        var viewport = service.GetViewport(workbook, sheet.Id, request);
+        viewport.RowMetrics.Should().NotBeEmpty();
+        viewport.RowMetrics[0].Row.Should().Be(1u);
+        foreach (var metric in viewport.RowMetrics)
+            metric.Row.Should().BeLessThan(1000u);
     }
 
     [Fact]

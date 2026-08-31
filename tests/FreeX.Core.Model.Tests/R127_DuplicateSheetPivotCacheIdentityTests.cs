@@ -39,8 +39,25 @@ public sealed class R127_DuplicateSheetPivotCacheIdentityTests
             CacheId = 1,
             SourceType = PivotCacheSourceType.WorksheetRange,
             SourceSheetName = "Sheet1",
-            SourceReference = sourceRange.ToString()
+            SourceReference = sourceRange.ToString(),
+            PackagePart = "xl/pivotCache/pivotCacheDefinition1.xml",
+            ConnectionId = 17,
+            IsOlap = true,
+            RefreshOnLoad = true,
+            SaveData = false,
+            EnableRefresh = false,
+            PreserveSourceSortFilter = false,
+            MissingItemsLimit = 12,
+            RecordCount = 9,
+            CreatedVersion = 3,
+            MinRefreshableVersion = 4,
+            RefreshedVersion = 5,
+            RefreshedBy = "FreeX",
+            RefreshedDateIso = "2026-08-30T12:00:00Z",
+            RawRecordsXml = "<pivotCacheRecords count=\"0\" />",
         };
+        originalCache.Fields.Add(new PivotCacheFieldModel("Region", ContainsString: true, SharedItems: ["East", "West"]));
+        originalCache.CalculatedItems.Add(new PivotCalculatedItemModel(0, "All Regions", "East+West"));
         workbook.PivotCaches.Add(originalCache);
 
         sheet.PivotTables.Add(new PivotTableModel
@@ -67,6 +84,14 @@ public sealed class R127_DuplicateSheetPivotCacheIdentityTests
 
         // The copy's own cache must describe the COPY's sheet, not the original's.
         copiedCache.SourceSheetName.Should().Be(copy.Name);
+        copiedCache.PackagePart.Should().BeEmpty("a new cache identity must receive a new package part on save");
+        copiedCache.Should().BeEquivalentTo(
+            originalCache,
+            options => options
+                .Excluding(cache => cache.CacheId)
+                .Excluding(cache => cache.SourceSheetName)
+                .Excluding(cache => cache.PackagePart),
+            "all remaining scalar and collection state must be copied without per-command drift");
 
         // The original cache/pivot must be completely untouched.
         originalCache.SourceSheetName.Should().Be("Sheet1");

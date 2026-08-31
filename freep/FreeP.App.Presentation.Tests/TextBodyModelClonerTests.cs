@@ -85,6 +85,44 @@ public sealed class TextBodyModelClonerTests
     }
 
     [Fact]
+    public void CloneParagraphMetadata_PreservesPercentBasedSpacingFields()
+    {
+        var source = new Paragraph
+        {
+            SpaceBeforePercent = 50,
+            SpaceAfterPercent = 200,
+            LineSpacingPercent = 150,
+            LineSpacingPointsExact = 24,
+        };
+
+        var clone = TextBodyModelCloner.CloneParagraphMetadata(source);
+
+        clone.SpaceBeforePercent.Should().Be(50);
+        clone.SpaceAfterPercent.Should().Be(200);
+        clone.LineSpacingPercent.Should().Be(150);
+        clone.LineSpacingPointsExact.Should().Be(24);
+    }
+
+    [Fact]
+    public void CloneParagraphMetadata_PreservesExistingPointBasedSpacingFieldsAlongsidePercentFields()
+    {
+        var source = new Paragraph
+        {
+            SpaceBeforePt = 12,
+            SpaceAfterPt = 18,
+        };
+
+        var clone = TextBodyModelCloner.CloneParagraphMetadata(source);
+
+        clone.SpaceBeforePt.Should().Be(12);
+        clone.SpaceAfterPt.Should().Be(18);
+        clone.SpaceBeforePercent.Should().BeNull();
+        clone.SpaceAfterPercent.Should().BeNull();
+        clone.LineSpacingPercent.Should().BeNull();
+        clone.LineSpacingPointsExact.Should().BeNull();
+    }
+
+    [Fact]
     public void SplitRunsAtSelection_UsesModelOwnedFragmentSemantics()
     {
         var body = new TextBody();

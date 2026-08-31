@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Media;
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.UI;
 using FreeX.Core.Calc;
@@ -80,9 +81,15 @@ public static partial class PrintRenderer
 
                 // Excel's "Black and white" print option forces every fill to transparent/white --
                 // never merely dimmed or grayscaled -- so skip the fill entirely instead of drawing it.
-                if (!blackAndWhite && style is not null && WorksheetPrintCellGeometryPlanner.HasVisibleFill(style))
+                // Theme-aware visibility: a cell whose fill was set via the ribbon's Theme Colors
+                // picker only carries FillThemeColor (FillColor stays null), so the check must resolve
+                // against the workbook theme -- the same theme-aware predicate the Avalonia screen
+                // renderer already uses for the identical fill-visibility question
+                // (CellSurfaceGridlinePlanner.HasVisibleFill) -- or a theme-only fill is skipped here
+                // and never printed at all, not merely mis-colored.
+                if (!blackAndWhite && style is not null && CellSurfaceGridlinePlanner.HasVisibleFill(style, workbook.Theme))
                 {
-                    DrawPrintedCellFill(dc, cellRect, style);
+                    DrawPrintedCellFill(dc, cellRect, style, workbook.Theme);
                 }
             }
         }
@@ -171,7 +178,8 @@ public static partial class PrintRenderer
                         rightWinner,
                         isMergeAnchor,
                         diagonalWidth,
-                        diagonalHeight);
+                        diagonalHeight,
+                        workbook.Theme);
                 }
             }
         }
@@ -280,6 +288,7 @@ public static partial class PrintRenderer
                     cellLookup,
                     textMerge,
                     sheet,
+                    workbook.Theme,
                     blackAndWhite);
             }
         }
@@ -426,6 +435,7 @@ public static partial class PrintRenderer
         IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
         GridRange? merge,
         Sheet? sheet,
+        WorkbookTheme theme,
         bool blackAndWhite = false)
     {
         var textRotation = style?.TextRotation ?? 0;
@@ -442,7 +452,7 @@ public static partial class PrintRenderer
         }
         else
         {
-            textBrush = ResolvePrintedTextBrush(style, out textColor);
+            textBrush = ResolvePrintedTextBrush(style, theme, out textColor);
         }
         var wrapText = style?.WrapText == true;
 
@@ -650,9 +660,14 @@ public static partial class PrintRenderer
             ? CellHAlign.Center
             : hAlign;
 
-    private static Brush ResolvePrintedTextBrush(CellStyle? style, out Color textColor)
+    private static Brush ResolvePrintedTextBrush(CellStyle? style, WorkbookTheme theme, out Color textColor)
     {
-        if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
+        // Resolves through CellStyle.ResolveFontColor (the same method the interactive grid calls --
+        // GridView.Rendering.cs:419/934 -- `style?.ResolveFontColor(WorkbookTheme)`) instead of
+        // reading the plain FontColor field directly, so a cell whose color was set via the ribbon's
+        // Theme Colors picker (which only sets FontThemeColor, leaving FontColor at its prior/default
+        // Black) prints/exports in its actual theme color instead of always falling back to black.
+        if (style?.ResolveFontColor(theme) is { } fontColor && !fontColor.IsBlack)
         {
             textColor = Color.FromRgb(fontColor.R, fontColor.G, fontColor.B);
             return new SolidColorBrush(textColor);
@@ -662,11 +677,15 @@ public static partial class PrintRenderer
         return Brushes.Black;
     }
 
-    private static void DrawPrintedCellFill(DrawingContext dc, Rect rect, CellStyle style)
+    private static void DrawPrintedCellFill(DrawingContext dc, Rect rect, CellStyle style, WorkbookTheme theme)
     {
+        // ResolveFillColor is the same theme-resolution CellFillMaterializationPlanner.Plan calls
+        // for the on-screen grid (CellFillMaterializationPlanner.cs:85 `style?.ResolveFillColor(theme)`)
+        // -- reading the plain FillColor field here would leave a theme-only fill (FillColor null,
+        // FillThemeColor set) undrawn even though the visibility gate above now lets it through.
         Brush? fill = style.GradientFill is { } gradient
             ? BuildPrintedGradientBrush(gradient)
-            : style.FillColor is { } fillColor
+            : style.ResolveFillColor(theme) is { } fillColor
                 ? new SolidColorBrush(Color.FromRgb(fillColor.R, fillColor.G, fillColor.B))
                 : null;
 
@@ -674,7 +693,7 @@ public static partial class PrintRenderer
             dc.DrawRectangle(fill, null, rect);
 
         if (style.GradientFill is null)
-            DrawPrintedFillPattern(dc, rect, style);
+            DrawPrintedFillPattern(dc, rect, style, theme);
     }
 
     private static Brush BuildPrintedGradientBrush(CellGradientFill gradient)
@@ -707,12 +726,14 @@ public static partial class PrintRenderer
         return linear;
     }
 
-    private static void DrawPrintedFillPattern(DrawingContext dc, Rect rect, CellStyle style)
+    private static void DrawPrintedFillPattern(DrawingContext dc, Rect rect, CellStyle style, WorkbookTheme theme)
     {
         if (style.FillPatternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid)
             return;
 
-        var color = style.FillPatternColor ?? CellColor.Black;
+        // Same ResolveFillPatternColor theme-resolution CellFillMaterializationPlanner.Plan calls
+        // for the on-screen grid (CellFillMaterializationPlanner.cs:98 `style!.ResolveFillPatternColor(theme)`).
+        var color = style.ResolveFillPatternColor(theme) ?? CellColor.Black;
         var brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
         var pen = new Pen(brush, 0.75);
         const double step = 6;
@@ -841,23 +862,38 @@ public static partial class PrintRenderer
         CellBorder rightBorder,
         bool drawDiagonal,
         double diagonalWidth,
-        double diagonalHeight)
+        double diagonalHeight,
+        WorkbookTheme theme)
     {
         if (!suppressTop)
-            DrawPrintedBorderEdge(dc, topBorder, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), blackAndWhite);
+            DrawPrintedBorderEdge(dc, topBorder, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), theme, blackAndWhite);
         if (!suppressBottom)
-            DrawPrintedBorderEdge(dc, bottomBorder, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), blackAndWhite);
+            DrawPrintedBorderEdge(dc, bottomBorder, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), theme, blackAndWhite);
         if (!suppressLeft)
-            DrawPrintedBorderEdge(dc, leftBorder, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), blackAndWhite);
+            DrawPrintedBorderEdge(dc, leftBorder, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), theme, blackAndWhite);
         if (!suppressRight)
-            DrawPrintedBorderEdge(dc, rightBorder, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), blackAndWhite);
+            DrawPrintedBorderEdge(dc, rightBorder, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), theme, blackAndWhite);
         if (drawDiagonal && style.BorderDiagonalDown.Style != BorderStyle.None)
-            DrawPrintedBorderEdge(dc, style.BorderDiagonalDown, new Point(rect.Left, rect.Top), new Point(rect.Left + diagonalWidth, rect.Top + diagonalHeight), blackAndWhite);
+            DrawPrintedBorderEdge(dc, style.BorderDiagonalDown, new Point(rect.Left, rect.Top), new Point(rect.Left + diagonalWidth, rect.Top + diagonalHeight), theme, blackAndWhite);
         if (drawDiagonal && style.BorderDiagonalUp.Style != BorderStyle.None)
-            DrawPrintedBorderEdge(dc, style.BorderDiagonalUp, new Point(rect.Left, rect.Top + diagonalHeight), new Point(rect.Left + diagonalWidth, rect.Top), blackAndWhite);
+            DrawPrintedBorderEdge(dc, style.BorderDiagonalUp, new Point(rect.Left, rect.Top + diagonalHeight), new Point(rect.Left + diagonalWidth, rect.Top), theme, blackAndWhite);
     }
 
-    private static void DrawPrintedBorderEdge(DrawingContext dc, CellBorder border, Point p1, Point p2, bool blackAndWhite = false)
+    private static SolidColorBrush BrushForResolvedBorderColor(CellColor color)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
+        brush.Freeze();
+        return brush;
+    }
+
+    /// <summary>
+    /// freex-theme-border-color-F1: a theme-backed edge (CellBorder.ThemeColor, e.g. Accent1) must
+    /// re-resolve against the workbook's CURRENT theme, exactly like the fill/font colors this same
+    /// print pass already resolve (DrawPrintedCellFill / ResolvePrintedTextBrush). Reading border.Color
+    /// raw printed the color baked in at load time, so a theme change recolored every printed fill and
+    /// font but left the borders on the old palette.
+    /// </summary>
+    private static void DrawPrintedBorderEdge(DrawingContext dc, CellBorder border, Point p1, Point p2, WorkbookTheme theme, bool blackAndWhite = false)
     {
         if (border.Style == BorderStyle.None) return;
 
@@ -885,7 +921,7 @@ public static partial class PrintRenderer
         // its authored color.
         var borderBrush = blackAndWhite
             ? Brushes.Black
-            : new SolidColorBrush(Color.FromRgb(border.Color.R, border.Color.G, border.Color.B));
+            : BrushForResolvedBorderColor(border.ResolveColor(theme));
         var pen = new Pen(borderBrush, thickness)
         {
             DashStyle = dash

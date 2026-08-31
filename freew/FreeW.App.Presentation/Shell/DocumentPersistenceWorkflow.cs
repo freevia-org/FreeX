@@ -112,6 +112,18 @@ public sealed class DocumentPersistenceWorkflow
         var adapter = DocumentFileFormatResolver.FindOpenAdapter(_adapters, extension, out var format)
             ?? throw new InvalidOperationException($"FreeW has no reader for \"{extension}\" files.");
 
+        // r174-freew-persistence-readonly-open: FreeX's WorkbookReadOnlySession.IsFileWriteRestricted
+        // (round 149) checks the OS read-only attribute (plus a write-probe fallback for read-only
+        // shares/volumes/ACLs) at Open time specifically because leaving this unchecked meant a
+        // read-only .docx opened fully editable with zero indication until the first Save failed.
+        // FreeW had no equivalent check at all -- port the same check here so callers can surface it
+        // up front instead of only discovering it when AtomicFileWriter.ReplaceTarget throws in Save.
+        // Must run BEFORE the read-only File.OpenRead below: that call's stream stays open for the
+        // rest of this method (a using declaration), and it is opened with the default FileShare.Read
+        // -- a write-probe attempted while that handle is still open would always hit a self-inflicted
+        // sharing violation and silently report "not read-only" even for a genuinely restricted file.
+        var isFileSystemReadOnly = IsFileWriteRestricted(path);
+
         using var stream = File.OpenRead(path);
         var document = adapter.Load(stream);
         LinkedImagePreviewResolver.ResolveLocalPreviews(document, path);
@@ -124,8 +136,21 @@ public sealed class DocumentPersistenceWorkflow
         // saved document (SavedPath is already null for the same reason), so there is no "source"
         // file to compare a future save against here.
         var sourceLastWriteTimeUtc = opensAsTemplate ? (DateTime?)null : File.GetLastWriteTimeUtc(path);
-        return new DocumentOpenResult(document, savedPath, opensAsTemplate, adapter, format, sourceLastWriteTimeUtc);
+        // Same template exception as above: a template open never targets this file for a future
+        // save, so its write-restriction state is irrelevant even though it was already computed.
+        isFileSystemReadOnly = opensAsTemplate ? false : isFileSystemReadOnly;
+        return new DocumentOpenResult(document, savedPath, opensAsTemplate, adapter, format, sourceLastWriteTimeUtc, isFileSystemReadOnly);
     }
+
+    /// <summary>
+    /// Best-effort check of whether <paramref name="filePath"/> can currently be written back to.
+    /// Delegates to the shared <see cref="FileWriteRestrictionProbe"/> so FreeW, FreeX
+    /// (<c>WorkbookReadOnlySession</c>, round 149) and FreeP classify a read-only source file
+    /// identically -- see that type for the attribute-then-write-probe rationale, and for why this
+    /// must run before the caller opens its own read handle.
+    /// </summary>
+    private static bool IsFileWriteRestricted(string filePath) =>
+        FileWriteRestrictionProbe.IsWriteRestricted(filePath);
 
     public DocumentSnapshotOpenResult OpenSnapshot(string snapshotPath, string? originalPath)
     {
@@ -134,7 +159,15 @@ public sealed class DocumentPersistenceWorkflow
         using var stream = File.OpenRead(snapshotPath);
         var document = DocxReader.Read(stream);
         LinkedImagePreviewResolver.ResolveLocalPreviews(document, originalPath ?? snapshotPath);
-        return new DocumentSnapshotOpenResult(document, originalPath);
+        // r174 remediation: recovery adopts originalPath as the save target (the caller wires it
+        // straight into MarkDirtyWithPath), so the same write-restriction check Open performs
+        // belongs here too. Without it, recovering after a crash onto a read-only original opened
+        // fully editable with no indication -- the very defect this round fixed for Open, reached
+        // through the recovery door instead.
+        return new DocumentSnapshotOpenResult(
+            document,
+            originalPath,
+            IsFileSystemReadOnly: originalPath is { Length: > 0 } target && IsFileWriteRestricted(target));
     }
 
     public DocumentImportResult ImportPdfText(string path)
@@ -236,9 +269,18 @@ public sealed record DocumentOpenResult(
     bool OpenedAsTemplate,
     IDocumentFileAdapter Adapter,
     FileFormatDescriptor? Format,
-    DateTime? SourceLastWriteTimeUtc = null);
+    DateTime? SourceLastWriteTimeUtc = null,
+    // r174-freew-persistence-readonly-open: true when the OS reports the source file cannot
+    // currently be written back to (read-only attribute, read-only share/volume, or a denied ACL) --
+    // see DocumentPersistenceWorkflow.IsFileWriteRestricted. Hosts can use this to warn the user up
+    // front the same way FreeX's WorkbookReadOnlySession does, instead of only discovering it when a
+    // later Save throws UnauthorizedAccessException.
+    bool IsFileSystemReadOnly = false);
 
-public sealed record DocumentSnapshotOpenResult(TextDocument Document, string? TargetPath);
+public sealed record DocumentSnapshotOpenResult(
+    TextDocument Document,
+    string? TargetPath,
+    bool IsFileSystemReadOnly = false);
 
 public sealed record DocumentImportResult(
     TextDocument Document,

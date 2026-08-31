@@ -50,14 +50,6 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
     // bounded hyperlink refs shift/delete independently of the CellAddress-keyed dictionaries above.
     private List<GridRange>? _printAreaSnapshot;
     private List<uint>? _rowPageBreakSnapshot;
-    private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
-    // R102: see RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsDown -- every SeriesIndex-keyed
-    // per-series/per-point collection on a Switch-Row/Column chart whose plotted series span this
-    // delete overlaps must be captured here (undo) since the remap mutates them in place / drops rows.
-    private List<RowColumnShiftHelpers.ChartSeriesFormattingWorkbookSnapshot>? _chartSeriesFormattingSnapshot;
-    // R86-commands-insert-move-refadjust-5-1: see RowColumnShiftHelpers.ShiftChartPositionRowsDown —
-    // tracked separately from _chartSnapshot above, which only tracks DataRange.
-    private List<RowColumnShiftHelpers.ChartPositionSnapshot>? _chartPositionSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
     // R92-commands-undo-structural-format-5-1: see RebandTablesAfterRowDelete.
     private List<(CellAddress Address, Cell? OldCell)>? _tableRebandSnapshot;
@@ -104,7 +96,10 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         // it to dangle as #NAME? -- mirrors DeleteSheetOp's DeletedTableNames handling.
         var deletedTableNames = RowColumnShiftHelpers.FindStructuredTablesRemovedByRowDelete(sheet, _startRow, _count);
 
-        _mutationSnapshot = RowColumnMutationSnapshot.Capture(ctx.Workbook, sheet);
+        _mutationSnapshot = RowColumnMutationSnapshot.Capture(
+            ctx.Workbook,
+            sheet,
+            RowColumnShiftHelpers.ChartStructuralSnapshotFeatures.Positions);
         _addressStateSnapshot = RowColumnShiftHelpers.CaptureAddressBearingState(ctx.Workbook, sheet);
 
         var (deletedSnapshot, shiftedSnapshot) = CaptureDeletedAndShiftedCells(sheet, endRow);
@@ -142,7 +137,6 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         // R86-commands-insert-move-refadjust-5-1: must run BEFORE sheet.RowHeights is re-keyed below
         // — the deleted band's own heights are needed to measure the removed band's pixel height, and
         // they are gone from the live dictionary once ShiftIndexesDown below has run.
-        _chartPositionSnapshot = RowColumnShiftHelpers.CaptureChartPositions(sheet);
         RowColumnShiftHelpers.ShiftChartPositionRowsDown(sheet, _startRow, _count, sheet.RowHeights, sheet.DefaultRowHeight);
         RowColumnShiftHelpers.ShiftIndexesDown(sheet.RowHeights, _startRow, _count);
 
@@ -176,11 +170,9 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         RowColumnShiftHelpers.ShiftPrintAreaRowsDown(sheet, _startRow, _count);
         _rowPageBreakSnapshot = RowColumnShiftHelpers.CaptureSortedSet(sheet.RowPageBreaks);
         RowColumnShiftHelpers.ShiftSortedSetDown(sheet.RowPageBreaks, _startRow, _count);
-        _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
         // R102: must run BEFORE ShiftChartRowsDown below -- it needs each chart's PRE-delete
         // DataRange to tell whether the deleted band overlaps a Switch-Row/Column chart's plotted
         // series span (see RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsDown).
-        _chartSeriesFormattingSnapshot = RowColumnShiftHelpers.CaptureChartSeriesFormatting(ctx.Workbook);
         RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsDown(ctx.Workbook, _sheetId, _startRow, _count);
         RowColumnShiftHelpers.ShiftChartRowsDown(ctx.Workbook, _sheetId, _startRow, _count);
         RowColumnShiftHelpers.ShiftAddressBearingRowsDown(ctx.Workbook, sheet, _addressStateSnapshot, _startRow, _count);
@@ -412,9 +404,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         _mutationSnapshot.RestoreCommonState(ctx.Workbook, sheet, restoreRulesInPlace: false);
         sheet.SetPrintAreas(_printAreaSnapshot ?? []);
         RowColumnShiftHelpers.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
-        RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartSnapshot);
-        RowColumnShiftHelpers.RestoreChartSeriesFormatting(ctx.Workbook, _chartSeriesFormattingSnapshot);
-        RowColumnShiftHelpers.RestoreChartPositions(_chartPositionSnapshot);
+        _mutationSnapshot.RestoreChartStructuralState(ctx.Workbook);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
 
         // R96-commands-undo-affected-cells-1: recompute AffectedCells to reflect where every

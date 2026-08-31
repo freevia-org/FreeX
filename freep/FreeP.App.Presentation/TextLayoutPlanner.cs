@@ -647,6 +647,10 @@ public static class TextLayoutPlanner
             BulletChar = paragraph.BulletChar,
             SpaceBeforePt = paragraph.SpaceBeforePt * spaceScale,
             SpaceAfterPt = paragraph.SpaceAfterPt * spaceScale,
+            // Percent spacing resolves against the run font sizes, which are themselves scaled
+            // just above, so it tracks the shrink on its own and must pass through unscaled.
+            SpaceBeforePercent = paragraph.SpaceBeforePercent,
+            SpaceAfterPercent = paragraph.SpaceAfterPercent,
             LineSpacingPercent = paragraph.LineSpacingPercent,
             LineSpacingPointsExact = paragraph.LineSpacingPointsExact,
             TabStops = paragraph.TabStops,
@@ -766,6 +770,8 @@ public static class TextLayoutPlanner
             BulletImage = paragraph.BulletImage,
             SpaceBeforePt = paragraph.SpaceBeforePt,
             SpaceAfterPt = paragraph.SpaceAfterPt,
+            SpaceBeforePercent = paragraph.SpaceBeforePercent,
+            SpaceAfterPercent = paragraph.SpaceAfterPercent,
             TabStops = paragraph.TabStops,
             BulletText = paragraph.BulletText,
             BulletColor = paragraph.BulletColor,
@@ -1008,6 +1014,58 @@ public static class TextLayoutPlanner
         if (paragraph.LineSpacingPointsExact is { } pts && pts > 0 && naturalHeightDip > 0)
             return PointsToDip(pts) / naturalHeightDip;
         return 1.0;
+    }
+
+    /// <summary>
+    /// A single line's height for this paragraph, in points: the largest authored run font size
+    /// times <see cref="ParagraphSpacingMetrics.LineHeightFactor"/>. This is the basis ECMA-376
+    /// defines for <c>a:spcBef</c>/<c>a:spcAft</c> expressed as <c>a:spcPct</c> — the same "one
+    /// line" notion <c>a:lnSpc/a:spcPct</c> uses, and no measured single-line height is available
+    /// here (the measured height covers the whole wrapped paragraph). Zero when the paragraph has
+    /// no sized runs.
+    /// </summary>
+    public static double ResolveParagraphSingleLineHeightPoints(ResolvedParagraph paragraph)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        double maxFontPt = 0;
+        foreach (var run in paragraph.Runs)
+            maxFontPt = Math.Max(maxFontPt, run.FontSizePt);
+        return ParagraphSpacingMetrics.SingleLineHeightPoints(maxFontPt);
+    }
+
+    /// <summary>
+    /// The paragraph's effective space-before in points, resolving
+    /// <see cref="ResolvedParagraph.SpaceBeforePercent"/> against a single line's height when the
+    /// source authored <c>a:spcBef/a:spcPct</c> instead of <c>a:spcPts</c>. Layout must always go
+    /// through this rather than reading <see cref="ResolvedParagraph.SpaceBeforePt"/> directly,
+    /// or percent-authored spacing renders as zero.
+    /// </summary>
+    public static double ResolveSpaceBeforePoints(ResolvedParagraph paragraph)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        return ResolveSpacingPoints(paragraph, paragraph.SpaceBeforePt, paragraph.SpaceBeforePercent);
+    }
+
+    /// <summary>
+    /// The paragraph's effective space-after in points. See <see cref="ResolveSpaceBeforePoints"/>.
+    /// </summary>
+    public static double ResolveSpaceAfterPoints(ResolvedParagraph paragraph)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        return ResolveSpacingPoints(paragraph, paragraph.SpaceAfterPt, paragraph.SpaceAfterPercent);
+    }
+
+    private static double ResolveSpacingPoints(ResolvedParagraph paragraph, double points, double? percent)
+    {
+        // spcPts wins over spcPct: they are mutually exclusive per ECMA-376, and both the reader
+        // and the model give the explicit points value precedence.
+        if (points != 0)
+            return points;
+
+        return ParagraphSpacingMetrics.ResolvePoints(
+            points: null,
+            percent,
+            ResolveParagraphSingleLineHeightPoints(paragraph));
     }
 
     public static TextBlockLayoutPlan PlanTableCellText(
@@ -1288,8 +1346,8 @@ public static class TextLayoutPlanner
                     paragraphIndex,
                     lineIndex,
                     native.HeightDip,
-                    lineIndex == 0 ? PointsToDip(paragraph.SpaceBeforePt) : 0,
-                    lineIndex == lines.Count - 1 ? PointsToDip(paragraph.SpaceAfterPt) : 0,
+                    lineIndex == 0 ? PointsToDip(ResolveSpaceBeforePoints(paragraph)) : 0,
+                    lineIndex == lines.Count - 1 ? PointsToDip(ResolveSpaceAfterPoints(paragraph)) : 0,
                     lineIndex == 0,
                     lineIndex == lines.Count - 1));
             }
@@ -1387,8 +1445,8 @@ public static class TextLayoutPlanner
             measures.Add(CreateParagraphMeasure(
                 paragraphIndex,
                 native.HeightDip,
-                paragraph.SpaceBeforePt,
-                paragraph.SpaceAfterPt,
+                ResolveSpaceBeforePoints(paragraph),
+                ResolveSpaceAfterPoints(paragraph),
                 lineSpacingScale,
                 applyParagraphLineSpacing
                     ? ResolveParagraphLineSpacingScale(paragraph, native.HeightDip)
@@ -1438,8 +1496,8 @@ public static class TextLayoutPlanner
             paragraphMeasures.Add(TextLayoutPlanner.CreateParagraphMeasure(
                 paragraphIndex,
                 height,
-                paragraph.SpaceBeforePt,
-                paragraph.SpaceAfterPt,
+                ResolveSpaceBeforePoints(paragraph),
+                ResolveSpaceAfterPoints(paragraph),
                 lineSpacingScale));
         }
 

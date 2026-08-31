@@ -107,9 +107,25 @@ internal static class XlsxHeaderFooterPicturePackagePlanner
             return $"freexHeaderFooter{sheetIndex}_{pictureIndex}{extension}";
         }
 
-        return Path.HasExtension(candidate)
+        // Round 172 (freep-media F1 follow-up): the original file name is kept only when its own
+        // extension means the SAME image content type as the one the picture is stored with. Keeping
+        // an extension that disagrees would split the pair the r157-remediation note in OpcMediaTypes
+        // warns about: the part is named from the file name while [Content_Types].xml is written from
+        // the content type, so a picture named "logo.bin" carrying image/png produced a part no
+        // Default covers. Spelling variants that DO agree (logo.tif vs "tiff", logo.jpeg vs "jpg") are
+        // preserved -- the writer declares the Default for the extension the part actually carries.
+        if (!Path.HasExtension(candidate))
+            return $"{candidate}{extension}";
+
+        // TryGetDefaultContentType (not GetImageContentType) so an unknown extension is REJECTED rather
+        // than silently answering image/png -- comparing two png defaults would let "logo.bin" through
+        // whenever the picture happened to be a png, which is the vacuous-guard shape of this bug.
+        var candidateExtension = Path.GetExtension(candidate).TrimStart('.');
+        return OpcMediaTypes.TryGetDefaultContentType(candidateExtension, out var candidateContentType) &&
+               OpcMediaTypes.TryGetDefaultContentType(extension.TrimStart('.'), out var storedContentType) &&
+               string.Equals(candidateContentType, storedContentType, StringComparison.OrdinalIgnoreCase)
             ? candidate
-            : $"{candidate}{extension}";
+            : $"{Path.GetFileNameWithoutExtension(candidate)}{extension}";
     }
 
     public static double? ParseStyleDimension(string? style, string name)

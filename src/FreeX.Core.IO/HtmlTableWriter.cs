@@ -51,18 +51,7 @@ internal static class HtmlTableWriter
 
         if (endRow >= 1 && endCol >= 1)
         {
-            // Map anchor → merge region, and mark covered non-anchor cells to skip.
-            var anchors = new Dictionary<(uint, uint), GridRange>();
-            var covered = new HashSet<(uint, uint)>();
-            foreach (var region in sheet.MergedRegions)
-            {
-                anchors[(region.Start.Row, region.Start.Col)] = region;
-                foreach (var addr in region.AllCells())
-                {
-                    if (addr.Row != region.Start.Row || addr.Col != region.Start.Col)
-                        covered.Add((addr.Row, addr.Col));
-                }
-            }
+            var hasMergedRegions = sheet.MergedRegions.Count != 0;
 
             // Emit from A1 (row 1, col 1) so the table's grid coordinates are ABSOLUTE: a sheet whose used
             // range starts below/right of A1 keeps that offset on re-import (leading empty rows/cells fill
@@ -72,7 +61,13 @@ internal static class HtmlTableWriter
                 writer.Write("<tr>");
                 for (uint c = 1; c <= endCol; c++)
                 {
-                    if (covered.Contains((r, c)))
+                    // Query the sheet's merge index instead of expanding every merged region into
+                    // a per-cell HashSet. A large merge may extend far beyond the emitted used range;
+                    // materializing its covered cells would waste memory proportional to the full
+                    // merged area even though only this grid position needs to be classified.
+                    var address = new CellAddress(sheet.Id, r, c);
+                    var mergeRegion = hasMergedRegions ? sheet.GetMergeRegion(address) : null;
+                    if (mergeRegion is { } merged && address != merged.Start)
                         continue;
 
                     var cell = sheet.GetCell(r, c);
@@ -84,7 +79,7 @@ internal static class HtmlTableWriter
                     var value = cell?.Value ?? BlankValue.Instance;
 
                     var spanAttrs = "";
-                    if (anchors.TryGetValue((r, c), out var region))
+                    if (mergeRegion is { } region)
                     {
                         uint colspan = region.ColCount;
                         uint rowspan = region.RowCount;
@@ -95,7 +90,7 @@ internal static class HtmlTableWriter
                     var css = style is not null ? BuildCss(style, workbook.Theme) : "";
                     var styleAttr = css.Length > 0 ? $" style=\"{css}\"" : "";
                     var display = HtmlText.Escape(DisplayValue(value, style, workbook));
-                    if (sheet.Hyperlinks.TryGetValue(new CellAddress(sheet.Id, r, c), out var hyperlink) &&
+                    if (sheet.Hyperlinks.TryGetValue(address, out var hyperlink) &&
                         !string.IsNullOrEmpty(hyperlink))
                     {
                         display = $"<a href=\"{HtmlText.Escape(hyperlink)}\">{display}</a>";
@@ -206,15 +201,22 @@ internal static class HtmlTableWriter
         if (align is not null)
             sb.Append($"text-align:{align};");
 
-        AppendBorder(sb, "top", style.BorderTop);
-        AppendBorder(sb, "right", style.BorderRight);
-        AppendBorder(sb, "bottom", style.BorderBottom);
-        AppendBorder(sb, "left", style.BorderLeft);
+        AppendBorder(sb, "top", style.BorderTop, theme);
+        AppendBorder(sb, "right", style.BorderRight, theme);
+        AppendBorder(sb, "bottom", style.BorderBottom, theme);
+        AppendBorder(sb, "left", style.BorderLeft, theme);
 
         return sb.ToString();
     }
 
-    private static void AppendBorder(StringBuilder sb, string edge, CellBorder border)
+    /// <summary>
+    /// freex-theme-border-color-F1: HTML has no theme link to fall back on, so a theme-backed edge
+    /// (CellBorder.ThemeColor) must be flattened through the workbook's CURRENT theme exactly like the
+    /// font/fill colors this same method already resolve. Reading border.Color raw exported the RGB
+    /// baked in at load time, so a theme change recolored every exported fill and font but left the
+    /// borders on the old palette — permanently, since the written hex is all the reader ever sees.
+    /// </summary>
+    private static void AppendBorder(StringBuilder sb, string edge, CellBorder border, WorkbookTheme theme)
     {
         if (border.Style == BorderStyle.None)
             return;
@@ -228,7 +230,7 @@ internal static class HtmlTableWriter
             BorderStyle.Double => ("3px", "double"),
             _ => ("1px", "solid"),
         };
-        sb.Append($"border-{edge}:{width} {line} {Hex(border.Color)};");
+        sb.Append($"border-{edge}:{width} {line} {Hex(border.ResolveColor(theme))};");
     }
 
     private static string Hex(CellColor c) =>

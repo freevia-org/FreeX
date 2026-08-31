@@ -123,6 +123,24 @@ public sealed record PageHeaderFooterRun(
     LayoutPoint TextOrigin);
 
 /// <summary>
+/// R168-presentation-preview-headerfooter-picture-1: one header/footer <c>&amp;G</c> picture resolved
+/// into page-space geometry -- the rectangle
+/// <see cref="WorksheetPrintHeaderFooterGeometryPlanner.ResolvePictureBounds"/> places it in (already
+/// uniformly scaled to fit its section) plus the raw encoded image bytes a renderer paints directly,
+/// so no platform image-decode type leaks through the portable model. Kept separate from
+/// <see cref="PagePictureBlock"/>, which models a worksheet picture and carries an object Id and crop
+/// fractions that a header/footer picture has neither of.
+///
+/// Before this, the render model dropped header/footer pictures entirely, so the Avalonia print
+/// preview -- the only print preview on Linux/macOS -- showed a sheet's header/footer TEXT but never
+/// its picture, and showed an ungrown band, disagreeing with the PDF that same platform exports.
+/// </summary>
+public sealed record PageHeaderFooterPictureBlock(
+    LayoutRect Bounds,
+    byte[] ImageBytes,
+    string ContentType);
+
+/// <summary>
 /// One printed worksheet text box resolved into page-space geometry: the outer rectangle, the inner
 /// text rectangle, resolved fill/outline colors, and the text/font the renderer can paint without
 /// consulting the workbook model.
@@ -204,8 +222,17 @@ public sealed record PageContentLayout(
     IReadOnlyList<PageHeaderFooterRun> HeaderRuns,
     IReadOnlyList<PageHeaderFooterRun> FooterRuns,
     IReadOnlyList<PagePictureBlock> Pictures,
-    IReadOnlyList<PageDisplayedCommentBlock> Comments)
+    IReadOnlyList<PageDisplayedCommentBlock> Comments,
+    IReadOnlyList<PageHeaderFooterPictureBlock>? HeaderFooterPictures = null)
 {
+    /// <summary>
+    /// R168-presentation-preview-headerfooter-picture-1: the header/footer <c>&amp;G</c> pictures on
+    /// this page, painted with the header/footer bands (never empty-vs-null for a consumer to
+    /// distinguish -- an omitted list simply means "none on this page").
+    /// </summary>
+    public IReadOnlyList<PageHeaderFooterPictureBlock> HeaderFooterPictureBlocks =>
+        HeaderFooterPictures ?? [];
+
     public bool PrintGridlines => GridLines.Count > 0;
     public bool PrintHeadings => ColumnHeadings.Count > 0 || RowHeadings.Count > 0;
 }

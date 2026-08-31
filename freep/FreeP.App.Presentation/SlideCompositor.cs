@@ -2300,6 +2300,11 @@ public static class SlideCompositor
                 BulletImage  = para.BulletImage,
                 SpaceBeforePt = para.SpaceBeforePt ?? 0,
                 SpaceAfterPt  = para.SpaceAfterPt ?? 0,
+                // spcPts wins over spcPct. The nullable model values collapse to 0 above, so an
+                // authored 0pt would otherwise let a stale percent resurrect at layout time while
+                // the writer still emits the 0pt value.
+                SpaceBeforePercent = para.SpaceBeforePt is null ? para.SpaceBeforePercent : null,
+                SpaceAfterPercent  = para.SpaceAfterPt is null ? para.SpaceAfterPercent : null,
                 LineSpacingPercent = para.LineSpacingPercent,
                 LineSpacingPointsExact = para.LineSpacingPointsExact
             });
@@ -3001,6 +3006,9 @@ public static class SlideCompositor
                 BulletImage = marker.Image,
                 SpaceBeforePt = para.SpaceBeforePt ?? 0,
                 SpaceAfterPt = para.SpaceAfterPt ?? 0,
+                // See the table-cell resolver: spcPts wins, so drop the percent when points are set.
+                SpaceBeforePercent = para.SpaceBeforePt is null ? para.SpaceBeforePercent : null,
+                SpaceAfterPercent = para.SpaceAfterPt is null ? para.SpaceAfterPercent : null,
                 LineSpacingPercent = para.LineSpacingPercent,
                 LineSpacingPointsExact = para.LineSpacingPointsExact,
                 TabStops = resolvedTabStops,  // Wave 18B

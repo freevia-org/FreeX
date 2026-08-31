@@ -189,4 +189,65 @@ public sealed class R151_ChartPointIndexRemapTests
         chart.PointFillColors.Should().ContainSingle().Which.PointIndex.Should().Be(1,
             because: "PointIndex is column-relative in this orientation -- a row insert must not move it");
     }
+
+    [Fact]
+    public void PointInsert_UnaffectedFlatAndNestedCollectionsRetainReferences()
+    {
+        var (sheet, _, chart) = CreateDefaultOrientationChart();
+        var fill = new ChartPointFillFormat(0, 0, CellColor.FromArgb(1, 2, 3));
+        chart.PointFillColors.Add(fill);
+        var fills = chart.PointFillColors;
+        IReadOnlyList<ChartRangeDataLabelPoint> points = new List<ChartRangeDataLabelPoint>
+        {
+            new(0, "before")
+        };
+        var entry = new ChartSeriesRangeDataLabels(0, "Sheet1!$F$2:$F$10", null, points);
+        chart.SeriesRangeDataLabels.Add(entry);
+        var entries = chart.SeriesRangeDataLabels;
+
+        RowColumnShiftHelpers.RemapChartPointFormattingForRowInsert(chart, sheet.Id, start: 5, count: 1);
+
+        chart.PointFillColors.Should().BeSameAs(fills);
+        chart.PointFillColors[0].Should().BeSameAs(fill);
+        chart.SeriesRangeDataLabels.Should().BeSameAs(entries);
+        chart.SeriesRangeDataLabels[0].Should().BeSameAs(entry);
+        chart.SeriesRangeDataLabels[0].Points.Should().BeSameAs(points);
+    }
+
+    [Fact]
+    public void PointDelete_ChangedFlatAndNestedCollectionsDoNotMutateAliases()
+    {
+        var (sheet, _, chart) = CreateDefaultOrientationChart();
+        var unaffectedFill = new ChartPointFillFormat(0, 0, CellColor.FromArgb(1, 2, 3));
+        chart.PointFillColors.AddRange([
+            unaffectedFill,
+            new ChartPointFillFormat(0, 3, CellColor.FromArgb(4, 5, 6)),
+            new ChartPointFillFormat(0, 4, CellColor.FromArgb(7, 8, 9))
+        ]);
+        var originalFills = chart.PointFillColors;
+        var unaffectedPoint = new ChartRangeDataLabelPoint(0, "before");
+        IReadOnlyList<ChartRangeDataLabelPoint> originalPoints = new List<ChartRangeDataLabelPoint>
+        {
+            unaffectedPoint,
+            new(3, "removed"),
+            new(4, "shifted")
+        };
+        var originalEntry = new ChartSeriesRangeDataLabels(0, "Sheet1!$F$2:$F$10", null, originalPoints);
+        chart.SeriesRangeDataLabels.Add(originalEntry);
+        var originalEntries = chart.SeriesRangeDataLabels;
+
+        RowColumnShiftHelpers.RemapChartPointFormattingForRowDelete(chart, sheet.Id, start: 5, count: 1);
+
+        chart.PointFillColors.Should().NotBeSameAs(originalFills);
+        chart.PointFillColors.Select(format => format.PointIndex).Should().Equal(0, 3);
+        chart.PointFillColors[0].Should().BeSameAs(unaffectedFill);
+        originalFills.Select(format => format.PointIndex).Should().Equal(0, 3, 4);
+
+        chart.SeriesRangeDataLabels.Should().NotBeSameAs(originalEntries);
+        chart.SeriesRangeDataLabels[0].Should().NotBeSameAs(originalEntry);
+        chart.SeriesRangeDataLabels[0].Points.Should().NotBeSameAs(originalPoints);
+        chart.SeriesRangeDataLabels[0].Points.Select(point => point.PointIndex).Should().Equal(0, 3);
+        chart.SeriesRangeDataLabels[0].Points[0].Should().BeSameAs(unaffectedPoint);
+        originalPoints.Select(point => point.PointIndex).Should().Equal(0, 3, 4);
+    }
 }

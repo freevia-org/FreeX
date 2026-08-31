@@ -1,23 +1,16 @@
 using System.Globalization;
 using FreeX.App.Presentation;
 using FreeX.Core.Model;
-using IOPath = System.IO.Path;
 
 namespace FreeX.App.Presentation.DrawingInteraction;
 
+// Round 172 (freep-media follow-up): GetImageContentType used to live here as a hardcoded switch that
+// defaulted every unrecognised extension to "image/png". Deleted rather than extended: picture
+// content-type inference belongs to the single shared policy
+// (FreeX.App.Services.InsertPictureCommandFactory.ContentTypeForPath), which returns null for an
+// unsupported format so the shell can reject the file instead of writing a mislabelled media part.
 public static class DrawingInputParser
 {
-    public static string GetImageContentType(string fileName) =>
-        IOPath.GetExtension(fileName).ToLowerInvariant() switch
-        {
-            ".jpg" or ".jpeg" => "image/jpeg",
-            ".bmp" => "image/bmp",
-            ".gif" => "image/gif",
-            ".webp" => "image/webp",
-            ".tif" or ".tiff" => "image/tiff",
-            _ => "image/png"
-        };
-
     public static string FormatCropPercent(double value) =>
         Math.Round(value * 100, 1).ToString("0.#", CultureInfo.CurrentCulture);
 

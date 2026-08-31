@@ -1199,7 +1199,8 @@ public sealed class DocumentReferenceEditingCoordinator
                         blockIndex,
                         fieldPages?.PageNumberAtBlock,
                         fieldPageText,
-                        sourceRunIndex: runIndex);
+                        sourceRunIndex: runIndex,
+                        sourceParagraph: paragraph);
                 }
                 else if (run.ComplexField is { } complexField)
                 {

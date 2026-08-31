@@ -19,6 +19,19 @@ public partial class HeaderFooterDialog
         if (!result.Chosen)
             return;
 
+        // Round 172 (freep-media F1 follow-up): reject an unsupported picture instead of falling back
+        // to image/png. HeaderFooterPicture_OpenFileFilter offers "All files (*.*)", so a .wmf/.emf can
+        // be chosen here; XlsxHeaderFooterPicturePackageWriter names the media part from this stored
+        // content type (OpcMediaTypes.GetImageExtension), so the old `?? "image/png"` wrote metafile
+        // bytes into a part called .png and declared image/png -- self-consistent but undecodable.
+        var contentType = InsertPictureCommandFactory.ContentTypeForPath(result.FileName!);
+        if (contentType is null)
+        {
+            DialogMessageHelper.ShowInfo(this, UiText.Get("InsertLoc_UnsupportedImageFormat"), Title);
+            FocusActiveTextBox();
+            return;
+        }
+
         var readResult = await FileByteReadWorkflow.ReadLocalPathAsync(result.FileName!);
         if (readResult.Outcome == FileByteReadOutcome.Canceled)
             return;
@@ -47,7 +60,7 @@ public partial class HeaderFooterDialog
 
         var picture = new WorksheetHeaderFooterPicture(
             bytes,
-            InsertPictureCommandFactory.ContentTypeForPath(result.FileName!) ?? "image/png",
+            contentType,
             Path.GetFileName(result.FileName!),
             width,
             height);

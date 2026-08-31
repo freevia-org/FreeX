@@ -45,6 +45,24 @@ public sealed class MediaFieldsTests
 
         using var ms = new MemoryStream();
         PptxPackageWriter.Write(pres, ms);
+
+        ms.Position = 0;
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var relationshipsNamespace = (XNamespace)
+                "http://schemas.openxmlformats.org/package/2006/relationships";
+            using var relationshipsStream = archive
+                .GetEntry("ppt/slides/_rels/slide1.xml.rels")!
+                .Open();
+            var slideRelationships = XDocument.Load(relationshipsStream);
+            var videoRelationship = slideRelationships.Root!
+                .Elements(relationshipsNamespace + "Relationship")
+                .Single(element => element.Attribute("Id")?.Value == "rIdVid1");
+
+            videoRelationship.Attribute("Target")!.Value.Should().Be("../media/slide1_video1.mp4");
+            videoRelationship.Attribute("TargetMode").Should().BeNull();
+        }
+
         ms.Position = 0;
         var pres2 = PptxPackageReader.Read(ms);
 

@@ -39,10 +39,10 @@ public static class ComplexFieldEngine
 
     /// <summary>
     /// True when <paramref name="field"/> is a field family this engine can recompute
-    /// (<c>=</c>, <c>REF</c>, <c>PAGEREF</c>, <c>SEQ</c>, <c>CITATION</c>, <c>STYLEREF</c>, <c>IF</c>,
-    /// <c>DOCPROPERTY</c>, <c>DOCVARIABLE</c>, <c>CREATEDATE</c>, <c>SAVEDATE</c>, <c>LASTSAVEDBY</c>,
-    /// <c>TEMPLATE</c>, <c>NUMWORDS</c>, <c>NUMCHARS</c>, <c>REVNUM</c>, <c>EDITTIME</c>, or
-    /// <c>PRINTDATE</c>).
+    /// (<c>=</c>, <c>REF</c>, <c>PAGEREF</c>, <c>NOTEREF</c>, <c>SEQ</c>, <c>CITATION</c>, <c>STYLEREF</c>,
+    /// <c>IF</c>, <c>DOCPROPERTY</c>, <c>DOCVARIABLE</c>, <c>CREATEDATE</c>, <c>SAVEDATE</c>,
+    /// <c>LASTSAVEDBY</c>, <c>TEMPLATE</c>, <c>NUMWORDS</c>, <c>NUMCHARS</c>, <c>REVNUM</c>,
+    /// <c>EDITTIME</c>, or <c>PRINTDATE</c>).
     /// Other keywords
     /// (PAGE/DATE/AUTHOR/…) are resolved elsewhere or left to their cached value, so the caller can
     /// cheaply skip them.
@@ -55,7 +55,7 @@ public static class ComplexFieldEngine
     }
 
     private static bool CanRecomputeKeyword(string keyword) =>
-        keyword is "=" or "REF" or "PAGEREF" or "SEQ" or "CITATION" or "STYLEREF" or "IF"
+        keyword is "=" or "REF" or "PAGEREF" or "NOTEREF" or "SEQ" or "CITATION" or "STYLEREF" or "IF"
             or "DOCPROPERTY" or "DOCVARIABLE" or "CREATEDATE" or "SAVEDATE" or "LASTSAVEDBY"
             or "TEMPLATE" or "NUMWORDS" or "NUMCHARS" or "REVNUM" or "EDITTIME" or "PRINTDATE";
 
@@ -138,8 +138,9 @@ public static class ComplexFieldEngine
         var result = field.Keyword switch
         {
             "=" => ResolveFormula(field),
-            "REF" => ResolveRef(document, field, run.Text),
+            "REF" => ResolveRef(document, field, blockIndex, run, run.Text),
             "PAGEREF" => ResolvePageRef(document, field, run.Text, pageOf, pageTextOf),
+            "NOTEREF" => ResolveNoteRef(document, field, blockIndex, run, run.Text),
             "SEQ" => ResolveSeq(document, field, run, nestedOwner),
             "CITATION" => Citations.ResolveCitationField(document, field, run.Text),
             "STYLEREF" => ResolveStyleRef(document, field, blockIndex, run.Text),
@@ -484,6 +485,19 @@ public static class ComplexFieldEngine
         return DocumentFieldStories.Enumerate(document)
             .Select(story => story.Paragraph)
             .FirstOrDefault(paragraph => paragraph.Runs.Contains(run));
+    }
+
+    // ResolveRef/ResolveNoteRef's shared helper: the field run's own paragraph and its index within that
+    // paragraph's Runs, both fed to CrossReferences.ResolveField so its above/below tie-break can place
+    // the field on the same whole-block axis as its target (see CrossReferences.RunOrdinalInBlock) even
+    // when blockIndex names a table spanning several cells' worth of paragraphs. -1/not-found becomes a
+    // null run index, matching FindOwningParagraph's own "unlocatable" contract.
+    private static (Paragraph? Paragraph, int? RunIndex) FindOwningParagraphAndRunIndex(
+        TextDocument document, int blockIndex, Run run)
+    {
+        var owningParagraph = FindOwningParagraph(document, blockIndex, run);
+        var runIndex = owningParagraph?.Runs.IndexOf(run) ?? -1;
+        return (owningParagraph, runIndex >= 0 ? runIndex : null);
     }
 
     // Mirrors Proofing.cs's ResolveStyleNoProof: walks the paragraph style's based-on chain looking for
@@ -1007,22 +1021,36 @@ public static class ComplexFieldEngine
         return values;
     }
 
-    // REF: the text of the paragraph that carries the referenced bookmark, trimmed of trailing blanks.
-    // Unresolvable (no such bookmark) falls back to the cached text so the field never blanks.
-    private static string ResolveRef(TextDocument document, ComplexField field, string cached)
+    // REF: resolves per the field's "insert reference to" switch -- \w the target heading's outline
+    // number, \n its paragraph/list number, \p its above/below position relative to this field, otherwise
+    // the target paragraph's plain text. A REF imported from Word's complex fldChar/instrText form (a
+    // generic Run.ComplexField, unlike the fldSimple form which DocxReader already routes into a
+    // Run.CrossReference) previously ignored every one of those switches and always returned the target's
+    // full paragraph text -- corrupting e.g. a "see page 4"-style heading-number reference into the whole
+    // heading. This reuses the exact same resolution CrossReferences.ResolveField already gives a
+    // Run.CrossReference-based REF, by rebuilding the equivalent CrossReferenceField from the
+    // instruction's bookmark argument and switches, mirroring ResolveNoteRef below. Unresolvable (no such
+    // bookmark) falls back to the cached text so the field never blanks.
+    private static string ResolveRef(TextDocument document, ComplexField field, int blockIndex, Run run, string cached)
     {
         var name = Argument(field.Instruction);
         if (name.Length == 0)
             return cached;
-        // Bookmarks.FindParagraph (not Bookmarks.List + a Blocks[index] cast) so a bookmark nested in a
-        // table cell resolves too — List reports the containing table's block index for those, which is
-        // never itself a Paragraph.
-        if (Bookmarks.FindParagraph(document, name) is { } target)
-        {
-            var text = target.PlainText.TrimEnd();
-            return text.Length > 0 ? text : cached;
-        }
-        return cached;
+
+        var insertAs = HasSwitch(field.Instruction, 'w') ? CrossRefInsertAs.HeadingNumber
+            : HasSwitch(field.Instruction, 'n') ? CrossRefInsertAs.ParagraphNumber
+            : HasSwitch(field.Instruction, 'p') ? CrossRefInsertAs.AboveBelow
+            : CrossRefInsertAs.Text;
+        var syntheticField = new CrossReferenceField(
+            CrossRefFieldKind.Ref, name, insertAs, HasSwitch(field.Instruction, 'h'));
+
+        // r174 remediation: mirrors ResolveNoteRef's own fix below. Without the field's own run position,
+        // CrossReferences' above/below tie-break could never place this REF against a target sharing its
+        // block (same paragraph, or another cell of the same table) -- see FindOwningParagraphAndRunIndex.
+        var (sourceParagraph, sourceRunIndex) = FindOwningParagraphAndRunIndex(document, blockIndex, run);
+        return CrossReferences.ResolveField(
+            document, syntheticField, cached, blockIndex,
+            sourceRunIndex: sourceRunIndex, sourceParagraph: sourceParagraph);
     }
 
     // PAGEREF: the page number of the referenced bookmark's paragraph, via the shared canonical walk in
@@ -1047,6 +1075,45 @@ public static class ComplexFieldEngine
             return cached;
 
         return BookmarkPageResolution.ResolvePageText(document, target, pageOf, pageTextOf);
+    }
+
+    // NOTEREF: the current display number of the referenced foot/endnote. A NOTEREF field lands here only
+    // when it was imported in Word's complex fldChar/instrText form (DocxReader.AddComplexFieldRun does
+    // not route it through CrossReferenceFor the way the simpler fldSimple form does), so this reuses the
+    // exact same resolution CrossReferences.ResolveField already gives a Run.CrossReference-based NOTEREF
+    // -- including reading-order sequencing, section restarts, and the legacy numeric-id fallback -- by
+    // rebuilding the equivalent CrossReferenceField from the instruction bookmark/id argument, and
+    // honouring the above/below switch the same way REF does. A missing or dangling target falls
+    // back to the cached text.
+    private static string ResolveNoteRef(TextDocument document, ComplexField field, int blockIndex, Run run, string cached)
+    {
+        var target = Argument(field.Instruction);
+        if (target.Length == 0)
+            return cached;
+
+        // r173 remediation: honour the above/below switch exactly as ResolveRef above does.
+        // Passing Text unconditionally was worse than the inert field it replaced -- a cached
+        // "1 above" was rewritten to a bare "1" on the first Update Fields, dropping a word the
+        // user had asked Word to insert, permanently. The heading- and paragraph-number switches
+        // are deliberately not consulted: those belong to REF, and NOTEREF has no such form.
+        var insertAs = HasSwitch(field.Instruction, 'p')
+            ? CrossRefInsertAs.AboveBelow
+            : CrossRefInsertAs.Text;
+        var syntheticField = new CrossReferenceField(
+            CrossRefFieldKind.NoteRef, target, insertAs, HasSwitch(field.Instruction, 'h'));
+
+        // r174 remediation: CrossReferences' within-block above/below tie-break (used whenever the field
+        // and its bookmarked note reference share the same top-level block index) orders the two by run
+        // position, and that requires the field's OWN run position, not just its block. Without it the
+        // tie-break's sourceRunIndex was always null, so the "targetRun > sourceRun" comparison could
+        // never be true and the same-block case silently defaulted to "above" -- even when the note sits
+        // textually after the field within the SAME paragraph. Passing sourceParagraph too (not just the
+        // paragraph-local run index) lets CrossReferences place both positions on one whole-block axis,
+        // so a note in a DIFFERENT cell of the same table as the field is no longer always "above" either.
+        var (sourceParagraph, sourceRunIndex) = FindOwningParagraphAndRunIndex(document, blockIndex, run);
+        return CrossReferences.ResolveField(
+            document, syntheticField, cached, blockIndex,
+            sourceRunIndex: sourceRunIndex, sourceParagraph: sourceParagraph);
     }
 
     // SEQ: the running counter for this sequence name across the complete main-document story, including

@@ -162,19 +162,25 @@ public static partial class PrintRenderer
 
         // Measure the total text width so we can compute the correct starting x for center/right.
         var totalWidth = MeasureTotalRunsWidth(runs, fontScale);
-        var maxWidth = Math.Max(1, rect.Width - 4);
+        // R168-headerfooter-section-padding-1: header/footer text fills its section edge to edge --
+        // with "Align with margins" on, that edge IS the page margin, and Excel aligns header/footer
+        // content with the margins exactly rather than padding it inwards. This used to reserve a
+        // 2-unit pad on each side (rect.Width - 4), a home-grown inset the Avalonia/Skia PDF export
+        // path never had, so left-aligned text started 2 units further in -- and right-aligned text
+        // ended 2 units further out -- on this path than in the PDF of the same sheet.
+        var maxWidth = Math.Max(1, rect.Width);
 
         // Clamp so we don't overflow the rect (match the single-run CharacterEllipsis behaviour
         // at a coarse level — we skip runs that are fully outside).
         var startX = alignment switch
         {
-            TextAlignment.Center => rect.Left + 2 + Math.Max(0, (maxWidth - totalWidth) / 2),
-            TextAlignment.Right  => rect.Left + 2 + Math.Max(0, maxWidth - totalWidth),
-            _                    => rect.Left + 2
+            TextAlignment.Center => rect.Left + Math.Max(0, (maxWidth - totalWidth) / 2),
+            TextAlignment.Right  => rect.Left + Math.Max(0, maxWidth - totalWidth),
+            _                    => rect.Left
         };
 
         var x = startX;
-        var rightBoundary = rect.Left + 2 + maxWidth;
+        var rightBoundary = rect.Left + maxWidth;
 
         foreach (var run in runs)
         {

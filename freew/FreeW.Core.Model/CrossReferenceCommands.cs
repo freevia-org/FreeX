@@ -110,7 +110,11 @@ public sealed class InsertCrossReferenceCommand(
     {
         if (targetNoteId is { } noteId && targetIsFootnote is { } footnote)
         {
-            return EnumerateBodyParagraphs(context.Document.Blocks).FirstOrDefault(paragraph =>
+            return TextDocumentStoryTraversal.EnumerateBlockParagraphs(
+                    context.Document.Blocks,
+                    TextDocumentStoryTraversalOptions.IncludeNestedTables
+                    | TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs)
+                .FirstOrDefault(paragraph =>
                 paragraph.Runs.Any(run => (footnote ? run.FootnoteId : run.EndnoteId) == noteId));
         }
 
@@ -119,30 +123,4 @@ public sealed class InsertCrossReferenceCommand(
             : null;
     }
 
-    private static IEnumerable<Paragraph> EnumerateBodyParagraphs(IEnumerable<Block> blocks)
-    {
-        foreach (var block in blocks)
-        {
-            if (block is Paragraph paragraph)
-            {
-                yield return paragraph;
-                continue;
-            }
-
-            if (block is not Table table)
-                continue;
-
-            foreach (var row in table.Rows)
-            {
-                foreach (var cell in row.Cells)
-                {
-                    foreach (var cellParagraph in cell.Paragraphs)
-                        yield return cellParagraph;
-                    foreach (var nestedTable in cell.NestedTables)
-                        foreach (var nestedParagraph in EnumerateBodyParagraphs([nestedTable]))
-                            yield return nestedParagraph;
-                }
-            }
-        }
-    }
 }

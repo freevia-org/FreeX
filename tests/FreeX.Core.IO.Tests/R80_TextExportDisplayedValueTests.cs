@@ -65,6 +65,20 @@ public sealed class R80_TextExportDisplayedValueTests
     }
 
     [Fact]
+    public void Csv_Save_InvalidStyleIds_FallBackToGeneralWithoutChangingRawValues()
+    {
+        var (workbook, sheet) = CreateWorkbookWithSheet();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1.25));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(2.5));
+        sheet.GetCell(1, 1)!.StyleId = new StyleId(-1);
+        sheet.GetCell(1, 2)!.StyleId = new StyleId(9999);
+
+        var savedText = SaveToUtf8Text(new CsvFileAdapter(), workbook);
+
+        savedText.Should().Be("1.25,2.5\r\n");
+    }
+
+    [Fact]
     public void Prn_Save_WritesPercentFormattedNumberAsDisplayedText()
     {
         var (workbook, sheet) = CreateWorkbookWithSheet();

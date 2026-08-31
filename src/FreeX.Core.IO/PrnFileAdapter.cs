@@ -245,7 +245,7 @@ internal static class PrnWorkbookWriter
         // "General" format has no explicit numeric/date shape to honor and keeps the raw fallback.
         if (cell.Value is NumberValue or DateTimeValue)
         {
-            var numberFormat = workbook.GetStyle(cell.StyleId).NumberFormat;
+            var numberFormat = workbook.GetStyleNumberFormat(cell.StyleId);
             if (!string.IsNullOrEmpty(numberFormat) &&
                 !string.Equals(numberFormat, "General", StringComparison.OrdinalIgnoreCase))
             {

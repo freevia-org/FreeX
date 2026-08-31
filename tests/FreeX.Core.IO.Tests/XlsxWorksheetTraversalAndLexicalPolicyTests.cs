@@ -62,6 +62,32 @@ public sealed class XlsxWorksheetTraversalAndLexicalPolicyTests
         XlsxSqrefParser.NormalizeCellRangeList(value).Should().Be(expected);
 
     [Theory]
+    [InlineData("A1", true, true)]
+    [InlineData("A1:B2", true, true)]
+    [InlineData("B2:A1", true, true)]
+    [InlineData("A:A", false, true)]
+    [InlineData("A:C", false, true)]
+    [InlineData("1:1", false, true)]
+    [InlineData("1:3", false, true)]
+    [InlineData("XFE:XFE", false, false)]
+    [InlineData("1048577:1048577", false, false)]
+    [InlineData("A1:B2:C3", false, false)]
+    [InlineData("invalid", false, false)]
+    public void SqrefTokenParsing_KeepsBoundedAndWholeRowColumnPoliciesDistinct(
+        string token,
+        bool expectedBounded,
+        bool expectedBroad)
+    {
+        var sheet = SheetId.New();
+
+        XlsxSqrefParser.TryParseCellRangeToken(token, sheet, out var bounded).Should().Be(expectedBounded);
+        XlsxSqrefParser.TryParseRangeToken(token, sheet, out var broad).Should().Be(expectedBroad);
+
+        if (expectedBounded)
+            bounded.Should().Be(broad);
+    }
+
+    [Theory]
     [InlineData(null, null)]
     [InlineData("  ", null)]
     [InlineData(" A:A  3:5 A1:B2 ", "A:A 3:5 A1:B2")]
@@ -73,6 +99,19 @@ public sealed class XlsxWorksheetTraversalAndLexicalPolicyTests
         string? value,
         string? expected) =>
         XlsxSqrefParser.NormalizeSelectionReferenceList(value).Should().Be(expected);
+
+    [Fact]
+    public void BoundedSqrefConsumers_DelegateToTheCanonicalParser()
+    {
+        TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxFileAdapter.SheetXmlLayout.cs")
+            .Should().Contain("XlsxSqrefParser.TryParseCellRangeToken")
+            .And.NotContain("private static bool TryParseSqrefToken");
+
+        TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorksheetDiagnosticsMapper.cs")
+            .Should().Contain("XlsxSqrefParser.TryParseCellRangeToken")
+            .And.NotContain("token.Split(':')")
+            .And.NotContain("CellAddress.TryParse");
+    }
 
     [Fact]
     public void WorksheetWriters_UseMappedPathsAndLeaveSkippedWorksheetsByteExact()

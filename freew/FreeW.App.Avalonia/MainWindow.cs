@@ -1553,7 +1553,11 @@ public sealed partial class MainWindow : Window
 
     private void OpenMailMergeErrorReport(TextDocument report)
     {
-        var reportWindow = new MainWindow
+        // r173 remediation: pass THIS window's real options store. The parameterless ctor
+        // defaults to an in-memory store, so any option the user changed from the error-report
+        // window was silently discarded on close. Same defect the WPF shell had; its twin was
+        // fixed in the same round and this one was missed.
+        var reportWindow = new MainWindow(Array.Empty<string>(), null, _optionsStore)
         {
             Title = FreeWUiTextCatalog.MailMergeErrorReportWindowTitle
         };
@@ -4413,6 +4417,15 @@ public sealed partial class MainWindow : Window
         UpdateStatus();
     }
 
+    /// <summary>
+    /// The read-only marker for the title. Deliberately tolerant of a not-yet-constructed
+    /// <c>_documentFileWorkflow</c>: the constructor refreshes the title once BEFORE building it,
+    /// and an NRE there aborts MainWindow construction outright -- the Avalonia crash-on-launch
+    /// class this shell has been bitten by before.
+    /// </summary>
+    private bool IsCurrentDocumentReadOnly() =>
+        _documentFileWorkflow is { IsCurrentFileReadOnly: true };
+
     private void RefreshDocumentWindowTitle()
     {
         Title = ApplicationWindowTitlePolicy.Compose(
@@ -4420,6 +4433,10 @@ public sealed partial class MainWindow : Window
             _fileWorkflow.CurrentFileName ?? FreeWApplicationFrameDescriptor.Title.DefaultDocumentDisplayName,
             _fileWorkflow.IsDirty,
             FreeWDocumentWindowPlanner.FormatWindowSuffix(_documentWindowNumber),
+            // r174-freew-persistence-readonly-open: mark a source file that cannot be written back
+            // to, matching the WPF host and FreeX's read-only title marker. Save itself is routed
+            // to Save-As inside FreeWDocumentFileWorkflow.
+            FreeWDocumentWindowPlanner.FormatReadOnlySuffix(IsCurrentDocumentReadOnly()),
             isDefaultDocument: _fileWorkflow.CurrentPath is null);
     }
 

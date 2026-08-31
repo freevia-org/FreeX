@@ -17,6 +17,22 @@ public enum FormulaArrayMode
 }
 
 /// <summary>
+/// Allocation-free snapshot of every field preserved by <see cref="Cell.Clone"/>. Keeping this
+/// state in Core.Model gives command snapshots the same copy contract without allocating a
+/// temporary <see cref="Cell"/> for every occupied cell they capture.
+/// </summary>
+internal readonly record struct CellCopyState(
+    ScalarValue Value,
+    string? FormulaText,
+    object? CachedAst,
+    bool IgnoreFormulaError,
+    StyleId StyleId,
+    bool QuotePrefix,
+    FormulaArrayMode ArrayMode,
+    uint LegacyArrayRows,
+    uint LegacyArrayCols);
+
+/// <summary>
 /// Represents a single cell in a worksheet.
 /// A cell holds an optional formula string and a computed/entered value.
 /// </summary>
@@ -99,21 +115,37 @@ public sealed class Cell
     /// <summary>Creates a cell with a formula. The value will be computed by the calc engine.</summary>
     public static Cell FromFormula(string formulaText) => new() { FormulaText = formulaText };
 
-    /// <summary>Creates a deep copy of this cell. Preserves the cached AST to avoid re-parsing.</summary>
-    public Cell Clone()
+    /// <summary>Captures every field preserved by <see cref="Clone"/> without allocating.</summary>
+    internal CellCopyState CaptureCopyState() =>
+        new(
+            Value,
+            _formulaText,
+            CachedAst,
+            IgnoreFormulaError,
+            StyleId,
+            QuotePrefix,
+            ArrayMode,
+            LegacyArrayRows,
+            LegacyArrayCols);
+
+    /// <summary>Creates a cell from the canonical copy-state representation.</summary>
+    internal static Cell FromCopyState(CellCopyState state)
     {
         var copy = new Cell
         {
-            Value = Value,
-            IgnoreFormulaError = IgnoreFormulaError,
-            StyleId = StyleId,
-            QuotePrefix = QuotePrefix
+            Value = state.Value,
+            CachedAst = state.CachedAst,
+            IgnoreFormulaError = state.IgnoreFormulaError,
+            StyleId = state.StyleId,
+            QuotePrefix = state.QuotePrefix,
+            ArrayMode = state.ArrayMode,
+            LegacyArrayRows = state.LegacyArrayRows,
+            LegacyArrayCols = state.LegacyArrayCols
         };
-        copy._formulaText = _formulaText;
-        copy.CachedAst = CachedAst;
-        copy.ArrayMode = ArrayMode;
-        copy.LegacyArrayRows = LegacyArrayRows;
-        copy.LegacyArrayCols = LegacyArrayCols;
+        copy._formulaText = state.FormulaText;
         return copy;
     }
+
+    /// <summary>Creates a deep copy of this cell. Preserves the cached AST to avoid re-parsing.</summary>
+    public Cell Clone() => FromCopyState(CaptureCopyState());
 }

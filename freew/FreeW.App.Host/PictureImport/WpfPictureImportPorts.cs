@@ -47,6 +47,23 @@ internal sealed class WpfPictureDecoderPort : IFreeWPictureDecoderPort
         FreeWPictureDecoderPolicy.DecodeOrUnavailable(cancellationToken, () =>
         {
             using var source = new MemoryStream(bytes, writable: false);
+
+            // Round 172: WIC cannot decode a metafile (BitmapFrame.Create throws NotSupportedException
+            // for WMF/EMF), which DecodeOrUnavailable would turn into "no natural size" -- every
+            // inserted metafile would land at the 200x150pt fallback. GDI+ reads their real extent, the
+            // same route DocumentView.TryDecodeMetafile uses to render them. Any failure here still
+            // falls through to DecodeOrUnavailable's fallback.
+            if (InlineImage.FormatForExtension(Path.GetExtension(selection.Name))
+                is ImageFormat.Wmf or ImageFormat.Emf)
+            {
+                using var metafile = new System.Drawing.Imaging.Metafile(source);
+                return new FreeWPictureDecoderFacts(
+                    metafile.Width,
+                    metafile.Height,
+                    metafile.HorizontalResolution,
+                    metafile.VerticalResolution);
+            }
+
             var frame = BitmapFrame.Create(
                 source,
                 BitmapCreateOptions.PreservePixelFormat,

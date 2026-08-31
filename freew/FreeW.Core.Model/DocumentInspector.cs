@@ -81,7 +81,7 @@ public static class DocumentInspector
 
         var properties = CountNonEmptyProperties(document.Properties);
 
-        var bookmarks = EnumerateParagraphs(document)
+        var bookmarks = EnumerateBodyParagraphs(document)
             .Sum(p => p.BookmarkNames.Count(n => !string.IsNullOrEmpty(n)));
 
         return new InspectionResult(comments, revisions, properties, bookmarks);
@@ -117,7 +117,7 @@ public static class DocumentInspector
     /// <see cref="Run.IsCommentReference"/>), which are removed entirely. Comments legitimately live
     /// outside the body too (Word allows anchoring one in a header, footer, footnote, or endnote), so this
     /// walks every such paragraph store via <see cref="EnumerateCommentAnchorParagraphs"/> — not just
-    /// <see cref="EnumerateParagraphs"/>'s body/table paragraphs — so no anchor is left dangling with a
+    /// <see cref="EnumerateBodyParagraphs"/>'s body/table paragraphs — so no anchor is left dangling with a
     /// <see cref="Run.CommentId"/> that no longer resolves to any entry in
     /// <see cref="TextDocument.Comments"/> (the docx writer would otherwise still emit its
     /// w:commentRangeStart/End/w:commentReference, producing a package Word must repair). Mutates
@@ -171,7 +171,7 @@ public static class DocumentInspector
         var usedEndnoteIds = new HashSet<int>();
         var usedCommentIds = new HashSet<int>();
 
-        foreach (var paragraph in EnumerateCommentAnchorParagraphs(document))
+        foreach (var paragraph in EnumerateNoteAndCommentAnchorParagraphsForPruning(document))
         {
             foreach (var run in paragraph.Runs)
             {
@@ -226,7 +226,7 @@ public static class DocumentInspector
     {
         ArgumentNullException.ThrowIfNull(document);
 
-        foreach (var paragraph in EnumerateParagraphs(document))
+        foreach (var paragraph in EnumerateBodyParagraphs(document))
         {
             paragraph.BookmarkNames.Clear();
             foreach (var run in paragraph.Runs)
@@ -246,7 +246,7 @@ public static class DocumentInspector
     /// <see cref="Paragraph.MarkRevision"/>, <see cref="TableRow.RowRevision"/>) that
     /// <see cref="RemoveRevisions"/> (i.e. <see cref="TrackChanges.AcceptAll"/>) actually resolves —
     /// mirroring <see cref="TrackChanges.HasRevisions"/>'s reach: the body (including table rows, table
-    /// cells, nested tables, and text-box shape content, via <see cref="EnumerateParagraphs"/>), every
+    /// cells, nested tables, and text-box shape content, via <see cref="EnumerateBodyParagraphs"/>), every
     /// header/footer slot of every section (including a side-by-side header/footer layout table's own
     /// rows), and every footnote's/endnote's own content. Before this, <see cref="Inspect"/> only summed
     /// <see cref="Run.Revision"/> across the body — a document whose only tracked change was a table-row
@@ -257,7 +257,13 @@ public static class DocumentInspector
     /// </summary>
     private static int CountRevisions(TextDocument document)
     {
-        var count = EnumerateParagraphs(document).Sum(CountParagraphRevisionMarks)
+        var count = TextDocumentStoryTraversal.EnumerateParagraphs(
+                document,
+                TextDocumentStorySubset.All,
+                TextDocumentStoryTraversalOptions.IncludeShapeTextBoxes
+                | TextDocumentStoryTraversalOptions.IncludeNestedTables
+                | TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs)
+            .Sum(CountParagraphRevisionMarks)
             + CountTableRowRevisionMarks(document.Blocks.OfType<Table>());
 
         foreach (var section in document.Sections)
@@ -276,16 +282,10 @@ public static class DocumentInspector
                 if (headerFooter is null)
                     continue;
 
-                count += BodyParagraphWalk.Enumerate(headerFooter.Paragraphs).Sum(CountParagraphRevisionMarks);
                 if (headerFooter.Table is { } headerFooterTable)
                     count += CountTableRowRevisionMarks([headerFooterTable]);
             }
         }
-
-        foreach (var footnote in document.Footnotes.Values)
-            count += BodyParagraphWalk.Enumerate(footnote.Content).Sum(CountParagraphRevisionMarks);
-        foreach (var endnote in document.Endnotes.Values)
-            count += BodyParagraphWalk.Enumerate(endnote.Content).Sum(CountParagraphRevisionMarks);
 
         return count;
     }
@@ -297,9 +297,8 @@ public static class DocumentInspector
     // formatting-only edit (bold/italic/color toggled with Track Changes on, no text inserted/deleted)
     // is still counted instead of reporting zero while RemoveRevisions (TrackChanges.AcceptAll) still
     // clears it. Does not walk into a run's text-box (Run.Shape) content itself — callers needing that
-    // reach route the paragraph list through BodyParagraphWalk.Enumerate first (EnumerateParagraphs for
-    // the body; the IEnumerable<Paragraph> overload for a header/footer/footnote/endnote's own list), which
-    // yields shape paragraphs as separate entries before this is applied to each.
+    // reach route the selected stories through TextDocumentStoryTraversal first, which yields shape
+    // paragraphs as separate entries before this is applied to each.
     private static int CountParagraphRevisionMarks(Paragraph paragraph) =>
         (paragraph.MarkRevision != RevisionKind.None ? 1 : 0) +
         (paragraph.ParagraphFormatRevision is not null ? 1 : 0) +
@@ -327,14 +326,19 @@ public static class DocumentInspector
 
     // Every paragraph reachable in the document body — top-level paragraphs and those nested in table
     // cells, including tables nested inside table cells to any depth, plus the text-box content of any
-    // Run.Shape a run carries (see BodyParagraphWalk) — the same walk TrackChanges uses, so inspection/
+    // Run.Shape a run carries — the same walk TrackChanges uses, so inspection/
     // removal cover all body runs and bookmarks, including those living in a text box.
-    private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document) =>
-        BodyParagraphWalk.Enumerate(document);
+    private static IEnumerable<Paragraph> EnumerateBodyParagraphs(TextDocument document) =>
+        TextDocumentStoryTraversal.EnumerateParagraphs(
+            document,
+            TextDocumentStorySubset.Body,
+            TextDocumentStoryTraversalOptions.IncludeShapeTextBoxes
+            | TextDocumentStoryTraversalOptions.IncludeNestedTables
+            | TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs);
 
     /// <summary>
     /// Every paragraph that can carry a comment anchor (<see cref="Run.CommentId"/> /
-    /// <see cref="Run.IsCommentReference"/>): the body/table paragraphs from <see cref="EnumerateParagraphs"/>,
+    /// <see cref="Run.IsCommentReference"/>): the body/table paragraphs from <see cref="EnumerateBodyParagraphs"/>,
     /// plus every header/footer of every document section (default, even, and first-page slots — mirroring
     /// the note-deletion walk's fix for the identical footnote/endnote
     /// dangling-marker bug), plus every footnote's and endnote's own content paragraphs. Word allows anchoring
@@ -359,6 +363,46 @@ public static class DocumentInspector
                      | TextDocumentStorySubset.Footnotes
                      | TextDocumentStorySubset.Endnotes,
                      TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs))
+            yield return paragraph;
+    }
+
+    /// <summary>
+    /// Every paragraph that can carry a footnote/endnote/comment reference/anchor run for the purposes of
+    /// <see cref="PruneOrphanedNoteAndCommentAnchors"/>: the same stores as
+    /// <see cref="EnumerateCommentAnchorParagraphs"/> (body/table paragraphs, every header/footer slot, and
+    /// footnote/endnote content), but — unlike that helper — also descending into any text box
+    /// (<see cref="Run.Shape"/>) found while walking the header/footer/footnote/endnote paragraphs, exactly
+    /// as the body branch already does and exactly as <see cref="NoteCommands.DeleteNoteCommand"/>'s own
+    /// marker-removal walk does for the identical Body|HeadersFooters combination. Without this, a
+    /// footnote/endnote/comment reference mark that lives only inside a text box embedded in a header or
+    /// footer would never be counted as "in use", so the prune would delete its still-referenced
+    /// footnote/endnote/comment content while leaving the reference-mark run behind in the header/footer
+    /// shape — a silent content loss plus an invalid docx on the next save (a dangling
+    /// w:footnoteReference/w:endnoteReference/w:commentReference with no matching entry). This walk is
+    /// intentionally NOT shared with <see cref="EnumerateCommentAnchorParagraphs"/>: that helper's
+    /// header/footer/footnote/endnote branch deliberately stays shape-free for
+    /// <see cref="RemoveComments"/> (see
+    /// <c>TextDocumentStoryTraversalAdoptionTests.DocumentInspector_PreservesItsBodyOnlyShapeExpansion</c>),
+    /// so widening it there would silently change that removal's existing scope instead of only fixing the
+    /// prune's orphan check.
+    /// </summary>
+    private static IEnumerable<Paragraph> EnumerateNoteAndCommentAnchorParagraphsForPruning(TextDocument document)
+    {
+        foreach (var paragraph in TextDocumentStoryTraversal.EnumerateParagraphs(
+                     document,
+                     TextDocumentStorySubset.Body,
+                     TextDocumentStoryTraversalOptions.IncludeShapeTextBoxes
+                     | TextDocumentStoryTraversalOptions.IncludeNestedTables
+                     | TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs))
+            yield return paragraph;
+
+        foreach (var paragraph in TextDocumentStoryTraversal.EnumerateParagraphs(
+                     document,
+                     TextDocumentStorySubset.HeadersFooters
+                     | TextDocumentStorySubset.Footnotes
+                     | TextDocumentStorySubset.Endnotes,
+                     TextDocumentStoryTraversalOptions.IncludeShapeTextBoxes
+                     | TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs))
             yield return paragraph;
     }
 }

@@ -944,38 +944,11 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
     /// </summary>
     private static StructuredTableModel CopyTableWithNativeSortState(StructuredTableModel table, string? nativeSortStateXml)
     {
-        var copy = new StructuredTableModel
+        var state = table.CaptureCopyState() with
         {
-            Id = table.Id,
-            Name = table.Name,
-            DisplayName = table.DisplayName,
-            Range = table.Range,
-            HasAutoFilter = table.HasAutoFilter,
-            TotalsRowShown = table.TotalsRowShown,
-            HeaderRowCount = table.HeaderRowCount,
-            TotalsRowCount = table.TotalsRowCount,
-            InsertRow = table.InsertRow,
-            InsertRowShift = table.InsertRowShift,
-            Published = table.Published,
-            Comment = table.Comment,
-            StyleName = table.StyleName,
-            ShowFirstColumn = table.ShowFirstColumn,
-            ShowLastColumn = table.ShowLastColumn,
-            ShowRowStripes = table.ShowRowStripes,
-            ShowColumnStripes = table.ShowColumnStripes,
-            PackagePart = table.PackagePart,
-            NativeSortStateXml = nativeSortStateXml,
-            NativeAttributes = table.NativeAttributes,
-            NativeChildXmls = table.NativeChildXmls,
-            NativeAutoFilterAttributes = table.NativeAutoFilterAttributes,
-            NativeAutoFilterChildXmls = table.NativeAutoFilterChildXmls,
-            NativeStyleInfoAttributes = table.NativeStyleInfoAttributes,
-            NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls
+            NativeSortStateXml = nativeSortStateXml
         };
-
-        copy.Columns.AddRange(table.Columns);
-        copy.FilterColumns.AddRange(table.FilterColumns);
-        return copy;
+        return StructuredTableModel.FromCopyState(state);
     }
 
     public void Revert(ICommandContext ctx)

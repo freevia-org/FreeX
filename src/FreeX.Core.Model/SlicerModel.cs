@@ -1,5 +1,31 @@
 namespace FreeX.Core.Model;
 
+/// <summary>
+/// Complete allocation-free copy state for <see cref="SlicerModel"/>. Callers apply intentional
+/// identity, host-sheet, or package transformations before materializing an independent slicer.
+/// </summary>
+internal readonly record struct SlicerCopyState(
+    string Name,
+    string? Caption,
+    string CacheName,
+    string? SourcePivotTableName,
+    IReadOnlyList<string> ConnectedPivotTableNames,
+    string? SourceFieldName,
+    string? StyleName,
+    int? SourceFieldIndex,
+    IReadOnlyList<string> SelectedItems,
+    bool SelectionCaptured,
+    string PackagePart,
+    DrawingAnchorRange? DrawingAnchor,
+    string? DrawingShapeName,
+    int ColumnCount,
+    bool ShowCaption,
+    string? SourceSheetName,
+    int? SourceTableId,
+    int? SourceTableColumnId,
+    IReadOnlyList<SlicerCacheItem> CacheItems,
+    IReadOnlyList<string> AvailableItems);
+
 public sealed class SlicerModel
 {
     public string Name { get; init; } = "";
@@ -107,6 +133,61 @@ public sealed class SlicerModel
     /// mirroring how form-control selected text is resolved at viewport-build time. Empty until resolved.
     /// </summary>
     public IReadOnlyList<string> AvailableItems { get; set; } = [];
+
+    internal SlicerCopyState CaptureCopyState() =>
+        new(
+            Name,
+            Caption,
+            CacheName,
+            SourcePivotTableName,
+            ConnectedPivotTableNames,
+            SourceFieldName,
+            StyleName,
+            SourceFieldIndex,
+            SelectedItems,
+            SelectionCaptured,
+            PackagePart,
+            DrawingAnchor,
+            DrawingShapeName,
+            ColumnCount,
+            ShowCaption,
+            SourceSheetName,
+            SourceTableId,
+            SourceTableColumnId,
+            CacheItems,
+            AvailableItems);
+
+    /// <summary>
+    /// Materializes independent mutable collection containers while retaining the existing
+    /// <see cref="AvailableItems"/> projection identity used by Duplicate Sheet.
+    /// </summary>
+    internal static SlicerModel FromCopyState(SlicerCopyState state)
+    {
+        var copy = new SlicerModel
+        {
+            Name = state.Name,
+            Caption = state.Caption,
+            CacheName = state.CacheName,
+            SourcePivotTableName = state.SourcePivotTableName,
+            ConnectedPivotTableNames = [.. state.ConnectedPivotTableNames],
+            SourceFieldName = state.SourceFieldName,
+            StyleName = state.StyleName,
+            SourceFieldIndex = state.SourceFieldIndex,
+            SelectionCaptured = state.SelectionCaptured,
+            PackagePart = state.PackagePart,
+            DrawingAnchor = state.DrawingAnchor,
+            DrawingShapeName = state.DrawingShapeName,
+            ColumnCount = state.ColumnCount,
+            ShowCaption = state.ShowCaption,
+            SourceSheetName = state.SourceSheetName,
+            SourceTableId = state.SourceTableId,
+            SourceTableColumnId = state.SourceTableColumnId,
+            CacheItems = [.. state.CacheItems],
+            AvailableItems = state.AvailableItems
+        };
+        copy.SelectedItems.AddRange(state.SelectedItems);
+        return copy;
+    }
 }
 
 /// <summary>One entry in a pivot slicer cache's tabular item list: the field-item index and whether it is selected.</summary>

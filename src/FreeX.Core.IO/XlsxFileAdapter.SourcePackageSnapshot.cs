@@ -132,6 +132,24 @@ public sealed partial class XlsxFileAdapter
         return Convert.ToHexString(hash.Hash ?? []);
     }
 
+    /// <summary>
+    /// A drawing object hyperlink participates in the patch-safety fingerprint.
+    ///
+    /// <para>The row/column shift rewrites "Place in This Document" hyperlinks on shapes, pictures,
+    /// text boxes and charts, which makes the Hyperlink field mutable from a command that does not
+    /// force a full save. This fingerprint decides whether a cell-patch save may reuse the source
+    /// package's drawing parts verbatim, so a field it does not compare is a field whose change gets
+    /// silently thrown away. R101_DrawingChartHyperlinkPatchSafetyGuardTests exists to catch exactly
+    /// that, and it caught this.</para>
+    /// </summary>
+    private static void WriteDrawingObjectHyperlinkFingerprint(Stream stream, DrawingObjectHyperlink? hyperlink)
+    {
+        WriteFingerprintToken(stream, "\t");
+        WriteFingerprintString(stream, hyperlink?.Target);
+        WriteFingerprintString(stream, hyperlink?.TargetMode);
+        WriteFingerprintString(stream, hyperlink?.Tooltip);
+    }
+
     private static void WriteDrawingChartFingerprint(Stream stream, ChartModel chart)
     {
         WriteFingerprintString(stream, chart.Name);
@@ -153,6 +171,7 @@ public sealed partial class XlsxFileAdapter
         WriteFingerprintNumber(stream, chart.Height);
         WriteFingerprintToken(stream, "\t");
         WriteFingerprintNumber(stream, (int)chart.DrawingAnchorKind);
+        WriteDrawingObjectHyperlinkFingerprint(stream, chart.Hyperlink);
         WriteFingerprintToken(stream, "\n");
     }
 
@@ -191,6 +210,7 @@ public sealed partial class XlsxFileAdapter
         WriteFingerprintNumber(stream, picture.CropRight);
         WriteFingerprintToken(stream, "\t");
         WriteFingerprintNumber(stream, picture.CropBottom);
+        WriteDrawingObjectHyperlinkFingerprint(stream, picture.Hyperlink);
         WriteFingerprintToken(stream, "\n");
     }
 
@@ -222,6 +242,7 @@ public sealed partial class XlsxFileAdapter
         WriteFingerprintNullableColor(stream, textBox.OutlineColor);
         WriteFingerprintNullableThemeColor(stream, textBox.FillThemeColor);
         WriteFingerprintNullableThemeColor(stream, textBox.OutlineThemeColor);
+        WriteDrawingObjectHyperlinkFingerprint(stream, textBox.Hyperlink);
         WriteFingerprintToken(stream, "\n");
     }
 
@@ -260,6 +281,7 @@ public sealed partial class XlsxFileAdapter
         WriteFingerprintNumber(stream, shape.OutlineWidthPoints);
         WriteFingerprintBoolean(stream, shape.OutlineHasNoFill);
         WriteFingerprintNumber(stream, (int)shape.OutlineDash);
+        WriteDrawingObjectHyperlinkFingerprint(stream, shape.Hyperlink);
         WriteFingerprintToken(stream, "\n");
     }
 
@@ -1944,21 +1966,13 @@ public sealed partial class XlsxFileAdapter
                 changed = true;
             }
 
-            var existingKeys = targetDefinedNames
-                .Elements(workbookNs + "definedName")
-                .Select(XlsxDefinedNamePreservationPolicy.GetKey)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var existingNamesByKey = XlsxDefinedNamePreservationPolicy.CreateFirstElementIndex(
+                targetDefinedNames.Elements(workbookNs + "definedName"));
 
             foreach (var sourceName in sourceDefinedNames.Elements(workbookNs + "definedName"))
             {
                 var key = XlsxDefinedNamePreservationPolicy.GetKey(sourceName);
-                var existing = targetDefinedNames
-                    .Elements(workbookNs + "definedName")
-                    .FirstOrDefault(element => string.Equals(
-                        XlsxDefinedNamePreservationPolicy.GetKey(element),
-                        key,
-                        StringComparison.OrdinalIgnoreCase));
-                if (existing is not null)
+                if (existingNamesByKey.TryGetValue(key, out var existing))
                 {
                     if (XlsxDefinedNamePreservationPolicy.BackfillMissingAttributes(sourceName, existing))
                         changed = true;
@@ -1999,7 +2013,7 @@ public sealed partial class XlsxFileAdapter
                     // Re-check for a collision at the remapped index: ClosedXML may already have
                     // re-emitted an entry for this name at the sheet's new index (common for
                     // Excel-reserved names like Print_Area).
-                    if (existingKeys.Contains(key))
+                    if (existingNamesByKey.ContainsKey(key))
                         continue;
 
                     // R62-io-defined-name-print-6-1: Print_Area/Print_Titles are Excel-reserved
@@ -2021,7 +2035,7 @@ public sealed partial class XlsxFileAdapter
                 }
 
                 targetDefinedNames.Add(resurrected);
-                existingKeys.Add(key);
+                existingNamesByKey.TryAdd(key, resurrected);
                 changed = true;
             }
 
@@ -5516,8 +5530,8 @@ public sealed partial class XlsxFileAdapter
         /// Streaming read of just the root-level <c>sheetProtection</c>/<c>protectedRanges</c>
         /// elements' protection-relevant attributes, without loading the full worksheet XDocument
         /// (mirrors <see cref="XlsxWorksheetGridXmlNormalizer.AnyRowMissingRowIndex"/>'s style).
-        /// Encodes the password the same way <c>XlsxFileAdapter.SheetXmlLayout</c>'s
-        /// <c>ReadSheetProtectionPasswordHash</c> does at full-load time, so the result is directly
+        /// Encodes the password through <see cref="XlsxSheetProtectionPasswordCodec"/>, the same
+        /// policy used at full-load time, so the result is directly
         /// comparable to <see cref="Sheet.ProtectionPassword"/>. Also captures the permission
         /// booleans (via <see cref="XlsxSheetProtectionPermissionMapper.Read"/>) and the Allow-Edit
         /// ranges/range-passwords (via <see cref="XlsxAllowEditRangeMapper.Read(XDocument, XNamespace, out Dictionary{GridRange, string})"/>)
@@ -5574,22 +5588,13 @@ public sealed partial class XlsxFileAdapter
                     if (reader.LocalName == "sheetProtection")
                     {
                         isProtected = XlsxWorksheetXmlValueParser.IsTruthy(reader.GetAttribute("sheet"));
-                        var legacyPassword = reader.GetAttribute("password");
-                        if (!string.IsNullOrEmpty(legacyPassword))
-                        {
-                            passwordHash = legacyPassword;
-                        }
-                        else
-                        {
-                            var hashValue = reader.GetAttribute("hashValue");
-                            passwordHash = string.IsNullOrEmpty(hashValue)
-                                ? null
-                                : ProtectionPasswordHelper.EncodeIso29500Hash(
-                                    reader.GetAttribute("algorithmName"),
-                                    reader.GetAttribute("spinCount"),
-                                    reader.GetAttribute("saltValue"),
-                                    hashValue);
-                        }
+                        passwordHash = XlsxSheetProtectionPasswordCodec.Decode(
+                            new XlsxSheetProtectionPasswordAttributes(
+                                reader.GetAttribute("password"),
+                                reader.GetAttribute("algorithmName"),
+                                reader.GetAttribute("spinCount"),
+                                reader.GetAttribute("saltValue"),
+                                reader.GetAttribute("hashValue")));
 
                         var protectionElement = new XElement(worksheetNs + "sheetProtection");
                         if (reader.MoveToFirstAttribute())

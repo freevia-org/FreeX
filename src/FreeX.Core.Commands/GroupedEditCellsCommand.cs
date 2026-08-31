@@ -8,7 +8,6 @@ namespace FreeX.Core.Commands;
 public sealed class GroupedEditCellsCommand : IWorkbookCommand, IEstimatesMemory
 {
     private readonly IReadOnlyList<SheetId> _sheetIds;
-    private readonly SheetId _sourceSheetId;
     private readonly IReadOnlyList<(CellAddress Address, Cell NewCell)> _sourceEdits;
     private List<(SheetId SheetId, CellEditCompanionSnapshot Snapshot)>? _snapshot;
 
@@ -35,7 +34,7 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand, IEstimatesMemory
         IReadOnlyList<(CellAddress Address, Cell NewCell)> sourceEdits)
     {
         _sheetIds = sheetIds.Distinct().ToList();
-        _sourceSheetId = sourceSheetId;
+        _ = sourceSheetId; // Kept in the public API for existing callers; only row/column are replayed.
         _sourceEdits = sourceEdits;
     }
 
@@ -47,13 +46,24 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand, IEstimatesMemory
         foreach (var sheetId in _sheetIds)
         {
             var sheet = ctx.GetSheet(sheetId);
-            var addresses = new List<CellAddress>(_sourceEdits.Count);
-            foreach (var (sourceAddress, _) in _sourceEdits)
+            var requiresProtectionValidation = sheet.IsProtected;
+            var requiresArraySplitValidation = CommandGuards.RequiresArraySplitValidation(sheet);
+            if (!requiresProtectionValidation && !requiresArraySplitValidation)
+                continue;
+
+            var remappedAddresses = requiresArraySplitValidation
+                ? new CellAddress[_sourceEdits.Count]
+                : null;
+
+            for (var i = 0; i < _sourceEdits.Count; i++)
             {
+                var sourceAddress = _sourceEdits[i].Address;
                 var address = RemapAddress(sourceAddress, sheetId);
-                if (!CommandGuards.CanEditCell(ctx.Workbook, sheet, address))
+                if (requiresProtectionValidation && !CommandGuards.CanEditCell(ctx.Workbook, sheet, address))
                     return CommandGuards.RejectSheetProtected();
-                addresses.Add(address);
+
+                if (remappedAddresses is not null)
+                    remappedAddresses[i] = address;
             }
 
             // R156-grouped-edit-array-split-guard: mirrors EditCellsCommand.Apply's check --
@@ -61,8 +71,17 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand, IEstimatesMemory
             // here for ANY one grouped sheet stops the edit on ALL of them. Applying to the
             // sheets that pass and skipping the ones that don't would silently desynchronize the
             // grouped sheets, which is worse than the pre-fix all-or-nothing bug.
-            if (CommandGuards.RejectIfSplitsArray(sheet, addresses, allowDynamicSpillMemberWrite: true) is { } splitsArrayRejection)
+            // Ordinary unprotected sheets need no validation work. Sheets with array-like ranges
+            // remap once into an exact-size buffer that the guard can inspect without a second
+            // source-edit enumeration; protected sheets retain protection-first rejection order.
+            if (remappedAddresses is not null &&
+                CommandGuards.RejectIfSplitsArray(
+                    sheet,
+                    remappedAddresses,
+                    allowDynamicSpillMemberWrite: true) is { } splitsArrayRejection)
+            {
                 return splitsArrayRejection;
+            }
         }
 
         _snapshot = [];
@@ -72,8 +91,9 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand, IEstimatesMemory
         foreach (var sheetId in _sheetIds)
         {
             var sheet = ctx.GetSheet(sheetId);
-            foreach (var (sourceAddress, sourceCell) in _sourceEdits)
+            for (var i = 0; i < _sourceEdits.Count; i++)
             {
+                var (sourceAddress, sourceCell) = _sourceEdits[i];
                 var address = RemapAddress(sourceAddress, sheetId);
                 var snapshot = CellEditCompanionSnapshot.Capture(sheet, address);
                 _snapshot.Add((sheetId, snapshot));
@@ -127,11 +147,6 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand, IEstimatesMemory
             snapshot.Restore(ctx.GetSheet(sheetId));
     }
 
-    private CellAddress RemapAddress(CellAddress address, SheetId targetSheetId)
-    {
-        var sourceAddress = address.Sheet == _sourceSheetId
-            ? address
-            : new CellAddress(_sourceSheetId, address.Row, address.Col);
-        return new CellAddress(targetSheetId, sourceAddress.Row, sourceAddress.Col);
-    }
+    private static CellAddress RemapAddress(CellAddress address, SheetId targetSheetId) =>
+        new(targetSheetId, address.Row, address.Col);
 }

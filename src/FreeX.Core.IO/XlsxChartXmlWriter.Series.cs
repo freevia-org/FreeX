@@ -461,7 +461,7 @@ internal static partial class XlsxChartXmlWriter
         var firstCell = targetSheet.GetCell(range.Start.Row, range.Start.Col);
         if (firstCell is not null)
         {
-            var code = workbook.GetStyle(firstCell.StyleId).NumberFormat;
+            var code = workbook.GetStyleNumberFormat(firstCell.StyleId);
             if (!string.IsNullOrEmpty(code))
                 formatCode = code;
         }
@@ -618,7 +618,7 @@ internal static partial class XlsxChartXmlWriter
         if (cell is null)
             return "General";
 
-        var formatCode = workbook.GetStyle(cell.StyleId).NumberFormat;
+        var formatCode = workbook.GetStyleNumberFormat(cell.StyleId);
         return string.IsNullOrEmpty(formatCode) ? "General" : formatCode;
     }
 

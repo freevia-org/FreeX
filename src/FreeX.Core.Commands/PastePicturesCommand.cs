@@ -72,7 +72,7 @@ public sealed class PastePicturesCommand : IWorkbookCommand
                      _destinationRange,
                      _transpose))
         {
-            var clone = ClonePictureAtAnchor(picture, destinationAnchor);
+            var clone = DuplicateSheetDrawingCloner.ClonePictureForPaste(picture, destinationAnchor);
             targetSheet.Pictures.Add(clone);
             _added.Add(clone);
             affected.Add(destinationAnchor);
@@ -92,70 +92,4 @@ public sealed class PastePicturesCommand : IWorkbookCommand
         _added = null;
     }
 
-    /// <summary>
-    /// Builds the pasted copy of <paramref name="picture"/> anchored at <paramref name="destinationAnchor"/>.
-    /// Mirrors <c>DuplicateSheetDrawingCloner.ClonePicture</c>'s field-for-field copy (new Id, own
-    /// defensive-copied byte buffers, <c>IsSourceLoaded = false</c> so the pasted copy round-trips
-    /// through the normal authored-picture writer instead of being silently dropped for lacking a
-    /// mapped source drawing part). <see cref="PictureModel.LinkedSourceRange"/> is intentionally
-    /// left unshifted: a camera/"linked picture" copy keeps referencing the same source data range
-    /// it always did, exactly like Excel's own Copy/Paste of a linked picture.
-    /// </summary>
-    private static PictureModel ClonePictureAtAnchor(PictureModel picture, CellAddress destinationAnchor)
-    {
-        var clone = new PictureModel
-        {
-            Name = picture.Name,
-            Anchor = destinationAnchor,
-            AnchorOffsetX = picture.AnchorOffsetX,
-            AnchorOffsetY = picture.AnchorOffsetY,
-            Kind = picture.Kind,
-            SourceRowCount = picture.SourceRowCount,
-            SourceColumnCount = picture.SourceColumnCount,
-            IsLinkedToSourceRange = picture.IsLinkedToSourceRange,
-            LinkedSourceRange = picture.LinkedSourceRange,
-            LinkedSourceSheetName = picture.LinkedSourceSheetName,
-            ImageBytes = picture.ImageBytes?.ToArray(),
-            ContentType = picture.ContentType,
-            SvgImageBytes = picture.SvgImageBytes?.ToArray(),
-            LinkedImageTarget = picture.LinkedImageTarget,
-            Title = picture.Title,
-            AltText = picture.AltText,
-            IsDecorative = picture.IsDecorative,
-            Width = picture.Width,
-            Height = picture.Height,
-            LockAspectRatio = picture.LockAspectRatio,
-            RotationDegrees = picture.RotationDegrees,
-            FlipHorizontal = picture.FlipHorizontal,
-            FlipVertical = picture.FlipVertical,
-            IsVisible = picture.IsVisible,
-            // R127C-clone-editas-parity: mirrors DuplicateSheetDrawingCloner.ClonePicture's
-            // DrawingAnchorKind copy -- without this, a oneCellAnchor ("move but don't size") or
-            // absoluteAnchor ("don't move or size") picture carried along in a cell-range
-            // copy/paste (normal paste, paste-special picture carry-over, or tiled/multi-paste)
-            // silently reverted to the PictureModel default of TwoCell, so the pasted copy would
-            // then wrongly move AND resize on a later row/column insert or delete.
-            DrawingAnchorKind = picture.DrawingAnchorKind,
-            // R150-model-drawing-object-lock-paste-1-1: mirrors DuplicateSheetDrawingCloner.ClonePicture's
-            // Locked copy (R111-model-drawing-object-lock-1-1 precedent) -- without this, an
-            // explicitly-unlocked picture (Format Picture > Properties > Locked unchecked) silently
-            // reverted to the PictureModel default of Locked = true on every copy/paste that routes
-            // through this command, re-locking the pasted copy against move/resize under sheet
-            // protection even though the source picture stayed unlocked.
-            Locked = picture.Locked,
-            CropLeft = picture.CropLeft,
-            CropTop = picture.CropTop,
-            CropRight = picture.CropRight,
-            CropBottom = picture.CropBottom,
-            // R97-model-drawing-hyperlink-2-2: carry the object-level hyperlink into the pasted copy
-            // -- mirrors DuplicateSheetDrawingCloner.ClonePicture's identical Hyperlink copy.
-            Hyperlink = picture.Hyperlink,
-            IsSourceLoaded = false
-        };
-
-        foreach (var cell in picture.Cells)
-            clone.Cells.Add(cell);
-
-        return clone;
-    }
 }

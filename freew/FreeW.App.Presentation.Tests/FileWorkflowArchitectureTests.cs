@@ -92,6 +92,30 @@ public sealed class FileWorkflowArchitectureTests
         avalonia.Should().NotContain("_documentPersistence.TryGetSaveFormat(");
     }
 
+    // r174-shared-protection-readonly F2 (host wiring): both renderers must actually SHOW the
+    // read-only state DocumentPersistenceWorkflow.Open now computes. Before this, the flag reached
+    // FreeWDocumentFileWorkflow and stopped there -- a read-only document looked identical to an
+    // editable one in both shells. The suffix itself is unit-tested in
+    // FreeWDocumentWindowPlannerTests; this pins that each host composes it into its title.
+    [Fact]
+    public void RenderersSurfaceTheReadOnlySourceMarkerInTheWindowTitle()
+    {
+        var wpf = ReadSource("freew", "FreeW.App.Host", "MainWindow.cs");
+        var wpfFileCommands = ReadSource("freew", "FreeW.App.Host", "FileCommands.cs");
+        var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "MainWindow.cs");
+
+        wpfFileCommands.Should().Contain(
+            "public bool IsFileSystemReadOnly => _documentWorkflow.IsCurrentFileReadOnly;");
+        wpf.Should().Contain(
+            "FreeWDocumentWindowPlanner.FormatReadOnlySuffix(_file.IsFileSystemReadOnly)");
+        avalonia.Should().Contain(
+            "FreeWDocumentWindowPlanner.FormatReadOnlySuffix(IsCurrentDocumentReadOnly())");
+        avalonia.Should().Contain(
+            "_documentFileWorkflow is { IsCurrentFileReadOnly: true }",
+            "the title refresh runs once before _documentFileWorkflow is constructed, so the "
+                + "marker lookup must tolerate that instead of faulting MainWindow construction");
+    }
+
     private static string ReadSource(params string[] parts)
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");

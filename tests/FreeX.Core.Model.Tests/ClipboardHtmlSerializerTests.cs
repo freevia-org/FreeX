@@ -192,4 +192,73 @@ public sealed class ClipboardHtmlSerializerTests
         var start = payload.IndexOf(field, StringComparison.Ordinal) + field.Length;
         return int.Parse(payload.AsSpan(start, 10));
     }
+
+    /// <summary>
+    /// freex-theme-border-color-F1: the clipboard HTML flavor has no theme link to fall back on, so a
+    /// theme-backed border (CellBorder.ThemeColor) must be flattened through the workbook's CURRENT
+    /// theme, exactly like the font/fill colors BuildCellCss already resolves. Reading border.Color raw
+    /// pasted the RGB baked in at load time, so after a theme change a copied range pasted with
+    /// correctly recolored fills and fonts but borders still on the old palette.
+    /// </summary>
+    [Fact]
+    public void Serialize_FlattensThemeBackedBorderThroughTheCurrentTheme()
+    {
+        // A stale baked RGB plus a live Accent1 link, as XlsxColorReader produces for <color theme="4"/>.
+        var border = new CellBorder(
+            BorderStyle.Thin,
+            new CellColor(0x01, 0x02, 0x03),
+            new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1));
+        var themeA = WorkbookTheme.Office.WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(200, 10, 20));
+        var themeB = WorkbookTheme.Office.WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(20, 200, 10));
+
+        var fragmentA = SerializeBorderedCell(border, themeA);
+        var fragmentB = SerializeBorderedCell(border, themeB);
+
+        fragmentA.Should().Contain(HexOf(border.ResolveColor(themeA)));
+        fragmentB.Should().Contain(HexOf(border.ResolveColor(themeB)));
+        fragmentA.Should().NotContain("#010203");
+        fragmentB.Should().NotContain("#010203");
+    }
+
+    [Fact]
+    public void Serialize_KeepsLiteralRgbBorderConstantAcrossThemeChanges()
+    {
+        var border = new CellBorder(BorderStyle.Thin, new CellColor(0, 112, 192));
+        border.ThemeColor.Should().BeNull();
+
+        var fragmentA = SerializeBorderedCell(
+            border,
+            WorkbookTheme.Office.WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(200, 10, 20)));
+        var fragmentB = SerializeBorderedCell(
+            border,
+            WorkbookTheme.Office.WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(20, 200, 10)));
+
+        fragmentA.Should().Contain("#0070C0");
+        fragmentB.Should().Contain("#0070C0");
+    }
+
+    private static string HexOf(CellColor color) => $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+
+    private static string SerializeBorderedCell(CellBorder border, WorkbookTheme theme)
+    {
+        var workbook = new Workbook("Book1") { Theme = theme };
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var style = new CellStyle
+        {
+            BorderTop = border,
+            BorderRight = border,
+            BorderBottom = border,
+            BorderLeft = border,
+        };
+        var viewport = new ViewportModel(
+            [new DisplayCell(1, 1, new TextValue("X"), "X", null, default, null, style)],
+            [],
+            []);
+
+        var payload = ClipboardHtmlSerializer.Serialize(
+            viewport, sheet, new GridRange(address, address), workbook.Theme);
+        payload.Should().NotBeNull();
+        return payload!.Fragment;
+    }
 }

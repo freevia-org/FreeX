@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.Model;
@@ -95,6 +96,8 @@ public sealed class XlsxWorksheetSheetDataLayoutReaderTests
                 new XAttribute("hidden", "1"),
                 new XAttribute("ht", "18"),
                 new XAttribute("customHeight", "1"),
+                new XAttribute("s", "3"),
+                new XAttribute("customFormat", "1"),
                 new XAttribute("outlineLevel", "2"),
                 new XAttribute("collapsed", "1"),
                 new XAttribute("thickTop", "1"),
@@ -122,6 +125,7 @@ public sealed class XlsxWorksheetSheetDataLayoutReaderTests
                 new XAttribute("r", "6"),
                 new XAttribute("collapsed", "1")));
         var worksheet = new XDocument(new XElement(WorksheetNs + "worksheet", sheetData));
+        var directLayout = XlsxWorksheetRowColumnLayoutReader.ReadSheetDataLayout(worksheet, WorksheetNs);
 
         using var reader = worksheet.Root!.Element(WorksheetNs + "sheetData")!.CreateReader();
 
@@ -132,6 +136,10 @@ public sealed class XlsxWorksheetSheetDataLayoutReaderTests
         layout.RowColumnLayout.RowOutlineLevels.Should().Contain(5u, 2);
         layout.RowColumnLayout.GroupHiddenRows.Should().Equal(5u);
         layout.RowColumnLayout.CollapsedAnchorRows.Should().BeEquivalentTo([5u, 6u]);
+        layout.RowColumnLayout.StyledRows.Should().Equal(5u);
+        layout.RowColumnLayout.Should().BeEquivalentTo(
+            directLayout.RowColumnLayout,
+            "the direct and streaming readers share one row-layout semantic parser");
         layout.CellLayout.HasStyleOnlyCells.Should().BeTrue();
         layout.CellLayout.ExplicitStyleOnlyCells.Should().Equal((5u, 1u, 4));
         layout.CellLayout.ExplicitPopulatedCellStyles.Should().Equal((5u, 3u, 6));
@@ -200,6 +208,11 @@ public sealed class XlsxWorksheetSheetDataLayoutReaderTests
         rowColumnSource.Should().Contain("root.Elements(worksheetNs + \"cols\")");
         rowColumnSource.Should().Contain("XmlReader reader,");
         rowColumnSource.Should().Contain("detectPreservableSourceSheetDataMetadata");
+        rowColumnSource.Should().Contain("private readonly record struct RowLayoutAttributes");
+        Regex.Matches(rowColumnSource, @"private static void ReadRowLayout\(").Count
+            .Should().Be(1, "row attributes must feed one semantic parser, not parallel element-specific bodies");
+        rowColumnSource.Should().NotContain("HashSet<uint> groupHiddenRows,",
+            "the row parser no longer carries the stale, unused group-hidden output parameter");
         rowColumnSource.Should().NotContain("worksheetXml.Descendants(worksheetNs + \"row\")");
         rowColumnSource.Should().NotContain("worksheetXml.Descendants(worksheetNs + \"col\")");
         cellSource.Should().Contain("ReadSheetDataCells(");

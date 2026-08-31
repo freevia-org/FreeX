@@ -63,8 +63,6 @@ public static class CellEntryParser
             // committing the malformed shape and only ever surfacing it later as a #VALUE!.
             // Walking the freshly parsed AST here rejects it at entry instead, matching Excel
             // (R120-formula-entry-arity-validation).
-            FormulaEvaluator.ValidateBuiltInFunctionArity(parsedFormula);
-
             // Real Excel also refuses to leave edit mode for a formula whose deepest chain of one
             // function nested inside another exceeds its documented 64-level function-nesting
             // limit (e.g. 100 nested IF() calls), popping its "too many levels of nesting" error
@@ -74,8 +72,9 @@ public static class CellEntryParser
             // substitute for it -- so a formula built with, say, 100 nested IFs sailed through
             // those unchallenged even though real Excel's formula bar would reject that exact text
             // at entry. Walking the already-parsed AST here closes that gap
-            // (R120-formula-entry-nesting-length-validation).
-            FormulaEvaluator.ValidateFunctionNestingDepth(parsedFormula);
+            // (R120-formula-entry-nesting-length-validation). One traversal enforces both AST
+            // constraints while retaining arity-first error precedence.
+            FormulaEvaluator.ValidateFormulaEntryAst(parsedFormula);
 
             return Cell.FromFormula(formula);
         }

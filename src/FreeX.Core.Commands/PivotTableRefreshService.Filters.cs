@@ -28,7 +28,7 @@ public static partial class PivotTableRefreshService
 
                     hasExplicitSelection = true;
                     rowKey ??= GroupKeyText(row[field.SourceFieldIndex], field);
-                    if (!string.Equals(rowKey, selectedItem, StringComparison.CurrentCultureIgnoreCase))
+                    if (!MatchesFieldKeyCandidate(rowKey, row[field.SourceFieldIndex], field, selectedItem))
                         continue;
 
                     matchesExplicitSelection = true;
@@ -50,7 +50,8 @@ public static partial class PivotTableRefreshService
                 continue;
             }
 
-            if (!string.Equals(GroupKeyText(row[field.SourceFieldIndex], field), field.SelectedItem, StringComparison.CurrentCultureIgnoreCase))
+            var singleRowKey = GroupKeyText(row[field.SourceFieldIndex], field);
+            if (!MatchesFieldKeyCandidate(singleRowKey, row[field.SourceFieldIndex], field, field.SelectedItem))
                 return false;
         }
 
@@ -359,6 +360,41 @@ public static partial class PivotTableRefreshService
 
     private static string GroupKeyText(ScalarValue value, PivotFieldModel field) =>
         GroupKeyText(value, field.Grouping, field.GroupStart, field.GroupEnd, field.GroupInterval);
+
+    /// <summary>
+    /// Matches a persisted "Select Items..."/slicer selection caption against a row's live value.
+    /// Tries the refresh-time <paramref name="rowKey"/> (<see cref="GroupKeyText(ScalarValue, PivotFieldModel)"/>,
+    /// formatted with <see cref="CultureInfo.CurrentCulture"/>) first, matching the existing
+    /// same-culture behavior exactly. For an ungrouped Number/Date field, also falls back to a
+    /// culture-INVARIANT candidate: the "Select Items..." dialog and slicer/timeline panes read
+    /// their candidate captions via <c>SpreadsheetDisplayFormatter</c>'s CellDisplay profile, which
+    /// formats a Number as <c>value.ToString(CultureInfo.InvariantCulture)</c> and a Date as a fixed
+    /// "yyyy-MM-dd" invariant string -- independent of <see cref="CultureInfo.CurrentCulture"/> -- so
+    /// a caption captured that way never matches a CurrentCulture-formatted row key on any machine
+    /// whose culture isn't itself invariant (and the mismatch is equally possible after a save/
+    /// reopen across differently-configured machines). Without this fallback, hasExplicitSelection
+    /// is true but nothing matches, so the field's filter empties every row (see H-shared-localization-rtl).
+    /// Scoped to field.Grouping == None (the case the "Select Items..."/slicer dialogs actually
+    /// list raw, ungrouped values for): Year/Quarter/Month/Day grouped keys are already
+    /// culture-invariant (see GroupKeyText), and NumberRange-grouped bucket labels are a
+    /// separate, not-yet-addressed instance of this same class of bug outside this finding's scope.
+    /// </summary>
+    private static bool MatchesFieldKeyCandidate(string rowKey, ScalarValue value, PivotFieldModel field, string candidate)
+    {
+        if (string.Equals(rowKey, candidate, StringComparison.CurrentCultureIgnoreCase))
+            return true;
+
+        return field.Grouping == PivotFieldGrouping.None &&
+            string.Equals(InvariantKeyText(value), candidate, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string InvariantKeyText(ScalarValue value) =>
+        value switch
+        {
+            NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
+            DateTimeValue date => date.ToDateTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            _ => KeyText(value)
+        };
 
     private static int IndexOfSourceField(IReadOnlyList<PivotFieldModel> fields, int sourceFieldIndex)
     {

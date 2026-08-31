@@ -2,7 +2,6 @@ using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.Charts;
-using System.Globalization;
 
 namespace FreeX.App.Presentation.Charts.Editing;
 
@@ -204,13 +203,21 @@ public static class ChartTrendlinePlanner
     {
         input = default;
 
-        if (!TryParseIntInRange(periodText, MinPeriod, MaxPeriod, out var period))
+        if (!NumericInputParser.TryParseInt32InRange(
+                periodText ?? string.Empty,
+                MinPeriod,
+                MaxPeriod,
+                out var period))
         {
             issue = ChartTrendlineDialogParseIssue.Period;
             return false;
         }
 
-        if (!TryParseIntInRange(orderText, MinOrder, MaxOrder, out var order))
+        if (!NumericInputParser.TryParseInt32InRange(
+                orderText ?? string.Empty,
+                MinOrder,
+                MaxOrder,
+                out var order))
         {
             issue = ChartTrendlineDialogParseIssue.Order;
             return false;
@@ -280,12 +287,4 @@ public static class ChartTrendlinePlanner
         return false;
     }
 
-    private static bool TryParseIntInRange(string? text, int min, int max, out int value)
-    {
-        var trimmed = (text ?? string.Empty).Trim();
-        return (int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.CurrentCulture, out value) ||
-                int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out value))
-            && value >= min
-            && value <= max;
-    }
 }

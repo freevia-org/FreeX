@@ -261,6 +261,110 @@ public sealed class FreeWDocumentFileWorkflowTests : IDisposable
         lifecycle.IsDirty.Should().BeTrue();
     }
 
+    // r174-shared-protection-readonly F2 (host wiring): a document opened from a file that cannot be
+    // written back to must be MARKED read-only and must never write in place -- before this, Open
+    // computed DocumentOpenResult.IsFileSystemReadOnly but nothing consumed it, so the document
+    // opened fully editable and the user only learned of the restriction when the write threw.
+    [Fact]
+    public async Task OpenPathAsync_ReadOnlySourceFile_MarksReadOnlyAndRoutesSaveToSaveAs()
+    {
+        var adapter = new RecordingAdapter(".docx", canSave: true, Document("loaded"));
+        var (workflow, _) = CreateWorkflow(adapter, currentDocument: Document("my edit"));
+        var path = Path.Combine(TempDirectory, "ReadOnlySource.docx");
+        await File.WriteAllTextAsync(path, "original");
+        File.SetAttributes(path, File.GetAttributes(path) | FileAttributes.ReadOnly);
+
+        try
+        {
+            var opened = await workflow.OpenPathAsync(path);
+
+            opened.Succeeded.Should().BeTrue();
+            opened.OpenResult!.IsFileSystemReadOnly.Should().BeTrue();
+            workflow.IsCurrentFileReadOnly.Should().BeTrue();
+
+            var save = await workflow.SaveCurrentPathAsync(path);
+
+            save.RequiresSaveAs.Should().BeTrue(
+                "Save over a read-only source must divert to Save-As instead of failing the write");
+            File.ReadAllText(path).Should().Be("original");
+        }
+        finally
+        {
+            File.SetAttributes(path, File.GetAttributes(path) & ~FileAttributes.ReadOnly);
+        }
+    }
+
+    // The state must clear itself again: Save-As onto a writable target is the normal way out of
+    // read-only, and leaving the marker set would strand the document in Save-As forever.
+    [Fact]
+    public async Task SavePathAsync_SaveAsFromReadOnlySource_ClearsReadOnlyState()
+    {
+        var adapter = new RecordingAdapter(".docx", canSave: true, Document("loaded"));
+        var (workflow, _) = CreateWorkflow(adapter, currentDocument: Document("my edit"));
+        var path = Path.Combine(TempDirectory, "ReadOnlyOriginal.docx");
+        await File.WriteAllTextAsync(path, "original");
+        File.SetAttributes(path, File.GetAttributes(path) | FileAttributes.ReadOnly);
+
+        try
+        {
+            await workflow.OpenPathAsync(path);
+            workflow.IsCurrentFileReadOnly.Should().BeTrue();
+
+            var copyPath = Path.Combine(TempDirectory, "WritableCopy.docx");
+            var saved = await workflow.SavePathAsync(copyPath);
+
+            saved.Succeeded.Should().BeTrue();
+            workflow.IsCurrentFileReadOnly.Should().BeFalse();
+            File.ReadAllText(copyPath).Should().Be("my edit");
+        }
+        finally
+        {
+            File.SetAttributes(path, File.GetAttributes(path) & ~FileAttributes.ReadOnly);
+        }
+    }
+
+    // Guard against over-triggering: an ordinary writable file must stay editable and save in place.
+    [Fact]
+    public async Task OpenPathAsync_WritableSourceFile_StaysEditable()
+    {
+        var adapter = new RecordingAdapter(".docx", canSave: true, Document("loaded"));
+        var (workflow, _) = CreateWorkflow(adapter, currentDocument: Document("my edit"));
+        var path = Path.Combine(TempDirectory, "Writable.docx");
+        await File.WriteAllTextAsync(path, "original");
+
+        var opened = await workflow.OpenPathAsync(path);
+
+        opened.OpenResult!.IsFileSystemReadOnly.Should().BeFalse();
+        workflow.IsCurrentFileReadOnly.Should().BeFalse();
+        (await workflow.SaveCurrentPathAsync(path)).Succeeded.Should().BeTrue();
+        File.ReadAllText(path).Should().Be("my edit");
+    }
+
+    // A View > New Window clone gets its own workflow instance and never runs Open, so it re-probes
+    // the path it was handed -- otherwise the clone of a read-only document is silently editable.
+    [Fact]
+    public async Task ApplyWindowState_ReadOnlyPath_MarksCloneReadOnly()
+    {
+        var adapter = new RecordingAdapter(".docx", canSave: true, Document("loaded"));
+        var (workflow, lifecycle) = CreateWorkflow(adapter, currentDocument: Document("my edit"));
+        var path = Path.Combine(TempDirectory, "ClonedReadOnly.docx");
+        await File.WriteAllTextAsync(path, "original");
+        File.SetAttributes(path, File.GetAttributes(path) | FileAttributes.ReadOnly);
+
+        try
+        {
+            lifecycle.MarkSavedWithPath(path, suppressRecentFiles: true);
+            workflow.ApplyWindowState(path);
+
+            workflow.IsCurrentFileReadOnly.Should().BeTrue();
+            (await workflow.SaveCurrentPathAsync(path)).RequiresSaveAs.Should().BeTrue();
+        }
+        finally
+        {
+            File.SetAttributes(path, File.GetAttributes(path) & ~FileAttributes.ReadOnly);
+        }
+    }
+
     private (FreeWDocumentFileWorkflow Workflow, FileCommandWorkflow Lifecycle) CreateWorkflow(
         IDocumentFileAdapter adapter,
         List<string>? events = null,

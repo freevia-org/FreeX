@@ -5351,7 +5351,10 @@ public class DocxRoundTripTests
     /// <summary>
     /// Em dashes, en dashes, curly quotes and ellipsis must survive a write→read round-trip
     /// with their Unicode code points intact. The bug category: UTF-8 bytes interpreted as
-    /// Windows-1252 would turn U+2014 (—) into the three-character sequence â€" and similar.
+    /// Windows-1252 would turn U+2014 (—) into the three-character sequence
+    /// U+00E2 U+20AC U+201D, and similar for the other punctuation below. (Those code points are
+    /// named rather than written out: spelling the mojibake literally here would make this file
+    /// itself trip the repo-wide mojibake guard, SourceTodoDocumentationTests.)
     /// Root cause established: the DocxWriter writes via XDocument.Save (UTF-8 + declaration)
     /// and the DocxReader reads via XmlReader (respects the declaration) — both are correct.
     /// This test acts as a regression guard so any future change to encoding paths stays honest.
@@ -5380,7 +5383,7 @@ public class DocxRoundTripTests
 
     /// <summary>
     /// Confirms the em-dash is stored as the Unicode codepoint U+2014 in the emitted XML
-    /// (not as UTF-8 byte sequence interpreted as Windows-1252 mojibake â€").
+    /// (not as its UTF-8 bytes reinterpreted through Windows-1252, i.e. U+00E2 U+20AC U+201D).
     /// </summary>
     [Fact]
     public void EmDash_StoredAsUnicodeCodePointInXml()

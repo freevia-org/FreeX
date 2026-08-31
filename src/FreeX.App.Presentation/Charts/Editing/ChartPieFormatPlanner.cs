@@ -1,6 +1,5 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
-using System.Globalization;
 
 namespace FreeX.App.Presentation.Charts.Editing;
 
@@ -168,21 +167,25 @@ public static class ChartPieFormatPlanner
         out ChartPieFormatInput input,
         out ChartPieFormatParseIssue issue)
     {
-        if (!TryParseClampedInt(firstSliceAngleText, MinFirstSliceAngle, MaxFirstSliceAngle, out var angle))
+        if (!NumericInputParser.TryParseInt32InRange(
+                firstSliceAngleText,
+                MinFirstSliceAngle,
+                MaxFirstSliceAngle,
+                out var angle))
         {
             input = default;
             issue = ChartPieFormatParseIssue.FirstSliceAngle;
             return false;
         }
 
-        if (!TryParseInt(explodedSliceIndexText, out var explodedIndex))
+        if (!NumericInputParser.TryParseInt32(explodedSliceIndexText, out var explodedIndex))
         {
             input = default;
             issue = ChartPieFormatParseIssue.ExplodedSliceIndex;
             return false;
         }
 
-        if (!TryParseClampedInt(
+        if (!NumericInputParser.TryParseInt32InRange(
                 explodedDistancePercentText,
                 ToDisplayPercent(MinExplodedDistance),
                 ToDisplayPercent(MaxExplodedDistance),
@@ -195,7 +198,7 @@ public static class ChartPieFormatPlanner
 
         var holeSizePercent = ToDisplayPercent(0.55);
         if (includeDoughnutHoleSize &&
-            !TryParseClampedInt(
+            !NumericInputParser.TryParseInt32InRange(
                 doughnutHoleSizePercentText,
                 ToDisplayPercent(MinHoleSize),
                 ToDisplayPercent(MaxHoleSize),
@@ -243,10 +246,4 @@ public static class ChartPieFormatPlanner
             DoughnutHoleSize: normalized.DoughnutHoleSize);
     }
 
-    private static bool TryParseClampedInt(string text, int min, int max, out int value) =>
-        TryParseInt(text, out value) && value >= min && value <= max;
-
-    private static bool TryParseInt(string text, out int value) =>
-        int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.CurrentCulture, out value)
-        || int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
 }

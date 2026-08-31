@@ -721,8 +721,15 @@ public sealed partial class MainWindowSourceHygieneTests
         var lifecycleSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookLifecycle.cs");
 
         // Multi-window slice 1 adds an Excel-style per-window number suffix to the shared formatter.
+        // R174-shared-protection-readonly-F1 adds the read-only session flag as a further argument,
+        // so the call now spans multiple lines -- assert on the individual arguments rather than one
+        // contiguous single-line substring.
         editingSource.Should().Contain("WorkbookTitleFormatter.Format(");
-        editingSource.Should().Contain("_workbook.Name, _workbookDirty, IsWorkbookGrouped(), _windowTitleSuffix)");
+        editingSource.Should().Contain("_workbook.Name,");
+        editingSource.Should().Contain("_workbookDirty,");
+        editingSource.Should().Contain("IsWorkbookGrouped(),");
+        editingSource.Should().Contain("_windowTitleSuffix,");
+        editingSource.Should().Contain("_workbookReadOnlySession.IsReadOnly);");
         // Dirty/save-point mutations belong to the shared WorkbookSession used by both hosts.
         lifecycleSource.Should().Contain("_session.MarkDirtyFromHost();");
         lifecycleSource.Should().Contain("_session.MarkSavedFromHost();");

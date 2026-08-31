@@ -475,6 +475,7 @@ public sealed class AddSlicerCommand : IWorkbookCommand
             Name = _slicerName.Trim(),
             CacheName = $"Slicer_{PivotTableSlicerTimelineCommandHelpers.SanitizeCacheName(_slicerName, "Slicer")}",
             SourcePivotTableName = target.Value.PivotTable.Name,
+            SourceSheetName = target.Value.Sheet.Name,
             SourceFieldName = headers[sourceFieldIndex],
             // R163-pivotslicer-rename-resilience: seed the position alongside the name so a later
             // rename of this header can be self-healed by SetSlicerSelectionCommand.Apply instead of

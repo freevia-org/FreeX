@@ -102,4 +102,72 @@ public sealed class BlackAndWhitePdfPrintTests
             .Should().Contain(r => r.Color.R == 255 && r.Color.G == 0 && r.Color.B == 0,
                 "color mode should preserve cell fill colors");
     }
+
+    // freex-print-page-setup-F1: Page Setup > Sheet > "Black and white" is implemented to force every
+    // fill/font/border to solid black for print (Excel's grayscale-print behavior), and the WPF native
+    // print path (PrintRenderer.GridCells.cs's BlackAndWhiteGridlinePen) already does this for
+    // gridlines too. This shared PDF content builder (used by both the Avalonia Save-As-PDF exporter
+    // and, through PortablePdfExportPlanner, the print-preview geometry) previously drew gridlines with
+    // a fixed light-gray color regardless of the flag, so PDF/preview output disagreed with what WPF
+    // actually prints.
+    [Fact]
+    public void BuildWithPageSetup_BlackAndWhite_ForcesGridlinesToBlack()
+    {
+        var workbook = new Workbook("B&W Gridlines");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.PrintBlackAndWhite = true;
+        sheet.PrintGridlines = true;
+
+        var cell = Cell.FromValue(new TextValue("X"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), cell);
+
+        var intent = new WorkbookExportPrintIntent(
+            WorkbookExportPrintScope.ActiveSheet,
+            WorkbookExportPrintOutputKind.Pdf,
+            ActiveSheetIndex: 0);
+
+        var exportPlan = WorkbookExportPrintPlanner.CreatePlanFromPageSetup(workbook, intent);
+        exportPlan.IsReady.Should().BeTrue(exportPlan.StatusText);
+
+        var pdfPlan = PortablePdfExportPlanner.CreatePlan(exportPlan);
+        pdfPlan.IsReady.Should().BeTrue(pdfPlan.StatusText);
+
+        var doc = WorkbookPdfContentBuilder.BuildWithPageSetup(workbook, pdfPlan);
+        doc.Pages.Should().NotBeEmpty();
+
+        var gridLines = doc.Pages[0].Ops.OfType<PdfLine>().ToList();
+        gridLines.Should().NotBeEmpty("PrintGridlines is on, so gridline PdfLine ops must be emitted");
+        gridLines.Should().OnlyContain(
+            l => l.Color.R == 0 && l.Color.G == 0 && l.Color.B == 0,
+            "Black-and-white print must force gridlines to solid black, matching the WPF native print " +
+            "path's BlackAndWhiteGridlinePen (PrintRenderer.GridCells.cs)");
+    }
+
+    [Fact]
+    public void BuildWithPageSetup_NormalMode_KeepsGridlinesLightGray()
+    {
+        var workbook = new Workbook("Color Gridlines");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.PrintBlackAndWhite = false; // normal color mode
+        sheet.PrintGridlines = true;
+
+        var cell = Cell.FromValue(new TextValue("X"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), cell);
+
+        var intent = new WorkbookExportPrintIntent(
+            WorkbookExportPrintScope.ActiveSheet,
+            WorkbookExportPrintOutputKind.Pdf,
+            ActiveSheetIndex: 0);
+
+        var exportPlan = WorkbookExportPrintPlanner.CreatePlanFromPageSetup(workbook, intent);
+        var pdfPlan = PortablePdfExportPlanner.CreatePlan(exportPlan);
+        var doc = WorkbookPdfContentBuilder.BuildWithPageSetup(workbook, pdfPlan);
+
+        var gridLines = doc.Pages[0].Ops.OfType<PdfLine>().ToList();
+        gridLines.Should().NotBeEmpty("PrintGridlines is on, so gridline PdfLine ops must be emitted");
+        gridLines.Should().OnlyContain(
+            l => l.Color.R == 180 && l.Color.G == 185 && l.Color.B == 190,
+            "normal (color) print mode must keep the sibling case unchanged -- gridlines stay the " +
+            "existing light gray-blue, not forced to black");
+    }
 }

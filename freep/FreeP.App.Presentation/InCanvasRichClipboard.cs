@@ -164,11 +164,19 @@ public static class InCanvasRichClipboardPlanner
             typingRun is null ? null : TextBodyModelCloner.CloneRun(typingRun));
     }
 
+    /// <param name="destinationSlideIds">
+    /// Slide ids of the presentation being pasted into. When supplied, a pasted run whose
+    /// hyperlink jumps to a slide that does not exist here -- the cross-presentation paste
+    /// case -- has its <see cref="Hyperlink.TargetSlideId"/> cleared, mirroring how deleting a
+    /// slide orphans the links that pointed at it. Url and Tooltip are preserved. Pass null
+    /// (the default) to keep the fragment exactly as captured.
+    /// </param>
     public static TextBody Apply(
         TextBody destination,
         InCanvasEditorTextSelection selection,
         InCanvasRichClipboardPayload payload,
-        out int caret)
+        out int caret,
+        IReadOnlyCollection<string>? destinationSlideIds = null)
     {
         ArgumentNullException.ThrowIfNull(destination);
         ArgumentNullException.ThrowIfNull(payload);
@@ -180,7 +188,45 @@ public static class InCanvasRichClipboardPlanner
             destination,
             start,
             end - start,
-            payload.Body);
+            ResolveSlideJumps(payload.Body, destinationSlideIds));
+    }
+
+    /// <summary>
+    /// Drops internal slide-jump targets the destination presentation cannot resolve, returning
+    /// <paramref name="fragment"/> itself when nothing needs changing. The fragment is cloned
+    /// before it is edited: the same payload can be pasted again, so the clipboard copy must
+    /// keep its original targets for a paste back into the source deck.
+    /// <para>
+    /// Shared by the in-canvas paste (through <see cref="Apply"/>) and the slide-level paste,
+    /// so pasting into a text box and pasting onto the canvas resolve a foreign link alike.
+    /// </para>
+    /// </summary>
+    public static TextBody ResolveSlideJumps(
+        TextBody fragment,
+        IReadOnlyCollection<string>? destinationSlideIds)
+    {
+        ArgumentNullException.ThrowIfNull(fragment);
+
+        if (destinationSlideIds is null)
+            return fragment;
+
+        var known = destinationSlideIds as ISet<string>
+            ?? new HashSet<string>(destinationSlideIds, StringComparer.Ordinal);
+        bool needsResolution = fragment.Paragraphs
+            .SelectMany(paragraph => paragraph.Runs)
+            .Any(run => run.Hyperlink?.TargetSlideId is { } id && !known.Contains(id));
+        if (!needsResolution)
+            return fragment;
+
+        var resolved = TextBodyModelCloner.CloneTextBody(fragment) ?? new TextBody();
+        foreach (var run in resolved.Paragraphs.SelectMany(paragraph => paragraph.Runs))
+        {
+            if (run.Hyperlink is { TargetSlideId: { } targetSlideId } hyperlink
+                && !known.Contains(targetSlideId))
+                hyperlink.TargetSlideId = null;
+        }
+
+        return resolved;
     }
 
     /// <summary>
@@ -615,6 +661,10 @@ public static class InCanvasRichClipboardPlanner
         BulletFontFollowsText = paragraph.BulletFontFollowsText,
         SpaceBeforePt = paragraph.SpaceBeforePt,
         SpaceAfterPt = paragraph.SpaceAfterPt,
+        SpaceBeforePercent = paragraph.SpaceBeforePercent,
+        SpaceAfterPercent = paragraph.SpaceAfterPercent,
+        LineSpacingPercent = paragraph.LineSpacingPercent,
+        LineSpacingPointsExact = paragraph.LineSpacingPointsExact,
         TabStops = paragraph.TabStops.Select(stop => new ClipboardTabStopDto
         {
             PositionEmu = stop.PositionEmu,
@@ -809,6 +859,10 @@ public static class InCanvasRichClipboardPlanner
             BulletFontFollowsText = dto.BulletFontFollowsText,
             SpaceBeforePt = dto.SpaceBeforePt,
             SpaceAfterPt = dto.SpaceAfterPt,
+            SpaceBeforePercent = dto.SpaceBeforePercent,
+            SpaceAfterPercent = dto.SpaceAfterPercent,
+            LineSpacingPercent = dto.LineSpacingPercent,
+            LineSpacingPointsExact = dto.LineSpacingPointsExact,
         };
         foreach (var stop in dto.TabStops ?? [])
             paragraph.TabStops.Add(new TabStop
@@ -1164,6 +1218,10 @@ public static class InCanvasRichClipboardPlanner
         public bool BulletFontFollowsText { get; set; }
         public double? SpaceBeforePt { get; set; }
         public double? SpaceAfterPt { get; set; }
+        public double? SpaceBeforePercent { get; set; }
+        public double? SpaceAfterPercent { get; set; }
+        public double? LineSpacingPercent { get; set; }
+        public double? LineSpacingPointsExact { get; set; }
         public List<ClipboardTabStopDto>? TabStops { get; set; }
         public ClipboardImageDto? BulletImage { get; set; }
         public List<ClipboardRunDto>? Runs { get; set; }

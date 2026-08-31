@@ -33,39 +33,29 @@ internal static class XlsxNumberFormatCatalogWriter
         }
 
         var remap = new Dictionary<int, int>();
-        var usedIds = numFmts.Elements(workbookNs + "numFmt")
-            .Select(element => XlsxXmlAttributeReader.ReadIntAttribute(element, "numFmtId"))
-            .Where(id => id is not null)
-            .Select(id => id!.Value)
-            .ToHashSet();
-        var nextId = Math.Max(164, usedIds.Count == 0 ? 164 : usedIds.Max() + 1);
+        var formatIndex = NumberFormatIndex.Create(numFmts, workbookNs);
+        var nextId = Math.Max(164, formatIndex.UsedIds.Count == 0 ? 164 : formatIndex.UsedIds.Max() + 1);
         foreach (var (numberFormatId, formatCode) in catalog.OrderBy(pair => pair.Key))
         {
-            var existing = FindNumberFormatById(numFmts, workbookNs, numberFormatId);
-            if (existing is not null &&
-                string.Equals(existing.Attribute("formatCode")?.Value, formatCode, StringComparison.Ordinal))
+            var hasExistingId = formatIndex.TryGetFormatCode(numberFormatId, out var existingFormatCode);
+            if (hasExistingId && string.Equals(existingFormatCode, formatCode, StringComparison.Ordinal))
             {
                 remap[numberFormatId] = numberFormatId;
                 continue;
             }
 
-            if (existing is not null)
+            if (hasExistingId)
             {
-                var equivalent = FindEquivalentNumberFormat(numFmts, workbookNs, formatCode);
-                if (equivalent is not null && XlsxXmlAttributeReader.ReadIntAttribute(equivalent, "numFmtId") is { } equivalentId)
+                if (formatIndex.TryGetEquivalentCustomId(formatCode, out var equivalentId))
                 {
                     remap[numberFormatId] = equivalentId;
                     continue;
                 }
 
-                while (usedIds.Contains(nextId))
+                while (formatIndex.UsedIds.Contains(nextId))
                     nextId++;
                 remap[numberFormatId] = nextId;
-                usedIds.Add(nextId);
-                numFmts.Add(new XElement(
-                    workbookNs + "numFmt",
-                    new XAttribute("numFmtId", nextId.ToString(CultureInfo.InvariantCulture)),
-                    new XAttribute("formatCode", formatCode)));
+                formatIndex.Append(nextId, formatCode);
                 nextId++;
                 continue;
             }
@@ -74,19 +64,14 @@ internal static class XlsxNumberFormatCatalogWriter
             // same formatCode a different id). Before minting a brand-new entry, check whether an
             // equivalent formatCode already exists under another (already-referenced) id — otherwise
             // every round trip where the live id drifts adds one more orphaned duplicate.
-            var equivalentForNewId = FindEquivalentNumberFormat(numFmts, workbookNs, formatCode);
-            if (equivalentForNewId is not null && XlsxXmlAttributeReader.ReadIntAttribute(equivalentForNewId, "numFmtId") is { } equivalentIdForNewId)
+            if (formatIndex.TryGetEquivalentCustomId(formatCode, out var equivalentIdForNewId))
             {
                 remap[numberFormatId] = equivalentIdForNewId;
                 continue;
             }
 
             remap[numberFormatId] = numberFormatId;
-            usedIds.Add(numberFormatId);
-            numFmts.Add(new XElement(
-                workbookNs + "numFmt",
-                new XAttribute("numFmtId", numberFormatId.ToString(CultureInfo.InvariantCulture)),
-                new XAttribute("formatCode", formatCode)));
+            formatIndex.Append(numberFormatId, formatCode);
         }
 
         // R118-io-numfmt-pivot-sentinel-collision: PivotValueFieldPlanner hardcodes the SAME sentinel
@@ -108,26 +93,21 @@ internal static class XlsxNumberFormatCatalogWriter
             {
                 var formatCode = formatCodes[index];
 
-                var equivalent = FindEquivalentNumberFormat(numFmts, workbookNs, formatCode);
-                if (equivalent is not null && XlsxXmlAttributeReader.ReadIntAttribute(equivalent, "numFmtId") is { } equivalentId)
+                if (formatIndex.TryGetEquivalentCustomId(formatCode, out var equivalentId))
                 {
                     pivotCodeRemap[(numberFormatId, formatCode)] = equivalentId;
                     continue;
                 }
 
-                while (usedIds.Contains(nextId))
+                while (formatIndex.UsedIds.Contains(nextId))
                     nextId++;
                 pivotCodeRemap[(numberFormatId, formatCode)] = nextId;
-                usedIds.Add(nextId);
-                numFmts.Add(new XElement(
-                    workbookNs + "numFmt",
-                    new XAttribute("numFmtId", nextId.ToString(CultureInfo.InvariantCulture)),
-                    new XAttribute("formatCode", formatCode)));
+                formatIndex.Append(nextId, formatCode);
                 nextId++;
             }
         }
 
-        numFmts.SetAttributeValue("count", numFmts.Elements(workbookNs + "numFmt").Count().ToString(CultureInfo.InvariantCulture));
+        numFmts.SetAttributeValue("count", formatIndex.Count.ToString(CultureInfo.InvariantCulture));
         XlsxPackageXmlEditor.ReplaceXml(archive, "xl/styles.xml", stylesXml);
         return new PivotNumberFormatIdMap(remap, pivotCodeRemap);
     }
@@ -263,7 +243,7 @@ internal static class XlsxNumberFormatCatalogWriter
         }
 
         foreach (var styleId in liveStyleIds)
-            liveFormatCodes.Add(workbook.GetStyle(styleId).NumberFormat);
+            liveFormatCodes.Add(workbook.GetStyleNumberFormat(styleId));
 
         return liveFormatCodes;
     }
@@ -285,29 +265,59 @@ internal static class XlsxNumberFormatCatalogWriter
         return null;
     }
 
-    private static XElement? FindNumberFormatById(XElement numFmts, XNamespace workbookNs, int numberFormatId)
+    private sealed class NumberFormatIndex
     {
-        foreach (var element in numFmts.Elements(workbookNs + "numFmt"))
+        private readonly XElement _numFmts;
+        private readonly XName _numFmtName;
+        private readonly Dictionary<int, string?> _formatCodesById = [];
+        private readonly Dictionary<string, int> _customIdsByCode = new(StringComparer.Ordinal);
+
+        private NumberFormatIndex(XElement numFmts, XNamespace workbookNs)
         {
-            if (XlsxXmlAttributeReader.ReadIntAttribute(element, "numFmtId") == numberFormatId)
-                return element;
+            _numFmts = numFmts;
+            _numFmtName = workbookNs + "numFmt";
         }
 
-        return null;
-    }
+        public HashSet<int> UsedIds { get; } = [];
 
-    private static XElement? FindEquivalentNumberFormat(XElement numFmts, XNamespace workbookNs, string formatCode)
-    {
-        foreach (var element in numFmts.Elements(workbookNs + "numFmt"))
+        public int Count { get; private set; }
+
+        public static NumberFormatIndex Create(XElement numFmts, XNamespace workbookNs)
         {
-            if (string.Equals(element.Attribute("formatCode")?.Value, formatCode, StringComparison.Ordinal) &&
-                XlsxXmlAttributeReader.ReadIntAttribute(element, "numFmtId") is { } equivalentId &&
-                equivalentId >= 164)
+            var index = new NumberFormatIndex(numFmts, workbookNs);
+            foreach (var element in numFmts.Elements(index._numFmtName))
             {
-                return element;
+                index.Count++;
+                if (XlsxXmlAttributeReader.ReadIntAttribute(element, "numFmtId") is not { } id)
+                    continue;
+
+                var formatCode = element.Attribute("formatCode")?.Value;
+                index.UsedIds.Add(id);
+                index._formatCodesById.TryAdd(id, formatCode);
+                if (id >= 164 && formatCode is not null)
+                    index._customIdsByCode.TryAdd(formatCode, id);
             }
+
+            return index;
         }
 
-        return null;
+        public bool TryGetFormatCode(int id, out string? formatCode) =>
+            _formatCodesById.TryGetValue(id, out formatCode);
+
+        public bool TryGetEquivalentCustomId(string formatCode, out int id) =>
+            _customIdsByCode.TryGetValue(formatCode, out id);
+
+        public void Append(int id, string formatCode)
+        {
+            _numFmts.Add(new XElement(
+                _numFmtName,
+                new XAttribute("numFmtId", id.ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("formatCode", formatCode)));
+            Count++;
+            UsedIds.Add(id);
+            _formatCodesById.TryAdd(id, formatCode);
+            if (id >= 164)
+                _customIdsByCode.TryAdd(formatCode, id);
+        }
     }
 }

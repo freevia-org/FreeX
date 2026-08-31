@@ -122,6 +122,82 @@ public sealed class R96_ExternalHyperlinkBookmarkSurvivesCellMoveTests
         reloadedSheet.HyperlinkMetadata[reloadedAddress].Bookmark.Should().BeEmpty();
     }
 
+    [Fact]
+    public void FixExternalBookmarkLocations_IndexesFirstRefAndPreservesExistingLocationsAndOrder()
+    {
+        using var package = CreateWritablePackage(CreateExternalHyperlinkWithLocationSourcePackage(location: null));
+        AddHyperlinkElements(
+            package,
+            new XElement(WorkbookNs + "hyperlink",
+                new XAttribute("ref", "a1"),
+                new XAttribute("location", "duplicate-location")),
+            new XElement(WorkbookNs + "hyperlink",
+                new XAttribute("ref", "B1"),
+                new XAttribute("location", "existing-location")));
+        var pathMap = CreateWorksheetPathMap(package);
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.HyperlinkMetadata[new CellAddress(sheet.Id, 1, 1)] = new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            Bookmark: "first-location");
+        sheet.HyperlinkMetadata[new CellAddress(sheet.Id, 1, 2)] = new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            Bookmark: "replacement-must-not-win");
+        sheet.HyperlinkMetadata[new CellAddress(sheet.Id, 1, 3)] = new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            Bookmark: "missing-ref-location");
+
+        package.Position = 0;
+        XlsxFileAdapter.FixExternalHyperlinkBookmarkLocations(package, workbook, pathMap);
+
+        var hyperlinks = ReadHyperlinkElements(package);
+        hyperlinks.Select(element => element.Attribute("ref")?.Value)
+            .Should().Equal("A1", "a1", "B1");
+        hyperlinks[0].Attribute("location")?.Value.Should().Be("first-location");
+        hyperlinks[1].Attribute("location")?.Value.Should().Be("duplicate-location");
+        hyperlinks[2].Attribute("location")?.Value.Should().Be("existing-location");
+        hyperlinks.Should().NotContain(element =>
+            string.Equals((string?)element.Attribute("ref"), "C1", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void FixExternalBookmarkLocations_WhenMatchesAreMissingOrAlreadyPopulated_DoesNotRewriteWorksheet()
+    {
+        using var package = CreateWritablePackage(
+            CreateExternalHyperlinkWithLocationSourcePackage(location: "existing-location"));
+        var pathMap = CreateWorksheetPathMap(package);
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.HyperlinkMetadata[new CellAddress(sheet.Id, 1, 1)] = new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            Bookmark: "replacement-must-not-win");
+        sheet.HyperlinkMetadata[new CellAddress(sheet.Id, 1, 3)] = new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            Bookmark: "missing-ref-location");
+        var before = ReadPackageEntry(package, "xl/worksheets/sheet1.xml");
+
+        package.Position = 0;
+        XlsxFileAdapter.FixExternalHyperlinkBookmarkLocations(package, workbook, pathMap);
+
+        ReadPackageEntry(package, "xl/worksheets/sheet1.xml").Should().Equal(before);
+    }
+
+    [Fact]
+    public void FixExternalBookmarkLocations_UsesOneLinearReferenceIndex()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxFileAdapter.Hyperlinks.cs");
+        var method = source[
+            source.IndexOf("internal static void FixExternalHyperlinkBookmarkLocations", StringComparison.Ordinal)..];
+
+        method.Should().Contain("new Dictionary<string, XElement>(StringComparer.OrdinalIgnoreCase)");
+        method.Should().Contain("hyperlinksByReference.TryAdd(reference, hyperlinkElement)");
+        method.Should().Contain("hyperlinksByReference.TryGetValue(reference, out var hyperlinkElement)");
+        method.Should().NotContain(".FirstOrDefault(");
+    }
+
+    private static readonly XNamespace WorkbookNs =
+        "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
     private static byte[] CreateExternalHyperlinkWithLocationSourcePackage(string? location = "Sheet2!A5")
     {
         var locationAttr = location is null ? "" : $" location=\"{location}\"";
@@ -204,6 +280,55 @@ public sealed class R96_ExternalHyperlinkBookmarkSurvivesCellMoveTests
                 """));
 
         return package.ToArray();
+    }
+
+    private static MemoryStream CreateWritablePackage(byte[] packageBytes)
+    {
+        var package = new MemoryStream(packageBytes.Length + 4096);
+        package.Write(packageBytes);
+        package.Position = 0;
+        return package;
+    }
+
+    private static XlsxWorkbookWorksheetPathMap CreateWorksheetPathMap(MemoryStream package)
+    {
+        package.Position = 0;
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var pathMap = XlsxWorkbookWorksheetPathMap.TryCreate(archive);
+        pathMap.Should().NotBeNull();
+        return pathMap!;
+    }
+
+    private static void AddHyperlinkElements(MemoryStream package, params XElement[] elements)
+    {
+        package.Position = 0;
+        using var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true);
+        var worksheet = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        worksheet.Root!.Element(WorkbookNs + "hyperlinks")!.Add(elements);
+        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/worksheets/sheet1.xml", worksheet);
+        package.Position = 0;
+    }
+
+    private static List<XElement> ReadHyperlinkElements(MemoryStream package)
+    {
+        package.Position = 0;
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        return XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet1.xml")
+            .Root!
+            .Element(WorkbookNs + "hyperlinks")!
+            .Elements(WorkbookNs + "hyperlink")
+            .Select(element => new XElement(element))
+            .ToList();
+    }
+
+    private static byte[] ReadPackageEntry(MemoryStream package, string path)
+    {
+        package.Position = 0;
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        using var entryStream = archive.GetEntry(path)!.Open();
+        using var buffer = new MemoryStream();
+        entryStream.CopyTo(buffer);
+        return buffer.ToArray();
     }
 
     private static string? ReadHyperlinkAttribute(

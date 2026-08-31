@@ -1,4 +1,5 @@
 using Free.Shared.AppServices;
+using Free.Shared.IO;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 
@@ -71,6 +72,25 @@ public sealed class FreeWDocumentFileWorkflow
     // reset on File>New: New clears _lifecycle.CurrentPath to null, and the path-identity gate above
     // is already false against a null CurrentPath, so a stale value here is inert.
     private DateTime? _currentFileSourceLastWriteTimeUtc;
+
+    // r174-freew-persistence-readonly-open (host wiring): the path DocumentPersistenceWorkflow.Open
+    // reported as write-restricted (OS read-only attribute, read-only share/volume, denied ACL), or
+    // null when the current document has no such restriction. Stored as the PATH rather than a bare
+    // bool for the same reason _currentFileSourceLastWriteTimeUtc is gated on path identity: File >
+    // New, Save-As to a writable target, or any other change of document identity moves CurrentPath
+    // away from this value, which makes a stale entry inert instead of needing an explicit reset on
+    // every lifecycle path that could clear it.
+    private string? _readOnlySourcePath;
+
+    /// <summary>
+    /// Whether the document currently loaded came from a file that cannot be written back to.
+    /// Hosts surface this the way FreeX does (a <c>[Read-Only]</c> title suffix), and
+    /// <see cref="SaveCurrentPathAsync"/> routes Save through Save-As while it is set, mirroring
+    /// FreeX's <c>WorkbookReadOnlySession.ResolveExistingSaveTarget</c> returning null.
+    /// </summary>
+    public bool IsCurrentFileReadOnly =>
+        _readOnlySourcePath is not null
+        && PlatformPathIdentityComparer.Current.Equals(_lifecycle.CurrentPath, _readOnlySourcePath);
 
     /// <summary>
     /// r172: the external-modification guard baseline, exposed so a test can assert that a code
@@ -201,6 +221,11 @@ public sealed class FreeWDocumentFileWorkflow
                 result.TargetPath is not null && File.Exists(result.TargetPath)
                     ? File.GetLastWriteTimeUtc(result.TargetPath)
                     : null;
+            // Recovery adopts the ORIGINAL file as its save target, so carry over the same
+            // write-restriction verdict OpenSnapshot computed for it -- otherwise recovering onto a
+            // read-only original lands in exactly the fully-editable-with-no-indication state this
+            // change removes from Open.
+            _readOnlySourcePath = result.IsFileSystemReadOnly ? result.TargetPath : null;
             _lifecycle.MarkDirtyWithPath(result.TargetPath);
             return new(DocumentFileExecutionOutcome.Succeeded, result);
         }
@@ -219,6 +244,13 @@ public sealed class FreeWDocumentFileWorkflow
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        // A read-only source must never be written back to in place: report the same SaveAsRequired
+        // outcome an unsaveable format does, which FreeWDocumentFileCommandSession already turns
+        // into a Save-As prompt. Without this the user only learns the file is read-only when the
+        // underlying write throws "access to the path is denied" -- after they have already edited.
+        if (IsCurrentFileReadOnly)
+            return Task.FromResult(new DocumentSaveWorkflowResult(DocumentFileExecutionOutcome.SaveAsRequired));
+
         return _persistence.TryResolveCurrentSaveTarget(path, out var target)
             ? SaveTargetAsync(target, DocumentSaveExecutionKind.Save, cancellationToken)
             : Task.FromResult(new DocumentSaveWorkflowResult(DocumentFileExecutionOutcome.SaveAsRequired));
@@ -289,11 +321,16 @@ public sealed class FreeWDocumentFileWorkflow
             path is not null && File.Exists(path)
                 ? File.GetLastWriteTimeUtc(path)
                 : null;
+        // Same reasoning for the read-only marker: a New Window clone gets its own workflow instance
+        // and never runs Open, so re-probe the path it was handed instead of leaving the clone
+        // editable (and its Save silently failing) on a read-only source.
+        _readOnlySourcePath = FileWriteRestrictionProbe.IsWriteRestricted(path) ? path : null;
     }
 
     private void PublishOpenedDocument(DocumentOpenResult result, bool suppressRecentFiles)
     {
         _currentFileSourceLastWriteTimeUtc = result.SourceLastWriteTimeUtc;
+        _readOnlySourcePath = result.IsFileSystemReadOnly ? result.SavedPath : null;
 
         if (result.SavedPath is null)
         {
@@ -311,6 +348,10 @@ public sealed class FreeWDocumentFileWorkflow
         // Rebase the guard to the write this save just produced (kind == Save only -- Save Copy
         // never calls this callback, by design, since it doesn't change the document's identity).
         _currentFileSourceLastWriteTimeUtc = File.Exists(path) ? File.GetLastWriteTimeUtc(path) : null;
+        // The write just succeeded, so this path is demonstrably writable -- clear any read-only
+        // marker inherited from the source file (Save-As off a read-only original is the normal way
+        // out of the read-only state).
+        _readOnlySourcePath = null;
         _lifecycle.MarkSavedWithPath(
             path,
             suppressRecentFiles: false,

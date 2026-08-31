@@ -680,6 +680,14 @@ public sealed class SlideShowSessionController
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(callbacks);
 
+        // Round-173 F1: RevealHiddenSlide deliberately leaves Controller parked on the
+        // underlying route slide (see that method's own doc comment), so a click-step
+        // consumed here while a hidden slide is still the thing on screen belongs to a
+        // slide the renderer never redrew. Capture that BEFORE clearing the reveal below,
+        // so the PlayAnimationStep case can tell whether it needs to bring the underlying
+        // slide back on screen first.
+        var wasDisplayingRevealedHiddenSlide = _revealedHiddenSlide is not null;
+
         _revealedHiddenSlide = null;
         _revealedHiddenSlideSourceIndex = -1;
         _revealedHiddenSlideEntryStepConsumed = false;
@@ -695,6 +703,23 @@ public sealed class SlideShowSessionController
                 callbacks.Close(nowUtc);
                 break;
             case SlideShowHostCommandKind.PlayAnimationStep when command.Step is not null:
+                // Unlike the NavigateToSlide case below, PlayAnimationStep never redraws
+                // anything by itself -- it only resolves the step's target shape against
+                // whatever is already rendered. If a hidden slide was on screen, the
+                // audience is still looking at ITS tree, so redisplay the underlying route
+                // slide (now current again, per the clear above) through the very same
+                // chokepoint NavigateToSlide uses, before the step is asked to target a
+                // shape that was never drawn there.
+                if (wasDisplayingRevealedHiddenSlide && Controller.CurrentSlide is { } returningSlide)
+                {
+                    callbacks.NavigateToSlide(new SlideShowNavigationRequest(
+                        returningSlide,
+                        Controller.CurrentSlideIndex,
+                        AnimateSlide: false,
+                        TransitionDurationMs: null,
+                        UseDestinationBackground: true));
+                }
+
                 callbacks.PlayAnimationStep(command.Step);
                 break;
             case SlideShowHostCommandKind.NavigateToSlide when command.Slide is not null:

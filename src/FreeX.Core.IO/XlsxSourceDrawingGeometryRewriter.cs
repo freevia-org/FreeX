@@ -920,10 +920,10 @@ internal static class XlsxSourceDrawingGeometryRewriter
             return true;
         }
 
-        var left = ToSourceRectanglePercent(picture.CropLeft);
-        var top = ToSourceRectanglePercent(picture.CropTop);
-        var right = ToSourceRectanglePercent(picture.CropRight);
-        var bottom = ToSourceRectanglePercent(picture.CropBottom);
+        var left = XlsxSourceRectangleRatioCodec.Format(picture.CropLeft);
+        var top = XlsxSourceRectangleRatioCodec.Format(picture.CropTop);
+        var right = XlsxSourceRectangleRatioCodec.Format(picture.CropRight);
+        var bottom = XlsxSourceRectangleRatioCodec.Format(picture.CropBottom);
 
         if (srcRect is not null)
         {
@@ -950,11 +950,6 @@ internal static class XlsxSourceDrawingGeometryRewriter
 
         return true;
     }
-
-    private static string ToSourceRectanglePercent(double ratio) =>
-        // R80-io-drawing-image-5-2: preserve negative (outward-crop/padding) ratios -- only clamp the
-        // magnitude to Excel's ±100% bound, matching ReadSourceRectangleRatio's [-1, 1] range.
-        ((int)Math.Round(Math.Clamp(ratio, -1, 1) * 100000d)).ToString(CultureInfo.InvariantCulture);
 
     private static bool SetOrRemoveAttribute(XElement element, string attributeName, string? value)
     {

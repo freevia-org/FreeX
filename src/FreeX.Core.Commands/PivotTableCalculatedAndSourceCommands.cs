@@ -126,15 +126,17 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
         if (!CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
             return CommandGuards.RejectPivotTableNotFound();
 
+        var cache = CommandGuards.FindPivotCache(ctx.Workbook, pivotTable);
         var fieldCount = checked((int)_sourceRange.ColCount);
         if (pivotTable.RowFields.Concat(pivotTable.ColumnFields).Concat(pivotTable.PageFields)
                 .Any(field => field.SourceFieldIndex < 0 || field.SourceFieldIndex >= fieldCount) ||
-            pivotTable.DataFields.Any(field => field.SourceFieldIndex < 0 || field.SourceFieldIndex >= fieldCount))
+            pivotTable.DataFields.Any(field => field.SourceFieldIndex < 0 || field.SourceFieldIndex >= fieldCount) ||
+            pivotTable.CalculatedItems.Any(item => item.SourceFieldIndex < 0 || item.SourceFieldIndex >= fieldCount) ||
+            cache?.CalculatedItems.Any(item => item.SourceFieldIndex < 0 || item.SourceFieldIndex >= fieldCount) == true)
         {
             return new CommandOutcome(false, "Existing PivotTable fields are outside the new source range.");
         }
 
-        var cache = CommandGuards.FindPivotCache(ctx.Workbook, pivotTable);
         _snapshot = PivotSourceSnapshot.Capture(pivotTable, cache);
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.LastRenderedRange ?? pivotTable.TargetRange);
 
@@ -260,30 +262,15 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
         PivotCacheSourceType desiredType,
         List<string> headers)
     {
-        var redirected = new PivotCacheModel
-        {
-            CacheId = original.CacheId,
-            SourceType = desiredType,
-            SourceSheetName = sourceSheet.Name,
-            SourceReference = sourceRange.ToString(),
-            SourceTableName = matchedTable?.Name,
-            SourceTableId = matchedTable?.Id,
-            PackagePart = original.PackagePart,
-            ConnectionId = original.ConnectionId,
-            IsOlap = original.IsOlap,
-            RefreshOnLoad = original.RefreshOnLoad,
-            SaveData = original.SaveData,
-            EnableRefresh = original.EnableRefresh,
-            PreserveSourceSortFilter = original.PreserveSourceSortFilter,
-            MissingItemsLimit = original.MissingItemsLimit,
-            RecordCount = original.RecordCount,
-            CreatedVersion = original.CreatedVersion,
-            MinRefreshableVersion = original.MinRefreshableVersion,
-            RefreshedVersion = original.RefreshedVersion,
-            RefreshedBy = original.RefreshedBy,
-            RefreshedDateIso = original.RefreshedDateIso,
-            RawRecordsXml = original.RawRecordsXml,
-        };
+        var redirected = PivotCacheScalarCopyFactory.Create(
+            original,
+            cacheId: original.CacheId,
+            sourceType: desiredType,
+            sourceSheetName: sourceSheet.Name,
+            sourceReference: sourceRange.ToString(),
+            sourceTableName: matchedTable?.Name,
+            sourceTableId: matchedTable?.Id,
+            packagePart: original.PackagePart);
 
         // R116-commands-pivot-slicer-changesource: same as the same-SourceType branch above --
         // RECONCILE against the ORIGINAL cache's fields (by name) via PivotCacheFieldFactory.
@@ -293,6 +280,7 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
         // slicer's SlicerModel.CacheItems[].Index must keep meaning what it always meant even when the
         // crossing forced a whole new PivotCacheModel object.
         redirected.Fields.AddRange(PivotCacheFieldFactory.ReconcileFields(original.Fields, headers, sourceSheet, sourceRange));
+        redirected.CalculatedItems.AddRange(original.CalculatedItems);
 
         return redirected;
     }

@@ -1831,6 +1831,17 @@ public sealed partial class MainWindow
             if (file is null)
                 return;
 
+            // Round 172 (freep-media F1 follow-up): reject an unsupported picture rather than falling
+            // back to image/png, matching InsertPictureFromFileAsync and the WPF header/footer dialog.
+            // XlsxHeaderFooterPicturePackageWriter names the media part from this stored content type,
+            // so the old fallback wrote e.g. metafile bytes into a .png part declared image/png.
+            var contentType = InsertPictureCommandFactory.ContentTypeForPath(file.Name);
+            if (contentType is null)
+            {
+                ShowEditIssue(UiText.Get("InsertLoc_UnsupportedImageFormat"));
+                return;
+            }
+
             var readResult = await FileByteReadWorkflow.ReadStreamAsync(file.OpenReadAsync);
             if (readResult.Outcome == FileByteReadOutcome.Canceled)
                 return;
@@ -1845,7 +1856,6 @@ public sealed partial class MainWindow
                 return;
             }
 
-            var contentType = InsertPictureCommandFactory.ContentTypeForPath(file.Name) ?? "image/png";
             var (pictureWidth, pictureHeight) = DecodeHeaderFooterPictureSize(readResult.Bytes);
             var picture = new WorksheetHeaderFooterPicture(readResult.Bytes, contentType, file.Name, pictureWidth, pictureHeight);
             if (!HeaderFooterEditorPlanner.ContainsPictureToken(editor.Text))

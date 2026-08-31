@@ -288,7 +288,7 @@ public static class WorkbookPdfContentBuilder
             // overrides the raw style's border on that edge, matching the CF fill override immediately
             // above -- previously an Excel-authored dxf border (e.g. a CF-highlighted totals row) never
             // drew here even though the raw R127 fix above already drew a plain, non-CF border.
-            DrawCellBorders(ops, style, cell.ConditionalStyle, x, y, w, h, bw);
+            DrawCellBorders(ops, style, cell.ConditionalStyle, x, y, w, h, bw, workbook.Theme);
 
             var isEffectivelyRightToLeft = CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft(
                 style.ReadingOrder, sheet.IsRightToLeft);
@@ -412,6 +412,14 @@ public static class WorkbookPdfContentBuilder
         // ── Gridlines ─────────────────────────────────────────────────────────
         if (sheet.PrintGridlines)
         {
+            // freex-print-page-setup-F1: Page Setup > Sheet > "Black and white" forces every printed
+            // fill/font/border to solid black (Excel's grayscale-print behavior) -- gridlines must
+            // follow the same rule, matching the WPF native print path's BlackAndWhiteGridlinePen
+            // (PrintRenderer.GridCells.cs). Previously this used the fixed light-gray GridLineColor
+            // unconditionally, so this shared PDF-export path (and the Avalonia print preview, which
+            // has the identical gap) disagreed with what WPF actually prints.
+            var gridLineColor = sheet.PrintBlackAndWhite ? PdfColor.Black : GridLineColor;
+
             var gridBottom = rowYs.Length > 0 ? rowYs[rowCount - 1] : contentBottom;
             var gridRight  = colXs.Length > 0 ? colXs[columnCount - 1] + colWidths[columnCount - 1] : contentRight;
 
@@ -426,7 +434,7 @@ public static class WorkbookPdfContentBuilder
                 else
                     break;
 
-                ops.Add(new PdfLine(gridLeft, lineY, gridRight, lineY, GridLineColor, 0.4));
+                ops.Add(new PdfLine(gridLeft, lineY, gridRight, lineY, gridLineColor, 0.4));
             }
 
             // Vertical lines (one per column boundary + right).
@@ -440,7 +448,7 @@ public static class WorkbookPdfContentBuilder
                 else
                     break;
 
-                ops.Add(new PdfLine(lineX, gridTop, lineX, gridBottom, GridLineColor, 0.4));
+                ops.Add(new PdfLine(lineX, gridTop, lineX, gridBottom, gridLineColor, 0.4));
             }
         }
 
@@ -658,7 +666,7 @@ public static class WorkbookPdfContentBuilder
             // path's existing behavior.
             //
             // freex-conditional-format-F1: same CF border override as the page-setup-aware path above.
-            DrawCellBorders(ops, style, cell.ConditionalStyle, x, y, columnWidth, options.RowHeightPoints, blackAndWhite: false);
+            DrawCellBorders(ops, style, cell.ConditionalStyle, x, y, columnWidth, options.RowHeightPoints, blackAndWhite: false, theme: workbook.Theme);
 
             // shared-localization-rtl-F1: resolve the cell's effective reading order the same way the
             // page-setup-aware path does above (CellTextOrientationLayoutPlanner.
@@ -2663,17 +2671,17 @@ public static class WorkbookPdfContentBuilder
         List<PdfDrawOp> ops,
         CellStyle style,
         ConditionalFormatStylePlan? cfStyle,
-        double x, double y, double w, double h, bool blackAndWhite)
+        double x, double y, double w, double h, bool blackAndWhite, WorkbookTheme theme)
     {
         var top = y + h;
         var bottom = y;
         var left = x;
         var right = x + w;
 
-        DrawBorderEdge(ops, ResolveConditionalBorder(style.BorderTop, cfStyle?.BorderTop), left, top, right, top, blackAndWhite);
-        DrawBorderEdge(ops, ResolveConditionalBorder(style.BorderBottom, cfStyle?.BorderBottom), left, bottom, right, bottom, blackAndWhite);
-        DrawBorderEdge(ops, ResolveConditionalBorder(style.BorderLeft, cfStyle?.BorderLeft), left, bottom, left, top, blackAndWhite);
-        DrawBorderEdge(ops, ResolveConditionalBorder(style.BorderRight, cfStyle?.BorderRight), right, bottom, right, top, blackAndWhite);
+        DrawBorderEdge(ops, ResolveConditionalBorder(style.BorderTop, cfStyle?.BorderTop), left, top, right, top, blackAndWhite, theme);
+        DrawBorderEdge(ops, ResolveConditionalBorder(style.BorderBottom, cfStyle?.BorderBottom), left, bottom, right, bottom, blackAndWhite, theme);
+        DrawBorderEdge(ops, ResolveConditionalBorder(style.BorderLeft, cfStyle?.BorderLeft), left, bottom, left, top, blackAndWhite, theme);
+        DrawBorderEdge(ops, ResolveConditionalBorder(style.BorderRight, cfStyle?.BorderRight), right, bottom, right, top, blackAndWhite, theme);
     }
 
     /// <summary>
@@ -2698,13 +2706,19 @@ public static class WorkbookPdfContentBuilder
     /// solid too -- so Dashed/Dotted/DashDot/etc. styles draw as a solid line of the same weight.
     /// </summary>
     private static void DrawBorderEdge(
-        List<PdfDrawOp> ops, CellBorder border, double x1, double y1, double x2, double y2, bool blackAndWhite)
+        List<PdfDrawOp> ops, CellBorder border, double x1, double y1, double x2, double y2, bool blackAndWhite,
+        WorkbookTheme theme)
     {
         if (border.Style == BorderStyle.None)
             return;
 
         var thickness = BorderStyleThicknessPt(border.Style);
-        var color = blackAndWhite ? PdfColor.Black : ToPdfColor(border.Color);
+        // freex-theme-border-color-F1: a theme-backed edge (CellBorder.ThemeColor, e.g. Accent1) must
+        // re-resolve against the workbook's CURRENT theme, exactly like the fill/font colors this same
+        // per-cell loop already resolve through CellStyle.ResolveFillColor/ResolveFontColor. Reading
+        // border.Color raw exported the color baked in at load time, so changing the workbook theme
+        // recolored every exported fill and font but left the borders on the old palette.
+        var color = blackAndWhite ? PdfColor.Black : ToPdfColor(border.ResolveColor(theme));
 
         if (border.Style == BorderStyle.Double)
         {

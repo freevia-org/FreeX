@@ -2324,6 +2324,103 @@ public sealed class PresentationExportPlannerTests : IDisposable
         pdf.Should().Contain("( bolditalic) Tj");
     }
 
+    /// <summary>
+    /// R173 F2: a bold run mid-line used to advance the x-cursor by a flat
+    /// <c>text.Length * fontSize * 0.55</c> estimate, so two runs of equal character count but
+    /// different glyph widths (five wide "W"s vs. five narrow "i"s) produced identical gaps to
+    /// the run that follows them. The exporter now measures with real Helvetica AFM per-glyph
+    /// advance widths by default (see <see cref="PresentationNotesPagePdfExporter"/>'s built-in
+    /// fallback), so the gap after the wide run must be strictly larger -- this is impossible
+    /// under the old flat character-count estimate and does not rely on any injected delegate.
+    /// </summary>
+    [Fact]
+    public void NotesPagePdfExporter_DefaultMeasurement_WideGlyphsAdvanceFurtherThanNarrowGlyphsOfEqualLength()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Title = "Glyph widths" });
+        var notes = new TextBody();
+
+        var wideParagraph = new Paragraph();
+        wideParagraph.Runs.Add(new Run { Text = "Prefix " });
+        wideParagraph.Runs.Add(new Run { Text = "WWWWW", Bold = true });
+        wideParagraph.Runs.Add(new Run { Text = " Suffix" });
+        notes.Paragraphs.Add(wideParagraph);
+
+        var narrowParagraph = new Paragraph();
+        narrowParagraph.Runs.Add(new Run { Text = "Prefix " });
+        narrowParagraph.Runs.Add(new Run { Text = "iiiii", Bold = true });
+        narrowParagraph.Runs.Add(new Run { Text = " Suffix" });
+        notes.Paragraphs.Add(narrowParagraph);
+
+        presentation.Slides[0].Notes = notes;
+
+        var renderPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(presentation);
+        var ops = renderPlan.Pages[0].Ops.OfType<PdfText>()
+            .Where(text => text.Text is "WWWWW" or "iiiii" or " Suffix")
+            .ToArray();
+
+        var wideBold = ops.Single(op => op.Text == "WWWWW");
+        var narrowBold = ops.Single(op => op.Text == "iiiii");
+        var wideSuffix = ops.Single(op => op.Text == " Suffix" && Math.Abs(op.Y - wideBold.Y) < 0.001);
+        var narrowSuffix = ops.Single(op => op.Text == " Suffix" && Math.Abs(op.Y - narrowBold.Y) < 0.001);
+
+        var wideGap = wideSuffix.X - wideBold.X;
+        var narrowGap = narrowSuffix.X - narrowBold.X;
+
+        wideGap.Should().BeGreaterThan(
+            narrowGap,
+            "five wide 'W' glyphs must advance the cursor further than five narrow 'i' glyphs " +
+            "of the same character count -- a flat per-character estimate cannot tell them apart");
+    }
+
+    /// <summary>
+    /// R173 F2 sibling: a host that can measure real glyphs (WPF FormattedText, Avalonia text
+    /// layout) can supply <see cref="PresentationNotesPageTextWidthMeasurer"/> on the export
+    /// request, following the same caller-supplies-the-measurement shape as
+    /// <see cref="TextLayoutPlanner.PlanTabLeaderFill"/>. This asserts the run after a mid-line
+    /// bold run lands exactly where that injected measurement puts it -- computed from the same
+    /// function, never a hard-coded literal -- proving the exporter actually uses the supplied
+    /// delegate instead of its own estimate when one is given.
+    /// </summary>
+    [Fact]
+    public void NotesPagePdfExporter_BoldRunMidLine_PositionsFollowingRunsAtInjectedMeasurement()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Title = "Injected measurement" });
+        var notes = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = "Intro " });
+        paragraph.Runs.Add(new Run { Text = "Bold Word", Bold = true });
+        paragraph.Runs.Add(new Run { Text = " tail" });
+        notes.Paragraphs.Add(paragraph);
+        presentation.Slides[0].Notes = notes;
+
+        double Measure(string text, PdfFontFace face, double fontSize)
+        {
+            // Stand-in "real" glyph measurement: depends on the actual text and face, unlike the
+            // exporter's own flat character-count estimate, so agreement here proves the injected
+            // delegate -- not the built-in fallback -- produced the positions.
+            var baseWidth = text.Sum(ch => (double)ch) * fontSize / 1000.0;
+            return face is PdfFontFace.Bold or PdfFontFace.BoldItalic ? baseWidth * 1.1 : baseWidth;
+        }
+
+        var request = new PresentationNotesPagePdfExportRequest(MeasureRunWidth: Measure);
+        var renderPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(presentation, request);
+
+        var ops = renderPlan.Pages[0].Ops.OfType<PdfText>()
+            .Where(text => text.Text is "Intro " or "Bold Word" or " tail")
+            .ToArray();
+        ops.Select(op => op.Text).Should().Equal("Intro ", "Bold Word", " tail");
+
+        var expectedBoldX = ops[0].X + Measure("Intro ", PdfFontFace.Regular, PresentationNotesPagePdfExporter.NotesFontSize);
+        var expectedTailX = expectedBoldX + Measure("Bold Word", PdfFontFace.Bold, PresentationNotesPagePdfExporter.NotesFontSize);
+
+        ops[1].X.Should().BeApproximately(expectedBoldX, 0.0001);
+        ops[2].X.Should().BeApproximately(expectedTailX, 0.0001);
+    }
+
     [Fact]
     public void NotesPagePdfRenderPlan_VeryLongNotes_ContinuesOverflowOntoASubsequentPage()
     {

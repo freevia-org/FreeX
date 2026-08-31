@@ -31,15 +31,23 @@ public sealed record WorksheetPrintMaterializationProfile(
         HeaderFooterBaseLineHeight: 18.0,
         SizeHeaderFooterBandsToContent: true);
 
+    // R168-presentation-preview-headerfooter-picture-1: the two header/footer flags used to be false
+    // here because the portable render model dropped header/footer pictures entirely and the preview
+    // canvas had no image primitive to paint one with. Both are now true: the model resolves each
+    // section's picture through the same shared geometry planner the export paths use, and the
+    // preview paints it as a real image -- so a sheet's header/footer picture appears in the preview
+    // on the platforms where this is the only preview, sized against the same grown band the printed
+    // and exported page will use. Leaving them false would also have left this profile's own band
+    // geometry disagreeing with the very layout it wraps.
     public static WorksheetPrintMaterializationProfile AvaloniaPreview { get; } = new(
         BakeScaleIntoGeometry: true,
-        RenderHeaderFooterPictures: false,
+        RenderHeaderFooterPictures: true,
         RenderDisplayedComments: false,
         RenderPrintableLinks: false,
         PreserveNativeCellFidelity: false,
         PreserveNativeChartFidelity: false,
         HeaderFooterBaseLineHeight: 16.0,
-        SizeHeaderFooterBandsToContent: false);
+        SizeHeaderFooterBandsToContent: true);
 }
 
 public sealed record WorksheetPrintTransformPlan(
@@ -661,11 +669,17 @@ public static class WorksheetPrintHeaderFooterGeometryPlanner
             pictureWidth, pictureHeight, section.Width, section.Height);
         var width = pictureWidth * scale;
         var height = pictureHeight * scale;
+        // R168-headerfooter-section-padding-1: a left/right-aligned picture sits flush against its
+        // section's edge, which -- with "Align with margins" on -- is the page margin itself. Excel
+        // aligns header/footer content with the margins exactly (that is what the setting means: the
+        // left section's content lines up with the body's left edge); it inserts no padding inside a
+        // section. This used to inset by 2, a home-grown pad the Avalonia/Skia PDF export path never
+        // had, so the same picture landed 2 units apart in the two exports.
         var left = alignment switch
         {
             PageTextAlignment.Center => section.Left + (section.Width - width) / 2,
-            PageTextAlignment.Right => Math.Max(section.Left, section.Right - width - 2),
-            _ => section.Left + 2,
+            PageTextAlignment.Right => Math.Max(section.Left, section.Right - width),
+            _ => section.Left,
         };
         return new LayoutRect(left, section.Top + (section.Height - height) / 2, width, height);
     }

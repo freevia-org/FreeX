@@ -294,6 +294,14 @@ public sealed class CoreCommandsResidualDeduplicationTests
         ModelSourceTestSupport.ReadCommandsSource("PivotTableSlicerTimelineCommands.cs")
             .Should().Contain("PivotTableTargetStateSnapshot.Capture");
 
+        var autoFilterClonerSource = ModelSourceTestSupport.ReadModelSource("WorksheetAutoFilterCloner.cs");
+        autoFilterClonerSource.Should().Contain("internal static class WorksheetAutoFilterCloner");
+        autoFilterClonerSource.Should().Contain("clone.FilterColumns.EnsureCapacity(autoFilter.FilterColumns.Count)");
+        autoFilterClonerSource.Should().NotContain(".Select(");
+        ModelSourceTestSupport.ReadCommandsSourcesMatching("ToggleWorksheetAutoFilterCommand.cs", "*.cs")
+            .Should().NotContain("class WorksheetAutoFilterCloner",
+                "AutoFilter deep-clone policy must have one Model-owned implementation");
+
         foreach (var file in new[]
                  {
                      "ConvertToRangeStructuredReferenceLowering.cs",
@@ -317,8 +325,15 @@ public sealed class CoreCommandsResidualDeduplicationTests
             .Should().HaveCount(3, "the shared insert core should be called by both axis wrappers");
         source.Split("RemapChartSeriesIndexedCollectionsForDelete(chart, posLo, posHi, removedCount);")
             .Should().HaveCount(3, "the shared delete core should be called by both axis wrappers");
-        source.Split("chart.SeriesOrderOverrides = chart.SeriesOrderOverrides")
-            .Should().HaveCount(2, "the series mutation body should have one authoritative implementation");
+        // Round 172: this used to pin the literal "chart.SeriesOrderOverrides = chart.SeriesOrderOverrides",
+        // the in-place mutation the no-op-allocation work replaced with the shared RemapIndexedItems*
+        // helpers. The property the guard defends -- ONE authoritative series-mutation body per
+        // direction, reached from both axis wrappers -- still holds; only the expression it was
+        // spelled with changed.
+        source.Split("chart.SeriesOrderOverrides = RemapIndexedItemsForInsert(")
+            .Should().HaveCount(2, "the insert mutation body should have one authoritative implementation");
+        source.Split("chart.SeriesOrderOverrides = RemapIndexedItemsForDelete(")
+            .Should().HaveCount(2, "the delete mutation body should have one authoritative implementation");
     }
 
     private static void ClearPivotState(PivotTableModel pivot)

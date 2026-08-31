@@ -167,6 +167,14 @@ internal sealed class FileCommands
 
     public string DisplayName => _workflow.DisplayName;
 
+    /// <summary>
+    /// r174-freew-persistence-readonly-open: whether the open document's source file cannot be
+    /// written back to (OS read-only attribute, read-only share/volume, denied ACL). Surfaced in
+    /// the window title exactly like FreeX's read-only session marker; Save is routed to Save-As
+    /// inside FreeWDocumentFileWorkflow, so nothing else in this host has to branch on it.
+    /// </summary>
+    public bool IsFileSystemReadOnly => _documentWorkflow.IsCurrentFileReadOnly;
+
     public IReadOnlyList<FileFormatDescriptor> SaveFormats => _persistence.SaveFormats;
 
     /// <summary>

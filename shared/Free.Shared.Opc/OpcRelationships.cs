@@ -465,31 +465,35 @@ public static class OpcRelationships
 public sealed class OpcRelationshipDocument
 {
     private readonly List<OpcRelationship> _relationships = [];
+    private readonly HashSet<string> _relationshipIds = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<RelationshipIdentity> _relationshipIdentities = new(RelationshipIdentityComparer.Instance);
     private readonly string _preservedIdPrefix;
+    private int _nextPreservedId = 1;
 
     public OpcRelationshipDocument(string preservedIdPrefix = "rIdPreserved")
     {
         _preservedIdPrefix = preservedIdPrefix;
     }
 
-    public void Add(string id, string type, string target, bool external = false) =>
+    public void Add(string id, string type, string target, bool external = false)
+    {
         _relationships.Add(new OpcRelationship(id, type, target, external));
+        _relationshipIds.Add(id);
+        _relationshipIdentities.Add(new RelationshipIdentity(type, target, external));
+    }
 
     public void AddUnique(string id, string type, string target, bool external = false)
     {
-        if (_relationships.Any(r =>
-                string.Equals(r.Type, type, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(r.Target, target, StringComparison.OrdinalIgnoreCase) &&
-                r.IsExternal == external))
-        {
+        var identity = new RelationshipIdentity(type, target, external);
+        if (_relationshipIdentities.Contains(identity))
             return;
-        }
 
         var uniqueId = id;
-        if (_relationships.Any(r => string.Equals(r.Id, uniqueId, StringComparison.OrdinalIgnoreCase)))
+        if (!_relationshipIds.Add(uniqueId))
             uniqueId = NextRelationshipId();
 
-        Add(uniqueId, type, target, external);
+        _relationshipIdentities.Add(identity);
+        _relationships.Add(new OpcRelationship(uniqueId, type, target, external));
     }
 
     public XDocument ToXDocument() =>
@@ -498,14 +502,32 @@ public sealed class OpcRelationshipDocument
 
     private string NextRelationshipId()
     {
-        var counter = 1;
-        string id;
-        do
+        while (true)
         {
-            id = $"{_preservedIdPrefix}{counter++}";
+            var id = $"{_preservedIdPrefix}{_nextPreservedId++}";
+            if (_relationshipIds.Add(id))
+                return id;
         }
-        while (_relationships.Any(r => string.Equals(r.Id, id, StringComparison.OrdinalIgnoreCase)));
+    }
 
-        return id;
+    private readonly record struct RelationshipIdentity(string Type, string Target, bool IsExternal);
+
+    private sealed class RelationshipIdentityComparer : IEqualityComparer<RelationshipIdentity>
+    {
+        public static RelationshipIdentityComparer Instance { get; } = new();
+
+        public bool Equals(RelationshipIdentity left, RelationshipIdentity right) =>
+            left.IsExternal == right.IsExternal &&
+            string.Equals(left.Type, right.Type, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(left.Target, right.Target, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode(RelationshipIdentity value)
+        {
+            var hash = new HashCode();
+            hash.Add(value.Type, StringComparer.OrdinalIgnoreCase);
+            hash.Add(value.Target, StringComparer.OrdinalIgnoreCase);
+            hash.Add(value.IsExternal);
+            return hash.ToHashCode();
+        }
     }
 }

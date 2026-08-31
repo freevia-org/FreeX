@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using FreeP.App.Compositor;
 using Avalonia.Headless;
 using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
@@ -318,6 +319,45 @@ public sealed class AsyncFileLifecycleHeadlessTests
         saved.Should().BeFalse();
         summary.Should().Be("Could not save the presentation");
         shownException.Should().NotBeNull();
+    }
+
+    // r174-shared-protection-readonly: the read-only title marker changes while a window lives (it
+    // appears on opening a read-only file and disappears on Save-As), which the title spec's
+    // captured GroupSuffix cannot express -- hence the provider. This pins that it is re-queried on
+    // every refresh, and that the constructor's own RefreshTitle can call it safely.
+    [Fact]
+    public async Task GroupSuffixProvider_IsRequeriedOnEveryTitleRefresh()
+    {
+        var isReadOnly = false;
+        string? atConstruction = null;
+        string? whileReadOnly = null;
+        string? afterClearing = null;
+
+        await RunOnUiThread(() =>
+        {
+            var owner = new Window();
+            var workflow = new SisterAvaloniaFileCommandWorkflow(
+                owner: owner,
+                titleSpec: new SisterAvaloniaFileTitleSpec("FreeP", " \u2014 "),
+                maxRecentEntries: static () => 10,
+                onChanged: static () => { },
+                saveAsync: static () => Task.FromResult(true),
+                groupSuffixProvider: () =>
+                    PresentationDocumentWindowPlanner.FormatReadOnlySuffix(isReadOnly));
+
+            atConstruction = owner.Title;
+            isReadOnly = true;
+            workflow.MarkDirty();
+            whileReadOnly = owner.Title;
+            isReadOnly = false;
+            workflow.MarkSavedWithoutPath();
+            afterClearing = owner.Title;
+            return Task.CompletedTask;
+        });
+
+        atConstruction.Should().NotContain(PresentationDocumentWindowPlanner.ReadOnlySuffix);
+        whileReadOnly.Should().Contain(PresentationDocumentWindowPlanner.ReadOnlySuffix);
+        afterClearing.Should().NotContain(PresentationDocumentWindowPlanner.ReadOnlySuffix);
     }
 
     private static SisterAvaloniaFileCommandWorkflow CreateWorkflow(

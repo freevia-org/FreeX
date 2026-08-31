@@ -68,8 +68,14 @@ public sealed class WorksheetPrintPageContentPlannerTests
         avalonia!.Transform.ScaleRatio.Should().BeApproximately(0.5, 0.0001);
         avalonia.Transform.ApplyNativeTransform.Should().BeFalse();
         avalonia.HeaderFooter.Header.Left.Should().Be("First");
-        avalonia.HeaderFooter.HeaderPictures.Should().Be(WorksheetHeaderFooterPictureSet.Empty);
-        avalonia.HeaderFooter.HeaderBand.Left.Height.Should().Be(16);
+        // R168-presentation-preview-headerfooter-picture-1: the portable preview profile now carries
+        // header/footer pictures and sizes its bands to them, like the WPF profile above -- the render
+        // model resolves each section's picture and the preview canvas paints it as a real image, so
+        // the platforms where this is the only preview no longer show a text-only, ungrown band that
+        // disagrees with the PDF they export. The band still uses this profile's own 16-unit base line
+        // height; it grows to 48 here because the picture is taller than that.
+        avalonia.HeaderFooter.HeaderPictures.Right.Should().NotBeNull();
+        avalonia.HeaderFooter.HeaderBand.Left.Height.Should().Be(48);
         avalonia.Comments.DisplayedComments.Should().BeEmpty();
         avalonia.Hyperlinks.Should().BeEmpty();
         avalonia.CellDestinations.Should().BeEmpty();

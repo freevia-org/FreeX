@@ -546,6 +546,14 @@ public sealed class InCanvasTableCellEditor
         }
     }
 
+    /// <summary>
+    /// Slide ids of the deck currently being edited, read at paste time so a slide-jump
+    /// hyperlink pasted in from another presentation is orphaned rather than left pointing at
+    /// an id this deck cannot resolve.
+    /// </summary>
+    private IReadOnlyCollection<string>? CurrentSlideIds() =>
+        _editor.Presentation?.Slides.Select(slide => slide.Id).ToArray();
+
     private async void OnCellTextBoxPreviewKeyDown(object sender, KeyEventArgs e)
     {
         if ((e.KeyboardDevice.Modifiers & ModifierKeys.Control) != 0 &&
@@ -558,7 +566,8 @@ public sealed class InCanvasTableCellEditor
                     e,
                     _cellTextBox,
                     currentBody,
-                    onInlineOlePayloadUpdated: OnInlineOlePayloadCommitted);
+                    onInlineOlePayloadUpdated: OnInlineOlePayloadCommitted,
+                    destinationSlideIds: CurrentSlideIds());
                 if (e.Key is Key.C or Key.X &&
                     !result.Handled &&
                     result.FailureMessage is { } failureMessage)

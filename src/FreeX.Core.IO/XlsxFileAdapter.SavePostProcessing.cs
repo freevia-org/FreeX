@@ -18,6 +18,19 @@ public sealed partial class XlsxFileAdapter
     {
         var featurePlan = XlsxPostProcessingFeaturePlan.Create(workbook);
         XlsxWorkbookWorksheetPathMap? worksheetPathMap = null;
+        SourceDrawingSaveMetadata? sourceDrawingSaveMetadata = null;
+        var sourceDrawingMetadataFields = SourceDrawingMetadataFields.None;
+        if (featurePlan.HasBackgroundImages)
+            sourceDrawingMetadataFields |= SourceDrawingMetadataFields.MediaEntryNames;
+        if (featurePlan.HasSupportedCharts)
+            sourceDrawingMetadataFields |= SourceDrawingMetadataFields.DrawingPaths | SourceDrawingMetadataFields.ChartHyperlinks;
+        if (featurePlan.HasSupportedDrawingObjects)
+        {
+            sourceDrawingMetadataFields |=
+                SourceDrawingMetadataFields.DrawingPaths |
+                SourceDrawingMetadataFields.ObjectHyperlinks |
+                SourceDrawingMetadataFields.MaxPictureIndex;
+        }
         XlsxWorkbookWorksheetPathMap? GetWorksheetPathMap()
         {
             if (worksheetPathMap is not null)
@@ -28,6 +41,9 @@ public sealed partial class XlsxFileAdapter
             worksheetPathMap = XlsxWorkbookWorksheetPathMap.TryCreate(archive);
             return worksheetPathMap;
         }
+
+        SourceDrawingSaveMetadata GetSourceDrawingSaveMetadata() =>
+            sourceDrawingSaveMetadata ??= ReadSourceDrawingSaveMetadata(workbook, sourceDrawingMetadataFields);
 
         if (featurePlan.HasWorkbookPostProcessingMetadata)
         {
@@ -178,8 +194,12 @@ public sealed partial class XlsxFileAdapter
 
         if (featurePlan.HasBackgroundImages)
         {
+            var sourceDrawingMetadata = GetSourceDrawingSaveMetadata();
             packageStream.Position = 0;
-            XlsxWorksheetBackgroundReaderWriter.Save(packageStream, workbook, GetSourceMediaEntryNames(workbook));
+            XlsxWorksheetBackgroundReaderWriter.Save(
+                packageStream,
+                workbook,
+                sourceDrawingMetadata.MediaEntryNames);
         }
 
         if (featurePlan.HasHeaderFooterPictures)
@@ -294,6 +314,7 @@ public sealed partial class XlsxFileAdapter
         var chartDrawingPathsBySheet = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (featurePlan.HasSupportedCharts)
         {
+            var sourceDrawingMetadata = GetSourceDrawingSaveMetadata();
             packageStream.Position = 0;
             XlsxWorksheetChartWriter.Save(
                 packageStream,
@@ -302,20 +323,21 @@ public sealed partial class XlsxFileAdapter
                 XlsxChartXmlWriter.ToChartXml,
                 XlsxChartXmlWriter.GetContentType,
                 XlsxChartXmlWriter.GetRelationshipType,
-                GetSourceDrawingPathsBySheet(workbook),
-                GetSourceChartHyperlinksBySheet(workbook),
+                sourceDrawingMetadata.DrawingPathsBySheet,
+                sourceDrawingMetadata.ChartHyperlinksBySheet,
                 chartDrawingPathsBySheet);
         }
 
         if (featurePlan.HasSupportedDrawingObjects)
         {
+            var sourceDrawingMetadata = GetSourceDrawingSaveMetadata();
             packageStream.Position = 0;
             XlsxWorksheetDrawingObjectWriter.Save(
                 packageStream,
                 workbook,
-                GetSourceDrawingPathsBySheet(workbook),
-                startPictureIndex: GetSourceMaxPictureIndex(workbook) + 1,
-                sourceObjectHyperlinksBySheet: GetSourceDrawingObjectHyperlinksBySheet(workbook),
+                sourceDrawingMetadata.DrawingPathsBySheet,
+                startPictureIndex: sourceDrawingMetadata.MaxPictureIndex + 1,
+                sourceObjectHyperlinksBySheet: sourceDrawingMetadata.ObjectHyperlinksBySheet,
                 chartDrawingPathsBySheet: chartDrawingPathsBySheet);
         }
 
@@ -1517,107 +1539,117 @@ public sealed partial class XlsxFileAdapter
                 featurePlan.HasSupportedDrawingObjects);
     }
 
-    // Maps each source-package sheet to the drawing part it owns. The rebuilt chart writer reuses a chart
-    // sheet's own drawing part (so its charts stay on that sheet) and avoids every other sheet's drawing,
-    // which the source preservation restores at its original path. Without this, a chart sheet's rebuilt
-    // drawing could claim the part name another sheet's source drawing owns and steal its charts.
-    private static IReadOnlyDictionary<string, string> GetSourceDrawingPathsBySheet(Workbook workbook)
+    private static SourceDrawingSaveMetadata ReadSourceDrawingSaveMetadata(
+        Workbook workbook,
+        SourceDrawingMetadataFields fields)
     {
         if (!SourcePackages.TryGetValue(workbook, out var sourcePackage))
-            return EmptyDrawingPathsBySheet;
+            return SourceDrawingSaveMetadata.Empty;
 
         try
         {
             using var sourceStream = sourcePackage.OpenRead();
             using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read);
 
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-            var workbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
-            if (workbookEntry is null)
-                return EmptyDrawingPathsBySheet;
-
-            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-            var workbookRels = XlsxRelationshipReader.LoadTargets(
-                sourceArchive, "xl/_rels/workbook.xml.rels", "xl/workbook.xml", packageRelNs);
-
-            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var (sheetName, worksheetPath) in
-                     XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs))
+            IReadOnlyDictionary<string, string> drawingPathsBySheet = EmptyDrawingPathsBySheet;
+            if ((fields & SourceDrawingMetadataFields.DrawingPaths) != 0)
             {
-                if (result.ContainsKey(sheetName))
-                    continue;
-
-                var worksheetEntry = sourceArchive.GetEntry(worksheetPath);
-                if (worksheetEntry is null)
-                    continue;
-
-                var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-                var drawingRelId = worksheetXml.Root?
-                    .Element(workbookNs + "drawing")?
-                    .Attribute(relNs + "id")?
-                    .Value;
-                if (string.IsNullOrWhiteSpace(drawingRelId))
-                    continue;
-
-                var worksheetRels = XlsxRelationshipReader.LoadTargets(
-                    sourceArchive, XlsxPackagePath.GetRelationshipPartPath(worksheetPath), worksheetPath, packageRelNs);
-                if (worksheetRels.TryGetValue(drawingRelId, out var drawingPath))
-                    result[sheetName] = XlsxPackagePath.NormalizePackagePath(drawingPath);
+                try
+                {
+                    drawingPathsBySheet = ReadSourceDrawingPathsBySheet(sourceArchive);
+                }
+                catch
+                {
+                    drawingPathsBySheet = EmptyDrawingPathsBySheet;
+                }
             }
 
-            return result;
+            var chartHyperlinksBySheet =
+                (fields & SourceDrawingMetadataFields.ChartHyperlinks) != 0
+                    ? ReadSourceChartHyperlinksBySheet(sourceArchive, drawingPathsBySheet)
+                    : EmptyChartHyperlinksBySheet;
+            var objectHyperlinksBySheet =
+                (fields & SourceDrawingMetadataFields.ObjectHyperlinks) != 0
+                    ? ReadSourceDrawingObjectHyperlinksBySheet(sourceArchive, drawingPathsBySheet)
+                    : EmptyDrawingObjectHyperlinksBySheet;
+            IReadOnlySet<string> mediaEntryNames = EmptyMediaEntryNames;
+            var maxPictureIndex = 0;
+            if ((fields & (SourceDrawingMetadataFields.MediaEntryNames | SourceDrawingMetadataFields.MaxPictureIndex)) != 0)
+            {
+                ReadSourceMediaMetadata(
+                    sourceArchive,
+                    includeEntryNames: (fields & SourceDrawingMetadataFields.MediaEntryNames) != 0,
+                    includeMaxPictureIndex: (fields & SourceDrawingMetadataFields.MaxPictureIndex) != 0,
+                    out mediaEntryNames,
+                    out maxPictureIndex);
+            }
+
+            return new SourceDrawingSaveMetadata(
+                drawingPathsBySheet,
+                chartHyperlinksBySheet,
+                objectHyperlinksBySheet,
+                mediaEntryNames,
+                maxPictureIndex);
         }
         catch
         {
-            return EmptyDrawingPathsBySheet;
+            return SourceDrawingSaveMetadata.Empty;
         }
     }
 
-    private static readonly IReadOnlyDictionary<string, string> EmptyDrawingPathsBySheet =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// R95-io-chart-hyperlink-real-pipeline / R96-io-chart-hyperlink-name-key: maps each source-package
-    /// sheet's OWN drawing part's chart graphicFrame hyperlinks (object-level AND chart-title) to
-    /// <see cref="ChartHyperlinkPair"/> entries, KEYED by each chart graphicFrame's stable
-    /// <c>cNvPr@name</c> -- read directly from the TRUE source .xlsx package via
-    /// <see cref="XlsxWorksheetChartWriter.ReadSourceChartHyperlinks"/>.
-    /// <para>
-    /// This is the chart-writer sibling of <see cref="GetSourceDrawingObjectHyperlinksBySheet"/> below,
-    /// fixing the identical bug for charts: <see cref="XlsxWorksheetChartWriter"/>'s R41
-    /// hyperlink-preservation code used to read the CURRENT (pre-rebuild) drawing/chart bytes out of the
-    /// in-progress package being built for this very save -- but through a real
-    /// <see cref="XlsxFileAdapter.Save"/>, that package is a freshly-ClosedXML-generated workbook with
-    /// no original drawing/chart parts at all (ClosedXML always builds brand new, chart-less XML), so
-    /// every chart-object and chart-title hyperlink was silently and permanently dropped on the very
-    /// first save after opening a file that has one. R41's own tests never caught this because they call
-    /// <c>XlsxWorksheetChartWriter.Save</c> directly with a hand-seeded package standing in for "the
-    /// archive", which is exactly the shape the real pipeline does not have.
-    /// </para>
-    /// <para>
-    /// R96: R95 initially matched these pairs to the CURRENT save's charts by document-order position
-    /// (mirroring how this file numbers chart parts positionally elsewhere), which desyncs -- silently
-    /// misattributing one chart's hyperlink onto a different chart, not merely dropping it -- the moment
-    /// a sheet's chart set is added to, deleted from, or reordered between load and save. Keying by
-    /// <c>cNvPr@name</c> instead (the same name <see cref="ChartModel.Name"/> round-trips through
-    /// load/save) fixes this exactly as <see cref="GetSourceDrawingObjectHyperlinksBySheet"/> already
-    /// does for pictures/shapes/text boxes.
-    /// </para>
-    /// </summary>
-    private static IReadOnlyDictionary<string, IReadOnlyDictionary<string, ChartHyperlinkPair>> GetSourceChartHyperlinksBySheet(Workbook workbook)
+    // Maps each source-package sheet to the drawing part it owns. The rebuilt chart writer reuses a chart
+    // sheet's own drawing part and avoids every other sheet's drawing, which source preservation restores.
+    private static IReadOnlyDictionary<string, string> ReadSourceDrawingPathsBySheet(ZipArchive sourceArchive)
     {
-        var drawingPathsBySheet = GetSourceDrawingPathsBySheet(workbook);
-        if (drawingPathsBySheet.Count == 0 || !SourcePackages.TryGetValue(workbook, out var sourcePackage))
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var workbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return EmptyDrawingPathsBySheet;
+
+        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+        var workbookRels = XlsxRelationshipReader.LoadTargets(
+            sourceArchive, "xl/_rels/workbook.xml.rels", "xl/workbook.xml", packageRelNs);
+
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (sheetName, worksheetPath) in
+                 XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs))
+        {
+            if (result.ContainsKey(sheetName))
+                continue;
+
+            var worksheetEntry = sourceArchive.GetEntry(worksheetPath);
+            if (worksheetEntry is null)
+                continue;
+
+            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+            var drawingRelId = worksheetXml.Root?
+                .Element(workbookNs + "drawing")?
+                .Attribute(relNs + "id")?
+                .Value;
+            if (string.IsNullOrWhiteSpace(drawingRelId))
+                continue;
+
+            var worksheetRels = XlsxRelationshipReader.LoadTargets(
+                sourceArchive, XlsxPackagePath.GetRelationshipPartPath(worksheetPath), worksheetPath, packageRelNs);
+            if (worksheetRels.TryGetValue(drawingRelId, out var drawingPath))
+                result[sheetName] = XlsxPackagePath.NormalizePackagePath(drawingPath);
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyDictionary<string, ChartHyperlinkPair>> ReadSourceChartHyperlinksBySheet(
+        ZipArchive sourceArchive,
+        IReadOnlyDictionary<string, string> drawingPathsBySheet)
+    {
+        if (drawingPathsBySheet.Count == 0)
             return EmptyChartHyperlinksBySheet;
 
         try
         {
-            using var sourceStream = sourcePackage.OpenRead();
-            using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read);
-
             XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
             XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
             XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
@@ -1641,36 +1673,15 @@ public sealed partial class XlsxFileAdapter
         }
     }
 
-    private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, ChartHyperlinkPair>> EmptyChartHyperlinksBySheet =
-        new Dictionary<string, IReadOnlyDictionary<string, ChartHyperlinkPair>>(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// R95-io-drawing-hyperlink-2-2: maps each source-package sheet's OWN drawing part's
-    /// picture/text-box/shape object-level hyperlinks (an <c>a:hlinkClick</c> on a <c>xdr:cNvPr</c>),
-    /// keyed by the object's stable <c>cNvPr@name</c> -- read directly from the TRUE source .xlsx
-    /// package via <see cref="XlsxWorksheetDrawingObjectWriter.ReadOldDrawingObjectHyperlinksByName"/>.
-    /// <para>
-    /// This must read the TRUE source package (like <see cref="GetSourceDrawingPathsBySheet"/> does),
-    /// NOT the in-progress generated package: at the point <see cref="XlsxWorksheetDrawingObjectWriter.Save"/>
-    /// runs, the generated package is a freshly built ClosedXML workbook with no drawing parts of its
-    /// own yet, so it never carries the original hyperlink bytes. Without this, a fill/outline/gradient/
-    /// effect edit on a shape (or a colour/rotation edit on a text box) -- which clears
-    /// <c>IsSourceLoaded</c> so the writer reconstructs the object's anchor from the edited model --
-    /// silently and permanently dropped any hyperlink the object carried, even though the edit itself
-    /// has nothing to do with the hyperlink.
-    /// </para>
-    /// </summary>
-    private static IReadOnlyDictionary<string, IReadOnlyDictionary<string, (string Target, string? TargetMode)>> GetSourceDrawingObjectHyperlinksBySheet(Workbook workbook)
+    private static IReadOnlyDictionary<string, IReadOnlyDictionary<string, (string Target, string? TargetMode)>> ReadSourceDrawingObjectHyperlinksBySheet(
+        ZipArchive sourceArchive,
+        IReadOnlyDictionary<string, string> drawingPathsBySheet)
     {
-        var drawingPathsBySheet = GetSourceDrawingPathsBySheet(workbook);
-        if (drawingPathsBySheet.Count == 0 || !SourcePackages.TryGetValue(workbook, out var sourcePackage))
+        if (drawingPathsBySheet.Count == 0)
             return EmptyDrawingObjectHyperlinksBySheet;
 
         try
         {
-            using var sourceStream = sourcePackage.OpenRead();
-            using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read);
-
             XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
             XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
             XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -1694,84 +1705,82 @@ public sealed partial class XlsxFileAdapter
         }
     }
 
-    private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, (string Target, string? TargetMode)>> EmptyDrawingObjectHyperlinksBySheet =
-        new Dictionary<string, IReadOnlyDictionary<string, (string, string?)>>(StringComparer.OrdinalIgnoreCase);
-
-    // Returns the highest N found in xl/media/freexPictureN.* entries in the source package, or 0
-    // if there is no source package or no such entries. The caller adds 1 to get the first safe
-    // starting index for newly authored picture media, preventing the drawing object writer from
-    // claiming a media path that is already reserved by the source package. Without this, the
-    // authored-picture media would shadow the source media name in the generated archive, causing
-    // MergeRelationshipParts to refuse to copy the source drawing .rels (it skips relationships whose
-    // targets were produced by the current save pass).
-    private static int GetSourceMaxPictureIndex(Workbook workbook)
+    private static void ReadSourceMediaMetadata(
+        ZipArchive sourceArchive,
+        bool includeEntryNames,
+        bool includeMaxPictureIndex,
+        out IReadOnlySet<string> mediaEntryNames,
+        out int maxPictureIndex)
     {
-        if (!SourcePackages.TryGetValue(workbook, out var sourcePackage))
-            return 0;
+        const string mediaPrefix = "xl/media/";
+        const string picturePrefix = "xl/media/freexPicture";
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var max = 0;
 
         try
         {
-            using var sourceStream = sourcePackage.OpenRead();
-            using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read);
-
-            const string prefix = "xl/media/freexPicture";
-            var max = 0;
             foreach (var entry in sourceArchive.Entries)
             {
                 var name = entry.FullName;
-                if (!name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                if (!name.StartsWith(mediaPrefix, StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                var afterPrefix = name.AsSpan(prefix.Length);
+                if (includeEntryNames)
+                    names.Add(name);
+                if (!includeMaxPictureIndex ||
+                    !name.StartsWith(picturePrefix, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var afterPrefix = name.AsSpan(picturePrefix.Length);
                 var dotIndex = afterPrefix.IndexOf('.');
-                if (dotIndex <= 0)
-                    continue;
-
-                if (int.TryParse(afterPrefix[..dotIndex], out var index) && index > max)
+                if (dotIndex > 0 && int.TryParse(afterPrefix[..dotIndex], out var index) && index > max)
                     max = index;
             }
 
-            return max;
+            mediaEntryNames = names;
+            maxPictureIndex = max;
         }
         catch
         {
-            return 0;
+            mediaEntryNames = EmptyMediaEntryNames;
+            maxPictureIndex = 0;
         }
     }
 
-    // Returns the set of xl/media/* entry names already present in the source package (or an empty
-    // set when there is no source package). WriteBackground runs before PreserveSourcePackageParts
-    // copies the source's own xl/media/* entries into the generated archive, so a background image
-    // saved under the user's raw filename (e.g. "image1.png") can otherwise claim a media name the
-    // source package already uses for an authored picture; CopyUnknownPackageParts then skips
-    // copying that source media because the name is already taken, leaving other drawings pointing
-    // at the wrong (background) image. Reserving these names lets the background writer pick a
-    // collision-free name up front instead of silently shadowing preserved source media.
-    private static IReadOnlySet<string> GetSourceMediaEntryNames(Workbook workbook)
+    private sealed record SourceDrawingSaveMetadata(
+        IReadOnlyDictionary<string, string> DrawingPathsBySheet,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, ChartHyperlinkPair>> ChartHyperlinksBySheet,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, (string Target, string? TargetMode)>> ObjectHyperlinksBySheet,
+        IReadOnlySet<string> MediaEntryNames,
+        int MaxPictureIndex)
     {
-        if (!SourcePackages.TryGetValue(workbook, out var sourcePackage))
-            return EmptyMediaEntryNames;
-
-        try
-        {
-            using var sourceStream = sourcePackage.OpenRead();
-            using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read);
-
-            const string prefix = "xl/media/";
-            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var entry in sourceArchive.Entries)
-            {
-                if (entry.FullName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                    names.Add(entry.FullName);
-            }
-
-            return names;
-        }
-        catch
-        {
-            return EmptyMediaEntryNames;
-        }
+        public static SourceDrawingSaveMetadata Empty { get; } = new(
+            EmptyDrawingPathsBySheet,
+            EmptyChartHyperlinksBySheet,
+            EmptyDrawingObjectHyperlinksBySheet,
+            EmptyMediaEntryNames,
+            0);
     }
+
+    [Flags]
+    private enum SourceDrawingMetadataFields
+    {
+        None = 0,
+        DrawingPaths = 1 << 0,
+        ChartHyperlinks = 1 << 1,
+        ObjectHyperlinks = 1 << 2,
+        MediaEntryNames = 1 << 3,
+        MaxPictureIndex = 1 << 4,
+    }
+
+    private static readonly IReadOnlyDictionary<string, string> EmptyDrawingPathsBySheet =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, ChartHyperlinkPair>> EmptyChartHyperlinksBySheet =
+        new Dictionary<string, IReadOnlyDictionary<string, ChartHyperlinkPair>>(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, (string Target, string? TargetMode)>> EmptyDrawingObjectHyperlinksBySheet =
+        new Dictionary<string, IReadOnlyDictionary<string, (string, string?)>>(StringComparer.OrdinalIgnoreCase);
 
     private static readonly IReadOnlySet<string> EmptyMediaEntryNames =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);

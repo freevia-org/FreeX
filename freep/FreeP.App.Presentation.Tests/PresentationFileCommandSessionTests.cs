@@ -739,6 +739,68 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
 
     public void Dispose() => _temporaryDirectory.Dispose();
 
+    // ── r174-shared-protection-readonly F2 (FreeP session wiring) ──────────────────────────
+    //
+    // FAIL-BEFORE: Open reported nothing about the source file's write permission, so Ctrl+S on a
+    // read-only presentation went straight to the in-place write and failed with a raw "access to
+    // the path is denied" after the user had already edited. Save must divert to Save-As instead,
+    // as FreeW does via its SaveAsRequired outcome.
+    [Fact]
+    public async Task SaveAsync_ReadOnlySourceFile_DivertsToSaveAs()
+    {
+        var path = Path.Combine(TempDirectory, "ReadOnlySource.pptx");
+        PresentationFilePersistenceWorkflow.Save(path, TitledPresentation("Original"));
+        File.SetAttributes(path, File.GetAttributes(path) | FileAttributes.ReadOnly);
+        var saveAsPath = Path.Combine(TempDirectory, "SaveAsTarget.pptx");
+        var picker = new FakePickerPort { SaveResult = PresentationFilePickerResult.Selected(saveAsPath) };
+        var presentation = TitledPresentation("My Edit");
+        var session = CreateSession(() => presentation, _ => { }, new FakeLifecyclePort(), picker);
+
+        try
+        {
+            var opened = await session.OpenPathAsync(path);
+            opened.Succeeded.Should().BeTrue();
+            session.IsCurrentFileReadOnly.Should().BeTrue();
+
+            var saved = await session.SaveAsync();
+
+            saved.Succeeded.Should().BeTrue();
+            picker.LastSaveRequest.Should().NotBeNull("Save must have gone through the Save-As picker");
+            saved.Path.Should().Be(saveAsPath);
+            PresentationFilePersistenceWorkflow.Open(path).Presentation.Properties.Title.Should().Be(
+                "Original",
+                "the read-only source must be left untouched");
+            PresentationFilePersistenceWorkflow.Open(saveAsPath).Presentation.Properties.Title
+                .Should().Be("My Edit");
+            session.IsCurrentFileReadOnly.Should().BeFalse(
+                "the Save-As target is writable, so the session is no longer read-only");
+        }
+        finally
+        {
+            File.SetAttributes(path, File.GetAttributes(path) & ~FileAttributes.ReadOnly);
+        }
+    }
+
+    [Fact]
+    public async Task SaveAsync_WritableSourceFile_SavesInPlace()
+    {
+        var path = Path.Combine(TempDirectory, "Writable.pptx");
+        PresentationFilePersistenceWorkflow.Save(path, TitledPresentation("Original"));
+        var picker = new FakePickerPort();
+        var presentation = TitledPresentation("My Edit");
+        var session = CreateSession(() => presentation, _ => { }, new FakeLifecyclePort(), picker);
+
+        var opened = await session.OpenPathAsync(path);
+        opened.Succeeded.Should().BeTrue();
+        session.IsCurrentFileReadOnly.Should().BeFalse();
+
+        var saved = await session.SaveAsync();
+
+        saved.Succeeded.Should().BeTrue();
+        picker.LastSaveRequest.Should().BeNull("a writable file must save in place, with no picker");
+        PresentationFilePersistenceWorkflow.Open(path).Presentation.Properties.Title.Should().Be("My Edit");
+    }
+
     private static PresentationFileCommandSession CreateSession(
         Func<Presentation> getPresentation,
         Action<Presentation> loadPresentation,

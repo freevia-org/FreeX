@@ -575,42 +575,19 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
             }
         }
 
-        var newCache = new PivotCacheModel
-        {
-            CacheId = NextCacheId(workbook),
-            SourceType = original.SourceType,
-            SourceSheetName = copy.Name,
-            SourceReference = original.SourceReference,
-            SourceTableName = newSourceTableName,
-            SourceTableId = newSourceTableId,
-            // R127B-commands-pivot-cache-clone-packagepart: deliberately NOT original.PackagePart.
-            // PackagePart is the exact package-part path (e.g.
-            // "xl/pivotCache/pivotCacheDefinition1.xml") the SOURCE cache was loaded from/last saved
-            // to; copying it verbatim leaves the newly-minted cache and the original cache both
-            // claiming that identical path in workbook.PivotCaches. XlsxFileAdapter's patch-save
-            // eligibility guard (TryAddPatchSafePivotPackagePaths) keys a dictionary by that same
-            // path across ALL of workbook.PivotCaches, so a duplicate throws an ArgumentException the
-            // first time ANY sheet's patch-save eligibility is checked -- silently downgrading every
-            // subsequent save of the whole workbook to the slow full-regenerate path. Leaving it
-            // empty matches the established "brand-new pivot cache has no PackagePart yet"
-            // convention the guard already tolerates (it filters out blank PackagePart entries before
-            // building the dictionary); the full-write path always mints a fresh part path anyway.
-            PackagePart = string.Empty,
-            ConnectionId = original.ConnectionId,
-            IsOlap = original.IsOlap,
-            RefreshOnLoad = original.RefreshOnLoad,
-            SaveData = original.SaveData,
-            EnableRefresh = original.EnableRefresh,
-            PreserveSourceSortFilter = original.PreserveSourceSortFilter,
-            MissingItemsLimit = original.MissingItemsLimit,
-            RecordCount = original.RecordCount,
-            CreatedVersion = original.CreatedVersion,
-            MinRefreshableVersion = original.MinRefreshableVersion,
-            RefreshedVersion = original.RefreshedVersion,
-            RefreshedBy = original.RefreshedBy,
-            RefreshedDateIso = original.RefreshedDateIso,
-            RawRecordsXml = original.RawRecordsXml,
-        };
+        // R127B-commands-pivot-cache-clone-packagepart: deliberately do NOT reuse
+        // original.PackagePart. The clone is a brand-new cache identity and the full writer will mint
+        // its own part path; sharing the source cache's path would make patch-save package lookup
+        // ambiguous. Source identity and collection policy likewise remain explicit here.
+        var newCache = PivotCacheScalarCopyFactory.Create(
+            original,
+            cacheId: NextCacheId(workbook),
+            sourceType: original.SourceType,
+            sourceSheetName: copy.Name,
+            sourceReference: original.SourceReference,
+            sourceTableName: newSourceTableName,
+            sourceTableId: newSourceTableId,
+            packagePart: string.Empty);
         newCache.Fields.AddRange(original.Fields);
         newCache.CalculatedItems.AddRange(original.CalculatedItems);
         return newCache;

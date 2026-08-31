@@ -322,6 +322,10 @@ public sealed partial class FormulaEvaluator
         private readonly FreeX.Core.Model.CellAddress? _currentCellAddress;
         private readonly bool _isIterativeCalculationPass;
         private Dictionary<string, FreeX.Core.Model.Sheet?>? _sheetNameCache;
+        private Dictionary<string, ExternalSheetCacheEntry?>? _externalSheetCache;
+
+        private readonly record struct ExternalSheetCacheEntry(
+            Dictionary<(uint Row, uint Col), ScalarValue>? CachedValues);
 
         public readonly Sheet SourceSheet;
 
@@ -347,7 +351,7 @@ public sealed partial class FormulaEvaluator
             var target = ResolveSheet(sheetName);
             if (target is not null) return target.GetValue(row, col);
 
-            var external = ExternalSheetReferenceResolver.TryResolve(_workbook, sheetName);
+            var external = ResolveExternalSheet(sheetName);
             if (external is { } resolved)
             {
                 // A resolvable external sheet caches only the cells a formula actually referenced at
@@ -363,8 +367,11 @@ public sealed partial class FormulaEvaluator
                 // bracketed sheet-name text this quoted form also contains) so the cell's last-known
                 // value is preserved instead — exactly like the unquoted '[1]Sheet1!A1' form that
                 // never parses at all.
-                if (resolved.Link.TryGetCachedValue(resolved.SheetIndex, row, col, out var cachedValue))
+                if (resolved.CachedValues is { } cachedValues &&
+                    cachedValues.TryGetValue((row, col), out var cachedValue))
+                {
                     return cachedValue ?? BlankValue.Instance;
+                }
 
                 throw new FormulaParseException(
                     $"External reference '{sheetName}' has no cached value for this cell; " +
@@ -410,7 +417,7 @@ public sealed partial class FormulaEvaluator
             var c0 = Math.Min(startCol, endCol); var c1 = Math.Max(startCol, endCol);
             if (target is null)
             {
-                var external = ExternalSheetReferenceResolver.TryResolve(_workbook, sheetName);
+                var external = ResolveExternalSheet(sheetName);
                 if (external is not { } resolved)
                 {
                     // Mirror the scalar GetCellValue(sheetName, ...) behavior: a bracketed reference
@@ -440,7 +447,8 @@ public sealed partial class FormulaEvaluator
                         // external-workbook-reference guard) instead of silently substituting Blank,
                         // or a range-shaped external reference (e.g. inside MEDIAN/PRODUCT/VLOOKUP/
                         // LARGE) would overwrite a correct loaded value with a wrong recomputed one.
-                        if (!resolved.Link.TryGetCachedValue(resolved.SheetIndex, r, c, out var cachedValue))
+                        if (resolved.CachedValues is not { } cachedValues ||
+                            !cachedValues.TryGetValue((r, c), out var cachedValue))
                         {
                             throw new FormulaParseException(
                                 $"External reference '{sheetName}' has no cached value for this cell; " +
@@ -500,7 +508,7 @@ public sealed partial class FormulaEvaluator
 
         public bool SheetExists(string sheetName) =>
             ResolveSheet(sheetName) is not null ||
-            ExternalSheetReferenceResolver.TryResolve(_workbook, sheetName) is not null;
+            ResolveExternalSheet(sheetName) is not null;
 
         public bool IsRowHidden(uint row) => _sheet.IsRowEffectivelyHidden(row);
 
@@ -556,6 +564,39 @@ public sealed partial class FormulaEvaluator
             var resolvedSheet = _workbook.GetSheet(sheetName);
             _sheetNameCache[sheetName] = resolvedSheet;
             return resolvedSheet;
+        }
+
+        private ExternalSheetCacheEntry? ResolveExternalSheet(string sheetName)
+        {
+            if (_workbook is null)
+                return null;
+
+            _externalSheetCache ??=
+                new Dictionary<string, ExternalSheetCacheEntry?>(StringComparer.OrdinalIgnoreCase);
+            if (_externalSheetCache.TryGetValue(sheetName, out var cachedEntry))
+                return cachedEntry;
+
+            ExternalSheetCacheEntry? entry = null;
+            if (ExternalSheetReferenceResolver.TryResolve(_workbook, sheetName) is { } resolved)
+            {
+                Dictionary<(uint Row, uint Col), ScalarValue>? cachedValues = null;
+                foreach (var cachedSheet in resolved.Link.CachedSheetData)
+                {
+                    if (cachedSheet.SheetId != resolved.SheetIndex)
+                        continue;
+
+                    // ExternalLinkModel.TryGetCachedValue stops at the first matching sheet-data
+                    // entry even when that entry lacks the requested cell. Keep that duplicate
+                    // precedence while caching its live Values dictionary rather than copying it.
+                    cachedValues = cachedSheet.Values;
+                    break;
+                }
+
+                entry = new ExternalSheetCacheEntry(cachedValues);
+            }
+
+            _externalSheetCache[sheetName] = entry;
+            return entry;
         }
     }
 

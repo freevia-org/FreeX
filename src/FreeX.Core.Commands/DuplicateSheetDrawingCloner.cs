@@ -120,36 +120,14 @@ internal static class DuplicateSheetDrawingCloner
                      .Where(s => string.Equals(s.SourceSheetName, source.Name, StringComparison.OrdinalIgnoreCase))
                      .ToList())
         {
-            var clone = new SlicerModel
+            var state = slicer.CaptureCopyState() with
             {
                 Name = GenerateUniqueName(workbook.Slicers.Select(s => s.Name), slicer.Name),
-                Caption = slicer.Caption,
                 CacheName = GenerateUniqueName(workbook.Slicers.Select(s => s.CacheName), slicer.CacheName),
-                SourcePivotTableName = slicer.SourcePivotTableName,
-                // R133-io-slicer-timeline-multipivot: copy the list rather than aliasing the source
-                // slicer's instance (same reasoning as CacheItems below), and rather than leaving it
-                // to the property's own `= []` default, which would silently drop every OTHER pivot
-                // connection this slicer carries beyond SourcePivotTableName.
-                ConnectedPivotTableNames = slicer.ConnectedPivotTableNames.ToList(),
-                SourceFieldName = slicer.SourceFieldName,
-                StyleName = slicer.StyleName,
                 PackagePart = string.Empty,
-                DrawingAnchor = slicer.DrawingAnchor,
-                DrawingShapeName = slicer.DrawingShapeName,
-                ColumnCount = slicer.ColumnCount,
-                ShowCaption = slicer.ShowCaption,
-                SourceSheetName = copy.Name,
-                SourceTableId = slicer.SourceTableId,
-                SourceTableColumnId = slicer.SourceTableColumnId,
-                // R117-commands-pivot-slicer-growth: CacheItems is now a mutable List<> (a later
-                // refresh can append newly-appeared indices to it); copy the list rather than aliasing
-                // the source slicer's instance, or a refresh-driven append to one would silently mutate
-                // the other's cache items too.
-                CacheItems = slicer.CacheItems.ToList(),
-                AvailableItems = slicer.AvailableItems,
-                SelectionCaptured = slicer.SelectionCaptured
+                SourceSheetName = copy.Name
             };
-            clone.SelectedItems.AddRange(slicer.SelectedItems);
+            var clone = SlicerModel.FromCopyState(state);
             workbook.Slicers.Add(clone);
             clonedSlicers.Add(clone);
         }
@@ -630,23 +608,51 @@ internal static class DuplicateSheetDrawingCloner
         string copySheetName,
         SheetId copyId)
     {
+        var linkedSourceRange = picture.LinkedSourceRange is { } range &&
+            range.Start.Sheet == sourceSheetId
+                ? RemapRange(range, copyId)
+                : picture.LinkedSourceRange;
+        var linkedSourceSheetName = picture.LinkedSourceSheetName == sourceSheetName
+            ? copySheetName
+            : picture.LinkedSourceSheetName;
+
+        return ClonePictureCore(
+            picture,
+            RemapAddress(picture.Anchor, copyId),
+            linkedSourceRange,
+            linkedSourceSheetName);
+    }
+
+    /// <summary>
+    /// Builds an authored picture copy at a paste destination while deliberately retaining the
+    /// camera/linked-picture source. Pasting a linked picture moves the picture, not the range it
+    /// displays; whole-sheet duplication uses <see cref="ClonePicture"/> to remap that source.
+    /// </summary>
+    internal static PictureModel ClonePictureForPaste(PictureModel picture, CellAddress destinationAnchor) =>
+        ClonePictureCore(
+            picture,
+            destinationAnchor,
+            picture.LinkedSourceRange,
+            picture.LinkedSourceSheetName);
+
+    private static PictureModel ClonePictureCore(
+        PictureModel picture,
+        CellAddress anchor,
+        GridRange? linkedSourceRange,
+        string? linkedSourceSheetName)
+    {
         var copiedPicture = new PictureModel
         {
             Name = picture.Name,
-            Anchor = RemapAddress(picture.Anchor, copyId),
+            Anchor = anchor,
             AnchorOffsetX = picture.AnchorOffsetX,
             AnchorOffsetY = picture.AnchorOffsetY,
             Kind = picture.Kind,
             SourceRowCount = picture.SourceRowCount,
             SourceColumnCount = picture.SourceColumnCount,
             IsLinkedToSourceRange = picture.IsLinkedToSourceRange,
-            LinkedSourceRange = picture.LinkedSourceRange is { } linkedSourceRange &&
-                linkedSourceRange.Start.Sheet == sourceSheetId
-                    ? RemapRange(linkedSourceRange, copyId)
-                    : picture.LinkedSourceRange,
-            LinkedSourceSheetName = picture.LinkedSourceSheetName == sourceSheetName
-                ? copySheetName
-                : picture.LinkedSourceSheetName,
+            LinkedSourceRange = linkedSourceRange,
+            LinkedSourceSheetName = linkedSourceSheetName,
             ImageBytes = picture.ImageBytes?.ToArray(),
             ContentType = picture.ContentType,
             // R80-io-drawing-image-5-3: an Insert > Icons/SVG picture keeps a PNG rasterization in
@@ -911,23 +917,7 @@ internal static class DuplicateSheetDrawingCloner
             YAxisCustomDisplayUnit = chart.YAxisCustomDisplayUnit,
             ShowXAxisDisplayUnitLabel = chart.ShowXAxisDisplayUnitLabel,
             ShowYAxisDisplayUnitLabel = chart.ShowYAxisDisplayUnitLabel,
-            DataTable = chart.DataTable is null
-                ? null
-                : new ChartDataTableModel
-                {
-                    ShowHorizontalBorder = chart.DataTable.ShowHorizontalBorder,
-                    ShowVerticalBorder = chart.DataTable.ShowVerticalBorder,
-                    ShowOutline = chart.DataTable.ShowOutline,
-                    ShowLegendKeys = chart.DataTable.ShowLegendKeys,
-                    FillColor = chart.DataTable.FillColor,
-                    FillThemeColor = chart.DataTable.FillThemeColor,
-                    BorderColor = chart.DataTable.BorderColor,
-                    BorderThemeColor = chart.DataTable.BorderThemeColor,
-                    BorderThickness = chart.DataTable.BorderThickness,
-                    TextColor = chart.DataTable.TextColor,
-                    TextThemeColor = chart.DataTable.TextThemeColor,
-                    FontSize = chart.DataTable.FontSize
-            },
+            DataTable = chart.DataTable?.Clone(),
             ThreeDView = chart.ThreeDView,
             FloorFormat = CloneSurfaceFormat(chart.FloorFormat),
             SideWallFormat = CloneSurfaceFormat(chart.SideWallFormat),

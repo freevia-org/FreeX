@@ -26,6 +26,14 @@ public sealed class MailMergeSession
     // only MailMergeSession itself survives across clicks.
     internal IReadOnlyList<int> OriginalRecordNumbers { get; set; } = [];
 
+    // r174 remediation: true once Filter & Sort Recipients has actually narrowed the list. An
+    // empty recipient list has two quite different causes -- every row filtered out, or a list
+    // that arrived with no data rows in the first place (the Select Recipients dialog seeds just a
+    // header line, so confirming it without typing rows lands exactly there) -- and they need
+    // different advice. Deciding from Data being non-null cannot tell them apart, and told a user
+    // who had never opened the filter dialog that their filter excluded everyone.
+    public bool HasFilteredRecipients { get; set; }
+
     public bool IsPreviewing => Template is not null;
 
     public TextDocument? EndPreview()

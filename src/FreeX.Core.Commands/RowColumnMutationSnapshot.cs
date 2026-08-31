@@ -24,7 +24,7 @@ internal sealed class RowColumnMutationSnapshot
     private readonly List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _conditionalFormats;
     private readonly Dictionary<string, NamedRangeSnapshot> _namedRanges;
     private readonly Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)> _scopedNamedRanges;
-    private readonly List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot> _chartVerbatimFormulas;
+    private readonly RowColumnShiftHelpers.ChartStructuralWorkbookSnapshot _chartStructuralState;
     private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarks;
 
     internal Dictionary<CellAddress, string> FormulaTexts { get; } = [];
@@ -37,7 +37,10 @@ internal sealed class RowColumnMutationSnapshot
     private Dictionary<(Guid Id, int Slot), string?> PromotedConditionalFormatThresholdTexts { get; } = [];
     private Dictionary<(Guid Id, int Slot), string?> PromotedDataValidationFormulaTexts { get; } = [];
 
-    private RowColumnMutationSnapshot(Workbook workbook, Sheet sheet)
+    private RowColumnMutationSnapshot(
+        Workbook workbook,
+        Sheet sheet,
+        RowColumnShiftHelpers.ChartStructuralSnapshotFeatures chartFeatures)
     {
         _mergedRegions = sheet.MergedRegions.ToList();
         _comments = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
@@ -54,11 +57,15 @@ internal sealed class RowColumnMutationSnapshot
         _conditionalFormats = ruleRanges.ConditionalFormats;
         _namedRanges = RowColumnShiftHelpers.CaptureNamedRanges(workbook);
         _scopedNamedRanges = RowColumnShiftHelpers.CaptureScopedNamedRanges(workbook);
-        _chartVerbatimFormulas = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(workbook);
+        _chartStructuralState = RowColumnShiftHelpers.CaptureChartStructuralState(workbook, sheet, chartFeatures);
     }
 
-    internal static RowColumnMutationSnapshot Capture(Workbook workbook, Sheet sheet) =>
-        new(workbook, sheet);
+    internal static RowColumnMutationSnapshot Capture(
+        Workbook workbook,
+        Sheet sheet,
+        RowColumnShiftHelpers.ChartStructuralSnapshotFeatures chartFeatures =
+            RowColumnShiftHelpers.ChartStructuralSnapshotFeatures.None) =>
+        new(workbook, sheet, chartFeatures);
 
     internal void RewriteReferences(Workbook workbook, Sheet sheet, RewriteOperation operation)
     {
@@ -140,8 +147,11 @@ internal sealed class RowColumnMutationSnapshot
         RowColumnShiftHelpers.RestoreRangeHyperlinks(sheet, _rangeHyperlinks);
         RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRuns);
         RowColumnShiftHelpers.RestoreDictionary(sheet.CellPhoneticGuides, _phoneticGuides);
-        RowColumnShiftHelpers.RestoreChartVerbatimFormulas(workbook, _chartVerbatimFormulas);
+        RowColumnShiftHelpers.RestoreChartStructuralVerbatimFormulas(workbook, _chartStructuralState);
     }
+
+    internal void RestoreChartStructuralState(Workbook workbook) =>
+        RowColumnShiftHelpers.RestoreChartStructuralState(workbook, _chartStructuralState);
 
     internal IReadOnlyList<CellAddress> BuildAffectedCells(
         IEnumerable<CellAddress> relocatedOrVacatedCells,

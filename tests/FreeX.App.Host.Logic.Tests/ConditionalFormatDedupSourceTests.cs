@@ -30,7 +30,13 @@ public sealed class ConditionalFormatDedupSourceTests
         presentationSource.Should().Contain("matchingRuleCount--");
         presentationSource.Should().Contain("FindRuleIndex");
         presentationSource.Should().Contain("src.Clone(id)");
-        presentationSource.Should().Contain("result.Insert(index + 1");
+        // Round 172: this pinned "result.Insert(index + 1", the mid-list insert DuplicateRule used
+        // before it was rewritten as a single pass that appends the copy as soon as it reaches the
+        // source rule. The behaviour the guard defends -- a duplicate lands immediately after the rule
+        // it was made from, in the shared planner -- is unchanged; only the mechanism is. Pin the
+        // adjacency itself so the next rewrite of the loop does not read as a regression either.
+        presentationSource.Should().Contain("if (index == duplicateIndex)");
+        presentationSource.Should().Contain("result.Add(CloneWithPriority(rules[index], result.Count + 1, newId ?? Guid.NewGuid()));");
         presentationSource.Should().Contain("public static IReadOnlyList<ConditionalFormat> AddRule(");
     }
 

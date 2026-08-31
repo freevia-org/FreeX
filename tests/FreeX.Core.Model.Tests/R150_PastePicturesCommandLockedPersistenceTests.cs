@@ -5,9 +5,9 @@ using FreeX.Core.Model;
 namespace FreeX.Core.Model.Tests;
 
 /// <summary>
-/// sweep89 F1: <c>PastePicturesCommand.ClonePictureAtAnchor</c> hand-rolls its own
-/// <see cref="PictureModel"/> clone rather than calling the canonical
-/// <c>DuplicateSheetDrawingCloner.ClonePicture</c>, and its field list never copied
+/// sweep89 F1: the former <c>PastePicturesCommand.ClonePictureAtAnchor</c> hand-rolled its own
+/// <see cref="PictureModel"/> clone rather than sharing the canonical authored-picture copy, and
+/// its field list never copied
 /// <see cref="PictureModel.Locked"/>. Because <see cref="PictureModel.Locked"/> defaults to
 /// <c>true</c>, a picture the user explicitly unlocked (Format Picture &gt; Properties &gt;
 /// uncheck Locked) silently reverted to locked on every copy/paste that routes through this
@@ -113,5 +113,86 @@ public sealed class R150_PastePicturesCommandLockedPersistenceTests
         sheet.IsProtected = true;
         PictureCommandGuards.RejectIfEditObjectsBlocked(sheet, pasted).Should().NotBeNull(
             "a still-locked pasted picture must remain rejected for move/resize under sheet protection");
+    }
+
+    [Fact]
+    public void PastePictureClone_UsesCanonicalAuthoredCopyAndPreservesCompleteState()
+    {
+        var sourceSheetId = SheetId.New();
+        var destination = new CellAddress(SheetId.New(), 20, 21);
+        var linkedRange = new GridRange(
+            new CellAddress(sourceSheetId, 2, 3),
+            new CellAddress(sourceSheetId, 4, 5));
+        var source = new PictureModel
+        {
+            Name = "Complete",
+            Anchor = new CellAddress(sourceSheetId, 7, 8),
+            AnchorOffsetX = 1.25,
+            AnchorOffsetY = 2.5,
+            Kind = PictureKind.Image,
+            SourceRowCount = 3,
+            SourceColumnCount = 4,
+            IsLinkedToSourceRange = true,
+            LinkedSourceRange = linkedRange,
+            LinkedSourceSheetName = "Source",
+            ImageBytes = [1, 2, 3],
+            SvgImageBytes = [4, 5, 6],
+            ContentType = "image/png",
+            LinkedImageTarget = "file:///image.png",
+            Title = "Title",
+            AltText = "Alt",
+            IsDecorative = true,
+            DrawingAnchorKind = ChartDrawingAnchorKind.OneCell,
+            Locked = false,
+            Width = 101,
+            Height = 62,
+            LockAspectRatio = false,
+            RotationDegrees = 12,
+            FlipHorizontal = true,
+            FlipVertical = true,
+            IsVisible = false,
+            CropLeft = 0.1,
+            CropTop = 0.2,
+            CropRight = 0.3,
+            CropBottom = 0.4,
+            Hyperlink = new DrawingObjectHyperlink("https://example.com", TargetMode: "External"),
+            IsSourceLoaded = true,
+            SourceLoadedWidthPixels = 500,
+            SourceLoadedHeightPixels = 300
+        };
+        source.Cells.AddRange(
+        [
+            new PictureCellSnapshot(0, 0, "A"),
+            new PictureCellSnapshot(1, 2, "B")
+        ]);
+
+        var clone = DuplicateSheetDrawingCloner.ClonePictureForPaste(source, destination);
+
+        clone.Id.Should().NotBe(source.Id);
+        clone.Anchor.Should().Be(destination);
+        clone.LinkedSourceRange.Should().Be(linkedRange);
+        clone.LinkedSourceSheetName.Should().Be("Source");
+        clone.Should().BeEquivalentTo(source, options => options
+            .Excluding(picture => picture.Id)
+            .Excluding(picture => picture.Anchor)
+            .Excluding(picture => picture.IsSourceLoaded)
+            .Excluding(picture => picture.SourceLoadedWidthPixels)
+            .Excluding(picture => picture.SourceLoadedHeightPixels));
+        clone.ImageBytes.Should().NotBeSameAs(source.ImageBytes);
+        clone.SvgImageBytes.Should().NotBeSameAs(source.SvgImageBytes);
+        clone.Cells.Should().NotBeSameAs(source.Cells);
+        clone.IsSourceLoaded.Should().BeFalse();
+        clone.SourceLoadedWidthPixels.Should().BeNull();
+        clone.SourceLoadedHeightPixels.Should().BeNull();
+    }
+
+    [Fact]
+    public void PastePicturesCommand_DelegatesToCanonicalPictureClone()
+    {
+        var source = ModelSourceTestSupport.ReadCommandsSource("PastePicturesCommand.cs");
+
+        source.Should().Contain("DuplicateSheetDrawingCloner.ClonePictureForPaste(");
+        source.Should().NotContain("new PictureModel");
+        source.Should().NotContain("ClonePictureAtAnchor");
     }
 }

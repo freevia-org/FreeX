@@ -235,7 +235,9 @@ public sealed class MergeScenarioCommand : IWorkbookCommand
         // Merged scenarios must not silently collide with (and shadow) an existing scenario name --
         // Excel's own Merge dialog keeps every merged scenario distinct, so a name that already
         // exists in the target (or among scenarios merged earlier in this same call) is uniquified.
-        var existingNames = new List<string>(ctx.Workbook.Scenarios.Select(s => s.Name));
+        var existingNames = new HashSet<string>(
+            ctx.Workbook.Scenarios.Select(static scenario => scenario.Name),
+            StringComparer.OrdinalIgnoreCase);
         var affectedCells = new List<CellAddress>();
         foreach (var scenario in _sourceScenarios)
         {
@@ -270,11 +272,11 @@ public sealed class MergeScenarioCommand : IWorkbookCommand
         _applied = false;
     }
 
-    private static string MakeUniqueScenarioName(string name, IReadOnlyList<string> existingNames)
+    private static string MakeUniqueScenarioName(string name, IReadOnlySet<string> existingNames)
     {
         var candidate = name;
         var suffix = 2;
-        while (existingNames.Any(existing => string.Equals(existing, candidate, StringComparison.OrdinalIgnoreCase)))
+        while (existingNames.Contains(candidate))
         {
             candidate = $"{name} ({suffix})";
             suffix++;

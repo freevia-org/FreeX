@@ -35,15 +35,6 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
     // Sheet.RangeHyperlinks) and must be shifted independently.
     private List<GridRange>? _printAreaSnapshot;
     private List<uint>? _rowPageBreakSnapshot;
-    private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
-    // R102: see RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsUp -- every SeriesIndex-keyed
-    // per-series/per-point collection on a Switch-Row/Column chart whose plotted series span this
-    // insert falls strictly inside must be captured here (undo) since the remap mutates them in place.
-    private List<RowColumnShiftHelpers.ChartSeriesFormattingWorkbookSnapshot>? _chartSeriesFormattingSnapshot;
-    // R86-commands-insert-move-refadjust-5-1: a chart's own drawing position (Left/Top) is never
-    // cell-anchored (see RowColumnShiftHelpers.ShiftChartPositionRowsUp), so it must be captured and
-    // shifted separately from _chartSnapshot above, which only tracks DataRange.
-    private List<RowColumnShiftHelpers.ChartPositionSnapshot>? _chartPositionSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
     private List<(CellAddress Address, Cell? OldCell)>? _tableCalculatedColumnFillSnapshot;
 
@@ -99,7 +90,10 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
             return new CommandOutcome(false,
                 ErrorMessage: CommandGuards.CannotInsertRowsPastLastRow(_count));
 
-        _mutationSnapshot = RowColumnMutationSnapshot.Capture(ctx.Workbook, sheet);
+        _mutationSnapshot = RowColumnMutationSnapshot.Capture(
+            ctx.Workbook,
+            sheet,
+            RowColumnShiftHelpers.ChartStructuralSnapshotFeatures.Positions);
         _addressStateSnapshot = RowColumnShiftHelpers.CaptureAddressBearingState(ctx.Workbook, sheet);
 
         _movedSnapshot = movedSnapshot;
@@ -157,19 +151,16 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         RowColumnShiftHelpers.ShiftPrintAreaRowsUp(sheet, _beforeRow, _count);
         _rowPageBreakSnapshot = RowColumnShiftHelpers.CaptureSortedSet(sheet.RowPageBreaks);
         RowColumnShiftHelpers.ShiftSortedSetUp(sheet.RowPageBreaks, _beforeRow, _count);
-        _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
         // R102: must run BEFORE ShiftChartRowsUp below -- it needs each chart's PRE-insert DataRange
         // to tell whether _beforeRow falls strictly inside a Switch-Row/Column chart's plotted series
         // span (see RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsUp -- every SeriesIndex-keyed
         // collection on such a chart must move in lockstep with the inserted row(s), the row-axis twin
         // of ShiftChartSeriesFormattingColumnsUp above).
-        _chartSeriesFormattingSnapshot = RowColumnShiftHelpers.CaptureChartSeriesFormatting(ctx.Workbook);
         RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsUp(ctx.Workbook, _sheetId, _beforeRow, _count);
         RowColumnShiftHelpers.ShiftChartRowsUp(ctx.Workbook, _sheetId, _beforeRow, _count);
         // R86-commands-insert-move-refadjust-5-1: see ShiftChartPositionRowsUp — rows before
         // _beforeRow are untouched by this insert, so it is safe to read sheet.RowHeights here
         // regardless of whether the RowHeights re-key above has already run.
-        _chartPositionSnapshot = RowColumnShiftHelpers.CaptureChartPositions(sheet);
         RowColumnShiftHelpers.ShiftChartPositionRowsUp(sheet, _beforeRow, _count);
         RowColumnShiftHelpers.ShiftAddressBearingRowsUp(ctx.Workbook, sheet, _addressStateSnapshot, _beforeRow, _count);
 
@@ -452,9 +443,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         _mutationSnapshot.RestoreCommonState(ctx.Workbook, sheet, restoreRulesInPlace: true);
         sheet.SetPrintAreas(_printAreaSnapshot ?? []);
         RowColumnShiftHelpers.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
-        RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartSnapshot);
-        RowColumnShiftHelpers.RestoreChartSeriesFormatting(ctx.Workbook, _chartSeriesFormattingSnapshot);
-        RowColumnShiftHelpers.RestoreChartPositions(_chartPositionSnapshot);
+        _mutationSnapshot.RestoreChartStructuralState(ctx.Workbook);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
 
         // R96-commands-undo-affected-cells-1: recompute AffectedCells to reflect where every

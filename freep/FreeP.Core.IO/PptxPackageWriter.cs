@@ -692,7 +692,10 @@ public static class PptxPackageWriter
                 layoutRels.Add(relId, ImageRelType, $"../media/{mediaPath.Split('/').Last()}");
             foreach (var (_, relId, mediaTarget, isVideo, isExternalMedia) in layoutMediaFileRelIds)
                 layoutRels.Add(relId, isVideo ? VideoRelType : AudioRelType,
-                    isExternalMedia ? mediaTarget : MakeRelativePath(layoutPath, mediaTarget), isExternalMedia);
+                    isExternalMedia
+                        ? mediaTarget
+                        : OpcPathHelper.GetRelativeZipPath(GetDirectoryName(layoutPath), mediaTarget),
+                    isExternalMedia);
             WriteRels(archive, layoutPath, layoutRels, packageSnapshot);
         }
 
@@ -747,7 +750,10 @@ public static class PptxPackageWriter
                 masterRels.Add(relId, ImageRelType, $"../media/{mediaPath.Split('/').Last()}");
             foreach (var (_, relId, mediaTarget, isVideo, isExternalMedia) in masterMediaFileRelIds)
                 masterRels.Add(relId, isVideo ? VideoRelType : AudioRelType,
-                    isExternalMedia ? mediaTarget : MakeRelativePath(masterPath, mediaTarget), isExternalMedia);
+                    isExternalMedia
+                        ? mediaTarget
+                        : OpcPathHelper.GetRelativeZipPath(GetDirectoryName(masterPath), mediaTarget),
+                    isExternalMedia);
             WriteRels(archive, masterPath, masterRels, packageSnapshot);
         }
 
@@ -931,7 +937,10 @@ public static class PptxPackageWriter
                 slideRels.Add(mediaRelId, ImageRelType, $"../media/{mediaPath.Split('/').Last()}");
             foreach (var (_, mediaFileRelId, mediaFileTarget, isVideo, isExternalMedia) in mediaFileRelIds)
                 slideRels.Add(mediaFileRelId, isVideo ? VideoRelType : AudioRelType,
-                    isExternalMedia ? mediaFileTarget : MakeRelativePath(slidePath, mediaFileTarget), isExternalMedia);
+                    isExternalMedia
+                        ? mediaFileTarget
+                        : OpcPathHelper.GetRelativeZipPath(GetDirectoryName(slidePath), mediaFileTarget),
+                    isExternalMedia);
             foreach (var (_, relationship, target, isExternal) in captionTrackRels)
                 slideRels.Add(relationship.RelationshipId, CaptionRelType, target, isExternal);
             foreach (var (_, fillBlipRelId, fillBlipPath) in fillBlipRelIds)
@@ -952,7 +961,10 @@ public static class PptxPackageWriter
                 slideRels.Add(relId, ImageRelType, $"../media/{mediaPath.Split('/').Last()}");
             // Wave 25A: preserved modern object rels (absolute paths in prvRelIdPatch, relative in rels entry)
             foreach (var (_, _, newRelId, relType, targetPath) in prvRels)
-                slideRels.Add(newRelId, relType, MakeRelativePath(slidePath, targetPath));
+                slideRels.Add(
+                    newRelId,
+                    relType,
+                    OpcPathHelper.GetRelativeZipPath(GetDirectoryName(slidePath), targetPath));
             // Hyperlink rels (external with TargetMode=External; internal slide rels without)
             foreach (var (hlRelId, hlRelType, hlTarget, isExternal) in hlinkRelEntries)
                 slideRels.Add(hlRelId, hlRelType, hlTarget, isExternal);
@@ -2283,6 +2295,34 @@ public static class PptxPackageWriter
     // ── p:transition ─────────────────────────────────────────────────────────────
 
     /// <summary>
+    /// F1: overwrites the spd/advClick/advTm attributes (and p14:dur, if the element already
+    /// carries one) on a preserved-verbatim (<see cref="TransitionKind.Other"/>) p:transition
+    /// element with the current values of <paramref name="transition"/>. These three attributes
+    /// are the only parts of an unmodelled transition FreeP's ribbon lets the user edit
+    /// (Advance-On-Click / Advance-After / Duration), so a round-trip must let edits to them win
+    /// over whatever the raw XML originally said -- everything else (the effect child, any other
+    /// attribute, extLst, …) is left byte-identical.
+    /// </summary>
+    private static void ApplyOtherTransitionTimingAttrs(XElement transitionEl, SlideTransition transition)
+    {
+        transitionEl.SetAttributeValue("spd", PptxAnimationMap.DurationToSpd(transition.DurationMs));
+
+        transitionEl.SetAttributeValue("advClick", transition.AdvanceOnClick ? null : "0");
+
+        transitionEl.SetAttributeValue("advTm",
+            transition.AdvanceAfterMs.HasValue
+                ? transition.AdvanceAfterMs.Value.ToString(CultureInfo.InvariantCulture)
+                : null);
+
+        // p14:dur only ever appears on the mc:Choice-side p:transition captured when the source
+        // wrapped this transition in mc:AlternateContent (see ResolveTransitionEl's
+        // preferP14Dur=true path) -- only refresh it if it's already there so we never introduce
+        // a namespaced attribute onto a bare, unwrapped p:transition.
+        if (transitionEl.Attribute(P14 + "dur") is not null)
+            transitionEl.SetAttributeValue(P14 + "dur", transition.DurationMs);
+    }
+
+    /// <summary>
     /// Builds the mc:AlternateContent wrapping a p:transition element, or re-emits
     /// the verbatim RawXml for unrecognized (Other) transitions.
     /// <paramref name="soundRelId"/> is the r:embed relationship id of the audio part, if any.
@@ -2324,6 +2364,12 @@ public static class PptxPackageWriter
             try
             {
                 var rawEl = XElement.Parse(transition.RawXml, LoadOptions.PreserveWhitespace);
+
+                // F1: the ribbon lets the user edit AdvanceOnClick/AdvanceAfterMs/DurationMs
+                // regardless of Kind, so those fields must win over whatever the preserved raw
+                // XML originally said -- only the effect child (and every other attribute we
+                // don't model) stays verbatim.
+                ApplyOtherTransitionTimingAttrs(rawEl, transition);
 
                 // If there's a sound to re-attach and the raw XML doesn't already contain
                 // a sndAc element, inject it.
@@ -2557,6 +2603,14 @@ public static class PptxPackageWriter
             if (soundRelId is not null)
                 fallbackAttrs.Add(BuildSndAcEl(soundRelId, transition.Sound));
             fallbackEl = new XElement(P + "transition", fallbackAttrs.Where(a => a is not null).Cast<object>().ToArray());
+        }
+        else
+        {
+            // F1: this is the *other* place a preserved-verbatim node (the captured mc:Fallback
+            // p:transition) was being re-emitted completely unchanged -- refresh the same
+            // user-editable timing attributes here too, for old readers that fall back to this
+            // branch instead of mc:Choice.
+            ApplyOtherTransitionTimingAttrs(fallbackEl, transition);
         }
 
         return new XElement(MC + "AlternateContent",
@@ -3472,23 +3526,8 @@ public static class PptxPackageWriter
             case BulletKind.Char:
                 el.Add(new XElement(A + "buChar", new XAttribute("char", level.BulletChar ?? "•"))); break;
             case BulletKind.Auto:
-                var lvlAutoNumTypeStr = level.AutoNumType switch
-                {
-                    AutoNumType.ArabicParenR    => "arabicParenR",
-                    AutoNumType.ArabicParenBoth => "arabicParenBoth",
-                    AutoNumType.RomanUcPeriod   => "romanUcPeriod",
-                    AutoNumType.RomanLcPeriod   => "romanLcPeriod",
-                    AutoNumType.RomanUcParenR   => "romanUcParenR",
-                    AutoNumType.RomanLcParenR   => "romanLcParenR",
-                    AutoNumType.AlphaUcPeriod   => "alphaUcPeriod",
-                    AutoNumType.AlphaLcPeriod   => "alphaLcPeriod",
-                    AutoNumType.AlphaUcParenR   => "alphaUcParenR",
-                    AutoNumType.AlphaLcParenR   => "alphaLcParenR",
-                    AutoNumType.AlphaUcParenBoth => "alphaUcParenBoth",
-                    AutoNumType.AlphaLcParenBoth => "alphaLcParenBoth",
-                    _                           => "arabicPeriod"
-                };
-                el.Add(new XElement(A + "buAutoNum", new XAttribute("type", lvlAutoNumTypeStr))); break;
+                el.Add(new XElement(A + "buAutoNum",
+                    new XAttribute("type", PptxAutoNumberTypeCodec.Format(level.AutoNumType)))); break;
         }
 
         // a:defRPr
@@ -4553,7 +4592,8 @@ public static class PptxPackageWriter
                 new XElement(P + "cNvGraphicFramePr",
                     new XElement(A + "graphicFrameLocks",
                         new XAttribute("noGrp", "1"))),
-                new XElement(P + "nvPr")),
+                new XElement(P + "nvPr",
+                    shape.Placeholder is not null ? BuildPhEl(shape.Placeholder) : null)),
             xfrm,
             new XElement(A + "graphic",
                 new XElement(A + "graphicData",
@@ -4595,7 +4635,8 @@ public static class PptxPackageWriter
                 new XElement(P + "cNvGraphicFramePr",
                     new XElement(A + "graphicFrameLocks",
                         new XAttribute("noGrp", "1"))),
-                new XElement(P + "nvPr")),
+                new XElement(P + "nvPr",
+                    shape.Placeholder is not null ? BuildPhEl(shape.Placeholder) : null)),
             xfrm,
             new XElement(A + "graphic",
                 new XElement(A + "graphicData",
@@ -5144,7 +5185,6 @@ public static class PptxPackageWriter
 
         const double AvgCharWidthEmFactor = 0.52; // coarse proportional-font average advance width
         const double WideCharWidthEmFactor = 1.0; // CJK/fullwidth glyphs render close to a full em wide
-        const double LineHeightFactor = 1.2;
         const double DefaultFontSizePt = 18.0;
         const double DefaultInsetLeftRightPt = 7.2; // OOXML default lIns/rIns (91440 EMU)
         const double DefaultInsetTopBottomPt = 3.6; // OOXML default tIns/bIns (45720 EMU)
@@ -5176,9 +5216,21 @@ public static class PptxPackageWriter
             int lines = body.Wrap
                 ? Math.Max(1, (int)Math.Ceiling(textWidthPt / widthPt))
                 : 1;
-            unscaledHeightPt += lines * fontSizePt * LineHeightFactor;
-            unscaledHeightPt += paragraph.SpaceBeforePt ?? 0;
-            unscaledHeightPt += paragraph.SpaceAfterPt ?? 0;
+            // Percent-authored spacing (a:spcBef/a:spcAft with a:spcPct) resolves against a
+            // single line's height, and a:lnSpc scales the text height itself — this estimate
+            // drives the cached normAutofit fontScale, so ignoring either understates the
+            // required shrink for exactly the paragraphs that need it most.
+            double singleLineHeightPt = ParagraphSpacingMetrics.SingleLineHeightPoints(fontSizePt);
+            double lineHeightPt = paragraph.LineSpacingPointsExact is { } exactLinePt && exactLinePt > 0
+                ? exactLinePt
+                : singleLineHeightPt * (paragraph.LineSpacingPercent is { } linePct && linePct > 0
+                    ? linePct / 100.0
+                    : 1.0);
+            unscaledHeightPt += lines * lineHeightPt;
+            unscaledHeightPt += ParagraphSpacingMetrics.ResolvePoints(
+                paragraph.SpaceBeforePt, paragraph.SpaceBeforePercent, singleLineHeightPt);
+            unscaledHeightPt += ParagraphSpacingMetrics.ResolvePoints(
+                paragraph.SpaceAfterPt, paragraph.SpaceAfterPercent, singleLineHeightPt);
         }
 
         // Fits at authored size (or no clear evidence of overflow) — no basis to override the
@@ -5326,23 +5378,8 @@ public static class PptxPackageWriter
             case BulletKind.Char:
                 pPr.Add(new XElement(A + "buChar", new XAttribute("char", para.BulletChar ?? "•"))); hasPPr = true; break;
             case BulletKind.Auto:
-                var autoNumTypeStr = para.AutoNumType switch
-                {
-                    AutoNumType.ArabicParenR    => "arabicParenR",
-                    AutoNumType.ArabicParenBoth => "arabicParenBoth",
-                    AutoNumType.RomanUcPeriod   => "romanUcPeriod",
-                    AutoNumType.RomanLcPeriod   => "romanLcPeriod",
-                    AutoNumType.RomanUcParenR   => "romanUcParenR",
-                    AutoNumType.RomanLcParenR   => "romanLcParenR",
-                    AutoNumType.AlphaUcPeriod   => "alphaUcPeriod",
-                    AutoNumType.AlphaLcPeriod   => "alphaLcPeriod",
-                    AutoNumType.AlphaUcParenR   => "alphaUcParenR",
-                    AutoNumType.AlphaLcParenR   => "alphaLcParenR",
-                    AutoNumType.AlphaUcParenBoth => "alphaUcParenBoth",
-                    AutoNumType.AlphaLcParenBoth => "alphaLcParenBoth",
-                    _                           => "arabicPeriod"
-                };
-                var autoNumEl = new XElement(A + "buAutoNum", new XAttribute("type", autoNumTypeStr));
+                var autoNumEl = new XElement(A + "buAutoNum",
+                    new XAttribute("type", PptxAutoNumberTypeCodec.Format(para.AutoNumType)));
                 if (para.AutoNumStartAtSpecified || para.AutoNumStartAt != 1)
                     autoNumEl.Add(new XAttribute("startAt", Math.Max(1, para.AutoNumStartAt)));
                 pPr.Add(autoNumEl); hasPPr = true; break;
@@ -6013,7 +6050,11 @@ public static class PptxPackageWriter
                     track.Language,
                     track.Label,
                     IsExternal: false);
-                result.Add((shape.Id, internalRelationship, MakeRelativePath($"ppt/slides/slide{slideIndex}.xml", captionPath), isExternal: false));
+                result.Add((
+                    shape.Id,
+                    internalRelationship,
+                    OpcPathHelper.GetRelativeZipPath("ppt/slides", captionPath),
+                    isExternal: false));
             }
         }
 
@@ -6447,36 +6488,6 @@ public static class PptxPackageWriter
     // ── Wave 25A: Preserved modern objects (zoom / ink / 3D / unknown) ─────────────
 
     /// <summary>
-    /// Builds a relative OPC path from a slide's absolute path to an absolute target part path.
-    /// E.g. slide="ppt/slides/slide1.xml", target="ppt/media/foo.glb" → "../media/foo.glb"
-    /// </summary>
-    private static string MakeRelativePath(string slidePath, string targetPath)
-    {
-        // Normalize: ensure no leading slash
-        slidePath  = slidePath.TrimStart('/');
-        targetPath = targetPath.TrimStart('/');
-
-        var slideDir  = GetDirectoryName(slidePath);
-        var targetDir = GetDirectoryName(targetPath);
-        var fileName  = targetPath[(targetPath.LastIndexOf('/') + 1)..];
-
-        // Count how many levels up we need to go from slideDir
-        var slideParts  = slideDir.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        var targetParts = targetDir.Split('/', StringSplitOptions.RemoveEmptyEntries);
-
-        // Find common prefix length
-        int common = 0;
-        while (common < slideParts.Length && common < targetParts.Length &&
-               string.Equals(slideParts[common], targetParts[common], StringComparison.OrdinalIgnoreCase))
-            common++;
-
-        var ups   = string.Join("/", Enumerable.Repeat("..", slideParts.Length - common));
-        var down  = string.Join("/", targetParts[common..]);
-        var parts = new[] { ups, down, fileName }.Where(s => !string.IsNullOrEmpty(s));
-        return string.Join("/", parts);
-    }
-
-    /// <summary>
     /// Writes all OPC parts for preserved modern objects on the slide.
     /// Returns:
     ///   prvRels: (shapeId, oldRelId, newRelId, relType, absoluteTargetPath)
@@ -6558,7 +6569,7 @@ public static class PptxPackageWriter
             {
                 var origPath = kv.Key;
                 if (!pathRemap.TryGetValue(origPath, out var freshPath)) freshPath = origPath;
-                var relsPath = MakePartRelsPath(freshPath);
+                var relsPath = OpcPathHelper.GetRelationshipPartPath(freshPath);
                 if (!writtenPaths.Contains(relsPath))
                 {
                     var rEntry = archive.CreateEntry(relsPath, CompressionLevel.Optimal);
@@ -6595,11 +6606,6 @@ public static class PptxPackageWriter
         }
 
         return (prvRels, false);
-    }
-
-    private static string MakePartRelsPath(string partPath)
-    {
-        return OpcPathHelper.GetRelationshipPartPath(partPath);
     }
 
     /// <summary>

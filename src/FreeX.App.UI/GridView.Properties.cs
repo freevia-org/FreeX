@@ -745,6 +745,17 @@ public partial class GridView
             // Font scheme resolution depends on the theme: clear the style-to-default-layout cache
             // so stale entries do not survive a Theme Fonts switch.
             grid._defaultTextLayoutStyleCache.Clear();
+            // R175: DrawBorderEdge now resolves CellBorder.ThemeColor against the CURRENT theme,
+            // but _borderPenCache is keyed by the CellBorder struct alone (Style/baked Color/
+            // ThemeColor reference), which does not change when the theme swaps -- so a cached Pen
+            // built under the OLD theme would otherwise keep matching that key and paint the stale
+            // color forever, never just until the size-based eviction in TrimRenderCachesIfOversized.
+            grid._borderPenCache.Clear();
+            // The pre-selection layer cache (GridView.RenderSurfaceCache.cs) bakes every
+            // theme-resolved cell color into a frozen DrawingGroup, but it carries WorkbookTheme in
+            // its own key, so it invalidates itself here without needing an explicit Clear -- and,
+            // unlike this method, it also survives the same-instance re-assignment that
+            // MainWindow.Viewport.cs performs on every viewport refresh.
         }
     }
 

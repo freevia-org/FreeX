@@ -69,6 +69,61 @@ public class ComplexFieldUpdateRoundTripTests
         ComplexFieldEngine.Recompute(reloaded, 4, 0).Should().Be("3");
     }
 
+    // freew-fields-toc F1: a REF cross-reference imported in Word's complex fldChar/instrText form (the
+    // form Word emits for Insert > Cross-reference, especially with "Insert as hyperlink" checked) must
+    // honour its \w "insert reference to heading number" switch on Update Fields, not degrade to the
+    // full target paragraph text. DocxReader.AddComplexFieldRun has no special case for REF/PAGEREF/
+    // NOTEREF (unlike AddSimpleField, which recognises them via CrossReferenceFor and produces a
+    // Run.CrossReference) so this field round-trips as a generic Run.ComplexField; the fix lives in
+    // ComplexFieldEngine.ResolveRef, which now rebuilds the equivalent CrossReferenceField from the
+    // switch and resolves through CrossReferences.ResolveField -- the same reader a Run.CrossReference
+    // already uses -- instead of unconditionally returning the target's whole trimmed text.
+    [Fact]
+    public void RefField_ComplexForm_WithHeadingNumberSwitch_RecomputesToHeadingNumber_NotFullHeadingText()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+
+        // 0: the bookmarked heading the REF points at (outline number "1").
+        doc.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1", BookmarkName = "_Ref1" });
+        // 1: a complex-form REF with the \w (heading number) and \h (hyperlink) switches, exactly as
+        // Word writes Insert > Cross-reference > Heading > "Heading number" with "Insert as hyperlink".
+        // The cached separate-run text ("1") is what Word itself last computed for this switch.
+        var refPara = new Paragraph();
+        refPara.Runs.Add(Run.ComplexFieldRun(" REF _Ref1 \\w \\h ", "1"));
+        doc.Blocks.Add(refPara);
+
+        // Round-trips through REAL complex fldChar begin/instrText/separate/end XML (DocxWriter emits it,
+        // DocxReader.AddComplexFieldRun reads it back) -- not a hand-built model shortcut.
+        var reloaded = RoundTrip(doc);
+        var run = reloaded.Blocks.OfType<Paragraph>().ElementAt(1).Runs.Single();
+        run.CrossReference.Should().BeNull(); // confirms this exercises the generic ComplexField path
+        run.ComplexField!.Instruction.Should().Be(" REF _Ref1 \\w \\h ");
+
+        // The DISPLAYED text after Update Fields must be the heading number "1", never the full heading
+        // text "Chapter One" the unfixed engine used to substitute in.
+        ComplexFieldEngine.Recompute(reloaded, 1, 0).Should().Be("1");
+    }
+
+    // Sibling no-regression: a complex-form REF with NO insert-as switch must keep resolving to the
+    // target's full paragraph text (Word's default "Insert reference to: Entire caption/paragraph text"),
+    // exactly like RefAndSeqFields_SurviveRoundTrip_ThenRecomputeAfterTargetChanges above -- the switch-
+    // aware rebuild in ResolveRef must not regress the plain-text case it already handled correctly.
+    [Fact]
+    public void RefField_ComplexForm_WithoutSwitch_StillRecomputesToFullBookmarkedText()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1", BookmarkName = "_Ref1" });
+        var refPara = new Paragraph();
+        refPara.Runs.Add(Run.ComplexFieldRun(" REF _Ref1 ", "Chapter One"));
+        doc.Blocks.Add(refPara);
+
+        var reloaded = RoundTrip(doc);
+
+        ComplexFieldEngine.Recompute(reloaded, 1, 0).Should().Be("Chapter One");
+    }
+
     [Fact]
     public void StyleRefField_BeforeHeading_SurvivesRoundTripAndResolvesForward()
     {

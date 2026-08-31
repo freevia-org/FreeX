@@ -1874,7 +1874,11 @@ public partial class MainWindow
     private void UpdateTitleBar()
     {
         var displayName = WorkbookTitleFormatter.Format(
-            _workbook.Name, _workbookDirty, IsWorkbookGrouped(), _windowTitleSuffix);
+            _workbook.Name,
+            _workbookDirty,
+            IsWorkbookGrouped(),
+            _windowTitleSuffix,
+            _workbookReadOnlySession.IsReadOnly);
         WorkbookNameText.Text = displayName;
         this.Title = displayName;
     }

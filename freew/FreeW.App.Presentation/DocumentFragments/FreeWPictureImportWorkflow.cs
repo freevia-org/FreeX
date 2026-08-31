@@ -201,11 +201,27 @@ public sealed record FreeWPictureImportOutcomePresentation(
 
 public static class FreeWPictureImportPlanner
 {
+    // Round 172 (freep-media F1 follow-up): wmf/emf belong here. Unlike FreeX -- which has no metafile
+    // decoder and therefore rejects them -- FreeW carries metafiles end to end: ImageFormat.Emf/Wmf,
+    // InlineImage.FormatForExtension/ExtensionFor, the DocxWriter media part + [Content_Types] Default
+    // (OoxmlWordprocessing.ImageContentTypeForExtension -> image/x-emf / image/x-wmf), and the WPF
+    // renderer's GDI+ metafile path. Omitting them from the picker meant a user could only reach that
+    // working path through the picker's "All files" entry, which made a first-class supported format
+    // look unsupported. Mirrors FreeP's picture profile (PresentationAssetPickerProfileCatalog).
     private static readonly IReadOnlyList<string> PicturePatterns =
-        ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tif", "*.tiff", "*.svg"];
+        ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tif", "*.tiff", "*.svg", "*.wmf", "*.emf"];
 
     private static readonly IReadOnlyList<string> PictureMimeTypes =
-        ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/tiff", "image/svg+xml"];
+    [
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+        "image/bmp",
+        "image/tiff",
+        "image/svg+xml",
+        "image/x-wmf",
+        "image/x-emf",
+    ];
 
     public static FreeWPictureImportRequest CreateRequest() =>
         new(

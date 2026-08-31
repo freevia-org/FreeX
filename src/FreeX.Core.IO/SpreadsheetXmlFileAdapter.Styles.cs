@@ -68,9 +68,9 @@ public sealed partial class SpreadsheetXmlFileAdapter
         for (var index = 1; index < workbook.StyleCount; index++)
         {
             var styleId = new StyleId(index);
-            var style = workbook.GetStyle(styleId);
-            if (string.IsNullOrWhiteSpace(style.NumberFormat) ||
-                string.Equals(style.NumberFormat, CellStyle.Default.NumberFormat, StringComparison.Ordinal))
+            var numberFormat = workbook.GetStyleNumberFormat(styleId);
+            if (string.IsNullOrWhiteSpace(numberFormat) ||
+                string.Equals(numberFormat, CellStyle.Default.NumberFormat, StringComparison.Ordinal))
             {
                 continue;
             }
@@ -94,7 +94,7 @@ public sealed partial class SpreadsheetXmlFileAdapter
             WriteSpreadsheetStartElement(writer, "Style");
             WriteSpreadsheetAttribute(writer, SpreadsheetIdAttribute, styleName);
             WriteSpreadsheetStartElement(writer, "NumberFormat");
-            WriteSpreadsheetAttribute(writer, SpreadsheetFormatAttribute, workbook.GetStyle(styleId).NumberFormat);
+            WriteSpreadsheetAttribute(writer, SpreadsheetFormatAttribute, workbook.GetStyleNumberFormat(styleId));
             writer.WriteEndElement();
             writer.WriteEndElement();
         }

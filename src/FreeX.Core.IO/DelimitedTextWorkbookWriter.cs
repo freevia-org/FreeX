@@ -377,7 +377,7 @@ internal static class DelimitedTextWorkbookWriter
     // it keeps the existing raw-value rendering below (round-trip invariant numbers, ISO dates).
     private static bool TryGetAppliedNumberFormat(Cell cell, Workbook workbook, out string numberFormat)
     {
-        numberFormat = workbook.GetStyle(cell.StyleId).NumberFormat;
+        numberFormat = workbook.GetStyleNumberFormat(cell.StyleId);
         return !string.IsNullOrEmpty(numberFormat) &&
                !string.Equals(numberFormat, "General", StringComparison.OrdinalIgnoreCase);
     }

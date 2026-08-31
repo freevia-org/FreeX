@@ -182,11 +182,8 @@ public static partial class PivotTableRefreshService
         var itemSets = columnFields
             .Select(field => GetFieldItemsWithNoData(workbook, pivotTable, rows, field))
             .ToList();
-        foreach (var key in BuildKeyCombinations(itemSets))
-        {
-            if (!keys.Contains(key))
-                keys.Add(key);
-        }
+        foreach (var key in BuildMissingKeyCombinations(itemSets, keys))
+            keys.Add(key);
 
         return keys.Order(PivotKeyComparer.Instance).ToList();
     }
@@ -208,11 +205,8 @@ public static partial class PivotTableRefreshService
         var itemSets = rowFields
             .Select(field => GetFieldItemsWithNoData(workbook, pivotTable, rows, field))
             .ToList();
-        foreach (var key in BuildKeyCombinations(itemSets))
-        {
-            if (!groups.Any(group => group.Key.Equals(key)))
-                groups.Add(new PivotRowGroup(key, []));
-        }
+        foreach (var key in BuildMissingKeyCombinations(itemSets, groups.Select(group => group.Key)))
+            groups.Add(new PivotRowGroup(key, []));
 
         return groups.OrderBy(group => group.Key, PivotKeyComparer.Instance).ToList();
     }
@@ -306,6 +300,18 @@ public static partial class PivotTableRefreshService
         var values = new string[itemSets.Count];
         foreach (var key in BuildKeyCombinations(itemSets, values, 0))
             yield return key;
+    }
+
+    private static IEnumerable<PivotKey> BuildMissingKeyCombinations(
+        IReadOnlyList<IReadOnlyList<string>> itemSets,
+        IEnumerable<PivotKey> existingKeys)
+    {
+        var seen = new HashSet<PivotKey>(existingKeys);
+        foreach (var key in BuildKeyCombinations(itemSets))
+        {
+            if (seen.Add(key))
+                yield return key;
+        }
     }
 
     private static IEnumerable<PivotKey> BuildKeyCombinations(

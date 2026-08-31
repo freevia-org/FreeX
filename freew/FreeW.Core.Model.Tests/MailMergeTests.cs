@@ -328,7 +328,7 @@ public class MailMergeTests
             {
                 Run.ComplexFieldRun(
                     $" MERGEFIELD Value \\* {format} \\* MERGEFORMAT ",
-                    "Â«ValueÂ»")
+                    "«Value»")
             }
         });
         var row = new Dictionary<string, string> { ["Value"] = value };
@@ -348,7 +348,7 @@ public class MailMergeTests
             {
                 Run.ComplexFieldRun(
                     " MERGEFIELD Value \\b \"[\" \\f \"]\" \\* Roman ",
-                    "Â«ValueÂ»")
+                    "«Value»")
             }
         });
         var row = new Dictionary<string, string> { ["Value"] = "27" };
@@ -368,7 +368,7 @@ public class MailMergeTests
             {
                 Run.ComplexFieldRun(
                     " MERGEFIELD Value \\b \"[\" \\f \"]\" \\* Roman ",
-                    "Â«ValueÂ»")
+                    "«Value»")
             }
         });
         var row = new Dictionary<string, string> { ["Value"] = "abc" };
@@ -388,7 +388,7 @@ public class MailMergeTests
             {
                 Run.ComplexFieldRun(
                     " MERGEFIELD Value \\b \"[\" \\f \"]\" \\* Roman \\* Upper ",
-                    "Â«ValueÂ»")
+                    "«Value»")
             }
         });
         var row = new Dictionary<string, string> { ["Value"] = "27" };
@@ -408,7 +408,7 @@ public class MailMergeTests
             {
                 Run.ComplexFieldRun(
                     " MERGEFIELD Value \\b \"pre-\" \\f \"-post\" \\* CardText \\* Upper ",
-                    "Â«ValueÂ»")
+                    "«Value»")
             }
         });
         var row = new Dictionary<string, string> { ["Value"] = "27" };

@@ -79,10 +79,10 @@ public sealed class R168_HeaderFooterPictureTextInsetAndBandPlacementTests
     [Fact]
     public void ResolveTextBounds_PictureThatAlreadyFits_LeavesTheFullGapPastTheDrawnPicture()
     {
-        // No-regression sibling for the common unscaled case: the reserved space is still the
-        // picture's own width, and the gap between the drawn picture and the text is the full gap
-        // (the raw-width formula previously ate half of it, because ResolvePictureBounds insets a
-        // left-aligned picture by 2 while the text inset measured from the section's edge).
+        // The common unscaled case: the reserved space is the picture's own width and the gap between
+        // the drawn picture and the text is the full gap. The picture itself sits flush against the
+        // section's left edge (R168-headerfooter-section-padding-1 removed the home-grown 2-unit pad
+        // this path used to add, which Excel and the PDF export path do not have).
         var picture = new WorksheetHeaderFooterPicture([1], "image/png", "logo.png", Width: 96, Height: 42);
         var section = new LayoutRect(24, 10, 200, 42);
 
@@ -91,8 +91,8 @@ public sealed class R168_HeaderFooterPictureTextInsetAndBandPlacementTests
         var textBounds = WorksheetPrintHeaderFooterGeometryPlanner.ResolveTextBounds(
             section, picture, PageTextAlignment.Left);
 
-        pictureBounds.Should().Be(new LayoutRect(26, 10, 96, 42));
-        textBounds.Should().Be(new LayoutRect(126, 10, 98, 42));
+        pictureBounds.Should().Be(new LayoutRect(24, 10, 96, 42));
+        textBounds.Should().Be(new LayoutRect(124, 10, 100, 42));
     }
 
     [Fact]

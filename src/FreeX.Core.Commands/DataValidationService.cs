@@ -364,6 +364,15 @@ public static partial class DataValidationService
                 return null;
         }
 
+        return ValidateResolvedNumericBounds(dv, numericValue, v1, v2);
+    }
+
+    private static string? ValidateResolvedNumericBounds(
+        DataValidation dv,
+        double numericValue,
+        double v1,
+        double v2)
+    {
         bool passes = dv.Operator switch
         {
             DvOperator.Between             => CompareTolerant(numericValue, v1) >= 0 && CompareTolerant(numericValue, v2) <= 0,
@@ -462,26 +471,14 @@ public static partial class DataValidationService
         if (!DataValidationBoundsParser.TryParseDateBound(dv.Formula1, sheet, address, dv.AppliesTo.Start, workbook, out var v1))
             return null;
 
-        string? formula2 = null;
+        double v2 = 0;
         if (dv.Operator is DvOperator.Between or DvOperator.NotBetween)
         {
-            if (!DataValidationBoundsParser.TryParseDateBound(dv.Formula2, sheet, address, dv.AppliesTo.Start, workbook, out var v2))
+            if (!DataValidationBoundsParser.TryParseDateBound(dv.Formula2, sheet, address, dv.AppliesTo.Start, workbook, out v2))
                 return null;
-
-            formula2 = v2.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        // Reuse numeric comparison logic with a temporary DV wrapper
-        var numericDv = new DataValidation
-        {
-            Type      = DvType.Decimal,
-            Operator  = dv.Operator,
-            Formula1  = v1.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            Formula2  = formula2,
-            AllowBlank = dv.AllowBlank,
-            ErrorMessage = dv.ErrorMessage
-        };
-        return ValidateNumeric(numericDv, new NumberValue(oaDate));
+        return ValidateResolvedNumericBounds(dv, oaDate, v1, v2);
     }
 
     private static string? ValidateTime(DataValidation dv, ScalarValue value) =>
@@ -505,25 +502,14 @@ public static partial class DataValidationService
         if (!DataValidationBoundsParser.TryParseTimeBound(dv.Formula1, sheet, address, dv.AppliesTo.Start, workbook, out var v1))
             return null;
 
-        string? formula2 = null;
+        double v2 = 0;
         if (dv.Operator is DvOperator.Between or DvOperator.NotBetween)
         {
-            if (!DataValidationBoundsParser.TryParseTimeBound(dv.Formula2, sheet, address, dv.AppliesTo.Start, workbook, out var v2))
+            if (!DataValidationBoundsParser.TryParseTimeBound(dv.Formula2, sheet, address, dv.AppliesTo.Start, workbook, out v2))
                 return null;
-
-            formula2 = v2.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        var numericDv = new DataValidation
-        {
-            Type = DvType.Decimal,
-            Operator = dv.Operator,
-            Formula1 = v1.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            Formula2 = formula2,
-            AllowBlank = dv.AllowBlank,
-            ErrorMessage = dv.ErrorMessage
-        };
-        return ValidateNumeric(numericDv, new NumberValue(timeValue));
+        return ValidateResolvedNumericBounds(dv, timeValue, v1, v2);
     }
 
     private static string? ValidateCustom(

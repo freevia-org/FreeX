@@ -109,6 +109,18 @@ internal sealed class XlsxDefinedNamePreservationPolicy
         return $"{name}\u001f{localSheetId}";
     }
 
+    public static Dictionary<string, XElement> CreateFirstElementIndex(IEnumerable<XElement> elements)
+    {
+        ArgumentNullException.ThrowIfNull(elements);
+
+        var index = new Dictionary<string, XElement>(StringComparer.OrdinalIgnoreCase);
+        foreach (var element in elements)
+            // Preserve the document-order winner used by the former FirstOrDefault lookup.
+            index.TryAdd(GetKey(element), element);
+
+        return index;
+    }
+
     public static bool BackfillMissingAttributes(XElement source, XElement target)
     {
         ArgumentNullException.ThrowIfNull(source);

@@ -99,6 +99,7 @@ public sealed class Workbook
     private static readonly char[] InvalidSheetNameChars = [':', '\\', '/', '?', '*', '[', ']'];
     private readonly List<Sheet> _sheets = [];
     private readonly Dictionary<SheetId, Sheet> _sheetById = [];
+    private readonly Dictionary<string, Sheet> _sheetByName = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<CellStyle> _styles = [CellStyle.Default];
     private readonly Dictionary<CellStyle, int> _styleIndex = new() { [CellStyle.Default] = 0 };
 
@@ -613,6 +614,7 @@ public sealed class Workbook
         var sheet = new Sheet(SheetId.New(), name);
         _sheets.Add(sheet);
         _sheetById[sheet.Id] = sheet;
+        RegisterSheetName(sheet);
         return sheet;
     }
 
@@ -623,6 +625,7 @@ public sealed class Workbook
         var sheet = new Sheet(SheetId.New(), name);
         _sheets.Insert(index, sheet);
         _sheetById[sheet.Id] = sheet;
+        RegisterSheetName(sheet);
         return sheet;
     }
 
@@ -632,6 +635,7 @@ public sealed class Workbook
         EnsureCanUseSheetName(sheet.Name, sheet.Id);
         _sheets.Insert(index, sheet);
         _sheetById[sheet.Id] = sheet;
+        RegisterSheetName(sheet);
     }
 
     /// <summary>
@@ -768,8 +772,11 @@ public sealed class Workbook
     {
         var idx = IndexOfSheet(sheetId);
         if (idx < 0) return false;
+        var sheet = _sheets[idx];
         _sheets.RemoveAt(idx);
         _sheetById.Remove(sheetId);
+        sheet.NameChanged -= HandleSheetNameChanged;
+        RefreshSheetNameIndex(sheet.Name);
         RemoveNamedRangesForSheet(sheetId);
         AdjustWorkbookViewSheetIndexes(idx);
         return true;
@@ -878,7 +885,11 @@ public sealed class Workbook
     /// <summary>Get a sheet by name (case-insensitive), or null if not found.</summary>
     public Sheet? GetSheet(string name)
     {
-        return _sheets.Find(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (name is null)
+            return null;
+
+        _sheetByName.TryGetValue(name, out var sheet);
+        return sheet;
     }
 
     /// <summary>Get a sheet by 0-based index.</summary>
@@ -909,8 +920,19 @@ public sealed class Workbook
     /// </summary>
     public CellStyle GetStyle(StyleId id)
     {
-        int idx = id.Value;
-        return (idx >= 0 && idx < _styles.Count ? _styles[idx] : _styles[0]).Clone();
+        return GetRegisteredStyleOrDefault(id).Clone();
+    }
+
+    /// <summary>
+    /// Reads a style's immutable number-format value without allocating the defensive
+    /// <see cref="CellStyle"/> clone required by <see cref="GetStyle"/>.
+    /// </summary>
+    internal string GetStyleNumberFormat(StyleId id) => GetRegisteredStyleOrDefault(id).NumberFormat;
+
+    private CellStyle GetRegisteredStyleOrDefault(StyleId id)
+    {
+        var idx = id.Value;
+        return idx >= 0 && idx < _styles.Count ? _styles[idx] : _styles[0];
     }
 
     /// <summary>Total number of registered styles.</summary>
@@ -924,8 +946,43 @@ public sealed class Workbook
         var sheet = _sheets[fromIndex];
         _sheets.RemoveAt(fromIndex);
         _sheets.Insert(toIndex, sheet);
+        RefreshSheetNameIndex(sheet.Name);
         ActiveSheetIndex = GetWorkbookViewIndexForSheetId(activeSheetId);
         FirstVisibleSheetIndex = GetWorkbookViewIndexForSheetId(firstVisibleSheetId);
+    }
+
+    private void RegisterSheetName(Sheet sheet)
+    {
+        // Reinsertions after undo must restore the subscription. Remove first so a malformed caller
+        // that inserts the same instance twice cannot accumulate duplicate handlers.
+        sheet.NameChanged -= HandleSheetNameChanged;
+        sheet.NameChanged += HandleSheetNameChanged;
+        RefreshSheetNameIndex(sheet.Name);
+    }
+
+    private void HandleSheetNameChanged(Sheet sheet, string? oldName, string? newName)
+    {
+        RefreshSheetNameIndex(oldName);
+        if (!StringComparer.OrdinalIgnoreCase.Equals(oldName, newName))
+            RefreshSheetNameIndex(newName);
+    }
+
+    private void RefreshSheetNameIndex(string? name)
+    {
+        if (name is null)
+            return;
+
+        for (var index = 0; index < _sheets.Count; index++)
+        {
+            var candidate = _sheets[index];
+            if (string.Equals(candidate.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                _sheetByName[name] = candidate;
+                return;
+            }
+        }
+
+        _sheetByName.Remove(name);
     }
 
     private SheetId? GetSheetIdForWorkbookViewIndex(int? sheetIndex)

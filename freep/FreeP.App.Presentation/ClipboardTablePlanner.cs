@@ -282,31 +282,12 @@ public static class ClipboardTablePlanner
         }).ToList();
     }
 
-    /// <summary>Mirrors ClipboardSerializer.IsProperlyQuotedField: the quote at <paramref
-    /// name="quoteIndex"/> (already known to be the first character of a field) opens genuine
-    /// RFC4180 quoting only if scanning forward -- treating a doubled quote as an escaped literal --
-    /// reaches a closing quote immediately followed by the next tab or the end of the row. Otherwise
-    /// it is a literal quote character (typed by a user, or produced by a rich-text source that never
-    /// CSV-quotes its cells) and must be preserved as data rather than consumed as CSV syntax.</summary>
-    private static bool IsProperlyQuotedCell(List<char> chars, int quoteIndex)
-    {
-        for (var i = quoteIndex + 1; i < chars.Count; i++)
-        {
-            if (chars[i] != '"')
-                continue;
-
-            if (i + 1 < chars.Count && chars[i + 1] == '"')
-            {
-                i++;
-                continue;
-            }
-
-            var next = i + 1;
-            return next >= chars.Count || chars[next] == '\t';
-        }
-
-        return false;
-    }
+    /// <summary>Delegates to the shared quote scanner that the tabular-shape check in
+    /// <see cref="PresentationClipboardContent.HasTabularText"/> also uses, so both sides of the
+    /// paste -- deciding a payload is a grid, and cutting that grid into cells -- agree on where a
+    /// field boundary is. See <see cref="ClipboardTsvFields.OpensQuotedField"/>.</summary>
+    private static bool IsProperlyQuotedCell(List<char> chars, int quoteIndex) =>
+        ClipboardTsvFields.OpensQuotedField(chars, quoteIndex);
 
     private static void AddRun(List<Run> target, Run source, StringBuilder text)
     {

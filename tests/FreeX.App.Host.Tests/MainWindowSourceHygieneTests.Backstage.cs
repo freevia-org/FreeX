@@ -316,7 +316,20 @@ public sealed partial class MainWindowSourceHygieneTests
 
         keyboardSource.Should().Contain("RegisterPortableKeyboardCommand(KeyboardCommandShortcut.NewWorkbook, WorkbookShortcutRoute.NewWorkbook);");
         keyboardSource.Should().Contain("RegisterPortableKeyboardCommand(KeyboardCommandShortcut.SaveWorkbook, WorkbookShortcutRoute.SaveWorkbook);");
-        keyboardSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SaveAs, async (_, _) => await SaveWorkbookWithDialogAsync());");
+        // Round 172: this used to pin the exact one-liner
+        //   Register(KeyboardCommandShortcut.SaveAs, async (_, _) => await SaveWorkbookWithDialogAsync());
+        // which the crash-hunt work then had to replace: KeyboardCommandDispatcher stores Action
+        // callbacks, so an async lambda is async void and a save fault escaped through WPF's
+        // dispatcher and killed the app. Pinning the old text made the STALE shape the contract --
+        // satisfying it again would mean reverting a crash fix. Pin the two things that actually
+        // matter instead: Ctrl+Shift+S still reaches the Save-As dialog path, and the async-void
+        // lambda still contains its faults.
+        var saveAsRegistration = ExtractMethodSource(
+            keyboardSource,
+            "_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SaveAs, async (_, _) =>");
+        saveAsRegistration.Should().Contain("await SaveWorkbookWithDialogAsync();");
+        saveAsRegistration.Should().Contain("catch (Exception ex)");
+        saveAsRegistration.Should().Contain("ReportAsyncCommandFailure(KeyboardCommandShortcut.SaveAs.ToString(), ex);");
         keyboardSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CloseWorkbook, (_, _) => Close());");
     }
 

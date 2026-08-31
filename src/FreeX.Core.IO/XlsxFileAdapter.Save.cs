@@ -1,5 +1,7 @@
 using System.IO;
+using System.IO.Compression;
 using System.Xml;
+using System.Xml.Linq;
 using ClosedXML.Excel;
 using FreeX.Core.Model;
 
@@ -149,6 +151,20 @@ public sealed partial class XlsxFileAdapter
         var xlStyleValueCache = XlCellSetStyleValueAction is not null && XlCellStyleValueAccessor is not null
             ? new Dictionary<StyleId, object>(workbook.StyleCount)
             : null;
+
+        // R174-formula-array-cse-1: addresses of every currently-1x1 dynamic-array (or
+        // #SPILL!-blocked) formula written below as a single-cell "t=array ref=anchor" formula
+        // (the branch that sets xlSheet.Range(row,col,row,col).FormulaArrayA1 for a 1x1 extent).
+        // That representation is byte-for-byte identical to a genuine single-cell legacy CSE array
+        // formula, so after ClosedXML's save these addresses get an additional real-Excel-style
+        // `cm` dynamic-array metadata marker stamped on them post-hoc (see
+        // ApplyDynamicArrayCollapsedMetadataMarkers below) -- the same signal
+        // XlsxFileAdapter.cs's loader now checks to tell a still-dynamic 1x1 formula apart from a
+        // genuine legacy CSE one. A cell that is ALREADY a confined legacy CSE formula
+        // (cell.LegacyArrayRows > 0) must never be added here: it round-trips correctly without any
+        // marker (see the per-cell loop below), and marking it would wrongly turn a genuine
+        // single-cell CSE formula into a free-spilling one on the next reload.
+        Dictionary<string, List<(uint Row, uint Col)>>? dynamicArrayCollapsedCellsBySheet = null;
 
         foreach (var sheet in workbook.Sheets)
         {
@@ -341,6 +357,25 @@ public sealed partial class XlsxFileAdapter
                         // it round-trips as independent content, not an anchor-owned provisional spill
                         // cell that a later recalculation could mistake for overwriteable spill output.
                         xlSheet.Range((int)row, (int)col, (int)row, (int)col).FormulaArrayA1 = formula;
+
+                        // R174-formula-array-cse-1: only a formula that is genuinely still dynamic
+                        // (never confined to a declared legacy-CSE extent) needs the post-hoc `cm`
+                        // marker below -- cell.LegacyArrayRows > 0 here means this anchor was loaded
+                        // as an already-confined legacy CSE formula (e.g. reloaded after the loader's
+                        // own 1x1-confinement fix below registered it, or a genuine multi-cell CSE
+                        // whose live spill extent collapsed reporting-wise to exactly 1x1 — see
+                        // hasLiveSpillExtent above), and must round-trip with NO marker so it is
+                        // correctly recognised as legacy CSE again next time it is loaded.
+                        if (cell.LegacyArrayRows == 0)
+                        {
+                            dynamicArrayCollapsedCellsBySheet ??= new(StringComparer.OrdinalIgnoreCase);
+                            if (!dynamicArrayCollapsedCellsBySheet.TryGetValue(sheet.Name, out var collapsedCells))
+                            {
+                                collapsedCells = [];
+                                dynamicArrayCollapsedCellsBySheet[sheet.Name] = collapsedCells;
+                            }
+                            collapsedCells.Add((row, col));
+                        }
                     }
                     else
                     {
@@ -764,6 +799,7 @@ public sealed partial class XlsxFileAdapter
                 currentModelFingerprint,
                 removeSourceCalcChain: patchDiagnostics.InvalidatesCalcChain,
                 preserveVbaProject: preserveVbaProject);
+            ApplyDynamicArrayCollapsedMetadataMarkers(stream, dynamicArrayCollapsedCellsBySheet);
             sourcePackage?.RestoreWorkbookDefinedNames(stream, workbook);
             stream.Position = stream.Length;
             return;
@@ -777,6 +813,7 @@ public sealed partial class XlsxFileAdapter
             currentModelFingerprint,
             removeSourceCalcChain: patchDiagnostics.InvalidatesCalcChain,
             preserveVbaProject: preserveVbaProject);
+        ApplyDynamicArrayCollapsedMetadataMarkers(packageStream, dynamicArrayCollapsedCellsBySheet);
         sourcePackage?.RestoreWorkbookDefinedNames(packageStream, workbook);
         packageStream.Position = 0;
         packageStream.CopyTo(stream);
@@ -785,6 +822,232 @@ public sealed partial class XlsxFileAdapter
 
     private static bool CanSavePackageInPlace(Stream stream) =>
         stream.CanRead && stream.CanWrite && stream.CanSeek;
+
+    private const string DynamicArrayMetadataPartPath = "xl/metadata.xml";
+    private const string DynamicArrayMetadataRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata";
+    private const string DynamicArrayMetadataContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml";
+    private static readonly XNamespace DynamicArrayMetadataMainNs =
+        "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private static readonly XNamespace DynamicArrayNs =
+        "http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray";
+    private static readonly XNamespace DynamicArrayMetadataPackageRelNs =
+        "http://schemas.openxmlformats.org/package/2006/relationships";
+
+    /// <summary>
+    /// R174-formula-array-cse-1: stamps a real-Excel-style dynamic-array <c>cm</c> (cell-metadata)
+    /// marker onto every cell address in <paramref name="cellsBySheetName"/> -- each one a
+    /// currently-1x1 dynamic-array (or #SPILL!-blocked) formula that the per-cell loop above just
+    /// wrote as a single-cell <c>t="array" ref=anchor</c> formula, a representation byte-for-byte
+    /// identical to a genuine single-cell legacy CSE array formula. Real Excel resolves that exact
+    /// ambiguity for its OWN modern dynamic-array formulas via a <c>cm</c> attribute indexing into
+    /// an <c>xl/metadata.xml</c> part that declares "XLDAPR" dynamic-array cell-metadata -- a
+    /// genuine legacy CSE formula never carries it. This replicates that real mechanism (rather
+    /// than inventing a private marker) so <c>XlsxFileAdapter.cs</c>'s loader can tell the two apart
+    /// on reload (see <c>GetDynamicArrayMetadataCellAddresses</c> there).
+    /// <para>
+    /// A no-op that never touches <paramref name="packageStream"/> at all when
+    /// <paramref name="cellsBySheetName"/> is null/empty -- the overwhelming majority of saves.
+    /// </para>
+    /// </summary>
+    private static void ApplyDynamicArrayCollapsedMetadataMarkers(
+        Stream packageStream,
+        Dictionary<string, List<(uint Row, uint Col)>>? cellsBySheetName)
+    {
+        if (cellsBySheetName is null || cellsBySheetName.Count == 0)
+            return;
+
+        packageStream.Position = 0;
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+
+        var worksheetPathMap = XlsxWorkbookWorksheetPathMap.TryCreate(archive);
+        var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        if (worksheetPathMap is null || workbookRelsEntry is null)
+            return;
+
+        var metadataEntry = archive.GetEntry(DynamicArrayMetadataPartPath);
+        var metadataXml = metadataEntry is not null
+            ? XlsxPackageXmlEditor.LoadXml(metadataEntry)
+            : new XDocument(
+                new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(DynamicArrayMetadataMainNs + "metadata"));
+        var root = metadataXml.Root!;
+        root.SetAttributeValue(XNamespace.Xmlns + "xda", DynamicArrayNs.NamespaceName);
+
+        var xldaprTypeIndex = EnsureXldaprMetadataType(root);
+        EnsureXldaprFutureMetadataEntry(root);
+        var cellMetadataIndex = AppendCellMetadataEntry(root, xldaprTypeIndex);
+        ReorderMetadataChildren(root);
+
+        XlsxPackageXmlEditor.ReplaceXml(archive, DynamicArrayMetadataPartPath, metadataXml);
+        XlsxPackageXmlEditor.EnsureSpecificContentType(
+            archive, DynamicArrayMetadataPartPath, DynamicArrayMetadataContentType);
+
+        var workbookRelsXml = XlsxPackageXmlEditor.LoadXml(workbookRelsEntry);
+        XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
+            workbookRelsXml,
+            DynamicArrayMetadataPackageRelNs,
+            "xl/workbook.xml",
+            DynamicArrayMetadataPartPath,
+            DynamicArrayMetadataRelationshipType);
+        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/_rels/workbook.xml.rels", workbookRelsXml);
+
+        foreach (var (sheetName, cells) in cellsBySheetName)
+        {
+            if (cells.Count == 0)
+                continue;
+            if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheetName, out var worksheetPath))
+                continue;
+            if (archive.GetEntry(worksheetPath) is not { } worksheetEntry)
+                continue;
+
+            var targetAddresses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (row, col) in cells)
+            {
+                targetAddresses.Add(
+                    CellAddress.NumberToColumnName(col) + row.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+
+            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+            var worksheetRoot = worksheetXml.Root;
+            var worksheetNs = worksheetRoot?.Name.Namespace ?? DynamicArrayMetadataMainNs;
+            var sheetData = worksheetRoot?.Element(worksheetNs + "sheetData");
+            if (sheetData is null)
+                continue;
+
+            var changed = false;
+            foreach (var cellElement in sheetData.Elements(worksheetNs + "row").Elements(worksheetNs + "c"))
+            {
+                var reference = cellElement.Attribute("r")?.Value;
+                if (reference is null || !targetAddresses.Contains(reference))
+                    continue;
+
+                cellElement.SetAttributeValue("cm", cellMetadataIndex);
+                changed = true;
+            }
+
+            if (changed)
+                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+        }
+    }
+
+    /// <summary>Ensures a metadataTypes/metadataType[@name='XLDAPR'] entry exists; returns its 1-based index.</summary>
+    private static int EnsureXldaprMetadataType(XElement root)
+    {
+        var ns = DynamicArrayMetadataMainNs;
+        var metadataTypes = root.Element(ns + "metadataTypes");
+        if (metadataTypes is null)
+        {
+            metadataTypes = new XElement(ns + "metadataTypes");
+            root.Add(metadataTypes);
+        }
+
+        var entries = metadataTypes.Elements(ns + "metadataType").ToList();
+        var existingIndex = entries.FindIndex(
+            e => string.Equals(e.Attribute("name")?.Value, "XLDAPR", StringComparison.Ordinal));
+        if (existingIndex >= 0)
+            return existingIndex + 1;
+
+        metadataTypes.Add(new XElement(
+            ns + "metadataType",
+            new XAttribute("name", "XLDAPR"),
+            new XAttribute("minSupportedVersion", 120000),
+            new XAttribute("copy", 1),
+            new XAttribute("pasteAll", 1),
+            new XAttribute("pasteValues", 1),
+            new XAttribute("merge", 1),
+            new XAttribute("splitFirst", 1),
+            new XAttribute("rowColShift", 1),
+            new XAttribute("clearFormats", 1),
+            new XAttribute("clearComments", 1),
+            new XAttribute("assign", 1),
+            new XAttribute("coerce", 1),
+            new XAttribute("cellMeta", 1)));
+        metadataTypes.SetAttributeValue("count", entries.Count + 1);
+        return entries.Count + 1;
+    }
+
+    /// <summary>Ensures a single shared futureMetadata/XLDAPR bk entry (fDynamic/fCollapsed) exists.</summary>
+    private static void EnsureXldaprFutureMetadataEntry(XElement root)
+    {
+        var ns = DynamicArrayMetadataMainNs;
+        var futureMetadata = root.Elements(ns + "futureMetadata")
+            .FirstOrDefault(e => string.Equals(e.Attribute("name")?.Value, "XLDAPR", StringComparison.Ordinal));
+        if (futureMetadata is not null)
+            return; // Already present -- every marked cell shares this one bk entry (index 1).
+
+        futureMetadata = new XElement(
+            ns + "futureMetadata",
+            new XAttribute("name", "XLDAPR"),
+            new XAttribute("count", 1),
+            new XElement(
+                ns + "bk",
+                new XElement(
+                    ns + "extLst",
+                    new XElement(
+                        ns + "ext",
+                        new XAttribute("uri", "{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}"),
+                        new XElement(
+                            DynamicArrayNs + "dynamicArrayProperties",
+                            new XAttribute("fDynamic", 1),
+                            new XAttribute("fCollapsed", 1))))));
+        root.Add(futureMetadata);
+    }
+
+    /// <summary>
+    /// Appends a cellMetadata/bk entry pointing at the (single, shared) XLDAPR futureMetadata bk
+    /// entry above, and returns its 1-based index -- the value every marked cell's <c>cm</c>
+    /// attribute must carry.
+    /// </summary>
+    private static int AppendCellMetadataEntry(XElement root, int xldaprTypeIndex)
+    {
+        var ns = DynamicArrayMetadataMainNs;
+        var cellMetadata = root.Element(ns + "cellMetadata");
+        if (cellMetadata is null)
+        {
+            cellMetadata = new XElement(ns + "cellMetadata");
+            root.Add(cellMetadata);
+        }
+
+        var existingEntries = cellMetadata.Elements(ns + "bk").ToList();
+        // All of FreeX's own markers share the identical (fDynamic=1, fCollapsed=1) properties, so a
+        // single shared bk entry (the first one ever created, referencing bk index 1 of the XLDAPR
+        // futureMetadata table) is reused for every cell instead of growing one per cell.
+        var existingSharedEntry = existingEntries.FirstOrDefault(bk =>
+            bk.Elements(ns + "rc").Any(rc =>
+                rc.Attribute("t")?.Value == xldaprTypeIndex.ToString(System.Globalization.CultureInfo.InvariantCulture) &&
+                rc.Attribute("v")?.Value == "0"));
+        if (existingSharedEntry is not null)
+            return existingEntries.IndexOf(existingSharedEntry) + 1;
+
+        cellMetadata.Add(new XElement(
+            ns + "bk",
+            new XElement(ns + "rc", new XAttribute("t", xldaprTypeIndex), new XAttribute("v", 0))));
+        cellMetadata.SetAttributeValue("count", existingEntries.Count + 1);
+        return existingEntries.Count + 1;
+    }
+
+    /// <summary>
+    /// Reorders metadata.xml's direct children into the schema-required CT_Metadata sequence
+    /// (metadataTypes, futureMetadata*, cellMetadata, valueMetadata) -- needed because a preserved
+    /// source package's existing metadata.xml may already carry entries for OTHER metadata kinds
+    /// this method knows nothing about, and Ensure*/Append* above only ever append new elements at
+    /// the end.
+    /// </summary>
+    private static void ReorderMetadataChildren(XElement root)
+    {
+        var ns = DynamicArrayMetadataMainNs;
+        var orderedNames = new[] { "metadataTypes", "futureMetadata", "cellMetadata", "valueMetadata" };
+        var childrenInSchemaOrder = orderedNames.SelectMany(name => root.Elements(ns + name)).ToList();
+        if (childrenInSchemaOrder.Count == 0)
+            return;
+
+        foreach (var element in childrenInSchemaOrder)
+            element.Remove();
+        foreach (var element in childrenInSchemaOrder)
+            root.Add(element);
+    }
 
     /// <summary>
     /// R124-io-spill-member-save-stale-extent: true if any non-anchor cell within the given

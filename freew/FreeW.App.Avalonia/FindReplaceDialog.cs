@@ -29,18 +29,18 @@ namespace FreeW.App.Avalonia;
 /// "Use Wildcards" disables "Whole Word" through the presentation planner policy.
 ///
 /// The inline find bar in MainWindow continues to work; the dialog is opened via a separate
-/// <c>freew.find-replace-dialog</c> ribbon command (Home â†’ Editing group) or Ctrl+H.
+/// <c>freew.find-replace-dialog</c> ribbon command (Home → Editing group) or Ctrl+H.
 /// </summary>
 public sealed partial class FindReplaceDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
     private static readonly FindReplaceDialogSurfaceSpec Surface = FindReplaceDialogPlanner.Surface;
 
-    // â”€â”€ Editor reference â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Editor reference ──────────────────────────────────────────────────────
 
     private readonly DocumentView _editor;
 
-    // â”€â”€ Controls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Controls ──────────────────────────────────────────────────────────────
 
     private readonly TextBox _findBox = new()
     {
@@ -84,7 +84,7 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
     private TextBox _lastFocusedBox = null!;
     private readonly FindReplaceDialogSession _session;
 
-    // â”€â”€ Construction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Construction ──────────────────────────────────────────────────────────
 
     public FindReplaceDialog(
         DocumentView editor,
@@ -232,7 +232,7 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
         box.Focus();
     }
 
-    // â”€â”€ Go To section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Go To section ─────────────────────────────────────────────────────────
 
     private Panel BuildGoToSection()
     {
@@ -294,7 +294,7 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
         _status.Text = _session.State.StatusText;
     }
 
-    // â”€â”€ Find / Replace logic â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Find / Replace logic ──────────────────────────────────────────────────
 
     private void Execute(FindReplaceDialogActionKind action) =>
         _status.Text = _session.Execute(action, ReadInput()).StatusText;
@@ -318,7 +318,7 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
             _wholeWord.IsChecked = false;
     }
 
-    // â”€â”€ Scroll helper (mirrors NavigationPane.ScrollEditorToBlock) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Scroll helper (mirrors NavigationPane.ScrollEditorToBlock) ────────────
 
     /// <summary>
     /// Scrolls the <see cref="ScrollViewer"/> that wraps the editor so that
@@ -337,7 +337,7 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
         scroller.Offset = new Vector(scroller.Offset.X, Math.Max(0, y - 40));
     }
 
-    // â”€â”€ Layout helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Layout helpers ────────────────────────────────────────────────────────
 
     private static void AddLabeledRow(Grid grid, int row, string label, Control field)
     {

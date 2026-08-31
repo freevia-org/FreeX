@@ -431,6 +431,118 @@ public sealed class RowColumnShiftAddressStateTests
         sheet.AutoFilter.FilterColumns.Select(column => column.ColumnId).Should().Equal(1, 3);
     }
 
+    [Fact]
+    public void InsertRows_UndoPreservesWatchWindowRemovalAndAddition()
+    {
+        var (workbook, sheet, ctx) = Setup();
+        var removedOriginal = Addr(sheet, 5, 1);
+        var keptOriginal = Addr(sheet, 6, 2);
+        var userAdded = Addr(sheet, 2, 4);
+        workbook.WatchedCells.AddRange([removedOriginal, keptOriginal]);
+        var command = new InsertRowsCommand(sheet.Id, beforeRow: 4, count: 2);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        workbook.WatchedCells.Remove(Addr(sheet, 7, 1)).Should().BeTrue();
+        workbook.WatchedCells.Add(userAdded);
+
+        command.Revert(ctx);
+
+        workbook.WatchedCells.Should().Equal(keptOriginal, userAdded);
+    }
+
+    [Fact]
+    public void InsertRows_UndoConsumesFirstDuplicateOccurrencesAndKeepsRemainderInLiveOrder()
+    {
+        var (workbook, sheet, ctx) = Setup();
+        var firstOriginal = Addr(sheet, 5, 1);
+        var middleOriginal = Addr(sheet, 6, 2);
+        var shiftedFirst = Addr(sheet, 7, 1);
+        var shiftedMiddle = Addr(sheet, 8, 2);
+        var userAddedFirst = Addr(sheet, 2, 3);
+        var userAddedSecond = Addr(sheet, 3, 4);
+        workbook.WatchedCells.AddRange([firstOriginal, middleOriginal, firstOriginal]);
+        var command = new InsertRowsCommand(sheet.Id, beforeRow: 4, count: 2);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        workbook.WatchedCells.Clear();
+        workbook.WatchedCells.AddRange(
+            [shiftedFirst, userAddedFirst, shiftedFirst, userAddedSecond, shiftedMiddle, shiftedFirst]);
+
+        command.Revert(ctx);
+
+        workbook.WatchedCells.Should().Equal(
+            firstOriginal,
+            middleOriginal,
+            firstOriginal,
+            userAddedFirst,
+            userAddedSecond,
+            shiftedFirst);
+    }
+
+    [Fact]
+    public void DeleteRows_UndoAlwaysRestoresStructurallyDeletedWatch()
+    {
+        var (workbook, sheet, ctx) = Setup();
+        var deletedOriginal = Addr(sheet, 3, 1);
+        var survivingOriginal = Addr(sheet, 6, 2);
+        var userAdded = Addr(sheet, 1, 4);
+        workbook.WatchedCells.AddRange([deletedOriginal, survivingOriginal]);
+        var command = new DeleteRowsCommand(sheet.Id, startRow: 3, count: 2);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        workbook.WatchedCells.Remove(Addr(sheet, 4, 2)).Should().BeTrue();
+        workbook.WatchedCells.Add(userAdded);
+
+        command.Revert(ctx);
+
+        workbook.WatchedCells.Should().Equal(deletedOriginal, userAdded);
+    }
+
+    [BenchmarkFact]
+    public void Benchmark_InsertRowsWithWatchedCells_ReportsTiming()
+    {
+        const int watchCount = 12_000;
+        const int iterations = 5;
+        var (workbook, sheet, ctx) = Setup();
+        for (uint row = 1; row <= watchCount; row++)
+            workbook.WatchedCells.Add(Addr(sheet, row, 1));
+
+        var warmup = new InsertRowsCommand(sheet.Id, beforeRow: 1);
+        warmup.Apply(ctx).Success.Should().BeTrue();
+        warmup.Revert(ctx);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var command = new InsertRowsCommand(sheet.Id, beforeRow: 1);
+            var step = Stopwatch.StartNew();
+            command.Apply(ctx).Success.Should().BeTrue();
+            command.Revert(ctx);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        workbook.WatchedCells.Should().HaveCount(watchCount);
+        Console.WriteLine(
+            "PERF WATCHED_CELL_ROW_SHIFT " +
+            $"watched_cells={watchCount} steps={iterations} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
     [BenchmarkFact]
     public void Benchmark_InsertRowsWithStyleOnlyCells_ReportsTiming()
     {
@@ -484,6 +596,18 @@ public sealed class RowColumnShiftAddressStateTests
 
         source.Should().Contain("sheet.ClearStyleOnlyEntries();");
         source.Should().NotContain("GetStyleOnlyEntries().ToList()");
+    }
+
+    [Fact]
+    public void AddressStateWatchRestore_UsesLinearOccurrenceReconciliation()
+    {
+        var source = ModelSourceTestSupport.ReadCommandsSourceFromCurrentDirectoryOrFallback(
+            "RowColumnShiftHelpers.AddressState.cs");
+
+        source.Should().Contain("WatchedCellOccurrenceCounts");
+        source.Should().Contain("liveOccurrences");
+        source.Should().NotContain("unmatchedLive.IndexOf");
+        source.Should().NotContain("RemoveAt(index)");
     }
 
     private static (Workbook Workbook, Sheet Sheet, ICommandContext Context) Setup()

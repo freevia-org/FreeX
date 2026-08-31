@@ -33,14 +33,19 @@ public sealed class R103_DuplicateSheetSlicerTimelineTests
             TargetRange = new GridRange(new CellAddress(sheet.Id, 0, 5), new CellAddress(sheet.Id, 5, 7))
         });
 
+        var availableItems = new[] { "East", "West" };
         var slicer = new SlicerModel
         {
             Name = "Slicer_Region",
             CacheName = "Slicer_Region_Cache",
             SourcePivotTableName = "PivotTable1",
+            ConnectedPivotTableNames = ["PivotTable1"],
             SourceFieldName = "Region",
+            SourceFieldIndex = 0,
             SourceSheetName = "Sheet1",
             PackagePart = "xl/slicers/slicer1.xml",
+            CacheItems = [new SlicerCacheItem(0, IsSelected: true)],
+            AvailableItems = availableItems,
             DrawingAnchor = new DrawingAnchorRange(
                 new DrawingAnchorPoint(3, 0, 1, 0),
                 new DrawingAnchorPoint(6, 0, 10, 0))
@@ -73,8 +78,16 @@ public sealed class R103_DuplicateSheetSlicerTimelineTests
         copy.PivotTables.Should().ContainSingle().Which.Name.Should().NotBe("PivotTable1");
         clone.SourcePivotTableName.Should().Be(copy.PivotTables[0].Name);
         clone.SourceFieldName.Should().Be("Region");
+        clone.SourceFieldIndex.Should().Be(0,
+            because: "the positional fallback must survive duplication when the source header is later renamed");
         clone.SelectedItems.Should().ContainSingle().Which.Should().Be("East");
         clone.DrawingAnchor.Should().Be(slicer.DrawingAnchor);
+        clone.ConnectedPivotTableNames.Should().NotBeSameAs(slicer.ConnectedPivotTableNames);
+        clone.SelectedItems.Should().NotBeSameAs(slicer.SelectedItems);
+        clone.CacheItems.Should().NotBeSameAs(slicer.CacheItems);
+        clone.AvailableItems.Should().BeSameAs(availableItems);
+        clone.CacheItems.Add(new SlicerCacheItem(1, IsSelected: false));
+        slicer.CacheItems.Should().ContainSingle();
 
         // Name/CacheName must be workbook-unique -- not a duplicate of the source's identity, or a
         // save would either collide the two <slicer> definitions or alias their cache parts.

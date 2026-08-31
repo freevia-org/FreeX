@@ -326,9 +326,9 @@ public sealed class NoteCommandTests
 
     // freew-footnote-numbering F4: a footnote's only reference marker lives inside a text box (Run.Shape)
     // in the body. DeleteNoteCommand's own private paragraph walk never descended into Run.Shape.
-    // TextParagraphs, unlike the shared BodyParagraphWalk used elsewhere for the identical orphan-cleanup
-    // job (DocumentInspector.PruneOrphanedNoteAndCommentAnchors), so the marker run was left behind still
-    // carrying the now-nonexistent FootnoteId after the note's content was removed.
+    // TextParagraphs, unlike TextDocumentStoryTraversal with IncludeShapeTextBoxes used for the identical
+    // orphan-cleanup job (DocumentInspector.PruneOrphanedNoteAndCommentAnchors), so the marker run was left
+    // behind still carrying the now-nonexistent FootnoteId after the note's content was removed.
     [Fact]
     public void DeleteNote_RemovesMarkerInsideBodyTextBox_AndUndoRedoRestoresExactRuns()
     {

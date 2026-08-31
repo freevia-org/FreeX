@@ -6,44 +6,13 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class DrawingInputParserTests
 {
-    [Theory]
-    [InlineData("photo.jpg", "image/jpeg")]
-    [InlineData("photo.jpeg", "image/jpeg")]
-    [InlineData("photo.bmp", "image/bmp")]
-    [InlineData("photo.gif", "image/gif")]
-    [InlineData("photo.png", "image/png")]
-    [InlineData("photo.unknown", "image/png")]
-    public void GetImageContentType_MapsCommonImageExtensions(string fileName, string expected)
-    {
-        DrawingInputParser.GetImageContentType(fileName).Should().Be(expected);
-    }
-
-    // Round 157 (shared-image-codecs F1): WebP and TIFF are supported image formats elsewhere in
-    // the app (see InsertPictureCommandFactory.ContentTypeForPath), so the WPF Insert Picture path
-    // must not mislabel them as image/png -- that mislabel gets written verbatim into the .xlsx
-    // media part's extension/content-type by XlsxWorksheetDrawingObjectWriter, corrupting the file.
-    [Theory]
-    [InlineData("photo.webp", "image/webp")]
-    [InlineData("photo.WEBP", "image/webp")]
-    [InlineData("scan.tif", "image/tiff")]
-    [InlineData("scan.tiff", "image/tiff")]
-    [InlineData("scan.TIFF", "image/tiff")]
-    public void GetImageContentType_MapsWebpAndTiffToTheirOwnContentTypes(string fileName, string expected)
-    {
-        DrawingInputParser.GetImageContentType(fileName).Should().Be(expected);
-    }
-
-    // Sibling no-regression: genuinely unrecognized extensions must keep falling back to image/png
-    // (this is the pre-existing, deliberate default -- only webp/tif/tiff gained explicit mappings).
-    [Theory]
-    [InlineData("photo.unknown")]
-    [InlineData("photo.heic")]
-    [InlineData("photo")]
-    public void GetImageContentType_StillDefaultsGenuinelyUnknownExtensionsToPng(string fileName)
-    {
-        DrawingInputParser.GetImageContentType(fileName).Should().Be("image/png");
-    }
-
+    // Round 172 (freep-media follow-up): DrawingInputParser.GetImageContentType is GONE. Round 157
+    // taught it webp/tiff but deliberately kept the "everything else -> image/png" default, which
+    // still mislabelled a .wmf/.emf picked through the dialog's "All files" entry. Content-type
+    // inference for picture insertion now has exactly one owner --
+    // InsertPictureCommandFactory.ContentTypeForPath -- which returns null for an unsupported format
+    // so both shells reject the file. See InsertPictureCommandFactoryTests and
+    // R172_InsertedPictureSavedMediaContentTypeTests for the replacement coverage.
     [Theory]
     [InlineData(0.125, "12.5")]
     [InlineData(0.1, "10")]
