@@ -33,13 +33,13 @@ public static class SectionZoomInsertionPlanner
         int currentSlideIndex)
     {
         ArgumentNullException.ThrowIfNull(presentation);
+        var catalog = PresentationSectionSlideCatalog.Create(presentation);
         return presentation.Sections
-            .Where(section => section.SlideIds.Count > 0
-                && section.SlideIds.Any(slideId => presentation.Slides.Any(slide =>
-                    string.Equals(slide.Id, slideId, StringComparison.OrdinalIgnoreCase))))
-            .Select(section => (
-                section.Id,
-                DisplayName: $"{section.Name.Trim()} ({section.SlideIds.Count} slides)"))
+            .Select(section => (Section: section, ValidSlideCount: catalog.CountValidSlides(section)))
+            .Where(item => item.ValidSlideCount > 0)
+            .Select(item => (
+                item.Section.Id,
+                DisplayName: $"{item.Section.Name.Trim()} ({item.Section.SlideIds.Count} slides)"))
             .Where(option => !string.IsNullOrWhiteSpace(option.Id))
             .ToArray();
     }
@@ -52,13 +52,12 @@ public static class SectionZoomInsertionPlanner
         ArgumentNullException.ThrowIfNull(presentation);
         plan = null!;
 
-        var section = presentation.Sections.FirstOrDefault(candidate =>
-            string.Equals(candidate.Id, targetSectionId?.Trim(), StringComparison.OrdinalIgnoreCase));
+        var catalog = PresentationSectionSlideCatalog.Create(presentation);
+        var section = catalog.FindSection(targetSectionId?.Trim());
         if (section is null || section.SlideIds.Count == 0)
             return false;
 
-        var validSlideCount = section.SlideIds.Count(slideId => presentation.Slides.Any(slide =>
-            string.Equals(slide.Id, slideId, StringComparison.OrdinalIgnoreCase)));
+        var validSlideCount = catalog.CountValidSlides(section);
         if (validSlideCount == 0)
             return false;
 

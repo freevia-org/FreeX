@@ -32,12 +32,13 @@ public static class SummaryZoomInsertionPlanner
         int currentSlideIndex)
     {
         ArgumentNullException.ThrowIfNull(presentation);
+        var catalog = PresentationSectionSlideCatalog.Create(presentation);
         return presentation.Sections
-            .Where(section => section.SlideIds.Any(slideId => presentation.Slides.Any(slide =>
-                string.Equals(slide.Id, slideId, StringComparison.OrdinalIgnoreCase))))
-            .Select(section => (
-                section.Id,
-                DisplayName: $"{(string.IsNullOrWhiteSpace(section.Name) ? "Untitled section" : section.Name.Trim())} ({ValidSlideCount(presentation, section)} slides)"))
+            .Select(section => (Section: section, ValidSlideCount: catalog.CountValidSlides(section)))
+            .Where(item => item.ValidSlideCount > 0)
+            .Select(item => (
+                item.Section.Id,
+                DisplayName: $"{(string.IsNullOrWhiteSpace(item.Section.Name) ? "Untitled section" : item.Section.Name.Trim())} ({item.ValidSlideCount} slides)"))
             .Where(option => !string.IsNullOrWhiteSpace(option.Id))
             .ToArray();
     }
@@ -58,11 +59,11 @@ public static class SummaryZoomInsertionPlanner
         if (requested.Length < 2)
             return false;
 
+        var catalog = PresentationSectionSlideCatalog.Create(presentation);
         var sections = requested
-            .Select(id => presentation.Sections.FirstOrDefault(section =>
-                string.Equals(section.Id, id, StringComparison.OrdinalIgnoreCase)))
+            .Select(catalog.FindSection)
             .ToArray();
-        if (sections.Any(section => section is null || ValidSlideCount(presentation, section) == 0))
+        if (sections.Any(section => section is null || catalog.CountValidSlides(section) == 0))
             return false;
 
         var columns = (int)Math.Ceiling(Math.Sqrt(sections.Length));
@@ -121,10 +122,6 @@ public static class SummaryZoomInsertionPlanner
             PreservedObject = preserved,
         };
     }
-
-    private static int ValidSlideCount(Presentation presentation, PresentationSection section) =>
-        section.SlideIds.Count(slideId => presentation.Slides.Any(slide =>
-            string.Equals(slide.Id, slideId, StringComparison.OrdinalIgnoreCase)));
 
     private static string BuildRawXml(uint shapeId, IReadOnlyList<SummaryZoomTarget> targets)
     {

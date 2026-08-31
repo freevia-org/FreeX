@@ -481,16 +481,32 @@ public static class AccessibilityChecker
             return false;
 
         // Content fallback: a first row whose every cell has non-blank, fully bold text reads as a header.
-        return firstRow.Cells.All(cell =>
-            !string.IsNullOrWhiteSpace(cell.PlainText) &&
-            cell.Paragraphs.SelectMany(p => p.Runs).Where(r => !string.IsNullOrEmpty(r.Text)).Any() &&
-            cell.Paragraphs.SelectMany(p => p.Runs)
-                .Where(r => !string.IsNullOrEmpty(r.Text))
-                .All(r => IsBold(document, FindOwningParagraph(cell, r), r)));
+        return firstRow.Cells.All(cell => CellHasFullyBoldText(document, cell));
     }
 
-    private static Paragraph FindOwningParagraph(TableCell cell, Run run) =>
-        cell.Paragraphs.First(p => p.Runs.Contains(run));
+    private static bool CellHasFullyBoldText(TextDocument document, TableCell cell)
+    {
+        var hasVisibleText = false;
+        var hasNonWhitespaceText = false;
+        foreach (var paragraph in cell.Paragraphs)
+        {
+            // Every run in a paragraph shares the same style chain, so resolve its inherited bold state
+            // once instead of walking that chain again for every visible run.
+            var styleBold = ResolveStyleBold(document, paragraph.StyleId);
+            foreach (var run in paragraph.Runs)
+            {
+                if (string.IsNullOrEmpty(run.Text))
+                    continue;
+
+                hasVisibleText = true;
+                hasNonWhitespaceText |= !string.IsNullOrWhiteSpace(run.Text);
+                if (!run.Formatting.Bold && !styleBold)
+                    return false;
+            }
+        }
+
+        return hasVisibleText && hasNonWhitespaceText;
+    }
 
     // === Colour resolution ===
     // Resolve a run's effective text colour by walking run formatting → its paragraph style chain →
@@ -540,13 +556,6 @@ public static class AccessibilityChecker
             return paragraph.Formatting.ShadingColorHex!;
 
         return DefaultBackgroundHex;
-    }
-
-    private static bool IsBold(TextDocument document, Paragraph paragraph, Run run)
-    {
-        if (run.Formatting.Bold)
-            return true;
-        return ResolveStyleBold(document, paragraph.StyleId);
     }
 
     private static bool ResolveStyleBold(TextDocument document, string? styleId)

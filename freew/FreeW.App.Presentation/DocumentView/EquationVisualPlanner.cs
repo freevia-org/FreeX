@@ -1167,32 +1167,14 @@ public static class EquationVisualPlanner
 
     private static IEnumerable<Equation> EnumerateEquations(TextDocument document)
     {
-        foreach (var paragraph in EnumerateParagraphs(document))
+        foreach (var paragraph in TextDocumentStoryTraversal.EnumerateBlockParagraphs(
+                     document.Blocks,
+                     TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs))
         {
             foreach (var run in paragraph.Runs)
             {
                 if (run.Equation is not null)
                     yield return run.Equation;
-            }
-        }
-    }
-
-    private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document)
-    {
-        foreach (var block in document.Blocks)
-        {
-            if (block is Paragraph paragraph)
-            {
-                yield return paragraph;
-                continue;
-            }
-
-            if (block is Table table)
-            {
-                foreach (var row in table.Rows)
-                    foreach (var cell in row.Cells)
-                        foreach (var cellParagraph in cell.Paragraphs)
-                            yield return cellParagraph;
             }
         }
     }

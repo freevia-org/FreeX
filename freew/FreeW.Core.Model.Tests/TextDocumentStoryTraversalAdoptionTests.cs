@@ -3,6 +3,64 @@ namespace FreeW.Core.Model.Tests;
 public sealed class TextDocumentStoryTraversalAdoptionTests
 {
     [Fact]
+    public void AuditedParagraphConsumers_DelegateToTheSharedTraversalWithExplicitScopeContracts()
+    {
+        var inspector = ReadSource("freew", "FreeW.Core.Model", "DocumentInspector.cs");
+        var readAloud = ReadSource("freew", "FreeW.Core.Model", "ReadAloud.cs");
+        var revisions = ReadSource("freew", "FreeW.Core.Model", "RevisionList.cs");
+        var crossReferences = ReadSource("freew", "FreeW.Core.Model", "CrossReferenceCommands.cs");
+        var equations = ReadSource("freew", "FreeW.App.Presentation", "DocumentView", "EquationVisualPlanner.cs");
+        var numbering = ReadSource("freew", "FreeW.App.Presentation", "DocumentView", "PreservedNumberingMarkerPlanner.cs");
+        var compatibility = ReadSource("freew", "FreeW.App.Presentation", "Shell", "DocumentSaveCompatibilityPlanner.cs");
+
+        foreach (var source in new[]
+                 {
+                     inspector, readAloud, revisions, crossReferences, equations, numbering, compatibility,
+                 })
+        {
+            source.Should().Contain("TextDocumentStoryTraversal.Enumerate");
+            source.Should().Contain("TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs");
+        }
+
+        readAloud.Should().Contain("TextDocumentStoryTraversalOptions.IncludeNestedTables");
+        crossReferences.Should().Contain("TextDocumentStoryTraversalOptions.IncludeNestedTables");
+        revisions.Should().Contain("TextDocumentStorySubset.All")
+            .And.Contain("TextDocumentStoryTraversalOptions.IncludeShapeTextBoxes")
+            .And.Contain("TextDocumentStoryTraversalOptions.IncludeNestedTables");
+        inspector.Should().Contain("TextDocumentStorySubset.Body")
+            .And.Contain("TextDocumentStoryTraversalOptions.IncludeShapeTextBoxes")
+            .And.Contain("TextDocumentStoryTraversalOptions.IncludeNestedTables");
+        compatibility.Should().Contain("comment => comment.ThreadInOrder()")
+            .And.Contain("comment => comment.Content");
+
+        foreach (var bodyOnlyWithoutTextBoxes in new[]
+                 {
+                     readAloud, crossReferences, equations, numbering,
+                 })
+        {
+            bodyOnlyWithoutTextBoxes.Should().NotContain("TextDocumentStoryTraversalOptions.IncludeShapeTextBoxes")
+                .And.NotContain("TextDocumentStoryTraversalOptions.IncludeTextBoxes");
+        }
+
+        equations.Should().NotContain("TextDocumentStoryTraversalOptions.IncludeNestedTables");
+        numbering.Should().NotContain("TextDocumentStoryTraversalOptions.IncludeNestedTables");
+        compatibility.Should().NotContain("TextDocumentStoryTraversalOptions.IncludeNestedTables")
+            .And.NotContain("TextDocumentStoryTraversalOptions.IncludeShapeTextBoxes")
+            .And.NotContain("TextDocumentStoryTraversalOptions.IncludeTextBoxes");
+
+        readAloud.Should().NotContain("private static IEnumerable<Paragraph> EnumerateParagraphs");
+        crossReferences.Should().NotContain("private static IEnumerable<Paragraph> EnumerateBodyParagraphs");
+        equations.Should().NotContain("private static IEnumerable<Paragraph> EnumerateParagraphs");
+        numbering.Should().NotContain("private static IEnumerable<Paragraph> EnumerateParagraphs");
+        compatibility.Should().NotContain("private static IEnumerable<Paragraph> EnumerateBodyParagraphs")
+            .And.NotContain("private static IEnumerable<Paragraph> EnumerateHeaderFooterParagraphs");
+
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        File.Exists(Path.Combine(root, "freew", "FreeW.Core.Model", "BodyParagraphWalk.cs"))
+            .Should().BeFalse("TextDocumentStoryTraversal now owns the audited paragraph walks");
+    }
+
+    [Fact]
     public void DocumentInspector_PreservesItsBodyOnlyShapeExpansion()
     {
         var bodyShapeParagraph = CommentParagraph(1);
@@ -104,4 +162,7 @@ public sealed class TextDocumentStoryTraversalAdoptionTests
     {
         public TextDocument Document { get; } = document;
     }
+
+    private static string ReadSource(params string[] parts) =>
+        TestWorkspaceFileLocator.ReadAllText(parts);
 }
