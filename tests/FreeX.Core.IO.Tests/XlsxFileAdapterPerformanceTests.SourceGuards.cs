@@ -558,6 +558,27 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void ClassicChartSeries_IndexLastSeriesFormatsWithoutPerSeriesLinqRescans()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxChartXmlWriter.Series.cs");
+        var lookupStart = source.IndexOf("    private sealed class ChartSeriesFormatLookup", StringComparison.Ordinal);
+        var lookupEnd = source.IndexOf("    /// <summary>", lookupStart, StringComparison.Ordinal);
+        var builders = source[..lookupStart] + source[lookupEnd..];
+        var lookup = source[lookupStart..lookupEnd];
+
+        builders.Should().Contain("var formatLookup = ChartSeriesFormatLookup.Create(chart);")
+            .And.NotContain("chart.SeriesFormats.LastOrDefault(",
+                "classic chart series formatting must not linearly rescan the full format list for every helper");
+        lookup.Should().Contain("if (chart.SeriesFormats.Count == 0)")
+            .And.Contain("return null;",
+                "charts without per-series formats must remain allocation-free")
+            .And.Contain("formatsBySeriesIndex[format.SeriesIndex] = format",
+                "later duplicate format entries must retain the prior LastOrDefault precedence")
+            .And.Contain("Normalize(format)",
+                "enum sanitization must remain part of every indexed format lookup");
+    }
+
+    [Fact]
     public void SourcePackage_RenumberedQueryTableReplayIndexesExistingTargets()
     {
         var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxFileAdapter.SourcePackage.cs");
