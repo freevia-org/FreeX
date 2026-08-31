@@ -1055,51 +1055,10 @@ public static class PortablePdfWriter
         return upDistance <= upLeftDistance ? up : upLeft;
     }
 
-    private static (int Width, int Height, int Components) ReadJpegSize(byte[] bytes)
-    {
-        if (bytes.Length < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8)
-            throw new FormatException("Not a JPEG image.");
-
-        var position = 2;
-        while (position + 4 <= bytes.Length)
-        {
-            while (position < bytes.Length && bytes[position] == 0xFF)
-                position++;
-            if (position >= bytes.Length)
-                break;
-
-            var marker = bytes[position++];
-            if (marker is 0xD9 or 0xDA)
-                break;
-            if (position + 2 > bytes.Length)
-                break;
-
-            var length = BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(position, 2));
-            if (length < 2 || position + length > bytes.Length)
-                throw new FormatException("JPEG segment overruns the file.");
-
-            if (IsJpegStartOfFrame(marker))
-            {
-                if (length < 8)
-                    throw new FormatException("JPEG start-of-frame segment is truncated.");
-                var precision = bytes[position + 2];
-                if (precision != 8)
-                    throw new NotSupportedException("Portable PDF image export supports only 8-bit JPEG images.");
-
-                var height = BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(position + 3, 2));
-                var width = BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(position + 5, 2));
-                var components = bytes[position + 7];
-                return (width, height, components);
-            }
-
-            position += length;
-        }
-
-        throw new FormatException("JPEG image is missing a start-of-frame segment.");
-    }
-
-    private static bool IsJpegStartOfFrame(byte marker) =>
-        marker is 0xC0 or 0xC1 or 0xC2 or 0xC3 or 0xC5 or 0xC6 or 0xC7 or 0xC9 or 0xCA or 0xCB or 0xCD or 0xCE or 0xCF;
+    // The marker scan lives in PdfImageDimensions so the XPS adapter snaps crops to the same
+    // source pixel grid as this writer.
+    private static (int Width, int Height, int Components) ReadJpegSize(byte[] bytes) =>
+        PdfImageDimensions.ReadJpegSize(bytes);
 
     private static void AppendImage(
         StringBuilder content,

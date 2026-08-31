@@ -1169,9 +1169,45 @@ public static class PptxPackageReader
         }
     }
 
+    /// <summary>
+    /// Reads one <c>a:spcBef</c>/<c>a:spcAft</c>/<c>a:lnSpc</c> element into its points and
+    /// percent forms. <c>a:spcPts</c> is hundredths of a point and <c>a:spcPct</c> is
+    /// 1000ths-of-a-percent (ECMA-376 §21.1.2.2.9); the two children are mutually exclusive, so
+    /// exactly one of the returned values is non-null. <paramref name="preferPercent"/> selects
+    /// which child wins should a malformed file carry both — a:lnSpc is overwhelmingly authored
+    /// as a percentage, spcBef/spcAft as points.
+    /// </summary>
+    private static (double? Points, double? Percent) ReadSpacing(XElement? spacingEl, bool preferPercent = false)
+    {
+        if (spacingEl is null)
+            return (null, null);
+
+        double? points = int.TryParse(
+            spacingEl.Element(A + "spcPts")?.Attribute("val")?.Value,
+            NumberStyles.Integer,
+            CultureInfo.InvariantCulture,
+            out var rawPoints) ? rawPoints / 100.0 : null;
+        double? percent = int.TryParse(
+            spacingEl.Element(A + "spcPct")?.Attribute("val")?.Value,
+            NumberStyles.Integer,
+            CultureInfo.InvariantCulture,
+            out var rawPercent) ? rawPercent / 1000.0 : null;
+
+        if (points is not null && (percent is null || !preferPercent))
+            return (points, null);
+        return percent is not null ? (null, percent) : (null, null);
+    }
+
     private static TextStyleLevel ReadTextStyleLevel(XElement lvlEl, PresentationColorScheme scheme)
     {
         var level = new TextStyleLevel();
+
+        // Paragraph spacing defaults (a:lnSpc / a:spcBef / a:spcAft) — PowerPoint's stock body
+        // placeholder authors spcBef here, so a deck can depend entirely on this level for it.
+        (level.SpaceBeforePt, level.SpaceBeforePercent) = ReadSpacing(lvlEl.Element(A + "spcBef"));
+        (level.SpaceAfterPt, level.SpaceAfterPercent) = ReadSpacing(lvlEl.Element(A + "spcAft"));
+        (level.LineSpacingPointsExact, level.LineSpacingPercent) =
+            ReadSpacing(lvlEl.Element(A + "lnSpc"), preferPercent: true);
 
         // Paragraph-level attributes
         var algnStr = lvlEl.Attribute("algn")?.Value;
@@ -6267,42 +6303,13 @@ public static class PptxPackageReader
                 para.BulletFontFamily = buFont.Attribute("typeface")?.Value;
             }
 
-            var spcBefEl = pPr.Element(A + "spcBef");
-            var spcBefPts = spcBefEl?.Element(A + "spcPts")?.Attribute("val")?.Value;
-            if (!string.IsNullOrWhiteSpace(spcBefPts) && int.TryParse(spcBefPts, out var sb))
-                para.SpaceBeforePt = sb / 100.0;
-            else
-            {
-                var spcBefPct = spcBefEl?.Element(A + "spcPct")?.Attribute("val")?.Value;
-                if (!string.IsNullOrWhiteSpace(spcBefPct) && int.TryParse(spcBefPct, out var sbp))
-                    para.SpaceBeforePercent = sbp / 1000.0;
-            }
-
-            var spcAftEl = pPr.Element(A + "spcAft");
-            var spcAftPts = spcAftEl?.Element(A + "spcPts")?.Attribute("val")?.Value;
-            if (!string.IsNullOrWhiteSpace(spcAftPts) && int.TryParse(spcAftPts, out var sa))
-                para.SpaceAfterPt = sa / 100.0;
-            else
-            {
-                var spcAftPct = spcAftEl?.Element(A + "spcPct")?.Attribute("val")?.Value;
-                if (!string.IsNullOrWhiteSpace(spcAftPct) && int.TryParse(spcAftPct, out var sap))
-                    para.SpaceAfterPercent = sap / 1000.0;
-            }
+            (para.SpaceBeforePt, para.SpaceBeforePercent) = ReadSpacing(pPr.Element(A + "spcBef"));
+            (para.SpaceAfterPt, para.SpaceAfterPercent) = ReadSpacing(pPr.Element(A + "spcAft"));
 
             // (c) a:lnSpc — paragraph line spacing. Percentage is 1000ths-of-a-percent per
             // ECMA-376 (§21.1.2.2.9), e.g. val="150000" means 150%. spcPts is hundredths of a point.
-            var lnSpcEl = pPr.Element(A + "lnSpc");
-            var lnSpcPct = lnSpcEl?.Element(A + "spcPct")?.Attribute("val")?.Value;
-            if (!string.IsNullOrWhiteSpace(lnSpcPct) && int.TryParse(lnSpcPct, out var lsp))
-            {
-                para.LineSpacingPercent = lsp / 1000.0;
-            }
-            else
-            {
-                var lnSpcPts = lnSpcEl?.Element(A + "spcPts")?.Attribute("val")?.Value;
-                if (!string.IsNullOrWhiteSpace(lnSpcPts) && int.TryParse(lnSpcPts, out var lspt))
-                    para.LineSpacingPointsExact = lspt / 100.0;
-            }
+            (para.LineSpacingPointsExact, para.LineSpacingPercent) =
+                ReadSpacing(pPr.Element(A + "lnSpc"), preferPercent: true);
 
             // Wave 18B: tab stop list (a:tabLst)
             var tabLst = pPr.Element(A + "tabLst");

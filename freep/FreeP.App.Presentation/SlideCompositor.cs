@@ -2286,27 +2286,35 @@ public static class SlideCompositor
                 });
             }
 
+            var cellStyle = body.LstStyle?.Resolve(para.Level);
+            var cellSpaceBefore = ResolveParagraphSpacing(
+                para.SpaceBeforePt, para.SpaceBeforePercent,
+                cellStyle?.SpaceBeforePt, cellStyle?.SpaceBeforePercent);
+            var cellSpaceAfter = ResolveParagraphSpacing(
+                para.SpaceAfterPt, para.SpaceAfterPercent,
+                cellStyle?.SpaceAfterPt, cellStyle?.SpaceAfterPercent);
+            var cellLineSpacing = ResolveParagraphLineSpacing(
+                para.LineSpacingPercent, para.LineSpacingPointsExact,
+                cellStyle?.LineSpacingPercent, cellStyle?.LineSpacingPointsExact);
+
             resolvedParas.Add(new ResolvedParagraph
             {
                 Runs         = resolvedRuns,
                 Align        = para.Align ?? TextAlign.Left,
                 RightToLeft  = para.RightToLeft
-                    ?? body.LstStyle?.Resolve(para.Level)?.RightToLeft
+                    ?? cellStyle?.RightToLeft
                     ?? body.DefaultParaRightToLeft
                     ?? false,
                 Level        = para.Level,
                 BulletKind   = para.BulletKind,
                 BulletChar   = para.BulletChar,
                 BulletImage  = para.BulletImage,
-                SpaceBeforePt = para.SpaceBeforePt ?? 0,
-                SpaceAfterPt  = para.SpaceAfterPt ?? 0,
-                // spcPts wins over spcPct. The nullable model values collapse to 0 above, so an
-                // authored 0pt would otherwise let a stale percent resurrect at layout time while
-                // the writer still emits the 0pt value.
-                SpaceBeforePercent = para.SpaceBeforePt is null ? para.SpaceBeforePercent : null,
-                SpaceAfterPercent  = para.SpaceAfterPt is null ? para.SpaceAfterPercent : null,
-                LineSpacingPercent = para.LineSpacingPercent,
-                LineSpacingPointsExact = para.LineSpacingPointsExact
+                SpaceBeforePt = cellSpaceBefore.Points,
+                SpaceAfterPt  = cellSpaceAfter.Points,
+                SpaceBeforePercent = cellSpaceBefore.Percent,
+                SpaceAfterPercent  = cellSpaceAfter.Percent,
+                LineSpacingPercent = cellLineSpacing.Percent,
+                LineSpacingPointsExact = cellLineSpacing.PointsExact
             });
         }
 
@@ -2526,12 +2534,37 @@ public static class SlideCompositor
             : layout is { } l3 && (l3.BulletFontFamily is not null || l3.BulletFontFollowsText) ? layout
             : master is { } m3 && (m3.BulletFontFamily is not null || m3.BulletFontFollowsText) ? master : null;
 
+        // Each spacing element resolves as a unit: a:spcPts and a:spcPct are mutually exclusive
+        // children of one a:spcBef/a:spcAft/a:lnSpc, so a layer that authors the points form must
+        // not have a percent from a lower layer merged in beside it (that would apply both).
+        static TextStyleLevel? SpacingLayer(
+            TextStyleLevel? shape,
+            TextStyleLevel? layout,
+            TextStyleLevel? master,
+            Func<TextStyleLevel, bool> authored) =>
+            shape is not null && authored(shape) ? shape
+            : layout is not null && authored(layout) ? layout
+            : master is not null && authored(master) ? master : null;
+
+        var spcBefLayer = SpacingLayer(shape, layout, master,
+            level => level.SpaceBeforePt is not null || level.SpaceBeforePercent is not null);
+        var spcAftLayer = SpacingLayer(shape, layout, master,
+            level => level.SpaceAfterPt is not null || level.SpaceAfterPercent is not null);
+        var lnSpcLayer = SpacingLayer(shape, layout, master,
+            level => level.LineSpacingPercent is not null || level.LineSpacingPointsExact is not null);
+
         return new TextStyleLevel
         {
             Align         = shape?.Align         ?? layout?.Align         ?? master?.Align,
             RightToLeft   = shape?.RightToLeft    ?? layout?.RightToLeft    ?? master?.RightToLeft,
             MarginLeftEmu = shape?.MarginLeftEmu  ?? layout?.MarginLeftEmu  ?? master?.MarginLeftEmu,
             IndentEmu     = shape?.IndentEmu      ?? layout?.IndentEmu      ?? master?.IndentEmu,
+            SpaceBeforePt          = spcBefLayer?.SpaceBeforePt,
+            SpaceBeforePercent     = spcBefLayer?.SpaceBeforePercent,
+            SpaceAfterPt           = spcAftLayer?.SpaceAfterPt,
+            SpaceAfterPercent      = spcAftLayer?.SpaceAfterPercent,
+            LineSpacingPercent     = lnSpcLayer?.LineSpacingPercent,
+            LineSpacingPointsExact = lnSpcLayer?.LineSpacingPointsExact,
             FontSizePt    = shape?.FontSizePt     ?? layout?.FontSizePt     ?? master?.FontSizePt,
             Bold          = shape?.Bold           ?? layout?.Bold           ?? master?.Bold,
             Italic        = shape?.Italic         ?? layout?.Italic         ?? master?.Italic,
@@ -2549,6 +2582,39 @@ public static class SlideCompositor
             BulletFontFollowsText    = fontLayer?.BulletFontFollowsText ?? false,
         };
     }
+
+    /// <summary>
+    /// Resolves one paragraph spacing element (<c>a:spcBef</c>/<c>a:spcAft</c>) against the
+    /// inherited style level. The paragraph wins as a UNIT whenever it authored either form:
+    /// a paragraph-level <c>a:spcPts</c> must never be combined with an inherited
+    /// <c>a:spcPct</c>, since the two are mutually exclusive children of the same element and
+    /// applying both would double the spacing. Within the winning layer points beats percent,
+    /// so the returned pair never carries both.
+    /// </summary>
+    private static (double Points, double? Percent) ResolveParagraphSpacing(
+        double? paragraphPoints,
+        double? paragraphPercent,
+        double? inheritedPoints,
+        double? inheritedPercent)
+    {
+        bool paragraphAuthored = paragraphPoints is not null || paragraphPercent is not null;
+        double? points = paragraphAuthored ? paragraphPoints : inheritedPoints;
+        double? percent = paragraphAuthored ? paragraphPercent : inheritedPercent;
+        return (points ?? 0, points is null ? percent : null);
+    }
+
+    /// <summary>
+    /// Resolves <c>a:lnSpc</c> against the inherited style level, as a unit for the same reason
+    /// as <see cref="ResolveParagraphSpacing"/>.
+    /// </summary>
+    private static (double? Percent, double? PointsExact) ResolveParagraphLineSpacing(
+        double? paragraphPercent,
+        double? paragraphPointsExact,
+        double? inheritedPercent,
+        double? inheritedPointsExact) =>
+        paragraphPercent is not null || paragraphPointsExact is not null
+            ? (paragraphPercent, paragraphPointsExact)
+            : (inheritedPercent, inheritedPointsExact);
 
     /// <summary>
     /// Resolves a latin font token (e.g. "+mj-lt" or "+mn-lt") to the actual theme font name.
@@ -2760,6 +2826,20 @@ public static class SlideCompositor
                 ? ResolveLatinFont(lf, theme)
                 : null;
             long marLEmu = para.MarginLeftEmu ?? inheritedStyle?.MarginLeftEmu ?? 0;
+
+            // Paragraph spacing inherits from the shape/layout/master lstStyle chain the same way
+            // margins and alignment do. PowerPoint's stock body placeholder authors spcBef only at
+            // the master level, so without this most real decks render with no space between
+            // paragraphs at all.
+            var spaceBefore = ResolveParagraphSpacing(
+                para.SpaceBeforePt, para.SpaceBeforePercent,
+                inheritedStyle?.SpaceBeforePt, inheritedStyle?.SpaceBeforePercent);
+            var spaceAfter = ResolveParagraphSpacing(
+                para.SpaceAfterPt, para.SpaceAfterPercent,
+                inheritedStyle?.SpaceAfterPt, inheritedStyle?.SpaceAfterPercent);
+            var lineSpacing = ResolveParagraphLineSpacing(
+                para.LineSpacingPercent, para.LineSpacingPointsExact,
+                inheritedStyle?.LineSpacingPercent, inheritedStyle?.LineSpacingPointsExact);
             double mathParagraphWidthDip = Math.Max(
                 1,
                 resolvedTextAreaWidthDip - Math.Max(0, marLEmu) / EmuPerDip);
@@ -3004,13 +3084,12 @@ public static class SlideCompositor
                 BulletKind = marker.Kind,
                 BulletChar = marker.Character,
                 BulletImage = marker.Image,
-                SpaceBeforePt = para.SpaceBeforePt ?? 0,
-                SpaceAfterPt = para.SpaceAfterPt ?? 0,
-                // See the table-cell resolver: spcPts wins, so drop the percent when points are set.
-                SpaceBeforePercent = para.SpaceBeforePt is null ? para.SpaceBeforePercent : null,
-                SpaceAfterPercent = para.SpaceAfterPt is null ? para.SpaceAfterPercent : null,
-                LineSpacingPercent = para.LineSpacingPercent,
-                LineSpacingPointsExact = para.LineSpacingPointsExact,
+                SpaceBeforePt = spaceBefore.Points,
+                SpaceAfterPt = spaceAfter.Points,
+                SpaceBeforePercent = spaceBefore.Percent,
+                SpaceAfterPercent = spaceAfter.Percent,
+                LineSpacingPercent = lineSpacing.Percent,
+                LineSpacingPointsExact = lineSpacing.PointsExact,
                 TabStops = resolvedTabStops,  // Wave 18B
                 // Wave 19A:
                 BulletText       = marker.Text,
