@@ -10,6 +10,11 @@ namespace FreeX.App.Host;
 
 public partial class FormatCellsDialog : Window
 {
+    private const double CompactDialogWidth = 550;
+    private const double CompactDialogHeight = 510;
+    private const double BorderDialogWidth = 620;
+    private const double BorderDialogHeight = 540;
+
     public StyleDiff? ResultDiff { get; private set; }
     public FormatCellsDialogBorderSelection ResultBorderSelection { get; private set; } = FormatCellsDialogBorderSelection.None;
     public bool? ResultMergeCells { get; private set; }
@@ -47,8 +52,24 @@ public partial class FormatCellsDialog : Window
         {
             Populate(_current);
             Tabs.SelectedIndex = (int)initialTab;
+            UpdateDialogSizeForSelectedTab();
             FocusInitialKeyboardTarget();
         };
+    }
+
+    private void Tabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!ReferenceEquals(e.OriginalSource, Tabs))
+            return;
+
+        UpdateDialogSizeForSelectedTab();
+    }
+
+    private void UpdateDialogSizeForSelectedTab()
+    {
+        var borderTabSelected = Tabs.SelectedIndex == (int)FormatCellsDialogTab.Border;
+        Width = borderTabSelected ? BorderDialogWidth : CompactDialogWidth;
+        Height = borderTabSelected ? BorderDialogHeight : CompactDialogHeight;
     }
 
     private void FocusInitialKeyboardTarget()
