@@ -37,7 +37,7 @@ public static class CommentListPlanner
 
         var items = new List<CommentListItem>();
         var seen = new HashSet<int>();
-        var topLevelByCommentId = BuildTopLevelCommentIds(document);
+        var topLevelByCommentId = CommentThreadIndex.BuildTopLevelByCommentId(document);
         for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
         {
             foreach (var paragraph in ParagraphsInBlock(document.Blocks[blockIndex]))
@@ -89,7 +89,7 @@ public static class CommentListPlanner
         Func<int, CommentAnchorPosition> anchorAt,
         List<CommentListItem> items,
         HashSet<int> seen,
-        IReadOnlyDictionary<int, int> topLevelByCommentId)
+        IReadOnlyDictionary<int, Comment> topLevelByCommentId)
     {
         var offset = 0;
         foreach (var run in paragraph.Runs)
@@ -100,15 +100,15 @@ public static class CommentListPlanner
                 continue;
             }
 
-            var topLevelId = TopLevelCommentId(topLevelByCommentId, commentId);
-            if (!seen.Add(topLevelId) || !document.Comments.TryGetValue(topLevelId, out var comment))
+            if (!topLevelByCommentId.TryGetValue(commentId, out var comment)
+                || !seen.Add(comment.Id))
             {
                 offset += run.Text.Length;
                 continue;
             }
 
             items.Add(new CommentListItem(
-                topLevelId,
+                comment.Id,
                 anchorAt(offset),
                 string.IsNullOrWhiteSpace(comment.Author) ? "Unknown" : comment.Author,
                 comment.PlainText,
@@ -169,31 +169,6 @@ public static class CommentListPlanner
 
         return -1;
     }
-
-    private static IReadOnlyDictionary<int, int> BuildTopLevelCommentIds(TextDocument document)
-    {
-        var topLevelByCommentId = new Dictionary<int, int>(document.Comments.Count);
-
-        // Establish direct roots first: a malformed document that repeats an id in a reply must still
-        // resolve a direct root the same way the former ContainsKey check did.
-        foreach (var root in document.Comments.Values)
-            topLevelByCommentId[root.Id] = root.Id;
-
-        // Thread ids are normally globally unique. TryAdd keeps the former first-root resolution if a
-        // malformed document duplicates a reply id across roots.
-        foreach (var root in document.Comments.Values)
-        {
-            foreach (var comment in root.ThreadInOrder())
-                topLevelByCommentId.TryAdd(comment.Id, root.Id);
-        }
-
-        return topLevelByCommentId;
-    }
-
-    private static int TopLevelCommentId(
-        IReadOnlyDictionary<int, int> topLevelByCommentId,
-        int commentId) =>
-        topLevelByCommentId.TryGetValue(commentId, out var topLevelId) ? topLevelId : commentId;
 
     private static IEnumerable<ParagraphAddress> ParagraphsInBlock(Block block)
     {

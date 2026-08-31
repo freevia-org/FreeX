@@ -551,7 +551,7 @@ public static class DocumentMerge
         var endnoteIds = new Dictionary<int, int>();
         var commentIds = new Dictionary<int, int>();
         var copiedCommentRoots = new HashSet<int>();
-        var sourceCommentRootsById = BuildTopLevelCommentIndex(source);
+        var sourceCommentRootsById = CommentThreadIndex.BuildTopLevelByCommentId(source);
         var usedFootnotes = target.Footnotes.Keys.ToHashSet();
         var usedEndnotes = target.Endnotes.Keys.ToHashSet();
         var usedComments = target.Comments.Values.SelectMany(comment => comment.ThreadInOrder()).Select(comment => comment.Id).ToHashSet();
@@ -699,26 +699,6 @@ public static class DocumentMerge
             if (usedTags.Add(candidate))
                 return candidate;
         }
-    }
-
-    private static IReadOnlyDictionary<int, Comment> BuildTopLevelCommentIndex(TextDocument source)
-    {
-        var sourceCommentRootsById = new Dictionary<int, Comment>(source.Comments.Count);
-
-        // Direct root keys take priority, matching the former TryGetValue branch when malformed
-        // documents duplicate an id in a reply.
-        foreach (var (rootId, root) in source.Comments)
-            sourceCommentRootsById[rootId] = root;
-
-        // Thread ids are normally globally unique. TryAdd keeps the former first-root lookup result
-        // for malformed documents that reuse a reply id across roots.
-        foreach (var root in source.Comments.Values)
-        {
-            foreach (var node in root.ThreadInOrder())
-                sourceCommentRootsById.TryAdd(node.Id, root);
-        }
-
-        return sourceCommentRootsById;
     }
 
     private static Comment CloneComment(Comment source, Func<int, int> mapId, List<Paragraph> allParagraphs)

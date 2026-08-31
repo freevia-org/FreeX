@@ -94,15 +94,14 @@ public sealed class CommentListPlannerTests
     }
 
     [Fact]
-    public void Build_SourceGuardIndexesThreadIdsOnce()
+    public void Build_SourceGuardUsesSharedCommentThreadIndex()
     {
         var source = TestWorkspaceFileLocator.ReadAllText(
             "freew", "FreeW.App.Presentation", "Ribbon", "CommentListPlanner.cs");
 
-        source.Should().Contain("var topLevelByCommentId = BuildTopLevelCommentIds(document);")
-            .And.Contain("topLevelByCommentId[root.Id] = root.Id;")
-            .And.Contain("topLevelByCommentId.TryAdd(comment.Id, root.Id);")
-            .And.Contain("topLevelByCommentId.TryGetValue(commentId, out var topLevelId)")
+        source.Should().Contain("var topLevelByCommentId = CommentThreadIndex.BuildTopLevelByCommentId(document);")
+            .And.Contain("topLevelByCommentId.TryGetValue(commentId, out var comment)")
+            .And.NotContain("BuildTopLevelCommentIds(")
             .And.NotContain("comment.Replies.Any(reply => reply.Id == commentId)");
     }
 
