@@ -272,7 +272,7 @@ public sealed partial class MainWindow
             Background = SwatchBrush(selectedColor),
         };
         AutomationProperties.SetAutomationId(colorSwatch, "SparklineColorSwatch");
-        colorButton.Click += async (_, _) =>
+        colorButton.Click += (_, _) => RunGuarded(async () =>
         {
             var picked = await ShowMoreColorsDialogAsync(
                 UiText.Get("Sparkline_EditColor"),
@@ -282,7 +282,7 @@ public sealed partial class MainWindow
                 selectedColor = chosen;
                 colorSwatch.Background = SwatchBrush(selectedColor);
             }
-        };
+        });
         var clearColorButton = new Button { Content = UiText.Get("Sparkline_DefaultColor"), MinWidth = 120 };
         ApplySparklineButtonChrome(clearColorButton, 120);
         AutomationProperties.SetAutomationId(clearColorButton, "SparklineClearColorButton");

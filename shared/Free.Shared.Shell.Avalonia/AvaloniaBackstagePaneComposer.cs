@@ -284,7 +284,7 @@ public sealed class AvaloniaBackstagePaneComposer
         };
         AutomationProperties.SetAutomationId(button, automationId);
         AutomationProperties.SetName(button, text);
-        button.Click += (_, _) => action();
+        button.Click += (_, _) => AvaloniaBackstageChrome.InvokeAction(action, automationId);
         return button;
     }
 

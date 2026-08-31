@@ -117,7 +117,7 @@ public sealed class PageLayoutDialogParityTests
 
         profile.Should().Contain(
             "BindOrUnavailable(bindings, FreeWRibbonCommandAction.HyphenationManual, ports.OpenManualHyphenationDialog)");
-        mainWindow.Should().Contain("OpenManualHyphenationDialog: () => _ = OpenManualHyphenationDialogAsync()");
+        mainWindow.Should().Contain("OpenManualHyphenationDialog: () => RunUiTask(OpenManualHyphenationDialogAsync)");
         mainWindow.Should().Contain("ManualHyphenationDialog.ShowAndApplyAsync(this, _editor");
         dialog.Should().Contain("ManualHyphenationPlanner.CreateSession(editor.Document)");
         dialog.Should().Contain("editor.ApplyManualHyphenation(session.Edits)");

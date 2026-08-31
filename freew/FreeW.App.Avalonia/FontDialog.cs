@@ -273,7 +273,9 @@ public sealed class FontDialog : FreeWDialogWindow
         };
     }
 
-    private async void OnOk()
+    private void OnOk() => AvaloniaUiTaskGuard.Run(OnOkAsync);
+
+    private async Task OnOkAsync()
     {
         _status.IsVisible = false;
         var acceptance = _session.PlanAcceptance(FontDialogPlanner.CaptureControlState(

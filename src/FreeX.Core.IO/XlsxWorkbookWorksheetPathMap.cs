@@ -30,17 +30,28 @@ internal sealed class XlsxWorkbookWorksheetPathMap
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
         var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-        var workbookRels = rejectDuplicateRelationshipIds
-            ? XlsxRelationshipReader.LoadTargetsStrict(
-                archive,
-                "xl/_rels/workbook.xml.rels",
-                XlsxPackagePath.NormalizeWorkbookTarget,
-                packageRelNs)
-            : XlsxRelationshipReader.LoadTargets(
-                archive,
-                "xl/_rels/workbook.xml.rels",
-                "xl/workbook.xml",
-                packageRelNs);
+        Dictionary<string, string> workbookRels;
+        try
+        {
+            workbookRels = rejectDuplicateRelationshipIds
+                ? XlsxRelationshipReader.LoadTargetsStrict(
+                    archive,
+                    "xl/_rels/workbook.xml.rels",
+                    XlsxPackagePath.NormalizeWorkbookTarget,
+                    packageRelNs)
+                : XlsxRelationshipReader.LoadTargets(
+                    archive,
+                    "xl/_rels/workbook.xml.rels",
+                    "xl/workbook.xml",
+                    packageRelNs);
+        }
+        catch (ArgumentException) when (rejectDuplicateRelationshipIds)
+        {
+            // Strict callers deliberately reject ambiguous relationship maps. Keep the TryCreate
+            // contract for malformed packages instead of letting ToDictionary's duplicate-key
+            // ArgumentException escape during open/save post-processing.
+            return null;
+        }
         var worksheets = XlsxWorkbookSheetPathReader
             .GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
             .Select(pair => new XlsxWorkbookWorksheetPath(pair.SheetName, pair.WorksheetPath))

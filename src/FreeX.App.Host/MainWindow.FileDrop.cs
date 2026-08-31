@@ -13,7 +13,10 @@ public partial class MainWindow
         e.Handled = true;
     }
 
-    private async void MainWindow_Drop(object sender, DragEventArgs e)
+    private void MainWindow_Drop(object sender, DragEventArgs e) =>
+        RunGuardedUiCommand("Drop Workbook", () => OpenDroppedWorkbookAsync(sender, e));
+
+    private async Task OpenDroppedWorkbookAsync(object sender, DragEventArgs e)
     {
         var path = GetDroppedWorkbookPath(e);
         e.Handled = true;

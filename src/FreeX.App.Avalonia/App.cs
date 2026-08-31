@@ -90,7 +90,9 @@ public sealed class App : Application
             // not attached yet, so registering this early is safe.
             AppCrashHandlers.Register(
                 recordCrash: (exception, source) => Diagnostics?.RecordCrash(exception, source),
-                subscribeDispatcher: null,
+                subscribeDispatcher: handler =>
+                    Dispatcher.UIThread.UnhandledException += (_, args) =>
+                        args.Handled = AppCrashHandlers.HandleDispatcherException(args.Exception, handler),
                 onAfterFault: AvaloniaAutosaveCoordinator.TryEmergencySnapshots);
 
             var mainWindow = new MainWindow(StartupArguments, deferStartupFileOpen: true);

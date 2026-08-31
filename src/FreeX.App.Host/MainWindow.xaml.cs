@@ -599,17 +599,55 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
 
     private void ReportAsyncCommandFailure(string command, Exception exception)
     {
-        RecordDiagnosticEvent("command_invoked", new Dictionary<string, string?>
+        try
         {
-            ["command"] = command,
-            ["status"] = "failed",
-            ["reason"] = exception.GetType().Name
-        });
-        ShowOwnedMessage(
-            UiText.Format("InsertLoc_CommandFailed", exception.Message),
-            UiText.Get("MainWindowMessage_CommandErrorTitle"),
-            MessageBoxButton.OK,
-            MessageBoxImage.Warning);
+            RecordDiagnosticEvent("command_invoked", new Dictionary<string, string?>
+            {
+                ["command"] = command,
+                ["status"] = "failed",
+                ["reason"] = exception.GetType().Name
+            });
+        }
+        catch
+        {
+            // Failure reporting must not replace the original contained fault with another one.
+        }
+
+        try
+        {
+            ShowOwnedMessage(
+                UiText.Format("InsertLoc_CommandFailed", exception.Message),
+                UiText.Get("MainWindowMessage_CommandErrorTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+        catch
+        {
+            // The owner may already be closing or its dispatcher may be shutting down. The command
+            // fault is still contained and diagnostics above remain best effort.
+        }
+    }
+
+    /// <summary>
+    /// Observes fire-and-forget work launched by WPF's void-only event surface. Every handler
+    /// routed here is protected across both its synchronous prefix and every continuation after an
+    /// await, so an ordinary I/O, dialog, clipboard, or command failure cannot escape through the
+    /// dispatcher and terminate the process.
+    /// </summary>
+    private async void RunGuardedUiCommand(string command, Func<Task> handler)
+    {
+        try
+        {
+            await handler();
+        }
+        catch (OperationCanceledException)
+        {
+            // User cancellation is an expected terminal state for UI workflows.
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            ReportAsyncCommandFailure(command, ex);
+        }
     }
 
     /// <summary>

@@ -226,7 +226,23 @@ public static class QuickAccessToolbarRenderer
             TryRegisterName(resourceHost, item.ResolvedAutomationId, button);
 
         if (options.WireClick && onClick is not null)
-            button.Click += (_, _) => onClick(item.CommandId);
+        {
+            button.Click += (_, _) =>
+            {
+                // The WPF startup boundary records dispatcher exceptions but intentionally does
+                // not mark them handled. Keep QAT command failures consistent with ribbon/menu
+                // commands (and with the Avalonia QAT renderer): report the fault without letting
+                // it escape Button.Click and terminate the application.
+                try
+                {
+                    onClick(item.CommandId);
+                }
+                catch (Exception ex)
+                {
+                    RibbonCommandFaultReporter.Report(ex, item.CommandId);
+                }
+            };
+        }
 
         options.CustomizeButton?.Invoke(item, button);
         return button;

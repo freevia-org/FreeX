@@ -562,6 +562,20 @@ public sealed class InCanvasTableCellEditor
 
     private async void OnCellTextBoxPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        try
+        {
+            await OnCellTextBoxPreviewKeyDownCore(e);
+        }
+        catch (Exception exception)
+        {
+            _onClipboardWriteFailed?.Invoke(
+                PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditCopyCommand),
+                exception.Message);
+        }
+    }
+
+    private async Task OnCellTextBoxPreviewKeyDownCore(KeyEventArgs e)
+    {
         if ((e.KeyboardDevice.Modifiers & ModifierKeys.Control) != 0 &&
             _cellTextBox is not null &&
             TryGetCurrentCellTextBody() is { } currentBody)

@@ -654,7 +654,7 @@ public sealed partial class MainWindow
         hiddenEmptyButton.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
         hiddenEmptyButton.Margin = new Thickness(0, 0, 0, 8);
         AutomationProperties.SetAutomationId(hiddenEmptyButton, hiddenEmptyAction.AutomationId);
-        hiddenEmptyButton.Click += async (_, _) =>
+        hiddenEmptyButton.Click += (_, _) => RunGuarded(async () =>
         {
             var infoDialog = NewChartDialog(
                 UiText.Get(SelectDataSourcePlanner.HiddenEmptyCellsTitleResourceKey),
@@ -680,7 +680,7 @@ public sealed partial class MainWindow
                 },
             };
             await infoDialog.ShowDialog(dialog);
-        };
+        });
 
         dialog.Content = new StackPanel
         {

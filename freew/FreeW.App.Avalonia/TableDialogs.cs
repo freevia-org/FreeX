@@ -512,7 +512,13 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
             margins);
     }
 
-    private async void Accept()
+    private void Accept() => AvaloniaUiTaskGuard.Run(AcceptAsync, ex =>
+    {
+        _validation.Text = ex.Message;
+        _validation.IsVisible = true;
+    });
+
+    private async Task AcceptAsync()
     {
         var acceptance = CaptureAcceptance();
         if (!acceptance.IsAccepted)

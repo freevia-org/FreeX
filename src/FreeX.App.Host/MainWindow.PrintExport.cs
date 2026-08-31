@@ -110,7 +110,10 @@ public partial class MainWindow
         return (document, plan);
     }
 
-    private async void ExportPdfButton_Click(object sender, RoutedEventArgs e)
+    private void ExportPdfButton_Click(object sender, RoutedEventArgs e) =>
+        RunGuardedUiCommand("Export PDF", () => ExportPdfAsync(sender, e));
+
+    private async Task ExportPdfAsync(object sender, RoutedEventArgs e)
     {
         var savePlan = ExportFilePickerPlanner.BuildPdfXpsDialogPlan(_workbook.Name, "FreeX");
         var saveResult = WpfFileDialogService.ShowSaveDialog(

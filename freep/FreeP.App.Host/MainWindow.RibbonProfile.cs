@@ -151,7 +151,22 @@ public sealed partial class MainWindow
                 error));
 
     private void QueueAssetImport(PresentationAssetImportKind kind) =>
-        _ = ImportPresentationAssetAsync(kind);
+        RunGuarded(async () => await ImportPresentationAssetAsync(kind), kind.ToString());
+
+    private async void RunGuarded(Func<Task> command, string commandName)
+    {
+        try
+        {
+            await command();
+        }
+        catch (Exception exception)
+        {
+            _slideCountText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                PresentationFileTextResources.Presentation,
+                commandName,
+                exception.Message);
+        }
+    }
 
     private bool WithCanvas(Func<SlideCanvas, bool> execute) =>
         SlideCanvas is { } canvas && execute(canvas);

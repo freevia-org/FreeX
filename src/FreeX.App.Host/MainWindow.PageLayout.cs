@@ -124,7 +124,10 @@ public partial class MainWindow
         BackgroundChooseMenuItem_Click(sender, e);
     }
 
-    private async void BackgroundChooseMenuItem_Click(object sender, RoutedEventArgs e)
+    private void BackgroundChooseMenuItem_Click(object sender, RoutedEventArgs e) =>
+        RunGuardedUiCommand("Sheet Background", () => ChooseSheetBackgroundAsync(sender, e));
+
+    private async Task ChooseSheetBackgroundAsync(object sender, RoutedEventArgs e)
     {
         var openPlan = SheetBackgroundPickerPlanner.BuildOpenDialogPlan();
         var result = WpfFileDialogService.ShowOpenDialog(

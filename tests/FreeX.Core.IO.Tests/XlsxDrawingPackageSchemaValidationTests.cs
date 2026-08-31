@@ -115,6 +115,33 @@ public sealed class XlsxDrawingPackageSchemaValidationTests
         drawingObjectIds.Should().OnlyHaveUniqueItems();
     }
 
+    [Fact]
+    public void NormalizePackage_MaximumObjectIdDoesNotOverflowReplacementId()
+    {
+        using var package = CreatePackage((
+            "xl/drawings/drawing1.xml",
+            """
+            <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing">
+              <xdr:sp><xdr:nvSpPr><xdr:cNvPr id="2147483647" name="Maximum" /></xdr:nvSpPr></xdr:sp>
+              <xdr:sp><xdr:nvSpPr><xdr:cNvPr id="2147483647" name="Duplicate" /></xdr:nvSpPr></xdr:sp>
+              <xdr:sp><xdr:nvSpPr><xdr:cNvPr id="0" name="Invalid" /></xdr:nvSpPr></xdr:sp>
+            </xdr:wsDr>
+            """));
+
+        XlsxDrawingSchemaNormalizer.NormalizePackage(package);
+
+        package.Position = 0;
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var drawingXml = LoadPackageXml(archive, "xl/drawings/drawing1.xml");
+        var ids = drawingXml.Descendants(SpreadsheetDrawingNs + "cNvPr")
+            .Select(element => int.Parse(element.Attribute("id")!.Value, System.Globalization.CultureInfo.InvariantCulture))
+            .ToArray();
+
+        ids.Should().OnlyContain(id => id > 0);
+        ids.Should().OnlyHaveUniqueItems();
+        ids.Should().Contain(int.MaxValue);
+    }
+
     private static MemoryStream CreateSourcePackage() =>
         CreatePackage(
             ("xl/workbook.xml", WorkbookXml()),

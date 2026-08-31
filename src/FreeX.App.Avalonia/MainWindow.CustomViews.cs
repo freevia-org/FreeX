@@ -134,13 +134,13 @@ public sealed partial class MainWindow
         showButton.Click += (_, _) => ShowSelectedView();
         viewsList.DoubleTapped += (_, _) => ShowSelectedView();
 
-        addButton.Click += async (_, _) =>
+        addButton.Click += (_, _) => RunGuarded(async () =>
         {
             warningText.IsVisible = false;
             var added = await ShowAddCustomViewDialogAsync();
             if (added is not null)
                 RefreshRows(added);
-        };
+        });
 
         deleteButton.Click += (_, _) =>
         {

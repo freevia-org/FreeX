@@ -5,6 +5,17 @@ namespace FreeX.App.Host.Tests;
 public sealed class AppDiagnosticsStartupTests
 {
     [Fact]
+    public void System_parameter_changes_are_marshaled_to_the_application_dispatcher()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("App.xaml.cs");
+
+        source.Should().Contain("SystemParameters.StaticPropertyChanged += OnSystemParametersChanged;");
+        source.Should().Contain("if (!Dispatcher.CheckAccess())");
+        source.Should().Contain("!Dispatcher.HasShutdownStarted && !Dispatcher.HasShutdownFinished");
+        source.Should().Contain("Dispatcher.BeginInvoke(RefreshSystemColorsBrushOverrides)");
+    }
+
+    [Fact]
     public void AppStartup_RegistersDiagnosticsAndCrashHandlers()
     {
         var source = DialogSourceTestSupport.ReadHostSources("App.xaml.cs");
@@ -20,6 +31,7 @@ public sealed class AppDiagnosticsStartupTests
         source.Should().Contain("AddSingleton<IAppDiagnostics, AppDiagnostics>()");
         source.Should().Contain("AppCrashHandlers.Register(");
         source.Should().Contain("DispatcherUnhandledException");
+        source.Should().Contain("args.Handled = Free.Shared.AppServices.AppCrashHandlers.HandleDispatcherException(");
         crashHandlersSource.Should().Contain("AppDomain.CurrentDomain.UnhandledException");
         crashHandlersSource.Should().Contain("TaskScheduler.UnobservedTaskException");
         source.Should().Contain("RecordEvent(\"app_start\")");

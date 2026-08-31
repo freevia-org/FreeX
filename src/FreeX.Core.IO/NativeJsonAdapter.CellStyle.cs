@@ -231,7 +231,11 @@ public sealed partial class NativeJsonAdapter
         if (dto is null)
             return null;
 
-        var stops = dto.Stops
+        // System.Text.Json permits an explicit null even though the DTO initializes this list.
+        // Treat a malformed/null collection (and null entries within it) as a degenerate gradient
+        // instead of letting workbook open escape with ArgumentNullException/NullReferenceException.
+        var stops = (dto.Stops ?? [])
+            .OfType<CellGradientStopDto>()
             .Select(s => new CellGradientStop(s.Position, s.Color))
             .ToList();
         if (stops.Count < 2)
@@ -386,11 +390,13 @@ public sealed partial class NativeJsonAdapter
                 x.Left != y.Left || x.Right != y.Right ||
                 x.Top != y.Top || x.Bottom != y.Bottom)
                 return false;
-            if (x.Stops.Count != y.Stops.Count) return false;
-            for (int i = 0; i < x.Stops.Count; i++)
+            var xStops = (x.Stops ?? []).OfType<CellGradientStopDto>().ToList();
+            var yStops = (y.Stops ?? []).OfType<CellGradientStopDto>().ToList();
+            if (xStops.Count != yStops.Count) return false;
+            for (int i = 0; i < xStops.Count; i++)
             {
-                if (x.Stops[i].Position != y.Stops[i].Position ||
-                    x.Stops[i].Color != y.Stops[i].Color)
+                if (xStops[i].Position != yStops[i].Position ||
+                    xStops[i].Color != yStops[i].Color)
                     return false;
             }
             return true;
@@ -402,7 +408,11 @@ public sealed partial class NativeJsonAdapter
             var h = new HashCode();
             h.Add(dto.Type);
             h.Add(dto.Degree);
-            foreach (var stop in dto.Stops) { h.Add(stop.Position); h.Add(stop.Color); }
+            foreach (var stop in (dto.Stops ?? []).OfType<CellGradientStopDto>())
+            {
+                h.Add(stop.Position);
+                h.Add(stop.Color);
+            }
             return h.ToHashCode();
         }
 

@@ -102,7 +102,7 @@ internal sealed partial class StyleDialog : FreeWDialogWindow
             AddRow(panel, spec.Label, fields[spec.Kind]);
 
         var actionRow = AvaloniaCompactDialogChrome.CreateOkCancelRow(
-            () => _ = AcceptAsync(),
+            () => RunUiTask(AcceptAsync),
             () => Close(null),
             buttonWidth: Surface.ActionButtonWidth,
             margin: new Thickness(0, StyleDialogMetrics.ActionRowTopMargin, -1, 0),
@@ -182,6 +182,23 @@ internal sealed partial class StyleDialog : FreeWDialogWindow
         }
 
         Close(acceptance.Result);
+    }
+
+    private void RunUiTask(Func<Task> operation) => _ = ObserveUiTaskAsync(operation);
+
+    private static async Task ObserveUiTaskAsync(Func<Task> operation)
+    {
+        try
+        {
+            await operation();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // This callback has no synchronous caller; contain host dialog-service failures.
+        }
     }
 
     private static void AddRow(Panel panel, string label, Control field)

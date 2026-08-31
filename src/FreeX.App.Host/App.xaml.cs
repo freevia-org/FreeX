@@ -63,7 +63,7 @@ public partial class App : Application
         // property WPF is tracking, including HighContrast and the individual *Color properties
         // it derives from — so re-applying our brushes on every notification keeps them current
         // without needing to special-case the raised property.
-        SystemParameters.StaticPropertyChanged += (_, _) => RefreshSystemColorsBrushOverrides();
+        SystemParameters.StaticPropertyChanged += OnSystemParametersChanged;
 
         // Velopack is invoked earlier, from Program.Main, before the WPF Application is created,
         // so install/update/uninstall hooks are serviced before any UI initializes.
@@ -250,6 +250,24 @@ public partial class App : Application
     /// window/dialog without needing to touch each consumer.
     /// </para>
     /// </summary>
+    private void OnSystemParametersChanged(object? sender, EventArgs e)
+    {
+        // SystemParameters raises this static notification on whichever thread processed the
+        // native settings change. Touching Application.Resources from that thread can therefore
+        // throw the same cross-dispatcher InvalidOperationException that previously affected the
+        // worksheet grid's high-contrast listener. Always marshal the resource update back to the
+        // application dispatcher, and avoid queuing work while WPF is shutting down.
+        if (!Dispatcher.CheckAccess())
+        {
+            if (!Dispatcher.HasShutdownStarted && !Dispatcher.HasShutdownFinished)
+                _ = Dispatcher.BeginInvoke(RefreshSystemColorsBrushOverrides);
+
+            return;
+        }
+
+        RefreshSystemColorsBrushOverrides();
+    }
+
     private void RefreshSystemColorsBrushOverrides()
     {
         var resources = Resources;
@@ -362,7 +380,10 @@ public partial class App : Application
         Free.Shared.AppServices.AppCrashHandlers.Register(
             recordCrash: (exception, source) => diagnostics.RecordCrash(exception, source),
             subscribeDispatcher: handler =>
-                Current.DispatcherUnhandledException += (_, args) => handler(args.Exception),
+                Current.DispatcherUnhandledException += (_, args) =>
+                    args.Handled = Free.Shared.AppServices.AppCrashHandlers.HandleDispatcherException(
+                        args.Exception,
+                        handler),
             onAfterFault: () => TryEmergencySaveAllWindows(snapshotStore));
     }
 

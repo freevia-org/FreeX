@@ -128,7 +128,10 @@ public partial class MainWindow
         Keyboard.Focus(firstEnabledItem);
     }
 
-    private async void QuickAnalysisMenuItem_Click(object sender, RoutedEventArgs e)
+    private void QuickAnalysisMenuItem_Click(object sender, RoutedEventArgs e) =>
+        RunGuardedUiCommand("Quick Analysis", () => ExecuteQuickAnalysisAsync(sender, e));
+
+    private async Task ExecuteQuickAnalysisAsync(object sender, RoutedEventArgs e)
     {
         if (sender is not MenuItem { Tag: QuickAnalysisShellItemPlan item })
             return;

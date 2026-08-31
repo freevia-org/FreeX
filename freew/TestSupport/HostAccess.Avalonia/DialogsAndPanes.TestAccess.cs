@@ -97,6 +97,7 @@ internal sealed partial class CompareDocumentsDialog
 internal sealed partial class RestrictEditingDialog
 {
     internal Task StopProtectionForTestAsync() => StopProtectionAsync();
+    internal string ValidationTextForTest => _validation.Text ?? string.Empty;
 }
 
 internal sealed partial class StyleDialog

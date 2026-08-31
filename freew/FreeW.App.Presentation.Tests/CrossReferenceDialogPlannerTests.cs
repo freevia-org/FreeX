@@ -59,7 +59,7 @@ public sealed class CrossReferenceDialogPlannerTests
         avalonia.Should().Contain("Layout.AvaloniaInactiveSelectionBackgroundHex");
         avalonia.Should().Contain("Layout.AvaloniaInactiveSelectionBorderHex");
         wpf.Should().Contain("_targetList.MouseDoubleClick += (_, _) => Accept();");
-        avalonia.Should().Contain("_targetList.DoubleTapped += async (_, _) => await AcceptAsync();");
+        avalonia.Should().Contain("_targetList.DoubleTapped += (_, _) => RunUiTask(AcceptAsync);");
     }
 
     [Fact]

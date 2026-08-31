@@ -602,6 +602,37 @@ public sealed class PresentationMediaTranscriptPlannerTests
         track.Cues[1].EndTime.Should().Be(TimeSpan.FromMilliseconds(2750));
     }
 
+    [Theory]
+    [InlineData("<tt xmlns=\"http://www.w3.org/ns/ttml\"><body><div><p begin=\"1e300s\" dur=\"1s\">Huge unit time</p></div></body></tt>")]
+    [InlineData("<tt xmlns=\"http://www.w3.org/ns/ttml\"><body><div><p begin=\"2147483647:00:00:00\" dur=\"1s\">Huge frame time</p></div></body></tt>")]
+    [InlineData("<tt xmlns=\"http://www.w3.org/ns/ttml\"><body begin=\"900000000000s\"><div begin=\"900000000000s\"><p dur=\"1s\">Nested overflow</p></div></body></tt>")]
+    public void BuildTranscriptPlan_IgnoresOverflowingTtmlTimesInsteadOfThrowing(string captionText)
+    {
+        var track = BuildTranscriptTrack("captions.ttml", "application/ttml+xml", captionText);
+
+        track.Status.Should().Be(PresentationMediaTranscriptTrackStatus.Available);
+        track.Cues.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("WEBVTT\n\n2147483647:00:00.000 --> 2147483647:00:01.000\nHuge cue")]
+    [InlineData("1\n2147483647:00:00,000 --> 2147483647:00:01,000\nHuge cue")]
+    public void BuildTranscriptPlan_IgnoresOverflowingWebVttAndSrtTimesInsteadOfThrowing(
+        string captionText)
+    {
+        var source = captionText.StartsWith("WEBVTT", StringComparison.Ordinal)
+            ? "captions.vtt"
+            : "captions.srt";
+        var contentType = source.EndsWith(".vtt", StringComparison.Ordinal)
+            ? "text/vtt"
+            : "application/x-subrip";
+
+        var track = BuildTranscriptTrack(source, contentType, captionText);
+
+        track.Status.Should().Be(PresentationMediaTranscriptTrackStatus.Available);
+        track.Cues.Should().BeEmpty();
+    }
+
     [Fact]
     public void BuildTranscriptPlan_ParsesDfxpInheritedOffsetsAndFrameClock()
     {
@@ -1532,5 +1563,35 @@ public sealed class PresentationMediaTranscriptPlannerTests
 
         editor.Redo();
         mediaShape.Media.CaptionTracks.Should().BeEmpty();
+    }
+
+    private static PresentationMediaTranscriptTrackDescriptor BuildTranscriptTrack(
+        string source,
+        string contentType,
+        string captionText)
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 999,
+            Name = "Captioned video",
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                CaptionTracks =
+                {
+                    new MediaCaptionTrackInfo
+                    {
+                        Source = source,
+                        ContentType = contentType,
+                        Bytes = Encoding.UTF8.GetBytes(captionText),
+                    }
+                }
+            }
+        });
+
+        return PresentationMediaTranscriptPlanner.BuildTranscriptPlan(presentation)
+            .Tracks.Should().ContainSingle().Subject;
     }
 }

@@ -238,7 +238,8 @@ public sealed class BackstagePaneComposer
             FocusVisualStyle = null,
             Margin = ToThickness(_profile.Metrics.ActionRowMargin)
         };
-        button.Click += (_, _) => action.Invoke();
+        var commandId = action.ResolveAutomationId("BackstageAction_");
+        button.Click += (_, _) => BackstageVisualKit.InvokeAction(action.Invoke, commandId);
         button.IsEnabled = action.IsEnabled;
         // The action label is the shared semantic contract. Keep it on the
         // button even though the visual content is a two-line StackPanel so
@@ -274,7 +275,10 @@ public sealed class BackstagePaneComposer
     private UIElement ExportActionRow(BackstageActionRow action)
     {
         var row = new StackPanel { Margin = ToThickness(_profile.Metrics.ActionRowMargin) };
-        var button = _kit.LinkButton(action.Label, action.Invoke);
+        var button = _kit.LinkButton(
+            action.Label,
+            action.Invoke,
+            action.ResolveAutomationId("BackstageAction_"));
         button.FontSize = _profile.Metrics.ActionFontSize;
         button.IsEnabled = action.IsEnabled;
         AutomationProperties.SetName(button, action.Label);

@@ -6,6 +6,16 @@ namespace FreeX.App.Services.Tests;
 public sealed class AvaloniaShellSourceTests
 {
     [Fact]
+    public void Avalonia_dispatcher_faults_are_recorded_snapshotted_and_contained()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "App.cs"));
+
+        source.Should().Contain("Dispatcher.UIThread.UnhandledException +=");
+        source.Should().Contain("args.Handled = AppCrashHandlers.HandleDispatcherException(args.Exception, handler)");
+        source.Should().Contain("onAfterFault: AvaloniaAutosaveCoordinator.TryEmergencySnapshots");
+    }
+
+    [Fact]
     public void WorksheetContextMenu_ContainsAsyncCommandFailures()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
@@ -218,7 +228,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ConfigureNativeFileMenuItem(_shareWorkbookMenuItem, NativeFileMenuItemId.ShareWorkbook);");
         catalogSource.Should().Contain("NativeFileMenuItemId.ShareWorkbook");
         catalogSource.Should().Contain("\"AvaloniaNativeMenu_ShareWorkbook\"");
-        source.Should().Contain("_shareWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Share);");
+        source.Should().Contain("_shareWorkbookMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Share));");
         catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.ShareWorkbook)");
         source.Should().Contain("ApplyNativeFileMenuAvailability(isIdle);");
         smokeSource.Should().Contain("HasNativeShareWorkbookMenuItem: HasEnabledNativeFileMenuItem(_shareWorkbookMenuItem, NativeFileMenuItemId.ShareWorkbook)");
@@ -314,7 +324,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _exportPdfMenuItem = new();");
         source.Should().Contain("ConfigureNativeFileMenuItem(_exportPdfMenuItem, NativeFileMenuItemId.ExportPdf);");
         catalogSource.Should().Contain("\"AvaloniaNativeMenu_ExportPdf\"");
-        source.Should().Contain("_exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();");
+        source.Should().Contain("_exportPdfMenuItem.Click += (_, _) => RunGuarded(ExportActiveSheetPdfAsync);");
         catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.ExportPdf)");
         catalogSource.Should().Contain("new(NativeFileMenuItemId.ExportPdf, context.IsIdle && context.CanSaveThroughStorageProvider)");
         source.Should().Contain("private Task ExportActiveSheetPdfAsync() =>");
@@ -588,7 +598,7 @@ public sealed class AvaloniaShellSourceTests
         var nativeMenuBlock = ExtractSourceBlock(
             source,
             "private void ConfigureNativeMenu()",
-            "_renameSheetMenuItem.Click += async (_, _) => await RenameActiveSheetAsync();");
+            "_renameSheetMenuItem.Click += (_, _) => RunGuarded(RenameActiveSheetAsync);");
         nativeMenuBlock.Should().NotContain("_newWorkbookMenuItem.Header = \"New Workbook\"");
         nativeMenuBlock.Should().NotContain("_openMenuItem.Header = \"Open...\"");
         nativeMenuBlock.Should().NotContain("_openRecentMenuItem.Header = \"Open Recent\"");
@@ -629,7 +639,7 @@ public sealed class AvaloniaShellSourceTests
         menuSource.Should().Contain("private readonly NativeMenuItem _optionsMenuItem = new();");
         menuSource.Should().Contain("ConfigureNativeFileMenuItem(_optionsMenuItem, NativeFileMenuItemId.Options);");
         catalogSource.Should().Contain("\"Options_Title\"");
-        menuSource.Should().Contain("_optionsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.Options);");
+        menuSource.Should().Contain("_optionsMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.Options));");
         catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.Options)");
 
         // The dialog edits AppOptions through the renderer-neutral runtime/dialog session.
@@ -754,29 +764,29 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ConfigureNativeFileMenuItem(_newWorkbookMenuItem, NativeFileMenuItemId.NewWorkbook);");
         catalogSource.Should().Contain("\"AvaloniaNativeMenu_NewWorkbook\"");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.NewWorkbook)");
-        source.Should().Contain("_newWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);");
+        source.Should().Contain("_newWorkbookMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New));");
         source.Should().Contain("ConfigureNativeFileMenuItem(_openMenuItem, NativeFileMenuItemId.Open);");
         catalogSource.Should().Contain("\"AvaloniaNativeMenu_Open\"");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.OpenWorkbook)");
-        source.Should().Contain("_openMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open);");
+        source.Should().Contain("_openMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open));");
         source.Should().Contain("ConfigureNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent);");
         catalogSource.Should().Contain("\"AvaloniaNativeMenu_OpenRecent\"");
         source.Should().Contain("_openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);");
         source.Should().Contain("ConfigureNativeFileMenuItem(_saveMenuItem, NativeFileMenuItemId.Save);");
         catalogSource.Should().Contain("\"AvaloniaNativeMenu_Save\"");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.SaveWorkbook)");
-        source.Should().Contain("_saveMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Save);");
+        source.Should().Contain("_saveMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Save));");
         source.Should().Contain("ConfigureNativeFileMenuItem(_saveAsMenuItem, NativeFileMenuItemId.SaveAs);");
         catalogSource.Should().Contain("\"AvaloniaNativeMenu_SaveAs\"");
         catalogSource.Should().Contain("NativeMenuGestureModifiers.Meta | NativeMenuGestureModifiers.Shift");
-        source.Should().Contain("_saveAsMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.SaveAs);");
+        source.Should().Contain("_saveAsMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.SaveAs));");
         source.Should().Contain("ConfigureNativeFileMenuItem(_closeWorkbookMenuItem, NativeFileMenuItemId.CloseWorkbook);");
         catalogSource.Should().Contain("\"AvaloniaNativeMenu_CloseWorkbook\"");
         catalogSource.Should().Contain("new NativeMenuGesturePlan(NativeMenuGestureKey.W, NativeMenuGestureModifiers.Meta)");
-        source.Should().Contain("_closeWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close);");
-        source.Should().Contain("_backstageExportMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageExport);");
-        source.Should().Contain("_backstageAccountMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageAccount);");
-        source.Should().Contain("_optionsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.Options);");
+        source.Should().Contain("_closeWorkbookMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close));");
+        source.Should().Contain("_backstageExportMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageExport));");
+        source.Should().Contain("_backstageAccountMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageAccount));");
+        source.Should().Contain("_optionsMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.Options));");
         workflowSource.Should().Contain("private Task ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId command)");
         workflowSource.Should().Contain("FreeXBackstageCommandWorkflowExecutor.ExecuteAsync(");
         workflowSource.Should().Contain("CreateBackstageCommandHandlers()");
@@ -792,11 +802,11 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("new(NativeMenuItemId.Redo, \"Redo\", NativeMenuGesture(WorkbookShortcutRoute.Redo))");
         source.Should().Contain("_redoMenuItem.Click += (_, _) => RedoLastEdit();");
         catalogSource.Should().Contain("new(NativeMenuItemId.Cut, \"Cut\", NativeMenuGesture(WorkbookShortcutRoute.Cut))");
-        source.Should().Contain("_cutMenuItem.Click += async (_, _) => await CutSelectedRangeToClipboardAsync();");
+        source.Should().Contain("_cutMenuItem.Click += (_, _) => RunGuarded(CutSelectedRangeToClipboardAsync);");
         catalogSource.Should().Contain("new(NativeMenuItemId.Copy, \"Copy\", NativeMenuGesture(WorkbookShortcutRoute.Copy))");
-        source.Should().Contain("_copyMenuItem.Click += async (_, _) => await CopySelectedRangeToClipboardAsync();");
+        source.Should().Contain("_copyMenuItem.Click += (_, _) => RunGuarded(CopySelectedRangeToClipboardAsync);");
         catalogSource.Should().Contain("new(NativeMenuItemId.Paste, \"Paste\", NativeMenuGesture(WorkbookShortcutRoute.Paste))");
-        source.Should().Contain("_pasteMenuItem.Click += async (_, _) => await PasteClipboardTextAsync();");
+        source.Should().Contain("_pasteMenuItem.Click += (_, _) => RunGuarded(PasteClipboardTextAsync);");
         catalogSource.Should().Contain("new(NativeMenuItemId.PasteSpecial, \"Paste Special\", NativeMenuGesture(WorkbookShortcutRoute.PasteSpecial))");
         source.Should().Contain("_pasteSpecialMenuItem.Menu = CreateNativePasteSpecialMenu();");
         source.Should().Contain("CreateNativePasteCommentsMenuItem(\"Comments and Notes\")");
@@ -1004,19 +1014,19 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private double GetActiveZoomFactor()");
         source.Should().Contain("TryGetDisplayedDrawingObjectBounds(");
         catalogSource.Should().Contain("new(NativeMenuItemId.HelpOnline, \"Help Online\", new NativeMenuGesturePlan(NativeMenuGestureKey.F1))");
-        source.Should().Contain("_helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get(\"MainWindow_Content_HelpOnline\"));");
+        source.Should().Contain("_helpOnlineMenuItem.Click += (_, _) => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get(\"MainWindow_Content_HelpOnline\")));");
         catalogSource.Should().Contain("new(NativeMenuItemId.SendFeedback, \"Send Feedback\", RequiresGestureInSmoke: false)");
         source.Should().Contain("AppIssueReporter.CreateIssueUrl(CreateIssueReportContext()),");
         catalogSource.Should().Contain("new(NativeMenuItemId.CheckForUpdates, \"Check for Updates\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, UiText.Get(\"MainWindow_Content_CheckForUpdates\"));");
+        source.Should().Contain("_checkForUpdatesMenuItem.Click += (_, _) => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, UiText.Get(\"MainWindow_Content_CheckForUpdates\")));");
         catalogSource.Should().Contain("new(NativeMenuItemId.About, \"About FreeX\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_aboutMenuItem.Click += async (_, _) => await ShowAboutDialogAsync();");
+        source.Should().Contain("_aboutMenuItem.Click += (_, _) => RunGuarded(ShowAboutDialogAsync);");
         catalogSource.Should().Contain("new(NativeMenuItemId.LegalNotices, \"Legal Notices\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_legalNoticesMenuItem.Click += async (_, _) => await ShowLegalNoticesDialogAsync();");
+        source.Should().Contain("_legalNoticesMenuItem.Click += (_, _) => RunGuarded(ShowLegalNoticesDialogAsync);");
         source.Should().Contain("ConfigureNativeFileMenuItem(_quitMenuItem, NativeFileMenuItemId.Quit);");
         catalogSource.Should().Contain("\"Quit FreeX\"");
         catalogSource.Should().Contain("new NativeMenuGesturePlan(NativeMenuGestureKey.Q, NativeMenuGestureModifiers.Meta)");
-        source.Should().Contain("_quitMenuItem.Click += async (_, _) => await TryQuitApplicationAsync();");
+        source.Should().Contain("_quitMenuItem.Click += (_, _) => RunGuarded(TryQuitApplicationAsync);");
         source.Should().Contain("var fileMenu = CreateNativeFileMenu();");
         catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.NewWorkbook)");
         catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.OpenRecent)");
@@ -2134,7 +2144,7 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("new(NativeMenuItemId.SortDescending, \"Sort Z to A\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_sortDescendingMenuItem.Click += (_, _) => SortSelectedRange(ascending: false);");
         catalogSource.Should().Contain("new(NativeMenuItemId.CustomSort, \"Sort...\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_customSortMenuItem.Click += async (_, _) => await ShowSortDialogAsync();");
+        source.Should().Contain("_customSortMenuItem.Click += (_, _) => RunGuarded(ShowSortDialogAsync);");
         source.Should().Contain("var dataMenu = CreateNativeMenu(NativeMenuTopLevelId.Data);");
         catalogSource.Should().Contain("Item(NativeMenuItemId.SortAscending)");
         catalogSource.Should().Contain("Item(NativeMenuItemId.SortDescending)");
@@ -2316,7 +2326,7 @@ public sealed class AvaloniaShellSourceTests
 
         source.Should().Contain("private readonly NativeMenuItem _dataValidationMenuItem = new();");
         catalogSource.Should().Contain("new(NativeMenuItemId.DataValidation, \"Data Validation...\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_dataValidationMenuItem.Click += async (_, _) => await ShowDataValidationDialogAsync();");
+        source.Should().Contain("_dataValidationMenuItem.Click += (_, _) => RunGuarded(ShowDataValidationDialogAsync);");
         catalogSource.Should().Contain("Item(NativeMenuItemId.DataValidation)");
         catalogSource.Should().Contain("new(NativeMenuItemId.DataValidation, context.IsIdle)");
         source.Should().Contain("private async Task ShowDataValidationDialogAsync()");
@@ -2390,7 +2400,7 @@ public sealed class AvaloniaShellSourceTests
 
         source.Should().Contain("private readonly NativeMenuItem _dataValidationPreviewMenuItem = new();");
         catalogSource.Should().Contain("new(NativeMenuItemId.DataValidationPreview, \"Data Validation Preview...\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_dataValidationPreviewMenuItem.Click += async (_, _) => await ShowDataValidationPreviewDialogAsync();");
+        source.Should().Contain("_dataValidationPreviewMenuItem.Click += (_, _) => RunGuarded(ShowDataValidationPreviewDialogAsync);");
         catalogSource.Should().Contain("Item(NativeMenuItemId.DataValidationPreview)");
         catalogSource.Should().Contain("new(NativeMenuItemId.DataValidationPreview, context.IsIdle)");
         smokeSource.Should().Contain("HasNativeDataValidationPreviewMenuItem: HasNativeMenuItem(_dataValidationPreviewMenuItem, NativeMenuItemId.DataValidationPreview)");
@@ -2600,7 +2610,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _whatIfAnalysisMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _goalSeekMenuItem = new();");
         catalogSource.Should().Contain("new(NativeMenuItemId.GoalSeek, \"Goal Seek...\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_goalSeekMenuItem.Click += async (_, _) => await ShowGoalSeekDialogAsync();");
+        source.Should().Contain("_goalSeekMenuItem.Click += (_, _) => RunGuarded(ShowGoalSeekDialogAsync);");
         catalogSource.Should().Contain("new(NativeMenuItemId.WhatIfAnalysis, \"What-If Analysis\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_whatIfAnalysisMenuItem.Menu = CreateNativeWhatIfAnalysisMenu();");
         catalogSource.Should().Contain("Item(NativeMenuItemId.WhatIfAnalysis)");
@@ -3112,7 +3122,7 @@ public sealed class AvaloniaShellSourceTests
 
         source.Should().Contain("private readonly NativeMenuItem _dataTableMenuItem = new();");
         catalogSource.Should().Contain("new(NativeMenuItemId.DataTable, \"Data Table...\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_dataTableMenuItem.Click += async (_, _) => await ShowDataTableDialogAsync();");
+        source.Should().Contain("_dataTableMenuItem.Click += (_, _) => RunGuarded(ShowDataTableDialogAsync);");
         catalogSource.Should().Contain("new(NativeMenuItemId.DataTable,");
         source.Should().Contain("=> CreateNativeMenu(NativeMenuCatalog.WhatIfAnalysisMenuEntries);");
         catalogSource.Should().Contain("Item(NativeMenuItemId.GoalSeek)");
@@ -3190,7 +3200,7 @@ public sealed class AvaloniaShellSourceTests
 
         source.Should().Contain("private readonly NativeMenuItem _forecastSheetMenuItem = new();");
         catalogSource.Should().Contain("new(NativeMenuItemId.ForecastSheet, \"Forecast Sheet...\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_forecastSheetMenuItem.Click += async (_, _) => await ShowForecastSheetDialogAsync();");
+        source.Should().Contain("_forecastSheetMenuItem.Click += (_, _) => RunGuarded(ShowForecastSheetDialogAsync);");
         catalogSource.Should().Contain("Item(NativeMenuItemId.ForecastSheet)");
         catalogSource.Should().Contain("new(NativeMenuItemId.ForecastSheet, context.IsIdle)");
 
@@ -3274,7 +3284,7 @@ public sealed class AvaloniaShellSourceTests
 
         source.Should().Contain("private readonly NativeMenuItem _scenarioManagerMenuItem = new();");
         catalogSource.Should().Contain("new(NativeMenuItemId.ScenarioManager, \"Scenario Manager...\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_scenarioManagerMenuItem.Click += async (_, _) => await ShowScenarioManagerDialogAsync();");
+        source.Should().Contain("_scenarioManagerMenuItem.Click += (_, _) => RunGuarded(ShowScenarioManagerDialogAsync);");
         catalogSource.Should().Contain("new(NativeMenuItemId.ScenarioManager, context.IsIdle)");
         catalogSource.Should().Contain("Item(NativeMenuItemId.ScenarioManager)");
 
@@ -3382,7 +3392,7 @@ public sealed class AvaloniaShellSourceTests
 
         source.Should().Contain("private readonly NativeMenuItem _advancedFilterMenuItem = new();");
         catalogSource.Should().Contain("new(NativeMenuItemId.AdvancedFilter, \"Advanced Filter...\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_advancedFilterMenuItem.Click += async (_, _) => await ShowAdvancedFilterDialogAsync();");
+        source.Should().Contain("_advancedFilterMenuItem.Click += (_, _) => RunGuarded(ShowAdvancedFilterDialogAsync);");
         catalogSource.Should().Contain("Item(NativeMenuItemId.AdvancedFilter)");
         catalogSource.Should().Contain("new(NativeMenuItemId.AdvancedFilter, context.IsIdle)");
 
@@ -3470,7 +3480,7 @@ public sealed class AvaloniaShellSourceTests
 
         source.Should().Contain("private readonly NativeMenuItem _removeDuplicatesMenuItem = new();");
         catalogSource.Should().Contain("new(NativeMenuItemId.RemoveDuplicates, \"Remove Duplicates...\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_removeDuplicatesMenuItem.Click += async (_, _) => await ShowRemoveDuplicatesDialogAsync();");
+        source.Should().Contain("_removeDuplicatesMenuItem.Click += (_, _) => RunGuarded(ShowRemoveDuplicatesDialogAsync);");
         catalogSource.Should().Contain("Item(NativeMenuItemId.RemoveDuplicates)");
         catalogSource.Should().Contain("new(NativeMenuItemId.RemoveDuplicates, context.IsIdle && context.SelectedRangeRowCount > 1)");
         smokeSource.Should().Contain("HasNativeRemoveDuplicatesMenuItem: HasNativeMenuItem(_removeDuplicatesMenuItem, NativeMenuItemId.RemoveDuplicates)");
@@ -3557,7 +3567,7 @@ public sealed class AvaloniaShellSourceTests
 
         source.Should().Contain("private readonly NativeMenuItem _subtotalMenuItem = new();");
         catalogSource.Should().Contain("new(NativeMenuItemId.Subtotal, \"Subtotal...\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_subtotalMenuItem.Click += async (_, _) => await ShowSubtotalDialogAsync();");
+        source.Should().Contain("_subtotalMenuItem.Click += (_, _) => RunGuarded(ShowSubtotalDialogAsync);");
         catalogSource.Should().Contain("Item(NativeMenuItemId.Subtotal)");
         catalogSource.Should().Contain("NativeMenuItemId.Subtotal,");
         smokeSource.Should().Contain("HasNativeSubtotalMenuItem: HasNativeMenuItem(_subtotalMenuItem, NativeMenuItemId.Subtotal)");
@@ -3730,8 +3740,8 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("new(NativeMenuItemId.PreviousNote, \"Previous Note\", RequiresGestureInSmoke: false)");
         catalogSource.Should().Contain("new(NativeMenuItemId.NextComment, \"Next Comment\", RequiresGestureInSmoke: false)");
         catalogSource.Should().Contain("new(NativeMenuItemId.PreviousComment, \"Previous Comment\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_reviewSummaryMenuItem.Click += async (_, _) => await ShowReviewSummaryDialogAsync();");
-        source.Should().Contain("_checkAccessibilityMenuItem.Click += async (_, _) => await ShowAccessibilityCheckerDialogAsync();");
+        source.Should().Contain("_reviewSummaryMenuItem.Click += (_, _) => RunGuarded(() => ShowReviewSummaryDialogAsync());");
+        source.Should().Contain("_checkAccessibilityMenuItem.Click += (_, _) => RunGuarded(ShowAccessibilityCheckerDialogAsync);");
         source.Should().Contain("_nextNoteMenuItem.Click += (_, _) => NavigateReviewNote(previous: false);");
         source.Should().Contain("_previousNoteMenuItem.Click += (_, _) => NavigateReviewNote(previous: true);");
         source.Should().Contain("_nextCommentMenuItem.Click += (_, _) => NavigateReviewThreadedComment(previous: false);");
@@ -4067,7 +4077,7 @@ public sealed class AvaloniaShellSourceTests
 
         source.Should().Contain("private readonly NativeMenuItem _insertHyperlinkMenuItem = new();");
         catalogSource.Should().Contain("new(NativeMenuItemId.InsertHyperlink, \"Hyperlink...\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_insertHyperlinkMenuItem.Click += async (_, _) => await ShowInsertHyperlinkDialogAsync();");
+        source.Should().Contain("_insertHyperlinkMenuItem.Click += (_, _) => RunGuarded(ShowInsertHyperlinkDialogAsync);");
         source.Should().Contain("var insertMenu = CreateNativeMenu(NativeMenuTopLevelId.Insert);");
         catalogSource.Should().Contain("Item(NativeMenuItemId.InsertHyperlink)");
         catalogSource.Should().Contain("new(NativeMenuItemId.InsertHyperlink, context.IsIdle)");
@@ -4114,7 +4124,7 @@ public sealed class AvaloniaShellSourceTests
 
         source.Should().Contain("private readonly NativeMenuItem _openHyperlinkMenuItem = new();");
         catalogSource.Should().Contain("new(NativeMenuItemId.OpenHyperlink, \"Open Hyperlink\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_openHyperlinkMenuItem.Click += async (_, _) => await OpenSelectedHyperlinkAsync();");
+        source.Should().Contain("_openHyperlinkMenuItem.Click += (_, _) => RunGuarded(OpenSelectedHyperlinkAsync);");
         source.Should().Contain("NativeMenuItemId.OpenHyperlink => _openHyperlinkMenuItem,");
         catalogSource.Should().Contain("Item(NativeMenuItemId.OpenHyperlink)");
         catalogSource.Should().Contain("new(NativeMenuItemId.OpenHyperlink, context.IsIdle && context.CanOpenSelectedHyperlink)");
@@ -4452,7 +4462,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(_mergeAndCenterButton, \"HomeMergeAndCenterButton\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_mergeAndCenterButton, UiText.Get(\"Toolbar_MergeCenterHelpText\"));");
         catalogSource.Should().Contain("new(NativeMenuItemId.MergeAndCenter, \"Merge & Center\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_mergeAndCenterMenuItem.Click += async (_, _) => await MergeAndCenterSelectedRangeAsync();");
+        source.Should().Contain("_mergeAndCenterMenuItem.Click += (_, _) => RunGuarded(MergeAndCenterSelectedRangeAsync);");
         catalogSource.Should().Contain("new(NativeMenuItemId.UnmergeCells, \"Unmerge Cells\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_unmergeCellsMenuItem.Click += (_, _) => UnmergeSelectedRange();");
         source.Should().Contain("NativeMenuItemId.MergeAndCenter => _mergeAndCenterMenuItem,");
@@ -4828,7 +4838,7 @@ public sealed class AvaloniaShellSourceTests
 
         source.Should().Contain("private readonly NativeMenuItem _formatCellsMenuItem = new();");
         catalogSource.Should().Contain("new(NativeMenuItemId.FormatCells, \"Format Cells...\", NativeMenuGesture(WorkbookShortcutRoute.OpenFormatCells))");
-        source.Should().Contain("_formatCellsMenuItem.Click += async (_, _) => await ShowFormatCells");
+        source.Should().Contain("_formatCellsMenuItem.Click += (_, _) => RunGuarded(() => ShowFormatCells");
         source.Should().Contain("NativeMenuItemId.FormatCells => _formatCellsMenuItem,");
         catalogSource.Should().Contain("Item(NativeMenuItemId.FormatCells)");
         catalogSource.Should().Contain("new(NativeMenuItemId.FormatCells, context.IsIdle)");
@@ -5060,7 +5070,7 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("new(NativeMenuItemId.NewSheet, \"AvaloniaNativeMenu_NewSheet\", NativeMenuGesture(WorkbookShortcutRoute.InsertWorksheet), UsesResourceKey: true)");
         source.Should().Contain("_newSheetMenuItem.Click += (_, _) => AddNewSheet();");
         catalogSource.Should().Contain("new(NativeMenuItemId.RenameSheet, \"Rename Sheet...\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_renameSheetMenuItem.Click += async (_, _) => await RenameActiveSheetAsync();");
+        source.Should().Contain("_renameSheetMenuItem.Click += (_, _) => RunGuarded(RenameActiveSheetAsync);");
         catalogSource.Should().Contain("new(NativeMenuItemId.DuplicateSheet, \"Duplicate Sheet\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_duplicateSheetMenuItem.Click += (_, _) => DuplicateActiveSheet();");
         catalogSource.Should().Contain("new(NativeMenuItemId.MoveSheetLeft, \"Move Sheet Left\", RequiresGestureInSmoke: false)");
@@ -5076,7 +5086,7 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("new(NativeMenuItemId.HideSheet, \"Hide Sheet\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_hideSheetMenuItem.Click += (_, _) => HideActiveSheet();");
         catalogSource.Should().Contain("new(NativeMenuItemId.UnhideSheet, \"Unhide Sheet...\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_unhideSheetMenuItem.Click += async (_, _) => await UnhideSheetAsync();");
+        source.Should().Contain("_unhideSheetMenuItem.Click += (_, _) => RunGuarded(UnhideSheetAsync);");
         catalogSource.Should().Contain("new(NativeMenuItemId.DeleteSheet, \"Delete Sheet\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_deleteSheetMenuItem.Click += (_, _) => DeleteActiveSheet();");
         source.Should().Contain("var sheetMenu = CreateNativeMenu(NativeMenuTopLevelId.Sheet);");
@@ -5475,15 +5485,15 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("GoToSpecialDialogPlanner.BuildChoices().ToArray()");
         source.Should().Contain("GoToSpecialDialogPlanner.BuildOptions(choice.Kind, GetValueTypes())");
         catalogSource.Should().Contain("new(NativeMenuItemId.Find, \"Find...\", NativeMenuGesture(WorkbookShortcutRoute.Find))");
-        source.Should().Contain("_findMenuItem.Click += async (_, _) => await ShowFindDialogAsync();");
+        source.Should().Contain("_findMenuItem.Click += (_, _) => RunGuarded(ShowFindDialogAsync);");
         catalogSource.Should().Contain("new(NativeMenuItemId.FindNext, \"Find Next\", new NativeMenuGesturePlan(NativeMenuGestureKey.G, NativeMenuGestureModifiers.Meta))");
         source.Should().Contain("_findNextMenuItem.Click += (_, _) => FindNext();");
         catalogSource.Should().Contain("new(NativeMenuItemId.Replace, \"Replace...\", NativeMenuGesture(WorkbookShortcutRoute.Replace))");
-        source.Should().Contain("_replaceMenuItem.Click += async (_, _) => await ShowReplaceDialogAsync();");
+        source.Should().Contain("_replaceMenuItem.Click += (_, _) => RunGuarded(ShowReplaceDialogAsync);");
         catalogSource.Should().Contain("new(NativeMenuItemId.GoTo, \"Go To...\", NativeMenuGesture(WorkbookShortcutRoute.GoTo))");
-        source.Should().Contain("_goToMenuItem.Click += async (_, _) => await ShowGoToDialogAsync();");
+        source.Should().Contain("_goToMenuItem.Click += (_, _) => RunGuarded(ShowGoToDialogAsync);");
         catalogSource.Should().Contain("new(NativeMenuItemId.GoToSpecial, \"Go To Special...\", RequiresGestureInSmoke: false)");
-        source.Should().Contain("_goToSpecialMenuItem.Click += async (_, _) => await ShowGoToSpecialDialogAsync();");
+        source.Should().Contain("_goToSpecialMenuItem.Click += (_, _) => RunGuarded(ShowGoToSpecialDialogAsync);");
         source.Should().Contain("NativeMenuItemId.Find => _findMenuItem,");
         source.Should().Contain("NativeMenuItemId.FindNext => _findNextMenuItem,");
         source.Should().Contain("NativeMenuItemId.Replace => _replaceMenuItem,");
@@ -5754,7 +5764,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);");
         catalogSource.Should().Contain("\"AvaloniaNativeMenu_WorkbookStatistics\"");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.WorkbookStatistics)");
-        source.Should().Contain("_workbookStatisticsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.WorkbookStatistics);");
+        source.Should().Contain("_workbookStatisticsMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.WorkbookStatistics));");
         catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.WorkbookStatistics)");
         catalogSource.Should().Contain("new(NativeFileMenuItemId.WorkbookStatistics, context.IsIdle)");
         smokeSource.Should().Contain("HasNativeWorkbookStatisticsMenuItem: HasNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics)");
