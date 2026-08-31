@@ -4087,7 +4087,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!_cellAddressBoxHasPendingEdit)
             _cellAddressText.Text =
                 ResolveSelectedDrawingObjectNameBoxText() ??
-                FormatCellReference(_session.ActiveCell);
+                FormatSelectionNameBoxText();
         _isApplyingFormulaBoxText = true;
         try
         {
@@ -28836,6 +28836,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private static string FormatCellReference(CellAddress address) =>
         SpreadsheetDisplayFormatter.FormatCellReference(address, useR1C1ReferenceStyle: false);
+
+    // A row-header selection is stored as the complete grid span so editing, rendering, and
+    // commands can operate on every cell. The Name Box, however, uses Excel's compact whole-row
+    // notation instead of exposing that implementation geometry.
+    private string FormatSelectionNameBoxText()
+    {
+        var range = _session.SelectedRange;
+        if (range.Start.Col == 1 && range.End.Col == CellAddress.MaxCol)
+            return range.Start.Row == range.End.Row
+                ? $"{range.Start.Row}:{range.Start.Row}"
+                : $"{range.Start.Row}:{range.End.Row}";
+
+        return FormatCellReference(_session.ActiveCell);
+    }
 
     private static string FormatRangeReference(GridRange range) =>
         SpreadsheetDisplayFormatter.FormatRangeReference(
