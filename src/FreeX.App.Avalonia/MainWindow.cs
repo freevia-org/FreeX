@@ -6343,7 +6343,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
             if (style is { } borderStyle && HasVisibleCellBorder(borderStyle))
             {
-                var borderOverlay = new CellBorderPanel(borderStyle, ResolvePictureCellBorderNeighborEdges(cell, cellLookup))
+                var borderOverlay = new CellBorderPanel(borderStyle, ResolvePictureCellBorderNeighborEdges(cell, cellLookup), theme: theme)
                 {
                     Width = cellWidth,
                     Height = cellHeight,
@@ -8930,7 +8930,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             suppressDefaultGridlines: CellSurfaceGridlinePlanner.HasVisibleFill(
                 style,
                 _session.Workbook.Theme),
-            borderNeighbors: borderNeighbors);
+            borderNeighbors: borderNeighbors,
+            // R175: the panel resolves CellBorder.ThemeColor against this theme on every paint, so a
+            // border set from the ribbon's Theme Colors picker follows a Theme Colors swap instead of
+            // keeping the RGB baked at load time (matches how font/fill already resolve here).
+            theme: _session.Workbook.Theme);
 
         // Grid tracks define worksheet ownership. Give the interactive border the exact slot size
         // (cellWidth/cellHeight already include merged spans) so Linux font measurement cannot let
@@ -11422,7 +11426,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         CellCommentDisplay? commentDisplay = null,
         FontFamily? fontFamily = null,
         bool suppressDefaultGridlines = false,
-        CellBorderNeighborEdges borderNeighbors = default)
+        CellBorderNeighborEdges borderNeighbors = default,
+        WorkbookTheme? theme = null)
     {
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
@@ -11534,7 +11539,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 style,
                 borderNeighbors,
                 isEffectivelyRightToLeft: flowDirection == FlowDirection.RightToLeft,
-                zoomFactor: zoomFactor)
+                zoomFactor: zoomFactor,
+                theme: theme)
             : CreateDefaultCellContent(
                 textBlock,
                 style,
@@ -11545,7 +11551,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 sparklineLayer,
                 patternBrush,
                 borderNeighbors,
-                isRightToLeft: flowDirection == FlowDirection.RightToLeft);
+                isRightToLeft: flowDirection == FlowDirection.RightToLeft,
+                theme: theme);
 
         // Selected cells get a faint translucent-green wash over their content (matching the WPF grid's
         // SelectionBrush), so a multi-cell selection reads as a light highlight rather than bare green
@@ -11604,7 +11611,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         Control? sparklineLayer = null,
         IBrush? patternBrush = null,
         CellBorderNeighborEdges borderNeighbors = default,
-        bool isRightToLeft = false)
+        bool isRightToLeft = false,
+        WorkbookTheme? theme = null)
     {
         var content = new AvaloniaGrid { ClipToBounds = true };
 
@@ -11659,7 +11667,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (conditionalIcon is { } iconGlyph)
             content.Children.Add(CreateConditionalIconLayer(iconGlyph, zoomFactor, isRightToLeft));
 
-        AddStyledCellBorderOverlay(content, style, borderNeighbors, zoomFactor);
+        AddStyledCellBorderOverlay(content, style, borderNeighbors, zoomFactor, theme);
         return content;
     }
 
@@ -11860,7 +11868,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         CellStyle? style,
         CellBorderNeighborEdges borderNeighbors = default,
         bool isEffectivelyRightToLeft = false,
-        double zoomFactor = 1)
+        double zoomFactor = 1,
+        WorkbookTheme? theme = null)
     {
         var content = new AvaloniaGrid { ClipToBounds = true };
         var canvas = new Canvas { ClipToBounds = true };
@@ -11894,7 +11903,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         Canvas.SetTop(textBlock, layout.TextPoint.Y);
         canvas.Children.Add(textBlock);
         content.Children.Add(canvas);
-        AddStyledCellBorderOverlay(content, style, borderNeighbors, zoomFactor);
+        AddStyledCellBorderOverlay(content, style, borderNeighbors, zoomFactor, theme);
         return content;
     }
 
@@ -11902,7 +11911,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AvaloniaGrid content,
         CellStyle? style,
         CellBorderNeighborEdges borderNeighbors = default,
-        double zoomFactor = 1)
+        double zoomFactor = 1,
+        WorkbookTheme? theme = null)
     {
         if (style is not { } visibleStyle || !HasVisibleCellBorder(visibleStyle))
             return;
@@ -11913,7 +11923,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // borderNeighbors carries the touching neighbor cells' opposing edge styles so a shared
         // grid edge resolves to the heavier/more-prominent style through CellBorderVisualPlanner
         // instead of this cell always winning by paint order.
-        content.Children.Add(new CellBorderPanel(visibleStyle, borderNeighbors, zoomFactor));
+        content.Children.Add(new CellBorderPanel(visibleStyle, borderNeighbors, zoomFactor, theme));
     }
 
     private static bool HasVisibleCellBorder(CellStyle? style) =>

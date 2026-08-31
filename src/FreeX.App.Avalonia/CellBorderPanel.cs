@@ -51,14 +51,26 @@ internal sealed class CellBorderPanel : Panel
     private readonly CellStyle _style;
     private readonly CellBorderNeighborEdges _neighbors;
     private readonly double _zoomFactor;
+    private readonly WorkbookTheme _theme;
     private Size _lastArrange = new(-1, -1);
     private TopLevel? _subscribedTopLevel;
 
-    public CellBorderPanel(CellStyle style, CellBorderNeighborEdges neighbors = default, double zoomFactor = 1.0)
+    // theme defaults to WorkbookTheme.Office (rather than being required) so the many existing
+    // call sites/tests that construct a panel for a plain, non-theme-referencing border keep
+    // compiling unchanged. A caller that omits it while the style DOES carry a CellBorder.ThemeColor
+    // reference still resolves correctly against Office -- CellBorder.ResolveColor always needs
+    // SOME theme, and Office is the same fallback ChartRenderer.Render/WorkbookTheme.Office use
+    // elsewhere in this codebase when no explicit theme is available.
+    public CellBorderPanel(
+        CellStyle style,
+        CellBorderNeighborEdges neighbors = default,
+        double zoomFactor = 1.0,
+        WorkbookTheme? theme = null)
     {
         _style = style;
         _neighbors = neighbors;
         _zoomFactor = double.IsFinite(zoomFactor) && zoomFactor > 0 ? zoomFactor : 1.0;
+        _theme = theme ?? WorkbookTheme.Office;
         IsHitTestVisible = false;
         ClipToBounds = false;
     }
@@ -160,7 +172,7 @@ internal sealed class CellBorderPanel : Panel
         var strokePlan = CellBorderVisualPlanner.Plan(border.Style);
         var renderScaling = GetRenderScaling();
         var thickness  = GetDisplayThickness(strokePlan, renderScaling);
-        var stroke     = ColorToBrush(border.Color);
+        var stroke     = ColorToBrush(border.ResolveColor(_theme));
         var halfThick  = thickness / 2.0;
 
         // Inset the line centre by half-thickness so the visible stroke sits exactly on the panel
@@ -190,7 +202,7 @@ internal sealed class CellBorderPanel : Panel
         var strokePlan = CellBorderVisualPlanner.Plan(border.Style);
         var renderScaling = GetRenderScaling();
         var thickness = GetDisplayThickness(strokePlan, renderScaling);
-        var stroke    = ColorToBrush(border.Color);
+        var stroke    = ColorToBrush(border.ResolveColor(_theme));
         AddLineOrDouble(strokePlan, p1, p2, stroke, thickness, renderScaling);
     }
 

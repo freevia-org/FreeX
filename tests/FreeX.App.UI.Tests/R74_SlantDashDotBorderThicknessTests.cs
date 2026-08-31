@@ -26,7 +26,7 @@ public sealed class R74_SlantDashDotBorderThicknessTests
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            method!.Invoke(null, [dc, border, new Point(0, 0), new Point(40, 0), null, borderPenCache, 1.0]);
+            method!.Invoke(null, [dc, border, new Point(0, 0), new Point(40, 0), WorkbookTheme.Office, null, borderPenCache, 1.0]);
         }
 
         borderPenCache.Should().ContainKey(border);
