@@ -400,6 +400,8 @@ public sealed partial class MainWindow
             MinWidth = 72,
         };
         AvaloniaCompactDialogChrome.ApplyButton(okButton, AutoFilterDialogChromeStyle, 72, isDefault: true);
+        AutomationProperties.SetAutomationId(okButton, $"AutoFilterOkButton_{headerCell.Row}_{headerCell.Col}");
+        AutomationProperties.SetName(okButton, UiText.CreateAutomationName(UiText.Get("Common_Ok")));
         okButton.Click += (_, _) =>
         {
             flyout.Hide();
@@ -412,7 +414,19 @@ public sealed partial class MainWindow
                     criteriaBox.Text,
                     addCurrentSelectionToFilter: addSelectionBox.IsChecked == true));
         };
-        panel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([okButton], new Thickness(0, 6, 0, 0)));
+        var cancelButton = new Button
+        {
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
+            IsCancel = true,
+            MinWidth = 72,
+        };
+        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, AutoFilterDialogChromeStyle, 72);
+        AutomationProperties.SetAutomationId(cancelButton, $"AutoFilterCancelButton_{headerCell.Row}_{headerCell.Col}");
+        AutomationProperties.SetName(cancelButton, UiText.CreateAutomationName(UiText.Get("Common_Cancel")));
+        // Checklist edits are deliberately local to this flyout until OK; Cancel and Escape leave the
+        // worksheet filter untouched, matching Excel's transactional value checklist.
+        cancelButton.Click += (_, _) => flyout.Hide();
+        panel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 6, 0, 0)));
 
         panel.KeyDown += (_, e) =>
         {
