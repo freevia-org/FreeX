@@ -166,6 +166,83 @@ public sealed class CommentCommandTests
     }
 
     [Fact]
+    public void DeleteCommentCommand_DenseReplyAnchorsAcrossThreadsRestoreInOrder()
+    {
+        const int unrelatedThreadCount = 128;
+        const int anchorCount = 256;
+        const int topLevelId = 100;
+        const int replyId = 101;
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        for (var index = 0; index < unrelatedThreadCount; index++)
+        {
+            var root = new Comment(1_000 + index, "unrelated", "U", "U");
+            root.AddReply(2_000 + index, "reply", "U", "U");
+            doc.Comments[root.Id] = root;
+        }
+
+        var target = new Comment(topLevelId, "target", "T", "T");
+        target.AddReply(replyId, "target reply", "T", "T");
+        doc.Comments[topLevelId] = target;
+        var anchors = new List<Paragraph>(anchorCount);
+        for (var index = 0; index < anchorCount; index++)
+        {
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run(index.ToString()) { CommentId = replyId });
+            paragraph.Runs.Add(Run.CommentReference(replyId));
+            doc.Blocks.Add(paragraph);
+            anchors.Add(paragraph);
+        }
+
+        var bus = new DocumentCommandBus(new TestContext(doc));
+        bus.Execute(new DeleteCommentCommand(topLevelId));
+
+        doc.Comments.Should().NotContainKey(topLevelId);
+        anchors.Should().OnlyContain(paragraph =>
+            paragraph.Runs.Count == 1 && paragraph.Runs[0].CommentId == null && !paragraph.Runs[0].IsCommentReference);
+
+        bus.Undo().Should().BeTrue();
+
+        doc.Comments[topLevelId].Replies.Single().Id.Should().Be(replyId);
+        anchors.Should().OnlyContain(paragraph =>
+            paragraph.Runs.Count == 2
+            && paragraph.Runs[0].CommentId == replyId
+            && paragraph.Runs[1].IsCommentReference);
+
+        bus.Redo().Should().BeTrue();
+        anchors.Should().OnlyContain(paragraph => paragraph.Runs.Count == 1 && paragraph.Runs[0].CommentId == null);
+    }
+
+    [Fact]
+    public void DeleteCommentCommand_ResolveTopLevelPreservesDirectKeyPrecedenceAndMissingFallback()
+    {
+        var doc = TextDocument.CreateEmpty();
+        var threaded = new Comment(10, "threaded", "T", "T");
+        threaded.AddReply(11, "reply", "T", "T");
+        threaded.AddReply(12, "colliding reply", "T", "T");
+        doc.Comments[10] = threaded;
+        doc.Comments[12] = new Comment(12, "direct", "D", "D");
+
+        DeleteCommentCommand.ResolveTopLevel(doc, 11).Should().Be(10);
+        DeleteCommentCommand.ResolveTopLevel(doc, 12).Should().Be(12);
+        DeleteCommentCommand.ResolveTopLevel(doc, 99).Should().Be(99);
+    }
+
+    [Fact]
+    public void DeleteCommentCommand_SourceGuardCachesAnchorOrdinalsAndThreadLookup()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText("freew", "FreeW.Core.Model", "CommentCommands.cs");
+
+        source.Should().Contain("var topLevelByCommentId = CommentThreadIndex.BuildTopLevelByCommentId(doc);")
+            .And.Contain("var anchorParagraphs = EnumerateCommentAnchorParagraphs(doc).ToList();")
+            .And.Contain("new Dictionary<Paragraph, int>(ReferenceEqualityComparer.Instance)")
+            .And.Contain("anchorParagraphKeys.TryAdd(anchorParagraphs[index], index);")
+            .And.Contain("ResolveTopLevel(doc, topLevelByCommentId, cid)")
+            .And.NotContain("ParagraphKey(")
+            .And.NotContain("ParagraphForKey(");
+    }
+
+    [Fact]
     public void ReplyAndResolveCommands_AreCommentHistory_AndUndoRedo()
     {
         var doc = TextDocument.CreateEmpty();
