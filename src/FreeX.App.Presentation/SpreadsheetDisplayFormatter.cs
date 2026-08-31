@@ -1,5 +1,6 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using System.Globalization;
 
 namespace FreeX.App.Presentation;
 
@@ -47,7 +48,8 @@ public static class SpreadsheetDisplayFormatter
         CellAddress address,
         bool useR1C1ReferenceStyle,
         Sheet? sheet,
-        Workbook? workbook)
+        Workbook? workbook,
+        CultureInfo? culture = null)
     {
         if (cell?.HasFormula == true && cell.FormulaText is not null)
         {
@@ -59,6 +61,9 @@ public static class SpreadsheetDisplayFormatter
                 : cell.FormulaText;
             return "=" + formula;
         }
+
+        if (TryFormatBuiltInShortDateForFormulaBar(cell, address, sheet, workbook, culture, out var dateText))
+            return dateText;
 
         return FormatCellValue(cell?.Value);
     }
@@ -89,6 +94,42 @@ public static class SpreadsheetDisplayFormatter
             ? cell.StyleId
             : sheet.GetStyleOnly(address.Row, address.Col) ?? StyleId.Default;
         return workbook.GetStyle(styleId).Hidden;
+    }
+
+    /// <summary>
+    /// The formula bar exposes a Ctrl+;-entered built-in short date using the user's short-date
+    /// pattern, rather than the invariant ISO diagnostic text used for unformatted DateTimeValue
+    /// literals. Excel stores that entry as a numeric serial with built-in numFmtId 14, so both
+    /// the style and the serial are required before taking this display path.
+    /// </summary>
+    private static bool TryFormatBuiltInShortDateForFormulaBar(
+        Cell? cell,
+        CellAddress address,
+        Sheet? sheet,
+        Workbook? workbook,
+        CultureInfo? culture,
+        out string text)
+    {
+        text = "";
+        if (cell?.Value is not NumberValue number || sheet is null || workbook is null)
+            return false;
+
+        var styleId = cell.StyleId != StyleId.Default
+            ? cell.StyleId
+            : sheet.GetStyleOnly(address.Row, address.Col) ?? StyleId.Default;
+        if (!string.Equals(
+                workbook.GetStyle(styleId).NumberFormat,
+                DateTimeEntryService.CurrentDateNumberFormat,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!new DateTimeValue(number.Value).TryToDateTime(out var date))
+            return false;
+
+        text = date.ToString("d", culture ?? CultureInfo.CurrentCulture);
+        return true;
     }
 
     public static string FormatCellValue(ScalarValue? value) =>
