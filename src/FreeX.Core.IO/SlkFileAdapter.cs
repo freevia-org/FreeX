@@ -178,6 +178,16 @@ public sealed class SlkFileAdapter : IFileAdapter
             // K = constant value (always emitted so a reader without formula support still sees a value).
             sb.Append(";K").Append(FormatValue(cell.Value));
 
+            // A boolean has no numeric spelling of its own in SYLK's K field. Writing a bare "KTRUE"
+            // (what this adapter used to emit) is not a number or a quoted string, so other readers fall
+            // back to 0 and every TRUE arrives as FALSE -- verified against LibreOffice. Excel and
+            // LibreOffice both write the numeric equivalent plus a TRUE()/FALSE() expression, which keeps
+            // the value correct for a reader that ignores expressions AND lets one that reads them
+            // recover the boolean type. FormatValue emits the 1/0 above; this adds the expression. Only
+            // for a value cell -- a boolean that is a formula's cached result keeps its own formula.
+            if (cell.Value is BoolValue boolValue && cell.FormulaText is not { Length: > 0 })
+                sb.Append(";E").Append(boolValue.Value ? "TRUE()" : "FALSE()");
+
             if (cell.FormulaText is { Length: > 0 } formula)
             {
                 var a1 = formula.StartsWith("=", StringComparison.Ordinal) ? formula[1..] : formula;
@@ -284,7 +294,15 @@ public sealed class SlkFileAdapter : IFileAdapter
 
         var addr = new CellAddress(sheet.Id, curRow, curCol);
         Cell cell;
-        if (expression is { Length: > 0 })
+        if (expression is { Length: > 0 } boolExpression &&
+            TryParseBooleanExpression(boolExpression) is { } boolean)
+        {
+            // "K1;ETRUE()" is how this writer -- and Excel, and LibreOffice -- spell a boolean CONSTANT
+            // in SYLK, since the K field has no boolean form. Restore it as a boolean value rather than
+            // as a formula cell, so a saved TRUE loads back as TRUE and not as a =TRUE() formula.
+            cell = Cell.FromValue(boolean);
+        }
+        else if (expression is { Length: > 0 })
         {
             var a1 = R1C1FormulaConverter.ToA1(expression, curRow, curCol);
             cell = Cell.FromFormula(a1);
@@ -297,6 +315,21 @@ public sealed class SlkFileAdapter : IFileAdapter
         }
 
         sheet.SetCell(addr, cell);
+    }
+
+    /// <summary>
+    /// Recognises the SYLK spelling of a boolean constant -- a numeric K field paired with a bare
+    /// <c>TRUE()</c>/<c>FALSE()</c> expression. Returns null for anything else, including a formula that
+    /// merely contains TRUE()/FALSE() as a subexpression, which stays a formula.
+    /// </summary>
+    private static ScalarValue? TryParseBooleanExpression(string expression)
+    {
+        var trimmed = expression.Trim();
+        if (trimmed.Equals("TRUE()", StringComparison.OrdinalIgnoreCase))
+            return new BoolValue(true);
+        if (trimmed.Equals("FALSE()", StringComparison.OrdinalIgnoreCase))
+            return new BoolValue(false);
+        return null;
     }
 
     private static ScalarValue ParseValue(string raw)
@@ -329,7 +362,10 @@ public sealed class SlkFileAdapter : IFileAdapter
         NumberValue n when double.IsFinite(n.Value) => n.Value.ToString("R", CultureInfo.InvariantCulture),
         NumberValue => "0",
         DateTimeValue d when double.IsFinite(d.Value) => d.Value.ToString("R", CultureInfo.InvariantCulture),
-        BoolValue b => b.Value ? "TRUE" : "FALSE",
+        // Numeric, not a bare TRUE/FALSE token: the K field takes a number or a quoted string, so a
+        // bare token is read as 0 by other implementations. The boolean TYPE is carried by the
+        // companion TRUE()/FALSE() expression the writer adds (see WriteCells).
+        BoolValue b => b.Value ? "1" : "0",
         ErrorValue e => Escape(e.Code),
         TextValue t => $"\"{Escape(t.Value)}\"",
         _ => "\"\"",
