@@ -145,7 +145,7 @@ internal static partial class XlsxChartXmlWriter
         }
     }
 
-    private static IEnumerable<XElement> BuildChartExSeries(
+    internal static IEnumerable<XElement> BuildChartExSeries(
         ChartModel chart,
         Sheet sheet,
         XNamespace chartExNs,

@@ -9,7 +9,7 @@ namespace FreeX.Core.IO;
 
 public sealed partial class XlsxFileAdapter
 {
-    private static void ApplyPackagePostProcessing(
+    internal static void ApplyPackagePostProcessing(
         Workbook workbook,
         Stream packageStream,
         string? currentModelFingerprint = null,

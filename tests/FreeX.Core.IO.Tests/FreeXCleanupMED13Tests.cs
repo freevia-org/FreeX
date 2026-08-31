@@ -71,11 +71,7 @@ public sealed class FreeXCleanupMED13Tests
     private static void InvokeCopyChartExWithModeledContent(
         ZipArchiveEntry sourceEntry, ZipArchiveEntry generatedEntry, ZipArchive generatedArchive)
     {
-        var method = typeof(XlsxFileAdapter).GetMethod(
-            "CopyChartExWithModeledContent",
-            BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new InvalidOperationException("CopyChartExWithModeledContent method not found via reflection.");
-        method.Invoke(null, [sourceEntry, generatedEntry, generatedArchive]);
+        XlsxFileAdapter.CopyChartExWithModeledContent(sourceEntry, generatedEntry, generatedArchive);
     }
 
     /// <summary>

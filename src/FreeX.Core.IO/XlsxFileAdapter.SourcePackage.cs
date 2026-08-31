@@ -1379,7 +1379,7 @@ public sealed partial class XlsxFileAdapter
         sourceChart.FirstColIsCategories == candidate.FirstColIsCategories &&
         string.Equals(sourceChart.Title ?? "", candidate.Title ?? "", StringComparison.Ordinal);
 
-    private static void CopyChartExWithModeledContent(
+    internal static void CopyChartExWithModeledContent(
         ZipArchiveEntry sourceEntry,
         ZipArchiveEntry generatedEntry,
         ZipArchive generatedArchive)
@@ -1432,7 +1432,7 @@ public sealed partial class XlsxFileAdapter
     // cx:dataId resolves to via cx:chartData's cx:numDim/cx:f formula -- and only fall back to
     // positional pairing for series where identity can't be resolved on both sides (e.g. Pareto's
     // synthetic ownerIdx-based "paretoLine" series, which has no cx:dataId of its own).
-    private static void MergeChartExSeries(
+    internal static void MergeChartExSeries(
         XDocument sourceXml,
         XElement sourceChart,
         XDocument generatedXml,
