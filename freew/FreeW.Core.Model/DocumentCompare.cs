@@ -192,16 +192,17 @@ public static class DocumentCompare
         // those paragraphs pointing at an id result.Styles no longer defines, silently losing their
         // formatting. Give the backfilled style a disambiguated name instead — the same " 2", " 3", …
         // convention StyleManager.CreateStyle uses for a user-authored collision — so the id keeps
-        // resolving to a real, distinctly named style. This is the same StyleManager.FindStyleIdByName
-        // lookup TransferStyles uses for the identical rule.
+        // resolving to a real, distinctly named style. Keep the same name-first rule as DocumentMerge's
+        // lookup, but index the growing result catalog once for dense style catalogs.
+        var usedStyleNames = new HashSet<string>(
+            result.Styles.Values.Select(style => style.Name),
+            StringComparer.OrdinalIgnoreCase);
         foreach (var (id, style) in original.Styles)
         {
             if (result.Styles.ContainsKey(id))
                 continue;
 
-            var name = StyleManager.FindStyleIdByName(result, style.Name) is not null
-                ? StyleManager.MakeNameUnique(result, style.Name)
-                : style.Name;
+            var name = StyleManager.MakeNameUnique(style.Name, usedStyleNames);
             result.Styles.Add(id, name == style.Name ? style : new DocumentStyle
             {
                 Id = style.Id,

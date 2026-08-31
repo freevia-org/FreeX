@@ -254,13 +254,26 @@ public static class StyleManager
     public static string MakeNameUnique(TextDocument doc, string name)
     {
         ArgumentNullException.ThrowIfNull(doc);
-        if (!NameInUse(doc, name))
+        var usedNames = new HashSet<string>(
+            doc.Styles.Values.Select(style => style.Name),
+            StringComparer.OrdinalIgnoreCase);
+        return MakeNameUnique(name, usedNames);
+    }
+
+    /// <summary>
+    /// Claims <paramref name="name"/> or its first available Word-style <c>" N"</c> suffix from
+    /// <paramref name="usedNames"/>. The supplied set is updated with the returned name.
+    /// </summary>
+    internal static string MakeNameUnique(string name, ISet<string> usedNames)
+    {
+        ArgumentNullException.ThrowIfNull(usedNames);
+        if (usedNames.Add(name))
             return name;
 
         for (var n = 2; ; n++)
         {
             var candidate = name + " " + n.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            if (!NameInUse(doc, candidate))
+            if (usedNames.Add(candidate))
                 return candidate;
         }
     }

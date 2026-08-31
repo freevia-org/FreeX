@@ -899,6 +899,50 @@ public class DocumentCompareTests
         result.Styles["Quote"].Name.Should().Be("Quote");
     }
 
+    [Fact]
+    public void Compare_BackfilledDenseNameCollisions_UseSequentialWordNames()
+    {
+        const int styleCount = 512;
+        var original = DocWith("Shared paragraph");
+        var revised = DocWith("Shared paragraph");
+        for (var index = 0; index < styleCount; index++)
+        {
+            var name = "Dense style " + index;
+            original.Styles["Original" + index] = new DocumentStyle
+            {
+                Id = "Original" + index,
+                Name = name,
+            };
+            revised.Styles["Revised" + index] = new DocumentStyle
+            {
+                Id = "Revised" + index,
+                Name = name,
+            };
+        }
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        result.Styles.Count.Should().BeGreaterThanOrEqualTo(styleCount * 2);
+        result.Styles.Values.Select(style => style.Name)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Should().HaveCount(result.Styles.Count);
+        for (var index = 0; index < styleCount; index++)
+        {
+            result.Styles["Revised" + index].Name.Should().Be("Dense style " + index);
+            result.Styles["Original" + index].Name.Should().Be("Dense style " + index + " 2");
+        }
+    }
+
+    [Fact]
+    public void Compare_StyleBackfill_SourceGuardKeepsOneNameIndex()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText("freew", "FreeW.Core.Model", "DocumentCompare.cs");
+
+        source.Should().Contain("var usedStyleNames = new HashSet<string>(")
+            .And.Contain("StyleManager.MakeNameUnique(style.Name, usedStyleNames);")
+            .And.NotContain("StyleManager.FindStyleIdByName(result, style.Name)");
+    }
+
     // -----------------------------------------------------------------------
     // Word-level diff must not drop inline objects sharing an edited paragraph (r141 HIGH:
     // freew-compare-word-diff-drops-inline-objects)
