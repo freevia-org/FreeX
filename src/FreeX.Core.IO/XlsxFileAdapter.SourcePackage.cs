@@ -720,11 +720,26 @@ public sealed partial class XlsxFileAdapter
             if (targetRoot is null)
                 continue;
 
-            var existingIds = targetRoot
-                .Elements(context.PackageRelNs + "Relationship")
-                .Select(element => element.Attribute("Id")?.Value)
-                .Where(value => !string.IsNullOrWhiteSpace(value))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var existingIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var existingQueryTableTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var existingRelationship in targetRoot.Elements(context.PackageRelNs + "Relationship"))
+            {
+                var existingId = existingRelationship.Attribute("Id")?.Value;
+                if (!string.IsNullOrWhiteSpace(existingId))
+                    existingIds.Add(existingId);
+
+                if (!string.Equals(
+                        existingRelationship.Attribute("Type")?.Value?.Trim(),
+                        QueryTableRelationshipType,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var existingTarget = existingRelationship.Attribute("Target")?.Value;
+                if (!string.IsNullOrWhiteSpace(existingTarget))
+                    existingQueryTableTargets.Add(existingTarget);
+            }
 
             var changed = false;
             foreach (var sourceRelationship in queryTableRelationships)
@@ -735,12 +750,7 @@ public sealed partial class XlsxFileAdapter
 
                 // Already present (e.g. this preserver ran more than once, or the target already had
                 // its own equivalent relationship) -- avoid adding a duplicate.
-                var alreadyPresent = targetRoot
-                    .Elements(context.PackageRelNs + "Relationship")
-                    .Any(existing =>
-                        string.Equals(existing.Attribute("Target")?.Value, target, StringComparison.OrdinalIgnoreCase) &&
-                        string.Equals(existing.Attribute("Type")?.Value?.Trim(), QueryTableRelationshipType, StringComparison.OrdinalIgnoreCase));
-                if (alreadyPresent)
+                if (!existingQueryTableTargets.Add(target))
                     continue;
 
                 // Both the old and new worksheet parts live directly under xl/worksheets/, so a

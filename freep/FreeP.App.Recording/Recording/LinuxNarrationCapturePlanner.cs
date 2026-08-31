@@ -60,6 +60,7 @@ public static partial class LinuxNarrationCapturePlanner
             return Array.Empty<SlideShowRecordingCaptureDeviceDescriptor>();
 
         var devices = new List<SlideShowRecordingCaptureDeviceDescriptor>();
+        var seenDeviceIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var line in SplitLines(standardOutput))
         {
             var match = PipeWireTargetPattern().Match(line);
@@ -68,7 +69,7 @@ public static partial class LinuxNarrationCapturePlanner
 
             var id = match.Groups["id"].Value.Trim();
             var displayName = NormalizeDisplayName(match.Groups["name"].Value, id);
-            if (devices.Any(device => string.Equals(device.DeviceId, id, StringComparison.Ordinal)))
+            if (!seenDeviceIds.Add(id))
                 continue;
 
             devices.Add(Microphone(
@@ -89,6 +90,7 @@ public static partial class LinuxNarrationCapturePlanner
 
         var normalizedDefault = defaultSourceName?.Trim();
         var devices = new List<SlideShowRecordingCaptureDeviceDescriptor>();
+        var seenDeviceIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var line in SplitLines(standardOutput))
         {
             var columns = line.Split('\t');
@@ -98,7 +100,7 @@ public static partial class LinuxNarrationCapturePlanner
                 continue;
 
             var id = columns[1].Trim();
-            if (id.Length == 0 || devices.Any(device => string.Equals(device.DeviceId, id, StringComparison.Ordinal)))
+            if (id.Length == 0 || !seenDeviceIds.Add(id))
                 continue;
 
             devices.Add(Microphone(

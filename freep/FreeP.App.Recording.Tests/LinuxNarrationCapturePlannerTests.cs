@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Free.Shared.AppServices.Printing;
 using FreeP.App.Compositor;
 using FreeP.App.Recording;
@@ -47,6 +48,67 @@ public sealed class LinuxNarrationCapturePlannerTests
         devices.Single(device => device.IsDefault).DeviceId
             .Should().Be("alsa_input.usb-Blue_Mic-00.mono-fallback");
         devices[1].DisplayName.Should().Be("mono fallback");
+    }
+
+    [Fact]
+    public void ParseDeviceCatalogs_DenseDuplicatesPreserveFirstOccurrenceOrderAndOrdinalIds()
+    {
+        const int deviceCount = 1_000;
+        var pipeWireOutput = string.Join(
+            Environment.NewLine,
+            Enumerable.Range(0, deviceCount)
+                .Select(index => $"  {index}: Original {index}")
+                .Concat(Enumerable.Range(0, deviceCount).Reverse()
+                    .Select(index => $"* {index}: Duplicate {index}"))
+                .Append("  Mic: Upper case")
+                .Append("  mic: Lower case"));
+
+        var pipeWireDevices = LinuxNarrationCapturePlanner.ParsePipeWireTargets(pipeWireOutput);
+
+        pipeWireDevices.Should().HaveCount(deviceCount + 2);
+        pipeWireDevices.Take(deviceCount).Select(device => device.DeviceId)
+            .Should().Equal(Enumerable.Range(0, deviceCount).Select(index => index.ToString()));
+        pipeWireDevices[0].DisplayName.Should().Be("Original 0");
+        pipeWireDevices.Should().ContainSingle(device => device.IsDefault)
+            .Which.DeviceId.Should().Be("0", "later starred duplicates must not replace first occurrences");
+        pipeWireDevices.Skip(deviceCount).Select(device => device.DeviceId)
+            .Should().Equal("Mic", "mic");
+
+        var pulseAudioOutput = string.Join(
+            Environment.NewLine,
+            Enumerable.Range(0, deviceCount)
+                .Select(index => $"{index}\tsource.{index}\tmodule")
+                .Concat(Enumerable.Range(0, deviceCount).Reverse()
+                    .Select(index => $"{index + deviceCount}\tsource.{index}\treplacement")));
+
+        var pulseAudioDevices = LinuxNarrationCapturePlanner.ParsePulseAudioSources(
+            pulseAudioOutput,
+            "source.500");
+
+        pulseAudioDevices.Should().HaveCount(deviceCount);
+        pulseAudioDevices.Select(device => device.DeviceId)
+            .Should().Equal(Enumerable.Range(0, deviceCount).Select(index => $"source.{index}"));
+        pulseAudioDevices.Should().ContainSingle(device => device.IsDefault)
+            .Which.DeviceId.Should().Be("source.500");
+    }
+
+    [Fact]
+    public void DeviceCatalogParsers_IndexIdsInsteadOfScanningAccumulatedDevices()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Recording",
+            "Recording",
+            "LinuxNarrationCapturePlanner.cs"));
+
+        Regex.Matches(source, Regex.Escape("new HashSet<string>(StringComparer.Ordinal)"))
+            .Should().HaveCount(2, "each native device parser owns one linear duplicate index");
+        Regex.Matches(source, Regex.Escape("seenDeviceIds.Add(id)"))
+            .Should().HaveCount(2);
+        source.Should().NotContain(
+            "devices.Any(device => string.Equals(device.DeviceId, id, StringComparison.Ordinal))");
     }
 
     [Fact]
