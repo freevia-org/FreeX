@@ -332,14 +332,18 @@ public sealed partial class FormatCellsDialogXamlTests
     {
         StaTestRunner.Run(() =>
         {
-            var dialog = ShowDialogForTest(new CellStyle(), numberPreviewText: "score");
+            const string selectedCellText = "FreeX / Excel UX parity corpus";
+            var dialog = ShowDialogForTest(new CellStyle(), numberPreviewText: selectedCellText);
             try
             {
                 var categories = GetControl<ListBox>(dialog, "NumberCategoryList");
                 var preview = GetControl<TextBlock>(dialog, "NumberPreview");
+                var previewBorder = GetControl<Border>(dialog, "NumberPreviewBorder");
 
                 categories.SelectedItem = "General";
-                preview.Text.Should().Be("score");
+                preview.Text.Should().Be(selectedCellText);
+                previewBorder.ActualWidth.Should().Be(330);
+                preview.ActualWidth.Should().BeGreaterThan(250);
 
                 categories.SelectedItem = "Currency";
                 preview.Text.Should().Be("$1,234.56");
