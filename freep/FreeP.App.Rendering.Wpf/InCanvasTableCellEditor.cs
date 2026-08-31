@@ -588,8 +588,7 @@ public sealed class InCanvasTableCellEditor
                     currentBody,
                     onInlineOlePayloadUpdated: OnInlineOlePayloadCommitted,
                     destinationSlideIds: CurrentSlideIds());
-                if (result.FailureMessage is { } failureMessage &&
-                    (e.Key == Key.V || !result.Handled))
+                if (result.FailureMessage is { } failureMessage)
                     _onClipboardWriteFailed?.Invoke(
                         PresentationShellTextCatalog.Resolve(e.Key switch
                         {
