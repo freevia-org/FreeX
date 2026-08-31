@@ -193,13 +193,44 @@ public static class OleActivationService
         };
     }
 
-    private static bool IsBlockedExtension(string extension) => extension.ToLowerInvariant() switch
+    /// <summary>
+    /// The extensions an embedded OLE payload may be activated with. Activation hands the file to
+    /// the OS shell (DesktopPathLauncher.CreateOpenFileProcessStartInfo), so whatever is registered
+    /// for the extension runs.
+    ///
+    /// r182: this was a DENYLIST of executable and script extensions, and the extension it filtered
+    /// comes verbatim from the OPC relationship target inside the .pptx -- i.e. from the document
+    /// author. A denylist cannot be complete on Windows: .hta, .scr, .lnk, .cpl, .msc, .jar, .reg,
+    /// .application, .pif, .ws, .settingcontent-ms and more all execute through the shell and none
+    /// were listed, so opening a crafted presentation and activating its embedded object ran
+    /// attacker-chosen code. Inverted to an allowlist of the document and media types an embedded
+    /// object legitimately carries: anything unrecognised -- including the "bin" fallback
+    /// ResolveExtension produces for an unknown or path-traversing target -- is simply not opened.
+    /// </summary>
+    private static readonly HashSet<string> ActivatableExtensions = new(StringComparer.Ordinal)
     {
-        "exe" or "com" or "msi" or "dll" or "so" or "dylib" or
-        "bat" or "cmd" or "ps1" or "sh" or "bash" or "zsh" or
-        "js" or "jse" or "vbs" or "vbe" or "wsf" or "wsh" => true,
-        _ => false,
+        // Office
+        "doc", "docx", "docm", "dot", "dotx", "dotm", "rtf",
+        "xls", "xlsx", "xlsm", "xlsb", "xlt", "xltx", "xltm", "csv",
+        "ppt", "pptx", "pptm", "pot", "potx", "potm", "pps", "ppsx",
+        // OpenDocument
+        "odt", "ods", "odp", "odg",
+        // This suite own formats
+        "fxl", "fxw", "fxp",
+        // Documents and plain data
+        "pdf", "txt", "xml",
+        // The explicit unknown-payload fallback ResolveExtension produces for a target it cannot
+        // identify, including one that tried to traverse out of the package. Kept activatable
+        // because it is inert -- Windows registers no handler for .bin, so the shell either does
+        // nothing or asks the user to choose an app -- and because refusing it would break
+        // activating an ordinary embedded object whose type the package did not declare.
+        "bin",
+        // Images an embedded object commonly carries
+        "png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "emf", "wmf", "svg",
     };
+
+    private static bool IsBlockedExtension(string extension) =>
+        !ActivatableExtensions.Contains(extension.ToLowerInvariant());
 
     private sealed class OleActivationSession : IDisposable
     {
