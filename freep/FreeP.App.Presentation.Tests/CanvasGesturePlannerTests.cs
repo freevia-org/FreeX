@@ -95,6 +95,63 @@ public sealed class CanvasGesturePlannerTests
     }
 
     [Fact]
+    public void CaptureSelectionState_DenseNestedShapesPreservesSelectionOrderAndFirstDuplicateMatch()
+    {
+        const int shapeCount = 1_000;
+        var slide = new Slide();
+        foreach (var id in Enumerable.Range(1, shapeCount / 2))
+            slide.Shapes.Add(CreateStateShape((uint)id));
+
+        var group = new SlideShape { Id = 2_000 };
+        foreach (var id in Enumerable.Range(shapeCount / 2 + 1, shapeCount / 2))
+            group.Children.Add(CreateStateShape((uint)id));
+        slide.Shapes.Add(group);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 750,
+            OffsetXEmu = -1,
+            OffsetYEmu = -1,
+            ExtentCxEmu = -1,
+            ExtentCyEmu = -1,
+            RotationDeg = -1,
+        });
+
+        var selectedIds = Enumerable.Range(1, shapeCount)
+            .Reverse()
+            .Select(id => (uint)id)
+            .Append((uint)9_999)
+            .Append((uint)750)
+            .ToArray();
+
+        var moveStates = CanvasGesturePlanner.CaptureMoveState(slide, selectedIds);
+        var transformStates = CanvasGesturePlanner.CaptureTransformState(slide, selectedIds);
+
+        var expectedIds = Enumerable.Range(1, shapeCount)
+            .Reverse()
+            .Select(id => (uint)id)
+            .Append((uint)750);
+        moveStates.Select(state => state.ShapeId).Should().Equal(expectedIds);
+        transformStates.Select(state => state.ShapeId).Should().Equal(expectedIds);
+        moveStates.Where(state => state.ShapeId == 750).Should().HaveCount(2)
+            .And.OnlyContain(state => state.OffsetXEmu == 7_500 && state.OffsetYEmu == 15_000);
+        transformStates.Where(state => state.ShapeId == 750).Should().HaveCount(2)
+            .And.OnlyContain(state =>
+                state.XEmu == 7_500 &&
+                state.YEmu == 15_000 &&
+                state.RotationDeg == 75);
+    }
+
+    [Fact]
+    public void CaptureSelectionState_EmptySelectionRemainsEmpty()
+    {
+        var slide = new Slide();
+        slide.Shapes.Add(CreateStateShape(1));
+
+        CanvasGesturePlanner.CaptureMoveState(slide, Array.Empty<uint>()).Should().BeEmpty();
+        CanvasGesturePlanner.CaptureTransformState(slide, Array.Empty<uint>()).Should().BeEmpty();
+    }
+
+    [Fact]
     public void ComputeResizeBounds_SeHandle_GrowsWithoutMovingOrigin()
     {
         var result = CanvasGesturePlanner.ComputeResizeBounds(
@@ -369,6 +426,17 @@ public sealed class CanvasGesturePlannerTests
         double dy = py - cy;
         return (cx + dx * cos - dy * sin, cy + dx * sin + dy * cos);
     }
+
+    private static SlideShape CreateStateShape(uint id) =>
+        new()
+        {
+            Id = id,
+            OffsetXEmu = id * 10,
+            OffsetYEmu = id * 20,
+            ExtentCxEmu = id * 30,
+            ExtentCyEmu = id * 40,
+            RotationDeg = id / 10.0,
+        };
 
     private static string ReadWorkspaceFile(params string[] relativeParts) =>
         TestWorkspaceFileLocator.ReadAllText(relativeParts);
