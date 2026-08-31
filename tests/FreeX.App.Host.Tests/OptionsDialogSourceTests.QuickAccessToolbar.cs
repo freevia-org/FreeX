@@ -94,7 +94,7 @@ public sealed partial class OptionsDialogSourceTests
 
         source.Should().Contain("private void QuickAccessSelectedCommandsList_KeyDown(object sender, KeyEventArgs e)");
 
-        source.Should().Contain("private bool TryHandleQuickAccessSelectedCommandsListKey(Key key, ModifierKeys modifiers)");
+        source.Should().Contain("internal bool TryHandleQuickAccessSelectedCommandsListKey(Key key, ModifierKeys modifiers)");
 
         source.Should().Contain("key is not (Key.Enter or Key.Return)");
 

@@ -430,7 +430,7 @@ public partial class OptionsDialog : Window
             e.Handled = true;
     }
 
-    private bool TryHandleQuickAccessSelectedCommandsListKey(Key key, ModifierKeys modifiers)
+    internal bool TryHandleQuickAccessSelectedCommandsListKey(Key key, ModifierKeys modifiers)
     {
         if ((modifiers & ModifierKeys.Control) == ModifierKeys.Control)
         {

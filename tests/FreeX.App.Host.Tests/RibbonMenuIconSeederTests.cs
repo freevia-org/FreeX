@@ -94,10 +94,7 @@ public sealed class RibbonMenuIconSeederTests
 
     private static void SeedMenuItems(params MenuItem[] menuItems)
     {
-        var method = typeof(RibbonMenuIconSeeder)
-            .GetMethod("SeedMenuItems", BindingFlags.Static | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(nameof(RibbonMenuIconSeeder), "SeedMenuItems");
 
-        method.Invoke(null, [menuItems]);
+        RibbonMenuIconSeeder.SeedMenuItems(menuItems);
     }
 }

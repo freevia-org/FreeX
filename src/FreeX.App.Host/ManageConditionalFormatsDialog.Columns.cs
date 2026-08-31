@@ -127,7 +127,7 @@ public sealed partial class ManageConditionalFormatsDialog
     // Stashes the text shown when the box gains focus, so LostFocus (below) can tell "the user
     // actually retyped this reference" apart from "focus merely passed through the cell"
     // (R49-commands-cf-manage-3-2).
-    private static void AppliesToTextBox_GotFocus(object sender, RoutedEventArgs e)
+    internal static void AppliesToTextBox_GotFocus(object sender, RoutedEventArgs e)
     {
         if (sender is TextBox textBox)
             textBox.Tag = textBox.Text;
@@ -142,7 +142,7 @@ public sealed partial class ManageConditionalFormatsDialog
     // navigation) and back out without changing a single character. Only clear AdditionalRanges
     // when the displayed text actually changed from what it was when focus was gained; otherwise
     // a multi-area rule's non-active areas were being silently discarded on a no-op focus visit.
-    private void AppliesToTextBox_LostFocus(object sender, RoutedEventArgs e)
+    internal void AppliesToTextBox_LostFocus(object sender, RoutedEventArgs e)
     {
         if (sender is not TextBox { DataContext: ConditionalFormat rule } textBox)
             return;
