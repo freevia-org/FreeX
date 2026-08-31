@@ -1039,23 +1039,29 @@ internal static class PptxChartWriter
             if (pointStyles.Count == 0)
                 continue;
 
+            var pointsByIndex = new Dictionary<int, XElement>();
+            foreach (var point in series[index].Elements(cx + "dataPt"))
+            {
+                if (TryParseChartExId(point.Attribute("idx")?.Value) is int pointIndex)
+                    pointsByIndex.TryAdd(pointIndex, point);
+            }
+
+            var insertionAnchor = series[index].Elements()
+                .FirstOrDefault(element =>
+                    element.Name == cx + "dataLabels"
+                    || element.Name == cx + "dataId");
+
             foreach (var pair in pointStyles.OrderBy(pair => pair.Key))
             {
-                var point = series[index].Elements(cx + "dataPt")
-                    .FirstOrDefault(element =>
-                        TryParseChartExId(element.Attribute("idx")?.Value) == pair.Key);
-                if (point is null)
+                if (!pointsByIndex.TryGetValue(pair.Key, out var point))
                 {
                     point = new XElement(cx + "dataPt",
                         new XAttribute("idx", pair.Key));
-                    var anchor = series[index].Elements()
-                        .FirstOrDefault(element =>
-                            element.Name == cx + "dataLabels"
-                            || element.Name == cx + "dataId");
-                    if (anchor is not null)
-                        anchor.AddBeforeSelf(point);
+                    if (insertionAnchor is not null)
+                        insertionAnchor.AddBeforeSelf(point);
                     else
                         series[index].Add(point);
+                    pointsByIndex.TryAdd(pair.Key, point);
                 }
 
                 var shapeProperties = BuildPointShapePropertiesEl(null, pair.Value);
