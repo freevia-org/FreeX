@@ -2698,9 +2698,11 @@ public sealed partial class MainWindow : Window,
             FileCommands = new FreePRibbonFileCommandEndpoints
             {
                 New = FileNew,
-                Open = () => RunGuarded(async () => await FileOpenAsync(), "Open"),
-                Save = () => RunGuarded(async () => await FileSaveAsync(), "Save"),
-                SaveAs = () => RunGuarded(async () => await FileSaveAsAsync(), "Save As"),
+                Open = () => RunGuarded(async () => await FileOpenAsync(), FileText.OpenCommand),
+                Save = () => RunGuarded(async () => await FileSaveAsync(), FileText.SaveCommand),
+                SaveAs = () => RunGuarded(
+                    async () => await FileSaveAsAsync(),
+                    UiText.Get("Ribbon_Command_FileSaveAs_Label")),
                 ExportPdf = () => RunGuarded(async () => await FileExportPdfAsync(), "Export PDF"),
                 ExportNotesPagePdf = () => RunGuarded(async () => await FileExportNotesPagePdfAsync(), "Export notes PDF"),
                 ExportImages = () => RunGuarded(async () => await FileExportImagesAsync(), "Export images"),
@@ -3525,7 +3527,7 @@ public sealed partial class MainWindow : Window,
 
 
 
-    private void FileNew() => RunGuarded(async () => await FileNewAsync(), "New");
+    private void FileNew() => RunGuarded(async () => await FileNewAsync(), FileText.NewAction);
 
 
     private async Task<bool> FileNewAsync() =>
@@ -3539,13 +3541,19 @@ public sealed partial class MainWindow : Window,
         GetRecentEntries: () => _fileSession.RecentEntries,
         GetCurrentOptions: () => _options,
         GetDataFolder: () => FreePApplicationFrameDescriptor.ResolveDataFolderLabel(_optionsStore.StorePath),
-        OpenOptions: () => RunGuarded(OpenOptionsAsync, "Options"),
+        OpenOptions: () => RunGuarded(
+            OpenOptionsAsync,
+            UiText.Get("FreeP_Backstage_Options_EditText")),
         New: FileNew,
-        Open: () => RunGuarded(async () => await FileOpenAsync(), "Open"),
+        Open: () => RunGuarded(async () => await FileOpenAsync(), FileText.OpenCommand),
         OpenPath: OpenRecentPath,
-        RecoverUnsaved: () => RunGuarded(() => _autosave.RecoverUnsavedPresentationsAsync(this), "Recover unsaved presentations"),
-        Save: () => RunGuarded(async () => await FileSaveAsync(), "Save"),
-        SaveAs: () => RunGuarded(async () => await FileSaveAsAsync(), "Save As"),
+        RecoverUnsaved: () => RunGuarded(
+            () => _autosave.RecoverUnsavedPresentationsAsync(this),
+            UiText.Get("Autosave_Recovery_Backstage_Label")),
+        Save: () => RunGuarded(async () => await FileSaveAsync(), FileText.SaveCommand),
+        SaveAs: () => RunGuarded(
+            async () => await FileSaveAsAsync(),
+            UiText.Get("Ribbon_Command_FileSaveAs_Label")),
         ExportPdf: () => RunGuarded(async () => await FileExportPdfAsync(), "Export PDF"),
         ExportNotesPagePdf: () => RunGuarded(async () => await FileExportNotesPagePdfAsync(), "Export notes PDF"),
         ExportImages: () => RunGuarded(async () => await FileExportImagesAsync(), "Export images"),
@@ -3586,7 +3594,7 @@ public sealed partial class MainWindow : Window,
     }
 
     private void OpenRecentPath(string path) =>
-        RunGuarded(async () => await OpenRecentPathAsync(path), "Open recent presentation");
+        RunGuarded(async () => await OpenRecentPathAsync(path), FileText.OpenCommand);
 
     private async Task<bool> OpenRecentPathAsync(string path) =>
         (await _fileSession.OpenRecentPathAsync(path)).Succeeded;

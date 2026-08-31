@@ -49,9 +49,11 @@ public sealed partial class MainWindow
             NativeCommands = new PresentationWorkareaNativeCommandEndpoints
             {
                 NewPresentation = FileNew,
-                OpenPresentation = () => RunGuarded(async () => await FileOpenAsync(), "Open"),
-                SavePresentation = () => RunGuarded(async () => await FileSaveAsync(), "Save"),
-                SavePresentationAs = () => RunGuarded(async () => await FileSaveAsAsync(), "Save As"),
+                OpenPresentation = () => RunGuarded(async () => await FileOpenAsync(), FileText.OpenCommand),
+                SavePresentation = () => RunGuarded(async () => await FileSaveAsync(), FileText.SaveCommand),
+                SavePresentationAs = () => RunGuarded(
+                    async () => await FileSaveAsAsync(),
+                    UiText.Get("Ribbon_Command_FileSaveAs_Label")),
                 PrintPresentation = ShowPrintBackstage,
                 StartSlideShowFromBeginning = () => StartSlideShow(true),
                 StartSlideShowFromCurrentSlide = () => StartSlideShow(false),

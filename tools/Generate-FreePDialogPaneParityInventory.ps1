@@ -344,7 +344,7 @@ $routes = @(
         -Tests @("freep/FreeP.App.Host.Tests/FileLifecycleTests.cs", "freep/FreeP.App.Avalonia.Tests/FileLifecycleWorkflowSourceTests.cs", "freep/FreeP.App.Presentation.Tests/PresentationFileDialogPlannerTests.cs") `
         -VisualEvidenceStatus "native platform visual; exact cross-platform pixel parity is not applicable" `
         -RequiredWpfTokens @("OpenPresentation = () => FileOpen()") `
-        -RequiredAvaloniaTokens @('OpenPresentation = () => RunGuarded(async () => await FileOpenAsync(), "Open")') `
+        -RequiredAvaloniaTokens @('OpenPresentation = () => RunGuarded(async () => await FileOpenAsync(), FileText.OpenCommand)') `
         -RequiredWorkareaSessionTokens @("FreePKeyboardCommand.OpenPresentation")
 
     New-Route -Id "file.save-as-picker" -Area "Save presentation as" `
@@ -359,7 +359,7 @@ $routes = @(
         -Tests @("freep/FreeP.App.Host.Tests/FileLifecycleTests.cs", "freep/FreeP.App.Avalonia.Tests/FileLifecycleWorkflowSourceTests.cs", "freep/FreeP.App.Presentation.Tests/PresentationFileDialogPlannerTests.cs") `
         -VisualEvidenceStatus "native platform visual; exact cross-platform pixel parity is not applicable" `
         -RequiredWpfTokens @("SavePresentationAs = () => FileSaveAs()") `
-        -RequiredAvaloniaTokens @('SavePresentationAs = () => RunGuarded(async () => await FileSaveAsAsync(), "Save As")') `
+        -RequiredAvaloniaTokens @('SavePresentationAs = () => RunGuarded(', 'UiText.Get("Ribbon_Command_FileSaveAs_Label")') `
         -RequiredWorkareaSessionTokens @("FreePKeyboardCommand.SavePresentationAs")
 )
 
