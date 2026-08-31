@@ -63,12 +63,12 @@ public sealed class WorksheetContextMenuRendererTests
             var menu = new ContextMenu();
             WorksheetContextMenuRenderer.AddItems(menu.Items, ribbonMenu.Items, dispatched.Add);
 
-            var insertAndDelete = menu.Items.OfType<MenuItem>()
-                .First(item => (item.Header as string) == "_Insert and Delete");
-            AutomationProperties.GetName(insertAndDelete).Should().Be("Insert and Delete");
-            AutomationProperties.GetAutomationId(insertAndDelete)
-                .Should().Be("WorksheetContextMenu_InsertandDelete");
-            insertAndDelete.Items.OfType<MenuItem>().Should().NotBeEmpty();
+            var dataTools = menu.Items.OfType<MenuItem>()
+                .First(item => (item.Header as string) == "Data _Tools");
+            AutomationProperties.GetName(dataTools).Should().Be("Data Tools");
+            AutomationProperties.GetAutomationId(dataTools)
+                .Should().Be("WorksheetContextMenu_DataTools");
+            dataTools.Items.OfType<MenuItem>().Should().NotBeEmpty();
         });
     }
 

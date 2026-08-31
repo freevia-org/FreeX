@@ -31,18 +31,18 @@ public class WorksheetContextMenuRibbonAdapterTests
     }
 
     [Fact]
-    public void MapsSubmenu_NullCommandIdWithPreservedChildren()
+    public void MapsSecondarySubmenu_NullCommandIdWithPreservedChildren()
     {
         var commands = WorksheetContextMenuPlanner.BuildCommands();
 
         var menu = WorksheetContextMenuRibbonAdapter.ToRibbonMenu(commands);
 
-        var insertAndDelete = FindByHeader(menu.Items, "_Insert and Delete");
-        insertAndDelete.Should().NotBeNull();
-        insertAndDelete!.CommandId.Should().BeNull(); // submenu parents have no action
-        insertAndDelete.Children.Should().NotBeEmpty();
-        FindByHeader(insertAndDelete.Children, "_Insert...")!.CommandId
-            .Should().Be(new RibbonCommandId(WorksheetContextMenuAction.InsertCells.ToString()));
+        var dataTools = FindByHeader(menu.Items, "Data _Tools");
+        dataTools.Should().NotBeNull();
+        dataTools!.CommandId.Should().BeNull(); // submenu parents have no action
+        dataTools.Children.Should().NotBeEmpty();
+        FindByHeader(dataTools.Children, "Te_xt to Columns...")!.CommandId
+            .Should().Be(new RibbonCommandId(WorksheetContextMenuAction.TextToColumns.ToString()));
     }
 
     [Fact]

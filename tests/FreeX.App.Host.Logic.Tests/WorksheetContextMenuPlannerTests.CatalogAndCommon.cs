@@ -21,7 +21,7 @@ public sealed partial class WorksheetContextMenuPlannerTests
     }
 
     [Fact]
-    public void BuildCommands_GroupsNormalWorksheetContextMenuIntoUsableTopLevelShape()
+    public void BuildCommands_ExposesCommonWorksheetCommandsAtTheKeyboardSurface()
     {
         var commands = WorksheetContextMenuPlanner.BuildCommands();
         var topLevelHeaders = commands
@@ -33,31 +33,8 @@ public sealed partial class WorksheetContextMenuPlannerTests
             "Cut",
             "Copy",
             "Paste",
-            "Paste Options",
-            "Insert and Delete",
-            "Sort and Filter",
-            "Quick Analysis",
-            "Data Tools",
-            "Rows and Columns",
-            "Comments and Notes",
-            "Hyperlink...",
-            "Format Cells...",
-            "Clear");
-        topLevelHeaders.Should().HaveCount(13);
-        topLevelHeaders.Should().NotContain([
             "Paste Special...",
-            "Insert Row Above",
-            "Delete Row(s)",
-            "Data Validation...",
-            "Row Height...",
-            "New Comment",
-            "Clear Contents"
-        ]);
-
-        SingleSubmenu(commands, "Paste Options").Children.Select(command => command.Header).Should().ContainInOrder(
-            "Paste Special...",
-            "Insert Copied Cells...");
-        SingleSubmenu(commands, "Insert and Delete").Children.Select(command => command.Header).Should().ContainInOrder(
+            "Insert Copied Cells...",
             "Insert...",
             "Insert Row Above",
             "Insert Row Below",
@@ -65,22 +42,34 @@ public sealed partial class WorksheetContextMenuPlannerTests
             "Insert Column Right",
             "Delete...",
             "Delete Row(s)",
-            "Delete Column(s)");
-        SingleSubmenu(commands, "Sort and Filter").Children.Select(command => command.Header).Should().ContainInOrder(
+            "Delete Column(s)",
+            "Clear Contents",
             "Sort A to Z",
             "Sort Z to A",
             "Custom Sort...",
             "Filter...",
-            "Clear Filter",
-            "Reapply Filter",
-            "Pick From Drop-down List...");
-        SingleSubmenu(commands, "Data Tools").Children.Select(command => command.Header).Should().ContainInOrder(
+            "Quick Analysis",
             "Define Name...",
             "Create Table...",
             "Format as Table...",
+            "Data Validation...",
+            "Data Tools",
+            "Rows and Columns",
+            "Comments and Notes",
+            "Hyperlink...",
+            "Format Cells...",
+            "Clear");
+        topLevelHeaders.Should().NotContain([
+            "Paste Options",
+            "Insert and Delete",
+            "Sort and Filter",
+            "Row Height...",
+            "New Comment"
+        ]);
+
+        SingleSubmenu(commands, "Data Tools").Children.Select(command => command.Header).Should().ContainInOrder(
             "Text to Columns...",
-            "Remove Duplicates...",
-            "Data Validation...");
+            "Remove Duplicates...");
         SingleSubmenu(commands, "Rows and Columns").Children.Select(command => command.Header).Should().ContainInOrder(
             "Hide Rows",
             "AutoFit Row Height",
@@ -92,7 +81,6 @@ public sealed partial class WorksheetContextMenuPlannerTests
             "New Note",
             "Show Notes");
         SingleSubmenu(commands, "Clear").Children.Select(command => command.Header).Should().ContainInOrder(
-            "Clear Contents",
             "Clear All",
             "Clear Formats",
             "Clear Comments and Notes",
@@ -114,6 +102,7 @@ public sealed partial class WorksheetContextMenuPlannerTests
             "Insert Row Above",
             "Delete...",
             "Delete Row(s)",
+            "Clear Contents",
             "Sort A to Z",
             "Custom Sort...",
             "Filter...",
@@ -124,9 +113,9 @@ public sealed partial class WorksheetContextMenuPlannerTests
             "Define Name...",
             "Create Table...",
             "Format as Table...",
+            "Data Validation...",
             "Text to Columns...",
             "Remove Duplicates...",
-            "Data Validation...",
             "Hide Rows",
             "Unhide Rows",
             "Row Height...",
@@ -145,7 +134,6 @@ public sealed partial class WorksheetContextMenuPlannerTests
             "Show Notes",
             "Hyperlink...",
             "Format Cells...",
-            "Clear Contents",
             "Clear All",
             "Clear Formats",
             "Clear Comments and Notes",
