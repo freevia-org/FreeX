@@ -52,7 +52,7 @@ public static class SpreadsheetDisplayFormatter
         if (cell?.HasFormula == true && cell.FormulaText is not null)
         {
             if (sheet is { IsProtected: true } && workbook is not null && IsHidden(cell, address, sheet, workbook))
-                return FormatCellValue(cell.Value);
+                return FormatFormulaBarValue(cell.Value, cell, address, sheet, workbook);
 
             var formula = useR1C1ReferenceStyle
                 ? FormulaReferenceStyleService.ToR1C1(cell.FormulaText, address)
@@ -60,7 +60,7 @@ public static class SpreadsheetDisplayFormatter
             return "=" + formula;
         }
 
-        return FormatCellValue(cell?.Value);
+        return FormatFormulaBarValue(cell?.Value, cell, address, sheet, workbook);
     }
 
     /// <summary>
@@ -85,10 +85,69 @@ public static class SpreadsheetDisplayFormatter
 
     private static bool IsHidden(Cell cell, CellAddress address, Sheet sheet, Workbook workbook)
     {
+        return GetEffectiveStyle(cell, address, sheet, workbook).Hidden;
+    }
+
+    /// <summary>
+    /// Excel displays a literal percentage in the formula bar rather than the stored decimal
+    /// value: a cell containing <c>0.1234</c> with a percentage number format reads
+    /// <c>12.34%</c>. This affects only non-formula numeric values; formula text remains editable
+    /// formula text, while General and date/time readback retain their established behavior.
+    /// </summary>
+    private static string FormatFormulaBarValue(
+        ScalarValue? value,
+        Cell? cell,
+        CellAddress address,
+        Sheet? sheet,
+        Workbook? workbook)
+    {
+        if (value is NumberValue number &&
+            cell is not null &&
+            sheet is not null &&
+            workbook is not null &&
+            IsPercentageNumberFormat(GetEffectiveStyle(cell, address, sheet, workbook).NumberFormat))
+        {
+            // Do not use the cell's display code here. Ctrl+Shift+5 applies "0%", which rounds
+            // the grid display to 12%, but Excel preserves the underlying percentage precision in
+            // the formula bar (12.34%). Formatting the scaled value as General gives that editable
+            // Excel-style text without changing the stored NumberValue.
+            return FormatCellValue(new NumberValue(number.Value * 100d)) + "%";
+        }
+
+        return FormatCellValue(value);
+    }
+
+    private static CellStyle GetEffectiveStyle(Cell cell, CellAddress address, Sheet sheet, Workbook workbook)
+    {
         var styleId = cell.StyleId != StyleId.Default
             ? cell.StyleId
             : sheet.GetStyleOnly(address.Row, address.Col) ?? StyleId.Default;
-        return workbook.GetStyle(styleId).Hidden;
+        return workbook.GetStyle(styleId);
+    }
+
+    private static bool IsPercentageNumberFormat(string format)
+    {
+        var inQuote = false;
+        for (var index = 0; index < format.Length; index++)
+        {
+            var character = format[index];
+            if (character == '"')
+            {
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (character == '\\' && index + 1 < format.Length)
+            {
+                index++;
+                continue;
+            }
+
+            if (!inQuote && character == '%')
+                return true;
+        }
+
+        return false;
     }
 
     public static string FormatCellValue(ScalarValue? value) =>
