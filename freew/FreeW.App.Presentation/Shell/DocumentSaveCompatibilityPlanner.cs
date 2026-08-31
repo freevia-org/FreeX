@@ -531,70 +531,12 @@ public static class DocumentSaveCompatibilityPlanner
             partName.Equals("/word/_rels/vbaProject.bin.rels", StringComparison.OrdinalIgnoreCase);
 
         private static IEnumerable<Paragraph> EnumerateAllParagraphs(TextDocument document)
-        {
-            foreach (var paragraph in EnumerateBodyParagraphs(document.Blocks))
-                yield return paragraph;
-
-            foreach (var section in document.Sections)
-            {
-                foreach (var paragraph in EnumerateHeaderFooterParagraphs(section.HeadersFooters))
-                    yield return paragraph;
-            }
-
-            foreach (var note in document.Footnotes.Values)
-                foreach (var paragraph in note.Content)
-                    yield return paragraph;
-
-            foreach (var note in document.Endnotes.Values)
-                foreach (var paragraph in note.Content)
-                    yield return paragraph;
-
-            foreach (var comment in document.Comments.Values.SelectMany(comment => comment.ThreadInOrder()))
-                foreach (var paragraph in comment.Content)
-                    yield return paragraph;
-        }
-
-        private static IEnumerable<Paragraph> EnumerateBodyParagraphs(IEnumerable<Block> blocks)
-        {
-            foreach (var block in blocks)
-            {
-                if (block is Paragraph paragraph)
-                {
-                    yield return paragraph;
-                }
-                else if (block is Table table)
-                {
-                    foreach (var row in table.Rows)
-                    {
-                        foreach (var cell in row.Cells)
-                        {
-                            foreach (var cellParagraph in cell.Paragraphs)
-                                yield return cellParagraph;
-                        }
-                    }
-                }
-            }
-        }
-
-        private static IEnumerable<Paragraph> EnumerateHeaderFooterParagraphs(SectionHeadersFooters headersFooters)
-        {
-            foreach (var headerFooter in new[]
-                     {
-                         headersFooters.Header,
-                         headersFooters.Footer,
-                         headersFooters.EvenHeader,
-                         headersFooters.EvenFooter,
-                         headersFooters.FirstHeader,
-                         headersFooters.FirstFooter,
-                     })
-            {
-                if (headerFooter is null)
-                    continue;
-
-                foreach (var paragraph in headerFooter.Paragraphs)
-                    yield return paragraph;
-            }
-        }
+            => TextDocumentStoryTraversal.EnumerateParagraphs(
+                document,
+                document.Comments.Values
+                    .SelectMany(comment => comment.ThreadInOrder())
+                    .SelectMany(comment => comment.Content),
+                TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs);
 
         private static bool HasRichParagraphFormatting(Paragraph paragraph) =>
             paragraph.StyleId is not null ||

@@ -206,37 +206,18 @@ public static class RevisionList
 
     // Every paragraph reachable anywhere TrackChanges.HasRevisions/AcceptAll/RejectAll look: the document
     // body (top-level paragraphs and those nested in table cells, including tables nested inside table
-    // cells, to any depth, plus the text-box content of any Run.Shape a run carries -- see
-    // BodyParagraphWalk), every header/footer slot of every section, and every footnote/endnote. Before
+    // cells, to any depth, plus the text-box content of any Run.Shape a run carries), every header/footer
+    // slot of every section, and every footnote/endnote. Before
     // this, RevisionList only walked the body, so a tracked change living in a header/footer/footnote/
     // endnote produced an empty Reviewing Pane and no per-item Accept/Reject even though
     // TrackChanges.HasRevisions/AcceptAll/RejectAll (TrackChanges.cs's own Resolve) already reached it.
-    private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document)
-    {
-        foreach (var paragraph in BodyParagraphWalk.Enumerate(document))
-            yield return paragraph;
-
-        foreach (var section in document.Sections)
-        {
-            var headersFooters = section.HeadersFooters;
-            foreach (var paragraph in HeaderFooterParagraphs(headersFooters.Header)) yield return paragraph;
-            foreach (var paragraph in HeaderFooterParagraphs(headersFooters.Footer)) yield return paragraph;
-            foreach (var paragraph in HeaderFooterParagraphs(headersFooters.EvenHeader)) yield return paragraph;
-            foreach (var paragraph in HeaderFooterParagraphs(headersFooters.EvenFooter)) yield return paragraph;
-            foreach (var paragraph in HeaderFooterParagraphs(headersFooters.FirstHeader)) yield return paragraph;
-            foreach (var paragraph in HeaderFooterParagraphs(headersFooters.FirstFooter)) yield return paragraph;
-        }
-
-        foreach (var footnote in document.Footnotes.Values)
-            foreach (var paragraph in BodyParagraphWalk.Enumerate(footnote.Content))
-                yield return paragraph;
-        foreach (var endnote in document.Endnotes.Values)
-            foreach (var paragraph in BodyParagraphWalk.Enumerate(endnote.Content))
-                yield return paragraph;
-    }
-
-    private static IEnumerable<Paragraph> HeaderFooterParagraphs(HeaderFooter? headerFooter) =>
-        headerFooter is null ? [] : BodyParagraphWalk.Enumerate(headerFooter.Paragraphs);
+    private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document) =>
+        TextDocumentStoryTraversal.EnumerateParagraphs(
+            document,
+            TextDocumentStorySubset.All,
+            TextDocumentStoryTraversalOptions.IncludeShapeTextBoxes
+            | TextDocumentStoryTraversalOptions.IncludeNestedTables
+            | TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs);
 
     // Resolve a paragraph-mark revision (Paragraph.MarkRevision) in isolation, leaving every other
     // revision untouched -- the mark-revision counterpart to ResolveInsertionOrDeletion above. Mirrors
