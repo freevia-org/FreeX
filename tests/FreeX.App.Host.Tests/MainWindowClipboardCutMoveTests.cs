@@ -1,5 +1,7 @@
 using System.Reflection;
 using System.Windows;
+using System.Windows.Controls.Primitives;
+using Free.Shared.Ribbon.Wpf;
 using FreeX.App.UI;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -17,6 +19,69 @@ namespace FreeX.App.Host.Tests;
 // formulas that pointed at the cut cells follow the move.
 public sealed class MainWindowClipboardCutMoveTests
 {
+    [Fact]
+    public void RenderedHomePastePrimaryClick_PastesCopiedCellAndMarksWorkbookDirty()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var initialWorkbook = new Workbook("Book1");
+            initialWorkbook.AddSheet("Sheet1");
+            var workbookRef = new WorkbookRef { Current = initialWorkbook };
+            var window = new MainWindow(
+                NullLogger<MainWindow>.Instance,
+                new ViewportService(),
+                new CommandBus(_ => new TestCommandContext(workbookRef.Current)),
+                new RecalcEngine(new DependencyGraph(), new FormulaEvaluator()),
+                [],
+                workbookRef,
+                initialWorkbook,
+                NullUserMessageService.Instance,
+                platformClipboard: new InMemoryPlatformClipboard());
+
+            try
+            {
+                window.Show();
+                PumpDispatcher();
+
+                var workbook = workbookRef.Current;
+                var sheet = workbook.GetSheetAt(0);
+                var a1 = new CellAddress(sheet.Id, 1, 1);
+                var h12 = new CellAddress(sheet.Id, 12, 8);
+                sheet.SetCell(a1, new TextValue("Ribbon Paste"));
+
+                var grid = (GridView)window.FindName("SheetGrid");
+                grid.SelectedRange = new GridRange(a1, a1);
+                InvokeClickHandler(window, "CopyBtn_Click");
+                PumpDispatcher();
+
+                grid.SelectedRange = new GridRange(h12, h12);
+                var ribbonTabs = (System.Windows.Controls.TabControl)window.FindName("RibbonTabs");
+                var ribbonRoot = (DependencyObject)ribbonTabs.SelectedContent;
+                var renderedButtons = WpfTestTree
+                    .FindVisualSelfAndDescendants<ButtonBase>(ribbonRoot)
+                    .ToList();
+                var pastePrimary = renderedButtons.Single(button =>
+                    RibbonMetadata.GetCommandName(button) == "Paste");
+                var pasteDropdown = renderedButtons.Single(button =>
+                    RibbonMetadata.GetCommandName(button) == "Paste.Dropdown");
+                pastePrimary.ContextMenu.Should().BeNull();
+                pasteDropdown.ContextMenu.Should().NotBeNull();
+
+                pastePrimary.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, pastePrimary));
+                PumpDispatcher();
+
+                sheet.GetCell(h12)!.Value.Should().Be(new TextValue("Ribbon Paste"));
+                window.Session.IsDirty.Should().BeTrue();
+                pasteDropdown.ContextMenu!.IsOpen.Should().BeFalse();
+            }
+            finally
+            {
+                MainWindowTestCleanup.CloseWithoutSavePrompt(window);
+                PumpDispatcher();
+            }
+        });
+    }
+
     [Fact]
     public void CutThenPaste_KeepsMovedFormulaOwnReferenceAndUpdatesReferencingFormula()
     {
