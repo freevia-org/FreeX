@@ -228,28 +228,75 @@ public static class SlideShowMorphPlanner
         var usedTarget = new HashSet<SlideShape>();
 
         // Stable OOXML ids are the strongest identity signal within a deck.
-        foreach (var targetShape in targetShapes.Where(s => s.Id != 0))
+        var sourceShapesById = new Dictionary<uint, Queue<SlideShape>>();
+        foreach (var sourceShape in sourceShapes)
         {
-            var sourceShape = sourceShapes.FirstOrDefault(s =>
-                !usedSource.Contains(s) && s.Id == targetShape.Id);
-            if (sourceShape is null) continue;
+            if (sourceShape.Id == 0)
+                continue;
+
+            if (!sourceShapesById.TryGetValue(sourceShape.Id, out var shapesWithId))
+            {
+                shapesWithId = new Queue<SlideShape>();
+                sourceShapesById.Add(sourceShape.Id, shapesWithId);
+            }
+
+            shapesWithId.Enqueue(sourceShape);
+        }
+
+        foreach (var targetShape in targetShapes)
+        {
+            if (targetShape.Id == 0
+                || !sourceShapesById.TryGetValue(targetShape.Id, out var shapesWithId))
+            {
+                continue;
+            }
+
+            SlideShape? sourceShape = null;
+            while (shapesWithId.Count > 0 && sourceShape is null)
+            {
+                var candidate = shapesWithId.Dequeue();
+                if (!usedSource.Contains(candidate))
+                    sourceShape = candidate;
+            }
+
+            if (sourceShape is null)
+                continue;
 
             AddMatch(sourceShape, targetShape, $"id:{targetShape.Id}");
         }
 
         // Names allow Morph to work across slides where PowerPoint regenerated
         // shape ids. A duplicate name is intentionally left unmatched.
-        foreach (var targetShape in targetShapes.Where(s =>
-                     !usedTarget.Contains(s) && !string.IsNullOrWhiteSpace(s.Name)))
+        var unmatchedSourcesByName = new Dictionary<string, List<SlideShape>>(StringComparer.Ordinal);
+        foreach (var sourceShape in sourceShapes)
         {
+            if (usedSource.Contains(sourceShape) || string.IsNullOrWhiteSpace(sourceShape.Name))
+                continue;
+
+            var key = NormalizeName(sourceShape.Name);
+            if (!unmatchedSourcesByName.TryGetValue(key, out var shapesWithName))
+            {
+                shapesWithName = new List<SlideShape>();
+                unmatchedSourcesByName.Add(key, shapesWithName);
+            }
+
+            shapesWithName.Add(sourceShape);
+        }
+
+        foreach (var targetShape in targetShapes)
+        {
+            if (usedTarget.Contains(targetShape) || string.IsNullOrWhiteSpace(targetShape.Name))
+                continue;
+
             var key = NormalizeName(targetShape.Name);
-            var candidates = sourceShapes.Where(s =>
-                    !usedSource.Contains(s) &&
-                    string.Equals(NormalizeName(s.Name), key, StringComparison.Ordinal))
-                .ToList();
-            if (candidates.Count != 1) continue;
+            if (!unmatchedSourcesByName.TryGetValue(key, out var candidates)
+                || candidates.Count != 1)
+            {
+                continue;
+            }
 
             AddMatch(candidates[0], targetShape, $"name:{key}");
+            unmatchedSourcesByName.Remove(key);
         }
 
         if (option is "byWord" or "byChar")
