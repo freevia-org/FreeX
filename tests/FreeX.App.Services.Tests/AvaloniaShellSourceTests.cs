@@ -5027,7 +5027,7 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
-        source.Should().Contain("AddStyledCellBorderOverlay(content, style, borderNeighbors, zoomFactor);");
+        source.Should().Contain("AddStyledCellBorderOverlay(content, style, borderNeighbors, zoomFactor, theme);");
         source.Should().Contain("private static void AddStyledCellBorderOverlay(");
         source.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
         source.Should().Contain("style.BorderTop.Style != BorderStyle.None");
@@ -5041,7 +5041,7 @@ public sealed class AvaloniaShellSourceTests
         // solid-Border-strip approach that could not dash and had wrong Hair/SlantDashDot thickness.
         // borderNeighbors carries the touching neighbor cells' opposing edge styles so a shared grid
         // edge resolves via CellBorderVisualPlanner.ResolveEdgeWinner (R66-render-gridlines-borders-6-1).
-        source.Should().Contain("content.Children.Add(new CellBorderPanel(visibleStyle, borderNeighbors, zoomFactor));");
+        source.Should().Contain("content.Children.Add(new CellBorderPanel(visibleStyle, borderNeighbors, zoomFactor, theme));");
     }
 
     [Fact]

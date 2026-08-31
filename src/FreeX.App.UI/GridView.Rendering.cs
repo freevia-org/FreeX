@@ -286,34 +286,34 @@ public partial class GridView
                 ? splitAboveStyle.BorderBottom
                 : default;
             var topWinner = ResolveBorderEdgeWinner(style.BorderTop, neighborBottom);
-            DrawBorderEdge(dc, topWinner, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), _brushCache, _borderPenCache, borderPixelsPerDip);
+            DrawBorderEdge(dc, topWinner, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), WorkbookTheme, _brushCache, _borderPenCache, borderPixelsPerDip);
 
             var neighborTop = borderStyleLookup is not null &&
                 borderStyleLookup.TryGetValue((cell.Row + 1, cell.Col), out var splitBelowStyle)
                 ? splitBelowStyle.BorderTop
                 : default;
             var bottomWinner = ResolveBorderEdgeWinner(style.BorderBottom, neighborTop);
-            DrawBorderEdge(dc, bottomWinner, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache, borderPixelsPerDip);
+            DrawBorderEdge(dc, bottomWinner, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), WorkbookTheme, _brushCache, _borderPenCache, borderPixelsPerDip);
 
             var neighborRight = borderStyleLookup is not null &&
                 borderStyleLookup.TryGetValue((cell.Row, cell.Col - 1), out var splitLeftStyle)
                 ? splitLeftStyle.BorderRight
                 : default;
             var leftWinner = ResolveBorderEdgeWinner(style.BorderLeft, neighborRight);
-            DrawBorderEdge(dc, leftWinner, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), _brushCache, _borderPenCache, borderPixelsPerDip);
+            DrawBorderEdge(dc, leftWinner, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), WorkbookTheme, _brushCache, _borderPenCache, borderPixelsPerDip);
 
             var neighborLeft = borderStyleLookup is not null &&
                 borderStyleLookup.TryGetValue((cell.Row, cell.Col + 1), out var splitRightStyle)
                 ? splitRightStyle.BorderLeft
                 : default;
             var rightWinner = ResolveBorderEdgeWinner(style.BorderRight, neighborLeft);
-            DrawBorderEdge(dc, rightWinner, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache, borderPixelsPerDip);
+            DrawBorderEdge(dc, rightWinner, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), WorkbookTheme, _brushCache, _borderPenCache, borderPixelsPerDip);
 
             // Diagonal borders: drawn across cell interior (not edge-aligned), so no pen cache — these are rare
             if (style.BorderDiagonalDown.Style != BorderStyle.None)
-                DrawBorderEdge(dc, style.BorderDiagonalDown, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Bottom), _brushCache, null, borderPixelsPerDip);
+                DrawBorderEdge(dc, style.BorderDiagonalDown, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Bottom), WorkbookTheme, _brushCache, null, borderPixelsPerDip);
             if (style.BorderDiagonalUp.Style != BorderStyle.None)
-                DrawBorderEdge(dc, style.BorderDiagonalUp, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Top), _brushCache, null, borderPixelsPerDip);
+                DrawBorderEdge(dc, style.BorderDiagonalUp, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Top), WorkbookTheme, _brushCache, null, borderPixelsPerDip);
         }
 
         if (cell.HasComment)
@@ -646,7 +646,7 @@ public partial class GridView
                     ? aboveStyle.BorderBottom
                     : default;
                 var winner = ResolveBorderEdgeWinner(style.BorderTop, neighborBottom);
-                DrawBorderEdge(dc, winner, new Point(x, y), new Point(x + w, y), _brushCache, _borderPenCache, borderPixelsPerDip);
+                DrawBorderEdge(dc, winner, new Point(x, y), new Point(x + w, y), WorkbookTheme, _brushCache, _borderPenCache, borderPixelsPerDip);
             }
             if (visibleEdges.Bottom)
             {
@@ -654,7 +654,7 @@ public partial class GridView
                     ? belowStyle.BorderTop
                     : default;
                 var winner = ResolveBorderEdgeWinner(style.BorderBottom, neighborTop);
-                DrawBorderEdge(dc, winner, new Point(x, y + h), new Point(x + w, y + h), _brushCache, _borderPenCache, borderPixelsPerDip);
+                DrawBorderEdge(dc, winner, new Point(x, y + h), new Point(x + w, y + h), WorkbookTheme, _brushCache, _borderPenCache, borderPixelsPerDip);
             }
             if (visibleEdges.Left)
             {
@@ -662,7 +662,7 @@ public partial class GridView
                     ? leftStyle.BorderRight
                     : default;
                 var winner = ResolveBorderEdgeWinner(style.BorderLeft, neighborRight);
-                DrawBorderEdge(dc, winner, new Point(x, y), new Point(x, y + h), _brushCache, _borderPenCache, borderPixelsPerDip);
+                DrawBorderEdge(dc, winner, new Point(x, y), new Point(x, y + h), WorkbookTheme, _brushCache, _borderPenCache, borderPixelsPerDip);
             }
             if (visibleEdges.Right)
             {
@@ -670,7 +670,7 @@ public partial class GridView
                     ? rightStyle.BorderLeft
                     : default;
                 var winner = ResolveBorderEdgeWinner(style.BorderRight, neighborLeft);
-                DrawBorderEdge(dc, winner, new Point(x + w, y), new Point(x + w, y + h), _brushCache, _borderPenCache, borderPixelsPerDip);
+                DrawBorderEdge(dc, winner, new Point(x + w, y), new Point(x + w, y + h), WorkbookTheme, _brushCache, _borderPenCache, borderPixelsPerDip);
             }
             if (style.BorderDiagonalDown.Style != BorderStyle.None || style.BorderDiagonalUp.Style != BorderStyle.None)
             {
@@ -693,9 +693,9 @@ public partial class GridView
                     }
 
                     if (style.BorderDiagonalDown.Style != BorderStyle.None)
-                        DrawBorderEdge(dc, style.BorderDiagonalDown, new Point(x, y), new Point(x + diagonalW, y + diagonalH), _brushCache, null, borderPixelsPerDip);
+                        DrawBorderEdge(dc, style.BorderDiagonalDown, new Point(x, y), new Point(x + diagonalW, y + diagonalH), WorkbookTheme, _brushCache, null, borderPixelsPerDip);
                     if (style.BorderDiagonalUp.Style != BorderStyle.None)
-                        DrawBorderEdge(dc, style.BorderDiagonalUp, new Point(x, y + diagonalH), new Point(x + diagonalW, y), _brushCache, null, borderPixelsPerDip);
+                        DrawBorderEdge(dc, style.BorderDiagonalUp, new Point(x, y + diagonalH), new Point(x + diagonalW, y), WorkbookTheme, _brushCache, null, borderPixelsPerDip);
                 }
             }
         }
@@ -731,22 +731,22 @@ public partial class GridView
                 if (edges.Top is { } topEdge && fringeVisibleEdges.Top)
                 {
                     var winner = ResolveBorderEdgeWinner(ownStyle?.BorderTop ?? default, topEdge);
-                    DrawBorderEdge(dc, winner, new Point(fx, fy), new Point(fx + fw, fy), _brushCache, _borderPenCache, borderPixelsPerDip);
+                    DrawBorderEdge(dc, winner, new Point(fx, fy), new Point(fx + fw, fy), WorkbookTheme, _brushCache, _borderPenCache, borderPixelsPerDip);
                 }
                 if (edges.Bottom is { } bottomEdge && fringeVisibleEdges.Bottom)
                 {
                     var winner = ResolveBorderEdgeWinner(ownStyle?.BorderBottom ?? default, bottomEdge);
-                    DrawBorderEdge(dc, winner, new Point(fx, fy + fh), new Point(fx + fw, fy + fh), _brushCache, _borderPenCache, borderPixelsPerDip);
+                    DrawBorderEdge(dc, winner, new Point(fx, fy + fh), new Point(fx + fw, fy + fh), WorkbookTheme, _brushCache, _borderPenCache, borderPixelsPerDip);
                 }
                 if (edges.Left is { } leftEdge && fringeVisibleEdges.Left)
                 {
                     var winner = ResolveBorderEdgeWinner(ownStyle?.BorderLeft ?? default, leftEdge);
-                    DrawBorderEdge(dc, winner, new Point(fx, fy), new Point(fx, fy + fh), _brushCache, _borderPenCache, borderPixelsPerDip);
+                    DrawBorderEdge(dc, winner, new Point(fx, fy), new Point(fx, fy + fh), WorkbookTheme, _brushCache, _borderPenCache, borderPixelsPerDip);
                 }
                 if (edges.Right is { } rightEdge && fringeVisibleEdges.Right)
                 {
                     var winner = ResolveBorderEdgeWinner(ownStyle?.BorderRight ?? default, rightEdge);
-                    DrawBorderEdge(dc, winner, new Point(fx + fw, fy), new Point(fx + fw, fy + fh), _brushCache, _borderPenCache, borderPixelsPerDip);
+                    DrawBorderEdge(dc, winner, new Point(fx + fw, fy), new Point(fx + fw, fy + fh), WorkbookTheme, _brushCache, _borderPenCache, borderPixelsPerDip);
                 }
             }
         }
@@ -1330,7 +1330,11 @@ public partial class GridView
     ///   in the spreadsheet but do not make existing brush entries stale.</description></item>
     /// <item><description><c>_borderPenCache</c>: keyed by <c>CellBorder</c>. The snapped pen thickness
     ///   also depends on effective render scale, so <c>DrawBorderEdge</c> validates the cached
-    ///   thickness before reuse and replaces stale entries after zoom/DPI changes.</description></item>
+    ///   thickness before reuse and replaces stale entries after zoom/DPI changes. The pen's stroke
+    ///   color ALSO depends on the current <c>WorkbookTheme</c> when the border carries a
+    ///   <c>ThemeColor</c> reference (resolved via <c>CellBorder.ResolveColor</c>), which the
+    ///   <c>CellBorder</c> key itself does not capture -- so unlike the other caches here, this one
+    ///   DOES need explicit theme invalidation; <c>OnWorkbookThemeChanged</c> clears it.</description></item>
     /// <item><description><c>_fillPatternPenCache</c>: keyed by <c>CellColor</c>. Same as brush cache.</description></item>
     /// <item><description><c>_typefaceCache</c>: keyed by <c>CellTypefaceKey</c> (font name/weight/style).
     ///   Zoom only affects <c>fontSize</c> which is passed to <c>FormattedText</c>, not to <c>Typeface</c>.

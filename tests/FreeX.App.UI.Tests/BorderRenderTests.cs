@@ -25,7 +25,7 @@ public sealed class BorderRenderTests
     {
         var method = typeof(GridView).GetMethod("DrawBorderEdge", BindingFlags.NonPublic | BindingFlags.Static);
         method.Should().NotBeNull();
-        method!.Invoke(null, [dc, border, p1, p2, null, null, effectivePixelsPerDip]);
+        method!.Invoke(null, [dc, border, p1, p2, WorkbookTheme.Office, null, null, effectivePixelsPerDip]);
     }
 
     private static RenderTargetBitmap RenderLineToBitmap(CellBorder border, Point p1, Point p2, int dpi)
