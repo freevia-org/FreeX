@@ -79,7 +79,10 @@ public sealed class FindReplaceDialogXamlTests
         xaml.Should().Contain("FindReplaceDialogPlanner.ClearFormatButtonWidth");
         xaml.Should().Contain("FindReplaceDialogPlanner.ChooseFormatButtonWidth");
         xaml.Should().Contain("FindReplaceDialogPlanner.ResultsMinimumHeight");
+        xaml.Should().Contain("FindReplaceDialogPlanner.WpfCompactWidth");
         xaml.Should().Contain("SizeToContent=\"Height\"");
+        xaml.Should().Contain("ResizeMode=\"NoResize\"");
+        xaml.Should().Contain("FindReplaceDialogPlanner.WpfCompactActionButtonWidth");
         xaml.Should().Contain("FindReplaceDialog.FindReplaceResultBookColumnWidth");
         xaml.Should().Contain("FindReplaceDialog.FindReplaceResultSheetColumnWidth");
         xaml.Should().Contain("FindReplaceDialog.FindReplaceResultNameColumnWidth");
@@ -149,6 +152,10 @@ public sealed class FindReplaceDialogXamlTests
         AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "FindClearFormatButton", "Visibility", "Collapsed");
         AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "ReplaceFindClearFormatButton", "Visibility", "Collapsed");
         AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "ReplaceWithClearFormatButton", "Visibility", "Collapsed");
+        AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "ReplaceFindFormatButton", "Visibility", "Collapsed");
+        AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "ReplaceWithFormatButton", "Visibility", "Collapsed");
+        AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "ReplaceFindChooseFormatFromCellButton", "Visibility", "Collapsed");
+        AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "ReplaceWithChooseFormatFromCellButton", "Visibility", "Collapsed");
 
         AssertNamedElement(document, presentation, xaml, "DataGrid", "FindResultsGrid");
 
@@ -166,6 +173,46 @@ public sealed class FindReplaceDialogXamlTests
             GetPrivateControl<Button>(dialog, "FindFormatButton").Content.Should().Be("For_mat...");
             GetPrivateControl<Button>(dialog, "FindChooseFormatFromCellButton").Content.Should().Be("Choose From _Cell...");
             GetPrivateControl<Button>(dialog, "FindClearFormatButton").Content.Should().Be("_Clear");
+        });
+    }
+
+    [Fact]
+    public void Dialog_KeepsFormatPickersOutOfTheCompactSurfaceUntilOptionsAreExpanded()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book1");
+            workbook.AddSheet("Sheet1");
+            var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
+            var dialog = new FindReplaceDialog(
+                () => workbook,
+                command => commandBus.Execute(workbook.Id, command),
+                _ => { },
+                replaceMode: true);
+            dialog.Show();
+            try
+            {
+                var options = GetPrivateControl<Expander>(dialog, "OptionsExpander");
+                var format = GetPrivateControl<Button>(dialog, "ReplaceFindFormatButton");
+                var chooseFromCell = GetPrivateControl<Button>(dialog, "ReplaceFindChooseFormatFromCellButton");
+
+                format.Visibility.Should().Be(System.Windows.Visibility.Collapsed);
+                chooseFromCell.Visibility.Should().Be(System.Windows.Visibility.Collapsed);
+
+                options.IsExpanded = true;
+
+                format.Visibility.Should().Be(System.Windows.Visibility.Visible);
+                chooseFromCell.Visibility.Should().Be(System.Windows.Visibility.Visible);
+
+                options.IsExpanded = false;
+
+                format.Visibility.Should().Be(System.Windows.Visibility.Collapsed);
+                chooseFromCell.Visibility.Should().Be(System.Windows.Visibility.Collapsed);
+            }
+            finally
+            {
+                dialog.Close();
+            }
         });
     }
 
@@ -239,7 +286,7 @@ public sealed class FindReplaceDialogXamlTests
     }
 
     [Fact]
-    public void Dialog_OrdersReplaceBetweenFindNextAndReplaceAll()
+    public void Dialog_OrdersReplaceActionsBeforeFindActionsLikeExcel()
     {
         var document = LoadDialogXaml();
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -251,7 +298,7 @@ public sealed class FindReplaceDialogXamlTests
             .Select(element => element.Attribute(xaml + "Name")?.Value)
             .ToList();
 
-        buttonNames.Should().ContainInOrder("FindAllBtn", "FindNextBtn", "ReplaceBtn", "ReplaceAllBtn", "CloseBtn");
+        buttonNames.Should().ContainInOrder("ReplaceAllBtn", "ReplaceBtn", "FindAllBtn", "FindNextBtn", "CloseBtn");
     }
 
     [Fact]
@@ -260,7 +307,7 @@ public sealed class FindReplaceDialogXamlTests
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FindReplaceDialog.xaml");
 
         xaml.Should().Contain("<Button x:Name=\"FindNextBtn\"");
-        xaml.Should().Contain("x:Name=\"FindNextBtn\" Width=\"80\" Margin=\"0,0,8,0\" IsDefault=\"True\"");
+        xaml.Should().Contain("x:Name=\"FindNextBtn\" Width=\"{x:Static services:FindReplaceDialogPlanner.WpfCompactActionButtonWidth}\"");
         WithDialog(dialog => GetPrivateControl<Button>(dialog, "FindNextBtn").Content.Should().Be("_Find Next"));
     }
 

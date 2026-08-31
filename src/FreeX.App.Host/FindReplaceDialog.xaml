@@ -3,14 +3,14 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:FreeX.App.Host"
         xmlns:services="clr-namespace:FreeX.App.Services;assembly=FreeX.App.Services"
-        Width="{x:Static services:FindReplaceDialogPlanner.Width}"
-        MaxHeight="{x:Static services:FindReplaceDialogPlanner.Height}"
+        Width="{x:Static services:FindReplaceDialogPlanner.WpfCompactWidth}"
+        MaxHeight="{x:Static services:FindReplaceDialogPlanner.WpfCompactMaximumHeight}"
         MinWidth="{x:Static services:FindReplaceDialogPlanner.MinWidth}"
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
-        ResizeMode="CanResize"
+        ResizeMode="NoResize"
         ShowInTaskbar="False">
-    <Grid Margin="12">
+    <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -19,9 +19,9 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TabControl x:Name="FindReplaceTabs" Grid.Row="0" Margin="0,0,0,10" SelectionChanged="FindReplaceTabs_SelectionChanged">
+        <TabControl x:Name="FindReplaceTabs" Grid.Row="0" Margin="0,0,0,6" SelectionChanged="FindReplaceTabs_SelectionChanged">
             <TabItem x:Name="FindTab">
-                <Grid Margin="10">
+                <Grid Margin="4,6,4,4">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="{x:Static local:FindReplaceDialog.FindReplaceFieldLabelColumnWidth}"/>
                         <ColumnDefinition Width="*"/>
@@ -31,14 +31,14 @@
                     </Grid.ColumnDefinitions>
                     <Label x:Name="FindWhatLabel" Target="{Binding ElementName=FindBox}" VerticalAlignment="Center"/>
                     <TextBox x:Name="FindBox" Grid.Column="1" MinWidth="{x:Static services:FindReplaceDialogPlanner.FieldMinWidth}" KeyDown="FindBox_KeyDown" TextChanged="FindBox_TextChanged"/>
-                    <Button x:Name="FindFormatButton" Grid.Column="2" Width="{x:Static services:FindReplaceDialogPlanner.FormatButtonWidth}" Margin="8,0,0,0" Click="FindFormatButton_Click"/>
+                    <Button x:Name="FindFormatButton" Grid.Column="2" Width="{x:Static services:FindReplaceDialogPlanner.FormatButtonWidth}" Margin="8,0,0,0" Visibility="Collapsed" Click="FindFormatButton_Click"/>
                     <Button x:Name="FindClearFormatButton" Grid.Column="3" Width="{x:Static services:FindReplaceDialogPlanner.ClearFormatButtonWidth}" Margin="6,0,0,0" Visibility="Collapsed" Click="FindClearFormatButton_Click"/>
-                    <Button x:Name="FindChooseFormatFromCellButton" Grid.Column="4" Width="{x:Static services:FindReplaceDialogPlanner.ChooseFormatButtonWidth}" Margin="6,0,0,0" Click="ChooseFindFormatFromCellButton_Click"/>
+                    <Button x:Name="FindChooseFormatFromCellButton" Grid.Column="4" Width="{x:Static services:FindReplaceDialogPlanner.ChooseFormatButtonWidth}" Margin="6,0,0,0" Visibility="Collapsed" Click="ChooseFindFormatFromCellButton_Click"/>
                 </Grid>
             </TabItem>
 
             <TabItem x:Name="ReplaceTab">
-                <Grid Margin="10">
+                <Grid Margin="4,6,4,4">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
@@ -54,12 +54,12 @@
                         </Grid.ColumnDefinitions>
                         <Label x:Name="ReplaceFindWhatLabel" Target="{Binding ElementName=ReplaceFindBox}" VerticalAlignment="Center"/>
                         <TextBox x:Name="ReplaceFindBox" Grid.Column="1" MinWidth="{x:Static services:FindReplaceDialogPlanner.FieldMinWidth}" KeyDown="FindBox_KeyDown" TextChanged="FindBox_TextChanged"/>
-                        <Button x:Name="ReplaceFindFormatButton" Grid.Column="2" Width="{x:Static services:FindReplaceDialogPlanner.FormatButtonWidth}" Margin="8,0,0,0" Click="FindFormatButton_Click"/>
+                        <Button x:Name="ReplaceFindFormatButton" Grid.Column="2" Width="{x:Static services:FindReplaceDialogPlanner.FormatButtonWidth}" Margin="8,0,0,0" Visibility="Collapsed" Click="FindFormatButton_Click"/>
                         <Button x:Name="ReplaceFindClearFormatButton" Grid.Column="3" Width="{x:Static services:FindReplaceDialogPlanner.ClearFormatButtonWidth}" Margin="6,0,0,0" Visibility="Collapsed" Click="FindClearFormatButton_Click"/>
-                        <Button x:Name="ReplaceFindChooseFormatFromCellButton" Grid.Column="4" Width="{x:Static services:FindReplaceDialogPlanner.ChooseFormatButtonWidth}" Margin="6,0,0,0" Click="ChooseFindFormatFromCellButton_Click"/>
+                        <Button x:Name="ReplaceFindChooseFormatFromCellButton" Grid.Column="4" Width="{x:Static services:FindReplaceDialogPlanner.ChooseFormatButtonWidth}" Margin="6,0,0,0" Visibility="Collapsed" Click="ChooseFindFormatFromCellButton_Click"/>
                     </Grid>
 
-                    <Grid x:Name="ReplaceRow" Grid.Row="1" Margin="0,8,0,0">
+                    <Grid x:Name="ReplaceRow" Grid.Row="1" Margin="0,4,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="{x:Static local:FindReplaceDialog.FindReplaceFieldLabelColumnWidth}"/>
                             <ColumnDefinition Width="*"/>
@@ -69,9 +69,9 @@
                         </Grid.ColumnDefinitions>
                         <Label x:Name="ReplaceWithLabel" Target="{Binding ElementName=ReplaceBox}" VerticalAlignment="Center"/>
                         <TextBox x:Name="ReplaceBox" Grid.Column="1" MinWidth="{x:Static services:FindReplaceDialogPlanner.FieldMinWidth}"/>
-                        <Button x:Name="ReplaceWithFormatButton" Grid.Column="2" Width="{x:Static services:FindReplaceDialogPlanner.FormatButtonWidth}" Margin="8,0,0,0" Click="ReplaceWithFormatButton_Click"/>
+                        <Button x:Name="ReplaceWithFormatButton" Grid.Column="2" Width="{x:Static services:FindReplaceDialogPlanner.FormatButtonWidth}" Margin="8,0,0,0" Visibility="Collapsed" Click="ReplaceWithFormatButton_Click"/>
                         <Button x:Name="ReplaceWithClearFormatButton" Grid.Column="3" Width="{x:Static services:FindReplaceDialogPlanner.ClearFormatButtonWidth}" Margin="6,0,0,0" Visibility="Collapsed" Click="ReplaceWithClearFormatButton_Click"/>
-                        <Button x:Name="ReplaceWithChooseFormatFromCellButton" Grid.Column="4" Width="{x:Static services:FindReplaceDialogPlanner.ChooseFormatButtonWidth}" Margin="6,0,0,0" Click="ChooseReplaceWithFormatFromCellButton_Click"/>
+                        <Button x:Name="ReplaceWithChooseFormatFromCellButton" Grid.Column="4" Width="{x:Static services:FindReplaceDialogPlanner.ChooseFormatButtonWidth}" Margin="6,0,0,0" Visibility="Collapsed" Click="ChooseReplaceWithFormatFromCellButton_Click"/>
                     </Grid>
                 </Grid>
             </TabItem>
@@ -82,7 +82,7 @@
                   IsExpanded="False"
                   Expanded="OptionsExpander_Expanded"
                   Collapsed="OptionsExpander_Collapsed"
-                  Margin="0,0,0,10">
+                  Margin="0,0,0,6">
             <Grid Margin="0,8,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="{x:Static local:FindReplaceDialog.FindReplaceFieldLabelColumnWidth}"/>
@@ -131,15 +131,15 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <TextBlock x:Name="StatusLabel" Grid.Row="3" Foreground="#555" FontSize="11" MinHeight="18" Margin="0,0,0,8"
+        <TextBlock x:Name="StatusLabel" Grid.Row="3" Foreground="#555" FontSize="11" Margin="0,0,0,4" Visibility="Collapsed"
                    AutomationProperties.LiveSetting="Polite"/>
 
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="FindAllBtn" Width="76" Margin="0,0,8,0" Click="FindAll_Click"/>
-            <Button x:Name="FindNextBtn" Width="80" Margin="0,0,8,0" IsDefault="True" Click="FindNext_Click"/>
-            <Button x:Name="ReplaceBtn" Width="76" Margin="0,0,8,0" Visibility="Collapsed" Click="Replace_Click"/>
-            <Button x:Name="ReplaceAllBtn" Width="88" Margin="0,0,8,0" Visibility="Collapsed" Click="ReplaceAll_Click"/>
-            <Button x:Name="CloseBtn" Width="60" IsCancel="True" Click="Close_Click"/>
+            <Button x:Name="ReplaceAllBtn" Width="{x:Static services:FindReplaceDialogPlanner.WpfCompactActionButtonWidth}" Margin="{x:Static local:FindReplaceDialog.CompactActionButtonMargin}" Visibility="Collapsed" Click="ReplaceAll_Click"/>
+            <Button x:Name="ReplaceBtn" Width="{x:Static services:FindReplaceDialogPlanner.WpfCompactActionButtonWidth}" Margin="{x:Static local:FindReplaceDialog.CompactActionButtonMargin}" Visibility="Collapsed" Click="Replace_Click"/>
+            <Button x:Name="FindAllBtn" Width="{x:Static services:FindReplaceDialogPlanner.WpfCompactActionButtonWidth}" Margin="{x:Static local:FindReplaceDialog.CompactActionButtonMargin}" Click="FindAll_Click"/>
+            <Button x:Name="FindNextBtn" Width="{x:Static services:FindReplaceDialogPlanner.WpfCompactActionButtonWidth}" Margin="{x:Static local:FindReplaceDialog.CompactActionButtonMargin}" IsDefault="True" Click="FindNext_Click"/>
+            <Button x:Name="CloseBtn" Width="{x:Static services:FindReplaceDialogPlanner.WpfCompactActionButtonWidth}" IsCancel="True" Click="Close_Click"/>
         </StackPanel>
     </Grid>
 </Window>
