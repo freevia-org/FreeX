@@ -182,7 +182,7 @@ public static class GoToSpecialService
         return cells;
     }
 
-    private static bool HasConditionalFormatAt(List<ConditionalFormat> rules, CellAddress address)
+    private static bool HasConditionalFormatAt(IReadOnlyList<ConditionalFormat> rules, CellAddress address)
     {
         for (var i = 0; i < rules.Count; i++)
         {
@@ -193,85 +193,58 @@ public static class GoToSpecialService
         return false;
     }
 
-    private static bool HasDataValidationAt(List<DataValidation> rules, CellAddress address)
+    private static bool HasDataValidationAt(IReadOnlyList<DataValidation> rules, CellAddress address)
     {
         for (var i = 0; i < rules.Count; i++)
         {
-            var rule = rules[i];
-            if (rule.AppliesTo.Contains(address))
+            if (DataValidationAppliesAt(rules[i], address))
                 return true;
-
-            var additionalRanges = rule.AdditionalRanges;
-            for (var rangeIndex = 0; rangeIndex < additionalRanges.Count; rangeIndex++)
-            {
-                if (additionalRanges[rangeIndex].Contains(address))
-                    return true;
-            }
         }
 
         return false;
     }
 
-    /// <summary>
-    /// Excel's "Same as active cell" sub-option for Go To Special > Conditional Formats:
-    /// selects only cells governed by the SAME specific rule(s) that apply to
-    /// <paramref name="activeCell"/> -- not every rule intersecting <paramref name="range"/>
-    /// (that broader behavior is "All", the default).
-    /// </summary>
-    private static IReadOnlyList<CellAddress> FindConditionalFormatsMatchingActiveCell(
-        List<ConditionalFormat> rules,
-        GridRange range,
-        CellAddress activeCell)
+    private static bool DataValidationAppliesAt(DataValidation rule, CellAddress address)
+    {
+        if (rule.AppliesTo.Contains(address))
+            return true;
+
+        var additionalRanges = rule.AdditionalRanges;
+        for (var rangeIndex = 0; rangeIndex < additionalRanges.Count; rangeIndex++)
+        {
+            if (additionalRanges[rangeIndex].Contains(address))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static IReadOnlyList<ConditionalFormat> SelectConditionalFormatsAt(
+        IReadOnlyList<ConditionalFormat> rules,
+        CellAddress address)
     {
         List<ConditionalFormat>? matchingRules = null;
         for (var i = 0; i < rules.Count; i++)
         {
-            if (rules[i].AppliesTo.Contains(activeCell))
+            if (rules[i].AppliesTo.Contains(address))
                 (matchingRules ??= []).Add(rules[i]);
         }
 
-        if (matchingRules is null)
-            return [];
-
-        var result = new List<CellAddress>();
-        foreach (var address in range.AllCells())
-        {
-            if (HasConditionalFormatAt(matchingRules, address))
-                result.Add(address);
-        }
-
-        return result;
+        return matchingRules ?? [];
     }
 
-    /// <summary>
-    /// Excel's "Same as active cell" sub-option for Go To Special > Data Validation:
-    /// selects only cells governed by the SAME specific rule(s) that apply to
-    /// <paramref name="activeCell"/> -- not every rule intersecting <paramref name="range"/>
-    /// (that broader behavior is "All", the default).
-    /// </summary>
-    private static IReadOnlyList<CellAddress> FindDataValidationsMatchingActiveCell(
-        List<DataValidation> rules,
-        GridRange range,
-        CellAddress activeCell)
+    private static IReadOnlyList<DataValidation> SelectDataValidationsAt(
+        IReadOnlyList<DataValidation> rules,
+        CellAddress address)
     {
         List<DataValidation>? matchingRules = null;
         for (var i = 0; i < rules.Count; i++)
         {
-            if (HasDataValidationAt([rules[i]], activeCell))
+            if (DataValidationAppliesAt(rules[i], address))
                 (matchingRules ??= []).Add(rules[i]);
         }
 
-        if (matchingRules is null)
-            return [];
-
-        var result = new List<CellAddress>();
-        foreach (var address in range.AllCells())
-        {
-            if (HasDataValidationAt(matchingRules, address))
-                result.Add(address);
-        }
-
-        return result;
+        return matchingRules ?? [];
     }
 
     private static IReadOnlyList<CellAddress> FindConditionalFormats(
@@ -282,23 +255,26 @@ public static class GoToSpecialService
         if (rules.Count == 0)
             return [];
 
-        if (matchActiveCellOnly is { } activeCell)
-            return FindConditionalFormatsMatchingActiveCell(rules, range, activeCell);
+        IReadOnlyList<ConditionalFormat> selectedRules = matchActiveCellOnly is { } activeCell
+            ? SelectConditionalFormatsAt(rules, activeCell)
+            : rules;
+        if (selectedRules.Count == 0)
+            return [];
 
-        var (coversRange, coveredCells, rangeCount) = AnalyzeConditionalFormatRanges(rules, range);
+        var (coversRange, coveredCells, rangeCount) = AnalyzeConditionalFormatRanges(selectedRules, range);
         if (coversRange)
             return MaterializeCells(range);
 
         if (ShouldIndexRuleRanges(rangeCount, coveredCells))
         {
-            var matches = BuildConditionalFormatAddressKeys(rules, range, coveredCells);
+            var matches = BuildConditionalFormatAddressKeys(selectedRules, range, coveredCells);
             return MaterializeMatches(range, matches);
         }
 
         var result = new List<CellAddress>();
         foreach (var address in range.AllCells())
         {
-            if (HasConditionalFormatAt(rules, address))
+            if (HasConditionalFormatAt(selectedRules, address))
                 result.Add(address);
         }
 
@@ -313,23 +289,26 @@ public static class GoToSpecialService
         if (rules.Count == 0)
             return [];
 
-        if (matchActiveCellOnly is { } activeCell)
-            return FindDataValidationsMatchingActiveCell(rules, range, activeCell);
+        IReadOnlyList<DataValidation> selectedRules = matchActiveCellOnly is { } activeCell
+            ? SelectDataValidationsAt(rules, activeCell)
+            : rules;
+        if (selectedRules.Count == 0)
+            return [];
 
-        var (coversRange, coveredCells, rangeCount) = AnalyzeDataValidationRanges(rules, range);
+        var (coversRange, coveredCells, rangeCount) = AnalyzeDataValidationRanges(selectedRules, range);
         if (coversRange)
             return MaterializeCells(range);
 
         if (ShouldIndexRuleRanges(rangeCount, coveredCells))
         {
-            var matches = BuildDataValidationAddressKeys(rules, range, coveredCells);
+            var matches = BuildDataValidationAddressKeys(selectedRules, range, coveredCells);
             return MaterializeMatches(range, matches);
         }
 
         var result = new List<CellAddress>();
         foreach (var address in range.AllCells())
         {
-            if (HasDataValidationAt(rules, address))
+            if (HasDataValidationAt(selectedRules, address))
                 result.Add(address);
         }
 
@@ -342,7 +321,7 @@ public static class GoToSpecialService
         coveredCells <= MaximumIndexedRuleCells;
 
     private static (bool CoversRange, long CoveredCells, int RangeCount) AnalyzeConditionalFormatRanges(
-        List<ConditionalFormat> rules,
+        IReadOnlyList<ConditionalFormat> rules,
         GridRange searchRange)
     {
         long coveredCells = 0;
@@ -360,7 +339,7 @@ public static class GoToSpecialService
     }
 
     private static (bool CoversRange, long CoveredCells, int RangeCount) AnalyzeDataValidationRanges(
-        List<DataValidation> rules,
+        IReadOnlyList<DataValidation> rules,
         GridRange searchRange)
     {
         long coveredCells = 0;
@@ -392,7 +371,7 @@ public static class GoToSpecialService
     }
 
     private static List<ulong> BuildConditionalFormatAddressKeys(
-        List<ConditionalFormat> rules,
+        IReadOnlyList<ConditionalFormat> rules,
         GridRange searchRange,
         long coveredCells)
     {
@@ -407,7 +386,7 @@ public static class GoToSpecialService
     }
 
     private static List<ulong> BuildDataValidationAddressKeys(
-        List<DataValidation> rules,
+        IReadOnlyList<DataValidation> rules,
         GridRange searchRange,
         long coveredCells)
     {
