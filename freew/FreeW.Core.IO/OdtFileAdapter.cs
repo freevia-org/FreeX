@@ -133,7 +133,20 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
         public OdtPictureStore Pictures { get; } = pictures;
     }
 
-    private IEnumerable<Block> ReadBlocks(XElement container, ReadContext ctx)
+    /// <summary>
+    /// How deep a table-in-cell / list-in-list chain the reader will follow before it stops.
+    ///
+    /// r181: ReadBlocks -> ReadTable -> ReadBlocks (and ReadList -> ReadList) recursed with no
+    /// bound, so a small hand-written .odt nesting a table inside a cell a few thousand times
+    /// overflowed the stack. A StackOverflowException cannot be caught in .NET: the process dies
+    /// outright, taking every other open document with it, and the file is tiny so neither the
+    /// zip-bomb guard nor the character cap in SecureXmlReaderSettings sees anything wrong. The
+    /// cap is far above anything a real document reaches -- Word itself stops nesting tables at
+    /// 20 -- so content beyond it is not content a writer produced.
+    /// </summary>
+    private const int MaxStructuralNestingDepth = 100;
+
+    private IEnumerable<Block> ReadBlocks(XElement container, ReadContext ctx, int depth = 0)
     {
         foreach (var element in container.Elements())
         {
@@ -148,7 +161,8 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
             }
             else if (element.Name == TableNs + "table")
             {
-                yield return ReadTable(element, ctx);
+                if (depth < MaxStructuralNestingDepth)
+                    yield return ReadTable(element, ctx, depth + 1);
             }
             // Unmodelled blocks (text:section, draw:frame at body level, …) are skipped by design.
         }
@@ -179,7 +193,7 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
                     };
                     yield return p;
                 }
-                else if (child.Name == Text + "list")
+                else if (child.Name == Text + "list" && level < MaxStructuralNestingDepth)
                 {
                     foreach (var nested in ReadList(child, ctx, level + 1))
                         yield return nested;
@@ -401,7 +415,7 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
     /// </summary>
     private const int MaximumTableColumns = 1024;
 
-    private Table ReadTable(XElement table, ReadContext ctx)
+    private Table ReadTable(XElement table, ReadContext ctx, int depth = 0)
     {
         var result = new Table();
 
@@ -454,7 +468,7 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
                     if (span > 1)
                         cell.GridSpan = span;
 
-                    foreach (var block in ReadBlocks(cellEl, ctx))
+                    foreach (var block in ReadBlocks(cellEl, ctx, depth))
                     {
                         if (block is Paragraph p)
                             cell.Paragraphs.Add(p);

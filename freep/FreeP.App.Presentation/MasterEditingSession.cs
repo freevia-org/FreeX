@@ -168,7 +168,12 @@ public sealed class MasterEditingSession : ICanvasGestureEditingSession
             ExtentCxEmu = Presentation.SlideSizeCxEmu / 2,
             ExtentCyEmu = Presentation.SlideSizeCyEmu / 5,
             Fill = ShapeFill.None.Instance,
-            Placeholder = new Placeholder { Type = type },
+            // r181: allocate a distinct Idx, the way AddShape allocates a distinct Id just below.
+            // Placeholder.Idx defaults to 0, so every placeholder this method created claimed the
+            // same index: adding a second Body placeholder to a layout gave two placeholders with
+            // the same (Type, Idx) pair, which is how a slide binds its content to a layout slot.
+            // Both then inherit from -- and write back to -- whichever the resolver matched first.
+            Placeholder = new Placeholder { Type = type, Idx = AllocatePlaceholderIndex() },
             TextBody = new TextBody { Wrap = true },
         };
         shape.TextBody.Paragraphs.Add(new Paragraph { Runs = { new Run { Text = string.Empty } } });
@@ -250,6 +255,24 @@ public sealed class MasterEditingSession : ICanvasGestureEditingSession
                 .Select(layout => MasterEditTarget.Layout(layout.Id)));
         }
         return targets;
+    }
+
+    /// <summary>
+    /// The next unused placeholder index across the master and layouts being edited. Mirrors
+    /// <see cref="AllocateShapeId"/>: a placeholder is addressed by (Type, Idx), so a duplicate
+    /// Idx is the placeholder equivalent of a duplicate shape id.
+    /// </summary>
+    private int AllocatePlaceholderIndex()
+    {
+        var used = Presentation.Masters
+            .SelectMany(master => SlideShapeTraversal.EnumerateDepthFirst(master.Placeholders))
+            .Concat(Presentation.Layouts
+                .SelectMany(layout => SlideShapeTraversal.EnumerateDepthFirst(layout.Placeholders)))
+            .Select(shape => shape.Placeholder?.Idx ?? -1)
+            .DefaultIfEmpty(-1)
+            .Max();
+
+        return used + 1;
     }
 
     private uint AllocateShapeId()

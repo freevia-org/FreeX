@@ -98,6 +98,27 @@ internal static class XlsxWorksheetFormControlWriter
         if (vml is null || vmlPath is null || vmlRelationshipId is null)
             return;
 
+        // r181: seed the allocator from the VML part TOO, not just from <control shapeId>.
+        // Legacy CELL COMMENTS live in this same vmlDrawing part and carry their own
+        // _x0000_sNNNN shape ids, which the <controls> container knows nothing about. Allocating
+        // from the controls list alone therefore handed a new form control an id a comment had
+        // already taken: two <v:shape> elements share an id, and Excel resolves the duplicate to
+        // whichever it sees first -- the control renders as the comment box, or vanishes.
+        foreach (var existing in vml.Root?.Descendants(VmlNs + "shape") ?? Enumerable.Empty<XElement>())
+        {
+            var id = existing.Attribute("id")?.Value;
+            if (id is null || !id.StartsWith("_x0000_s", StringComparison.Ordinal))
+                continue;
+            if (uint.TryParse(
+                    id.AsSpan("_x0000_s".Length),
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture,
+                    out var vmlShapeId))
+            {
+                existingShapeIds.Add(vmlShapeId);
+            }
+        }
+
         var vmlRoot = vml.Root!;
         EnsureVmlNamespaces(vmlRoot);
         var changed = false;

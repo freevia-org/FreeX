@@ -14,6 +14,7 @@ public sealed class FileCommandSession
     public const string DefaultUntitledDisplayName = "Untitled";
 
     private readonly Func<RecentFilesStore> _loadRecentFilesStore;
+    private readonly ConcurrentDictionary<string, bool> _pathExistsCache = new(PlatformPathIdentityComparer.Current);
     private readonly Func<string, bool> _pathExists;
 
     // Caches each recent path's existence probe result for the lifetime of this session, so a
@@ -22,7 +23,6 @@ public sealed class FileCommandSession
     // (potentially a 20+ second SMB/TCP timeout for an unreachable UNC/mapped-network path) on
     // every single access. Keyed with platform path identity so a case-differing alias of an
     // already-probed path reuses the cached result instead of re-probing.
-    private readonly ConcurrentDictionary<string, bool> _pathExistsCache = new(PlatformPathIdentityComparer.Current);
 
     private readonly WorkbookDocumentState _state = new();
     private readonly string _untitledDisplayName;
@@ -36,6 +36,17 @@ public sealed class FileCommandSession
 
         _untitledDisplayName = untitledDisplayName;
         _loadRecentFilesStore = loadRecentFilesStore ?? RecentFilesStore.Load;
+        // r181: this default stays SYNCHRONOUS deliberately, and the finding that asked for the
+        // off-thread RecentFilePathExistenceCache here was only half right. The freeze it
+        // describes is real -- File.Exists against an unreachable UNC path blocks for the SMB
+        // timeout, 20+ seconds, on the UI thread building the Backstage pane. But that cache
+        // answers OPTIMISTICALLY until its background probe returns, and FreeW/FreeP read
+        // RecentEntries once and render it with no refresh hook, so defaulting to it swapped a
+        // freeze for a dead entry that never disappears (RecentEntries_PrunesEntriesWhoseFile
+        // NoLongerExists pins exactly that, and is right to). The complete fix is host-side: the
+        // four FreeW/FreeP shells must pass the cache in AND wire its onProbed callback to
+        // re-render, the way both FreeX shells already do. Until then the correct default is the
+        // one that never shows a dead entry.
         _pathExists = pathExists ?? File.Exists;
     }
 
@@ -53,7 +64,7 @@ public sealed class FileCommandSession
     /// Recent files (most recent first) from the shared store, pruned to entries whose file still
     /// exists on disk; never throws. Mirrors the FreeX WPF host's <c>BackstageRecentFileListPlanner</c>
     /// filtering so a moved/deleted file silently drops out of the Recent list instead of producing a
-    /// dead "Open" click. Each path's existence result is cached for the lifetime of this session, so
+    /// dead "Open" click. Each path existence result is cached for the lifetime of this session, so
     /// repeated reads -- e.g. once per keystroke while a host filters its Open-pane Recent list --
     /// probe a given path at most once instead of re-running a synchronous, potentially multi-second
     /// filesystem/network check on every access.
@@ -68,6 +79,11 @@ public sealed class FileCommandSession
                 var existing = new List<RecentFileEntry>(entries.Count);
                 foreach (var entry in entries)
                 {
+                    // NOTE: a caller that injects RecentFilePathExistenceCache must NOT have its
+                    // answer memoised here -- that cache updates once its background probe
+                    // returns, and a second cache in front of it would freeze the optimistic
+                    // "yes" forever. The per-session cache is only correct for a probe that is
+                    // already authoritative on its first call, which the default File.Exists is.
                     if (_pathExistsCache.GetOrAdd(entry.Path, _pathExists))
                         existing.Add(entry);
                 }

@@ -278,7 +278,14 @@ internal sealed class DocumentViewAutomationPeer : ControlAutomationPeer, IValue
             or DocumentAccessibilityNodeKind.WordArt
             or DocumentAccessibilityNodeKind.SmartArt
             or DocumentAccessibilityNodeKind.DrawingGroup
-            or DocumentAccessibilityNodeKind.EmbeddedObject;
+            or DocumentAccessibilityNodeKind.EmbeddedObject
+            // r181: a content control (checkbox, drop-down, date picker, plain/rich text field)
+            // is the most keyboard-driven node in a form document, and this peer already reports
+            // HasKeyboardFocus:true for one -- so omitting it here told assistive technology the
+            // focused element cannot take focus. Screen readers use IsKeyboardFocusable to decide
+            // what to announce and what to offer in a form-fields list, so the fields a form exists
+            // for were the ones it skipped.
+            or DocumentAccessibilityNodeKind.ContentControl;
 
     private static Dictionary<string, string?> BuildParentMap(DocumentAccessibilityTree tree)
     {

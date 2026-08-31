@@ -865,10 +865,17 @@ public sealed class CarryMergedCellContentCommand(
         {
             var source = cells[c];
 
+            // r181: CLONE. Appending the source objects themselves aliased them into two cells at
+            // once -- the survivor and the dropped cell that MergeCellsHorizontalCommand snapshots
+            // for its own undo. Editing the merged cell then mutated the snapshot too, so undoing
+            // the merge restored cells already carrying the post-merge edits.
             foreach (var nested in source.NestedTables)
             {
-                survivor.NestedTables.Add(nested);
-                _appendedNestedTables++;
+                if (DocumentModelCloner.CloneBlock(nested, RevisionClonePolicy.Preserve) is Table clonedTable)
+                {
+                    survivor.NestedTables.Add(clonedTable);
+                    _appendedNestedTables++;
+                }
             }
 
             foreach (var paragraph in source.Paragraphs)
@@ -876,7 +883,8 @@ public sealed class CarryMergedCellContentCommand(
                 if (paragraph.PlainText.Length == 0 && paragraph.Runs.Count == 0)
                     continue;
 
-                survivor.Paragraphs.Add(paragraph);
+                survivor.Paragraphs.Add(
+                    DocumentModelCloner.CloneParagraph(paragraph, RevisionClonePolicy.Preserve));
                 _appendedParagraphs++;
             }
         }
