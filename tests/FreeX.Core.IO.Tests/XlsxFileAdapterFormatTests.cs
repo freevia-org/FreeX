@@ -4,6 +4,7 @@ using System.Xml.Linq;
 using ClosedXML.Excel;
 using DocumentFormat.OpenXml.Packaging;
 using FluentAssertions;
+using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
@@ -37,6 +38,46 @@ public sealed class XlsxFileAdapterFormatTests
         loaded.GetStyle(sheetModel.GetCell(2, 1)!.StyleId).NumberFormat.Should().Be("0.00%");
         loaded.GetStyle(sheetModel.GetCell(3, 1)!.StyleId).NumberFormat.Should().Be("# ??/??");
         loaded.GetStyle(sheetModel.GetCell(4, 1)!.StyleId).NumberFormat.Should().Be("@");
+    }
+
+    [Fact]
+    public void Save_CurrencyShortcutUsesBuiltInFormatIdEight()
+    {
+        var workbook = new Workbook("Currency shortcut");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(address, new NumberValue(1234.5));
+        sheet.GetCell(address)!.StyleId = workbook.RegisterStyle(new CellStyle
+        {
+            NumberFormat = NumberFormatShortcutService.GetFormat(NumberFormatShortcut.Currency)
+        });
+
+        using var stream = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, stream);
+
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        using (var stylesStream = archive.GetEntry("xl/styles.xml")!.Open())
+        {
+            var styles = XDocument.Load(stylesStream);
+            var ns = styles.Root!.Name.Namespace;
+            var shortcutFormat = NumberFormatShortcutService.GetFormat(NumberFormatShortcut.Currency);
+
+            styles.Root!
+                .Element(ns + "cellXfs")!
+                .Elements(ns + "xf")
+                .Should().Contain(xf => xf.Attribute("numFmtId")!.Value == "8");
+            (styles.Root!
+                .Element(ns + "numFmts")?
+                .Elements(ns + "numFmt") ?? Enumerable.Empty<XElement>())
+                .Should().NotContain(numFmt => numFmt.Attribute("formatCode")!.Value == shortcutFormat);
+        }
+
+        stream.Position = 0;
+        var reloaded = adapter.Load(stream);
+        reloaded.GetStyle(reloaded.GetSheetAt(0).GetCell(1, 1)!.StyleId).NumberFormat
+            .Should().Be(NumberFormatShortcutService.GetFormat(NumberFormatShortcut.Currency));
     }
 
     [Fact]

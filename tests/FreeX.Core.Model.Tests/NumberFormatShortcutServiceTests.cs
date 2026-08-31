@@ -1,4 +1,5 @@
 using FreeX.Core.Commands;
+using FreeX.Core.Formula;
 using FluentAssertions;
 
 namespace FreeX.Core.Model.Tests;
@@ -8,7 +9,7 @@ public sealed class NumberFormatShortcutServiceTests
     [Theory]
     [InlineData(NumberFormatShortcut.General, "General")]
     [InlineData(NumberFormatShortcut.Number, "#,##0.00")]
-    [InlineData(NumberFormatShortcut.Currency, "$#,##0.00")]
+    [InlineData(NumberFormatShortcut.Currency, "$#,##0.00_);[Red]($#,##0.00)")]
     [InlineData(NumberFormatShortcut.Percentage, "0%")]
     [InlineData(NumberFormatShortcut.Date, "m/d/yyyy")]
     [InlineData(NumberFormatShortcut.Time, "h:mm AM/PM")]
@@ -16,5 +17,14 @@ public sealed class NumberFormatShortcutServiceTests
     public void GetFormat_ReturnsExcelCompatibleFormatCode(NumberFormatShortcut shortcut, string expected)
     {
         NumberFormatShortcutService.GetFormat(shortcut).Should().Be(expected);
+    }
+
+    [Fact]
+    public void Currency_UsesBuiltInCurrencyFormatIdEightAndRetainsObservedDisplay()
+    {
+        var format = NumberFormatShortcutService.GetFormat(NumberFormatShortcut.Currency);
+
+        BuiltInNumberFormatCatalog.ResolveNumberFormatIdForCode(format).Should().Be(8);
+        NumberFormatter.Format(new NumberValue(1234.5), format).TrimEnd().Should().Be("$1,234.50");
     }
 }
