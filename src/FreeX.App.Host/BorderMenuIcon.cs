@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
@@ -90,12 +91,40 @@ public sealed class BorderMenuIcon : FrameworkElement
         set => SetValue(KindProperty, value);
     }
 
+    /// <summary>
+    /// freex-border-accent-swatch-F1: the workbook theme the two "Accent n" swatches are drawn from.
+    /// <c>MainWindow.HomeFormatting.cs</c>'s <c>BorderLineColorAccent1MenuItem_Click</c> applies
+    /// <c>_workbook.Theme.GetColor(Accent1)</c>, so the swatch must come from the same place or the menu
+    /// advertises one color and paints another. Before this, the swatches were hard-coded to values that
+    /// matched no theme at all -- Accent 2 in particular drew teal (45,125,154) while applying the Office
+    /// theme's orange (233,113,50).
+    /// </summary>
+    public static readonly DependencyProperty ThemeProperty =
+        DependencyProperty.Register(
+            nameof(Theme),
+            typeof(WorkbookTheme),
+            typeof(BorderMenuIcon),
+            new FrameworkPropertyMetadata(WorkbookTheme.Office, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public WorkbookTheme Theme
+    {
+        get => (WorkbookTheme)GetValue(ThemeProperty);
+        set => SetValue(ThemeProperty, value);
+    }
+
     public BorderMenuIcon()
     {
         Width = 18;
         Height = 18;
         SnapsToDevicePixels = true;
         UseLayoutRounding = true;
+    }
+
+    private static SolidColorBrush FrozenBrush(CellColor color)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
+        brush.Freeze();
+        return brush;
     }
 
     protected override void OnRender(DrawingContext dc)
@@ -108,8 +137,15 @@ public sealed class BorderMenuIcon : FrameworkElement
         var black = new SolidColorBrush(Color.FromRgb(32, 32, 32));
         black.Freeze();
 
+        // Chrome accent for the tool glyphs (Draw Border pencil, line samples) -- deliberately NOT a
+        // theme color: those icons depict a tool, not a color the command will apply.
         var accent = new SolidColorBrush(Color.FromRgb(15, 109, 140));
         accent.Freeze();
+
+        // The two "Accent n" entries under Line Color ARE color swatches, so they must show exactly
+        // what clicking them applies: the live workbook theme's accent (see the DP doc above).
+        var themeAccent1 = FrozenBrush(Theme.GetColor(WorkbookThemeColorSlot.Accent1));
+        var themeAccent2 = FrozenBrush(Theme.GetColor(WorkbookThemeColorSlot.Accent2));
 
         DrawGrid(dc, gray);
 
@@ -172,10 +208,10 @@ public sealed class BorderMenuIcon : FrameworkElement
                 DrawColorSwatch(dc, new SolidColorBrush(Color.FromRgb(128, 128, 128)));
                 break;
             case BorderMenuIconKind.ColorAccent1:
-                DrawColorSwatch(dc, accent);
+                DrawColorSwatch(dc, themeAccent1);
                 break;
             case BorderMenuIconKind.ColorAccent2:
-                DrawColorSwatch(dc, new SolidColorBrush(Color.FromRgb(45, 125, 154)));
+                DrawColorSwatch(dc, themeAccent2);
                 break;
             case BorderMenuIconKind.StyleThin:
                 DrawLineSample(dc, black, 1, null);
