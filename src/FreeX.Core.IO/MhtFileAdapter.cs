@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 using FreeX.Core.Model;
 
@@ -290,54 +291,64 @@ public sealed class MhtFileAdapter : IFileAdapter
     /// </summary>
     private static string DecodeQuotedPrintable(string body)
     {
-        // Work on raw bytes for correctness, then interpret as UTF-8.
-        var bytes = new List<byte>(body.Length);
+        // Work on raw bytes for correctness, then interpret as UTF-8. Literal text is encoded in
+        // contiguous spans so tolerant raw non-ASCII input does not allocate a char[] + byte[] for
+        // every UTF-16 code unit (and surrogate pairs remain intact).
+        var bytes = new ArrayBufferWriter<byte>(Math.Max(1, body.Length));
         int i = 0;
         while (i < body.Length)
         {
-            char c = body[i];
-            if (c == '=')
+            if (body[i] != '=')
             {
-                if (i + 1 < body.Length && (body[i + 1] == '\r' || body[i + 1] == '\n'))
+                var literalStart = i;
+                do
                 {
-                    // Soft line break — skip the '=' and the newline(s).
                     i++;
-                    if (i < body.Length && body[i] == '\r') i++;
-                    if (i < body.Length && body[i] == '\n') i++;
-                    continue;
                 }
+                while (i < body.Length && body[i] != '=');
 
-                if (i + 2 < body.Length &&
-                    Uri.IsHexDigit(body[i + 1]) && Uri.IsHexDigit(body[i + 2]))
-                {
-                    string hex = body.Substring(i + 1, 2);
-                    if (byte.TryParse(hex, System.Globalization.NumberStyles.HexNumber,
-                            System.Globalization.CultureInfo.InvariantCulture, out byte b))
-                    {
-                        bytes.Add(b);
-                        i += 3;
-                        continue;
-                    }
-                }
+                AppendUtf8(bytes, body.AsSpan(literalStart, i - literalStart));
+                continue;
+            }
 
-                // Malformed '=' — emit literally.
-                bytes.Add((byte)'=');
-                i++;
-            }
-            else if (c < 0x80)
+            if (i + 1 < body.Length && (body[i + 1] == '\r' || body[i + 1] == '\n'))
             {
-                bytes.Add((byte)c);
+                // Soft line break — skip the '=' and the newline(s).
                 i++;
+                if (i < body.Length && body[i] == '\r') i++;
+                if (i < body.Length && body[i] == '\n') i++;
+                continue;
             }
-            else
+
+            if (i + 2 < body.Length &&
+                byte.TryParse(
+                    body.AsSpan(i + 1, 2),
+                    System.Globalization.NumberStyles.HexNumber,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var value))
             {
-                // High code point (shouldn't appear in QP, but tolerate).
-                foreach (byte b in Encoding.UTF8.GetBytes(new[] { c }))
-                    bytes.Add(b);
-                i++;
+                AppendByte(bytes, value);
+                i += 3;
+                continue;
             }
+
+            // Malformed '=' — emit literally.
+            AppendByte(bytes, (byte)'=');
+            i++;
         }
 
-        return Encoding.UTF8.GetString(bytes.ToArray());
+        return Encoding.UTF8.GetString(bytes.WrittenSpan);
+    }
+
+    private static void AppendUtf8(ArrayBufferWriter<byte> destination, ReadOnlySpan<char> text)
+    {
+        var target = destination.GetSpan(Encoding.UTF8.GetMaxByteCount(text.Length));
+        destination.Advance(Encoding.UTF8.GetBytes(text, target));
+    }
+
+    private static void AppendByte(ArrayBufferWriter<byte> destination, byte value)
+    {
+        destination.GetSpan(1)[0] = value;
+        destination.Advance(1);
     }
 }
