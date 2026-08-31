@@ -964,7 +964,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         }
         catch (Exception exception)
         {
-            _lastWriteFailureMessage = $"{commandName}: {exception.Message}";
+            _lastClipboardFailureMessage = $"{commandName}: {exception.Message}";
         }
     }
 
@@ -976,7 +976,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         }
         catch (Exception exception)
         {
-            _lastWriteFailureMessage = exception.Message;
+            _lastClipboardFailureMessage = exception.Message;
         }
     }
 
