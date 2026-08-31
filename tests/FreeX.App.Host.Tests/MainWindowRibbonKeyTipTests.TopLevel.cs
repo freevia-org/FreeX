@@ -6,6 +6,38 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class MainWindowRibbonKeyTipTests
 {
     [Fact]
+    public void TopLevelKeyTipOverlay_ExposesEveryVisibleMainRibbonTab()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SetRibbonWidth(1520);
+
+            harness.EnterKeyTipScope("TopLevel");
+
+            var tabKeyTips = new[]
+            {
+                "F", "H", "N", "J", "P", "M", "A", "R", "W", "Y"
+            };
+            harness.OverlayBadgeTexts.Should().Contain(tabKeyTips);
+
+            var tabBadgeBounds = tabKeyTips
+                .Select(harness.OverlayBadgeBounds)
+                .ToArray();
+            for (var index = 0; index < tabBadgeBounds.Length; index++)
+            {
+                for (var otherIndex = index + 1; otherIndex < tabBadgeBounds.Length; otherIndex++)
+                {
+                    tabBadgeBounds[index]
+                        .IntersectsWith(tabBadgeBounds[otherIndex])
+                        .Should()
+                        .BeFalse("top-level Alt keytips must remain individually readable");
+                }
+            }
+        });
+    }
+
+    [Fact]
     public void TopLevelAndCommandKeyTips_RouteThroughVisibleRibbonControls()
     {
         RunSta(() =>
