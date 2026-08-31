@@ -797,6 +797,46 @@ public class DocumentCompareTests
         result.Comments[5].PlainText.Should().Be("Verb choice");
     }
 
+    [Fact]
+    public void Compare_WordDiffedDenseCommentedRuns_PreservesEveryAnchor()
+    {
+        const int runCount = 512;
+        var original = new TextDocument();
+        var originalParagraph = new Paragraph();
+        var revised = new TextDocument();
+        var revisedParagraph = new Paragraph();
+        for (var index = 0; index < runCount; index++)
+        {
+            var commentId = index + 1;
+            originalParagraph.Runs.Add(new Run("token" + index + " ") { CommentId = commentId });
+            revisedParagraph.Runs.Add(new Run(index == runCount - 1 ? "changed " : "token" + index + " ")
+            {
+                CommentId = commentId
+            });
+        }
+        original.Blocks.Add(originalParagraph);
+        revised.Blocks.Add(revisedParagraph);
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        result.Paragraphs.Single().Runs
+            .Where(run => run.CommentId is not null)
+            .Select(run => run.CommentId!.Value)
+            .Distinct()
+            .Order()
+            .Should().Equal(Enumerable.Range(1, runCount));
+    }
+
+    [Fact]
+    public void Compare_WordDiffCommentSourceGuard_UsesMonotonicSpanCursor()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText("freew", "FreeW.Core.Model", "DocumentCompare.cs");
+
+        source.Should().Contain("var commentSpanIndex = 0;")
+            .And.Contain("while (commentSpanIndex < commentSpans.Count")
+            .And.NotContain("FindCoveringCommentId(");
+    }
+
     // -----------------------------------------------------------------------
     // Style catalog for whole-paragraph deletions (r134 MED: dangling StyleId reference)
     // -----------------------------------------------------------------------
@@ -897,6 +937,50 @@ public class DocumentCompareTests
         var result = DocumentCompare.Compare(original, revised, Author, DateXml);
 
         result.Styles["Quote"].Name.Should().Be("Quote");
+    }
+
+    [Fact]
+    public void Compare_BackfilledDenseNameCollisions_UseSequentialWordNames()
+    {
+        const int styleCount = 512;
+        var original = DocWith("Shared paragraph");
+        var revised = DocWith("Shared paragraph");
+        for (var index = 0; index < styleCount; index++)
+        {
+            var name = "Dense style " + index;
+            original.Styles["Original" + index] = new DocumentStyle
+            {
+                Id = "Original" + index,
+                Name = name,
+            };
+            revised.Styles["Revised" + index] = new DocumentStyle
+            {
+                Id = "Revised" + index,
+                Name = name,
+            };
+        }
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        result.Styles.Count.Should().BeGreaterThanOrEqualTo(styleCount * 2);
+        result.Styles.Values.Select(style => style.Name)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Should().HaveCount(result.Styles.Count);
+        for (var index = 0; index < styleCount; index++)
+        {
+            result.Styles["Revised" + index].Name.Should().Be("Dense style " + index);
+            result.Styles["Original" + index].Name.Should().Be("Dense style " + index + " 2");
+        }
+    }
+
+    [Fact]
+    public void Compare_StyleBackfill_SourceGuardKeepsOneNameIndex()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText("freew", "FreeW.Core.Model", "DocumentCompare.cs");
+
+        source.Should().Contain("var usedStyleNames = new HashSet<string>(")
+            .And.Contain("StyleManager.MakeNameUnique(style.Name, usedStyleNames);")
+            .And.NotContain("StyleManager.FindStyleIdByName(result, style.Name)");
     }
 
     // -----------------------------------------------------------------------

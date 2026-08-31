@@ -14,8 +14,24 @@ public enum AutosaveRecoveryDisposition
 public static class AutosaveRecoveryPolicy
 {
     public static AutosaveRecoveryCandidate? SelectLatest(
-        IEnumerable<AutosaveRecoveryCandidate> candidates) =>
-        OrderNewestFirst(candidates).FirstOrDefault();
+        IEnumerable<AutosaveRecoveryCandidate> candidates)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+
+        AutosaveRecoveryCandidate? latest = null;
+        var latestTimestamp = DateTimeOffset.MinValue;
+        foreach (var candidate in candidates)
+        {
+            var timestamp = ParseTimestamp(candidate.Sidecar.TimestampUtc);
+            if (latest is null || timestamp > latestTimestamp)
+            {
+                latest = candidate;
+                latestTimestamp = timestamp;
+            }
+        }
+
+        return latest;
+    }
 
     public static IReadOnlyList<AutosaveRecoveryCandidate> OrderNewestFirst(
         IEnumerable<AutosaveRecoveryCandidate> candidates)

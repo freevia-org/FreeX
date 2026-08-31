@@ -82,6 +82,18 @@ public sealed class RibbonGroupBuilder
     public RibbonGroupBuilder SplitButton(string commandId, string label, RibbonMenu menu, Func<RibbonSplitButton, RibbonSplitButton>? configure = null)
         => Add(new RibbonSplitButton(commandId, label, menu), configure);
 
+    public RibbonGroupBuilder SplitButton(
+        string commandId,
+        string label,
+        Action<RibbonMenuBuilder> menu,
+        Func<RibbonSplitButton, RibbonSplitButton>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(menu);
+        var menuBuilder = new RibbonMenuBuilder();
+        menu(menuBuilder);
+        return SplitButton(commandId, label, menuBuilder.Build(), configure);
+    }
+
     public RibbonGroupBuilder Dropdown(string commandId, string label, RibbonMenu menu, Func<RibbonDropdown, RibbonDropdown>? configure = null)
         => Add(new RibbonDropdown(commandId, label, menu), configure);
 

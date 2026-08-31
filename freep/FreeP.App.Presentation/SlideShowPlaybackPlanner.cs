@@ -588,9 +588,27 @@ public static class SlideShowPlaybackPlanner
     {
         ArgumentNullException.ThrowIfNull(step);
 
-        return step.Entries
-            .Select(entry => PlanShapeAnimation(entry.Animation, entry.StartDelayMs, presentation, effectiveClrMap))
-            .ToList();
+        var plans = new List<SlideShowShapeAnimationPlaybackPlan>(step.Entries.Count);
+        IReadOnlyDictionary<uint, SlideShape>? shapesById = null;
+        foreach (var entry in step.Entries)
+        {
+            if (shapesById is null &&
+                presentation is not null &&
+                entry.Animation.Preset == AnimationPreset.ChangeFillColor &&
+                !string.IsNullOrWhiteSpace(entry.Animation.PreservedFillBehaviorXml))
+            {
+                shapesById = IndexPresentationShapesById(presentation);
+            }
+
+            plans.Add(PlanShapeAnimation(
+                entry.Animation,
+                entry.StartDelayMs,
+                presentation,
+                effectiveClrMap,
+                shapesById));
+        }
+
+        return plans;
     }
 
     public static SlideShowShapeAnimationPlaybackPlan PlanShapeAnimation(
@@ -598,6 +616,21 @@ public static class SlideShowPlaybackPlanner
         int startDelayMs,
         Presentation? presentation = null,
         IReadOnlyDictionary<string, string>? effectiveClrMap = null)
+    {
+        return PlanShapeAnimation(
+            animation,
+            startDelayMs,
+            presentation,
+            effectiveClrMap,
+            shapesById: null);
+    }
+
+    private static SlideShowShapeAnimationPlaybackPlan PlanShapeAnimation(
+        ShapeAnimation animation,
+        int startDelayMs,
+        Presentation? presentation,
+        IReadOnlyDictionary<string, string>? effectiveClrMap,
+        IReadOnlyDictionary<uint, SlideShape>? shapesById)
     {
         ArgumentNullException.ThrowIfNull(animation);
 
@@ -610,7 +643,12 @@ public static class SlideShowPlaybackPlanner
         var (fromScaleX, fromScaleY, toScaleX, toScaleY, peakScaleX, peakScaleY) =
             ResolveScaleAxesForPlayback(animation, fromScale, toScale, ResolvePeakScale(animation));
         var (offsetX, offsetY) = ResolveFlyInOffset(animation.Direction);
-        var (colorFromHex, colorToHex) = ResolveColorBehavior(animation, effectKind, presentation, effectiveClrMap);
+        var (colorFromHex, colorToHex) = ResolveColorBehavior(
+            animation,
+            effectKind,
+            presentation,
+            effectiveClrMap,
+            shapesById);
 
         return new SlideShowShapeAnimationPlaybackPlan(
             animation,
@@ -767,10 +805,11 @@ public static class SlideShowPlaybackPlanner
         ShapeAnimation animation,
         SlideShowShapeAnimationEffectKind effectKind,
         Presentation? presentation,
-        IReadOnlyDictionary<string, string>? effectiveClrMap)
+        IReadOnlyDictionary<string, string>? effectiveClrMap,
+        IReadOnlyDictionary<uint, SlideShape>? shapesById)
     {
         if (effectKind == SlideShowShapeAnimationEffectKind.ChangeFillColor)
-            return ResolveFillColorBehavior(animation, presentation, effectiveClrMap);
+            return ResolveFillColorBehavior(animation, presentation, effectiveClrMap, shapesById);
 
         if (effectKind == SlideShowShapeAnimationEffectKind.ChangeLineColor)
         {
@@ -826,7 +865,8 @@ public static class SlideShowPlaybackPlanner
     private static (string? From, string? To) ResolveFillColorBehavior(
         ShapeAnimation animation,
         Presentation? presentation,
-        IReadOnlyDictionary<string, string>? effectiveClrMap)
+        IReadOnlyDictionary<string, string>? effectiveClrMap,
+        IReadOnlyDictionary<uint, SlideShape>? shapesById)
     {
         if (presentation is null || string.IsNullOrWhiteSpace(animation.PreservedFillBehaviorXml))
             return (null, null);
@@ -838,7 +878,9 @@ public static class SlideShowPlaybackPlanner
             var root = XElement.Parse(animation.PreservedFillBehaviorXml, LoadOptions.PreserveWhitespace);
             var animClr = root.Descendants(p + "animClr").FirstOrDefault();
             var to = ResolveAnimationColor(animClr?.Element(p + "to"), presentation, effectiveClrMap, a);
-            var shape = FindSlideShape(presentation, animation.ShapeId);
+            var shape = shapesById is not null
+                ? shapesById.GetValueOrDefault(animation.ShapeId)
+                : FindSlideShape(presentation, animation.ShapeId);
             var from = shape?.Fill is ShapeFill.Solid solid
                 ? solid.Color.Resolved.ToString().TrimStart('#')
                 : null;
@@ -848,6 +890,18 @@ public static class SlideShowPlaybackPlanner
         {
             return (null, null);
         }
+    }
+
+    private static Dictionary<uint, SlideShape> IndexPresentationShapesById(Presentation presentation)
+    {
+        var shapesById = new Dictionary<uint, SlideShape>();
+        foreach (var slide in presentation.Slides)
+        {
+            foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
+                shapesById.TryAdd(shape.Id, shape);
+        }
+
+        return shapesById;
     }
 
     private static SlideShape? FindSlideShape(Presentation presentation, uint shapeId)

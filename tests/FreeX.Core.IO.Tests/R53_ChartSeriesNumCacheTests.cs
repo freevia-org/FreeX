@@ -17,6 +17,7 @@ namespace FreeX.Core.IO.Tests;
 public sealed class R53_ChartSeriesNumCacheTests
 {
     private static readonly XNamespace ChartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+    private static readonly XNamespace DrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
     [Fact]
     public void ColumnChart_ValueSeries_EmitsNumCacheWithActualValues()
@@ -123,6 +124,42 @@ public sealed class R53_ChartSeriesNumCacheTests
         series[47].Element(ChartNs + "val")!.Element(ChartNs + "numRef")!.Element(ChartNs + "f")!.Value
             .Should().Be("NamedValue47");
     }
+
+    [Fact]
+    public void ColumnChart_DenseSeriesFormats_KeepLastDuplicateFormat()
+    {
+        var workbook = new Workbook("DenseClassicSeriesFormats");
+        var sheet = workbook.AddSheet("Data");
+        var formats = new List<ChartSeriesFormat>();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 48)),
+            FirstRowIsHeader = false,
+            FirstColIsCategories = false,
+            SeriesFormats = formats
+        };
+
+        for (var seriesIndex = 0; seriesIndex < 48; seriesIndex++)
+            formats.Add(new ChartSeriesFormat(seriesIndex, FillColor: new CellColor(1, 2, (byte)seriesIndex)));
+
+        // LastOrDefault previously chose this later entry. The format lookup must retain that
+        // override semantics rather than preserving the first color seen for a series.
+        formats.Add(new ChartSeriesFormat(0, FillColor: new CellColor(0x11, 0x22, 0x33)));
+
+        var chartXml = FreeX.Core.IO.XlsxChartXmlWriter.ToChartXml(chart, workbook, sheet);
+        var series = chartXml.Descendants(ChartNs + "ser").ToList();
+
+        series.Should().HaveCount(48);
+        SeriesFillColor(series[0]).Should().Be("112233");
+        SeriesFillColor(series[47]).Should().Be("01022F");
+    }
+
+    private static string SeriesFillColor(XElement series) =>
+        series.Element(ChartNs + "spPr")!
+            .Element(DrawingNs + "solidFill")!
+            .Element(DrawingNs + "srgbClr")!
+            .Attribute("val")!.Value;
 
     private static XDocument LoadChartXml(byte[] package)
     {

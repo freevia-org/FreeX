@@ -256,6 +256,25 @@ public sealed class SlidePaneTests
     }
 
     [StaFact]
+    public void SlidePane_RefreshItemChrome_UpdatesDenseProjectionInSlideOrder()
+    {
+        const int slideCount = 256;
+        var (pane, editor) = MakePaneWithSlides(slideCount);
+
+        editor.SelectSlide(slideCount - 1);
+        pane.RefreshItemChrome();
+
+        CountThumbnailItems(pane).Should().Be(slideCount);
+        GetChrome(pane, 0).BorderThickness.Left
+            .Should().Be(SlidePanePlanner.DefaultNormalBorderThickness);
+        GetChrome(pane, slideCount - 1).BorderThickness.Left
+            .Should().Be(SlidePanePlanner.DefaultSelectedBorderThickness);
+        pane.SlidePaneThumbnailAutomationNamesForTests.Should().HaveCount(slideCount);
+        pane.SlidePaneThumbnailAutomationNamesForTests[0].Should().StartWith("Slide 1:");
+        pane.SlidePaneThumbnailAutomationNamesForTests[^1].Should().StartWith($"Slide {slideCount}:");
+    }
+
+    [StaFact]
     public void AfterInsertSlide_PaneShowsNPlusOneItems()
     {
         var (pane, editor) = MakePaneWithSlides(2);

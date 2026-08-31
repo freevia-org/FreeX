@@ -7124,6 +7124,7 @@ public static class PptxPackageReader
 
     private static void ReadMediaPlaybackStartModes(XElement timingEl, Slide slide)
     {
+        Dictionary<uint, SlideShape>? shapesById = null;
         foreach (var videoOrAudioEl in timingEl.Descendants()
                      .Where(element => element.Name == P + "video" || element.Name == P + "audio"))
         {
@@ -7135,8 +7136,8 @@ public static class PptxPackageReader
             if (!uint.TryParse(shapeIdText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shapeId))
                 continue;
 
-            var shape = FindShapeRecursive(slide.Shapes, shapeId);
-            if (shape?.Media is null)
+            shapesById ??= IndexShapesById(slide.Shapes);
+            if (!shapesById.TryGetValue(shapeId, out var shape) || shape.Media is null)
                 continue;
 
             var cTn = mediaNode.Element(P + "cTn");
@@ -7191,18 +7192,24 @@ public static class PptxPackageReader
         }
     }
 
-    private static SlideShape? FindShapeRecursive(IEnumerable<SlideShape> shapes, uint shapeId)
+    private static Dictionary<uint, SlideShape> IndexShapesById(IEnumerable<SlideShape> shapes)
+    {
+        var shapesById = new Dictionary<uint, SlideShape>();
+        AddShapesById(shapes, shapesById);
+        return shapesById;
+    }
+
+    private static void AddShapesById(
+        IEnumerable<SlideShape> shapes,
+        Dictionary<uint, SlideShape> shapesById)
     {
         foreach (var shape in shapes)
         {
-            if (shape.Id == shapeId)
-                return shape;
+            shapesById.TryAdd(shape.Id, shape);
 
-            if (shape.Children.Count > 0 && FindShapeRecursive(shape.Children, shapeId) is { } child)
-                return child;
+            if (shape.Children.Count > 0)
+                AddShapesById(shape.Children, shapesById);
         }
-
-        return null;
     }
 
     private static XElement? FindSequence(XElement tnLst, string nodeType)

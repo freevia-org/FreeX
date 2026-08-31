@@ -65,7 +65,11 @@ public static class TableGridProjection
         ArgumentNullException.ThrowIfNull(row);
         if (cellIndex < 0 || cellIndex >= row.Cells.Count)
             return -1;
-        return ProjectRow(row)[cellIndex].StartColumn;
+
+        var startColumn = 0;
+        for (var index = 0; index < cellIndex; index++)
+            startColumn += NormalizeSpan(row.Cells[index].GridSpan);
+        return startColumn;
     }
 
     public static TableGridCellProjection? At(TableRow row, int gridColumn)
@@ -73,10 +77,16 @@ public static class TableGridProjection
         ArgumentNullException.ThrowIfNull(row);
         if (gridColumn < 0)
             return null;
-        foreach (var projected in ProjectRow(row))
+
+        var startColumn = 0;
+        for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
         {
+            var cell = row.Cells[cellIndex];
+            var span = NormalizeSpan(cell.GridSpan);
+            var projected = new TableGridCellProjection(cell, cellIndex, startColumn, span);
             if (projected.Contains(gridColumn))
                 return projected;
+            startColumn += span;
         }
 
         return null;
@@ -95,10 +105,16 @@ public static class TableGridProjection
         ArgumentNullException.ThrowIfNull(row);
         if (gridColumn < 0)
             return null;
-        foreach (var projected in ProjectRow(row))
+
+        var startColumn = 0;
+        for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
         {
+            var cell = row.Cells[cellIndex];
+            var span = NormalizeSpan(cell.GridSpan);
+            var projected = new TableGridCellProjection(cell, cellIndex, startColumn, span);
             if (projected.StartColumn == gridColumn)
                 return projected;
+            startColumn += span;
         }
 
         return null;
@@ -112,10 +128,13 @@ public static class TableGridProjection
     public static int InsertionIndex(TableRow row, int gridColumn)
     {
         ArgumentNullException.ThrowIfNull(row);
-        foreach (var projected in ProjectRow(row))
+
+        var startColumn = 0;
+        for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
         {
-            if (projected.StartColumn >= gridColumn)
-                return projected.CellIndex;
+            if (startColumn >= gridColumn)
+                return cellIndex;
+            startColumn += NormalizeSpan(row.Cells[cellIndex].GridSpan);
         }
 
         return row.Cells.Count;

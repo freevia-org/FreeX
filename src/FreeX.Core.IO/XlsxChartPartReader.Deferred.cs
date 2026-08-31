@@ -140,11 +140,12 @@ public static partial class XlsxChartPartReader
             ? chartExSeries
             : plotChart.Descendants().Where(element => element.Name.LocalName == "ser"))
             .ToList();
+        var chartExDataLookup = chartExSeries.Length > 0 ? ChartExDataLookup.Create(chartXml) : null;
         foreach (var series in seriesElements)
         {
             if (series.Name.LocalName == "series")
             {
-                var data = FindChartExData(chartXml, series);
+                var data = chartExDataLookup!.Find(series);
                 hasTitleRange |= data?.Elements().Any(element =>
                     element.Name.LocalName == "numDim" &&
                     element.Elements().Any(child => child.Name.LocalName == "nf" && !string.IsNullOrWhiteSpace(child.Value))) == true;
@@ -161,7 +162,7 @@ public static partial class XlsxChartPartReader
                 hasCategoryRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "cat");
             }
 
-            foreach (var formula in ReadDeferredAdvancedSeriesRangeFormulas(chartXml, series))
+            foreach (var formula in ReadDeferredAdvancedSeriesRangeFormulas(chartExDataLookup, series))
             {
                 if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, sheetNameResolver, out var range))
                     ranges.Add(range);
@@ -183,7 +184,7 @@ public static partial class XlsxChartPartReader
             // <ser>-shaped members of this family, and a chartEx-native numDim/strDim <lvl>/<pt>
             // cache reader (TryReadChartExEmbeddedSeriesData) for the true <cx:series>-shaped ones.
             var embeddedData = chartExSeries.Length > 0
-                ? TryReadChartExEmbeddedSeriesData(chartXml, chartExSeries)
+                ? TryReadChartExEmbeddedSeriesData(chartExDataLookup!, chartExSeries)
                 : XlsxChartSeriesRangeReader.TryReadEmbeddedSeriesData(seriesElements, sheetId)
                   ?? XlsxChartSeriesRangeReader.TryReadCrossSheetEmbeddedData(seriesElements, sheetId, sheetNameResolver);
 
@@ -220,7 +221,7 @@ public static partial class XlsxChartPartReader
                 // chartEx-native capture below feeding XlsxChartXmlWriter.ChartEx.cs's
                 // BuildChartExData.
                 if (chartExSeries.Length > 0)
-                    result.VerbatimSeriesFormulas = BuildChartExVerbatimSeriesFormulas(chartXml, chartExSeries);
+                    result.VerbatimSeriesFormulas = BuildChartExVerbatimSeriesFormulas(chartExDataLookup!, chartExSeries);
                 else
                     ApplyVerbatimSeriesFormulasIfNeeded(seriesElements, sheetId, sheetNameResolver, result);
 
@@ -248,7 +249,7 @@ public static partial class XlsxChartPartReader
         result.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
         result.FirstRowIsHeader = hasTitleRange;
         result.FirstColIsCategories = hasCategoryRange;
-        result.SeriesInRows = DetectDeferredSeriesInRows(chartXml, seriesElements, sheetId, sheetNameResolver);
+        result.SeriesInRows = DetectDeferredSeriesInRows(chartExDataLookup, seriesElements, sheetId, sheetNameResolver);
         XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);
         chart = result;
@@ -262,7 +263,7 @@ public static partial class XlsxChartPartReader
     /// <see cref="XlsxChartSeriesRangeReader.DetectSeriesInRows"/>.
     /// </summary>
     private static bool DetectDeferredSeriesInRows(
-        XDocument chartXml,
+        ChartExDataLookup? chartExDataLookup,
         IEnumerable<XElement> seriesElements,
         SheetId sheetId,
         IReadOnlyDictionary<string, SheetId>? sheetNameResolver)
@@ -271,7 +272,7 @@ public static partial class XlsxChartPartReader
         foreach (var series in seriesElements)
         {
             var formula = series.Name.LocalName == "series"
-                ? FindChartExData(chartXml, series)?.Elements()
+                ? chartExDataLookup?.Find(series)?.Elements()
                     .Where(element => element.Name.LocalName == "numDim")
                     .SelectMany(element => element.Elements())
                     .FirstOrDefault(child => child.Name.LocalName == "f" && !string.IsNullOrWhiteSpace(child.Value))?
@@ -359,16 +360,12 @@ public static partial class XlsxChartPartReader
             ? value
             : null;
 
-    private static IEnumerable<string> ReadDeferredAdvancedSeriesRangeFormulas(XDocument chartXml, XElement series)
+    private static IEnumerable<string> ReadDeferredAdvancedSeriesRangeFormulas(ChartExDataLookup? chartExDataLookup, XElement series)
     {
         if (series.Name.LocalName != "series")
             return XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series);
 
-        var dataId = ReadChartExSeriesDataId(series);
-        if (string.IsNullOrWhiteSpace(dataId))
-            return [];
-
-        var data = FindChartExData(chartXml, dataId);
+        var data = chartExDataLookup?.Find(series);
         return data is null
             ? []
             : data.Descendants()
@@ -389,14 +386,14 @@ public static partial class XlsxChartPartReader
     /// (e.g. the numDim only carries an &lt;cx:f&gt; formula with no cache at all).
     /// </summary>
     private static List<ChartEmbeddedSeriesData>? TryReadChartExEmbeddedSeriesData(
-        XDocument chartXml,
+        ChartExDataLookup chartExDataLookup,
         IReadOnlyList<XElement> chartExSeriesElements)
     {
         var result = new List<ChartEmbeddedSeriesData>(chartExSeriesElements.Count);
         for (var i = 0; i < chartExSeriesElements.Count; i++)
         {
             var series = chartExSeriesElements[i];
-            var data = FindChartExData(chartXml, series);
+            var data = chartExDataLookup.Find(series);
             var catDimension = FindChartExDimension(data, "strDim", "cat");
             // A <cx:data> element carries exactly one <cx:numDim> (see BuildChartExData in
             // XlsxChartXmlWriter.ChartEx.cs), but its @type varies by chart family:
@@ -437,14 +434,14 @@ public static partial class XlsxChartPartReader
     /// built from the synthetic placeholder DataRange.
     /// </summary>
     private static List<ChartSeriesVerbatimFormulas> BuildChartExVerbatimSeriesFormulas(
-        XDocument chartXml,
+        ChartExDataLookup chartExDataLookup,
         IReadOnlyList<XElement> chartExSeriesElements)
     {
         var result = new List<ChartSeriesVerbatimFormulas>(chartExSeriesElements.Count);
         for (var i = 0; i < chartExSeriesElements.Count; i++)
         {
             var series = chartExSeriesElements[i];
-            var data = FindChartExData(chartXml, series);
+            var data = chartExDataLookup.Find(series);
             var valDimension = FindChartExDimension(data, "numDim", dimensionType: null);
             var catDimension = FindChartExDimension(data, "strDim", "cat");
 
@@ -556,24 +553,46 @@ public static partial class XlsxChartPartReader
         return true;
     }
 
-    private static XElement? FindChartExData(XDocument chartXml, XElement series)
+    /// <summary>
+    /// Indexes chartEx data by ID for a single deferred-chart read. A chart with N series used to
+    /// traverse the entire chart XML once for every dataId lookup (formula collection, cache
+    /// extraction, verbatim capture, and orientation detection all performed independent
+    /// lookups). Keep the first element for a duplicate ID to match the former document-order
+    /// scan exactly.
+    /// </summary>
+    private sealed class ChartExDataLookup
     {
-        var dataId = ReadChartExSeriesDataId(series);
-        return string.IsNullOrWhiteSpace(dataId) ? null : FindChartExData(chartXml, dataId);
-    }
+        private readonly Dictionary<string, XElement> _dataById;
 
-    private static XElement? FindChartExData(XDocument chartXml, string dataId)
-    {
-        if (chartXml.Root is not { } root)
-            return null;
+        private ChartExDataLookup(Dictionary<string, XElement> dataById) => _dataById = dataById;
 
-        foreach (var element in root.Descendants())
+        public static ChartExDataLookup Create(XDocument chartXml)
         {
-            if (IsChartExDataElement(element, dataId))
-                return element;
+            var dataById = new Dictionary<string, XElement>(StringComparer.Ordinal);
+            if (chartXml.Root is not { } root)
+                return new ChartExDataLookup(dataById);
+
+            foreach (var element in root.Descendants())
+            {
+                if (element.Name.LocalName != "data")
+                    continue;
+
+                var dataId = element.Attribute("id")?.Value;
+                if (!string.IsNullOrWhiteSpace(dataId))
+                    dataById.TryAdd(dataId, element);
+            }
+
+            return new ChartExDataLookup(dataById);
         }
 
-        return null;
+        public XElement? Find(XElement series)
+        {
+            var dataId = ReadChartExSeriesDataId(series);
+            return string.IsNullOrWhiteSpace(dataId) ? null : Find(dataId);
+        }
+
+        private XElement? Find(string dataId) =>
+            _dataById.TryGetValue(dataId, out var data) ? data : null;
     }
 
     private static XElement? FirstChildElementByLocalName(XElement element, string localName)
@@ -591,10 +610,6 @@ public static partial class XlsxChartPartReader
         FirstChildElementByLocalName(series, "dataId")?
             .Attribute("val")?
             .Value;
-
-    private static bool IsChartExDataElement(XElement element, string dataId) =>
-        element.Name.LocalName == "data" &&
-        string.Equals(element.Attribute("id")?.Value, dataId, StringComparison.Ordinal);
 
     private static bool IsMapChartElement(XElement element) =>
         element.Name.LocalName is "geoChart" or "mapChart" or "regionMapChart";

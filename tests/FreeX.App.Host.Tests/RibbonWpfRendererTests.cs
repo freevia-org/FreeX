@@ -349,6 +349,37 @@ public class RibbonWpfRendererTests
     }
 
     [Fact]
+    public void RenderedHomePaste_PrimaryInvocationExecutesPasteInsteadOfOpeningMenu()
+    {
+        var registry = new RibbonCommandRegistry();
+        var paste = new RecordingCommand();
+        registry.Register("Paste", paste);
+
+        StaTestRunner.Run(() =>
+        {
+            var host = BuildHost();
+            var tab = HomeRibbonDefinition.Build().FindTab("HomeTab")!;
+            tab.Groups
+                .Single(group => group.Id == "HomeClipboardGroup")
+                .Controls.Single(control => control.CommandId.Value == "Paste")
+                .Should().BeOfType<RibbonSplitButton>();
+
+            host.Child = RibbonWpfRenderer.BuildTabContent(tab, host, registry);
+            Layout(host, 1880);
+
+            var primary = (Button)FindByCommandName(host, "Paste")!;
+            var dropdown = (Button)FindByCommandName(host, "Paste.Dropdown")!;
+            primary.ContextMenu.Should().BeNull();
+            dropdown.ContextMenu.Should().NotBeNull();
+
+            primary.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, primary));
+
+            paste.Invocations.Should().Be(1);
+            dropdown.ContextMenu!.IsOpen.Should().BeFalse();
+        });
+    }
+
+    [Fact]
     public void WpfControlRibbonCommand_RaisesButtonClick()
     {
         var invocations = 0;
