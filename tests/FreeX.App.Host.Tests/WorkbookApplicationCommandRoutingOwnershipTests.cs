@@ -32,6 +32,16 @@ public sealed class WorkbookApplicationCommandRoutingOwnershipTests
     }
 
     [Fact]
+    public void WpfKeyboardWorksheetInsertTargetsTheActiveSheetWithoutChangingMenuAppendBehavior()
+    {
+        var bindings = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
+
+        bindings.Should().Contain("invocation.Route.Source == WorkbookApplicationCommandSource.KeyboardShortcut");
+        bindings.Should().Contain("InsertNewSheet(_session.ActiveSheet.Id);");
+        bindings.Should().Contain("AddSheetButton_Click(NativeSource(invocation), RoutedArgs(invocation));");
+    }
+
+    [Fact]
     public void WpfApplicationFrameRoutesUseSharedBindingFactory()
     {
         var bindings = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");

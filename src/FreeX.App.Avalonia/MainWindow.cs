@@ -26187,7 +26187,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (e.Key == Key.F11 && e.KeyModifiers == KeyModifiers.Shift)
             {
                 e.Handled = true;
-                AddNewSheet();
+                // Unlike the tab-strip '+' button, Excel's Shift+F11 inserts immediately
+                // before the active sheet.
+                AddNewSheet(_session.ActiveSheet.Id);
                 return;
             }
 

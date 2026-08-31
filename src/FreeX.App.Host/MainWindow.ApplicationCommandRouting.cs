@@ -103,7 +103,14 @@ public partial class MainWindow
             FreezePanes = Handled<WorkbookApplicationCommandInvocation>(invocation =>
                 FreezeAtSelectionMenuItem_Click(NativeSource(invocation), RoutedArgs(invocation))),
             InsertWorksheet = Handled<WorkbookApplicationCommandInvocation>(invocation =>
-                AddSheetButton_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            {
+                // The Sheet menu continues to share the append-mode button behavior. Keyboard
+                // worksheet insertion (Shift+F11 / Alt+Shift+F1) instead belongs before active.
+                if (invocation.Route.Source == WorkbookApplicationCommandSource.KeyboardShortcut)
+                    InsertNewSheet(_session.ActiveSheet.Id);
+                else
+                    AddSheetButton_Click(NativeSource(invocation), RoutedArgs(invocation));
+            }),
             Find = Handled<WorkbookApplicationCommandInvocation>(invocation =>
                 FindButton_Click(NativeSource(invocation), RoutedArgs(invocation))),
             Replace = Handled<WorkbookApplicationCommandInvocation>(invocation =>
