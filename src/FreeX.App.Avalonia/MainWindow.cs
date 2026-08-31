@@ -16704,7 +16704,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 decorations.Add(new TextDecoration { Location = TextDecorationLocation.Strikethrough });
             fontPreview.TextDecorations = decorations.Count > 0 ? decorations : null;
 
-            if (double.TryParse(fontSizeBox.Text?.Trim(), NumberStyles.Float, CultureInfo.CurrentCulture, out var size)
+            // r178: go through the SHARED parser the commit path already uses. The inline parse
+            // here was CurrentCulture-only, while the box is filled with an InvariantCulture
+            // rendering ("10.5") -- so on a comma-decimal locale the live preview could not read a
+            // half-point size it had just written, silently kept the previous size, and disagreed
+            // with the size the dialog would actually apply on OK.
+            if (FreeX.App.Presentation.FormatCells.FormatCellsInputParser.TryParseFontSize(fontSizeBox.Text ?? string.Empty) is { } size
                 && double.IsFinite(size) && size > 0)
             {
                 fontPreview.FontSize = Math.Clamp(size, 6, 72);

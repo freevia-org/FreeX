@@ -96,6 +96,59 @@ public sealed class FindReplaceHeaderFooterTests
     /// replacement deliberately not containing the search term.
     /// </summary>
     /// <summary>
+    /// r178. The r177 body-exhausted handoff into the header/footer walk ignored
+    /// restrictToSelection. A selection is a body concept -- SelectFindReplaceMatch clears
+    /// _selectionAnchor for a header/footer hit, so ReplaceAllCore's restrict check can never fire
+    /// for one -- which meant "Replace All within the selection" reached out and rewrote header and
+    /// footer text far outside the range the user had highlighted. Before r177 the walk never got
+    /// there at all, so this is a regression that fix introduced.
+    ///
+    /// The body must contain exactly ONE occurrence, inside the selection: a second body match
+    /// trips ReplaceAllCore restrict check first and the handoff is never reached, which is how a
+    /// first draft of this test passed against the unfixed code.
+    /// </summary>
+    [Fact]
+    public async Task ReplaceAll_RestrictedToASelection_DoesNotTouchTheHeaderOrFooter()
+    {
+        var count = -1;
+        string? headerText = null;
+        string? footerText = null;
+        string? firstBody = null;
+        string? secondBody = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Blocks.Add(new Paragraph("Draft one"));
+            document.Blocks.Add(new Paragraph("nothing else matches"));
+            document.Header = new HeaderFooter("Draft header");
+            document.Footer = new HeaderFooter("Draft footer");
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new Size(800, 2000));
+
+            // Select only the FIRST body paragraph.
+            view.SetSelectionRangePublic(0, 0, 0, "Draft one".Length);
+
+            count = view.ReplaceAll("Draft", "Final");
+
+            firstBody = ((Paragraph)view.Document.Blocks[0]).PlainText;
+            secondBody = ((Paragraph)view.Document.Blocks[1]).PlainText;
+            headerText = view.Document.Header!.Paragraphs[0].PlainText;
+            footerText = view.Document.Footer!.Paragraphs[0].PlainText;
+        });
+        if (!ran) return;
+
+        firstBody.Should().Be("Final one", "the selected paragraph is in scope");
+        secondBody.Should().Be("nothing else matches", "unchanged -- it never contained the term");
+        headerText.Should().Be("Draft header", "the header is far outside the user's selection");
+        footerText.Should().Be("Draft footer", "so is the footer");
+        count.Should().Be(1);
+    }
+
+    /// <summary>
     /// r177. Replace All reached the header/footer only when the body story contained NO match at
     /// all: FindNextMatch falls through to the header/footer walk as a last resort, but a body that
     /// has its own match makes the body walk wrap and re-report that match, which ReplaceAllCore
