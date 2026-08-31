@@ -1299,75 +1299,68 @@
                 <!-- Greeting -->
                 <TextBlock x:Name="SsGreeting" Grid.Row="0"
                            FontSize="28" FontWeight="Light" Foreground="#1F1F1F"
-                           Margin="40,36,40,0"/>
+                           Margin="40,30,40,0"/>
 
                 <!-- New section -->
-                <Border Grid.Row="1" Padding="40,18,40,6">
+                <Border Grid.Row="1" Padding="40,18,40,8">
                     <StackPanel>
-                        <DockPanel LastChildFill="False" Margin="0,0,0,10">
-                            <TextBlock DockPanel.Dock="Left" Text="{local:Loc Key=Common_New}"
-                                       FontSize="14" FontWeight="SemiBold" Foreground="#1F1F1F"/>
-                            <Button DockPanel.Dock="Right" Content="{local:Loc Key=MainWindow_Content_MoreTemplatesExcluded}"
-                                    Background="Transparent" BorderThickness="0" Padding="0"
-                                    FontSize="12" Foreground="{DynamicResource FreeXAccentBrush}"
-                                    VerticalAlignment="Center" Cursor="Hand"
-                                    AutomationProperties.AutomationId="MoreTemplatesExcludedButton"
-                                    AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_MoreTemplatesUnavailable}"
-                                    AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OnlineTemplateDiscoveryDependsOnAnExternalMicrosoftTemplateServiceAndIsE_D9AF02A3}"
-                                    Click="SsMoreTemplatesBtn_Click"
-                                    ribbonWpf:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_MoreTemplatesExcluded}"
-                                    ribbonWpf:RibbonTooltip.KeyTip="MT"
-                                    ribbonWpf:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OnlineTemplateDiscoveryDependsOnAnExternalMicrosoftTemplateServiceAndIsE_FB222BC1}" ribbonWpf:RibbonMetadata.CommandName="More Templates Excluded"/>
-                        </DockPanel>
+                        <TextBlock Text="{local:Loc Key=Common_New}"
+                                   FontSize="14" FontWeight="SemiBold" Foreground="#1F1F1F"
+                                   Margin="0,0,0,12"/>
 
-                        <StackPanel Orientation="Horizontal">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="16"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
                             <!-- Blank workbook card -->
-                            <Button Click="SsBlankWorkbook_Click" Cursor="Hand" Margin="0,0,16,0"
+                            <Button Grid.Column="0" Click="SsBlankWorkbook_Click" Cursor="Hand"
                                     ribbonWpf:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_BlankWorkbook}"
                                     ribbonWpf:RibbonTooltip.KeyTip="B1" ribbonWpf:RibbonMetadata.CommandName="Blank Workbook">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
                                         <Border x:Name="cardBg" Background="Transparent" Padding="4">
-                                            <StackPanel Width="108">
+                                            <StackPanel Width="144">
                                                 <!-- Mini spreadsheet thumbnail -->
-                                                <Border Width="108" Height="80"
+                                                <Border Width="144" Height="108"
                                                         BorderBrush="#C8C8C8" BorderThickness="1"
                                                         Background="White" ClipToBounds="True">
-                                                    <Canvas Width="108" Height="80">
+                                                    <Canvas Width="144" Height="108">
                                                         <!-- Row-header strip -->
                                                         <Rectangle Canvas.Left="0" Canvas.Top="0"
-                                                                   Width="18" Height="80" Fill="#F0F0F0"/>
+                                                                   Width="22" Height="108" Fill="#F0F0F0"/>
                                                         <!-- Column-header strip -->
                                                         <Rectangle Canvas.Left="0" Canvas.Top="0"
-                                                                   Width="108" Height="14" Fill="#F0F0F0"/>
+                                                                   Width="144" Height="17" Fill="#F0F0F0"/>
                                                         <!-- Horizontal grid lines -->
-                                                        <Line X1="0" Y1="27" X2="108" Y2="27"
+                                                        <Line X1="0" Y1="35" X2="144" Y2="35"
                                                               Stroke="#DCDCDC" StrokeThickness="0.5"/>
-                                                        <Line X1="0" Y1="40" X2="108" Y2="40"
+                                                        <Line X1="0" Y1="53" X2="144" Y2="53"
                                                               Stroke="#DCDCDC" StrokeThickness="0.5"/>
-                                                        <Line X1="0" Y1="53" X2="108" Y2="53"
+                                                        <Line X1="0" Y1="71" X2="144" Y2="71"
                                                               Stroke="#DCDCDC" StrokeThickness="0.5"/>
-                                                        <Line X1="0" Y1="66" X2="108" Y2="66"
+                                                        <Line X1="0" Y1="89" X2="144" Y2="89"
                                                               Stroke="#DCDCDC" StrokeThickness="0.5"/>
                                                         <!-- Vertical grid lines -->
-                                                        <Line X1="42" Y1="14" X2="42" Y2="80"
+                                                        <Line X1="54" Y1="17" X2="54" Y2="108"
                                                               Stroke="#DCDCDC" StrokeThickness="0.5"/>
-                                                        <Line X1="66" Y1="14" X2="66" Y2="80"
+                                                        <Line X1="84" Y1="17" X2="84" Y2="108"
                                                               Stroke="#DCDCDC" StrokeThickness="0.5"/>
-                                                        <Line X1="90" Y1="14" X2="90" Y2="80"
+                                                        <Line X1="114" Y1="17" X2="114" Y2="108"
                                                               Stroke="#DCDCDC" StrokeThickness="0.5"/>
                                                         <!-- Selected cell A1 -->
-                                                        <Rectangle Canvas.Left="18" Canvas.Top="14"
-                                                                   Width="24" Height="13"
+                                                        <Rectangle Canvas.Left="22" Canvas.Top="17"
+                                                                   Width="32" Height="18"
                                                                    Fill="#E6F6FA"/>
-                                                        <Rectangle Canvas.Left="18" Canvas.Top="14"
-                                                                   Width="24" Height="13"
+                                                        <Rectangle Canvas.Left="22" Canvas.Top="17"
+                                                                   Width="32" Height="18"
                                                                    Stroke="{DynamicResource FreeXAccentBrush}" StrokeThickness="1.5"
                                                                    Fill="Transparent"/>
                                                     </Canvas>
                                                 </Border>
                                                 <TextBlock Text="{local:Loc Key=MainWindow_Text_BlankWorkbook}"
-                                                           FontSize="12" Margin="0,6,0,2"
+                                                           FontSize="12" Margin="0,7,0,2"
                                                            TextAlignment="Center"
                                                            Foreground="#1F1F1F"/>
                                             </StackPanel>
@@ -1381,12 +1374,73 @@
                                     </ControlTemplate>
                                 </Button.Template>
                             </Button>
-                        </StackPanel>
+
+                            <!-- Keep unsupported online templates visible but honest. This wider gallery card
+                                 adds the same visual rhythm as Excel's template strip while continuing to use
+                                 FreeX's existing excluded-command explanation instead of inventing fake templates. -->
+                            <Button Grid.Column="2" Click="SsMoreTemplatesBtn_Click" Cursor="Hand"
+                                    HorizontalContentAlignment="Stretch"
+                                    AutomationProperties.AutomationId="MoreTemplatesExcludedButton"
+                                    AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_MoreTemplatesUnavailable}"
+                                    AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OnlineTemplateDiscoveryDependsOnAnExternalMicrosoftTemplateServiceAndIsE_D9AF02A3}"
+                                    ribbonWpf:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_MoreTemplatesExcluded}"
+                                    ribbonWpf:RibbonTooltip.KeyTip="MT"
+                                    ribbonWpf:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OnlineTemplateDiscoveryDependsOnAnExternalMicrosoftTemplateServiceAndIsE_FB222BC1}"
+                                    ribbonWpf:RibbonMetadata.CommandName="More Templates Excluded">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="cardBg" Background="Transparent" Padding="4">
+                                            <StackPanel MinWidth="320">
+                                                <Border Height="108"
+                                                        BorderBrush="#D4D8DC" BorderThickness="1"
+                                                        Background="#F6F7F8">
+                                                    <Grid Margin="22,13">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="12"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="12"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Border Grid.Column="0" Background="White" BorderBrush="#D8DDE2" BorderThickness="1">
+                                                            <Grid Margin="8">
+                                                                <Rectangle Height="7" Fill="#DDEFE5" VerticalAlignment="Top"/>
+                                                                <Rectangle Height="34" Fill="#EEF6F1" VerticalAlignment="Bottom"/>
+                                                            </Grid>
+                                                        </Border>
+                                                        <Border Grid.Column="2" Background="White" BorderBrush="#D8DDE2" BorderThickness="1">
+                                                            <Grid Margin="8">
+                                                                <Rectangle Height="7" Fill="#DCE9F7" VerticalAlignment="Top"/>
+                                                                <Rectangle Height="34" Fill="#EEF3FA" VerticalAlignment="Bottom"/>
+                                                            </Grid>
+                                                        </Border>
+                                                        <Border Grid.Column="4" Background="White" BorderBrush="#D8DDE2" BorderThickness="1">
+                                                            <Grid Margin="8">
+                                                                <Rectangle Height="7" Fill="#F1E2D7" VerticalAlignment="Top"/>
+                                                                <Rectangle Height="34" Fill="#F9F2EC" VerticalAlignment="Bottom"/>
+                                                            </Grid>
+                                                        </Border>
+                                                    </Grid>
+                                                </Border>
+                                                <TextBlock Text="{local:Loc Key=MainWindow_AutomationName_MoreTemplatesUnavailable}"
+                                                           FontSize="12" Margin="0,7,0,2"
+                                                           TextAlignment="Center" Foreground="#666"/>
+                                            </StackPanel>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="cardBg" Property="Background" Value="#F3F6F9"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </Grid>
                     </StackPanel>
                 </Border>
 
                 <!-- Recent files -->
-                <Grid Grid.Row="2" Margin="40,0,40,16">
+                <Grid Grid.Row="2" Margin="40,24,40,16">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/> <!-- Tabs + search -->
                         <RowDefinition Height="Auto"/> <!-- Column headers -->
@@ -1394,8 +1448,13 @@
                     </Grid.RowDefinitions>
 
                     <!-- Tabs row + search box -->
-                    <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,0">
-                        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                    <Grid Grid.Row="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal">
                             <Button x:Name="SsRecentTabButton"
                                     Background="Transparent" BorderThickness="0" Padding="0"
                                     Cursor="Hand" Click="SsRecentTab_Click"
@@ -1417,7 +1476,7 @@
                                 </Border>
                             </Button>
                         </StackPanel>
-                        <Border DockPanel.Dock="Right"
+                        <Border Grid.Column="2"
                                 Background="#F5F5F5" BorderBrush="#D8D8D8" BorderThickness="1"
                                 CornerRadius="2" Padding="8,4" VerticalAlignment="Center">
                             <TextBox x:Name="SsSearchBox" Width="180" FontSize="12"
@@ -1425,7 +1484,7 @@
                                      VerticalContentAlignment="Center"
                                      TextChanged="SsSearchBox_TextChanged"/>
                         </Border>
-                    </DockPanel>
+                    </Grid>
 
                     <!-- Column headers -->
                     <Border Grid.Row="1" BorderThickness="0,1,0,1" BorderBrush="#E4E4E4"
@@ -1446,7 +1505,7 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Button HorizontalContentAlignment="Stretch"
-                                            BorderThickness="0" Padding="0,7"
+                                            BorderThickness="0" Padding="0,10" MinHeight="56"
                                             Click="SsRecentItem_Click"
                                             Loaded="SsRecentFileItem_Loaded"
                                             Cursor="Hand"
@@ -1472,23 +1531,30 @@
                                                 <ColumnDefinition Width="150"/>
                                                 <ColumnDefinition Width="36"/>
                                             </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                                <Border Width="26" Height="30" Background="{DynamicResource FreeXAccentBrush}"
-                                                        CornerRadius="2" Margin="0,0,10,0"
+                                            <Grid Grid.Column="0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Border Width="32" Height="36" Background="{DynamicResource FreeXAccentBrush}"
+                                                        CornerRadius="2" Margin="0,0,12,0"
                                                         VerticalAlignment="Center">
                                                     <TextBlock Text="X" Foreground="White"
                                                                FontSize="11" FontWeight="Bold"
                                                                HorizontalAlignment="Center"
                                                                VerticalAlignment="Center"/>
                                                 </Border>
-                                                <StackPanel VerticalAlignment="Center">
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding FileName}"
-                                                               FontSize="13" Foreground="#1F1F1F"/>
-                                                    <TextBlock Text="{Binding Directory}"
+                                                               FontSize="13" Foreground="#1F1F1F"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding DisplayDirectory}"
                                                                FontSize="11" Foreground="#888"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               ToolTip="{Binding Directory}"
                                                                Margin="0,1,0,0"/>
                                                 </StackPanel>
-                                            </StackPanel>
+                                            </Grid>
                                             <TextBlock Grid.Column="1"
                                                        Text="{Binding LastOpenedText}"
                                                        FontSize="12" Foreground="#666"
@@ -1516,7 +1582,7 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Button HorizontalContentAlignment="Stretch"
-                                            BorderThickness="0" Padding="0,7"
+                                            BorderThickness="0" Padding="0,10" MinHeight="56"
                                             Click="SsRecentItem_Click"
                                             Loaded="SsPinnedFileItem_Loaded"
                                             Cursor="Hand"
@@ -1542,23 +1608,30 @@
                                                 <ColumnDefinition Width="150"/>
                                                 <ColumnDefinition Width="36"/>
                                             </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                                <Border Width="26" Height="30" Background="{DynamicResource FreeXAccentBrush}"
-                                                        CornerRadius="2" Margin="0,0,10,0"
+                                            <Grid Grid.Column="0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Border Width="32" Height="36" Background="{DynamicResource FreeXAccentBrush}"
+                                                        CornerRadius="2" Margin="0,0,12,0"
                                                         VerticalAlignment="Center">
                                                     <TextBlock Text="X" Foreground="White"
                                                                FontSize="11" FontWeight="Bold"
                                                                HorizontalAlignment="Center"
                                                                VerticalAlignment="Center"/>
                                                 </Border>
-                                                <StackPanel VerticalAlignment="Center">
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding FileName}"
-                                                               FontSize="13" Foreground="#1F1F1F"/>
-                                                    <TextBlock Text="{Binding Directory}"
+                                                               FontSize="13" Foreground="#1F1F1F"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding DisplayDirectory}"
                                                                FontSize="11" Foreground="#888"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               ToolTip="{Binding Directory}"
                                                                Margin="0,1,0,0"/>
                                                 </StackPanel>
-                                            </StackPanel>
+                                            </Grid>
                                             <TextBlock Grid.Column="1"
                                                        Text="{Binding LastOpenedText}"
                                                        FontSize="12" Foreground="#666"

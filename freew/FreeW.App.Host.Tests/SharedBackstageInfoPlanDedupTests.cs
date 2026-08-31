@@ -87,6 +87,7 @@ public sealed class SharedBackstageInfoPlanDedupTests
             "ChromeBackstageSidebarHoverBrush",
             "ChromeBackstageSidebarSelectedBrush",
             "ChromeBackstageSidebarSeparatorBrush",
+            "ChromeBackstageSidebarTextBrush",
             "BackstageSidebarNavButton",
             "BackstageSidebarNavButtonActive",
             "BackstageSidebarBackButton");

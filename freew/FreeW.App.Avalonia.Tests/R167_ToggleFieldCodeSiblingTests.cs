@@ -106,7 +106,11 @@ public sealed class R167_ToggleFieldCodeSiblingTests
     [Fact]
     public void ToggleFieldCodeAtCaret_OnASimpleFieldNextToAComplexField_LeavesTheComplexFieldUntouched()
     {
-        var complex = Run.ComplexFieldRun(" DATE ", "cached date text");
+        // Keep the unrelated sibling's rendered and cached lengths identical. A live DATE field is a
+        // poor fixture here because its rendered length varies with the current date and culture while
+        // this test positions the synthetic caret in display-offset space. That made the caret miss both
+        // fields in short-date cultures and masked the actual sibling-targeting assertion.
+        var complex = Run.ComplexFieldRun(" MERGEFIELD Neighbor ", "cached sibling text");
         var document = TextDocument.CreateEmpty();
         document.Blocks.Clear();
         var paragraph = new Paragraph();
