@@ -11,7 +11,8 @@ public readonly record struct BackstageAccent(
     Color Sidebar,
     Color Hover,
     Color Selected,
-    Color Separator);
+    Color Separator,
+    Color? Foreground = null);
 
 /// <summary>
 /// Shared wrapper for app-specific WPF Backstage views. The app still supplies entries and panes; this

@@ -40,11 +40,7 @@ public static class BackstageFrameComposer
         ArgumentNullException.ThrowIfNull(spec.Entries);
 
         var frame = new BackstageFrame(spec.Chrome);
-        frame.SetAccent(
-            spec.Accent.Sidebar,
-            spec.Accent.Hover,
-            spec.Accent.Selected,
-            spec.Accent.Separator);
+        frame.SetAccent(spec.Accent);
 
         if (spec.ContentPadding is { } contentPadding)
             frame.SetContentPadding(contentPadding);

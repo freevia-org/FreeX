@@ -322,12 +322,16 @@ public sealed class BackstageFrame : UserControl
     /// Re-tint the nav rail (e.g. FreeW's Word #2B579A). Pass the base, hover and selection colours; the
     /// frame keeps the FreeX navy/teal defaults when this is never called.
     /// </summary>
-    public void SetAccent(Color sidebar, Color hover, Color selected, Color separator)
+    public void SetAccent(BackstageAccent accent)
     {
-        _rail.Background = Freeze(sidebar);
-        Resources["ChromeBackstageSidebarHoverBrush"] = Freeze(hover);
-        Resources["ChromeBackstageSidebarSelectedBrush"] = Freeze(selected);
-        Resources["ChromeBackstageSidebarSeparatorBrush"] = Freeze(separator);
+        _rail.Background = Freeze(accent.Sidebar);
+        Resources["ChromeBackstageSidebarHoverBrush"] = Freeze(accent.Hover);
+        Resources["ChromeBackstageSidebarSelectedBrush"] = Freeze(accent.Selected);
+        Resources["ChromeBackstageSidebarSeparatorBrush"] = Freeze(accent.Separator);
+        Resources["ChromeBackstageSidebarTextBrush"] = Freeze(accent.Foreground ?? Colors.White);
+        // The back icon is created with the frame, before the host applies its accent. Refresh it so a
+        // light rail does not leave the arrow painted in the original white fallback.
+        _back.Content = BuildIcon(BackstageIconKind.Previous, BackstageVisualContract.Frame.BackButtonIconSize);
     }
 
     /// <summary>
@@ -586,7 +590,7 @@ public sealed class BackstageFrame : UserControl
     // kind geometry when the host has no artwork — so the backstage reuses the same Office icons the ribbon does.
     private FrameworkElement BuildIcon(BackstageIconKind kind, double size, string? commandName = null)
     {
-        var icon = _chrome.CreateIcon(new BackstageIconSpec(kind, commandName), size, Brushes.White);
+        var icon = _chrome.CreateIcon(new BackstageIconSpec(kind, commandName), size, ResolveRailForegroundBrush());
         icon.VerticalAlignment = VerticalAlignment.Center;
         icon.Margin = kind == BackstageIconKind.Previous
             ? new Thickness(0)
@@ -607,6 +611,11 @@ public sealed class BackstageFrame : UserControl
         (Resources["ChromeBackstageSidebarSeparatorBrush"] as Brush)
         ?? TryFindResource("ChromeBackstageSidebarSeparatorBrush") as Brush
         ?? Freeze(Color.FromRgb(0x24, 0x44, 0x5E));
+
+    private Brush ResolveRailForegroundBrush() =>
+        (Resources["ChromeBackstageSidebarTextBrush"] as Brush)
+        ?? TryFindResource("ChromeBackstageSidebarTextBrush") as Brush
+        ?? Brushes.White;
 
     private static Brush Freeze(Color color)
     {
