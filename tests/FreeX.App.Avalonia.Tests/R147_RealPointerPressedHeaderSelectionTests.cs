@@ -144,6 +144,41 @@ public sealed class R147_RealPointerPressedHeaderSelectionTests
     }
 
     [Fact]
+    public async Task RealPointerPressed_RowHeader_UsesCompactWholeRowReferenceInNameBox()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = CreateShownWindow(out var sheet);
+            try
+            {
+                var rowFiveFirstCell = new CellAddress(sheet.Id, 5, 1);
+                sheet.SetCell(rowFiveFirstCell, new TextValue("row 5 value"));
+                Refresh(window);
+                await DrainInputAsync();
+
+                ClickHeader(window, "RowHeader_5", NearTop, RawInputModifiers.None);
+                await DrainInputAsync();
+
+                window.Session.SelectedRange.Should().Be(new GridRange(
+                    rowFiveFirstCell,
+                    new CellAddress(sheet.Id, 5, CellAddress.MaxCol)),
+                    "the physical row-header click must retain the full-row selection geometry");
+                window.CellAddressBoxTextForTest.Should().Be("5:5",
+                    "Excel displays a whole-row selection with compact row notation in the Name Box");
+                window.FormulaBoxTextForTest.Should().Be("row 5 value",
+                    "the formula bar must continue to display the active cell's value");
+            }
+            finally
+            {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+                window.Close();
+            }
+
+            return true;
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task RealPointerPressed_CtrlClickColumnHeaderJustOutsideResizeHotspot_StillAddsSelection()
     {
         await Session.Dispatch(async () =>
