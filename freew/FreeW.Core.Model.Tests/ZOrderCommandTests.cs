@@ -44,6 +44,20 @@ public class ZOrderCommandTests
         return (doc, bus);
     }
 
+    private static (TextDocument doc, DocumentCommandBus bus) DenseFloatingDoc(int count)
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Clear();
+        for (var index = 0; index < count; index++)
+        {
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromImage(FloatingImage(index * 2)));
+            doc.Blocks.Add(paragraph);
+        }
+
+        return (doc, new DocumentCommandBus(new TestContext(doc)));
+    }
+
     private static InlineImage ImageAt(TextDocument doc, int blockIndex) =>
         ((Paragraph)doc.Blocks[blockIndex]).Runs[0].Image!;
 
@@ -69,6 +83,31 @@ public class ZOrderCommandTests
         ImageAt(doc, 0).ZOrderIndex.Should().Be(1);
         ImageAt(doc, 1).ZOrderIndex.Should().Be(3);
         ImageAt(doc, 2).ZOrderIndex.Should().Be(5);
+    }
+
+    [Fact]
+    public void Revert_DenseFloatingDocument_RestoresEveryZOrderIndex()
+    {
+        const int count = 1_000;
+        var (doc, bus) = DenseFloatingDoc(count);
+
+        bus.Execute(new ChangeZOrderCommand(0, 0, ZOrderOperation.BringToFront));
+        bus.Undo();
+
+        for (var index = 0; index < count; index++)
+            ImageAt(doc, index).ZOrderIndex.Should().Be(index * 2);
+    }
+
+    [Fact]
+    public void Revert_SourceGuardUsesSingleFloatingLocationIndex()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText(
+            "freew", "FreeW.Core.Model", "EditCommands.cs");
+
+        source.Should().Contain("var floatingByLocation = new Dictionary<(int Bi, int Ri), FloatingRef>(all.Count);")
+            .And.Contain("floatingByLocation[(floating.Bi, floating.Ri)] = floating;")
+            .And.Contain("floatingByLocation.TryGetValue((bi, ri), out var floating)")
+            .And.NotContain("var t = all.FirstOrDefault(x => x.Bi == bi && x.Ri == ri);");
     }
 
     // ── SendToBack ───────────────────────────────────────────────────────────────────────────────
