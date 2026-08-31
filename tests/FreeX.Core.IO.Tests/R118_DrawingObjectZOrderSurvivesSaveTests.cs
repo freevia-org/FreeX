@@ -146,6 +146,77 @@ public sealed class R118_DrawingObjectZOrderSurvivesSaveTests
         ReadPictureAnchorNamesInDocumentOrder(resave).Should().Equal("PicA", "PicB", "PicC");
     }
 
+    [Fact]
+    public void ReorderAnchorsByZOrder_DenseMixedObjectsUsesEntryNamesWithoutRepeatedModelScans()
+    {
+        const int objectsPerKind = 240;
+        var workbook = new Workbook("DenseDrawingZOrder");
+        var sheet = workbook.AddSheet("Sheet1");
+        var drawingRoot = new XElement(SpreadsheetDrawingNs + "wsDr");
+
+        for (var index = 0; index < objectsPerKind; index++)
+        {
+            var picture = new PictureModel { Name = $"Picture {index}" };
+            var textBox = new TextBoxModel { Name = $"TextBox {index}" };
+            var shape = new DrawingShapeModel { Name = $"Shape {index}" };
+            sheet.Pictures.Add(picture);
+            sheet.TextBoxes.Add(textBox);
+            sheet.DrawingShapes.Add(shape);
+
+            AddAnchor(drawingRoot, picture.Name!);
+            AddAnchor(drawingRoot, textBox.Name!);
+            AddAnchor(drawingRoot, shape.Name!);
+
+            sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id));
+            sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, textBox.Id));
+            sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, picture.Id));
+        }
+
+        XlsxWorksheetDrawingPartMerger.ReorderAnchorsByZOrder(drawingRoot, sheet, SpreadsheetDrawingNs).Should().BeTrue();
+
+        ReadAnchorNames(drawingRoot).Should().Equal(
+            Enumerable.Range(0, objectsPerKind).SelectMany(index => new[] { $"Shape {index}", $"TextBox {index}", $"Picture {index}" }));
+    }
+
+    [Fact]
+    public void ReorderAnchorsByZOrder_DuplicateObjectIdsKeepTheFirstModelName()
+    {
+        var workbook = new Workbook("DuplicateDrawingObjectIds");
+        var sheet = workbook.AddSheet("Sheet1");
+        var duplicateId = Guid.NewGuid();
+        var firstPicture = new PictureModel { Id = duplicateId, Name = "First picture" };
+        var duplicatePicture = new PictureModel { Id = duplicateId, Name = "Second picture" };
+        var otherPicture = new PictureModel { Name = "Other picture" };
+        sheet.Pictures.Add(firstPicture);
+        sheet.Pictures.Add(duplicatePicture);
+        sheet.Pictures.Add(otherPicture);
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, duplicateId));
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, otherPicture.Id));
+
+        var drawingRoot = new XElement(
+            SpreadsheetDrawingNs + "wsDr",
+            Anchor("Other picture"),
+            Anchor("First picture"));
+
+        XlsxWorksheetDrawingPartMerger.ReorderAnchorsByZOrder(drawingRoot, sheet, SpreadsheetDrawingNs).Should().BeTrue();
+
+        ReadAnchorNames(drawingRoot).Should().Equal("First picture", "Other picture");
+    }
+
+    [Fact]
+    public void ReorderAnchorsByZOrder_SourceUsesPreindexedNonChartEntryNames()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoSource("XlsxWorksheetDrawingPartMerger.cs");
+
+        source.Should().Contain("var namesByEntry = new Dictionary<DrawingObjectZOrderEntry, string?>(");
+        source.Should().Contain("namesByEntry.TryAdd(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, picture.Id), picture.Name);");
+        source.Should().Contain("namesByEntry.TryGetValue(entry, out var name);");
+        source.Should().Contain("nameOrderIndex.TryAdd(name, index);");
+        source.Should().NotContain("sheet.Pictures.FirstOrDefault(picture => picture.Id == entry.Id)");
+        source.Should().NotContain("sheet.TextBoxes.FirstOrDefault(textBox => textBox.Id == entry.Id)");
+        source.Should().NotContain("sheet.DrawingShapes.FirstOrDefault(shape => shape.Id == entry.Id)");
+    }
+
     private static void AddPicture(Sheet sheet, string name, uint row) =>
         sheet.Pictures.Add(new PictureModel
         {
@@ -172,6 +243,16 @@ public sealed class R118_DrawingObjectZOrderSurvivesSaveTests
             .Select(name => name!)
             .ToList();
     }
+
+    private static void AddAnchor(XElement drawingRoot, string name) => drawingRoot.Add(Anchor(name));
+
+    private static XElement Anchor(string name) =>
+        new(SpreadsheetDrawingNs + "oneCellAnchor",
+            new XElement(SpreadsheetDrawingNs + "cNvPr", new XAttribute("name", name)));
+
+    private static List<string> ReadAnchorNames(XElement drawingRoot) => drawingRoot.Elements()
+        .Select(anchor => anchor.Descendants(SpreadsheetDrawingNs + "cNvPr").First().Attribute("name")!.Value)
+        .ToList();
 
     private static byte[] MinimalPngBytes() =>
     [

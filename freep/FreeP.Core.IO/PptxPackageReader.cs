@@ -1676,12 +1676,14 @@ public static class PptxPackageReader
         string? slideDir = null,
         IReadOnlyDictionary<string, string>? slidePartPathToId = null,
         int groupDepth = 0,
-        PresentationTheme? theme = null)
+        PresentationTheme? theme = null,
+        IReadOnlyList<OpcRelationshipTarget>? partRels = null)
     {
         if (groupDepth > MaxShapeGroupNestingDepth)
             yield break;
 
-
+        partRels ??= slideRels
+            ?? OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
         foreach (var child in spTree.Elements())
         {
             // Theme 21: mc:AlternateContent at shape-tree level wraps OLE objects (and some
@@ -1709,16 +1711,19 @@ public static class PptxPackageReader
             {
                 "sp"           => ReadSp(effectiveEl, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath, theme),
                 "pic"          => ReadPic(effectiveEl, archive, partPath, scheme,
-                                      slideRels, allSlides, slideDir, slidePartPathToId),
+                                      partRels, slideRels, allSlides, slideDir, slidePartPathToId),
                 "cxnSp"        => ReadCxnSp(effectiveEl, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath, theme),
-                "grpSp"        => ReadGrpSp(effectiveEl, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId, groupDepth, theme),
+                "grpSp"        => ReadGrpSp(effectiveEl, archive, partPath, scheme, tableStyles,
+                                      partRels, slideRels, allSlides, slideDir, slidePartPathToId,
+                                      groupDepth, theme),
                 // EA3: pass mcChoiceEl so ReadGraphicFrame can capture the Requires token
                 "graphicFrame" => ReadGraphicFrame(effectiveEl, archive, partPath, scheme, tableStyles,
-                                      slideRels, allSlides, slideDir, slidePartPathToId,
+                                      partRels, slideRels, allSlides, slideDir, slidePartPathToId,
                                       wasAlternateContent: child != effectiveEl, mcChoiceEl: mcChoiceEl,
                                       alternateContentFallbackXml: mcFallbackEl?.ToString(SaveOptions.DisableFormatting)),
                 // Wave 25A: ink annotations arrive as p:contentPart (possibly inside mc:AlternateContent)
-                "contentPart"  => ReadContentPartInk(child, effectiveEl, archive, partPath, mcChoiceEl),
+                "contentPart"  => ReadContentPartInk(
+                                      child, effectiveEl, archive, partPath, partRels, mcChoiceEl),
                 _ => null
             };
 
@@ -1925,6 +1930,7 @@ public static class PptxPackageReader
         XElement gfEl, ZipArchive archive, string partPath,
         PresentationColorScheme scheme,
         Dictionary<string, TableStyleData>? tableStyles,
+        IReadOnlyList<OpcRelationshipTarget> partRels,
         IReadOnlyList<OpcRelationshipTarget>? slideRels = null,
         List<Slide>? allSlides = null,
         string? slideDir = null,
@@ -1995,7 +2001,6 @@ public static class PptxPackageReader
             if (string.IsNullOrWhiteSpace(chartRelId)) return null;
 
             // Resolve the chart part path via the slide's rels
-            var partRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
             var chartTarget = partRels
                 .FirstOrDefault(r => r.Id == chartRelId && r.Type == ChartRelType).Target;
             if (string.IsNullOrWhiteSpace(chartTarget)) return null;
@@ -2032,7 +2037,6 @@ public static class PptxPackageReader
                 .Attribute(R + "id")?.Value;
             if (string.IsNullOrWhiteSpace(chartRelId)) return null;
 
-            var partRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
             var chartTarget = partRels
                 .FirstOrDefault(r => r.Id == chartRelId && r.Type == ChartExRelType).Target;
             if (string.IsNullOrWhiteSpace(chartTarget)) return null;
@@ -2068,7 +2072,7 @@ public static class PptxPackageReader
         // ── SmartArt diagram ──────────────────────────────────────────────────
         if (string.Equals(uri, DrawingDiagramUri, StringComparison.OrdinalIgnoreCase))
         {
-            var smartArt = ReadSmartArt(graphicData, archive, partPath, scheme);
+            var smartArt = ReadSmartArt(graphicData, archive, partPath, scheme, partRels);
             return new SlideShape
             {
                 Id = ParseUint(cNvPr?.Attribute("id")?.Value),
@@ -2097,7 +2101,7 @@ public static class PptxPackageReader
             if (oleObjEl is not null)
             {
                 var oleShape = ReadOleObject(oleObjEl, gfEl, archive, partPath, scheme,
-                    wasAlternateContent);
+                    partRels, wasAlternateContent);
                 if (oleShape is not null)
                 {
                     oleShape.Id = ParseUint(cNvPr?.Attribute("id")?.Value);
@@ -2121,7 +2125,8 @@ public static class PptxPackageReader
         // Unknown graphicFrame type — preserve verbatim (Wave 25A: no-silent-loss guarantee).
         // EA3: pass mcChoiceEl so ReadPreservedGraphicFrame can capture the Requires token.
         var preserved = ReadPreservedGraphicFrame(gfEl, graphicData, uri, cNvPr, offX, offY, extCx, extCy,
-            archive, partPath, wasAlternateContent, mcChoiceEl, alternateContentFallbackXml, allSlides);
+            archive, partPath, partRels, wasAlternateContent, mcChoiceEl,
+            alternateContentFallbackXml, allSlides);
         var preservedHlink = cNvPr?.Element(A + "hlinkClick");
         if (preservedHlink is not null)
             preserved.Hyperlink = ResolveHlinkClick(preservedHlink, slideRels, allSlides, slideDir, slidePartPathToId);
@@ -2174,7 +2179,9 @@ public static class PptxPackageReader
     private static SlideShape ReadPreservedGraphicFrame(
         XElement gfEl, XElement graphicData, string? uri,
         XElement? cNvPr, long offX, long offY, long extCx, long extCy,
-        ZipArchive archive, string partPath, bool wasAlternateContent,
+        ZipArchive archive, string partPath,
+        IReadOnlyList<OpcRelationshipTarget> partRels,
+        bool wasAlternateContent,
         XElement? mcChoiceEl = null, string? alternateContentFallbackXml = null,
         List<Slide>? allSlides = null)
     {
@@ -2240,12 +2247,11 @@ public static class PptxPackageReader
         if (kind == PreservedObjectKind.Zoom)
             info.SummaryZoomTargets.AddRange(ReadSummaryZoomTargets(gfEl));
 
-        // Capture all referenced parts via the slide's rels
-        var slideRels2 = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
-        CaptureReferencedParts(gfEl, slideRels2, archive, partPath, info);
+        // Capture all referenced parts via the owning part's preloaded relationships.
+        CaptureReferencedParts(gfEl, partRels, archive, partPath, info);
 
         // Extract fallback preview image if present (a:blip or p:pic inside graphicData or nearby)
-        var fallbackImage = ExtractPreservedFallbackImage(gfEl, graphicData, slideRels2, archive, partPath);
+        var fallbackImage = ExtractPreservedFallbackImage(gfEl, graphicData, partRels, archive, partPath);
 
         return new SlideShape
         {
@@ -2331,6 +2337,7 @@ public static class PptxPackageReader
     private static SlideShape? ReadContentPartInk(
         XElement originalEl, XElement contentPartEl,
         ZipArchive archive, string partPath,
+        IReadOnlyList<OpcRelationshipTarget> partRels,
         XElement? mcChoiceEl = null)
     {
         // Extract cNvPr from nvContentPartPr if present
@@ -2349,8 +2356,6 @@ public static class PptxPackageReader
         long offY  = ParseLong(xfrmEl?.Elements().FirstOrDefault(element => element.Name.LocalName == "off")?.Attribute("y")?.Value);
         long extCx = ParseLong(xfrmEl?.Elements().FirstOrDefault(element => element.Name.LocalName == "ext")?.Attribute("cx")?.Value);
         long extCy = ParseLong(xfrmEl?.Elements().FirstOrDefault(element => element.Name.LocalName == "ext")?.Attribute("cy")?.Value);
-
-        var slideRels2 = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
 
         // EA3/FA2: capture original mc:Choice Requires token(s) for round-trip fidelity.
         // Requires may be a space-separated list of tokens (e.g. "p14 p15") — resolve each
@@ -2387,7 +2392,7 @@ public static class PptxPackageReader
         var rId = contentPartEl.Attribute(R + "id")?.Value;
         if (!string.IsNullOrEmpty(rId))
         {
-            var rel = slideRels2.FirstOrDefault(r => r.Id == rId);
+            var rel = partRels.FirstOrDefault(r => r.Id == rId);
             if (rel != default)
             {
                 var inkPath = ResolveRelationshipTargetZipPath(archive, GetDirectoryName(partPath), rel.Target);
@@ -2408,7 +2413,7 @@ public static class PptxPackageReader
                 var imgRelId = blipEl?.Attribute(R + "embed")?.Value;
                 if (!string.IsNullOrEmpty(imgRelId))
                 {
-                    var imgRel = slideRels2.FirstOrDefault(r => r.Id == imgRelId);
+                    var imgRel = partRels.FirstOrDefault(r => r.Id == imgRelId);
                     if (imgRel != default)
                     {
                         var imgPath = ResolveRelationshipTargetZipPath(archive, GetDirectoryName(partPath), imgRel.Target);
@@ -2595,7 +2600,11 @@ public static class PptxPackageReader
     // ── SmartArt diagram parsing ──────────────────────────────────────────────────
 
     private static SmartArtShape ReadSmartArt(
-        XElement graphicData, ZipArchive archive, string partPath, PresentationColorScheme scheme)
+        XElement graphicData,
+        ZipArchive archive,
+        string partPath,
+        PresentationColorScheme scheme,
+        IReadOnlyList<OpcRelationshipTarget> partRels)
     {
         var smart = new SmartArtShape();
 
@@ -2614,8 +2623,7 @@ public static class PptxPackageReader
         if (qsRelId is not null) smart.DiagramRelIds["qs"] = qsRelId;
         if (csRelId is not null) smart.DiagramRelIds["cs"] = csRelId;
 
-        // Resolve each rel id -> part path via slide rels.
-        var slideRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
+        // Resolve each rel id -> part path via the owning part's preloaded relationships.
         var slideDir  = GetDirectoryName(partPath);
 
         var relTypeForKey = new Dictionary<string, string>
@@ -2641,7 +2649,7 @@ public static class PptxPackageReader
             if (!relTypeForKey.TryGetValue(key, out var relType)) continue;
 
             // Find target by relId (type not always set correctly — match by id first)
-            var target = slideRels.FirstOrDefault(r => r.Id == relId).Target;
+            var target = partRels.FirstOrDefault(r => r.Id == relId).Target;
             if (string.IsNullOrWhiteSpace(target)) continue;
 
             var absPath = ResolveRelationshipTargetZipPath(archive, slideDir, target);
@@ -2825,9 +2833,9 @@ public static class PptxPackageReader
         ZipArchive archive,
         string partPath,
         PresentationColorScheme scheme,
+        IReadOnlyList<OpcRelationshipTarget> partRels,
         bool wasAlternateContent)
     {
-        var slideRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
         var slideDir  = GetDirectoryName(partPath);
 
         var ole = new OleObjectInfo
@@ -2840,7 +2848,7 @@ public static class PptxPackageReader
         var embRelId = oleObjEl.Attribute(R + "id")?.Value;
         if (!string.IsNullOrWhiteSpace(embRelId))
         {
-            var embRel = slideRels.FirstOrDefault(r => r.Id == embRelId);
+            var embRel = partRels.FirstOrDefault(r => r.Id == embRelId);
             if (!string.IsNullOrWhiteSpace(embRel.Target) && embRel.IsExternal)
             {
                 // LINKED OLE object: the relationship's target is an external file/URL, not a
@@ -2896,13 +2904,13 @@ public static class PptxPackageReader
         if (picEl is not null)
         {
             var blip = picEl.Descendants(A + "blip").FirstOrDefault();
-            fallbackImage = LoadImageFromBlip(blip, slideRels, slideDir, archive);
+            fallbackImage = LoadImageFromBlip(blip, partRels, slideDir, archive);
         }
         if (fallbackImage is null)
         {
             // Fallback: look for any a:blip directly under oleObj
             var blip = oleObjEl.Descendants(A + "blip").FirstOrDefault();
-            fallbackImage = LoadImageFromBlip(blip, slideRels, slideDir, archive);
+            fallbackImage = LoadImageFromBlip(blip, partRels, slideDir, archive);
         }
 
         var shape = new SlideShape
@@ -4965,6 +4973,7 @@ public static class PptxPackageReader
     // ── p:pic ────────────────────────────────────────────────────────────────────
 
     private static SlideShape ReadPic(XElement pic, ZipArchive archive, string partPath, PresentationColorScheme scheme,
+        IReadOnlyList<OpcRelationshipTarget> partRels,
         IReadOnlyList<OpcRelationshipTarget>? slideRels = null,
         List<Slide>? allSlides = null,
         string? slideDir = null,
@@ -5008,7 +5017,6 @@ public static class PptxPackageReader
         var embedId = blip?.Attribute(R + "embed")?.Value;
         if (!string.IsNullOrWhiteSpace(embedId))
         {
-            var partRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
             var imageTarget = partRels.FirstOrDefault(r => r.Id == embedId && r.Type == ImageRelType).Target;
             if (!string.IsNullOrWhiteSpace(imageTarget))
             {
@@ -5055,7 +5063,6 @@ public static class PptxPackageReader
 
                 if (!string.IsNullOrWhiteSpace(mediaRelId))
                 {
-                    var partRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
                     var mediaRel = partRels.FirstOrDefault(r => r.Id == mediaRelId);
                     if (!string.IsNullOrEmpty(mediaRel.Target))
                     {
@@ -5095,7 +5102,6 @@ public static class PptxPackageReader
                     var extLst = nvPr.Element(P + "extLst");
                     if (extLst is not null)
                     {
-                        var partRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
                         foreach (var ext in extLst.Elements(P + "ext"))
                         {
                             var mediaRef = ext.Descendants()
@@ -5120,7 +5126,8 @@ public static class PptxPackageReader
                     }
                 }
 
-                foreach (var track in ReadMediaCaptionTracks(archive, partPath, nvPr, mediaRelId))
+                foreach (var track in ReadMediaCaptionTracks(
+                             archive, partPath, partRels, nvPr, mediaRelId))
                 {
                     mediaInfo.CaptionTracks.Add(track);
                 }
@@ -5176,16 +5183,16 @@ public static class PptxPackageReader
     private static IReadOnlyList<MediaCaptionTrackInfo> ReadMediaCaptionTracks(
         ZipArchive archive,
         string partPath,
+        IReadOnlyList<OpcRelationshipTarget> partRels,
         XElement nvPr,
         string? primaryMediaRelId)
     {
-        var rels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
-        if (rels.Count == 0)
+        if (partRels.Count == 0)
         {
             return [];
         }
 
-        var relById = rels
+        var relById = partRels
             .GroupBy(rel => rel.Id, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
         var defaultContentTypes = OpcMediaTypes.ReadDefaultContentTypes(archive);
@@ -5426,6 +5433,7 @@ public static class PptxPackageReader
 
     private static SlideShape ReadGrpSp(XElement grpSp, ZipArchive archive, string partPath,
         PresentationColorScheme scheme, Dictionary<string, TableStyleData>? tableStyles = null,
+        IReadOnlyList<OpcRelationshipTarget>? partRels = null,
         IReadOnlyList<OpcRelationshipTarget>? slideRels = null,
         List<Slide>? allSlides = null,
         string? slideDir = null,
@@ -5454,7 +5462,9 @@ public static class PptxPackageReader
 
         // groupDepth + 1: descending into this group's children costs one more stack level, and the
         // tree reader stops once the nesting exceeds MaxShapeGroupNestingDepth.
-        foreach (var child in ReadShapesFromTree(grpSp, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId, groupDepth + 1, theme))
+        foreach (var child in ReadShapesFromTree(
+                     grpSp, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir,
+                     slidePartPathToId, groupDepth + 1, theme, partRels))
             shape.Children.Add(child);
 
         return shape;
