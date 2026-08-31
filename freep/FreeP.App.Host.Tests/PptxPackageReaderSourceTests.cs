@@ -47,6 +47,48 @@ public sealed class PptxPackageReaderSourceTests
     }
 
     [Fact]
+    public void ShapeTree_RelationshipTargetsAreLoadedAtMostOncePerOwningPart()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.Core.IO",
+            "PptxPackageReader.cs"));
+        const string loadRelationships =
+            "OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath))";
+
+        Regex.Matches(source, Regex.Escape(loadRelationships))
+            .Should().HaveCount(1,
+                "the shape-tree owner should load relationships once and every shape reader should reuse them");
+        ExtractMethod(source, "private static IEnumerable<SlideShape> ReadShapesFromTree(")
+            .Should()
+            .Contain("partRels ??= slideRels")
+            .And.Contain("partRels, slideRels")
+            .And.Contain("partPath, partRels, mcChoiceEl");
+        ExtractMethod(source, "private static SlideShape ReadGrpSp(")
+            .Should()
+            .Contain("theme, partRels)")
+            .And.NotContain(loadRelationships);
+
+        foreach (var signature in new[]
+                 {
+                     "private static SlideShape? ReadGraphicFrame(",
+                     "private static SlideShape ReadPreservedGraphicFrame(",
+                     "private static SlideShape? ReadContentPartInk(",
+                     "private static SmartArtShape ReadSmartArt(",
+                     "private static SlideShape? ReadOleObject(",
+                     "private static SlideShape ReadPic(",
+                     "private static IReadOnlyList<MediaCaptionTrackInfo> ReadMediaCaptionTracks(",
+                 })
+        {
+            ExtractMethod(source, signature).Should()
+                .Contain("IReadOnlyList<OpcRelationshipTarget> partRels")
+                .And.NotContain(loadRelationships,
+                    $"{signature} should consume the owning part's preloaded relationship targets");
+        }
+    }
+
+    [Fact]
     public void DocumentMathProperties_ReadWrapIndentAndWrapRightWithOpenXmlDefaults()
     {
         var source = File.ReadAllText(Path.Combine(
