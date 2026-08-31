@@ -6184,6 +6184,7 @@ public static class DocxReader
         var contentTypeOverrides = ReadContentTypeOverrides(archive);
         var contentTypeDefaults = ReadContentTypeDefaults(archive);
         var references = new List<PreservedDrawingReference>();
+        var capturedRelationshipIds = new HashSet<string>(StringComparer.Ordinal);
 
         string? RelationshipTypeFor(string partName)
         {
@@ -6206,7 +6207,8 @@ public static class DocxReader
 
         void CaptureLocalRelationship(string relationshipId)
         {
-            if (!partRelationshipTargets.TryGetValue(relationshipId, out var localPartPath))
+            if (capturedRelationshipIds.Contains(relationshipId)
+                || !partRelationshipTargets.TryGetValue(relationshipId, out var localPartPath))
                 return;
             var partName = "/" + localPartPath.TrimStart('/');
             var relationshipType = RelationshipTypeFor(partName);
@@ -6219,8 +6221,8 @@ public static class DocxReader
                     relationshipType: documentRelationships ? relationshipType : null))
                 return;
             CaptureReferencedParts(archive, document, partName, contentTypeOverrides, contentTypeDefaults);
-            if (!references.Any(reference => reference.OriginalRelId == relationshipId))
-                references.Add(new PreservedDrawingReference(relationshipId, partName, relationshipType));
+            references.Add(new PreservedDrawingReference(relationshipId, partName, relationshipType));
+            capturedRelationshipIds.Add(relationshipId);
         }
 
         var dataRelationshipId = relIds.Attribute(R + "dm")?.Value;
@@ -6308,6 +6310,7 @@ public static class DocxReader
         var contentTypeOverrides = ReadContentTypeOverrides(archive);
         var contentTypeDefaults = ReadContentTypeDefaults(archive);
         var references = new List<PreservedDrawingReference>();
+        var capturedRelationshipIds = new HashSet<string>(StringComparer.Ordinal);
         var diagramDataPartPaths = new List<string>();
 
         string? RelationshipTypeFor(string partName)
@@ -6335,7 +6338,7 @@ public static class DocxReader
 
         void CaptureLocalRelationship(string relationshipId)
         {
-            if (references.Any(reference => reference.OriginalRelId == relationshipId)
+            if (capturedRelationshipIds.Contains(relationshipId)
                 || !partRelationshipTargets.TryGetValue(relationshipId, out var localPartPath))
                 return;
 
@@ -6353,6 +6356,7 @@ public static class DocxReader
 
             CaptureReferencedParts(archive, document, partName, contentTypeOverrides, contentTypeDefaults);
             references.Add(new PreservedDrawingReference(relationshipId, partName, relationshipType));
+            capturedRelationshipIds.Add(relationshipId);
             if (relationshipType == DiagramDataRelType)
                 diagramDataPartPaths.Add(localPartPath);
         }
