@@ -117,7 +117,10 @@ public static class SheetTabListPlanner
 
     public static string GenerateUniqueSheetName(Workbook workbook)
     {
-        for (var index = workbook.Sheets.Count + 1; index <= 10_000; index++)
+        // Excel allocates the first unused default worksheet name, rather than deriving the
+        // next number from the current sheet count. Imported workbooks commonly have only
+        // custom names, so their first inserted worksheet is still Sheet1.
+        for (var index = 1; index <= 10_000; index++)
         {
             var name = $"Sheet{index}";
             if (workbook.ValidateSheetName(name) is null)
