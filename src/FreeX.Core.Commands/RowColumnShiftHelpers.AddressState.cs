@@ -38,6 +38,7 @@ internal static partial class RowColumnShiftHelpers
             CaptureTextBoxes(sheet),
             CaptureDrawingShapes(sheet),
             CapturePictures(sheet),
+            CaptureCharts(sheet),
             CaptureSparklines(sheet),
             CapturePivotTables(workbook),
             CaptureList(sheet.StructuredTables),
@@ -129,6 +130,30 @@ internal static partial class RowColumnShiftHelpers
                 picture.Height,
                 picture.Hyperlink));
         }
+
+        return snapshots;
+    }
+
+    // round-176-chart-hyperlink: ChartModel.Hyperlink is the chart's own "Place in This Document"
+    // drawing-object hyperlink, the exact same kind of field as TextBoxModel/DrawingShapeModel/
+    // PictureModel.Hyperlink above (R97-model-drawing-hyperlink-2-2). It is captured/shifted/restored
+    // the same way -- ONLY the Hyperlink field, never Anchor/Width/Height/DataRange/Left/Top, which
+    // don't apply here: a chart has no CellAddress Anchor (position is DrawingAnchorKind + Left/Top
+    // pixels, already shifted by ShiftChartPositionRowsUp/Down in RowColumnShiftHelpers.PrintAndCharts.cs)
+    // and DataRange/SeriesColumnMappings are already shifted/undone by that same file's
+    // ShiftChartRowsUp/Down + RestoreChartStructuralState. Charts are also never removed from
+    // sheet.Charts by a structural edit the way a text box/shape/picture anchored inside a deleted
+    // row is dropped (TryShiftAnchoredDrawingObject's "object anchor itself was deleted" branch does
+    // not apply to charts at all), so this deliberately mutates chart.Hyperlink in place rather than
+    // Clear()/re-Add()-ing sheet.Charts like ShiftTextBoxes/ShiftDrawingShapes/ShiftPictures do.
+    private static IReadOnlyList<ChartAddressSnapshot> CaptureCharts(Sheet sheet)
+    {
+        if (sheet.Charts.Count == 0)
+            return [];
+
+        var snapshots = new List<ChartAddressSnapshot>(sheet.Charts.Count);
+        foreach (var chart in sheet.Charts)
+            snapshots.Add(new ChartAddressSnapshot(chart, chart.Hyperlink));
 
         return snapshots;
     }
@@ -378,6 +403,12 @@ internal static partial class RowColumnShiftHelpers
             sheet.Pictures.Add(entry.Picture);
         }
 
+        // round-176-chart-hyperlink: undo ShiftDrawingObjectHyperlinkForShift's target rewrite back
+        // to the exact pre-edit hyperlink, mirroring the TextBox/Shape/Picture restores above. Charts
+        // are never Clear()/re-Add()-ed (see CaptureCharts) so this restores in place by reference.
+        foreach (var entry in snapshot.Charts)
+            entry.Chart.Hyperlink = entry.Hyperlink;
+
         sheet.Sparklines.Clear();
         foreach (var entry in snapshot.Sparklines)
         {
@@ -512,6 +543,7 @@ internal static partial class RowColumnShiftHelpers
         ShiftDrawingShapes(sheet, snapshot, shift);
         ShiftPictures(workbook, sheet, snapshot, shift);
         ShiftCrossSheetPictureRefs(workbook, snapshot, shift);
+        ShiftCharts(snapshot, shift);
         ShiftSparklines(sheet, snapshot, shift);
         ShiftPivotTables(workbook, snapshot, shift);
         ShiftStructuredTables(workbook, sheet, snapshot, shift);
@@ -1234,6 +1266,21 @@ internal static partial class RowColumnShiftHelpers
 
             sheet.Pictures.Add(entry.Picture);
         }
+    }
+
+    /// <summary>
+    /// round-176-chart-hyperlink: rewrites each chart's own 'Place in This Document' hyperlink
+    /// target for a row/column insert or delete, exactly like ShiftTextBoxes/ShiftDrawingShapes/
+    /// ShiftPictures above do for their Hyperlink field -- see <see cref="ShiftDrawingObjectHyperlinkForShift"/>.
+    /// Unlike those three, a chart is never removed from <c>sheet.Charts</c> by this shift (charts
+    /// have no CellAddress anchor to invalidate; their pixel position is shifted separately by
+    /// <c>ShiftChartPositionRowsUp/Down</c> in RowColumnShiftHelpers.PrintAndCharts.cs), so this
+    /// mutates <see cref="ChartModel.Hyperlink"/> in place instead of Clear()/re-Add()-ing the list.
+    /// </summary>
+    private static void ShiftCharts(AddressBearingStateSnapshot snapshot, AddressShift shift)
+    {
+        foreach (var entry in snapshot.Charts)
+            entry.Chart.Hyperlink = ShiftDrawingObjectHyperlinkForShift(entry.Hyperlink, shift);
     }
 
     /// <summary>
@@ -2470,6 +2517,7 @@ internal sealed record AddressBearingStateSnapshot(
     IReadOnlyList<TextBoxAddressSnapshot> TextBoxes,
     IReadOnlyList<DrawingShapeAddressSnapshot> DrawingShapes,
     IReadOnlyList<PictureAddressSnapshot> Pictures,
+    IReadOnlyList<ChartAddressSnapshot> Charts,
     IReadOnlyList<SparklineAddressSnapshot> Sparklines,
     IReadOnlyList<PivotTableAddressSnapshot> PivotTables,
     IReadOnlyList<StructuredTableModel> StructuredTables,
@@ -2515,6 +2563,10 @@ internal readonly record struct PictureAddressSnapshot(
     double Width,
     double Height,
     DrawingObjectHyperlink? Hyperlink);
+
+// round-176-chart-hyperlink: only Hyperlink is captured -- unlike TextBox/DrawingShape/Picture above,
+// a chart has no CellAddress Anchor/Width/Height to snapshot here (see ShiftCharts).
+internal readonly record struct ChartAddressSnapshot(ChartModel Chart, DrawingObjectHyperlink? Hyperlink);
 
 internal readonly record struct SparklineAddressSnapshot(
     SparklineModel Sparkline,

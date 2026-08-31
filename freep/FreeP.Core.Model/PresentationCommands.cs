@@ -433,7 +433,18 @@ public sealed class InsertSlideCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        p.Slides.Remove(_slide);
+        // Resolve by Slide.Id, not the captured Slide OBJECT reference: List<Slide>.Remove uses
+        // reference equality (Slide has no Equals override), and an intervening command on the
+        // same undo stack -- HeaderFooterCommandPlanner's ApplyHeaderFooterCommand is the
+        // concrete example -- can wholesale-replace this exact slide's identity via
+        // SlideCloner.CloneSlidePreservingIdentity (used for an in-place edit) while carrying the
+        // same Slide.Id forward (CloneSlideCore keeps `Id = slide.Id` when createDistinctSlide is
+        // false). The captured `_slide` then points at a detached, pre-clone-swap object no
+        // longer present in p.Slides by reference, so Remove(_slide) would silently no-op and
+        // strand the inserted slide on the presentation forever.
+        var index = p.Slides.FindIndex(slide => string.Equals(slide.Id, _slide.Id, StringComparison.Ordinal));
+        if (index >= 0)
+            p.Slides.RemoveAt(index);
         _beforeSections?.Restore(p);
     }
 }
@@ -779,8 +790,18 @@ public sealed class DuplicateSlideCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
+        // Resolve by Slide.Id, not the captured Slide OBJECT reference -- see the identical
+        // comment on InsertSlideCommand.Revert above for why List<Slide>.Remove(_duplicate)
+        // silently no-ops once an intervening command (e.g. Insert > Header and Footer, which
+        // defaults to the current slide -- exactly the duplicate this command just created and
+        // selected) has cloned this slide via SlideCloner.CloneSlidePreservingIdentity.
         if (_duplicate is not null)
-            p.Slides.Remove(_duplicate);
+        {
+            var index = p.Slides.FindIndex(slide =>
+                string.Equals(slide.Id, _duplicate.Id, StringComparison.Ordinal));
+            if (index >= 0)
+                p.Slides.RemoveAt(index);
+        }
         _beforeSections?.Restore(p);
     }
 }
@@ -3283,6 +3304,47 @@ internal static class ShapeHelper
 
         return null;
     }
+
+    /// <summary>
+    /// Like <see cref="FindContainingList(Presentation, int, uint)"/>, but also reports the Id of
+    /// the shape whose <c>Children</c> the list belongs to (null when it is the slide's own
+    /// top-level <c>Shapes</c> list). Callers that need to re-resolve the same container again
+    /// later -- after crossing an undo/redo boundary where an intervening command may have
+    /// wholesale-replaced the Slide object (see <see cref="DeleteShapeCommand"/>'s Revert) --
+    /// must resolve fresh via the returned parent Id rather than caching the returned list
+    /// reference itself, since a Slide clone allocates a brand-new Shapes/Children list every
+    /// time.
+    /// </summary>
+    internal static (List<SlideShape> Container, uint? ParentShapeId)? FindContainingListWithParent(
+        Presentation p,
+        int slideIndex,
+        uint shapeId)
+    {
+        var shapes = Shapes(p, slideIndex);
+        return shapes is null ? null : FindContainingListWithParent(shapes, shapeId, parentId: null);
+    }
+
+    private static (List<SlideShape> Container, uint? ParentShapeId)? FindContainingListWithParent(
+        List<SlideShape> shapes,
+        uint shapeId,
+        uint? parentId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId)
+            {
+                return (shapes, parentId);
+            }
+
+            if (shape.Children.Count > 0 &&
+                FindContainingListWithParent(shape.Children, shapeId, shape.Id) is { } found)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
@@ -3306,7 +3368,22 @@ public sealed class AddShapeCommand : IPresentationCommand
     public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_shape);
 
     public void Apply(Presentation p)  => ShapeHelper.Shapes(p, _slideIndex)?.Add(_shape);
-    public void Revert(Presentation p) => ShapeHelper.Shapes(p, _slideIndex)?.Remove(_shape);
+
+    public void Revert(Presentation p)
+    {
+        // Resolve by shape Id against the freshly-resolved live list, not List<T>.Remove(_shape)
+        // (reference equality; SlideShape has no Equals override): an intervening command --
+        // HeaderFooterCommandPlanner's ApplyHeaderFooterCommand is the concrete example -- can
+        // wholesale-replace the Slide object (and every shape on it, via
+        // SlideCloner.CloneSlidePreservingIdentity) between this Add and its own undo, which
+        // would leave the captured `_shape` reference detached and Remove(_shape) a silent no-op.
+        // Same object-identity bug class as DeleteShapeCommand and DuplicateSlideCommand/
+        // InsertSlideCommand above.
+        var shapes = ShapeHelper.Shapes(p, _slideIndex);
+        if (shapes is null) return;
+        var idx = shapes.FindIndex(s => s.Id == _shape.Id);
+        if (idx >= 0) shapes.RemoveAt(idx);
+    }
 }
 
 /// <summary>
@@ -3568,12 +3645,14 @@ public sealed class DeleteShapeCommand : IPresentationCommand
     private readonly int  _slideIndex;
     private readonly uint _shapeId;
     private SlideShape? _captured;
-    private List<SlideShape>? _capturedContainer;
+    // The shape's parent Id (or null for the slide's own top-level Shapes list), not the
+    // List<SlideShape> object it lived in at capture time -- see the comment on Revert below.
+    private uint?       _capturedParentShapeId;
     private int         _capturedIndex;
     private List<ShapeAnimation>? _capturedAnimations;
     private string? _capturedBuildListXml;
     private uint[]? _capturedDeletedShapeIds;
-    private List<(SlideShape Connector, ConnectorAttachment? Start, ConnectorAttachment? End)>?
+    private List<(uint ConnectorId, ConnectorAttachment? Start, ConnectorAttachment? End)>?
         _capturedConnectorAttachments;
     private List<CommentAnchorSnapshot>? _capturedOrphanedCommentAnchors;
 
@@ -3589,25 +3668,31 @@ public sealed class DeleteShapeCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var shapes = ShapeHelper.FindContainingList(p, _slideIndex, _shapeId);
-        if (shapes is null) return;
+        var found = ShapeHelper.FindContainingListWithParent(p, _slideIndex, _shapeId);
+        if (found is not { } resolved) return;
+        var shapes = resolved.Container;
         _capturedIndex = shapes.FindIndex(s => s.Id == _shapeId);
         if (_capturedIndex < 0) return;
         if (!ChartHelper.IsObjectEditable(shapes[_capturedIndex])) return;
         _captured = shapes[_capturedIndex];
-        _capturedContainer = shapes;
+        _capturedParentShapeId = resolved.ParentShapeId;
 
         var slide = p.Slides[_slideIndex];
         _capturedDeletedShapeIds = CollectShapeIds(_captured).ToArray();
         var deletedShapeIds = _capturedDeletedShapeIds.ToHashSet();
         _capturedAnimations = slide.Animations.ToList();
         _capturedBuildListXml = slide.AnimationBuildListXml;
-        _capturedConnectorAttachments = ShapeHelper.All(p, _slideIndex)
+        var connectorAttachments = ShapeHelper.All(p, _slideIndex)
             .Where(shape => shape.Kind == SlideShapeKind.Connector &&
                 (shape.ConnectionStart is { } start && deletedShapeIds.Contains(start.ShapeId) ||
                  shape.ConnectionEnd is { } end && deletedShapeIds.Contains(end.ShapeId)))
             .Select(connector =>
                 (connector, connector.ConnectionStart, connector.ConnectionEnd))
+            .ToList();
+        // Keep only the connector's Id in the field that survives to Revert -- see the comment
+        // on Revert for why the SlideShape reference itself cannot be cached across the boundary.
+        _capturedConnectorAttachments = connectorAttachments
+            .Select(entry => (entry.connector.Id, entry.ConnectionStart, entry.ConnectionEnd))
             .ToList();
 
         // Modern (p188) comment threads can be anchored to a specific shape (deMkLst/txMkLst
@@ -3660,34 +3745,44 @@ public sealed class DeleteShapeCommand : IPresentationCommand
             slide.AnimationBuildListXml,
             deletedShapeIds);
 
-        if (_capturedConnectorAttachments is not null)
+        foreach (var (connector, _, _) in connectorAttachments)
         {
-            foreach (var (connector, _, _) in _capturedConnectorAttachments)
-            {
-                if (connector.ConnectionStart is { } start && deletedShapeIds.Contains(start.ShapeId))
-                    connector.ConnectionStart = null;
-                if (connector.ConnectionEnd is { } end && deletedShapeIds.Contains(end.ShapeId))
-                    connector.ConnectionEnd = null;
-            }
+            if (connector.ConnectionStart is { } start && deletedShapeIds.Contains(start.ShapeId))
+                connector.ConnectionStart = null;
+            if (connector.ConnectionEnd is { } end && deletedShapeIds.Contains(end.ShapeId))
+                connector.ConnectionEnd = null;
         }
     }
 
     public void Revert(Presentation p)
     {
         if (_captured is null) return;
-        var shapes = _capturedContainer;
-        if (shapes is null) return;
-        var idx = Math.Clamp(_capturedIndex, 0, shapes.Count);
-        shapes.Insert(idx, _captured);
 
-        // Every other slide-indexed command in this file re-validates the captured index in both
-        // Apply and Revert, because the slide count can differ by the time an undo runs; this was
-        // the one that indexed straight into Slides. The shape is already restored above, so
-        // stopping here still undoes the delete — it only skips the animation restore.
+        // Every slide-indexed command in this file re-validates the captured index against the
+        // LIVE presentation in both Apply and Revert, because an intervening command on the same
+        // undo stack -- HeaderFooterCommandPlanner's ApplyHeaderFooterCommand is the concrete
+        // example -- can wholesale-replace the Slide object (and every SlideShape/list on it) via
+        // SlideCloner.CloneSlidePreservingIdentity between this Delete and its own undo. A cached
+        // List<SlideShape> container reference (the old `_capturedContainer` field) would then
+        // point at a detached, orphaned list no longer reachable from the presentation, so
+        // inserting into it silently has zero visible effect -- exactly the object-identity bug
+        // class already fixed for SetSlideLayoutCommand's PlaceholderGeometryState (above). Shape
+        // Id survives the clone (SlideCloner.CloneShape copies it verbatim), so resolve the live
+        // container fresh via the captured parent shape Id (or the slide's own top-level Shapes
+        // list when there is none) instead.
         if (_slideIndex < 0 || _slideIndex >= p.Slides.Count)
             return;
 
         var slide = p.Slides[_slideIndex];
+        var shapes = _capturedParentShapeId is { } parentId
+            ? SlideShapeTraversal.FindById(slide, parentId)?.Children
+            : slide.Shapes;
+        if (shapes is null)
+            return;
+
+        var idx = Math.Clamp(_capturedIndex, 0, shapes.Count);
+        shapes.Insert(idx, _captured);
+
         if (_capturedOrphanedCommentAnchors is not null)
         {
             foreach (var snapshot in _capturedOrphanedCommentAnchors)
@@ -3710,8 +3805,15 @@ public sealed class DeleteShapeCommand : IPresentationCommand
 
         if (_capturedConnectorAttachments is not null)
         {
-            foreach (var (connector, start, end) in _capturedConnectorAttachments)
+            // Resolved fresh by Id against the live slide, not the SlideShape reference captured
+            // at Apply time -- same reasoning as the container above: a wholesale Slide clone
+            // swap allocates a brand-new connector shape object, and mutating the stale captured
+            // one would silently do nothing.
+            foreach (var (connectorId, start, end) in _capturedConnectorAttachments)
             {
+                if (SlideShapeTraversal.FindById(slide, connectorId) is not { } connector)
+                    continue;
+
                 connector.ConnectionStart = start;
                 connector.ConnectionEnd = end;
             }
@@ -5418,6 +5520,7 @@ public sealed class AddShapeAnimationCommand : IPresentationCommand
 {
     private readonly int            _slideIndex;
     private readonly ShapeAnimation _animation;
+    private int                     _addedIndex = -1;
 
     public AddShapeAnimationCommand(int slideIndex, ShapeAnimation animation)
     {
@@ -5430,13 +5533,26 @@ public sealed class AddShapeAnimationCommand : IPresentationCommand
     public void Apply(Presentation p)
     {
         if (_slideIndex < 0 || _slideIndex >= p.Slides.Count) return;
-        p.Slides[_slideIndex].Animations.Add(_animation);
+        var anims = p.Slides[_slideIndex].Animations;
+        anims.Add(_animation);
+        _addedIndex = anims.Count - 1;
     }
 
     public void Revert(Presentation p)
     {
+        // Removed by the captured index against the freshly-resolved live list, not
+        // List<T>.Remove(_animation) (reference equality; ShapeAnimation has no Equals override
+        // and, unlike a SlideShape, carries no unique per-instance Id to resolve through either):
+        // an intervening command -- HeaderFooterCommandPlanner's ApplyHeaderFooterCommand is the
+        // concrete example -- can wholesale-replace the Slide object (and every ShapeAnimation on
+        // it, via SlideCloner.CloneSlidePreservingIdentity) between this Add and its own undo,
+        // which would leave the captured `_animation` reference detached and Remove(_animation) a
+        // silent no-op. Same index-based-removal pattern already used by
+        // RemoveShapeAnimationCommand/ReorderShapeAnimationCommand below.
         if (_slideIndex < 0 || _slideIndex >= p.Slides.Count) return;
-        p.Slides[_slideIndex].Animations.Remove(_animation);
+        var anims = p.Slides[_slideIndex].Animations;
+        if (_addedIndex >= 0 && _addedIndex < anims.Count)
+            anims.RemoveAt(_addedIndex);
     }
 }
 

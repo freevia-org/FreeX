@@ -109,7 +109,13 @@ public sealed record FindReplaceReplaceRequest(
 /// (<see cref="TableGridProjection.StartColumn"/>), not a raw <see cref="TableRow.Cells"/> index, matching
 /// the convention every consumer (DocumentView.GetCellParagraph via TableGridProjection.StartingAt, the
 /// PlacedChar.CellCol placed-glyph lookup, the _cellCaret/_cellAnchor tuples) already uses; for a body
-/// paragraph hit all three are null.
+/// paragraph hit all three are null. When the hit is instead in the document's default header/footer
+/// (<see cref="TextDocument.Header"/>/<see cref="TextDocument.Footer"/> -- the only header/footer slot
+/// <c>FreeW.App.Avalonia.Editing.DocumentView.PlaceCaretInHeaderFooter</c> can target),
+/// <see cref="HeaderFooterIsFooter"/>/<see cref="HeaderFooterParagraphIndex"/> locate it instead and
+/// <see cref="Block"/> is meaningless (-1); <see cref="TableRow"/>/<see cref="TableCol"/>/
+/// <see cref="TableParagraphIndex"/> are null there too, so <see cref="IsInTableCell"/> and
+/// <see cref="IsInHeaderFooter"/> are mutually exclusive.
 /// </summary>
 public readonly record struct FindReplaceMatch(
     int Block,
@@ -117,9 +123,12 @@ public readonly record struct FindReplaceMatch(
     int Length,
     int? TableRow = null,
     int? TableCol = null,
-    int? TableParagraphIndex = null)
+    int? TableParagraphIndex = null,
+    bool? HeaderFooterIsFooter = null,
+    int? HeaderFooterParagraphIndex = null)
 {
     public bool IsInTableCell => TableRow is not null;
+    public bool IsInHeaderFooter => HeaderFooterIsFooter is not null;
 }
 
 public enum FindReplaceGoToTargetKind
@@ -458,6 +467,48 @@ public static class FindReplaceDialogPlanner
                     wrapMatch.Row, wrapMatch.Col, wrapMatch.ParagraphIndex);
         }
 
+        // The whole body (and, when applicable, the table it wrapped through) has now been searched with
+        // no hit. Fall back to the document's default header/footer -- see freew-find-replace F1: Find
+        // Next used to only ever walk document.Blocks, so a term that existed only in a header/footer was
+        // reported "not found" even though CountMatches/DocumentContains (fixed for headers/footers by an
+        // earlier round, see the TextDocumentStoryTraversal.HeadersFooters walk in CountMatches below) had
+        // already proven it was there. See FindInDefaultHeaderFooter's remarks for this fallback's scope.
+        return FindInDefaultHeaderFooter(document, term, options);
+    }
+
+    /// <summary>
+    /// Best-effort Find Next fallback into the document's default header/footer
+    /// (<see cref="TextDocument.Header"/>/<see cref="TextDocument.Footer"/>, i.e. the final section's
+    /// default slot) once the whole body has been searched with no hit. This is deliberately the ONLY
+    /// header/footer slot covered: it is the only one
+    /// <c>FreeW.App.Avalonia.Editing.DocumentView.PlaceCaretInHeaderFooter</c> -- the sole production
+    /// consumer of a <see cref="FindReplaceMatch.IsInHeaderFooter"/> hit -- can place a caret in today.
+    /// EvenHeader/EvenFooter/FirstHeader/FirstFooter, other sections' headers/footers, footnotes, endnotes,
+    /// and text-box content remain outside Find Next's reach (see freew-find-replace F1 remarks) until
+    /// those shells grow a way to select text there too. Always returns the FIRST remaining match, header
+    /// before footer -- there is no "resume from a header/footer position" concept, so repeated Find Next
+    /// clicks re-land on the same hit until it is replaced or the caret leaves some other way (matching
+    /// how Replace All -- which just keeps calling Find Next until a call returns null -- still terminates:
+    /// each replacement removes that occurrence, so the next call finds the next one or nothing).
+    /// </summary>
+    private static FindReplaceMatch? FindInDefaultHeaderFooter(
+        TextDocument document, string term, FindReplaceSearchOptions options) =>
+        FindInHeaderFooterSlot(document.Header, isFooter: false, term, options)
+        ?? FindInHeaderFooterSlot(document.Footer, isFooter: true, term, options);
+
+    private static FindReplaceMatch? FindInHeaderFooterSlot(
+        HeaderFooter? headerFooter, bool isFooter, string term, FindReplaceSearchOptions options)
+    {
+        if (headerFooter is null)
+            return null;
+
+        for (var paraIdx = 0; paraIdx < headerFooter.Paragraphs.Count; paraIdx++)
+        {
+            var match = FindAll(headerFooter.Paragraphs[paraIdx].PlainText, term, options).FirstOrDefault();
+            if (match.Length > 0)
+                return new FindReplaceMatch(-1, match.Start, match.Length,
+                    HeaderFooterIsFooter: isFooter, HeaderFooterParagraphIndex: paraIdx);
+        }
         return null;
     }
 

@@ -779,9 +779,27 @@ public sealed partial class DocumentView : Control
     /// selection, while a table-cell match (<see cref="FindReplaceMatch.IsInTableCell"/>) additionally
     /// sets <see cref="_cellCaret"/>/<see cref="_cellAnchor"/> so the rest of the editor (Replace,
     /// <see cref="SelectedText"/>, typing) recognizes and acts on it as an ordinary in-cell selection.
+    /// A header/footer match (<see cref="FindReplaceMatch.IsInHeaderFooter"/> -- always the document's
+    /// default header/footer, the only slot <see cref="PlaceCaretInHeaderFooter(bool, int, int)"/> can
+    /// target) instead arms the separate H/F caret: this reuses the private HfTarget overload rather than
+    /// duplicating its selection-arming logic -- calling it twice, the second with extendSelection: true,
+    /// arms <see cref="_hfSelectionAnchor"/> at the match start and leaves <see cref="_hfCaret"/> at the
+    /// match end, exactly like a shift-click drag inside the header/footer would. That overload also
+    /// clears the body/cell caret fields (including <see cref="_selectionAnchor"/>), which
+    /// <c>ReplaceAllCore</c>'s restrict-to-selection bookkeeping accounts for.
     /// </summary>
     private void SelectFindReplaceMatch(FindReplaceMatch hit)
     {
+        if (hit.IsInHeaderFooter)
+        {
+            var target = new HfTarget(_doc.Sections.Count - 1, UseFinalSectionStore: true,
+                hit.HeaderFooterIsFooter!.Value ? HeaderFooterSlotKind.Footer : HeaderFooterSlotKind.Header,
+                hit.HeaderFooterParagraphIndex!.Value);
+            PlaceCaretInHeaderFooter(target, hit.Start);
+            PlaceCaretInHeaderFooter(target, hit.Start + hit.Length, extendSelection: true);
+            return;
+        }
+
         if (hit.IsInTableCell)
         {
             var anchor = (TableBlock: hit.Block, Row: hit.TableRow!.Value, Col: hit.TableCol!.Value,
@@ -983,6 +1001,15 @@ public sealed partial class DocumentView : Control
         // an N-match Replace All became N separate undo entries here. ownsUndoGroup guards against the
         // (currently unreached, but the rest of this file always guards it this way) case of being called
         // while an outer caller already has a group open.
+        // r176 remediation: a header/footer match has no resume position -- FindInDefaultHeaderFooter
+        // always rescans each paragraph from offset 0, and the planner justifies that by assuming
+        // "each replacement removes that occurrence". That assumption fails whenever the
+        // replacement CONTAINS the search term (Confidential -> Strictly Confidential): the term is
+        // recreated at the same offset, the next find returns the same hit, and Replace All runs to
+        // its 10000 cap rewriting the header into garbage. Before headers were reachable at all this
+        // was merely a no-op; making them reachable turned it into data corruption, so the loop now
+        // requires each header/footer hit to be somewhere new.
+        (HfTarget Target, int Offset)? previousHeaderFooterMatch = null;
         var ownsUndoGroup = !_bus.IsUndoGroupOpen;
         if (ownsUndoGroup)
             _bus.BeginUndoGroup();
@@ -995,8 +1022,33 @@ public sealed partial class DocumentView : Control
                 if (!found || HasWrappedAround(searchFrom))
                     break;
 
-                var matchStart = _selectionAnchor!.Value;
-                if (restrictToSelection && Compare(matchStart, limit) >= 0)
+                // A header/footer Find Next hit (see SelectFindReplaceMatch) routes through the separate
+                // _hfCaret/_hfSelectionAnchor model and leaves _selectionAnchor null -- so matchStart is
+                // nullable here, unlike before this was reachable. restrictToSelection is already a
+                // body-selection-only concept (a cell-text selection isn't honored as a restriction either,
+                // per the remarks above), so a header/footer hit is simply never restricted and never
+                // contributes to the shifting `limit` below; it just gets replaced and counted like any
+                // other match.
+                if (_hfSelectionAnchor is { } headerFooterMatch)
+                {
+                    // Require forward progress: the next hit in the same slot and paragraph must
+                    // start at or after the end of what was just written there. Equality alone is
+                    // not enough -- when the replacement contains the search term the match does
+                    // not repeat, it WALKS forward through its own output (0, then 9, then 18 for
+                    // Confidential -> Strictly Confidential) and never terminates on its own.
+                    if (previousHeaderFooterMatch is { } resume
+                        && resume.Target.Equals(headerFooterMatch.Target)
+                        && headerFooterMatch.Offset < resume.Offset)
+                    {
+                        break;
+                    }
+
+                    previousHeaderFooterMatch = (headerFooterMatch.Target,
+                        headerFooterMatch.Offset + replacement.Length);
+                }
+
+                var matchStart = _selectionAnchor;
+                if (restrictToSelection && matchStart is { } restrictAnchor && Compare(restrictAnchor, limit) >= 0)
                     break;
 
                 // The match's block never changes under ReplaceSelectionWith (it only rewrites text within a
@@ -1007,8 +1059,9 @@ public sealed partial class DocumentView : Control
                 // original text in place and only inserts the replacement, a different length delta than a
                 // literal swap). Otherwise the selection boundary would drift out of sync with the edited text
                 // as later matches are located and replaced.
-                var lengthBefore = restrictToSelection && limit.Block == matchStart.Block
-                    && _doc.Blocks[matchStart.Block] is Paragraph beforeParagraph
+                var lengthBefore = restrictToSelection && matchStart is { } lengthAnchor
+                    && limit.Block == lengthAnchor.Block
+                    && _doc.Blocks[lengthAnchor.Block] is Paragraph beforeParagraph
                     ? beforeParagraph.PlainText.Length
                     : (int?)null;
 
@@ -1016,7 +1069,8 @@ public sealed partial class DocumentView : Control
                 ReplaceSelectionWith(replacement);
                 SkipTrackedLeftoverMatch(originalMatchText);
 
-                if (lengthBefore is { } before && _doc.Blocks[matchStart.Block] is Paragraph afterParagraph)
+                if (lengthBefore is { } before && matchStart is { } shiftAnchor
+                    && _doc.Blocks[shiftAnchor.Block] is Paragraph afterParagraph)
                     limit = limit with { Offset = limit.Offset + (afterParagraph.PlainText.Length - before) };
 
                 count++;
@@ -1048,6 +1102,19 @@ public sealed partial class DocumentView : Control
         if (HasCellTextSelection())
         {
             ReplaceCellTextSelectionWith(replacement);
+            return;
+        }
+
+        // A header/footer selection (as set by SelectFindReplaceMatch for a Find/Replace hit there, or by
+        // ordinary shift-selection while typing in a header/footer) routes through the same InsertText
+        // path normal typing uses -- InsertText already dispatches to HfInsertText whenever _hfCaret is
+        // set, and HfInsertText itself deletes the current NormalizedHfSelection() before inserting, so no
+        // separate delete-then-insert plumbing is needed here (unlike ReplaceCellTextSelectionWith, which
+        // has to set _cellAnchor/_cellCaret itself because InsertText's cell branch has no equivalent
+        // "current selection" concept of its own).
+        if (NormalizedHfSelection() is not null)
+        {
+            InsertText(replacement);
             return;
         }
 
@@ -20113,7 +20180,18 @@ public sealed partial class DocumentView : Control
                 if (bodyCells.Count == 0)
                 {
                     // Enter on an EMPTY list item → exit the list: turn the paragraph into a normal one.
-                    var exitFmt = listFmt with { ListKind = ListKind.None, ListLevel = 0 };
+                    // r176: promote one level; only leave the list from the OUTERMOST level.
+                    // This reset ListKind/ListLevel unconditionally, so it disagreed with the
+                    // shared rule in DocumentEditingSession.TryInsertBodyParagraphBreak, which
+                    // has always promoted exactly one level. That shared path is tried FIRST
+                    // (TryApplyParagraphBreak above) and handles every ordinary body
+                    // paragraph, so no test reaches this fallback -- a probe confirmed the
+                    // level-2 case never gets here. It is aligned rather than pinned: if the
+                    // shared path ever declines a list paragraph, the fallback must not
+                    // silently unwind the whole nesting in one keystroke.
+                    var exitFmt = listFmt.ListLevel == 0
+                        ? listFmt with { ListKind = ListKind.None, ListLevel = 0 }
+                        : listFmt with { ListLevel = listFmt.ListLevel - 1 };
                     _editingSession.FormatParagraphs([block], _ => exitFmt);
                     // Caret stays at block 0 (now a normal paragraph). No split.
                     if (ownsBodyUndoGroup)

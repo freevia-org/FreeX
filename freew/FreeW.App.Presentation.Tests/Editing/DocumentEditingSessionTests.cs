@@ -666,7 +666,38 @@ public sealed class DocumentEditingSessionTests
     }
 
     [Fact]
-    public void InsertBodyParagraphBreak_OnEmptyListItemExitsListWithoutAddingBlock()
+    public void InsertBodyParagraphBreak_OnEmptyTopLevelListItemExitsListWithoutAddingBlock()
+    {
+        var paragraph = new Paragraph
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                ListKind = ListKind.Bullet,
+                ListLevel = 0,
+            },
+        };
+        var document = new TextDocument();
+        document.Blocks.Add(paragraph);
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.TryInsertBodyParagraphBreak(
+                new DocumentTextRange(
+                    new DocumentTextPosition(0, 0),
+                    new DocumentTextPosition(0, 0)),
+                out var result)
+            .Should().BeTrue();
+
+        document.Blocks.Should().ContainSingle();
+        ((Paragraph)document.Blocks[0]).Formatting.ListKind.Should().Be(ListKind.None);
+        ((Paragraph)document.Blocks[0]).Formatting.ListLevel.Should().Be(0);
+        result.Caret.Should().Be(new DocumentTextPosition(0, 0));
+        session.Commands.Undo().Should().BeTrue();
+        ((Paragraph)document.Blocks[0]).Formatting.ListKind.Should().Be(ListKind.Bullet);
+    }
+
+    [Fact]
+    public void InsertBodyParagraphBreak_OnEmptyNestedListItemOutdentsOneLevelWithoutAddingBlock()
     {
         var paragraph = new Paragraph
         {
@@ -689,11 +720,11 @@ public sealed class DocumentEditingSessionTests
             .Should().BeTrue();
 
         document.Blocks.Should().ContainSingle();
-        ((Paragraph)document.Blocks[0]).Formatting.ListKind.Should().Be(ListKind.None);
+        ((Paragraph)document.Blocks[0]).Formatting.ListKind.Should().Be(ListKind.Bullet);
         ((Paragraph)document.Blocks[0]).Formatting.ListLevel.Should().Be(0);
         result.Caret.Should().Be(new DocumentTextPosition(0, 0));
         session.Commands.Undo().Should().BeTrue();
-        ((Paragraph)document.Blocks[0]).Formatting.ListKind.Should().Be(ListKind.Bullet);
+        ((Paragraph)document.Blocks[0]).Formatting.ListLevel.Should().Be(1);
     }
 
     [Fact]

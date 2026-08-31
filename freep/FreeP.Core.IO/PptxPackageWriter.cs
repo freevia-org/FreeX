@@ -3999,6 +3999,37 @@ public static class PptxPackageWriter
             blip.Add(new XElement(A + "alphaModFix",
                 new XAttribute("amt", FormatPercentFraction(fmt.AlphaModPct.Value))));
 
+        // Re-emits a:duotone (Picture Format > Color > Recolor) verbatim from what the reader
+        // captured -- see PictureFormat.DuotoneXml -- so a Recolor preset applied in real
+        // PowerPoint survives a FreeP open/save round trip instead of being silently dropped.
+        if (fmt.DuotoneXml is { Length: > 0 } duotoneXml)
+        {
+            try
+            {
+                blip.Add(XElement.Parse(duotoneXml));
+            }
+            catch (System.Xml.XmlException)
+            {
+                // Malformed captured XML (should not happen -- written by this same reader/writer
+                // pair) -- drop the effect rather than emit an invalid part.
+            }
+        }
+
+        // Re-emits a:clrChange (Picture Format > Color > Set Transparent Color) verbatim from
+        // what the reader captured -- see PictureFormat.ClrChangeXml.
+        if (fmt.ClrChangeXml is { Length: > 0 } clrChangeXml)
+        {
+            try
+            {
+                blip.Add(XElement.Parse(clrChangeXml));
+            }
+            catch (System.Xml.XmlException)
+            {
+                // Malformed captured XML (should not happen -- written by this same reader/writer
+                // pair) -- drop the effect rather than emit an invalid part.
+            }
+        }
+
         // a:extLst must come last in the a:blip child sequence. Re-emits the a14:artisticEffect
         // extension (Picture Format > Artistic Effects) verbatim from what the reader captured --
         // see PictureFormat.ArtisticEffectXml -- so an Artistic Effect applied in real PowerPoint

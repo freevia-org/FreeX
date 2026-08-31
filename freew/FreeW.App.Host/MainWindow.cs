@@ -846,7 +846,7 @@ public sealed partial class MainWindow : Window
             if (distinctStartupFilePaths.Length > 1)
             {
                 var additionalStartupFilePaths = distinctStartupFilePaths.Skip(1).ToArray();
-                Loaded += (_, _) => OpenAdditionalStartupFiles(additionalStartupFilePaths);
+                Loaded += (_, _) => _ = OpenAdditionalStartupFiles(additionalStartupFilePaths);
             }
         }
     }
@@ -2564,14 +2564,38 @@ public sealed partial class MainWindow : Window
     // every argument after the first being silently dropped.
     // r173: passes _optionsStore (see OpenNewWindowWithRecoveredSnapshot's comment above) so a
     // multi-file-startup window's Options changes persist to disk instead of being silently discarded.
-    private void OpenAdditionalStartupFiles(IReadOnlyList<string> paths)
+    /// <summary>
+    /// Opens each remaining startup path in a window of its own and returns the windows that
+    /// are still open afterwards. Production ignores the result; it exists so the
+    /// close-the-stray-window behaviour is observable without an Application.Current window
+    /// registry, which this assembly deliberately does not stand up in tests (it would race
+    /// Application.Current across the suite).
+    /// </summary>
+    private List<MainWindow> OpenAdditionalStartupFiles(IReadOnlyList<string> paths)
     {
+        var opened = new List<MainWindow>();
         foreach (var path in paths)
         {
             var newWindow = new MainWindow(_options, _optionsStore, messageService: _messageService);
+            // Show() must precede OpenPath so the dispatcher is pumping for the load (see the
+            // startup comment above), which means a failed open leaves a window already on
+            // screen. r176: close it. OpenPath has always returned false for a missing file or
+            // an unrecognized extension -- and reported it through its own error dialog -- but
+            // the result was discarded here, so dragging four files onto the taskbar icon when
+            // three of them were bad left three stray windows sitting on the sample document,
+            // each looking like an untitled document the user had somehow created.
+            //
+            // The PRIMARY window deliberately does the opposite and degrades to the sample
+            // document instead: closing it would exit the application before it is usable.
+            // That asymmetry is intentional, not an inconsistency.
             newWindow.Show();
-            newWindow._file.OpenPath(path);
+            if (newWindow._file.OpenPath(path))
+                opened.Add(newWindow);
+            else
+                newWindow.Close();
         }
+
+        return opened;
     }
 
     // r173: passes _optionsStore too -- this report window is a full MainWindow with the same

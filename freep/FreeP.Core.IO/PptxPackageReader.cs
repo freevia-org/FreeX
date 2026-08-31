@@ -8175,6 +8175,20 @@ public static class PptxPackageReader
             if (alphaFix is not null)
                 fmt.AlphaModPct = ParsePercentFraction(alphaFix.Attribute("amt")?.Value);
 
+            // a:duotone — Picture Format > Color > Recolor gallery (every preset other than "No
+            // Recolor" serializes as a two-stop a:duotone). Not decomposed into a model per-color
+            // pair; captured verbatim (like ArtisticEffectXml below) so it survives a save even
+            // though FreeP doesn't render or edit it yet.
+            var duotone = blip.Element(A + "duotone");
+            if (duotone is not null)
+                fmt.DuotoneXml = duotone.ToString(SaveOptions.DisableFormatting);
+
+            // a:clrChange — Picture Format > Color > Set Transparent Color. Captured verbatim for
+            // the same reason as a:duotone above.
+            var clrChange = blip.Element(A + "clrChange");
+            if (clrChange is not null)
+                fmt.ClrChangeXml = clrChange.ToString(SaveOptions.DisableFormatting);
+
             // a:extLst/a:ext[@uri=a14 imgEffect] — Artistic Effects (Picture Format > Artistic
             // Effects: Pencil Sketch, Photocopy, Glow Diffused, Glass, Mosaic Bubbles, etc). Not
             // decomposed into a model per-effect; captured verbatim so it survives a save even
