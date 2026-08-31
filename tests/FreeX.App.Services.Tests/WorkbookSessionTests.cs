@@ -8334,6 +8334,36 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void AddSheet_WithActiveTarget_UsesFirstAvailableDefaultNameAndKeepsUndoRedoCoherent()
+    {
+        var workbook = new Workbook("Excel-authored");
+        workbook.AddSheet("Summary");
+        var overview = workbook.AddSheet("UX Overview");
+        workbook.AddSheet("Sheet2");
+        workbook.AddSheet("Sheet8");
+        workbook.ActiveSheetIndex = 1;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Excel-authored.xlsx",
+            "Opened .xlsx.",
+            IsFallback: false));
+
+        var result = session.AddSheet(overview.Id);
+
+        result.Success.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Summary", "Sheet1", "UX Overview", "Sheet2", "Sheet8");
+        session.ActiveSheet.Name.Should().Be("Sheet1");
+
+        session.UndoLastEdit().Success.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Summary", "UX Overview", "Sheet2", "Sheet8");
+        session.ActiveSheet.Should().BeSameAs(overview);
+
+        session.RedoLastEdit().Success.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Summary", "Sheet1", "UX Overview", "Sheet2", "Sheet8");
+        session.ActiveSheet.Name.Should().Be("Sheet1");
+    }
+
+    [Fact]
     public void AddSheet_WithTarget_RejectsProtectedWorkbookWithoutChangingState()
     {
         var workbook = CreateWorkbook();

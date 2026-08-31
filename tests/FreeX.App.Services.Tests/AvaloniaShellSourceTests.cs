@@ -5243,6 +5243,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var result = _session.DeleteActiveSheet();");
         source.Should().Contain("RefreshShell(UiText.Format(\"SheetTabs_DeletedStatusFormat\", sheetName));");
         source.Should().Contain("e.Key == Key.F11 && e.KeyModifiers == KeyModifiers.Shift");
+        source.Should().Contain("AddNewSheet(_session.ActiveSheet.Id);");
         source.Should().Contain("private static bool HasCommandAndShiftModifiers(KeyModifiers modifiers)");
         source.Should().Contain("ShellFocusTarget.Worksheet");
         source.Should().Contain("ShellFocusTarget.Ribbon");
