@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Windows;
 using System.Windows.Media;
 using FluentAssertions;
@@ -19,14 +18,12 @@ public sealed class R74_SlantDashDotBorderThicknessTests
 {
     private static Pen InvokeDrawBorderEdgeAndCapturePen(CellBorder border)
     {
-        var method = typeof(GridView).GetMethod("DrawBorderEdge", BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull();
-
         var borderPenCache = new Dictionary<CellBorder, Pen>();
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            method!.Invoke(null, [dc, border, new Point(0, 0), new Point(40, 0), WorkbookTheme.Office, null, borderPenCache, 1.0]);
+            // Direct call, not reflection -- see BorderRenderTests for why.
+            GridView.DrawBorderEdge(dc, border, new Point(0, 0), new Point(40, 0), WorkbookTheme.Office, null, borderPenCache, 1.0);
         }
 
         borderPenCache.Should().ContainKey(border);

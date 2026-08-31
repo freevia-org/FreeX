@@ -893,7 +893,10 @@ public static partial class PrintRenderer
     /// raw printed the color baked in at load time, so a theme change recolored every printed fill and
     /// font but left the borders on the old palette.
     /// </summary>
-    private static void DrawPrintedBorderEdge(DrawingContext dc, CellBorder border, Point p1, Point p2, WorkbookTheme theme, bool blackAndWhite = false)
+    // internal, not private: the print-path test lane drives this directly. Reflection used to bind
+    // these arguments positionally at RUNTIME, so reordering the parameters broke the call sites
+    // silently; a compiled call turns the next such change into a build error.
+    internal static void DrawPrintedBorderEdge(DrawingContext dc, CellBorder border, Point p1, Point p2, WorkbookTheme theme, bool blackAndWhite = false)
     {
         if (border.Style == BorderStyle.None) return;
 

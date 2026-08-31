@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Windows;
 using System.Windows.Media;
 using FluentAssertions;
@@ -33,13 +32,14 @@ public sealed class ThemeBorderColorPrintTests
     /// </summary>
     private static Color CapturePrintedBorderColor(CellBorder border, WorkbookTheme theme, bool blackAndWhite = false)
     {
-        var method = typeof(PrintRenderer).GetMethod("DrawPrintedBorderEdge", BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull();
 
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            method!.Invoke(null, [dc, border, new Point(0, 0), new Point(40, 0), theme, blackAndWhite]);
+            // Direct call, not reflection: DrawPrintedBorderEdge is internal and this assembly
+            // has InternalsVisibleTo, so a change to its signature is a build error right here
+            // rather than a runtime TargetParameterCountException from a positional array.
+            PrintRenderer.DrawPrintedBorderEdge(dc, border, new Point(0, 0), new Point(40, 0), theme, blackAndWhite);
         }
 
         var pen = FindFirstPen(visual.Drawing);
