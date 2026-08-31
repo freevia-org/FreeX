@@ -212,6 +212,78 @@ public class AccessibilityCheckerTests
         report.Issues.Should().NotContain(i => i.Rule == AccessibilityRule.TableMissingHeaderRow);
     }
 
+    [Fact]
+    public void TableMissingHeaderRow_UsesEachParagraphStyleAndRejectsALaterNonBoldRun()
+    {
+        var doc = CleanDocument();
+        doc.Styles["BoldHeader"] = new DocumentStyle
+        {
+            Id = "BoldHeader",
+            Name = "Bold header",
+            Run = new RunFormatting { Bold = true },
+        };
+        var table = Table.Create(1, 1);
+        var cell = table.Rows[0].Cells[0];
+        cell.Paragraphs[0].StyleId = "BoldHeader";
+        cell.Paragraphs[0].Runs.Add(new Run("Styled"));
+        cell.Paragraphs.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run(string.Empty),
+                new Run(" explicit", new RunFormatting { Bold = true }),
+                new Run(" plain"),
+            },
+        });
+        doc.Blocks.Add(table);
+
+        var report = AccessibilityChecker.Check(doc);
+
+        report.Issues.Should().Contain(i =>
+            i.Rule == AccessibilityRule.TableMissingHeaderRow && i.Table == table);
+    }
+
+    [Fact]
+    public void TableMissingHeaderRow_DenseStyleBoldHeaderRemainsLinearAndRecognized()
+    {
+        const int runCount = 10_000;
+        var doc = CleanDocument();
+        doc.Styles["BaseBoldHeader"] = new DocumentStyle
+        {
+            Id = "BaseBoldHeader",
+            Name = "Base bold header",
+            Run = new RunFormatting { Bold = true },
+        };
+        doc.Styles["DerivedHeader"] = new DocumentStyle
+        {
+            Id = "DerivedHeader",
+            Name = "Derived header",
+            BasedOnStyleId = "BaseBoldHeader",
+        };
+        var table = Table.Create(1, 1);
+        var paragraph = table.Rows[0].Cells[0].Paragraphs[0];
+        paragraph.StyleId = "DerivedHeader";
+        for (var index = 0; index < runCount; index++)
+            paragraph.Runs.Add(new Run("x"));
+        doc.Blocks.Add(table);
+
+        var report = AccessibilityChecker.Check(doc);
+
+        report.Issues.Should().NotContain(i => i.Rule == AccessibilityRule.TableMissingHeaderRow);
+    }
+
+    [Fact]
+    public void TableHeaderHeuristic_SourceGuardKeepsSinglePassOwnership()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText(
+            "freew", "FreeW.Core.Model", "AccessibilityChecker.cs");
+
+        source.Should().Contain("CellHasFullyBoldText(document, cell)")
+            .And.Contain("var styleBold = ResolveStyleBold(document, paragraph.StyleId);")
+            .And.NotContain("FindOwningParagraph(")
+            .And.NotContain("cell.Paragraphs.SelectMany(p => p.Runs)");
+    }
+
     // --- Low contrast text (Warning) ---
 
     [Fact]
