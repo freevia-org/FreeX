@@ -5,6 +5,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Shell;
 using FluentAssertions;
 using Free.Shared.Ribbon;
@@ -85,6 +86,23 @@ public sealed partial class MainWindowRibbonKeyTipTests
             var width = badge.ActualWidth > 0 ? badge.ActualWidth : badge.DesiredSize.Width;
             var height = badge.ActualHeight > 0 ? badge.ActualHeight : badge.DesiredSize.Height;
             return new Rect(Canvas.GetLeft(badge), Canvas.GetTop(badge), width, height);
+        }
+
+        public (Color Background, Color Foreground) OverlayBadgeColors(string text)
+        {
+            var overlay = (_window.FindName("KeyTipOverlay") as Canvas)
+                ?? throw new InvalidOperationException("KeyTipOverlay was not found.");
+            var badges = overlay.Children
+                .OfType<Border>()
+                .Where(border => string.Equals((border.Child as TextBlock)?.Text, text, StringComparison.Ordinal))
+                .ToList();
+            badges.Should().ContainSingle($"the overlay should contain one {text} badge");
+
+            var badge = badges[0];
+            var textBlock = badge.Child as TextBlock;
+            return (
+                ((SolidColorBrush)badge.Background).Color,
+                ((SolidColorBrush)textBlock!.Foreground).Color);
         }
 
         public Rect ElementBounds(string name)

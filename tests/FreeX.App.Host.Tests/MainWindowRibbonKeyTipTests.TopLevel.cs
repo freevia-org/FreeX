@@ -1,4 +1,5 @@
 using System.Windows.Input;
+using System.Windows.Media;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -20,6 +21,9 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 "F", "H", "N", "J", "P", "M", "A", "R", "W", "Y"
             };
             harness.OverlayBadgeTexts.Should().Contain(tabKeyTips);
+            harness.OverlayBadgeColors("N").Should().Be((Colors.DimGray, Colors.White),
+                "top-level tab keytips need to remain distinguishable from Home command labels");
+            harness.OverlayBadgeColors("W").Should().Be((Colors.DimGray, Colors.White));
 
             var tabBadgeBounds = tabKeyTips
                 .Select(harness.OverlayBadgeBounds)

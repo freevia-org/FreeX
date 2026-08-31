@@ -212,10 +212,10 @@ public partial class MainWindow
                 continue;
             }
 
-            var badge = CreateKeyTipBadge(keyTip.Trim().ToUpperInvariant());
+            var badgeKind = GetKeyTipBadgeKind(element);
+            var badge = CreateKeyTipBadge(keyTip.Trim().ToUpperInvariant(), badgeKind);
             badge.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             var badgeSize = badge.DesiredSize;
-            var badgeKind = GetKeyTipBadgeKind(element);
             var point = RibbonKeyTipOverlayPlacement.PlaceBadge(
                 new Rect(origin, new Size(element.ActualWidth, element.ActualHeight)),
                 overlaySize,
@@ -284,10 +284,13 @@ public partial class MainWindow
         KeyTipOverlay.Visibility = Visibility.Collapsed;
     }
 
-    private static Border CreateKeyTipBadge(string keyTip) =>
+    private static Border CreateKeyTipBadge(string keyTip, RibbonKeyTipBadgeKind kind) =>
         new()
         {
-            Background = Brushes.White,
+            // Top-level tab keytips float over the active ribbon content. Use the
+            // same dark, high-contrast treatment Excel uses so they remain clearly
+            // identifiable as tab labels instead of looking like Home commands.
+            Background = kind == RibbonKeyTipBadgeKind.Tab ? Brushes.DimGray : Brushes.White,
             BorderBrush = Brushes.Black,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(2),
@@ -298,7 +301,7 @@ public partial class MainWindow
                 FontFamily = new FontFamily("Segoe UI"),
                 FontSize = 10,
                 FontWeight = FontWeights.SemiBold,
-                Foreground = Brushes.Black
+                Foreground = kind == RibbonKeyTipBadgeKind.Tab ? Brushes.White : Brushes.Black
             }
         };
 
@@ -609,16 +612,33 @@ public partial class MainWindow
             .Concat(EnumerateLogicalDescendants(root))
             .OfType<FrameworkElement>();
 
-    private bool IsVisibleKeyTipElement(FrameworkElement element, RibbonKeyTipScope scope) =>
-        !ReferenceEquals(element, KeyTipOverlay) &&
-        element.IsVisible &&
-        element.ActualWidth > 0 &&
-        element.ActualHeight > 0 &&
-        (scope != RibbonKeyTipScope.Commands || !IsStartScreenVisible() || IsInsideStartScreenOverlay(element)) &&
-        (scope != RibbonKeyTipScope.Commands || !IsInsideUnselectedTabItem(element)) &&
-        ShouldShowKeyTipElement(element, scope) &&
-        IsEnabledKeyTipTarget(element) &&
-        !string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(element));
+    private bool IsVisibleKeyTipElement(FrameworkElement element, RibbonKeyTipScope scope)
+    {
+        // In the WPF TabControl template an unselected declarative TabItem can
+        // report IsVisible=false while its header is still laid out and visible.
+        // Top-level Alt mode targets those headers, so use their own Visibility
+        // and measured bounds as the authoritative presentation signal.
+        var hasVisiblePresentation = element.IsVisible ||
+            (scope == RibbonKeyTipScope.TopLevel &&
+             element is TabItem &&
+             IsVisibleTopLevelTabKeyTip(element.Visibility, element.ActualWidth, element.ActualHeight));
+
+        return !ReferenceEquals(element, KeyTipOverlay) &&
+               hasVisiblePresentation &&
+               element.ActualWidth > 0 &&
+               element.ActualHeight > 0 &&
+               (scope != RibbonKeyTipScope.Commands || !IsStartScreenVisible() || IsInsideStartScreenOverlay(element)) &&
+               (scope != RibbonKeyTipScope.Commands || !IsInsideUnselectedTabItem(element)) &&
+               ShouldShowKeyTipElement(element, scope) &&
+               IsEnabledKeyTipTarget(element) &&
+               !string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(element));
+    }
+
+    internal static bool IsVisibleTopLevelTabKeyTip(
+        Visibility visibility,
+        double actualWidth,
+        double actualHeight) =>
+        visibility == Visibility.Visible && actualWidth > 0 && actualHeight > 0;
 
     private void InvalidateKeyTipCandidateCaches()
     {
