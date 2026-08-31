@@ -417,6 +417,7 @@ public static partial class ChartRenderer
                 };
                 var seriesFormat = GetSeriesFormat(chart, seriesIndex);
                 ApplyRectangleBarFormat(series, seriesFormat, theme);
+                ApplyDefaultRectangleBarPalette(series, seriesFormat, theme, seriesIndex);
                 ApplyNativeDataLabelStyle(series, chart, theme);
                 var trendPoints = firstSeriesPoints is null ? new List<DataPoint>() : null;
                 var colHalfWidth = ColumnBarHalfWidth(chart);

@@ -1074,6 +1074,12 @@ internal static class DuplicateSheetDrawingCloner
             Top = chart.Top,
             Width = chart.Width,
             Height = chart.Height,
+            Anchor = chart.Anchor is { } anchor ? RemapAddress(anchor, copyId) : null,
+            AnchorOffsetX = chart.AnchorOffsetX,
+            AnchorOffsetY = chart.AnchorOffsetY,
+            AnchorEnd = chart.AnchorEnd is { } anchorEnd ? RemapAddress(anchorEnd, copyId) : null,
+            AnchorEndOffsetX = chart.AnchorEndOffsetX,
+            AnchorEndOffsetY = chart.AnchorEndOffsetY,
             DrawingAnchorKind = chart.DrawingAnchorKind
         };
 

@@ -40,6 +40,13 @@ public sealed partial class ChartRendererTests
         model.DefaultColors[4].Should().Be(OxyColor.FromRgb(160, 43, 147), "Accent5 is purple");
         model.DefaultColors[5].Should().Be(OxyColor.FromRgb(78, 167, 46),  "Accent6 is green");
         model.DefaultColors.Should().HaveCountGreaterThanOrEqualTo(30, "palette extends past 6 for many-series charts");
+
+        var bars = model.Series.OfType<RectangleBarSeries>().ToList();
+        bars.Should().HaveCount(3);
+        bars[0].FillColor.Should().Be(OxyColor.FromRgb(21, 96, 130));
+        bars[1].FillColor.Should().Be(OxyColor.FromRgb(233, 113, 50));
+        bars[2].FillColor.Should().Be(OxyColor.FromRgb(25, 107, 36));
+        bars.Should().OnlyContain(series => series.StrokeThickness == 0);
     }
 
     [Fact]

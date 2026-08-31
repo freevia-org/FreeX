@@ -287,6 +287,12 @@ public sealed partial class NativeJsonAdapter
         Top = chart.Top,
         Width = chart.Width,
         Height = chart.Height,
+        Anchor = chart.Anchor?.ToA1(),
+        AnchorOffsetX = chart.AnchorOffsetX,
+        AnchorOffsetY = chart.AnchorOffsetY,
+        AnchorEnd = chart.AnchorEnd?.ToA1(),
+        AnchorEndOffsetX = chart.AnchorEndOffsetX,
+        AnchorEndOffsetY = chart.AnchorEndOffsetY,
         DrawingAnchorKind = chart.DrawingAnchorKind
     };
 

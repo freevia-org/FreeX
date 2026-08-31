@@ -316,6 +316,12 @@ public sealed partial class NativeJsonAdapter
         public double Top { get; set; } = 50;
         public double Width { get; set; } = 400;
         public double Height { get; set; } = 300;
+        public string? Anchor { get; set; }
+        public double AnchorOffsetX { get; set; }
+        public double AnchorOffsetY { get; set; }
+        public string? AnchorEnd { get; set; }
+        public double AnchorEndOffsetX { get; set; }
+        public double AnchorEndOffsetY { get; set; }
         public ChartDrawingAnchorKind DrawingAnchorKind { get; set; } = ChartDrawingAnchorKind.Absolute;
     }
 

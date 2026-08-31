@@ -235,17 +235,52 @@ public partial class GridView
         return null;
     }
 
-    private Rect CreateChartRect(ChartModel chart) =>
-        new(
+    private Rect CreateChartRect(ChartModel chart)
+    {
+        if (chart.Anchor is { } anchor)
+        {
+            var width = Math.Max(MinimumChartObjectWidth, chart.Width);
+            var height = Math.Max(MinimumChartObjectHeight, chart.Height);
+            var startColumn = Viewport?.ColMetrics.FirstOrDefault(metric => metric.Col == anchor.Col);
+            var startRow = Viewport?.RowMetrics.FirstOrDefault(metric => metric.Row == anchor.Row);
+            var endAnchor = chart.AnchorEnd;
+            var endColumn = endAnchor is { } endColumnAnchor
+                ? Viewport?.ColMetrics.FirstOrDefault(metric => metric.Col == endColumnAnchor.Col)
+                : null;
+            var endRow = endAnchor is { } endRowAnchor
+                ? Viewport?.RowMetrics.FirstOrDefault(metric => metric.Row == endRowAnchor.Row)
+                : null;
+
+            var left = startColumn is { } startColumnMetric && startColumnMetric.Col == anchor.Col
+                ? ActualRowHeaderWidth + startColumnMetric.LeftOffset + chart.AnchorOffsetX
+                : endColumn is { } endColumnMetric && endAnchor is { } endForColumn && endColumnMetric.Col == endForColumn.Col
+                    ? ActualRowHeaderWidth + endColumnMetric.LeftOffset + chart.AnchorEndOffsetX - width
+                    : (double?)null;
+            var top = startRow is { } startRowMetric && startRowMetric.Row == anchor.Row
+                ? EffectiveColHeaderHeight + startRowMetric.TopOffset + chart.AnchorOffsetY
+                : endRow is { } endRowMetric && endAnchor is { } endForRow && endRowMetric.Row == endForRow.Row
+                    ? EffectiveColHeaderHeight + endRowMetric.TopOffset + chart.AnchorEndOffsetY - height
+                    : (double?)null;
+            if (left is { } x && top is { } y)
+                return new Rect(x, y, width, height);
+
+            return Rect.Empty;
+        }
+
+        return new Rect(
             chart.Left + ActualRowHeaderWidth,
             chart.Top + EffectiveColHeaderHeight,
             Math.Max(MinimumChartObjectWidth, chart.Width),
             Math.Max(MinimumChartObjectHeight, chart.Height));
+    }
 
     private CellAddress GetChartAnchor(ChartModel chart)
     {
-        if (HitTestAnchorCell(new Point(chart.Left + ActualRowHeaderWidth, chart.Top + EffectiveColHeaderHeight)) is { } anchor)
-            return new CellAddress(chart.DataRange.Start.Sheet, anchor.Row, anchor.Col);
+        if (chart.Anchor is { } anchor)
+            return anchor;
+
+        if (HitTestAnchorCell(new Point(chart.Left + ActualRowHeaderWidth, chart.Top + EffectiveColHeaderHeight)) is { } hitAnchor)
+            return new CellAddress(chart.DataRange.Start.Sheet, hitAnchor.Row, hitAnchor.Col);
 
         return chart.DataRange.Start;
     }

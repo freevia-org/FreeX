@@ -65,7 +65,9 @@ public static partial class ChartRenderer
         }
 
         var surfaceSeries = new RectangleBarSeries { Title = chart.Title ?? "Surface" };
-        ApplyRectangleBarFormat(surfaceSeries, GetSeriesFormat(chart, 0), theme);
+        var surfaceFormat = GetSeriesFormat(chart, 0);
+        ApplyRectangleBarFormat(surfaceSeries, surfaceFormat, theme);
+        ApplyDefaultRectangleBarPalette(surfaceSeries, surfaceFormat, theme, 0);
 
         foreach (var (categoryIndex, seriesIndex, value) in surfaceValues)
         {

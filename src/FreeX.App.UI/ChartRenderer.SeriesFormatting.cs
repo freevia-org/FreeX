@@ -228,6 +228,22 @@ public static partial class ChartRenderer
         // approximation via stroke color + thickness only.
     }
 
+    private static void ApplyDefaultRectangleBarPalette(
+        RectangleBarSeries series,
+        ChartSeriesFormat? format,
+        WorkbookTheme theme,
+        int seriesIndex)
+    {
+        if (format is not null)
+            return;
+
+        var palette = ChartStylePlanner.BuildExcelSeriesPalette(theme);
+        var color = palette[Math.Abs(seriesIndex) % palette.Length];
+        series.FillColor = OxyColor.FromRgb(color.R, color.G, color.B);
+        series.StrokeColor = OxyColors.Transparent;
+        series.StrokeThickness = 0;
+    }
+
     private static void ApplyBarFormat(BarSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
     {
         if (format is null)

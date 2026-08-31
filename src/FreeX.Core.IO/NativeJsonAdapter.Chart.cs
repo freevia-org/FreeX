@@ -295,6 +295,12 @@ public sealed partial class NativeJsonAdapter
                 Top = chartDto.Top,
                 Width = NativeJsonValueSanitizer.PositiveFiniteOrDefault(chartDto.Width, 400),
                 Height = NativeJsonValueSanitizer.PositiveFiniteOrDefault(chartDto.Height, 300),
+                Anchor = chartDto.Anchor is null ? null : CellAddress.Parse(chartDto.Anchor, sheetId),
+                AnchorOffsetX = chartDto.AnchorOffsetX,
+                AnchorOffsetY = chartDto.AnchorOffsetY,
+                AnchorEnd = chartDto.AnchorEnd is null ? null : CellAddress.Parse(chartDto.AnchorEnd, sheetId),
+                AnchorEndOffsetX = chartDto.AnchorEndOffsetX,
+                AnchorEndOffsetY = chartDto.AnchorEndOffsetY,
                 DrawingAnchorKind = chartDto.DrawingAnchorKind
             };
             SanitizeLoadedChart(chart);

@@ -343,6 +343,7 @@ public static partial class ChartRenderer
     private static void ApplyTitleStyle(PlotModel model, ChartModel chart, WorkbookTheme theme)
     {
         model.TitleFontSize = chart.ChartTitleFontSize;
+        model.TitleFontWeight = FontWeights.Bold;
         if (chart.ResolveChartTitleTextColor(theme) is { } titleColor)
             model.TitleColor = OxyColor.FromRgb(titleColor.R, titleColor.G, titleColor.B);
     }
@@ -363,7 +364,9 @@ public static partial class ChartRenderer
         double thickness)
     {
         axis.MajorGridlineStyle = showMajor ? LineStyle.Solid : LineStyle.None;
-        axis.MajorGridlineColor = ToOxyColor(majorColor) ?? OxyColor.FromRgb(220, 220, 220);
+        // Excel chart style 2 (the default for an inserted clustered-column chart) renders an
+        // unformatted major gridline in medium gray, rather than OxyPlot's faint default.
+        axis.MajorGridlineColor = ToOxyColor(majorColor) ?? OxyColor.FromRgb(127, 127, 127);
         axis.MajorGridlineThickness = thickness;
         axis.MinorGridlineStyle = showMinor ? LineStyle.Dot : LineStyle.None;
         axis.MinorGridlineColor = ToOxyColor(minorColor) ?? OxyColor.FromRgb(235, 235, 235);

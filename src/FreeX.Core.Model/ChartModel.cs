@@ -158,7 +158,9 @@ public sealed class ChartModel
     public double ChartDefaultFontSize { get; set; } = 11;
     public CellColor? ChartTitleTextColor { get; set; }
     public WorkbookThemeColorReference? ChartTitleTextThemeColor { get; set; }
-    public double ChartTitleFontSize { get; set; } = 16;
+    // Office's default chart style uses an 18pt bold title when the source does not carry an
+    // explicit title text property.
+    public double ChartTitleFontSize { get; set; } = 18;
     public CellColor? AxisTitleTextColor { get; set; }
     public WorkbookThemeColorReference? AxisTitleTextThemeColor { get; set; }
     public double AxisTitleFontSize { get; set; } = 12;
@@ -700,6 +702,27 @@ public sealed class ChartModel
     public double Top    { get; set; } = 50;
     public double Width  { get; set; } = 400;
     public double Height { get; set; } = 300;
+
+    /// <summary>
+    /// The worksheet cell containing the top-left point of a source drawing anchor.  Imported
+    /// charts retain this separately from their absolute pixel geometry so the interactive
+    /// renderer can place them correctly after the worksheet scrolls.
+    /// </summary>
+    public CellAddress? Anchor { get; set; }
+
+    /// <summary>Horizontal sub-cell offset, in DIP pixels, from <see cref="Anchor"/>.</summary>
+    public double AnchorOffsetX { get; set; }
+
+    /// <summary>Vertical sub-cell offset, in DIP pixels, from <see cref="Anchor"/>.</summary>
+    public double AnchorOffsetY { get; set; }
+
+    /// <summary>The bottom-right point of a two-cell source drawing anchor, when present.</summary>
+    public CellAddress? AnchorEnd { get; set; }
+    /// <summary>Horizontal sub-cell offset, in DIP pixels, from <see cref="AnchorEnd"/>.</summary>
+    public double AnchorEndOffsetX { get; set; }
+    /// <summary>Vertical sub-cell offset, in DIP pixels, from <see cref="AnchorEnd"/>.</summary>
+    public double AnchorEndOffsetY { get; set; }
+
     public ChartDrawingAnchorKind DrawingAnchorKind { get; set; } = ChartDrawingAnchorKind.Absolute;
 
     public CellColor? ResolveChartDefaultTextColor(WorkbookTheme theme) =>

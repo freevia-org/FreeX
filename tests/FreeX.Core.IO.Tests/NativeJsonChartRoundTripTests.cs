@@ -29,6 +29,34 @@ public sealed class NativeJsonChartRoundTripTests
     }
 
     [Fact]
+    public void ChartDrawingAnchor_SurvivesRoundTrip()
+    {
+        var workbook = new Workbook("T");
+        var sheet = workbook.AddSheet("Data");
+        Seed(sheet);
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = GridRange.Parse("A1:B2", sheet.Id),
+            Anchor = new CellAddress(sheet.Id, 2, 8),
+            AnchorOffsetX = 32,
+            AnchorOffsetY = 12,
+            AnchorEnd = new CellAddress(sheet.Id, 20, 17),
+            AnchorEndOffsetX = 16,
+            AnchorEndOffsetY = 8
+        });
+
+        var chart = RoundTrip(workbook).GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+
+        chart.Anchor.Should().Be(new CellAddress(chart.DataRange.Start.Sheet, 2, 8));
+        chart.AnchorOffsetX.Should().Be(32);
+        chart.AnchorOffsetY.Should().Be(12);
+        chart.AnchorEnd.Should().Be(new CellAddress(chart.DataRange.Start.Sheet, 20, 17));
+        chart.AnchorEndOffsetX.Should().Be(16);
+        chart.AnchorEndOffsetY.Should().Be(8);
+    }
+
+    [Fact]
     public void CrossSheetChart_SurvivesRoundTrip_AndKeepsDataSourceSheet()
     {
         var wb = new Workbook("T");

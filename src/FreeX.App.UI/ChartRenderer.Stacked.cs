@@ -92,7 +92,9 @@ public static partial class ChartRenderer
                 Title = IsLegendEntryDeleted(chart, seriesIndex) ? "" : seriesName,
                 LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 4)
             };
-            ApplyRectangleBarFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
+            var seriesFormat = GetSeriesFormat(chart, seriesIndex);
+            ApplyRectangleBarFormat(series, seriesFormat, theme);
+            ApplyDefaultRectangleBarPalette(series, seriesFormat, theme, seriesIndex);
             ApplyNativeDataLabelStyle(series, chart, theme);
 
             var i = 0;
@@ -181,7 +183,9 @@ public static partial class ChartRenderer
                 Title = IsLegendEntryDeleted(chart, seriesIndex) ? "" : seriesName,
                 LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 4)
             };
-            ApplyRectangleBarFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
+            var seriesFormat = GetSeriesFormat(chart, seriesIndex);
+            ApplyRectangleBarFormat(series, seriesFormat, theme);
+            ApplyDefaultRectangleBarPalette(series, seriesFormat, theme, seriesIndex);
             ApplyNativeDataLabelStyle(series, chart, theme);
 
             var i = 0;
@@ -444,7 +448,9 @@ public static partial class ChartRenderer
                 Title = IsLegendEntryDeleted(chart, seriesIndex) ? "" : seriesName,
                 LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 4)
             };
-            ApplyRectangleBarFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
+            var seriesFormat = GetSeriesFormat(chart, seriesIndex);
+            ApplyRectangleBarFormat(series, seriesFormat, theme);
+            ApplyDefaultRectangleBarPalette(series, seriesFormat, theme, seriesIndex);
             ApplyNativeDataLabelStyle(series, chart, theme);
 
             var displayValue = normalizeToPercent && total > 0 ? value / total * 100 : value;

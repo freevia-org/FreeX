@@ -61,6 +61,24 @@ internal static class XlsxDrawingAnchorApplier
         chart.DrawingAnchorKind = anchor.Kind;
         chart.Left = anchor.AbsoluteLeft ?? (WorksheetMetricSpanCalculator.SumColumnPixels(sheet, 1, fromColumn) + anchor.FromColumnOffset);
         chart.Top = anchor.AbsoluteTop ?? (WorksheetMetricSpanCalculator.SumRowPixels(sheet, 1, fromRow) + anchor.FromRowOffset);
+        chart.Anchor = anchor.Kind == ChartDrawingAnchorKind.Absolute
+            ? null
+            : new CellAddress(sheet.Id, fromRow + 1, fromColumn + 1);
+        chart.AnchorOffsetX = anchor.Kind == ChartDrawingAnchorKind.Absolute ? 0 : anchor.FromColumnOffset;
+        chart.AnchorOffsetY = anchor.Kind == ChartDrawingAnchorKind.Absolute ? 0 : anchor.FromRowOffset;
+        if (anchor.Kind == ChartDrawingAnchorKind.TwoCell &&
+            anchor.ToRowZeroBased is { } toRow && anchor.ToColumnZeroBased is { } toColumn)
+        {
+            chart.AnchorEnd = new CellAddress(sheet.Id, ClampRow(toRow) + 1, ClampColumn(toColumn) + 1);
+            chart.AnchorEndOffsetX = anchor.ToColumnOffset!.Value;
+            chart.AnchorEndOffsetY = anchor.ToRowOffset!.Value;
+        }
+        else
+        {
+            chart.AnchorEnd = null;
+            chart.AnchorEndOffsetX = 0;
+            chart.AnchorEndOffsetY = 0;
+        }
 
         var width = anchor.Width ?? (
             WorksheetMetricSpanCalculator.SumColumnPixels(sheet, fromColumn + 1, ZeroBasedSpan(fromColumn, ClampColumn(anchor.ToColumnZeroBased!.Value)))
