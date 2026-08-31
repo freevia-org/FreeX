@@ -35,4 +35,40 @@ public sealed class TableGridProjectionTests
 
         TableGridProjection.TableWidth(table).Should().Be(5);
     }
+
+    [Fact]
+    public void PointQueries_DenseRowMatchMaterializedProjection()
+    {
+        const int cellCount = 512;
+        var row = new TableRow();
+        for (var index = 0; index < cellCount; index++)
+            row.Cells.Add(new TableCell { GridSpan = index % 5 - 1 });
+
+        var projection = TableGridProjection.ProjectRow(row);
+        projection.Should().HaveCount(cellCount);
+        foreach (var expected in projection)
+        {
+            TableGridProjection.StartColumn(row, expected.CellIndex).Should().Be(expected.StartColumn);
+            TableGridProjection.At(row, expected.StartColumn).Should().Be(expected);
+            TableGridProjection.At(row, expected.EndColumnExclusive - 1).Should().Be(expected);
+            TableGridProjection.StartingAt(row, expected.StartColumn).Should().Be(expected);
+            TableGridProjection.InsertionIndex(row, expected.StartColumn).Should().Be(expected.CellIndex);
+        }
+
+        TableGridProjection.At(row, -1).Should().BeNull();
+        TableGridProjection.At(row, TableGridProjection.RowWidth(row)).Should().BeNull();
+        TableGridProjection.StartingAt(row, 4).Should().BeNull();
+        TableGridProjection.InsertionIndex(row, -1).Should().Be(0);
+        TableGridProjection.InsertionIndex(row, TableGridProjection.RowWidth(row)).Should().Be(cellCount);
+    }
+
+    [Fact]
+    public void PointQueries_SourceGuardAvoidsMaterializedRowProjection()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText("freew", "FreeW.Core.Model", "TableGridProjection.cs");
+
+        source.Should().Contain("var projected = new TableGridCellProjection(cell, cellIndex, startColumn, span);")
+            .And.NotContain("return ProjectRow(row)[cellIndex].StartColumn;")
+            .And.NotContain("foreach (var projected in ProjectRow(row))");
+    }
 }
