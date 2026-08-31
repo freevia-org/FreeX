@@ -279,7 +279,7 @@ public sealed class HeaderFooterDialogXamlTests
         source.Should().Contain("FocusSizeInput(invalidField);");
         source.Should().Contain("private void FocusSizeInput(ObjectSizeDialogField field)");
         source.Should().Contain("DialogFocus.FocusAndSelect(field == ObjectSizeDialogField.Width ? _widthBox : _heightBox);");
-        source.Should().NotContain("private static void FocusAndSelect(TextBox box)");
+        source.Should().NotContain("internal static void FocusAndSelect(TextBox box)");
     }
 
     [Fact]

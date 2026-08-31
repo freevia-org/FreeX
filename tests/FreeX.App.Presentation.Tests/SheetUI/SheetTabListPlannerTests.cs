@@ -103,6 +103,17 @@ public sealed class SheetTabListPlannerTests
     }
 
     [Fact]
+    public void GenerateUniqueSheetName_UsesLowestAvailableExcelDefaultName()
+    {
+        var workbook = new Workbook("Book");
+        workbook.AddSheet("UX Overview");
+        workbook.AddSheet("Sheet2");
+        workbook.AddSheet("Sheet8");
+
+        SheetTabListPlanner.GenerateUniqueSheetName(workbook).Should().Be("Sheet1");
+    }
+
+    [Fact]
     public void AdjacentVisibleSheet_ClampsToVisibleSheets()
     {
         var workbook = new Workbook("Book");

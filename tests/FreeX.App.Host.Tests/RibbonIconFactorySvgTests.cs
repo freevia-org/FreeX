@@ -166,14 +166,8 @@ public sealed class RibbonIconFactorySvgTests
     {
         // The size-specific SVG slug logic was extracted from RibbonIconFactory into the shared
         // Free.Shared.Ribbon.Wpf.SvgCommandIconLoader (signature now (slug, size), no trailing flag).
-        var method = typeof(Free.Shared.Ribbon.Wpf.SvgCommandIconLoader).GetMethod(
-            "GetSizeSpecificSlugCandidates",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
-        method.Should().NotBeNull();
-
-        var smallCandidates = ((IEnumerable<string>)method!.Invoke(null, ["paste", 20d])!).ToList();
-        var largeCandidates = ((IEnumerable<string>)method.Invoke(null, ["paste", 32d])!).ToList();
+        var smallCandidates = Free.Shared.Ribbon.Wpf.SvgCommandIconLoader.GetSizeSpecificSlugCandidates("paste", 20d).ToList();
+        var largeCandidates = Free.Shared.Ribbon.Wpf.SvgCommandIconLoader.GetSizeSpecificSlugCandidates("paste", 32d).ToList();
 
         smallCandidates.Should().StartWith("paste-small");
         smallCandidates.Should().ContainInOrder("paste-small", "paste");

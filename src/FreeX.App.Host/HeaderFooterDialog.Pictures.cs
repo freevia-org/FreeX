@@ -228,7 +228,7 @@ public partial class HeaderFooterDialog
             _ => HeaderCenterBox
         };
 
-    private static (double Width, double Height) GetImageSize(byte[] bytes)
+    internal static (double Width, double Height) GetImageSize(byte[] bytes)
     {
         // Convert native pixel dimensions to the app's device-independent 1/96-inch unit
         // convention (matching the ordinary Insert>Picture path's ImageDimensionDecoder), rather

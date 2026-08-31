@@ -63,29 +63,18 @@ public sealed partial class GridViewRenderPerformanceTests
         buildCellLookups.Should().Contain("styles ?? EmptyRenderCellStyleLookup");
         buildCellLookups.Should().NotContain("var styles = new Dictionary<(uint Row, uint Col), CellStyle>();");
 
-        var buildLookup = typeof(GridView).GetMethod(
-            "BuildRenderCellLookups",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        buildLookup.Should().NotBeNull();
-
-        var defaultLookup = (ITuple)buildLookup!.Invoke(
-            null,
-            [new DisplayCell[] { Cell(1, 1, "default", CellStyle.Default) }, WorkbookTheme.Office])!;
-        ((IReadOnlyDictionary<(uint Row, uint Col), CellStyle>)defaultLookup[0]!).Should().BeEmpty();
+        var defaultLookup = GridView.BuildRenderCellLookups(new DisplayCell[] { Cell(1, 1, "default", CellStyle.Default) }, WorkbookTheme.Office);
+        defaultLookup.Styles.Should().BeEmpty();
 
         var fontOnlyStyle = CellStyle.Default.Clone();
         fontOnlyStyle.Bold = true;
-        var fontOnlyLookup = (ITuple)buildLookup.Invoke(
-            null,
-            [new DisplayCell[] { Cell(1, 1, "font", fontOnlyStyle) }, WorkbookTheme.Office])!;
-        ((IReadOnlyDictionary<(uint Row, uint Col), CellStyle>)fontOnlyLookup[0]!).Should().BeEmpty();
+        var fontOnlyLookup = GridView.BuildRenderCellLookups(new DisplayCell[] { Cell(1, 1, "font", fontOnlyStyle) }, WorkbookTheme.Office);
+        fontOnlyLookup.Styles.Should().BeEmpty();
 
         var fillStyle = CellStyle.Default.Clone();
         fillStyle.FillColor = CellColor.White;
-        var fillLookup = (ITuple)buildLookup.Invoke(
-            null,
-            [new DisplayCell[] { Cell(1, 1, "fill", fillStyle) }, WorkbookTheme.Office])!;
-        ((IReadOnlyDictionary<(uint Row, uint Col), CellStyle>)fillLookup[0]!).Should().ContainKey((1u, 1u));
+        var fillLookup = GridView.BuildRenderCellLookups(new DisplayCell[] { Cell(1, 1, "fill", fillStyle) }, WorkbookTheme.Office);
+        fillLookup.Styles.Should().ContainKey((1u, 1u));
 
         // R114 sibling coverage: a cell whose fill was set PURELY via a Theme Color reference
         // (no baked FillColor at all) must also be included -- this is exactly the reachability
@@ -93,21 +82,14 @@ public sealed partial class GridViewRenderPerformanceTests
         // FillThemeColor is set).
         var themeOnlyFillStyle = CellStyle.Default.Clone();
         themeOnlyFillStyle.FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2);
-        var themeOnlyFillLookup = (ITuple)buildLookup.Invoke(
-            null,
-            [new DisplayCell[] { Cell(1, 1, "theme-fill", themeOnlyFillStyle) }, WorkbookTheme.Office])!;
-        ((IReadOnlyDictionary<(uint Row, uint Col), CellStyle>)themeOnlyFillLookup[0]!).Should().ContainKey((1u, 1u),
+        var themeOnlyFillLookup = GridView.BuildRenderCellLookups(new DisplayCell[] { Cell(1, 1, "theme-fill", themeOnlyFillStyle) }, WorkbookTheme.Office);
+        themeOnlyFillLookup.Styles.Should().ContainKey((1u, 1u),
             "a cell whose fill was set purely via FillThemeColor (no baked FillColor) must not be silently dropped from the render lookup");
     }
 
     [Fact]
     public void RenderCellLookups_CachesEveryBorderKindInSourceOrder()
     {
-        var buildLookup = typeof(GridView).GetMethod(
-            "BuildRenderCellLookups",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        buildLookup.Should().NotBeNull();
-
         var borderStyles = new[]
         {
             BorderStyleFor(s => s.BorderTop = ThinBorder),
@@ -124,9 +106,9 @@ public sealed partial class GridViewRenderPerformanceTests
             .Append(Cell(2, 1, "default", CellStyle.Default))
             .ToArray();
 
-        var result = (ITuple)buildLookup!.Invoke(null, [cells, WorkbookTheme.Office])!;
-        var stylesByAddress = (IReadOnlyDictionary<(uint Row, uint Col), CellStyle>)result[1]!;
-        var orderedCells = ((IEnumerable)result[2]!).Cast<object>().ToArray();
+        var result = GridView.BuildRenderCellLookups(cells, WorkbookTheme.Office);
+        var stylesByAddress = result.BorderStyles;
+        var orderedCells = result.BorderCells.Cast<object>().ToArray();
 
         stylesByAddress.Should().HaveCount(6);
         stylesByAddress[(1, 1)].Should().BeSameAs(replacement);

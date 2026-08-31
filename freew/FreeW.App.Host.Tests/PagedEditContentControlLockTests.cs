@@ -134,14 +134,6 @@ public sealed class PagedEditContentControlLockTests
         Content = content,
     };
 
-    private static readonly MethodInfo OnBodyPreviewKeyDownMethod =
-        typeof(PageBox).GetMethod("OnBodyPreviewKeyDown", BindingFlags.NonPublic | BindingFlags.Instance)
-        ?? throw new InvalidOperationException("PageBox.OnBodyPreviewKeyDown not found -- renamed or removed.");
-
-    private static readonly MethodInfo OnBodyPreviewTextInputMethod =
-        typeof(PageBox).GetMethod("OnBodyPreviewTextInput", BindingFlags.NonPublic | BindingFlags.Instance)
-        ?? throw new InvalidOperationException("PageBox.OnBodyPreviewTextInput not found -- renamed or removed.");
-
     [StaFact]
     public void Build_WiresContentControlLockProbe_OnEveryBodyPageBox()
     {
@@ -196,7 +188,7 @@ public sealed class PagedEditContentControlLockTests
         {
             RoutedEvent = Keyboard.PreviewKeyDownEvent
         };
-        OnBodyPreviewKeyDownMethod.Invoke(box, [box.Body, args]);
+        box.OnBodyPreviewKeyDown(box.Body, args);
         return args.Handled;
     }
 
@@ -249,7 +241,7 @@ public sealed class PagedEditContentControlLockTests
         {
             RoutedEvent = TextCompositionManager.PreviewTextInputEvent
         };
-        OnBodyPreviewTextInputMethod.Invoke(box, [box.Body, args]);
+        box.OnBodyPreviewTextInput(box.Body, args);
 
         args.Handled.Should().BeTrue("a typed character inside a locked content control must be blocked");
     }

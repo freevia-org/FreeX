@@ -92,10 +92,9 @@ public sealed class IconPickerGridKeyboardNavigationTests
         try
         {
             var tiles = Tiles(dialog);
-            var method = typeof(IconPickerDialog).GetMethod("OnTileClick", BindingFlags.Instance | BindingFlags.NonPublic)!;
             // OnTileClick(object sender, MouseButtonEventArgs e) never reads e, only sender -- so a
             // real MouseButtonEventArgs (which needs a live MouseDevice) is unnecessary here.
-            method.Invoke(dialog, [tiles[2], null]);
+            dialog.OnTileClick(tiles[2], null!);
 
             Session(dialog).State.SelectedEntry.Should().Be((IconPickerEntry)tiles[2].Tag!);
         }

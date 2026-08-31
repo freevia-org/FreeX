@@ -174,7 +174,6 @@ public sealed class R110_ScrollableRowColumnMergeAnchorPlaceholderTests
         private readonly MethodInfo _mainWindowKeyDown;
         private readonly MethodInfo _updateViewport;
         private readonly FieldInfo _selectionAnchorField;
-        private readonly MethodInfo _countScrollableColumns;
 
         private ScrollableCountHarness(MainWindow window)
         {
@@ -194,16 +193,6 @@ public sealed class R110_ScrollableRowColumnMergeAnchorPlaceholderTests
             // The count now has a single neutral owner (FreeX.App.Services.
             // WorkbookViewportScrollPlanner.CountVisibleScrollableColumns) that both renderers
             // call; MainWindow no longer keeps a private copy.
-            _countScrollableColumns = typeof(WorkbookViewportScrollPlanner)
-                .GetMethod(
-                    "CountVisibleScrollableColumns",
-                    BindingFlags.Public | BindingFlags.Static,
-                    binder: null,
-                    types: [typeof(ViewportModel), typeof(uint)],
-                    modifiers: null)
-                ?? throw new MissingMethodException(
-                    nameof(WorkbookViewportScrollPlanner),
-                    "CountVisibleScrollableColumns");
         }
 
         // MainWindow_Loaded unconditionally calls CreateNewWorkbook() (unless adopting a shared
@@ -252,8 +241,7 @@ public sealed class R110_ScrollableRowColumnMergeAnchorPlaceholderTests
         }
 
         public int InvokeCountScrollableColumns(ViewportModel viewport, uint frozenCols) =>
-            (int)(_countScrollableColumns.Invoke(null, [viewport, frozenCols])
-                ?? throw new InvalidOperationException("CountScrollableColumns returned null."));
+            WorkbookViewportScrollPlanner.CountVisibleScrollableColumns(viewport, frozenCols);
 
         public void PressKey(Key key)
         {

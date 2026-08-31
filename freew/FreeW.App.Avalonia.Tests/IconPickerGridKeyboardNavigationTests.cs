@@ -86,8 +86,7 @@ public sealed class IconPickerGridKeyboardNavigationTests
             var dialog = CreateDialog();
             var tiles = Tiles(dialog);
             var thirdEntry = (IconPickerEntry)tiles[2].Tag!;
-            var select = typeof(IconPickerDialog).GetMethod("Select", BindingFlags.Instance | BindingFlags.NonPublic)!;
-            select.Invoke(dialog, [thirdEntry, tiles[2]]);
+            dialog.Select(thirdEntry, tiles[2]);
 
             Session_(dialog).State.SelectedEntry.Should().Be(thirdEntry);
         }, CancellationToken.None);

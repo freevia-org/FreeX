@@ -589,7 +589,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     /// selection text elsewhere (a move) MUST check this return value first — inserting the full
     /// text while a source box's delete failed would duplicate that box's content.
     /// </returns>
-    private bool DeleteCrossPageSelection()
+    internal bool DeleteCrossPageSelection()
     {
         if (!_crossPageSelection.IsActive)
             return false;
@@ -689,7 +689,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     /// uses (see <c>PagedEditContentControlLockTests.PositionAfterText</c>), so each Text-context segment
     /// in the range is probed one character in from its start.
     /// </summary>
-    private static bool RangeTouchesLockedContentControl(PageBox box, TextPointer from, TextPointer to)
+    internal static bool RangeTouchesLockedContentControl(PageBox box, TextPointer from, TextPointer to)
     {
         if (box.ContentControlLockProbe is not { } probe)
             return false;
@@ -1410,7 +1410,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     /// documented on <c>PagedEditCrossPageDragMoveAtomicityTests</c>.
     /// </para>
     /// </summary>
-    private bool CompleteDrag(Point panelPoint, bool isCopy)
+    internal bool CompleteDrag(Point panelPoint, bool isCopy)
     {
         // Find the box under the mouse for the drop target.
         var dropBox = FindPageBoxAtPoint(panelPoint);

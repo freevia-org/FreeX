@@ -577,7 +577,7 @@ internal sealed class PageBox : Border
     /// All other keys, and arrow keys that are not at an edge, fall through to the native
     /// <see cref="RichTextBox"/> handler.
     /// </summary>
-    private void OnBodyPreviewKeyDown(object sender, KeyEventArgs e)
+    internal void OnBodyPreviewKeyDown(object sender, KeyEventArgs e)
     {
         // freew-cc-3: block Enter/Backspace/Delete from mutating a locked content control. Typed
         // characters are gated separately in OnBodyPreviewTextInput; navigation keys (arrows, Home/End,
@@ -632,7 +632,7 @@ internal sealed class PageBox : Border
     }
 
     /// <summary>freew-cc-3: block a typed character from mutating a locked content control.</summary>
-    private void OnBodyPreviewTextInput(object sender, TextCompositionEventArgs e)
+    internal void OnBodyPreviewTextInput(object sender, TextCompositionEventArgs e)
     {
         if (IsLockedAt(Body.Selection.Start))
             e.Handled = true;

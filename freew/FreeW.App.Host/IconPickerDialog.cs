@@ -249,7 +249,7 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     }
 
     // ── Selection ─────────────────────────────────────────────────────────────────────────────────
-    private void OnTileClick(object sender, MouseButtonEventArgs e)
+    internal void OnTileClick(object sender, MouseButtonEventArgs e)
     {
         if (sender is not Border tile || tile.Tag is not IconPickerEntry entry)
             return;

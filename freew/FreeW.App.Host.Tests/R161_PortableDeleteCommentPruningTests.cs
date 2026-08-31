@@ -26,12 +26,9 @@ namespace FreeW.App.Host.Tests;
 /// </summary>
 public sealed class R161_PortableDeleteCommentPruningTests
 {
-    private static readonly MethodInfo TryApplyBodyDeletionMethod =
-        typeof(DocumentView).GetMethod(
-            "TryApplyBodyDeletion", BindingFlags.NonPublic | BindingFlags.Instance)
-        ?? throw new InvalidOperationException(
-            "DocumentView.TryApplyBodyDeletion is the shared portable deletion path this test exists "
-            + "to cover; if it was renamed, retarget the test rather than deleting it");
+    // DocumentView.TryApplyBodyDeletion is the shared portable deletion path this test exists to
+    // cover. It is called directly (internal + InternalsVisibleTo) rather than by reflection, so a
+    // rename or signature change stops this building instead of failing at run time.
 
     [StaFact]
     public void DeletingTheOnlyAnchorThroughThePortablePath_PrunesTheComment()
@@ -68,7 +65,7 @@ public sealed class R161_PortableDeleteCommentPruningTests
     }
 
     private static bool InvokeBodyDeletion(DocumentView view) =>
-        (bool)TryApplyBodyDeletionMethod.Invoke(view, [false])!;
+        view.TryApplyBodyDeletion(false);
 
     private static void SelectFirstParagraph(DocumentView view)
     {

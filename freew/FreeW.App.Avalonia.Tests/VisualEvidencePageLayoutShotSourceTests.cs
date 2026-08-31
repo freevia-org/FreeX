@@ -341,7 +341,7 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
 
         source.Should().Contain("var formatted = BuildChartSceneText(text);");
-        source.Should().Contain("private FormattedText BuildChartSceneText(ChartSceneText text)");
+        source.Should().Contain("internal FormattedText BuildChartSceneText(ChartSceneText text)");
         source.Should().Contain("text.Kind == ChartSceneTextKind.Title ? \"Aptos\" : \"Calibri\"");
         source.Should().Contain("Math.Max(1, text.FontSize)");
         source.Should().Contain("Matrix.CreateRotation(text.RotationDegrees * Math.PI / 180) *");

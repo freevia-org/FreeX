@@ -5073,7 +5073,7 @@ public sealed partial class DocumentView : Control
             Math.Max(0.1, slice.StrokeWidth / PxPerPoint)));
     }
 
-    private void AddPdfSceneText(
+    internal void AddPdfSceneText(
         List<PdfDrawOp> ops,
         ChartSceneText text,
         Rect sourceRect,
@@ -5116,7 +5116,7 @@ public sealed partial class DocumentView : Control
 
     private readonly record struct PdfPoint(double X, double Y);
 
-    private readonly record struct PdfRectValue(double X, double Y, double Width, double Height);
+    internal readonly record struct PdfRectValue(double X, double Y, double Width, double Height);
 
     private PdfRectValue PdfRect(
         Rect sourceRect,
@@ -5390,7 +5390,7 @@ public sealed partial class DocumentView : Control
             addNode(node.NodeIndex, X(node.X), Y(node.Y), node.Width * scale, node.Height * scale, null);
     }
 
-    private void AddPdfTextAt(
+    internal void AddPdfTextAt(
         List<PdfDrawOp> ops,
         string text,
         double xDip,
@@ -27206,7 +27206,7 @@ public sealed partial class DocumentView : Control
     private static EquationVisualStyle EquationDelimiterStyle { get; } = new(EquationVisualPlanner.DefaultMathFontFamily, false, EquationVisualPlanner.DelimiterFontSizeScale, EquationVisualBaselineRole.Normal, 0);
     private static EquationVisualStyle EquationFunctionNameStyle { get; } = new(EquationVisualPlanner.DefaultMathFontFamily, false, EquationVisualPlanner.StructureFontSizeScale, EquationVisualBaselineRole.Normal, 0);
 
-    private FormattedText Build(string text, RunFormatting fmt)
+    internal FormattedText Build(string text, RunFormatting fmt)
     {
         var typeface = new Typeface(
             fmt.FontFamily is { Length: > 0 } family ? new FontFamily(family) : FontFamily.Default,
@@ -28114,7 +28114,7 @@ public sealed partial class DocumentView : Control
         context.DrawText(formatted, new Point(x, y));
     }
 
-    private FormattedText BuildChartSceneText(ChartSceneText text)
+    internal FormattedText BuildChartSceneText(ChartSceneText text)
     {
         var typeface = new Typeface(
             new FontFamily(text.Kind == ChartSceneTextKind.Title ? "Aptos" : "Calibri"),

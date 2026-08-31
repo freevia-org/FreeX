@@ -343,7 +343,7 @@ public sealed partial class NamedRangeDialog : Window
         return result.IsValid ? null : DescribeNameError(result.Error);
     }
 
-    private static string DescribeNameError(DefinedNameError error) =>
+    internal static string DescribeNameError(DefinedNameError error) =>
         DefinedNameValidationMessages.Describe(error).Resolve(UiText.Get);
 
     private static string DescribeDraftNameError(DefinedNameError error, string name) =>
@@ -351,7 +351,7 @@ public sealed partial class NamedRangeDialog : Window
             ? UiText.Format("NamedRange_NameAlreadyExistsInScopeMessage", name)
             : DescribeNameError(error);
 
-    private static string DescribeRefersToError(RefersToError error) =>
+    internal static string DescribeRefersToError(RefersToError error) =>
         RefersToValidationMessages.Describe(error).Resolve(UiText.Get);
 
     public static NamedRangeSelectionRequest CreateRangeSelectionRequest(

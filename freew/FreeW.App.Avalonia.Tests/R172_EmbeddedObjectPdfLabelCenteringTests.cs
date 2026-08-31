@@ -59,13 +59,12 @@ public sealed class R172_EmbeddedObjectPdfLabelCenteringTests
             // The same real-glyph measurement the live editor already uses to center this exact
             // label on screen (DrawInlineEmbeddedObject / Build), reached here via reflection since
             // it is a private instance method of DocumentView.
-            var buildMethod = typeof(DocumentView).GetMethod("Build", BindingFlags.Instance | BindingFlags.NonPublic)!;
             var fmt = RunFormatting.Default with
             {
                 FontSizePt = 10,
                 ColorHex = EmbeddedObjectVisualPlanner.ForegroundColorHex,
             };
-            var formatted = (FormattedText)buildMethod.Invoke(view, [label, fmt])!;
+            var formatted = view.Build(label, fmt);
             var realWidthPt = formatted.WidthIncludingTrailingWhitespace / PxPerPoint;
 
             var expectedX = fillRect.X + Math.Max(4, (fillRect.Width - realWidthPt) / 2);

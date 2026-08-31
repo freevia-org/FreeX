@@ -47,15 +47,9 @@ namespace FreeW.App.Host.Tests;
 /// </summary>
 public sealed class TableBlockContentControlRoundTripTests
 {
-    private static readonly MethodInfo TryPrepareNativeFallbackMethod =
-        typeof(DocumentView).GetMethod("TryPrepareNativeFallback", BindingFlags.NonPublic | BindingFlags.Instance)
-        ?? throw new InvalidOperationException(
-            "DocumentView.TryPrepareNativeFallback not found -- the choke point this test targets was renamed or removed.");
-
     private static bool TryPrepareNativeFallbackAllowed(DocumentView view)
     {
-        var args = new object?[] { null };
-        return (bool)TryPrepareNativeFallbackMethod.Invoke(view, args)!;
+        return view.TryPrepareNativeFallback(out _);
     }
 
     private static DocumentView LoadWithTable(BlockContentControl? blockContentControl)

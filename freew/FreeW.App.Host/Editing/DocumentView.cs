@@ -969,7 +969,7 @@ public sealed partial class DocumentView : RichTextBox
     /// paragraph's BLOCK-level control (see <see cref="BlockContentControlAt"/>) -- the whole-paragraph
     /// <c>w:sdt</c> Word produces for "lock whole paragraph", which carries no run.Control at all.
     /// </summary>
-    private bool TryPrepareNativeFallback(out bool restoreReadOnly)
+    internal bool TryPrepareNativeFallback(out bool restoreReadOnly)
     {
         restoreReadOnly = false;
         // freew-cc-6: the checks below judge the position the caret sits ON, which says nothing about a
@@ -1014,7 +1014,7 @@ public sealed partial class DocumentView : RichTextBox
     /// ribbon repaints) -- toggling IsReadOnly with no paired restore there would leave Filling-In-Forms
     /// protection permanently open the first time the caret happens to rest in an editable field.
     /// </summary>
-    private bool IsCaretOnLockedContentControl()
+    internal bool IsCaretOnLockedContentControl()
     {
         // freew-cc-6: Cut and Paste both REMOVE whatever the selection covers, so a selection spanning a
         // delete-locked control is blocked even when the caret itself rests on ordinary text.
@@ -1255,7 +1255,7 @@ public sealed partial class DocumentView : RichTextBox
     // Read the text before the caret (within the current paragraph), evaluate the AutoCorrect rules for
     // the just-typed char, and if one fires, delete back N chars and insert the replacement at the caret.
     // Returns true when a correction was applied (the raw keystroke should be suppressed).
-    private bool TryAutoCorrect(char justTyped)
+    internal bool TryAutoCorrect(char justTyped)
     {
         // freew-autocorrect-bypasses-restrict-editing-wpf: this mutates the live FlowDocument directly
         // (TextRange.Text assignment below), so — unlike ordinary typing, which is gated by
@@ -15646,7 +15646,7 @@ public sealed partial class DocumentView : RichTextBox
 
     private bool TryApplyBodyDeleteForward() => TryApplyBodyDeletion(backward: false);
 
-    private bool TryApplyBodyDeletion(bool backward)
+    internal bool TryApplyBodyDeletion(bool backward)
     {
         if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit)
             || !TryGetCurrentBodyTextRange(out var range))
@@ -16367,7 +16367,7 @@ public sealed partial class DocumentView : RichTextBox
     /// still leaves the keystroke consumed by the caller so it never falls through to a literal tab
     /// character while Filling-In-Forms protection is active.
     /// </summary>
-    private bool TabToContentControl(bool forward)
+    internal bool TabToContentControl(bool forward)
     {
         var stops = BodyContentControlTabRuns().ToList();
         if (stops.Count == 0)

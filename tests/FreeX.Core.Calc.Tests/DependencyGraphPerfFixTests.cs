@@ -57,15 +57,8 @@ public class DependencyGraphPerfFixCorrectnessTests
 
         // Test graph using compact range dep
         var rangeGraph = new DependencyGraph();
-        var setDependencies = typeof(DependencyGraph).GetMethod(
-            "SetDependencies",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
-            null,
-            [typeof(CellAddress), typeof(HashSet<CellAddress>), typeof(IReadOnlyList<GridRange>)],
-            null);
-        setDependencies.Should().NotBeNull();
         var range = new GridRange(a1, b2);
-        setDependencies!.Invoke(rangeGraph, [c3, new HashSet<CellAddress>(), new[] { range }]);
+        rangeGraph.SetDependencies(c3, new HashSet<CellAddress>(), new[] { range });
 
         // Both should recalc c3 when any cell in the range changes
         foreach (var changed in new[] { a1, a2, b1, b2 })
@@ -95,17 +88,11 @@ public class DependencyGraphPerfFixCorrectnessTests
         var e1 = new CellAddress(sheetId, 1, 5);
 
         var graph = new DependencyGraph();
-        var setDependencies = typeof(DependencyGraph).GetMethod(
-            "SetDependencies",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
-            null,
-            [typeof(CellAddress), typeof(HashSet<CellAddress>), typeof(IReadOnlyList<GridRange>)],
-            null);
-        setDependencies!.Invoke(graph, [
+        graph.SetDependencies(
             d1,
             new HashSet<CellAddress>(),
             new[] { new GridRange(a1, c1) }
-        ]);
+        );
         graph.SetDependencies(e1, [d1]);
 
         var plan = graph.GetRecalcOrder([a1]);
@@ -171,14 +158,8 @@ public class DependencyGraphPerfFixCorrectnessTests
         var b1 = new CellAddress(sheetId, 1, 2);
 
         var graph = new DependencyGraph();
-        var setDependencies = typeof(DependencyGraph).GetMethod(
-            "SetDependencies",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
-            null,
-            [typeof(CellAddress), typeof(HashSet<CellAddress>), typeof(IReadOnlyList<GridRange>)],
-            null);
         var range = new GridRange(aCells[0], aCells[^1]);
-        setDependencies!.Invoke(graph, [b1, new HashSet<CellAddress>(), new[] { range }]);
+        graph.SetDependencies(b1, new HashSet<CellAddress>(), new[] { range });
 
         var dirtyCells = new HashSet<CellAddress>(aCells) { b1 };
         var plan = graph.GetEvaluationOrder(dirtyCells);
@@ -201,18 +182,12 @@ public class DependencyGraphPerfFixCorrectnessTests
         var b1 = new CellAddress(sheetId, 1, 2);
 
         var graph = new DependencyGraph();
-        var setDependencies = typeof(DependencyGraph).GetMethod(
-            "SetDependencies",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
-            null,
-            [typeof(CellAddress), typeof(HashSet<CellAddress>), typeof(IReadOnlyList<GridRange>)],
-            null);
         // B1 has both an exact dep on A1 and a range dep covering A1:A3
-        setDependencies!.Invoke(graph, [
+        graph.SetDependencies(
             b1,
             new HashSet<CellAddress> { a1 },
             new[] { new GridRange(a1, a3) }
-        ]);
+        );
         // Also set up a chain: C1 depends on B1 to verify topological order
         var c1 = new CellAddress(sheetId, 1, 3);
         graph.SetDependencies(c1, [b1]);
@@ -250,13 +225,6 @@ public class DependencyGraphPerfFixCorrectnessTests
             // Formula cells: col 2, rows 1..formulaCount, each references a random subrange of col 1
             var oracleGraph = new DependencyGraph();
             var rangeGraph = new DependencyGraph();
-            var setDependencies = typeof(DependencyGraph).GetMethod(
-                "SetDependencies",
-                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
-                null,
-                [typeof(CellAddress), typeof(HashSet<CellAddress>), typeof(IReadOnlyList<GridRange>)],
-                null)!;
-
             for (var f = 0; f < formulaCount; f++)
             {
                 var formulaRow = (uint)(f + 1);
@@ -274,11 +242,11 @@ public class DependencyGraphPerfFixCorrectnessTests
                 oracleGraph.SetDependencies(formulaCell, exactPrecs);
 
                 // Range graph: compact range
-                setDependencies.Invoke(rangeGraph, [
+                rangeGraph.SetDependencies(
                     formulaCell,
                     new HashSet<CellAddress>(),
                     (IReadOnlyList<GridRange>)new[] { range }
-                ]);
+                );
             }
 
             // For each data cell, the set of triggered formulas must match

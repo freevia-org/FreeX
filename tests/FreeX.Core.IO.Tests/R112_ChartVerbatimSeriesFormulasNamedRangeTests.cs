@@ -369,10 +369,7 @@ public sealed class R112_ChartVerbatimSeriesFormulasNamedRangeTests
 
     private static List<XElement> BuildChartExPrimarySeries(ChartModel chart, Sheet sheet, int dataCount)
     {
-        var buildSeries = typeof(FreeX.Core.IO.XlsxChartXmlWriter).GetMethod(
-            "BuildChartExSeries",
-            BindingFlags.NonPublic | BindingFlags.Static)!;
-        var series = (IEnumerable<XElement>)buildSeries.Invoke(null, [chart, sheet, ChartExNs, dataCount])!;
+        var series = FreeX.Core.IO.XlsxChartXmlWriter.BuildChartExSeries(chart, sheet, ChartExNs, dataCount);
         return series.ToList();
     }
 
