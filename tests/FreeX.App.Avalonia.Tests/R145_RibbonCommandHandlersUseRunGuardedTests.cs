@@ -77,6 +77,47 @@ public sealed class R145_RibbonCommandHandlersUseRunGuardedTests
             string.Join("\n", offendingLines.Select(l => l.Trim())));
     }
 
+    // Round 176 / finding sweep114-F1: the two Facts above only ever read MainWindow.cs and
+    // MainWindow.ContextualTabs.cs, but the RunGuarded(...) handler-dictionary pattern this guard
+    // polices is used across ~130 MainWindow partial files (dozens of which use RunGuarded directly,
+    // e.g. MainWindow.RibbonMenuWires.cs). A bare `_ = FooAsync()` handler introduced in any of those
+    // other files left both Facts green -- the scan never read the file containing the violation. This
+    // Fact widens coverage to every MainWindow partial class file, found by scanning the project
+    // directory tree rather than by a hand-maintained file list, so a newly created partial file (e.g.
+    // one added under a feature subfolder like Charts/MainWindow.Charts.cs) is covered automatically
+    // the day it is created, with no test edit required.
+    [Fact]
+    public void AllMainWindowPartialFiles_DoNotBareFireAndForgetAsyncCalls()
+    {
+        var avaloniaProjectDir = RepoFile("src", "FreeX.App.Avalonia");
+
+        var partialFiles = Directory
+            .GetFiles(avaloniaProjectDir, "MainWindow*.cs", SearchOption.AllDirectories)
+            .Where(file => File.ReadAllText(file).Contains("partial class MainWindow"))
+            .OrderBy(file => file, StringComparer.Ordinal)
+            .ToList();
+
+        // Guard the guard: if the derived file set were ever accidentally narrowed (e.g. by a filter
+        // typo), this scan would silently cover nothing and report false-green, same failure mode as
+        // the finding itself. Assert it actually finds the known MainWindow partial-class population.
+        partialFiles.Should().HaveCountGreaterThan(100,
+            "the derived MainWindow-partial file set should find the whole ~130-file population " +
+            "(including nested ones like Charts/MainWindow.Charts.cs), not a hand-picked subset");
+
+        var offendingLines = partialFiles
+            .SelectMany(file => File.ReadAllLines(file)
+                .Select((line, index) => (file, line, number: index + 1))
+                .Where(entry => BareFireAndForgetAsync.IsMatch(entry.line) && !Regex.IsMatch(entry.line, @"_\s*=\s*await\b")))
+            .Select(entry => $"{Path.GetFileName(entry.file)}:{entry.number}: {entry.line.Trim()}")
+            .ToList();
+
+        offendingLines.Should().BeEmpty(
+            "every ribbon/menu Action handler in every MainWindow partial file must route its async " +
+            "dialog call through RunGuarded(...) so a thrown exception is surfaced on the status bar " +
+            "instead of becoming an unobserved Task exception (finding async-hazards F2 / sweep114-F1). " +
+            "Offending lines:\n" + string.Join("\n", offendingLines));
+    }
+
     [Fact]
     public void FormatCellsRibbonCommand_RoutesThroughRunGuarded()
     {

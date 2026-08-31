@@ -680,10 +680,16 @@ public sealed partial class SlideCanvas : Control
     private static void RenderShapeEffects(DrawingContext dc, DrawOp.Shape shape)
     {
         if (shape.Geometry.Contours.Count == 0) return;
-        if (shape.Text is not null && shape.Fill is ResolvedFill.None) return;
+        // r176: this used to skip ALL outer effects for an unfilled text box. The case it
+        // exists for is the SHADOW -- a shadow cast by a shape with nothing in it is a dark
+        // blob floating behind transparent text -- but suppressing glow and soft edge with it
+        // also made the screen disagree with print: PresentationPdfExporter has no equivalent
+        // guard and has always drawn the glow for exactly these shapes. A glow authored on a
+        // text box was therefore invisible on screen and present in the exported PDF.
+        var suppressShadow = shape.Text is not null && shape.Fill is ResolvedFill.None;
         var plan = ResolvedShapeEffectRenderPlanner.PlanOuterEffects(shape.Effects, shape.BoundsDip);
 
-        if (plan.ShadowPasses.Count > 0)
+        if (plan.ShadowPasses.Count > 0 && !suppressShadow)
         {
             var shadowGeo = AvaloniaSlideGeometryFactory.ToGeometry(shape.Geometry);
             if (shadowGeo is null) return;

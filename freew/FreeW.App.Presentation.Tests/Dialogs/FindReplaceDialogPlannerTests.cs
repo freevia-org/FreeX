@@ -618,4 +618,95 @@ public sealed class FindReplaceDialogPlannerTests
         FindReplaceDialogPlanner.CountMatches(tableDoc, "Budget2026", new FindReplaceSearchOptions())
             .Should().Be(1);
     }
+
+    // ---- freew-find-replace F1 ------------------------------------------------------------------
+    // FindNextMatch -- the only one of FindNextMatch/CountMatches/DocumentContains that any shipping
+    // code actually calls (FreeW.App.Avalonia.Editing.DocumentView.FindNext, and transitively
+    // ReplaceNext/ReplaceAll) -- used to only ever walk document.Blocks, so Find Next/Replace/Replace
+    // All reported "not found" / 0 replacements for a term that existed only in a header or footer,
+    // even though CountMatches/DocumentContains (fixed above, freew-find-replace F2) already proved
+    // the term was there. FindNextMatch now falls back to the document's default header/footer
+    // (TextDocument.Header/Footer) once the whole body has been searched with no hit -- the one slot
+    // DocumentView.PlaceCaretInHeaderFooter can actually place a caret in, so a hit there can be
+    // selected and replaced, not just detected. See FindReplaceDialogPlanner.cs's
+    // FindInDefaultHeaderFooter remarks for what remains out of reach (other header/footer slots,
+    // footnotes, endnotes, text boxes) and DocumentView.SelectFindReplaceMatch for the production
+    // caret-placement side of this fix.
+
+    [Fact]
+    public void FindNextMatch_LocatesATermThatOnlyOccursInTheHeader()
+    {
+        var doc = BuildSampleDoc("nothing relevant here");
+        doc.Header = new HeaderFooter("MAGICWORD in the header");
+
+        var match = FindReplaceDialogPlanner.FindNextMatch(
+            doc, "MAGICWORD", new FindReplaceSearchOptions(), fromBlock: 0, fromOffset: 0);
+
+        match.Should().NotBeNull("the term is plainly visible in the header on every page");
+        match!.Value.IsInHeaderFooter.Should().BeTrue();
+        match.Value.HeaderFooterIsFooter.Should().BeFalse();
+        match.Value.HeaderFooterParagraphIndex.Should().Be(0);
+        match.Value.Start.Should().Be(0);
+        match.Value.Length.Should().Be("MAGICWORD".Length);
+    }
+
+    [Fact]
+    public void FindNextMatch_LocatesATermThatOnlyOccursInTheFooter()
+    {
+        var doc = BuildSampleDoc("nothing relevant here");
+        doc.Footer = new HeaderFooter("MAGICWORD in the footer");
+
+        var match = FindReplaceDialogPlanner.FindNextMatch(
+            doc, "MAGICWORD", new FindReplaceSearchOptions(), fromBlock: 0, fromOffset: 0);
+
+        match.Should().NotBeNull("the term is plainly visible in the footer on every page");
+        match!.Value.IsInHeaderFooter.Should().BeTrue();
+        match.Value.HeaderFooterIsFooter.Should().BeTrue();
+        match.Value.HeaderFooterParagraphIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void FindNextMatch_StillPrefersABodyOrTableMatchOverAHeaderFooterMatch()
+    {
+        // Sibling/non-regression coverage: the header/footer fallback must only kick in once the body
+        // (and any table) has been searched with no hit -- an ordinary body match must keep winning,
+        // exactly as before this fix, even when the same term also appears in the header.
+        var doc = BuildSampleDoc("find the body match here");
+        doc.Header = new HeaderFooter("find in the header too");
+
+        var match = FindReplaceDialogPlanner.FindNextMatch(
+            doc, "find", new FindReplaceSearchOptions(), fromBlock: 0, fromOffset: 0);
+
+        match.Should().Be(new FindReplaceMatch(0, 0, 4));
+        match!.Value.IsInHeaderFooter.Should().BeFalse();
+    }
+
+    [Fact]
+    public void FindNextMatch_StillReturnsNullWhenTermIsNowhereInTheBodyOrHeaderOrFooter()
+    {
+        // Sibling/non-regression coverage: a document with header/footer content that just doesn't
+        // contain the term must still report "not found", not a phantom header/footer hit.
+        var doc = BuildSampleDoc("nothing relevant here");
+        doc.Header = new HeaderFooter("also nothing relevant");
+        doc.Footer = new HeaderFooter("still nothing relevant");
+
+        FindReplaceDialogPlanner.FindNextMatch(
+                doc, "MAGICWORD", new FindReplaceSearchOptions(), fromBlock: 0, fromOffset: 0)
+            .Should().BeNull();
+    }
+
+    [Fact]
+    public void FindNextMatch_StillReturnsNullForATermThatOnlyOccursInAFootnote()
+    {
+        // Documents the remaining, deliberately out-of-scope gap: footnotes/endnotes have no
+        // production caret model to select into yet (see FindInDefaultHeaderFooter remarks), so
+        // FindNextMatch correctly still reports "not found" for a footnote-only term rather than
+        // returning a hit DocumentView.SelectFindReplaceMatch cannot act on.
+        var doc = BuildSampleDoc("nothing relevant here");
+        doc.Footnotes[1] = new Footnote(1, "MAGICFOOT text");
+
+        FindReplaceDialogPlanner.FindNextMatch(
+                doc, "MAGICFOOT", new FindReplaceSearchOptions(), fromBlock: 0, fromOffset: 0)
+            .Should().BeNull();
+    }
 }

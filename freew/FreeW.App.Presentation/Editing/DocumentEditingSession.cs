@@ -1236,7 +1236,9 @@ public sealed class DocumentEditingSession
         var splitOffset = Math.Clamp(span.Start.Offset, 0, remaining.PlainText.Length);
         if (remaining.Formatting.ListKind != ListKind.None && remaining.PlainText.Length == 0)
         {
-            remaining.Formatting = remaining.Formatting with { ListKind = ListKind.None, ListLevel = 0 };
+            remaining.Formatting = remaining.Formatting.ListLevel == 0
+                ? remaining.Formatting with { ListKind = ListKind.None, ListLevel = 0 }
+                : remaining.Formatting with { ListLevel = remaining.Formatting.ListLevel - 1 };
             _commands.Execute(new ReplaceBlocksCommand(span.Start.BlockIndex, replaceCount, [remaining]));
             result = new DocumentParagraphEditResult(span.Start, replaceCount);
             return true;
