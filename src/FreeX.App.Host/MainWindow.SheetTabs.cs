@@ -317,6 +317,29 @@ public partial class MainWindow
         UpdateViewport();
         RefreshSheetTabs();
         UpdateTitleBar();
+
+        // Selecting the tab refreshes its container, so the element that received this mouse event
+        // no longer owns the attached ContextMenu when WPF reaches its normal context-menu route.
+        // Open the rebuilt menu on the replacement element instead of leaving right-click as a
+        // selection-only operation.
+        e.Handled = true;
+        Dispatcher.BeginInvoke(
+            () => OpenSheetTabContextMenuFromPointer(tab.Id),
+            DispatcherPriority.Input);
+    }
+
+    private void OpenSheetTabContextMenuFromPointer(SheetId tabId)
+    {
+        var tab = FindSheetTab(tabId);
+        var target = tab is null ? null : FindSheetTabContextMenuTarget(tab);
+        if (target?.ContextMenu is not { } contextMenu)
+            return;
+
+        RebuildSheetTabContextMenu(contextMenu, tab);
+        HideSheetTabContextMenuInputGestures(contextMenu);
+        contextMenu.PlacementTarget = target;
+        contextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+        contextMenu.IsOpen = true;
     }
 
     private void SheetTab_LabelMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
