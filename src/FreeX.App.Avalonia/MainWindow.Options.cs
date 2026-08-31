@@ -590,11 +590,11 @@ public sealed partial class MainWindow
 
         var customizeRibbonImportExportButton = OptionsButton(OptionsText("Options_ImportExport"), width: 130);
         AutomationProperties.SetAutomationId(customizeRibbonImportExportButton, "RibbonImportExportButton");
-        customizeRibbonImportExportButton.Click += async (_, _) =>
-            await AvaloniaUserMessageDialog.ShowWarningAsync(
+        customizeRibbonImportExportButton.Click += (_, _) => RunGuarded(() =>
+            AvaloniaUserMessageDialog.ShowWarningAsync(
                 dialog,
                 UiText.Get("DeferredCommand_RibbonCustomization_Body"),
-                UiText.Get("DeferredCommand_RibbonCustomization_Title"));
+                UiText.Get("DeferredCommand_RibbonCustomization_Title")));
 
         var customizeRibbonPanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_CustomizeTheRibbon")),
@@ -840,10 +840,10 @@ public sealed partial class MainWindow
 
         var importItem = new MenuItem { Header = QuickAccessToolbarCustomizationFile.ImportMenuHeader.TrimStart('_') };
         AutomationProperties.SetAutomationId(importItem, FreeXAutomationIdCatalog.QuickAccessToolbarImportCustomizationMenuItem);
-        importItem.Click += async (_, _) => await ImportQuickAccessCustomizationAsync();
+        importItem.Click += (_, _) => RunGuarded(ImportQuickAccessCustomizationAsync);
         var exportItem = new MenuItem { Header = QuickAccessToolbarCustomizationFile.ExportMenuHeader.TrimStart('_') };
         AutomationProperties.SetAutomationId(exportItem, FreeXAutomationIdCatalog.QuickAccessToolbarExportCustomizationMenuItem);
-        exportItem.Click += async (_, _) => await ExportQuickAccessCustomizationAsync();
+        exportItem.Click += (_, _) => RunGuarded(ExportQuickAccessCustomizationAsync);
         var quickAccessImportExportMenu = new ContextMenu { Items = { importItem, exportItem } };
         quickAccessImportExportButton.Click += (_, _) => quickAccessImportExportMenu.Open(quickAccessImportExportButton);
 
@@ -909,11 +909,11 @@ public sealed partial class MainWindow
             OptionsText("Options_Go"),
             width: OptionsDialogPlanner.AddInsGoButtonWidth);
         AutomationProperties.SetAutomationId(addInsGoButton, "AddInsGoButton");
-        addInsGoButton.Click += async (_, _) =>
-            await AvaloniaUserMessageDialog.ShowWarningAsync(
+        addInsGoButton.Click += (_, _) => RunGuarded(() =>
+            AvaloniaUserMessageDialog.ShowWarningAsync(
                 dialog,
                 UiText.Get("DeferredCommand_OfficeAddIns_Body"),
-                UiText.Get("DeferredCommand_OfficeAddIns_Title"));
+                UiText.Get("DeferredCommand_OfficeAddIns_Title")));
 
         var addInsDescription = OptionsDescription(
             OptionsText("Options_ActiveApplicationAddIns"),
@@ -942,11 +942,11 @@ public sealed partial class MainWindow
             OptionsText("Options_CrashReportsIncludeAppVersionRuntimeOperatingSystemSessi"));
 
         var trustCenterSettingsButton = OptionsButton(OptionsText("Options_TrustCenterSettings"), width: 170);
-        trustCenterSettingsButton.Click += async (_, _) =>
-            await AvaloniaUserMessageDialog.ShowWarningAsync(
+        trustCenterSettingsButton.Click += (_, _) => RunGuarded(() =>
+            AvaloniaUserMessageDialog.ShowWarningAsync(
                 dialog,
                 UiText.Get("DeferredCommand_TrustCenter_Body"),
-                UiText.Get("DeferredCommand_TrustCenter_Title"));
+                UiText.Get("DeferredCommand_TrustCenter_Title")));
 
         var trustCenterPanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_TrustCenter2")),

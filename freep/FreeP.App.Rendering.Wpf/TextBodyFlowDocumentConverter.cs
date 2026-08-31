@@ -152,7 +152,19 @@ internal static class TextBodyFlowDocumentConverter
     /// underline, and strikethrough are extracted. Color is stored as a resolved sRGB
     /// <see cref="ThemeAwareColor"/> (scheme ref not available during editing, by design).
     /// </summary>
-    public static TextBody FromFlowDocument(FlowDocument doc, TextBody? originalBody = null)
+    /// <param name="destinationSlideIds">
+    /// Slide ids of the deck this document is being committed into. A <c>freep-slide:</c>
+    /// NavigateUri is how <see cref="ToFlowDocument"/> carries an internal slide jump, and WPF's
+    /// own Ctrl+V will paste one straight into the document when the clipboard adapter declines
+    /// to handle the key (a failed clipboard read) -- reviving a target from whichever deck the
+    /// XamlPackage was copied from. Supplying the ids orphans what this deck cannot resolve, the
+    /// same rule the clipboard planner applies. Null (the default) keeps every reconstructed
+    /// target, which is what a copy-side read of the document wants.
+    /// </param>
+    public static TextBody FromFlowDocument(
+        FlowDocument doc,
+        TextBody? originalBody = null,
+        IReadOnlyCollection<string>? destinationSlideIds = null)
     {
         var body = new TextBody
         {
@@ -341,7 +353,7 @@ internal static class TextBodyFlowDocumentConverter
             body.Paragraphs.Add(para);
         }
 
-        return body;
+        return InCanvasRichClipboardPlanner.ResolveSlideJumps(body, destinationSlideIds);
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────

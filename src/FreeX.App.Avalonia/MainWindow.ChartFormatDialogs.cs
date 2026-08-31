@@ -105,21 +105,21 @@ public sealed partial class MainWindow
             }
         }
 
-        fillButton.Click += async (_, _) => await PickColor(
+        fillButton.Click += (_, _) => RunGuarded(() => PickColor(
             ChartDataLabelsDialogFieldId.FillColor,
             () => state.FillColor,
             color => state = state with { FillColor = color },
-            fillButton);
-        borderButton.Click += async (_, _) => await PickColor(
+            fillButton));
+        borderButton.Click += (_, _) => RunGuarded(() => PickColor(
             ChartDataLabelsDialogFieldId.BorderColor,
             () => state.BorderColor,
             color => state = state with { BorderColor = color },
-            borderButton);
-        textButton.Click += async (_, _) => await PickColor(
+            borderButton));
+        textButton.Click += (_, _) => RunGuarded(() => PickColor(
             ChartDataLabelsDialogFieldId.TextColor,
             () => state.TextColor,
             color => state = state with { TextColor = color },
-            textButton);
+            textButton));
 
         var dialog = NewChartDialog(UiText.Get("ChartDataLabels_Title"), "ChartDataLabelsDialog");
 
@@ -392,26 +392,26 @@ public sealed partial class MainWindow
             }
         }
 
-        majorGridColorButton.Click += async (_, _) => await PickAxisColor(
+        majorGridColorButton.Click += (_, _) => RunGuarded(() => PickAxisColor(
             ChartAxisDialogFieldId.MajorGridlineColor,
             () => state.MajorGridlineColor,
             color => state = state with { MajorGridlineColor = color },
-            majorGridColorButton);
-        minorGridColorButton.Click += async (_, _) => await PickAxisColor(
+            majorGridColorButton));
+        minorGridColorButton.Click += (_, _) => RunGuarded(() => PickAxisColor(
             ChartAxisDialogFieldId.MinorGridlineColor,
             () => state.MinorGridlineColor,
             color => state = state with { MinorGridlineColor = color },
-            minorGridColorButton);
-        labelColorButton.Click += async (_, _) => await PickAxisColor(
+            minorGridColorButton));
+        labelColorButton.Click += (_, _) => RunGuarded(() => PickAxisColor(
             ChartAxisDialogFieldId.LabelTextColor,
             () => state.LabelTextColor,
             color => state = state with { LabelTextColor = color },
-            labelColorButton);
-        lineColorButton.Click += async (_, _) => await PickAxisColor(
+            labelColorButton));
+        lineColorButton.Click += (_, _) => RunGuarded(() => PickAxisColor(
             ChartAxisDialogFieldId.LineColor,
             () => state.LineColor,
             color => state = state with { LineColor = color },
-            lineColorButton);
+            lineColorButton));
 
         // WPF ChartAxisFormatDialog selects the minimum editor when the dialog is loaded. Keep the
         // equivalent Avalonia target explicit because this dialog's controls are nested in scrollable
@@ -716,7 +716,7 @@ public sealed partial class MainWindow
             LoadState(ChartSeriesFormatPlanner.Read(chart, index));
         };
 
-        fillButton.Click += async (_, _) =>
+        fillButton.Click += (_, _) => RunGuarded(async () =>
         {
             var chosen = await ShowMoreColorsDialogAsync(
                 SeriesFieldLabel(ChartSeriesFormatDialogFieldId.FillColor),
@@ -726,8 +726,8 @@ public sealed partial class MainWindow
                 state = state with { FillColor = color };
                 fillButton.Content = DescribeColor(SeriesFieldLabel(ChartSeriesFormatDialogFieldId.FillColor), color);
             }
-        };
-        strokeButton.Click += async (_, _) =>
+        });
+        strokeButton.Click += (_, _) => RunGuarded(async () =>
         {
             var chosen = await ShowMoreColorsDialogAsync(
                 SeriesFieldLabel(ChartSeriesFormatDialogFieldId.StrokeColor),
@@ -737,7 +737,7 @@ public sealed partial class MainWindow
                 state = state with { StrokeColor = color };
                 strokeButton.Content = DescribeColor(SeriesFieldLabel(ChartSeriesFormatDialogFieldId.StrokeColor), color);
             }
-        };
+        });
 
         var dialog = NewChartDialog(UiText.Get("ChartSeries_Title"), "ChartSeriesFormatDialog");
 
@@ -919,7 +919,7 @@ public sealed partial class MainWindow
         ApplyTrendlineDescriptorAutomation(dashCombo, ChartTrendlineDialogFieldId.DashStyle);
         dashCombo.SelectedItem = current.DashStyle ?? ChartLineDashStyle.Solid;
 
-        colorButton.Click += async (_, _) =>
+        colorButton.Click += (_, _) => RunGuarded(async () =>
         {
             var chosen = await ShowMoreColorsDialogAsync(
                 TrendlineFieldLabel(ChartTrendlineDialogFieldId.LineColor),
@@ -929,7 +929,7 @@ public sealed partial class MainWindow
                 state = state with { Color = color };
                 colorButton.Content = DescribeColor(TrendlineFieldLabel(ChartTrendlineDialogFieldId.LineColor), color);
             }
-        };
+        });
 
         var dialog = NewChartDialog(UiText.Get("ChartTrendline_Title"), "ChartTrendlineDialog");
 

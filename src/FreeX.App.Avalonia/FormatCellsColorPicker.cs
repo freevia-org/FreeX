@@ -47,6 +47,7 @@ internal sealed class FormatCellsColorPicker : Button
     private readonly bool _includeClear;
     private readonly FormatCellsColorChoice? _clearChoice;
     private readonly string _moreColorsTitle;
+    private readonly Action<Func<Task>> _runGuarded;
 
     private readonly Border _previewSwatch;
     private readonly TextBlock _previewLabel;
@@ -59,11 +60,13 @@ internal sealed class FormatCellsColorPicker : Button
         Func<string, CellColor, Task<CellColor?>> showMoreColorsAsync,
         string noColorLabel,
         bool includeClear,
-        string moreColorsTitle)
+        string moreColorsTitle,
+        Action<Func<Task>>? runGuarded = null)
     {
         _recentColors = recentColors ?? throw new ArgumentNullException(nameof(recentColors));
         _showMoreColorsAsync = showMoreColorsAsync ?? throw new ArgumentNullException(nameof(showMoreColorsAsync));
         _moreColorsTitle = moreColorsTitle;
+        _runGuarded = runGuarded ?? RunGuardedLocally;
         _includeClear = includeClear;
         _noColorChoice = new FormatCellsColorChoice(noColorLabel, null, Clear: false);
         _clearChoice = includeClear ? new FormatCellsColorChoice(UiText.Get("FormatCells_NoFill"), null, Clear: true) : null;
@@ -204,7 +207,7 @@ internal sealed class FormatCellsColorPicker : Button
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
         AutomationProperties.SetAutomationId(moreColorsButton, "FormatCellsColorPickerMoreColorsButton");
-        moreColorsButton.Click += async (_, _) => await ShowMoreColorsAsync();
+        moreColorsButton.Click += (_, _) => _runGuarded(ShowMoreColorsAsync);
         _flyoutRoot.Children.Add(moreColorsButton);
 
         _flyout = new Flyout
@@ -284,5 +287,17 @@ internal sealed class FormatCellsColorPicker : Button
         var chosen = await _showMoreColorsAsync(_moreColorsTitle, initial);
         if (chosen is { } color)
             SetSelected(new FormatCellsColorChoice(CellColorPalettePlanner.FormatHexColor(color), color, Clear: false));
+    }
+
+    private async void RunGuardedLocally(Func<Task> handler)
+    {
+        try
+        {
+            await handler();
+        }
+        catch (Exception exception)
+        {
+            ToolTip.SetTip(this, exception.Message);
+        }
     }
 }

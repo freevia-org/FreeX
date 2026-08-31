@@ -147,14 +147,14 @@ public sealed partial class MainWindow
 
         filterBox.SelectionChanged += (_, _) => RefreshRows();
 
-        newButton.Click += async (_, _) =>
+        newButton.Click += (_, _) => RunGuarded(async () =>
         {
             warningText.IsVisible = false;
             await ShowDefineNameDialogAsync(null);
             RefreshRows();
-        };
+        });
 
-        editButton.Click += async (_, _) =>
+        editButton.Click += (_, _) => RunGuarded(async () =>
         {
             warningText.IsVisible = false;
             var selection = DefinedNameUiPolicy.PlanManagerSelection(
@@ -166,7 +166,7 @@ public sealed partial class MainWindow
 
             await ShowDefineNameDialogAsync(selectedRow);
             RefreshRows();
-        };
+        });
 
         deleteButton.Click += (_, _) =>
         {

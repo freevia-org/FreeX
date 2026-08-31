@@ -2179,10 +2179,14 @@ public sealed class ChangeZOrderCommand(int paragraphIndex, int runIndex, ZOrder
     {
         if (_snapshot is null) return;
         var all = CollectFloating(context.Document);
+        var floatingByLocation = new Dictionary<(int Bi, int Ri), FloatingRef>(all.Count);
+        foreach (var floating in all)
+            floatingByLocation[(floating.Bi, floating.Ri)] = floating;
+
         foreach (var (bi, ri, oldZ) in _snapshot)
         {
-            var t = all.FirstOrDefault(x => x.Bi == bi && x.Ri == ri);
-            t?.SetZ(oldZ);
+            if (floatingByLocation.TryGetValue((bi, ri), out var floating))
+                floating.SetZ(oldZ);
         }
         _snapshot = null;
     }

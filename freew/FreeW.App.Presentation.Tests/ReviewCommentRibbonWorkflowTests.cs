@@ -60,7 +60,7 @@ public sealed class ReviewCommentRibbonWorkflowTests
 
         avalonia.Should().Contain("OptionalHostCommand(callbacks.NewComment)");
         avalonia.Should().NotContain("editor.NewComment()");
-        window.Should().Contain("NewComment: () => _ = NewCommentAsync()");
+        window.Should().Contain("NewComment: () => RunUiTask(NewCommentAsync)");
         window.Should().Contain("CommentTextEntryKind.NewComment");
     }
 

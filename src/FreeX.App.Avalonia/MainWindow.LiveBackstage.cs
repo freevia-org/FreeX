@@ -239,11 +239,11 @@ public sealed partial class MainWindow
             },
         };
         AutomationProperties.SetAutomationId(blankWorkbook, "BackstageBlankWorkbookButton");
-        blankWorkbook.Click += async (_, _) =>
+        blankWorkbook.Click += (_, _) => RunGuarded(async () =>
         {
             HideBackstageOverlay();
             await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);
-        };
+        });
         content.Children.Add(blankWorkbook);
 
         content.Children.Add(new TextBlock
@@ -340,11 +340,11 @@ public sealed partial class MainWindow
                 entry.FileName,
                 UiText.Get,
                 action => ApplyBackstageRecentFileAction(entry.Path, action)));
-        openButton.Click += async (_, _) =>
+        openButton.Click += (_, _) => RunGuarded(async () =>
         {
             HideBackstageOverlay();
             await OpenRecentWorkbookAsync(entry.Path, entry.FileAccessIdentity);
-        };
+        });
         row.Children.Add(openButton);
 
         var date = new TextBlock
@@ -481,11 +481,11 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(button, automationId);
-        button.Click += async (_, _) =>
+        button.Click += (_, _) => RunGuarded(async () =>
         {
             HideBackstageOverlay();
             await action();
-        };
+        });
         return button;
     }
 

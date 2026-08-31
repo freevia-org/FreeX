@@ -2000,9 +2000,9 @@ public static class PresentationMediaTranscriptPlanner
                 GetTtmlAttribute(element, "end"),
                 frameRate,
                 tickRate,
-                out var explicitEnd))
+                out var explicitEnd)
+            && TryAddCaptionTimes(parentBegin, explicitEnd, out var absoluteEnd))
         {
-            var absoluteEnd = parentBegin + explicitEnd;
             elementEnd = elementEnd is null || absoluteEnd < elementEnd.Value
                 ? absoluteEnd
                 : elementEnd;
@@ -2012,11 +2012,11 @@ public static class PresentationMediaTranscriptPlanner
                 GetTtmlAttribute(element, "dur"),
                 frameRate,
                 tickRate,
-                out var duration))
+                out var duration)
+            && TryAddCaptionTimes(scheduledStart, duration, out var absoluteDurationEnd))
         {
-            var absoluteEnd = scheduledStart + duration;
-            elementEnd = elementEnd is null || absoluteEnd < elementEnd.Value
-                ? absoluteEnd
+            elementEnd = elementEnd is null || absoluteDurationEnd < elementEnd.Value
+                ? absoluteDurationEnd
                 : elementEnd;
         }
 
@@ -2071,7 +2071,14 @@ public static class PresentationMediaTranscriptPlanner
                 continue;
             }
 
-            var childStart = (isSequential ? cursor : scheduledStart) + childBegin;
+            if (!TryAddCaptionTimes(
+                    isSequential ? cursor : scheduledStart,
+                    childBegin,
+                    out var childStart))
+            {
+                continue;
+            }
+
             var childEnd = CollectTtmlTimedElements(
                 child,
                 childStart,
@@ -2573,8 +2580,7 @@ public static class PresentationMediaTranscriptPlanner
                 return false;
             }
 
-            value = new TimeSpan(checked((long)Math.Round(amount * multiplier)));
-            return true;
+            return TryCreateCaptionTimeFromTicks(amount * multiplier, out value);
         }
 
         if (normalized.EndsWith('f')
@@ -2586,8 +2592,7 @@ public static class PresentationMediaTranscriptPlanner
             && frames >= 0
             && frameRate > 0)
         {
-            value = TimeSpan.FromSeconds(frames / frameRate);
-            return true;
+            return TryCreateCaptionTimeFromSeconds(frames / frameRate, out value);
         }
 
         if (normalized.EndsWith('t')
@@ -2599,8 +2604,7 @@ public static class PresentationMediaTranscriptPlanner
             && ticks >= 0
             && tickRate > 0)
         {
-            value = TimeSpan.FromSeconds(ticks / tickRate);
-            return true;
+            return TryCreateCaptionTimeFromSeconds(ticks / tickRate, out value);
         }
 
         var clockParts = normalized.Replace(';', ':').Split(':');
@@ -2615,10 +2619,11 @@ public static class PresentationMediaTranscriptPlanner
             && clockFrames >= 0
             && frameRate > 0)
         {
-            value = TimeSpan.FromHours(clockHours)
-                + TimeSpan.FromMinutes(clockMinutes)
-                + TimeSpan.FromSeconds(clockSeconds + clockFrames / frameRate);
-            return true;
+            var seconds = clockHours * 3600d
+                + clockMinutes * 60d
+                + clockSeconds
+                + clockFrames / frameRate;
+            return TryCreateCaptionTimeFromSeconds(seconds, out value);
         }
 
         return TryParseCaptionTime(normalized, out value);
@@ -2775,7 +2780,44 @@ public static class PresentationMediaTranscriptPlanner
             return false;
         }
 
-        value = TimeSpan.FromHours(hour) + TimeSpan.FromMinutes(minute) + TimeSpan.FromSeconds(second);
+        if (hour < 0 || minute < 0 || second < 0)
+        {
+            return false;
+        }
+
+        return TryCreateCaptionTimeFromSeconds(
+            hour * 3600d + minute * 60d + second,
+            out value);
+    }
+
+    private static bool TryCreateCaptionTimeFromSeconds(double seconds, out TimeSpan value) =>
+        TryCreateCaptionTimeFromTicks(seconds * TimeSpan.TicksPerSecond, out value);
+
+    private static bool TryCreateCaptionTimeFromTicks(double ticks, out TimeSpan value)
+    {
+        value = default;
+        // Reject the upper endpoint as well: Int64.MaxValue is rounded to 2^63 when converted to
+        // double, and an unchecked cast of that rounded value would wrap to Int64.MinValue.
+        if (!double.IsFinite(ticks) || ticks < 0 || ticks >= TimeSpan.MaxValue.Ticks)
+        {
+            return false;
+        }
+
+        value = new TimeSpan((long)Math.Round(ticks, MidpointRounding.AwayFromZero));
+        return true;
+    }
+
+    private static bool TryAddCaptionTimes(TimeSpan left, TimeSpan right, out TimeSpan value)
+    {
+        value = default;
+        if (left < TimeSpan.Zero
+            || right < TimeSpan.Zero
+            || left.Ticks > TimeSpan.MaxValue.Ticks - right.Ticks)
+        {
+            return false;
+        }
+
+        value = new TimeSpan(left.Ticks + right.Ticks);
         return true;
     }
 

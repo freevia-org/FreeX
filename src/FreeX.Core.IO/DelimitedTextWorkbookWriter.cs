@@ -181,48 +181,37 @@ internal static class DelimitedTextWorkbookWriter
             .ToArray();
         if (cells.Length == 0) return;
 
-        var rowCapacity = EstimateRowCapacity(cells);
-        var cellsPerRowCapacity = EstimateCellsPerRowCapacity(cells.Length, rowCapacity);
-        var rowLookup = new Dictionary<uint, DelimitedTextRowBucket>(rowCapacity);
-        var rows = new List<DelimitedTextRowBucket>(rowCapacity);
-        var endRow = 0u;
         var endCol = 0u;
-        foreach (var (address, cell) in cells)
-        {
-            if (!rowLookup.TryGetValue(address.Row, out var row))
-            {
-                row = new DelimitedTextRowBucket(address.Row, cellsPerRowCapacity);
-                rowLookup[address.Row] = row;
-                rows.Add(row);
-            }
-
-            row.Cells.Add((address.Col, cell));
-            endRow = Math.Max(endRow, address.Row);
+        foreach (var (address, _) in cells)
             endCol = Math.Max(endCol, address.Col);
-        }
 
-        rows.Sort(static (left, right) => left.Row.CompareTo(right.Row));
-        foreach (var row in rows)
-            row.Cells.Sort(static (left, right) => left.Col.CompareTo(right.Col));
+        Array.Sort(cells, static (left, right) =>
+        {
+            var rowComparison = left.Address.Row.CompareTo(right.Address.Row);
+            return rowComparison != 0
+                ? rowComparison
+                : left.Address.Col.CompareTo(right.Address.Col);
+        });
 
         using var writer = new StreamWriter(stream, encoding, leaveOpen: true);
         var nextRow = 1u;
-        foreach (var row in rows)
+        var rowStart = 0;
+        while (rowStart < cells.Length)
         {
-            while (nextRow < row.Row)
+            var rowNumber = cells[rowStart].Address.Row;
+            while (nextRow < rowNumber)
             {
                 WriteBlankRow(writer, delimiter, endCol);
                 nextRow++;
             }
 
-            WriteRow(writer, delimiter, row.Cells, endCol, workbook);
-            nextRow = row.Row + 1;
-        }
+            var rowEnd = rowStart + 1;
+            while (rowEnd < cells.Length && cells[rowEnd].Address.Row == rowNumber)
+                rowEnd++;
 
-        while (nextRow <= endRow)
-        {
-            WriteBlankRow(writer, delimiter, endCol);
-            nextRow++;
+            WriteRow(writer, delimiter, cells, rowStart, rowEnd, endCol, workbook);
+            nextRow = rowNumber + 1;
+            rowStart = rowEnd;
         }
     }
 
@@ -230,35 +219,20 @@ internal static class DelimitedTextWorkbookWriter
         row is >= 1 and <= CellAddress.MaxRow &&
         col is >= 1 and <= CellAddress.MaxCol;
 
-    private static int EstimateRowCapacity(IReadOnlyList<(CellAddress Address, Cell Cell)> cells)
-    {
-        var rows = new HashSet<uint>();
-        foreach (var (address, _) in cells)
-            rows.Add(address.Row);
-
-        return rows.Count;
-    }
-
-    private static int EstimateCellsPerRowCapacity(int cellCount, int rowCapacity)
-    {
-        if (rowCapacity <= 0)
-            return 0;
-
-        return Math.Max(1, (cellCount + rowCapacity - 1) / rowCapacity);
-    }
-
-    private sealed class DelimitedTextRowBucket(uint row, int cellCapacity)
-    {
-        public uint Row { get; } = row;
-
-        public List<(uint Col, Cell Cell)> Cells { get; } = new(cellCapacity);
-    }
-
-    private static void WriteRow(TextWriter writer, char delimiter, List<(uint Col, Cell Cell)> cells, uint endCol, Workbook workbook)
+    private static void WriteRow(
+        TextWriter writer,
+        char delimiter,
+        (CellAddress Address, Cell Cell)[] cells,
+        int startIndex,
+        int endIndex,
+        uint endCol,
+        Workbook workbook)
     {
         var previousCol = 0u;
-        foreach (var (col, cell) in cells)
+        for (var index = startIndex; index < endIndex; index++)
         {
+            var (address, cell) = cells[index];
+            var col = address.Col;
             WriteDelimiters(writer, delimiter, previousCol == 0 ? col - 1 : col - previousCol);
             WriteCellField(writer, delimiter, cell, workbook);
             previousCol = col;

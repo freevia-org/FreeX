@@ -649,7 +649,8 @@ public partial class MainWindow
             selectedRange => dialog.ApplyRangeSelection(FormatRangeReference(selectedRange.Start, selectedRange.End)));
     }
 
-    private async void ShareWorkbookBtn_Click(object sender, RoutedEventArgs e) => await ShareWorkbookAsync();
+    private void ShareWorkbookBtn_Click(object sender, RoutedEventArgs e) =>
+        RunGuardedUiCommand("Share Workbook", ShareWorkbookAsync);
 
     private async Task ShareWorkbookAsync()
     {
@@ -694,7 +695,10 @@ public partial class MainWindow
         OpenExternalHelpLink(AppInfo.HelpUrl, UiText.Get("MainWindowMessage_HelpOnlineTitle"));
     }
 
-    private async void CheckForUpdatesBtn_Click(object sender, RoutedEventArgs e)
+    private void CheckForUpdatesBtn_Click(object sender, RoutedEventArgs e) =>
+        RunGuardedUiCommand("Check for Updates", CheckForUpdatesAsync);
+
+    private async Task CheckForUpdatesAsync()
     {
         RecordDiagnosticEvent("update_check_opened", new Dictionary<string, string?>
         {

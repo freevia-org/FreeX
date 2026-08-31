@@ -28,9 +28,9 @@ public sealed partial class MainWindow
                 Copy = QueueClipboardCopy,
                 Cut = QueueClipboardCut,
                 Paste = QueueClipboardPaste,
-                InsertPicture = () => _ = InsertPictureFromFileAsync(),
-                InsertVideo = () => _ = InsertMediaFromFileAsync(isVideo: true),
-                InsertAudio = () => _ = InsertMediaFromFileAsync(isVideo: false),
+                InsertPicture = () => RunGuarded(InsertPictureFromFileAsync, "Insert picture"),
+                InsertVideo = () => RunGuarded(() => InsertMediaFromFileAsync(isVideo: true), "Insert video"),
+                InsertAudio = () => RunGuarded(() => InsertMediaFromFileAsync(isVideo: false), "Insert audio"),
 #endif
                 OpenTablePicker = OpenTablePicker,
                 ExecuteTableStructureAction = kind =>
@@ -58,15 +58,15 @@ public sealed partial class MainWindow
                 SetZoomCoverImage = OpenZoomCoverImagePicker,
                 ResetZoomCoverImage = RestoreZoomPreview,
 #else
-                PickPictureBullet = () => _ = ApplyPictureBulletFromFileAsync(),
-                InsertSlideZoom = () => _ = OpenSlideZoomDialogAsync(),
-                InsertSectionZoom = () => _ = OpenSectionZoomDialogAsync(),
-                InsertSummaryZoom = () => _ = OpenSummaryZoomDialogAsync(),
-                EditZoomTarget = () => _ = OpenZoomTargetDialogAsync(),
-                EditSummaryZoomTargets = () => _ = OpenSummaryZoomTargetsDialogAsync(),
-                FormatZoom = () => _ = OpenZoomObjectPropertiesDialogAsync(),
-                SetZoomCoverImage = () => _ = OpenZoomCoverImagePickerAsync(),
-                ResetZoomCoverImage = () => _ = RestoreZoomPreviewAsync(),
+                PickPictureBullet = () => RunGuarded(ApplyPictureBulletFromFileAsync, "Picture bullet"),
+                InsertSlideZoom = () => RunGuarded(OpenSlideZoomDialogAsync, "Slide Zoom"),
+                InsertSectionZoom = () => RunGuarded(OpenSectionZoomDialogAsync, "Section Zoom"),
+                InsertSummaryZoom = () => RunGuarded(OpenSummaryZoomDialogAsync, "Summary Zoom"),
+                EditZoomTarget = () => RunGuarded(OpenZoomTargetDialogAsync, "Zoom target"),
+                EditSummaryZoomTargets = () => RunGuarded(OpenSummaryZoomTargetsDialogAsync, "Summary Zoom targets"),
+                FormatZoom = () => RunGuarded(OpenZoomObjectPropertiesDialogAsync, "Format Zoom"),
+                SetZoomCoverImage = () => RunGuarded(OpenZoomCoverImagePickerAsync, "Zoom cover image"),
+                ResetZoomCoverImage = () => RunGuarded(RestoreZoomPreviewAsync, "Reset Zoom cover"),
 #endif
                 OpenHeaderFooter = OpenHeaderFooterDialog,
                 ApplySmartArtColor = preset => ApplySmartArtColorPreset(preset),
@@ -125,7 +125,7 @@ public sealed partial class MainWindow
                 PickTransitionSound = PickTransitionSound,
                 ToggleAnimationPane = _ => ToggleAnimationPane(),
 #else
-                PickTransitionSound = () => _ = PickTransitionSoundAsync(),
+                PickTransitionSound = () => RunGuarded(PickTransitionSoundAsync, "Transition sound"),
                 ToggleAnimationPane = OnAnimationPaneRequested,
 #endif
                 StartSlideShowFromBeginning = () => StartSlideShow(fromStart: true),

@@ -10,8 +10,8 @@ public sealed class ShapeGradientColorPickerParityTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.DrawingFormatDialogs.cs"));
 
         source.Should().Contain("CreateGradientColorButton(");
-        source.Should().Contain("startSwatch.Click += async");
-        source.Should().Contain("endSwatch.Click += async");
+        source.Should().Contain("startSwatch.Click += (_, _) => RunGuarded");
+        source.Should().Contain("endSwatch.Click += (_, _) => RunGuarded");
         source.Should().Contain("AutomationProperties.SetAutomationId(button, automationId);");
         source.Should().Contain("AutomationProperties.SetName(button, UiText.Get(automationNameKey));");
         source.Should().Contain("AutomationProperties.SetHelpText(button, UiText.Get(helpTextKey));");

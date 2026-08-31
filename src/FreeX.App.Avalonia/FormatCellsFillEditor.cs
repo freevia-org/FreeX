@@ -37,7 +37,8 @@ internal sealed class FormatCellsFillEditor
         Func<string, CellColor, Task<CellColor?>> showMoreColorsAsync,
         Func<string, string> getText,
         WorkbookTheme theme,
-        CellStyle current)
+        CellStyle current,
+        Action<Func<Task>>? runGuarded = null)
     {
         ArgumentNullException.ThrowIfNull(recentColors);
         ArgumentNullException.ThrowIfNull(showMoreColorsAsync);
@@ -53,13 +54,15 @@ internal sealed class FormatCellsFillEditor
             showMoreColorsAsync,
             getText("FormatCells_NoChange"),
             includeClear: true,
-            getText("FormatCells_MoreFillColors"));
+            getText("FormatCells_MoreFillColors"),
+            runGuarded);
         PatternColorPicker = new FormatCellsColorPicker(
             recentColors,
             showMoreColorsAsync,
             getText("FormatCells_NoChange"),
             includeClear: false,
-            getText("FormatCells_MorePatternColors"));
+            getText("FormatCells_MorePatternColors"),
+            runGuarded);
         FillColorPicker.ConfigureCompactPickButton();
         PatternColorPicker.ConfigureCompactPickButton();
         AutomationProperties.SetName(FillColorPicker, getText("FormatCells_BackgroundColor2"));

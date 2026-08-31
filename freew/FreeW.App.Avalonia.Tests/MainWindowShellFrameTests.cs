@@ -297,7 +297,68 @@ public sealed class MainWindowShellFrameTests
             .Which.Color.Should().Be(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF));
     }
 
+    [Fact]
+    public void MainWindow_async_opened_lifecycle_contains_recovery_failures()
+    {
+        var source = File.ReadAllText(FindRepoFile(
+            "freew", "FreeW.App.Avalonia", "MainWindow.cs"));
+        var opened = source.IndexOf("Opened += async", StringComparison.Ordinal);
+        var recovery = source.IndexOf("await _autosave.OfferRecoveryAsync(this);", opened, StringComparison.Ordinal);
+        var catchIndex = source.IndexOf("catch (Exception ex) when (ex is not OutOfMemoryException)", opened, StringComparison.Ordinal);
+        var feedback = source.IndexOf("UiText.Get(\"Operation_Startup\")", catchIndex, StringComparison.Ordinal);
+
+        opened.Should().BeGreaterThanOrEqualTo(0);
+        recovery.Should().BeGreaterThan(opened);
+        catchIndex.Should().BeGreaterThan(recovery);
+        feedback.Should().BeGreaterThan(catchIndex);
+    }
+
+    [Fact]
+    public async Task MainWindow_fire_and_forget_observer_contains_sync_and_async_faults()
+    {
+        await OnUiThread(async () =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+
+            await window.ObserveUiTaskForTests(
+                () => throw new InvalidOperationException("picker failed synchronously"));
+            window.PrintStatusForTests.Should().Contain("picker failed synchronously");
+
+            await window.ObserveUiTaskForTests(
+                async () =>
+                {
+                    await Task.Yield();
+                    throw new InvalidOperationException("dialog failed asynchronously");
+                });
+            window.PrintStatusForTests.Should().Contain("dialog failed asynchronously");
+        });
+    }
+
+    [Fact]
+    public async Task AvaloniaUiTaskGuard_contains_operation_and_failure_reporter_faults()
+    {
+        var reported = string.Empty;
+
+        await AvaloniaUiTaskGuard.ObserveAsync(
+            async () =>
+            {
+                await Task.Yield();
+                throw new InvalidOperationException("dialog service failed");
+            },
+            ex => reported = ex.Message);
+
+        reported.Should().Be("dialog service failed");
+
+        var act = () => AvaloniaUiTaskGuard.ObserveAsync(
+            () => throw new InvalidOperationException("picker failed"),
+            _ => throw new InvalidOperationException("status failed"));
+        await act.Should().NotThrowAsync();
+    }
+
     private static Task OnUiThread(Action action) =>
+        Session.Dispatch(action, CancellationToken.None);
+
+    private static Task OnUiThread(Func<Task> action) =>
         Session.Dispatch(action, CancellationToken.None);
 
     private static string FindRepoFile(params string[] parts) =>

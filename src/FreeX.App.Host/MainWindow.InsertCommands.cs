@@ -247,7 +247,7 @@ public partial class MainWindow
             return;
         }
 
-        _ = OpenStartupFileAsync(openablePath);
+        RunGuardedUiCommand("Open Hyperlink Workbook", () => OpenStartupFileAsync(openablePath));
     }
 
     // Excel opens the ACTIVE cell's hyperlink, not the selection's normalized top-left. The two

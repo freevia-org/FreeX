@@ -606,8 +606,8 @@ public sealed partial class MainWindow
         preview.Margin = new Thickness(0, 13, 0, 4);
         stopGrid.Children.Add(preview);
 
-        startSwatch.Click += async (_, _) => await ChooseGradientColorAsync(UiText.Get("ShapeGradient_StartColorLabel"), c => startColor = c);
-        endSwatch.Click += async (_, _) => await ChooseGradientColorAsync(UiText.Get("ShapeGradient_EndColorLabel"), c => endColor = c);
+        startSwatch.Click += (_, _) => RunGuarded(() => ChooseGradientColorAsync(UiText.Get("ShapeGradient_StartColorLabel"), c => startColor = c));
+        endSwatch.Click += (_, _) => RunGuarded(() => ChooseGradientColorAsync(UiText.Get("ShapeGradient_EndColorLabel"), c => endColor = c));
 
         var gradientGroup = new GroupBox
         {

@@ -18,7 +18,10 @@ public partial class MainWindow
     {
         InsertTextBox();
     }
-    private async void InsertPictureBtn_Click(object sender, RoutedEventArgs e)
+    private void InsertPictureBtn_Click(object sender, RoutedEventArgs e) =>
+        RunGuardedUiCommand("Insert Picture", () => InsertPictureAsync(sender, e));
+
+    private async Task InsertPictureAsync(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
 

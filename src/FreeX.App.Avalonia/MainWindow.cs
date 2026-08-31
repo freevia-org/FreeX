@@ -2175,56 +2175,56 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ConfigureNativeCatalogMenuItems();
 
         ConfigureNativeFileMenuItem(_newWorkbookMenuItem, NativeFileMenuItemId.NewWorkbook);
-        _newWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);
+        _newWorkbookMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New));
 
         ConfigureNativeFileMenuItem(_openMenuItem, NativeFileMenuItemId.Open);
-        _openMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open);
+        _openMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open));
 
         ConfigureNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent);
         _openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);
 
         ConfigureNativeFileMenuItem(_saveMenuItem, NativeFileMenuItemId.Save);
-        _saveMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Save);
+        _saveMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Save));
 
         ConfigureNativeFileMenuItem(_saveAsMenuItem, NativeFileMenuItemId.SaveAs);
-        _saveAsMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.SaveAs);
+        _saveAsMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.SaveAs));
 
         ConfigureNativeFileMenuItem(_exportPdfMenuItem, NativeFileMenuItemId.ExportPdf);
-        _exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();
+        _exportPdfMenuItem.Click += (_, _) => RunGuarded(ExportActiveSheetPdfAsync);
 
         ConfigureNativeFileMenuItem(_printMenuItem, NativeFileMenuItemId.Print);
-        _printMenuItem.Click += async (_, _) => await ShowPrintDialogAsync();
+        _printMenuItem.Click += (_, _) => RunGuarded(ShowPrintDialogAsync);
 
         ConfigurePageSetupNativeMenuItem(_filePageSetupMenuItem);
-        _pageSetupMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.PageSetup);
+        _pageSetupMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.PageSetup));
 
         ConfigureNativeFileMenuItem(_printPreviewMenuItem, NativeFileMenuItemId.PrintPreview);
-        _printPreviewMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.PrintPreview);
+        _printPreviewMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.PrintPreview));
 
         ConfigureNativeFileMenuItem(_shareWorkbookMenuItem, NativeFileMenuItemId.ShareWorkbook);
-        _shareWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Share);
+        _shareWorkbookMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Share));
 
         ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);
-        _workbookStatisticsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.WorkbookStatistics);
+        _workbookStatisticsMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.WorkbookStatistics));
 
         ConfigureNativeFileMenuItem(_backstageInfoMenuItem, NativeFileMenuItemId.BackstageInfo);
-        _backstageInfoMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageInfo);
+        _backstageInfoMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageInfo));
 
         ConfigureNativeFileMenuItem(_backstageExportMenuItem, NativeFileMenuItemId.BackstageExport);
-        _backstageExportMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageExport);
+        _backstageExportMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageExport));
 
         ConfigureNativeFileMenuItem(_backstageAccountMenuItem, NativeFileMenuItemId.BackstageAccount);
-        _backstageAccountMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageAccount);
+        _backstageAccountMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageAccount));
 
         ConfigureNativeFileMenuItem(_optionsMenuItem, NativeFileMenuItemId.Options);
-        _optionsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.Options);
+        _optionsMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.Options));
 
         ConfigureNativeFileMenuItem(_closeWorkbookMenuItem, NativeFileMenuItemId.CloseWorkbook);
-        _closeWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close);
+        _closeWorkbookMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close));
 
         _newSheetMenuItem.Click += (_, _) => AddNewSheet();
 
-        _renameSheetMenuItem.Click += async (_, _) => await RenameActiveSheetAsync();
+        _renameSheetMenuItem.Click += (_, _) => RunGuarded(RenameActiveSheetAsync);
 
         _duplicateSheetMenuItem.Click += (_, _) => DuplicateActiveSheet();
 
@@ -2240,7 +2240,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         _hideSheetMenuItem.Click += (_, _) => HideActiveSheet();
 
-        _unhideSheetMenuItem.Click += async (_, _) => await UnhideSheetAsync();
+        _unhideSheetMenuItem.Click += (_, _) => RunGuarded(UnhideSheetAsync);
 
         _deleteSheetMenuItem.Click += (_, _) => DeleteActiveSheet();
 
@@ -2248,11 +2248,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         _redoMenuItem.Click += (_, _) => RedoLastEdit();
 
-        _cutMenuItem.Click += async (_, _) => await CutSelectedRangeToClipboardAsync();
+        _cutMenuItem.Click += (_, _) => RunGuarded(CutSelectedRangeToClipboardAsync);
 
-        _copyMenuItem.Click += async (_, _) => await CopySelectedRangeToClipboardAsync();
+        _copyMenuItem.Click += (_, _) => RunGuarded(CopySelectedRangeToClipboardAsync);
 
-        _pasteMenuItem.Click += async (_, _) => await PasteClipboardTextAsync();
+        _pasteMenuItem.Click += (_, _) => RunGuarded(PasteClipboardTextAsync);
 
         _pasteSpecialMenuItem.Menu = CreateNativePasteSpecialMenu();
 
@@ -2260,19 +2260,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         _selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();
 
-        _findMenuItem.Click += async (_, _) => await ShowFindDialogAsync();
+        _findMenuItem.Click += (_, _) => RunGuarded(ShowFindDialogAsync);
 
         _findNextMenuItem.Click += (_, _) => FindNext();
 
-        _replaceMenuItem.Click += async (_, _) => await ShowReplaceDialogAsync();
+        _replaceMenuItem.Click += (_, _) => RunGuarded(ShowReplaceDialogAsync);
 
-        _goToMenuItem.Click += async (_, _) => await ShowGoToDialogAsync();
+        _goToMenuItem.Click += (_, _) => RunGuarded(ShowGoToDialogAsync);
 
-        _goToSpecialMenuItem.Click += async (_, _) => await ShowGoToSpecialDialogAsync();
+        _goToSpecialMenuItem.Click += (_, _) => RunGuarded(ShowGoToSpecialDialogAsync);
 
-        _openHyperlinkMenuItem.Click += async (_, _) => await OpenSelectedHyperlinkAsync();
+        _openHyperlinkMenuItem.Click += (_, _) => RunGuarded(OpenSelectedHyperlinkAsync);
 
-        _insertHyperlinkMenuItem.Click += async (_, _) => await ShowInsertHyperlinkDialogAsync();
+        _insertHyperlinkMenuItem.Click += (_, _) => RunGuarded(ShowInsertHyperlinkDialogAsync);
 
         _insertColumnChartMenuItem.Click += (_, _) => InsertChartFromSelection(ChartType.Column);
         _insertBarChartMenuItem.Click += (_, _) => InsertChartFromSelection(ChartType.Bar);
@@ -2283,9 +2283,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         _insertTableMenuItem.Click += (_, _) => RunGuarded(InsertTableFromSelectionAsync);
 
-        _insertPivotTableMenuItem.Click += async (_, _) => await ShowInsertPivotTableDialogAsync();
+        _insertPivotTableMenuItem.Click += (_, _) => RunGuarded(ShowInsertPivotTableDialogAsync);
 
-        _insertPictureMenuItem.Click += async (_, _) => await InsertPictureFromFileAsync();
+        _insertPictureMenuItem.Click += (_, _) => RunGuarded(InsertPictureFromFileAsync);
 
         _insertShapeMenuItem.Menu = CreateNativeShapeMenu();
 
@@ -2295,45 +2295,45 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         _sortDescendingMenuItem.Click += (_, _) => SortSelectedRange(ascending: false);
 
-        _customSortMenuItem.Click += async (_, _) => await ShowSortDialogAsync();
+        _customSortMenuItem.Click += (_, _) => RunGuarded(ShowSortDialogAsync);
 
         _flashFillMenuItem.Click += (_, _) => FlashFillSelectedRange();
 
         _toggleFilterMenuItem.Click += (_, _) => ToggleAutoFilter();
 
-        _advancedFilterMenuItem.Click += async (_, _) => await ShowAdvancedFilterDialogAsync();
+        _advancedFilterMenuItem.Click += (_, _) => RunGuarded(ShowAdvancedFilterDialogAsync);
 
-        _removeDuplicatesMenuItem.Click += async (_, _) => await ShowRemoveDuplicatesDialogAsync();
+        _removeDuplicatesMenuItem.Click += (_, _) => RunGuarded(ShowRemoveDuplicatesDialogAsync);
 
-        _subtotalMenuItem.Click += async (_, _) => await ShowSubtotalDialogAsync();
+        _subtotalMenuItem.Click += (_, _) => RunGuarded(ShowSubtotalDialogAsync);
 
-        _textToColumnsMenuItem.Click += async (_, _) => await ShowTextToColumnsDialogAsync();
+        _textToColumnsMenuItem.Click += (_, _) => RunGuarded(ShowTextToColumnsDialogAsync);
 
-        _consolidateMenuItem.Click += async (_, _) => await ShowConsolidateDialogAsync();
+        _consolidateMenuItem.Click += (_, _) => RunGuarded(() => ShowConsolidateDialogAsync());
 
-        _dataValidationPreviewMenuItem.Click += async (_, _) => await ShowDataValidationPreviewDialogAsync();
+        _dataValidationPreviewMenuItem.Click += (_, _) => RunGuarded(ShowDataValidationPreviewDialogAsync);
 
-        _dataValidationMenuItem.Click += async (_, _) => await ShowDataValidationDialogAsync();
+        _dataValidationMenuItem.Click += (_, _) => RunGuarded(ShowDataValidationDialogAsync);
 
-        _quickAnalysisMenuItem.Click += async (_, _) => await ShowQuickAnalysisDialogAsync();
+        _quickAnalysisMenuItem.Click += (_, _) => RunGuarded(ShowQuickAnalysisDialogAsync);
 
-        _goalSeekMenuItem.Click += async (_, _) => await ShowGoalSeekDialogAsync();
+        _goalSeekMenuItem.Click += (_, _) => RunGuarded(ShowGoalSeekDialogAsync);
 
-        _scenarioManagerMenuItem.Click += async (_, _) => await ShowScenarioManagerDialogAsync();
+        _scenarioManagerMenuItem.Click += (_, _) => RunGuarded(ShowScenarioManagerDialogAsync);
 
-        _dataTableMenuItem.Click += async (_, _) => await ShowDataTableDialogAsync();
+        _dataTableMenuItem.Click += (_, _) => RunGuarded(ShowDataTableDialogAsync);
 
-        _forecastSheetMenuItem.Click += async (_, _) => await ShowForecastSheetDialogAsync();
+        _forecastSheetMenuItem.Click += (_, _) => RunGuarded(ShowForecastSheetDialogAsync);
 
         _whatIfAnalysisMenuItem.Menu = CreateNativeWhatIfAnalysisMenu();
 
-        _reviewSummaryMenuItem.Click += async (_, _) => await ShowReviewSummaryDialogAsync();
+        _reviewSummaryMenuItem.Click += (_, _) => RunGuarded(() => ShowReviewSummaryDialogAsync());
 
-        _checkAccessibilityMenuItem.Click += async (_, _) => await ShowAccessibilityCheckerDialogAsync();
+        _checkAccessibilityMenuItem.Click += (_, _) => RunGuarded(ShowAccessibilityCheckerDialogAsync);
 
-        _protectSheetMenuItem.Click += async (_, _) => await ShowProtectSheetDialogAsync();
+        _protectSheetMenuItem.Click += (_, _) => RunGuarded(ShowProtectSheetDialogAsync);
 
-        _protectWorkbookMenuItem.Click += async (_, _) => await ShowProtectWorkbookDialogAsync();
+        _protectWorkbookMenuItem.Click += (_, _) => RunGuarded(ShowProtectWorkbookDialogAsync);
 
         _nextNoteMenuItem.Click += (_, _) => NavigateReviewNote(previous: false);
 
@@ -2413,7 +2413,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         _cellStylesMenuItem.Menu = CreateNativeCellStylesMenu();
 
-        _formatCellsMenuItem.Click += async (_, _) => await ShowFormatCellsDialogAsync();
+        _formatCellsMenuItem.Click += (_, _) => RunGuarded(() => ShowFormatCellsDialogAsync());
 
         _horizontalTextMenuItem.Click += (_, _) =>
             ApplySelectedRangeTextRotation(0, UiText.Get("TextRotation_HorizontalSuccessAction"), UiText.Get("MainLoc_AlignmentFailed"));
@@ -2451,7 +2451,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         _wrapTextMenuItem.Click += (_, _) => ToggleSelectedRangeWrapText();
 
-        _mergeAndCenterMenuItem.Click += async (_, _) => await MergeAndCenterSelectedRangeAsync();
+        _mergeAndCenterMenuItem.Click += (_, _) => RunGuarded(MergeAndCenterSelectedRangeAsync);
 
         _unmergeCellsMenuItem.Click += (_, _) => UnmergeSelectedRange();
 
@@ -2465,19 +2465,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         _alignRightMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Right);
 
-        _themesMenuItem.Click += async (_, _) => await ShowThemesGalleryAsync();
+        _themesMenuItem.Click += (_, _) => RunGuarded(ShowThemesGalleryAsync);
 
-        _themeColorsMenuItem.Click += async (_, _) => await ShowThemeColorsGalleryAsync();
+        _themeColorsMenuItem.Click += (_, _) => RunGuarded(ShowThemeColorsGalleryAsync);
 
-        _themeFontsMenuItem.Click += async (_, _) => await ShowThemeFontsGalleryAsync();
+        _themeFontsMenuItem.Click += (_, _) => RunGuarded(ShowThemeFontsGalleryAsync);
 
-        _themeEffectsMenuItem.Click += async (_, _) => await ShowThemeEffectsGalleryAsync();
+        _themeEffectsMenuItem.Click += (_, _) => RunGuarded(ShowThemeEffectsGalleryAsync);
 
         _pageMarginsMenuItem.Menu = CreateNativeMarginsMenu();
         _pageMarginsNormalMenuItem.Click += (_, _) => ApplyPageMarginsPreset(PageLayoutMarginPreset.Normal);
         _pageMarginsWideMenuItem.Click += (_, _) => ApplyPageMarginsPreset(PageLayoutMarginPreset.Wide);
         _pageMarginsNarrowMenuItem.Click += (_, _) => ApplyPageMarginsPreset(PageLayoutMarginPreset.Narrow);
-        _pageMarginsCustomMenuItem.Click += async (_, _) => await ShowPageSetupDialogAsync();
+        _pageMarginsCustomMenuItem.Click += (_, _) => RunGuarded(() => ShowPageSetupDialogAsync());
 
         _pageOrientationMenuItem.Menu = CreateNativePageOrientationMenu();
         _pageOrientationPortraitMenuItem.Click += (_, _) => ApplyPageOrientationPreset(PageLayoutOrientationPreset.Portrait);
@@ -2487,7 +2487,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _paperSizeLetterMenuItem.Click += (_, _) => ApplyPaperSizePreset(PageLayoutPaperSizePreset.Letter);
         _paperSizeLegalMenuItem.Click += (_, _) => ApplyPaperSizePreset(PageLayoutPaperSizePreset.Legal);
         _paperSizeA4MenuItem.Click += (_, _) => ApplyPaperSizePreset(PageLayoutPaperSizePreset.A4);
-        _paperSizeMoreMenuItem.Click += async (_, _) => await ShowPageSetupDialogAsync();
+        _paperSizeMoreMenuItem.Click += (_, _) => RunGuarded(() => ShowPageSetupDialogAsync());
 
         _printAreaMenuItem.Menu = CreateNativePrintAreaMenu();
         _setPrintAreaMenuItem.Click += (_, _) => SetPrintAreaFromSelection();
@@ -2531,20 +2531,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _pageBreakPreviewMenuItem.ToggleType = MenuItemToggleType.CheckBox;
         _pageBreakPreviewMenuItem.Click += (_, _) => TogglePageBreakPreview();
 
-        _helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get("MainWindow_Content_HelpOnline"));
+        _helpOnlineMenuItem.Click += (_, _) => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get("MainWindow_Content_HelpOnline")));
 
-        _sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(
+        _sendFeedbackMenuItem.Click += (_, _) => RunGuarded(() => OpenExternalHelpLinkAsync(
             AppIssueReporter.CreateIssueUrl(CreateIssueReportContext()),
-            UiText.Get("MainWindow_Content_Feedback"));
+            UiText.Get("MainWindow_Content_Feedback")));
 
-        _checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, UiText.Get("MainWindow_Content_CheckForUpdates"));
+        _checkForUpdatesMenuItem.Click += (_, _) => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, UiText.Get("MainWindow_Content_CheckForUpdates")));
 
-        _aboutMenuItem.Click += async (_, _) => await ShowAboutDialogAsync();
+        _aboutMenuItem.Click += (_, _) => RunGuarded(ShowAboutDialogAsync);
 
-        _legalNoticesMenuItem.Click += async (_, _) => await ShowLegalNoticesDialogAsync();
+        _legalNoticesMenuItem.Click += (_, _) => RunGuarded(ShowLegalNoticesDialogAsync);
 
         ConfigureNativeFileMenuItem(_quitMenuItem, NativeFileMenuItemId.Quit);
-        _quitMenuItem.Click += async (_, _) => await TryQuitApplicationAsync();
+        _quitMenuItem.Click += (_, _) => RunGuarded(TryQuitApplicationAsync);
 
         _minimizeWindowMenuItem.Click += (_, _) => WindowState = WindowState.Minimized;
 
@@ -2945,7 +2945,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private void ConfigurePageSetupNativeMenuItem(NativeMenuItem item)
     {
         ConfigureNativeFileMenuItem(item, NativeFileMenuItemId.PageSetup);
-        item.Click += async (_, _) => await ShowPageSetupDialogAsync();
+        item.Click += (_, _) => RunGuarded(() => ShowPageSetupDialogAsync());
     }
 
     private NativeMenu CreateNativeMarginsMenu()
@@ -4683,13 +4683,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Header = header,
             IsEnabled = isEnabled,
         };
-        menuItem.Click += async (_, _) =>
+        menuItem.Click += (_, _) => RunGuarded(async () =>
         {
             if (!SelectSheetForContextCommand(tab.Id))
                 return;
 
             await action();
-        };
+        });
         return menuItem;
     }
 
@@ -12039,50 +12039,50 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         bool keepSourceColumnWidths = false)
     {
         var menuItem = new MenuItem { Header = header };
-        menuItem.Click += async (_, _) =>
-            await PasteSpecialClipboardTextAsync(mode, options, header, keepSourceColumnWidths);
+        menuItem.Click += (_, _) => RunGuarded(
+            () => PasteSpecialClipboardTextAsync(mode, options, header, keepSourceColumnWidths));
         return menuItem;
     }
 
     private MenuItem CreatePasteColumnWidthsMenuItem(string header)
     {
         var menuItem = new MenuItem { Header = header };
-        menuItem.Click += async (_, _) => await PasteColumnWidthsFromClipboardAsync(header);
+        menuItem.Click += (_, _) => RunGuarded(() => PasteColumnWidthsFromClipboardAsync(header));
         return menuItem;
     }
 
     private MenuItem CreatePasteCommentsMenuItem(string header)
     {
         var menuItem = new MenuItem { Header = header };
-        menuItem.Click += async (_, _) => await PasteCommentsFromClipboardAsync(header);
+        menuItem.Click += (_, _) => RunGuarded(() => PasteCommentsFromClipboardAsync(header));
         return menuItem;
     }
 
     private MenuItem CreatePasteDataValidationMenuItem(string header)
     {
         var menuItem = new MenuItem { Header = header };
-        menuItem.Click += async (_, _) => await PasteDataValidationFromClipboardAsync(header);
+        menuItem.Click += (_, _) => RunGuarded(() => PasteDataValidationFromClipboardAsync(header));
         return menuItem;
     }
 
     private MenuItem CreatePasteLinkMenuItem(string header)
     {
         var menuItem = new MenuItem { Header = header };
-        menuItem.Click += async (_, _) => await PasteLinkFromClipboardAsync(header);
+        menuItem.Click += (_, _) => RunGuarded(() => PasteLinkFromClipboardAsync(header));
         return menuItem;
     }
 
     private MenuItem CreatePasteSpecialTextMenuItem(string header)
     {
         var menuItem = new MenuItem { Header = header };
-        menuItem.Click += async (_, _) => await PasteSpecialExternalTextFromClipboardAsync(header);
+        menuItem.Click += (_, _) => RunGuarded(() => PasteSpecialExternalTextFromClipboardAsync(header));
         return menuItem;
     }
 
     private MenuItem CreatePastePictureMenuItem(string header, bool linkedPicture)
     {
         var menuItem = new MenuItem { Header = header };
-        menuItem.Click += async (_, _) => await PastePictureFromClipboardAsync(header, linkedPicture);
+        menuItem.Click += (_, _) => RunGuarded(() => PastePictureFromClipboardAsync(header, linkedPicture));
         return menuItem;
     }
 
@@ -12123,50 +12123,50 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         bool keepSourceColumnWidths = false)
     {
         var menuItem = new NativeMenuItem { Header = header };
-        menuItem.Click += async (_, _) =>
-            await PasteSpecialClipboardTextAsync(mode, options, header, keepSourceColumnWidths);
+        menuItem.Click += (_, _) => RunGuarded(
+            () => PasteSpecialClipboardTextAsync(mode, options, header, keepSourceColumnWidths));
         return menuItem;
     }
 
     private NativeMenuItem CreateNativePasteColumnWidthsMenuItem(string header)
     {
         var menuItem = new NativeMenuItem { Header = header };
-        menuItem.Click += async (_, _) => await PasteColumnWidthsFromClipboardAsync(header);
+        menuItem.Click += (_, _) => RunGuarded(() => PasteColumnWidthsFromClipboardAsync(header));
         return menuItem;
     }
 
     private NativeMenuItem CreateNativePasteCommentsMenuItem(string header)
     {
         var menuItem = new NativeMenuItem { Header = header };
-        menuItem.Click += async (_, _) => await PasteCommentsFromClipboardAsync(header);
+        menuItem.Click += (_, _) => RunGuarded(() => PasteCommentsFromClipboardAsync(header));
         return menuItem;
     }
 
     private NativeMenuItem CreateNativePasteDataValidationMenuItem(string header)
     {
         var menuItem = new NativeMenuItem { Header = header };
-        menuItem.Click += async (_, _) => await PasteDataValidationFromClipboardAsync(header);
+        menuItem.Click += (_, _) => RunGuarded(() => PasteDataValidationFromClipboardAsync(header));
         return menuItem;
     }
 
     private NativeMenuItem CreateNativePasteLinkMenuItem(string header)
     {
         var menuItem = new NativeMenuItem { Header = header };
-        menuItem.Click += async (_, _) => await PasteLinkFromClipboardAsync(header);
+        menuItem.Click += (_, _) => RunGuarded(() => PasteLinkFromClipboardAsync(header));
         return menuItem;
     }
 
     private NativeMenuItem CreateNativePasteSpecialTextMenuItem(string header)
     {
         var menuItem = new NativeMenuItem { Header = header };
-        menuItem.Click += async (_, _) => await PasteSpecialExternalTextFromClipboardAsync(header);
+        menuItem.Click += (_, _) => RunGuarded(() => PasteSpecialExternalTextFromClipboardAsync(header));
         return menuItem;
     }
 
     private NativeMenuItem CreateNativePastePictureMenuItem(string header, bool linkedPicture)
     {
         var menuItem = new NativeMenuItem { Header = header };
-        menuItem.Click += async (_, _) => await PastePictureFromClipboardAsync(header, linkedPicture);
+        menuItem.Click += (_, _) => RunGuarded(() => PastePictureFromClipboardAsync(header, linkedPicture));
         return menuItem;
     }
 
@@ -13854,7 +13854,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         UpdateFormatButtons(findFormat, findFormatButton, findFormatClearButton);
         UpdateFormatButtons(findFormat, replaceFindFormatButton, replaceFindFormatClearButton);
         UpdateFormatButtons(replacementFormat, replaceWithFormatButton, replaceWithFormatClearButton);
-        findFormatButton.Click += async (_, _) =>
+        findFormatButton.Click += (_, _) => RunGuarded(async () =>
         {
             var selectedFormat = await PickFindReplaceFormatAsync(findFormat);
             if (selectedFormat is not null)
@@ -13862,7 +13862,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 findFormat = selectedFormat;
                 UpdateFormatButtons(findFormat, findFormatButton, findFormatClearButton);
             }
-        };
+        });
         findFormatClearButton.Click += (_, _) =>
         {
             findFormat = null;
@@ -13873,7 +13873,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             findFormat = _session.CreateFormatDiffFromActiveCell();
             UpdateFormatButtons(findFormat, findFormatButton, findFormatClearButton);
         };
-        replaceFindFormatButton.Click += async (_, _) =>
+        replaceFindFormatButton.Click += (_, _) => RunGuarded(async () =>
         {
             var selectedFormat = await PickFindReplaceFormatAsync(findFormat);
             if (selectedFormat is not null)
@@ -13881,7 +13881,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 findFormat = selectedFormat;
                 UpdateFormatButtons(findFormat, replaceFindFormatButton, replaceFindFormatClearButton);
             }
-        };
+        });
         replaceFindFormatClearButton.Click += (_, _) =>
         {
             findFormat = null;
@@ -13892,7 +13892,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             findFormat = _session.CreateFormatDiffFromActiveCell();
             UpdateFormatButtons(findFormat, replaceFindFormatButton, replaceFindFormatClearButton);
         };
-        replaceWithFormatButton.Click += async (_, _) =>
+        replaceWithFormatButton.Click += (_, _) => RunGuarded(async () =>
         {
             var selectedFormat = await PickFindReplaceFormatAsync(replacementFormat);
             if (selectedFormat is not null)
@@ -13900,7 +13900,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 replacementFormat = selectedFormat;
                 UpdateFormatButtons(replacementFormat, replaceWithFormatButton, replaceWithFormatClearButton);
             }
-        };
+        });
         replaceWithFormatClearButton.Click += (_, _) =>
         {
             replacementFormat = null;
@@ -14803,7 +14803,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         acceptButton.Click += (_, _) => AcceptReference();
         cancelButton.Click += (_, _) => dialog.Close();
-        specialButton.Click += async (_, _) =>
+        specialButton.Click += (_, _) => RunGuarded(async () =>
         {
             var special = await ShowGoToSpecialInputDialogAsync();
             if (special is null)
@@ -14811,7 +14811,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
             result = new GoToDialogResult(Reference: null, special.Kind, special.Options);
             dialog.Close();
-        };
+        });
         inputBox.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Enter)
@@ -15495,7 +15495,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         linkTypeBox.SelectionChanged += (_, _) => RefreshTargetField();
         okButton.Click += (_, _) => Accept();
         cancelButton.Click += (_, _) => dialog.Close();
-        screenTipButton.Click += async (_, _) =>
+        screenTipButton.Click += (_, _) => RunGuarded(async () =>
         {
             var value = await ShowHyperlinkSubPromptAsync(
                 dialog,
@@ -15504,8 +15504,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 screenTipBox.Text);
             if (value is not null)
                 screenTipBox.Text = value;
-        };
-        bookmarkButton.Click += async (_, _) =>
+        });
+        bookmarkButton.Click += (_, _) => RunGuarded(async () =>
         {
             var value = await ShowHyperlinkSubPromptAsync(
                 dialog,
@@ -15514,7 +15514,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 bookmarkBox.Text);
             if (value is not null)
                 bookmarkBox.Text = value;
-        };
+        });
         dialog.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Enter)
@@ -15806,11 +15806,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ApplyDialogButtonChrome(copyToClipboardButton);
 
         var statsText = FormatWorkbookStatistics(statistics);
-        copyToClipboardButton.Click += async (_, _) =>
+        copyToClipboardButton.Click += (_, _) => RunGuarded(async () =>
         {
             _ = await _platformClipboard.WriteAsync(
                 new PlatformClipboardContent(Text: statsText));
-        };
+        });
 
         okButton.Click += (_, _) => dialog.Close();
         dialog.KeyDown += (_, e) =>
@@ -16736,7 +16736,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ShowMoreColorsDialogAsync,
             UiText.Get,
             _session.Workbook.Theme,
-            currentFillStyle);
+            currentFillStyle,
+            RunGuarded);
         var fillColorBox = fillEditor.FillColorPicker;
         var fillPatternStyleBox = fillEditor.FillPatternStyleBox;
         var fillPatternColorBox = fillEditor.PatternColorPicker;
@@ -17092,7 +17093,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (border is { } b && b.Style != BorderStyle.None)
             {
                 SetEdgeStyle(styleBox, b.Style);
-                colorBox.SelectColor(b.Color);
+                // freex-theme-border-color-F1 (Avalonia dialog parity with the WPF Border tab): show the
+                // colour the grid is actually painting, not the RGB baked in at load time. Write-back
+                // stays safe because ReadBorderSide compares against the seeded BOX value, so an
+                // untouched edge still yields null and keeps its CellBorder.ThemeColor link.
+                colorBox.SelectColor(b.ResolveColor(_session.Workbook.Theme));
                 toggle.IsChecked = true;
             }
             else
@@ -19218,15 +19223,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private void CutButton_Click(object? sender, RoutedEventArgs e) =>
         RunGuarded(CutSelectedRangeToClipboardAsync);
 
-    private async void CopyButton_Click(object? sender, RoutedEventArgs e)
-    {
-        await CopySelectedRangeToClipboardAsync();
-    }
+    private void CopyButton_Click(object? sender, RoutedEventArgs e) =>
+        RunGuarded(CopySelectedRangeToClipboardAsync);
 
-    private async void PasteButton_Click(object? sender, RoutedEventArgs e)
-    {
-        await PasteClipboardTextAsync();
-    }
+    private void PasteButton_Click(object? sender, RoutedEventArgs e) =>
+        RunGuarded(PasteClipboardTextAsync);
 
     private void FormatPainterButton_Click(object? sender, RoutedEventArgs e)
     {
@@ -19953,7 +19954,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             selectedLevelIndex = Math.Min(levels.Count - 1, selectedLevelIndex + 1);
             RebuildLevels();
         };
-        optionsButton.Click += async (_, _) =>
+        optionsButton.Click += (_, _) => RunGuarded(async () =>
         {
             var updated = await ShowSortOptionsDialogAsync(optionsState);
             if (updated is null)
@@ -19961,7 +19962,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
             optionsState = updated;
             RebuildLevels();
-        };
+        });
         headersCheck.PropertyChanged += (_, e) =>
         {
             if (e.Property == ToggleButton.IsCheckedProperty)
@@ -25853,7 +25854,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 Header = entry.Header,
                 IsEnabled = isIdle,
             };
-            item.Click += async (_, _) => await OpenRecentWorkbookAsync(path, fileAccessIdentity);
+            item.Click += (_, _) => RunGuarded(() => OpenRecentWorkbookAsync(path, fileAccessIdentity));
             menu.Items.Add(item);
         }
 

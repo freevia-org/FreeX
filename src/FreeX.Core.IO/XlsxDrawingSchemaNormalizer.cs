@@ -42,12 +42,11 @@ internal static class XlsxDrawingSchemaNormalizer
             .Descendants(SpreadsheetDrawingNs + "cNvPr")
             .ToList();
         var usedIds = new HashSet<int>();
-        var nextId = objectProperties
+        var reservedIds = objectProperties
             .Select(element => TryReadPositiveInt(element.Attribute("id")?.Value, out var id) ? id : 0)
-            .DefaultIfEmpty(0)
-            .Max() + 1;
-        if (nextId <= 0)
-            nextId = 1;
+            .Where(id => id > 0)
+            .ToHashSet();
+        var nextId = FindNextAvailableId(reservedIds);
 
         var changed = false;
         foreach (var objectProperty in objectProperties)
@@ -58,10 +57,10 @@ internal static class XlsxDrawingSchemaNormalizer
                 continue;
             }
 
-            while (!usedIds.Add(nextId))
-                nextId++;
+            usedIds.Add(nextId);
             objectProperty.SetAttributeValue("id", nextId.ToString(CultureInfo.InvariantCulture));
-            nextId++;
+            reservedIds.Add(nextId);
+            nextId = FindNextAvailableId(reservedIds);
             changed = true;
         }
 
@@ -70,4 +69,26 @@ internal static class XlsxDrawingSchemaNormalizer
 
     private static bool TryReadPositiveInt(string? value, out int id) =>
         int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out id) && id > 0;
+
+    private static int FindNextAvailableId(IReadOnlySet<int> reservedIds)
+    {
+        if (reservedIds.Count == 0)
+            return 1;
+
+        var maximum = reservedIds.Max();
+        if (maximum < int.MaxValue)
+            return maximum + 1;
+
+        // A producer-controlled id of Int32.MaxValue used to wrap `maximum + 1` negative. If the
+        // drawing also contained a duplicate or invalid id, normalization then emitted another
+        // invalid cNvPr id and downstream package readers could terminate the open workflow.
+        // Reuse the first positive gap instead; a finite XML document always has one.
+        for (var candidate = 1; candidate < int.MaxValue; candidate++)
+        {
+            if (!reservedIds.Contains(candidate))
+                return candidate;
+        }
+
+        throw new InvalidDataException("The drawing has exhausted all positive object identifiers.");
+    }
 }

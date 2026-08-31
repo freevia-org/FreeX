@@ -1039,7 +1039,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
         wpfMainWindow.Should().Contain("AppCrashAnalyticsRuntime.SendTestReport()");
         wpfMainWindow.Should().Contain("DialogMessageHelper.ShowInfo(this, message, FreeWUiTextCatalog.TestCrashReportingTitle);");
         wpfMainWindow.Should().Contain("DialogMessageHelper.ShowWarning(this, message, FreeWUiTextCatalog.TestCrashReportingTitle);");
-        avaloniaMainWindow.Should().Contain("TestCrashReporting: () => _ = TestCrashReportingAsync(),");
+        avaloniaMainWindow.Should().Contain("TestCrashReporting: () => RunUiTask(TestCrashReportingAsync),");
         avaloniaHelpCommands.Should().Contain(
             "AppCrashAnalyticsRuntime.UserMessage(AppCrashAnalyticsRuntime.SendTestReport())");
         avaloniaHelpCommands.Should().Contain("FreeWUiTextCatalog.TestCrashReportingTitle");

@@ -150,7 +150,9 @@ public sealed partial class TabsDialog : FreeWDialogWindow
             ApplyResult(editor, result);
     }
 
-    private async void SetStop()
+    private void SetStop() => AvaloniaUiTaskGuard.Run(SetStopAsync);
+
+    private async Task SetStopAsync()
     {
         var request = new TabsDialogSetRequest(_position.Text, _alignment.SelectedIndex, _leader.SelectedIndex);
         var plan = _session.SetStop(request);
@@ -166,7 +168,9 @@ public sealed partial class TabsDialog : FreeWDialogWindow
         RefreshRows(plan.SelectedIndex);
     }
 
-    private async void Accept()
+    private void Accept() => AvaloniaUiTaskGuard.Run(AcceptAsync);
+
+    private async Task AcceptAsync()
     {
         var acceptance = _session.PlanAcceptance(_defaultTab.Text);
         if (!acceptance.IsAccepted)
@@ -459,7 +463,13 @@ public sealed partial class BordersAndShadingDialog : FreeWDialogWindow
         }
     }
 
-    private async void Accept()
+    private void Accept() => AvaloniaUiTaskGuard.Run(AcceptAsync, ex =>
+    {
+        _status.Text = ex.Message;
+        _status.IsVisible = true;
+    });
+
+    private async Task AcceptAsync()
     {
         var input = new BordersAndShadingDialogInput(
             ParagraphSettingIndex: _paragraphSetting.SelectedIndex,

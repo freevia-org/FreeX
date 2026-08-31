@@ -118,10 +118,9 @@ public static class SisterAppLaunchSmokeCoordinator
             {
                 attempts++;
 
-                // Avalonia has no dispatcher-level unhandled-exception hook, so an exception
-                // escaping a timer tick takes the process down. A capture delegate that throws
-                // should fail the smoke run, not kill the app under test — and it would otherwise
-                // throw again on every subsequent tick.
+                // Keep a failing capture local to the smoke workflow so it produces a failed
+                // report rather than relying on the host's final dispatcher safety net. It would
+                // otherwise throw again on every subsequent tick.
                 try
                 {
                     var report = capture();

@@ -1123,23 +1123,36 @@ public sealed class MergeData
         ArgumentNullException.ThrowIfNull(rows);
 
         Header = header.Select(h => (h ?? string.Empty).Trim()).ToList();
-        DuplicateHeaderNames = Header
-            .Select((name, index) => (name, index))
-            .GroupBy(entry => entry.name, StringComparer.OrdinalIgnoreCase)
-            .Where(group => group.Count() > 1)
-            .Select(group => group.OrderBy(entry => entry.index).First().name)
-            .ToList();
+        var lastColumnIndexByName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var uniqueHeaderNames = new List<string>(Header.Count);
+        var duplicateHeaderNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var index = 0; index < Header.Count; index++)
+        {
+            var name = Header[index];
+            if (lastColumnIndexByName.TryAdd(name, index))
+            {
+                uniqueHeaderNames.Add(name);
+                continue;
+            }
+
+            lastColumnIndexByName[name] = index;
+            duplicateHeaderNames.Add(name);
+        }
+
+        DuplicateHeaderNames = uniqueHeaderNames.Where(duplicateHeaderNames.Contains).ToList();
         foreach (var cells in rows)
         {
             ArgumentNullException.ThrowIfNull(cells);
             // NOTE: keyed case-insensitively so a template field «Name» binds to a "name" header (see
-            // class summary). When Header itself contains two names that differ only by case, this loop
-            // necessarily collapses them to one entry -- the second write silently wins. That collision
-            // is surfaced via DuplicateHeaderNames below so callers can warn instead of losing data with
-            // no signal at all.
-            var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            for (var i = 0; i < Header.Count; i++)
-                row[Header[i]] = i < cells.Count ? cells[i] ?? string.Empty : string.Empty;
+            // class summary). When Header itself contains two names that differ only by case, only the
+            // last column's value survives. The precomputed index keeps that behavior without rewriting
+            // the same dictionary entry for every colliding column in every row.
+            var row = new Dictionary<string, string>(uniqueHeaderNames.Count, StringComparer.OrdinalIgnoreCase);
+            foreach (var name in uniqueHeaderNames)
+            {
+                var index = lastColumnIndexByName[name];
+                row[name] = index < cells.Count ? cells[index] ?? string.Empty : string.Empty;
+            }
             _rows.Add(row);
         }
     }

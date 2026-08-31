@@ -293,7 +293,7 @@ public sealed partial class MainWindow
 
             e.Handled = true;
         };
-        exportButton.Click += async (_, _) =>
+        exportButton.Click += (_, _) => RunGuarded(async () =>
         {
             dialog.Close();
             switch (currentSettings.PrintWhat)
@@ -312,7 +312,7 @@ public sealed partial class MainWindow
                     await ExportActiveSheetPdfAsync();
                     break;
             }
-        };
+        });
         dialog.KeyDown += (_, e) =>
         {
             switch (e.Key)

@@ -108,7 +108,7 @@ public sealed class CaptionRibbonWorkflowTests
 
         avalonia.Should().Contain("callbacks.OpenCaptionDialogForLabel");
         avalonia.Should().NotContain("editor.InsertCaption(CaptionLabel.");
-        avaloniaWindow.Should().Contain("OpenCaptionDialogForLabel: label => _ = OpenCaptionDialogAsync(label)");
+        avaloniaWindow.Should().Contain("OpenCaptionDialogForLabel: label => RunUiTask(() => OpenCaptionDialogAsync(label))");
     }
 
     private static IRibbonCommand Command(

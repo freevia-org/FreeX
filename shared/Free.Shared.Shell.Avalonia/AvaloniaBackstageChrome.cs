@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Ribbon;
 using Free.Shared.Shell;
 
 namespace Free.Shared.Shell.Avalonia;
@@ -353,7 +354,7 @@ public static class AvaloniaBackstageChrome
         if (!string.IsNullOrWhiteSpace(spec.AutomationName))
             AutomationProperties.SetName(button, spec.AutomationName);
         AutomationProperties.SetAutomationId(button, spec.AutomationId);
-        button.Click += (_, _) => spec.Action();
+        button.Click += (_, _) => InvokeAction(spec.Action, spec.AutomationId);
         return button;
     }
 
@@ -397,7 +398,7 @@ public static class AvaloniaBackstageChrome
             radio.IsCheckedChanged += (_, _) =>
             {
                 if (radio.IsChecked == true)
-                    option.Select();
+                    InvokeAction(option.Select, option.AutomationId);
             };
             group.Children.Add(radio);
         }
@@ -440,7 +441,7 @@ public static class AvaloniaBackstageChrome
             HorizontalContentAlignment = HorizontalAlignment.Left,
         };
         AutomationProperties.SetAutomationId(button, spec.AutomationId);
-        button.Click += (_, _) => spec.Action();
+        button.Click += (_, _) => InvokeAction(spec.Action, spec.AutomationId);
         return button;
     }
 
@@ -459,7 +460,7 @@ public static class AvaloniaBackstageChrome
         };
         AutomationProperties.SetAutomationId(button, spec.AutomationId);
         if (spec.Action is { } action)
-            button.Click += (_, _) => action();
+            button.Click += (_, _) => InvokeAction(action, spec.AutomationId);
 
         var row = new DockPanel { Margin = spec.RowMargin };
         DockPanel.SetDock(button, Dock.Left);
@@ -473,6 +474,21 @@ public static class AvaloniaBackstageChrome
             Margin = spec.DescriptionMargin,
         });
         return row;
+    }
+
+    internal static void InvokeAction(Action action, string commandId)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception ex)
+        {
+            // These callbacks execute inside Avalonia UI events, where an escaping exception
+            // terminates the process. Route them through the same diagnostics seam as ribbon
+            // commands and keep the shell alive.
+            RibbonCommandFaultReporter.Report(ex, commandId);
+        }
     }
 
     public static Border CreateSeparator(AvaloniaBackstageChromeStyle style, Thickness margin)

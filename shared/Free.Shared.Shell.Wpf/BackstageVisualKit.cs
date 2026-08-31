@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Free.Shared.Ribbon;
 using Free.Shared.Shell;
 
 namespace Free.Shared.Shell.Wpf;
@@ -124,12 +125,12 @@ public sealed class BackstageVisualKit
             Margin = new Thickness(0, 8, 0, 0),
             HorizontalAlignment = HorizontalAlignment.Center
         });
-        stack.MouseLeftButtonUp += (_, _) => onClick();
+        stack.MouseLeftButtonUp += (_, _) => InvokeAction(onClick, "BackstageTemplate");
         return stack;
     }
 
     /// <summary>A flat, link-coloured text button.</summary>
-    public Button LinkButton(string text, Action onClick)
+    public Button LinkButton(string text, Action onClick, string commandId = "BackstageAction")
     {
         var button = new Button
         {
@@ -143,8 +144,23 @@ public sealed class BackstageVisualKit
             Cursor = Cursors.Hand,
             FocusVisualStyle = null
         };
-        button.Click += (_, _) => onClick();
+        button.Click += (_, _) => InvokeAction(onClick, commandId);
         return button;
+    }
+
+    internal static void InvokeAction(Action action, string commandId)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception ex)
+        {
+            // The WPF dispatcher boundary records but does not handle exceptions. Contain
+            // host-provided backstage callbacks at their UI event boundary so a failed command
+            // is diagnostic data rather than a process-ending fault.
+            RibbonCommandFaultReporter.Report(ex, commandId);
+        }
     }
 
     /// <summary>Wraps a pane body in a vertical-only scroll viewer.</summary>

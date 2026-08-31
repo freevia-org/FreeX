@@ -768,12 +768,29 @@ public static class AvaloniaRibbonRenderer
             if ((tabControl.SelectedItem as TabItem)?.Tag is string selectedId &&
                 string.Equals(selectedId, FileRibbonTabId, StringComparison.Ordinal))
             {
-                onFileTabSelected?.Invoke();
                 if (lastContentTabIndex >= 0 && lastContentTabIndex < tabControl.Items.Count)
                 {
                     restoringContentTab = true;
-                    tabControl.SelectedIndex = lastContentTabIndex;
-                    restoringContentTab = false;
+                    try
+                    {
+                        tabControl.SelectedIndex = lastContentTabIndex;
+                    }
+                    finally
+                    {
+                        restoringContentTab = false;
+                    }
+                }
+
+                try
+                {
+                    onFileTabSelected?.Invoke();
+                }
+                catch (Exception ex)
+                {
+                    // Avalonia has no dispatcher-level unhandled-exception hook. A backstage
+                    // construction/open failure escaping SelectionChanged terminates the process,
+                    // so contain and report it like every other ribbon command boundary.
+                    RibbonCommandFaultReporter.Report(ex, FileRibbonTabId);
                 }
             }
             else

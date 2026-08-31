@@ -248,7 +248,14 @@ public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControl
         Accept(PageSetupDialogFollowUp.None);
     }
 
-    private async void Accept(PageSetupDialogFollowUp followUp)
+    private void Accept(PageSetupDialogFollowUp followUp) =>
+        AvaloniaUiTaskGuard.Run(() => AcceptAsync(followUp), ex =>
+        {
+            _status.Text = ex.Message;
+            _status.IsVisible = true;
+        });
+
+    private async Task AcceptAsync(PageSetupDialogFollowUp followUp)
     {
         var acceptance = _session.PlanAcceptance(this, followUp);
         if (!acceptance.IsAccepted)

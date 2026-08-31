@@ -169,6 +169,26 @@ public sealed class WpfAuthoritySurfaceParityTests
     }
 
     [Fact]
+    public async Task Restrict_editing_contains_password_provider_failure()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var current = ProtectionPasswordHelper.CreateWithPassword(
+                ProtectionMode.ReadOnly,
+                "secret");
+            var dialog = new RestrictEditingDialog(
+                current,
+                (_, _, _) => throw new InvalidOperationException("credential provider unavailable"));
+
+            await dialog.StopProtectionForTestAsync();
+
+            dialog.Result.Should().BeNull();
+            dialog.ValidationTextForTest.Should().Contain("credential provider unavailable");
+            return true;
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Symbol_picker_matches_the_WPF_grid_and_applies_only_an_explicit_result()
     {
         await Session.Dispatch(() =>

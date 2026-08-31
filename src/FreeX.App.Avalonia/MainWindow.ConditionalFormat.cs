@@ -52,7 +52,7 @@ public sealed partial class MainWindow
         var menu = new NativeMenu();
 
         var newRule = new NativeMenuItem { Header = UiText.Get("MainWindow_Header_NewRule") };
-        newRule.Click += async (_, _) => await ShowConditionalFormatNewRuleDialogAsync();
+        newRule.Click += (_, _) => RunGuarded(ShowConditionalFormatNewRuleDialogAsync);
         menu.Items.Add(newRule);
         menu.Items.Add(new NativeMenuItemSeparator());
 
@@ -70,7 +70,7 @@ public sealed partial class MainWindow
         }
 
         var greaterThan = new NativeMenuItem { Header = UiText.Get("ConditionalFormat_HighlightCellsGreaterThan") };
-        greaterThan.Click += async (_, _) => await ApplyHighlightGreaterThanPresetAsync();
+        greaterThan.Click += (_, _) => RunGuarded(ApplyHighlightGreaterThanPresetAsync);
         menu.Items.Add(greaterThan);
 
         var top10 = new NativeMenuItem { Header = UiText.Get("ConditionalFormatDialog_RuleType_Top10Items") };
@@ -84,7 +84,7 @@ public sealed partial class MainWindow
         menu.Items.Add(clear);
 
         var manage = new NativeMenuItem { Header = UiText.Get("MainWindow_Header_ManageRules") };
-        manage.Click += async (_, _) => await ShowManageConditionalFormatsDialogAsync();
+        manage.Click += (_, _) => RunGuarded(ShowManageConditionalFormatsDialogAsync);
         menu.Items.Add(manage);
 
         return menu;
@@ -337,7 +337,7 @@ public sealed partial class MainWindow
         var formatButton = new Button { Content = StripDisplayMnemonic(UiText.Get("ConditionalFormatDialog_FormatButton")) };
         ApplyCfButtonChrome(formatButton, 84);
         AutomationProperties.SetAutomationId(formatButton, "ConditionalFormatFormatButton");
-        formatButton.Click += async (_, _) =>
+        formatButton.Click += (_, _) => RunGuarded(async () =>
         {
             var presetFill = highlightBox.SelectedIndex >= 0 && highlightBox.SelectedIndex < ConditionalFormatHighlightPreset.Presets.Count
                 ? ConditionalFormatHighlightPreset.Presets[highlightBox.SelectedIndex].FillColor
@@ -350,7 +350,7 @@ public sealed partial class MainWindow
                 customFormatStyle = new CellStyle { FillColor = color };
                 highlightBox.SelectedItem = customFormatLabel;
             }
-        };
+        });
 
         var operatorField = CreateDataValidationField(UiText.Get("ConditionalFormat_OperatorLabel"), operatorBox);
         var value1Field = CreateDataValidationField(UiText.Get("ConditionalFormat_ValueLabel"), value1Box);
@@ -1158,7 +1158,7 @@ public sealed partial class MainWindow
         };
         scopeBox.SelectionChanged += (_, _) => Reload();
 
-        newButton.Click += async (_, _) =>
+        newButton.Click += (_, _) => RunGuarded(async () =>
         {
             var built = await ShowConditionalFormatRuleEditorAsync(existingRule: null);
             if (built is null)
@@ -1167,9 +1167,9 @@ public sealed partial class MainWindow
             // Append to the working copy only — nothing reaches the live sheet until Commit().
             manageSession.Add(built);
             Reload(built.Id);
-        };
+        });
 
-        editButton.Click += async (_, _) =>
+        editButton.Click += (_, _) => RunGuarded(async () =>
         {
             if (listBox.SelectedItem is not ManageConditionalFormatRuleProjection item)
                 return;
@@ -1182,7 +1182,7 @@ public sealed partial class MainWindow
                 return;
 
             Reload(edited.Id);
-        };
+        });
 
         deleteButton.Click += (_, _) =>
         {
@@ -1195,7 +1195,7 @@ public sealed partial class MainWindow
             Reload();
         };
 
-        duplicateButton.Click += async (_, _) =>
+        duplicateButton.Click += (_, _) => RunGuarded(async () =>
         {
             if (listBox.SelectedItem is not ManageConditionalFormatRuleProjection item)
                 return;
@@ -1205,7 +1205,7 @@ public sealed partial class MainWindow
                 return;
 
             Reload(duplicateId);
-        };
+        });
 
         void Move(ConditionalFormatRuleMoveDirection direction)
         {

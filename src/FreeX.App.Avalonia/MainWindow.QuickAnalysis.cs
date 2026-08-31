@@ -129,7 +129,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(button, item.AutomationId);
         ToolTip.SetTip(button, item.ToolTip);
-        button.Click += async (_, _) =>
+        button.Click += (_, _) => RunGuarded(async () =>
         {
             flyout.Hide();
             try
@@ -140,7 +140,7 @@ public sealed partial class MainWindow
             {
                 ShowEditIssue(exception.Message);
             }
-        };
+        });
         return button;
     }
 

@@ -1,5 +1,6 @@
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
+using Avalonia.Threading;
 
 namespace Free.Shared.Shell.Avalonia;
 
@@ -119,7 +120,11 @@ internal sealed class SisterAvaloniaProgramRuntime
         {
             var diagnostics = LocalAppDiagnostics.CreateDefault(version);
             return new SisterAvaloniaProgramDiagnostics(
-                () => diagnostics.RegisterCrashHandlers(subscribeDispatcher: null, onAfterFault: onEmergencySnapshot),
+                () => diagnostics.RegisterCrashHandlers(
+                    subscribeDispatcher: handler =>
+                        Dispatcher.UIThread.UnhandledException += (_, args) =>
+                            args.Handled = AppCrashHandlers.HandleDispatcherException(args.Exception, handler),
+                    onAfterFault: onEmergencySnapshot),
                 (exception, source) => diagnostics.RecordCrash(exception, source));
         };
 
