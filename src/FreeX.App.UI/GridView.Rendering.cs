@@ -1185,7 +1185,7 @@ public partial class GridView
     private static readonly Dictionary<(uint Row, uint Col), CellStyle> EmptyRenderCellStyleLookup = new(0);
     private static readonly IReadOnlyList<RenderBorderCell> EmptyRenderBorderCells = Array.Empty<RenderBorderCell>();
 
-    private static (Dictionary<(uint Row, uint Col), CellStyle> Styles,
+    internal static (Dictionary<(uint Row, uint Col), CellStyle> Styles,
         Dictionary<(uint Row, uint Col), CellStyle> BorderStyles,
         IReadOnlyList<RenderBorderCell> BorderCells) BuildRenderCellLookups(
         IReadOnlyList<DisplayCell> cells,

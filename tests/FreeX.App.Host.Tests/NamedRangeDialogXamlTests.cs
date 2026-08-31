@@ -624,12 +624,7 @@ public sealed class NamedRangeDialogXamlTests
     [InlineData(DefinedNameError.Duplicate)]
     public void NameManager_ResolvesSharedNameValidationMessage(DefinedNameError error)
     {
-        var method = typeof(NamedRangeDialog).GetMethod(
-            "DescribeNameError",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
-        method.Should().NotBeNull();
-        method!.Invoke(null, [error]).Should().Be(
+        NamedRangeDialog.DescribeNameError(error).Should().Be(
             DefinedNameValidationMessages.Describe(error).Resolve(FreeX.App.Localization.Loc.Get));
     }
 
@@ -639,12 +634,7 @@ public sealed class NamedRangeDialogXamlTests
     [InlineData(RefersToError.None)]
     public void NameManager_ResolvesSharedRefersToValidationMessage(RefersToError error)
     {
-        var method = typeof(NamedRangeDialog).GetMethod(
-            "DescribeRefersToError",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
-        method.Should().NotBeNull();
-        method!.Invoke(null, [error]).Should().Be(
+        NamedRangeDialog.DescribeRefersToError(error).Should().Be(
             RefersToValidationMessages.Describe(error).Resolve(FreeX.App.Localization.Loc.Get));
     }
 

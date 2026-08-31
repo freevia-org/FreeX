@@ -216,7 +216,7 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
             };
     }
 
-    private void Select(IconPickerEntry entry, Border tile)
+    internal void Select(IconPickerEntry entry, Border tile)
     {
         var tiles = _tiles.Children.OfType<Border>().ToList();
         var index = tiles.IndexOf(tile);

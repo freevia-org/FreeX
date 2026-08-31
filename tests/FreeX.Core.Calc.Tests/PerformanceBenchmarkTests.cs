@@ -377,18 +377,6 @@ public class PerformanceBenchmarkTests
         const uint rangeCount = 20_000;
         const int iterations = 250;
 
-        var setDependencies = typeof(DependencyGraph).GetMethod(
-            "SetDependencies",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
-            binder: null,
-            [
-                typeof(CellAddress),
-                typeof(HashSet<CellAddress>),
-                typeof(IReadOnlyList<GridRange>)
-            ],
-            modifiers: null);
-        setDependencies.Should().NotBeNull();
-
         for (uint row = 1; row <= rangeCount; row++)
         {
             var formula = new CellAddress(sheetId, row, 1_200);
@@ -396,7 +384,7 @@ public class PerformanceBenchmarkTests
                 new CellAddress(sheetId, row, 1),
                 new CellAddress(sheetId, row, 1_100));
 
-            setDependencies!.Invoke(graph, [formula, new HashSet<CellAddress>(), new[] { range }]);
+            graph.SetDependencies(formula, new HashSet<CellAddress>(), new[] { range });
         }
 
         var changed = new CellAddress(sheetId, rangeCount / 2, 500);
