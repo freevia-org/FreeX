@@ -1298,13 +1298,13 @@
 
                 <!-- Greeting -->
                 <TextBlock x:Name="SsGreeting" Grid.Row="0"
-                           FontSize="28" FontWeight="Light" Foreground="#1F1F1F"
-                           Margin="40,36,40,0"/>
+                           FontSize="24" FontWeight="Normal" Foreground="#1F1F1F"
+                           Margin="32,24,32,0"/>
 
                 <!-- New section -->
-                <Border Grid.Row="1" Padding="40,18,40,6">
+                <Border Grid.Row="1" Padding="32,14,32,4">
                     <StackPanel>
-                        <DockPanel LastChildFill="False" Margin="0,0,0,10">
+                        <DockPanel LastChildFill="False" Margin="0,0,0,8">
                             <TextBlock DockPanel.Dock="Left" Text="{local:Loc Key=Common_New}"
                                        FontSize="14" FontWeight="SemiBold" Foreground="#1F1F1F"/>
                             <Button DockPanel.Dock="Right" Content="{local:Loc Key=MainWindow_Content_MoreTemplatesExcluded}"
@@ -1322,39 +1322,39 @@
 
                         <StackPanel Orientation="Horizontal">
                             <!-- Blank workbook card -->
-                            <Button Click="SsBlankWorkbook_Click" Cursor="Hand" Margin="0,0,16,0"
+                            <Button Click="SsBlankWorkbook_Click" Cursor="Hand" Margin="0,0,12,0"
                                     ribbonWpf:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_BlankWorkbook}"
                                     ribbonWpf:RibbonTooltip.KeyTip="B1" ribbonWpf:RibbonMetadata.CommandName="Blank Workbook">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
-                                        <Border x:Name="cardBg" Background="Transparent" Padding="4">
-                                            <StackPanel Width="108">
+                                        <Border x:Name="cardBg" Background="Transparent" Padding="3">
+                                            <StackPanel Width="100">
                                                 <!-- Mini spreadsheet thumbnail -->
-                                                <Border Width="108" Height="80"
+                                                <Border Width="100" Height="74"
                                                         BorderBrush="#C8C8C8" BorderThickness="1"
                                                         Background="White" ClipToBounds="True">
-                                                    <Canvas Width="108" Height="80">
+                                                    <Canvas Width="100" Height="74">
                                                         <!-- Row-header strip -->
                                                         <Rectangle Canvas.Left="0" Canvas.Top="0"
-                                                                   Width="18" Height="80" Fill="#F0F0F0"/>
+                                                                   Width="18" Height="74" Fill="#F0F0F0"/>
                                                         <!-- Column-header strip -->
                                                         <Rectangle Canvas.Left="0" Canvas.Top="0"
-                                                                   Width="108" Height="14" Fill="#F0F0F0"/>
+                                                                   Width="100" Height="14" Fill="#F0F0F0"/>
                                                         <!-- Horizontal grid lines -->
-                                                        <Line X1="0" Y1="27" X2="108" Y2="27"
+                                                        <Line X1="0" Y1="27" X2="100" Y2="27"
                                                               Stroke="#DCDCDC" StrokeThickness="0.5"/>
-                                                        <Line X1="0" Y1="40" X2="108" Y2="40"
+                                                        <Line X1="0" Y1="40" X2="100" Y2="40"
                                                               Stroke="#DCDCDC" StrokeThickness="0.5"/>
-                                                        <Line X1="0" Y1="53" X2="108" Y2="53"
+                                                        <Line X1="0" Y1="53" X2="100" Y2="53"
                                                               Stroke="#DCDCDC" StrokeThickness="0.5"/>
-                                                        <Line X1="0" Y1="66" X2="108" Y2="66"
+                                                        <Line X1="0" Y1="66" X2="100" Y2="66"
                                                               Stroke="#DCDCDC" StrokeThickness="0.5"/>
                                                         <!-- Vertical grid lines -->
-                                                        <Line X1="42" Y1="14" X2="42" Y2="80"
+                                                        <Line X1="42" Y1="14" X2="42" Y2="74"
                                                               Stroke="#DCDCDC" StrokeThickness="0.5"/>
-                                                        <Line X1="66" Y1="14" X2="66" Y2="80"
+                                                        <Line X1="66" Y1="14" X2="66" Y2="74"
                                                               Stroke="#DCDCDC" StrokeThickness="0.5"/>
-                                                        <Line X1="90" Y1="14" X2="90" Y2="80"
+                                                        <Line X1="90" Y1="14" X2="90" Y2="74"
                                                               Stroke="#DCDCDC" StrokeThickness="0.5"/>
                                                         <!-- Selected cell A1 -->
                                                         <Rectangle Canvas.Left="18" Canvas.Top="14"
@@ -1367,7 +1367,7 @@
                                                     </Canvas>
                                                 </Border>
                                                 <TextBlock Text="{local:Loc Key=MainWindow_Text_BlankWorkbook}"
-                                                           FontSize="12" Margin="0,6,0,2"
+                                                           FontSize="12" Margin="0,5,0,1"
                                                            TextAlignment="Center"
                                                            Foreground="#1F1F1F"/>
                                             </StackPanel>
@@ -1386,7 +1386,7 @@
                 </Border>
 
                 <!-- Recent files -->
-                <Grid Grid.Row="2" Margin="40,0,40,16">
+                <Grid Grid.Row="2" Margin="32,0,32,14">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/> <!-- Tabs + search -->
                         <RowDefinition Height="Auto"/> <!-- Column headers -->
@@ -1446,7 +1446,7 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Button HorizontalContentAlignment="Stretch"
-                                            BorderThickness="0" Padding="0,7"
+                                            BorderThickness="0" Padding="0,5"
                                             Click="SsRecentItem_Click"
                                             Loaded="SsRecentFileItem_Loaded"
                                             Cursor="Hand"
@@ -1472,26 +1472,32 @@
                                                 <ColumnDefinition Width="150"/>
                                                 <ColumnDefinition Width="36"/>
                                             </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                                <Border Width="26" Height="30" Background="{DynamicResource FreeXAccentBrush}"
-                                                        CornerRadius="2" Margin="0,0,10,0"
+                                            <Grid Grid.Column="0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Border Width="24" Height="28" Background="{DynamicResource FreeXAccentBrush}"
+                                                        CornerRadius="2" Margin="0,0,8,0"
                                                         VerticalAlignment="Center">
                                                     <TextBlock Text="X" Foreground="White"
                                                                FontSize="11" FontWeight="Bold"
                                                                HorizontalAlignment="Center"
                                                                VerticalAlignment="Center"/>
                                                 </Border>
-                                                <StackPanel VerticalAlignment="Center">
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding FileName}"
-                                                               FontSize="13" Foreground="#1F1F1F"/>
+                                                               FontSize="12" Foreground="#1F1F1F"
+                                                               TextTrimming="CharacterEllipsis"/>
                                                     <TextBlock Text="{Binding Directory}"
-                                                               FontSize="11" Foreground="#888"
+                                                               FontSize="10" Foreground="#888"
+                                                               TextTrimming="CharacterEllipsis"
                                                                Margin="0,1,0,0"/>
                                                 </StackPanel>
-                                            </StackPanel>
+                                            </Grid>
                                             <TextBlock Grid.Column="1"
                                                        Text="{Binding LastOpenedText}"
-                                                       FontSize="12" Foreground="#666"
+                                                       FontSize="11" Foreground="#666"
                                                        VerticalAlignment="Center"/>
                                             <Button Grid.Column="2"
                                                     Style="{StaticResource BackstageRecentPinCommandButton}"
@@ -1516,7 +1522,7 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Button HorizontalContentAlignment="Stretch"
-                                            BorderThickness="0" Padding="0,7"
+                                            BorderThickness="0" Padding="0,5"
                                             Click="SsRecentItem_Click"
                                             Loaded="SsPinnedFileItem_Loaded"
                                             Cursor="Hand"
@@ -1542,26 +1548,32 @@
                                                 <ColumnDefinition Width="150"/>
                                                 <ColumnDefinition Width="36"/>
                                             </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                                <Border Width="26" Height="30" Background="{DynamicResource FreeXAccentBrush}"
-                                                        CornerRadius="2" Margin="0,0,10,0"
+                                            <Grid Grid.Column="0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Border Width="24" Height="28" Background="{DynamicResource FreeXAccentBrush}"
+                                                        CornerRadius="2" Margin="0,0,8,0"
                                                         VerticalAlignment="Center">
                                                     <TextBlock Text="X" Foreground="White"
                                                                FontSize="11" FontWeight="Bold"
                                                                HorizontalAlignment="Center"
                                                                VerticalAlignment="Center"/>
                                                 </Border>
-                                                <StackPanel VerticalAlignment="Center">
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding FileName}"
-                                                               FontSize="13" Foreground="#1F1F1F"/>
+                                                               FontSize="12" Foreground="#1F1F1F"
+                                                               TextTrimming="CharacterEllipsis"/>
                                                     <TextBlock Text="{Binding Directory}"
-                                                               FontSize="11" Foreground="#888"
+                                                               FontSize="10" Foreground="#888"
+                                                               TextTrimming="CharacterEllipsis"
                                                                Margin="0,1,0,0"/>
                                                 </StackPanel>
-                                            </StackPanel>
+                                            </Grid>
                                             <TextBlock Grid.Column="1"
                                                        Text="{Binding LastOpenedText}"
-                                                       FontSize="12" Foreground="#666"
+                                                       FontSize="11" Foreground="#666"
                                                        VerticalAlignment="Center"/>
                                             <Button Grid.Column="2"
                                                     Style="{StaticResource BackstageRecentPinCommandButton}"
