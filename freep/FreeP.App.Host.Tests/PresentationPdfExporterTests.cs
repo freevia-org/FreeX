@@ -2,6 +2,7 @@ using System.Linq;
 using System.Text;
 using Free.Shared.Drawing;
 using Free.Shared.Pdf;
+using FreeP.App.Compositor;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
 
@@ -936,6 +937,58 @@ public class PresentationPdfExporterTests
             .Subject;
 
         image.Opacity.Should().Be(0.42);
+    }
+
+    [Fact]
+    public void BuildDocument_NegativeSrcRectInsetsLetterboxTheSameWayTheScreenRendererDoes()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.Picture,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            PictureFormat = new PictureFormat { CropLeft = -0.25, CropBottom = -0.5 },
+            Picture = new ImagePart { Bytes = MinimalPngBytes(), ContentType = "image/png" },
+        });
+        deck.Slides.Add(slide);
+
+        var image = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops
+            .OfType<PdfImage>()
+            .Should().ContainSingle()
+            .Subject;
+
+        image.SourceCrop.Left.Should().Be(-0.25, "negative insets must reach the writer unclamped");
+        image.SourceCrop.Bottom.Should().Be(-0.5);
+
+        // Print resolves the same geometry as screen: the source rectangle stays whole and the
+        // padding lands on the destination instead.
+        var printPlan = PdfRenderGeometry.GetImageCropPlan(100, 50, image.SourceCrop);
+        var screenPlan = PictureRenderPlanner.Plan(
+            new DrawOp.Picture
+            {
+                DestDip = new LayoutRect(0, 0, image.Width, image.Height),
+                CropLeft = image.SourceCrop.Left,
+                CropBottom = image.SourceCrop.Bottom,
+            },
+            pixelWidth: 100,
+            pixelHeight: 50);
+
+        printPlan.HasSourceCrop.Should().BeFalse();
+        screenPlan.HasSourceCrop.Should().BeFalse();
+        printPlan.DestinationInsetLeft.Should().BeApproximately(0.2, 1e-9);
+        printPlan.DestinationInsetBottom.Should().BeApproximately(1.0 / 3.0, 1e-9);
+
+        screenPlan.ImageDestinationDip.X.Should().BeApproximately(
+            printPlan.DestinationInsetLeft * image.Width, 1e-9);
+        screenPlan.ImageDestinationDip.Width.Should().BeApproximately(
+            image.Width * (1 - printPlan.DestinationInsetLeft - printPlan.DestinationInsetRight), 1e-9);
+        screenPlan.ImageDestinationDip.Height.Should().BeApproximately(
+            image.Height * (1 - printPlan.DestinationInsetTop - printPlan.DestinationInsetBottom), 1e-9);
     }
 
     [Fact]

@@ -99,6 +99,79 @@ public sealed class PictureCropEffectsTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_NegativeSrcRectInsets_WrittenSignedAndPreserved()
+    {
+        // Negative a:srcRect insets outset (pad the picture inside its frame) rather than crop.
+        // They must survive the write as signed per-mille values and read back unclamped.
+        var img = new ImagePart { Bytes = Minimal1x1Png(), ContentType = "image/png" };
+        var fmt = new PictureFormat
+        {
+            CropLeft   = -0.25,
+            CropTop    = -0.125,
+            CropRight  = 0.0,
+            CropBottom = 0.25,
+        };
+
+        var pres = new Presentation();
+        pres.Slides.Add(new Slide());
+        pres.Slides[0].Shapes.Add(MakePictureShape(img, fmt));
+
+        var path = WriteToPptx(pres);
+
+        using (var package = System.IO.Compression.ZipFile.OpenRead(path))
+        {
+            var slidePart = package.GetEntry("ppt/slides/slide1.xml");
+            slidePart.Should().NotBeNull();
+            using var reader = new StreamReader(slidePart!.Open());
+            var xml = reader.ReadToEnd();
+            xml.Should().Contain("l=\"-25000\"", "negative insets must be written signed, not clamped");
+            xml.Should().Contain("t=\"-12500\"");
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var pf = reloaded.Slides[0].Shapes[0].PictureFormat;
+        pf.Should().NotBeNull("a negative srcRect is still a srcRect");
+        pf!.CropLeft  .Should().BeApproximately(-0.25,  0.0001);
+        pf.CropTop    .Should().BeApproximately(-0.125, 0.0001);
+        pf.CropRight  .Should().BeApproximately(0.0,    0.0001);
+        pf.CropBottom .Should().BeApproximately(0.25,   0.0001);
+    }
+
+    [Fact]
+    public void Compositor_NegativeCrop_PlansPaddedImageDestinationInsideFrame()
+    {
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id          = 1,
+            Kind        = SlideShapeKind.Picture,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 457200,
+            ExtentCxEmu = 2743200,
+            ExtentCyEmu = 1828800,
+            Picture     = new ImagePart { Bytes = Minimal1x1Png(), ContentType = "image/png" },
+            PictureFormat = new PictureFormat { CropLeft = -0.25 },
+        });
+
+        var picOp = SlideCompositor.Compose(pres, pres.Slides[0]).OfType<DrawOp.Picture>().First();
+        picOp.CropLeft.Should().BeApproximately(-0.25, 0.0001);
+
+        var plan = PictureRenderPlanner.Plan(picOp, pixelWidth: 100, pixelHeight: 50);
+
+        plan.HasSourceCrop.Should().BeFalse();
+        plan.HasDestinationInset.Should().BeTrue();
+        plan.HasCrop.Should().BeTrue();
+        plan.ImageDestinationDip.X.Should().BeApproximately(
+            plan.DestinationDip.X + plan.DestinationDip.Width * 0.2,
+            0.0001);
+        plan.ImageDestinationDip.Width.Should().BeApproximately(
+            plan.DestinationDip.Width * 0.8,
+            0.0001);
+        plan.ImageDestinationDip.Height.Should().BeApproximately(plan.DestinationDip.Height, 0.0001);
+    }
+
+    [Fact]
     public void RoundTrip_NoCrop_PictureFormatIsNull()
     {
         var img = new ImagePart { Bytes = Minimal1x1Png(), ContentType = "image/png" };
