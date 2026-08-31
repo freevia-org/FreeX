@@ -27,9 +27,9 @@ public sealed class DialogBackedCommandAvailabilityTests
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var source = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "MainWindow.cs"));
 
-        source.Should().Contain("OpenDateTimeDialog: () => _ = OpenDateTimeDialogAsync()");
-        source.Should().Contain("OpenSplitCellDialog: () => _ = OpenSplitCellDialogAsync()");
-        source.Should().Contain("InsertObject:        () => _ = InsertEmbeddedObjectAsync()");
+        source.Should().Contain("OpenDateTimeDialog: () => RunUiTask(OpenDateTimeDialogAsync)");
+        source.Should().Contain("OpenSplitCellDialog: () => RunUiTask(OpenSplitCellDialogAsync)");
+        source.Should().Contain("InsertObject:        () => RunUiTask(InsertEmbeddedObjectAsync)");
     }
 
     [Fact]

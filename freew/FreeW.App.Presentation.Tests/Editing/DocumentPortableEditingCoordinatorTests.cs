@@ -1691,6 +1691,70 @@ public sealed class DocumentReferenceEditingCoordinatorTests
                 "Figure 1: Diagram\t1");
     }
 
+    // r175 freew-captions-figures F1: UpdateFields (F9 / "Update entire document") must refresh EVERY
+    // distinct caption-table label's region, not just the first one encountered in document order.
+    // Before the fix, RefreshGeneratedReferenceRegions computed a single `labelText` via
+    // TableOfFigures.ExistingLabelText -- which stops at the first match -- and refreshed only that one
+    // region, silently leaving a second, differently-labelled table (e.g. a Table of Tables alongside a
+    // Table of Figures) stale.
+    [Fact]
+    public void UpdateFieldsRefreshesEveryDistinctCaptionTableLabelRegion()
+    {
+        var figureCaption = Captions.BuildCaption(CaptionLabel.Figure, 1, "First diagram");
+        var tableCaption = Captions.BuildCaption(CaptionLabel.Table, 1, "First table");
+        var document = new TextDocument { Blocks = { figureCaption, tableCaption } };
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        var insertedFigures = session.References.InsertTableOfFigures(
+            new DocumentTextPosition(0, 0),
+            Captions.FigureLabelText,
+            (_, _) => "1");
+        session.References.InsertTableOfFigures(
+            insertedFigures.Caret,
+            Captions.TableLabelText,
+            (_, _) => "1");
+
+        // A second caption of EACH label, added after both tables already exist.
+        document.Blocks.Add(Captions.BuildCaption(CaptionLabel.Figure, 2, "Second diagram"));
+        document.Blocks.Add(Captions.BuildCaption(CaptionLabel.Table, 2, "Second table"));
+
+        var result = session.References.UpdateFields();
+
+        result.RefreshedGeneratedRegionCount.Should().Be(2);
+        document.Blocks.Where(block => TableOfFigures.IsTableOfFiguresParagraph(block, Captions.FigureLabelText))
+            .Cast<Paragraph>().Select(p => p.PlainText)
+            .Should().Equal("Table of Figures", "Figure 1: First diagram\t1", "Figure 2: Second diagram\t1");
+        document.Blocks.Where(block => TableOfFigures.IsTableOfFiguresParagraph(block, Captions.TableLabelText))
+            .Cast<Paragraph>().Select(p => p.PlainText)
+            .Should().Equal("Table of Tables", "Table 1: First table\t1", "Table 2: Second table\t1");
+    }
+
+    // Sibling/no-regression check: a document with only ONE distinct caption-table label must still be
+    // refreshed exactly as before UpdateFieldsRefreshesEveryDistinctCaptionTableLabelRegion's fix -- one
+    // region found, one region refreshed.
+    [Fact]
+    public void UpdateFieldsStillRefreshesASingleCaptionTableLabelRegion()
+    {
+        var figureCaption = Captions.BuildCaption(CaptionLabel.Figure, 1, "First diagram");
+        var document = new TextDocument { Blocks = { figureCaption } };
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.References.InsertTableOfFigures(
+            new DocumentTextPosition(0, 0),
+            Captions.FigureLabelText,
+            (_, _) => "1");
+        document.Blocks.Add(Captions.BuildCaption(CaptionLabel.Figure, 2, "Second diagram"));
+
+        var result = session.References.UpdateFields();
+
+        result.RefreshedGeneratedRegionCount.Should().Be(1);
+        document.Blocks.Where(TableOfFigures.IsTableOfFiguresParagraph)
+            .Cast<Paragraph>().Select(p => p.PlainText)
+            .Should().Equal("Table of Figures", "Figure 1: First diagram\t1", "Figure 2: Second diagram\t1");
+    }
+
     // Index counterpart of the above. A generated index has no title paragraph to cut at
     // (DocumentIndex.Build emits one only under IndexOptions.IncludeTitle, default false and off on
     // this path) and reuses its heading style for every letter-group heading, so neither contiguity

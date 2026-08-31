@@ -38,6 +38,12 @@ public sealed class PresentationWorkareaOperationEndpoints
     public Action? RefreshAltTextRequest { get; init; }
     public Action? RefreshReadingOrder { get; init; }
     public Action? RefreshAltTextPane { get; init; }
+
+    /// <summary>See <see cref="PresentationWorkareaSession.NotifySaved"/>.</summary>
+    public Action<EditingSession>? MarkSavedAtUndoDepth { get; init; }
+
+    /// <summary>Called after every Undo/Redo; see PresentationWorkareaSession's editor-command handling.</summary>
+    public Action<EditingSession>? TryMarkCleanIfAtSavePoint { get; init; }
 }
 
 /// <summary>Native file, clipboard, dialog, and slide-show commands supplied by a renderer.</summary>
@@ -146,6 +152,10 @@ public static class PresentationWorkareaEndpointDispatcher
             PresentationWorkareaOperation.RefreshAltTextRequest => Invoke(endpoints.RefreshAltTextRequest),
             PresentationWorkareaOperation.RefreshReadingOrder => Invoke(endpoints.RefreshReadingOrder),
             PresentationWorkareaOperation.RefreshAltTextPane => Invoke(endpoints.RefreshAltTextPane),
+            PresentationWorkareaOperation.MarkSavedAtUndoDepth =>
+                Invoke(endpoints.MarkSavedAtUndoDepth, context.Snapshot.Editor),
+            PresentationWorkareaOperation.TryMarkCleanIfAtSavePoint =>
+                Invoke(endpoints.TryMarkCleanIfAtSavePoint, context.Snapshot.Editor),
             _ => false,
         };
     }

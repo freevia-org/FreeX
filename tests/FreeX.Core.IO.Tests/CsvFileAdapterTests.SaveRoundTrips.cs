@@ -11,6 +11,20 @@ namespace FreeX.Core.IO.Tests;
 public sealed partial class CsvFileAdapterTests
 {
     [Fact]
+    public void Save_SortsSnapshotWhilePreservingRowColumnAndGlobalWidthGaps()
+    {
+        var (workbook, sheet) = CreateWorkbookWithSheet();
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new TextValue("D4"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue(""));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("C1"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("A4"));
+
+        var savedText = SaveToUtf8Text(new CsvFileAdapter(), workbook);
+
+        savedText.Should().Be(",,C1,\r\n,\"\",,\r\n,,,\r\nA4,,,D4\r\n");
+    }
+
+    [Fact]
     public void Save_RoundTripsExplicitEmptyTextFields()
     {
         var (workbook, sheet) = CreateWorkbookWithSheet();

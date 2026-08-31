@@ -129,17 +129,23 @@ internal sealed class AvaloniaRichTextEditor : Grid
         {
             Header = PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditCopyCommand),
         };
-        _copyContextMenuItem.Click += async (_, _) => { _ = await CopySelectionAsync(); };
+        _copyContextMenuItem.Click += (_, _) => RunClipboardCommandGuarded(
+            () => CopySelectionAsync(),
+            PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditCopyCommand));
         _cutContextMenuItem = new MenuItem
         {
             Header = PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditCutCommand),
         };
-        _cutContextMenuItem.Click += async (_, _) => { _ = await CutSelectionAsync(); };
+        _cutContextMenuItem.Click += (_, _) => RunClipboardCommandGuarded(
+            () => CutSelectionAsync(),
+            PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditCutCommand));
         _pasteContextMenuItem = new MenuItem
         {
             Header = PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditPasteCommand),
         };
-        _pasteContextMenuItem.Click += async (_, _) => { _ = await PasteClipboardAsync(); };
+        _pasteContextMenuItem.Click += (_, _) => RunClipboardCommandGuarded(
+            () => PasteClipboardAsync(),
+            PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditPasteCommand));
         var selectAllContextMenuItem = new MenuItem
         {
             Header = PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditSelectAllCommand),
@@ -950,7 +956,31 @@ internal sealed class AvaloniaRichTextEditor : Grid
         _pointerAutoScrollTimer.Stop();
     }
 
+    private async void RunClipboardCommandGuarded(Func<Task<bool>> command, string commandName)
+    {
+        try
+        {
+            await command();
+        }
+        catch (Exception exception)
+        {
+            _lastWriteFailureMessage = $"{commandName}: {exception.Message}";
+        }
+    }
+
     private async void OnInputNavigationKeyDown(object? sender, KeyEventArgs e)
+    {
+        try
+        {
+            await OnInputNavigationKeyDownCore(e);
+        }
+        catch (Exception exception)
+        {
+            _lastWriteFailureMessage = exception.Message;
+        }
+    }
+
+    private async Task OnInputNavigationKeyDownCore(KeyEventArgs e)
     {
         bool control = (e.KeyModifiers & KeyModifiers.Control) != 0;
         bool shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;

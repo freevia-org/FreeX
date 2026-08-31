@@ -777,6 +777,31 @@ public sealed class PortablePdfWriterTests
     }
 
     [Fact]
+    public void Write_LetterboxesImageForNegativeSourceCropInsets()
+    {
+        // a:srcRect l="-25000": the frame spans source fractions [-0.25, 1], so the bitmap covers
+        // only the right 80% of the 80pt-wide frame (64pt starting 16pt in) and the rest stays empty.
+        var page = new PdfContentPage(120, 90, new PdfDrawOp[]
+        {
+            new PdfImage(
+                10,
+                20,
+                80,
+                40,
+                MinimalJpegBytes(),
+                "image/jpeg",
+                SourceCrop: new PdfImageSourceCrop(-0.25, 0, 0, 0)),
+        });
+
+        var pdf = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page })))
+            .Replace("\r\n", "\n");
+
+        pdf.Should().Contain("10 20 80 40 re W n");
+        pdf.Should().Contain("64 0 0 40 26 20 cm");
+        pdf.Should().Contain("/Im1 Do");
+    }
+
+    [Fact]
     public void Write_ClipsImageToEllipse()
     {
         var page = new PdfContentPage(100, 80, new PdfDrawOp[]

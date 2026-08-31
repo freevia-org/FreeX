@@ -481,6 +481,149 @@ public sealed class ChartRenderPlannerTests
         (radial.X * plus.X + radial.Y * plus.Y).Should().BeLessThan(0);
     }
 
+    [Theory]
+    [InlineData(ChartType.ColumnClustered)]
+    [InlineData(ChartType.BarClustered)]
+    public void BuildScenePlan_ErrorBarCentersPreserveSignedRectangleAnchors(ChartType chartType)
+    {
+        var chart = new ChartShape
+        {
+            ChartType = chartType,
+            Categories = { "Positive", "Negative" },
+        };
+        var series = new ChartSeries
+        {
+            Name = "Actual",
+            ErrorBars = new ChartErrorBars { Value = 1 },
+        };
+        series.Values.AddRange(new double?[] { 10, -5 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.ErrorBars.Should().HaveCount(2);
+        foreach (var errorBar in scene.ErrorBars)
+        {
+            var rectangle = scene.Rectangles.Single(candidate =>
+                candidate.SeriesIndex == errorBar.SeriesIndex
+                && candidate.CategoryIndex == errorBar.PointIndex);
+            double value = series.Values[errorBar.PointIndex]!.Value;
+            var expected = chartType == ChartType.ColumnClustered
+                ? new ChartPlanPoint(
+                    rectangle.Bounds.X + rectangle.Bounds.Width / 2.0,
+                    value >= 0 ? rectangle.Bounds.Y : rectangle.Bounds.Bottom)
+                : new ChartPlanPoint(
+                    value >= 0 ? rectangle.Bounds.Right : rectangle.Bounds.X,
+                    rectangle.Bounds.Y + rectangle.Bounds.Height / 2.0);
+            errorBar.Center.Should().Be(expected);
+        }
+    }
+
+    [Fact]
+    public void BuildScenePlan_BubbleErrorBarCentersMatchRenderedBubbleCenters()
+    {
+        var chart = new ChartShape { ChartType = ChartType.Bubble };
+        var series = new ChartSeries
+        {
+            Name = "Actual",
+            ErrorBars = new ChartErrorBars
+            {
+                Direction = ChartErrorDirection.X,
+                Value = 0.5,
+            },
+        };
+        series.XValues.AddRange(new double?[] { 1, 2, 3 });
+        series.Values.AddRange(new double?[] { 3, 5, 4 });
+        series.BubbleSizes.AddRange(new double?[] { 10, 20, 15 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.ErrorBars.Should().HaveCount(3);
+        var bubbles = scene.Bubble!.Value.Bubbles;
+        foreach (var errorBar in scene.ErrorBars)
+        {
+            errorBar.Center.Should().Be(bubbles.Single(candidate =>
+                candidate.SeriesIndex == errorBar.SeriesIndex
+                && candidate.PointIndex == errorBar.PointIndex).Center);
+        }
+    }
+
+    [Fact]
+    public void BuildScenePlan_DenseLineErrorBarCentersMatchEveryRenderedPoint()
+    {
+        const int seriesCount = 8;
+        const int pointCount = 64;
+        var chart = new ChartShape { ChartType = ChartType.LineMarkers };
+        chart.Categories.AddRange(Enumerable.Range(0, pointCount).Select(index => $"C{index}"));
+        for (int seriesIndex = 0; seriesIndex < seriesCount; seriesIndex++)
+        {
+            var series = new ChartSeries
+            {
+                Name = $"Series {seriesIndex}",
+                ErrorBars = new ChartErrorBars { Value = 0.25 },
+            };
+            series.Values.AddRange(Enumerable.Range(0, pointCount)
+                .Select(pointIndex => (double?)(seriesIndex * 10 + pointIndex + 1)));
+            chart.Series.Add(series);
+        }
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 960, 540));
+
+        scene.ErrorBars.Should().HaveCount(seriesCount * pointCount);
+        foreach (var errorBar in scene.ErrorBars)
+        {
+            var renderedSeries = scene.LineSeries.Single(candidate =>
+                candidate.SeriesIndex == errorBar.SeriesIndex);
+            errorBar.Center.Should().Be(renderedSeries.Points[errorBar.PointIndex]!.Value);
+        }
+    }
+
+    [Fact]
+    public void BuildScenePlan_MissingLinePointStillOmitsItsErrorBar()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.LineMarkers,
+            Categories = { "Q1", "Q2", "Q3" },
+        };
+        var series = new ChartSeries
+        {
+            ErrorBars = new ChartErrorBars { Value = 1 },
+        };
+        series.Values.AddRange(new double?[] { 10, null, 30 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.ErrorBars.Select(errorBar => errorBar.PointIndex).Should().Equal(0, 2);
+    }
+
+    [Fact]
+    public void ErrorBarGeometryIndex_SourceGuardBuildsOnceAndUsesFirstWinsLookups()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText(
+            "freep", "FreeP.App.Presentation", "ChartRenderPlanner.cs");
+        int buildStart = source.IndexOf(
+            "private static IReadOnlyList<ChartErrorBarPrimitive> BuildErrorBarPrimitives(",
+            StringComparison.Ordinal);
+        buildStart.Should().BeGreaterThanOrEqualTo(0);
+        int indexStart = source.IndexOf("private sealed class ChartErrorBarGeometryIndex", buildStart, StringComparison.Ordinal);
+        indexStart.Should().BeGreaterThan(buildStart);
+        int nextMember = source.IndexOf("public static ChartRenderFamily GetRenderFamily", indexStart, StringComparison.Ordinal);
+        nextMember.Should().BeGreaterThan(indexStart);
+
+        var buildMethod = source[buildStart..indexStart];
+        buildMethod.IndexOf("var geometryIndex = ChartErrorBarGeometryIndex.Create(", StringComparison.Ordinal)
+            .Should().BeLessThan(buildMethod.IndexOf("foreach (var (series, seriesIndex)", StringComparison.Ordinal));
+        var geometryIndex = source[indexStart..nextMember];
+        geometryIndex.Should().Contain("TryAdd(series.SeriesIndex, series)")
+            .And.Contain("pointIndicesSeenInArea")
+            .And.Contain("TryAdd((point.SeriesIndex, point.PointIndex), point)")
+            .And.NotContain(".FirstOrDefault(")
+            .And.NotContain(".Where(");
+    }
+
     [Fact]
     public void BuildScenePlan_TallImportedSurfaceWrapsItsPowerPointTitle()
     {

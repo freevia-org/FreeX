@@ -47,6 +47,13 @@ public sealed partial class MainWindow
 
         var plan = WorkbookThemeCommandPlanner.PlanApply(chosen);
         var result = _session.ExecuteReviewCommand(plan.Command);
+        // R175: a WorkbookTheme swap carries no AffectedCells, so the generic executor's own
+        // sheet-tab refresh (which only re-derives SheetTabs when an edit crosses to a different
+        // sheet) never runs for it -- force it explicitly so a theme-colored worksheet tab
+        // (Sheet.TabColor set via the Theme Colors picker) re-resolves against the new theme
+        // instead of keeping its previous color until the user happens to switch sheets.
+        if (result.Success)
+            _session.RefreshSheetTabsForActiveSheet();
         RefreshShell(result.Success
             ? UiText.Format("WTA_Theme_Applied", chosen.Name)
             : result.ErrorMessage ?? UiText.Get("WTA_Theme_ApplyFailed"));
@@ -112,6 +119,10 @@ public sealed partial class MainWindow
     {
         var plan = WorkbookThemeCommandPlanner.PlanApply(theme);
         var result = _session.ExecuteReviewCommand(plan.Command);
+        // See the matching comment in ShowThemesGalleryAsync: force the sheet-tab refresh a plain
+        // theme command's generic ExecuteReviewCommand path otherwise skips.
+        if (result.Success)
+            _session.RefreshSheetTabsForActiveSheet();
         RefreshShell(result.Success ? successMessage : result.ErrorMessage ?? UiText.Get("WTA_Theme_ApplyFailed"));
     }
 

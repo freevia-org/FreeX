@@ -27,6 +27,7 @@ public static class SheetTabListPlanner
         SheetId currentSheetId,
         HashSet<SheetId> groupedSheetIds)
     {
+        var theme = workbook.Theme;
         var sheets = workbook.Sheets;
         var firstVisibleIndex = -1;
         for (var index = 0; index < sheets.Count; index++)
@@ -79,8 +80,9 @@ public static class SheetTabListPlanner
                 sheet.Name,
                 // Re-resolve the theme link (when the tab colour came from a <tabColor theme="n"/>)
                 // against the workbook's CURRENT theme rather than reading the RGB baked at load time,
-                // so a theme swap repaints the tab strip in both shells.
-                sheet.ResolveTabColor(workbook.Theme),
+                // so a theme swap repaints the tab strip in both shells. `theme` is workbook.Theme,
+                // hoisted out of this loop above.
+                sheet.ResolveTabColor(theme),
                 sheet.IsProtected,
                 sheet.Id == currentSheetId,
                 groupedSheetIds.Contains(sheet.Id),

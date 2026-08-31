@@ -13,6 +13,7 @@ namespace FreeW.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    internal Task ObserveUiTaskForTests(Func<Task> operation) => ObserveUiTaskAsync(operation);
     internal NavigationPane NavPane => _navPane;
     internal ReviewingPane ReviewingPane => _reviewingPane;
     internal ReviewBalloonsPane ReviewBalloonsPane => _reviewBalloonsPane;

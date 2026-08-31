@@ -651,6 +651,20 @@ public sealed class InCanvasTextEditor : IDisposable
 
     private async void OnRichBoxPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        try
+        {
+            await OnRichBoxPreviewKeyDownCore(e);
+        }
+        catch (Exception exception)
+        {
+            _onClipboardWriteFailed?.Invoke(
+                PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditCopyCommand),
+                exception.Message);
+        }
+    }
+
+    private async Task OnRichBoxPreviewKeyDownCore(KeyEventArgs e)
+    {
         if ((e.KeyboardDevice.Modifiers & ModifierKeys.Control) == 0)
             return;
 

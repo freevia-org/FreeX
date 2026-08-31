@@ -26,7 +26,28 @@ public sealed record PictureRenderPlan(
     ShapeEffectRenderPlan OuterEffects,
     IReadOnlyList<PictureRenderPhase> PhaseOrder)
 {
-    public bool HasCrop { get; init; }
+    private readonly LayoutRect? _imageDestinationDip;
+
+    /// <summary>
+    /// The rectangle the image body itself is painted into. This is <see cref="DestinationDip"/>
+    /// except when the picture carries negative <c>a:srcRect</c> insets, which pad (letterbox) the
+    /// image inside its frame instead of cropping it. Frame-level decoration -- shadow, outline,
+    /// frame clip, media glyph -- stays on <see cref="DestinationDip"/>.
+    /// </summary>
+    public LayoutRect ImageDestinationDip
+    {
+        get => _imageDestinationDip ?? DestinationDip;
+        init => _imageDestinationDip = value;
+    }
+
+    /// <summary>True when the source rectangle is a strict sub-rectangle of the decoded bitmap.</summary>
+    public bool HasSourceCrop { get; init; }
+
+    /// <summary>True when the image body is padded inside its frame (negative insets).</summary>
+    public bool HasDestinationInset => ImageDestinationDip != DestinationDip;
+
+    /// <summary>True when the picture is cropped or padded in any way.</summary>
+    public bool HasCrop => HasSourceCrop || HasDestinationInset;
 
     public bool HasPixelEffects => ColorEffects.HasPixelEffects;
 
@@ -69,7 +90,12 @@ public static class PictureRenderPlanner
     {
         int sourceWidth = Math.Max(1, pixelWidth);
         int sourceHeight = Math.Max(1, pixelHeight);
-        var sourceRect = PlanSourceRect(picture, sourceWidth, sourceHeight);
+        var crop = PlanCrop(picture, sourceWidth, sourceHeight);
+        var sourceRect = new PictureSourceRectPixels(
+            crop.SourceX,
+            crop.SourceY,
+            crop.SourceWidth,
+            crop.SourceHeight);
         double reflectionDistance = picture.Effects?.ReflectionDistDip ?? 0;
         double reflectionScale = picture.Effects?.ReflectionScaleY ?? -1;
         double reflectionEndPosition = picture.Effects?.ReflectionEndPos ?? 1;
@@ -82,10 +108,8 @@ public static class PictureRenderPlanner
             ResolvedShapeEffectRenderPlanner.PlanOuterEffects(picture.Effects),
             DefaultPhaseOrder)
         {
-            HasCrop = sourceRect.X != 0 ||
-                sourceRect.Y != 0 ||
-                sourceRect.Width != sourceWidth ||
-                sourceRect.Height != sourceHeight,
+            HasSourceCrop = crop.HasSourceCrop,
+            ImageDestinationDip = ApplyDestinationInset(picture.DestDip, crop),
             HasReflection = picture.Effects?.HasReflection == true,
             ReflectionAlpha = picture.Effects?.ReflectionAlpha ?? 0,
             ReflectionDistDip = reflectionDistance,
@@ -121,13 +145,34 @@ public static class PictureRenderPlanner
             ]);
     }
 
-    private static PictureSourceRectPixels PlanSourceRect(
+    /// <summary>
+    /// Applies the destination inset a negative <c>a:srcRect</c> produces. Positive-only crops
+    /// leave the frame untouched.
+    /// </summary>
+    private static LayoutRect ApplyDestinationInset(LayoutRect frame, SourceRectCropPlan crop)
+    {
+        if (!crop.HasDestinationInset)
+            return frame;
+
+        var width = frame.Width * (1.0 - crop.DestinationInsetLeft - crop.DestinationInsetRight);
+        var height = frame.Height * (1.0 - crop.DestinationInsetTop - crop.DestinationInsetBottom);
+        if (width <= 0 || height <= 0)
+            return frame;
+
+        return new LayoutRect(
+            frame.X + crop.DestinationInsetLeft * frame.Width,
+            frame.Y + crop.DestinationInsetTop * frame.Height,
+            width,
+            height);
+    }
+
+    private static SourceRectCropPlan PlanCrop(
         DrawOp.Picture picture,
         int pixelWidth,
         int pixelHeight)
     {
         if (picture.HasCrop)
-            return PlanSourceRect(
+            return SourceRectCropGeometry.Plan(
                 pixelWidth,
                 pixelHeight,
                 picture.CropLeft,
@@ -136,12 +181,12 @@ public static class PictureRenderPlanner
                 picture.CropBottom);
 
         if (!picture.IsCover)
-            return new PictureSourceRectPixels(0, 0, pixelWidth, pixelHeight);
+            return NoCrop(pixelWidth, pixelHeight);
 
         var sourceAspect = pixelWidth / (double)pixelHeight;
         var destinationAspect = picture.DestDip.Width / picture.DestDip.Height;
         if (!double.IsFinite(destinationAspect) || destinationAspect <= 0)
-            return new PictureSourceRectPixels(0, 0, pixelWidth, pixelHeight);
+            return NoCrop(pixelWidth, pixelHeight);
 
         var cropLeft = 0d;
         var cropTop = 0d;
@@ -158,7 +203,7 @@ public static class PictureRenderPlanner
             cropTop = cropBottom = verticalCrop / 2;
         }
 
-        return PlanSourceRect(
+        return SourceRectCropGeometry.Plan(
             pixelWidth,
             pixelHeight,
             cropLeft,
@@ -167,24 +212,6 @@ public static class PictureRenderPlanner
             cropBottom);
     }
 
-    private static PictureSourceRectPixels PlanSourceRect(
-        int pixelWidth,
-        int pixelHeight,
-        double cropLeft,
-        double cropTop,
-        double cropRight,
-        double cropBottom)
-    {
-        int x = (int)Math.Round(cropLeft * pixelWidth);
-        int y = (int)Math.Round(cropTop * pixelHeight);
-        int width = (int)Math.Round((1.0 - cropLeft - cropRight) * pixelWidth);
-        int height = (int)Math.Round((1.0 - cropTop - cropBottom) * pixelHeight);
-
-        x = Math.Max(0, Math.Min(x, pixelWidth - 1));
-        y = Math.Max(0, Math.Min(y, pixelHeight - 1));
-        width = Math.Max(1, Math.Min(width, pixelWidth - x));
-        height = Math.Max(1, Math.Min(height, pixelHeight - y));
-
-        return new PictureSourceRectPixels(x, y, width, height);
-    }
+    private static SourceRectCropPlan NoCrop(int pixelWidth, int pixelHeight) =>
+        new(0, 0, pixelWidth, pixelHeight, 0, 0, 0, 0);
 }

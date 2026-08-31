@@ -139,12 +139,12 @@ public static class WpfApplicationStartupRunner
         app.ShutdownMode = ShutdownMode.OnMainWindowClose;
 
         diagnostics.RegisterCrashHandlers(
-            handler => app.DispatcherUnhandledException += (_, args) => handler(args.Exception),
+            handler => app.DispatcherUnhandledException += (_, args) =>
+                args.Handled = AppCrashHandlers.HandleDispatcherException(args.Exception, handler),
             spec.OnEmergencySnapshot);
 
-        // The handler above records a dispatcher fault but does not mark it handled, so an exception
-        // escaping a ribbon Click handler would still terminate the app. The shared ribbon renderer
-        // contains those instead and reports them here, so they are still tracked.
+        // Ribbon renderers still contain command callbacks themselves so diagnostics retain the
+        // precise command id and no partially-unwound routed event escapes into this final net.
         Free.Shared.Ribbon.RibbonCommandFaultReporter.Handler = (exception, commandId) =>
             diagnostics.RecordCrash(exception, "ribbon_command:" + commandId);
 

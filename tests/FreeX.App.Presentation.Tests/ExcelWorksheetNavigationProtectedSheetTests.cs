@@ -15,6 +15,10 @@ public sealed class ExcelWorksheetNavigationProtectedSheetTests
     [InlineData(ExcelWorksheetNavigationKey.Enter, true, 2, 1, 1, 1)]
     [InlineData(ExcelWorksheetNavigationKey.Tab, false, 1, 2, 1, 3)]
     [InlineData(ExcelWorksheetNavigationKey.Tab, true, 1, 2, 1, 1)]
+    [InlineData(ExcelWorksheetNavigationKey.Home, false, 1, 2, 1, 3)]
+    [InlineData(ExcelWorksheetNavigationKey.End, false, 1, 2, 1, 1)]
+    [InlineData(ExcelWorksheetNavigationKey.PageUp, false, 2, 1, 1, 1)]
+    [InlineData(ExcelWorksheetNavigationKey.PageDown, false, 2, 1, 3, 1)]
     public void ResolveProtectedSheetTarget_SkipsLockedCellsInNavigationDirection(
         ExcelWorksheetNavigationKey key,
         bool shiftHeld,
@@ -55,16 +59,36 @@ public sealed class ExcelWorksheetNavigationProtectedSheetTests
     }
 
     [Fact]
+    public void ResolveProtectedSheetTarget_ReturnsNullAtSheetEdgeWhenNothingIsSelectable_ForHome()
+    {
+        var (workbook, sheet, _) = CreateProtectedWorkbook();
+        var target = new CellAddress(sheet.Id, 1, CellAddress.MaxCol);
+
+        var resolved = ExcelWorksheetNavigationPlanner.ResolveProtectedSheetTarget(
+            workbook,
+            sheet,
+            target,
+            ExcelWorksheetNavigationKey.Home,
+            shiftHeld: false);
+
+        resolved.Should().BeNull();
+    }
+
+    [Fact]
     public void ResolveProtectedSheetTarget_PreservesTargetsOutsideSkipPolicy()
     {
         var (workbook, sheet, unlockedStyleId) = CreateProtectedWorkbook();
         var lockedTarget = new CellAddress(sheet.Id, 1, 2);
 
+        // A key the skip policy genuinely has no step for (e.g. a raw/system key that never
+        // reaches worksheet navigation) must still pass its target through unchanged -- unlike
+        // Home/End/PageUp/PageDown, which now have a defined skip direction (see
+        // ResolveProtectedSheetTarget_SkipsLockedCellsInNavigationDirection).
         ExcelWorksheetNavigationPlanner.ResolveProtectedSheetTarget(
                 workbook,
                 sheet,
                 lockedTarget,
-                ExcelWorksheetNavigationKey.Home,
+                ExcelWorksheetNavigationKey.Other,
                 shiftHeld: false)
             .Should()
             .Be(lockedTarget);

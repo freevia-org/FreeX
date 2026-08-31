@@ -119,13 +119,17 @@ public partial class FormatCellsDialog : Window
         DlgStrikeCheck.IsChecked    = s.Strikethrough;
         DlgSuperscriptCheck.IsChecked = s.Superscript;
         DlgSubscriptCheck.IsChecked = s.Subscript;
-        DlgFontColorBox.Text        = ColorInputParser.FormatRgbColor(s.FontColor);
+        // Theme-backed font/fill colours resolve against the live theme for the same reason the Border
+        // tab does: the box must show the colour the grid is actually painting, not the RGB baked in at
+        // load time. Safe to show the resolved value because FormatCellsDialogPlanner re-emits the
+        // original theme link when the box comes back unchanged, so OK no longer unlinks the cell.
+        DlgFontColorBox.Text        = ColorInputParser.FormatRgbColor(s.ResolveFontColor(_theme));
 
-        DlgFillColorBox.Text = s.FillColor.HasValue
-            ? ColorInputParser.FormatRgbColor(s.FillColor.Value)
+        DlgFillColorBox.Text = s.ResolveFillColor(_theme) is { } resolvedFill
+            ? ColorInputParser.FormatRgbColor(resolvedFill)
             : "";
-        DlgFillPatternColorBox.Text = s.FillPatternColor.HasValue
-            ? ColorInputParser.FormatRgbColor(s.FillPatternColor.Value)
+        DlgFillPatternColorBox.Text = s.ResolveFillPatternColor(_theme) is { } resolvedPatternFill
+            ? ColorInputParser.FormatRgbColor(resolvedPatternFill)
             : "";
         DlgFillPatternStyleBox.ItemsSource = FillPatternDisplayChoices().Select(option => option.Label).ToArray();
         DlgFillPatternStyleBox.SelectedItem = FillPatternLabel(s.FillPatternStyle);
@@ -239,6 +243,7 @@ public partial class FormatCellsDialog : Window
         if (!FormatCellsDialogPlanner.TryCreateResult(
                 _current,
                 CreatePlannerInput(),
+                _theme,
                 out var result,
                 out var validation))
         {

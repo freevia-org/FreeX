@@ -524,7 +524,7 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
             "not silently omit the picture");
     }
 
-    // R136: both FreeP shells fire Export Video as fire-and-forget ("() => _ = _fileSession.ExportVideoAsync()"),
+    // R136: both FreeP shells invoke Export Video from void UI-command endpoints,
     // so a second invocation while the first is still writing the output file previously started a
     // second, concurrent export racing on the same output. This drives the guard through the lowest
     // shared entry point both ExportVideoAsync (after its picker) and the direct-path callers land on.

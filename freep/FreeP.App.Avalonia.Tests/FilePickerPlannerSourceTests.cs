@@ -54,7 +54,7 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("_fileSession.ExportPdfAsync()");
         source.Should().Contain("_fileSession.ExportImagesAsync()");
         source.Should().Contain("new FreePRibbonFileCommandEndpoints")
-            .And.Contain("ExportVideo = () => _ = FileExportVideoAsync()")
+            .And.Contain("ExportVideo = () => RunGuarded(async () => await FileExportVideoAsync(), \"Export video\")")
             .And.Contain("Print = () =>");
         ribbonProfile.Should().Contain("PresentationExportPlanner.PdfExportCommandId")
             .And.Contain("PresentationExportPlanner.NotesPagePdfExportCommandId")

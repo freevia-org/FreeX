@@ -52,6 +52,11 @@ public sealed class MailMergeSession
         Mapping = MailMerge.AutoMatchFields(data.Header);
         Template = null;
         CurrentIndex = 0;
+        // Loading (or replacing) the recipient list is the one Data mutation, besides Clear(), that
+        // ApplyRecipientFilter does not perform -- so it owns resetting the filtered marker itself
+        // rather than leaning on every caller to remember it. A freshly loaded list is never "filtered
+        // to zero"; only ApplyRecipientFilter sets this true again, deliberately, after this returns.
+        HasFilteredRecipients = false;
         return data;
     }
 
@@ -69,6 +74,10 @@ public sealed class MailMergeSession
         CurrentIndex = 0;
         Mode = MailMergeOutputMode.Letters;
         Mapping = null;
+        // A cleared session has no recipient list at all, so no filter can be the reason it is empty --
+        // reset here, on the same method that nulls Data, so this can't be forgotten by a future Data
+        // mutator the way MailMergeSessionWorkflow.Clear() forgot it (round 175 finding).
+        HasFilteredRecipients = false;
     }
 
     public IReadOnlyDictionary<string, string> AugmentRow(

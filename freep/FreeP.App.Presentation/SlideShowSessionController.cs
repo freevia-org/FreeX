@@ -66,6 +66,11 @@ public sealed class SlideShowSessionController
     private readonly Presentation _presentation;
     private readonly SlideShowPlaybackRoute _playbackRoute;
     private int _currentRouteSlideIndex;
+    // Round-175 F1: route index MoveToSlide was parked on immediately before the most
+    // recent ordinary navigation, for the "Last Slide Viewed" action-only click
+    // (HyperlinkActionKind.LastSlideViewed / ppaction://hlinklastslideviewed). -1 means
+    // nothing has been navigated away from yet. See PlanLastSlideViewed.
+    private int _lastViewedRouteSlideIndex = -1;
     private string _slideNumberBuffer = string.Empty;
     private Slide? _revealedHiddenSlide;
     private int _revealedHiddenSlideSourceIndex = -1;
@@ -596,6 +601,19 @@ public sealed class SlideShowSessionController
 
         if (hyperlink.TargetSlideId is null)
         {
+            // Round-175 F1: an action-only click (PowerPoint "Action Button" -- Next/
+            // Previous/First/Last Slide, End Show, Last Slide Viewed) authors as
+            // <a:hlinkClick action="ppaction://hlink..."> with no r:id, so both Url and
+            // TargetSlideId stay null and only hyperlink.Action carries the target.
+            if (TryPlanBuiltInAction(hyperlink.Action, out var actionCommand))
+            {
+                return new SlideShowSessionPointerPlan(
+                    true,
+                    SlideShowSessionInputActionKind.ExecuteHostCommand,
+                    actionCommand,
+                    hyperlink);
+            }
+
             return new SlideShowSessionPointerPlan(
                 true,
                 SlideShowSessionInputActionKind.None,
@@ -624,6 +642,66 @@ public sealed class SlideShowSessionController
                 SlideShowSessionInputActionKind.None,
                 SlideShowHostCommand.Ignored,
                 hyperlink);
+    }
+
+    /// <summary>
+    /// Resolves a built-in action-only click (<see cref="HyperlinkActionKind"/>, other than
+    /// <see cref="HyperlinkActionKind.None"/>) to the same host command its equivalent
+    /// keyboard/menu gesture already produces -- Next/Previous/First/Last Slide mirror the
+    /// Right/Left/Home/End keys (see <see cref="SlideShowHostPlanner.IntentFromKeyName"/>)
+    /// and End Show mirrors Escape's Close command. Returns false for
+    /// <see cref="HyperlinkActionKind.None"/>, leaving the caller's existing "not an
+    /// action-only click" handling in place.
+    /// </summary>
+    private bool TryPlanBuiltInAction(HyperlinkActionKind action, out SlideShowHostCommand command)
+    {
+        switch (action)
+        {
+            case HyperlinkActionKind.NextSlide:
+                command = PlanAdvance(stopAutoAdvance: true);
+                return true;
+            case HyperlinkActionKind.PreviousSlide:
+                command = PlanBack(stopAutoAdvance: true);
+                return true;
+            case HyperlinkActionKind.FirstSlide:
+                command = PlanFirstSlide();
+                return true;
+            case HyperlinkActionKind.LastSlide:
+                command = SlideShowHostPlanner.PlanIntent(
+                    SlideShowHostIntent.LastSlide,
+                    Controller,
+                    _playbackRoute.Slides,
+                    stopAutoAdvance: true);
+                return true;
+            case HyperlinkActionKind.LastSlideViewed:
+                command = PlanLastSlideViewed();
+                return true;
+            case HyperlinkActionKind.EndShow:
+                command = SlideShowHostCommand.Close(stopAutoAdvance: true);
+                return true;
+            default:
+                command = SlideShowHostCommand.Ignored;
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Jumps to whichever route slide was on screen immediately before the current one --
+    /// for the "Last Slide Viewed" action-only click
+    /// (<see cref="HyperlinkActionKind.LastSlideViewed"/>, <c>ppaction://hlinklastslideviewed</c>).
+    /// Tracked at the MoveToSlide chokepoint every ordinary Advance/Back/jump navigation
+    /// funnels through, so a slide only ever shown via RevealHiddenSlide is not recorded
+    /// here (RevealHiddenSlide deliberately leaves the route's current index unchanged --
+    /// see MoveToSlide's own callers). No-ops when nothing has been navigated away from yet.
+    /// </summary>
+    public SlideShowHostCommand PlanLastSlideViewed()
+    {
+        if (_lastViewedRouteSlideIndex < 0 || _lastViewedRouteSlideIndex >= _playbackRoute.Slides.Count)
+        {
+            return SlideShowHostCommand.HandledNoOp(stopAutoAdvance: true);
+        }
+
+        return PlanInternalSlideJump(_playbackRoute.Slides[_lastViewedRouteSlideIndex].Id);
     }
 
     public void ExecuteInputPlan(
@@ -884,6 +962,11 @@ public sealed class SlideShowSessionController
         EnsureOpen();
 
         FinalizePresenterTiming(nowUtc);
+        if (_currentRouteSlideIndex != routeSlideIndex)
+        {
+            _lastViewedRouteSlideIndex = _currentRouteSlideIndex;
+        }
+
         _currentRouteSlideIndex = routeSlideIndex;
         var sourceSlideIndex = _playbackRoute.GetSourceSlideIndex(routeSlideIndex);
         TimingRecorderState = SlideShowTimingRecorderPlanner.EnterSlide(

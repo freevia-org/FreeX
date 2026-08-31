@@ -10,6 +10,33 @@ namespace FreeX.Core.IO.Tests;
 
 public sealed partial class CsvFileAdapterTests
 {
+    [Fact]
+    public void Save_WarmedSparseRowsHasBoundedAllocation()
+    {
+        const int rowCount = 5_000;
+        const int colCount = 2_000;
+        const int cellsPerRow = 3;
+        const long allocationLimit = 4_000_000;
+        var workbook = CreateSparseWideWorkbook(rowCount, colCount, cellsPerRow);
+        var adapter = new CsvFileAdapter();
+
+        adapter.Save(workbook, Stream.Null);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        adapter.Save(workbook, Stream.Null);
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        output.WriteLine(
+            $"CSV warmed sparse save allocation: rows={rowCount}, cols={colCount}, cellsPerRow={cellsPerRow}, allocatedBytes={allocatedBytes}");
+        allocatedBytes.Should().BeLessThan(
+            allocationLimit,
+            "saving a sparse snapshot should not duplicate every cell into per-row buckets");
+    }
+
     [BenchmarkFact]
     public void Save_DenseSyntheticSheet_ReportsThroughputAndAllocatedBytes()
     {

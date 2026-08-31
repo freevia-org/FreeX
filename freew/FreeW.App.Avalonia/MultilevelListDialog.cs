@@ -133,7 +133,9 @@ internal sealed partial class MultilevelListDialog : FreeWDialogWindow
     public static Task<MultilevelListDefinition?> ShowAsync(Window owner, IReadOnlyList<ListNumberFormat> formats) =>
         new MultilevelListDialog(formats).ShowDialog<MultilevelListDefinition?>(owner);
 
-    private async void Accept()
+    private void Accept() => AvaloniaUiTaskGuard.Run(AcceptAsync);
+
+    private async Task AcceptAsync()
     {
         SynchronizeSession();
         var acceptance = _session.PlanAcceptance();

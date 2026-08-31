@@ -318,7 +318,9 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
         }
     }
 
-    private async void Accept()
+    private void Accept() => AvaloniaUiTaskGuard.Run(AcceptAsync);
+
+    private async Task AcceptAsync()
     {
         var plan = _session.PlanAccept();
         if (plan.ShouldAccept)

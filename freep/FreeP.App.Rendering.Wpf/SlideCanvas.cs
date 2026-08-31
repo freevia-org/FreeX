@@ -1112,7 +1112,7 @@ public sealed partial class SlideCanvas : FrameworkElement
         var plan = PictureRenderPlanner.Plan(pic, bitmap.PixelWidth, bitmap.PixelHeight);
 
         // 18A: apply crop via CroppedBitmap (source sub-rect)
-        if (plan.HasCrop)
+        if (plan.HasSourceCrop)
         {
             var source = plan.SourceRectPixels;
             var cropped = new CroppedBitmap(
@@ -1129,6 +1129,15 @@ public sealed partial class SlideCanvas : FrameworkElement
 
         var destination = plan.DestinationDip;
         var dest = new Rect(destination.X, destination.Y, destination.Width, destination.Height);
+
+        // Negative a:srcRect insets pad the image inside its frame instead of cropping it, so the
+        // image body draws into an inset rectangle while the frame decoration keeps the full rect.
+        var imageDestination = plan.ImageDestinationDip;
+        var imageDest = new Rect(
+            imageDestination.X,
+            imageDestination.Y,
+            imageDestination.Width,
+            imageDestination.Height);
 
         var pictureTransform = ShapeTransformPlanner.PlanPictureTransform(pic);
         if (!pictureTransform.IsIdentity)
@@ -1163,10 +1172,10 @@ public sealed partial class SlideCanvas : FrameworkElement
             foreach (var blurPass in plan.ReflectionBlurPasses)
             {
                 var reflectionDest = new Rect(
-                    dest.X + blurPass.OffsetXDip,
-                    dest.Y + blurPass.OffsetYDip,
-                    dest.Width,
-                    dest.Height);
+                    imageDest.X + blurPass.OffsetXDip,
+                    imageDest.Y + blurPass.OffsetYDip,
+                    imageDest.Width,
+                    imageDest.Height);
                 var reflectionMask = new LinearGradientBrush
                 {
                     StartPoint = new System.Windows.Point(0.5, 0),
@@ -1214,7 +1223,7 @@ public sealed partial class SlideCanvas : FrameworkElement
             dc.PushClip(clipGeom);
         }
 
-        dc.DrawImage(bitmap, dest);
+        dc.DrawImage(bitmap, imageDest);
 
         if (hasFrameClip) dc.Pop(); // pop clip
 

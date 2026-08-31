@@ -36,9 +36,11 @@ public sealed partial class MainWindowSourceHygieneTests
         backstageSource.Should().Contain("private void ShowStartScreen()");
         backstageSource.Should().Contain("private void UpdateSsRecentList(");
         backstageSource.Should().Contain("private async Task OpenFileAsync(");
-        backstageSource.Should().Contain("private async void OpenButton_Click(");
+        backstageSource.Should().Contain("private void OpenButton_Click(");
+        backstageSource.Should().Contain("private async Task OpenFromBackstageAsync(");
         backstageSource.Should().Contain("private async Task<bool> SaveWorkbookWithDialogAsync()");
-        backstageSource.Should().Contain("private async void SaveAsButton_Click(");
+        backstageSource.Should().Contain("private void SaveAsButton_Click(");
+        backstageSource.Should().Contain("private async Task SaveAsFromBackstageAsync(");
     }
 
     [Fact]
@@ -121,10 +123,11 @@ public sealed partial class MainWindowSourceHygieneTests
         // it now lives on the shared frame, so its presence/keytip is asserted behaviourally.
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
-        backstageSource.Should().Contain("private async void SaveAsButton_Click(object sender, RoutedEventArgs e)");
+        backstageSource.Should().Contain("private void SaveAsButton_Click(object sender, RoutedEventArgs e)");
+        backstageSource.Should().Contain("RunGuardedUiCommand(\"Save Workbook As\", SaveAsFromBackstageAsync)");
         // Save As forces the Save-As dialog directly (it does NOT route through the shared
         // SaveResolvedAsync existing-path resolution that Save uses), then closes the backstage.
-        var saveAsMethod = ExtractMethodSource(backstageSource, "private async void SaveAsButton_Click(");
+        var saveAsMethod = ExtractMethodSource(backstageSource, "private async Task SaveAsFromBackstageAsync(");
         saveAsMethod.Should().Contain("await SaveWorkbookWithDialogAsync()");
         saveAsMethod.Should().NotContain("SaveResolvedAsync");
         saveAsMethod.Should().Contain("HideStartScreen();");
@@ -209,12 +212,12 @@ public sealed partial class MainWindowSourceHygieneTests
         // P2b: SaveButton_Click defers the Save-vs-Save-As resolution to the shared SaveResolvedAsync
         // helper (asserted below against MainWindow.WorkbookLifecycle.cs) — the same single resolution path
         // the dirty-gate uses — then hides the backstage on a successful save.
-        var saveButtonMethod = ExtractMethodSource(backstageSource, "private async void SaveButton_Click(");
+        var saveButtonMethod = ExtractMethodSource(backstageSource, "private async Task SaveFromBackstageAsync(");
         saveButtonMethod.Should().Contain("var saved = await SaveResolvedAsync();");
         saveButtonMethod.Should().Contain("if (saved && IsStartScreenVisible())");
         saveButtonMethod.Should().Contain("HideStartScreen();");
 
-        var saveAsMethod = ExtractMethodSource(backstageSource, "private async void SaveAsButton_Click(");
+        var saveAsMethod = ExtractMethodSource(backstageSource, "private async Task SaveAsFromBackstageAsync(");
         saveAsMethod.Should().Contain("await SaveWorkbookWithDialogAsync()");
         saveAsMethod.Should().Contain("HideStartScreen();");
 
@@ -281,7 +284,7 @@ public sealed partial class MainWindowSourceHygieneTests
         lifecycleSource.Should().Contain("_workbookReadOnlySession.ResolveExistingSaveTarget(");
         lifecycleSource.Should().Contain("() => _fileWorkflow.ResolveExistingSaveTarget(_currentFilePath)");
 
-        var closingMethod = ExtractMethodSource(lifecycleSource, "private async void MainWindow_Closing(");
+        var closingMethod = ExtractMethodSource(lifecycleSource, "private async Task CloseWindowAsync(");
         closingMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeClosingWorkbook\"))");
         closingMethod.Should().Contain("_suppressClosePrompt = true;");
         closingMethod.Should().Contain("PrepareActiveWorkbookForFinalClose();");
@@ -495,7 +498,8 @@ public sealed partial class MainWindowSourceHygieneTests
         dataCommandsSource.Should().Contain("multiselect: plan.Multiselect");
         dataCommandsSource.Should().Contain("if (!result.Chosen) return;");
         dataCommandsSource.Should().Contain("FileFormatResolver.FindOpenAdapter(adapters, ext, out var format)");
-        dataCommandsSource.Should().Contain("private async void GetDataBtn_Click(object sender, RoutedEventArgs e)");
+        dataCommandsSource.Should().Contain("private void GetDataBtn_Click(object sender, RoutedEventArgs e)");
+        dataCommandsSource.Should().Contain("private async Task GetDataAsync(object sender, RoutedEventArgs e)");
         dataCommandsSource.Should().Contain("WorkbookImportWorkflow.ImportPathAsync(");
         dataCommandsSource.Should().Contain("RecordDiagnosticEvent(\"import_failed\"");
         dataCommandsSource.Should().Contain("RecordDiagnosticEvent(\"import_completed\"");
@@ -525,7 +529,8 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var dataCommandsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
-        dataCommandsSource.Should().Contain("private async void RefreshAllBtn_Click(object sender, RoutedEventArgs e)");
+        dataCommandsSource.Should().Contain("private void RefreshAllBtn_Click(object sender, RoutedEventArgs e)");
+        dataCommandsSource.Should().Contain("private async Task RefreshAllAsync(object sender, RoutedEventArgs e)");
         dataCommandsSource.Should().Contain("source.CanRefresh(_session.Workbook)");
         dataCommandsSource.Should().Contain("File.Exists(source.FilePath)");
         dataCommandsSource.Should().Contain("source.FilePath,");
@@ -549,7 +554,8 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("ExportAsXps(");
 
         printSource.Should().Contain("private void PrintButton_Click(");
-        printSource.Should().Contain("private async void ExportPdfButton_Click(");
+        printSource.Should().Contain("private void ExportPdfButton_Click(");
+        printSource.Should().Contain("private async Task ExportPdfAsync(");
         printSource.Should().Contain("private async Task<bool> ExportAsPdf(");
         printSource.Should().Contain("private async Task<bool> ExportAsXps(");
     }
@@ -569,7 +575,8 @@ public sealed partial class MainWindowSourceHygieneTests
         shareMethod.Should().Contain("SaveWorkbookToTargetAsync(target!)");
         shareMethod.Should().Contain("_shareService.ShareFileAsync(this, sharePath, _workbook.Name)");
 
-        reviewSource.Should().Contain("private async void ShareWorkbookBtn_Click(object sender, RoutedEventArgs e) => await ShareWorkbookAsync();");
+        reviewSource.Should().Contain("private void ShareWorkbookBtn_Click(object sender, RoutedEventArgs e) =>");
+        reviewSource.Should().Contain("RunGuardedUiCommand(\"Share Workbook\", ShareWorkbookAsync);");
 
         // The backstage Share rail entry now lives on the shared frame and routes through the shared
         // workflow executor to the FreeX frame wrapper's ShareWorkbookAsync handler.
@@ -674,7 +681,7 @@ public sealed partial class MainWindowSourceHygieneTests
     public void ExportPdfXpsSaveDialog_DeclaresNativeGuardrailsAndOwnedMessages()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.PrintExport.cs");
-        var exportMethod = ExtractMethodSource(source, "private async void ExportPdfButton_Click(");
+        var exportMethod = ExtractMethodSource(source, "private async Task ExportPdfAsync(");
         var exportPdfMethod = ExtractMethodSource(source, "private async Task<bool> ExportAsPdf(");
         var exportXpsMethod = ExtractMethodSource(source, "private async Task<bool> ExportAsXps(");
 

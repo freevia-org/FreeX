@@ -45,7 +45,8 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private void ResizeSelectedDrawingObject()");
         mainSource.Should().NotContain("private DrawingObjectTarget? GetTargetDrawingObject(");
 
-        drawingSource.Should().Contain("private async void InsertPictureBtn_Click(");
+        drawingSource.Should().Contain("private void InsertPictureBtn_Click(");
+        drawingSource.Should().Contain("private async Task InsertPictureAsync(");
         drawingSource.Should().Contain("private void PictureCropBtn_Click(");
         drawingSource.Should().Contain("private void InsertTextBox()");
         drawingSource.Should().Contain("private void InsertDrawingShape(");
@@ -144,7 +145,8 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var pageLayoutSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PageLayout.cs");
 
-        pageLayoutSource.Should().Contain("private async void BackgroundChooseMenuItem_Click(");
+        pageLayoutSource.Should().Contain("private void BackgroundChooseMenuItem_Click(");
+        pageLayoutSource.Should().Contain("private async Task ChooseSheetBackgroundAsync(");
         pageLayoutSource.Should().Contain("var openPlan = SheetBackgroundPickerPlanner.BuildOpenDialogPlan();");
         pageLayoutSource.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
         pageLayoutSource.Should().Contain("UiText.Get(\"MainWindowDialog_ImageFilesFilter\")");

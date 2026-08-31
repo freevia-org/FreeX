@@ -148,6 +148,82 @@ public sealed class SlideCanvasAvaloniaTests
         });
     }
 
+    /// <summary>
+    /// Negative <c>a:srcRect</c> insets outset: the picture is letterboxed inside its frame instead
+    /// of filling it. Rendered proof -- the padded band must still show the slide background while
+    /// the same band is covered by the picture when the inset is zero.
+    /// </summary>
+    [Fact]
+    public async Task SlideCanvas_NegativeSrcRectInset_LeavesPaddedBandUnpainted()
+    {
+        await Run(() =>
+        {
+            const int width = 400;
+            const int height = 225;
+            const int sampleY = height / 2;
+            const int paddedX = (int)(width * 0.30); // inside the frame, inside the outset padding
+            const int imageX = (int)(width * 0.60);  // inside the frame, covered by the picture
+            const int outsideX = (int)(width * 0.05); // outside the frame entirely
+
+            byte[] RenderWithCropLeft(double cropLeft)
+            {
+                var presentation = MakePresentation();
+                var slide = presentation.Slides[0];
+                slide.Background = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00)));
+                slide.Shapes.Clear();
+                slide.Shapes.Add(new SlideShape
+                {
+                    Id = 1,
+                    Kind = SlideShapeKind.Picture,
+                    OffsetXEmu = presentation.SlideSizeCxEmu / 4,
+                    OffsetYEmu = presentation.SlideSizeCyEmu / 4,
+                    ExtentCxEmu = presentation.SlideSizeCxEmu / 2,
+                    ExtentCyEmu = presentation.SlideSizeCyEmu / 2,
+                    Picture = new ImagePart { Bytes = SolidPng(Colors.Blue), ContentType = "image/png" },
+                    PictureFormat = cropLeft == 0 ? null : new PictureFormat { CropLeft = cropLeft },
+                    Outline = ShapeOutline.None.Instance,
+                });
+
+                var canvas = new SlideCanvas { Presentation = presentation, Slide = slide };
+                return RenderPixels(canvas, width, height);
+            }
+
+            static (byte B, byte G, byte R) At(byte[] pixels, int x, int y)
+            {
+                var offset = ((y * 400) + x) * 4;
+                return (pixels[offset], pixels[offset + 1], pixels[offset + 2]);
+            }
+
+            var filled = RenderWithCropLeft(0);
+            var outset = RenderWithCropLeft(-0.25);
+
+            var background = At(filled, outsideX, sampleY);
+            At(outset, outsideX, sampleY).Should().Be(background,
+                "the slide background outside the frame is unaffected either way");
+
+            At(filled, paddedX, sampleY).Should().NotBe(background,
+                "without an inset the picture covers the whole frame");
+            At(filled, imageX, sampleY).Should().NotBe(background);
+
+            At(outset, paddedX, sampleY).Should().Be(background,
+                "a -25% left inset pads the left 20% of the frame instead of cropping the picture");
+            At(outset, imageX, sampleY).Should().NotBe(background,
+                "the picture still paints the rest of the frame");
+        });
+    }
+
+    /// <summary>Encodes a small opaque single-colour PNG for picture-render tests.</summary>
+    private static byte[] SolidPng(Color color, int size = 8)
+    {
+        using var bitmap = new RenderTargetBitmap(new PixelSize(size, size));
+        using (var context = bitmap.CreateDrawingContext())
+            context.FillRectangle(new SolidColorBrush(color), new Rect(0, 0, size, size));
+
+        using var stream = new MemoryStream();
+        bitmap.Save(stream);
+        return stream.ToArray();
+    }
+
     private sealed class PinnedFramebuffer : ILockedFramebuffer
     {
         public PinnedFramebuffer(IntPtr address, PixelSize size, int rowBytes)

@@ -252,6 +252,18 @@ public sealed class PresentationCommandBus
     public bool CanUndo => _stack.CanUndo;
     public bool CanRedo => _stack.CanRedo;
 
+    /// <summary>
+    /// R175-shared-undo-across-save-F2: the undo stack's current depth and top-of-stack identity
+    /// token, exposed so a save-point can be recorded/compared the same way FreeX's WorkbookSession
+    /// does via WorkbookDocumentState.SavedUndoDepth/TryMarkCleanIfAtSavePoint. See
+    /// <see cref="Free.Shared.Commands.UndoRedoStack{TCommand,TPayload}.Version"/> for why the
+    /// version token (not depth alone) is required for a robust "back to exactly what was saved"
+    /// check.
+    /// </summary>
+    public int UndoDepth => _stack.UndoDepth;
+
+    public long Version => _stack.Version;
+
     /// <summary>Applies a command and records it for undo (invalidating the redo history).</summary>
     public void Execute(IPresentationCommand command)
     {

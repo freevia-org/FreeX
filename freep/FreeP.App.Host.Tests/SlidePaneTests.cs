@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
 
@@ -51,6 +52,29 @@ public sealed class SlidePaneTests
         endpoint.Pane = pane;
         workarea.Initialize();
         return (pane, workarea.Editor);
+    }
+
+    // Hosts a control in a real (but offscreen) top-level Window so ActualWidth/ActualHeight and
+    // WrapPanel wrapping reflect genuine layout, not just DesiredSize from an unattached visual tree.
+    private static Window HostOffscreen(FrameworkElement content, double width, double height) => new()
+    {
+        Content = content,
+        WindowStyle = WindowStyle.None,
+        ShowInTaskbar = false,
+        Left = -10000,
+        Top = -10000,
+        Width = width,
+        Height = height,
+    };
+
+    // Mirrors BackstageCloseFocusRestoreTests.PumpLayout: a template/panel swap (here, the ListBox's
+    // ItemsPanel) can defer container regeneration to the dispatcher queue rather than completing
+    // synchronously inside a single UpdateLayout() call.
+    private static void PumpLayout(Window window)
+    {
+        window.UpdateLayout();
+        window.Dispatcher.Invoke(DispatcherPriority.ApplicationIdle, new Action(() => { }));
+        window.UpdateLayout();
     }
 
     // ── Construction ──────────────────────────────────────────────────────────────
@@ -424,6 +448,173 @@ public sealed class SlidePaneTests
         var label = row.Children[1].Should().BeOfType<TextBlock>().Subject;
         label.Text.Should().Be(plan.LabelText);
         BrushColor(label.Foreground).Should().Be(ColorFromHex(plan.ForegroundHex));
+    }
+
+    [StaFact]
+    public void SlideSorter_PlainSlides_WrapAcrossMultipleRows_NoHorizontalScrollbar()
+    {
+        // A plain WrapPanel does not implement IScrollInfo. If the hosting ScrollViewer's horizontal
+        // scrolling is anything but Disabled, WPF measures the WrapPanel's content with an
+        // unconstrained (PositiveInfinity) width, so it never wraps at all -- every slide (with or
+        // without any section headers involved) ends up on one single, horizontally-scrolling line.
+        // This is a precondition for the section-header full-row-width fix to have any visible effect
+        // at all (a "full width divider" is meaningless if there is only ever one row), so it must
+        // hold even with no sections in play.
+        var (pane, _) = MakePaneWithSlides(10);
+        var window = HostOffscreen(pane, width: 900, height: 700);
+        try
+        {
+            window.Show();
+            PumpLayout(window);
+
+            pane.SetSlideSorterMode(true);
+            PumpLayout(window);
+
+            var list = pane.NativeListForTests;
+            ScrollViewer.GetHorizontalScrollBarVisibility(list).Should().Be(ScrollBarVisibility.Disabled);
+
+            var rowYs = list.Items.OfType<ListBoxItem>()
+                .Select(item => item.TranslatePoint(new Point(0, 0), list).Y)
+                .Distinct()
+                .ToArray();
+            rowYs.Length.Should().BeGreaterThan(1,
+                "10 slide thumbnails in a 900px-wide pane must wrap across multiple rows, not sit on one " +
+                "endless horizontally-scrolling line");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    // ── Slide Sorter section-header layout (finding freep-sections F1) ────────────
+
+    private static Presentation MakeTwoSectionPresentation()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide1", Title = "Slide 1" });
+        presentation.Slides.Add(new Slide { Id = "slide2", Title = "Slide 2" });
+        presentation.Slides.Add(new Slide { Id = "slide3", Title = "Slide 3" });
+        presentation.Slides.Add(new Slide { Id = "slide4", Title = "Slide 4" });
+        var intro = new PresentationSection
+        {
+            Id = "intro-section",
+            Name = "Introduction Section With A Longer Name",
+        };
+        intro.SlideIds.AddRange(new[] { "slide1", "slide2" });
+        var body = new PresentationSection { Id = "body-section", Name = "Body" };
+        body.SlideIds.AddRange(new[] { "slide3", "slide4" });
+        presentation.Sections.Add(intro);
+        presentation.Sections.Add(body);
+        return presentation;
+    }
+
+    [StaFact]
+    public void SlideSorter_SectionHeader_SpansFullRowWidth_NotTinyChip()
+    {
+        // Matches the finding's repro: 4 slides in 2 sections, laid out in Slide Sorter mode with the
+        // real WrapPanel ItemsPanel, measured/arranged by a real (offscreen) Window.
+        var presentation = MakeTwoSectionPresentation();
+        var (pane, _) = MakePane(presentation);
+        var window = HostOffscreen(pane, width: 900, height: 700);
+        try
+        {
+            window.Show();
+            PumpLayout(window);
+
+            pane.SetSlideSorterMode(true);
+            PumpLayout(window);
+
+            var list = pane.NativeListForTests;
+            list.Items.Count.Should().Be(6, "2 section headers + 4 slides");
+
+            // Layout order per SlidePanePlanner.BuildEntries: header, its member slides, next header, ...
+            var introHeader = (ListBoxItem)list.Items[0];
+            var slideAfterIntroHeader = (ListBoxItem)list.Items[1];
+            var bodyHeader = (ListBoxItem)list.Items[3];
+            introHeader.Tag.Should().NotBeOfType<int>("index 0 must be a section header, not a slide");
+            slideAfterIntroHeader.Tag.Should().Be(0);
+            bodyHeader.Tag.Should().NotBeOfType<int>("index 3 must be the second section header");
+
+            // The defect: a WrapPanel never stretches a child to fill its line, so an unconstrained
+            // header was only as wide as its own label text (a ~79-264px "chip") instead of spanning the
+            // full width available to the panel. After the fix the header's Width is bound to the
+            // ScrollViewer's ViewportWidth, so it must span (within scrollbar-rounding) the same width as
+            // the list itself -- nowhere near a small chip.
+            introHeader.ActualWidth.Should().BeGreaterThan(
+                list.ActualWidth * 0.9,
+                "the section header must act as a full-width divider, not a small label-sized chip");
+            bodyHeader.ActualWidth.Should().BeGreaterThan(
+                list.ActualWidth * 0.9,
+                "every section header must span the full row width, not just the first one");
+
+            // Corollary of spanning the full width: because no slide thumbnail can now share the
+            // header's WrapPanel line, the line's height is driven solely by the header's own natural
+            // height, not stretched up to match a neighboring slide thumbnail row.
+            var slideItem = (ListBoxItem)list.Items[1];
+            introHeader.ActualHeight.Should().BeLessThan(
+                slideItem.ActualHeight,
+                "a header sharing a WrapPanel line with a slide thumbnail is stretched to that line's " +
+                "(much taller) height; a header correctly alone on its own line is not");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void SlideSorter_SlideThumbnailWidths_RemainUniform_RegressionCheckForTheSiblingBehaviour()
+    {
+        // Sibling case: the fix must only touch the section-header item's Width. Slide thumbnails were
+        // already correctly uniform (their SlideCanvas has a fixed Width from the visual plan) and must
+        // stay that way -- and the un-fixed (non-Slide-Sorter) header layout, which already relies on
+        // HorizontalContentAlignment.Stretch inside the default vertical panel, must be left alone too.
+        var presentation = MakeTwoSectionPresentation();
+        var (pane, _) = MakePane(presentation);
+        var window = HostOffscreen(pane, width: 900, height: 700);
+        try
+        {
+            window.Show();
+            PumpLayout(window);
+
+            // Before switching to Slide Sorter mode: the header item must carry no explicit Width (Auto),
+            // exactly as before this fix -- this program's fix must not touch the non-Slide-Sorter path.
+            var headerBeforeSorterMode = (ListBoxItem)pane.NativeListForTests.Items[0];
+            double.IsNaN(headerBeforeSorterMode.Width).Should().BeTrue(
+                "outside Slide Sorter mode the header keeps relying on Stretch, not an explicit Width");
+
+            pane.SetSlideSorterMode(true);
+            PumpLayout(window);
+
+            var list = pane.NativeListForTests;
+            var slideItems = list.Items.OfType<ListBoxItem>()
+                .Where(item => item.Tag is int)
+                .ToArray();
+            slideItems.Should().HaveCount(4);
+            // Tolerance rather than bit-exact equality: WPF's layout rounding already gives the first
+            // slide in a row (here, immediately following a header) a width a couple of pixels off from
+            // its row-mates even on unmodified code (e.g. 172px vs. 170px) -- a pre-existing, purely
+            // cosmetic rounding artifact of where the row starts, unrelated to and unaffected by this
+            // fix. What must hold is that no slide is meaningfully mis-sized by the header Width fix.
+            var widths = slideItems.Select(item => item.ActualWidth).ToArray();
+            (widths.Max() - widths.Min()).Should().BeLessThanOrEqualTo(3.0,
+                "every slide thumbnail must keep essentially the same width regardless of the " +
+                "section-header fix (small sub-pixel layout-rounding differences pre-date this fix)");
+
+            // Toggling back out of Slide Sorter mode must drop the special-case header Width again
+            // (RefreshProjection rebuilds every item), so the header does not carry stale sizing into the
+            // normal (non-WrapPanel) layout.
+            pane.SetSlideSorterMode(false);
+            PumpLayout(window);
+            var headerAfterReturningToNormalMode = (ListBoxItem)pane.NativeListForTests.Items[0];
+            double.IsNaN(headerAfterReturningToNormalMode.Width).Should().BeTrue(
+                "returning to the normal list layout must not leave the Slide-Sorter-only Width binding in place");
+        }
+        finally
+        {
+            window.Close();
+        }
     }
 
     [StaFact]

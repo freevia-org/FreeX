@@ -171,7 +171,29 @@ public sealed class SubtotalCommand : IWorkbookCommand, IEstimatesMemory
         List<CellAddress> affected)
     {
         var insert = new InsertRowsCommand(_sheetId, subtotalRow.InsertRow);
-        var insertOutcome = insert.Apply(ctx);
+        CommandOutcome insertOutcome;
+        try
+        {
+            insertOutcome = insert.Apply(ctx);
+        }
+        catch
+        {
+            // R175-auditB-F1: insert can throw PARTWAY through its own multi-step row-insert
+            // mutation (sequential cell moves, hidden-row/filter/subtotal-marker shifts,
+            // named-range/chart/table rewrites) rather than merely returning a failed
+            // CommandOutcome. A failed CommandOutcome is already handled by the `if
+            // (!insertOutcome.Success) return false` below, which bubbles up to ApplyPlan's
+            // `Revert(ctx)` call and unwinds every prior successful entry in `_appliedCommands`.
+            // An exception is different: it propagates out of this method entirely, past
+            // ApplyPlan's success/failure check, to whatever invoked this SubtotalCommand's own
+            // Apply (CommandBus.Execute or an enclosing composite), which will best-effort revert
+            // THIS command -- and SubtotalCommand.Revert also only walks `_appliedCommands`, so it
+            // cannot fix insert's own partial mutation because insert was never added to that list
+            // (that only happens on success, immediately below). Best-effort revert it here before
+            // rethrowing so the original exception is not lost.
+            try { insert.Revert(ctx); } catch { }
+            throw;
+        }
         if (!insertOutcome.Success)
             return false;
         _appliedCommands.Add(insert);
@@ -209,7 +231,19 @@ public sealed class SubtotalCommand : IWorkbookCommand, IEstimatesMemory
         }
 
         var edit = new EditCellsCommand(_sheetId, edits);
-        var editOutcome = edit.Apply(ctx);
+        CommandOutcome editOutcome;
+        try
+        {
+            editOutcome = edit.Apply(ctx);
+        }
+        catch
+        {
+            // R175-auditB-F1: same reasoning as the insert catch above -- edit was never added
+            // to `_appliedCommands` yet, so a throw here would otherwise leave its own partial
+            // cell mutation unreverted even after SubtotalCommand itself gets rolled back.
+            try { edit.Revert(ctx); } catch { }
+            throw;
+        }
         if (!editOutcome.Success)
             return false;
 
@@ -412,7 +446,25 @@ public sealed class RemoveSubtotalRowsCommand : IWorkbookCommand
         foreach (var row in rows.OrderByDescending(r => r))
         {
             var delete = new DeleteRowsCommand(_sheetId, row);
-            var outcome = delete.Apply(ctx);
+            CommandOutcome outcome;
+            try
+            {
+                outcome = delete.Apply(ctx);
+            }
+            catch
+            {
+                // R175-auditB-F1: same rollback-family defect as SubtotalCommand.ApplyInsertAndEdit
+                // above -- delete can throw PARTWAY through its own multi-step row-delete mutation
+                // instead of merely returning a failed CommandOutcome, and it was never added to
+                // `_deletes` yet (that only happens on success, immediately below), so a caller's
+                // best-effort revert of this whole RemoveSubtotalRowsCommand (which only walks
+                // `_deletes`) would leave delete's own partial mutation permanently in the sheet.
+                // Best-effort revert it here before rethrowing so the original exception is not
+                // lost and every earlier successful delete (already in `_deletes`) still gets
+                // unwound by the caller's revert.
+                try { delete.Revert(ctx); } catch { }
+                throw;
+            }
             if (!outcome.Success)
                 return outcome;
 

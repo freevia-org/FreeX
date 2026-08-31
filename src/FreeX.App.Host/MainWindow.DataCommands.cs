@@ -39,7 +39,10 @@ public partial class MainWindow
     /// </summary>
     private WorkbookImportRefreshSource? _lastImportSource;
 
-    private async void GetDataBtn_Click(object sender, RoutedEventArgs e)
+    private void GetDataBtn_Click(object sender, RoutedEventArgs e) =>
+        RunGuardedUiCommand("Get Data", () => GetDataAsync(sender, e));
+
+    private async Task GetDataAsync(object sender, RoutedEventArgs e)
     {
         var plan = ImportDataFilePickerPlanner.BuildAdapterOpenDialogPlan(_fileAdapters);
         var adapters = plan.Adapters;
@@ -264,7 +267,10 @@ public partial class MainWindow
         return properties;
     }
 
-    private async void RefreshAllBtn_Click(object sender, RoutedEventArgs e)
+    private void RefreshAllBtn_Click(object sender, RoutedEventArgs e) =>
+        RunGuardedUiCommand("Refresh All", () => RefreshAllAsync(sender, e));
+
+    private async Task RefreshAllAsync(object sender, RoutedEventArgs e)
     {
         SynchronizeWorkbookSessionSelection();
         if (_lastImportSource is not { } source

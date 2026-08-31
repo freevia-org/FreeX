@@ -201,12 +201,12 @@ public sealed partial class MainWindow
             numberFormatPresetBox.SelectedIndex = presetIndex;
         }
 
-        numberFormatButton.Click += async (_, _) =>
+        numberFormatButton.Click += (_, _) => RunGuarded(async () =>
         {
             var selection = await ShowPivotNumberFormatInputDialogAsync(CurrentNumberFormatCode());
             if (selection?.Request.NumberFormat is { } acceptedFormat)
                 SetNumberFormatState(acceptedFormat);
-        };
+        });
 
         TabControl? valueFieldTabs = null;
 

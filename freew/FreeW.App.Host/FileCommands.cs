@@ -203,6 +203,14 @@ internal sealed class FileCommands
         _workflow.MarkDirty();
     }
 
+    /// <summary>See <see cref="Free.Shared.AppServices.FileCommandWorkflow.MarkSavedAtUndoDepth"/>.</summary>
+    public void MarkSavedAtUndoDepth(int undoDepthAtSave, long undoStackVersionAtSave) =>
+        _workflow.MarkSavedAtUndoDepth(undoDepthAtSave, undoStackVersionAtSave);
+
+    /// <summary>See <see cref="Free.Shared.AppServices.FileCommandWorkflow.TryMarkCleanIfAtSavePoint"/>.</summary>
+    public bool TryMarkCleanIfAtSavePoint(int currentUndoDepth, long currentUndoStackVersion) =>
+        _workflow.TryMarkCleanIfAtSavePoint(currentUndoDepth, currentUndoStackVersion);
+
     /// <summary>Loads the shared New Window snapshot and restores its file identity.</summary>
     public void LoadDocumentWindow(FreeWDocumentWindowPlan plan)
     {

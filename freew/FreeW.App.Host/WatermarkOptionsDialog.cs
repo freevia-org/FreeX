@@ -209,16 +209,19 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
     private async Task BrowseForImageAsync()
     {
-        var result = WpfFileDialogService.ShowOpenDialog(
-            this,
-            WatermarkOptionsDialogPlanner.WatermarkImageFilter,
-            checkFileExists: true,
-            title: WatermarkOptionsDialogPlanner.SelectWatermarkImageTitle);
-        if (!result.Chosen || result.FileName is not { Length: > 0 } fileName)
-            return;
-
         try
         {
+            // The native picker belongs inside the same guard as the subsequent read. This method is
+            // awaited from an async-void Click handler, so a COM/shell picker failure outside the guard
+            // would otherwise terminate the dispatcher before any file was selected.
+            var result = WpfFileDialogService.ShowOpenDialog(
+                this,
+                WatermarkOptionsDialogPlanner.WatermarkImageFilter,
+                checkFileExists: true,
+                title: WatermarkOptionsDialogPlanner.SelectWatermarkImageTitle);
+            if (!result.Chosen || result.FileName is not { Length: > 0 } fileName)
+                return;
+
             var imageBytes = await FileByteReadWorkflow.ReadLocalPathBytesAsync(fileName);
             var import = _session.ImportImage(
                 fileName,

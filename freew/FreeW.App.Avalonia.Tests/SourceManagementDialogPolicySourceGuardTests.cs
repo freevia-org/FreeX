@@ -54,8 +54,8 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().Contain("SourceManagementDialogPlanner.EditCurrentSource(");
         source.Should().Contain("SourceManagementDialogPlanner.DeleteCurrentSource(");
         source.Should().Contain("SourceManagementDialogPlanner.BuildResult(");
-        source.Should().Contain("_masterList.DoubleTapped += (_, _) => _ = EditMasterAsync();");
-        source.Should().Contain("_currentList.DoubleTapped += (_, _) => _ = EditCurrentAsync();");
+        source.Should().Contain("_masterList.DoubleTapped += (_, _) => RunUiTask(EditMasterAsync);");
+        source.Should().Contain("_currentList.DoubleTapped += (_, _) => RunUiTask(EditCurrentAsync);");
     }
 
     [Fact]
@@ -84,8 +84,8 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
 
         source.Should().Contain("SizeToContent = SizeToContent.WidthAndHeight;");
         source.Should().NotContain("Width = 620;");
-        source.Should().Contain("Button(text.CopyToCurrentButtonLabel, () => _ = CopyMasterToCurrentAsync())");
-        source.Should().Contain("Button(text.CopyToMasterButtonLabel, () => _ = CopyCurrentToMasterAsync())");
+        source.Should().Contain("Button(text.CopyToCurrentButtonLabel, () => RunUiTask(CopyMasterToCurrentAsync))");
+        source.Should().Contain("Button(text.CopyToMasterButtonLabel, () => RunUiTask(CopyCurrentToMasterAsync))");
         source.Should().Contain("minWidth: ManageSourcesDialogVisualMetrics.ButtonMinimumWidth");
     }
 

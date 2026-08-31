@@ -117,6 +117,12 @@ public partial class MainWindow
 
         UpdateViewport();
         SheetGrid.InvalidateVisual();
+        // R175: a WorkbookTheme swap has no AffectedCells, so ApplyWorkbookSessionSelectionToRenderer's
+        // own sheet-tab refresh (only re-derived when the active sheet id actually changes) never
+        // runs for it -- refresh explicitly so a theme-colored worksheet tab (Sheet.TabColor set via
+        // the Theme Colors picker) re-resolves against the new theme immediately instead of only
+        // after the user next switches sheets.
+        RefreshSheetTabs();
     }
 
     private void BackgroundBtn_Click(object sender, RoutedEventArgs e)
@@ -124,7 +130,10 @@ public partial class MainWindow
         BackgroundChooseMenuItem_Click(sender, e);
     }
 
-    private async void BackgroundChooseMenuItem_Click(object sender, RoutedEventArgs e)
+    private void BackgroundChooseMenuItem_Click(object sender, RoutedEventArgs e) =>
+        RunGuardedUiCommand("Sheet Background", () => ChooseSheetBackgroundAsync(sender, e));
+
+    private async Task ChooseSheetBackgroundAsync(object sender, RoutedEventArgs e)
     {
         var openPlan = SheetBackgroundPickerPlanner.BuildOpenDialogPlan();
         var result = WpfFileDialogService.ShowOpenDialog(

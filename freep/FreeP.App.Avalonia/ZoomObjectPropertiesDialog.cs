@@ -155,17 +155,25 @@ internal sealed class ZoomObjectPropertiesDialog : FreePDialogWindow
 
     private async void Apply()
     {
-        if (!_avaloniaRenderer.Session.TryAccept(out var validation))
+        try
         {
-            await AvaloniaUserMessageDialog.ShowWarningAsync(
-                this,
-                validation!.Message,
-                _avaloniaRenderer.Surface.Chrome.Title);
-            _avaloniaRenderer.Form.Focus(validation.Field);
-            return;
-        }
+            if (!_avaloniaRenderer.Session.TryAccept(out var validation))
+            {
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    this,
+                    validation!.Message,
+                    _avaloniaRenderer.Surface.Chrome.Title);
+                _avaloniaRenderer.Form.Focus(validation.Field);
+                return;
+            }
 
-        Close(true);
+            Close(true);
+        }
+        catch
+        {
+            // This is an async-void button callback; validation/dialog failures must not escape
+            // Avalonia's dispatcher and terminate the application.
+        }
     }
 
     private static void ApplyAction(

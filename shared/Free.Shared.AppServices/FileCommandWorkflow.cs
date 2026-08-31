@@ -50,6 +50,24 @@ public sealed class FileCommandWorkflow
 
     public void MarkDirty() => _session.MarkDirtyIfClean(_onChanged);
 
+    /// <summary>
+    /// Records the undo-stack depth/version at the moment of a successful save (or of loading a
+    /// clean document), so a later <see cref="TryMarkCleanIfAtSavePoint"/> call can detect "the
+    /// user undid/redid back to exactly what is on disk" and clear <see cref="IsDirty"/> without an
+    /// explicit save. Thin passthrough to <see cref="FileCommandSession.MarkSavedAtUndoDepth"/> --
+    /// see that method's doc comment for the FreeX parity this exists for.
+    /// </summary>
+    public void MarkSavedAtUndoDepth(int undoDepthAtSave, long undoStackVersionAtSave) =>
+        _session.MarkSavedAtUndoDepth(undoDepthAtSave, undoStackVersionAtSave);
+
+    /// <summary>
+    /// If the undo stack has returned to the depth/version recorded by
+    /// <see cref="MarkSavedAtUndoDepth"/>, clears <see cref="IsDirty"/> and notifies. Thin
+    /// passthrough to <see cref="FileCommandSession.TryMarkCleanIfAtSavePoint(int, long, Action)"/>.
+    /// </summary>
+    public bool TryMarkCleanIfAtSavePoint(int currentUndoDepth, long currentUndoStackVersion) =>
+        _session.TryMarkCleanIfAtSavePoint(currentUndoDepth, currentUndoStackVersion, _onChanged);
+
     public void MarkDirtyWithPath(string? path, Action? beforeChanged = null)
     {
         _session.SetCurrentPath(path);

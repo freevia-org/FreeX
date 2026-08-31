@@ -12213,9 +12213,14 @@ public sealed partial class DocumentView : Control
         }
 
         // AV-HFEDIT: the header/footer caret renders independently of the body caret.
+        // AV-SHAPECARET: the shape-text caret is painted per-shape inside DrawFloatingShape (so it
+        // shares that shape's clip/rotation transforms); _shapeCaret is excluded here too, otherwise
+        // this fallback would keep painting the body caret at its last (now stale) position on top of
+        // -- or instead of -- the shape-text caret while a floating text box is being edited.
         if (IsFocused && _hfCaret is not null && TryGetHfCaretRect(out var hfRect))
             context.FillRectangle(Brushes.Black, hfRect);
-        else if (IsFocused && NormalizedSelection() is null && _hfCaret is null && TryGetCaretRect(out var caretRect))
+        else if (IsFocused && NormalizedSelection() is null && _hfCaret is null && _shapeCaret is null
+            && TryGetCaretRect(out var caretRect))
             context.FillRectangle(Brushes.Black, caretRect);
     }
 
@@ -12818,6 +12823,39 @@ public sealed partial class DocumentView : Control
     }
 
     /// <summary>
+    /// Resolves the caret-stop (pre-computed by <see cref="BuildShapeTextCaretStops"/>) matching the
+    /// live <see cref="_shapeCaret"/> position, so <see cref="DrawFloatingShape"/> can paint an
+    /// insertion-point caret while text-editing a floating text box -- mirroring the body/header-footer
+    /// carets, which is otherwise the only feedback missing during shape-text editing (typed characters
+    /// are already routed into the shape by OnTextInput). Identity is (block, run, child-path); a shared
+    /// group parent can host several children at the same block/run so the child path must also match.
+    /// </summary>
+    private bool TryGetActiveShapeCaretStop(out ShapeTextCaretStop stop)
+    {
+        stop = null!;
+        if (_shapeCaret is not { } caret)
+            return false;
+
+        foreach (var candidate in _shapeTextCaretStops)
+        {
+            if (candidate.BlockIndex != caret.BlockIndex
+                || candidate.RunIndex != caret.RunIndex
+                || candidate.TextParagraphIndex != caret.TextParagraphIndex
+                || candidate.TextRunIndex != caret.TextRunIndex
+                || candidate.Offset != caret.Offset
+                || !ShapeChildPathsEqual(candidate.ChildPath, _activeShapeTextChildPath))
+                continue;
+
+            stop = candidate;
+            return true;
+        }
+        return false;
+    }
+
+    private static bool ShapeChildPathsEqual(IReadOnlyList<int>? a, IReadOnlyList<int>? b) =>
+        a is null || b is null ? a is null && b is null : a.SequenceEqual(b);
+
+    /// <summary>
     /// Renders a single floating shape from its pre-computed <see cref="FloatingShapeData"/>.
     /// Applies rotation/flip transforms around the shape centre when present, then draws
     /// the geometry (fill + outline) followed by any centred shape text.
@@ -12931,6 +12969,21 @@ public sealed partial class DocumentView : Control
                             new Point(point.X, point.Y + glyph.Height * 0.5),
                             new Point(point.X + glyph.Width, point.Y + glyph.Height * 0.5));
                     }
+                }
+
+                // AV-SHAPECARET: paint the insertion-point caret while text-editing this shape. Drawn
+                // here (inside the same clip + rotation transforms used for the glyphs above) so it lands
+                // at the correct on-screen position for rotated/flipped shapes and rotated text direction.
+                // Suppressed while a range selection is active, matching the body/header-footer carets.
+                // The extra block/run/child-path check guards against drawing the caret while rendering a
+                // different (non-active) shape that merely shares this pass's loop.
+                if (IsFocused && CurrentShapeTextSelection is null
+                    && TryGetActiveShapeCaretStop(out var caretStop)
+                    && caretStop.BlockIndex == sd.BlockIndex
+                    && caretStop.RunIndex == sd.RunIndex
+                    && ShapeChildPathsEqual(caretStop.ChildPath, sd.ChildPath))
+                {
+                    context.FillRectangle(Brushes.Black, new Rect(caretStop.X, caretStop.Y, 1.5, caretStop.Height));
                 }
                 rotation?.Dispose();
             }

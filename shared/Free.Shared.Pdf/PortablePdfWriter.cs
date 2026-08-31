@@ -1107,15 +1107,15 @@ public static class PortablePdfWriter
         PdfImageResource resource,
         string? opacityResourceName)
     {
-        var hasSourceCrop = TryGetSourceCroppedImagePlacement(image, resource, out var placement);
-        if (image.ClipKind != PdfImageClipKind.None || hasSourceCrop)
+        var hasCroppedPlacement = TryGetCroppedImagePlacement(image, resource, out var placement);
+        if (image.ClipKind != PdfImageClipKind.None || hasCroppedPlacement)
         {
             AppendClippedImage(
                 content,
                 image,
                 resource.ResourceName,
                 opacityResourceName,
-                hasSourceCrop ? placement : null);
+                hasCroppedPlacement ? placement : null);
             return;
         }
 
@@ -1157,7 +1157,13 @@ public static class PortablePdfWriter
         content.AppendLine("Q");
     }
 
-    private static bool TryGetSourceCroppedImagePlacement(
+    /// <summary>
+    /// Places the full image so that its visible <c>a:srcRect</c> sub-rectangle lands on the part of
+    /// the frame it owns; the surrounding frame clip trims the rest. Negative insets outset instead
+    /// of cropping, so the visible region occupies only an inset part of the frame and the padding
+    /// is simply left unpainted -- matching what the on-screen renderers do.
+    /// </summary>
+    private static bool TryGetCroppedImagePlacement(
         PdfImage image,
         PdfImageResource resource,
         out PdfImagePlacement placement)
@@ -1170,19 +1176,30 @@ public static class PortablePdfWriter
             resource.PixelHeight <= 0)
             return false;
 
-        if (!PdfRenderGeometry.TryGetImageSourceRect(
-                resource.PixelWidth,
-                resource.PixelHeight,
-                image.SourceCrop,
-                out var sourceRect))
+        var plan = PdfRenderGeometry.GetImageCropPlan(
+            resource.PixelWidth,
+            resource.PixelHeight,
+            image.SourceCrop);
+        if (!plan.HasCrop)
             return false;
 
-        var scaleX = image.Width / sourceRect.Width;
-        var scaleY = image.Height / sourceRect.Height;
-        var sourceBottom = resource.PixelHeight - sourceRect.Y - sourceRect.Height;
+        // PDF user space has y growing upwards, so the top inset is measured from the frame top and
+        // the origin of the visible band sits above the frame bottom by the bottom inset.
+        var visibleX = image.X + plan.DestinationInsetLeft * image.Width;
+        var visibleY = image.Y + plan.DestinationInsetBottom * image.Height;
+        var visibleWidth = image.Width *
+            (1.0 - plan.DestinationInsetLeft - plan.DestinationInsetRight);
+        var visibleHeight = image.Height *
+            (1.0 - plan.DestinationInsetTop - plan.DestinationInsetBottom);
+        if (visibleWidth <= 0 || visibleHeight <= 0)
+            return false;
+
+        var scaleX = visibleWidth / plan.SourceWidth;
+        var scaleY = visibleHeight / plan.SourceHeight;
+        var sourceBottom = resource.PixelHeight - plan.SourceY - plan.SourceHeight;
         placement = new PdfImagePlacement(
-            image.X - sourceRect.X * scaleX,
-            image.Y - sourceBottom * scaleY,
+            visibleX - plan.SourceX * scaleX,
+            visibleY - sourceBottom * scaleY,
             resource.PixelWidth * scaleX,
             resource.PixelHeight * scaleY);
         return true;

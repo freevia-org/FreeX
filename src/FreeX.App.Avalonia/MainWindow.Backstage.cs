@@ -210,11 +210,11 @@ public sealed partial class MainWindow
             IsEnabled = scopePlan.CanExport,
         };
         AutomationProperties.SetAutomationId(exportButton, "BackstageExportCreateButton");
-        exportButton.Click += async (_, _) =>
+        exportButton.Click += (_, _) => RunGuarded(async () =>
         {
             dialog.Close();
             await ExportWorkbookPdfAsync(selectedScope, selectedFormat);
-        };
+        });
 
         var cancelButton = new Button
         {
