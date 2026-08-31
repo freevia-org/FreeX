@@ -473,8 +473,8 @@ public sealed class MainWindowSheetTabKeyboardTests
             harness.SheetTabContextMenuPlacement.Should().Be(PlacementMode.MousePoint);
             harness.SheetTabMenuItems.Should().Contain(new[]
             {
-                UiText.Get("MainWindow_Header_InsertSheet"),
-                UiText.Get("MainWindow_Header_DeleteSheet"),
+                UiText.Get("Common_Insert"),
+                UiText.Get("MainWindow_Content_Delete"),
                 UiText.Get("MainWindow_Header_Rename"),
                 UiText.Get("MainWindow_Header_TabColor"),
                 UiText.Get("MainWindow_Header_SelectAllSheets")
