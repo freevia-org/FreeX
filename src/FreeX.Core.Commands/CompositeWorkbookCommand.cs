@@ -103,6 +103,29 @@ public sealed class CompositeWorkbookCommand : IWorkbookCommand, IEstimatesMemor
                 return new CommandOutcome(false, $"{Label}: {ex.Message}");
             }
 
+            // R175-commands-composite-failure-outcome-audit-1: note the deliberate asymmetry with
+            // the catch above -- the failing command is NOT reverted here, and must not be.
+            //
+            // A command that THREW is mid-flight by definition: it entered Apply and never
+            // returned, so asking it to roll back is always the right call (CommandBus.Execute
+            // makes the same call via TryRevert on its own throw path). A command that RETURNED a
+            // failure outcome is a different animal: the overwhelmingly common case is a clean
+            // up-front rejection (protection guards, "target no longer exists", invalid input)
+            // that never touched the workbook, and a Revert on that path is actively destructive
+            // for any command that snapshots INSIDE Apply after its guards. SetCalculationMode-
+            // Command is the worked example: it returns failure on an undefined mode BEFORE
+            // assigning _previousMode, so _previousMode still holds default(WorkbookCalculation-
+            // Mode) == Automatic -- reverting it would silently flip a Manual workbook to
+            // Automatic, corrupting a setting the command never wrote. 74 of the 236 Revert
+            // implementations audited have no never-applied guard and would misbehave the same way.
+            //
+            // Nor is there any signal here to tell "failed after mutating" from "rejected up
+            // front". An audit of the failure returns in FreeX.Core.Commands found no command that
+            // mutates the workbook and then returns a failure outcome -- the convention is
+            // validate-then-mutate -- so the correct place to hold this line is that convention,
+            // not a blanket rollback that would break the well-behaved majority. If a
+            // mutate-then-fail command is ever introduced, give it the guard its Revert needs and
+            // have it throw (or revert itself) rather than reverting from here.
             if (!outcome.Success)
             {
                 RevertApplied(ctx);
