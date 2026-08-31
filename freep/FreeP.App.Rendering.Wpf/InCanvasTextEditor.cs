@@ -690,8 +690,7 @@ public sealed class InCanvasTextEditor : IDisposable
                 // here on belong to that body, not the one the edit started with.
                 _inlineOleSourceBody = pastedBody;
             }
-            else if (result.FailureMessage is { } failureMessage &&
-                     (e.Key == Key.V || !result.Handled))
+            else if (result.FailureMessage is { } failureMessage)
                 _onClipboardWriteFailed?.Invoke(
                     PresentationShellTextCatalog.Resolve(e.Key switch
                     {
