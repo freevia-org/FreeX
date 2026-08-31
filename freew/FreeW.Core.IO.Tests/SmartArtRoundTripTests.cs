@@ -544,9 +544,8 @@ public class SmartArtRoundTripTests
         var smartArt = new SmartArt { Kind = SmartArtKind.Hierarchy };
         smartArt.Nodes.Add(root);
 
-        var drawing = EntryXml(
-            WriteBytes(SingleDiagramDocument(smartArt)),
-            "word/diagrams/drawing1.xml");
+        var bytes = WriteBytes(SingleDiagramDocument(smartArt));
+        var drawing = EntryXml(bytes, "word/diagrams/drawing1.xml");
         var shapes = drawing.Descendants(Dsp + "sp").ToList();
 
         shapes.Should().HaveCount(1 + childCount * 2,
@@ -558,6 +557,12 @@ public class SmartArtRoundTripTests
         shapes.Where(shape => shape.Descendants(A + "t").Any())
             .Select(shape => shape.Descendants(A + "t").Single().Value)
             .Should().Equal(["Root", .. Enumerable.Range(0, childCount).Select(index => "Child " + index)]);
+
+        var roundTripped = DocxReader.Read(new MemoryStream(bytes));
+        var hierarchy = roundTripped.Paragraphs.Single().Runs.Single(run => run.SmartArt is not null).SmartArt!;
+        var roundTrippedRoot = hierarchy.Nodes.Should().ContainSingle().Subject;
+        roundTrippedRoot.Children.Select(node => node.Text)
+            .Should().Equal(Enumerable.Range(0, childCount).Select(index => "Child " + index));
     }
 
     [Fact]
@@ -570,7 +575,10 @@ public class SmartArtRoundTripTests
             .And.Contain("new XAttribute(\"id\", nextCachedShapeId++)")
             .And.NotContain("nodes.FindIndex(candidate => candidate.Node.Children.Contains(nodes[i].Node))")
             .And.NotContain("var siblings = nodes.Select((item, index)")
-            .And.NotContain("spTree.Elements(Dsp + \"sp\").Count() + 1");
+            .And.NotContain("spTree.Elements(Dsp + \"sp\").Count() + 1")
+            .And.Contain("var semanticNodeIndexesById = new Dictionary<string, int>(semanticNodes.Count, StringComparer.Ordinal);")
+            .And.Contain("var childIndex = semanticNodeIndexesById[child.Id];")
+            .And.NotContain("semanticNodes.IndexOf(child)");
     }
 
     [Fact]
