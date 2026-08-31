@@ -126,7 +126,9 @@ public partial class PivotValueFieldSettingsDialog : Window
     private void NumberFormatButton_Click(object sender, RoutedEventArgs e)
     {
         var style = new CellStyle { NumberFormat = CurrentNumberFormatCode() };
-        var dialog = new FormatCellsDialog(style, FormatCellsDialogTab.Number)
+        // WorkbookTheme.Office: this dialog opens on the Number tab over a synthetic, border-free style,
+        // so the theme only ever resolves borders that do not exist here. No workbook is in reach.
+        var dialog = new FormatCellsDialog(style, WorkbookTheme.Office, FormatCellsDialogTab.Number)
         {
             Owner = this,
             Title = UiText.Get("PivotValueFieldSettings_FormatCellsTitle")

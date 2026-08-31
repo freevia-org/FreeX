@@ -113,4 +113,43 @@ public sealed class SheetStyleOnlyRunTests
         sheet.TryGetCompressedStyleOnlyRuns(out var runs).Should().BeTrue();
         runs.Should().Equal(new StyleOnlyRun(1, 1, 2, baseStyle));
     }
+
+    [Fact]
+    public void GetStyleOnlyEntries_InRangeClipsRunsAndPreservesOverlaysAndTombstones()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        var baseStyle = new StyleId(1);
+        var overrideStyle = new StyleId(2);
+        sheet.SetStyleOnlyRuns([
+            new StyleOnlyRun(2, 1, 10, baseStyle),
+            new StyleOnlyRun(5, 1, 10, baseStyle),
+            new StyleOnlyRun(8, 1, 10, baseStyle)
+        ]);
+        sheet.SetStyleOnly(5, 5, overrideStyle);
+        sheet.ClearStyleOnly(5, 6);
+        sheet.SetStyleOnly(6, 5, overrideStyle);
+
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 4, 4),
+            new CellAddress(sheet.Id, 6, 7));
+
+        sheet.GetStyleOnlyEntries(range).Should().Equal(
+            (((uint)5, (uint)4), baseStyle),
+            (((uint)5, (uint)5), overrideStyle),
+            (((uint)5, (uint)7), baseStyle),
+            (((uint)6, (uint)5), overrideStyle));
+    }
+
+    [Fact]
+    public void GetStyleOnlyEntries_InRangeForAnotherSheetReturnsEmpty()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        sheet.SetStyleOnlyRuns([new StyleOnlyRun(1, 1, 3, new StyleId(1))]);
+        var otherSheetId = SheetId.New();
+        var otherSheetRange = new GridRange(
+            new CellAddress(otherSheetId, 1, 1),
+            new CellAddress(otherSheetId, 1, 3));
+
+        sheet.GetStyleOnlyEntries(otherSheetRange).Should().BeEmpty();
+    }
 }

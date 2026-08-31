@@ -374,7 +374,7 @@ public sealed class PivotFilterDialogXamlTests
             .Should()
             .Be("Collapsed");
         source.Should().Contain("NumberFormatButton_Click");
-        source.Should().Contain("new FormatCellsDialog(style, FormatCellsDialogTab.Number)");
+        source.Should().Contain("new FormatCellsDialog(style, WorkbookTheme.Office, FormatCellsDialogTab.Number)");
         source.Should().Contain("NumberFormatCodeBox.Text = numberFormat");
         source.Should().Contain("DefaultCustomNumberFormatId");
     }

@@ -161,6 +161,69 @@ public sealed partial class Sheet
     }
 
     /// <summary>
+    /// Enumerates style-only entries inside <paramref name="range"/>. Compressed runs are clipped
+    /// to the requested rows and columns before their individual cells are expanded, so a caller
+    /// operating on a narrow selection does not materialize unrelated style-only cells elsewhere
+    /// on the sheet.
+    /// </summary>
+    public IEnumerable<((uint Row, uint Col) Key, StyleId StyleId)> GetStyleOnlyEntries(GridRange range)
+    {
+        if (range.Start.Sheet != Id)
+            yield break;
+
+        if (_styleOnlyRuns is { Count: > 0 } runs)
+        {
+            foreach (var run in runs)
+            {
+                // NormalizeStyleOnlyRuns keeps runs ordered by row, then starting column. Once the
+                // row has passed the selection there can be no later intersecting run.
+                if (run.Row < range.Start.Row)
+                    continue;
+                if (run.Row > range.End.Row)
+                    break;
+
+                var startCol = Math.Max(run.StartCol, range.Start.Col);
+                var endCol = Math.Min(run.EndCol, range.End.Col);
+                if (startCol > endCol)
+                    continue;
+
+                var col = startCol;
+                while (true)
+                {
+                    var key = (run.Row, col);
+                    if (_styleOnly.TryGetValue(key, out var overlayStyleId))
+                    {
+                        yield return (key, overlayStyleId);
+                    }
+                    else if (_styleOnlyRunTombstones?.Contains(key) != true)
+                    {
+                        yield return (key, run.StyleId);
+                    }
+
+                    if (col == endCol)
+                        break;
+
+                    col++;
+                }
+            }
+        }
+
+        foreach (var entry in _styleOnly)
+        {
+            if (entry.Key.Row < range.Start.Row || entry.Key.Row > range.End.Row ||
+                entry.Key.Col < range.Start.Col || entry.Key.Col > range.End.Col)
+            {
+                continue;
+            }
+
+            if (TryGetStyleOnlyRun(entry.Key.Row, entry.Key.Col).HasValue)
+                continue;
+
+            yield return (entry.Key, entry.Value);
+        }
+    }
+
+    /// <summary>
     /// Returns compressed style-only runs when there are no mutable overlays or tombstones.
     /// Callers that need exact cell-level output should use <see cref="GetStyleOnlyEntries"/>.
     /// </summary>

@@ -165,6 +165,62 @@ public sealed class OpcSharedHelperTests
     }
 
     [Fact]
+    public void RelationshipDocument_AddUnique_UsesCaseInsensitiveIdentityAndPreservesExternalDistinction()
+    {
+        var relationships = new OpcRelationshipDocument();
+        relationships.Add("rId1", "TYPE/KNOWN", "Target.xml");
+
+        relationships.AddUnique("rId2", "type/known", "target.XML");
+        relationships.AddUnique("rId3", "type/known", "target.XML", external: true);
+
+        var entries = relationships.ToXDocument().Root!
+            .Elements(OpcRelationships.Namespace + "Relationship")
+            .ToList();
+        entries.Should().HaveCount(2);
+        entries[1].Attribute("Id")!.Value.Should().Be("rId3");
+        entries[1].Attribute("TargetMode")!.Value.Should().Be("External");
+    }
+
+    [Fact]
+    public void RelationshipDocument_AddUnique_MintsFirstAvailablePreservedIdsAcrossSparseReservations()
+    {
+        var relationships = new OpcRelationshipDocument();
+        relationships.Add("rIdPreserved2", "type/known-2", "known-2.xml");
+        relationships.Add("rIdPreserved4", "type/known-4", "known-4.xml");
+
+        relationships.AddUnique("rIdPreserved2", "type/new-1", "new-1.xml");
+        relationships.AddUnique("rIdPreserved1", "type/new-2", "new-2.xml");
+
+        relationships.ToXDocument().Root!
+            .Elements(OpcRelationships.Namespace + "Relationship")
+            .Select(element => element.Attribute("Id")!.Value)
+            .Should()
+            .Equal("rIdPreserved2", "rIdPreserved4", "rIdPreserved1", "rIdPreserved3");
+    }
+
+    [Fact]
+    public void RelationshipDocument_AddUnique_HandlesDenseCollisionSequences()
+    {
+        const int relationshipCount = 2_500;
+        var relationships = new OpcRelationshipDocument();
+        relationships.Add("rIdCollision", "type/known", "known.xml");
+
+        for (var index = 0; index < relationshipCount; index++)
+        {
+            relationships.AddUnique(
+                "rIdCollision",
+                "type/preserved",
+                $"preserved-{index}.xml");
+        }
+
+        var entries = relationships.ToXDocument().Root!
+            .Elements(OpcRelationships.Namespace + "Relationship")
+            .ToList();
+        entries.Should().HaveCount(relationshipCount + 1);
+        entries[^1].Attribute("Id")!.Value.Should().Be($"rIdPreserved{relationshipCount}");
+    }
+
+    [Fact]
     public void PackageRetentionClassifier_ClassifiesRegeneratedPartsAndRelationships()
     {
         var classifier = new OpcPackageRetentionClassifier(

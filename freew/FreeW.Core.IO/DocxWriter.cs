@@ -10184,67 +10184,7 @@ public static class DocxWriter
     /// </summary>
     private static string SanitizeXmlText(string? text)
     {
-        if (string.IsNullOrEmpty(text))
-            return text ?? string.Empty;
-
-        // Fast path: scan for any illegal character; return original when none found.
-        var needsSanitize = false;
-        for (var i = 0; i < text.Length; i++)
-        {
-            var c = text[i];
-            if (IsXmlIllegal(c, text, ref i))
-            {
-                needsSanitize = true;
-                break;
-            }
-        }
-        if (!needsSanitize)
-            return text;
-
-        var sb = new System.Text.StringBuilder(text.Length);
-        for (var i = 0; i < text.Length; i++)
-        {
-            var c = text[i];
-            if (char.IsHighSurrogate(c))
-            {
-                // Keep a valid surrogate pair; drop a lone high surrogate.
-                if (i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
-                {
-                    sb.Append(c);
-                    sb.Append(text[++i]);
-                }
-                // else: lone high surrogate — drop it
-            }
-            else if (!char.IsLowSurrogate(c) && !IsXml10IllegalChar(c))
-            {
-                // Lone low surrogates are also illegal in XML; skip them.
-                sb.Append(c);
-            }
-            // else: illegal char (C0/C1 control or lone surrogate) — drop it
-        }
-        return sb.ToString();
-
-        // Returns true when position i contains an illegal XML 1.0 character (lone surrogate or C0/C1 control).
-        // The ref i allows advancing past the second char of a surrogate pair on the fast-path scan.
-        static bool IsXmlIllegal(char c, string s, ref int i)
-        {
-            if (char.IsHighSurrogate(c))
-            {
-                if (i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
-                {
-                    i++; // valid pair — skip
-                    return false;
-                }
-                return true; // lone high surrogate
-            }
-            if (char.IsLowSurrogate(c))
-                return true; // lone low surrogate
-            return IsXml10IllegalChar(c);
-        }
-
-        static bool IsXml10IllegalChar(char c) =>
-            // XML 1.0 legal: #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD]
-            c != '\t' && c != '\n' && c != '\r' && (c < ' ' || c == '￾' || c == '￿');
+        return XmlTextSanitizer.Sanitize(text);
     }
 
 }

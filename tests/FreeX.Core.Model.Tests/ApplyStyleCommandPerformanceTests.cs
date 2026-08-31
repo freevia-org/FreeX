@@ -598,6 +598,64 @@ public sealed class ApplyStyleCommandPerformanceTests
             "bold on a content-only column must not create style-only entries that degrade the viewport fast path");
     }
 
+    [Fact]
+    public void ApplyStyleCommand_Pass3UsesRangeAwareStyleOnlySnapshot()
+    {
+        var source = ModelSourceTestSupport.ReadCommandsSource("ApplyStyleCommand.cs");
+
+        source.Should().Contain("sheet.GetStyleOnlyEntries(_range).ToList()");
+        source.Should().NotContain("sheet.GetStyleOnlyEntries().ToList()");
+    }
+
+    [BenchmarkFact]
+    public void Benchmark_WholeRowBoldSkipsOffTargetCompressedStyleRuns()
+    {
+        const int runCount = 20_000;
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var italicStyle = wb.RegisterStyle(new CellStyle { Italic = true });
+        var runs = new StyleOnlyRun[runCount];
+        for (var index = 0; index < runs.Length; index++)
+            runs[index] = new StyleOnlyRun((uint)index + 1, 1, 50, italicStyle);
+        sheet.SetStyleOnlyRuns(runs);
+
+        // This is the only pre-existing style-only entry in the selected row. The other one
+        // million style-only cells are compressed into runs on different rows and must never be
+        // expanded into Pass 3's mutation-safety snapshot.
+        const uint selectedFarRow = 25_000;
+        sheet.SetStyleOnly(selectedFarRow, 1, italicStyle);
+        var wholeSelectedRow = new GridRange(
+            new CellAddress(sheet.Id, selectedFarRow, 1),
+            new CellAddress(sheet.Id, selectedFarRow, CellAddress.MaxCol));
+        var ctx = new TestCommandContext(wb);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+
+        var command = new ApplyStyleCommand(sheet.Id, wholeSelectedRow, new StyleDiff(Bold: true));
+        var outcome = command.Apply(ctx);
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        outcome.Success.Should().BeTrue();
+        var updated = wb.GetStyle(sheet.GetStyleOnly(selectedFarRow, 1)!.Value);
+        updated.Bold.Should().BeTrue();
+        updated.Italic.Should().BeTrue();
+        sheet.GetStyleOnly(1, 2).Should().Be(italicStyle, "off-target compressed runs must remain untouched");
+        allocatedBytes.Should().BeLessThan(2_000_000,
+            "formatting one row must not expand and copy roughly one million off-target run cells");
+
+        command.Revert(ctx);
+        sheet.GetStyleOnly(selectedFarRow, 1).Should().Be(italicStyle,
+            "undo must restore the selected pre-existing style-only entry exactly");
+        sheet.GetStyleOnly(1, 2).Should().Be(italicStyle);
+
+        Console.WriteLine(
+            "PERF APPLY_STYLE_RANGE_AWARE_STYLE_ONLY_SNAPSHOT " +
+            $"runs={runCount} off_target_cells={runCount * 50:N0} allocated_bytes={allocatedBytes:N0}");
+    }
+
     // ── Benchmark ────────────────────────────────────────────────────────────
 
     [BenchmarkFact]

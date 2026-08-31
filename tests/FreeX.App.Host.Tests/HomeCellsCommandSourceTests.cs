@@ -55,7 +55,7 @@ public sealed class HomeCellsCommandSourceTests
         source.Should().Contain("var selectedCell = sheet.GetCell(ResolveFormatCellsSeedCell(range));");
         source.Should().Contain("var numberPreviewText = selectedCell is null");
         source.Should().Contain(": GetAutoFitDisplayText(sheet, selectedCell);");
-        source.Should().Contain("new FormatCellsDialog(currentStyle, initialTab, mergeCells, numberPreviewText)");
+        source.Should().Contain("new FormatCellsDialog(currentStyle, _workbook.Theme, initialTab, mergeCells, numberPreviewText)");
         source.Should().Contain("CellMergePlanner.IsSelectionMerged(sheet, range)");
         source.Should().Contain("dlg.ResultMergeCells == true && !TryResolveMergeContentResolution(range, out mergeContentResolution)");
         source.Should().Contain("MergeCellContentResolution mergeContentResolution = MergeCellContentResolution.KeepFirstCell");
