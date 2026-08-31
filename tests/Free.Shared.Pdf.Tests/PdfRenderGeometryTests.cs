@@ -36,6 +36,68 @@ public sealed class PdfRenderGeometryTests
         skiaRect.Should().Be(SKRect.Create(expected.X, expected.Y, expected.Width, expected.Height));
     }
 
+    [Fact]
+    public void ImageCropPlan_TreatsNegativeInsetsAsDestinationPaddingNotCrop()
+    {
+        // a:srcRect l="-25000" outsets: the frame spans source fractions [-0.25, 1], so the bitmap
+        // covers the right 1/1.25 of the frame and the left 20% is left empty.
+        var plan = PdfRenderGeometry.GetImageCropPlan(
+            16,
+            16,
+            new PdfImageSourceCrop(-0.25, 0, 0, 0));
+
+        plan.SourceX.Should().Be(0);
+        plan.SourceWidth.Should().Be(16);
+        plan.HasSourceCrop.Should().BeFalse("an outset names no sub-rectangle of the bitmap");
+        plan.HasDestinationInset.Should().BeTrue();
+        plan.HasCrop.Should().BeTrue("the picture is still not filling its frame");
+        plan.DestinationInsetLeft.Should().BeApproximately(0.2, 1e-9);
+        plan.DestinationInsetRight.Should().Be(0);
+        plan.DestinationInsetTop.Should().Be(0);
+        plan.DestinationInsetBottom.Should().Be(0);
+    }
+
+    [Fact]
+    public void ImageCropPlan_CombinesCropOnOneEdgeWithOutsetOnTheOther()
+    {
+        // Frame spans source fractions [-0.5, 0.75]; span 1.25. The visible pixels are [0, 0.75],
+        // so the image starts 0.5/1.25 = 40% into the frame and runs to its right edge.
+        var plan = PdfRenderGeometry.GetImageCropPlan(
+            20,
+            10,
+            new PdfImageSourceCrop(-0.5, 0, 0.25, 0));
+
+        plan.SourceX.Should().Be(0);
+        plan.SourceWidth.Should().Be(15);
+        plan.HasSourceCrop.Should().BeTrue();
+        plan.DestinationInsetLeft.Should().BeApproximately(0.4, 1e-9);
+        plan.DestinationInsetRight.Should().BeApproximately(0.0, 1e-9);
+    }
+
+    [Fact]
+    public void ImageCropPlan_LeavesPositiveOnlyCropsUnpadded()
+    {
+        var plan = PdfRenderGeometry.GetImageCropPlan(
+            16,
+            16,
+            new PdfImageSourceCrop(0.25, 0.125, 0.25, 0.375));
+
+        plan.HasSourceCrop.Should().BeTrue();
+        plan.HasDestinationInset.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ImageSourcePlan_IgnoresOutsetOnlyCropsSoTheFullBitmapIsDrawn()
+    {
+        PdfRenderGeometry.TryGetImageSourceRect(
+                16,
+                16,
+                new PdfImageSourceCrop(-0.25, 0, 0, 0),
+                out _)
+            .Should()
+            .BeFalse();
+    }
+
     [Theory]
     [InlineData(PdfImageClipKind.Triangle, 3)]
     [InlineData(PdfImageClipKind.Diamond, 4)]
@@ -86,7 +148,7 @@ public sealed class PdfRenderGeometryTests
         var skia = File.ReadAllText(Path.Combine(root, "shared", "Free.Shared.Pdf.Skia", "SkiaPdfWriter.cs"));
         var wpf = File.ReadAllText(Path.Combine(root, "shared", "Free.Shared.Pdf.Wpf", "WpfRasterPdfWriter.cs"));
 
-        portable.Should().Contain("PdfRenderGeometry.TryGetImageSourceRect");
+        portable.Should().Contain("PdfRenderGeometry.GetImageCropPlan");
         portable.Should().Contain("PdfRenderGeometry.GetPresetClipPolygonPoints");
         portable.Should().Contain("PdfRenderGeometry.TryNormalizeGradient");
         portable.Should().NotContain("private static PdfPathPoint[] GetPresetClipPolygonPoints");
@@ -94,7 +156,7 @@ public sealed class PdfRenderGeometryTests
 
         skia.Should().Contain("PdfRenderGeometry.ToCanvasTop");
         skia.Should().Contain("PdfRenderGeometry.ToCanvasY");
-        skia.Should().Contain("PdfRenderGeometry.TryGetImageSourceRect");
+        skia.Should().Contain("PdfRenderGeometry.GetImageCropPlan");
         skia.Should().Contain("PdfRenderGeometry.GetPresetClipPolygonPoints");
         skia.Should().Contain("PdfRenderGeometry.TryNormalizeGradient");
         skia.Should().NotContain("private static SKPoint[] GetPresetClipPolygonPoints");
