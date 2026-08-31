@@ -370,6 +370,67 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
+    public void Media_DenseTiming_RoundTripsEveryShapeById()
+    {
+        const int mediaCount = 128;
+        var presentation = new Presentation();
+        var slide = new Slide();
+        for (var index = 0; index < mediaCount; index++)
+        {
+            var isVideo = index % 2 == 0;
+            slide.Shapes.Add(new SlideShape
+            {
+                Id = (uint)(1000 + index),
+                Name = $"Dense media {index}",
+                Kind = SlideShapeKind.Media,
+                ExtentCxEmu = 914400,
+                ExtentCyEmu = 914400,
+                Media = new MediaInfo
+                {
+                    IsVideo = isVideo,
+                    VolumePercent = index % 101,
+                    PlaybackStartMode = index % 3 == 0
+                        ? MediaPlaybackStartMode.Automatically
+                        : MediaPlaybackStartMode.InClickSequence,
+                    Loop = index % 5 == 0,
+                    RewindAfterPlaying = index % 7 == 0,
+                    PlayFullScreen = isVideo && index % 6 == 0,
+                    ShowWhenStopped = index % 4 != 0,
+                    StopAfterSlides = 1 + index % 3,
+                    Bytes = isVideo
+                        ? [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70]
+                        : [0x52, 0x49, 0x46, 0x46],
+                    ContentType = isVideo ? "video/mp4" : "audio/wav",
+                },
+            });
+        }
+        presentation.Slides.Add(slide);
+
+        using var package = new MemoryStream();
+        PptxPackageWriter.Write(presentation, package);
+        package.Position = 0;
+
+        var reopened = PptxPackageReader.Read(package);
+        reopened.Slides[0].Shapes.Should().HaveCount(mediaCount);
+        for (var index = 0; index < mediaCount; index++)
+        {
+            var media = reopened.Slides[0].Shapes[index].Media;
+            media.Should().NotBeNull();
+            var isVideo = index % 2 == 0;
+            media!.IsVideo.Should().Be(isVideo);
+            media.VolumePercent.Should().Be(index % 101);
+            media.PlaybackStartMode.Should().Be(index % 3 == 0
+                ? MediaPlaybackStartMode.Automatically
+                : MediaPlaybackStartMode.InClickSequence);
+            media.Loop.Should().Be(index % 5 == 0);
+            media.RewindAfterPlaying.Should().Be(index % 7 == 0);
+            media.PlayFullScreen.Should().Be(isVideo && index % 6 == 0);
+            media.ShowWhenStopped.Should().Be(index % 4 != 0);
+            media.StopAfterSlides.Should().Be(1 + index % 3);
+        }
+    }
+
+    [Fact]
     public void Media_StopAfterSlides_RoundTripsNativeAudioTiming()
     {
         var pres = new Presentation();
