@@ -442,25 +442,34 @@ internal static class XlsxWorksheetDrawingPartMerger
         if (normalizedOrder.Count == 0)
             return false;
 
+        // A dense selection-pane reorder can contain every non-chart drawing object. Index the
+        // first model name for each kind/id pair once so building nameOrderIndex does not rescan
+        // the picture/text-box/shape collections for every normalized z-order entry. TryAdd is
+        // intentional: FirstOrDefault previously selected the first model object if malformed
+        // input contained duplicate IDs, and preserving that choice keeps this merge path stable.
+        var namesByEntry = new Dictionary<DrawingObjectZOrderEntry, string?>(
+            sheet.Pictures.Count + sheet.TextBoxes.Count + sheet.DrawingShapes.Count);
+        foreach (var picture in sheet.Pictures)
+            namesByEntry.TryAdd(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, picture.Id), picture.Name);
+        foreach (var textBox in sheet.TextBoxes)
+            namesByEntry.TryAdd(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, textBox.Id), textBox.Name);
+        foreach (var shape in sheet.DrawingShapes)
+            namesByEntry.TryAdd(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id), shape.Name);
+
         var nameOrderIndex = new Dictionary<string, int>(StringComparer.Ordinal);
         for (var index = 0; index < normalizedOrder.Count; index++)
         {
             var entry = normalizedOrder[index];
-            var name = entry.Kind switch
-            {
-                SelectionPaneObjectKind.Picture => sheet.Pictures.FirstOrDefault(picture => picture.Id == entry.Id)?.Name,
-                SelectionPaneObjectKind.TextBox => sheet.TextBoxes.FirstOrDefault(textBox => textBox.Id == entry.Id)?.Name,
-                SelectionPaneObjectKind.Shape => sheet.DrawingShapes.FirstOrDefault(shape => shape.Id == entry.Id)?.Name,
-                // Chart intentionally excluded -- see the method comment above.
-                _ => null
-            };
+            // Chart entries deliberately have no map entry: graphicFrame anchors remain positionally
+            // matched by XlsxWorksheetChartWriter rather than by their non-reliable cNvPr names.
+            namesByEntry.TryGetValue(entry, out var name);
 
             // Excel's default naming ("Picture 1", "Shape 1", ...) is reused independently per sheet, so
             // two distinct entries could in principle share a literal Name; keep the FIRST (lowest
             // z-order index) mapping only -- an unresolvable name collision is exactly the pre-existing
             // GetDrawingAnchorIdentity caveat this file already documents, not a new risk this fix adds.
-            if (!string.IsNullOrWhiteSpace(name) && !nameOrderIndex.ContainsKey(name))
-                nameOrderIndex[name] = index;
+            if (!string.IsNullOrWhiteSpace(name))
+                nameOrderIndex.TryAdd(name, index);
         }
 
         if (nameOrderIndex.Count == 0)
