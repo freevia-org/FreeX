@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using FreeX.App.Presentation.DrawingInteraction;
+using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -239,8 +240,8 @@ public partial class GridView
     {
         if (chart.Anchor is { } anchor)
         {
-            var width = Math.Max(MinimumChartObjectWidth, chart.Width);
-            var height = Math.Max(MinimumChartObjectHeight, chart.Height);
+            var fallbackWidth = Math.Max(MinimumChartObjectWidth, chart.Width);
+            var fallbackHeight = Math.Max(MinimumChartObjectHeight, chart.Height);
             var startColumn = Viewport?.ColMetrics.FirstOrDefault(metric => metric.Col == anchor.Col);
             var startRow = Viewport?.RowMetrics.FirstOrDefault(metric => metric.Row == anchor.Row);
             var endAnchor = chart.AnchorEnd;
@@ -251,16 +252,32 @@ public partial class GridView
                 ? Viewport?.RowMetrics.FirstOrDefault(metric => metric.Row == endRowAnchor.Row)
                 : null;
 
-            var left = startColumn is { } startColumnMetric && startColumnMetric.Col == anchor.Col
+            var startLeft = startColumn is { } startColumnMetric && startColumnMetric.Col == anchor.Col
                 ? ActualRowHeaderWidth + startColumnMetric.LeftOffset + chart.AnchorOffsetX
-                : endColumn is { } endColumnMetric && endAnchor is { } endForColumn && endColumnMetric.Col == endForColumn.Col
-                    ? ActualRowHeaderWidth + endColumnMetric.LeftOffset + chart.AnchorEndOffsetX - width
-                    : (double?)null;
-            var top = startRow is { } startRowMetric && startRowMetric.Row == anchor.Row
+                : (double?)null;
+            var startTop = startRow is { } startRowMetric && startRowMetric.Row == anchor.Row
                 ? EffectiveColHeaderHeight + startRowMetric.TopOffset + chart.AnchorOffsetY
-                : endRow is { } endRowMetric && endAnchor is { } endForRow && endRowMetric.Row == endForRow.Row
-                    ? EffectiveColHeaderHeight + endRowMetric.TopOffset + chart.AnchorEndOffsetY - height
-                    : (double?)null;
+                : (double?)null;
+            var endRight = endColumn is { } endColumnMetric && endAnchor is { } endForColumn && endColumnMetric.Col == endForColumn.Col
+                ? ActualRowHeaderWidth + endColumnMetric.LeftOffset + chart.AnchorEndOffsetX
+                : (double?)null;
+            var endBottom = endRow is { } endRowMetric && endAnchor is { } endForRow && endRowMetric.Row == endForRow.Row
+                ? EffectiveColHeaderHeight + endRowMetric.TopOffset + chart.AnchorEndOffsetY
+                : (double?)null;
+
+            // XLSX two-cell anchors describe both chart edges in the grid's native pixel space.
+            // Chart.Width is derived during import from Excel's separate width-in-characters*8
+            // coordinate space; using it with viewport metrics makes Excel-authored charts wider
+            // than their anchored right edge. Derive the extent from the markers and the sheet's
+            // actual grid widths so it also remains correct when the start marker has scrolled away.
+            var markerWidth = 0.0;
+            var markerHeight = 0.0;
+            var hasMarkerExtent = endAnchor is { } end &&
+                TryGetTwoCellChartExtent(chart, anchor, end, out markerWidth, out markerHeight);
+            var width = hasMarkerExtent ? Math.Max(MinimumChartObjectWidth, markerWidth) : fallbackWidth;
+            var height = hasMarkerExtent ? Math.Max(MinimumChartObjectHeight, markerHeight) : fallbackHeight;
+            var left = startLeft ?? (endRight is { } right ? right - width : null);
+            var top = startTop ?? (endBottom is { } bottom ? bottom - height : null);
             if (left is { } x && top is { } y)
                 return new Rect(x, y, width, height);
 
@@ -272,6 +289,44 @@ public partial class GridView
             chart.Top + EffectiveColHeaderHeight,
             Math.Max(MinimumChartObjectWidth, chart.Width),
             Math.Max(MinimumChartObjectHeight, chart.Height));
+    }
+
+    private bool TryGetTwoCellChartExtent(
+        ChartModel chart,
+        CellAddress start,
+        CellAddress end,
+        out double width,
+        out double height)
+    {
+        width = 0;
+        height = 0;
+        if (end.Col < start.Col || end.Row < start.Row ||
+            !double.IsFinite(chart.AnchorOffsetX) || !double.IsFinite(chart.AnchorOffsetY) ||
+            !double.IsFinite(chart.AnchorEndOffsetX) || !double.IsFinite(chart.AnchorEndOffsetY))
+        {
+            return false;
+        }
+
+        var isColumnHidden = SheetIsColHiddenPredicate ?? (col => HiddenColumns?.Contains(col) == true);
+        for (var column = start.Col; column < end.Col; column++)
+        {
+            if (!isColumnHidden(column))
+            {
+                var columnWidth = SheetColumnWidths?.GetValueOrDefault(column, SheetDefaultColumnWidth) ?? SheetDefaultColumnWidth;
+                width += ColumnWidthPixelMapper.ColumnWidthToPixels(columnWidth);
+            }
+        }
+
+        var isRowHidden = SheetIsRowHiddenPredicate ?? (row => HiddenRows?.Contains(row) == true);
+        for (var row = start.Row; row < end.Row; row++)
+        {
+            if (!isRowHidden(row))
+                height += SheetRowHeights?.GetValueOrDefault(row, SheetDefaultRowHeight) ?? SheetDefaultRowHeight;
+        }
+
+        width += chart.AnchorEndOffsetX - chart.AnchorOffsetX;
+        height += chart.AnchorEndOffsetY - chart.AnchorOffsetY;
+        return double.IsFinite(width) && double.IsFinite(height) && width > 0 && height > 0;
     }
 
     private CellAddress GetChartAnchor(ChartModel chart)

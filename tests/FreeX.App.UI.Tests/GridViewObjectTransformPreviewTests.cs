@@ -76,6 +76,106 @@ public sealed class GridViewObjectTransformPreviewTests
     }
 
     [Fact]
+    public void TwoCellAnchoredChart_UsesVisibleAnchorEdgesInsteadOfImportedAnchorSpaceExtent()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var chart = CreateRedChart(sheetId, left: 0, top: 0, width: 500, height: 500);
+            chart.Anchor = new CellAddress(sheetId, 1, 1);
+            chart.AnchorOffsetX = 5;
+            chart.AnchorOffsetY = 6;
+            chart.AnchorEnd = new CellAddress(sheetId, 3, 3);
+            chart.AnchorEndOffsetX = 35;
+            chart.AnchorEndOffsetY = 24;
+
+            var grid = new GridView
+            {
+                Width = 320,
+                Height = 260,
+                ShowHeaders = false,
+                Viewport = new ViewportModel(
+                    [],
+                    [
+                        new RowMetric(1, 100, 0),
+                        new RowMetric(2, 100, 100),
+                        new RowMetric(3, 100, 200)
+                    ],
+                    [
+                        new ColMetric(1, 100, 0),
+                        new ColMetric(2, 100, 100),
+                        new ColMetric(3, 100, 200)
+                    ]),
+                Charts = [chart],
+                SelectedObjectId = chart.Id,
+                SelectedObjectKind = ObjectKind.Chart,
+                SheetColumnWidths = new Dictionary<uint, double>
+                {
+                    [1] = 95d / 7d,
+                    [2] = 95d / 7d,
+                    [3] = 95d / 7d
+                },
+                SheetRowHeights = new Dictionary<uint, double>
+                {
+                    [1] = 100,
+                    [2] = 100,
+                    [3] = 100
+                }
+            };
+
+            GridViewTestHelpers.GetSelectedObjectRect(grid)
+                .Should().Be(new Rect(5, 6, 230, 218),
+                    "the two visible source anchor markers define the chart's exact grid-space bounds");
+        });
+    }
+
+    [Fact]
+    public void TwoCellAnchoredChart_WithStartMarkerScrolledAway_UsesGridSpaceExtentFromEndMarker()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var chart = CreateRedChart(sheetId, left: 0, top: 0, width: 500, height: 500);
+            chart.Anchor = new CellAddress(sheetId, 1, 1);
+            chart.AnchorOffsetX = 5;
+            chart.AnchorOffsetY = 6;
+            chart.AnchorEnd = new CellAddress(sheetId, 3, 3);
+            chart.AnchorEndOffsetX = 35;
+            chart.AnchorEndOffsetY = 24;
+
+            var grid = new GridView
+            {
+                Width = 320,
+                Height = 260,
+                ShowHeaders = false,
+                Viewport = new ViewportModel(
+                    [],
+                    [new RowMetric(3, 100, 0)],
+                    [new ColMetric(3, 100, 0)]),
+                Charts = [chart],
+                SelectedObjectId = chart.Id,
+                SelectedObjectKind = ObjectKind.Chart,
+                SheetColumnWidths = new Dictionary<uint, double>
+                {
+                    [1] = 95d / 7d,
+                    [2] = 95d / 7d,
+                    [3] = 95d / 7d
+                },
+                SheetRowHeights = new Dictionary<uint, double>
+                {
+                    [1] = 100,
+                    [2] = 100,
+                    [3] = 100
+                }
+            };
+
+            GridViewTestHelpers.GetSelectedObjectRect(grid)
+                .Should().Be(new Rect(-195, -194, 230, 218),
+                    "the visible end marker must recover the same chart bounds after the start marker scrolls offscreen");
+        });
+    }
+
+    [Fact]
     public void ChartMoveCommit_RaisesFinalBoundsWithoutMutatingModel()
     {
         WpfTestThread.Run(() =>
