@@ -340,7 +340,15 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
             }
             catch
             {
-                editor.Commands.AbortUndoGroup();
+                // r177: ROLL BACK, do not merely abort. AbortUndoGroup discards the group without
+                // reverting anything already applied (its own doc comment says so and tells the
+                // caller to handle cleanup -- nothing here did). Because notifyOnEachExecute is true
+                // above, every replacement before the failing one is already written and on screen;
+                // abandoning the group left them permanently in the document AND absent from the
+                // undo stack, so Ctrl+Z skipped straight past them and the user had no way back.
+                // Replace All is one operation to the user: if it cannot finish, it must leave the
+                // document as it found it.
+                editor.Commands.RollbackUndoGroup();
                 throw;
             }
 

@@ -415,7 +415,8 @@ public static class FindReplaceDialogPlanner
         FindReplaceSearchOptions options,
         int fromBlock,
         int fromOffset,
-        (int Row, int Col, int ParagraphIndex, int Offset)? fromTableCell = null)
+        (int Row, int Col, int ParagraphIndex, int Offset)? fromTableCell = null,
+        (bool IsFooter, int ParagraphIndex, int Offset)? resumeHeaderFooterFrom = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         if (string.IsNullOrEmpty(term) || document.Blocks.Count == 0)
@@ -473,7 +474,7 @@ public static class FindReplaceDialogPlanner
         // reported "not found" even though CountMatches/DocumentContains (fixed for headers/footers by an
         // earlier round, see the TextDocumentStoryTraversal.HeadersFooters walk in CountMatches below) had
         // already proven it was there. See FindInDefaultHeaderFooter's remarks for this fallback's scope.
-        return FindInDefaultHeaderFooter(document, term, options);
+        return FindInDefaultHeaderFooter(document, term, options, resumeHeaderFooterFrom);
     }
 
     /// <summary>
@@ -491,20 +492,74 @@ public static class FindReplaceDialogPlanner
     /// how Replace All -- which just keeps calling Find Next until a call returns null -- still terminates:
     /// each replacement removes that occurrence, so the next call finds the next one or nothing).
     /// </summary>
+    /// <summary>
+    /// Header/footer-only Find Next, for callers that have already exhausted the body story.
+    /// <see cref="FindNextMatch"/> reaches the header/footer only when the body yields NO match
+    /// at all, because the body walk wraps and reports its own first match again. Replace All has
+    /// to be able to say "the body is finished, continue into the header and footer" explicitly --
+    /// without this, a document whose body contained the search term had its header and footer
+    /// occurrences silently skipped, and the count reported to the user was short by that many.
+    /// </summary>
+    public static FindReplaceMatch? FindNextHeaderFooterMatch(
+        TextDocument document,
+        string? term,
+        FindReplaceSearchOptions options,
+        (bool IsFooter, int ParagraphIndex, int Offset)? resumeFrom = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        if (string.IsNullOrEmpty(term))
+            return null;
+        return FindInDefaultHeaderFooter(document, term, NormalizeOptions(options), resumeFrom);
+    }
+
     private static FindReplaceMatch? FindInDefaultHeaderFooter(
-        TextDocument document, string term, FindReplaceSearchOptions options) =>
-        FindInHeaderFooterSlot(document.Header, isFooter: false, term, options)
-        ?? FindInHeaderFooterSlot(document.Footer, isFooter: true, term, options);
+        TextDocument document,
+        string term,
+        FindReplaceSearchOptions options,
+        (bool IsFooter, int ParagraphIndex, int Offset)? resumeFrom = null)
+    {
+        // r177: when a resume point is supplied, the slot it names is searched from that offset
+        // and the OTHER slot is still searched in full. Without this the header could never be
+        // passed: Replace All rescanned it from offset 0 every call, so a replacement that
+        // re-created the search term (Confidential -> Strictly Confidential) either looped or,
+        // with r176 guard in place, ended the whole operation and silently left the FOOTER
+        // unreplaced. A resume point is what the header/footer walk was missing all along.
+        // The walk is strictly header-then-footer, so a resume point that names the FOOTER also
+        // means the header is finished. Searching it again from offset 0 would re-find the
+        // replacement text this Replace All just wrote there and loop forever -- which is exactly
+        // what happened when this only applied the resume to the slot it named.
+        if (resumeFrom is not { IsFooter: true })
+        {
+            var header = resumeFrom is { IsFooter: false } h
+                ? FindInHeaderFooterSlot(document.Header, false, term, options, h.ParagraphIndex, h.Offset)
+                : FindInHeaderFooterSlot(document.Header, false, term, options);
+            if (header is not null)
+                return header;
+        }
+
+        return resumeFrom is { IsFooter: true } f
+            ? FindInHeaderFooterSlot(document.Footer, true, term, options, f.ParagraphIndex, f.Offset)
+            : FindInHeaderFooterSlot(document.Footer, true, term, options);
+    }
 
     private static FindReplaceMatch? FindInHeaderFooterSlot(
-        HeaderFooter? headerFooter, bool isFooter, string term, FindReplaceSearchOptions options)
+        HeaderFooter? headerFooter,
+        bool isFooter,
+        string term,
+        FindReplaceSearchOptions options,
+        int fromParagraphIndex = 0,
+        int fromOffset = 0)
     {
         if (headerFooter is null)
             return null;
 
-        for (var paraIdx = 0; paraIdx < headerFooter.Paragraphs.Count; paraIdx++)
+        for (var paraIdx = Math.Max(0, fromParagraphIndex); paraIdx < headerFooter.Paragraphs.Count; paraIdx++)
         {
-            var match = FindAll(headerFooter.Paragraphs[paraIdx].PlainText, term, options).FirstOrDefault();
+            // Only the paragraph the resume point names starts partway in; every later paragraph
+            // in the slot is searched from its beginning, as it has not been visited yet.
+            var minOffset = paraIdx == fromParagraphIndex ? Math.Max(0, fromOffset) : 0;
+            var match = FindAll(headerFooter.Paragraphs[paraIdx].PlainText, term, options)
+                .FirstOrDefault(candidate => candidate.Start >= minOffset);
             if (match.Length > 0)
                 return new FindReplaceMatch(-1, match.Start, match.Length,
                     HeaderFooterIsFooter: isFooter, HeaderFooterParagraphIndex: paraIdx);
