@@ -187,13 +187,19 @@ public sealed class StatusBarLayoutTests
     }
 
     [Fact]
-    public void F6StatusBarFocus_StartsAtZoomOutAndTabsThroughFooterControls()
+    public void F6StatusBarFocus_EntersCellModeThenTabStartsAtZoomOut()
     {
         StaTestRunner.Run(() =>
         {
             using var harness = MainWindowHarness.Create();
 
-            harness.CycleShellFocus(reverse: true);
+            harness.CycleShellFocus(reverse: false);
+            harness.CycleShellFocus(reverse: false);
+            harness.CycleShellFocus(reverse: false);
+
+            harness.FocusedElementName.Should().Be("StatusModeFocusTarget");
+
+            harness.HandleFocusedStatusBarTab().Should().BeTrue();
 
             harness.FocusedElementName.Should().Be("StatusZoomOutButton");
 
@@ -210,7 +216,10 @@ public sealed class StatusBarLayoutTests
         {
             using var harness = MainWindowHarness.Create();
 
-            harness.CycleShellFocus(reverse: true);
+            harness.CycleShellFocus(reverse: false);
+            harness.CycleShellFocus(reverse: false);
+            harness.CycleShellFocus(reverse: false);
+            harness.HandleFocusedStatusBarTab().Should().BeTrue();
             harness.FocusedElementName.Should().Be("StatusZoomOutButton");
 
             harness.HandleFocusedStatusBarTab().Should().BeTrue();
@@ -234,7 +243,10 @@ public sealed class StatusBarLayoutTests
         {
             using var harness = MainWindowHarness.Create();
 
-            harness.CycleShellFocus(reverse: true);
+            harness.CycleShellFocus(reverse: false);
+            harness.CycleShellFocus(reverse: false);
+            harness.CycleShellFocus(reverse: false);
+            harness.HandleFocusedStatusBarTab().Should().BeTrue();
             harness.FocusedElementName.Should().Be("StatusZoomOutButton");
 
             harness.HandleFocusedStatusBarTab().Should().BeTrue();
@@ -267,7 +279,10 @@ public sealed class StatusBarLayoutTests
         {
             using var harness = MainWindowHarness.Create();
 
-            harness.CycleShellFocus(reverse: true);
+            harness.CycleShellFocus(reverse: false);
+            harness.CycleShellFocus(reverse: false);
+            harness.CycleShellFocus(reverse: false);
+            harness.HandleFocusedStatusBarTab().Should().BeTrue();
             harness.FocusedElementName.Should().Be("StatusZoomOutButton");
 
             harness.HandleFocusedStatusBarKey(Key.Escape).Should().BeTrue();
