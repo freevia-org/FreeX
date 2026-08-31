@@ -193,7 +193,10 @@ public sealed class InCanvasTableCellEditor
         if (cell is null) return;
 
         // Rebuild the full rich TextBody from the FlowDocument.
-        var newBody = TextBodyFlowDocumentConverter.FromFlowDocument(doc, cell.TextBody);
+        var newBody = TextBodyFlowDocumentConverter.FromFlowDocument(
+            doc,
+            cell.TextBody,
+            CurrentSlideIds());
         var decision = editSession?.Commit(newBody)
             ?? new InCanvasTextEditDecision(InCanvasTextEditOutcome.Unchanged, null);
 
@@ -459,7 +462,10 @@ public sealed class InCanvasTableCellEditor
         if (!IsCellRichEditActive || _cellTextBox is null || TryGetCurrentCellTextBody() is not { } baseBody)
             return false;
 
-        var current = TextBodyFlowDocumentConverter.FromFlowDocument(_cellTextBox.Document, baseBody);
+        var current = TextBodyFlowDocumentConverter.FromFlowDocument(
+            _cellTextBox.Document,
+            baseBody,
+            CurrentSlideIds());
         (int Start, int End)? selection = CurrentLogicalSelection();
         var updated = mutate(current, selection);
         int start = selection?.Start ?? 0;
