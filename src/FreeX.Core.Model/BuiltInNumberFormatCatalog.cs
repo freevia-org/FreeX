@@ -21,7 +21,11 @@ public static class BuiltInNumberFormatCatalog
         new(11, "0.00E+00"),
         new(12, "# ?/?"),
         new(13, "# ??/??"),
-        new(14, "m/d/yy"),
+        // Built-in format 14 is locale-sensitive in Excel. The Windows Excel baseline renders
+        // its Short Date with a four-digit year (for example, 7/8/2026), so keep FreeX's
+        // portable representation aligned with the rendered value rather than the legacy
+        // two-digit placeholder listed in older OOXML references.
+        new(14, "m/d/yyyy"),
         new(15, "d-mmm-yy"),
         new(16, "d-mmm"),
         new(17, "mmm-yy"),

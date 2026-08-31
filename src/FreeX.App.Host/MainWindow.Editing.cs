@@ -107,6 +107,7 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         var cell = sheet?.GetCell(addr);
         var text = FormatFormulaBarText(SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, cell, addr), addr);
+        UpdateFormulaEditNameBoxText(addr, text);
         _formulaEditCell = addr;
         // freex-cell-editing-modes-F2: remembers what this edit's target address displayed at
         // the moment editing began, so a sibling "New Window" view's RefreshFromSharedWorkbook
@@ -708,6 +709,13 @@ public partial class MainWindow
         {
             _syncingFormulaEditorText = false;
         }
+    }
+
+    private void UpdateFormulaEditNameBoxText(CellAddress address, string formulaText)
+    {
+        var nameBoxText = FormulaSignatureHelpPlanner.ResolveLeadingFunctionName(formulaText)
+            ?? FormatNameBoxSelectionText(new GridRange(address, address));
+        SetCellAddressBoxSelectionText(nameBoxText);
     }
 
     private void SyncInlineEditorTextFromFormulaBar()

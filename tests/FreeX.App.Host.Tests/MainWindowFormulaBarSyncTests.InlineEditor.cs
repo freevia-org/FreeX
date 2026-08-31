@@ -17,6 +17,25 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class MainWindowFormulaBarSyncTests
 {
     [Fact]
+    public void InlineEditor_FormulaFunctionEdit_ShowsFunctionNameInNameBoxAndRestoresAddressAfterCancel()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellFormula(2, 2, "SUM(1,2,3)");
+            harness.SelectActiveCell(2, 2);
+            harness.ShowInlineEditor(2, 2);
+
+            harness.CellAddressBoxText.Should().Be("SUM");
+
+            harness.ClickFormulaBarCancelButton();
+
+            harness.CellAddressBoxText.Should().Be("B2");
+        });
+    }
+
+    [Fact]
     public void InlineEditorTextChange_RefreshesFormulaBar()
     {
         StaTestRunner.Run(() =>

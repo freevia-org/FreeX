@@ -32,6 +32,35 @@ public sealed record FormulaSignatureHelpInfo(
 public static class FormulaSignatureHelpPlanner
 {
     /// <summary>
+    /// Returns the leading function name of a formula, when the formula begins with a function
+    /// call. Excel puts this identifier in the Name Box while editing a formula such as
+    /// <c>=SUM(1,2,3)</c>, even when the caret is after the closing parenthesis (where signature
+    /// help quite correctly no longer applies).
+    /// </summary>
+    public static string? ResolveLeadingFunctionName(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        var span = text.AsSpan().TrimStart();
+        if (span.IsEmpty || span[0] != '=')
+            return null;
+
+        span = span[1..].TrimStart();
+        var nameLength = 0;
+        while (nameLength < span.Length && IsFunctionNameChar(span[nameLength]))
+            nameLength++;
+
+        if (nameLength == 0)
+            return null;
+
+        var remaining = span[nameLength..].TrimStart();
+        return !remaining.IsEmpty && remaining[0] == '('
+            ? span[..nameLength].ToString().ToUpperInvariant()
+            : null;
+    }
+
+    /// <summary>
     /// Resolves the signature-help info for the caret position, or null when the caret is not inside
     /// any function call's argument list (e.g. before the first "=", inside a plain grouping
     /// parenthesis with no preceding identifier, or past the call's closing parenthesis).

@@ -37,11 +37,13 @@ public partial class MainWindow
             _pendingEditBaselineText = FormatFormulaBarText(
                 SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, sheet?.GetCell(activeCell), activeCell),
                 activeCell);
+            UpdateFormulaEditNameBoxText(activeCell, _pendingEditBaselineText);
         }
     }
 
     private void ClearFormulaRangeEntryState()
     {
+        var formulaEditCell = _formulaEditCell;
         _formulaEditCell = null;
         _pendingEditBaselineText = null;
         FormulaReferenceEditingController.Reset(
@@ -59,6 +61,9 @@ public partial class MainWindow
         // in-cell editor open over a cell the user never asked to edit in-cell. Clearing it here
         // gives the suspended state a defined end everywhere an edit can end.
         _inlineEditorAnchorOffscreen = false;
+
+        if (formulaEditCell is { } address && SheetGrid.SelectedRange is { } range && range.Contains(address))
+            SetCellAddressBoxSelectionText(FormatNameBoxSelectionText(range));
     }
 
     private void ClearFormulaReferenceEntrySpan() =>

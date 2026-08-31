@@ -10,7 +10,7 @@ public sealed class BuiltInNumberFormatCatalogTests
     [InlineData(0, "General")]
     [InlineData(5, "$#,##0_);($#,##0)")]
     [InlineData(7, "$#,##0.00_);($#,##0.00)")]
-    [InlineData(14, "m/d/yy")]
+    [InlineData(14, "m/d/yyyy")]
     [InlineData(44, "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)")]
     public void TryResolveFormatCode_MapsBuiltInIds(int? numberFormatId, string expected)
     {
@@ -23,7 +23,7 @@ public sealed class BuiltInNumberFormatCatalogTests
     [Theory]
     [InlineData("General", null)]
     [InlineData("$#,##0.00_);($#,##0.00)", 7)]
-    [InlineData("m/d/yy", 14)]
+    [InlineData("m/d/yyyy", 14)]
     [InlineData("#,##0.0 \"kg\"", null)]
     public void ResolveNumberFormatIdForCode_MapsKnownBuiltInCodes(string formatCode, int? expected)
     {

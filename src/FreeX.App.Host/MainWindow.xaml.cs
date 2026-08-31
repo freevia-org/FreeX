@@ -524,6 +524,8 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
 
             SyncInlineEditorTextFromFormulaBar();
             UpdateFormulaRangeEntryStateAfterTextChanged(FormulaBar);
+            if (_formulaEditCell is { } formulaEditCell)
+                UpdateFormulaEditNameBoxText(formulaEditCell, FormulaBar.Text);
 
             var formulaBarHasFocus = ReferenceEquals(System.Windows.Input.Keyboard.FocusedElement, FormulaBar);
             if (!formulaBarHasFocus && _inlineEditor?.IsVisible != true)

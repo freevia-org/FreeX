@@ -10,6 +10,15 @@ namespace FreeX.App.Presentation.Tests.FormulaBar;
 /// </summary>
 public sealed class R91_FormulaSignatureHelpPlannerTests
 {
+    [Theory]
+    [InlineData("=SUM(1,2,3)", "SUM")]
+    [InlineData(" =_xlfn.XLOOKUP(A1,B:B,C:C)", "_XLFN.XLOOKUP")]
+    [InlineData("=A1+B1", null)]
+    public void ResolveLeadingFunctionName_UsesOnlyAFormulaLeadingCall(string formula, string? expected)
+    {
+        FormulaSignatureHelpPlanner.ResolveLeadingFunctionName(formula).Should().Be(expected);
+    }
+
     [Fact]
     public void Resolve_RightAfterOpeningParen_HighlightsFirstArgument()
     {
