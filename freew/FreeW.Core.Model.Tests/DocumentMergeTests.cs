@@ -431,6 +431,74 @@ public class DocumentMergeTests
     }
 
     [Fact]
+    public void Merge_ReplyAnchorTransfersAndRemapsItsTopLevelThread()
+    {
+        var source = new TextDocument();
+        var sourceParagraph = new Paragraph();
+        sourceParagraph.Runs.Add(new Run("Reply anchor") { CommentId = 1 });
+        sourceParagraph.Runs.Add(Run.CommentReference(1));
+        source.Blocks.Add(sourceParagraph);
+        var sourceComment = new Comment(0, "Source root");
+        sourceComment.AddReply(1, "Source reply");
+        source.Comments[0] = sourceComment;
+
+        var target = new TextDocument();
+        var targetComment = new Comment(0, "Target root");
+        targetComment.AddReply(1, "Target reply");
+        target.Comments[0] = targetComment;
+
+        var inserted = DocumentMerge.Merge(target, 0, source);
+
+        var runs = inserted.Single().Should().BeOfType<Paragraph>().Subject.Runs;
+        runs.Should().OnlyContain(run => run.CommentId == 3);
+        target.Comments[2].PlainText.Should().Be("Source root");
+        target.Comments[2].Replies.Single().Id.Should().Be(3);
+        target.Comments[2].Replies.Single().PlainText.Should().Be("Source reply");
+    }
+
+    [Fact]
+    public void Merge_DenseReplyAnchorsTransfersEveryThread()
+    {
+        const int count = 1_000;
+        var source = new TextDocument();
+        for (var index = 0; index < count; index++)
+        {
+            var rootId = index * 2;
+            var root = new Comment(rootId, "Root " + index);
+            root.AddReply(rootId + 1, "Reply " + index);
+            source.Comments[rootId] = root;
+
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.CommentReference(rootId + 1));
+            source.Blocks.Add(paragraph);
+        }
+
+        var target = new TextDocument();
+        var inserted = DocumentMerge.Merge(target, 0, source);
+
+        inserted.Should().HaveCount(count);
+        target.Comments.Should().HaveCount(count);
+        for (var index = 0; index < count; index++)
+        {
+            var rootId = index * 2;
+            target.Comments[rootId].Replies.Single().Id.Should().Be(rootId + 1);
+            ((Paragraph)inserted[index]).Runs.Single().CommentId.Should().Be(rootId + 1);
+        }
+    }
+
+    [Fact]
+    public void Merge_SourceGuardIndexesSourceCommentRootsOnce()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText("freew", "FreeW.Core.Model", "DocumentMerge.cs");
+
+        source.Should().Contain("var sourceCommentRootsById = BuildTopLevelCommentIndex(source);")
+            .And.Contain("sourceCommentRootsById[rootId] = root;")
+            .And.Contain("sourceCommentRootsById.TryAdd(node.Id, root);")
+            .And.Contain("sourceCommentRootsById.TryGetValue(commentId, out var topComment)")
+            .And.NotContain("source.Comments.Values.FirstOrDefault(candidate => candidate.ThreadInOrder().Any(node => node.Id == id))");
+    }
+
+    [Fact]
     public void Merge_TransfersAltChunkPackageGraph_WithCollisionSafeRelationshipRewrite()
     {
         const string altChunkRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/aFChunk";
