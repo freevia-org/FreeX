@@ -281,6 +281,23 @@ public sealed partial class OdsFileAdapter
             // OpenFormula edge cases (structured-table refs, defined names, etc.) that a bidirectional
             // bracket conversion cannot represent faithfully. Read prefers this hint.
             cellElement.SetAttributeValue(TableNs + "freex-a1-formula", body);
+
+            // r176: a declared array (Ctrl+Shift+Enter, or an ODF matrix this adapter loaded) carries its
+            // extent in LegacyArrayRows/Cols. Emit ODF's matrix attributes so it survives the round trip
+            // -- without them the reader sees a plain formula on the anchor plus loose cached values, and
+            // the array silently degrades to an implicit-intersection formula on the next open, which is
+            // exactly the load-side bug fixed alongside this. Emitted for a 1x1 declared matrix too: that
+            // is a genuine single-cell CSE array, and dropping the attributes would lose the distinction
+            // between it and an ordinary formula.
+            if (cell.LegacyArrayRows > 0 && cell.LegacyArrayCols > 0)
+            {
+                cellElement.SetAttributeValue(
+                    TableNs + "number-matrix-rows-spanned",
+                    cell.LegacyArrayRows.ToString(CultureInfo.InvariantCulture));
+                cellElement.SetAttributeValue(
+                    TableNs + "number-matrix-columns-spanned",
+                    cell.LegacyArrayCols.ToString(CultureInfo.InvariantCulture));
+            }
         }
 
         WriteCellValue(cellElement, cell.Value, styleId, workbook);

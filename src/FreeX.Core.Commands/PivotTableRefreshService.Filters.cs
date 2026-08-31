@@ -374,19 +374,42 @@ public static partial class PivotTableRefreshService
     /// whose culture isn't itself invariant (and the mismatch is equally possible after a save/
     /// reopen across differently-configured machines). Without this fallback, hasExplicitSelection
     /// is true but nothing matches, so the field's filter empties every row (see H-shared-localization-rtl).
-    /// Scoped to field.Grouping == None (the case the "Select Items..."/slicer dialogs actually
-    /// list raw, ungrouped values for): Year/Quarter/Month/Day grouped keys are already
-    /// culture-invariant (see GroupKeyText), and NumberRange-grouped bucket labels are a
-    /// separate, not-yet-addressed instance of this same class of bug outside this finding's scope.
+    /// Year/Quarter/Month/Day grouped keys are already culture-invariant (see GroupKeyText), so they
+    /// need no fallback. NumberRange-grouped bucket labels DO (r176): their "0.5-1", "&gt;100", "&lt;0"
+    /// forms are built by string interpolation, which formats the bounds with
+    /// <see cref="CultureInfo.CurrentCulture"/> -- so the very same bucket is "0,5-1" on a de-DE machine
+    /// and "0.5-1" on en-US. A workbook whose checked-item captions were persisted under one culture
+    /// then matches nothing when reopened under another, which empties the field's filter exactly as in
+    /// the ungrouped case. r174 declared this instance out of its scope; it is fixed here.
     /// </summary>
     private static bool MatchesFieldKeyCandidate(string rowKey, ScalarValue value, PivotFieldModel field, string candidate)
     {
         if (string.Equals(rowKey, candidate, StringComparison.CurrentCultureIgnoreCase))
             return true;
 
-        return field.Grouping == PivotFieldGrouping.None &&
-            string.Equals(InvariantKeyText(value), candidate, StringComparison.OrdinalIgnoreCase);
+        return InvariantFieldKeyText(value, field) is { } invariant &&
+            string.Equals(invariant, candidate, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// The culture-INVARIANT spelling of this field's key for <paramref name="value"/>, or null when the
+    /// field's grouping already produces a culture-invariant key (Year/Quarter/Month/Day) and so has no
+    /// second spelling to try. Deliberately a MATCHING candidate only -- <see cref="GroupKeyText"/>'s
+    /// output is unchanged, because that string is also the row label the user sees, and a German user
+    /// should keep seeing the "0,5-1" bucket rather than have it silently switch to "0.5-1".
+    /// </summary>
+    private static string? InvariantFieldKeyText(ScalarValue value, PivotFieldModel field) =>
+        field.Grouping switch
+        {
+            PivotFieldGrouping.None => InvariantKeyText(value),
+            PivotFieldGrouping.NumberRange => NumberRangeKeyText(
+                value,
+                field.GroupStart ?? 0,
+                field.GroupEnd,
+                field.GroupInterval ?? 1,
+                CultureInfo.InvariantCulture),
+            _ => null
+        };
 
     private static string InvariantKeyText(ScalarValue value) =>
         value switch
@@ -416,7 +439,7 @@ public static partial class PivotTableRefreshService
             return KeyText(value);
 
         if (grouping == PivotFieldGrouping.NumberRange)
-            return NumberRangeKeyText(value, groupStart ?? 0, groupEnd, groupInterval ?? 1);
+            return NumberRangeKeyText(value, groupStart ?? 0, groupEnd, groupInterval ?? 1, CultureInfo.CurrentCulture);
 
         if (value is not DateTimeValue dateValue)
             return KeyText(value);
@@ -432,7 +455,19 @@ public static partial class PivotTableRefreshService
         };
     }
 
-    private static string NumberRangeKeyText(ScalarValue value, double start, double? end, double interval)
+    /// <summary>
+    /// The bucket label for <paramref name="value"/>. <paramref name="formatProvider"/> formats the
+    /// numeric bounds: CurrentCulture for the row label the user sees, InvariantCulture for the
+    /// cross-culture matching candidate (see <see cref="InvariantFieldKeyText"/>). It is explicit rather
+    /// than implicit because these labels are used BOTH as display text and as persisted filter keys,
+    /// and those two uses want different cultures.
+    /// </summary>
+    private static string NumberRangeKeyText(
+        ScalarValue value,
+        double start,
+        double? end,
+        double interval,
+        IFormatProvider formatProvider)
     {
         // Blank/non-numeric source values (e.g. an empty cell or text mixed into a
         // numeric column) don't belong to any numeric bucket - Excel puts them in a
@@ -450,7 +485,7 @@ public static partial class PivotTableRefreshService
         // overflow group labeled ">end", the same way Excel does. Guard end > start so a
         // misconfigured/legacy end value (<= start) doesn't collapse every bucket.
         if (end.HasValue && end.Value > start && number >= end.Value)
-            return $">{end.Value:0.########}";
+            return string.Create(formatProvider, $">{end.Value:0.########}");
 
         // Symmetric with the overflow bucket above: values below the "Starting at" bound
         // don't get their own interval-sized bucket extrapolated backwards past the
@@ -459,7 +494,7 @@ public static partial class PivotTableRefreshService
         // by extending the interval grid backwards, whose label described a range the
         // grid math places it in but that isn't the range Excel would show.
         if (number < start)
-            return $"<{start:0.########}";
+            return string.Create(formatProvider, $"<{start:0.########}");
 
         var bucketStart = start + Math.Floor((number - start) / interval) * interval;
 
@@ -470,7 +505,7 @@ public static partial class PivotTableRefreshService
         // understate the range, or even put the end before the start.
         var isIntegerInterval = interval == Math.Floor(interval);
         var bucketEnd = isIntegerInterval ? bucketStart + interval - 1 : bucketStart + interval;
-        return $"{bucketStart:0.########}-{bucketEnd:0.########}";
+        return string.Create(formatProvider, $"{bucketStart:0.########}-{bucketEnd:0.########}");
     }
 
     private static string KeyText(ScalarValue value) =>
