@@ -314,11 +314,16 @@ public sealed class DocumentTableEditingCoordinator
             var lastCell = CellIndexAtGridColumn(row, lastGridColumn);
             if (firstCell < 0 || lastCell < 0 || firstCell == lastCell)
                 return DocumentTableEditResult.NoChange(anchor);
-            _session.Commands.Execute(new MergeCellsHorizontalCommand(
-                anchor.BlockIndex,
-                firstRow,
-                firstCell,
-                lastCell));
+            // r180: carry the merged-away cells CONTENT onto the survivor first. The structural
+            // command removes those cells outright, which silently destroyed their text,
+            // formatting, hyperlinks and nested tables; Word stacks them as paragraphs instead.
+            DocumentUndoGroupExecutor.Execute(
+                _session.Commands,
+                [
+                    new CarryMergedCellContentCommand(anchor.BlockIndex, firstRow, firstCell, lastCell),
+                    new MergeCellsHorizontalCommand(anchor.BlockIndex, firstRow, firstCell, lastCell),
+                ],
+                "Merge Cells");
         }
         else if (firstGridColumn == lastGridColumn)
         {
@@ -344,6 +349,11 @@ public sealed class DocumentTableEditingCoordinator
                     return DocumentTableEditResult.NoChange(anchor);
                 if (firstCell != lastCell)
                 {
+                    commands.Add(new CarryMergedCellContentCommand(
+                        anchor.BlockIndex,
+                        r,
+                        firstCell,
+                        lastCell));
                     commands.Add(new MergeCellsHorizontalCommand(
                         anchor.BlockIndex,
                         r,
@@ -377,11 +387,16 @@ public sealed class DocumentTableEditingCoordinator
             return DocumentTableEditResult.NoChange(address);
         }
 
-        _session.Commands.Execute(new MergeCellsHorizontalCommand(
-            address.BlockIndex,
-            plan.RowIndex,
-            plan.FirstCellIndex,
-            plan.LastCellIndex));
+        // Erasing the border between two cells merges them, so it loses content the same way.
+        DocumentUndoGroupExecutor.Execute(
+            _session.Commands,
+            [
+                new CarryMergedCellContentCommand(
+                    address.BlockIndex, plan.RowIndex, plan.FirstCellIndex, plan.LastCellIndex),
+                new MergeCellsHorizontalCommand(
+                    address.BlockIndex, plan.RowIndex, plan.FirstCellIndex, plan.LastCellIndex),
+            ],
+            "Erase Border");
         return DocumentTableEditResult.Changed(address, invalidatesNativeSelection: true);
     }
 

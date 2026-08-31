@@ -814,6 +814,99 @@ public sealed class DeleteTableColumnCommand(int blockIndex, int columnIndex) : 
 /// cells' spans) and the absorbed cells are dropped from the row. The full original row is snapshotted
 /// so undo restores it exactly (cells, spans, and content). No-op if the run is empty or out of range.
 /// </summary>
+/// <summary>
+/// Moves the content of the cells about to be dropped by <see cref="MergeCellsHorizontalCommand"/>
+/// onto the cell that survives the merge.
+///
+/// r180: Merge Cells kept only the first cell's TableCell instance and removed the rest outright, so
+/// every other selected cell's text, per-run formatting, hyperlinks and nested tables were destroyed
+/// -- silently, and for a rectangular selection across every touched row. Word stacks the merged
+/// cells' content as consecutive paragraphs in the surviving cell instead; this restores that.
+///
+/// The structural command's own drop-the-cells contract is deliberately pinned by
+/// DocumentCommandBusTests.MergeCellsHorizontal_SetsGridSpan_DropsCells_AndReverts, so the content
+/// carry lives here as a separate command executed just before it, rather than changing that
+/// contract underneath its test.
+///
+/// Empty paragraphs are not carried across: a blank cell contributes nothing to read, and appending
+/// its placeholder paragraph would insert blank lines into the merged cell for every empty cell in
+/// the selection.
+/// </summary>
+public sealed class CarryMergedCellContentCommand(
+    int blockIndex,
+    int rowIndex,
+    int firstColumn,
+    int lastColumn) : IDocumentCommand
+{
+    private int _survivorColumn = -1;
+    private int _appendedParagraphs;
+    private int _appendedNestedTables;
+
+    public string Label => "Merge Cells";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
+            return;
+
+        var cells = table.Rows[rowIndex].Cells;
+        var first = Math.Clamp(Math.Min(firstColumn, lastColumn), 0, cells.Count - 1);
+        var last = Math.Clamp(Math.Max(firstColumn, lastColumn), 0, cells.Count - 1);
+        if (first >= last)
+            return;
+
+        _survivorColumn = first;
+        _appendedParagraphs = 0;
+        _appendedNestedTables = 0;
+        var survivor = cells[first];
+
+        for (var c = first + 1; c <= last; c++)
+        {
+            var source = cells[c];
+
+            foreach (var nested in source.NestedTables)
+            {
+                survivor.NestedTables.Add(nested);
+                _appendedNestedTables++;
+            }
+
+            foreach (var paragraph in source.Paragraphs)
+            {
+                if (paragraph.PlainText.Length == 0 && paragraph.Runs.Count == 0)
+                    continue;
+
+                survivor.Paragraphs.Add(paragraph);
+                _appendedParagraphs++;
+            }
+        }
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_survivorColumn < 0)
+            return;
+
+        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
+            return;
+
+        var cells = table.Rows[rowIndex].Cells;
+        if (_survivorColumn >= cells.Count)
+            return;
+
+        var survivor = cells[_survivorColumn];
+        for (var i = 0; i < _appendedParagraphs && survivor.Paragraphs.Count > 0; i++)
+            survivor.Paragraphs.RemoveAt(survivor.Paragraphs.Count - 1);
+        for (var i = 0; i < _appendedNestedTables && survivor.NestedTables.Count > 0; i++)
+            survivor.NestedTables.RemoveAt(survivor.NestedTables.Count - 1);
+
+        _appendedParagraphs = 0;
+        _appendedNestedTables = 0;
+        _survivorColumn = -1;
+    }
+}
+
 public sealed class MergeCellsHorizontalCommand(int blockIndex, int rowIndex, int firstColumn, int lastColumn) : IDocumentCommand
 {
     private TableCell[]? _removedRow;

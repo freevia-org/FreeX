@@ -18,6 +18,10 @@ public sealed partial class DocumentView
     internal void MoveCaretToBlockForTest(int modelBlockIndex, int offset) =>
         PlaceCaretAtModelTextOffset(modelBlockIndex, offset);
 
+    /// <summary>Drives the rich-content paste path (Ctrl+V / Keep Source Formatting).</summary>
+    internal bool PasteKeepSourceFormattingForTest(FreeW.Core.Model.TextDocument source) =>
+        PasteKeepSourceFormatting(source);
+
     internal void SetSelectionRangeForTest(int anchorBlock, int anchorOffset, int caretBlock, int caretOffset)
     {
         var anchor = TextPointerAtModelTextOffset(anchorBlock, anchorOffset);

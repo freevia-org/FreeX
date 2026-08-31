@@ -561,6 +561,60 @@ public sealed class DocumentTableEditingCoordinatorTests
         session.TableStylePreview.HasActivePreview.Should().BeFalse();
     }
 
+    /// <summary>
+    /// r180. Merge Cells kept only the first cell and removed the rest outright, destroying their
+    /// text, per-run formatting, hyperlinks and nested tables -- and for a rectangular selection, in
+    /// every touched row. Word stacks the merged cells' content as consecutive paragraphs instead.
+    /// The structural command's drop-the-cells contract is deliberately pinned by
+    /// DocumentCommandBusTests, so the content carry is a separate command in front of it.
+    /// </summary>
+    [Fact]
+    public void MergeCellsKeepsTheTextOfEveryMergedCellNotJustTheFirst()
+    {
+        var table = Table.Create(1, 3);
+        SetCellText(table, 0, 0, "alpha");
+        SetCellText(table, 0, 1, "beta");
+        SetCellText(table, 0, 2, "gamma");
+        var session = SessionWith(table);
+
+        session.Tables.MergeCells(
+                new DocumentTableCellAddress(0, 0, 0),
+                new DocumentTableCellAddress(0, 0, 2))
+            .Applied.Should().BeTrue();
+
+        var merged = table.Rows[0].Cells.Should().ContainSingle().Subject;
+        var text = string.Join("\n", merged.Paragraphs.Select(p => p.PlainText));
+        text.Should().Contain("alpha").And.Contain("beta").And.Contain("gamma",
+            "merging must stack the cells' content, not delete all but the first");
+    }
+
+    [Fact]
+    public void UndoingAMergeRemovesTheCarriedContentAgain()
+    {
+        var table = Table.Create(1, 2);
+        SetCellText(table, 0, 0, "alpha");
+        SetCellText(table, 0, 1, "beta");
+        var session = SessionWith(table);
+
+        session.Tables.MergeCells(
+            new DocumentTableCellAddress(0, 0, 0),
+            new DocumentTableCellAddress(0, 0, 1));
+        session.Commands.Undo().Should().BeTrue();
+
+        table.Rows[0].Cells.Should().HaveCount(2);
+        string.Join("\n", table.Rows[0].Cells[0].Paragraphs.Select(p => p.PlainText))
+            .Should().Be("alpha", "one undo must restore the split AND drop the carried copy of beta");
+        string.Join("\n", table.Rows[0].Cells[1].Paragraphs.Select(p => p.PlainText))
+            .Should().Be("beta");
+    }
+
+    private static void SetCellText(Table table, int row, int column, string text)
+    {
+        var cell = table.Rows[row].Cells[column];
+        cell.Paragraphs.Clear();
+        cell.Paragraphs.Add(new Paragraph(text));
+    }
+
     private static DocumentEditingSession SessionWith(Block block)
     {
         var document = new TextDocument();

@@ -2037,16 +2037,42 @@ public sealed partial class DocumentView : RichTextBox
         // Pasting over a selection replaces it, as in Word. The same predicate the Cut/Paste gate uses
         // decides whether that removal is allowed, so a locked content control in the range refuses the
         // paste rather than being deleted by it.
+        // r180: the selection removal must be a BUS edit, and must land in the same undo group as
+        // the insertion that follows it. It used to be a bare native TextRange.Text assignment
+        // followed by CommitToModel(), neither of which pushes anything onto the bus -- and the
+        // only command that did get pushed (ReplaceBlocksCommand, inside
+        // TryInsertDocumentAtBodyCaret) snapshots the paragraph AS IT FINDS IT, i.e. already
+        // shortened. So one Ctrl+Z after pasting over a selection removed the pasted content and
+        // left the replaced text permanently gone, with no further undo to recover it. Render()
+        // below reassigns Document and discards WPF-native undo, so the bus is the only way back.
+        var ownsPasteUndoGroup = false;
         if (!Selection.IsEmpty)
         {
             if (IsCaretOnLockedContentControl())
                 return false;
+
+            CommitToModel();
+            var beforeDelete = _model.Blocks.ToList();
             Selection.Text = string.Empty;
+            CommitToModel();
+            var afterDelete = _model.Blocks.ToList();
+
+            ownsPasteUndoGroup = !_commands.IsUndoGroupOpen;
+            if (ownsPasteUndoGroup)
+                _commands.BeginUndoGroup();
+            _commands.Execute(new ReplaceAllBlocksCommand(beforeDelete, afterDelete, "Paste"));
+        }
+        else
+        {
+            CommitToModel();
         }
 
-        CommitToModel();
         if (!TryGetCurrentBodyTextRange(out var range) || !range.IsCollapsed)
+        {
+            if (ownsPasteUndoGroup)
+                _commands.RollbackUndoGroup();
             return false;
+        }
 
         if (!_editingSession.TryInsertDocumentAtBodyCaret(
                 range.Normalize().Start,
@@ -2054,8 +2080,14 @@ public sealed partial class DocumentView : RichTextBox
                 out var insertion,
                 TrackChangesEnabled))
         {
+            // Roll back, do not abandon: the deletion above is already applied.
+            if (ownsPasteUndoGroup)
+                _commands.RollbackUndoGroup();
             return false;
         }
+
+        if (ownsPasteUndoGroup)
+            _commands.CommitUndoGroup("Paste");
 
         Render();
         PlaceCaretAtModelTextOffset(insertion.Caret.BlockIndex, insertion.Caret.Offset);
@@ -17502,6 +17534,13 @@ public sealed partial class DocumentView : RichTextBox
 
     /// <summary>The default revision author stamped on tracked changes this editor records.</summary>
     public string RevisionAuthor { get; set; } = "FreeW User";
+
+    /// <summary>
+    /// The w:date value a tracked edit made right now should carry, from the same session clock the
+    /// body edits use. r180: exposed so Find &amp; Replace can record header/footer replacements as
+    /// revisions instead of rewriting that text untracked.
+    /// </summary>
+    public string? RevisionDateXmlForEdit() => _editingSession.RevisionDateXmlForEdit();
 
     // ── Review > Tracking display controls ────────────────────────────────────────────────────────
     // These are view-only flags: they affect how the document renders but never touch the model.

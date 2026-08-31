@@ -80,4 +80,46 @@ public sealed class Round177_AnimationTimingCultureTests
             CultureInfo.CurrentCulture = original;
         }
     }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("fr-FR")]
+    [InlineData("en-US")]
+    public void WhatFormatEasingWrites_IsAlwaysReadableByTryParseEasing(string cultureName)
+    {
+        // r180: the Smooth Start/End field is the sibling of the Duration/Delay fields above -- same
+        // format-current / parse-invariant asymmetry, so on a comma-decimal locale the pane displayed
+        // "12,345%" and then reported its own output invalid when the user tabbed away.
+        var original = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(cultureName);
+
+            var displayed = AnimationPanePlanner.FormatEasing(12345);
+            AnimationPanePlanner.TryParseEasing(displayed, out var value)
+                .Should().BeTrue($"the pane shows \"{displayed}\" in {cultureName} and must read it back");
+            value.Should().Be(12345);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
+    }
+
+    [Fact]
+    public void AnInvariantFormEasingValue_IsStillAccepted_OnACommaDecimalCulture()
+    {
+        var original = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+
+            AnimationPanePlanner.TryParseEasing("12.345%", out var value).Should().BeTrue();
+            value.Should().Be(12345);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
+    }
 }

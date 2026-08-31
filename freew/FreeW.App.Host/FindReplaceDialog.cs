@@ -423,14 +423,55 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
                 var length = match.Length;
                 var replacement = request.Replacement;
 
+                // Decide BEFORE executing whether the splice is safe, so a match that overlaps a
+                // field or an image pushes no undo entry at all. Skipping it is the conservative
+                // answer: the alternative is rewriting the cached text of a PAGE field as if the
+                // user had typed it.
+                var slotRegion = isFooter ? editor.Model.Footer : editor.Model.Header;
+                var target = slotRegion is not null && paragraphIndex < slotRegion.Paragraphs.Count
+                    ? slotRegion.Paragraphs[paragraphIndex]
+                    : null;
+                if (target is null || !CanReplaceRunTextRange(target, start, length))
+                {
+                    // Step over this occurrence and keep going, or the next search re-finds it.
+                    resume = (isFooter, paragraphIndex, start + Math.Max(1, length));
+                    continue;
+                }
+
+                // r180: record the edit as a REVISION when Track Changes is on, exactly as the body
+                // loop does (editor.InsertText routes through the tracked path). Rewriting header
+                // text untracked while the identical replacement in the body is tracked would hide
+                // the change from the reviewer it was turned on for.
+                var tracked = editor.TrackChangesEnabled;
+                var resumeOffset = start + replacement.Length;
+
                 editor.Commands.Execute(new FreeW.Core.Model.EditHeaderFooterParagraphCommand(
                     sectionIndex: -1,
                     useFinalSectionStore: true,
                     slot: isFooter ? 1 : 0,
                     paragraphIndex: paragraphIndex,
-                    rebuild: (FreeW.Core.Model.Paragraph paragraph) => ReplaceRunTextRange(paragraph, start, length, replacement)));
+                    rebuild: (FreeW.Core.Model.Paragraph paragraph) =>
+                    {
+                        if (!tracked)
+                        {
+                            TryReplaceRunTextRange(paragraph, start, length, replacement);
+                            return;
+                        }
 
-                resume = (isFooter, paragraphIndex, start + replacement.Length);
+                        var author = editor.RevisionAuthor;
+                        var dateXml = editor.RevisionDateXmlForEdit();
+                        var deleted = RevisionEditPlanner.DeleteRangeAsRevision(
+                            paragraph, start, start + length, author, dateXml);
+                        var formatting = RevisionEditPlanner.FormattingAtOffset(paragraph, deleted.CaretOffset);
+                        var afterInsert = RevisionEditPlanner.InsertTrackedText(
+                            paragraph, deleted.CaretOffset, replacement, formatting, author, dateXml);
+
+                        // The struck-through original stays in the paragraph, so the next search has
+                        // to start past it too or it re-finds the text it just marked deleted.
+                        resumeOffset = afterInsert + (deleted.KeptDeletedText ? length : 0);
+                    }));
+
+                resume = (isFooter, paragraphIndex, resumeOffset);
                 count++;
             }
 
@@ -438,47 +479,137 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
         }
 
         /// <summary>
-        /// Rewrites <paramref name="length"/> characters of <paramref name="paragraph"/> starting at
-        /// <paramref name="start"/> (plain-text offsets, as the planner reports them) with
-        /// <paramref name="replacement"/>, preserving the formatting of the run the match starts in.
+        /// True when <paramref name="run"/> carries content that is not plain text -- a field, an
+        /// image, an equation, a shape, a chart, an embedded object, SmartArt, a content control, a
+        /// ruby annotation or a sub-document reference. Such a run must never have its text rewritten
+        /// by Find &amp; Replace: a PAGE field's Text is a cached rendering, not something the user
+        /// typed, and an image run's Text is empty and contributes nothing to the match in the first
+        /// place.
         /// </summary>
-        private static void ReplaceRunTextRange(
+        private static bool CarriesNonTextContent(FreeW.Core.Model.Run run) =>
+            run.FieldKind != RunFieldKind.None
+            || run.ComplexField is not null
+            || run.TableFormula is not null
+            || run.CrossReference is not null
+            || run.Image is not null
+            || run.Equation is not null
+            || run.Shape is not null
+            || run.WordArt is not null
+            || run.Chart is not null
+            || run.EmbeddedObject is not null
+            || run.SmartArt is not null
+            || run.PreservedDrawing is not null
+            || run.DrawingGroup is not null
+            || run.Control is not null
+            || run.Ruby is not null
+            || run.SubDocument is not null;
+
+        /// <summary>
+        /// Replaces the plain-text span [<paramref name="start"/>, start + <paramref name="length"/>)
+        /// of <paramref name="paragraph"/> with <paramref name="replacement"/>, touching ONLY the runs
+        /// that span actually covers and leaving every other run in the paragraph exactly as it was.
+        /// Returns false without modifying anything when the span overlaps a run carrying non-text
+        /// content, so the caller can skip that match rather than corrupt it.
+        ///
+        /// r180: this used to concatenate the paragraph's text, splice, and write back a SINGLE run
+        /// built from the matched run's formatting -- `Runs.Clear(); Runs.Add(one)`. That destroyed
+        /// every other run in the paragraph. The common casualty is the ordinary Word footer
+        /// "Page {PAGE} of {NUMPAGES}": replacing any text in that footer froze the page numbers into
+        /// literal text. Mixed formatting, hyperlinks and images went the same way, and none of it was
+        /// anywhere near the match. Six review lenses reported it independently.
+        ///
+        /// The runs are mutated IN PLACE rather than rebuilt, so formatting, hyperlink target,
+        /// revision marks and every other run property survive without this method having to know
+        /// they exist -- which is what made the rebuild lossy in the first place.
+        /// </summary>
+        /// <summary>
+        /// Whether <see cref="TryReplaceRunTextRange"/> would apply, without changing anything.
+        /// </summary>
+        private static bool CanReplaceRunTextRange(
+            FreeW.Core.Model.Paragraph paragraph,
+            int start,
+            int length)
+        {
+            if (start < 0 || length < 0)
+                return false;
+
+            var end = start + length;
+            var consumed = 0;
+            var covers = false;
+            foreach (var run in paragraph.Runs)
+            {
+                var runLength = run.Text.Length;
+                if (Math.Min(end, consumed + runLength) > Math.Max(start, consumed))
+                {
+                    if (CarriesNonTextContent(run))
+                        return false;
+                    covers = true;
+                }
+
+                consumed += runLength;
+            }
+
+            return covers && end <= consumed;
+        }
+
+        private static bool TryReplaceRunTextRange(
             FreeW.Core.Model.Paragraph paragraph,
             int start,
             int length,
             string replacement)
         {
-            var text = string.Concat(paragraph.Runs.Select(run => run.Text));
-            if (start < 0 || start > text.Length)
-                return;
+            if (start < 0 || length < 0)
+                return false;
 
-            var end = Math.Min(text.Length, start + length);
-            var rebuilt = string.Concat(text[..start], replacement, text[end..]);
-
-            // Keep the formatting of the run the match began in -- the same choice the Avalonia side
-            // makes when a replacement collapses several runs into one.
-            var template = RunAtOffset(paragraph, start) ?? paragraph.Runs.FirstOrDefault();
-            var carried = template is null ? new FreeW.Core.Model.Run(rebuilt) : CloneRunWithText(template, rebuilt);
-
-            paragraph.Runs.Clear();
-            paragraph.Runs.Add(carried);
-        }
-
-        private static FreeW.Core.Model.Run? RunAtOffset(FreeW.Core.Model.Paragraph paragraph, int offset)
-        {
+            var end = start + length;
+            var covered = new List<(FreeW.Core.Model.Run Run, int Start, int Length)>();
             var consumed = 0;
+
             foreach (var run in paragraph.Runs)
             {
-                if (offset < consumed + run.Text.Length)
-                    return run;
-                consumed += run.Text.Length;
+                var runLength = run.Text.Length;
+                var overlapStart = Math.Max(start, consumed);
+                var overlapEnd = Math.Min(end, consumed + runLength);
+                if (overlapEnd > overlapStart)
+                {
+                    if (CarriesNonTextContent(run))
+                        return false;
+
+                    covered.Add((run, overlapStart - consumed, overlapEnd - overlapStart));
+                }
+
+                consumed += runLength;
             }
 
-            return paragraph.Runs.LastOrDefault();
-        }
+            if (covered.Count == 0 || end > consumed)
+                return false;
 
-        private static FreeW.Core.Model.Run CloneRunWithText(FreeW.Core.Model.Run template, string text) =>
-            new(text, template.Formatting);
+            // The replacement text lands in the FIRST covered run, so it inherits that run's
+            // formatting -- the same choice Word makes. Later covered runs lose only the characters
+            // the match actually consumed.
+            for (var i = covered.Count - 1; i >= 1; i--)
+            {
+                var (run, runStart, runLength) = covered[i];
+                run.Text = string.Concat(run.Text[..runStart], run.Text[(runStart + runLength)..]);
+            }
+
+            var (first, firstStart, firstLength) = covered[0];
+            first.Text = string.Concat(
+                first.Text[..firstStart],
+                replacement,
+                first.Text[(firstStart + firstLength)..]);
+
+            // Drop runs the match emptied, but never one that carries content of its own -- an image
+            // or field run legitimately has empty text.
+            for (var i = paragraph.Runs.Count - 1; i >= 0; i--)
+            {
+                var run = paragraph.Runs[i];
+                if (run.Text.Length == 0 && !CarriesNonTextContent(run) && paragraph.Runs.Count > 1)
+                    paragraph.Runs.RemoveAt(i);
+            }
+
+            return true;
+        }
 
         private bool SelectFrom(TextPointer from, FindReplaceSearchRequest request)
         {
