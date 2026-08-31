@@ -1269,7 +1269,7 @@ public partial class MainWindow
     }
 
     private void SaveAsButton_Click(object sender, RoutedEventArgs e) =>
-        RunGuardedUiCommand("Backstage Save As", SaveAsFromBackstageAsync);
+        RunGuardedUiCommand("Save Workbook As", SaveAsFromBackstageAsync);
 
     private async Task SaveAsFromBackstageAsync()
     {
