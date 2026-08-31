@@ -347,7 +347,7 @@ public sealed partial class FindReplaceDialog : Window
     private void PickFormat(ref StyleDiff? target, params Button[] buttons)
     {
         var baseStyle = target?.ApplyTo(CellStyle.Default) ?? CellStyle.Default;
-        var dialog = new FormatCellsDialog(baseStyle, FormatCellsDialogTab.Font) { Owner = this };
+        var dialog = new FormatCellsDialog(baseStyle, _getWorkbook().Theme, FormatCellsDialogTab.Font) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.ResultDiff is null)
             return;
 

@@ -237,10 +237,22 @@ internal static class ExternalXamlClipboardWriter
         });
         if (paragraph.RightToLeft is { } rightToLeft)
             writer.WriteAttributeString("FlowDirection", rightToLeft ? "RightToLeft" : "LeftToRight");
-        if (paragraph.MarginLeftEmu is { } margin)
-            writer.WriteAttributeString("Margin", FormatDip(margin) + ",0,0,0");
+        // Margin/TextIndent are XAML device-independent pixels, not EMU — emitting the raw EMU
+        // made a 0.5" indent read back as 457200 DIP. Margin's top/bottom carry the paragraph
+        // spacing the reader already parses out of them (ApplyParagraphProperties), including
+        // percent-authored spacing resolved to points.
+        double spaceBeforeDip = ParagraphSpacingMetrics.ResolveSpaceBeforePoints(paragraph) / PointsPerDip;
+        double spaceAfterDip = ParagraphSpacingMetrics.ResolveSpaceAfterPoints(paragraph) / PointsPerDip;
+        double marginLeftDip = (paragraph.MarginLeftEmu ?? 0) / (double)EmuPerDip;
+        if (marginLeftDip != 0 || spaceBeforeDip != 0 || spaceAfterDip != 0)
+        {
+            writer.WriteAttributeString("Margin", string.Join(",", new[]
+            {
+                marginLeftDip, spaceBeforeDip, 0.0, spaceAfterDip
+            }.Select(FormatDip)));
+        }
         if (paragraph.IndentEmu is { } indent)
-            writer.WriteAttributeString("TextIndent", FormatDip(indent));
+            writer.WriteAttributeString("TextIndent", FormatDip(indent / (double)EmuPerDip));
 
         foreach (var run in runs)
             WriteRun(writer, run, images);
@@ -321,9 +333,9 @@ internal static class ExternalXamlClipboardWriter
         writer.WriteStartElement("InlineUIContainer", XamlNamespace);
         writer.WriteStartElement("Image", XamlNamespace);
         if (run.InlineImageWidthEmu is > 0 and var width)
-            writer.WriteAttributeString("Width", FormatDip(width / 9525.0));
+            writer.WriteAttributeString("Width", FormatDip(width / (double)EmuPerDip));
         if (run.InlineImageHeightEmu is > 0 and var height)
-            writer.WriteAttributeString("Height", FormatDip(height / 9525.0));
+            writer.WriteAttributeString("Height", FormatDip(height / (double)EmuPerDip));
         writer.WriteStartElement("Image.Source", XamlNamespace);
         writer.WriteStartElement("BitmapImage", XamlNamespace);
         writer.WriteAttributeString("UriSource", $"./{Path.GetFileName(packageImage.Path)}");
@@ -407,6 +419,9 @@ internal static class ExternalXamlClipboardWriter
     private static double ToDip(ShapeOutline? outline) => outline is ShapeOutline.Visible visible
         ? ToDip(visible.WidthPt)
         : 0;
+
+    private const long EmuPerDip = 9525;
+    private const double PointsPerDip = 0.75;
 
     private static string FormatDip(double value) =>
         value.ToString("0.###", CultureInfo.InvariantCulture);

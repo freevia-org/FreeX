@@ -866,20 +866,34 @@ public static partial class PrintRenderer
         WorkbookTheme theme)
     {
         if (!suppressTop)
-            DrawPrintedBorderEdge(dc, topBorder, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), blackAndWhite, theme);
+            DrawPrintedBorderEdge(dc, topBorder, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), theme, blackAndWhite);
         if (!suppressBottom)
-            DrawPrintedBorderEdge(dc, bottomBorder, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), blackAndWhite, theme);
+            DrawPrintedBorderEdge(dc, bottomBorder, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), theme, blackAndWhite);
         if (!suppressLeft)
-            DrawPrintedBorderEdge(dc, leftBorder, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), blackAndWhite, theme);
+            DrawPrintedBorderEdge(dc, leftBorder, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), theme, blackAndWhite);
         if (!suppressRight)
-            DrawPrintedBorderEdge(dc, rightBorder, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), blackAndWhite, theme);
+            DrawPrintedBorderEdge(dc, rightBorder, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), theme, blackAndWhite);
         if (drawDiagonal && style.BorderDiagonalDown.Style != BorderStyle.None)
-            DrawPrintedBorderEdge(dc, style.BorderDiagonalDown, new Point(rect.Left, rect.Top), new Point(rect.Left + diagonalWidth, rect.Top + diagonalHeight), blackAndWhite, theme);
+            DrawPrintedBorderEdge(dc, style.BorderDiagonalDown, new Point(rect.Left, rect.Top), new Point(rect.Left + diagonalWidth, rect.Top + diagonalHeight), theme, blackAndWhite);
         if (drawDiagonal && style.BorderDiagonalUp.Style != BorderStyle.None)
-            DrawPrintedBorderEdge(dc, style.BorderDiagonalUp, new Point(rect.Left, rect.Top + diagonalHeight), new Point(rect.Left + diagonalWidth, rect.Top), blackAndWhite, theme);
+            DrawPrintedBorderEdge(dc, style.BorderDiagonalUp, new Point(rect.Left, rect.Top + diagonalHeight), new Point(rect.Left + diagonalWidth, rect.Top), theme, blackAndWhite);
     }
 
-    private static void DrawPrintedBorderEdge(DrawingContext dc, CellBorder border, Point p1, Point p2, bool blackAndWhite, WorkbookTheme theme)
+    private static SolidColorBrush BrushForResolvedBorderColor(CellColor color)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
+        brush.Freeze();
+        return brush;
+    }
+
+    /// <summary>
+    /// freex-theme-border-color-F1: a theme-backed edge (CellBorder.ThemeColor, e.g. Accent1) must
+    /// re-resolve against the workbook's CURRENT theme, exactly like the fill/font colors this same
+    /// print pass already resolve (DrawPrintedCellFill / ResolvePrintedTextBrush). Reading border.Color
+    /// raw printed the color baked in at load time, so a theme change recolored every printed fill and
+    /// font but left the borders on the old palette.
+    /// </summary>
+    private static void DrawPrintedBorderEdge(DrawingContext dc, CellBorder border, Point p1, Point p2, WorkbookTheme theme, bool blackAndWhite = false)
     {
         if (border.Style == BorderStyle.None) return;
 
@@ -910,10 +924,9 @@ public static partial class PrintRenderer
         // ribbon's Theme Colors picker (which populates ThemeColor alongside a Color baked at load
         // time) prints in its CURRENT theme color instead of the stale color captured when the
         // file was loaded/authored.
-        var resolvedBorderColor = border.ResolveColor(theme);
         var borderBrush = blackAndWhite
             ? Brushes.Black
-            : new SolidColorBrush(Color.FromRgb(resolvedBorderColor.R, resolvedBorderColor.G, resolvedBorderColor.B));
+            : BrushForResolvedBorderColor(border.ResolveColor(theme));
         var pen = new Pen(borderBrush, thickness)
         {
             DashStyle = dash

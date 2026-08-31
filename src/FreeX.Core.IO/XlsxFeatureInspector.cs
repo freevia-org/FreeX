@@ -73,11 +73,80 @@ public static class XlsxFeatureInspector
 
         var features = archive.Entries
             .SelectMany(InspectEntry)
+            .Where(feature => feature.Kind != XlsxUnsupportedFeatureKind.LinkedDataTypes)
             .Distinct()
             .ToList();
 
-        return new XlsxFeatureReport(features);
+        // Rich-data is a container format, not a synonym for a Microsoft linked data type.  Excel
+        // uses it for formula-created local values too: notably dynamic-array results and images
+        // produced or propagated by a formula.  Those package graphs are preserved by the source
+        // patch writer, so warning just because xl/richData exists is both noisy and misleading.
+        // A service-linked entity is explicitly identified by its rich-value structure type.
+        if (HasLinkedDataTypes(archive))
+            features.Add(new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.LinkedDataTypes, "xl/richData"));
+
+        return new XlsxFeatureReport(features.Distinct().ToList());
     }
+
+    private static bool HasLinkedDataTypes(ZipArchive archive)
+    {
+        var richDataEntries = archive.Entries
+            .Where(entry => XlsxPackagePath.NormalizeEntryPath(entry)
+                .StartsWith("xl/richData/", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (richDataEntries.Count == 0)
+        {
+            // A dangling rich-data relationship still describes a linked-data package feature and
+            // remains worth disclosing.  The normal complete package path below is deliberately
+            // more precise because it can inspect the rich-value type.
+            return archive.Entries
+                .Where(entry => entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
+                .SelectMany(InspectRelationships)
+                .Contains(XlsxUnsupportedFeatureKind.LinkedDataTypes);
+        }
+
+        var structureEntries = richDataEntries
+            .Where(entry => string.Equals(
+                Path.GetFileName(XlsxPackagePath.NormalizeEntryPath(entry)),
+                "rdrichvaluestructure.xml",
+                StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        // A rich-value payload without its type table is not something this inspector can safely
+        // classify as a formula-created value, so retain the conservative disclosure.
+        if (structureEntries.Count == 0)
+            return true;
+
+        foreach (var structureEntry in structureEntries)
+        {
+            try
+            {
+                var document = XlsxPackageXmlEditor.LoadXml(structureEntry);
+                var structures = document
+                    .Descendants()
+                    .Where(element => string.Equals(element.Name.LocalName, "s", StringComparison.Ordinal));
+
+                foreach (var structure in structures)
+                {
+                    var type = structure.Attribute("t")?.Value;
+                    if (string.IsNullOrWhiteSpace(type) || !IsFormulaCreatedRichValueType(type))
+                        return true;
+                }
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsFormulaCreatedRichValueType(string type) =>
+        string.Equals(type, "_array", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(type, "_error", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(type, "_localImage", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(type, "_webImage", StringComparison.OrdinalIgnoreCase);
 
     private static IEnumerable<XlsxUnsupportedFeature> InspectEntry(ZipArchiveEntry entry)
     {

@@ -148,12 +148,12 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
         // Materialise the snapshot before the loop to avoid iterating while mutating _styleOnly.
         if (NeedsPreExistingStyleOnlyPass(_range, styleOnlyCreateZone))
         {
-            var preExistingStyleOnly = sheet.GetStyleOnlyEntries().ToList();
+            // The sheet can contain a very large compressed style-only layout outside this
+            // selection. Use the range-aware enumerator so those unrelated runs are skipped before
+            // cell expansion and are never copied into this mutation-safety snapshot.
+            var preExistingStyleOnly = sheet.GetStyleOnlyEntries(_range).ToList();
             foreach (var ((row, col), existingStyleId) in preExistingStyleOnly)
             {
-                if (row < _range.Start.Row || row > _range.End.Row) continue;
-                if (col < _range.Start.Col || col > _range.End.Col) continue;
-
                 // Skip anything already covered by Pass 2 to avoid duplicate snapshot entries.
                 if (styleOnlyCreateZone.HasValue)
                 {

@@ -40,7 +40,7 @@ public sealed class R74_PrintedSlantDashDotThicknessTests
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            method!.Invoke(null, [dc, border, p1, p2, false, WorkbookTheme.Office]);
+            method!.Invoke(null, [dc, border, p1, p2, WorkbookTheme.Office, false]);
         }
 
         var width = (int)(CanvasWidthDip * Scale);

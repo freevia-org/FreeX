@@ -110,6 +110,43 @@ public sealed partial class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void GetDirectDependents_CrossSheetLargeRangeUsesRegionOverlapWithoutPerCellAllocation()
+    {
+        const uint referencedRows = 100_000;
+        var wb = new Workbook("test");
+        var source = wb.AddSheet("Source");
+        var formulas = wb.AddSheet("Formulas");
+        var dependent = new CellAddress(formulas.Id, 1, 1);
+        formulas.SetCell(dependent, Cell.FromFormula($"SUM(Source!A1:A{referencedRows})"));
+
+        var target = new CellAddress(source.Id, referencedRows, 1);
+        FormulaAuditingService.GetDirectDependents(wb, target).Should().Equal(dependent);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var actual = FormulaAuditingService.GetDirectDependents(wb, target);
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        actual.Should().Equal(dependent);
+        allocatedBytes.Should().BeLessThan(
+            1_000_000,
+            "dependent matching should compare the referenced region directly instead of " +
+            "materializing every address in the 100,000-cell range");
+    }
+
+    [Fact]
+    public void GetDirectDependents_SourceGuardUsesPrecedentRegionsForFallbackMatching()
+    {
+        var source = ModelSourceTestSupport.ReadCommandsSource("FormulaAuditingService.cs");
+
+        source.Should().Contain(
+            "var precedentRegions = ExtractPrecedentRegions(workbook, sheet.Id, cell.FormulaText);");
+        source.Should().Contain("if (OverlapsAny(precedentRegions, precedentRange))");
+    }
+
+    [Fact]
     public void GetDependentTraceArrows_ReturnsMultiLevelFormulaChain()
     {
         var wb = new Workbook("test");

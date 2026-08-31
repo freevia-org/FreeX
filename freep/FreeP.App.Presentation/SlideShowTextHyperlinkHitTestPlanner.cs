@@ -107,7 +107,7 @@ public static class SlideShowTextHyperlinkHitTestPlanner
         foreach (var run in paragraph.Runs)
         {
             double fontSizeDip = Math.Max(1, (run.FontSizePt ?? 18.0) * DipPerPoint * fontScale);
-            double lineHeightDip = Math.Max(12, fontSizeDip * 1.2);
+            double lineHeightDip = Math.Max(12, fontSizeDip * ParagraphSpacingMetrics.LineHeightFactor);
             foreach (var character in run.Text ?? string.Empty)
             {
                 if (character is '\r' or '\n')
@@ -152,10 +152,13 @@ public static class SlideShowTextHyperlinkHitTestPlanner
         if (line.WidthDip > 0 || lines.Count == 0)
             FinishLine(lines, line);
 
+        double spacingBasisFontSizePt = ParagraphSpacingMetrics.MaxRunFontSizePoints(paragraph) * fontScale;
         return new ParagraphLines(
             lines,
-            PointsToDip(paragraph.SpaceBeforePt ?? 0),
-            PointsToDip(paragraph.SpaceAfterPt ?? 0),
+            // Percent spacing resolves against a single line's height at the autofit-scaled font
+            // size, matching how the renderer resolves it from already-scaled run sizes.
+            PointsToDip(ParagraphSpacingMetrics.ResolveSpaceBeforePoints(paragraph, spacingBasisFontSizePt)),
+            PointsToDip(ParagraphSpacingMetrics.ResolveSpaceAfterPoints(paragraph, spacingBasisFontSizePt)),
             paragraph.Align ?? TextAlign.Left);
     }
 

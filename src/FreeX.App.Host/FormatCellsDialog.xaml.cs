@@ -15,6 +15,7 @@ public partial class FormatCellsDialog : Window
     public bool? ResultMergeCells { get; private set; }
 
     private readonly CellStyle _current;
+    private readonly WorkbookTheme _theme;
     private readonly bool _initialMergeCells;
     private readonly string? _numberPreviewText;
     private bool _syncingNumberControls;
@@ -22,13 +23,23 @@ public partial class FormatCellsDialog : Window
     private CellBorder? _borderPresetOutline;
     private CellBorder? _borderPresetInside;
 
+    /// <param name="theme">
+    /// freex-theme-border-color-F1 (dialog sibling of the render/export sites): resolves
+    /// <paramref name="current"/>'s theme-backed borders (<see cref="CellBorder.ThemeColor"/>) so the
+    /// Border tab shows the color the grid is actually painting. Reading <see cref="CellBorder.Color"/>
+    /// raw showed the RGB baked in at load time, which disagrees with the grid after a theme swap.
+    /// Required (not defaulted) so a new call site cannot silently skip it; callers opening the dialog
+    /// on a synthetic border-free style pass <see cref="WorkbookTheme.Office"/>.
+    /// </param>
     public FormatCellsDialog(
         CellStyle current,
+        WorkbookTheme theme,
         FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number,
         bool mergeCells = false,
         string? numberPreviewText = null)
     {
         _current = current.Clone();
+        _theme = theme;
         _initialMergeCells = mergeCells;
         _numberPreviewText = string.IsNullOrWhiteSpace(numberPreviewText) ? null : numberPreviewText;
         InitializeComponent();
@@ -130,17 +141,17 @@ public partial class FormatCellsDialog : Window
         DlgIndentLevelBox.Text = s.IndentLevel.ToString();
         DlgTextRotationBox.Text = s.TextRotation.ToString();
 
-        PopulateBorder(DlgBorderTopStyleBox, DlgBorderTopColorBox, s.BorderTop);
-        PopulateBorder(DlgBorderRightStyleBox, DlgBorderRightColorBox, s.BorderRight);
-        PopulateBorder(DlgBorderBottomStyleBox, DlgBorderBottomColorBox, s.BorderBottom);
-        PopulateBorder(DlgBorderLeftStyleBox, DlgBorderLeftColorBox, s.BorderLeft);
+        PopulateBorder(DlgBorderTopStyleBox, DlgBorderTopColorBox, s.BorderTop, _theme);
+        PopulateBorder(DlgBorderRightStyleBox, DlgBorderRightColorBox, s.BorderRight, _theme);
+        PopulateBorder(DlgBorderBottomStyleBox, DlgBorderBottomColorBox, s.BorderBottom, _theme);
+        PopulateBorder(DlgBorderLeftStyleBox, DlgBorderLeftColorBox, s.BorderLeft, _theme);
         DlgBorderLineStyleBox.ItemsSource = FormatCellsBorderPalettePlanner.StyleChoices;
         DlgBorderLineStyleList.ItemsSource = FormatCellsBorderPalettePlanner.StyleChoices;
         DlgBorderLineStyleBox.SelectedItem = s.BorderBottom.Style == BorderStyle.None
             ? FormatCellsBorderPalettePlanner.ChoiceFor(BorderStyle.Thin)
             : FormatCellsBorderPalettePlanner.ChoiceFor(s.BorderBottom.Style);
         DlgBorderLineStyleList.SelectedItem = DlgBorderLineStyleBox.SelectedItem;
-        DlgBorderLineColorBox.Text = ColorInputParser.FormatRgbColor(s.BorderBottom.Color);
+        DlgBorderLineColorBox.Text = ColorInputParser.FormatRgbColor(s.BorderBottom.ResolveColor(_theme));
         PopulateBorderColorPalette();
 
         DlgLockedCheck.IsChecked = s.Locked;

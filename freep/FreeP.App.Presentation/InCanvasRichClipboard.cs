@@ -188,18 +188,25 @@ public static class InCanvasRichClipboardPlanner
             destination,
             start,
             end - start,
-            ResolveFragmentSlideJumps(payload.Body, destinationSlideIds));
+            ResolveSlideJumps(payload.Body, destinationSlideIds));
     }
 
     /// <summary>
-    /// Drops internal slide-jump targets the destination presentation cannot resolve. The
-    /// fragment is cloned before it is edited: the same payload can be pasted again, so the
-    /// clipboard copy must keep its original targets for a paste back into the source deck.
+    /// Drops internal slide-jump targets the destination presentation cannot resolve, returning
+    /// <paramref name="fragment"/> itself when nothing needs changing. The fragment is cloned
+    /// before it is edited: the same payload can be pasted again, so the clipboard copy must
+    /// keep its original targets for a paste back into the source deck.
+    /// <para>
+    /// Shared by the in-canvas paste (through <see cref="Apply"/>) and the slide-level paste,
+    /// so pasting into a text box and pasting onto the canvas resolve a foreign link alike.
+    /// </para>
     /// </summary>
-    private static TextBody ResolveFragmentSlideJumps(
+    public static TextBody ResolveSlideJumps(
         TextBody fragment,
         IReadOnlyCollection<string>? destinationSlideIds)
     {
+        ArgumentNullException.ThrowIfNull(fragment);
+
         if (destinationSlideIds is null)
             return fragment;
 

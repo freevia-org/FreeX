@@ -81,4 +81,60 @@ public sealed class ChartTrendlineRenderTests
 
         scene.Trendlines.Should().BeEmpty();
     }
+
+    [Fact]
+    public void MovingAverage_PeriodThree_PreservesPartialWarmUpWindowsAndSampleOrder()
+    {
+        (double X, double Y)[] samples = [(4, 2), (7, 4), (11, 8), (18, 16)];
+
+        var values = ChartRenderPlanner.BuildMovingAverageTrendlineValues(samples, authoredPeriod: 3);
+
+        values.Select(value => value.X).Should().Equal(4, 7, 11, 18);
+        values[0].Y.Should().BeApproximately(2, 1e-12);
+        values[1].Y.Should().BeApproximately(3, 1e-12);
+        values[2].Y.Should().BeApproximately(14.0 / 3.0, 1e-12);
+        values[3].Y.Should().BeApproximately(28.0 / 3.0, 1e-12);
+    }
+
+    [Fact]
+    public void MovingAverage_PeriodOverSampleCount_ClampsToSampleCount()
+    {
+        (double X, double Y)[] samples = [(1, 2), (2, 4), (3, 8), (4, 16)];
+
+        var values = ChartRenderPlanner.BuildMovingAverageTrendlineValues(samples, authoredPeriod: 100);
+
+        values.Select(value => value.Y).Should().Equal(2, 3, 14.0 / 3.0, 7.5);
+    }
+
+    [Fact]
+    public void MovingAverage_NullPeriod_UsesDefaultPeriodTwo()
+    {
+        (double X, double Y)[] samples = [(1, 2), (2, 4), (3, 8), (4, 16)];
+
+        var values = ChartRenderPlanner.BuildMovingAverageTrendlineValues(samples, authoredPeriod: null);
+
+        values.Select(value => value.Y).Should().Equal(2, 3, 6, 12);
+    }
+
+    [Fact]
+    public void MovingAverage_SourceGuard_KeepsLinearRollingWindow()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText(
+            "freep", "FreeP.App.Presentation", "ChartRenderPlanner.cs");
+        int start = source.IndexOf(
+            "internal static IReadOnlyList<(double X, double Y)> BuildMovingAverageTrendlineValues(",
+            StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        int end = source.IndexOf("private static bool TryBuildTrendlineFit(", start, StringComparison.Ordinal);
+        end.Should().BeGreaterThan(start);
+        var method = source[start..end];
+        source.Should().Contain("return BuildMovingAverageTrendlineValues(samples, trendline.MovingAveragePeriod);");
+        method.Should().Contain("Math.Clamp(authoredPeriod ?? 2, 2, samples.Count)")
+            .And.Contain("new (double X, double Y)[samples.Count]")
+            .And.Contain("rollingSum += samples[index].Y")
+            .And.Contain("rollingSum -= samples[index - period].Y")
+            .And.NotContain(".Skip(")
+            .And.NotContain(".Take(")
+            .And.NotContain(".Average(");
+    }
 }

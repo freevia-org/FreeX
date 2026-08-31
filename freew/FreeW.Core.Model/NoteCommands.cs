@@ -190,7 +190,7 @@ public sealed class ReplaceNoteContentCommand(
 /// Deletes one footnote or endnote and every matching reference marker in the document body.
 /// Undo restores both the rich note content and marker runs, including markers inside table cells
 /// (and tables nested inside table cells, to any depth) and inside text boxes (Run.Shape), via the
-/// shared <see cref="BodyParagraphWalk"/>.
+/// shared <see cref="TextDocumentStoryTraversal"/>.
 /// </summary>
 public sealed class DeleteNoteCommand(int id, bool footnote) : IDocumentCommand
 {

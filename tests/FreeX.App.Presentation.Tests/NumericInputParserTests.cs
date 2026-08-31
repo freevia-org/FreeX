@@ -19,7 +19,8 @@ public sealed class NumericInputParserTests
             "ChartBarFormatPlanner.cs",
             "ChartBubbleFormatPlanner.cs",
             "ChartPieFormatPlanner.cs",
-            "ChartStockFormatPlanner.cs"
+            "ChartStockFormatPlanner.cs",
+            "ChartTrendlinePlanner.cs"
         };
 
         foreach (var plannerFile in plannerFiles)
@@ -28,6 +29,7 @@ public sealed class NumericInputParserTests
             source.Should().Contain("NumericInputParser.TryParseInt32");
             source.Should().NotContain("private static bool TryParseClampedInt");
             source.Should().NotContain("private static bool TryParseInt(");
+            source.Should().NotContain("private static bool TryParseIntInRange");
         }
     }
 

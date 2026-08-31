@@ -851,6 +851,7 @@ public partial class MainWindow
                     IndentLevel = 2,
                     TextRotation = 45
                 },
+                WorkbookTheme.Office,
                 FormatCellsDialogTab.Alignment)
             {
                 Owner = this,
@@ -878,6 +879,7 @@ public partial class MainWindow
                 {
                     NumberFormat = "[$-409]mmmm d, yyyy;@"
                 },
+                WorkbookTheme.Office,
                 FormatCellsDialogTab.Number)
             {
                 Owner = this,

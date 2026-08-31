@@ -179,6 +179,13 @@ public static class ClipboardHtmlSerializer
         return css.ToString();
     }
 
+    /// <summary>
+    /// freex-theme-border-color-F1: the clipboard HTML flavor has no theme link to fall back on, so a
+    /// theme-backed edge (CellBorder.ThemeColor) must be flattened through the workbook's CURRENT theme
+    /// exactly like the font/fill colors this same method already resolve. Reading border.Color raw
+    /// pasted the RGB baked in at load time, so after a theme change a copied range pasted with
+    /// correctly recolored fills and fonts but borders still on the old palette.
+    /// </summary>
     private static void AppendBorderCss(StringBuilder css, string edge, CellBorder border, WorkbookTheme theme)
     {
         if (border.Style == BorderStyle.None)
@@ -194,10 +201,6 @@ public static class ClipboardHtmlSerializer
             BorderStyle.Double => ("3px", "double"),
             _ => ("1px", "solid"),
         };
-        // Resolve through CellBorder.ResolveColor (mirrors ResolveFontColor/ResolveFillColor
-        // above) instead of reading the plain Color field directly, so a border set via the
-        // ribbon's Theme Colors picker copies to the clipboard in its CURRENT theme color
-        // instead of the stale color captured when the file was loaded/authored.
         css.Append($"border-{edge}:{width} {line} {HexColor(border.ResolveColor(theme))};");
     }
 

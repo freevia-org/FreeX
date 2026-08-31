@@ -358,12 +358,18 @@ public static class InsertCopiedCellsPlanner
             // in the composite -- doing this any earlier would starve them of the state they need to
             // recreate the merge/hyperlink at the destination in the first place). sheet.MergedRegions/
             // Hyperlinks are current (post-insert) state, so use effectiveSourceRange here too.
-            _removedMergedRegions = sheet.MergedRegions.Where(region => IsFullyContained(region, effectiveSourceRange)).ToList();
-            if (_removedMergedRegions.Count > 0)
+            _removedMergedRegions = [];
+            var retainedMergedRegions = new List<GridRange>(sheet.MergedRegions.Count);
+            foreach (var region in sheet.MergedRegions)
             {
-                sheet.ReplaceMergedRegions(
-                    sheet.MergedRegions.Where(region => !_removedMergedRegions.Contains(region)));
+                if (IsFullyContained(region, effectiveSourceRange))
+                    _removedMergedRegions.Add(region);
+                else
+                    retainedMergedRegions.Add(region);
             }
+
+            if (_removedMergedRegions.Count > 0)
+                sheet.ReplaceMergedRegions(retainedMergedRegions);
 
             _removedHyperlinks = [];
             _removedHyperlinkMetadata = [];

@@ -622,8 +622,8 @@ public class DocumentInspectorTests
     // --- Round-150 meta F2: a tracked change inside a text box (Run.Shape) that itself lives in a
     // header/footer/footnote/endnote. CountRevisions' header/footer/footnote/endnote branches used to call
     // CountParagraphRevisionMarks directly on the paragraph list instead of routing it through
-    // BodyParagraphWalk.Enumerate first, so they never descended into Run.Shape.TextParagraphs the way the
-    // body branch (EnumerateParagraphs -> BodyParagraphWalk.Enumerate(TextDocument)) always has —
+    // TextDocumentStoryTraversal with IncludeShapeTextBoxes, so they never descended into
+    // Run.Shape.TextParagraphs the way the body helper EnumerateBodyParagraphs always has —
     // TrackChanges.HasRevisions/AcceptAll (ParagraphHasRevisions/ResolveParagraphContainer, both of which
     // do walk into Run.Shape) still reached these, so Accept All/Reject All silently resolved a revision
     // Inspect() never counted and the Revisions checkbox never reported.
@@ -757,7 +757,7 @@ public class DocumentInspectorTests
 
     // Sibling no-regression: a header carrying a text box with NO tracked change must not inflate the
     // count, and the existing body-shape and header-plain-text revision coverage (r147/r148) must still be
-    // exactly 1 each after routing header/footer/footnote/endnote through BodyParagraphWalk.Enumerate too.
+    // exactly 1 each after routing every selected story through TextDocumentStoryTraversal too.
     [Fact]
     public void Inspect_OnHeaderWithCleanShape_StaysZero()
     {

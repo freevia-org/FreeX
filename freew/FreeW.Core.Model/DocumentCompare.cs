@@ -971,6 +971,7 @@ public static class DocumentCompare
             .SelectMany(comment => comment.ThreadInOrder())
             .Select(comment => comment.Id)
             .ToHashSet();
+        var commentIds = new IntegerIdAllocator(usedIds, firstFreshId: 0);
 
         foreach (var originalId in deletedCommentIds)
         {
@@ -984,9 +985,7 @@ public static class DocumentCompare
             var idMap = new Dictionary<int, int>();
             foreach (var comment in originalComment.ThreadInOrder())
             {
-                var id = comment.Id;
-                if (!usedIds.Add(id))
-                    id = NextUnusedCommentId(usedIds);
+                var id = commentIds.ReservePreferredOrNext(comment.Id);
                 idMap[comment.Id] = id;
             }
 
@@ -995,14 +994,6 @@ public static class DocumentCompare
             if (copiedId != originalId)
                 RemapDeletedCommentMarkers(result, originalId, copiedId);
         }
-    }
-
-    private static int NextUnusedCommentId(HashSet<int> usedIds)
-    {
-        var id = usedIds.Count == 0 ? 0 : usedIds.Max() + 1;
-        while (!usedIds.Add(id))
-            id++;
-        return id;
     }
 
     // Whole-paragraph deletions (MarkWholeParagraph) and word-level deletions (the original-only branch of
@@ -1022,6 +1013,8 @@ public static class DocumentCompare
         var endnoteIdMap = new Dictionary<int, int>();
         var usedFootnoteIds = result.Footnotes.Keys.ToHashSet();
         var usedEndnoteIds = result.Endnotes.Keys.ToHashSet();
+        var footnoteIds = new IntegerIdAllocator(usedFootnoteIds, firstFreshId: 1);
+        var endnoteIds = new IntegerIdAllocator(usedEndnoteIds, firstFreshId: 1);
 
         foreach (var paragraph in TextDocumentStoryTraversal.EnumerateBlockParagraphs(result.Blocks))
         foreach (var run in paragraph.Runs)
@@ -1033,7 +1026,7 @@ public static class DocumentCompare
                 && !footnoteIdMap.ContainsKey(footnoteId)
                 && original.Footnotes.TryGetValue(footnoteId, out var footnote))
             {
-                var mappedId = AllocateNoteId(footnoteId, usedFootnoteIds);
+                var mappedId = footnoteIds.ReservePreferredOrNext(footnoteId);
                 footnoteIdMap[footnoteId] = mappedId;
                 var clone = new Footnote(mappedId) { HasAutomaticReferenceMark = footnote.HasAutomaticReferenceMark };
                 foreach (var content in footnote.Content)
@@ -1045,7 +1038,7 @@ public static class DocumentCompare
                 && !endnoteIdMap.ContainsKey(endnoteId)
                 && original.Endnotes.TryGetValue(endnoteId, out var endnote))
             {
-                var mappedId = AllocateNoteId(endnoteId, usedEndnoteIds);
+                var mappedId = endnoteIds.ReservePreferredOrNext(endnoteId);
                 endnoteIdMap[endnoteId] = mappedId;
                 var clone = new Endnote(mappedId) { HasAutomaticReferenceMark = endnote.HasAutomaticReferenceMark };
                 foreach (var content in endnote.Content)
@@ -1067,16 +1060,6 @@ public static class DocumentCompare
             if (run.EndnoteId is { } endnoteId && endnoteIdMap.TryGetValue(endnoteId, out var mappedEndnote))
                 run.EndnoteId = mappedEndnote;
         }
-    }
-
-    private static int AllocateNoteId(int sourceId, HashSet<int> usedIds)
-    {
-        if (usedIds.Add(sourceId))
-            return sourceId;
-        var candidate = usedIds.Count == 0 ? 1 : usedIds.Max() + 1;
-        while (!usedIds.Add(candidate))
-            candidate++;
-        return candidate;
     }
 
     // Diffs footnote/endnote CONTENT for ids confirmed to name the SAME logical note on both sides (F3

@@ -131,12 +131,11 @@ public static partial class FormulaAuditingService
 
     // Mirrors CollectReferences above but preserves a multi-cell RangeRefNode/NamedRangeNode/
     // StructuredReferenceNode as ONE contiguous GridRange region instead of flattening it into
-    // individual CellAddress entries. Used only by the trace-arrow builders (this service's
-    // CollectPrecedentTraceArrows and FormulaTraceArrowPlanner) so a range precedent collapses
-    // into a single arrow instead of one arrow per cell in the range
-    // (R88-app-formula-auditing-5-3), while GetDirectPrecedents/GetDirectDependents keep their
-    // existing per-cell contract unchanged for every other caller (Ctrl+[ navigation, Go To
-    // Special, dependents lookup, etc.).
+    // individual CellAddress entries. Trace-arrow builders use these regions to collapse a range
+    // precedent into a single arrow instead of one arrow per cell (R88-app-formula-auditing-5-3),
+    // and direct-dependent matching uses region overlap to avoid expanding a large referenced
+    // range merely to answer whether it intersects the queried range. GetDirectPrecedents keeps
+    // its existing per-cell contract for callers such as Ctrl+[ navigation and Go To Special.
     private static void CollectReferenceRegions(
         Workbook workbook,
         SheetId hostSheetId,

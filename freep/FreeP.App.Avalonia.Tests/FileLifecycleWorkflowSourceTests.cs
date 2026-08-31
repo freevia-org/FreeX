@@ -48,6 +48,15 @@ public sealed class FileLifecycleWorkflowSourceTests
         source.Should().Contain("PresentationFileCommandSessionFactory.Create(");
         source.Should().Contain("new PresentationFileCommandSessionComposition(");
         source.Should().Contain("new SisterAvaloniaFileTitleSpec(");
+        // r174-shared-protection-readonly: the Avalonia shell must SHOW the read-only source state
+        // the session now tracks, and must tolerate the shared workflow refreshing the title from
+        // its own constructor -- before _fileSession exists. An NRE there aborts MainWindow
+        // construction outright (the Avalonia crash-on-launch class).
+        source.Should().Contain(
+            "groupSuffixProvider: () => PresentationDocumentWindowPlanner.FormatReadOnlySuffix(");
+        source.Should().Contain("_fileSession is { IsCurrentFileReadOnly: true }");
+        sharedShellWorkflow.Should().Contain(
+            "groupSuffix: _groupSuffixProvider?.Invoke() ?? _titleSpec.GroupSuffix,");
         source.Should().Contain("_fileSession.NewAsync()");
         source.Should().Contain("_fileSession.OpenAsync()");
         source.Should().Contain("_fileSession.SaveAsync()");

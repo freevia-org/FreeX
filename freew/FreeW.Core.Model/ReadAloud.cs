@@ -155,7 +155,10 @@ public sealed class ReadAloudController
         ArgumentNullException.ThrowIfNull(document);
 
         var segments = new List<ReadAloudSegment>();
-        foreach (var paragraph in EnumerateParagraphs(document))
+        foreach (var paragraph in TextDocumentStoryTraversal.EnumerateBlockParagraphs(
+                     document.Blocks,
+                     TextDocumentStoryTraversalOptions.IncludeNestedTables
+                     | TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs))
         {
             var text = paragraph.PlainText;
             if (string.IsNullOrWhiteSpace(text))
@@ -182,39 +185,14 @@ public sealed class ReadAloudController
         var blocksBeforeCaret = Math.Min(caretBlockIndex, document.Blocks.Count);
         for (var blockIndex = 0; blockIndex < blocksBeforeCaret; blockIndex++)
         {
-            segmentIndex += EnumerateParagraphs(document.Blocks[blockIndex])
+            segmentIndex += TextDocumentStoryTraversal.EnumerateBlockParagraphs(
+                    [document.Blocks[blockIndex]],
+                    TextDocumentStoryTraversalOptions.IncludeNestedTables
+                    | TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs)
                 .Count(IsSpeakable);
         }
 
         return segmentIndex;
-    }
-
-    // Every paragraph reachable in the document body, in reading order: top-level paragraphs and those
-    // nested in table cells (row by row, cell by cell), including tables nested inside table cells to
-    // any depth — the same walk DocumentInspector uses.
-    private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document) =>
-        document.Blocks.SelectMany(EnumerateParagraphs);
-
-    private static IEnumerable<Paragraph> EnumerateParagraphs(Block block)
-    {
-        if (block is Paragraph paragraph)
-        {
-            yield return paragraph;
-            yield break;
-        }
-
-        if (block is not Table table)
-            yield break;
-
-        foreach (var row in table.Rows)
-        foreach (var cell in row.Cells)
-        {
-            foreach (var cellParagraph in cell.Paragraphs)
-                yield return cellParagraph;
-            foreach (var nestedTable in cell.NestedTables)
-            foreach (var nestedParagraph in EnumerateParagraphs(nestedTable))
-                yield return nestedParagraph;
-        }
     }
 
     private static bool IsSpeakable(Paragraph paragraph) =>

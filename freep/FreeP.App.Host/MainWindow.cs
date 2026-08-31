@@ -3562,6 +3562,14 @@ public sealed partial class MainWindow : Window,
                 ForegroundResourceKey = ThemeResources.Brush("TitleBarForeground").PrimaryKey
             });
 
+    /// <summary>
+    /// The read-only marker for the title. Deliberately tolerant of a not-yet-constructed
+    /// <c>_fileSession</c>: the title can refresh before the session field is assigned, and an NRE
+    /// on that path would abort window construction outright.
+    /// </summary>
+    private bool IsCurrentPresentationReadOnly() =>
+        _fileSession is { IsCurrentFileReadOnly: true };
+
     private void UpdateTitle()
     {
         var title = FreePApplicationFrameDescriptor.Title;
@@ -3572,7 +3580,12 @@ public sealed partial class MainWindow : Window,
             DirtyMarker: title.DirtyMarker,
             Separator: title.Separator,
             ApplicationPlacement: title.ApplicationPlacement,
-            WindowSuffix: PresentationDocumentWindowPlanner.FormatWindowSuffix(_documentWindowNumber)));
+            WindowSuffix: PresentationDocumentWindowPlanner.FormatWindowSuffix(_documentWindowNumber),
+            // r174-shared-protection-readonly: mark a source file that cannot be written back to,
+            // matching FreeX's read-only title marker. Save itself is diverted to Save-As inside
+            // PresentationFileCommandSession, so nothing else in this host branches on it.
+            GroupSuffix: PresentationDocumentWindowPlanner.FormatReadOnlySuffix(
+                IsCurrentPresentationReadOnly())));
     }
 
     // ── Keyboard bindings ─────────────────────────────────────────────────────────

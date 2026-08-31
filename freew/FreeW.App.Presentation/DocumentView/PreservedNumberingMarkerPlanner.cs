@@ -47,7 +47,9 @@ public static class PreservedNumberingMarkerPlanner
 
         var counters = new Dictionary<int, int[]>();
         var result = new Dictionary<Paragraph, PreservedNumberingMarkerPlan>();
-        foreach (var paragraph in EnumerateParagraphs(document))
+        foreach (var paragraph in TextDocumentStoryTraversal.EnumerateBlockParagraphs(
+                     document.Blocks,
+                     TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs))
         {
             if (paragraph.Formatting.ListKind != ListKind.None
                 || !TryResolveNumbering(document, paragraph, out var preserved)
@@ -73,25 +75,6 @@ public static class PreservedNumberingMarkerPlanner
         }
 
         return result;
-    }
-
-    private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document)
-    {
-        foreach (var block in document.Blocks)
-        {
-            if (block is Paragraph paragraph)
-            {
-                yield return paragraph;
-                continue;
-            }
-
-            if (block is not Table table)
-                continue;
-
-            foreach (var cell in table.Rows.SelectMany(row => row.Cells))
-            foreach (var cellParagraph in cell.Paragraphs)
-                yield return cellParagraph;
-        }
     }
 
     private static bool TryResolveNumbering(

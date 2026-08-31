@@ -142,6 +142,21 @@ public sealed class ParagraphPercentSpacingRenderTests
     // ─── Precedence + layout ──────────────────────────────────────────────────
 
     [Fact]
+    public void Compose_ExplicitZeroPointSpacing_DropsCompetingPercent()
+    {
+        var resolved = ResolveShapeParagraph(20, para =>
+        {
+            para.SpaceBeforePt = 0;
+            para.SpaceBeforePercent = 300;
+        });
+
+        resolved.SpaceBeforePercent.Should().BeNull(
+            "an authored 0pt spcBef wins over spcPct, and the .pptx writer emits the 0pt value — " +
+            "letting the percent survive the nullable collapse would make render and file disagree");
+        TextLayoutPlanner.ResolveSpaceBeforePoints(resolved).Should().Be(0);
+    }
+
+    [Fact]
     public void ResolveSpacePoints_ExplicitPointsWinOverPercent()
     {
         var paragraph = new ResolvedParagraph

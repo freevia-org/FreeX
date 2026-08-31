@@ -111,6 +111,52 @@ public sealed class SummaryZoomInsertionPlannerTests
     }
 
     [Fact]
+    public void Target_options_use_case_insensitive_catalog_and_count_only_existing_slide_ids()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "Slide-A" });
+        presentation.Slides.Add(new Slide { Id = "Slide-B" });
+        AddSection(presentation, "section-one", " One ", "slide-a", "missing", "SLIDE-A");
+        AddSection(presentation, "section-two", "Two", "slide-b");
+        AddSection(presentation, "section-empty", "Empty", "missing");
+
+        var summaryOptions = SummaryZoomInsertionPlanner.BuildTargetOptions(presentation, currentSlideIndex: 0);
+        var sectionOptions = SectionZoomInsertionPlanner.BuildTargetOptions(presentation, currentSlideIndex: 0);
+
+        summaryOptions.Should().Equal(
+            ("section-one", "One (2 slides)"),
+            ("section-two", "Two (1 slides)"));
+        sectionOptions.Should().Equal(
+            ("section-one", "One (3 slides)"),
+            ("section-two", "Two (1 slides)"));
+        SummaryZoomInsertionPlanner.TryBuildPlan(
+            presentation,
+            ["SECTION-ONE", "SECTION-TWO"],
+            out var plan).Should().BeTrue();
+        plan.Targets.Select(target => target.SectionId)
+            .Should().Equal("section-one", "section-two");
+    }
+
+    [Fact]
+    public void Zoom_section_planners_source_guard_use_shared_indexed_catalog()
+    {
+        var summary = TestWorkspaceFileLocator.ReadAllText(
+            "freep", "FreeP.App.Presentation", "SummaryZoomInsertionPlanner.cs");
+        var section = TestWorkspaceFileLocator.ReadAllText(
+            "freep", "FreeP.App.Presentation", "SectionZoomInsertionPlanner.cs");
+        var catalog = TestWorkspaceFileLocator.ReadAllText(
+            "freep", "FreeP.App.Presentation", "PresentationSectionSlideCatalog.cs");
+
+        summary.Should().Contain("PresentationSectionSlideCatalog.Create(presentation)")
+            .And.NotContain("presentation.Slides.Any(");
+        section.Should().Contain("PresentationSectionSlideCatalog.Create(presentation)")
+            .And.NotContain("presentation.Slides.Any(");
+        catalog.Should().Contain("ToHashSet(StringComparer.OrdinalIgnoreCase)")
+            .And.Contain("new Dictionary<string, PresentationSection>(StringComparer.OrdinalIgnoreCase)")
+            .And.Contain("_sectionsById.TryAdd(section.Id, section)");
+    }
+
+    [Fact]
     public void Summary_zoom_navigation_uses_the_clicked_tile()
     {
         var presentation = BuildPresentation();
