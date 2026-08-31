@@ -132,7 +132,7 @@ public sealed partial class ChartRendererTests
         var source = AppUiSourceTestSupport.ReadAppUiSources("ChartRenderer.cs");
         var render = source[
             source.IndexOf("public static ImageSource? Render(ChartModel chart, ViewportModel viewport, WorkbookTheme? theme, double renderScale)", StringComparison.Ordinal)..
-            source.IndexOf("private static PlotModel? BuildPlotModel", StringComparison.Ordinal)];
+            source.IndexOf("internal static PlotModel? BuildPlotModel", StringComparison.Ordinal)];
 
         render.Should().Contain("renderScale = NormalizeRenderScale(renderScale);");
         render.Should().Contain("chart.Width * renderScale");

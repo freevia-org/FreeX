@@ -115,18 +115,12 @@ public sealed class R74_PrintedDiagonalMergeExtentTests
         var hyperlinkLookup = new Dictionary<(uint Row, uint Col), WorksheetPrintHyperlinkPlan>();
         var cellDestinationLookup = new Dictionary<(uint Row, uint Col), CellAddress>();
 
-        var method = typeof(PrintRenderer).GetMethod(
-            "DrawPrintedGridCells",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull();
-
         const int width = 160;
         const int height = 100;
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            method!.Invoke(null,
-            [
+            PrintRenderer.DrawPrintedGridCells(
                 dc,
                 textOverlays,
                 linkOverlays,
@@ -143,8 +137,8 @@ public sealed class R74_PrintedDiagonalMergeExtentTests
                 0.0,
                 new Workbook(),
                 false,
-                sheet,
-            ]);
+                sheet
+            );
         }
 
         var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);

@@ -19,12 +19,7 @@ public sealed class R92_ChartSeriesFillAlphaTests
 {
     private static PlotModel BuildPlotModel(ChartModel chart, ViewportModel viewport)
     {
-        var method = typeof(ChartRenderer).GetMethod(
-            "BuildPlotModel",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static,
-            [typeof(ChartModel), typeof(ViewportModel)]);
-        method.Should().NotBeNull();
-        return method!.Invoke(null, [chart, viewport]).Should().BeOfType<PlotModel>().Subject;
+        return ChartRenderer.BuildPlotModel(chart, viewport).Should().BeOfType<PlotModel>().Subject;
     }
 
     private static DisplayCell Cell(uint row, uint col, string text) =>
