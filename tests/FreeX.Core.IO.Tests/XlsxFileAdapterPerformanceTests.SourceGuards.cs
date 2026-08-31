@@ -539,6 +539,25 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void ClassicChartSeries_IndexVerbatimFormulasWithoutPerSeriesLinqRescans()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxChartXmlWriter.Series.cs");
+        var lookupStart = source.IndexOf("    private sealed class ChartSeriesVerbatimFormulaLookup", StringComparison.Ordinal);
+        var lookupEnd = source.IndexOf("    /// <summary>", lookupStart, StringComparison.Ordinal);
+        var builders = source[..lookupStart] + source[lookupEnd..];
+        var lookup = source[lookupStart..lookupEnd];
+
+        builders.Should().Contain("var verbatimLookup = ChartSeriesVerbatimFormulaLookup.Create(chart);")
+            .And.NotContain("chart.VerbatimSeriesFormulas?.FirstOrDefault(",
+                "classic chart series writers should not linearly rescan verbatim formulas for every series");
+        lookup.Should().Contain("if (chart.VerbatimSeriesFormulas is not { Count: > 0 } formulas)")
+            .And.Contain("return null;",
+                "charts without verbatim formulas must stay allocation-free")
+            .And.Contain("formulasBySeriesIndex.TryAdd(formula.SeriesIndex, formula)",
+                "first duplicate formula entries must retain the prior FirstOrDefault behavior");
+    }
+
+    [Fact]
     public void SourcePackage_RenumberedQueryTableReplayIndexesExistingTargets()
     {
         var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxFileAdapter.SourcePackage.cs");
