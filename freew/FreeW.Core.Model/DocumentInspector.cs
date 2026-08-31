@@ -116,7 +116,7 @@ public static class DocumentInspector
     /// on covered runs and the textless comment-reference anchor runs (see
     /// <see cref="Run.IsCommentReference"/>), which are removed entirely. Comments legitimately live
     /// outside the body too (Word allows anchoring one in a header, footer, footnote, or endnote), so this
-    /// walks every such paragraph store via <see cref="EnumerateCommentAnchorParagraphs"/> — not just
+    /// walks every such paragraph store via <see cref="EnumerateNoteAndCommentAnchorParagraphs"/> — not just
     /// <see cref="EnumerateBodyParagraphs"/>'s body/table paragraphs — so no anchor is left dangling with a
     /// <see cref="Run.CommentId"/> that no longer resolves to any entry in
     /// <see cref="TextDocument.Comments"/> (the docx writer would otherwise still emit its
@@ -129,7 +129,7 @@ public static class DocumentInspector
 
         document.Comments.Clear();
 
-        foreach (var paragraph in EnumerateCommentAnchorParagraphs(document))
+        foreach (var paragraph in EnumerateNoteAndCommentAnchorParagraphs(document))
         {
             for (var i = paragraph.Runs.Count - 1; i >= 0; i--)
             {
@@ -171,7 +171,7 @@ public static class DocumentInspector
         var usedEndnoteIds = new HashSet<int>();
         var usedCommentIds = new HashSet<int>();
 
-        foreach (var paragraph in EnumerateNoteAndCommentAnchorParagraphsForPruning(document))
+        foreach (var paragraph in EnumerateNoteAndCommentAnchorParagraphs(document))
         {
             foreach (var run in paragraph.Runs)
             {
@@ -337,56 +337,26 @@ public static class DocumentInspector
             | TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs);
 
     /// <summary>
-    /// Every paragraph that can carry a comment anchor (<see cref="Run.CommentId"/> /
-    /// <see cref="Run.IsCommentReference"/>): the body/table paragraphs from <see cref="EnumerateBodyParagraphs"/>,
-    /// plus every header/footer of every document section (default, even, and first-page slots — mirroring
-    /// the note-deletion walk's fix for the identical footnote/endnote
-    /// dangling-marker bug), plus every footnote's and endnote's own content paragraphs. Word allows anchoring
-    /// a review comment in any of these; without walking them too, <see cref="RemoveComments"/> would clear
-    /// <see cref="TextDocument.Comments"/> while leaving header/footer/footnote/endnote runs still carrying a
-    /// <see cref="Run.CommentId"/> that no longer resolves to anything, which the docx writer would then still
-    /// serialise as a dangling w:commentRangeStart/End/w:commentReference.
+    /// Every paragraph that can carry a footnote/endnote/comment reference or anchor run: the body/table
+    /// paragraphs (descending into text boxes and nested tables), every header/footer slot of every section
+    /// (default, even, and first-page), and every footnote's and endnote's own content paragraphs —
+    /// descending into any text box (<see cref="Run.Shape"/>) found in those stores too, exactly as the body
+    /// branch does and exactly as <see cref="NoteCommands.DeleteNoteCommand"/>'s own marker-removal walk does
+    /// for the identical Body|HeadersFooters combination. Word allows anchoring a review comment, footnote,
+    /// or endnote in any of these.
+    ///
+    /// <para>Shared by <see cref="RemoveComments"/> and <see cref="PruneOrphanedNoteAndCommentAnchors"/>,
+    /// which need the same reach for opposite reasons: the prune must see every LIVE anchor or it deletes
+    /// still-referenced content, and the removal must reach every anchor or it leaves one dangling. r174
+    /// widened only the prune's copy of this walk and deliberately left the removal's copy shape-free in the
+    /// header/footer/footnote/endnote branch, to avoid changing RemoveComments' scope as a side effect. That
+    /// split was the bug: a comment anchored inside a text box embedded in a header survived
+    /// <see cref="RemoveComments"/> with its <see cref="Run.CommentId"/> intact while
+    /// <see cref="TextDocument.Comments"/> had already been cleared — precisely the dangling
+    /// w:commentRangeStart/End/w:commentReference that RemoveComments' own contract promises never to
+    /// produce, and a package Word must repair. Both walks are the same walk, so they are now one.</para>
     /// </summary>
-    private static IEnumerable<Paragraph> EnumerateCommentAnchorParagraphs(TextDocument document)
-    {
-        foreach (var paragraph in TextDocumentStoryTraversal.EnumerateParagraphs(
-                     document,
-                     TextDocumentStorySubset.Body,
-                     TextDocumentStoryTraversalOptions.IncludeShapeTextBoxes
-                     | TextDocumentStoryTraversalOptions.IncludeNestedTables
-                     | TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs))
-            yield return paragraph;
-
-        foreach (var paragraph in TextDocumentStoryTraversal.EnumerateParagraphs(
-                     document,
-                     TextDocumentStorySubset.HeadersFooters
-                     | TextDocumentStorySubset.Footnotes
-                     | TextDocumentStorySubset.Endnotes,
-                     TextDocumentStoryTraversalOptions.PreserveDuplicateParagraphs))
-            yield return paragraph;
-    }
-
-    /// <summary>
-    /// Every paragraph that can carry a footnote/endnote/comment reference/anchor run for the purposes of
-    /// <see cref="PruneOrphanedNoteAndCommentAnchors"/>: the same stores as
-    /// <see cref="EnumerateCommentAnchorParagraphs"/> (body/table paragraphs, every header/footer slot, and
-    /// footnote/endnote content), but — unlike that helper — also descending into any text box
-    /// (<see cref="Run.Shape"/>) found while walking the header/footer/footnote/endnote paragraphs, exactly
-    /// as the body branch already does and exactly as <see cref="NoteCommands.DeleteNoteCommand"/>'s own
-    /// marker-removal walk does for the identical Body|HeadersFooters combination. Without this, a
-    /// footnote/endnote/comment reference mark that lives only inside a text box embedded in a header or
-    /// footer would never be counted as "in use", so the prune would delete its still-referenced
-    /// footnote/endnote/comment content while leaving the reference-mark run behind in the header/footer
-    /// shape — a silent content loss plus an invalid docx on the next save (a dangling
-    /// w:footnoteReference/w:endnoteReference/w:commentReference with no matching entry). This walk is
-    /// intentionally NOT shared with <see cref="EnumerateCommentAnchorParagraphs"/>: that helper's
-    /// header/footer/footnote/endnote branch deliberately stays shape-free for
-    /// <see cref="RemoveComments"/> (see
-    /// <c>TextDocumentStoryTraversalAdoptionTests.DocumentInspector_PreservesItsBodyOnlyShapeExpansion</c>),
-    /// so widening it there would silently change that removal's existing scope instead of only fixing the
-    /// prune's orphan check.
-    /// </summary>
-    private static IEnumerable<Paragraph> EnumerateNoteAndCommentAnchorParagraphsForPruning(TextDocument document)
+    private static IEnumerable<Paragraph> EnumerateNoteAndCommentAnchorParagraphs(TextDocument document)
     {
         foreach (var paragraph in TextDocumentStoryTraversal.EnumerateParagraphs(
                      document,

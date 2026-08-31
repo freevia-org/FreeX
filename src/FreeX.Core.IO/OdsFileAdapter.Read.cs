@@ -54,6 +54,7 @@ public sealed partial class OdsFileAdapter
 
         uint row = 0;
         var pendingMerges = new List<GridRange>();
+        var pendingMatrices = new List<GridRange>();
         foreach (var rowElement in tableElement.Elements(TableNs + "table-row"))
         {
             var rowRepeat = ReadRepeat(rowElement, TableNs + "number-rows-repeated");
@@ -71,18 +72,55 @@ public sealed partial class OdsFileAdapter
                 if (rowHeight is { } h)
                     sheet.RowHeights[row] = h;
 
-                ReadRowCells(workbook, sheet, rowElement, row, styleTable, pendingMerges, isFirstRepeat: r == 0);
+                ReadRowCells(workbook, sheet, rowElement, row, styleTable, pendingMerges, pendingMatrices, isFirstRepeat: r == 0);
             }
         }
 
         foreach (var merge in pendingMerges)
             sheet.AddMergedRegion(merge);
 
+        RegisterMatrixMembers(sheet, pendingMatrices);
+
         // table:named-expressions may also appear nested inside table:table, holding sheet-scoped
         // named ranges/formulas (per the ODF 1.2 schema, it's the last child of the table element).
         var sheetNamedExpressions = tableElement.Element(TableNs + "named-expressions");
         if (sheetNamedExpressions is not null)
             ReadNamedExpressions(workbook, sheetNamedExpressions, scopeSheetId: sheet.Id);
+    }
+
+    /// <summary>
+    /// Re-registers the non-anchor cells covered by each matrix-formula extent as provisional spill
+    /// members of their anchor, mirroring what the XLSX and legacy .xls loaders do for the cells covered
+    /// by a declared array range.
+    /// <para>Runs as a post-pass because a matrix's covered cells appear in LATER rows than its anchor,
+    /// so they cannot be classified while the anchor's row is being read. Two things depend on it: the
+    /// anchor's recalculated spill must be allowed to overwrite these cells (a plain loaded cell would
+    /// block it and the anchor would report #SPILL!), and Sheet.TryGetArrayExtent must see the whole
+    /// declared block so CommandGuards.RejectIfSplitsArray can enforce "You cannot change part of an
+    /// array". Any formula LibreOffice replicated onto a covered cell is dropped -- only the anchor is
+    /// an independent formula cell, exactly as in the .xls loader -- while the cached value and style
+    /// are kept so the grid shows the loaded results before the first recalc.</para>
+    /// </summary>
+    private static void RegisterMatrixMembers(Sheet sheet, List<GridRange> pendingMatrices)
+    {
+        foreach (var matrix in pendingMatrices)
+        {
+            var anchor = matrix.Start;
+            for (var r = matrix.Start.Row; r <= matrix.End.Row; r++)
+            {
+                for (var c = matrix.Start.Col; c <= matrix.End.Col; c++)
+                {
+                    if (r == anchor.Row && c == anchor.Col)
+                        continue;
+
+                    var existing = sheet.GetCell(r, c);
+                    var member = Cell.FromValue(existing?.Value ?? BlankValue.Instance);
+                    if (existing is not null)
+                        member.StyleId = existing.StyleId;
+                    sheet.SetProvisionalSpillCell(anchor, r, c, member);
+                }
+            }
+        }
     }
 
     private void ReadColumns(Sheet sheet, XElement tableElement, OdsStyleTable styleTable)
@@ -111,6 +149,7 @@ public sealed partial class OdsFileAdapter
         uint row,
         OdsStyleTable styleTable,
         List<GridRange> pendingMerges,
+        List<GridRange> pendingMatrices,
         bool isFirstRepeat)
     {
         uint col = 0;
@@ -131,7 +170,17 @@ public sealed partial class OdsFileAdapter
             var rowsSpanned = ReadRepeat(cellElement, TableNs + "number-rows-spanned");
             var colsSpanned = ReadRepeat(cellElement, TableNs + "number-columns-spanned");
             var isMerge = rowsSpanned > 1 || colsSpanned > 1;
-            if (isMerge)
+
+            // A matrix (array) formula -- ODF's spelling of Ctrl+Shift+Enter. The anchor cell carries
+            // the formula plus the declared extent; the covered cells are ordinary table-cells holding
+            // the cached results (NOT covered-table-cell, which is the merge concept above). Like a
+            // merge, the declared extent is not repeated, so a matrix anchor is never a repeat run.
+            var matrixRows = ReadRepeat(cellElement, TableNs + "number-matrix-rows-spanned");
+            var matrixCols = ReadRepeat(cellElement, TableNs + "number-matrix-columns-spanned");
+            var isMatrix = cellElement.Attribute(TableNs + "number-matrix-rows-spanned") is not null ||
+                cellElement.Attribute(TableNs + "number-matrix-columns-spanned") is not null;
+
+            if (isMerge || isMatrix)
                 repeat = 1;
 
             // Resolve the cell's content/style once per XML element rather than once per repeat
@@ -174,12 +223,42 @@ public sealed partial class OdsFileAdapter
                 if (formula is not null)
                 {
                     var cell = Cell.FromFormula(formula);
-                    cell.ArrayMode = FormulaArrayMode.Implicit;
+                    if (isMatrix)
+                    {
+                        // An ODF matrix formula is a declared array (Ctrl+Shift+Enter), so it takes the
+                        // same LegacyArrayRows/Cols confinement the XLSX and legacy .xls loaders use for
+                        // <f t="array" ref="..."> and BIFF8 array records: RecalcEngine clamps the natural
+                        // result to the declared extent and the anchor shows its TOP-LEFT element. Leaving
+                        // it Implicit (as every ODS formula cell was before r176) routes the result through
+                        // ImplicitIntersection.Resolve instead, which positionally intersects against the
+                        // formula cell's OWN row/column -- the rule for an ordinary non-array formula's
+                        // automatic @ operator. For a 1x1-declared matrix whose body is a multi-cell range
+                        // that silently shows the wrong element; for a multi-cell one it also loses the
+                        // extent, so nothing stops an edit from splitting the array.
+                        cell.ArrayMode = FormulaArrayMode.Dynamic;
+                        cell.LegacyArrayRows = Math.Max(matrixRows, 1);
+                        cell.LegacyArrayCols = Math.Max(matrixCols, 1);
+                    }
+                    else
+                    {
+                        cell.ArrayMode = FormulaArrayMode.Implicit;
+                    }
                     if (value is not BlankValue)
                         cell.Value = value;
                     if (styleId != StyleId.Default)
                         cell.StyleId = styleId;
                     sheet.SetCell(new CellAddress(sheet.Id, row, col), cell);
+
+                    if (isMatrix && isFirstRepeat)
+                    {
+                        // Same 64-bit widening the merge extent below uses: the spans come straight from
+                        // attacker-controlled XML with no upper bound, so uint arithmetic could wrap.
+                        var lastRow = (uint)Math.Min(CellAddress.MaxRow, (ulong)row + Math.Max((ulong)matrixRows, 1) - 1);
+                        var lastCol = (uint)Math.Min(CellAddress.MaxCol, (ulong)col + Math.Max((ulong)matrixCols, 1) - 1);
+                        pendingMatrices.Add(new GridRange(
+                            new CellAddress(sheet.Id, row, col),
+                            new CellAddress(sheet.Id, lastRow, lastCol)));
+                    }
                 }
                 else if (value is not BlankValue)
                 {
