@@ -124,7 +124,14 @@ public static class XlsxFeatureInspector
                 var document = XlsxPackageXmlEditor.LoadXml(structureEntry);
                 var structures = document
                     .Descendants()
-                    .Where(element => string.Equals(element.Name.LocalName, "s", StringComparison.Ordinal));
+                    .Where(element => string.Equals(element.Name.LocalName, "s", StringComparison.Ordinal))
+                    .ToList();
+
+                // An empty structure table does not provide enough evidence to classify the
+                // payload as a formula-created local value. Keep the conservative warning used
+                // for missing or malformed structure metadata.
+                if (structures.Count == 0)
+                    return true;
 
                 foreach (var structure in structures)
                 {
