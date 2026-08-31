@@ -23,6 +23,22 @@ public sealed class PdfTextLineClustererTests
     }
 
     [Fact]
+    public void CalculateModalFontSize_PreservesFirstBucketWhenDenseFrequenciesTie()
+    {
+        var glyphs = Enumerable.Range(0, 512)
+            .SelectMany(index => new[]
+            {
+                new TestGlyph("A", index, index, 10.24),
+                new TestGlyph("B", index, index, 14.24),
+            })
+            .ToArray();
+
+        var modalSize = PdfTextLineClusterer.CalculateModalFontSize(glyphs, GetMetrics);
+
+        modalSize.Should().Be(10);
+    }
+
+    [Fact]
     public void Cluster_UsesRunningMeanBaselineSoGradualDriftRemainsOneLine()
     {
         // FreeX used a running mean while FreeW anchored to the first glyph. The shared policy keeps the

@@ -95,12 +95,31 @@ public static class PdfTextLineClusterer
 
     private static double? CalculateModalFontSize(IEnumerable<PdfTextGlyphMetrics> metrics)
     {
-        var modalGroup = metrics
-            .Where(item => item.FontSize > 0)
-            .GroupBy(item => Math.Round(item.FontSize * 2) / 2)
-            .OrderByDescending(group => group.Count())
-            .FirstOrDefault();
-        return modalGroup?.Key;
+        var counts = new Dictionary<double, int>();
+        double? modalFontSize = null;
+        var modalCount = 0;
+
+        foreach (var item in metrics)
+        {
+            if (item.FontSize <= 0)
+                continue;
+
+            var bucket = Math.Round(item.FontSize * 2) / 2;
+            var count = counts.TryGetValue(bucket, out var currentCount)
+                ? currentCount + 1
+                : 1;
+            counts[bucket] = count;
+
+            // Strictly greater preserves the first bucket when frequencies tie, matching GroupBy's
+            // encounter ordering without materializing and sorting every group.
+            if (count > modalCount)
+            {
+                modalFontSize = bucket;
+                modalCount = count;
+            }
+        }
+
+        return modalFontSize;
     }
 
     private sealed class LineBuilder<TGlyph>
