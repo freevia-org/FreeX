@@ -191,6 +191,49 @@ public sealed class R103_ChartSeriesTxNameOverrideTests
             .Should().Be("Data!$B$1");
     }
 
+    [Fact]
+    public void ColumnChart_DenseSeriesMetadata_UsesLastDuplicateNameAndOrderOverrides()
+    {
+        var workbook = new Workbook("DenseSeriesMetadata");
+        var sheet = workbook.AddSheet("Data");
+        for (uint column = 1; column <= 25; column++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, 1, column), new TextValue($"Header {column}"));
+            sheet.SetCell(new CellAddress(sheet.Id, 2, column), new NumberValue(column));
+            sheet.SetCell(new CellAddress(sheet.Id, 3, column), new NumberValue(column * 10));
+        }
+
+        var nameOverrides = new List<ChartSeriesNameOverride>();
+        var orderOverrides = new List<ChartSeriesOrderOverride>();
+        for (var seriesIndex = 0; seriesIndex < 24; seriesIndex++)
+        {
+            nameOverrides.Add(new ChartSeriesNameOverride(seriesIndex, "'Data'!$A$1"));
+            orderOverrides.Add(new ChartSeriesOrderOverride(seriesIndex, seriesIndex));
+        }
+
+        // Existing writer semantics are LastOrDefault, so duplicate metadata for a series must
+        // retain these final values after dense lists are indexed.
+        nameOverrides.Add(new ChartSeriesNameOverride(7, "'Data'!$B$1"));
+        orderOverrides.Add(new ChartSeriesOrderOverride(7, 99));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 25)),
+            FirstRowIsHeader = true,
+            FirstColIsCategories = true,
+            SeriesNameOverrides = nameOverrides,
+            SeriesOrderOverrides = orderOverrides,
+        });
+
+        var chartDoc = LoadChartXml(SaveToBytes(workbook));
+        var series = chartDoc.Descendants(ChartNs + "ser").ToArray();
+        series.Should().HaveCount(24);
+        var duplicateSeries = series.Single(item => item.Element(ChartNs + "idx")!.Attribute("val")!.Value == "7");
+        duplicateSeries.Element(ChartNs + "order")!.Attribute("val")!.Value.Should().Be("99");
+        duplicateSeries.Element(ChartNs + "tx")!.Element(ChartNs + "strRef")!.Element(ChartNs + "f")!.Value
+            .Should().Be("'Data'!$B$1");
+    }
+
     private static byte[] SaveToBytes(Workbook workbook)
     {
         using var stream = new MemoryStream();
