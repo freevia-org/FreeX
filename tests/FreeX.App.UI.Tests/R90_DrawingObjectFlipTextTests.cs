@@ -20,22 +20,6 @@ namespace FreeX.App.UI.Tests;
 /// </summary>
 public sealed class R90_DrawingObjectFlipTextTests
 {
-    private static readonly Type TransformStateType =
-        typeof(GridView).GetNestedType("DrawingObjectTransformState", BindingFlags.NonPublic)
-        ?? throw new InvalidOperationException("GridView must declare a private DrawingObjectTransformState type.");
-
-    private static readonly MethodInfo PushMethod =
-        typeof(GridView).GetMethod("PushDrawingObjectTransform", BindingFlags.NonPublic | BindingFlags.Static)
-        ?? throw new InvalidOperationException("GridView.PushDrawingObjectTransform not found.");
-
-    private static readonly MethodInfo PopFlipMethod =
-        typeof(GridView).GetMethod("PopDrawingObjectFlipTransform", BindingFlags.NonPublic | BindingFlags.Static)
-        ?? throw new InvalidOperationException("GridView.PopDrawingObjectFlipTransform not found.");
-
-    private static readonly MethodInfo PopMethod =
-        typeof(GridView).GetMethod("PopDrawingObjectTransform", BindingFlags.NonPublic | BindingFlags.Static)
-        ?? throw new InvalidOperationException("GridView.PopDrawingObjectTransform not found.");
-
     // dc.PushTransform wraps subsequent drawing commands in a DrawingGroup whose own .Transform
     // property carries the pushed transform -- child Geometry.Bounds stay in LOCAL (untransformed)
     // coordinates, so the cumulative transform down each branch must be applied by hand to get the
@@ -75,21 +59,19 @@ public sealed class R90_DrawingObjectFlipTextTests
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            var state = PushMethod.Invoke(null, [dc, 0.0, /*flipHorizontal*/ true, /*flipVertical*/ false, rect]);
+            var state = GridView.PushDrawingObjectTransform(dc, 0.0, flipHorizontal: true, flipVertical: false, rect);
 
             // Drawn while the flip ScaleTransform(-1,1,50,20) is still active: local x in [5,15]
             // mirrors to screen x in [85,95] (100 - x).
             dc.DrawRectangle(Brushes.Black, null, new Rect(5, 5, 10, 10));
 
-            var popFlipArgs = new[] { dc, state };
-            PopFlipMethod.Invoke(null, popFlipArgs);
-            state = popFlipArgs[1];
+            GridView.PopDrawingObjectFlipTransform(dc, ref state);
 
             // Drawn at the identical local rect after the flip is popped: must land at its true,
             // unmirrored screen position (x in [5,15]) -- this is where DrawShapeText now runs.
             dc.DrawRectangle(Brushes.Black, null, new Rect(5, 5, 10, 10));
 
-            PopMethod.Invoke(null, [dc, state]);
+            GridView.PopDrawingObjectTransform(dc, state);
         }
 
         var rects = CollectRects(visual.Drawing);
@@ -110,17 +92,15 @@ public sealed class R90_DrawingObjectFlipTextTests
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            var state = PushMethod.Invoke(null, [dc, 0.0, false, false, rect]);
+            var state = GridView.PushDrawingObjectTransform(dc, 0.0, flipHorizontal: false, flipVertical: false, rect);
 
             dc.DrawRectangle(Brushes.Black, null, new Rect(5, 5, 10, 10));
 
-            var popFlipArgs = new[] { dc, state };
-            PopFlipMethod.Invoke(null, popFlipArgs);
-            state = popFlipArgs[1];
+            GridView.PopDrawingObjectFlipTransform(dc, ref state);
 
             dc.DrawRectangle(Brushes.Black, null, new Rect(5, 5, 10, 10));
 
-            PopMethod.Invoke(null, [dc, state]);
+            GridView.PopDrawingObjectTransform(dc, state);
         }
 
         var rects = CollectRects(visual.Drawing);
