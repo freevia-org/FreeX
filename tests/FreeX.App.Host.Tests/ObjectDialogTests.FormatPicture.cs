@@ -107,7 +107,7 @@ public sealed partial class ObjectDialogTests
         source.Should().Contain("return _cropTopBox;");
         source.Should().Contain("return _cropRightBox;");
         source.Should().Contain("return _cropBottomBox;");
-        source.Should().NotContain("private static void FocusAndSelect(TextBox box)");
+        source.Should().NotContain("internal static void FocusAndSelect(TextBox box)");
     }
 
     [Fact]

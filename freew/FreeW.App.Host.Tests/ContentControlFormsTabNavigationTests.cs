@@ -31,11 +31,6 @@ public sealed class ContentControlFormsTabNavigationTests
         typeof(DocumentView).GetMethod("OnPreviewKeyDown", BindingFlags.NonPublic | BindingFlags.Instance)
         ?? throw new InvalidOperationException("DocumentView.OnPreviewKeyDown not found -- it was renamed or removed.");
 
-    private static readonly MethodInfo TabToContentControlMethod =
-        typeof(DocumentView).GetMethod("TabToContentControl", BindingFlags.NonPublic | BindingFlags.Instance)
-        ?? throw new InvalidOperationException(
-            "DocumentView.TabToContentControl not found -- the Tab-between-fields choke point this test targets was renamed or removed.");
-
     /// <summary>
     /// Two Plain-Text form fields ("Name"/"Email") with a plain body paragraph between them, matching a
     /// typical Word form layout -- a Tab-stop walk must skip the non-field middle paragraph.
@@ -116,7 +111,7 @@ public sealed class ContentControlFormsTabNavigationTests
     }
 
     private static bool InvokeTabToContentControl(DocumentView view, bool forward) =>
-        (bool)TabToContentControlMethod.Invoke(view, [forward])!;
+        view.TabToContentControl(forward);
 
     [StaFact]
     public void OnPreviewKeyDown_Tab_UnderFillingForms_MovesToNextField_ViaRealDispatch()

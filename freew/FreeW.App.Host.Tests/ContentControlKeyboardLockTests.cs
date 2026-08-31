@@ -508,13 +508,8 @@ public sealed class ContentControlKeyboardLockTests
         ((Paragraph)view.Model.Blocks[0]).Runs.Single().Text.Should().Be("AlXice");
     }
 
-    private static readonly MethodInfo IsCaretOnLockedContentControlMethod =
-        typeof(DocumentView).GetMethod("IsCaretOnLockedContentControl", BindingFlags.NonPublic | BindingFlags.Instance)
-        ?? throw new InvalidOperationException(
-            "DocumentView.IsCaretOnLockedContentControl not found -- the predicate backing the Paste/Cut gate was renamed or removed.");
-
     private static bool IsCaretOnLockedContentControl(DocumentView view) =>
-        (bool)IsCaretOnLockedContentControlMethod.Invoke(view, null)!;
+        view.IsCaretOnLockedContentControl();
 
     /// <summary>
     /// freew-cc-6: Word's <c>sdtLocked</c> protects a control's EXISTENCE (its text may still be edited

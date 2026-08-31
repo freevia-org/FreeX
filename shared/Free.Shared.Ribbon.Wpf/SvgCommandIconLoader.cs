@@ -128,7 +128,7 @@ public sealed class SvgCommandIconLoader
         return null;
     }
 
-    private static IEnumerable<string> GetSizeSpecificSlugCandidates(string slug, double size)
+    internal static IEnumerable<string> GetSizeSpecificSlugCandidates(string slug, double size)
     {
         if (size <= 22)
             yield return slug + "-small";

@@ -791,7 +791,7 @@ public static class WorkbookPdfContentBuilder
     /// direct proportion to the configured scale -- matching the WPF PrintRenderer path, which
     /// applies its ScaleTransform unconditionally once scaleRatio&lt;1, never only "on overflow".
     /// </summary>
-    private static (double[] ColWidths, double[] RowHeights, double EffectiveScaleRatio) ComputeActualGridSizes(
+    internal static (double[] ColWidths, double[] RowHeights, double EffectiveScaleRatio) ComputeActualGridSizes(
         Sheet sheet,
         PortablePdfPageContentPlan contentPlan,
         double availableWidth,

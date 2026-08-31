@@ -32,13 +32,6 @@ namespace FreeX.Core.IO.Tests;
 /// </summary>
 public sealed class R124_HasRangeHyperlinkRefsMemoryBoundTests
 {
-    private static readonly MethodInfo HasRangeHyperlinkRefsMethod =
-        typeof(XlsxClosedXmlLoadPackageSanitizer).GetMethod(
-            "HasRangeHyperlinkRefs",
-            BindingFlags.NonPublic | BindingFlags.Static)
-        ?? throw new InvalidOperationException(
-            "HasRangeHyperlinkRefs seam not found -- update this test if the method was renamed.");
-
     private const long AllocationCeiling = 250_000_000; // 250 MB
 
     // A highly-compressible worksheet body: valid, well-formed XML overall (opens with a real
@@ -133,7 +126,7 @@ public sealed class R124_HasRangeHyperlinkRefsMemoryBoundTests
     }
 
     private static bool InvokeHasRangeHyperlinkRefs(MemoryStream package) =>
-        (bool)HasRangeHyperlinkRefsMethod.Invoke(null, [package])!;
+        XlsxClosedXmlLoadPackageSanitizer.HasRangeHyperlinkRefs(package);
 
     private static MemoryStream CreateOversizedWorksheetPackage(int fillerCharacterCount)
     {

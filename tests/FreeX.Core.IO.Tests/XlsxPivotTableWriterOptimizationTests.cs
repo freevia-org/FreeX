@@ -10,10 +10,6 @@ public sealed class XlsxPivotTableWriterOptimizationTests
     private static readonly XNamespace WorkbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     private static readonly IReadOnlyDictionary<string, int> EmptyCalculatedFieldIndexes =
         new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-    private static readonly MethodInfo ToPivotFieldsXmlMethod = typeof(XlsxPivotTableWriter).GetMethod(
-        "ToPivotFieldsXml",
-        BindingFlags.Static | BindingFlags.NonPublic)!;
-
     [Fact]
     public void PivotFields_OverlappingAxesUseLastMetadataButRowAxisAndLastSort()
     {
@@ -99,5 +95,5 @@ public sealed class XlsxPivotTableWriterOptimizationTests
     }
 
     private static XElement WritePivotFields(PivotTableModel pivot) =>
-        (XElement)ToPivotFieldsXmlMethod.Invoke(null, [pivot, null, EmptyCalculatedFieldIndexes, WorkbookNs])!;
+        XlsxPivotTableWriter.ToPivotFieldsXml(pivot, null, EmptyCalculatedFieldIndexes, WorkbookNs);
 }

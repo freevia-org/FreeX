@@ -21,13 +21,8 @@ namespace FreeW.App.Host.Tests;
 /// </summary>
 public sealed class AutoCorrectRestrictEditingLockTests
 {
-    private static readonly MethodInfo TryAutoCorrectMethod =
-        typeof(DocumentView).GetMethod("TryAutoCorrect", BindingFlags.NonPublic | BindingFlags.Instance)
-        ?? throw new InvalidOperationException(
-            "DocumentView.TryAutoCorrect not found -- the method this test targets was renamed or removed.");
-
     private static bool InvokeTryAutoCorrect(DocumentView view, char justTyped) =>
-        (bool)TryAutoCorrectMethod.Invoke(view, [justTyped])!;
+        view.TryAutoCorrect(justTyped);
 
     /// <summary>
     /// Raises a real <see cref="TextCompositionManager.PreviewTextInputEvent"/> at <paramref name="view"/>

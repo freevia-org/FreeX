@@ -54,34 +54,18 @@ namespace FreeW.App.Host.Tests;
 /// </summary>
 public sealed class PagedEditCrossPageDragLockTests
 {
-    private static readonly MethodInfo RangeTouchesLockedContentControlMethod =
-        typeof(PaginatedEditorPanel).GetMethod(
-            "RangeTouchesLockedContentControl", BindingFlags.NonPublic | BindingFlags.Static)
-        ?? throw new InvalidOperationException(
-            "PaginatedEditorPanel.RangeTouchesLockedContentControl not found -- renamed or removed.");
-
-    private static readonly MethodInfo DeleteCrossPageSelectionMethod =
-        typeof(PaginatedEditorPanel).GetMethod(
-            "DeleteCrossPageSelection", BindingFlags.NonPublic | BindingFlags.Instance)
-        ?? throw new InvalidOperationException(
-            "PaginatedEditorPanel.DeleteCrossPageSelection not found -- renamed or removed.");
-
-    private static readonly MethodInfo CompleteDragMethod =
-        typeof(PaginatedEditorPanel).GetMethod("CompleteDrag", BindingFlags.NonPublic | BindingFlags.Instance)
-        ?? throw new InvalidOperationException("PaginatedEditorPanel.CompleteDrag not found -- renamed or removed.");
-
     private static readonly FieldInfo PageHostField =
         typeof(PaginatedEditorPanel).GetField("_pageHost", BindingFlags.NonPublic | BindingFlags.Instance)
         ?? throw new InvalidOperationException("PaginatedEditorPanel._pageHost not found -- renamed or removed.");
 
     private static bool InvokeRangeTouchesLockedContentControl(PageBox box, TextPointer from, TextPointer to) =>
-        (bool)RangeTouchesLockedContentControlMethod.Invoke(null, [box, from, to])!;
+        PaginatedEditorPanel.RangeTouchesLockedContentControl(box, from, to);
 
     private static bool InvokeDeleteCrossPageSelection(PaginatedEditorPanel panel) =>
-        (bool)DeleteCrossPageSelectionMethod.Invoke(panel, null)!;
+        panel.DeleteCrossPageSelection();
 
     private static bool InvokeCompleteDrag(PaginatedEditorPanel panel, Point panelPoint, bool isCopy) =>
-        (bool)CompleteDragMethod.Invoke(panel, [panelPoint, isCopy])!;
+        panel.CompleteDrag(panelPoint, isCopy);
 
     /// <summary>
     /// Forces a real (offscreen, windowless) layout pass over <paramref name="panel"/> so its page

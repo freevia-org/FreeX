@@ -19,12 +19,7 @@ public sealed class R166_HeaderFooterPictureSizeUsesDeviceIndependentUnitsTests
 {
     private static (double Width, double Height) InvokeGetImageSize(byte[] bytes)
     {
-        var method = typeof(HeaderFooterDialog).GetMethod(
-            "GetImageSize",
-            BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new MissingMethodException(nameof(HeaderFooterDialog), "GetImageSize");
-        var result = method.Invoke(null, [bytes]);
-        return ((double, double))result!;
+        return HeaderFooterDialog.GetImageSize(bytes);
     }
 
     [Fact]
