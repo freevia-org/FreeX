@@ -604,7 +604,14 @@ public sealed partial class MainWindow : Window,
             // overwrite question) go through the injected service when one is supplied, matching
             // MainWindow.AssetImports.cs's own `_messageService ?? new AvaloniaUserMessageService`
             // fallback. Null keeps the production owner-parented dialog.
-            messageService: messageService);
+            messageService: messageService,
+            // r174-shared-protection-readonly: mark a source file that cannot be written back to,
+            // matching the WPF host and FreeX's read-only title marker. Supplied as a provider
+            // because the marker appears on open and disappears on Save-As, which the title spec's
+            // captured GroupSuffix cannot express. Save itself is diverted to Save-As inside
+            // PresentationFileCommandSession.
+            groupSuffixProvider: () => PresentationDocumentWindowPlanner.FormatReadOnlySuffix(
+                IsCurrentPresentationReadOnly()));
         _fileSession = PresentationFileCommandSessionFactory.Create(
             new PresentationFileCommandSessionComposition(
                 () => _presentation,
@@ -7357,6 +7364,16 @@ public sealed partial class MainWindow : Window,
         _ribbonBindingSession?.SyncCommandStates();
         _ribbonContextSource.Refresh(Editor);
     }
+
+    /// <summary>
+    /// The read-only marker for the title. Deliberately tolerant of a not-yet-constructed
+    /// <c>_fileSession</c>: SisterAvaloniaFileCommandWorkflow refreshes the title from its OWN
+    /// constructor, which runs before the session below it exists, and an NRE there aborts
+    /// MainWindow construction outright -- the Avalonia crash-on-launch class this shell family
+    /// has been bitten by before.
+    /// </summary>
+    private bool IsCurrentPresentationReadOnly() =>
+        _fileSession is { IsCurrentFileReadOnly: true };
 
     private void OnFileWorkflowChanged()
     {

@@ -48,6 +48,13 @@ public sealed class WpfPresentationFileCommandPortsSourceTests
             .And.Contain("WpfPresentationFileCommandSessionFactory.Create(")
             .And.Contain("_fileSession.ConfirmCloseAllowedAsync().GetAwaiter().GetResult()")
             .And.NotContain("private FileCommands");
+        // r174-shared-protection-readonly: the WPF shell must SHOW the read-only source state the
+        // session now tracks, and must tolerate the title refreshing before _fileSession is
+        // assigned rather than faulting window construction.
+        mainWindow.Should().Contain(
+                "GroupSuffix: PresentationDocumentWindowPlanner.FormatReadOnlySuffix(")
+            .And.Contain("_fileSession is { IsCurrentFileReadOnly: true }");
+        session.Should().Contain("public bool IsCurrentFileReadOnly =>");
         source.Should().NotContain("PresentationFilePersistenceWorkflow.");
         source.Should().NotContain("PresentationFileDialogPlanner.");
         source.Should().NotContain("PresentationExportPlanner.Build");
