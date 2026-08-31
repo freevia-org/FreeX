@@ -4646,10 +4646,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.Unhide), async () => await UnhideSheetAsync(), Enabled(SheetTabContextMenuAction.Unhide));
         yield return CreateSheetTabColorContextMenuItem(tab, Header(SheetTabContextMenuAction.TabColor), Enabled(SheetTabContextMenuAction.TabColor));
         yield return new Separator();
-        yield return CreateSheetTabContextMenuItem(tab, UiText.Get("OutlineSettings_MenuItem"), ShowOutlineSettingsDialog, isIdle);
-        yield return new Separator();
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.SelectAllSheets), SelectAllVisibleSheets, Enabled(SheetTabContextMenuAction.SelectAllSheets));
-        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.UngroupSheets), UngroupSheets, Enabled(SheetTabContextMenuAction.UngroupSheets));
+        if (commonCommands.TryGetValue(SheetTabContextMenuAction.UngroupSheets, out var ungroup))
+            yield return CreateSheetTabContextMenuItem(tab, UiText.Get(ungroup.ResourceKey), UngroupSheets, isIdle);
         yield return new Separator();
         yield return CreateSheetTabContextMenuItem(tab, UiText.Get("MainWindow_Header_MoveLeft"), MoveActiveSheetLeft, isIdle && sheetTabIndex > 0);
         yield return CreateSheetTabContextMenuItem(

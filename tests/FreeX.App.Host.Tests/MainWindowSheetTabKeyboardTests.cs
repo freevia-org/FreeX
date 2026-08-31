@@ -34,8 +34,8 @@ public sealed class MainWindowSheetTabKeyboardTests
 
             harness.SheetTabContextMenuIsOpen.Should().BeTrue(harness.DebugSheetTabs);
             harness.SheetTabContextMenuPlacementTargetIsFocusedTab.Should().BeTrue();
-            harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_InsertSheet")).Should().Be("I");
-            harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_DeleteSheet")).Should().Be("E");
+            harness.SheetTabMenuItemGestureText(UiText.Get("Common_Insert")).Should().Be("I");
+            harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Content_Delete")).Should().Be("E");
             harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_Rename")).Should().Be("R");
             harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_MoveOrCopy")).Should().Be("M");
             harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_ViewCode")).Should().Be("V");
@@ -644,6 +644,8 @@ public sealed class MainWindowSheetTabKeyboardTests
         source.Should().Contain("private void SheetTabChrome_ContextMenuOpening(object sender, ContextMenuEventArgs e)");
         source.Should().Contain("private void RebuildSheetTabContextMenu(ContextMenu menu, SheetTabViewModel? tab)");
         source.Should().Contain("SheetTabContextMenuPlanner.BuildSheetTabCommands(state)");
+        source.Should().NotContain("AddOutlineSettingsContextMenuItem(menu.Items)");
+        source.Should().NotContain("private void AddOutlineSettingsContextMenuItem(ItemCollection target)");
         source.Should().Contain("HideSheetTabContextMenuInputGestures(menu);");
         source.Should().Contain("item.InputGestureText = string.Empty;");
         source.Should().Contain("private SheetTabContextMenuState BuildSheetTabContextMenuState(SheetTabViewModel? tab)");
