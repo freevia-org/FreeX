@@ -194,6 +194,8 @@ public partial class MainWindow
         KeyTipOverlay.Children.Clear();
         InvalidateVisibleKeyTipElementCache();
 
+        var badgePlacements = new List<(Border Badge, RibbonKeyTipBadgePlacement Placement)>();
+        var overlaySize = new Size(RootGrid.ActualWidth, RootGrid.ActualHeight);
         foreach (var element in GetVisibleKeyTipElements(scope))
         {
             var keyTip = RibbonTooltip.GetKeyTip(element);
@@ -216,10 +218,19 @@ public partial class MainWindow
             var badgeKind = GetKeyTipBadgeKind(element);
             var point = RibbonKeyTipOverlayPlacement.PlaceBadge(
                 new Rect(origin, new Size(element.ActualWidth, element.ActualHeight)),
-                new Size(RootGrid.ActualWidth, RootGrid.ActualHeight),
+                overlaySize,
                 badgeSize,
                 badgeKind);
+            badgePlacements.Add((badge, new RibbonKeyTipBadgePlacement(point, badgeSize)));
+        }
 
+        var resolvedPoints = RibbonKeyTipOverlayCollisionResolver.Resolve(
+            badgePlacements.Select(entry => entry.Placement).ToArray(),
+            overlaySize);
+        for (var index = 0; index < badgePlacements.Count; index++)
+        {
+            var (badge, _) = badgePlacements[index];
+            var point = resolvedPoints[index];
             Canvas.SetLeft(badge, point.X);
             Canvas.SetTop(badge, point.Y);
             KeyTipOverlay.Children.Add(badge);
