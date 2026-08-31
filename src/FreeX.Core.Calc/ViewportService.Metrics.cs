@@ -665,7 +665,7 @@ public sealed partial class ViewportService
     /// every scroll tick to pay for scanning the whole trailing region -- only genuinely dense
     /// hidden/custom-height counts near the bottom do.
     /// </summary>
-    private static uint ComputeTerminalRowThresholdLowerBound(Sheet sheet, uint maxRow, double availableHeight)
+    internal static uint ComputeTerminalRowThresholdLowerBound(Sheet sheet, uint maxRow, double availableHeight)
     {
         if (sheet.DefaultRowHeight <= 0)
             return 0;

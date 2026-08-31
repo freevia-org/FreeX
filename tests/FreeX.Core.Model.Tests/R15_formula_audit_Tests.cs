@@ -51,14 +51,9 @@ public sealed class R15_formula_audit_Tests
         // "inconsistent formula" runs): "LOG10" must not be misread as a cell reference (row 10,
         // column "LOG") and rewritten into a bogus R[]C[] relative-reference pattern. With no
         // genuine cell references present, the normalized pattern must equal the original text.
-        var normalizeFormulaPattern = typeof(FormulaAuditingService).GetMethod(
-            "NormalizeFormulaPattern",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        normalizeFormulaPattern.Should().NotBeNull();
-
         var address = new CellAddress(new SheetId(Guid.NewGuid()), 1, 1);
 
-        var normalized = (string)normalizeFormulaPattern!.Invoke(null, [address, "LOG10(5)"])!;
+        var normalized = (string)FormulaAuditingService.NormalizeFormulaPattern(address, "LOG10(5)")!;
 
         normalized.Should().Be("LOG10(5)");
     }

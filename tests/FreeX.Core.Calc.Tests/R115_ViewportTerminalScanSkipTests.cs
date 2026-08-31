@@ -43,18 +43,13 @@ public class R115_ViewportTerminalScanSkipTests
     // to the O(n) scan could still finish under 200ms on fast-enough hardware). The skip condition is
     // actually a pure O(1) function of the sheet's hidden/custom-size COUNTS
     // (ComputeTerminalRowThresholdLowerBound / ComputeTerminalColThresholdLowerBound in
-    // ViewportService.Metrics.cs), so we invoke it directly via reflection and assert the analytic
-    // property that guarantees the scan is skippable, instead of inferring it from timing.
-    private static uint InvokeComputeTerminalRowThresholdLowerBound(Sheet sheet, uint maxRow, double availableHeight)
-    {
-        var method = typeof(ViewportService).GetMethod(
-            "ComputeTerminalRowThresholdLowerBound",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull(
-            "ComputeTerminalRowThresholdLowerBound must still exist as the O(1) lower-bound guard " +
-            "BuildTerminalRowMetrics consults before running its expensive reverse scan");
-        return (uint)method!.Invoke(null, [sheet, maxRow, availableHeight])!;
-    }
+    // ViewportService.Metrics.cs), so we invoke it directly and assert the analytic property that
+    // guarantees the scan is skippable, instead of inferring it from timing. The call is compiled
+    // (the method is internal, with InternalsVisibleTo) rather than reflective, so it must still
+    // exist as the O(1) lower-bound guard BuildTerminalRowMetrics consults before its expensive
+    // reverse scan -- otherwise this stops building.
+    private static uint InvokeComputeTerminalRowThresholdLowerBound(Sheet sheet, uint maxRow, double availableHeight) =>
+        ViewportService.ComputeTerminalRowThresholdLowerBound(sheet, maxRow, availableHeight);
 
     [Fact]
     public void ComputeRowMetricsSummary_NearTopWithHiddenTrailingBlock_SkipsExpensiveTerminalScan()
