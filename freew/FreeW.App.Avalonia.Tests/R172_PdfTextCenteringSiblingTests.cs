@@ -53,17 +53,14 @@ public sealed class R172_PdfTextCenteringSiblingTests
             view.LoadDocument(document);
 
             var ops = new List<PdfDrawOp>();
-            var addPdfTextAt = typeof(DocumentView).GetMethod(
-                "AddPdfTextAt", BindingFlags.Instance | BindingFlags.NonPublic)!;
-            addPdfTextAt.Invoke(view, [
+            view.AddPdfTextAt(
                 ops, label, 300.0, 0.0, fontSizePt, false, "#000000",
-                new Rect(0, 0, 600, 400), 0.0, 792.0, null, null]);
+                new Rect(0, 0, 600, 400), 0.0, 792.0, null, null);
 
             var text = ops.OfType<PdfText>().Should().ContainSingle().Subject;
 
-            var build = typeof(DocumentView).GetMethod("Build", BindingFlags.Instance | BindingFlags.NonPublic)!;
             var fmt = new RunFormatting { FontSizePt = fontSizePt, ColorHex = "#000000" };
-            var realWidthDip = ((FormattedText)build.Invoke(view, [label, fmt])!).WidthIncludingTrailingWhitespace;
+            var realWidthDip = (view.Build(label, fmt)).WidthIncludingTrailingWhitespace;
 
             var expectedXDip = 300.0 - realWidthDip / 2;
             text.X.Should().BeApproximately(
@@ -97,15 +94,11 @@ public sealed class R172_PdfTextCenteringSiblingTests
             var view = new DocumentView();
             view.LoadDocument(document);
             var ops = new List<PdfDrawOp>();
-            var addPdfSceneText = typeof(DocumentView).GetMethod(
-                "AddPdfSceneText", BindingFlags.Instance | BindingFlags.NonPublic)!;
-            addPdfSceneText.Invoke(view, [ops, scene, new Rect(0, 0, 600, 400), 0.0, 792.0]);
+            view.AddPdfSceneText(ops, scene, new Rect(0, 0, 600, 400), 0.0, 792.0);
 
             var text = ops.OfType<PdfText>().Should().ContainSingle().Subject;
 
-            var buildScene = typeof(DocumentView).GetMethod(
-                "BuildChartSceneText", BindingFlags.Instance | BindingFlags.NonPublic)!;
-            var realWidthDip = ((FormattedText)buildScene.Invoke(view, [scene])!).WidthIncludingTrailingWhitespace;
+            var realWidthDip = (view.BuildChartSceneText(scene)).WidthIncludingTrailingWhitespace;
 
             var expectedXDip = 300.0 - realWidthDip / 2;
             text.X.Should().BeApproximately(

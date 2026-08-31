@@ -516,7 +516,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     public void ChartExSeriesTitles_IndexVerbatimAndEmbeddedEntriesWithoutLinqRescans()
     {
         var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxChartXmlWriter.ChartEx.cs");
-        var buildStart = source.IndexOf("    private static IEnumerable<XElement> BuildChartExSeries(", StringComparison.Ordinal);
+        var buildStart = source.IndexOf("    internal static IEnumerable<XElement> BuildChartExSeries(", StringComparison.Ordinal);
         var titleStart = source.IndexOf("    private static XElement? ToChartExSeriesTitleXml(", StringComparison.Ordinal);
         var lookupStart = source.IndexOf("    private sealed class ChartExSeriesTitleLookup", StringComparison.Ordinal);
         var valueStripStart = source.IndexOf("    private static uint GetChartExSeriesValueStrip", StringComparison.Ordinal);
