@@ -123,6 +123,38 @@ public sealed class R82_PivotFieldAxisMoveRoundTripTests
             .Which.SummaryFunction.Should().Be("count");
     }
 
+    [Fact]
+    public void SaveThenReload_DensePivotFieldAxisMove_PreservesEveryFieldOrder()
+    {
+        const int fieldCount = 33;
+        using var source = XlsxPackageTestHelper.SaveWorkbook(CreateWidePivotWorkbook(fieldCount));
+
+        var adapter = new XlsxFileAdapter();
+        var loaded = adapter.Load(source);
+        var pivot = loaded.GetSheetAt(0).PivotTables.Single();
+        var rowFields = pivot.RowFields.ToArray();
+        rowFields.Should().HaveCount(fieldCount - 1);
+
+        pivot.RowFields.Clear();
+        foreach (var field in rowFields)
+            pivot.ColumnFields.Add(field);
+
+        using var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+
+        var root = XlsxPackageTestHelper.ReadPackageXml(saved, "xl/pivotTables/pivotTable1.xml").Root!;
+        root.Element(WorkbookNs + "rowFields").Should().BeNull();
+        root.Element(WorkbookNs + "colFields")!
+            .Elements(WorkbookNs + "field")
+            .Select(field => (int)field.Attribute("x")!)
+            .Should().Equal(Enumerable.Range(0, fieldCount - 1),
+                "the cached metadata must retain all dense column-field indexes and their model order");
+        root.Element(WorkbookNs + "pivotFields")!
+            .Elements(WorkbookNs + "pivotField")
+            .Take(fieldCount - 1)
+            .Should().OnlyContain(field => field.Attribute("axis") != null && field.Attribute("axis")!.Value == "axisCol");
+    }
+
     private static Workbook CreateRegionPivotWorkbook()
     {
         var workbook = new Workbook("R82PivotFieldAxisMoveWorkbook");
@@ -162,6 +194,57 @@ public sealed class R82_PivotFieldAxisMoveRoundTripTests
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+
+        return workbook;
+    }
+
+    private static Workbook CreateWidePivotWorkbook(int fieldCount)
+    {
+        var workbook = new Workbook("R82WidePivotFieldWorkbook");
+        var sheet = workbook.AddSheet("Data");
+        for (var column = 0; column < fieldCount; column++)
+        {
+            var columnIndex = (uint)column + 1;
+            sheet.SetCell(new CellAddress(sheet.Id, 1, columnIndex), new TextValue($"Field{column}"));
+            sheet.SetCell(new CellAddress(sheet.Id, 2, columnIndex),
+                column == fieldCount - 1 ? new NumberValue(1) : new TextValue("A"));
+            sheet.SetCell(new CellAddress(sheet.Id, 3, columnIndex),
+                column == fieldCount - 1 ? new NumberValue(2) : new TextValue("B"));
+        }
+
+        var cache = new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = sheet.Name,
+            SourceReference = $"A1:{CellAddress.NumberToColumnName((uint)fieldCount)}3",
+            PackagePart = "xl/pivotCache/pivotCacheDefinition1.xml",
+            RecordCount = 2,
+        };
+        for (var column = 0; column < fieldCount - 1; column++)
+        {
+            cache.Fields.Add(new PivotCacheFieldModel(
+                $"Field{column}",
+                SharedItemCount: 2,
+                ContainsString: true,
+                SharedItems: ["A", "B"],
+                SharedItemKinds: ['s', 's']));
+        }
+        cache.Fields.Add(new PivotCacheFieldModel($"Field{fieldCount - 1}", ContainsNumber: true));
+        workbook.PivotCaches.Add(cache);
+
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, (uint)fieldCount)),
+            TargetRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 8, 2)),
+            PackagePart = "xl/pivotTables/pivotTable1.xml",
+        };
+        for (var column = 0; column < fieldCount - 1; column++)
+            pivot.RowFields.Add(new PivotFieldModel(column));
+        pivot.DataFields.Add(new PivotDataFieldModel(fieldCount - 1, $"Sum of Field{fieldCount - 1}", "sum"));
         sheet.PivotTables.Add(pivot);
 
         return workbook;

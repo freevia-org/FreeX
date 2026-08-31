@@ -81,6 +81,53 @@ public sealed class R28_QueryTableRenumberedRelationshipPreservationTests
                 "rels path on renumbering, not silently dropped");
     }
 
+    [Fact]
+    public void RenumberedSheet_DenseDuplicateQueryTableRelationships_KeepOneFirstTarget()
+    {
+        var workbook = new Workbook("DenseQueryTableRenumber");
+        var data = workbook.AddSheet("Data");
+        data.SetCell(new CellAddress(data.Id, 1, 1), new TextValue("data"));
+        var report = workbook.AddSheet("Report");
+        report.SetCell(new CellAddress(report.Id, 1, 1), new TextValue("report"));
+        var queryResult = workbook.AddSheet("QueryResult");
+        queryResult.SetCell(new CellAddress(queryResult.Id, 1, 1), new TextValue("query"));
+
+        using var source = XlsxPackageTestHelper.SaveWorkbook(workbook);
+        string queryResultSourcePath;
+        source.Position = 0;
+        using (var archive = new ZipArchive(source, ZipArchiveMode.Read, leaveOpen: true))
+            queryResultSourcePath = GetWorksheetPathForSheetName(archive, "QueryResult");
+
+        AddQueryTableRelationship(source, queryResultSourcePath, duplicateRelationshipCount: 48);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var loaded = adapter.Load(source);
+        loaded.RemoveSheet(loaded.GetSheet("Data")!.Id);
+        var loadedReport = loaded.GetSheet("Report")!;
+        loadedReport.SetCell(new CellAddress(loadedReport.Id, 2, 1), new TextValue("edited"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+
+        saved.Position = 0;
+        using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        var queryResultTargetPath = GetWorksheetPathForSheetName(savedArchive, "QueryResult");
+        var relsXml = XlsxPackageXmlEditor.LoadXml(
+            savedArchive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(queryResultTargetPath))!);
+        var preservedQueryTableRelationship = relsXml.Root!
+            .Elements(PackageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == QueryTableRelationshipType &&
+                relationship.Attribute("Target")?.Value == "../queryTables/queryTable1.xml")
+            .Should()
+            .ContainSingle(
+                "the target lookup must preserve the existing first-entry deduplication semantics even " +
+                "when a source worksheet carries many duplicate query-table relationships")
+            .Subject;
+        preservedQueryTableRelationship.Attribute("Id")!.Value.Should().Be("rIdFreeXQueryTable0");
+    }
+
     // Sibling already-working case: the retained sheet holding the queryTable relationship keeps its
     // ORIGINAL worksheet path (no renumbering) across a full-rebuild save. This exercises the
     // pre-existing same-path relationship merge (XlsxPackageMetadataMerger's
@@ -156,7 +203,10 @@ public sealed class R28_QueryTableRenumberedRelationshipPreservationTests
     /// xl/queryTables/queryTable1.xml plus the worksheet's own relationship pointing at it. Mirrors the
     /// package shape built by XlsxNonChartSchemaValidationTests.ConnectionsQueryTables.cs.
     /// </summary>
-    private static void AddQueryTableRelationship(MemoryStream packageStream, string worksheetPath)
+    private static void AddQueryTableRelationship(
+        MemoryStream packageStream,
+        string worksheetPath,
+        int duplicateRelationshipCount = 1)
     {
         packageStream.Position = 0;
         using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
@@ -184,11 +234,14 @@ public sealed class R28_QueryTableRenumberedRelationshipPreservationTests
         var worksheetRelsXml = worksheetRelsEntry is not null
             ? XlsxPackageXmlEditor.LoadXml(worksheetRelsEntry)
             : new XDocument(new XElement(PackageRelNs + "Relationships"));
-        worksheetRelsXml.Root!.Add(new XElement(
-            PackageRelNs + "Relationship",
-            new XAttribute("Id", "rIdFreeXQueryTable"),
-            new XAttribute("Type", QueryTableRelationshipType),
-            new XAttribute("Target", "../queryTables/queryTable1.xml")));
+        for (var relationshipIndex = 0; relationshipIndex < duplicateRelationshipCount; relationshipIndex++)
+        {
+            worksheetRelsXml.Root!.Add(new XElement(
+                PackageRelNs + "Relationship",
+                new XAttribute("Id", $"rIdFreeXQueryTable{relationshipIndex}"),
+                new XAttribute("Type", QueryTableRelationshipType),
+                new XAttribute("Target", "../queryTables/queryTable1.xml")));
+        }
         XlsxPackageXmlEditor.ReplaceXml(archive, worksheetRelsPath, worksheetRelsXml);
 
         packageStream.Position = 0;

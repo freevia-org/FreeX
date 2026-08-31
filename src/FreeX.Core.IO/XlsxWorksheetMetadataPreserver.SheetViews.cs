@@ -6,7 +6,7 @@ namespace FreeX.Core.IO;
 internal static partial class XlsxWorksheetMetadataPreserver
 {
     // Worksheet sheet format and sheet view native metadata preservation.
-    private static bool MergeWorksheetSheetFormatProperties(XElement? sourceSheetFormatProperties, XElement targetRoot, XNamespace workbookNs)
+    internal static bool MergeWorksheetSheetFormatProperties(XElement? sourceSheetFormatProperties, XElement targetRoot, XNamespace workbookNs)
     {
         if (sourceSheetFormatProperties is null)
             return false;

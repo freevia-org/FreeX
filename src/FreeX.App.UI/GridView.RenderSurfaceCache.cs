@@ -14,7 +14,7 @@ public partial class GridView
     private bool _hasLastPreSelectionLayerRenderKey;
     private bool _selectionVisualOnlyChangePending;
 
-    private readonly record struct PreSelectionLayerCacheKey(
+    internal readonly record struct PreSelectionLayerCacheKey(
         IReadOnlyList<DisplayCell> Cells,
         IReadOnlyList<RowMetric> RowMetrics,
         IReadOnlyList<ColMetric> ColMetrics,
@@ -128,7 +128,7 @@ public partial class GridView
         return group;
     }
 
-    private PreSelectionLayerCacheKey CreatePreSelectionLayerCacheKey(bool skipHeavyLayers)
+    internal PreSelectionLayerCacheKey CreatePreSelectionLayerCacheKey(bool skipHeavyLayers)
     {
         var mergedRegions = MergedRegions;
         var rowPageBreaks = RowPageBreaks;

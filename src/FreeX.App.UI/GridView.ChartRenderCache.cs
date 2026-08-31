@@ -74,7 +74,7 @@ public partial class GridView
     /// differ -- e.g. a pure scroll that repositions the window without touching the chart's own
     /// source data. XORed per-cell so fingerprint order doesn't depend on list iteration order.
     /// </summary>
-    private static long ComputeChartDataFingerprint(ChartModel chart, ViewportModel viewport)
+    internal static long ComputeChartDataFingerprint(ChartModel chart, ViewportModel viewport)
     {
         var dataRange = chart.DataRange;
         long fingerprint = 0;
@@ -110,7 +110,7 @@ public partial class GridView
         column >= dataRange.Start.Col &&
         column <= dataRange.End.Col;
 
-    private ImageSource? GetCachedChartImage(
+    internal ImageSource? GetCachedChartImage(
         ChartModel chart,
         ViewportModel viewport,
         WorkbookTheme theme,

@@ -126,12 +126,7 @@ public sealed class ChartRendererWaterfallTests
 
     private static PlotModel BuildPlotModel(ChartModel chart, ViewportModel viewport, WorkbookTheme theme)
     {
-        var method = typeof(ChartRenderer).GetMethod(
-            "BuildPlotModel",
-            BindingFlags.NonPublic | BindingFlags.Static,
-            [typeof(ChartModel), typeof(ViewportModel), typeof(WorkbookTheme)]);
-        method.Should().NotBeNull();
-        return method!.Invoke(null, [chart, viewport, theme]).Should().BeOfType<PlotModel>().Subject;
+        return ChartRenderer.BuildPlotModel(chart, viewport, theme).Should().BeOfType<PlotModel>().Subject;
     }
 
     private static DisplayCell Cell(uint row, uint col, string text) =>

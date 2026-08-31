@@ -86,7 +86,19 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         method.Should().Contain("var pivotXml = XlsxPackageXmlEditor.LoadXml(entry);");
         method.Should().Contain("changed |= RewritePreservedPivotPageFieldSelections");
         method.Should().Contain("changed |= RewritePreservedPivotDataFieldSummaries");
+        method.Should().Contain("var fieldMetadata = PreservedPivotFieldMetadata.Create(pivot);");
+        method.Should().Contain("RewritePreservedPivotFieldAxes(root, pivot, cache, fieldMetadata, workbookNs)");
+        method.Should().Contain("RewritePreservedPivotFieldItemFilters(root, cache, fieldMetadata, workbookNs)");
+        method.Should().Contain("RewritePreservedPivotPageFieldSelections(root, cache, fieldMetadata, workbookNs)");
         method.Should().Contain("if (changed)");
+        source.Should().Contain("private sealed class PreservedPivotFieldMetadata");
+        source.Should().Contain("axisBySourceFieldIndex.TryAdd(field.SourceFieldIndex, \"axisRow\")");
+        source.Should().Contain("axisBySourceFieldIndex.TryAdd(field.SourceFieldIndex, \"axisCol\")");
+        source.Should().Contain("axisBySourceFieldIndex.TryAdd(field.SourceFieldIndex, \"axisPage\")");
+        source.Should().NotContain("desiredRowIndexes.Contains(index)",
+            "preserved pivot-field axis rewrites must use the per-pivot index instead of linear list scans per native field");
+        source.Should().NotContain("FindPreservedPivotField(",
+            "preserved item-filter rewrites must use the precomputed last-match model lookup");
     }
 
     [Fact]
@@ -480,6 +492,107 @@ public sealed partial class XlsxFileAdapterPerformanceTests
         source.Should().NotContain(
             "ElementsAfterDataValidations",
             "a switch keeps the fixed worksheet-order anchor set allocation-free");
+    }
+
+    [Fact]
+    public void DataValidationClosedXmlLoad_IndexesAcceptedRulesByExactRange()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxDataValidationClosedXmlMapper.cs");
+        var loadEnd = source.IndexOf("    public static void Save(", StringComparison.Ordinal);
+        var load = source[..loadEnd];
+
+        load.Should().Contain("var existingRulesByRange = BuildValidationRangeIndex(sheet.DataValidations);")
+            .And.Contain("IsDuplicateCoveredValidation(existingRulesByRange, dv)")
+            .And.Contain("IndexValidationRanges(existingRulesByRange, dv)")
+            .And.NotContain("IsDuplicateCoveredValidation(sheet.DataValidations, dv)",
+                "each incoming data validation should only inspect rules registered for its exact range");
+        source.Should().Contain("private static Dictionary<GridRange, List<DataValidation>> BuildValidationRangeIndex")
+            .And.Contain("private static bool IsRangeCovered(")
+            .And.NotContain("existingRules.Any(existing => CoversRange(existing, range, candidate))",
+                "data-validation deduplication must avoid rescanning every accepted rule for each incoming rule");
+    }
+
+    [Fact]
+    public void ChartExSeriesTitles_IndexVerbatimAndEmbeddedEntriesWithoutLinqRescans()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxChartXmlWriter.ChartEx.cs");
+        var buildStart = source.IndexOf("    internal static IEnumerable<XElement> BuildChartExSeries(", StringComparison.Ordinal);
+        var titleStart = source.IndexOf("    private static XElement? ToChartExSeriesTitleXml(", StringComparison.Ordinal);
+        var lookupStart = source.IndexOf("    private sealed class ChartExSeriesTitleLookup", StringComparison.Ordinal);
+        var valueStripStart = source.IndexOf("    private static uint GetChartExSeriesValueStrip", StringComparison.Ordinal);
+        var build = source[buildStart..titleStart];
+        var title = source[titleStart..lookupStart];
+        var lookup = source[lookupStart..valueStripStart];
+
+        build.Should().Contain("ChartExSeriesTitleLookup.Create(chart)");
+        title.Should().Contain("titleLookup.TryGetVerbatim(seriesIndex, out var verbatim)")
+            .And.NotContain(".FirstOrDefault(",
+                "each chartEx series title should use the precomputed lookup instead of rescanning formula entries");
+        lookup.Should().Contain("if (chart.VerbatimSeriesFormulas is not { Count: > 0 } verbatimSeries)")
+            .And.Contain("return null;",
+                "the common chartEx path with no verbatim formulas must not allocate title lookup dictionaries")
+            .And.Contain("verbatimBySeriesIndex.TryAdd(verbatim.SeriesIndex, verbatim)")
+            .And.Contain("embeddedBySeriesIndex.TryAdd(embedded.SeriesIndex, embedded)",
+                "first duplicate series entries must retain the prior FirstOrDefault semantics")
+            .And.NotContain(".FirstOrDefault(",
+                "lookup construction should scan each source collection exactly once");
+    }
+
+    [Fact]
+    public void ClassicChartSeries_IndexVerbatimFormulasWithoutPerSeriesLinqRescans()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxChartXmlWriter.Series.cs");
+        var lookupStart = source.IndexOf("    private sealed class ChartSeriesVerbatimFormulaLookup", StringComparison.Ordinal);
+        var lookupEnd = source.IndexOf("    /// <summary>", lookupStart, StringComparison.Ordinal);
+        var builders = source[..lookupStart] + source[lookupEnd..];
+        var lookup = source[lookupStart..lookupEnd];
+
+        builders.Should().Contain("var verbatimLookup = ChartSeriesVerbatimFormulaLookup.Create(chart);")
+            .And.NotContain("chart.VerbatimSeriesFormulas?.FirstOrDefault(",
+                "classic chart series writers should not linearly rescan verbatim formulas for every series");
+        lookup.Should().Contain("if (chart.VerbatimSeriesFormulas is not { Count: > 0 } formulas)")
+            .And.Contain("return null;",
+                "charts without verbatim formulas must stay allocation-free")
+            .And.Contain("formulasBySeriesIndex.TryAdd(formula.SeriesIndex, formula)",
+                "first duplicate formula entries must retain the prior FirstOrDefault behavior");
+    }
+
+    [Fact]
+    public void ClassicChartSeries_IndexLastSeriesFormatsWithoutPerSeriesLinqRescans()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxChartXmlWriter.Series.cs");
+        var lookupStart = source.IndexOf("    private sealed class ChartSeriesFormatLookup", StringComparison.Ordinal);
+        var lookupEnd = source.IndexOf("    /// <summary>", lookupStart, StringComparison.Ordinal);
+        var builders = source[..lookupStart] + source[lookupEnd..];
+        var lookup = source[lookupStart..lookupEnd];
+
+        builders.Should().Contain("var formatLookup = ChartSeriesFormatLookup.Create(chart);")
+            .And.NotContain("chart.SeriesFormats.LastOrDefault(",
+                "classic chart series formatting must not linearly rescan the full format list for every helper");
+        lookup.Should().Contain("if (chart.SeriesFormats.Count == 0)")
+            .And.Contain("return null;",
+                "charts without per-series formats must remain allocation-free")
+            .And.Contain("formatsBySeriesIndex[format.SeriesIndex] = format",
+                "later duplicate format entries must retain the prior LastOrDefault precedence")
+            .And.Contain("Normalize(format)",
+                "enum sanitization must remain part of every indexed format lookup");
+    }
+
+    [Fact]
+    public void SourcePackage_RenumberedQueryTableReplayIndexesExistingTargets()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxFileAdapter.SourcePackage.cs");
+        var methodStart = source.IndexOf(
+            "    private static void PreserveRenumberedWorksheetQueryTableRelationships(",
+            StringComparison.Ordinal);
+        var methodEnd = source.IndexOf("    private static void CloneQueryTablesForDuplicatedSheets(", methodStart, StringComparison.Ordinal);
+        var method = source[methodStart..methodEnd];
+
+        method.Should().Contain("var existingQueryTableTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);")
+            .And.Contain("if (!existingQueryTableTargets.Add(target))")
+            .And.NotContain(".Any(existing =>",
+                "replaying many query-table relationships onto a renumbered worksheet must not rescan " +
+                "the generated relationship XML for every source relationship");
     }
 
     [Fact]

@@ -32,7 +32,7 @@ public sealed partial class GridViewRenderPerformanceTests
         renderSelectionRange.Should().Contain("CalculateSelectionRangeLayout(Viewport, range, rowHeaderWidth, columnHeaderHeight)");
 
         var singleCellLayout = selectionSource[
-            selectionSource.IndexOf("private SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout? CalculateSelectionRangeLayout", StringComparison.Ordinal)..
+            selectionSource.IndexOf("internal SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout? CalculateSelectionRangeLayout", StringComparison.Ordinal)..
             selectionSource.IndexOf("private static bool IsSingleCellRange", StringComparison.Ordinal)];
         singleCellLayout.Should().Contain("IsSingleCellRange(range)");
         singleCellLayout.Should().Contain("CalculateVisibleSingleCellSelectionLayout(viewport, range, rowHeaderWidth, columnHeaderHeight)");
@@ -81,7 +81,7 @@ public sealed partial class GridViewRenderPerformanceTests
         gridViewSource.Should().Contain("private static readonly Pen[] MarchingAntsCopyOverlayPens = CreateMarchingAntsPens(Brushes.White, 1.5);");
         gridViewSource.Should().Contain("private static readonly Pen[] MarchingAntsCutOverlayPens = MarchingAntsCopyOverlayPens;");
         gridViewSource.Should().Contain("private static Pen[] CreateMarchingAntsPens");
-        gridViewSource.Should().Contain("private static int GetMarchingAntsPhase(double offset)");
+        gridViewSource.Should().Contain("internal static int GetMarchingAntsPhase(double offset)");
         renderMarchingAnts.Should().Contain("var phase = GetMarchingAntsPhase(_marchOffset);");
         renderMarchingAnts.Should().Contain("MarchingAntsBlackPens[phase]");
         renderMarchingAnts.Should().Contain("ClipboardIsCut ? MarchingAntsCutOverlayPens[phase] : MarchingAntsCopyOverlayPens[phase]");
@@ -110,16 +110,11 @@ public sealed partial class GridViewRenderPerformanceTests
     [Fact]
     public void GetMarchingAntsPhase_NormalizesAnimationOffset()
     {
-        var getPhase = typeof(GridView).GetMethod(
-            "GetMarchingAntsPhase",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
-        getPhase.Should().NotBeNull();
-        getPhase!.Invoke(null, [0d]).Should().Be(0);
-        getPhase.Invoke(null, [1.5d]).Should().Be(3);
-        getPhase.Invoke(null, [7.5d]).Should().Be(15);
-        getPhase.Invoke(null, [8.0d]).Should().Be(0);
-        getPhase.Invoke(null, [-0.5d]).Should().Be(15);
+        GridView.GetMarchingAntsPhase(0d).Should().Be(0);
+        GridView.GetMarchingAntsPhase(1.5d).Should().Be(3);
+        GridView.GetMarchingAntsPhase(7.5d).Should().Be(15);
+        GridView.GetMarchingAntsPhase(8.0d).Should().Be(0);
+        GridView.GetMarchingAntsPhase(-0.5d).Should().Be(15);
     }
 
     [Fact]
@@ -188,10 +183,6 @@ public sealed partial class GridViewRenderPerformanceTests
     {
         RunOnStaThread(() =>
         {
-            var method = typeof(GridView).GetMethod(
-                "CreatePreSelectionLayerCacheKey",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            method.Should().NotBeNull();
 
             var rows = new[] { new RowMetric(1, 20, 0) };
             var columns = new[] { new ColMetric(1, 64, 0) };
@@ -205,11 +196,11 @@ public sealed partial class GridViewRenderPerformanceTests
             grid.Measure(new Size(320, 240));
             grid.Arrange(new Rect(0, 0, 320, 240));
 
-            var firstKey = method!.Invoke(grid, [false]);
+            var firstKey = grid.CreatePreSelectionLayerCacheKey(false);
             grid.Viewport = new ViewportModel(cells, rows, columns);
-            var wrappedKey = method.Invoke(grid, [false]);
+            var wrappedKey = grid.CreatePreSelectionLayerCacheKey(false);
             grid.Viewport = new ViewportModel(new[] { Cell(1, 1, "value") }, rows, columns);
-            var changedCellsKey = method.Invoke(grid, [false]);
+            var changedCellsKey = grid.CreatePreSelectionLayerCacheKey(false);
 
             wrappedKey.Should().Be(firstKey);
             changedCellsKey.Should().NotBe(firstKey);

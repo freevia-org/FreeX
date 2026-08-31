@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -23,9 +22,10 @@ public sealed class BorderRenderTests
         Point p2,
         double effectivePixelsPerDip = 1.0)
     {
-        var method = typeof(GridView).GetMethod("DrawBorderEdge", BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull();
-        method!.Invoke(null, [dc, border, p1, p2, WorkbookTheme.Office, null, null, effectivePixelsPerDip]);
+        // Direct call, not reflection: DrawBorderEdge is internal and this assembly has
+        // InternalsVisibleTo, so a change to its signature is a build error right here rather than a
+        // runtime TargetParameterCountException out of a positional argument array.
+        GridView.DrawBorderEdge(dc, border, p1, p2, WorkbookTheme.Office, null, null, effectivePixelsPerDip);
     }
 
     private static RenderTargetBitmap RenderLineToBitmap(CellBorder border, Point p1, Point p2, int dpi)

@@ -9,7 +9,7 @@ namespace FreeX.Core.IO;
 
 public sealed partial class XlsxFileAdapter
 {
-    private static void ApplyPackagePostProcessing(
+    internal static void ApplyPackagePostProcessing(
         Workbook workbook,
         Stream packageStream,
         string? currentModelFingerprint = null,
@@ -497,6 +497,15 @@ public sealed partial class XlsxFileAdapter
         {
             packageStream.Position = 0;
             XlsxSourceDrawingGeometryRewriter.Save(packageStream, workbook, GetWorksheetPathMap());
+
+            // round-176-drawing-hyperlink-persist: the same verbatim-preservation gap, for the same
+            // objects, one field over. A source-loaded object's a:hlinkClick (and the drawing-rels
+            // entry behind it) is replayed from the source package exactly like its anchor geometry
+            // was, so a DrawingObjectHyperlink rewritten on the model by a command that leaves
+            // IsSourceLoaded alone -- the row/column shift (freex-hyperlinks F1), Rename/Delete Sheet
+            // (R107) -- reached the model and never the saved file.
+            packageStream.Position = 0;
+            XlsxSourceDrawingHyperlinkRewriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
         // R118-io-drawing-zorder-1: Bring Forward/Send Backward/Selection Pane commands only ever
@@ -693,10 +702,11 @@ public sealed partial class XlsxFileAdapter
                     continue;
 
                 cachesById.TryGetValue(pivot.CacheId, out var cache);
+                var fieldMetadata = PreservedPivotFieldMetadata.Create(pivot);
 
-                var changed = RewritePreservedPivotFieldAxes(root, pivot, cache, workbookNs);
-                changed |= RewritePreservedPivotFieldItemFilters(root, pivot, cache, workbookNs);
-                changed |= RewritePreservedPivotPageFieldSelections(root, pivot, cache, workbookNs);
+                var changed = RewritePreservedPivotFieldAxes(root, pivot, cache, fieldMetadata, workbookNs);
+                changed |= RewritePreservedPivotFieldItemFilters(root, cache, fieldMetadata, workbookNs);
+                changed |= RewritePreservedPivotPageFieldSelections(root, cache, fieldMetadata, workbookNs);
                 changed |= RewritePreservedPivotValueAndLabelFilters(root, pivot, workbookNs);
                 changed |= RewritePreservedPivotGrandTotals(root, pivot);
                 changed |= RewritePreservedPivotReportLayout(root, pivot, workbookNs);
@@ -704,6 +714,67 @@ public sealed partial class XlsxFileAdapter
                 if (changed)
                     XlsxPackageXmlEditor.ReplaceXml(archive, pivotPath, pivotXml);
             }
+        }
+    }
+
+    // The preserved-part rewrites below all need the same field membership/lookup facts. Build them
+    // once per pivot definition rather than rescanning the row, column, and page lists for every
+    // native <pivotField>. The maps deliberately encode the pre-existing lookup precedence:
+    // axis attributes prefer row over column over page, while filter data uses the last matching
+    // model field across row -> column -> page (and page selection uses the last page field).
+    private sealed class PreservedPivotFieldMetadata(
+        IReadOnlyList<int> desiredRowIndexes,
+        IReadOnlyList<int> desiredColumnIndexes,
+        IReadOnlyList<int> desiredPageIndexes,
+        IReadOnlyDictionary<int, string> axisBySourceFieldIndex,
+        IReadOnlyDictionary<int, PivotFieldModel> fieldBySourceFieldIndex,
+        IReadOnlyDictionary<int, PivotFieldModel> pageFieldBySourceFieldIndex)
+    {
+        public IReadOnlyList<int> DesiredRowIndexes { get; } = desiredRowIndexes;
+        public IReadOnlyList<int> DesiredColumnIndexes { get; } = desiredColumnIndexes;
+        public IReadOnlyList<int> DesiredPageIndexes { get; } = desiredPageIndexes;
+        public IReadOnlyDictionary<int, string> AxisBySourceFieldIndex { get; } = axisBySourceFieldIndex;
+        public IReadOnlyDictionary<int, PivotFieldModel> FieldBySourceFieldIndex { get; } = fieldBySourceFieldIndex;
+        public IReadOnlyDictionary<int, PivotFieldModel> PageFieldBySourceFieldIndex { get; } = pageFieldBySourceFieldIndex;
+
+        public static PreservedPivotFieldMetadata Create(PivotTableModel pivot)
+        {
+            var desiredRowIndexes = new List<int>(pivot.RowFields.Count);
+            var desiredColumnIndexes = new List<int>(pivot.ColumnFields.Count);
+            var desiredPageIndexes = new List<int>(pivot.PageFields.Count);
+            var axisBySourceFieldIndex = new Dictionary<int, string>();
+            var fieldBySourceFieldIndex = new Dictionary<int, PivotFieldModel>();
+            var pageFieldBySourceFieldIndex = new Dictionary<int, PivotFieldModel>();
+
+            foreach (var field in pivot.RowFields)
+            {
+                desiredRowIndexes.Add(field.SourceFieldIndex);
+                axisBySourceFieldIndex.TryAdd(field.SourceFieldIndex, "axisRow");
+                fieldBySourceFieldIndex[field.SourceFieldIndex] = field;
+            }
+
+            foreach (var field in pivot.ColumnFields)
+            {
+                desiredColumnIndexes.Add(field.SourceFieldIndex);
+                axisBySourceFieldIndex.TryAdd(field.SourceFieldIndex, "axisCol");
+                fieldBySourceFieldIndex[field.SourceFieldIndex] = field;
+            }
+
+            foreach (var field in pivot.PageFields)
+            {
+                desiredPageIndexes.Add(field.SourceFieldIndex);
+                axisBySourceFieldIndex.TryAdd(field.SourceFieldIndex, "axisPage");
+                fieldBySourceFieldIndex[field.SourceFieldIndex] = field;
+                pageFieldBySourceFieldIndex[field.SourceFieldIndex] = field;
+            }
+
+            return new PreservedPivotFieldMetadata(
+                desiredRowIndexes,
+                desiredColumnIndexes,
+                desiredPageIndexes,
+                axisBySourceFieldIndex,
+                fieldBySourceFieldIndex,
+                pageFieldBySourceFieldIndex);
         }
     }
 
@@ -741,19 +812,16 @@ public sealed partial class XlsxFileAdapter
         XElement root,
         PivotTableModel pivot,
         PivotCacheModel? cache,
+        PreservedPivotFieldMetadata fieldMetadata,
         XNamespace workbookNs)
     {
-        var desiredRowIndexes = pivot.RowFields.Select(field => field.SourceFieldIndex).ToList();
-        var desiredColumnIndexes = pivot.ColumnFields.Select(field => field.SourceFieldIndex).ToList();
-        var desiredPageIndexes = pivot.PageFields.Select(field => field.SourceFieldIndex).ToList();
-
         var existingRowIndexes = ReadPreservedPivotFieldCollectionIndexes(root.Element(workbookNs + "rowFields"), workbookNs);
         var existingColumnIndexes = ReadPreservedPivotFieldCollectionIndexes(root.Element(workbookNs + "colFields"), workbookNs);
         var existingPageIndexes = ReadPreservedPivotPageFieldIndexes(root.Element(workbookNs + "pageFields"), workbookNs);
 
-        if (existingRowIndexes.SequenceEqual(desiredRowIndexes) &&
-            existingColumnIndexes.SequenceEqual(desiredColumnIndexes) &&
-            existingPageIndexes.SequenceEqual(desiredPageIndexes))
+        if (existingRowIndexes.SequenceEqual(fieldMetadata.DesiredRowIndexes) &&
+            existingColumnIndexes.SequenceEqual(fieldMetadata.DesiredColumnIndexes) &&
+            existingPageIndexes.SequenceEqual(fieldMetadata.DesiredPageIndexes))
         {
             return false;
         }
@@ -764,11 +832,7 @@ public sealed partial class XlsxFileAdapter
             var pivotFieldElements = pivotFieldsElement.Elements(workbookNs + "pivotField").ToList();
             for (var index = 0; index < pivotFieldElements.Count; index++)
             {
-                var desiredAxis =
-                    desiredRowIndexes.Contains(index) ? "axisRow" :
-                    desiredColumnIndexes.Contains(index) ? "axisCol" :
-                    desiredPageIndexes.Contains(index) ? "axisPage" :
-                    null;
+                fieldMetadata.AxisBySourceFieldIndex.TryGetValue(index, out var desiredAxis);
 
                 var element = pivotFieldElements[index];
                 if (string.Equals(element.Attribute("axis")?.Value, desiredAxis, StringComparison.Ordinal))
@@ -1097,8 +1161,8 @@ public sealed partial class XlsxFileAdapter
     // reassignment is out of scope for this patch-style rewrite.
     private static bool RewritePreservedPivotPageFieldSelections(
         XElement pivotTableDefinitionRoot,
-        PivotTableModel pivot,
         PivotCacheModel? cache,
+        PreservedPivotFieldMetadata fieldMetadata,
         XNamespace workbookNs)
     {
         var pageFieldsElement = pivotTableDefinitionRoot.Element(workbookNs + "pageFields");
@@ -1112,8 +1176,7 @@ public sealed partial class XlsxFileAdapter
             if (fieldIndex is null)
                 continue;
 
-            var model = pivot.PageFields.LastOrDefault(field => field.SourceFieldIndex == fieldIndex.Value);
-            if (model is null)
+            if (!fieldMetadata.PageFieldBySourceFieldIndex.TryGetValue(fieldIndex.Value, out var model))
                 continue;
 
             if (RewritePreservedPageFieldSelection(pageFieldElement, model, cache))
@@ -1191,8 +1254,8 @@ public sealed partial class XlsxFileAdapter
     // completely untouched, preserving whatever the source file originally carried.
     private static bool RewritePreservedPivotFieldItemFilters(
         XElement pivotTableDefinitionRoot,
-        PivotTableModel pivot,
         PivotCacheModel? cache,
+        PreservedPivotFieldMetadata fieldMetadata,
         XNamespace workbookNs)
     {
         if (cache is null)
@@ -1206,8 +1269,8 @@ public sealed partial class XlsxFileAdapter
         var changed = false;
         for (var fieldIndex = 0; fieldIndex < pivotFieldElements.Count && fieldIndex < cache.Fields.Count; fieldIndex++)
         {
-            var model = FindPreservedPivotField(pivot, fieldIndex);
-            if (model?.SelectedItems is not { } selectedItems)
+            if (!fieldMetadata.FieldBySourceFieldIndex.TryGetValue(fieldIndex, out var model) ||
+                model.SelectedItems is not { } selectedItems)
                 continue;
 
             var cacheField = cache.Fields[fieldIndex];
@@ -1247,12 +1310,6 @@ public sealed partial class XlsxFileAdapter
 
         return changed;
     }
-
-    private static PivotFieldModel? FindPreservedPivotField(PivotTableModel pivot, int sourceFieldIndex) =>
-        pivot.RowFields
-            .Concat(pivot.ColumnFields)
-            .Concat(pivot.PageFields)
-            .LastOrDefault(field => field.SourceFieldIndex == sourceFieldIndex);
 
     // Maps each raw OOXML shared-item index (the pivotField item's own "x" attribute, which includes any
     // dropped <m/> blank entries) to its materialized FreeX.Core.Model SharedItems index. When the
@@ -1942,7 +1999,10 @@ public sealed partial class XlsxFileAdapter
         /// <summary>
         /// True when any sheet has at least one source-loaded picture/text box/shape. Gates the F15
         /// anchor-geometry rewrite (<see cref="XlsxSourceDrawingGeometryRewriter"/>) that keeps a
-        /// resize/move of a source-loaded drawing object from being discarded on save.
+        /// resize/move of a source-loaded drawing object from being discarded on save, and its
+        /// object-hyperlink sibling <see cref="XlsxSourceDrawingHyperlinkRewriter"/>
+        /// (round-176-drawing-hyperlink-persist), which does the same for
+        /// <see cref="DrawingObjectHyperlink"/>.
         /// </summary>
         public bool HasSourceLoadedDrawingObjects;
         /// <summary>

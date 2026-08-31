@@ -161,15 +161,21 @@ public sealed partial class SlidePane : Border
     internal void RefreshItemChrome()
     {
         var projection = _workarea.SlidePaneSession.Projection;
+        var projectedSlides = new Dictionary<int, PresentationSlidePaneItemProjection>(
+            projection.Items.Count);
+        foreach (var projected in projection.Items)
+        {
+            if (projected.Entry.Kind == SlidePaneEntryKind.Slide)
+                projectedSlides.TryAdd(projected.Entry.SlideIndex, projected);
+        }
+
         foreach (var item in _list.Items.OfType<ListBoxItem>())
         {
             if (item.Tag is not int slideIndex || item.Content is not Border chrome)
                 continue;
 
-            var projected = projection.Items.FirstOrDefault(candidate =>
-                candidate.Entry.Kind == SlidePaneEntryKind.Slide &&
-                candidate.Entry.SlideIndex == slideIndex);
-            if (projected?.Thumbnail is not { } plan)
+            if (!projectedSlides.TryGetValue(slideIndex, out var projected) ||
+                projected.Thumbnail is not { } plan)
                 continue;
 
             ApplyThumbnailChrome(chrome, item, projected.AccessibilityOrdinal, plan);

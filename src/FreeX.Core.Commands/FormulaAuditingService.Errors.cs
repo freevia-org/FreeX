@@ -1133,7 +1133,7 @@ public static partial class FormulaAuditingService
         return new CellAddress(sheetId, row, col);
     }
 
-    private static string NormalizeFormulaPattern(CellAddress address, string formulaText)
+    internal static string NormalizeFormulaPattern(CellAddress address, string formulaText)
     {
         var normalizedLength = formulaText.Length;
         var replacementCount = 0;

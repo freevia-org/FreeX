@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FluentAssertions;
@@ -7,6 +6,43 @@ namespace FreeX.Core.Model.Tests;
 
 public class GroupCommandTests
 {
+
+    /// <summary>
+    /// Runs <paramref name="expandOperation"/> and returns the bytes it allocated on this thread.
+    ///
+    /// These four large-nested-sheet tests guard against a specific O(N^2) regression
+    /// (R76-perf-recursion-sweep-2): the nested-collapsed set must be built ONCE per Apply, not
+    /// re-walked from run boundaries for every qualifying row/column. They used to assert a 2s
+    /// wall-clock budget, which measures the build agent as much as the algorithm -- it failed at
+    /// 2.493s purely from load when the suite ran alongside other assemblies, and a wall-clock
+    /// assertion in a parallel test run is flaky by construction.
+    ///
+    /// Allocated bytes is a deterministic stand-in for the same hazard and needs no production
+    /// instrumentation. The quadratic shape allocates per row/column -- a fresh anchors.ToList()
+    /// and run list on every one of ~8000 iterations -- so it exceeds the linear path's total by
+    /// orders of magnitude, while the linear path's figure does not move with machine load at all.
+    /// GetAllocatedBytesForCurrentThread is per-thread, so a sibling test allocating in parallel
+    /// cannot perturb it either.
+    /// </summary>
+    private static long AllocatedBytesDuring(Action expandOperation)
+    {
+        // Settle anything the fixture left pending so it is not billed to the operation.
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        expandOperation();
+        return GC.GetAllocatedBytesForCurrentThread() - before;
+    }
+
+    /// <summary>
+    /// Budget for one outer-group expansion over the 8000-row/column nested fixture. The linear
+    /// implementation lands ~2 orders of magnitude under this; the quadratic one it guards against
+    /// allocates a list per qualifying row/column and blows past it immediately. Set generously so
+    /// ordinary allocation churn never trips it -- this is a complexity-class tripwire, not an
+    /// allocation budget.
+    /// </summary>
+    private const long ExpandOuterGroupAllocationBudgetBytes = 32L * 1024 * 1024;
     private static (Workbook wb, Sheet sheet, ICommandContext ctx) Setup()
     {
         var wb = new Workbook("test");
@@ -677,15 +713,13 @@ public class GroupCommandTests
     }
 
     [Fact]
-    public void SetColumnOutlineGroupCollapsed_ExpandOuter_LargeNestedSheet_CompletesFastAndLeavesNestedSubgroupHidden()
+    public void SetColumnOutlineGroupCollapsed_ExpandOuter_LargeNestedSheet_DoesNotDoQuadraticWorkAndLeavesNestedSubgroupHidden()
     {
         var (sheet, ctx, n) = SetupLargeNestedColumnSheet();
 
-        var sw = Stopwatch.StartNew();
-        new SetColumnOutlineGroupCollapsedCommand(sheet.Id, 1, n, 1, collapsed: false).Apply(ctx);
-        sw.Stop();
+        var allocated = AllocatedBytesDuring(() => new SetColumnOutlineGroupCollapsedCommand(sheet.Id, 1, n, 1, collapsed: false).Apply(ctx));
 
-        sw.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2),
+        allocated.Should().BeLessThan(ExpandOuterGroupAllocationBudgetBytes,
             "expanding the outer group must not re-walk O(N) run boundaries per column (O(N^2))");
 
         sheet.IsColEffectivelyHidden(1).Should().BeFalse();
@@ -696,15 +730,13 @@ public class GroupCommandTests
     }
 
     [Fact]
-    public void ExpandColGroupCommand_SelectionScoped_LargeNestedSheet_CompletesFastAndLeavesNestedSubgroupHidden()
+    public void ExpandColGroupCommand_SelectionScoped_LargeNestedSheet_DoesNotDoQuadraticWorkAndLeavesNestedSubgroupHidden()
     {
         var (sheet, ctx, n) = SetupLargeNestedColumnSheet();
 
-        var sw = Stopwatch.StartNew();
-        new ExpandColGroupCommand(sheet.Id, 1, selectionStart: 1, selectionEnd: 1).Apply(ctx);
-        sw.Stop();
+        var allocated = AllocatedBytesDuring(() => new ExpandColGroupCommand(sheet.Id, 1, selectionStart: 1, selectionEnd: 1).Apply(ctx));
 
-        sw.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2),
+        allocated.Should().BeLessThan(ExpandOuterGroupAllocationBudgetBytes,
             "expanding the outer group must not re-walk O(N) run boundaries per column (O(N^2))");
 
         sheet.IsColEffectivelyHidden(1).Should().BeFalse();
@@ -730,15 +762,13 @@ public class GroupCommandTests
     }
 
     [Fact]
-    public void SetRowOutlineGroupCollapsed_ExpandOuter_LargeNestedSheet_CompletesFastAndLeavesNestedSubgroupHidden()
+    public void SetRowOutlineGroupCollapsed_ExpandOuter_LargeNestedSheet_DoesNotDoQuadraticWorkAndLeavesNestedSubgroupHidden()
     {
         var (sheet, ctx, n) = SetupLargeNestedRowSheet();
 
-        var sw = Stopwatch.StartNew();
-        new SetRowOutlineGroupCollapsedCommand(sheet.Id, 1, n, 1, collapsed: false).Apply(ctx);
-        sw.Stop();
+        var allocated = AllocatedBytesDuring(() => new SetRowOutlineGroupCollapsedCommand(sheet.Id, 1, n, 1, collapsed: false).Apply(ctx));
 
-        sw.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2),
+        allocated.Should().BeLessThan(ExpandOuterGroupAllocationBudgetBytes,
             "expanding the outer group must not re-walk O(N) run boundaries per row (O(N^2))");
 
         sheet.IsRowEffectivelyHidden(1).Should().BeFalse();
@@ -749,15 +779,13 @@ public class GroupCommandTests
     }
 
     [Fact]
-    public void ExpandRowGroupCommand_SelectionScoped_LargeNestedSheet_CompletesFastAndLeavesNestedSubgroupHidden()
+    public void ExpandRowGroupCommand_SelectionScoped_LargeNestedSheet_DoesNotDoQuadraticWorkAndLeavesNestedSubgroupHidden()
     {
         var (sheet, ctx, n) = SetupLargeNestedRowSheet();
 
-        var sw = Stopwatch.StartNew();
-        new ExpandRowGroupCommand(sheet.Id, 1, selectionStart: 1, selectionEnd: 1).Apply(ctx);
-        sw.Stop();
+        var allocated = AllocatedBytesDuring(() => new ExpandRowGroupCommand(sheet.Id, 1, selectionStart: 1, selectionEnd: 1).Apply(ctx));
 
-        sw.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2),
+        allocated.Should().BeLessThan(ExpandOuterGroupAllocationBudgetBytes,
             "expanding the outer group must not re-walk O(N) run boundaries per row (O(N^2))");
 
         sheet.IsRowEffectivelyHidden(1).Should().BeFalse();

@@ -274,9 +274,7 @@ public sealed class GridViewRound60DrawingObjectTests
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            var drawShapeText = typeof(GridView).GetMethod("DrawShapeText", BindingFlags.Instance | BindingFlags.NonPublic);
-            drawShapeText.Should().NotBeNull();
-            drawShapeText!.Invoke(grid, [dc, shape, rect, 1.0]);
+            grid.DrawShapeText(dc, shape, rect, 1.0);
         }
 
         const int width = 100;

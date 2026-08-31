@@ -3728,7 +3728,8 @@ public static class SmartArtLayoutEngine
         long availW = Math.Max(fcx - 2 * padX, 1L);
         long availH = Math.Max(fcy - 2 * padY, 1L);
         int treeDepth = Math.Max(roots.Max(GetTreeDepth), 1);
-        int treeWidth = Math.Max(roots.Sum(GetTreeWidth), 1);
+        var treeWidths = new Dictionary<SmartArtNode, int>(ReferenceEqualityComparer.Instance);
+        int treeWidth = Math.Max(roots.Sum(root => IndexTreeWidths(root, treeWidths)), 1);
         long gapX = Math.Max((long)(fcx * GapFrac), 1L);
         long gapY = Math.Max((long)(fcy * GapFrac), 1L);
         long boxH = Math.Max(
@@ -3746,7 +3747,7 @@ public static class SmartArtLayoutEngine
 
         foreach (var root in roots)
         {
-            int rootWidth = GetTreeWidth(root);
+            int rootWidth = treeWidths[root];
             long rootSlotW = Math.Max(
                 (long)((double)rootWidth / treeWidth * availW),
                 1L);
@@ -3761,6 +3762,7 @@ public static class SmartArtLayoutEngine
                 gapX,
                 gapY,
                 shapes,
+                treeWidths,
                 stylePlan,
                 ref idCounter,
                 layoutName,
@@ -3790,6 +3792,7 @@ public static class SmartArtLayoutEngine
         long gapX,
         long gapY,
         List<SlideShape> shapes,
+        IReadOnlyDictionary<SmartArtNode, int> treeWidths,
         SmartArtStylePlan stylePlan,
         ref uint idCounter,
         string layoutName,
@@ -3821,12 +3824,12 @@ public static class SmartArtLayoutEngine
         if (node.Children.Count == 0)
             return;
 
-        int totalChildWidth = Math.Max(node.Children.Sum(GetTreeWidth), 1);
+        int totalChildWidth = Math.Max(treeWidths[node], 1);
         long childLevelY = boxBottomY + gapY;
         long childStartX = startX;
         foreach (var child in node.Children)
         {
-            int childWidth = GetTreeWidth(child);
+            int childWidth = treeWidths[child];
             long childSlotW = Math.Max(
                 (long)((double)childWidth / totalChildWidth * slotW),
                 1L);
@@ -3841,6 +3844,7 @@ public static class SmartArtLayoutEngine
                 gapX,
                 gapY,
                 shapes,
+                treeWidths,
                 stylePlan,
                 ref idCounter,
                 layoutName,
@@ -3848,6 +3852,17 @@ public static class SmartArtLayoutEngine
                 boxBottomY);
             childStartX += childSlotW;
         }
+    }
+
+    private static int IndexTreeWidths(
+        SmartArtNode node,
+        IDictionary<SmartArtNode, int> treeWidths)
+    {
+        int width = node.Children.Count == 0
+            ? 1
+            : node.Children.Sum(child => IndexTreeWidths(child, treeWidths));
+        treeWidths.Add(node, width);
+        return width;
     }
 
     private static SlideShape MakeTopDownHierarchyBox(

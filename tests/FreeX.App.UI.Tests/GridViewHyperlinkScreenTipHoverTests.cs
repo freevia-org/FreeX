@@ -59,16 +59,12 @@ public sealed class GridViewHyperlinkScreenTipHoverTests
 
     private static void InvokeUpdateHyperlinkScreenTip(GridView grid, Point pos)
     {
-        var method = typeof(GridView).GetMethod("UpdateHyperlinkScreenTip", BindingFlags.NonPublic | BindingFlags.Instance);
-        method.Should().NotBeNull("GridView.Input.cs must implement the hover ScreenTip lookup");
-        method!.Invoke(grid, [pos]);
+        grid.UpdateHyperlinkScreenTip(pos);
     }
 
     private static void InvokeDismissHyperlinkScreenTip(GridView grid)
     {
-        var method = typeof(GridView).GetMethod("DismissHyperlinkScreenTip", BindingFlags.NonPublic | BindingFlags.Instance);
-        method.Should().NotBeNull();
-        method!.Invoke(grid, null);
+        grid.DismissHyperlinkScreenTip();
     }
 
     private static Border? GetHyperlinkScreenTipBorder(GridView grid)
@@ -87,9 +83,7 @@ public sealed class GridViewHyperlinkScreenTipHoverTests
 
     private static void InvokeUpdateCommentPreviewForPointer(GridView grid, Point pos)
     {
-        var method = typeof(GridView).GetMethod("UpdateCommentPreviewForPointer", BindingFlags.NonPublic | BindingFlags.Instance);
-        method.Should().NotBeNull();
-        method!.Invoke(grid, [pos]);
+        grid.UpdateCommentPreviewForPointer(pos);
     }
 
     /// <summary>

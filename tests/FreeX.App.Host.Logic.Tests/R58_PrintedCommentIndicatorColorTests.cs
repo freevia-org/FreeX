@@ -106,23 +106,17 @@ public sealed class R58_PrintedCommentIndicatorColorTests
                 new LayoutRect(8, 8, 80, 48)),
         };
 
-        var method = typeof(PrintRenderer).GetMethod(
-            "DrawDisplayedComments",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull();
-
         const int width = (int)ColumnWidth;
         const int height = (int)RowHeight;
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            method!.Invoke(null,
-            [
+            PrintRenderer.DrawDisplayedComments(
                 dc,
                 textOverlays,
                 displayedComments,
-                false,
-            ]);
+                false
+            );
         }
 
         var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);

@@ -20,9 +20,7 @@ public sealed class GridViewOccupiedCellLookupMergeTests
     private static HashSet<(uint Row, uint Col)> InvokeGetOccupiedCellLookup(
         GridView grid, ViewportModel viewport, CellAddress? editingCell)
     {
-        var method = typeof(GridView).GetMethod("GetOccupiedCellLookup", BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        return (HashSet<(uint Row, uint Col)>)method!.Invoke(grid, [viewport, editingCell])!;
+        return (HashSet<(uint Row, uint Col)>)grid.GetOccupiedCellLookup(viewport, editingCell)!;
     }
 
     private static void SetMergeLookup(GridView grid, Dictionary<(uint Row, uint Col), GridRange> mergeLookup)

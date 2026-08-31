@@ -118,7 +118,7 @@ public partial class GridView
     /// Zero-crossing Y for a line sparkline, or null when the plotted min/max range does not include
     /// zero (real zero would sit outside the visible plot, so Excel does not draw the axis line).
     /// </summary>
-    private static double? ResolveLineAxisY(IReadOnlyList<double> values, Rect rect, double? overrideMin, double? overrideMax) =>
+    internal static double? ResolveLineAxisY(IReadOnlyList<double> values, Rect rect, double? overrideMin, double? overrideMax) =>
         SparklineAxisLinePlanner.ResolveY(
             SparklineKind.Line,
             values,
@@ -133,7 +133,7 @@ public partial class GridView
     /// <see cref="FreeX.App.Presentation.Sparklines.SparklineLayoutEngine.VisitColumnLayout{TConsumer}(IReadOnlyList{double}, FreeX.App.Presentation.Sparklines.LayoutRect, bool, ref TConsumer, double?)"/>'s
     /// own baseline computation for the bars themselves.
     /// </summary>
-    private static double ResolveColumnAxisY(IReadOnlyList<double> values, Rect rect, bool winLoss) =>
+    internal static double ResolveColumnAxisY(IReadOnlyList<double> values, Rect rect, bool winLoss) =>
         SparklineAxisLinePlanner.ResolveY(
             winLoss ? SparklineKind.WinLoss : SparklineKind.Column,
             values,

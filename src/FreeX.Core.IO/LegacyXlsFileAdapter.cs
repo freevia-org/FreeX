@@ -1936,10 +1936,10 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         }
     }
 
-    private static ObjRecord? TryGetObjRecord(HSSFSimpleShape sourceControl) =>
+    internal static ObjRecord? TryGetObjRecord(HSSFSimpleShape sourceControl) =>
         HssfGetObjRecordMethod?.Invoke(sourceControl, null) as ObjRecord;
 
-    private static bool TryFormatLbsListFillRange(
+    internal static bool TryFormatLbsListFillRange(
         HSSFWorkbook sourceWorkbook,
         LbsDataSubRecord lbsData,
         out string listFillRange)
@@ -1963,7 +1963,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         }
     }
 
-    private static bool TryGetLbsSelectedIndex(LbsDataSubRecord lbsData, out int selectedIndex)
+    internal static bool TryGetLbsSelectedIndex(LbsDataSubRecord lbsData, out int selectedIndex)
     {
         selectedIndex = 0;
         if (LbsSelectedIndexField?.GetValue(lbsData) is not int raw || raw <= 0)
@@ -2791,7 +2791,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             ? MapExcelDataReaderErrorValue(error)
             : MapValue(reader.GetValue(column));
 
-    private static ErrorValue MapExcelDataReaderErrorValue(ExcelDataReader.CellError error) =>
+    internal static ErrorValue MapExcelDataReaderErrorValue(ExcelDataReader.CellError error) =>
         error switch
         {
             ExcelDataReader.CellError.NULL => ErrorValue.Null,
@@ -2901,7 +2901,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
     // calendar DateTimes and this path never sets Workbook.Uses1904DateSystem, so a 1900-epoch OADate
     // serial is self-consistent here (no 1904 conversion needed — unlike the NPOI path above, which
     // does propagate the workbook's 1904 flag via MapDateTimeValue).
-    private static ScalarValue MapValue(object? value) =>
+    internal static ScalarValue MapValue(object? value) =>
         value switch
         {
             null => BlankValue.Instance,

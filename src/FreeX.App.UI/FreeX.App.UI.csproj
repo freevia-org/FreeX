@@ -18,6 +18,10 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="FreeX.App.UI.Tests" />
+    <!-- The tester-release smoke probe renders a border edge through GridView.DrawBorderEdge. It
+         used to do so by reflection, which binds positionally at runtime, so a signature change
+         broke it silently and only surfaced when the release gate ran. -->
+    <InternalsVisibleTo Include="FreeX.Validation.Wpf" />
   </ItemGroup>
 
   <PropertyGroup>

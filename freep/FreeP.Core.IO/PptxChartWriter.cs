@@ -723,11 +723,13 @@ internal static class PptxChartWriter
         if (categoryLevel is null)
             return;
 
-        var dataById = dataElements
-            .Select(data => (Data: data, Id: TryParseChartExId(data.Attribute("id")?.Value)))
-            .ToList();
-        if (dataById.Any(item => item.Id is null) || dataById.Select(item => item.Id!.Value).Distinct().Count() != dataById.Count)
-            return;
+        var dataById = new Dictionary<int, XElement>();
+        foreach (var data in dataElements)
+        {
+            var dataId = TryParseChartExId(data.Attribute("id")?.Value);
+            if (dataId is null || !dataById.TryAdd(dataId.Value, data))
+                return;
+        }
 
         var seriesValues = new List<XElement>(series.Count);
         foreach (var seriesElement in series)
@@ -736,10 +738,7 @@ internal static class PptxChartWriter
             if (dataId is null)
                 return;
 
-            var referencedData = dataById
-                .FirstOrDefault(item => item.Id == dataId)
-                .Data;
-            if (referencedData is null)
+            if (!dataById.TryGetValue(dataId.Value, out var referencedData))
                 return;
 
             var valueLevel = FindChartExValueDataLevel(referencedData, cx);

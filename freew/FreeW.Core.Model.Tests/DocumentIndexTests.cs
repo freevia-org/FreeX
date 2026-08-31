@@ -417,6 +417,54 @@ public class DocumentIndexTests
     }
 
     [Fact]
+    public void Build_DenseRepeatedBookmarkRangesPreserveSingleResolvedRange()
+    {
+        const int markCount = 256;
+        var doc = new TextDocument();
+        var start = new Paragraph("Range start");
+        start.BookmarkNames.Add("TopicRange");
+        start.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "dense-range", BookmarkBoundaryKind.Start, 0, "TopicRange"));
+        doc.Blocks.Add(start);
+        for (var index = 0; index < markCount; index++)
+        {
+            doc.Blocks.Add(new Paragraph
+            {
+                Runs = { DocumentIndex.MarkRun(new IndexMark("Alpha", BookmarkName: "TopicRange")) }
+            });
+        }
+
+        var end = new Paragraph("Range end");
+        end.BookmarkBoundaries.Add(new BookmarkBoundary("dense-range", BookmarkBoundaryKind.End, 0));
+        doc.Blocks.Add(end);
+
+        var entry = DocumentIndex.Build(
+                doc,
+                pageReferenceOf: blockIndex => blockIndex switch
+                {
+                    0 => new IndexPageReferenceAddress(1, "1"),
+                    _ => new IndexPageReferenceAddress(2, "2")
+                })
+            .Single(paragraph => paragraph.StyleId == DocumentIndex.EntryStyleId);
+
+        entry.PlainText.Should().Be("Alpha, 1\u20132");
+    }
+
+    [Fact]
+    public void Build_SourceGuardCachesOrdinalBookmarkRangesIncludingMissingResults()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText(
+            "freew", "FreeW.Core.Model", "DocumentIndex.cs");
+
+        source.Should().Contain("var bookmarkRanges = new BookmarkRangeCache(document);")
+            .And.Contain("bookmarkRanges.Resolve(occurrence.Mark.BookmarkName)")
+            .And.Contain("Dictionary<string, BookmarkBlockRange?> _ranges = new(StringComparer.Ordinal)")
+            .And.Contain("if (_ranges.TryGetValue(bookmarkName, out var range))")
+            .And.Contain("_bodyParagraphs ??= DocumentBodyParagraphs.Enumerate(_document).ToList();")
+            .And.NotContain("ResolveBookmarkRange(document, occurrence.Mark.BookmarkName)");
+    }
+
+    [Fact]
     public void Build_PageReferencesAreSortedAscendingRegardlessOfMarkDocumentOrder()
     {
         // Document order of the marks is: page 12, then the "4-7" ranged mark, then page 9 — the

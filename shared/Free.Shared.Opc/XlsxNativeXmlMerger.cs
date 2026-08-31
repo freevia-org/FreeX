@@ -61,8 +61,9 @@ internal static class XlsxNativeXmlMerger
                 continue;
             }
 
-            targetElement.Add(new XElement(sourceChild));
-            existingChildrenByKey[key] = targetElement.Elements().Last();
+            var clonedChild = new XElement(sourceChild);
+            targetElement.Add(clonedChild);
+            existingChildrenByKey[key] = clonedChild;
             changed = true;
         }
 

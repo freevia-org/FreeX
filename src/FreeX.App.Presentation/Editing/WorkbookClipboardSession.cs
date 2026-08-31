@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
 using Free.Shared.AppServices;
 using FreeX.Core.Model;
 
@@ -45,6 +49,60 @@ public readonly record struct WorkbookClipboardReadObservation(
 public sealed record WorkbookClipboardPasteResolution(
     ClipboardPastePlan Plan,
     WorkbookClipboardSnapshot? Snapshot);
+
+
+/// <summary>
+/// Builds the detached rich-content sheet that a clipboard snapshot carries as its
+/// <see cref="WorkbookClipboardSnapshot.SourceSheet"/>.
+///
+/// r179: the copy path used to store the LIVE source <see cref="Sheet"/>, and
+/// <c>PasteCommandFactory</c> reads rich text, hyperlinks, hyperlink metadata and phonetic guides
+/// off it at PASTE time. So editing the source cell between Ctrl+C and Ctrl+V changed what got
+/// pasted: change or remove the source cell's hyperlink after copying and the paste carried the NEW
+/// one, or none at all. The cell VALUES were already captured as independent clones -- only this
+/// rich-content side channel stayed live.
+///
+/// The copy is restricted to the copied range, so copying one cell of a large sheet does not
+/// duplicate every hyperlink on it. Entries stay keyed by their original source
+/// <see cref="CellAddress"/>, which is exactly how the paste factory looks them up.
+/// </summary>
+public static class ClipboardRichContentSnapshot
+{
+    public static Sheet Capture(Sheet source, GridRange range, IReadOnlyList<GridRange>? areas = null)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        var snapshot = new Sheet(source.Id, source.Name);
+        bool InCopiedArea(CellAddress address) =>
+            range.Contains(address) || (areas is not null && areas.Any(area => area.Contains(address)));
+
+        foreach (var (address, runs) in source.RichTextRuns)
+        {
+            if (InCopiedArea(address))
+                snapshot.RichTextRuns[address] = runs;
+        }
+
+        foreach (var (address, target) in source.Hyperlinks)
+        {
+            if (InCopiedArea(address))
+                snapshot.Hyperlinks[address] = target;
+        }
+
+        foreach (var (address, metadata) in source.HyperlinkMetadata)
+        {
+            if (InCopiedArea(address))
+                snapshot.HyperlinkMetadata[address] = metadata;
+        }
+
+        foreach (var (address, guide) in source.CellPhoneticGuides)
+        {
+            if (InCopiedArea(address))
+                snapshot.CellPhoneticGuides[address] = guide;
+        }
+
+        return snapshot;
+    }
+}
 
 /// <summary>
 /// Owns the renderer-neutral lifetime and source-selection policy for a copied workbook range.

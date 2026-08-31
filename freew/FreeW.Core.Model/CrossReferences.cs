@@ -449,18 +449,19 @@ public static class CrossReferences
         string label,
         bool footnote)
     {
-        var targets = new List<CrossRefTarget>();
-        foreach (var id in ids.OrderBy(k => k))
+        var sortedIds = ids.OrderBy(k => k).ToList();
+        var markerById = BuildNoteMarkerIndex(doc, footnote, sortedIds);
+        var targets = new List<CrossRefTarget>(sortedIds.Count);
+        foreach (var id in sortedIds)
         {
-            var marker = FindNoteMarker(doc, id, footnote);
-            if (marker is null)
+            if (!markerById.TryGetValue(id, out var marker))
                 continue;
             targets.Add(new CrossRefTarget(
                 label + " " + id.ToString(CultureInfo.InvariantCulture),
-                marker?.Anchor,
-                marker?.BlockIndex,
+                marker.Anchor,
+                marker.BlockIndex,
                 id,
-                marker?.RunIndex));
+                marker.RunIndex));
         }
         return targets;
     }
@@ -758,6 +759,45 @@ public static class CrossReferences
         }
 
         return null;
+    }
+
+    private static IReadOnlyDictionary<int, NoteMarker> BuildNoteMarkerIndex(
+        TextDocument doc,
+        bool footnote,
+        IReadOnlyCollection<int> ids)
+    {
+        var markerById = new Dictionary<int, NoteMarker>(ids.Count);
+        var remainingIds = ids.ToHashSet();
+        for (var blockIndex = 0; blockIndex < doc.Blocks.Count && remainingIds.Count > 0; blockIndex++)
+        {
+            var blockRunOrdinal = 0;
+            foreach (var paragraph in ParagraphsIn(doc.Blocks[blockIndex]))
+            {
+                for (var runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
+                {
+                    var run = paragraph.Runs[runIndex];
+                    var noteId = footnote ? run.FootnoteId : run.EndnoteId;
+                    if (noteId is { } id
+                        && remainingIds.Contains(id)
+                        && markerById.TryAdd(
+                            id,
+                            new NoteMarker(
+                                id,
+                                footnote,
+                                blockIndex,
+                                runIndex,
+                                FindBookmarkAroundRun(paragraph, runIndex),
+                                blockRunOrdinal + runIndex)))
+                    {
+                        remainingIds.Remove(id);
+                    }
+                }
+
+                blockRunOrdinal += paragraph.Runs.Count;
+            }
+        }
+
+        return markerById;
     }
 
     private static NoteMarker? FindBookmarkedNoteMarker(TextDocument doc, string bookmarkName)

@@ -277,6 +277,12 @@ public sealed class DocumentCommandBus(IDocumentCommandContext context)
     /// history entry. Every revert is attempted even when an earlier one fails. A complete restoration is
     /// silent; an incomplete restoration raises <see cref="Changed"/> so renderers can show the surviving
     /// state. Returned exceptions are ordered by rollback attempt, followed by notification failures.
+    ///
+    /// r178: the silence is DELIBERATE and pinned by tests -- a fully restored model is byte-for-byte
+    /// what subscribers last saw, so waking them would be spurious churn. It does NOT hold for a
+    /// caller that rendered DURING the group (BeginUndoGroup(notifyOnEachExecute: true)): its surface
+    /// is ahead of the model, not level with it, and it must refresh itself after rolling back. See
+    /// WpfFindReplaceCommandHost.ReplaceAll.
     /// </summary>
     public IReadOnlyList<Exception> RollbackUndoGroup()
     {

@@ -8,6 +8,7 @@ internal static class XlsxDataValidationClosedXmlMapper
 {
     public static void Load(IXLWorksheet xlSheet, Sheet sheet, List<string>? warnings = null)
     {
+        var existingRulesByRange = BuildValidationRangeIndex(sheet.DataValidations);
         foreach (var xlDv in xlSheet.DataValidations)
         {
             try
@@ -108,10 +109,11 @@ internal static class XlsxDataValidationClosedXmlMapper
                 foreach (var additionalRange in ranges.Skip(1))
                     dv.AdditionalRanges.Add(ToGridRange(additionalRange, sheetId));
 
-                if (IsDuplicateCoveredValidation(sheet.DataValidations, dv))
+                if (IsDuplicateCoveredValidation(existingRulesByRange, dv))
                     continue;
 
                 sheet.DataValidations.Add(dv);
+                IndexValidationRanges(existingRulesByRange, dv);
             }
             catch (Exception ex)
             {
@@ -356,20 +358,70 @@ internal static class XlsxDataValidationClosedXmlMapper
     // IXLDataValidation entries (one per area, all sharing the same content), and those split
     // artifacts are the only case this should collapse. Two independent rules that merely happen to
     // target the same range (e.g. a List rule and a Custom rule both on A1:A10) must both be kept.
-    private static bool IsDuplicateCoveredValidation(IEnumerable<DataValidation> existingRules, DataValidation candidate) =>
-        CandidateRanges(candidate).All(range => existingRules.Any(existing => CoversRange(existing, range, candidate)));
-
-    private static IEnumerable<GridRange> CandidateRanges(DataValidation validation)
+    private static Dictionary<GridRange, List<DataValidation>> BuildValidationRangeIndex(
+        IEnumerable<DataValidation> validations)
     {
-        yield return validation.AppliesTo;
-        foreach (var range in validation.AdditionalRanges)
-            yield return range;
+        var rulesByRange = new Dictionary<GridRange, List<DataValidation>>();
+        foreach (var validation in validations)
+            IndexValidationRanges(rulesByRange, validation);
+        return rulesByRange;
     }
 
-    private static bool CoversRange(DataValidation validation, GridRange range, DataValidation candidate) =>
-        (IsSameRange(validation.AppliesTo, range) ||
-            validation.AdditionalRanges.Any(additionalRange => IsSameRange(additionalRange, range))) &&
-        HasSameRuleContent(validation, candidate);
+    private static void IndexValidationRanges(
+        Dictionary<GridRange, List<DataValidation>> rulesByRange,
+        DataValidation validation)
+    {
+        IndexValidationRange(rulesByRange, validation.AppliesTo, validation);
+        foreach (var range in validation.AdditionalRanges)
+            IndexValidationRange(rulesByRange, range, validation);
+    }
+
+    private static void IndexValidationRange(
+        Dictionary<GridRange, List<DataValidation>> rulesByRange,
+        GridRange range,
+        DataValidation validation)
+    {
+        if (!rulesByRange.TryGetValue(range, out var rules))
+        {
+            rules = [];
+            rulesByRange.Add(range, rules);
+        }
+
+        rules.Add(validation);
+    }
+
+    private static bool IsDuplicateCoveredValidation(
+        IReadOnlyDictionary<GridRange, List<DataValidation>> existingRulesByRange,
+        DataValidation candidate)
+    {
+        if (!IsRangeCovered(existingRulesByRange, candidate.AppliesTo, candidate))
+            return false;
+
+        foreach (var range in candidate.AdditionalRanges)
+        {
+            if (!IsRangeCovered(existingRulesByRange, range, candidate))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsRangeCovered(
+        IReadOnlyDictionary<GridRange, List<DataValidation>> existingRulesByRange,
+        GridRange range,
+        DataValidation candidate)
+    {
+        if (!existingRulesByRange.TryGetValue(range, out var existingRules))
+            return false;
+
+        foreach (var existingRule in existingRules)
+        {
+            if (HasSameRuleContent(existingRule, candidate))
+                return true;
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// True when two <see cref="DataValidation"/> rules represent the same underlying Excel rule
@@ -393,14 +445,6 @@ internal static class XlsxDataValidationClosedXmlMapper
 
     private static bool FormulaMatchesOrEitherBlank(string? left, string? right) =>
         string.IsNullOrEmpty(left) || string.IsNullOrEmpty(right) || string.Equals(left, right, StringComparison.Ordinal);
-
-    private static bool IsSameRange(GridRange left, GridRange right) =>
-        left.Start.Sheet == right.Start.Sheet &&
-        left.Start.Row == right.Start.Row &&
-        left.Start.Col == right.Start.Col &&
-        left.End.Sheet == right.End.Sheet &&
-        left.End.Row == right.End.Row &&
-        left.End.Col == right.End.Col;
 
     private static void ApplyNumeric(IXLValidationCriteria rule, DvOperator op, string f1, string f2)
     {

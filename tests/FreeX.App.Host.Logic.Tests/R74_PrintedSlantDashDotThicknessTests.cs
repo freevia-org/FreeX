@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -23,7 +22,7 @@ public sealed class R74_PrintedSlantDashDotThicknessTests
     private const int CanvasWidthDip = 40;
 
     /// <summary>
-    /// Renders a single vertical border edge via the print path's private DrawPrintedBorderEdge
+    /// Renders a single vertical border edge via the print path's internal DrawPrintedBorderEdge
     /// and returns, for each device-pixel row, the widest contiguous run of painted pixels centered
     /// near the nominal line X -- taking the max across all rows so a dashed style's "off" segments
     /// (which paint nothing) don't understate the pen's true thickness.
@@ -34,13 +33,14 @@ public sealed class R74_PrintedSlantDashDotThicknessTests
         var p1 = new Point(20, 2);
         var p2 = new Point(20, 2 + LineLengthDip);
 
-        var method = typeof(PrintRenderer).GetMethod("DrawPrintedBorderEdge", BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull();
 
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            method!.Invoke(null, [dc, border, p1, p2, WorkbookTheme.Office, false]);
+            // Direct call, not reflection: DrawPrintedBorderEdge is internal and this assembly
+            // has InternalsVisibleTo, so a change to its signature is a build error right here
+            // rather than a runtime TargetParameterCountException from a positional array.
+            PrintRenderer.DrawPrintedBorderEdge(dc, border, p1, p2, WorkbookTheme.Office, false);
         }
 
         var width = (int)(CanvasWidthDip * Scale);

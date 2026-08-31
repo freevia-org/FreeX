@@ -336,6 +336,13 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
                     pointer = SkipTrackedLeftoverMatch(editor.Selection.End, originalMatchText);
                     count++;
                 }
+                // r179: the body FlowDocument is finished; now the default header and footer,
+                // which TryFind cannot reach at all (they are not in editor.Document). Skipped
+                // when the operation is restricted to a selection -- a selection is a body
+                // concept, and reaching outside it is the r178 bug the Avalonia side already had.
+                if (!restrictToSelection)
+                    count += ReplaceAllInDefaultHeaderFooter(request);
+
                 editor.Commands.CommitUndoGroup("Replace All");
             }
             catch
@@ -348,7 +355,22 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
                 // undo stack, so Ctrl+Z skipped straight past them and the user had no way back.
                 // Replace All is one operation to the user: if it cannot finish, it must leave the
                 // document as it found it.
-                editor.Commands.RollbackUndoGroup();
+                // r178: only roll back if the group is still open. The throw can come from
+                // CommitUndoGroup itself -- it clears the batch BEFORE raising Changed, and Changed
+                // runs the renderer synchronously -- in which case the work is already committed and
+                // undoable, and an unguarded RollbackUndoGroup threw "No undo group is open" over the
+                // top of the real failure. AbortUndoGroup was idempotent so this never showed before
+                // r177 swapped it. Same guard DocumentUndoGroupExecutor.Execute already uses.
+                if (editor.Commands.IsUndoGroupOpen)
+                {
+                    editor.Commands.RollbackUndoGroup();
+                    // The rollback is silent by design, and this loop has been rendering into the
+                    // live FlowDocument all along (notifyOnEachExecute above), so the surface is now
+                    // ahead of the reverted model. Pull it back, or the next edit commits the
+                    // rolled-back text straight into the document.
+                    editor.RefreshFromModel();
+                }
+
                 throw;
             }
 
@@ -366,6 +388,97 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
                 ? probeEnd
                 : afterReplace;
         }
+
+
+        /// <summary>
+        /// Replaces every remaining match in the document default header and footer, returning how many.
+        ///
+        /// r179: WPF Replace All searched ONLY the body. TryFind walks TextPointers over
+        /// editor.Document -- the RichTextBox body FlowDocument -- and headers/footers are not in it;
+        /// they live in the model and are edited through a separate sub-editor the dialog is never
+        /// given. So a term appearing in a header was silently left alone and the count reported to
+        /// the user was short by that many. The Avalonia shell was fixed for this in r177; this is the
+        /// same fix expressed against the model, since the WPF search cannot reach the content.
+        ///
+        /// Mirrors the Avalonia rules exactly: header before footer, and each replacement RESUMES past
+        /// the text it just wrote (a replacement that re-creates the search term -- Confidential ->
+        /// Strictly Confidential -- would otherwise re-find itself forever), with a resume naming the
+        /// footer also meaning the header is finished.
+        /// </summary>
+        private int ReplaceAllInDefaultHeaderFooter(FindReplaceReplaceRequest request)
+        {
+            var count = 0;
+            (bool IsFooter, int ParagraphIndex, int Offset)? resume = null;
+
+            while (count < 100_000)
+            {
+                var hit = FindReplaceDialogPlanner.FindNextHeaderFooterMatch(
+                    editor.Model, request.Term, request.Options, resume);
+                if (hit is not { IsInHeaderFooter: true } match)
+                    break;
+
+                var isFooter = match.HeaderFooterIsFooter!.Value;
+                var paragraphIndex = match.HeaderFooterParagraphIndex!.Value;
+                var start = match.Start;
+                var length = match.Length;
+                var replacement = request.Replacement;
+
+                editor.Commands.Execute(new FreeW.Core.Model.EditHeaderFooterParagraphCommand(
+                    sectionIndex: -1,
+                    useFinalSectionStore: true,
+                    slot: isFooter ? 1 : 0,
+                    paragraphIndex: paragraphIndex,
+                    rebuild: (FreeW.Core.Model.Paragraph paragraph) => ReplaceRunTextRange(paragraph, start, length, replacement)));
+
+                resume = (isFooter, paragraphIndex, start + replacement.Length);
+                count++;
+            }
+
+            return count;
+        }
+
+        /// <summary>
+        /// Rewrites <paramref name="length"/> characters of <paramref name="paragraph"/> starting at
+        /// <paramref name="start"/> (plain-text offsets, as the planner reports them) with
+        /// <paramref name="replacement"/>, preserving the formatting of the run the match starts in.
+        /// </summary>
+        private static void ReplaceRunTextRange(
+            FreeW.Core.Model.Paragraph paragraph,
+            int start,
+            int length,
+            string replacement)
+        {
+            var text = string.Concat(paragraph.Runs.Select(run => run.Text));
+            if (start < 0 || start > text.Length)
+                return;
+
+            var end = Math.Min(text.Length, start + length);
+            var rebuilt = string.Concat(text[..start], replacement, text[end..]);
+
+            // Keep the formatting of the run the match began in -- the same choice the Avalonia side
+            // makes when a replacement collapses several runs into one.
+            var template = RunAtOffset(paragraph, start) ?? paragraph.Runs.FirstOrDefault();
+            var carried = template is null ? new FreeW.Core.Model.Run(rebuilt) : CloneRunWithText(template, rebuilt);
+
+            paragraph.Runs.Clear();
+            paragraph.Runs.Add(carried);
+        }
+
+        private static FreeW.Core.Model.Run? RunAtOffset(FreeW.Core.Model.Paragraph paragraph, int offset)
+        {
+            var consumed = 0;
+            foreach (var run in paragraph.Runs)
+            {
+                if (offset < consumed + run.Text.Length)
+                    return run;
+                consumed += run.Text.Length;
+            }
+
+            return paragraph.Runs.LastOrDefault();
+        }
+
+        private static FreeW.Core.Model.Run CloneRunWithText(FreeW.Core.Model.Run template, string text) =>
+            new(text, template.Formatting);
 
         private bool SelectFrom(TextPointer from, FindReplaceSearchRequest request)
         {

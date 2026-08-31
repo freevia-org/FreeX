@@ -116,18 +116,12 @@ public sealed class R44_PrintedGridCellPassOrderingTests
         var hyperlinkLookup = new Dictionary<(uint Row, uint Col), WorksheetPrintHyperlinkPlan>();
         var cellDestinationLookup = new Dictionary<(uint Row, uint Col), CellAddress>();
 
-        var method = typeof(PrintRenderer).GetMethod(
-            "DrawPrintedGridCells",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull();
-
         var width = (int)(ColumnWidth * 2);
         var height = (int)RowHeight;
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            method!.Invoke(null,
-            [
+            PrintRenderer.DrawPrintedGridCells(
                 dc,
                 textOverlays,
                 linkOverlays,
@@ -144,8 +138,8 @@ public sealed class R44_PrintedGridCellPassOrderingTests
                 0.0,
                 workbook,
                 false,
-                sheet,
-            ]);
+                sheet
+            );
         }
 
         var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);

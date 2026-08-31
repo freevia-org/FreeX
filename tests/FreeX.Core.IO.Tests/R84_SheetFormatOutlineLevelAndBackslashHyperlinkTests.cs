@@ -73,11 +73,7 @@ public sealed class R84_SheetFormatOutlineLevelAndBackslashHyperlinkTests
 
     private static void InvokeMergeWorksheetSheetFormatProperties(XElement source, XElement targetRoot)
     {
-        var method = typeof(XlsxWorksheetMetadataPreserver).GetMethod(
-            "MergeWorksheetSheetFormatProperties",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull("XlsxWorksheetMetadataPreserver.MergeWorksheetSheetFormatProperties must still exist as a private static method");
-        method!.Invoke(null, [source, targetRoot, WorkbookNs]);
+        XlsxWorksheetMetadataPreserver.MergeWorksheetSheetFormatProperties(source, targetRoot, WorkbookNs);
     }
 
     // --- R84-io-hyperlink-defined-name-5-1 ----------------------------------------------------

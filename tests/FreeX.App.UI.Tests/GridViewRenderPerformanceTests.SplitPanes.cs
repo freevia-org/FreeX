@@ -21,20 +21,15 @@ public sealed partial class GridViewRenderPerformanceTests
 
         RunOnStaThread(() =>
         {
-            var method = typeof(GridView).GetMethod(
-                "GetSplitPaneBorderStyleLookup",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            method.Should().NotBeNull();
-
             var style = BorderStyleFor(value => value.BorderDiagonalDown = ThinBorder);
             var cells = new[] { Cell(1, 1, "border", style) };
             var replacementCells = new[] { Cell(1, 1, "border", style) };
             var grid = new GridView();
 
-            var first = method!.Invoke(grid, [cells]);
-            var repeated = method.Invoke(grid, [cells]);
-            var replacement = method.Invoke(grid, [replacementCells]);
-            var empty = method.Invoke(grid, [new[] { Cell(1, 1, "default", CellStyle.Default) }]);
+            var first = grid.GetSplitPaneBorderStyleLookup(cells);
+            var repeated = grid.GetSplitPaneBorderStyleLookup(cells);
+            var replacement = grid.GetSplitPaneBorderStyleLookup(replacementCells);
+            var empty = grid.GetSplitPaneBorderStyleLookup([Cell(1, 1, "default", CellStyle.Default)]);
 
             first.Should().NotBeNull();
             repeated.Should().BeSameAs(first);

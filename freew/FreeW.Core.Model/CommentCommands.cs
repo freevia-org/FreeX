@@ -161,6 +161,11 @@ public sealed class DeleteCommentCommand(int commentId) : IDocumentCommand
 
         _savedComment = comment;
         _savedOrdinal = doc.Comments.Keys.ToList().IndexOf(commentId);
+        var topLevelByCommentId = CommentThreadIndex.BuildTopLevelByCommentId(doc);
+        var anchorParagraphs = EnumerateCommentAnchorParagraphs(doc).ToList();
+        var anchorParagraphKeys = new Dictionary<Paragraph, int>(ReferenceEqualityComparer.Instance);
+        for (var index = 0; index < anchorParagraphs.Count; index++)
+            anchorParagraphKeys.TryAdd(anchorParagraphs[index], index);
 
         // Comments legitimately anchor outside the body too (Word allows one in a header, footer,
         // footnote, or endnote), so both the save and the strip below walk every such paragraph store via
@@ -169,23 +174,24 @@ public sealed class DeleteCommentCommand(int commentId) : IDocumentCommand
         // doc.Comments while leaving the footer run still carrying a CommentId that no longer resolves to
         // anything, which the docx writer would then still serialise as a dangling
         // w:commentRangeStart/End/w:commentReference.
-        foreach (var paragraph in EnumerateCommentAnchorParagraphs(doc))
+        foreach (var paragraph in anchorParagraphs)
         {
-            if (paragraph.Runs.Any(r => r.CommentId is { } cid && ResolveTopLevel(doc, cid) == commentId))
+            if (paragraph.Runs.Any(r => r.CommentId is { } cid
+                                        && ResolveTopLevel(doc, topLevelByCommentId, cid) == commentId))
             {
-                var key = ParagraphKey(doc, paragraph);
+                var key = anchorParagraphKeys[paragraph];
                 _savedRuns[key] = paragraph.Runs.Select(CloneRun).ToList();
                 _savedBookmarkBoundaries[key] = [.. paragraph.BookmarkBoundaries];
             }
         }
 
-        foreach (var paragraph in EnumerateCommentAnchorParagraphs(doc))
+        foreach (var paragraph in anchorParagraphs)
         {
             var bookmarkPositions = BookmarkBoundaryMapper.Capture(paragraph);
             for (var i = paragraph.Runs.Count - 1; i >= 0; i--)
             {
                 var run = paragraph.Runs[i];
-                if (run.CommentId is not { } cid || ResolveTopLevel(doc, cid) != commentId)
+                if (run.CommentId is not { } cid || ResolveTopLevel(doc, topLevelByCommentId, cid) != commentId)
                     continue;
 
                 if (run.IsCommentReference)
@@ -222,11 +228,13 @@ public sealed class DeleteCommentCommand(int commentId) : IDocumentCommand
         if (!inserted)
             doc.Comments[commentId] = _savedComment;
 
+        var anchorParagraphs = EnumerateCommentAnchorParagraphs(doc).ToList();
         foreach (var (key, runs) in _savedRuns)
         {
-            if (ParagraphForKey(doc, key) is not { } paragraph)
+            if ((uint)key >= (uint)anchorParagraphs.Count)
                 continue;
 
+            var paragraph = anchorParagraphs[key];
             paragraph.Runs.Clear();
             paragraph.Runs.AddRange(runs);
             paragraph.BookmarkBoundaries.Clear();
@@ -234,23 +242,6 @@ public sealed class DeleteCommentCommand(int commentId) : IDocumentCommand
                 paragraph.BookmarkBoundaries.AddRange(boundaries);
         }
     }
-
-    private static int ParagraphKey(TextDocument doc, Paragraph target)
-    {
-        var ordinal = 0;
-        foreach (var paragraph in EnumerateCommentAnchorParagraphs(doc))
-        {
-            if (ReferenceEquals(paragraph, target))
-                return ordinal;
-
-            ordinal++;
-        }
-
-        return -1;
-    }
-
-    private static Paragraph? ParagraphForKey(TextDocument doc, int key) =>
-        EnumerateCommentAnchorParagraphs(doc).ElementAtOrDefault(key);
 
     /// <summary>
     /// Every paragraph that can carry a comment anchor: the body/table paragraphs (via
@@ -276,17 +267,18 @@ public sealed class DeleteCommentCommand(int commentId) : IDocumentCommand
     private static Run CloneRun(Run source) =>
         DocumentModelCloner.CloneRun(source, RevisionClonePolicy.Preserve);
 
-    public static int ResolveTopLevel(TextDocument doc, int commentId)
-    {
-        if (doc.Comments.ContainsKey(commentId))
-            return commentId;
+    public static int ResolveTopLevel(TextDocument doc, int commentId) =>
+        ResolveTopLevel(doc, CommentThreadIndex.BuildTopLevelByCommentId(doc), commentId);
 
-        foreach (var top in doc.Comments.Values)
-            if (top.Replies.Any(r => r.Id == commentId))
-                return top.Id;
-
-        return commentId;
-    }
+    private static int ResolveTopLevel(
+        TextDocument doc,
+        IReadOnlyDictionary<int, Comment> topLevelByCommentId,
+        int commentId) =>
+        doc.Comments.ContainsKey(commentId)
+            ? commentId
+            : topLevelByCommentId.TryGetValue(commentId, out var topLevel)
+                ? topLevel.Id
+                : commentId;
 }
 
 /// <summary>Appends a reply to an existing top-level comment thread.</summary>

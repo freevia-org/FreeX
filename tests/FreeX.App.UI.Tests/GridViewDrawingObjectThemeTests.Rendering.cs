@@ -156,18 +156,12 @@ public sealed partial class GridViewDrawingObjectThemeTests
             var visual = new DrawingVisual();
             using (var drawingContext = visual.RenderOpen())
             {
-                var drawBevel = typeof(GridView).GetMethod(
-                    "DrawShapeAuthoredBevelEffect",
-                    BindingFlags.Instance | BindingFlags.NonPublic);
-                drawBevel.Should().NotBeNull();
-                drawBevel!.Invoke(
-                    grid,
-                    [
+                grid.DrawShapeAuthoredBevelEffect(
                         drawingContext,
                         DrawingShapeKind.Rectangle,
                         new Rect(20, 12, 48, 24),
                         DrawingShapeEffectPreset.Bevel
-                    ]);
+                    );
             }
 
             var bitmap = new RenderTargetBitmap(
@@ -346,18 +340,12 @@ public sealed partial class GridViewDrawingObjectThemeTests
             var visual = new DrawingVisual();
             using (var drawingContext = visual.RenderOpen())
             {
-                var drawThreeDRotation = typeof(GridView).GetMethod(
-                    "DrawShapeThreeDRotationEffect",
-                    BindingFlags.Instance | BindingFlags.NonPublic);
-                drawThreeDRotation.Should().NotBeNull();
-                drawThreeDRotation!.Invoke(
-                    grid,
-                    [
+                grid.DrawShapeThreeDRotationEffect(
                         drawingContext,
                         DrawingShapeKind.Rectangle,
                         new Rect(24, 24, 44, 24),
                         new DrawingObjectColors(new CellColor(31, 119, 180), new CellColor(20, 60, 100))
-                    ]);
+                    );
             }
 
             var bitmap = new RenderTargetBitmap(
@@ -395,18 +383,12 @@ public sealed partial class GridViewDrawingObjectThemeTests
             var visual = new DrawingVisual();
             using (var drawingContext = visual.RenderOpen())
             {
-                var drawReflection = typeof(GridView).GetMethod(
-                    "DrawShapeReflectionEffect",
-                    BindingFlags.Instance | BindingFlags.NonPublic);
-                drawReflection.Should().NotBeNull();
-                drawReflection!.Invoke(
-                    grid,
-                    [
+                grid.DrawShapeReflectionEffect(
                         drawingContext,
                         DrawingShapeKind.Rectangle,
                         new Rect(20, 12, 48, 24),
                         new DrawingObjectColors(new CellColor(31, 119, 180), new CellColor(20, 60, 100))
-                    ]);
+                    );
             }
 
             var bitmap = new RenderTargetBitmap(
@@ -672,14 +654,8 @@ public sealed partial class GridViewDrawingObjectThemeTests
         WpfTestThread.Run(() =>
         {
             var grid = new GridView();
-            var createFill = typeof(GridView).GetMethod(
-                "CreateDrawingShapeFill",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            createFill.Should().NotBeNull();
 
-            var brush = (Brush)createFill!.Invoke(
-                grid,
-                [
+            var brush = (Brush)grid.CreateDrawingShapeFill(
                     GridView.ResolveDrawingShapeRenderMetadata(
                         new DrawingShapeModel
                         {
@@ -687,7 +663,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
                             FillColor = new CellColor(10, 120, 230)
                         },
                         WorkbookTheme.Office)
-                ])!;
+                )!;
             var visual = new DrawingVisual();
             using (var drawingContext = visual.RenderOpen())
             {
@@ -746,7 +722,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
     {
         var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
         var drawText = source[
-            source.IndexOf("private void DrawShapeText", StringComparison.Ordinal)..
+            source.IndexOf("internal void DrawShapeText", StringComparison.Ordinal)..
             source.IndexOf("private readonly record struct DrawingObjectBrushKey", StringComparison.Ordinal)];
 
         drawText.Should().Contain("var suppressWordArtTextFill = shape.IsWordArt && shape.ShapeTextHasNoFill;");

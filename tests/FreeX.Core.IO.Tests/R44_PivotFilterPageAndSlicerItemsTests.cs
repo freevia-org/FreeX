@@ -145,6 +145,49 @@ public sealed class R44_PivotFilterPageAndSlicerItemsTests
         reloadedTwice.GetSheetAt(0).PivotTables.Single().PageFields.Single().SelectedItem.Should().Be("West");
     }
 
+    [Fact]
+    public void Save_OverlappingDuplicatePivotFields_UsesExistingAxisAndLastSelectionPrecedence()
+    {
+        using var source = SaveWorkbook(CreateRegionPivotWorkbook());
+        InjectNativeManualItemFilter(source, hiddenIndexes: [1]); // Region's original Row field selects East.
+
+        var adapter = new XlsxFileAdapter();
+        var loaded = adapter.Load(source);
+        var pivot = loaded.GetSheetAt(0).PivotTables.Single();
+        var region = pivot.RowFields.Single();
+
+        // These overlaps are unusual but valid model input. The preserved-part implementation has
+        // always chosen Row for the pivotField@axis, but the last matching field across Row,
+        // Column, then Page for item-filter state and the last Page field for page selection.
+        pivot.ColumnFields.Add(region with { SelectedItems = ["East"] });
+        pivot.PageFields.Add(region with { SelectedItem = "East", SelectedItems = ["East"] });
+        pivot.PageFields.Add(region with { SelectedItem = "West", SelectedItems = ["West"] });
+
+        using var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+
+        var root = ReadPivotXml(saved).Root!;
+        root.Element(WorkbookNs + "pivotFields")!
+            .Elements(WorkbookNs + "pivotField")
+            .First()
+            .Attribute("axis")!.Value.Should().Be("axisRow",
+                "axis precedence remains Row > Column > Page even when the source field is duplicated");
+
+        var pageFields = root.Element(WorkbookNs + "pageFields")!
+            .Elements(WorkbookNs + "pageField")
+            .ToList();
+        pageFields.Should().HaveCount(2);
+        pageFields.Should().OnlyContain(field => field.Attribute("item") != null && field.Attribute("item")!.Value == "1",
+            "both preserved page-field entries use the last same-index Page model selection, West");
+
+        var items = ReadPivotFieldItems(saved, fieldIndex: 0);
+        items.Single(item => item.Attribute("x")?.Value == "0")
+            .Attribute("hidden")?.Value.Should().Be("1",
+                "the last Page field's SelectedItems takes precedence over Row/Column selections");
+        items.Single(item => item.Attribute("x")?.Value == "1")
+            .Attribute("hidden").Should().BeNull();
+    }
+
     private static Workbook CreateRegionPivotWorkbook()
     {
         var workbook = new Workbook("PivotFilterPageWorkbook");

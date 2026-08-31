@@ -2416,7 +2416,7 @@ public sealed class AvaloniaShellSourceTests
         plannerSource.Should().Contain("DataValidationService.GetListItems(rule, sheet, activeCell, workbook)");
         plannerSource.Should().Contain("DataValidationService.FormatListSourceRange");
         plannerSource.Should().Contain("DataValidationDisplayTextPlanner.FormatAlertStyle");
-        plannerSource.Should().NotContain("private static string FormatAlertStyle");
+        plannerSource.Should().NotContain("internal static string FormatAlertStyle");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowDataValidationPreviewDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);

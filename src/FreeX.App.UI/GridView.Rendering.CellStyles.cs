@@ -74,7 +74,12 @@ public partial class GridView
     // WorkbookTheme on every paint instead of showing the stale color captured when the file was
     // loaded/authored or when the theme was last swapped. Mirrors PrintRenderer.GridCells.cs'
     // DrawPrintedBorderEdge, which resolves the identical way via CellBorder.ResolveColor(theme).
-    private static void DrawBorderEdge(
+    // internal, not private: the WPF test lane and the tester-release smoke probe both drive this
+    // directly. They used to reach it by reflection, which binds positionally at RUNTIME -- adding
+    // the theme parameter silently broke every one of those call sites, and the release-gate probe
+    // in FreeX.Validation.Wpf only failed once the gate ran. A compiled call makes the next
+    // signature change a build error at every call site instead.
+    internal static void DrawBorderEdge(
         DrawingContext dc,
         CellBorder border,
         Point p1,
@@ -161,7 +166,7 @@ public partial class GridView
         CellBorderLinePrimitive line) =>
         dc.DrawLine(pen, new Point(line.X1, line.Y1), new Point(line.X2, line.Y2));
 
-    private static bool HasVisibleCellBorder(CellStyle style) =>
+    internal static bool HasVisibleCellBorder(CellStyle style) =>
         style.BorderTop.Style != BorderStyle.None ||
         style.BorderBottom.Style != BorderStyle.None ||
         style.BorderLeft.Style != BorderStyle.None ||

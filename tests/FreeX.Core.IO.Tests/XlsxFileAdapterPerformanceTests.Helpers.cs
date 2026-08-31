@@ -1359,11 +1359,7 @@ public sealed partial class XlsxFileAdapterPerformanceTests
 
     private static void InvokeSavePostProcessing(Workbook workbook, Stream stream)
     {
-        var method = typeof(XlsxFileAdapter).GetMethod(
-            "ApplyPackagePostProcessing",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull();
-        method!.Invoke(null, [workbook, stream, null]);
+        XlsxFileAdapter.ApplyPackagePostProcessing(workbook, stream, null);
     }
 
     private static void MeasureExternalStage(string path, string stage, Action action)

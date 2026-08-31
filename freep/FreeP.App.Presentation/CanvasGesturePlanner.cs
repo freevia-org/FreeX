@@ -248,10 +248,11 @@ public static class CanvasGesturePlanner
         ArgumentNullException.ThrowIfNull(selectedShapeIds);
 
         var states = new List<CanvasMoveShapeState>();
+        Dictionary<uint, SlideShape>? shapesById = null;
         foreach (var id in selectedShapeIds)
         {
-            var shape = ShapeHitTester.FindShape(slide, id);
-            if (shape is null)
+            shapesById ??= IndexShapesById(slide);
+            if (!shapesById.TryGetValue(id, out var shape))
                 continue;
 
             states.Add(new CanvasMoveShapeState(
@@ -273,10 +274,11 @@ public static class CanvasGesturePlanner
         ArgumentNullException.ThrowIfNull(selectedShapeIds);
 
         var states = new List<CanvasTransformShapeState>();
+        Dictionary<uint, SlideShape>? shapesById = null;
         foreach (var id in selectedShapeIds)
         {
-            var shape = ShapeHitTester.FindShape(slide, id);
-            if (shape is null)
+            shapesById ??= IndexShapesById(slide);
+            if (!shapesById.TryGetValue(id, out var shape))
                 continue;
 
             states.Add(new CanvasTransformShapeState(
@@ -289,6 +291,14 @@ public static class CanvasGesturePlanner
         }
 
         return states;
+    }
+
+    private static Dictionary<uint, SlideShape> IndexShapesById(Slide slide)
+    {
+        var shapesById = new Dictionary<uint, SlideShape>();
+        foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
+            shapesById.TryAdd(shape.Id, shape);
+        return shapesById;
     }
 
     public static CanvasMovePlan PlanMove(CanvasMoveRequest request)
