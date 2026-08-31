@@ -9,16 +9,6 @@ namespace FreeX.App.UI;
 
 public static partial class ChartRenderer
 {
-    private static readonly Color[] DirectChartPalette =
-    [
-        Color.FromRgb(68, 114, 196),
-        Color.FromRgb(237, 125, 49),
-        Color.FromRgb(165, 165, 165),
-        Color.FromRgb(255, 192, 0),
-        Color.FromRgb(91, 155, 213),
-        Color.FromRgb(112, 173, 71)
-    ];
-
     private static readonly Typeface DirectChartTypeface = new("Segoe UI");
     private static readonly Typeface DirectChartTitleTypeface = new(
         new FontFamily("Segoe UI"),
@@ -109,6 +99,8 @@ public static partial class ChartRenderer
         Rect Legend,
         DirectLegendFlow LegendFlow);
 
+    internal readonly record struct DirectValueAxis(double Minimum, double Maximum, double MajorUnit);
+
     private static DirectChartData? BuildDirectChartData(ChartModel chart, ViewportModel viewport, WorkbookTheme theme)
     {
         var accessor = ChartViewportCellAccessorBuilder.BuildValueAccessor(
@@ -137,6 +129,7 @@ public static partial class ChartRenderer
                     : (pointIndex + 1).ToString(CultureInfo.InvariantCulture));
         }
 
+        var palette = ChartStylePlanner.BuildExcelSeriesPalette(theme);
         var series = new List<DirectChartSeries>();
         foreach (var sourceSeries in dataPlan.Series)
         {
@@ -149,6 +142,7 @@ public static partial class ChartRenderer
             series.Add(CreateDirectSeries(
                 chart,
                 theme,
+                palette,
                 sourceSeries.SeriesIndex,
                 name,
                 sourceSeries.Values));
@@ -178,12 +172,19 @@ public static partial class ChartRenderer
         var name = string.IsNullOrWhiteSpace(sourceSeries.Name) ? "Series 1" : sourceSeries.Name!;
         return new DirectChartData(
             categories,
-            [CreateDirectSeries(chart, theme, sourceSeries.SeriesIndex, name, sourceSeries.Values)]);
+            [CreateDirectSeries(
+                chart,
+                theme,
+                ChartStylePlanner.BuildExcelSeriesPalette(theme),
+                sourceSeries.SeriesIndex,
+                name,
+                sourceSeries.Values)]);
     }
 
     private static DirectChartSeries CreateDirectSeries(
         ChartModel chart,
         WorkbookTheme theme,
+        IReadOnlyList<CellColor> palette,
         int seriesIndex,
         string name,
         IReadOnlyList<double?> values)
@@ -191,7 +192,7 @@ public static partial class ChartRenderer
         var format = GetSeriesFormat(chart, seriesIndex);
         var fillColor = format?.ResolveFillColor(theme) is { } fill
             ? ToMediaColor(fill)
-            : DirectChartPalette[Math.Abs(seriesIndex) % DirectChartPalette.Length];
+            : ToMediaColor(ChartStylePlanner.GetPaletteColor(palette, seriesIndex));
         var strokeColor = format?.ResolveStrokeColor(theme) is { } stroke
             ? ToMediaColor(stroke)
             : Darken(fillColor, 0.68);
@@ -212,7 +213,7 @@ public static partial class ChartRenderer
     {
         if (chart.Type is ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut)
         {
-            DrawDirectPieChart(dc, chart, data, rect);
+            DrawDirectPieChart(dc, chart, data, theme, rect);
             return;
         }
 
@@ -285,8 +286,10 @@ public static partial class ChartRenderer
 
     private static void DrawDirectCartesianChart(DrawingContext dc, ChartModel chart, DirectChartData data, Rect plot)
     {
-        var (minimum, maximum) = GetDirectValueRange(data, includeZero: true);
-        DrawDirectValueGrid(dc, plot, minimum, maximum, horizontal: true, hideLabels: chart.HideYAxis);
+        var axis = PlanDirectValueAxis(chart, data.Series.SelectMany(series => series.Values), useXAxis: false, includeZero: true);
+        var minimum = axis.Minimum;
+        var maximum = axis.Maximum;
+        DrawDirectValueGrid(dc, plot, axis, horizontal: true, hideLabels: chart.HideYAxis);
         if (!chart.HideXAxis)
             dc.DrawLine(DirectChartAxisPen, new Point(plot.Left, MapY(0, minimum, maximum, plot)), new Point(plot.Right, MapY(0, minimum, maximum, plot)));
         if (!chart.HideYAxis)
@@ -411,8 +414,10 @@ public static partial class ChartRenderer
 
     private static void DrawDirectBarChart(DrawingContext dc, ChartModel chart, DirectChartData data, Rect plot)
     {
-        var (minimum, maximum) = GetDirectValueRange(data, includeZero: true);
-        DrawDirectValueGrid(dc, plot, minimum, maximum, horizontal: false, hideLabels: chart.HideXAxis);
+        var axis = PlanDirectValueAxis(chart, data.Series.SelectMany(series => series.Values), useXAxis: true, includeZero: true);
+        var minimum = axis.Minimum;
+        var maximum = axis.Maximum;
+        DrawDirectValueGrid(dc, plot, axis, horizontal: false, hideLabels: chart.HideXAxis);
         if (!chart.HideXAxis)
             dc.DrawLine(DirectChartAxisPen, new Point(MapX(0, minimum, maximum, plot), plot.Top), new Point(MapX(0, minimum, maximum, plot), plot.Bottom));
         if (!chart.HideYAxis)
@@ -441,7 +446,7 @@ public static partial class ChartRenderer
         }
     }
 
-    private static void DrawDirectPieChart(DrawingContext dc, ChartModel chart, DirectChartData data, Rect rect)
+    private static void DrawDirectPieChart(DrawingContext dc, ChartModel chart, DirectChartData data, WorkbookTheme theme, Rect rect)
     {
         if (!string.IsNullOrWhiteSpace(chart.Title))
             DrawCenteredText(dc, chart.Title!, rect.Left, rect.Top + 6, rect.Width, chart.ChartTitleFontSize, DirectChartTextBrush, bold: true);
@@ -457,6 +462,7 @@ public static partial class ChartRenderer
         var center = new Point(pieRect.Left + pieRect.Width / 2.0, pieRect.Top + pieRect.Height / 2.0);
         var radius = diameter / 2.0;
         var angle = chart.FirstSliceAngle - 90.0;
+        var palette = ChartStylePlanner.BuildExcelSeriesPalette(theme);
         for (var i = 0; i < values.Length; i++)
         {
             if (values[i] <= 0)
@@ -464,7 +470,8 @@ public static partial class ChartRenderer
 
             var sweep = values[i] / total * 360.0;
             var geometry = CreatePieSliceGeometry(center, radius, angle, sweep, chart.Type == ChartType.Doughnut ? radius * chart.DoughnutHoleSize : 0);
-            dc.DrawGeometry(CreateFrozenBrush(DirectChartPalette[i % DirectChartPalette.Length]), CreateFrozenPen(Colors.White, 1), geometry);
+            var fill = ChartStylePlanner.GetPaletteColor(palette, i);
+            dc.DrawGeometry(CreateFrozenBrush(ToMediaColor(fill)), CreateFrozenPen(Colors.White, 1), geometry);
             angle += sweep;
         }
     }
@@ -503,22 +510,22 @@ public static partial class ChartRenderer
         return new Point(center.X + Math.Cos(radians) * radius, center.Y + Math.Sin(radians) * radius);
     }
 
-    private static void DrawDirectValueGrid(DrawingContext dc, Rect plot, double minimum, double maximum, bool horizontal, bool hideLabels)
+    private static void DrawDirectValueGrid(DrawingContext dc, Rect plot, DirectValueAxis axis, bool horizontal, bool hideLabels)
     {
-        const int tickCount = 4;
+        var tickCount = Math.Clamp((int)Math.Round((axis.Maximum - axis.Minimum) / axis.MajorUnit), 1, 64);
         for (var i = 0; i <= tickCount; i++)
         {
-            var value = minimum + (maximum - minimum) * i / tickCount;
+            var value = axis.Minimum + axis.MajorUnit * i;
             if (horizontal)
             {
-                var y = MapY(value, minimum, maximum, plot);
+                var y = MapY(value, axis.Minimum, axis.Maximum, plot);
                 dc.DrawLine(DirectChartGridlinePen, new Point(plot.Left, y), new Point(plot.Right, y));
                 if (!hideLabels)
                     DrawRightAlignedText(dc, FormatDirectAxisLabel(value), plot.Left - 42, y - 8, 36, 10, DirectChartTextBrush);
             }
             else
             {
-                var x = MapX(value, minimum, maximum, plot);
+                var x = MapX(value, axis.Minimum, axis.Maximum, plot);
                 dc.DrawLine(DirectChartGridlinePen, new Point(x, plot.Top), new Point(x, plot.Bottom));
                 if (!hideLabels)
                     DrawCenteredText(dc, FormatDirectAxisLabel(value), x - 20, plot.Bottom + 6, 40, 10, DirectChartTextBrush);
@@ -611,27 +618,50 @@ public static partial class ChartRenderer
     private static double GetDirectLegendRowHeight(double fontSize) =>
         Math.Max(16.0, fontSize + 8.0);
 
-    private static (double Minimum, double Maximum) GetDirectValueRange(DirectChartData data, bool includeZero)
+    internal static DirectValueAxis PlanDirectValueAxis(
+        ChartModel chart,
+        IEnumerable<double?> values,
+        bool useXAxis,
+        bool includeZero)
     {
-        var values = data.Series.SelectMany(series => series.Values).Where(value => value.HasValue).Select(value => value!.Value).ToArray();
-        if (values.Length == 0)
-            return (0, 1);
+        var finiteValues = values.Where(value => value is { } number && double.IsFinite(number)).Select(value => value!.Value).ToArray();
+        if (finiteValues.Length == 0)
+            return new DirectValueAxis(0, 1, 0.2);
 
-        var minimum = values.Min();
-        var maximum = values.Max();
+        var minimum = finiteValues.Min();
+        var maximum = finiteValues.Max();
         if (includeZero)
         {
             minimum = Math.Min(0, minimum);
             maximum = Math.Max(0, maximum);
         }
 
-        if (Math.Abs(maximum - minimum) < 0.000001)
-        {
-            maximum += 1;
-            minimum = Math.Min(0, minimum - 1);
-        }
+        var explicitMinimum = useXAxis ? chart.XAxisMinimum : chart.YAxisMinimum;
+        var explicitMaximum = useXAxis ? chart.XAxisMaximum : chart.YAxisMaximum;
+        var explicitMajorUnit = useXAxis ? chart.XAxisMajorUnit : chart.YAxisMajorUnit;
+        if (explicitMinimum is { } authoredMinimum)
+            minimum = authoredMinimum;
+        if (explicitMaximum is { } authoredMaximum)
+            maximum = authoredMaximum;
 
-        return (minimum, maximum);
+        if (maximum <= minimum)
+            maximum = minimum + 1;
+
+        // Excel leaves headroom above a positive zero-baseline column/bar chart before choosing
+        // the nearest 1/2/5 × 10^n unit. For the captured 5720 maximum this gives 0–7000 by 1000,
+        // rather than the raw 0–5720 / 1430 steps the fallback previously drew.
+        var autoMaximum = explicitMaximum is null && includeZero && minimum >= 0 && maximum > 0
+            ? maximum * 1.2
+            : maximum;
+        var majorUnit = explicitMajorUnit is { } authoredMajorUnit && authoredMajorUnit > 0
+            ? authoredMajorUnit
+            : AxisScale.CalculateNiceStep(autoMaximum - minimum, targetTickCount: 7);
+        minimum = explicitMinimum ?? Math.Floor(minimum / majorUnit) * majorUnit;
+        maximum = explicitMaximum ?? Math.Ceiling(autoMaximum / majorUnit) * majorUnit;
+        if (maximum <= minimum)
+            maximum = minimum + majorUnit;
+
+        return new DirectValueAxis(minimum, maximum, majorUnit);
     }
 
     private static double MapY(double value, double minimum, double maximum, Rect plot) =>

@@ -160,6 +160,83 @@ public sealed partial class ChartRendererTests
         source.Should().Contain("bold ? DirectChartTitleTypeface : DirectChartTypeface");
     }
 
+    [Fact]
+    public void DirectFallback_UsesWorkbookPaletteAndExcelStyleAutomaticValueAxis()
+    {
+        var chart = new ChartModel { Type = ChartType.Column };
+        var axis = ChartRenderer.PlanDirectValueAxis(chart, [2400d, 4180d, 1750d, 3300d, 5720d, 1890d, 5040d, 2860d], useXAxis: false, includeZero: true);
+
+        axis.Should().Be(new ChartRenderer.DirectValueAxis(0, 7000, 1000));
+
+        var source = AppUiSourceTestSupport.ReadAppUiSources("ChartRenderer.DirectFallback.cs");
+        source.Should().Contain("ChartStylePlanner.BuildExcelSeriesPalette(theme)");
+        source.Should().Contain("ChartStylePlanner.GetPaletteColor(palette, seriesIndex)");
+        source.Should().Contain("DrawDirectValueGrid(dc, plot, axis");
+    }
+
+    [Fact]
+    public void DirectFallback_UsesLoadedWorkbookAccentPaletteForSeries()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var chart = new ChartModel
+            {
+                Type = ChartType.Column,
+                SeriesInRows = true,
+                DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 5, 5)),
+                Width = 420,
+                Height = 260
+            };
+            var image = ChartRenderer.RenderDirectFallback(chart, new ViewportModel(
+                [],
+                [],
+                [],
+                ChartDataCells:
+                [
+                    ChartCell(sheetId, 1, 1, "Month", new TextValue("Month")),
+                    ChartCell(sheetId, 1, 2, "North", new TextValue("North")),
+                    ChartCell(sheetId, 1, 3, "South", new TextValue("South")),
+                    ChartCell(sheetId, 1, 4, "East", new TextValue("East")),
+                    ChartCell(sheetId, 1, 5, "West", new TextValue("West")),
+                    ChartCell(sheetId, 2, 1, "Jan", new TextValue("Jan")),
+                    ChartCell(sheetId, 2, 2, "2400", new NumberValue(2400)),
+                    ChartCell(sheetId, 2, 3, "4180", new NumberValue(4180)),
+                    ChartCell(sheetId, 2, 4, "0", new NumberValue(0)),
+                    ChartCell(sheetId, 2, 5, "0", new NumberValue(0)),
+                    ChartCell(sheetId, 3, 1, "Feb", new TextValue("Feb")),
+                    ChartCell(sheetId, 3, 2, "0", new NumberValue(0)),
+                    ChartCell(sheetId, 3, 3, "0", new NumberValue(0)),
+                    ChartCell(sheetId, 3, 4, "1750", new NumberValue(1750)),
+                    ChartCell(sheetId, 3, 5, "3300", new NumberValue(3300)),
+                    ChartCell(sheetId, 4, 1, "Mar", new TextValue("Mar")),
+                    ChartCell(sheetId, 4, 2, "5720", new NumberValue(5720)),
+                    ChartCell(sheetId, 4, 3, "1890", new NumberValue(1890)),
+                    ChartCell(sheetId, 4, 4, "0", new NumberValue(0)),
+                    ChartCell(sheetId, 4, 5, "0", new NumberValue(0)),
+                    ChartCell(sheetId, 5, 1, "Apr", new TextValue("Apr")),
+                    ChartCell(sheetId, 5, 2, "0", new NumberValue(0)),
+                    ChartCell(sheetId, 5, 3, "0", new NumberValue(0)),
+                    ChartCell(sheetId, 5, 4, "5040", new NumberValue(5040)),
+                    ChartCell(sheetId, 5, 5, "2860", new NumberValue(2860))
+                ]),
+                WorkbookTheme.Office,
+                renderScale: 1.0).Should().BeAssignableTo<BitmapSource>().Subject;
+
+            foreach (var color in new[]
+                     {
+                         Color.FromRgb(21, 96, 130),
+                         Color.FromRgb(233, 113, 50),
+                         Color.FromRgb(25, 107, 36),
+                         Color.FromRgb(15, 158, 213)
+                     })
+            {
+                CountPixelsWithColor(image, color).Should().BeGreaterThan(100,
+                    "the fallback must use the loaded workbook's Accent1-Accent4 series palette");
+            }
+        });
+    }
+
     [Theory]
     [InlineData(1.0)]
     [InlineData(1.5)]
@@ -330,6 +407,25 @@ public sealed partial class ChartRendererTests
         }
 
         return visible;
+    }
+
+    private static int CountPixelsWithColor(BitmapSource bitmap, Color color)
+    {
+        var source = bitmap.Format == PixelFormats.Bgra32
+            ? bitmap
+            : new FormatConvertedBitmap(bitmap, PixelFormats.Bgra32, null, 0);
+        var stride = source.PixelWidth * 4;
+        var pixels = new byte[stride * source.PixelHeight];
+        source.CopyPixels(pixels, stride, 0);
+
+        var count = 0;
+        for (var i = 0; i < pixels.Length; i += 4)
+        {
+            if (pixels[i] == color.B && pixels[i + 1] == color.G && pixels[i + 2] == color.R && pixels[i + 3] == byte.MaxValue)
+                count++;
+        }
+
+        return count;
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using OxyPlot;
 using OxyPlot.Axes;
+using OxyPlot.Series;
 
 using FreeX.App.Presentation.Charts;
 using FreeX.Core.Formula;
@@ -121,6 +122,16 @@ public static partial class ChartRenderer
                     if (boundsMinorUnit is { } minorUnit)
                         axis.MinorStep = minorUnit;
                 }
+                ApplyExcelAutomaticColumnValueAxis(
+                    axis,
+                    model,
+                    chart,
+                    isSecondaryAxis,
+                    boundsSupported,
+                    boundsUseLogAxis,
+                    boundsMinimum,
+                    boundsMaximum,
+                    boundsMajorUnit);
                 var yDisplayUnitDivisor = GetAxisDisplayUnitDivisor(chart.YAxisDisplayUnit, chart.YAxisCustomDisplayUnit);
                 if (boundsSupported &&
                     HasExplicitAxisNumberFormat(boundsNumberFormat, boundsNumberFormatCode) &&
@@ -143,6 +154,57 @@ public static partial class ChartRenderer
         // R90-render-chart-axis-titles-5-2: runs after the loop above so it sees the final axis set
         // (a category axis is never log-converted, but the value axis in the same model may be).
         ApplyCategoryAxisSkip(model, chart);
+    }
+
+    /// <summary>
+    /// Excel pads an automatic positive column value axis before selecting a 1/2/5 times ten-to-the-n
+    /// major unit. OxyPlot otherwise exposes its raw data extent (for example 0..5720 by 1430), while
+    /// Excel displays 0..7000 by 1000 for the same imported chart. Restrict this to unpinned primary
+    /// column axes; stacked, secondary, logarithmic, and explicitly-authored axes retain their own
+    /// scale semantics.
+    /// </summary>
+    private static void ApplyExcelAutomaticColumnValueAxis(
+        Axis axis,
+        PlotModel model,
+        ChartModel chart,
+        bool isSecondaryAxis,
+        bool boundsSupported,
+        bool boundsUseLogAxis,
+        double? boundsMinimum,
+        double? boundsMaximum,
+        double? boundsMajorUnit)
+    {
+        if (axis is not LinearAxis linearAxis ||
+            isSecondaryAxis ||
+            !boundsSupported ||
+            boundsUseLogAxis ||
+            boundsMinimum is not null ||
+            boundsMaximum is not null ||
+            boundsMajorUnit is not null ||
+            chart.Type is not (ChartType.Column or ChartType.ThreeDColumn))
+        {
+            return;
+        }
+
+        var values = model.Series
+            .OfType<RectangleBarSeries>()
+            .Where(series => string.IsNullOrEmpty(series.YAxisKey))
+            .SelectMany(series => series.Items.SelectMany(item => new[] { item.Y0, item.Y1 }))
+            .Where(double.IsFinite)
+            .ToArray();
+        if (values.Length == 0)
+            return;
+
+        var minimum = Math.Min(0, values.Min());
+        var maximum = Math.Max(0, values.Max());
+        if (minimum < 0 || maximum <= 0)
+            return;
+
+        var paddedMaximum = maximum * 1.2;
+        var majorStep = AxisScale.CalculateNiceStep(paddedMaximum - minimum, targetTickCount: 7);
+        linearAxis.Minimum = Math.Floor(minimum / majorStep) * majorStep;
+        linearAxis.Maximum = Math.Ceiling(paddedMaximum / majorStep) * majorStep;
+        linearAxis.MajorStep = majorStep;
     }
 
     private static LinearAxis CreateCenteredIndexedCategoryAxis(

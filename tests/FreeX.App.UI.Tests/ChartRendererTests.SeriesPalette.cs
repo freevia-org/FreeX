@@ -288,6 +288,46 @@ public sealed partial class ChartRendererTests
     }
 
     [Fact]
+    public void ColumnRenderer_DefaultMetadataFormatStillUsesWorkbookAccentPalette()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            FirstRowIsHeader = true,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 5)),
+            // Excel authors this metadata for the captured workbook without adding a <c:spPr> fill.
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(0, InvertIfNegative: false),
+                new ChartSeriesFormat(1, InvertIfNegative: false),
+                new ChartSeriesFormat(2, InvertIfNegative: false),
+                new ChartSeriesFormat(3, InvertIfNegative: false)
+            ]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Month"), Cell(1, 2, "Jan"), Cell(1, 3, "Feb"), Cell(1, 4, "Mar"), Cell(1, 5, "Apr"),
+                Cell(2, 1, "North"), Cell(2, 2, "2400"), Cell(2, 3, "4180"), Cell(2, 4, "3380"), Cell(2, 5, "5720"),
+                Cell(3, 1, "South"), Cell(3, 2, "1800"), Cell(3, 3, "2200"), Cell(3, 4, "3000"), Cell(3, 5, "4100")
+            ],
+            [],
+            []),
+            WorkbookTheme.Office);
+
+        var bars = model.Series.OfType<RectangleBarSeries>().ToList();
+        bars.Should().HaveCount(4);
+        bars.Select(series => series.FillColor).Should().Equal(
+            OxyColor.FromRgb(21, 96, 130),
+            OxyColor.FromRgb(233, 113, 50),
+            OxyColor.FromRgb(25, 107, 36),
+            OxyColor.FromRgb(15, 158, 213));
+        bars.Should().OnlyContain(series => series.StrokeThickness == 0);
+    }
+
+    [Fact]
     public void PieRenderer_ExplicitFormatColorStillWinsOverPalette()
     {
         var sheetId = SheetId.New();

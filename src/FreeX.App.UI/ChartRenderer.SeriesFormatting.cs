@@ -234,7 +234,13 @@ public static partial class ChartRenderer
         WorkbookTheme theme,
         int seriesIndex)
     {
-        if (format is not null)
+        // Excel writes a <c:ser> record for otherwise-default series when it carries metadata
+        // such as <c:invertIfNegative val="0"/>. That is not a visual fill override: retain the
+        // workbook accent sequence unless the record actually specifies a fill (or no fill).
+        if (format is { } authoredFormat &&
+            (authoredFormat.NoFill ||
+             authoredFormat.ResolveFillColor(theme) is not null ||
+             !string.IsNullOrWhiteSpace(authoredFormat.RawFillXml)))
             return;
 
         var palette = ChartStylePlanner.BuildExcelSeriesPalette(theme);

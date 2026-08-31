@@ -14,6 +14,62 @@ namespace FreeX.App.UI.Tests;
 
 public sealed partial class ChartRendererTests
 {
+    [Fact]
+    public void ColumnRenderer_AutomaticExcelValueAxisUsesPaddedNiceBounds()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            FirstRowIsHeader = true,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 5))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Month"), Cell(1, 2, "Jan"), Cell(1, 3, "Feb"), Cell(1, 4, "Mar"), Cell(1, 5, "Apr"),
+                Cell(2, 1, "North"), Cell(2, 2, "2400"), Cell(2, 3, "4180"), Cell(2, 4, "3380"), Cell(2, 5, "5720"),
+                Cell(3, 1, "South"), Cell(3, 2, "1800"), Cell(3, 3, "2200"), Cell(3, 4, "3000"), Cell(3, 5, "4100")
+            ],
+            [],
+            []));
+
+        var axis = model.Axes.Should().ContainSingle(candidate => candidate.Position == AxisPosition.Left).Subject;
+        axis.Minimum.Should().Be(0);
+        axis.Maximum.Should().Be(7000);
+        axis.MajorStep.Should().Be(1000);
+    }
+
+    [Fact]
+    public void ColumnRenderer_ExplicitValueAxisBoundsOverrideAutomaticExcelScale()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            FirstRowIsHeader = true,
+            FirstColIsCategories = true,
+            YAxisMinimum = 1000,
+            YAxisMaximum = 6000,
+            YAxisMajorUnit = 500,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 3))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Month"), Cell(1, 2, "Jan"), Cell(1, 3, "Feb"),
+                Cell(2, 1, "North"), Cell(2, 2, "2400"), Cell(2, 3, "5720")
+            ],
+            [],
+            []));
+
+        var axis = model.Axes.Should().ContainSingle(candidate => candidate.Position == AxisPosition.Left).Subject;
+        axis.Minimum.Should().Be(1000);
+        axis.Maximum.Should().Be(6000);
+        axis.MajorStep.Should().Be(500);
+    }
+
     [Theory]
     [InlineData(ChartType.PercentStackedColumn, AxisPosition.Left)]
     [InlineData(ChartType.PercentStackedBar, AxisPosition.Bottom)]
