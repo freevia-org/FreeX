@@ -16,9 +16,13 @@ public sealed class SlideShowPlaybackShapeIndexSourceTests
         var fill = ExtractMethod(source, "private static (string? From, string? To) ResolveFillColorBehavior(");
 
         step.Should()
-            .Contain("entry.Animation.Preset == AnimationPreset.ChangeFillColor")
+            .Contain("var plans = new List<SlideShowShapeAnimationPlaybackPlan>(step.Entries.Count);")
+            .And.Contain("foreach (var entry in step.Entries)")
+            .And.Contain("entry.Animation.Preset == AnimationPreset.ChangeFillColor")
             .And.Contain("shapesById = IndexPresentationShapesById(presentation)")
-            .And.Contain("shapesById))");
+            .And.Contain("shapesById));")
+            .And.NotContain("step.Entries.Any(")
+            .And.NotContain("step.Entries.Select(");
         index.Should()
             .Contain("SlideShapeTraversal.EnumerateDepthFirst(slide)")
             .And.Contain("shapesById.TryAdd(shape.Id, shape)");

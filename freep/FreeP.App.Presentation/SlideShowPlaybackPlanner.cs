@@ -588,22 +588,27 @@ public static class SlideShowPlaybackPlanner
     {
         ArgumentNullException.ThrowIfNull(step);
 
+        var plans = new List<SlideShowShapeAnimationPlaybackPlan>(step.Entries.Count);
         IReadOnlyDictionary<uint, SlideShape>? shapesById = null;
-        if (presentation is not null && step.Entries.Any(entry =>
-                entry.Animation.Preset == AnimationPreset.ChangeFillColor &&
-                !string.IsNullOrWhiteSpace(entry.Animation.PreservedFillBehaviorXml)))
+        foreach (var entry in step.Entries)
         {
-            shapesById = IndexPresentationShapesById(presentation);
-        }
+            if (shapesById is null &&
+                presentation is not null &&
+                entry.Animation.Preset == AnimationPreset.ChangeFillColor &&
+                !string.IsNullOrWhiteSpace(entry.Animation.PreservedFillBehaviorXml))
+            {
+                shapesById = IndexPresentationShapesById(presentation);
+            }
 
-        return step.Entries
-            .Select(entry => PlanShapeAnimation(
+            plans.Add(PlanShapeAnimation(
                 entry.Animation,
                 entry.StartDelayMs,
                 presentation,
                 effectiveClrMap,
-                shapesById))
-            .ToList();
+                shapesById));
+        }
+
+        return plans;
     }
 
     public static SlideShowShapeAnimationPlaybackPlan PlanShapeAnimation(
