@@ -12,6 +12,7 @@ using Avalonia.Platform.Storage;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.DrawingUI;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.App.Presentation.TableUI;
 using FreeX.App.Services;
@@ -256,7 +257,10 @@ public sealed partial class MainWindow
             return;
 
         var sourceRange = TableCreationPlanner.PlanSourceRange(_session.ActiveSheet, _session.SelectedRange);
-        var defaultRangeText = FormatRangeReference(sourceRange);
+        var defaultRangeText = DialogRangeSelectionFormatter.Format(
+            sourceRange,
+            DialogRangeSelectionFormat.AbsoluteRange,
+            new DialogRangeSelectionFormatContext(null, null, UseR1C1ReferenceStyle: false));
         var defaultStyle = TableStyleGalleryPlanner.GetOption(0, _session.Workbook.Theme);
         var plan = await ShowCreateTableDialogAsync(defaultRangeText, defaultStyle.StyleName);
         if (plan is null)

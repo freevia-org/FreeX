@@ -41,6 +41,7 @@ public sealed class CreateTableDialog : Window
         AutomationProperties.SetAutomationId(this, CreateTableDialogPlanner.DialogAutomationId);
 
         _rangeBox.Text = defaultRangeText;
+        _rangeBox.MinWidth = CreateTableDialogPlanner.RangeBoxMinimumWidth;
         AutomationProperties.SetName(_rangeBox, UiText.Get(CreateTableDialogPlanner.RangeAutomationNameKey));
         AutomationProperties.SetAutomationId(_rangeBox, CreateTableDialogPlanner.RangeBoxAutomationId);
         AutomationProperties.SetHelpText(_rangeBox, UiText.Get(CreateTableDialogPlanner.RangeAutomationHelpTextKey));
@@ -58,7 +59,10 @@ public sealed class CreateTableDialog : Window
         root.Children.Add(CreateReferenceEditor(_rangeBox, UiText.Get(CreateTableDialogPlanner.RangePickerAutomationNameKey), RequestRangeSelection));
         _headersBox.Margin = new Thickness(0, 0, 0, CreateTableDialogPlanner.HeadersBottomMargin);
         root.Children.Add(_headersBox);
-        root.Children.Add(TextToColumnsDialog.CreateButtonRow(Accept));
+        root.Children.Add(DialogButtonRowFactory.Create(
+            Accept,
+            buttonWidth: CreateTableDialogPlanner.ButtonWidth,
+            rowMargin: new Thickness(0, CreateTableDialogPlanner.ActionRowTopMargin, 0, 0)));
         Content = root;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
@@ -97,7 +101,13 @@ public sealed class CreateTableDialog : Window
         string automationName,
         Action<DialogReferencePickerRequest>? requestSelection)
     {
-        var panel = DialogReferencePicker.CreateEditor(textBox, automationName, requestSelection: requestSelection);
+        var panel = DialogReferencePicker.CreateEditor(
+            textBox,
+            automationName,
+            pickerMargin: new Thickness(CreateTableDialogPlanner.RangePickerGap, 0, 0, 0),
+            pickerDock: Dock.Right,
+            pickerWidth: CreateTableDialogPlanner.RangePickerWidth,
+            requestSelection: requestSelection);
         panel.Margin = new Thickness(0, 0, 0, CreateTableDialogPlanner.RangeEditorBottomMargin);
         return panel;
     }

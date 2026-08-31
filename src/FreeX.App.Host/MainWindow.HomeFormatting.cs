@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Presentation.Editing;
 using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.Shell;
@@ -1523,7 +1524,7 @@ public partial class MainWindow
         CreateTableDialog? dialog = null;
         dialog = new CreateTableDialog(
             _currentSheetId,
-            FormatRangeReference(sourceRange.Start, sourceRange.End),
+            FormatCreateTableRangeReference(sourceRange),
             tableStyleName,
             request => ApplyCreateTableRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null)
@@ -1552,8 +1553,14 @@ public partial class MainWindow
         BeginDialogRangeSelection(
             dialog,
             request.CollapseDialog,
-            selectedRange => dialog.ApplyRangeSelection(FormatRangeReference(selectedRange.Start, selectedRange.End)));
+            selectedRange => dialog.ApplyRangeSelection(FormatCreateTableRangeReference(selectedRange)));
     }
+
+    private string FormatCreateTableRangeReference(GridRange range) =>
+        DialogRangeSelectionFormatter.Format(
+            range,
+            DialogRangeSelectionFormat.AbsoluteRange,
+            new DialogRangeSelectionFormatContext(null, null, _options.UseR1C1ReferenceStyle));
 
     private void CellStylesBtn_Click(object sender, RoutedEventArgs e)
     {
