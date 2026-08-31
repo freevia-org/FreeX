@@ -10,6 +10,13 @@ public static class FindReplaceDialogPlanner
     public const double Height = 430;
     public const double MinWidth = 520;
     public const double MinHeight = 360;
+    // Excel's collapsed Ctrl+H surface is substantially narrower than the result-bearing
+    // dialog used by the cross-platform host. Keep this WPF-only starting size separate so
+    // the Avalonia renderer can retain its independently verified result layout.
+    public const double WpfCompactWidth = 540;
+    public const double WpfCompactMaximumHeight = Height;
+    public const double WpfCompactActionButtonWidth = 90;
+    public const double WpfCompactActionButtonSpacing = 12;
     public const double RootMargin = 12;
     public const double AvaloniaRootRightMargin = 28;
     public const double AvaloniaRootBottomMargin = 44;
