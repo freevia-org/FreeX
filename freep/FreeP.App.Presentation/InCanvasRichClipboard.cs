@@ -164,6 +164,13 @@ public static class InCanvasRichClipboardPlanner
             typingRun is null ? null : TextBodyModelCloner.CloneRun(typingRun));
     }
 
+    /// <param name="destinationSlideIds">
+    /// Slide ids of the presentation being pasted into. When supplied, a pasted run whose
+    /// hyperlink jumps to a slide that does not exist here -- the cross-presentation paste
+    /// case -- has its <see cref="Hyperlink.TargetSlideId"/> cleared, mirroring how deleting a
+    /// slide orphans the links that pointed at it. Url and Tooltip are preserved. Pass null
+    /// (the default) to keep the fragment exactly as captured.
+    /// </param>
     public static TextBody Apply(
         TextBody destination,
         InCanvasEditorTextSelection selection,
@@ -177,45 +184,42 @@ public static class InCanvasRichClipboardPlanner
         int start = Math.Clamp(Math.Min(selection.Start, selection.End), 0, textLength);
         int end = Math.Clamp(Math.Max(selection.Start, selection.End), 0, textLength);
         caret = start + payload.PlainText.Length;
-        var fragment = destinationSlideIds is null
-            ? payload.Body
-            : WithValidatedSlideHyperlinks(payload.Body, destinationSlideIds);
         return RichTextBodyMutationPlanner.ReplaceWithFragment(
             destination,
             start,
             end - start,
-            fragment);
+            ResolveFragmentSlideJumps(payload.Body, destinationSlideIds));
     }
 
     /// <summary>
-    /// Drops a pasted run's internal slide-jump target when it does not name a slide that exists
-    /// in the destination document. <see cref="Hyperlink.TargetSlideId"/> round-trips through the
-    /// clipboard verbatim, but for a slide loaded from a real .pptx that value is the small
-    /// per-file OOXML relationship id (e.g. "rId4"), not a globally unique identifier -- so a
-    /// fragment copied from one open presentation and pasted into another can silently name an
-    /// unrelated slide there. <paramref name="destinationSlideIds"/> is the caller's own document,
-    /// so a same-document paste (the common case) always validates and is left untouched. Url and
-    /// Tooltip survive; only the internal jump target is cleared, the same treatment
-    /// <c>PresentationCommands</c> already gives a hyperlink whose target slide was deleted.
+    /// Drops internal slide-jump targets the destination presentation cannot resolve. The
+    /// fragment is cloned before it is edited: the same payload can be pasted again, so the
+    /// clipboard copy must keep its original targets for a paste back into the source deck.
     /// </summary>
-    private static TextBody WithValidatedSlideHyperlinks(
-        TextBody body,
-        IReadOnlyCollection<string> destinationSlideIds)
+    private static TextBody ResolveFragmentSlideJumps(
+        TextBody fragment,
+        IReadOnlyCollection<string>? destinationSlideIds)
     {
-        bool HasInvalidTarget(TextBody candidate) => candidate.Paragraphs
+        if (destinationSlideIds is null)
+            return fragment;
+
+        var known = destinationSlideIds as ISet<string>
+            ?? new HashSet<string>(destinationSlideIds, StringComparer.Ordinal);
+        bool needsResolution = fragment.Paragraphs
             .SelectMany(paragraph => paragraph.Runs)
-            .Any(run => run.Hyperlink?.TargetSlideId is { } id && !destinationSlideIds.Contains(id));
+            .Any(run => run.Hyperlink?.TargetSlideId is { } id && !known.Contains(id));
+        if (!needsResolution)
+            return fragment;
 
-        if (!HasInvalidTarget(body))
-            return body;
-
-        var clone = TextBodyModelCloner.CloneTextBody(body)!;
-        foreach (var run in clone.Paragraphs.SelectMany(paragraph => paragraph.Runs))
+        var resolved = TextBodyModelCloner.CloneTextBody(fragment) ?? new TextBody();
+        foreach (var run in resolved.Paragraphs.SelectMany(paragraph => paragraph.Runs))
         {
-            if (run.Hyperlink?.TargetSlideId is { } id && !destinationSlideIds.Contains(id))
-                run.Hyperlink.TargetSlideId = null;
+            if (run.Hyperlink is { TargetSlideId: { } targetSlideId } hyperlink
+                && !known.Contains(targetSlideId))
+                hyperlink.TargetSlideId = null;
         }
-        return clone;
+
+        return resolved;
     }
 
     /// <summary>

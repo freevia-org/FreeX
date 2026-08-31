@@ -226,8 +226,29 @@ public sealed partial class Sheet
     /// </summary>
     public void NotifyContentRecalculated() => _contentVersion++;
 
+    private string _name;
+
+    /// <summary>
+    /// Raised after the display name changes so an owning workbook can keep its name index current.
+    /// The old and new values are nullable to keep the notification safe when callers bypass
+    /// nullable annotations at runtime.
+    /// </summary>
+    internal event Action<Sheet, string?, string?>? NameChanged;
+
     /// <summary>Display name of the sheet (shown on tab).</summary>
-    public string Name { get; set; }
+    public string Name
+    {
+        get => _name;
+        set
+        {
+            if (string.Equals(_name, value, StringComparison.Ordinal))
+                return;
+
+            var oldName = _name;
+            _name = value;
+            NameChanged?.Invoke(this, oldName, value);
+        }
+    }
 
     /// <summary>Column widths override (1-based column index → width in characters).</summary>
     public Dictionary<uint, double> ColumnWidths { get; } = [];
@@ -950,7 +971,7 @@ public sealed partial class Sheet
     public Sheet(SheetId id, string name)
     {
         Id = id;
-        Name = name;
+        _name = name;
     }
 
     /// <summary>Pre-size cell storage for bulk writers.</summary>

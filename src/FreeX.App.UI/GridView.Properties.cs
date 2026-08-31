@@ -751,6 +751,11 @@ public partial class GridView
             // built under the OLD theme would otherwise keep matching that key and paint the stale
             // color forever, never just until the size-based eviction in TrimRenderCachesIfOversized.
             grid._borderPenCache.Clear();
+            // The pre-selection layer cache (GridView.RenderSurfaceCache.cs) bakes every
+            // theme-resolved cell color into a frozen DrawingGroup, but it carries WorkbookTheme in
+            // its own key, so it invalidates itself here without needing an explicit Clear -- and,
+            // unlike this method, it also survives the same-instance re-assignment that
+            // MainWindow.Viewport.cs performs on every viewport refresh.
         }
     }
 

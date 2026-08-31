@@ -765,10 +765,10 @@ internal static class XlsxWorksheetDrawingObjectWriter
                                         new XAttribute(relNs + "embed", svgRelId))))),
                     HasPictureCrop(picture)
                         ? new XElement(drawingNs + "srcRect",
-                            new XAttribute("l", ToSourceRectanglePercent(picture.CropLeft)),
-                            new XAttribute("t", ToSourceRectanglePercent(picture.CropTop)),
-                            new XAttribute("r", ToSourceRectanglePercent(picture.CropRight)),
-                            new XAttribute("b", ToSourceRectanglePercent(picture.CropBottom)))
+                            new XAttribute("l", XlsxSourceRectangleRatioCodec.Format(picture.CropLeft)),
+                            new XAttribute("t", XlsxSourceRectangleRatioCodec.Format(picture.CropTop)),
+                            new XAttribute("r", XlsxSourceRectangleRatioCodec.Format(picture.CropRight)),
+                            new XAttribute("b", XlsxSourceRectangleRatioCodec.Format(picture.CropBottom)))
                         : null,
                     new XElement(drawingNs + "stretch", new XElement(drawingNs + "fillRect"))),
                 new XElement(spreadsheetDrawingNs + "spPr",
@@ -817,10 +817,10 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     new XElement(drawingNs + "blip", new XAttribute(relNs + "link", linkRelId)),
                     HasPictureCrop(picture)
                         ? new XElement(drawingNs + "srcRect",
-                            new XAttribute("l", ToSourceRectanglePercent(picture.CropLeft)),
-                            new XAttribute("t", ToSourceRectanglePercent(picture.CropTop)),
-                            new XAttribute("r", ToSourceRectanglePercent(picture.CropRight)),
-                            new XAttribute("b", ToSourceRectanglePercent(picture.CropBottom)))
+                            new XAttribute("l", XlsxSourceRectangleRatioCodec.Format(picture.CropLeft)),
+                            new XAttribute("t", XlsxSourceRectangleRatioCodec.Format(picture.CropTop)),
+                            new XAttribute("r", XlsxSourceRectangleRatioCodec.Format(picture.CropRight)),
+                            new XAttribute("b", XlsxSourceRectangleRatioCodec.Format(picture.CropBottom)))
                         : null,
                     new XElement(drawingNs + "stretch", new XElement(drawingNs + "fillRect"))),
                 new XElement(spreadsheetDrawingNs + "spPr",
@@ -1090,11 +1090,6 @@ internal static class XlsxWorksheetDrawingObjectWriter
 
         return result;
     }
-
-    private static string ToSourceRectanglePercent(double ratio) =>
-        // R80-io-drawing-image-5-2: preserve negative (outward-crop/padding) ratios -- only clamp the
-        // magnitude to Excel's ±100% bound, matching ReadSourceRectangleRatio's [-1, 1] range.
-        ((int)Math.Round(Math.Clamp(ratio, -1, 1) * 100000d)).ToString(CultureInfo.InvariantCulture);
 
     private static XElement ToOneCellTextBoxAnchor(
         TextBoxModel textBox,

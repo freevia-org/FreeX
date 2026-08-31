@@ -499,6 +499,103 @@ public sealed class ScenarioManagerCommandTests
         sheet.GetValue(price).Should().Be(new NumberValue(10));
     }
 
+    [Fact]
+    public void MergeScenarioCommand_CaseInsensitiveSuffixesPreserveOrderInstanceReuseAndRedo()
+    {
+        var workbook = new Workbook("scenario merge");
+        workbook.AddSheet("Sheet1");
+        workbook.Scenarios.Add(new WorkbookScenario("Baseline", []));
+        workbook.Scenarios.Add(new WorkbookScenario("baseline (2)", []));
+        var firstDuplicate = new WorkbookScenario("BASELINE", []);
+        var secondDuplicate = new WorkbookScenario("baseline", []);
+        var unique = new WorkbookScenario("Upside", []);
+        var command = new MergeScenarioCommand([firstDuplicate, secondDuplicate, unique]);
+        var context = new TestCommandContext(workbook);
+
+        command.Apply(context).Success.Should().BeTrue();
+
+        workbook.Scenarios.Select(static scenario => scenario.Name).Should().Equal(
+            "Baseline",
+            "baseline (2)",
+            "BASELINE (3)",
+            "baseline (4)",
+            "Upside");
+        workbook.Scenarios[^1].Should().BeSameAs(unique);
+
+        command.Revert(context);
+        workbook.Scenarios.Select(static scenario => scenario.Name)
+            .Should().Equal("Baseline", "baseline (2)");
+
+        command.Apply(context).Success.Should().BeTrue();
+        workbook.Scenarios.Select(static scenario => scenario.Name).Should().Equal(
+            "Baseline",
+            "baseline (2)",
+            "BASELINE (3)",
+            "baseline (4)",
+            "Upside");
+        workbook.Scenarios[^1].Should().BeSameAs(unique);
+    }
+
+    [Fact]
+    public void MergeScenarioCommand_UsesOrdinalIgnoreCaseSetInsteadOfRepeatedNameScans()
+    {
+        var source = ModelSourceTestSupport.ReadCommandsSource("ScenarioCommands.cs");
+
+        source.Should().Contain("new HashSet<string>(");
+        source.Should().Contain("StringComparer.OrdinalIgnoreCase");
+        source.Should().Contain("IReadOnlySet<string> existingNames");
+        source.Should().Contain("while (existingNames.Contains(candidate))");
+        source.Should().NotContain("existingNames.Any(existing =>");
+    }
+
+    [BenchmarkFact]
+    [Trait("Category", "Benchmark")]
+    public void Benchmark_MergeScenarioCommand_LargeUniqueBatch_ReportsLinearTimingAndAllocation()
+    {
+        const int existingCount = 20_000;
+        const int incomingCount = 10_000;
+        var workbook = new Workbook("scenario merge benchmark");
+        workbook.AddSheet("Sheet1");
+        for (var index = 0; index < existingCount; index++)
+            workbook.Scenarios.Add(new WorkbookScenario($"Scenario_{index:D5}", []));
+
+        var incoming = new WorkbookScenario[incomingCount];
+        for (var index = 0; index < incomingCount; index++)
+            incoming[index] = new WorkbookScenario($"Scenario_{existingCount + index:D5}", []);
+
+        var warmupWorkbook = new Workbook("warmup");
+        warmupWorkbook.AddSheet("Sheet1");
+        _ = new MergeScenarioCommand([new WorkbookScenario("Warmup", [])])
+            .Apply(new TestCommandContext(warmupWorkbook));
+
+        _ = GC.GetAllocatedBytesForCurrentThread();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var command = new MergeScenarioCommand(incoming);
+        var context = new TestCommandContext(workbook);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var startedAt = Stopwatch.GetTimestamp();
+        var outcome = command.Apply(context);
+        var elapsed = Stopwatch.GetElapsedTime(startedAt);
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            "PERF MERGE_SCENARIOS " +
+            $"existing={existingCount} incoming={incomingCount} " +
+            $"elapsed_ms={elapsed.TotalMilliseconds:F2} allocated_bytes={allocatedBytes:N0}");
+
+        outcome.Success.Should().BeTrue();
+        workbook.Scenarios.Should().HaveCount(existingCount + incomingCount);
+        workbook.Scenarios[existingCount].Should().BeSameAs(incoming[0]);
+        workbook.Scenarios[^1].Should().BeSameAs(incoming[^1]);
+        allocatedBytes.Should().BeLessThan(8 * 1024 * 1024,
+            "name reservation should allocate one lookup set rather than predicates for quadratic scans");
+        elapsed.Should().BeLessThan(TimeSpan.FromSeconds(3),
+            "merging unique scenarios should use hash probes instead of roughly 250 million prior-name comparisons");
+    }
+
     [BenchmarkFact]
     [Trait("Category", "Benchmark")]
     public void Benchmark_ScenarioSummaryManySharedChangingCells_ReportsTimingAndAllocatedBytes()

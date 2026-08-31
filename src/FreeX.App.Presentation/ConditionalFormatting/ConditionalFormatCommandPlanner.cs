@@ -153,7 +153,10 @@ public static class ConditionalFormatCommandPlanner
         {
             var preserveIdentity = sheetId == primarySheetId;
             var remapped = rules
-                .Select(rule => CloneForSheet(rule, sheetId, preserveIdentity))
+                .Select(rule => GroupedSheetRangePlanner.CloneConditionalFormatForSheet(
+                    rule,
+                    sheetId,
+                    preserveIdentity: preserveIdentity))
                 .ToList();
             commands.Add(new ReplaceAllConditionalFormatsCommand(sheetId, remapped));
         }
@@ -181,7 +184,10 @@ public static class ConditionalFormatCommandPlanner
             {
                 var preserveIdentity = !identityPreserved
                     && sheetId == rule.AppliesTo.Start.Sheet;
-                var clone = CloneForSheet(rule, sheetId, preserveIdentity);
+                var clone = GroupedSheetRangePlanner.CloneConditionalFormatForSheet(
+                    rule,
+                    sheetId,
+                    preserveIdentity: preserveIdentity);
                 clone.AppliesTo = GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId);
                 commands.Add(new ApplyConditionalFormatCommand(sheetId, clone));
                 identityPreserved |= preserveIdentity;
@@ -201,23 +207,6 @@ public static class ConditionalFormatCommandPlanner
             status,
             FailureResourceKey,
             ConditionalFormatStateRefreshPolicy.WorksheetVisualState);
-
-    private static ConditionalFormat CloneForSheet(
-        ConditionalFormat source,
-        SheetId sheetId,
-        bool preserveIdentity)
-    {
-        ArgumentNullException.ThrowIfNull(source);
-
-        var clone = source.Clone(preserveIdentity ? null : Guid.NewGuid());
-        clone.AppliesTo = GroupedSheetRangePlanner.RemapRangeToSheet(source.AppliesTo, sheetId);
-        clone.AdditionalRanges = source.AdditionalRanges is null
-            ? null
-            : source.AdditionalRanges
-                .Select(range => GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId))
-                .ToList();
-        return clone;
-    }
 
     private static IReadOnlyList<SheetId> RequireTargets(IReadOnlyList<SheetId> targetSheetIds)
     {

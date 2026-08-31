@@ -224,13 +224,25 @@ public class InCanvasRichTextEditBuffer
         InCanvasEditorTextSelection selection) =>
         InCanvasRichClipboardPlanner.Capture(_body, selection, _typingRun);
 
+    /// <param name="destinationSlideIds">
+    /// Slide ids of the presentation being pasted into, forwarded to
+    /// <see cref="InCanvasRichClipboardPlanner.Apply"/> so a slide-jump hyperlink carried in
+    /// from another deck is orphaned instead of pointing at a slide id that does not exist
+    /// here. Null (the default) keeps the pasted fragment exactly as captured.
+    /// </param>
     public bool ApplyClipboardPayload(
         InCanvasRichClipboardPayload payload,
         InCanvasEditorTextSelection selection,
-        out int caret)
+        out int caret,
+        IReadOnlyCollection<string>? destinationSlideIds = null)
     {
         ArgumentNullException.ThrowIfNull(payload);
-        _body = InCanvasRichClipboardPlanner.Apply(_body, selection, payload, out caret);
+        _body = InCanvasRichClipboardPlanner.Apply(
+            _body,
+            selection,
+            payload,
+            out caret,
+            destinationSlideIds);
         _typingRun = payload.TypingRun is null
             ? null
             : TextBodyModelCloner.CloneRun(payload.TypingRun);

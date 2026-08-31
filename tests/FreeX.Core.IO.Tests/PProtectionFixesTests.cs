@@ -200,6 +200,58 @@ public sealed class PProtectionFixesTests
         protectionElement.Attribute("password").Should().BeNull();
     }
 
+    [Fact]
+    public void XlsxAdapter_SourcePatch_PreservesModernSheetHashAndPatchEligibility()
+    {
+        var workbook = new Workbook("SheetModernHashSourcePatch");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("locked"));
+
+        var adapter = new XlsxFileAdapter();
+        using var source = new MemoryStream();
+        adapter.Save(workbook, source);
+
+        const string password = "source patch password";
+        var (saltBase64, hashBase64) = ComputeReferenceHash(password, "SHA-512", 100_000,
+            [61, 62, 63, 64, 65, 66, 67, 68]);
+        RewriteSheetProtection(source, protection =>
+        {
+            protection.SetAttributeValue("sheet", "1");
+            protection.SetAttributeValue("algorithmName", "SHA-512");
+            protection.SetAttributeValue("hashValue", hashBase64);
+            protection.SetAttributeValue("saltValue", saltBase64);
+            protection.SetAttributeValue("spinCount", "100000");
+        });
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(loaded, out var blockReason)
+            .Should().BeTrue(blockReason);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch, adapter.LastSaveDiagnostics.Reason);
+        saved.Position = 0;
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var worksheetXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+            var protection = worksheetXml.Root!.Element(WorksheetNs + "sheetProtection")!;
+            protection.Attribute("algorithmName")!.Value.Should().Be("SHA-512");
+            protection.Attribute("spinCount")!.Value.Should().Be("100000");
+            protection.Attribute("saltValue")!.Value.Should().Be(saltBase64);
+            protection.Attribute("hashValue")!.Value.Should().Be(hashBase64);
+            protection.Attribute("password").Should().BeNull();
+        }
+
+        saved.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(saved);
+        ProtectionPasswordHelper.VerifyStoredPassword(reloaded.GetSheetAt(0).ProtectionPassword, password)
+            .Should().BeTrue();
+    }
+
     // ── K18: workbook-level modern ISO 29500 hash must be verifiable, not permanently unlocked ─
 
     [Fact]

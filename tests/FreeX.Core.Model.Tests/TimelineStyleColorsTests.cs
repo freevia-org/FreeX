@@ -109,4 +109,24 @@ public sealed class TimelineStyleColorsTests
 
         colors.SummaryLabel.Should().Be(accent2, "Summary label uses the accent colour for visibility");
     }
+
+    [Fact]
+    public void Resolve_TrimsExactFamilyButRejectsSlicerFamilyAndWrongCase()
+    {
+        var theme = SimpleTheme();
+        var light1 = TimelineStyleColors.Resolve("TimeSlicerStyleLight1", theme);
+
+        TimelineStyleColors.Resolve(" \tTimeSlicerStyleLight2\r\n", theme).Border
+            .Should().Be(theme.GetColor(WorkbookThemeColorSlot.Accent2));
+        TimelineStyleColors.Resolve("SlicerStyleLight2", theme).Should().Be(light1);
+        TimelineStyleColors.Resolve("timeSlicerStyleLight2", theme).Should().Be(light1);
+    }
+
+    [Fact]
+    public void Resolve_NullTheme_ThrowsBeforeStyleResolution()
+    {
+        var act = () => TimelineStyleColors.Resolve("TimeSlicerStyleLight2", null!);
+
+        act.Should().Throw<ArgumentNullException>();
+    }
 }

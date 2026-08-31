@@ -137,6 +137,46 @@ public sealed class ClearContentsCommandTests
     }
 
     [Fact]
+    public void ClearContents_CutSource_RemovesContainedMergesAndUndoRestoresTheirOrder()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var cutRange = Range(sheet, 2, 2, 4, 4);
+        var originalMerges = new[]
+        {
+            Range(sheet, 0, 0, 0, 1),
+            Range(sheet, 2, 2, 2, 3),
+            Range(sheet, 4, 3, 5, 3),
+            Range(sheet, 3, 2, 4, 2),
+            Range(sheet, 7, 7, 8, 8)
+        };
+        foreach (var merge in originalMerges)
+            sheet.AddMergedRegion(merge);
+        sheet.SetCell(cutRange.Start, Cell.FromValue(new TextValue("move")));
+        var context = new TestCommandContext(workbook);
+        var command = new ClearContentsCommand(sheet.Id, cutRange, isCutSource: true);
+
+        command.Apply(context).Success.Should().BeTrue();
+
+        sheet.MergedRegions.Should().Equal(originalMerges[0], originalMerges[2], originalMerges[4]);
+
+        command.Revert(context);
+
+        sheet.MergedRegions.Should().Equal(originalMerges);
+    }
+
+    [Fact]
+    public void ClearContents_CutSource_DoesNotUseQuadraticMergeMembershipScan()
+    {
+        var source = ModelSourceTestSupport.ReadCommandsSource("ClearContentsCommand.cs");
+        var apply = source[
+            source.IndexOf("public CommandOutcome Apply", StringComparison.Ordinal)..
+            source.IndexOf("public void Revert", StringComparison.Ordinal)];
+
+        apply.Should().NotContain("vacatedMerges.Contains");
+    }
+
+    [Fact]
     public void ClearContents_PreservesStyleOnlyFormattingAndUndoRestoresStyleOnlyCell()
     {
         var workbook = new Workbook("test");
@@ -226,6 +266,13 @@ public sealed class ClearContentsCommandTests
         outcome.Success.Should().BeTrue();
         sheet.GetCell(address)!.Value.Should().Be(BlankValue.Instance);
         sheet.GetCell(address)!.StyleId.Should().Be(unlockedStyle);
+    }
+
+    private static GridRange Range(Sheet sheet, uint startRow, uint startColumn, uint endRow, uint endColumn)
+    {
+        return new GridRange(
+            new CellAddress(sheet.Id, startRow, startColumn),
+            new CellAddress(sheet.Id, endRow, endColumn));
     }
 
 }

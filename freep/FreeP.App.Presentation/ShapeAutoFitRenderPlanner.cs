@@ -51,8 +51,8 @@ public static class ShapeAutoFitRenderPlanner
             measures.Add(TextLayoutPlanner.CreateParagraphMeasure(
                 index,
                 height,
-                paragraph.SpaceBeforePt,
-                paragraph.SpaceAfterPt));
+                TextLayoutPlanner.ResolveSpaceBeforePoints(paragraph),
+                TextLayoutPlanner.ResolveSpaceAfterPoints(paragraph)));
         }
 
         return TextLayoutPlanner.PlanShapeAutoFitBounds(text, bounds, measures);

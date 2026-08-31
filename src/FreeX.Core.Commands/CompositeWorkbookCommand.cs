@@ -73,33 +73,32 @@ public sealed class CompositeWorkbookCommand : IWorkbookCommand, IEstimatesMemor
             }
             catch (Exception ex)
             {
-                // R175-sweep113-F1: an inner command can throw AFTER already mutating the sheet
-                // partway through its own multi-step sequence (row/column insert-delete is ~300
-                // lines of sequential cell moves, hidden-row/filter/subtotal-marker shifts, and
-                // named-range/chart/table rewrites). The command that threw was never added to
-                // `_applied` (that only happens on success, below), so the old RevertApplied(ctx)-
-                // only rollback undid every sibling that already succeeded but left THIS command's
-                // partial mutation permanently in the document -- and because Apply then returns
-                // Success:false, CommandBus.Execute never pushes an undo entry, so the user has no
-                // Ctrl+Z path to remove it either. Mirror CommandBus.Execute's own handling of this
-                // same situation one level up (TryRevert on the very command that threw, see
-                // CommandBus.cs) by best-effort reverting the throwing command FIRST -- undoing its
-                // partial state before unwinding the prior successful siblings below, the same
-                // order the mutations actually happened in (LIFO). The throwing command's own
-                // Revert may itself assume Apply completed further than it did and throw too; that
-                // is swallowed here exactly like CommandBus.TryRevert does, so a broken child
-                // Revert cannot mask the original exception (still captured in `ex` below) or abort
-                // the sibling rollback that follows.
+                // An inner command threw mid-apply. Roll back in two stages so the composite
+                // stays atomic, then surface a failure outcome rather than leaving the
+                // operation half-applied.
+                //
+                // Stage 1 -- the THROWING command itself. It is deliberately absent from
+                // _applied (it never returned an outcome), but an IWorkbookCommand that mutates
+                // in several steps can already have changed the workbook before it threw:
+                // EditCellsCommand, for instance, captures each cell's CellEditCompanionSnapshot
+                // into _snapshot and THEN writes that cell, one at a time inside a loop, so a
+                // throw on cell K leaves cells 0..K-1 written. Its Revert() replays the
+                // snapshots it managed to capture, so it CAN undo a partial apply -- we just
+                // have to ask it. Best-effort and wrapped in its own try/catch: a command whose
+                // Revert is unhappy about half-applied state must not abort the sibling
+                // rollback below, and `ex` (not the revert's own failure) is what the caller
+                // needs to see in the returned outcome.
                 try
                 {
                     command.Revert(ctx);
                 }
                 catch
                 {
-                    // Best-effort: the child's Revert assumed more of its own Apply had completed
-                    // than actually had, or has some other unrelated bug. Either way we must not
-                    // lose the original exception or skip rolling back the successful siblings.
+                    // Best-effort: nothing more can be done for this command, and the original
+                    // failure is the one worth reporting.
                 }
+
+                // Stage 2 -- the siblings that fully succeeded before it.
                 RevertApplied(ctx);
                 return new CommandOutcome(false, $"{Label}: {ex.Message}");
             }

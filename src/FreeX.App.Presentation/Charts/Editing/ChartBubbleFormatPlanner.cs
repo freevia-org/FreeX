@@ -1,6 +1,5 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
-using System.Globalization;
 
 namespace FreeX.App.Presentation.Charts.Editing;
 
@@ -125,7 +124,11 @@ public static class ChartBubbleFormatPlanner
         out ChartBubbleFormatInput input,
         out ChartBubbleFormatParseIssue issue)
     {
-        if (!TryParseClampedInt(bubbleScaleText, MinBubbleScale, MaxBubbleScale, out var scale))
+        if (!NumericInputParser.TryParseInt32InRange(
+                bubbleScaleText,
+                MinBubbleScale,
+                MaxBubbleScale,
+                out var scale))
         {
             input = default;
             issue = ChartBubbleFormatParseIssue.BubbleScale;
@@ -161,10 +164,4 @@ public static class ChartBubbleFormatPlanner
             BubbleSizeRepresents: normalized.BubbleSizeRepresents);
     }
 
-    private static bool TryParseClampedInt(string text, int min, int max, out int value) =>
-        TryParseInt(text, out value) && value >= min && value <= max;
-
-    private static bool TryParseInt(string text, out int value) =>
-        int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.CurrentCulture, out value)
-        || int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
 }

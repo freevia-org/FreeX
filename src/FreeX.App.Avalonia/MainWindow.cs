@@ -8931,6 +8931,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 style,
                 _session.Workbook.Theme),
             borderNeighbors: borderNeighbors,
+            // R175: the panel resolves CellBorder.ThemeColor against this theme on every paint, so a
+            // border set from the ribbon's Theme Colors picker follows a Theme Colors swap instead of
+            // keeping the RGB baked at load time (matches how font/fill already resolve here).
             theme: _session.Workbook.Theme);
 
         // Grid tracks define worksheet ownership. Give the interactive border the exact slot size

@@ -106,4 +106,46 @@ public sealed class WorkbookSheetSelectionServiceTests
         selection.Tabs.Should().ContainSingle()
             .Which.Should().Be(new WorkbookSheetTab(hidden.Id, "Hidden", IsActive: true));
     }
+
+    [Fact]
+    public void CreateSelection_ResolvesThemeRelativeTabColorAgainstTheCurrentWorkbookTheme()
+    {
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Data");
+        // Baked-stale RGB plus a live theme link, exactly as XlsxFileAdapter loads <tabColor theme="4"/>.
+        sheet.TabColor = new CellColor(1, 2, 3);
+        sheet.TabThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1);
+
+        var themeA = WorkbookTheme.Office.WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(200, 10, 20));
+        var themeB = WorkbookTheme.Office.WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(20, 200, 10));
+        var service = new WorkbookSheetSelectionService();
+
+        workbook.Theme = themeA;
+        var tabA = service.EnsureActiveSheet(workbook).Tabs.Should().ContainSingle().Subject;
+        workbook.Theme = themeB;
+        var tabB = service.EnsureActiveSheet(workbook).Tabs.Should().ContainSingle().Subject;
+
+        tabA.TabColor.Should().Be(sheet.ResolveTabColor(themeA));
+        tabB.TabColor.Should().Be(sheet.ResolveTabColor(themeB));
+        tabA.TabColor.Should().NotBe(tabB.TabColor);
+        tabA.TabColor.Should().NotBe(new CellColor(1, 2, 3));
+    }
+
+    [Fact]
+    public void CreateSelection_KeepsExplicitRgbTabColorConstantAcrossThemeChanges()
+    {
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Data");
+        sheet.TabColor = new CellColor(0, 112, 192);
+        sheet.TabThemeColor.Should().BeNull();
+        var service = new WorkbookSheetSelectionService();
+
+        workbook.Theme = WorkbookTheme.Office.WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(200, 10, 20));
+        var tabA = service.EnsureActiveSheet(workbook).Tabs.Should().ContainSingle().Subject;
+        workbook.Theme = WorkbookTheme.Office.WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(20, 200, 10));
+        var tabB = service.EnsureActiveSheet(workbook).Tabs.Should().ContainSingle().Subject;
+
+        tabA.TabColor.Should().Be(new CellColor(0, 112, 192));
+        tabB.TabColor.Should().Be(new CellColor(0, 112, 192));
+    }
 }

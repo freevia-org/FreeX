@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -28,6 +29,7 @@ public sealed class R175_BorderThemeColorReResolutionTests
     private static readonly CellColor NewThemeBlue = new(10, 20, 230);
     private static readonly CellColor SecondThemeGreen = new(20, 200, 40);
     private static readonly CellColor PlainExplicitPurple = new(120, 10, 140);
+    private static readonly CellColor ThirdThemeOrange = new(240, 130, 15);
 
     private static WorkbookTheme ThemeWithAccent2As(CellColor color) =>
         WorkbookTheme.Office.WithColor(WorkbookThemeColorSlot.Accent2, color);
@@ -249,7 +251,131 @@ public sealed class R175_BorderThemeColorReResolutionTests
                 "after swapping the theme on the SAME GridView instance, the border must repaint with the NEW theme's resolved color -- _borderPenCache must not serve a stale Pen for the same CellBorder key");
             AnyPixelNear(secondBitmap, 45, 29, 3, NewThemeBlue).Should().BeFalse(
                 "the border must not keep showing the FIRST theme's color after the swap");
+
+            // SECOND consecutive swap. One swap is not enough to prove the invalidation is durable:
+            // an implementation that only re-resolved once (for example by capturing a single theme
+            // into the cache key, or by clearing exactly once on the first change) would pass the
+            // assertions above and then go stale again here. Repainting under theme #3 must follow.
+            grid.WorkbookTheme = ThemeWithAccent2As(ThirdThemeOrange);
+            grid.InvalidateVisual();
+            grid.UpdateLayout();
+            var thirdBitmap = RenderGridToBitmap(grid);
+
+            AnyPixelNear(thirdBitmap, 45, 29, 3, ThirdThemeOrange).Should().BeTrue(
+                "the border must follow a SECOND consecutive theme swap too, not just the first one");
+            AnyPixelNear(thirdBitmap, 45, 29, 3, SecondThemeGreen).Should().BeFalse(
+                "the border must not keep showing the SECOND theme's color after the third swap");
+            AnyPixelNear(thirdBitmap, 45, 29, 3, NewThemeBlue).Should().BeFalse(
+                "nor may it revert to the first theme's color");
         });
+    }
+
+    // ------------------------------------------------------------------
+    // No-regression: a PLAIN explicit-RGB border must be unaffected by theme swaps -- including
+    // across the cache invalidation those swaps now trigger, which must not corrupt or drop the
+    // color for a border that never referenced the theme in the first place.
+    // ------------------------------------------------------------------
+    [Fact]
+    public void MainGridPass_PlainExplicitBorderColor_IsUnaffectedByRepeatedThemeSwaps()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var cells = new[]
+            {
+                new DisplayCell(1, 1, null, "", null, default, null, new CellStyle
+                {
+                    BorderBottom = new CellBorder(BorderStyle.Thick, PlainExplicitPurple)
+                })
+            };
+
+            var grid = new GridView
+            {
+                Width = 100,
+                Height = 40,
+                ShowHeaders = false,
+                ShowGridLines = false,
+                WorkbookTheme = ThemeWithAccent2As(NewThemeBlue),
+                Viewport = new ViewportModel(cells, [new RowMetric(1, 30, 0)], [new ColMetric(1, 90, 0)]),
+            };
+            grid.Measure(new Size(grid.Width, grid.Height));
+            grid.Arrange(new Rect(0, 0, grid.Width, grid.Height));
+            grid.UpdateLayout();
+
+            foreach (var theme in new[]
+                     {
+                         ThemeWithAccent2As(NewThemeBlue),
+                         ThemeWithAccent2As(SecondThemeGreen),
+                         ThemeWithAccent2As(ThirdThemeOrange),
+                     })
+            {
+                grid.WorkbookTheme = theme;
+                grid.InvalidateVisual();
+                grid.UpdateLayout();
+                AnyPixelNear(RenderGridToBitmap(grid), 45, 29, 3, PlainExplicitPurple).Should().BeTrue(
+                    "an explicit-RGB border carries no ThemeColor reference, so no theme swap (and no cache invalidation triggered by one) may change what it paints");
+            }
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // Perf guard for the invalidation strategy: _borderPenCache is cleared from
+    // OnWorkbookThemeChanged, which WPF only raises when the WorkbookTheme value actually CHANGES.
+    // Re-assigning an equal theme (MainWindow.Viewport.cs assigns SheetGrid.WorkbookTheme on every
+    // viewport refresh) must therefore NOT throw the cache away -- otherwise the steady-state,
+    // non-themed common case would rebuild every border Pen on each refresh. WorkbookTheme is a
+    // sealed record, so equal-valued instances compare equal and the callback stays silent.
+    // ------------------------------------------------------------------
+    [Fact]
+    public void BorderPenCache_IsNotClearedWhenTheSameThemeIsReassigned_NoOverInvalidation()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var theme = ThemeWithAccent2As(NewThemeBlue);
+            var cells = new[]
+            {
+                new DisplayCell(1, 1, null, "", null, default, null, new CellStyle
+                {
+                    BorderBottom = new CellBorder(BorderStyle.Thick, PlainExplicitPurple)
+                })
+            };
+
+            var grid = new GridView
+            {
+                Width = 100,
+                Height = 40,
+                ShowHeaders = false,
+                ShowGridLines = false,
+                WorkbookTheme = theme,
+                Viewport = new ViewportModel(cells, [new RowMetric(1, 30, 0)], [new ColMetric(1, 90, 0)]),
+            };
+            grid.Measure(new Size(grid.Width, grid.Height));
+            grid.Arrange(new Rect(0, 0, grid.Width, grid.Height));
+            grid.UpdateLayout();
+            RenderGridToBitmap(grid);
+
+            BorderPenCacheCount(grid).Should().BeGreaterThan(0, "sanity check: the first paint must populate the border pen cache");
+
+            // The steady-state refresh: MainWindow.Viewport.cs assigns SheetGrid.WorkbookTheme =
+            // _workbook.Theme on EVERY viewport refresh, which hands back the same instance while
+            // the user has not changed themes. WPF raises no change notification for that, so the
+            // pen cache must survive it -- otherwise every scroll would rebuild every border Pen,
+            // penalizing the common explicit-RGB case for a feature it does not use.
+            grid.WorkbookTheme = theme;
+            BorderPenCacheCount(grid).Should().BeGreaterThan(0,
+                "re-assigning the SAME theme instance must leave the border pen cache intact");
+
+            // A genuinely different theme, by contrast, MUST clear it.
+            grid.WorkbookTheme = ThemeWithAccent2As(SecondThemeGreen);
+            BorderPenCacheCount(grid).Should().Be(0,
+                "a real theme change must invalidate the border pen cache so themed borders re-resolve");
+        });
+    }
+
+    private static int BorderPenCacheCount(GridView grid)
+    {
+        var field = typeof(GridView).GetField("_borderPenCache", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("GridView._borderPenCache not found");
+        return ((System.Collections.ICollection)field.GetValue(grid)!).Count;
     }
 
     // ------------------------------------------------------------------

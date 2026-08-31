@@ -21,7 +21,12 @@ public sealed record PresentationFileOpenResult(
     // r137-remediation2: the write time observed on SavedPath at open, threaded back into a later
     // Save's expectedLastWriteTimeUtc so it can detect another writer having changed the file since
     // -- see Save's own comment and PresentationExternallyModifiedException.
-    DateTime? SourceLastWriteTimeUtc = null);
+    DateTime? SourceLastWriteTimeUtc = null,
+    // r174-shared-protection-readonly: whether SavedPath cannot be written back to (OS read-only
+    // attribute, a read-only share/volume, or a denied ACL). Matches FreeW's
+    // DocumentOpenResult.IsFileSystemReadOnly and FreeX's WorkbookReadOnlyOpenPlan flag so callers
+    // can indicate the state up front instead of letting the user edit and only then fail the save.
+    bool IsFileSystemReadOnly = false);
 
 public sealed record PresentationFileSaveResult(
     string SavedPath,
@@ -86,6 +91,14 @@ public static class PresentationFilePersistenceWorkflow
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
+        // r174-shared-protection-readonly: FreeP had no read-only check at all, so a presentation
+        // on a read-only file opened fully editable with zero indication until the save failed.
+        // Port FreeW's/FreeX's check (shared FileWriteRestrictionProbe). This MUST run before the
+        // readers below open their own handle on the file: the probe asks for write access, and a
+        // read handle already held here turns it into a self-inflicted sharing violation that the
+        // probe deliberately reports as "not restricted".
+        var isFileSystemReadOnly = FileWriteRestrictionProbe.IsWriteRestricted(path);
+
         var presentation = ResolveFormat(path) switch
         {
             PresentationFilePersistenceFormat.LegacyFxp => FxpFormat.Read(path),
@@ -105,7 +118,10 @@ public static class PresentationFilePersistenceWorkflow
             presentation,
             SavedPath: savedPath,
             SuppressRecentFiles: false,
-            SourceLastWriteTimeUtc: savedPath is null ? null : File.GetLastWriteTimeUtc(path));
+            SourceLastWriteTimeUtc: savedPath is null ? null : File.GetLastWriteTimeUtc(path),
+            // A template open never targets this file for a future save (savedPath is null above for
+            // the same reason), so its write-restriction state is irrelevant there.
+            IsFileSystemReadOnly: savedPath is not null && isFileSystemReadOnly);
     }
 
     public static PresentationFileSaveResult Save(

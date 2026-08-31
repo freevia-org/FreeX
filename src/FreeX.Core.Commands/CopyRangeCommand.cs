@@ -90,9 +90,18 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
         // empty destination succeed instead of being rejected against its own source-range
         // self-overlap. Any OTHER merge (only partially overlapping the source, or already sitting
         // anywhere in the target) is still a real collision and remains rejected.
-        var copiedMerges = sheet.MergedRegions.Where(range => _sourceRange.Contains(range)).ToList();
-        if (sheet.MergedRegions.Any(range => !copiedMerges.Contains(range) && (_sourceRange.Overlaps(range) || targetRange.Overlaps(range))))
-            return new CommandOutcome(false, "Cannot copy a range that intersects merged cells.");
+        List<GridRange>? copiedMerges = null;
+        foreach (var range in sheet.MergedRegions)
+        {
+            if (_sourceRange.Contains(range))
+            {
+                (copiedMerges ??= []).Add(range);
+                continue;
+            }
+
+            if (_sourceRange.Overlaps(range) || targetRange.Overlaps(range))
+                return new CommandOutcome(false, "Cannot copy a range that intersects merged cells.");
+        }
 
         var destinationCells = targetRange.AllCells().ToList();
         if (sheet.IsProtected)
@@ -127,7 +136,7 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
         foreach (var payload in payloads)
             WritePayload(sheet, payload);
 
-        if (copiedMerges.Count > 0)
+        if (copiedMerges is { Count: > 0 })
         {
             _addedMergedRegions = copiedMerges
                 .Select(range => TranslateRange(range, rowDelta, colDelta))
@@ -147,8 +156,15 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
         var sheet = ctx.GetSheet(_sheetId);
         if (_addedMergedRegions is { Count: > 0 })
         {
-            var added = _addedMergedRegions;
-            sheet.ReplaceMergedRegions(sheet.MergedRegions.Where(range => !added.Contains(range)));
+            var addedMergeSet = new HashSet<GridRange>(_addedMergedRegions);
+            var remainingMerges = new List<GridRange>(sheet.MergedRegions.Count);
+            foreach (var range in sheet.MergedRegions)
+            {
+                if (!addedMergeSet.Contains(range))
+                    remainingMerges.Add(range);
+            }
+
+            sheet.ReplaceMergedRegions(remainingMerges);
         }
 
         foreach (var snapshot in _snapshot)

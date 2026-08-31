@@ -203,7 +203,7 @@ public sealed class CupsPrintService : IPlatformPrintService
             return new(status, null, Message: discovery.Message);
         }
 
-        var printer = ResolvePrinter(selection.PrinterName, discovery);
+        var printer = PrinterSubmissionSelectionPolicy.Resolve(selection.PrinterName, discovery);
         if (printer is null)
         {
             return new(
@@ -251,17 +251,6 @@ public sealed class CupsPrintService : IPlatformPrintService
                 printer,
                 Message: $"Print submission failed: {ex.Message}");
         }
-    }
-
-    private static string? ResolvePrinter(string? requested, PrinterDiscoveryResult discovery)
-    {
-        if (requested is { Length: > 0 })
-        {
-            return discovery.Printers.FirstOrDefault(printer =>
-                string.Equals(printer.Name, requested, StringComparison.OrdinalIgnoreCase))?.Name;
-        }
-
-        return discovery.DefaultPrinter ?? discovery.Printers[0].Name;
     }
 
     private static IEnumerable<string> ParsePrinterNames(

@@ -638,6 +638,14 @@ public sealed class InCanvasTextEditor : IDisposable
             Commit();
     }
 
+    /// <summary>
+    /// Slide ids of the deck currently being edited, read at paste time so a slide-jump
+    /// hyperlink pasted in from another presentation is orphaned rather than left pointing at
+    /// an id this deck cannot resolve.
+    /// </summary>
+    private IReadOnlyCollection<string>? CurrentSlideIds() =>
+        _editor.Presentation?.Slides.Select(slide => slide.Id).ToArray();
+
     private async void OnRichBoxPreviewKeyDown(object sender, KeyEventArgs e)
     {
         if ((e.KeyboardDevice.Modifiers & ModifierKeys.Control) == 0)
@@ -655,7 +663,7 @@ public sealed class InCanvasTextEditor : IDisposable
                 masterTextStyles: _inheritedMasterTextStyles,
                 category: _inheritedStyleCategory,
                 onInlineOlePayloadUpdated: OnInlineOlePayloadCommitted,
-                destinationSlideIds: _editor.Presentation?.Slides.Select(s => s.Id).ToArray());
+                destinationSlideIds: CurrentSlideIds());
             if (e.Key == Key.V && result.Handled)
             {
                 _shapeParagraphBody = result.UpdatedBody;

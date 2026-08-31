@@ -41,7 +41,9 @@ public readonly record struct SlicerStyleColors(
     {
         ArgumentNullException.ThrowIfNull(theme);
 
-        var slot = ResolveAccentSlot(styleName);
+        var slot = BuiltInFilterControlStylePolicy.ResolveLightAccentSlot(
+            styleName,
+            "SlicerStyleLight");
         if (slot is null)
             return ResolveLight1(theme);
 
@@ -71,25 +73,6 @@ public readonly record struct SlicerStyleColors(
             SelectedTile: theme.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.6),
             HeaderText: new CellColor(64, 64, 64),
             ItemText: new CellColor(64, 64, 64));
-    }
-
-    // SlicerStyleLight2 -> Accent2, Light3 -> Accent3, … Light6 -> Accent6. Light1 (and unknown) => null
-    // (neutral default). Custom/other styles fall through to null as well.
-    // Excel's actual mapping is a uniform +1 shift from the style number to the accent slot.
-    private static WorkbookThemeColorSlot? ResolveAccentSlot(string? styleName)
-    {
-        if (string.IsNullOrWhiteSpace(styleName))
-            return null;
-
-        return styleName.Trim() switch
-        {
-            "SlicerStyleLight2" => WorkbookThemeColorSlot.Accent2,
-            "SlicerStyleLight3" => WorkbookThemeColorSlot.Accent3,
-            "SlicerStyleLight4" => WorkbookThemeColorSlot.Accent4,
-            "SlicerStyleLight5" => WorkbookThemeColorSlot.Accent5,
-            "SlicerStyleLight6" => WorkbookThemeColorSlot.Accent6,
-            _ => null,
-        };
     }
 
     private static CellColor Darken(CellColor color, double amount)

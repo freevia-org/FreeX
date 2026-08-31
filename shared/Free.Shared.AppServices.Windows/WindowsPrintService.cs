@@ -169,7 +169,7 @@ public sealed class WindowsPrintService : IPlatformPrintService
                     Message: discovery.Message);
             }
 
-            printer = ResolvePrinter(printer, discovery);
+            printer = PrinterSubmissionSelectionPolicy.Resolve(printer, discovery);
             if (printer is null)
             {
                 return new PrintSubmissionResult(
@@ -233,17 +233,6 @@ public sealed class WindowsPrintService : IPlatformPrintService
                 Message: $"Windows PDF print handoff failed: {ex.Message}",
                 SourceFileMayStillBeInUse: sourceMayStillBeInUse);
         }
-    }
-
-    private static string? ResolvePrinter(string? requested, PrinterDiscoveryResult discovery)
-    {
-        if (requested is { Length: > 0 })
-        {
-            return discovery.Printers.FirstOrDefault(printer =>
-                string.Equals(printer.Name, requested, StringComparison.OrdinalIgnoreCase))?.Name;
-        }
-
-        return discovery.DefaultPrinter ?? discovery.Printers[0].Name;
     }
 
     private static PrinterDiscoveryResult CancelledDiscovery() =>

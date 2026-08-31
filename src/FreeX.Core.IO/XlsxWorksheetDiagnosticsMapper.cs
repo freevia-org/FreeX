@@ -23,29 +23,8 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
     }
 
-    private static bool TryParseSqrefToken(string token, SheetId sheet, out GridRange range)
-    {
-        range = default;
-        var parts = token.Split(':');
-        if (parts.Length == 1)
-        {
-            if (!CellAddress.TryParse(parts[0], sheet, out var address))
-                return false;
-
-            range = new GridRange(address, address);
-            return true;
-        }
-
-        if (parts.Length == 2 &&
-            CellAddress.TryParse(parts[0], sheet, out var start) &&
-            CellAddress.TryParse(parts[1], sheet, out var end))
-        {
-            range = new GridRange(start, end);
-            return true;
-        }
-
-        return false;
-    }
+    private static bool TryParseSqrefToken(string token, SheetId sheet, out GridRange range) =>
+        XlsxSqrefParser.TryParseCellRangeToken(token, sheet, out range);
 
     private static bool MergeMissingAttributes(XElement sourceElement, XElement targetElement)
     {

@@ -502,6 +502,13 @@ public sealed class PresentationFileCommandSession
     // a null CurrentPath, so a stale value here is inert.
     private DateTime? _currentFileSourceLastWriteTimeUtc;
 
+    // r174-shared-protection-readonly: the path Open reported as write-restricted (OS read-only
+    // attribute, read-only share/volume, denied ACL), or null when the current presentation has no
+    // such restriction. Stored as the PATH, not a bare bool, for the same reason the write-time
+    // baseline above is gated on path identity: File > New or a Save-As onto a writable target
+    // moves CurrentPath away from it, which makes a stale value inert with no explicit reset.
+    private string? _readOnlySourcePath;
+
     public PresentationFileCommandSession(
         Func<Presentation> getPresentation,
         Action<Presentation> loadPresentation,
@@ -556,6 +563,16 @@ public sealed class PresentationFileCommandSession
     public bool IsDirty => _lifecycle.IsDirty;
     public int DirtyGeneration => _lifecycle.DirtyGeneration;
     public string? CurrentPath => _lifecycle.CurrentPath;
+
+    /// <summary>
+    /// Whether the open presentation's source file cannot be written back to. Save routes through
+    /// Save-As while this is set (see <see cref="SaveAsync"/>), mirroring FreeW's
+    /// <c>FreeWDocumentFileWorkflow.IsCurrentFileReadOnly</c> and FreeX's read-only session; hosts
+    /// can also surface it as a title marker.
+    /// </summary>
+    public bool IsCurrentFileReadOnly =>
+        _readOnlySourcePath is not null
+        && PlatformPathIdentityComparer.Current.Equals(CurrentPath, _readOnlySourcePath);
     public string? CurrentFileName => _lifecycle.CurrentFileName;
     public string DisplayName => _lifecycle.DisplayName;
     public IReadOnlyList<RecentFileEntry> RecentEntries => _lifecycle.RecentEntries;
@@ -597,6 +614,9 @@ public sealed class PresentationFileCommandSession
         _currentFileSourceLastWriteTimeUtc = string.IsNullOrWhiteSpace(path) || !File.Exists(path)
             ? null
             : File.GetLastWriteTimeUtc(path);
+        // r174-shared-protection-readonly: a New Window clone runs no Open, so re-probe the path it
+        // was handed rather than leaving the clone editable on a read-only source.
+        _readOnlySourcePath = FileWriteRestrictionProbe.IsWriteRestricted(path) ? path : null;
     }
 
     /// <summary>
@@ -656,6 +676,11 @@ public sealed class PresentationFileCommandSession
         _currentFileSourceLastWriteTimeUtc = string.IsNullOrWhiteSpace(originalPath) || !File.Exists(originalPath)
             ? null
             : File.GetLastWriteTimeUtc(originalPath);
+        // r174-shared-protection-readonly: recovery adopts originalPath as the save target, so the
+        // same write-restriction verdict Open computes belongs here -- otherwise recovering onto a
+        // read-only original lands in exactly the silently-editable state this change removes.
+        _readOnlySourcePath =
+            FileWriteRestrictionProbe.IsWriteRestricted(originalPath) ? originalPath : null;
     }
 
     public async Task<PresentationFileCommandResult> NewAsync(CancellationToken cancellationToken = default)
@@ -755,10 +780,16 @@ public sealed class PresentationFileCommandSession
         var accepted = await _lifecycle.SaveAsync(
             async path =>
             {
-                operationResult = await SavePathCoreAsync(
-                    PresentationFileCommand.Save,
-                    path,
-                    cancellationToken);
+                // r174-shared-protection-readonly: a read-only source must never be written back to
+                // in place. Divert to Save-As instead of letting the write fail with a raw "access
+                // to the path is denied" after the user has already edited -- the same redirect
+                // FreeW performs via its SaveAsRequired outcome.
+                operationResult = IsCurrentFileReadOnly
+                    ? await SaveAsCoreAsync(cancellationToken)
+                    : await SavePathCoreAsync(
+                        PresentationFileCommand.Save,
+                        path,
+                        cancellationToken);
                 return operationResult.Succeeded;
             },
             async () =>
@@ -1245,6 +1276,7 @@ public sealed class PresentationFileCommandSession
             var result = PresentationFilePersistenceWorkflow.Open(path);
             _loadPresentation(result.Presentation);
             _currentFileSourceLastWriteTimeUtc = result.SourceLastWriteTimeUtc;
+            _readOnlySourcePath = result.IsFileSystemReadOnly ? result.SavedPath : null;
             SetSaved(result.SavedPath, suppressRecentFiles || result.SuppressRecentFiles);
             return await CompleteAsync(
                 PresentationFileCommandResult.Success(
@@ -1338,6 +1370,10 @@ public sealed class PresentationFileCommandSession
                 conflictPreparation.ExpectedLastWriteTimeUtc);
             _currentFileSourceLastWriteTimeUtc =
                 File.Exists(result.SavedPath) ? File.GetLastWriteTimeUtc(result.SavedPath) : null;
+            // The write just succeeded, so this path is demonstrably writable -- clear any read-only
+            // marker carried over from the source file (Save-As off a read-only original is the
+            // normal way out of the read-only state).
+            _readOnlySourcePath = null;
             _lifecycle.MarkSavedWithPath(result.SavedPath, result.SuppressRecentFiles);
             return await CompleteAsync(
                 PresentationFileCommandResult.Success(

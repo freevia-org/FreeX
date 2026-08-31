@@ -93,4 +93,24 @@ public sealed class SlicerStyleColorsTests
 
         unknown.Should().Be(SlicerStyleColors.Resolve("SlicerStyleLight1", theme));
     }
+
+    [Fact]
+    public void Resolve_TrimsExactFamilyButRejectsTimelineFamilyAndWrongCase()
+    {
+        var theme = SimpleTheme();
+        var light1 = SlicerStyleColors.Resolve("SlicerStyleLight1", theme);
+
+        SlicerStyleColors.Resolve(" \tSlicerStyleLight2\r\n", theme).Border
+            .Should().Be(theme.GetColor(WorkbookThemeColorSlot.Accent2));
+        SlicerStyleColors.Resolve("TimeSlicerStyleLight2", theme).Should().Be(light1);
+        SlicerStyleColors.Resolve("slicerStyleLight2", theme).Should().Be(light1);
+    }
+
+    [Fact]
+    public void Resolve_NullTheme_ThrowsBeforeStyleResolution()
+    {
+        var act = () => SlicerStyleColors.Resolve("SlicerStyleLight2", null!);
+
+        act.Should().Throw<ArgumentNullException>();
+    }
 }
