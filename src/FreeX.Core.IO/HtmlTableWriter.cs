@@ -206,15 +206,22 @@ internal static class HtmlTableWriter
         if (align is not null)
             sb.Append($"text-align:{align};");
 
-        AppendBorder(sb, "top", style.BorderTop);
-        AppendBorder(sb, "right", style.BorderRight);
-        AppendBorder(sb, "bottom", style.BorderBottom);
-        AppendBorder(sb, "left", style.BorderLeft);
+        AppendBorder(sb, "top", style.BorderTop, theme);
+        AppendBorder(sb, "right", style.BorderRight, theme);
+        AppendBorder(sb, "bottom", style.BorderBottom, theme);
+        AppendBorder(sb, "left", style.BorderLeft, theme);
 
         return sb.ToString();
     }
 
-    private static void AppendBorder(StringBuilder sb, string edge, CellBorder border)
+    /// <summary>
+    /// freex-theme-border-color-F1: HTML has no theme link to fall back on, so a theme-backed edge
+    /// (CellBorder.ThemeColor) must be flattened through the workbook's CURRENT theme exactly like the
+    /// font/fill colors this same method already resolve. Reading border.Color raw exported the RGB
+    /// baked in at load time, so a theme change recolored every exported fill and font but left the
+    /// borders on the old palette — permanently, since the written hex is all the reader ever sees.
+    /// </summary>
+    private static void AppendBorder(StringBuilder sb, string edge, CellBorder border, WorkbookTheme theme)
     {
         if (border.Style == BorderStyle.None)
             return;
@@ -228,7 +235,7 @@ internal static class HtmlTableWriter
             BorderStyle.Double => ("3px", "double"),
             _ => ("1px", "solid"),
         };
-        sb.Append($"border-{edge}:{width} {line} {Hex(border.Color)};");
+        sb.Append($"border-{edge}:{width} {line} {Hex(border.ResolveColor(theme))};");
     }
 
     private static string Hex(CellColor c) =>

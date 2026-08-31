@@ -12,7 +12,14 @@ namespace FreeX.Core.IO;
 /// </summary>
 internal static class OdsBorder
 {
-    public static string ToOdf(CellBorder border)
+    /// <param name="resolvedColor">
+    /// freex-theme-border-color-F1: the border color already resolved against the workbook's CURRENT
+    /// theme by the caller. ODF has no theme-color concept, so a theme-backed edge must be flattened
+    /// through the live theme here — reading border.Color raw wrote the RGB baked in at load time,
+    /// leaving exported borders on the old palette while the font color (which OdsStyleRegistry
+    /// already resolves via ResolveFontColor) followed the new one.
+    /// </param>
+    public static string ToOdf(CellBorder border, CellColor resolvedColor)
     {
         var (width, line) = border.Style switch
         {
@@ -24,7 +31,7 @@ internal static class OdsBorder
             BorderStyle.Double => ("1.5pt", "double"),
             _ => ("0.5pt", "solid"),
         };
-        return $"{width} {line} {OdsStyleRegistry.HexColor(border.Color)}";
+        return $"{width} {line} {OdsStyleRegistry.HexColor(resolvedColor)}";
     }
 
     /// <summary>Parses the verbatim per-edge hint "<c>&lt;styleInt&gt;:#RRGGBB</c>" back into a border.</summary>
