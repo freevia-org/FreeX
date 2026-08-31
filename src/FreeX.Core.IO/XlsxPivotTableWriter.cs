@@ -499,28 +499,56 @@ internal static partial class XlsxPivotTableWriter
             .Select(field => ResolvePivotDataFieldIndex(field, calculatedFieldIndexes))
             .Where(index => index >= 0)
             .ToHashSet();
+        // A pivot table can declare many fields, and this method emits one <pivotField> for every
+        // source-field index up to the highest used index. Build the lookup state once instead of
+        // rescanning every field collection (and the sort list) for each emitted XML element.
+        //
+        // Metadata deliberately uses last-write-wins in row, column, page order: this mirrors the
+        // previous RowFields.Concat(ColumnFields).Concat(PageFields).LastOrDefault lookup. Axis
+        // choice has different semantics: row wins over column, which wins over page, matching the
+        // original nested ternary even when an invalid/incomplete model lists one source field in
+        // more than one area.
+        var metadataByIndex = new Dictionary<int, PivotFieldModel>();
+        var axisByIndex = new Dictionary<int, string>();
+        foreach (var field in pivot.RowFields)
+        {
+            metadataByIndex[field.SourceFieldIndex] = field;
+            axisByIndex.TryAdd(field.SourceFieldIndex, "axisRow");
+        }
+
+        foreach (var field in pivot.ColumnFields)
+        {
+            metadataByIndex[field.SourceFieldIndex] = field;
+            axisByIndex.TryAdd(field.SourceFieldIndex, "axisCol");
+        }
+
+        foreach (var field in pivot.PageFields)
+        {
+            metadataByIndex[field.SourceFieldIndex] = field;
+            axisByIndex.TryAdd(field.SourceFieldIndex, "axisPage");
+        }
+
+        var sortByFieldIndex = new Dictionary<int, PivotSortModel>();
+        foreach (var sort in pivot.Sorts)
+            sortByFieldIndex[sort.FieldIndex] = sort;
 
         return new XElement(
             workbookNs + "pivotFields",
             new XAttribute("count", Math.Max(0, maxFieldIndex + 1).ToString(CultureInfo.InvariantCulture)),
             Enumerable.Range(0, Math.Max(0, maxFieldIndex + 1)).Select(index =>
             {
-                var metadataField = FindPivotField(pivot, index);
-                var isAxisField =
-                    pivot.RowFields.Any(field => field.SourceFieldIndex == index) ||
-                    pivot.ColumnFields.Any(field => field.SourceFieldIndex == index);
-                var axisValue =
-                    pivot.RowFields.Any(field => field.SourceFieldIndex == index) ? "axisRow" :
-                    pivot.ColumnFields.Any(field => field.SourceFieldIndex == index) ? "axisCol" :
-                    pivot.PageFields.Any(field => field.SourceFieldIndex == index) ? "axisPage" :
-                    null;
+                metadataByIndex.TryGetValue(index, out var metadataField);
+                axisByIndex.TryGetValue(index, out var axisValue);
+                var isAxisField = axisValue is "axisRow" or "axisCol";
                 // R82-io-pivot-layout-5-2: a row/column field's sort order is expressed on the
                 // CT_PivotField ITSELF (sortType + an autoSortScope child identifying the driving data
                 // field for a value sort) -- NOT the invented top-level <pivotSorts> element ToPivotSortsXml
                 // below emits, which isn't part of CT_pivotTableDefinition's content model at all. Only
                 // meaningful for an axis field; a sort recorded against a filter/page field (which the UI
                 // never allows) is dropped rather than emitted somewhere schema-invalid.
-                var sort = isAxisField ? pivot.Sorts.LastOrDefault(s => s.FieldIndex == index) : null;
+                var sort = isAxisField && sortByFieldIndex.TryGetValue(index, out var matchingSort)
+                    ? matchingSort
+                    : null;
                 return new XElement(
                     workbookNs + "pivotField",
                     axisValue is not null ? new XAttribute("axis", axisValue) : null,
@@ -661,12 +689,6 @@ internal static partial class XlsxPivotTableWriter
             new XAttribute("count", "1"),
             new XElement(workbookNs + "item", new XAttribute("t", "default")));
     }
-
-    private static PivotFieldModel? FindPivotField(PivotTableModel pivot, int sourceFieldIndex) =>
-        pivot.RowFields
-            .Concat(pivot.ColumnFields)
-            .Concat(pivot.PageFields)
-            .LastOrDefault(field => field.SourceFieldIndex == sourceFieldIndex);
 
     // Internal (not private): also called from XlsxFileAdapter.SavePostProcessing.cs's
     // RewritePreservedPivotFieldAxes to regenerate the rowFields/colFields containers on the
