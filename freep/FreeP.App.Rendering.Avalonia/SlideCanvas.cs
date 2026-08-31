@@ -1154,6 +1154,15 @@ public sealed partial class SlideCanvas : Control
         var destination = plan.DestinationDip;
         var dest = new Rect(destination.X, destination.Y, destination.Width, destination.Height);
 
+        // Negative a:srcRect insets pad the image inside its frame instead of cropping it, so the
+        // image body draws into an inset rectangle while the frame decoration keeps the full rect.
+        var imageDestination = plan.ImageDestinationDip;
+        var imageDest = new Rect(
+            imageDestination.X,
+            imageDestination.Y,
+            imageDestination.Width,
+            imageDestination.Height);
+
         // 18A: colour effects — produce a modified bitmap via pixel manipulation.
         // BN1: ApplyColorEffectsAvalonia returns null when GDI+/libgdiplus is unavailable;
         //      in that case we keep the original uneffected bitmap so the picture isn't blank.
@@ -1201,10 +1210,10 @@ public sealed partial class SlideCanvas : Control
             foreach (var blurPass in plan.ReflectionBlurPasses)
             {
                 var reflectionDest = new Rect(
-                    dest.X + blurPass.OffsetXDip,
-                    dest.Y + blurPass.OffsetYDip,
-                    dest.Width,
-                    dest.Height);
+                    imageDest.X + blurPass.OffsetXDip,
+                    imageDest.Y + blurPass.OffsetYDip,
+                    imageDest.Width,
+                    imageDest.Height);
                 var reflectionStops = new GradientStops
                 {
                     new AvGradientStop(
@@ -1266,17 +1275,17 @@ public sealed partial class SlideCanvas : Control
         }
 
         // 18A: crop from the shared renderer-neutral source rectangle.
-        if (plan.HasCrop)
+        if (plan.HasSourceCrop)
         {
             var source = plan.SourceRectPixels;
             dc.DrawImage(
                 renderBitmap,
                 new Rect(source.X, source.Y, source.Width, source.Height),
-                dest);
+                imageDest);
         }
         else
         {
-            dc.DrawImage(renderBitmap, dest);
+            dc.DrawImage(renderBitmap, imageDest);
         }
 
         clipScope?.Dispose(); // pop frame clip
