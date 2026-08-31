@@ -151,6 +151,10 @@ internal static partial class XlsxChartXmlWriter
         XNamespace chartExNs,
         int dataCount)
     {
+        var titleLookup = chart.Type == ChartType.BoxAndWhisker && chart.FirstRowIsHeader
+            ? ChartExSeriesTitleLookup.Create(chart)
+            : null;
+
         for (var seriesIndex = 0; seriesIndex < dataCount; seriesIndex++)
         {
             var dataId = ToChartExDataId(seriesIndex);
@@ -158,7 +162,7 @@ internal static partial class XlsxChartXmlWriter
             yield return new XElement(chartExNs + "series",
                 new XAttribute("layoutId", ToChartExSeriesLayoutId(chart.Type)),
                 ToChartExSeriesUniqueIdAttribute(chart, seriesIndex),
-                ToChartExSeriesTitleXml(chart, sheet, seriesIndex, chartExNs),
+                ToChartExSeriesTitleXml(chart, sheet, seriesIndex, chartExNs, titleLookup),
                 new XElement(chartExNs + "dataId", new XAttribute("val", dataId)),
                 BuildChartExSeriesLayoutPr(chart, chartExNs));
 
@@ -293,7 +297,8 @@ internal static partial class XlsxChartXmlWriter
         ChartModel chart,
         Sheet sheet,
         int seriesIndex,
-        XNamespace chartExNs)
+        XNamespace chartExNs,
+        ChartExSeriesTitleLookup? titleLookup)
     {
         if (chart.Type != ChartType.BoxAndWhisker || !chart.FirstRowIsHeader)
             return null;
@@ -304,13 +309,12 @@ internal static partial class XlsxChartXmlWriter
         // compute a meaningless header-cell reference from it. Use the series' own captured name
         // formula (the numDim <cx:nf>, repurposed as TxFormula) and cached name (EmbeddedSeriesData,
         // captured from the series' own <cx:tx>/<cx:txData>/<cx:v> at load time) instead.
-        var verbatim = chart.VerbatimSeriesFormulas?.FirstOrDefault(f => f.SeriesIndex == seriesIndex);
-        if (verbatim is not null)
+        if (titleLookup is not null && titleLookup.TryGetVerbatim(seriesIndex, out var verbatim))
         {
             if (string.IsNullOrEmpty(verbatim.TxFormula))
                 return null;
 
-            var cachedName = chart.EmbeddedSeriesData?.FirstOrDefault(d => d.SeriesIndex == seriesIndex)?.SeriesName;
+            var cachedName = titleLookup.GetEmbeddedSeriesName(seriesIndex);
             if (string.IsNullOrEmpty(cachedName))
                 return null;
 
@@ -331,6 +335,48 @@ internal static partial class XlsxChartXmlWriter
                     FormatStripHeaderCell(layout, sheet.Name, seriesStrip)),
                 new XElement(chartExNs + "v",
                     ToChartExSeriesTitleText(sheet.GetCell(headerRow, headerCol)?.Value))));
+    }
+
+    private sealed class ChartExSeriesTitleLookup
+    {
+        private readonly Dictionary<int, ChartSeriesVerbatimFormulas> _verbatimBySeriesIndex;
+        private readonly Dictionary<int, ChartEmbeddedSeriesData>? _embeddedBySeriesIndex;
+
+        private ChartExSeriesTitleLookup(
+            Dictionary<int, ChartSeriesVerbatimFormulas> verbatimBySeriesIndex,
+            Dictionary<int, ChartEmbeddedSeriesData>? embeddedBySeriesIndex)
+        {
+            _verbatimBySeriesIndex = verbatimBySeriesIndex;
+            _embeddedBySeriesIndex = embeddedBySeriesIndex;
+        }
+
+        public static ChartExSeriesTitleLookup? Create(ChartModel chart)
+        {
+            if (chart.VerbatimSeriesFormulas is not { Count: > 0 } verbatimSeries)
+                return null;
+
+            var verbatimBySeriesIndex = new Dictionary<int, ChartSeriesVerbatimFormulas>(verbatimSeries.Count);
+            foreach (var verbatim in verbatimSeries)
+                verbatimBySeriesIndex.TryAdd(verbatim.SeriesIndex, verbatim);
+
+            Dictionary<int, ChartEmbeddedSeriesData>? embeddedBySeriesIndex = null;
+            if (chart.EmbeddedSeriesData is { Count: > 0 } embeddedSeries)
+            {
+                embeddedBySeriesIndex = new Dictionary<int, ChartEmbeddedSeriesData>(embeddedSeries.Count);
+                foreach (var embedded in embeddedSeries)
+                    embeddedBySeriesIndex.TryAdd(embedded.SeriesIndex, embedded);
+            }
+
+            return new ChartExSeriesTitleLookup(verbatimBySeriesIndex, embeddedBySeriesIndex);
+        }
+
+        public bool TryGetVerbatim(int seriesIndex, out ChartSeriesVerbatimFormulas verbatim) =>
+            _verbatimBySeriesIndex.TryGetValue(seriesIndex, out verbatim!);
+
+        public string? GetEmbeddedSeriesName(int seriesIndex) =>
+            _embeddedBySeriesIndex is not null && _embeddedBySeriesIndex.TryGetValue(seriesIndex, out var embedded)
+                ? embedded.SeriesName
+                : null;
     }
 
     private static uint GetChartExSeriesValueStrip(ChartModel chart, ChartSeriesStripLayout layout, int seriesIndex)
