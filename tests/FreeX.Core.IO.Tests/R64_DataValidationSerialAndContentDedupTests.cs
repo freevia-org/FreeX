@@ -176,6 +176,33 @@ public sealed class R64_DataValidationSerialAndContentDedupTests
         dv.Formula2.Should().Be("100");
     }
 
+    [Fact]
+    public void Load_DenseDistinctValidations_LoadsEveryRuleWithoutCrossRangeDeduplication()
+    {
+        const int ruleCount = 192;
+        var rules = string.Join(
+            Environment.NewLine,
+            Enumerable.Range(1, ruleCount).Select(row =>
+                $"""
+                  <dataValidation type="whole" operator="equal" allowBlank="1" showInputMessage="1" showErrorMessage="1" sqref="A{row}">
+                    <formula1>{row}</formula1>
+                  </dataValidation>
+                  """));
+        var worksheetBody = $"""
+            <dataValidations count="{ruleCount}">
+            {rules}
+            </dataValidations>
+            """;
+
+        using var stream = BuildMinimalXlsx(worksheetBody);
+        var validations = new XlsxFileAdapter().Load(stream).GetSheetAt(0).DataValidations;
+
+        validations.Should().HaveCount(ruleCount,
+            "distinct dense validation ranges are independent rules and must not be collapsed merely because their shape is similar");
+        validations.Select(validation => validation.AppliesTo.Start.Row)
+            .Should().Equal(Enumerable.Range(1, ruleCount).Select(row => (uint)row));
+    }
+
     /// <summary>
     /// Builds the smallest possible valid XLSX stream that contains one worksheet with a few
     /// numeric cells and the given extra worksheet-root XML (dataValidations) appended after

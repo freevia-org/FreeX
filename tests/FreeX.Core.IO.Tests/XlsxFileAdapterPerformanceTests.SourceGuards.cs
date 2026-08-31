@@ -495,6 +495,24 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void DataValidationClosedXmlLoad_IndexesAcceptedRulesByExactRange()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxDataValidationClosedXmlMapper.cs");
+        var loadEnd = source.IndexOf("    public static void Save(", StringComparison.Ordinal);
+        var load = source[..loadEnd];
+
+        load.Should().Contain("var existingRulesByRange = BuildValidationRangeIndex(sheet.DataValidations);")
+            .And.Contain("IsDuplicateCoveredValidation(existingRulesByRange, dv)")
+            .And.Contain("IndexValidationRanges(existingRulesByRange, dv)")
+            .And.NotContain("IsDuplicateCoveredValidation(sheet.DataValidations, dv)",
+                "each incoming data validation should only inspect rules registered for its exact range");
+        source.Should().Contain("private static Dictionary<GridRange, List<DataValidation>> BuildValidationRangeIndex")
+            .And.Contain("private static bool IsRangeCovered(")
+            .And.NotContain("existingRules.Any(existing => CoversRange(existing, range, candidate))",
+                "data-validation deduplication must avoid rescanning every accepted rule for each incoming rule");
+    }
+
+    [Fact]
     public void SavePostProcessing_BatchesSourcePackageReplayWorksheetMetadataXmlWrites()
     {
         var adapterSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxFileAdapter.SavePostProcessing.cs");
