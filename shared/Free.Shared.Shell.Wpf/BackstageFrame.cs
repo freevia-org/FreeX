@@ -211,7 +211,16 @@ public sealed class BackstageFrame : UserControl
         railDock.Children.Add(_bottomNav);
 
         _topNav = new StackPanel { Margin = ToThickness(BackstageVisualContract.Frame.TopNavigationMargin) };
-        railDock.Children.Add(_topNav); // fills remaining space
+        // The File rail contains enough primary commands to exceed a short/high-DPI window. Keep the
+        // Back button and Account/Options docked while allowing the command portion to scroll, matching
+        // the Avalonia frame and preserving access to every File command at any supported scale.
+        var topNavScrollViewer = new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = _topNav,
+        };
+        railDock.Children.Add(topNavScrollViewer); // fills remaining space
 
         _rail = new Border { Background = ResolveSidebarBrush(), Child = railDock };
         Grid.SetColumn(_rail, 0);
@@ -279,6 +288,9 @@ public sealed class BackstageFrame : UserControl
             FocusManager.SetFocusedElement(scope, button);
         button.Focus();
         Keyboard.Focus(button);
+        // A rail button may be outside the top navigation viewport at high DPI. Bring it into view
+        // after focus changes so Up/Down/Home/End navigation remains visibly trackable.
+        button.BringIntoView();
     }
 
     private static DependencyObject? FindFocusScope(DependencyObject node)
