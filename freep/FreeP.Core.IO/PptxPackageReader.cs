@@ -434,10 +434,15 @@ public static class PptxPackageReader
 
         // Build ordered list of (rId, slidePath) for all valid slide entries.
         var slideInfos = new List<(string rId, string slidePath)>();
+        var numericIdByRelationshipId = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         foreach (var sldIdEl in sldIdList)
         {
             var rId = sldIdEl.Attribute(R + "id")?.Value;
-            if (string.IsNullOrWhiteSpace(rId) || !slideRelEntries.TryGetValue(rId, out var slideRel))
+            if (string.IsNullOrWhiteSpace(rId))
+                continue;
+
+            numericIdByRelationshipId.TryAdd(rId, sldIdEl.Attribute("id")?.Value);
+            if (!slideRelEntries.TryGetValue(rId, out var slideRel))
                 continue;
             if (slideRel.Type != SlideRelType) continue;
             slideInfos.Add((rId, ResolveRelationshipTargetZipPath(archive, presDir, slideRel.Target)));
@@ -447,9 +452,7 @@ public static class PptxPackageReader
         var allSlides = new List<Slide>(slideInfos.Count);
         foreach (var (rId, _) in slideInfos)
         {
-            var numericId = sldIdList
-                .FirstOrDefault(el => string.Equals(el.Attribute(R + "id")?.Value, rId, StringComparison.OrdinalIgnoreCase))
-                ?.Attribute("id")?.Value;
+            numericIdByRelationshipId.TryGetValue(rId, out var numericId);
             allSlides.Add(new Slide
             {
                 Id = rId,

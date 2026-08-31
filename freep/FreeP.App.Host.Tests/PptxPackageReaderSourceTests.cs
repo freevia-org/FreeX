@@ -89,6 +89,24 @@ public sealed class PptxPackageReaderSourceTests
     }
 
     [Fact]
+    public void SlideCatalog_IndexesNumericIdsOnceWithFirstCaseInsensitiveMatch()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.Core.IO",
+            "PptxPackageReader.cs"));
+        var method = ExtractMethod(source, "private static Presentation ReadArchive(");
+
+        method.Should()
+            .Contain("new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)")
+            .And.Contain("numericIdByRelationshipId.TryAdd(rId, sldIdEl.Attribute(\"id\")?.Value)")
+            .And.Contain("numericIdByRelationshipId.TryGetValue(rId, out var numericId)");
+        Regex.Matches(method, @"sldIdList\s*\.FirstOrDefault")
+            .Should().BeEmpty("slide numeric ids should not rescan the complete presentation list");
+    }
+
+    [Fact]
     public void DocumentMathProperties_ReadWrapIndentAndWrapRightWithOpenXmlDefaults()
     {
         var source = File.ReadAllText(Path.Combine(
