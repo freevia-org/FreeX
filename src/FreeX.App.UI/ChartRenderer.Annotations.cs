@@ -48,7 +48,8 @@ public static partial class ChartRenderer
         uint endRow,
         uint dataStartCol,
         uint endCol,
-        uint headerRow)
+        uint headerRow,
+        WorkbookTheme theme)
     {
         if (chart.DataTable is null || model.Axes.Count == 0)
             return;
@@ -56,13 +57,13 @@ public static partial class ChartRenderer
         var outline = chart.DataTable.ShowOutline == true;
         var showHorizontal = chart.DataTable.ShowHorizontalBorder != false;
         var strokeColor = outline || showHorizontal
-            ? ToOxyColor(chart.DataTable.BorderColor) ?? OxyColor.FromRgb(166, 166, 166)
+            ? ToOxyColor(chart.DataTable.ResolveBorderColor(theme)) ?? OxyColor.FromRgb(166, 166, 166)
             : OxyColors.Transparent;
         var strokeThickness = outline || showHorizontal
             ? GetChartDataTableBorderThickness(chart.DataTable)
             : 0;
-        var background = ToOxyColor(chart.DataTable.FillColor) ?? OxyColor.FromAColor(225, OxyColors.White);
-        var textColor = ToOxyColor(chart.DataTable.TextColor) ?? OxyColor.FromRgb(64, 64, 64);
+        var background = ToOxyColor(chart.DataTable.ResolveFillColor(theme)) ?? OxyColor.FromAColor(225, OxyColors.White);
+        var textColor = ToOxyColor(chart.DataTable.ResolveTextColor(theme)) ?? OxyColor.FromRgb(64, 64, 64);
         var fontSize = GetChartDataTableFontSize(chart.DataTable);
         var annotationIndex = 0;
         var textBuilder = new StringBuilder();

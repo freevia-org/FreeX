@@ -228,7 +228,7 @@ public static partial class ChartRenderer
             var stackedColumnModel = BuildStackedColumnModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, chart.Type == ChartType.PercentStackedColumn, theme, pointDataLabelFormats);
             AddStackedSeriesLines(stackedColumnModel, chart, theme, isBar: false);
             ApplyAxisBounds(stackedColumnModel, chart, theme);
-            AddChartDataTableAnnotations(stackedColumnModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
+            AddChartDataTableAnnotations(stackedColumnModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
             return stackedColumnModel;
         }
 
@@ -244,7 +244,7 @@ public static partial class ChartRenderer
             var stackedBarModel = BuildStackedBarModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, chart.Type == ChartType.PercentStackedBar, theme, pointDataLabelFormats);
             AddStackedSeriesLines(stackedBarModel, chart, theme, isBar: true);
             ApplyAxisBounds(stackedBarModel, chart, theme);
-            AddChartDataTableAnnotations(stackedBarModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
+            AddChartDataTableAnnotations(stackedBarModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
             return stackedBarModel;
         }
 
@@ -252,7 +252,7 @@ public static partial class ChartRenderer
         {
             var stackedAreaModel = BuildStackedAreaModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, chart.Type == ChartType.PercentStackedArea, theme, pointDataLabelFormats);
             ApplyAxisBounds(stackedAreaModel, chart, theme);
-            AddChartDataTableAnnotations(stackedAreaModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
+            AddChartDataTableAnnotations(stackedAreaModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
             return stackedAreaModel;
         }
 
@@ -261,28 +261,28 @@ public static partial class ChartRenderer
             var bubbleModel = BuildBubbleModel(chart, model, cellLookup, categories, dataStartRow, endRow, startCol, endCol, startRow, theme, pointDataLabelFormats, out var trendPoints);
             AddTrendlineIfRequested(bubbleModel, chart, theme, trendPoints);
             ApplyAxisBounds(bubbleModel, chart, theme);
-            AddChartDataTableAnnotations(bubbleModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
+            AddChartDataTableAnnotations(bubbleModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
             return bubbleModel;
         }
 
         if (chart.Type == ChartType.Radar)
         {
             var radarModel = BuildRadarModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
-            AddChartDataTableAnnotations(radarModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
+            AddChartDataTableAnnotations(radarModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
             return radarModel;
         }
 
         if (chart.Type == ChartType.Stock)
         {
             var stockModel = BuildStockModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
-            AddChartDataTableAnnotations(stockModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
+            AddChartDataTableAnnotations(stockModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
             return stockModel;
         }
 
         if (chart.Type is ChartType.Surface or ChartType.ThreeDSurface)
         {
             var surfaceModel = BuildSurfaceModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
-            AddChartDataTableAnnotations(surfaceModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
+            AddChartDataTableAnnotations(surfaceModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
             return surfaceModel;
         }
 
@@ -665,7 +665,7 @@ public static partial class ChartRenderer
         AddRangeDataLabelAnnotations(model, chart, theme, clusteredBarValues, categories);
         AddTrendlineIfRequested(model, chart, theme, firstSeriesPoints, swapTrendlineAxes: chart.Type == ChartType.Bar);
         ApplyAxisBounds(model, chart, theme);
-        AddChartDataTableAnnotations(model, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
+        AddChartDataTableAnnotations(model, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
 
         return model;
     }
