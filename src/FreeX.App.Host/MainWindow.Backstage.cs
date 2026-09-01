@@ -27,7 +27,7 @@ public partial class MainWindow
     private PrintPreviewSettings _backstagePrintPreviewSettings = new();
     private FixedDocument? _backstagePrintPreviewDocument;
 
-    private void ShowStartScreen()
+    internal void ShowStartScreen()
     {
         StartScreenOverlay.Visibility = Visibility.Visible;
         // The shared frame builds the Home pane (greeting + recent list refresh runs in its ContentFactory)
@@ -1078,7 +1078,7 @@ public partial class MainWindow
             MessageBoxImage.Information);
     }
 
-    private void SsOptionsBtn_Click(object sender, RoutedEventArgs e)
+    internal void SsOptionsBtn_Click(object sender, RoutedEventArgs e)
     {
         ShowOptionsDialog();
     }
@@ -1295,7 +1295,7 @@ public partial class MainWindow
         return false;
     }
 
-    private async Task<bool> SaveWorkbookToTargetAsync(FileSaveTarget target)
+    internal async Task<bool> SaveWorkbookToTargetAsync(FileSaveTarget target)
     {
         if (_isSavingFile)
             return false;
@@ -1529,7 +1529,7 @@ public partial class MainWindow
     /// with zero indication until the first Save failed, round 149).
     /// </para>
     /// </summary>
-    private WorkbookReadOnlyOpenOutcome ApplyWorkbookReadOnlyOpenPolicy(Workbook workbook, string? filePath = null) =>
+    internal WorkbookReadOnlyOpenOutcome ApplyWorkbookReadOnlyOpenPolicy(Workbook workbook, string? filePath = null) =>
         _workbookReadOnlySession.RunOpen(workbook, new WpfWorkbookReadOnlyOpenPromptPort(this), filePath);
 
     private sealed class WpfWorkbookReadOnlyOpenPromptPort(MainWindow owner) : IWorkbookReadOnlyOpenPromptPort

@@ -41,10 +41,7 @@ public sealed class R57_AutoFilterSubtotalRecalcTests
                 sheet.SetCell(new CellAddress(sheetId, 6, 1), new NumberValue(50)); // A6
                 sheet.SetFormula(new CellAddress(sheetId, 1, 2), "SUBTOTAL(109,A2:A6)"); // B1
 
-                var recalcMethod = typeof(MainWindow).GetMethod(
-                    "RecalculateWorkbook", BindingFlags.Instance | BindingFlags.NonPublic, [])
-                    ?? throw new MissingMethodException(nameof(MainWindow), "RecalculateWorkbook");
-                recalcMethod.Invoke(window, []);
+                window.RecalculateWorkbook();
 
                 sheet.GetValue(1, 2).Should().Be(new NumberValue(150), "10+20+30+40+50 before any filter");
 
@@ -98,10 +95,7 @@ public sealed class R57_AutoFilterSubtotalRecalcTests
                 sheet.SetCell(new CellAddress(sheetId, 3, 1), new NumberValue(20)); // A3
                 sheet.SetFormula(new CellAddress(sheetId, 1, 2), "SUM(A1:A3)"); // B1
 
-                var recalcMethod = typeof(MainWindow).GetMethod(
-                    "RecalculateWorkbook", BindingFlags.Instance | BindingFlags.NonPublic, [])
-                    ?? throw new MissingMethodException(nameof(MainWindow), "RecalculateWorkbook");
-                recalcMethod.Invoke(window, []);
+                window.RecalculateWorkbook();
 
                 window.SheetGrid.SelectedRange = new GridRange(
                     new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 1)); // A1:A3

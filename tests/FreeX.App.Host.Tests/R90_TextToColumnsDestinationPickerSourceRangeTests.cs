@@ -140,11 +140,6 @@ public sealed class R90_TextToColumnsDestinationPickerSourceRangeTests
         public void RunTextToColumnsPickingDestination(uint destinationRow, uint destinationCol)
         {
             var sheet = Workbook.GetSheetAt(0);
-            var completeSelection = typeof(MainWindow).GetMethod(
-                "CompleteDialogRangeSelection",
-                BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "CompleteDialogRangeSelection");
-
             Window.Dispatcher.BeginInvoke(new Action(() =>
             {
                 var dialog = Window.OwnedWindows.OfType<TextToColumnsDialog>().Single();
@@ -162,7 +157,7 @@ public sealed class R90_TextToColumnsDestinationPickerSourceRangeTests
                     new CellAddress(sheet.Id, destinationRow, destinationCol),
                     new CellAddress(sheet.Id, destinationRow, destinationCol));
 
-                completeSelection.Invoke(Window, [true]);
+                Window.CompleteDialogRangeSelection(true);
 
                 var finishButton = DialogSourceTestSupport.GetPrivateField<Button>(dialog, "_finishButton");
                 DialogSourceTestSupport.ClickButton(finishButton);

@@ -38,19 +38,11 @@ namespace FreeX.App.Host.Tests;
 /// </summary>
 public sealed class R127_ManualModeF9CatchUpTests
 {
-    private static readonly MethodInfo CalcNowClickMethod =
-        typeof(MainWindow).GetMethod("CalcNowBtn_Click", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(nameof(MainWindow), "CalcNowBtn_Click");
-
-    private static readonly MethodInfo CalcFullClickMethod =
-        typeof(MainWindow).GetMethod("CalcFullBtn_Click", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(nameof(MainWindow), "CalcFullBtn_Click");
-
     private static void ClickCalcNow(MainWindow window) =>
-        CalcNowClickMethod.Invoke(window, [null, new RoutedEventArgs()]);
+        window.CalcNowBtn_Click(null!, new RoutedEventArgs());
 
     private static void ClickCalcFull(MainWindow window) =>
-        CalcFullClickMethod.Invoke(window, [null, new RoutedEventArgs()]);
+        window.CalcFullBtn_Click(null!, new RoutedEventArgs());
 
     [Fact]
     public void ManualCalculationMode_PlainF9AfterEditingAPrecedent_CatchesUpTheStaleDependentFormula()

@@ -89,7 +89,7 @@ public partial class MainWindow
 
     private void PasteLinkedPictureMenuItem_Click(object sender, RoutedEventArgs e) => ExecutePasteAsPicture(isLinkedPicture: true);
 
-    private void ExecuteCopy(bool isCut = false)
+    internal void ExecuteCopy(bool isCut = false)
     {
         // Route a selected drawing object through its own clipboard instead of falling into the
         // cell-range path. Object Cut stays pending until Paste executes the shared move command.
@@ -751,7 +751,7 @@ public partial class MainWindow
             cell.Style?.Clone(),
             cell.RawValue is NumberValue or DateTimeValue);
 
-    private void ExecutePaste(
+    internal void ExecutePaste(
         PasteMode mode = PasteMode.All,
         PasteSpecialOptions options = default,
         bool keepColumnWidths = false,
@@ -1514,7 +1514,7 @@ public partial class MainWindow
         return true;
     }
 
-    private void ExecuteClearSelection()
+    internal void ExecuteClearSelection()
     {
         // R121-model-drawing-delete-1: Delete on a currently-selected picture/text box/shape/chart
         // removes the OBJECT (matching Excel), not the contents of whatever cell range happens to be
@@ -1638,7 +1638,7 @@ public partial class MainWindow
         }
     }
 
-    private void ExecutePasteColumnWidthsOnly()
+    internal void ExecutePasteColumnWidthsOnly()
     {
         if (_workbookClipboardSession.Content is not { } clip || SheetGrid.SelectedRange is not { } range)
             return;
@@ -1894,7 +1894,7 @@ public partial class MainWindow
     /// <see cref="System.Windows.DataFormats.Html"/> — WPF does not auto-wrap CF_HTML, the header
     /// with byte offsets must be supplied by the caller.
     /// </summary>
-    private static string? BuildHtmlClipboardFragment(
+    internal static string? BuildHtmlClipboardFragment(
         ViewportModel viewport, Sheet? sheet, GridRange range, WorkbookTheme theme) =>
         ClipboardHtmlSerializer.Serialize(viewport, sheet, range, theme)?.CfHtml;
 

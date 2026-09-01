@@ -66,9 +66,6 @@ public sealed class FreeXCleanupB10Tests
                     new GridRange(new CellAddress(sheet.Id, 1, 9), new CellAddress(sheet.Id, 2, 11)),
                 ]);
 
-                var buildPreview = typeof(MainWindow)
-                    .GetMethod("BuildActiveSheetPrintPreview", BindingFlags.Instance | BindingFlags.NonPublic)
-                    ?? throw new MissingMethodException(nameof(MainWindow), "BuildActiveSheetPrintPreview");
                 var currentSheetIdField = typeof(MainWindow)
                     .GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)
                     ?? throw new MissingFieldException(nameof(MainWindow), "_currentSheetId");
@@ -78,7 +75,7 @@ public sealed class FreeXCleanupB10Tests
                 // page-range slice below is exercising real multi-page re-parenting, not a no-op.
                 var fullSettings = new PrintPreviewSettings();
                 var fullResult = ((FixedDocument Document, PrintSettingsPlan Settings))
-                    buildPreview.Invoke(window, [fullSettings])!;
+                    window.BuildActiveSheetPrintPreview(fullSettings);
                 fullResult.Document.Pages.Count.Should().BeGreaterThanOrEqualTo(3);
 
                 var rangedSettings = new PrintPreviewSettings(PageFrom: 1, PageTo: 1);
@@ -86,7 +83,7 @@ public sealed class FreeXCleanupB10Tests
                 Action act = () =>
                 {
                     var (document, _) = ((FixedDocument Document, PrintSettingsPlan Settings))
-                        buildPreview.Invoke(window, [rangedSettings])!;
+                        window.BuildActiveSheetPrintPreview(rangedSettings);
                     document.Pages.Count.Should().Be(1, "PageFrom=1/PageTo=1 should slice the preview down to exactly one page");
                 };
 

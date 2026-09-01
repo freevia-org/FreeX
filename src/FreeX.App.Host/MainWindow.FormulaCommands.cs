@@ -568,15 +568,15 @@ public partial class MainWindow
         }
     }
 
-    private void CalcNowBtn_Click(object sender, RoutedEventArgs e)
+    internal void CalcNowBtn_Click(object sender, RoutedEventArgs e)
     {
         ExecuteCalculationAction(CalculationCommandAction.CalculateNow);
     }
-    private void CalcFullBtn_Click(object sender, RoutedEventArgs e)
+    internal void CalcFullBtn_Click(object sender, RoutedEventArgs e)
     {
         ExecuteCalculationAction(CalculationCommandAction.CalculateFull);
     }
-    private void CalcSheetBtn_Click(object sender, RoutedEventArgs e)
+    internal void CalcSheetBtn_Click(object sender, RoutedEventArgs e)
     {
         ExecuteCalculationAction(CalculationCommandAction.CalculateActiveSheet);
     }

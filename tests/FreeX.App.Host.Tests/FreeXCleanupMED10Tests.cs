@@ -44,11 +44,7 @@ public sealed class FreeXCleanupMED10Tests
             PdfCellDestinationOverlayExtractor.Extract(originalRoot)
                 .Should().ContainSingle(overlay => overlay.Address == targetAddress);
 
-            var cloneMethod = typeof(MainWindow).GetMethod(
-                "CloneExportPage",
-                BindingFlags.NonPublic | BindingFlags.Static)
-                ?? throw new MissingMethodException("MainWindow.CloneExportPage not found.");
-            var clonedPageContent = (PageContent)cloneMethod.Invoke(null, [document, originalPage])!;
+            var clonedPageContent = MainWindow.CloneExportPage(document, originalPage);
             var clonedPage = clonedPageContent.Child
                 ?? throw new InvalidOperationException("Cloned PageContent had no FixedPage child.");
 

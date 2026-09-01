@@ -723,7 +723,7 @@ public sealed partial class MainWindow : Window,
             SlideCanvas.ApplyViewZoomState(state);
     }
 
-    private void ApplyPresentationViewModeState(PresentationViewModeState state)
+    internal void ApplyPresentationViewModeState(PresentationViewModeState state)
     {
         _viewModeState = state;
         var isOutline = state.Mode == PresentationViewMode.Outline;

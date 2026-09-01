@@ -91,10 +91,7 @@ public sealed class Round176_StrayStartupWindowTests : IDisposable
 
     private static List<MainWindow> OpenAdditionalStartupFiles(MainWindow window, string[] paths)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "OpenAdditionalStartupFiles",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-        return (List<MainWindow>)method!.Invoke(window, [paths])!;
+        return window.OpenAdditionalStartupFiles(paths);
     }
 
     private static FileCommands GetFileCommands(MainWindow window)

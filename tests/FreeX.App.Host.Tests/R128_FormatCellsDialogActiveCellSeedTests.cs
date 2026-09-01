@@ -93,10 +93,7 @@ public sealed class R128_FormatCellsDialogActiveCellSeedTests
 
     private static CellAddress InvokeResolveFormatCellsSeedCell(MainWindow window, GridRange range)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "ResolveFormatCellsSeedCell", BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        return (CellAddress)method!.Invoke(window, [range])!;
+        return window.ResolveFormatCellsSeedCell(range);
     }
 
     /// <summary>The scenario from the finding: click C5 (Bold), Shift+click A1 -- selecting

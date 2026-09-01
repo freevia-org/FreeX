@@ -71,7 +71,7 @@ public sealed class MainWindowAutofillCtrlModifierWiringTests
         // handler must pass a hardcoded ctrlHeld: false into ExecuteAutofill instead of reading
         // the possibly-stale field.
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
-        var handlerStart = source.IndexOf("private void OnAutofillHandleDoubleClicked", StringComparison.Ordinal);
+        var handlerStart = source.IndexOf("internal void OnAutofillHandleDoubleClicked", StringComparison.Ordinal);
         var handlerEnd = source.IndexOf("private void ResolveAdjacentColumnLastPopulatedRow", StringComparison.Ordinal);
         if (handlerEnd < 0)
         {

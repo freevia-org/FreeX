@@ -225,13 +225,7 @@ public sealed class FreeXReview10ScenarioTests
         bool locked,
         string? replaceScenarioName)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "SaveScenarioFromDialog",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull("SaveScenarioFromDialog should exist as a private method on MainWindow");
-        method!.Invoke(
-            window,
-            [scenarioName, changingCellsText, comment, hidden, locked, replaceScenarioName]);
+        window.SaveScenarioFromDialog(scenarioName, changingCellsText, comment, hidden, locked, replaceScenarioName);
     }
 
     private static void PumpDispatcher()

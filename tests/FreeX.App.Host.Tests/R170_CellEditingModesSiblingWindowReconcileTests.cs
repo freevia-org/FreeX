@@ -141,9 +141,7 @@ public sealed class R170_CellEditingModesSiblingWindowReconcileTests
 
         public void InsertRowAboveInPrimary()
         {
-            var method = typeof(MainWindow).GetMethod("InsertRowBtn_Click", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "InsertRowBtn_Click");
-            method.Invoke(Primary, [Primary, new RoutedEventArgs()]);
+            Primary.InsertRowBtn_Click(Primary, new RoutedEventArgs());
             PumpDispatcher();
         }
 

@@ -432,32 +432,12 @@ public sealed class StatusBarLayoutTests
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly MethodInfo _cycleShellFocus;
-        private readonly MethodInfo _getCurrentShellFocusTarget;
-        private readonly MethodInfo _invalidateNavigationCaches;
-        private readonly MethodInfo _refreshStatusBar;
-        private readonly MethodInfo _tryHandleFocusedStatusBarKeyboardNavigation;
         private string? _visibleTaskPaneFocusCandidateName;
 
         private MainWindowHarness(MainWindow window, Workbook workbook)
         {
             _window = window;
             Workbook = workbook;
-            _cycleShellFocus = typeof(MainWindow)
-                .GetMethod("CycleShellFocus", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "CycleShellFocus");
-            _getCurrentShellFocusTarget = typeof(MainWindow)
-                .GetMethod("GetCurrentShellFocusTarget", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "GetCurrentShellFocusTarget");
-            _invalidateNavigationCaches = typeof(MainWindow)
-                .GetMethod("InvalidateNavigationCaches", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "InvalidateNavigationCaches");
-            _refreshStatusBar = typeof(MainWindow)
-                .GetMethod("RefreshStatusBar", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "RefreshStatusBar");
-            _tryHandleFocusedStatusBarKeyboardNavigation = typeof(MainWindow)
-                .GetMethod("TryHandleFocusedStatusBarKeyboardNavigation", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "TryHandleFocusedStatusBarKeyboardNavigation");
         }
 
         public Workbook Workbook { get; }
@@ -467,7 +447,7 @@ public sealed class StatusBarLayoutTests
         public SheetId CurrentSheetId => _window.CurrentSheetIdForTest;
 
         public ShellFocusTarget CurrentShellFocusTarget =>
-            (ShellFocusTarget)_getCurrentShellFocusTarget.Invoke(_window, [])!;
+            _window.GetCurrentShellFocusTarget();
 
         public string? FocusedElementName =>
             Keyboard.FocusedElement is FrameworkElement element && !string.IsNullOrWhiteSpace(element.Name)
@@ -560,13 +540,13 @@ public sealed class StatusBarLayoutTests
 
         public void RefreshStatusBar()
         {
-            _refreshStatusBar.Invoke(_window, []);
+            _window.RefreshStatusBar();
             PumpDispatcher();
         }
 
         public void InvalidateNavigationCaches()
         {
-            _invalidateNavigationCaches.Invoke(_window, []);
+            _window.InvalidateNavigationCaches();
             PumpDispatcher();
         }
 
@@ -579,7 +559,7 @@ public sealed class StatusBarLayoutTests
         public void CycleShellFocus(bool reverse)
         {
             _window.Activate();
-            _cycleShellFocus.Invoke(_window, [reverse]);
+            _window.CycleShellFocus(reverse);
             PumpDispatcher();
         }
 
@@ -632,7 +612,7 @@ public sealed class StatusBarLayoutTests
                 RoutedEvent = Keyboard.PreviewKeyDownEvent
             };
 
-            var handled = (bool)_tryHandleFocusedStatusBarKeyboardNavigation.Invoke(_window, [args])!;
+            var handled = _window.TryHandleFocusedStatusBarKeyboardNavigation(args);
             PumpDispatcher();
             return handled;
         }

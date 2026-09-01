@@ -100,14 +100,10 @@ public sealed class R153_SpellCheckAddToDictionaryConcurrentPersistTests
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly MethodInfo _spellCheckBtnClick;
 
         private MainWindowHarness(MainWindow window)
         {
             _window = window;
-            _spellCheckBtnClick = typeof(MainWindow)
-                .GetMethod("SpellCheckBtn_Click", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SpellCheckBtn_Click");
         }
 
         public Workbook Workbook => _window.Session.Workbook;
@@ -146,7 +142,7 @@ public sealed class R153_SpellCheckAddToDictionaryConcurrentPersistTests
                 accept.Invoke(dialog, [SpellCheckDialog.CreateAddResult()]);
             }), DispatcherPriority.ApplicationIdle);
 
-            _spellCheckBtnClick.Invoke(_window, [_window, new RoutedEventArgs()]);
+            _window.SpellCheckBtn_Click(_window, new RoutedEventArgs());
             PumpDispatcher();
         }
 

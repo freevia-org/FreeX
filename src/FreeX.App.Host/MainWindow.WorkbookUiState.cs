@@ -62,7 +62,7 @@ public partial class MainWindow
         }
     }
 
-    private void RecalculateWorkbook()
+    internal void RecalculateWorkbook()
     {
         _session.RecalculateWorkbook();
         InvalidateNavigationCaches();
@@ -91,7 +91,7 @@ public partial class MainWindow
         _watchWindowDialog?.Refresh();
     }
 
-    private void RebuildDependenciesAndCalculate()
+    internal void RebuildDependenciesAndCalculate()
     {
         _session.RecalculateWorkbook();
         InvalidateNavigationCaches();
@@ -100,7 +100,7 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private void RecalculateIfAutomatic(IReadOnlyList<CellAddress> changedCells)
+    internal void RecalculateIfAutomatic(IReadOnlyList<CellAddress> changedCells)
     {
         var report = _session.RecalculateChangedCells(changedCells);
         if (report is not null)
@@ -215,7 +215,7 @@ public partial class MainWindow
         SheetGrid.IsLiveResizing = false;
     }
 
-    private string FormatCellReference(CellAddress address) =>
+    internal string FormatCellReference(CellAddress address) =>
         SpreadsheetDisplayFormatter.FormatCellReference(address, _options.UseR1C1ReferenceStyle);
 
     private string FormatColumnReference(uint column) =>
@@ -240,7 +240,7 @@ public partial class MainWindow
     private Dictionary<GridRange, string>? _nameBoxScopedRangeIndex;
     private Dictionary<GridRange, string>? _nameBoxGlobalRangeIndex;
 
-    private string FormatNameBoxSelectionText(GridRange range)
+    internal string FormatNameBoxSelectionText(GridRange range)
     {
         EnsureNameBoxRangeIndex();
 

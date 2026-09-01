@@ -94,7 +94,6 @@ public sealed class R120_CloseDuringSaveOrOpenGuardTests
 
     private sealed class ClosingGuardHarness : IDisposable
     {
-        private readonly MethodInfo _closingMethod;
         private readonly FieldInfo _isSavingFileField;
         private readonly FieldInfo _isOpeningFileField;
         private readonly PropertyInfo _workbookDirtyProperty;
@@ -102,9 +101,6 @@ public sealed class R120_CloseDuringSaveOrOpenGuardTests
         private ClosingGuardHarness(MainWindow window)
         {
             Window = window;
-            _closingMethod = typeof(MainWindow).GetMethod(
-                "MainWindow_Closing", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "MainWindow_Closing");
             _isSavingFileField = typeof(MainWindow).GetField(
                 "_isSavingFile", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_isSavingFile");
@@ -133,7 +129,7 @@ public sealed class R120_CloseDuringSaveOrOpenGuardTests
         public CancelEventArgs InvokeClosing()
         {
             var e = new CancelEventArgs(false);
-            _closingMethod.Invoke(Window, [null, e]);
+            Window.MainWindow_Closing(null, e);
             return e;
         }
 

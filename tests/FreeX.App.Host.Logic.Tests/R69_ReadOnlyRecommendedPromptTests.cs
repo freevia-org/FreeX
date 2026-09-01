@@ -167,16 +167,12 @@ public sealed class R69_ReadOnlyRecommendedPromptTests
 
     private sealed class ReadOnlyPromptHarness : IDisposable
     {
-        private readonly MethodInfo _applyMethod;
         private readonly FieldInfo _readOnlySessionField;
 
         private ReadOnlyPromptHarness(MainWindow window, RecordingUserMessageService messageService)
         {
             Window = window;
             MessageService = messageService;
-            _applyMethod = typeof(MainWindow).GetMethod(
-                "ApplyWorkbookReadOnlyOpenPolicy", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ApplyWorkbookReadOnlyOpenPolicy");
             _readOnlySessionField = typeof(MainWindow).GetField(
                 "_workbookReadOnlySession", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_workbookReadOnlySession");
@@ -196,7 +192,7 @@ public sealed class R69_ReadOnlyRecommendedPromptTests
             // explicitly. null matches every existing call in this file: none of them exercise a
             // real on-disk path, only the embedded-flag (ReadOnlyRecommended/ReservationPassword)
             // classification this test class covers.
-            (WorkbookReadOnlyOpenOutcome)_applyMethod.Invoke(Window, [workbook, null])!;
+            Window.ApplyWorkbookReadOnlyOpenPolicy(workbook, null);
 
         public static ReadOnlyPromptHarness Create(bool acceptReadOnly, Func<string, string?>? reservationPasswordEntry = null)
         {

@@ -225,9 +225,7 @@ public sealed class R136_AutofillGroupedSheetsTests
     private static void InvokeExecuteAutofill(
         MainWindow window, GridRange sourceRange, GridRange fillRange, bool ctrlHeld)
     {
-        var method = typeof(MainWindow).GetMethod("ExecuteAutofill", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteAutofill");
-        method.Invoke(window, [sourceRange, fillRange, ctrlHeld]);
+        window.ExecuteAutofill(sourceRange, fillRange, ctrlHeld);
     }
 
     private static void GroupSheets(MainWindow window, params SheetId[] sheetIds)

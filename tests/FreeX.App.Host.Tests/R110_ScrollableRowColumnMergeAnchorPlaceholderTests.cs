@@ -170,20 +170,12 @@ public sealed class R110_ScrollableRowColumnMergeAnchorPlaceholderTests
     private sealed class ScrollableCountHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly MethodInfo _setActiveCell;
-        private readonly MethodInfo _mainWindowKeyDown;
         private readonly MethodInfo _updateViewport;
         private readonly FieldInfo _selectionAnchorField;
 
         private ScrollableCountHarness(MainWindow window)
         {
             _window = window;
-            _setActiveCell = typeof(MainWindow)
-                .GetMethod("SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SetActiveCell");
-            _mainWindowKeyDown = typeof(MainWindow)
-                .GetMethod("MainWindow_KeyDown", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "MainWindow_KeyDown");
             _updateViewport = typeof(MainWindow)
                 .GetMethod("UpdateViewport", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "UpdateViewport");
@@ -218,7 +210,7 @@ public sealed class R110_ScrollableRowColumnMergeAnchorPlaceholderTests
 
         public void SelectActiveCell(uint row, uint col)
         {
-            _setActiveCell.Invoke(_window, [new CellAddress(SheetId, row, col)]);
+            _window.SetActiveCell(new CellAddress(SheetId, row, col));
             PumpDispatcher();
         }
 
@@ -251,7 +243,7 @@ public sealed class R110_ScrollableRowColumnMergeAnchorPlaceholderTests
             {
                 RoutedEvent = Keyboard.KeyDownEvent
             };
-            _mainWindowKeyDown.Invoke(_window, [_window, args]);
+            _window.MainWindow_KeyDown(_window, args);
             PumpDispatcher();
         }
 

@@ -12,18 +12,10 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     {
         StaTestRunner.Run(() =>
         {
-            var createContent = typeof(MainWindow)
-                .GetMethod("CreateRibbonCommandContent", BindingFlags.Static | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "CreateRibbonCommandContent");
-            var refreshLabel = typeof(MainWindow)
-                .GetMethod("SetRibbonCommandButtonLabel", BindingFlags.Static | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SetRibbonCommandButtonLabel");
-            var content = (FrameworkElement)createContent.Invoke(
-                null,
-                ["Protect Sheet", "Protect Sheet", RibbonCommandLayoutKind.Large])!;
+            var content = MainWindow.CreateRibbonCommandContent("Protect Sheet", "Protect Sheet", RibbonCommandLayoutKind.Large);
             var button = new Button { Content = content };
 
-            refreshLabel.Invoke(null, [button, "Unprotect Sheet"]);
+            MainWindow.SetRibbonCommandButtonLabel(button, "Unprotect Sheet");
 
             button.Content.Should().BeSameAs(content);
             WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>((DependencyObject)button.Content)
@@ -51,11 +43,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             RibbonMetadata.SetCommandContentLayout(grid, RibbonCommandContentLayout.IconOnly);
             grid.Children.Add(icon);
             var button = new Button { Content = grid, Width = 38, Height = 24 };
-            var addChevron = typeof(MainWindow)
-                .GetMethod("AddRibbonDropdownChevronToGrid", BindingFlags.Static | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "AddRibbonDropdownChevronToGrid");
-
-            addChevron.Invoke(null, [button, grid, RibbonCommandContentLayout.IconOnly]);
+            MainWindow.AddRibbonDropdownChevronToGrid(button, grid, RibbonCommandContentLayout.IconOnly);
 
             var chevron = grid.Children
                 .OfType<FrameworkElement>()
@@ -75,15 +63,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     {
         StaTestRunner.Run(() =>
         {
-            var createContent = typeof(MainWindow)
-                .GetMethod("CreateRibbonCommandContent", BindingFlags.Static | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "CreateRibbonCommandContent");
-            var ensureChevron = typeof(MainWindow)
-                .GetMethod("EnsureRibbonDropdownChevron", BindingFlags.Static | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "EnsureRibbonDropdownChevron");
-            var content = (Grid)createContent.Invoke(
-                null,
-                ["Sort & Filter", "Sort & Filter", RibbonCommandLayoutKind.Small])!;
+            var content = MainWindow.CreateRibbonCommandContent("Sort & Filter", "Sort & Filter", RibbonCommandLayoutKind.Small);
             var button = new Button
             {
                 Content = content,
@@ -94,12 +74,12 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             };
             RibbonMetadata.SetCompactWidths(button, 128, 24);
 
-            ensureChevron.Invoke(null, [button]);
+            MainWindow.EnsureRibbonDropdownChevron(button);
 
             RibbonMetadata.TryGetCompactWidths(button, out var fullWidth, out var compactWidth).Should().BeTrue();
             fullWidth.Should().Be(128);
             compactWidth.Should().Be(38);
-            content.ColumnDefinitions[^1].Width.Value.Should().Be(20);
+            ((Grid)content).ColumnDefinitions[^1].Width.Value.Should().Be(20);
         });
     }
 
@@ -108,15 +88,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     {
         StaTestRunner.Run(() =>
         {
-            var createContent = typeof(MainWindow)
-                .GetMethod("CreateRibbonCommandContent", BindingFlags.Static | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "CreateRibbonCommandContent");
-            var ensureChevron = typeof(MainWindow)
-                .GetMethod("EnsureRibbonDropdownChevron", BindingFlags.Static | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "EnsureRibbonDropdownChevron");
-            var content = (Grid)createContent.Invoke(
-                null,
-                ["Sort & Filter", "Sort & Filter", RibbonCommandLayoutKind.Small])!;
+            var content = MainWindow.CreateRibbonCommandContent("Sort & Filter", "Sort & Filter", RibbonCommandLayoutKind.Small);
             var button = new Button
             {
                 Content = content,
@@ -127,7 +99,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 HorizontalContentAlignment = HorizontalAlignment.Left
             };
 
-            ensureChevron.Invoke(null, [button]);
+            MainWindow.EnsureRibbonDropdownChevron(button);
             var window = ShowStandaloneRibbonButton(button, 128, 24);
             try
             {
@@ -163,13 +135,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     {
         StaTestRunner.Run(() =>
         {
-            var createContent = typeof(MainWindow)
-                .GetMethod("CreateRibbonCommandContent", BindingFlags.Static | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "CreateRibbonCommandContent");
-            var ensureChevron = typeof(MainWindow)
-                .GetMethod("EnsureRibbonDropdownChevron", BindingFlags.Static | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "EnsureRibbonDropdownChevron");
-            var content = (StackPanel)createContent.Invoke(null, ["Paste", "Paste", RibbonCommandLayoutKind.Large])!;
+            var content = MainWindow.CreateRibbonCommandContent("Paste", "Paste", RibbonCommandLayoutKind.Large);
             var button = new Button
             {
                 Content = content,
@@ -181,7 +147,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 VerticalContentAlignment = VerticalAlignment.Center
             };
 
-            ensureChevron.Invoke(null, [button]);
+            MainWindow.EnsureRibbonDropdownChevron(button);
             var window = ShowStandaloneRibbonButton(button, 70, 76);
             try
             {

@@ -132,8 +132,6 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         private readonly MainWindow _window;
         private readonly Workbook _workbook;
         private readonly SheetId _quickAnalysisSheetId;
-        private readonly MethodInfo _showQuickAnalysisMenu;
-        private readonly MethodInfo _showQuickAnalysisPreview;
         private string? _focusedMenuHeader;
         private string? _contextMenuPlacementTargetName;
         private IReadOnlyList<string> _openMenuHeaders = [];
@@ -144,12 +142,6 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             _window = window;
             _workbook = workbook;
             _quickAnalysisSheetId = quickAnalysisSheetId;
-            _showQuickAnalysisMenu = typeof(MainWindow)
-                .GetMethod("ShowQuickAnalysisMenu", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ShowQuickAnalysisMenu");
-            _showQuickAnalysisPreview = typeof(MainWindow)
-                .GetMethod("ShowQuickAnalysisPreview", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ShowQuickAnalysisPreview");
         }
 
         public string? FocusedMenuHeader =>
@@ -215,7 +207,7 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             _contextMenuPlacementTargetName = null;
             _openMenuHeaders = [];
             SheetGrid.SelectedRange = _selectedRange;
-            _showQuickAnalysisMenu.Invoke(_window, null);
+            _window.ShowQuickAnalysisMenu();
             PumpDispatcher();
             if (_selectedRange is not { } range)
                 return;
@@ -259,7 +251,7 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
                 Header = item.Label,
                 Tag = item
             };
-            _showQuickAnalysisPreview.Invoke(_window, [menuItem]);
+            _window.ShowQuickAnalysisPreview(menuItem);
             PumpDispatcher();
             PumpDispatcher();
             if (SheetGrid.QuickAnalysisPreviewVisual == QuickAnalysisPreviewVisualKind.None &&

@@ -91,7 +91,7 @@ public partial class MainWindow
         Keyboard.Focus(FormulaBar);
     }
 
-    private void ShowInlineEditor(CellAddress addr, double? clickX = null)
+    internal void ShowInlineEditor(CellAddress addr, double? clickX = null)
     {
         if (!HideTextBoxInlineEditor(commit: true))
             return;
@@ -452,7 +452,7 @@ public partial class MainWindow
     /// selected remainder with the new keystroke (which re-runs this same check for the new
     /// prefix), and Backspace/Delete rejects it via the session's one-shot suppression state.
     /// </summary>
-    private void ApplyCellValueAutoCompleteSuggestion() => ApplyCellValueAutoCompleteSuggestion(_inlineEditor);
+    internal void ApplyCellValueAutoCompleteSuggestion() => ApplyCellValueAutoCompleteSuggestion(_inlineEditor);
 
     /// <summary>
     /// R88-app-autocomplete-picklist-5-3: same AutoComplete logic as the inline in-cell editor's own
@@ -461,7 +461,7 @@ public partial class MainWindow
     /// by clicking straight into the Formula Bar (in which case <see cref="ShowInlineEditor"/> is
     /// never invoked and the inline editor's own TextChanged handler never runs).
     /// </summary>
-    private void ApplyCellValueAutoCompleteSuggestion(System.Windows.Controls.TextBox? editor)
+    internal void ApplyCellValueAutoCompleteSuggestion(System.Windows.Controls.TextBox? editor)
     {
         if (_applyingCellValueAutoCompleteSuggestion || editor is null)
             return;
@@ -1134,7 +1134,7 @@ public partial class MainWindow
         return fallbackTarget;
     }
 
-    private static void InsertLineBreak(System.Windows.Controls.TextBox editor)
+    internal static void InsertLineBreak(System.Windows.Controls.TextBox editor)
     {
         var edit = ExcelTextEditorPlanner.InsertLineBreak(
             editor.Text,
@@ -1213,7 +1213,7 @@ public partial class MainWindow
     }
 
 
-    private void SetSelectionMode(ExcelSelectionMode mode)
+    internal void SetSelectionMode(ExcelSelectionMode mode)
     {
         _selectionMode = mode;
         if (mode != ExcelSelectionMode.Normal)
@@ -1261,7 +1261,7 @@ public partial class MainWindow
             ApplyFormulaEditStatusBarPlan(statusBarPlan);
     }
 
-    private void FormulaBar_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    internal void FormulaBar_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         // R154-M3-formula-bar-escape-local-first: mirrors the window-level guard added for the
         // same defect (ShouldHandleEscapeLocallyBeforeFormulaPointMode, applied to
@@ -1448,12 +1448,12 @@ public partial class MainWindow
         FocusSheetGridIfNeeded();
     }
 
-    private void CellAddressBox_DropDownOpened(object sender, EventArgs e)
+    internal void CellAddressBox_DropDownOpened(object sender, EventArgs e)
     {
         CellAddressBox.ItemsSource = NameBoxDropdownPlanner.Build(_workbook, _currentSheetId);
     }
 
-    private void CellAddressBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    internal void CellAddressBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (sender is not ComboBox { IsDropDownOpen: true, SelectedItem: NameBoxNavigationItem item })
             return;
@@ -1497,7 +1497,7 @@ public partial class MainWindow
         return true;
     }
 
-    private void CellAddressBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    internal void CellAddressBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (e.Key == Key.Escape && e.KeyboardDevice.Modifiers == ModifierKeys.None)
         {
@@ -1662,7 +1662,7 @@ public partial class MainWindow
         editor.SelectionLength = edit.SelectionLength;
     }
 
-    private bool CommitEdit()
+    internal bool CommitEdit()
     {
         if (SheetGrid.SelectedRange == null && _formulaEditCell is null) return false;
         var addr = _formulaEditCell ?? SheetGrid.SelectedRange!.Value.Start;

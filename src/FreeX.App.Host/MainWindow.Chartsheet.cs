@@ -41,7 +41,7 @@ public partial class MainWindow
         RenderActiveChartsheet(sheet!);
     }
 
-    private void RenderActiveChartsheet(Sheet chartsheet)
+    internal void RenderActiveChartsheet(Sheet chartsheet)
     {
         if (ChartsheetView is null || _viewportService is null)
             return;

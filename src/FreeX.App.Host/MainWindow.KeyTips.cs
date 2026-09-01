@@ -230,7 +230,7 @@ public partial class MainWindow
             : Visibility.Visible;
     }
 
-    private static RibbonKeyTipBadgeKind GetKeyTipBadgeKind(FrameworkElement element) =>
+    internal static RibbonKeyTipBadgeKind GetKeyTipBadgeKind(FrameworkElement element) =>
         element switch
         {
             TabItem => RibbonKeyTipBadgeKind.Tab,

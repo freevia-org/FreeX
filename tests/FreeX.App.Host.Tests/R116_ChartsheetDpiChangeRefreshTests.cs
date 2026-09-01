@@ -151,10 +151,7 @@ public sealed class R116_ChartsheetDpiChangeRefreshTests
         window.UpdateLayout();
         chartsheetView.ActualWidth.Should().BeGreaterThan(0, "the placeholder bitmap must have given ChartsheetView a real measured size");
 
-        var renderMethod = typeof(MainWindow).GetMethod(
-            "RenderActiveChartsheet", BindingFlags.Instance | BindingFlags.NonPublic);
-        renderMethod.Should().NotBeNull();
-        renderMethod!.Invoke(window, [chartsheet]);
+        window.RenderActiveChartsheet(chartsheet);
 
         var initialSource = chartsheetView.Source as BitmapSource;
         initialSource.Should().NotBeNull("RenderActiveChartsheet must have produced a real chart bitmap once ChartsheetView had a size");

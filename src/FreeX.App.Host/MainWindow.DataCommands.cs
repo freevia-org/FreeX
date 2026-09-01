@@ -83,7 +83,7 @@ public partial class MainWindow
     /// ImportSheetCommand) for a file already chosen by the caller. Split out of GetDataBtn_Click so
     /// the ordering-race guard below is directly testable without driving a real WPF OpenFileDialog.
     /// </summary>
-    private async Task ImportDataFromFileAsync(string importPath, IFileAdapter adapter, string ext, FileFormatDescriptor? format)
+    internal async Task ImportDataFromFileAsync(string importPath, IFileAdapter adapter, string ext, FileFormatDescriptor? format)
     {
         await ImportDataFromFileAtDestinationAsync(
             importPath,

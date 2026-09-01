@@ -14,7 +14,7 @@ public partial class MainWindow
     private ContextMenu? _quickAnalysisMenu;
     private readonly QuickAnalysisShellSession _quickAnalysisSession = new();
 
-    private void ShowQuickAnalysisMenu()
+    internal void ShowQuickAnalysisMenu()
     {
         CloseQuickAnalysisMenu();
         var sheet = _workbook.GetSheet(_currentSheetId);
@@ -218,7 +218,7 @@ public partial class MainWindow
         ClearQuickAnalysisPreview();
     }
 
-    private void ShowQuickAnalysisPreview(object sender)
+    internal void ShowQuickAnalysisPreview(object sender)
     {
         if (sender is not MenuItem { Tag: QuickAnalysisShellItemPlan item })
             return;

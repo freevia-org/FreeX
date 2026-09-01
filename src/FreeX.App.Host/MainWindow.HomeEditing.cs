@@ -99,7 +99,7 @@ public partial class MainWindow
     /// Number, Date, or Text -- rather than requiring Number/Date before the user has even had a
     /// chance to choose AutoFill.
     /// </summary>
-    private static bool CanStartFillSeries(ScalarValue? startValue) =>
+    internal static bool CanStartFillSeries(ScalarValue? startValue) =>
         startValue is NumberValue or DateTimeValue or TextValue;
 
     private void FillSeriesMenuItem_Click(object sender, RoutedEventArgs e)
@@ -244,7 +244,7 @@ public partial class MainWindow
     }
     private void FindFindMenuItem_Click(object sender, RoutedEventArgs e)       => FindButton_Click(sender, e);
     private void FindReplaceMenuItem_Click(object sender, RoutedEventArgs e)    => ReplaceButton_Click(sender, e);
-    private void FindGoToMenuItem_Click(object sender, RoutedEventArgs e)
+    internal void FindGoToMenuItem_Click(object sender, RoutedEventArgs e)
     {
         var defaultAddress = SheetGrid.SelectedRange is { } selectionForDefault
             ? FormatCellReference(selectionForDefault.Start)
@@ -312,7 +312,7 @@ public partial class MainWindow
         SelectGoToSpecialMatches(dialog.SelectedKind, dialog.SelectedOptions, showEmptyMessage: true, sheet, range);
     }
 
-    private void FindFormulasMenuItem_Click(object sender, RoutedEventArgs e) =>
+    internal void FindFormulasMenuItem_Click(object sender, RoutedEventArgs e) =>
         SelectGoToSpecialMatches(GoToSpecialKind.Formulas, showEmptyMessage: true);
 
     private void FindNotesMenuItem_Click(object sender, RoutedEventArgs e) =>
@@ -333,7 +333,7 @@ public partial class MainWindow
     private void FindSelectionPaneMenuItem_Click(object sender, RoutedEventArgs e) =>
         SelectionPaneBtn_Click(sender, e);
 
-    private void SelectGoToSpecialMatches(GoToSpecialKind kind, bool showEmptyMessage)
+    internal void SelectGoToSpecialMatches(GoToSpecialKind kind, bool showEmptyMessage)
         => SelectGoToSpecialMatches(kind, null, showEmptyMessage);
 
     private void SelectGoToSpecialMatches(GoToSpecialKind kind, GoToSpecialOptions? options, bool showEmptyMessage)

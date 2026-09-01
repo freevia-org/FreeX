@@ -161,7 +161,7 @@ public sealed class WpfWorkbookSessionOwnershipTests
         mainWindow.Should().NotContain("private ICommandBus _commandBus;");
         mainWindow.Should().NotContain("private ICommandStackChangeNotifier? _commandStackChangeNotifier;");
         mainWindow.Should().NotContain("private WorkbookRef _workbookRef;");
-        lifecycle.Should().Contain("private void ReplaceWorkbookSession(StartupWorkbookLoadResult source)");
+        lifecycle.Should().Contain("internal void ReplaceWorkbookSession(StartupWorkbookLoadResult source)");
         lifecycle.Should().Contain("_documentContext.CreateHostOwnedSession(");
         lifecycle.Should().Contain("_session.MarkDirtyFromHost();");
         lifecycle.Should().Contain("_session.MarkSavedFromHost();");

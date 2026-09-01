@@ -615,14 +615,10 @@ public sealed class NotesSlideTests : IDisposable
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
-            var apply = typeof(MainWindow).GetMethod(
-                "ApplyPresentationViewModeState",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            apply.Should().NotBeNull();
-            apply!.Invoke(window, [new PresentationViewModeState(PresentationViewMode.NotesPage)]);
+            window.ApplyPresentationViewModeState(new PresentationViewModeState(PresentationViewMode.NotesPage));
             window.IsNotesPageSurfaceVisible.Should().BeTrue();
 
-            apply.Invoke(window, [PresentationViewModeState.Normal]);
+            window.ApplyPresentationViewModeState(PresentationViewModeState.Normal);
             window.IsNotesPageSurfaceVisible.Should().BeFalse();
         }
         finally
@@ -637,15 +633,11 @@ public sealed class NotesSlideTests : IDisposable
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
-            var apply = typeof(MainWindow).GetMethod(
-                "ApplyPresentationViewModeState",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            apply.Should().NotBeNull();
-            apply!.Invoke(window, [new PresentationViewModeState(PresentationViewMode.SlideMaster)]);
+            window.ApplyPresentationViewModeState(new PresentationViewModeState(PresentationViewMode.SlideMaster));
             window.IsSlideMasterSurfaceVisible.Should().BeTrue();
             window.IsNotesPaneVisible.Should().BeFalse();
 
-            apply.Invoke(window, [PresentationViewModeState.Normal]);
+            window.ApplyPresentationViewModeState(PresentationViewModeState.Normal);
             window.IsSlideMasterSurfaceVisible.Should().BeFalse();
         }
         finally
@@ -660,11 +652,7 @@ public sealed class NotesSlideTests : IDisposable
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
-            var apply = typeof(MainWindow).GetMethod(
-                "ApplyPresentationViewModeState",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            apply.Should().NotBeNull();
-            apply!.Invoke(window, [new PresentationViewModeState(PresentationViewMode.SlideMaster)]);
+            window.ApplyPresentationViewModeState(new PresentationViewModeState(PresentationViewMode.SlideMaster));
 
             var layout = window.Editor.Presentation.Layouts.Should().ContainSingle().Subject;
             var target = MasterEditTarget.Layout(layout.Id);

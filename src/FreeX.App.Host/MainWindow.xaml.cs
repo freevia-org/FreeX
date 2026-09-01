@@ -658,7 +658,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     /// <see cref="GridAutofillPlanner.CalculateDoubleClickFillRange"/> to compute the fill range,
     /// then executes it the same way as a dragged <see cref="OnAutofillRequested"/> fill.
     /// </summary>
-    private void OnAutofillHandleDoubleClicked(GridRange source)
+    internal void OnAutofillHandleDoubleClicked(GridRange source)
     {
         if (_workbook.GetSheet(_currentSheetId) is not { } sheet)
             return;

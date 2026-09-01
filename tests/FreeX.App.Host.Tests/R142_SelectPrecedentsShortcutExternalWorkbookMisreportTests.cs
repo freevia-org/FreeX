@@ -134,19 +134,11 @@ public sealed class R142_SelectPrecedentsShortcutExternalWorkbookMisreportTests
 
     private static void InvokeCommandShortcut(MainWindow window, KeyboardCommandShortcut shortcut)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "ExecuteCommandShortcut",
-            BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteCommandShortcut");
-        method.Invoke(window, [shortcut, window, new RoutedEventArgs()]);
+        window.ExecuteCommandShortcut(shortcut, window, new RoutedEventArgs());
     }
 
     private static void InvokeSetActiveCell(MainWindow window, CellAddress addr)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "SetActiveCell",
-            BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(nameof(MainWindow), "SetActiveCell");
-        method.Invoke(window, [addr]);
+        window.SetActiveCell(addr);
     }
 }

@@ -96,7 +96,7 @@ public partial class MainWindow
                focusedUiElement.MoveFocus(new TraversalRequest(direction));
     }
 
-    private bool TryHandleFocusedStatusBarKeyboardNavigation(System.Windows.Input.KeyEventArgs e)
+    internal bool TryHandleFocusedStatusBarKeyboardNavigation(System.Windows.Input.KeyEventArgs e)
     {
         if (Keyboard.FocusedElement is not UIElement focusedElement ||
             !IsDescendantOf(focusedElement, StatusBarGrid) ||
@@ -181,7 +181,7 @@ public partial class MainWindow
         return LogicalTreeHelper.GetParent(element);
     }
 
-    private void CycleShellFocus(bool reverse)
+    internal void CycleShellFocus(bool reverse)
     {
         ShellFocusCyclePlanner.TryFocusNextAvailable(
             GetCurrentShellFocusTarget(),
@@ -195,7 +195,7 @@ public partial class MainWindow
         PivotFieldListPane?.Visibility == Visibility.Visible ||
         SlicerTimelinePane?.Visibility == Visibility.Visible;
 
-    private ShellFocusTarget GetCurrentShellFocusTarget()
+    internal ShellFocusTarget GetCurrentShellFocusTarget()
     {
         if (Keyboard.FocusedElement is DependencyObject focusedElement)
         {
@@ -398,7 +398,7 @@ public partial class MainWindow
         return true;
     }
 
-    private void ExecuteCommandShortcut(KeyboardCommandShortcut shortcut, object sender, RoutedEventArgs e)
+    internal void ExecuteCommandShortcut(KeyboardCommandShortcut shortcut, object sender, RoutedEventArgs e)
     {
         _keyboardCommandDispatcher.TryExecute(shortcut, sender, e);
     }

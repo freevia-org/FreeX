@@ -78,8 +78,6 @@ public sealed class R154_M3_FormulaBarEscapeLocalBeforeFormulaPointModeTests
     {
         private readonly MainWindow _owner;
         private readonly MainWindow _source;
-        private readonly MethodInfo _sourceFormulaBarKeyDown;
-        private readonly MethodInfo _setSelectionMode;
         private readonly FieldInfo _selectionModeField;
         private readonly CellAddress _formulaCell;
 
@@ -88,12 +86,6 @@ public sealed class R154_M3_FormulaBarEscapeLocalBeforeFormulaPointModeTests
             _owner = owner;
             _source = source;
             _formulaCell = formulaCell;
-            _sourceFormulaBarKeyDown = typeof(MainWindow)
-                .GetMethod("FormulaBar_KeyDown", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "FormulaBar_KeyDown");
-            _setSelectionMode = typeof(MainWindow)
-                .GetMethod("SetSelectionMode", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SetSelectionMode");
             _selectionModeField = typeof(MainWindow)
                 .GetField("_selectionMode", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_selectionMode");
@@ -131,7 +123,7 @@ public sealed class R154_M3_FormulaBarEscapeLocalBeforeFormulaPointModeTests
         /// keypress in MainWindow.Selection.cs.</summary>
         public void SourceArmF8ExtendMode()
         {
-            _setSelectionMode.Invoke(_source, [ExcelSelectionMode.Extend]);
+            _source.SetSelectionMode(ExcelSelectionMode.Extend);
             PumpDispatcher();
         }
 
@@ -153,7 +145,7 @@ public sealed class R154_M3_FormulaBarEscapeLocalBeforeFormulaPointModeTests
             {
                 RoutedEvent = Keyboard.PreviewKeyDownEvent
             };
-            _sourceFormulaBarKeyDown.Invoke(_source, [_source, args]);
+            _source.FormulaBar_KeyDown(_source, args);
             PumpDispatcher();
         }
 

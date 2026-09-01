@@ -39,7 +39,7 @@ public partial class MainWindow
     private void SparklineColumnBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline("column");
     private void SparklineWinLossBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline("winloss");
 
-    private void InsertSparkline(string type)
+    internal void InsertSparkline(string type)
     {
         var selected = SheetGrid.SelectedRange;
         SparklineDialog? dialog = null;

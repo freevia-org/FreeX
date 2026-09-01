@@ -68,10 +68,7 @@ public sealed class MainWindowAutofillDoubleClickStaleCtrlTests
                 ctrlField.Should().NotBeNull("MainWindow must declare the captured Ctrl-flip field");
                 ctrlField!.SetValue(window, true);
 
-                var doubleClickMethod = typeof(MainWindow).GetMethod(
-                    "OnAutofillHandleDoubleClicked", BindingFlags.Instance | BindingFlags.NonPublic);
-                doubleClickMethod.Should().NotBeNull();
-                doubleClickMethod!.Invoke(window, [source]);
+                window.OnAutofillHandleDoubleClicked(source);
                 PumpDispatcher();
 
                 // Excel's real behavior: double-click always continues the detected series exactly
@@ -129,10 +126,7 @@ public sealed class MainWindowAutofillDoubleClickStaleCtrlTests
                     new CellAddress(sheet.Id, 1, 2),
                     new CellAddress(sheet.Id, 2, 2));
 
-                var doubleClickMethod = typeof(MainWindow).GetMethod(
-                    "OnAutofillHandleDoubleClicked", BindingFlags.Instance | BindingFlags.NonPublic);
-                doubleClickMethod.Should().NotBeNull();
-                doubleClickMethod!.Invoke(window, [source]);
+                window.OnAutofillHandleDoubleClicked(source);
                 PumpDispatcher();
 
                 sheet.GetValue(new CellAddress(sheet.Id, 3, 2)).Should().Be(new NumberValue(30));

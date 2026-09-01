@@ -80,19 +80,11 @@ public sealed class R46_PasteColumnWidthsTileTests
 
     private sealed class PasteColumnWidthsHarness : IDisposable
     {
-        private readonly MethodInfo _executeCopy;
-        private readonly MethodInfo _executePasteColumnWidthsOnly;
 
         private PasteColumnWidthsHarness(MainWindow window, Workbook workbook)
         {
             Window = window;
             Workbook = workbook;
-            _executeCopy = typeof(MainWindow)
-                .GetMethod("ExecuteCopy", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteCopy");
-            _executePasteColumnWidthsOnly = typeof(MainWindow)
-                .GetMethod("ExecutePasteColumnWidthsOnly", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ExecutePasteColumnWidthsOnly");
         }
 
         public MainWindow Window { get; }
@@ -111,12 +103,12 @@ public sealed class R46_PasteColumnWidthsTileTests
 
         public void Copy()
         {
-            _executeCopy.Invoke(Window, [false]);
+            Window.ExecuteCopy(false);
         }
 
         public void PasteColumnWidthsOnly()
         {
-            _executePasteColumnWidthsOnly.Invoke(Window, null);
+            Window.ExecutePasteColumnWidthsOnly();
             PumpDispatcher();
         }
 

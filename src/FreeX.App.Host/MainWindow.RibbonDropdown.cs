@@ -40,7 +40,7 @@ public partial class MainWindow
         }
     }
 
-    private static void EnsureRibbonDropdownChevron(ButtonBase button)
+    internal static void EnsureRibbonDropdownChevron(ButtonBase button)
     {
         var contentRoot = button.Content as DependencyObject ??
                           WrapRibbonDropdownTextContent(button);
@@ -119,7 +119,7 @@ public partial class MainWindow
             .Distinct()
             .Any(RibbonMetadata.IsDropdownChevron);
 
-    private static void AddRibbonDropdownChevronToGrid(ButtonBase button, Grid grid, RibbonCommandContentLayout layout)
+    internal static void AddRibbonDropdownChevronToGrid(ButtonBase button, Grid grid, RibbonCommandContentLayout layout)
     {
         var chevron = CreateRibbonDropdownChevron(layout);
         if (layout == RibbonCommandContentLayout.IconOnly ||
@@ -508,7 +508,7 @@ public partial class MainWindow
                bounds.Contains(position);
     }
 
-    private static bool TryGetRibbonDropdownZoneBounds(ButtonBase button, out Rect bounds)
+    internal static bool TryGetRibbonDropdownZoneBounds(ButtonBase button, out Rect bounds)
     {
         bounds = Rect.Empty;
         var width = button.ActualWidth;

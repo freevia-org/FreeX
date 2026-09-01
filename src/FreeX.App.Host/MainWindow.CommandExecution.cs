@@ -31,7 +31,7 @@ public partial class MainWindow
         };
     }
 
-    private bool TryExecuteCommand(IWorkbookCommand command, string title, out CommandOutcome outcome)
+    internal bool TryExecuteCommand(IWorkbookCommand command, string title, out CommandOutcome outcome)
     {
         SynchronizeWorkbookSessionSelection();
         var result = _session.ExecuteCommandPreservingSelection(command);
@@ -183,7 +183,7 @@ public partial class MainWindow
             : [_currentSheetId];
     }
 
-    private bool TryExecuteEditCells(
+    internal bool TryExecuteEditCells(
         IReadOnlyList<(CellAddress Address, Cell NewCell)> edits,
         string title,
         out CommandOutcome outcome)
@@ -464,10 +464,10 @@ public partial class MainWindow
             result.AffectedCells,
             result.IsNoOp);
 
-    private bool ExecuteUndo()
+    internal bool ExecuteUndo()
         => ApplyWorkbookSessionHistoryResult(_session.UndoLastEdit());
 
-    private bool ExecuteRedo()
+    internal bool ExecuteRedo()
         => ApplyWorkbookSessionHistoryResult(_session.RedoLastEdit());
 
     private void ExecuteRepeatLast()

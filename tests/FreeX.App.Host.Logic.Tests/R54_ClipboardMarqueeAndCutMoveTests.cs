@@ -155,10 +155,6 @@ public sealed class R54_ClipboardMarqueeAndCutMoveTests
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly FieldInfo _clipboardSessionField;
-        private readonly MethodInfo _selectSingleSheetTab;
-        private readonly MethodInfo _updateViewport;
-        private readonly MethodInfo _tryExecuteEditCells;
-        private readonly MethodInfo _executeClearSelection;
 
         public MainWindow Window { get; }
         public Workbook Workbook { get; }
@@ -192,21 +188,6 @@ public sealed class R54_ClipboardMarqueeAndCutMoveTests
             _clipboardSessionField = typeof(MainWindow)
                 .GetField("_workbookClipboardSession", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_workbookClipboardSession");
-            _selectSingleSheetTab = typeof(MainWindow)
-                .GetMethod("SelectSingleSheetTab", BindingFlags.Instance | BindingFlags.NonPublic, [typeof(SheetId)])
-                ?? throw new MissingMethodException(nameof(MainWindow), "SelectSingleSheetTab");
-            _updateViewport = typeof(MainWindow)
-                .GetMethod("UpdateViewport", BindingFlags.Instance | BindingFlags.NonPublic, [])
-                ?? throw new MissingMethodException(nameof(MainWindow), "UpdateViewport");
-            _tryExecuteEditCells = typeof(MainWindow)
-                .GetMethod(
-                    "TryExecuteEditCells",
-                    BindingFlags.Instance | BindingFlags.NonPublic,
-                    [typeof(IReadOnlyList<(CellAddress, Cell)>), typeof(string)])
-                ?? throw new MissingMethodException(nameof(MainWindow), "TryExecuteEditCells");
-            _executeClearSelection = typeof(MainWindow)
-                .GetMethod("ExecuteClearSelection", BindingFlags.Instance | BindingFlags.NonPublic, [])
-                ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteClearSelection");
         }
 
         public bool HasInternalClipboard =>
@@ -220,8 +201,8 @@ public sealed class R54_ClipboardMarqueeAndCutMoveTests
 
         public void SwitchToSheet(SheetId sheetId)
         {
-            _selectSingleSheetTab.Invoke(Window, [sheetId]);
-            _updateViewport.Invoke(Window, []);
+            Window.SelectSingleSheetTab(sheetId);
+            Window.UpdateViewport();
             PumpDispatcher();
         }
 
@@ -239,13 +220,13 @@ public sealed class R54_ClipboardMarqueeAndCutMoveTests
         public void CommitCellEdit(CellAddress address, ScalarValue value)
         {
             var edits = new List<(CellAddress, Cell)> { (address, Cell.FromValue(value)) };
-            _tryExecuteEditCells.Invoke(Window, [edits, "Edit Cell"]);
+            Window.TryExecuteEditCells(edits, "Edit Cell", out _);
             PumpDispatcher();
         }
 
         public void InvokeExecuteClearSelection()
         {
-            _executeClearSelection.Invoke(Window, []);
+            Window.ExecuteClearSelection();
             PumpDispatcher();
         }
 

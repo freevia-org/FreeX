@@ -53,7 +53,7 @@ public partial class MainWindow
         dialog.ShowDialog();
     }
 
-    private (FixedDocument Document, PrintSettingsPlan Settings) BuildActiveSheetPrintPreview(PrintPreviewSettings settings)
+    internal (FixedDocument Document, PrintSettingsPlan Settings) BuildActiveSheetPrintPreview(PrintPreviewSettings settings)
     {
         FixedDocument document;
         switch (settings.PrintWhat)
@@ -471,7 +471,7 @@ public partial class MainWindow
         return result;
     }
 
-    private static PageContent CloneExportPage(FixedDocument document, PageContent pageContent) =>
+    internal static PageContent CloneExportPage(FixedDocument document, PageContent pageContent) =>
         PrintRenderer.ClonePageAsBitmap(document, pageContent);
 
     private IReadOnlyList<PdfBookmark>? CreatePdfBookmarks(ExportOptions options)

@@ -104,7 +104,7 @@ public partial class MainWindow
         ApplySlicerTimelinePlan(PivotApplication.PlanClearSlicer(slicerName), "Slicer");
     }
 
-    private void OnNativeSlicerTileToggleRequested(string slicerName, string caption)
+    internal void OnNativeSlicerTileToggleRequested(string slicerName, string caption)
     {
         ApplySlicerTimelinePlan(
             PivotApplication.PlanSlicerSelection(

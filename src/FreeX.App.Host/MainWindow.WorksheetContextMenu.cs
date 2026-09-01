@@ -15,7 +15,7 @@ public partial class MainWindow
 {
     // ── Context menu + Insert/Delete ─────────────────────────────────────────
 
-    private void OnGridContextMenuRequested(CellAddress clickedCell, System.Windows.Point gridPos)
+    internal void OnGridContextMenuRequested(CellAddress clickedCell, System.Windows.Point gridPos)
     {
         var actualAddr = new CellAddress(_currentSheetId, clickedCell.Row, clickedCell.Col);
         if (SheetGrid.SelectedRange is not { } selectedRange || !selectedRange.Contains(actualAddr))
@@ -105,7 +105,7 @@ public partial class MainWindow
         }
     }
 
-    private void OnGridHeaderContextMenuRequested(GridHeaderContextMenuTarget target, uint index, System.Windows.Point gridPos)
+    internal void OnGridHeaderContextMenuRequested(GridHeaderContextMenuTarget target, uint index, System.Windows.Point gridPos)
     {
         var address = target == GridHeaderContextMenuTarget.Row
             ? new CellAddress(_currentSheetId, index, 1)
@@ -256,7 +256,7 @@ public partial class MainWindow
         }
     }
 
-    private void OpenKeyboardContextMenu()
+    internal void OpenKeyboardContextMenu()
     {
         if (TryOpenFocusedSheetTabContextMenu())
             return;
@@ -303,7 +303,7 @@ public partial class MainWindow
         menu.VerticalOffset = screenPoint.Y;
     }
 
-    private WorksheetContextMenuTargetKind GetWorksheetContextMenuTargetKind(CellAddress address)
+    internal WorksheetContextMenuTargetKind GetWorksheetContextMenuTargetKind(CellAddress address)
     {
         if (SheetGrid.SelectedRange is { } selectedRange)
         {

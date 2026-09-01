@@ -237,11 +237,7 @@ public sealed class R120_SavePersistsSavingWindowsOwnViewStateTests
 
     private static Task<bool> InvokeSaveWorkbookToTargetAsync(MainWindow window, FileSaveTarget target)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "SaveWorkbookToTargetAsync",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        method.Should().NotBeNull("SaveWorkbookToTargetAsync is the real save entry point this finding concerns");
-        return (Task<bool>)method!.Invoke(window, [target])!;
+        return window.SaveWorkbookToTargetAsync(target);
     }
 
     /// <summary>
