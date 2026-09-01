@@ -1820,10 +1820,10 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
              path.Replace('\\', '/').StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static LoadPackageStream CreateLoadPackageStream(Stream stream) =>
+    internal static LoadPackageStream CreateLoadPackageStream(Stream stream) =>
         CreateLoadPackageStream(stream, WorkbookOpenSizeGuard.DefaultMaxFileBytes);
 
-    private static LoadPackageStream CreateLoadPackageStream(Stream stream, long maxFileBytes)
+    internal static LoadPackageStream CreateLoadPackageStream(Stream stream, long maxFileBytes)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(maxFileBytes, 1);
 
@@ -2139,7 +2139,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
             "This workbook is password-protected. Remove the password protection in Excel (File > Info > Protect Workbook > Encrypt with Password, then clear the password) and try again.");
     }
 
-    private readonly record struct LoadPackageStream(
+    internal readonly record struct LoadPackageStream(
         MemoryStream PackageStream,
         bool CanReuseBufferForSnapshot);
 

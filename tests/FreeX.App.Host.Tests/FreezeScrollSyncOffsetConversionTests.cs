@@ -83,14 +83,10 @@ public sealed class FreezeScrollSyncOffsetConversionTests
     private sealed class ScrollSyncHarness : IDisposable
     {
         public readonly MainWindow Window;
-        private readonly MethodInfo _setFreezePanes;
 
         private ScrollSyncHarness(MainWindow window)
         {
             Window = window;
-            _setFreezePanes = typeof(MainWindow)
-                .GetMethod("SetFreezePanes", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SetFreezePanes");
         }
 
         public double VerticalValue => Window.VerticalScroll!.Value;
@@ -98,7 +94,7 @@ public sealed class FreezeScrollSyncOffsetConversionTests
 
         public void SetFreezePanes(uint frozenRows, uint frozenCols)
         {
-            _setFreezePanes.Invoke(Window, [frozenRows, frozenCols]);
+            Window.SetFreezePanes(frozenRows, frozenCols);
             PumpDispatcher();
         }
 

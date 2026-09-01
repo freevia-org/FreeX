@@ -143,12 +143,7 @@ public sealed class SparklineReinsertReplacesExistingTests
                 DialogSourceTestSupport.ClickButton(GetSparklineOkButton(dialog));
             });
 
-            var method = typeof(MainWindow).GetMethod(
-                "InsertSparkline",
-                BindingFlags.Instance | BindingFlags.NonPublic,
-                [typeof(string)]);
-            method.Should().NotBeNull();
-            method!.Invoke(Window, [type]);
+            Window.InsertSparkline(type);
             PumpDispatcher();
         }
 

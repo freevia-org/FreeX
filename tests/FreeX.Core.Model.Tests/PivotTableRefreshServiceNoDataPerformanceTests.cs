@@ -41,11 +41,7 @@ public sealed partial class PivotTableRefreshServiceTests
             .Select(index => new PivotFieldModel(index))
             .ToList();
         var rows = Array.Empty<IReadOnlyList<ScalarValue>>();
-        var buildRowGroups = typeof(PivotTableRefreshService).GetMethod(
-            "BuildRowGroups",
-            BindingFlags.NonPublic | BindingFlags.Static)!;
-
-        InvokeBuildRowGroups(buildRowGroups, workbook, pivot, rows, rowFields)
+        InvokeBuildRowGroups(workbook, pivot, rows, rowFields)
             .Count.Should().Be(expectedCombinations);
 
         GC.Collect();
@@ -58,7 +54,7 @@ public sealed partial class PivotTableRefreshServiceTests
         for (var iteration = 0; iteration < iterations; iteration++)
         {
             var step = Stopwatch.StartNew();
-            var groups = InvokeBuildRowGroups(buildRowGroups, workbook, pivot, rows, rowFields);
+            var groups = InvokeBuildRowGroups(workbook, pivot, rows, rowFields);
             step.Stop();
 
             groups.Count.Should().Be(expectedCombinations);
@@ -82,10 +78,9 @@ public sealed partial class PivotTableRefreshServiceTests
         new(name, SharedItems: Enumerable.Range(0, itemCount).Select(index => $"Item {index}").ToList());
 
     private static ICollection InvokeBuildRowGroups(
-        MethodInfo method,
         Workbook workbook,
         PivotTableModel pivot,
         IReadOnlyList<IReadOnlyList<ScalarValue>> rows,
         IReadOnlyList<PivotFieldModel> rowFields) =>
-        (ICollection)method.Invoke(null, [workbook, pivot, rows, rowFields])!;
+        PivotTableRefreshService.BuildRowGroups(workbook, pivot, rows, rowFields);
 }
