@@ -109,8 +109,8 @@ if (-not $VerifyOnly) {
 
 $azureCliDirectory = Join-Path $programFiles "Microsoft SDKs/Azure/CLI2/wbin"
 if ((Test-Path -LiteralPath $azureCliDirectory -PathType Container) -and
-    -not (($env:PATH -split ';') -contains $azureCliDirectory)) {
-    $env:PATH = "$azureCliDirectory;$env:PATH"
+    -not (($env:PATH -split [IO.Path]::PathSeparator) -contains $azureCliDirectory)) {
+    $env:PATH = "$azureCliDirectory$([IO.Path]::PathSeparator)$env:PATH"
 }
 
 $resolvedFiles = @(
