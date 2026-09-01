@@ -201,9 +201,19 @@ internal static partial class XlsxChartXmlWriter
         var valueAxisDisplayUnit = valueAxisOnX ? chart.XAxisDisplayUnit : chart.YAxisDisplayUnit;
         var valueAxisCustomDisplayUnit = valueAxisOnX ? chart.XAxisCustomDisplayUnit : chart.YAxisCustomDisplayUnit;
         var valueAxisShowDisplayUnitLabel = valueAxisOnX ? chart.ShowXAxisDisplayUnitLabel : chart.ShowYAxisDisplayUnitLabel;
+        // r190: the title group, routed like every other value-axis property here. For bar-family
+        // charts the value axis is physically on X, so its title lives in X* -- the complement of
+        // ToCategoryAxisXml above and of what XlsxChartAxisReader now stores.
+        var valueTitle = valueAxisOnX ? chart.XAxisTitle : chart.YAxisTitle;
+        var valueTitleLayout = valueAxisOnX ? chart.XAxisTitleLayout : chart.YAxisTitleLayout;
+        var valueTitleVerbatimXml = valueAxisOnX ? chart.XAxisTitleVerbatimXml : chart.YAxisTitleVerbatimXml;
+        var valueTitleThemeColor = valueAxisOnX ? chart.XAxisTitleTextThemeColor : chart.YAxisTitleTextThemeColor;
+        var valueTitleColor = valueAxisOnX ? chart.XAxisTitleTextColor : chart.YAxisTitleTextColor;
+        var valueTitleFontSize = valueAxisOnX ? chart.XAxisTitleFontSize : chart.YAxisTitleFontSize;
+        var valueTitleRotation = valueAxisOnX ? chart.XAxisTitleRotation : chart.YAxisTitleRotation;
         yield return ToValueAxisXml(
-            chart.YAxisTitle,
-            chart.YAxisTitleLayout,
+            valueTitle,
+            valueTitleLayout,
             ValueAxisId,
             CategoryAxisId,
             ToXlsxValueAxisPosition(chart),
@@ -233,9 +243,9 @@ internal static partial class XlsxChartXmlWriter
             chart.YAxisLabelFontSize,
             chart.YAxisLabelAngle,
             chart.YAxisLabelTextThemeColor,
-            chart.YAxisTitleTextThemeColor ?? chart.AxisTitleTextThemeColor,
-            chart.YAxisTitleTextColor ?? chart.AxisTitleTextColor,
-            chart.YAxisTitleFontSize ?? chart.AxisTitleFontSize,
+            valueTitleThemeColor ?? chart.AxisTitleTextThemeColor,
+            valueTitleColor ?? chart.AxisTitleTextColor,
+            valueTitleFontSize ?? chart.AxisTitleFontSize,
             valueAxisCrosses,
             valueAxisCrossesAt,
             valueAxisCrossBetween,
@@ -244,9 +254,9 @@ internal static partial class XlsxChartXmlWriter
             chartNs,
             drawingNs,
             useExcelNativeMajorGridlineStyle: ShouldUseExcelNativeValueAxisMajorGridlineStyle(chart, valueAxisOnX),
-            verbatimTitle: TryParseVerbatimAxisTitleXml(chart.YAxisTitleVerbatimXml),
+            verbatimTitle: TryParseVerbatimAxisTitleXml(valueTitleVerbatimXml),
             showDisplayUnitLabel: valueAxisShowDisplayUnitLabel,
-            axisTitleRotation: chart.YAxisTitleRotation);
+            axisTitleRotation: valueTitleRotation);
 
         var secondaryIndexes = GetSecondaryAxisSeriesIndexes(chart, ChartTypeSupport.GetDataSeriesCount(chart));
         if (secondaryIndexes.Count > 0)
@@ -366,6 +376,14 @@ internal static partial class XlsxChartXmlWriter
         var categoryAxisMinorTickStyle = categoryAxisIsOnY ? chart.YAxisMinorTickStyle : chart.XAxisMinorTickStyle;
         var categoryAxisLineColor = categoryAxisIsOnY ? chart.YAxisLineColor : chart.XAxisLineColor;
         var categoryAxisLineThickness = categoryAxisIsOnY ? chart.YAxisLineThickness : chart.XAxisLineThickness;
+        // r190: the title group, routed the same way as everything above it.
+        var categoryTitle = categoryAxisIsOnY ? chart.YAxisTitle : chart.XAxisTitle;
+        var categoryTitleLayout = categoryAxisIsOnY ? chart.YAxisTitleLayout : chart.XAxisTitleLayout;
+        var categoryTitleVerbatimXml = categoryAxisIsOnY ? chart.YAxisTitleVerbatimXml : chart.XAxisTitleVerbatimXml;
+        var categoryTitleThemeColor = categoryAxisIsOnY ? chart.YAxisTitleTextThemeColor : chart.XAxisTitleTextThemeColor;
+        var categoryTitleColor = categoryAxisIsOnY ? chart.YAxisTitleTextColor : chart.XAxisTitleTextColor;
+        var categoryTitleFontSize = categoryAxisIsOnY ? chart.YAxisTitleFontSize : chart.XAxisTitleFontSize;
+        var categoryTitleRotation = categoryAxisIsOnY ? chart.YAxisTitleRotation : chart.XAxisTitleRotation;
         var categoryAxisPosition = ToXlsxCategoryAxisPosition(chart);
         return new XElement(chartNs + (isDateAxis ? "dateAx" : "catAx"),
             new XElement(chartNs + "axId", new XAttribute("val", CategoryAxisId)),
@@ -381,17 +399,21 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "axPos", new XAttribute("val", categoryAxisPosition)),
             ToAxisGridlinesXml("majorGridlines", categoryAxisShowMajorGridlines, categoryAxisMajorGridlineColor, categoryAxisGridlineThickness, chartNs, drawingNs),
             ToAxisGridlinesXml("minorGridlines", categoryAxisShowMinorGridlines, categoryAxisMinorGridlineColor, categoryAxisGridlineThickness, chartNs, drawingNs),
-            TryParseVerbatimAxisTitleXml(chart.XAxisTitleVerbatimXml)
+            // r190: mirror XlsxChartAxisReader's title routing, which now follows the same
+            // categoryAxisIsOnY convention as every other property in this method. Reading the
+            // title back from X* unconditionally would have written the VALUE axis's title onto the
+            // category axis for bar-family charts once the reader started storing it in Y*.
+            TryParseVerbatimAxisTitleXml(categoryTitleVerbatimXml)
                 ?? ToAxisTitleXml(
-                    chart.XAxisTitle,
-                    chart.XAxisTitleLayout,
-                    chart.XAxisTitleTextThemeColor ?? chart.AxisTitleTextThemeColor,
-                    chart.XAxisTitleTextColor ?? chart.AxisTitleTextColor,
-                    chart.XAxisTitleFontSize ?? chart.AxisTitleFontSize,
+                    categoryTitle,
+                    categoryTitleLayout,
+                    categoryTitleThemeColor ?? chart.AxisTitleTextThemeColor,
+                    categoryTitleColor ?? chart.AxisTitleTextColor,
+                    categoryTitleFontSize ?? chart.AxisTitleFontSize,
                     chartNs,
                     drawingNs,
                     vertical: IsVerticalAxisPosition(categoryAxisPosition),
-                    rotationOverride: chart.XAxisTitleRotation),
+                    rotationOverride: categoryTitleRotation),
             // R43-io-chart-axis-title-numfmt-3-1: category/date axes carry their OWN <c:numFmt>
             // (e.g. a date axis's custom "mmm-yy"), independent of the value axis's numFmt emitted
             // below in ToValueAxisXml. Without this, a round-tripped custom category/date axis

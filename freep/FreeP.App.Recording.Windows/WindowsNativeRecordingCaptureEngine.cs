@@ -113,9 +113,13 @@ public class WindowsNativeRecordingCaptureEngine : IWindowsRecordingCaptureEngin
                 $"{_adapterName}: camera capture was not started for slide {request.SlideIndex + 1}");
         }
 
+        // r191: set when RunAsync gives up waiting. The stop operation is then still running and
+        // still using `capture`, so disposal is handed to RunAsync's continuation instead of
+        // happening in the finally below.
+        var disposalDeferred = false;
         try
         {
-            var payload = RunAsync(() => _stopCamera(capture));
+            var payload = RunAsync(() => _stopCamera(capture), disposeAfterLateCompletion: capture);
             if (payload.Length == 0)
             {
                 return WindowsRecordingCaptureResult.Deferred(
@@ -129,6 +133,7 @@ public class WindowsNativeRecordingCaptureEngine : IWindowsRecordingCaptureEngin
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
+            disposalDeferred = ex is TimeoutException;
             return WindowsRecordingCaptureResult.Deferred(
                 WindowsRecordingCaptureStatus.CompletionFailure(
                     _adapterName,
@@ -138,7 +143,10 @@ public class WindowsNativeRecordingCaptureEngine : IWindowsRecordingCaptureEngin
         }
         finally
         {
-            capture.Dispose();
+            // Skipped on timeout: the orphaned stop call is still using this capture, and
+            // RunAsync disposes it once that call finishes.
+            if (!disposalDeferred)
+                capture.Dispose();
         }
     }
 
@@ -224,7 +232,17 @@ public class WindowsNativeRecordingCaptureEngine : IWindowsRecordingCaptureEngin
     /// no longer held hostage to it and the timeout is reported as a normal capture failure through the
     /// existing <see cref="_captureFailures"/> degrade path.
     /// </summary>
-    private T RunAsync<T>(Func<Task<T>> operation)
+    /// <param name="disposeAfterLateCompletion">
+    /// r191: an object the ORPHANED operation is still using, to be disposed only once that
+    /// operation actually finishes. The stop path needs this: <c>_stopCamera(capture)</c> keeps
+    /// calling <c>StopRecordAsync</c> on the live MediaCapture and reading its stream after the
+    /// wait gives up, so CompleteCapture's own <c>finally { capture.Dispose(); }</c> was tearing
+    /// the device down underneath a call still in flight -- inside the very timeout path that
+    /// exists to survive a wedged driver. r185 fixed the equivalent hazard for the START path by
+    /// deferring disposal of the late-arriving device; this is the same deferral for an object the
+    /// caller already holds.
+    /// </param>
+    private T RunAsync<T>(Func<Task<T>> operation, IDisposable? disposeAfterLateCompletion = null)
     {
         var task = Task.Run(operation);
 
@@ -242,7 +260,7 @@ public class WindowsNativeRecordingCaptureEngine : IWindowsRecordingCaptureEngin
             // other one until the process exits. Dispose whatever arrives late, and observe a
             // late fault so it does not surface as an unobserved task exception.
             _ = task.ContinueWith(
-                static completed =>
+                completed =>
                 {
                     if (completed.Status == TaskStatus.RanToCompletion)
                     {
@@ -252,6 +270,18 @@ public class WindowsNativeRecordingCaptureEngine : IWindowsRecordingCaptureEngin
                     else
                     {
                         _ = completed.Exception;
+                    }
+
+                    // Now that the orphaned operation has stopped touching it, the caller's object
+                    // is safe to release. Faults are swallowed: a wedged driver can make Dispose
+                    // itself throw, and this runs on a pool thread with no one to report to.
+                    try
+                    {
+                        disposeAfterLateCompletion?.Dispose();
+                    }
+                    catch
+                    {
+                        // Best effort; the process is already in the degraded path.
                     }
                 },
                 CancellationToken.None,

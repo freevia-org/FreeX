@@ -6,13 +6,26 @@ using Free.Shared.Theme;
 
 namespace Free.Shared.Shell.Avalonia;
 
-public sealed record SisterAvaloniaLocalizationStartupDescriptor(Action Install)
+public sealed record SisterAvaloniaLocalizationStartupDescriptor(
+    Action Install,
+    Action<string?>? ApplyLanguage = null)
 {
     internal void Apply()
     {
         ArgumentNullException.ThrowIfNull(Install);
         Install();
     }
+
+    /// <summary>
+    /// Applies the persisted UI language, once the options store has been read.
+    ///
+    /// r189: separate from <see cref="Apply"/> because the language is only known after
+    /// <c>Options.Load()</c>, which runs later. Every sister Avalonia shell offers a UI-language
+    /// field and shows a restart notice for it, so an app that leaves <see cref="ApplyLanguage"/>
+    /// null is promising the user something it does not do; FreeX had exactly that bug until r189,
+    /// and fixing it in FreeX alone left the identical bug in FreeW and FreeP.
+    /// </summary>
+    internal void ApplyPersistedLanguage(string? uiLanguage) => ApplyLanguage?.Invoke(uiLanguage);
 }
 
 public interface ISisterAvaloniaThemeStartupDescriptor
@@ -222,6 +235,10 @@ public static class SisterAvaloniaStandardDesktopFactory
         profile.Localization.Apply();
         profile.Theme.Apply(application, Environment.GetEnvironmentVariable);
         var (options, optionsStore) = profile.Options.Load();
+
+        // r189: after Load, because the persisted language is not known before it.
+        if (options is IBasicApplicationOptions basicOptions)
+            profile.Localization.ApplyPersistedLanguage(basicOptions.UiLanguage);
         var launch = profile.GetPendingLaunch();
         var afterCreated = Combine(profile.Window.AfterCreated, launch.AfterMainWindowCreated);
 

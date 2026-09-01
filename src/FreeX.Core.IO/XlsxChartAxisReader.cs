@@ -95,11 +95,30 @@ internal static class XlsxChartAxisReader
 
         var categoryAxis = plotArea.Element(ChartNs + "dateAx") ?? plotArea.Element(ChartNs + "catAx");
         chart.XAxisIsDateAxis = categoryAxis?.Name == ChartNs + "dateAx";
-        chart.XAxisTitle = ReadAxisTitle(categoryAxis);
-        chart.XAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(AxisTitleLayout(categoryAxis));
+        // r190: the TITLE follows the same physical-position routing as every other per-axis
+        // property below (reverse order, gridlines, tick styles, line, crosses -- R16/R47/R62/R71
+        // each extended that convention one property at a time, and the title was never included).
+        // It was captured unconditionally into X*, so for a bar-family chart the category axis's
+        // title landed in XAxisTitle while the renderer titles the LEFT category axis from
+        // YAxisTitle (ChartRenderer.cs, CreateCategoryAxis(AxisPosition.Left, chart.YAxisTitle))
+        // and the bottom value axis from XAxisTitle -- the two titles appeared swapped on every bar
+        // chart that had them. The writer mirrors this routing, so round-tripping our own files was
+        // symmetric and hid it; opening a bar chart authored anywhere showed it.
+        var categoryTitleOnX = !valueAxisOnX;
+        if (categoryTitleOnX)
+        {
+            chart.XAxisTitle = ReadAxisTitle(categoryAxis);
+            chart.XAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(AxisTitleLayout(categoryAxis));
+        }
+        else
+        {
+            chart.YAxisTitle = ReadAxisTitle(categoryAxis);
+            chart.YAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(AxisTitleLayout(categoryAxis));
+        }
+
         chart.HideXAxis = ReadBool(categoryAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
         chart.XAxisPosition = FromXlsxAxisPosition(categoryAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Bottom);
-        ApplyAxisTitleFormatting(categoryAxis, chart, isXAxis: true);
+        ApplyAxisTitleFormatting(categoryAxis, chart, isXAxis: categoryTitleOnX);
         // Route the category axis's own reverse-order flag to whichever field the renderer reads for
         // the category axis's PHYSICAL position: YAxisReverseOrder for the left axis (bar-family),
         // XAxisReverseOrder for the bottom axis (everything else). Must happen before
@@ -114,11 +133,23 @@ internal static class XlsxChartAxisReader
         // to find the secondary one without a schema-breaking axId lookup.
         var valueAxisElements = plotArea.Elements(ChartNs + "valAx").ToList();
         var valueAxis = valueAxisElements.Count > 0 ? valueAxisElements[0] : null;
-        chart.YAxisTitle = ReadAxisTitle(valueAxis);
-        chart.YAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(AxisTitleLayout(valueAxis));
+        // r190: the complement of the category-axis title routing above. For a bar-family chart the
+        // value axis is physically along the bottom, so its title belongs in X* -- and writing it
+        // unconditionally to Y* would immediately clobber the category title just stored there.
+        if (valueAxisOnX)
+        {
+            chart.XAxisTitle = ReadAxisTitle(valueAxis);
+            chart.XAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(AxisTitleLayout(valueAxis));
+        }
+        else
+        {
+            chart.YAxisTitle = ReadAxisTitle(valueAxis);
+            chart.YAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(AxisTitleLayout(valueAxis));
+        }
+
         chart.HideYAxis = ReadBool(valueAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
         chart.YAxisPosition = FromXlsxAxisPosition(valueAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Left);
-        ApplyAxisTitleFormatting(valueAxis, chart, isXAxis: false);
+        ApplyAxisTitleFormatting(valueAxis, chart, isXAxis: valueAxisOnX);
         // For bar-direction charts the value axis is HORIZONTAL (rendered at the bottom / X), so its
         // scaling (min/max/units/log/number-format) belongs to the X-axis bounds — that is where the
         // renderer (CreateCategoryAxis on Y + value LinearAxis on Bottom) and the sanitizer

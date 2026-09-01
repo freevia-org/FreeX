@@ -3683,7 +3683,8 @@ public sealed partial class MainWindow : Window,
             static (window, intent) => window.SetPresenterTimingIntent(intent),
             ShowSlideShowWindow,
             static window => window.IsVisible,
-            static window => window.Activate());
+            static window => window.Activate(),
+            static window => window.Close());
 
     private void ShowSlideShowWindow(SlideShowWindow window)
     {

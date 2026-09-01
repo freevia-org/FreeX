@@ -274,6 +274,36 @@ public sealed class Ruler : FrameworkElement
         }
     }
 
+    /// <summary>
+    /// r190: <c>_drag</c> was cleared only in <see cref="OnMouseLeftButtonUp"/>, so any route that
+    /// takes capture away without a button-up left the ruler believing a drag was still in
+    /// progress -- an Alt+Tab or a modal dialog opening mid-drag, a touch/pen gesture cancelled by
+    /// the system, or another control calling CaptureMouse. The next mouse move over the ruler then
+    /// resumed dragging the margin or indent the user had let go of, with no button held.
+    /// PaginatedEditorPanel in this same shell already subscribes to LostMouseCapture for its own
+    /// drag; this is the ruler's equivalent.
+    /// </summary>
+    protected override void OnLostMouseCapture(MouseEventArgs e)
+    {
+        base.OnLostMouseCapture(e);
+        if (_drag is null)
+            return;
+
+        // No margin/indent is committed here: capture loss means the gesture was abandoned, not
+        // completed, and OnMouseLeftButtonUp is what applies a finished drag.
+        //
+        // r191: the live preview value is cleared alongside it, as the commit path does. The r190
+        // version of this override cleared only _drag, so an abandoned vertical-margin drag left
+        // _dragPreviewMarginPt set; starting a drag on the OTHER margin boundary then had
+        // RenderVertical draw that leftover offset measured from the opposite edge until the first
+        // mouse-move overwrote it. Nothing wrong was ever written to the document -- the committed
+        // margin is computed from the mouse position, not from this field -- but the dashed guide
+        // appeared far from the cursor.
+        _drag = null;
+        _dragPreviewMarginPt = null;
+        Refresh();
+    }
+
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);

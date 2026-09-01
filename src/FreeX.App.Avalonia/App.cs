@@ -1,8 +1,10 @@
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.Themes.Fluent;
+using FreeX.App.Localization;
 using FreeX.App.Services;
 using FreeX.App.Services.Updates;
 using Free.Shared.AppServices;
@@ -51,6 +53,14 @@ public sealed class App : Application
         // AppLocalization.Bootstrap.InstallSharedSeams() (App.xaml.cs). Must run before any
         // window/dialog can be shown, so it goes first, ahead of even the brand theme setup below.
         AvaloniaAppLocalizationBootstrap.InstallSharedSeams(UiText.Get, UiText.Format, UiText.CreateAutomationName);
+
+        // r189: apply the persisted application language, as the WPF host does in App.xaml.cs. The
+        // Options dialog on this platform offers the field and shows a restart notice, so without
+        // this the app promised a restart would change a setting nothing read.
+        AvaloniaAppLocalizationBootstrap.ApplyAppLanguage(
+            new FreeXOptionsRuntimeSession().LiveOptions.AppLanguage,
+            name => AppLanguageCatalog.ResolveCulture(name, CultureInfo.CurrentUICulture),
+            CultureInfo.CurrentUICulture);
 
         Name = ApplicationTitle;
         // ThemeVariant.Default (not a hardcoded Light) lets Avalonia's FluentTheme resolve each

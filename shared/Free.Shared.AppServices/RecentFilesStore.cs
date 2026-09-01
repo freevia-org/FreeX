@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
@@ -24,11 +25,15 @@ public sealed class RecentFilesStore
     // load-modify-write would silently discard process A's write that landed in between B's own
     // load and save (a classic lost-update race) even though each individual write is atomic at
     // the file-replace level (AtomicFileWriter). See ReloadEntriesLocked()/AcquireCrossProcessLock().
-    private const int CrossProcessLockTimeoutMs = 3000;
+    private const int CrossProcessLockTimeoutMs = 30000;
     private const int CrossProcessLockRetryDelayMs = 15;
+
+    private static readonly ConcurrentDictionary<string, object> ProcessLocks = new(
+        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
     private readonly Func<DateTimeOffset> _clock;
     private readonly PlatformPathIdentityComparer _pathIdentityComparer;
+    private readonly object _processSync;
     private readonly string _storePath;
     // Serializes the list mutation + file rewrite in the mutators so concurrent callers can't lose
     // updates or interleave writes. Readers that may run concurrently should use Snapshot(), which
@@ -52,6 +57,7 @@ public sealed class RecentFilesStore
         _storePath = storePath;
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
         _pathIdentityComparer = pathIdentityComparer ?? PlatformPathIdentityComparer.Current;
+        _processSync = ProcessLocks.GetOrAdd(Path.GetFullPath(storePath), static _ => new object());
     }
 
     public static string DefaultStorePath => GetDefaultStorePath(PlatformApplicationDataPathProvider.Instance);
@@ -180,44 +186,35 @@ public sealed class RecentFilesStore
     /// <summary>
     /// Acquires an exclusive, cross-process lock scoped to this store's backing file, via an
     /// exclusively-opened sibling ".lock" file (FileShare.None is honored across separate OS
-    /// processes, unlike the in-process-only <see cref="_sync"/> monitor). Falls back to a no-op
-    /// lock (best-effort, no cross-process serialization) if the lock file can't be created/opened
-    /// at all, so a locked-down environment degrades gracefully instead of losing the user's action.
+    /// processes, unlike the in-process-only <see cref="_sync"/> monitor). Lock acquisition is
+    /// fail-closed: timing out or being unable to create the lock is surfaced to the caller instead
+    /// of silently continuing with an unlocked load-modify-write that could discard another
+    /// process's entries.
     /// </summary>
     private IDisposable AcquireCrossProcessLock()
     {
         var lockPath = _storePath + ".lock";
-        try
-        {
-            var directory = Path.GetDirectoryName(lockPath);
-            if (!string.IsNullOrEmpty(directory))
-                Directory.CreateDirectory(directory);
+        var directory = Path.GetDirectoryName(lockPath);
+        if (!string.IsNullOrEmpty(directory))
+            Directory.CreateDirectory(directory);
 
-            var deadline = Environment.TickCount64 + CrossProcessLockTimeoutMs;
-            while (true)
+        var deadline = Environment.TickCount64 + CrossProcessLockTimeoutMs;
+        while (true)
+        {
+            try
             {
-                try
-                {
-                    return new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-                }
-                catch (IOException) when (Environment.TickCount64 < deadline)
-                {
-                    Thread.Sleep(CrossProcessLockRetryDelayMs);
-                }
+                return new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
             }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[RecentFiles] Failed to acquire cross-process lock: {ex.Message}");
-            return NoOpLock.Instance;
-        }
-    }
-
-    private sealed class NoOpLock : IDisposable
-    {
-        public static readonly NoOpLock Instance = new();
-        public void Dispose()
-        {
+            catch (IOException) when (Environment.TickCount64 < deadline)
+            {
+                Thread.Sleep(CrossProcessLockRetryDelayMs);
+            }
+            catch (IOException ex)
+            {
+                throw new IOException(
+                    $"Timed out acquiring the recent-files lock '{lockPath}'.",
+                    ex);
+            }
         }
     }
 
@@ -244,26 +241,29 @@ public sealed class RecentFilesStore
         if (string.IsNullOrWhiteSpace(path))
             return;
 
-        lock (_sync)
+        lock (_processSync)
         {
-            using var crossProcessLock = AcquireCrossProcessLock();
-            ReloadEntriesLocked();
-
-            var existing = FindEntryByPath(path);
-            var wasPinned = existing?.IsPinned ?? false;
-            var identity = TryPreparePersistentIdentity(fileAccessIdentity, path) ??
-                TryPreparePersistentIdentity(existing?.FileAccessIdentity, path);
-            RemoveEntriesByPath(path);
-            Entries.Insert(0, new RecentFileEntry
+            lock (_sync)
             {
-                Path = path,
-                LastOpened = _clock(),
-                IsPinned = wasPinned,
-                FileAccessIdentity = identity,
-            });
-            Entries = LimitForPersistence(Entries, maxRecentEntries);
+                using var crossProcessLock = AcquireCrossProcessLock();
+                ReloadEntriesLocked();
 
-            Save();
+                var existing = FindEntryByPath(path);
+                var wasPinned = existing?.IsPinned ?? false;
+                var identity = TryPreparePersistentIdentity(fileAccessIdentity, path) ??
+                    TryPreparePersistentIdentity(existing?.FileAccessIdentity, path);
+                RemoveEntriesByPath(path);
+                Entries.Insert(0, new RecentFileEntry
+                {
+                    Path = path,
+                    LastOpened = _clock(),
+                    IsPinned = wasPinned,
+                    FileAccessIdentity = identity,
+                });
+                Entries = LimitForPersistence(Entries, maxRecentEntries);
+
+                Save();
+            }
         }
     }
 
@@ -296,45 +296,54 @@ public sealed class RecentFilesStore
 
     public void Pin(string path)
     {
-        lock (_sync)
+        lock (_processSync)
         {
-            using var crossProcessLock = AcquireCrossProcessLock();
-            ReloadEntriesLocked();
+            lock (_sync)
+            {
+                using var crossProcessLock = AcquireCrossProcessLock();
+                ReloadEntriesLocked();
 
-            var entry = FindEntryByPath(path);
-            if (entry is null)
-                return;
+                var entry = FindEntryByPath(path);
+                if (entry is null)
+                    return;
 
-            entry.IsPinned = true;
-            Save();
+                entry.IsPinned = true;
+                Save();
+            }
         }
     }
 
     public void Unpin(string path)
     {
-        lock (_sync)
+        lock (_processSync)
         {
-            using var crossProcessLock = AcquireCrossProcessLock();
-            ReloadEntriesLocked();
+            lock (_sync)
+            {
+                using var crossProcessLock = AcquireCrossProcessLock();
+                ReloadEntriesLocked();
 
-            var entry = FindEntryByPath(path);
-            if (entry is null)
-                return;
+                var entry = FindEntryByPath(path);
+                if (entry is null)
+                    return;
 
-            entry.IsPinned = false;
-            Save();
+                entry.IsPinned = false;
+                Save();
+            }
         }
     }
 
     public void Remove(string path)
     {
-        lock (_sync)
+        lock (_processSync)
         {
-            using var crossProcessLock = AcquireCrossProcessLock();
-            ReloadEntriesLocked();
+            lock (_sync)
+            {
+                using var crossProcessLock = AcquireCrossProcessLock();
+                ReloadEntriesLocked();
 
-            RemoveEntriesByPath(path);
-            Save();
+                RemoveEntriesByPath(path);
+                Save();
+            }
         }
     }
 
