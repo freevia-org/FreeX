@@ -127,6 +127,16 @@ public sealed class SlideShowWindowLaunchCoordinator<TWindow>
             {
                 if (_liveWindowIsBrowseWindow == forceBrowseWindow)
                 {
+                    // r190: the reused window still has to receive the timing intent. Rehearse
+                    // Timings and Record Timings are ordinary ribbon commands with no
+                    // running-show gate, so invoking either while a show is up took this branch
+                    // and returned before _setTimingIntent was ever called -- the button
+                    // refocused the show and started no recording, silently. Applying it here is
+                    // what the creation path below does; reuse must not be the cheaper path that
+                    // quietly does less.
+                    if (timingIntent != SlideShowTimingIntent.None)
+                        _setTimingIntent(running, timingIntent);
+
                     _activateWindow(running);
                     return;
                 }

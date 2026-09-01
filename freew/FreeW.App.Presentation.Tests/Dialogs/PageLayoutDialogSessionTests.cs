@@ -52,12 +52,22 @@ public sealed class PageLayoutDialogSessionTests
         var session = new DropCapOptionsDialogSession(CultureInfo.InvariantCulture);
 
         session.FontNames.Should().Contain(DropCapOptionsDialogPlanner.CurrentFontLabel);
-        session.PlanAcceptance(new DropCapOptionsDialogInput(2, "Arial", "99", "-4"))
-            .Should().Be(new DropCapOptionsDialogResult(
-                DropCapDialogPosition.InMargin,
-                "Arial",
-                LinesToDrop: 10,
-                DistanceFromTextPt: 0));
+
+        // r190: PlanAcceptance now returns an acceptance wrapper like its siblings in this file, so
+        // unparseable input can be refused rather than silently replaced. The clamping asserted
+        // here is unchanged -- 99 lines is an out-of-range request the dialog still accepts.
+        var acceptance = session.PlanAcceptance(new DropCapOptionsDialogInput(2, "Arial", "99", "-4"));
+
+        acceptance.IsAccepted.Should().BeTrue();
+        acceptance.ValidationMessage.Should().BeNull();
+        acceptance.Result.Should().Be(new DropCapOptionsDialogResult(
+            DropCapDialogPosition.InMargin,
+            "Arial",
+            LinesToDrop: 10,
+            DistanceFromTextPt: 0));
+
+        session.PlanAcceptance(new DropCapOptionsDialogInput(2, "Arial", "not a number", "0"))
+            .ValidationMessage.Should().Be(DropCapOptionsDialogPlanner.ValidationMessage);
     }
 
     [Fact]
