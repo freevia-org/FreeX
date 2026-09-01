@@ -972,6 +972,27 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void MorphPlanner_ByCharClearsLowerScoreTieWhenLaterCandidateIsUniquelyBetter()
+    {
+        var source = new Slide();
+        source.Shapes.Add(new SlideShape { Id = 10, Text = "AB", ExtentCxEmu = 1, ExtentCyEmu = 1 });
+        source.Shapes.Add(new SlideShape { Id = 11, Text = "AC", ExtentCxEmu = 1, ExtentCyEmu = 1 });
+        source.Shapes.Add(new SlideShape { Id = 12, Text = "ABCD", ExtentCxEmu = 1, ExtentCyEmu = 1 });
+
+        var target = new Slide();
+        target.Shapes.Add(new SlideShape { Id = 99, Text = "ABCE", ExtentCxEmu = 1, ExtentCyEmu = 1 });
+
+        var plan = SlideShowMorphPlanner.Plan(
+            new SlideTransition { Kind = TransitionKind.Morph, MorphOption = "byChar" },
+            source,
+            target);
+
+        plan.Matches.Should().ContainSingle();
+        plan.Matches[0].Source.Id.Should().Be(12);
+        plan.Matches[0].MatchKey.Should().Be("byChar:text:3");
+    }
+
+    [Fact]
     public void PlanTransition_DissolveUsesDedicatedAction()
     {
         var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
