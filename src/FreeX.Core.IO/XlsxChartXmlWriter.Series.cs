@@ -15,9 +15,9 @@ internal static partial class XlsxChartXmlWriter
     /// series <c>c:extLst</c>, round-tripping the source formula and cached point strings. Returns
     /// null when the series has no captured definition or the definition is empty.
     /// </summary>
-    private static XElement? ToRangeDataLabelsExtXml(ChartModel chart, int seriesIndex, XNamespace chartNs)
+    private static XElement? ToRangeDataLabelsExtXml(ChartSeriesMetadataLookup? metadataLookup, int seriesIndex, XNamespace chartNs)
     {
-        var definition = chart.SeriesRangeDataLabels?.LastOrDefault(item => item.SeriesIndex == seriesIndex);
+        var definition = metadataLookup?.GetRangeDataLabels(seriesIndex);
         if (definition is null)
             return null;
 
@@ -143,6 +143,7 @@ internal static partial class XlsxChartXmlWriter
         var verbatimLookup = ChartSeriesVerbatimFormulaLookup.Create(chart);
         var formatLookup = ChartSeriesFormatLookup.Create(chart);
         var dataPointFormatLookup = ChartDataPointFormatLookup.Create(chart);
+        var metadataLookup = ChartSeriesMetadataLookup.Create(chart);
         var categoryRange = chart.FirstColIsCategories
             ? FormatStripRange(layout, sheet.Name, layout.CategoryStrip)
             : null;
@@ -185,11 +186,11 @@ internal static partial class XlsxChartXmlWriter
                         : BuildStrCacheXml(categoryStripValues, chartNs))
                     : null);
 
-            var txElement = ResolveSeriesTitleXml(chart, sheet, layout, strip, seriesIndex, chartNs, verbatim?.TxFormula);
+            var txElement = ResolveSeriesTitleXml(metadataLookup, chart, sheet, layout, strip, seriesIndex, chartNs, verbatim?.TxFormula);
 
             yield return new XElement(chartNs + "ser",
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
-                new XElement(chartNs + "order", new XAttribute("val", GetSeriesOrder(chart, seriesIndex))),
+                new XElement(chartNs + "order", new XAttribute("val", GetSeriesOrder(metadataLookup, seriesIndex))),
                 txElement,
                 chart.Type is ChartType.Line or ChartType.ThreeDLine || forceLineShapeProperties
                     ? ToSeriesLineShapeProperties(formatLookup, seriesIndex, chartNs, drawingNs)
@@ -204,7 +205,7 @@ internal static partial class XlsxChartXmlWriter
                 ToAdditionalTrendlinesXml(chart, seriesIndex),
                 ToErrorBarsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToAdditionalErrorBarsXml(chart, seriesIndex),
-                ToVerbatimMultiLevelCategoryXml(chart, seriesIndex)
+                ToVerbatimMultiLevelCategoryXml(metadataLookup, seriesIndex)
                     ?? ToCategoryRangeXml(effectiveCategoryRange, effectiveCategoryIsNumeric, chartNs, categoryCache),
                 new XElement(chartNs + "val",
                     new XElement(chartNs + "numRef",
@@ -236,7 +237,7 @@ internal static partial class XlsxChartXmlWriter
                 forceLineShapeProperties && chart.Type is not ChartType.Radar
                     ? ToSeriesSmoothXml(formatLookup, seriesIndex, chartNs)
                     : null,
-                ToRangeDataLabelsExtXml(chart, seriesIndex, chartNs));
+                ToRangeDataLabelsExtXml(metadataLookup, seriesIndex, chartNs));
         }
     }
 
@@ -572,8 +573,8 @@ internal static partial class XlsxChartXmlWriter
     /// <see cref="ChartModel.SeriesNameOverrides"/>), independent of whether it happens to also be
     /// unparsable (that case is already covered by the captured verbatim formula's TxFormula).
     /// </summary>
-    private static string? GetSeriesNameOverrideFormula(ChartModel chart, int seriesIndex) =>
-        chart.SeriesNameOverrides.LastOrDefault(o => o.SeriesIndex == seriesIndex)?.Formula;
+    private static string? GetSeriesNameOverrideFormula(ChartSeriesMetadataLookup? metadataLookup, int seriesIndex) =>
+        metadataLookup?.GetNameOverride(seriesIndex)?.Formula;
 
     /// <summary>
     /// R103-io-chart-series-tx-1: single choke point for resolving a series' &lt;c:tx&gt; element —
@@ -585,6 +586,7 @@ internal static partial class XlsxChartXmlWriter
     /// by every BuildXxxChartSeries family so a fix to the precedence only needs to happen once.
     /// </summary>
     private static XElement? ResolveSeriesTitleXml(
+        ChartSeriesMetadataLookup? metadataLookup,
         ChartModel chart,
         Sheet sheet,
         ChartSeriesStripLayout layout,
@@ -593,7 +595,7 @@ internal static partial class XlsxChartXmlWriter
         XNamespace chartNs,
         string? verbatimTxFormula)
     {
-        var formula = verbatimTxFormula ?? GetSeriesNameOverrideFormula(chart, seriesIndex);
+        var formula = verbatimTxFormula ?? GetSeriesNameOverrideFormula(metadataLookup, seriesIndex);
         if (formula is not null)
         {
             return new XElement(chartNs + "tx",
@@ -609,8 +611,8 @@ internal static partial class XlsxChartXmlWriter
     /// <see cref="ChartModel.SeriesOrderOverrides"/>), falling back to the recomputed positional
     /// <paramref name="seriesIndex"/> — Excel's ordinary case, where order == idx.
     /// </summary>
-    private static int GetSeriesOrder(ChartModel chart, int seriesIndex) =>
-        chart.SeriesOrderOverrides.LastOrDefault(o => o.SeriesIndex == seriesIndex)?.Order ?? seriesIndex;
+    private static int GetSeriesOrder(ChartSeriesMetadataLookup? metadataLookup, int seriesIndex) =>
+        metadataLookup?.GetOrderOverride(seriesIndex)?.Order ?? seriesIndex;
 
     /// <summary>
     /// R82-io-chart-series-5-2: re-emits a series' captured &lt;c:cat&gt; verbatim when it was a
@@ -618,9 +620,8 @@ internal static partial class XlsxChartXmlWriter
     /// <see cref="ChartModel.MultiLevelCategoryXml"/>. Returns null when no such capture exists for
     /// this series, so the caller falls back to the ordinary computed &lt;c:cat&gt;.
     /// </summary>
-    private static XElement? ToVerbatimMultiLevelCategoryXml(ChartModel chart, int seriesIndex) =>
-        chart.MultiLevelCategoryXml
-            .LastOrDefault(entry => entry.SeriesIndex == seriesIndex) is { } entry
+    private static XElement? ToVerbatimMultiLevelCategoryXml(ChartSeriesMetadataLookup? metadataLookup, int seriesIndex) =>
+        metadataLookup?.GetMultiLevelCategoryXml(seriesIndex) is { } entry
             ? TryParseChartXml(entry.RawXml)
             : null;
 
@@ -769,6 +770,7 @@ internal static partial class XlsxChartXmlWriter
         var verbatimLookup = ChartSeriesVerbatimFormulaLookup.Create(chart);
         var formatLookup = ChartSeriesFormatLookup.Create(chart);
         var dataPointFormatLookup = ChartDataPointFormatLookup.Create(chart);
+        var metadataLookup = ChartSeriesMetadataLookup.Create(chart);
         var xValueStrip = chart.SeriesInRows ? chart.DataRange.Start.Row : chart.DataRange.Start.Col;
         var xValueRange = FormatStripRange(layout, sheet.Name, xValueStrip);
 
@@ -792,11 +794,11 @@ internal static partial class XlsxChartXmlWriter
                 ? BuildNumCacheXml(GetStripPointValues(sheet, layout, strip), GetStripNumberFormatCode(workbook, sheet, layout, strip), chartNs)
                 : ResolveVerbatimValueCacheXml(workbook, sheet.Id, verbatim.ValFormula, verbatim.ValCacheXml, chartNs);
 
-            var txElement = ResolveSeriesTitleXml(chart, sheet, layout, strip, seriesIndex, chartNs, verbatim?.TxFormula);
+            var txElement = ResolveSeriesTitleXml(metadataLookup, chart, sheet, layout, strip, seriesIndex, chartNs, verbatim?.TxFormula);
 
             yield return new XElement(chartNs + "ser",
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
-                new XElement(chartNs + "order", new XAttribute("val", GetSeriesOrder(chart, seriesIndex))),
+                new XElement(chartNs + "order", new XAttribute("val", GetSeriesOrder(metadataLookup, seriesIndex))),
                 txElement,
                 ToScatterSeriesLineShapeProperties(chart, formatLookup, seriesIndex, chartNs, drawingNs),
                 ToSeriesMarkerXml(chart, formatLookup, seriesIndex, chartNs, drawingNs),
@@ -815,7 +817,7 @@ internal static partial class XlsxChartXmlWriter
                         new XElement(chartNs + "f", yValueRange),
                         yValueCache)),
                 ToSeriesSmoothXml(formatLookup, seriesIndex, chartNs),
-                ToRangeDataLabelsExtXml(chart, seriesIndex, chartNs));
+                ToRangeDataLabelsExtXml(metadataLookup, seriesIndex, chartNs));
             seriesIndex++;
         }
     }
@@ -891,6 +893,7 @@ internal static partial class XlsxChartXmlWriter
         var verbatimLookup = ChartSeriesVerbatimFormulaLookup.Create(chart);
         var formatLookup = ChartSeriesFormatLookup.Create(chart);
         var dataPointFormatLookup = ChartDataPointFormatLookup.Create(chart);
+        var metadataLookup = ChartSeriesMetadataLookup.Create(chart);
         var xValueRange = FormatStripRange(layout, sheet.Name, xValueStrip);
 
         var seriesIndex = 0;
@@ -916,11 +919,11 @@ internal static partial class XlsxChartXmlWriter
                 ? BuildNumCacheXml(GetStripPointValues(sheet, layout, sizeStrip), GetStripNumberFormatCode(workbook, sheet, layout, sizeStrip), chartNs)
                 : ResolveVerbatimValueCacheXml(workbook, sheet.Id, verbatim.BubbleSizeFormula, verbatim.BubbleSizeCacheXml, chartNs);
 
-            var txElement = ResolveSeriesTitleXml(chart, sheet, layout, yValueStrip, seriesIndex, chartNs, verbatim?.TxFormula);
+            var txElement = ResolveSeriesTitleXml(metadataLookup, chart, sheet, layout, yValueStrip, seriesIndex, chartNs, verbatim?.TxFormula);
 
             yield return new XElement(chartNs + "ser",
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
-                new XElement(chartNs + "order", new XAttribute("val", GetSeriesOrder(chart, seriesIndex))),
+                new XElement(chartNs + "order", new XAttribute("val", GetSeriesOrder(metadataLookup, seriesIndex))),
                 txElement,
                 ToSeriesShapeProperties(formatLookup, seriesIndex, chartNs, drawingNs),
                 ToDataPointsXml(chart, dataPointFormatLookup, seriesIndex, chartNs, drawingNs),
@@ -941,7 +944,7 @@ internal static partial class XlsxChartXmlWriter
                     new XElement(chartNs + "numRef",
                         new XElement(chartNs + "f", sizeRange),
                         sizeCache)),
-                ToRangeDataLabelsExtXml(chart, seriesIndex, chartNs));
+                ToRangeDataLabelsExtXml(metadataLookup, seriesIndex, chartNs));
             seriesIndex++;
         }
     }
@@ -960,6 +963,7 @@ internal static partial class XlsxChartXmlWriter
         var verbatimLookup = ChartSeriesVerbatimFormulaLookup.Create(chart);
         var formatLookup = ChartSeriesFormatLookup.Create(chart);
         var dataPointFormatLookup = ChartDataPointFormatLookup.Create(chart);
+        var metadataLookup = ChartSeriesMetadataLookup.Create(chart);
         var categoryRange = chart.FirstColIsCategories
             ? FormatStripRange(layout, sheet.Name, layout.CategoryStrip)
             : null;
@@ -997,22 +1001,22 @@ internal static partial class XlsxChartXmlWriter
                         : BuildStrCacheXml(categoryStripValues, chartNs))
                     : null);
 
-            var txElement = ResolveSeriesTitleXml(chart, sheet, layout, valueStrip, seriesIndex, chartNs, verbatim?.TxFormula);
+            var txElement = ResolveSeriesTitleXml(metadataLookup, chart, sheet, layout, valueStrip, seriesIndex, chartNs, verbatim?.TxFormula);
 
             yield return new XElement(chartNs + "ser",
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
-                new XElement(chartNs + "order", new XAttribute("val", GetSeriesOrder(chart, seriesIndex))),
+                new XElement(chartNs + "order", new XAttribute("val", GetSeriesOrder(metadataLookup, seriesIndex))),
                 txElement,
                 ToSeriesShapeProperties(formatLookup, seriesIndex, chartNs, drawingNs),
                 ToDataPointsXml(chart, dataPointFormatLookup, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
-                ToVerbatimMultiLevelCategoryXml(chart, seriesIndex)
+                ToVerbatimMultiLevelCategoryXml(metadataLookup, seriesIndex)
                     ?? ToCategoryRangeXml(effectiveCategoryRange, effectiveCategoryIsNumeric, chartNs, categoryCache),
                 new XElement(chartNs + "val",
                     new XElement(chartNs + "numRef",
                         new XElement(chartNs + "f", valueRange),
                         valueCache)),
-                ToRangeDataLabelsExtXml(chart, seriesIndex, chartNs));
+                ToRangeDataLabelsExtXml(metadataLookup, seriesIndex, chartNs));
             seriesIndex++;
         }
     }
@@ -1043,6 +1047,70 @@ internal static partial class XlsxChartXmlWriter
             ? null
             : new XElement(chartNs + "firstSliceAng",
                 new XAttribute("val", Math.Clamp((int)Math.Round(normalized), 0, 360)));
+    }
+
+    /// <summary>
+    /// Captures the last authored series metadata entry for each index once per builder. These
+    /// lists permit duplicates, and the existing <c>LastOrDefault</c> lookups deliberately made
+    /// the final entry authoritative; dictionary assignment retains that exact precedence.
+    /// </summary>
+    private sealed class ChartSeriesMetadataLookup
+    {
+        private readonly Dictionary<int, ChartSeriesNameOverride>? _nameOverrides;
+        private readonly Dictionary<int, ChartSeriesOrderOverride>? _orderOverrides;
+        private readonly Dictionary<int, ChartSeriesRawXmlEntry>? _multiLevelCategoryXml;
+        private readonly Dictionary<int, ChartSeriesRangeDataLabels>? _rangeDataLabels;
+
+        private ChartSeriesMetadataLookup(
+            Dictionary<int, ChartSeriesNameOverride>? nameOverrides,
+            Dictionary<int, ChartSeriesOrderOverride>? orderOverrides,
+            Dictionary<int, ChartSeriesRawXmlEntry>? multiLevelCategoryXml,
+            Dictionary<int, ChartSeriesRangeDataLabels>? rangeDataLabels)
+        {
+            _nameOverrides = nameOverrides;
+            _orderOverrides = orderOverrides;
+            _multiLevelCategoryXml = multiLevelCategoryXml;
+            _rangeDataLabels = rangeDataLabels;
+        }
+
+        public static ChartSeriesMetadataLookup? Create(ChartModel chart)
+        {
+            if (chart.SeriesNameOverrides.Count == 0 &&
+                chart.SeriesOrderOverrides.Count == 0 &&
+                chart.MultiLevelCategoryXml.Count == 0 &&
+                chart.SeriesRangeDataLabels?.Count is not > 0)
+            {
+                return null;
+            }
+
+            return new ChartSeriesMetadataLookup(
+                IndexLast(chart.SeriesNameOverrides, static entry => entry.SeriesIndex),
+                IndexLast(chart.SeriesOrderOverrides, static entry => entry.SeriesIndex),
+                IndexLast(chart.MultiLevelCategoryXml, static entry => entry.SeriesIndex),
+                IndexLast(chart.SeriesRangeDataLabels, static entry => entry.SeriesIndex));
+        }
+
+        public ChartSeriesNameOverride? GetNameOverride(int seriesIndex) => Get(_nameOverrides, seriesIndex);
+
+        public ChartSeriesOrderOverride? GetOrderOverride(int seriesIndex) => Get(_orderOverrides, seriesIndex);
+
+        public ChartSeriesRawXmlEntry? GetMultiLevelCategoryXml(int seriesIndex) => Get(_multiLevelCategoryXml, seriesIndex);
+
+        public ChartSeriesRangeDataLabels? GetRangeDataLabels(int seriesIndex) => Get(_rangeDataLabels, seriesIndex);
+
+        private static Dictionary<int, T>? IndexLast<T>(IReadOnlyList<T>? entries, Func<T, int> getSeriesIndex)
+        {
+            if (entries is not { Count: > 0 })
+                return null;
+
+            var bySeriesIndex = new Dictionary<int, T>(entries.Count);
+            foreach (var entry in entries)
+                bySeriesIndex[getSeriesIndex(entry)] = entry;
+            return bySeriesIndex;
+        }
+
+        private static T? Get<T>(Dictionary<int, T>? entries, int seriesIndex) where T : class =>
+            entries is not null && entries.TryGetValue(seriesIndex, out var entry) ? entry : null;
     }
 
     /// <summary>

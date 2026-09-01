@@ -689,4 +689,30 @@ public sealed partial class XlsxFileAdapterPerformanceTests
             .And.NotContain("chart.PointMarkerFormats.LastOrDefault(",
                 "each emitted data point must resolve indexed formats instead of rescanning both lists");
     }
+
+    [Fact]
+    public void ChartSeriesWriter_IndexesLastMetadataEntriesOncePerBuilder()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxChartXmlWriter.Series.cs");
+        var buildStart = source.IndexOf("    private static IEnumerable<XElement> BuildChartSeries(", StringComparison.Ordinal);
+        var lookupStart = source.IndexOf("    private sealed class ChartSeriesMetadataLookup", StringComparison.Ordinal);
+        var dataPointLookupStart = source.IndexOf("    private sealed class ChartDataPointFormatLookup", StringComparison.Ordinal);
+        var builds = source[buildStart..lookupStart];
+        var lookup = source[lookupStart..dataPointLookupStart];
+
+        builds.Should().Contain("var metadataLookup = ChartSeriesMetadataLookup.Create(chart);")
+            .And.Contain("GetSeriesOrder(metadataLookup, seriesIndex)")
+            .And.Contain("ToRangeDataLabelsExtXml(metadataLookup, seriesIndex, chartNs)");
+        lookup.Should().Contain("if (chart.SeriesNameOverrides.Count == 0")
+            .And.Contain("chart.SeriesRangeDataLabels?.Count is not > 0)")
+            .And.Contain("return null;",
+                "the common chart path with no captured metadata must not allocate lookup dictionaries")
+            .And.Contain("bySeriesIndex[getSeriesIndex(entry)] = entry;",
+                "the final duplicate must retain the prior LastOrDefault precedence");
+        source.Should().NotContain("SeriesNameOverrides.LastOrDefault(")
+            .And.NotContain("SeriesOrderOverrides.LastOrDefault(")
+            .And.NotContain("MultiLevelCategoryXml\n            .LastOrDefault(")
+            .And.NotContain("SeriesRangeDataLabels?.LastOrDefault(",
+                "every series writer must resolve captured metadata through its per-builder index");
+    }
 }

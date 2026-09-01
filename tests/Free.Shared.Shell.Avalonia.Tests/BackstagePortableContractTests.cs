@@ -129,6 +129,59 @@ public sealed class BackstagePortableContractTests
     }
 
     [Fact]
+    public void Frame_session_indexes_dense_entries_with_first_duplicate_wins_per_identity_kind()
+    {
+        var entries = Enumerable.Range(0, 512)
+            .Select(index => SisterBackstageEntryPlan<string>.Pane(
+                "Pane " + index,
+                BackstageIconKind.Info,
+                () => index.ToString()) with
+            {
+                StableId = "pane." + index,
+                AutomationId = "PaneAutomation" + index,
+            })
+            .ToList();
+        var first = entries[123];
+        entries.Add(SisterBackstageEntryPlan<string>.Pane(
+            first.Label,
+            BackstageIconKind.Info,
+            () => "duplicate") with
+        {
+            StableId = first.StableId,
+            AutomationId = first.AutomationId,
+        });
+        var session = new BackstageFrameSession<string>();
+
+        session.SetEntries(entries);
+
+        var activation = session.Show();
+        activation.Should().NotBeNull();
+        activation!.Entry.Should().BeSameAs(entries[0]);
+        session.FindEntry(first.StableId!).Should().BeSameAs(first);
+        session.FindEntry(first.AutomationId!).Should().BeSameAs(first);
+        session.FindEntry(first.Label.ToUpperInvariant()).Should().BeSameAs(first);
+    }
+
+    [Fact]
+    public void Frame_session_source_guard_indexes_each_identity_once()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText(
+            "shared", "Free.Shared.Shell", "BackstageFrameSession.cs");
+        var findStart = source.IndexOf("    public SisterBackstageEntryPlan<TContent>? FindEntry(", StringComparison.Ordinal);
+        var activateStart = source.IndexOf("    public BackstageFrameActivation<TContent>? TryActivate(", StringComparison.Ordinal);
+        var findEntry = source[findStart..activateStart];
+
+        source.Should().Contain("entriesByStableId.TryAdd(stableId, entry)")
+            .And.Contain("entriesByAutomationId.TryAdd(automationId, entry)")
+            .And.Contain("entriesByLabel.TryAdd(label, entry)")
+            .And.Contain("? _firstPane");
+        findEntry.Should().Contain("_entriesByStableId.GetValueOrDefault(idOrLabel)")
+            .And.Contain("_entriesByAutomationId.GetValueOrDefault(idOrLabel)")
+            .And.Contain("_entriesByLabel.GetValueOrDefault(idOrLabel)")
+            .And.NotContain("FirstOrDefault");
+    }
+
+    [Fact]
     public void Frame_session_dismisses_commands_before_dispatch_and_keeps_hide_idempotent()
     {
         var dispatchOrder = new List<string>();
