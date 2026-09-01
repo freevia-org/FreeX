@@ -1,3 +1,4 @@
+using Free.Shared.AppServices.Updates;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Wpf;
 using FreeP.App.Compositor;
@@ -21,7 +22,7 @@ public static class Program
     {
         // Velopack must service install/update/uninstall hooks before WPF creates an Application.
         // Keep Run() at the real entry point so Velopack recognizes the lifecycle invocation.
-        VelopackBootstrap.Configure().Run();
+        VelopackBootstrapRunner.Configure(new VelopackHookConfig()).Run();
 
         WpfApplicationStartupRunner.Run(new WpfApplicationStartupSpec<FreePOptions>(
             FreePApplicationStartupDescriptor.ProductIdentity,
