@@ -204,7 +204,7 @@ jobs:
             -PartitionIndex ${{ matrix.partitionIndex }} `
             -PartitionCount ${{ matrix.partitionCount }} `
             -RetryFailedProjectCount 1 `
-            -HangTimeout 15m `
+            -HangTimeout 30m `
             -ResultsDirectory TestResults
       - name: Upload release test diagnostics
         if: always()

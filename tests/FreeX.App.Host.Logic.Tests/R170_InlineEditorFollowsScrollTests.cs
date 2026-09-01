@@ -29,7 +29,7 @@ public sealed class R170_InlineEditorFollowsScrollTests
                     sheet.SetCell(new CellAddress(sheet.Id, (uint)row, 1), new NumberValue(row));
 
                 // Edit a cell that is comfortably inside the initial (unscrolled) viewport.
-                var addr = new CellAddress(sheet.Id, 30, 1);
+                var addr = new CellAddress(sheet.Id, 5, 1);
                 R49MainWindowTestHarness.Invoke(window, "SetActiveCell", addr);
                 R49MainWindowTestHarness.Invoke(window, "ShowInlineEditor", addr, (double?)null);
 
@@ -42,9 +42,9 @@ public sealed class R170_InlineEditorFollowsScrollTests
                 var topBeforeScroll = Canvas.GetTop(inlineEditor);
 
                 // Scroll the view down (mirrors dragging the vertical scrollbar thumb / turning the
-                // mouse wheel): row 30 stays inside the viewport (still well within default page
-                // size), but its on-screen pixel row shifts upward as the view's top row advances.
-                SetVerticalScrollValue(window, 20);
+                // mouse wheel): row 5 stays inside even a constrained hosted-runner viewport,
+                // but its on-screen pixel row shifts upward as the view's top row advances.
+                SetVerticalScrollValue(window, 2);
 
                 GetFormulaEditCell(window).Should().Be(addr,
                     "scrolling must not commit/abandon the in-progress edit while the cell is " +

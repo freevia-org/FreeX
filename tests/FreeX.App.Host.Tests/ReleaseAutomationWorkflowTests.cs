@@ -314,6 +314,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("tools/Invoke-TestGate.ps1");
         workflow.Should().Contain("-Gate release");
         workflow.Should().Contain("-RetryFailedProjectCount 1");
+        workflow.Should().Contain("-HangTimeout 30m");
         workflow.Should().Contain("name: FreeX full release gate");
         workflow.Should().Contain("needs: [prepare, candidate]");
         workflow.Should().Contain("name: Validate complete release inventory");

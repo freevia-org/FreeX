@@ -31,6 +31,21 @@ public sealed class InstallerPackagingContractTests
     }
 
     [Fact]
+    public void WindowsVelopackPublisher_SignsPayloadBeforePackingAndVerifiesEveryExecutable()
+    {
+        var publisher = WorkspaceFileLocator.ReadAllText("tools", "Publish-WindowsVelopackPackage.ps1");
+
+        var payloadSigning = publisher.IndexOf("-Files $standalonePath,$mainExecutable", StringComparison.Ordinal);
+        var velopackPacking = publisher.IndexOf("& $VpkPath @vpkArguments", StringComparison.Ordinal);
+
+        payloadSigning.Should().BeGreaterThan(-1);
+        payloadSigning.Should().BeLessThan(velopackPacking,
+            "the app-host executable must be signed before Velopack embeds it in release packages");
+        publisher.Should().Contain("-Files $standalonePath,$mainExecutable,$setupPath");
+        publisher.Should().Contain("-VerifyOnly");
+    }
+
+    [Fact]
     public void SuitePackages_DelegateToIndividualInstallerIdentities()
     {
         var packager = WorkspaceFileLocator.ReadAllText("tools", "packaging", "New-AppInstallers.ps1");
