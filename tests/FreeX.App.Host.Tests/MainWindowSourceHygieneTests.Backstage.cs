@@ -124,7 +124,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         backstageSource.Should().Contain("private void SaveAsButton_Click(object sender, RoutedEventArgs e)");
-        backstageSource.Should().Contain("RunGuardedUiCommand(\"Save Workbook As\", SaveAsFromBackstageAsync)");
+        backstageSource.Should().Contain("RunGuardedUiCommand(\"Backstage Save As\", SaveAsFromBackstageAsync)");
         // Save As forces the Save-As dialog directly (it does NOT route through the shared
         // SaveResolvedAsync existing-path resolution that Save uses), then closes the backstage.
         var saveAsMethod = ExtractMethodSource(backstageSource, "private async Task SaveAsFromBackstageAsync(");

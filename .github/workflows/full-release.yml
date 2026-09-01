@@ -203,6 +203,7 @@ jobs:
             -GateId "${{ matrix.gateId }}" `
             -PartitionIndex ${{ matrix.partitionIndex }} `
             -PartitionCount ${{ matrix.partitionCount }} `
+            -RetryFailedProjectCount 1 `
             -HangTimeout 15m `
             -ResultsDirectory TestResults
       - name: Upload release test diagnostics

@@ -394,12 +394,12 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeSortDescendingMenuItem: HasNativeMenuItem(_sortDescendingMenuItem, NativeMenuItemId.SortDescending)");
         script.Should().Contain("HasNativeAdvancedFilterMenuItem: HasNativeMenuItem(_advancedFilterMenuItem, NativeMenuItemId.AdvancedFilter)");
         script.Should().Contain("NativeMenuItemId.RemoveDuplicates => _removeDuplicatesMenuItem,");
-        script.Should().Contain("_removeDuplicatesMenuItem.Click += async (_, _) => await ShowRemoveDuplicatesDialogAsync();");
+        script.Should().Contain("_removeDuplicatesMenuItem.Click += (_, _) => RunGuarded(ShowRemoveDuplicatesDialogAsync);");
         script.Should().Contain("HasNativeRemoveDuplicatesMenuItem: HasNativeMenuItem(_removeDuplicatesMenuItem, NativeMenuItemId.RemoveDuplicates)");
         script.Should().Contain("native_remove_duplicates_menu_item=");
         script.Should().Contain("private readonly NativeMenuItem _subtotalMenuItem = new();");
         script.Should().Contain("NativeMenuItemId.Subtotal => _subtotalMenuItem,");
-        script.Should().Contain("_subtotalMenuItem.Click += async (_, _) => await ShowSubtotalDialogAsync();");
+        script.Should().Contain("_subtotalMenuItem.Click += (_, _) => RunGuarded(ShowSubtotalDialogAsync);");
         script.Should().Contain("private async Task ShowSubtotalDialogAsync()");
         script.Should().Contain("private async Task<SubtotalDialogPlanResult?> ShowSubtotalInputDialogAsync(");
         script.Should().Contain("_session.ExecuteSubtotalOptions(selection.ToInputOptions())");
@@ -493,7 +493,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeUnmergeCellsMenuItem &&");
         script.Should().Contain("private readonly NativeMenuItem _workbookStatisticsMenuItem = new();");
         script.Should().Contain("ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);");
-        script.Should().Contain("_workbookStatisticsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.WorkbookStatistics);");
+        script.Should().Contain("_workbookStatisticsMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.WorkbookStatistics));");
         script.Should().Contain("ApplyNativeFileMenuAvailability(isIdle);");
         script.Should().Contain("src/FreeX.App.Presentation/Shell/NativeMenuCatalog.cs");
         script.Should().Contain("new(NativeMenuTopLevelId.View, `\"View`\")");
@@ -743,10 +743,10 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("ShellFocusTarget.TaskPane");
         script.Should().Contain("private static bool IsShellFocusCycleKey(KeyEventArgs args)");
         script.Should().Contain("CycleShellFocus(reverse: e.KeyModifiers == KeyModifiers.Shift);");
-        script.Should().Contain("internal void CycleShellFocus(bool reverse)");
+        script.Should().Contain("private void CycleShellFocus(bool reverse)");
         script.Should().Contain("ShellFocusCyclePlanner.TryFocusNextAvailable(");
         script.Should().Contain("private bool IsShellFocusTargetAvailable(ShellFocusTarget target)");
-        script.Should().Contain("internal ShellFocusTarget GetCurrentShellFocusTarget()");
+        script.Should().Contain("private ShellFocusTarget GetCurrentShellFocusTarget()");
         script.Should().Contain("private bool FocusShellRegion(ShellFocusTarget target)");
         script.Should().Contain("private bool FocusFirstEnabledToolbarControl()");
         script.Should().Contain("private IReadOnlyList<Control> GetToolbarFocusTargets()");
@@ -788,7 +788,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("TryCreateDrawingBitmap(imageBytes, out var bitmap)");
         script.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
         script.Should().Contain("private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();");
-        script.Should().Contain("_newWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);");
+        script.Should().Contain("_newWorkbookMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New));");
         script.Should().Contain("ConfigureNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent);");
         script.Should().Contain("NativeMenuItemId.SelectAll => _selectAllMenuItem,");
         script.Should().Contain("_fillCellsButton.Content = UiText.Get(`\"Toolbar_FillCells`\");");
@@ -803,7 +803,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("RecordFileAccessEvent(`\"workbook_file_access_identity`\", status, grantKind)");
         script.Should().Contain("RecordFileAccessEvent(`\"workbook_file_access_scope`\", status, grantKind)");
         script.Should().Contain("[\"payloadRedacted\"] = string.IsNullOrWhiteSpace(grantKind) ? null : \"true\"");
-        script.Should().Contain("_closeWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close);");
+        script.Should().Contain("_closeWorkbookMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close));");
         script.Should().Contain("_sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true)");
         script.Should().Contain("RefreshViewportSizeForZoom();");
         script.Should().Contain("private async void MainWindow_Closing(object? sender, WindowClosingEventArgs e)");
@@ -2548,7 +2548,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     TryCreateDrawingBitmap(imageBytes, out var bitmap);
                 AddStyledCellBorderOverlay(content, style, borderNeighbors, zoomFactor, theme);
                     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
-                    _newWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);
+                    _newWorkbookMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New));
                     ConfigureNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent);
                     _openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);
                     foreach (var entry in NativeMenuCatalog.FileMenuEntries)
@@ -2561,7 +2561,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     private readonly NativeMenuItem _workbookStatisticsMenuItem = new();
                     private readonly NativeMenuItem _exportPdfMenuItem = new();
                     ConfigureNativeFileMenuItem(_exportPdfMenuItem, NativeFileMenuItemId.ExportPdf);
-                    _exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();
+                    _exportPdfMenuItem.Click += (_, _) => RunGuarded(ExportActiveSheetPdfAsync);
                     NativeFileMenuItemId.ExportPdf => _exportPdfMenuItem,
                     HasNativeExportPdfMenuItem: HasNativeFileMenuItem(_exportPdfMenuItem, NativeFileMenuItemId.ExportPdf)
                     private Task ExportActiveSheetPdfAsync() =>
@@ -2584,11 +2584,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     StatusBarReadoutKind.NumericalCount,
                     StatusBarReadoutKind.Maximum,
                     ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);
-                    _workbookStatisticsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.WorkbookStatistics);
+                    _workbookStatisticsMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.WorkbookStatistics));
                     ApplyNativeFileMenuAvailability(isIdle);
                     private readonly NativeMenuItem _optionsMenuItem = new();
                     ConfigureNativeFileMenuItem(_optionsMenuItem, NativeFileMenuItemId.Options);
-                    _optionsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.Options);
+                    _optionsMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.Options));
                     NativeFileMenuItemId.Options => _optionsMenuItem,
                     Text = UiText.Get("FormatCells_ProtectionExplanation"),
                     CreateFormatCellsField(UiText.Get("FormatCells_PatternStyle"), fillPatternStyleBox)
@@ -2597,21 +2597,21 @@ public sealed class MacOsAppReadinessPreflightTests
                     private readonly NativeMenuItem _backstageInfoMenuItem = new();
                     private readonly NativeMenuItem _backstageAccountMenuItem = new();
                     ConfigureNativeFileMenuItem(_backstageInfoMenuItem, NativeFileMenuItemId.BackstageInfo);
-                    _backstageInfoMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageInfo);
+                    _backstageInfoMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageInfo));
                     ConfigureNativeFileMenuItem(_backstageExportMenuItem, NativeFileMenuItemId.BackstageExport);
-                    _backstageExportMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageExport);
+                    _backstageExportMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageExport));
                     ConfigureNativeFileMenuItem(_backstageAccountMenuItem, NativeFileMenuItemId.BackstageAccount);
-                    _backstageAccountMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageAccount);
+                    _backstageAccountMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageAccount));
                     NativeFileMenuItemId.BackstageExport => _backstageExportMenuItem,
                     NativeFileMenuItemId.BackstageInfo => _backstageInfoMenuItem,
                     NativeFileMenuItemId.BackstageAccount => _backstageAccountMenuItem,
                     private readonly NativeMenuItem _printMenuItem = new();
                     ConfigureNativeFileMenuItem(_printMenuItem, NativeFileMenuItemId.Print);
-                    _printMenuItem.Click += async (_, _) => await ShowPrintDialogAsync();
+                    _printMenuItem.Click += (_, _) => RunGuarded(ShowPrintDialogAsync);
                     NativeFileMenuItemId.Print => _printMenuItem,
                     private readonly NativeMenuItem _printPreviewMenuItem = new();
                     ConfigureNativeFileMenuItem(_printPreviewMenuItem, NativeFileMenuItemId.PrintPreview);
-                    _printPreviewMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.PrintPreview);
+                    _printPreviewMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.PrintPreview));
                     HasNativeWorkbookStatisticsMenuItem: HasNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics)
                     case WorkbookApplicationCommandIntent.WorkbookStatistics:
                     private async Task ShowWorkbookStatisticsDialogAsync()
@@ -2664,18 +2664,18 @@ public sealed class MacOsAppReadinessPreflightTests
                     private static AvaloniaGrid CreateGoToSpecialChoiceGrid(
                     _findMenuItem.Header = "Find...";
                     _findMenuItem.Gesture = new KeyGesture(Key.F, KeyModifiers.Meta);
-                    _findMenuItem.Click += async (_, _) => await ShowFindDialogAsync();
+                    _findMenuItem.Click += (_, _) => RunGuarded(ShowFindDialogAsync);
                     _findNextMenuItem.Header = "Find Next";
                     _findNextMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Meta);
                     _findNextMenuItem.Click += (_, _) => FindNext();
                     _replaceMenuItem.Header = "Replace...";
                     _replaceMenuItem.Gesture = new KeyGesture(Key.H, KeyModifiers.Control);
-                    _replaceMenuItem.Click += async (_, _) => await ShowReplaceDialogAsync();
+                    _replaceMenuItem.Click += (_, _) => RunGuarded(ShowReplaceDialogAsync);
                     _goToMenuItem.Header = "Go To...";
                     _goToMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control);
-                    _goToMenuItem.Click += async (_, _) => await ShowGoToDialogAsync();
+                    _goToMenuItem.Click += (_, _) => RunGuarded(ShowGoToDialogAsync);
                     _goToSpecialMenuItem.Header = "Go To Special...";
-                    _goToSpecialMenuItem.Click += async (_, _) => await ShowGoToSpecialDialogAsync();
+                    _goToSpecialMenuItem.Click += (_, _) => RunGuarded(ShowGoToSpecialDialogAsync);
                     _sortAscendingMenuItem.Header = "Sort A to Z";
                     _sortAscendingMenuItem.Click += (_, _) => SortSelectedRange(ascending: true);
                     _sortDescendingMenuItem.Header = "Sort Z to A";
@@ -2734,9 +2734,9 @@ public sealed class MacOsAppReadinessPreflightTests
                     private readonly NativeMenuItem _nextCommentMenuItem = new();
                     private readonly NativeMenuItem _previousCommentMenuItem = new();
                     _advancedFilterMenuItem.Header = "Advanced Filter...";
-                    _advancedFilterMenuItem.Click += async (_, _) => await ShowAdvancedFilterDialogAsync();
+                    _advancedFilterMenuItem.Click += (_, _) => RunGuarded(ShowAdvancedFilterDialogAsync);
                     _dataValidationMenuItem.Header = "Data Validation...";
-                    _dataValidationMenuItem.Click += async (_, _) => await ShowDataValidationDialogAsync();
+                    _dataValidationMenuItem.Click += (_, _) => RunGuarded(ShowDataValidationDialogAsync);
                     _whatIfAnalysisMenuItem.Header = "What-If Analysis";
                     _whatIfAnalysisMenuItem.Menu = CreateNativeWhatIfAnalysisMenu();
                     _goalSeekMenuItem.Header = "Goal Seek...";
@@ -2750,9 +2750,9 @@ public sealed class MacOsAppReadinessPreflightTests
                     _nextCommentMenuItem.Header = "Next Comment";
                     _previousCommentMenuItem.Header = "Previous Comment";
                     _removeDuplicatesMenuItem.Header = "Remove Duplicates...";
-                    _removeDuplicatesMenuItem.Click += async (_, _) => await ShowRemoveDuplicatesDialogAsync();
+                    _removeDuplicatesMenuItem.Click += (_, _) => RunGuarded(ShowRemoveDuplicatesDialogAsync);
                     _subtotalMenuItem.Header = "Subtotal...";
-                    _subtotalMenuItem.Click += async (_, _) => await ShowSubtotalDialogAsync();
+                    _subtotalMenuItem.Click += (_, _) => RunGuarded(ShowSubtotalDialogAsync);
                     dataMenu.Items.Add(_advancedFilterMenuItem);
                     dataMenu.Items.Add(_removeDuplicatesMenuItem);
                     dataMenu.Items.Add(_subtotalMenuItem);
@@ -2923,7 +2923,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     _fileWorkflow.RegisterRecentFile(
                     new RecentFileRegistrationRequest(
                     FileAccessIdentity: fileAccessIdentity ?? target.FileAccessIdentity
-                    _closeWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close);
+                    _closeWorkbookMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close));
                     var fileMenu = CreateNativeFileMenu();
                     NativeFileMenuItemId.NewWorkbook => _newWorkbookMenuItem,
                     NativeFileMenuItemId.CloseWorkbook => _closeWorkbookMenuItem,
@@ -2945,7 +2945,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     AutomationProperties.SetAutomationId(cancelButton, "DirtyWorkbookCancelButton");
                     _newSheetButton.Click += (_, _) => AddNewSheet();
                     _newSheetMenuItem.Click += (_, _) => AddNewSheet();
-                    _renameSheetMenuItem.Click += async (_, _) => await RenameActiveSheetAsync();
+                    _renameSheetMenuItem.Click += (_, _) => RunGuarded(RenameActiveSheetAsync);
                     _duplicateSheetMenuItem.Click += (_, _) => DuplicateActiveSheet();
                     _moveSheetLeftMenuItem.Click += (_, _) => MoveActiveSheetLeft();
                     _moveSheetRightMenuItem.Click += (_, _) => MoveActiveSheetRight();
@@ -2976,7 +2976,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     var changed = _session.SelectAllVisibleSheets();
                     var changed = _session.UngroupSheets();
                     _hideSheetMenuItem.Click += (_, _) => HideActiveSheet();
-                    _unhideSheetMenuItem.Click += async (_, _) => await UnhideSheetAsync();
+                    _unhideSheetMenuItem.Click += (_, _) => RunGuarded(UnhideSheetAsync);
                     _deleteSheetMenuItem.Click += (_, _) => DeleteActiveSheet();
                     _showGridlinesMenuItem.Header = "Gridlines";
                     _showGridlinesMenuItem.ToggleType = MenuItemToggleType.CheckBox;
@@ -3126,12 +3126,12 @@ public sealed class MacOsAppReadinessPreflightTests
                         SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: false);
                     case WorkbookApplicationCommandIntent.ActivateNextSheet:
                         SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: false);
-                    _helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get("MainWindow_Content_HelpOnline"));
+                    _helpOnlineMenuItem.Click += (_, _) => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get("MainWindow_Content_HelpOnline")));
                     _sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, UiText.Get("MainWindow_Content_Feedback"));
                     AppIssueReporter.CreateIssueUrl(CreateIssueReportContext()),
-                    _checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, UiText.Get("MainWindow_Content_CheckForUpdates"));
-                    _aboutMenuItem.Click += async (_, _) => await ShowAboutDialogAsync();
-                    _legalNoticesMenuItem.Click += async (_, _) => await ShowLegalNoticesDialogAsync();
+                    _checkForUpdatesMenuItem.Click += (_, _) => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, UiText.Get("MainWindow_Content_CheckForUpdates")));
+                    _aboutMenuItem.Click += (_, _) => RunGuarded(ShowAboutDialogAsync);
+                    _legalNoticesMenuItem.Click += (_, _) => RunGuarded(ShowLegalNoticesDialogAsync);
                     _minimizeWindowMenuItem.Gesture = new KeyGesture(Key.M, KeyModifiers.Meta);
                     _minimizeWindowMenuItem.Click += (_, _) => WindowState = WindowState.Minimized;
                     _zoomWindowMenuItem.Header = "Zoom";
@@ -3160,7 +3160,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     private readonly NativeMenuItem _formatCellsMenuItem = new();
                     _formatCellsMenuItem.Header = "Format Cells...";
                     _formatCellsMenuItem.Gesture = new KeyGesture(Key.D1, KeyModifiers.Meta);
-                    _formatCellsMenuItem.Click += async (_, _) => await ShowFormatCellsDialogAsync();
+                    _formatCellsMenuItem.Click += (_, _) => RunGuarded(() => ShowFormatCellsDialogAsync());
                     homeMenu.Items.Add(_formatCellsMenuItem);
                     _formatCellsMenuItem.IsEnabled = isIdle;
                     Key.D1;
@@ -3238,7 +3238,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     AutomationProperties.SetAutomationId(_mergeAndCenterButton, "HomeMergeAndCenterButton");
                     AutomationProperties.SetHelpText(_mergeAndCenterButton, UiText.Get("Toolbar_MergeCenterHelpText"));
                     _mergeAndCenterMenuItem.Header = "Merge & Center";
-                    _mergeAndCenterMenuItem.Click += async (_, _) => await MergeAndCenterSelectedRangeAsync();
+                    _mergeAndCenterMenuItem.Click += (_, _) => RunGuarded(MergeAndCenterSelectedRangeAsync);
                     _unmergeCellsMenuItem.Header = "Unmerge Cells";
                     _unmergeCellsMenuItem.Click += (_, _) => UnmergeSelectedRange();
                     homeMenu.Items.Add(_mergeAndCenterMenuItem);

@@ -129,7 +129,7 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("System Settings > Privacy & Security");
         source.Should().Contain("Open Anyway");
         source.Should().Contain("Do not disable Gatekeeper globally");
-        source.Should().Contain("Tester-facing warning for both platforms");
+        source.Should().Contain("Tester-facing warning: Windows direct-download executables are signed by Freevia and timestamped by Microsoft.");
         source.Should().Contain("Public distribution still requires Developer ID signing, accepted notarization, stapling, and Gatekeeper evidence.");
     }
 
@@ -200,16 +200,17 @@ public sealed class TestDistributionPlanTests
     {
         var source = WorkspaceFileLocator.ReadAllText("docs", "release/tester-release-checklist.md");
 
-        source.Should().Contain("Tester Release");
-        source.Should().Contain("release_notes");
-        source.Should().Contain("Repository preflight, build, and test");
-        source.Should().Contain("Versioned `.exe`, latest `.exe`, versioned MSIX, latest MSIX, Velopack installer/portable/feed artifacts, and checksum artifacts");
-        source.Should().Contain("release/progress.json");
+        source.Should().Contain("Full Signed Release");
+        source.Should().Contain("exact-SHA CI and CodeQL");
+        source.Should().Contain("standalone executables");
+        source.Should().Contain("Velopack");
+        source.Should().Contain("Free Suite bootstrapper");
+        source.Should().Contain("checksums, SBOMs, and manifests");
         source.Should().Contain("Keyboard-only smoke validation");
         source.Should().Contain("Screen-reader smoke validation");
-        source.Should().Contain("UI Automation catalog review");
+        source.Should().Contain("UI Automation names, IDs, patterns, and focus order");
         source.Should().Contain("Known accessibility issues");
         source.Should().Contain("internal-only");
-        source.Should().Contain("public-preview candidate");
+        source.Should().Contain("public-preview accessibility");
     }
 }

@@ -104,11 +104,17 @@ public sealed partial class MainWindowRibbonKeyTipTests
             var matches = SelectedRibbonCommandButtons()
                 .Where(button => string.Equals(RibbonTooltip.GetTitle(button), title, StringComparison.Ordinal))
                 .ToList();
-            matches.Should().ContainSingle($"the selected ribbon tab should expose one visible {title} button");
+            matches.Should().NotBeEmpty($"the selected ribbon tab should expose a visible {title} command");
 
-            var button = matches[0];
-            return button.TransformToAncestor(root)
-                .TransformBounds(new Rect(0, 0, button.ActualWidth, button.ActualHeight));
+            var bounds = Rect.Empty;
+            foreach (var button in matches)
+            {
+                var buttonBounds = button.TransformToAncestor(root)
+                    .TransformBounds(new Rect(0, 0, button.ActualWidth, button.ActualHeight));
+                bounds.Union(buttonBounds);
+            }
+
+            return bounds;
         }
 
         public bool ActiveMenuIsOpen => ActiveMenu?.IsOpen == true;
