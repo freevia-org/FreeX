@@ -48,6 +48,13 @@ public sealed partial class MainWindow : Window
         _session.Workbook.Name,
         _windowTitleSuffix);
 
+    /// <summary>
+    /// Whether this window is viewing a document with unsaved edits. Mirrors the WPF shell member
+    /// of the same name on IWorkbookWindow; a process-wide action (self-update, which restarts)
+    /// must be able to ask before destroying work it does not own.
+    /// </summary>
+    internal bool HasUnsavedChanges => _session.IsDirty;
+
     internal void RefreshWindowVisibilityCommandStates() => _refreshRibbonToggleStates?.Invoke();
 
     internal void ApplyWindowTitleSuffix(string suffix)

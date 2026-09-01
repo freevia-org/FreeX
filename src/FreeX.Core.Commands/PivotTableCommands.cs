@@ -79,6 +79,15 @@ public sealed class AddPivotTableCommand : IWorkbookCommand
         ctx.Workbook.PivotCaches.Add(cache);
         sheet.PivotTables.Add(pivotTable);
 
+        // r188: recorded HERE, not after the render below. Revert() only removes what these fields
+        // name, so between the two Add calls and the end of Execute the cache and the pivot table
+        // are registered in the workbook but invisible to the undo path. RefreshGuarded returns its
+        // failures (and rolls those back itself), but it can also THROW -- it walks the source data
+        // and rewrites the target range -- and an exception there used to leave a half-created pivot
+        // in the document that undo could not remove.
+        _addedCache = cache;
+        _addedPivotTable = pivotTable;
+
         // R140-remediation-pivot-refresh-growth-guard-completeness: the initial render of a brand new
         // pivot is just as capable of "growing" past the TargetRange the user drew as any later
         // refresh -- the user's initial rectangle is only ever a size ESTIMATE (Excel's own Insert
@@ -96,12 +105,15 @@ public sealed class AddPivotTableCommand : IWorkbookCommand
                     ctx.Workbook.PivotCaches.Remove(cache);
                 }) is { } failure)
         {
+            // The guard's own rollback (above) already removed both, so forget them: leaving them
+            // set would have Revert() call ClearRenderedRange for a pivot that is no longer in the
+            // sheet, wiping cells this failed command never wrote.
+            _addedCache = null;
+            _addedPivotTable = null;
             _targetSnapshot = null;
             return failure;
         }
 
-        _addedCache = cache;
-        _addedPivotTable = pivotTable;
         return new CommandOutcome(true, AffectedCells: [_targetRange.Start]);
     }
 

@@ -4,7 +4,7 @@ internal static class CaseSensitiveSortComparison
 {
     internal static int Compare(string a, string b)
     {
-        var primary = string.Compare(a, b, StringComparison.OrdinalIgnoreCase);
+        var primary = SortTextComparison.CompareIgnoreCase(a, b);
         if (primary != 0)
             return primary;
 
