@@ -50,7 +50,7 @@ try {
     }
 
     $project = Join-Path $repoRoot "tools/FreeSuite.Bootstrapper/FreeSuite.Bootstrapper.csproj"
-    & dotnet publish $project `
+    $publishOutput = @(& dotnet publish $project `
         --configuration $Configuration `
         --runtime win-x64 `
         --self-contained true `
@@ -59,9 +59,11 @@ try {
         -p:DebugType=None `
         -p:Version=$Version `
         -p:SuitePayloadDir=$payloadRoot `
-        --output $publishRoot
-    if ($LASTEXITCODE -ne 0) {
-        throw "Free Suite bootstrapper publish failed with exit code $LASTEXITCODE."
+        --output $publishRoot 2>&1)
+    $publishExitCode = $LASTEXITCODE
+    $publishOutput | ForEach-Object { Write-Host $_ }
+    if ($publishExitCode -ne 0) {
+        throw "Free Suite bootstrapper publish failed with exit code $publishExitCode."
     }
 
     $published = Join-Path $publishRoot "FreeSuite.exe"

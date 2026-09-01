@@ -55,6 +55,16 @@ public sealed class InstallerPackagingContractTests
     }
 
     [Fact]
+    public void WindowsSuitePackager_ReturnsOnlyTheBootstrapperPath()
+    {
+        var packager = WorkspaceFileLocator.ReadAllText("tools", "packaging", "New-FreeSuiteWindowsBootstrapper.ps1");
+
+        packager.Should().Contain("$publishOutput = @(& dotnet publish");
+        packager.Should().Contain("$publishOutput | ForEach-Object { Write-Host $_ }");
+        packager.Should().Contain("Write-Output $result");
+    }
+
+    [Fact]
     public void SuitePackages_DelegateToIndividualInstallerIdentities()
     {
         var packager = WorkspaceFileLocator.ReadAllText("tools", "packaging", "New-AppInstallers.ps1");
