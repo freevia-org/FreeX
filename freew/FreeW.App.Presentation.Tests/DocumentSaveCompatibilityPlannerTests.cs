@@ -253,6 +253,24 @@ public sealed class DocumentSaveCompatibilityPlannerTests
     }
 
     [Fact]
+    public void Build_PlainTextDetectsFieldsInsideThreadedCommentStories()
+    {
+        var document = TextDocument.CreateEmpty();
+        var parent = new Comment(1, "Parent comment");
+        var reply = new Comment(2, "Reply");
+        reply.Content.Add(new Paragraph { Runs = { Run.PageNumberField() } });
+        parent.Replies.Add(reply);
+        document.Comments[parent.Id] = parent;
+        var target = ResolveTarget("Plain.txt");
+
+        var plan = DocumentSaveCompatibilityPlanner.Build(document, target);
+
+        plan.Warnings.Select(warning => warning.Kind)
+            .Should()
+            .Contain(DocumentSaveCompatibilityWarningKind.FieldsAndReferences);
+    }
+
+    [Fact]
     public void Build_Word2003XmlUsesSelectedFormatMetadataInsteadOfXmlExtension()
     {
         var document = TextDocument.CreateEmpty();
