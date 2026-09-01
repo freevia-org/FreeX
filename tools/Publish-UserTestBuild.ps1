@@ -8,7 +8,8 @@ param(
     [string]$MsixCertificatePath = $env:FREEX_MSIX_CERTIFICATE_PATH,
     [string]$MsixCertificatePassword = $env:FREEX_MSIX_CERTIFICATE_PASSWORD,
     [string]$MsixTimestampUrl = $env:FREEX_MSIX_TIMESTAMP_URL,
-    [switch]$AllowUnsignedMsix
+    [switch]$AllowUnsignedMsix,
+    [string]$ArtifactSigningMetadataPath
 )
 
 $ErrorActionPreference = "Stop"
@@ -179,6 +180,17 @@ Assert-SafeTimestampUrl -Value $MsixTimestampUrl
 Assert-MsixCertificatePath -Value $MsixCertificatePath
 Assert-MsixSigningOptions -CertificatePath $MsixCertificatePath -CertificatePassword $MsixCertificatePassword -TimestampUrl $MsixTimestampUrl
 Assert-MsixPublishSigningMode -PublishMode $PublishMode -CertificatePath $MsixCertificatePath -AllowUnsigned ([bool]$AllowUnsignedMsix)
+if (-not [string]::IsNullOrWhiteSpace($ArtifactSigningMetadataPath)) {
+    if ($PublishMode -notin @("SingleFile", "Velopack")) {
+        throw "Artifact Signing is supported only for SingleFile and Velopack direct-download packages. Store-submitted MSIX packages are signed by Microsoft."
+    }
+    $ArtifactSigningMetadataPath = (Resolve-Path -LiteralPath $ArtifactSigningMetadataPath -ErrorAction Stop).Path
+    $azureCliDirectory = Join-Path $env:ProgramFiles "Microsoft SDKs/Azure/CLI2/wbin"
+    if ((Test-Path -LiteralPath $azureCliDirectory -PathType Container) -and
+        -not (($env:PATH -split [IO.Path]::PathSeparator) -contains $azureCliDirectory)) {
+        $env:PATH = "$azureCliDirectory$([IO.Path]::PathSeparator)$env:PATH"
+    }
+}
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $projectPath = Join-Path $repoRoot "src\FreeX.App.Host\FreeX.App.Host.csproj"
@@ -392,14 +404,23 @@ if ($PublishMode -eq "Velopack") {
     # A matching id would make Velopack rename/own that data dir — wiping user data on uninstall and
     # failing reinstall when the dir is locked. Distinct id keeps install and data fully separate.
     # packTitle stays "FreeX" so the display name (Start menu, Programs & Features) is unchanged.
-    & vpk pack `
-        --packId "FreeXApp" `
-        --packVersion $assemblyVersion `
-        --packDir $publishDir `
-        --mainExe "FreeX.App.Host.exe" `
-        --outputDir $vpkOut `
-        --packTitle "FreeX" `
-        --channel "win"
+    $vpkArguments = @(
+        "pack",
+        "--packId", "FreeXApp",
+        "--packVersion", $assemblyVersion,
+        "--packDir", $publishDir,
+        "--mainExe", "FreeX.App.Host.exe",
+        "--outputDir", $vpkOut,
+        "--packTitle", "FreeX",
+        "--channel", "win"
+    )
+    if (-not [string]::IsNullOrWhiteSpace($ArtifactSigningMetadataPath)) {
+        $powerShellPath = Get-ToolPowerShellPath
+        $signingScriptPath = Join-Path $PSScriptRoot "Invoke-WindowsArtifactSigning.ps1"
+        $signingTemplate = '"{0}" -NoProfile -File "{1}" -Files {{{{file}}}}' -f $powerShellPath, $signingScriptPath
+        $vpkArguments += @("--signTemplate", $signingTemplate)
+    }
+    & vpk @vpkArguments
     if ($LASTEXITCODE -ne 0) { throw "vpk pack failed with exit code $LASTEXITCODE" }
 
     Write-Host "Created Velopack artifacts in $vpkOut"
@@ -409,6 +430,12 @@ if ($PublishMode -eq "Velopack") {
 
 if ($PublishMode -eq "SingleFile") {
     Move-Item -LiteralPath $defaultExePath -Destination $artifactExePath
+    if (-not [string]::IsNullOrWhiteSpace($ArtifactSigningMetadataPath)) {
+        & (Join-Path $PSScriptRoot "Invoke-WindowsArtifactSigning.ps1") `
+            -Files $artifactExePath `
+            -MetadataPath $ArtifactSigningMetadataPath
+        if ($LASTEXITCODE -ne 0) { throw "Artifact Signing failed for $artifactExePath." }
+    }
     $hash = Get-FileHash -LiteralPath $artifactExePath -Algorithm SHA256
     Set-Content -LiteralPath $artifactExeHashPath -Value "$($hash.Hash.ToLowerInvariant())  $(Split-Path -Leaf $artifactExePath)" -Encoding ASCII
     Remove-Item -LiteralPath $publishDir -Recurse -Force
