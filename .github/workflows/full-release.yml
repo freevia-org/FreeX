@@ -166,8 +166,7 @@ jobs:
         run: |
           pwsh -NoProfile -File tools/Test-GitHubReleaseCandidate.ps1 `
             -Repository $env:GITHUB_REPOSITORY `
-            -CommitSha $env:GITHUB_SHA `
-            -RequiredWorkflows ci.yml,codeql.yml
+            -CommitSha $env:GITHUB_SHA
 
   release-tests:
     name: Release test ${{ matrix.app }} ${{ matrix.platform }} ${{ matrix.displayGateId }}

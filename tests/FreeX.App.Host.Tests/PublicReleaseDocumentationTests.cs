@@ -51,7 +51,8 @@ public sealed class PublicReleaseDocumentationTests
         operations.Should().Contain("do not silently replace asset bytes");
         operations.Should().Contain("rollback is withdrawal plus a");
         operations.Should().Contain("forward-fix release");
-        operations.Should().Contain("Do not disable SmartScreen, Gatekeeper, antivirus");
+        operations.Should().Contain("Do not disable");
+        operations.Should().Contain("SmartScreen, Gatekeeper, antivirus, or other operating-system protections");
         operations.Should().Contain("does not define notification deadlines");
     }
 
@@ -77,14 +78,14 @@ public sealed class PublicReleaseDocumentationTests
     }
 
     [Fact]
-    public void Release_notes_template_requires_unsigned_privacy_support_and_rollback_disclosure()
+    public void Release_notes_template_requires_signing_privacy_support_and_rollback_disclosure()
     {
         var releaseNotes = WorkspaceFileLocator.ReadAllText(
             "docs", "release", "public-preview-release-notes-template.md");
 
         releaseNotes.Should().Contain("## Trust and Signing Status");
-        releaseNotes.Should().Contain("unsigned");
-        releaseNotes.Should().Contain("unnotarized");
+        releaseNotes.Should().Contain("verified Freevia publisher for Windows");
+        releaseNotes.Should().Contain("accepted notarization, and stapling status");
         releaseNotes.Should().Contain("Verify SHA-256 checksums before launch");
         releaseNotes.Should().Contain("## Install, Update, Uninstall, and Rollback");
         releaseNotes.Should().Contain("## Privacy and Network Behavior");
