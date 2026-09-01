@@ -14,17 +14,22 @@ public partial class MainWindow
     private void InsertCurrentDateOrTime(bool insertTime)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var value = insertTime
-            ? DateTimeEntryService.CurrentTime(DateTime.Now)
-            : DateTimeEntryService.CurrentDate(DateTime.Now);
+        var now = DateTime.Now;
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 insertTime ? "Insert Time" : "Insert Date",
                 range,
-                currentRange => CreateSingleCellEditCommand(currentRange.Start, Cell.FromValue(value)),
+                currentRange => CreateSingleCellEditCommand(
+                    currentRange.Start,
+                    insertTime
+                        ? Cell.FromValue(DateTimeEntryService.CurrentTime(now))
+                        : DateTimeEntryService.CreateCurrentDateShortcutCell(_workbook, currentRange.Start, now)),
                 out var outcome))
             return;
 
         UpdateViewport();
+        var activeAddress = SheetGrid.SelectedRange?.Start ?? range.Start;
+        var activeSheet = _workbook.GetSheet(activeAddress.Sheet);
+        SetFormulaBarSelectionText(FormatFormulaBarText(activeSheet?.GetCell(activeAddress), activeAddress));
         RefreshToolbar();
         RefreshStatusBar();
     }
