@@ -14,18 +14,14 @@ namespace FreeX.App.Services.Tests;
 /// classic lost-update/TOCTOU race), because B's Save() rewrote the whole file from B's stale
 /// in-memory snapshot.
 ///
-/// The fix adds (a) a fresh-from-disk reload immediately before every mutator applies its change
-/// (<c>ReloadEntriesLocked</c>) and (b) a cross-process exclusive lock around the whole
-/// reload-mutate-save sequence (<c>AcquireCrossProcessLock</c>, an exclusively-opened sibling
-/// ".lock" file — FileShare.None is honored across separate OS processes, unlike the
-/// in-process-only <c>_sync</c> monitor). Together these mean a concurrent writer's save is
-/// merged instead of clobbered, whether the two writers are two windows in one process (already
-/// covered by <see cref="RecentFilesStoreMultiWindowReloadTests"/> for the H58 caller-side fix)
-/// or two wholly separate processes (this class).
+/// The fix adds (a) a fresh-from-disk reload immediately before every mutator applies its change,
+/// (b) a shared per-path process lock for independently loaded instances in one process, and (c) a
+/// fail-closed cross-process exclusive lock around the whole reload-mutate-save sequence. The
+/// cross-process lock is an exclusively-opened sibling ".lock" file; FileShare.None is honored
+/// across separate OS processes, unlike either instance's private <c>_sync</c> monitor.
 ///
-/// These tests exercise two independently-<see cref="RecentFilesStore.Load"/>-ed instances against
-/// the same backing file — the same emulation technique the existing H58 multi-window tests use —
-/// which is exactly the shape a second FreeX.exe process reduces to at the store/service layer.
+/// These tests exercise independently loaded instances against one backing file and directly hold
+/// its OS lock to verify a contending writer waits instead of degrading to an unlocked write.
 /// </summary>
 public sealed class RecentFilesStoreCrossProcessLockTests
 {
@@ -128,8 +124,9 @@ public sealed class RecentFilesStoreCrossProcessLockTests
         // A genuinely concurrent variant (real threads, not just interleaved sequential calls) of
         // the scenarios above, exercising the cross-process file lock itself rather than only the
         // reload-before-mutate merge: two independently-loaded store instances (standing in for two
-        // separate FreeX.exe processes; each has its own in-process _sync monitor, so only the
-        // cross-process file lock can serialize them) hammer the same recent.json at the same time.
+        // separate FreeX.exe processes; each has its own instance _sync monitor) hammer the same
+        // recent.json at the same time. The shared per-path process lock prevents local starvation,
+        // while the dedicated busy-lock test below covers the OS-lock boundary.
         using var temp = new TestTemporaryDirectory();
         var path = Path.Combine(temp.Path, "recent.json");
 
@@ -161,5 +158,40 @@ public sealed class RecentFilesStoreCrossProcessLockTests
             paths.Should().Contain($@"C:\Docs\A{i}.xlsx");
             paths.Should().Contain($@"C:\Docs\B{i}.xlsx");
         }
+    }
+
+    [Fact]
+    public async Task R189_AddOrUpdate_DoesNotFallBackToUnlockedWriteWhenLockIsBusy()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "recent.json");
+        RecentFilesStore.Load(path).AddOrUpdate(@"C:\Docs\Existing.xlsx", maxRecentEntries: 100);
+
+        var lockPath = path + ".lock";
+        using var heldByAnotherProcess = new FileStream(
+            lockPath,
+            FileMode.OpenOrCreate,
+            FileAccess.ReadWrite,
+            FileShare.None);
+
+        using var writerStarted = new ManualResetEventSlim();
+        var pendingWrite = Task.Run(() =>
+        {
+            writerStarted.Set();
+            RecentFilesStore.Load(path).AddOrUpdate(@"C:\Docs\New.xlsx", maxRecentEntries: 100);
+        });
+
+        writerStarted.Wait();
+        await Task.Delay(TimeSpan.FromSeconds(4));
+        pendingWrite.IsCompleted.Should().BeFalse(
+            "a busy cross-process lock must never degrade to an unlocked load-modify-write");
+
+        heldByAnotherProcess.Dispose();
+        await pendingWrite.WaitAsync(TimeSpan.FromSeconds(10));
+
+        var paths = JsonSerializer.Deserialize<List<RecentFileEntry>>(File.ReadAllText(path))!
+            .Select(entry => entry.Path);
+        paths.Should().Contain(@"C:\Docs\Existing.xlsx");
+        paths.Should().Contain(@"C:\Docs\New.xlsx");
     }
 }
