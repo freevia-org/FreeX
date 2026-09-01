@@ -62,36 +62,61 @@ public sealed class R188_SortTextCollationTests
         }
     }
 
+    // The same word in NFC (precomposed U+00E9) and NFD (e + U+0301) form. A user who pastes from
+    // macOS gets NFD; typing on Windows gets NFC. Culture collation reports these EQUAL, which is
+    // exactly the case the ordinal tie-break exists for.
+    //
+    // r189: this test used to use ("co-op", "coop") on the stated premise that the culture calls
+    // them equal. Measured on .NET 10 under de-DE, string.Compare with CompareOptions.IgnoreCase
+    // returns -1 for that pair, so the primary comparison decided it and the tie-break was never
+    // reached -- the test passed without exercising the thing it named. These two do compare 0.
+    private const string PrecomposedAccent = "\u00E9lan";
+    private const string DecomposedAccent = "e\u0301lan";
+
     [Fact]
-    public void CompareIgnoreCase_ForKeysTheCultureCallsEqual_StillSeparatesThem()
+    public void CompareIgnoreCase_ForKeysTheCultureCallsEqual_OrdersThemDeterministically()
     {
-        // The ordinal fallback exists so the comparison stays a total order: a culture-aware
-        // compare reports 0 for strings a user can tell apart, and a comparer that calls distinct
-        // values equal makes the sorted result depend on the input order.
+        // The ordinal fallback keeps the comparison a total order: a culture-aware compare reports
+        // 0 for strings a user can tell apart, and a comparer that calls distinct values equal
+        // leaves the sorted result dependent on the order the rows happened to be in.
         var previous = CultureInfo.CurrentCulture;
         CultureInfo.CurrentCulture = new CultureInfo("de-DE");
         try
+        {
+            // Both input orders must produce the SAME output order. That is what "total" means, and
+            // it is the assertion the old version of this test was missing: it only checked that
+            // both rows survived, which a stable sort guarantees whatever the comparer returns.
+            SortedPair(PrecomposedAccent, DecomposedAccent)
+                .Should().Equal(SortedPair(DecomposedAccent, PrecomposedAccent));
+
+            // Ordinal decides: the NFD form starts with 'e' (U+0065), below the precomposed U+00E9.
+            SortedPair(PrecomposedAccent, DecomposedAccent)
+                .Should().Equal(DecomposedAccent, PrecomposedAccent);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
+
+        static string[] SortedPair(string first, string second)
         {
             var workbook = new Workbook("test");
             var sheet = workbook.AddSheet("Sheet1");
             var ctx = new TestCommandContext(workbook);
             var sid = sheet.Id;
 
-            sheet.SetCell(new CellAddress(sid, 1, 1), new TextValue("co-op"));
-            sheet.SetCell(new CellAddress(sid, 2, 1), new TextValue("coop"));
+            sheet.SetCell(new CellAddress(sid, 1, 1), new TextValue(first));
+            sheet.SetCell(new CellAddress(sid, 2, 1), new TextValue(second));
 
             var range = new GridRange(new CellAddress(sid, 1, 1), new CellAddress(sid, 2, 1));
             new SortCommand(sid, range, sortByColOffset: 0, ascending: true)
                 .Apply(ctx).Success.Should().BeTrue();
 
-            var first = ((TextValue)sheet.GetValue(1, 1)!).Value;
-            var second = ((TextValue)sheet.GetValue(2, 1)!).Value;
-            first.Should().NotBe(second, "both rows must survive the sort");
-            new[] { first, second }.Should().BeEquivalentTo(["co-op", "coop"]);
-        }
-        finally
-        {
-            CultureInfo.CurrentCulture = previous;
+            return
+            [
+                ((TextValue)sheet.GetValue(1, 1)!).Value,
+                ((TextValue)sheet.GetValue(2, 1)!).Value,
+            ];
         }
     }
 }

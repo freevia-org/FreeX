@@ -35,7 +35,8 @@ public sealed class R188_SlideShowSecondLaunchTests
             (_, _) => { },
             shown.Add,
             window => window.IsLive,
-            activated.Add);
+            activated.Add,
+            window => window.IsLive = false);
 
         coordinator.TryLaunch(fromStart: true).Should().BeTrue();
         coordinator.TryLaunch(fromStart: true).Should().BeTrue();
@@ -68,7 +69,8 @@ public sealed class R188_SlideShowSecondLaunchTests
             (_, _) => { },
             _ => { },
             window => window.IsLive,
-            _ => { });
+            _ => { },
+            window => window.IsLive = false);
 
         coordinator.TryLaunch(fromStart: true).Should().BeTrue();
         created.Should().HaveCount(1);
@@ -80,10 +82,90 @@ public sealed class R188_SlideShowSecondLaunchTests
     }
 
     [Fact]
-    public void TryLaunchReadingView_WhileAShowIsRunning_AlsoReusesIt()
+    public void TryLaunchReadingView_WhileAFullscreenShowIsRunning_ReplacesItRatherThanReusingIt()
     {
-        // Reading view goes through the same Launch path, so it must not open a second window
-        // either -- the duplicate-window bug was in Launch, not in any one entry point.
+        // r189 CORRECTION. This test previously asserted that Reading View reuses a running
+        // fullscreen show, and it was WRONG -- it pinned the defect the r188 reuse check
+        // introduced. Reading View is a windowed browse view; a fullscreen show is not that
+        // window, so re-focusing it silently drops what the user asked for. The reuse is only
+        // correct when the mode matches.
+        var editor = CreateEditor();
+        var customShows = new SlideShowCustomShowSession(() => editor);
+        var created = new List<(FakeWindow Window, bool Browse)>();
+        var activated = new List<FakeWindow>();
+        var closed = new List<FakeWindow>();
+
+        var coordinator = new SlideShowWindowLaunchCoordinator<FakeWindow>(
+            customShows,
+            () => editor.Presentation,
+            () => null,
+            editor.SetSlideNotesText,
+            plan =>
+            {
+                var window = new FakeWindow { IsLive = true };
+                created.Add((window, plan.ForceBrowseWindow));
+                return window;
+            },
+            (_, _) => { },
+            _ => { },
+            window => window.IsLive,
+            activated.Add,
+            window =>
+            {
+                window.IsLive = false;
+                closed.Add(window);
+            });
+
+        coordinator.TryLaunch(fromStart: true).Should().BeTrue();
+        coordinator.TryLaunchReadingView().Should().BeTrue();
+
+        created.Should().HaveCount(2);
+        created[0].Browse.Should().BeFalse("F5 opens a fullscreen show");
+        created[1].Browse.Should().BeTrue("Reading View is the windowed browse view");
+        closed.Should().ContainSingle().Which.Should().BeSameAs(created[0].Window);
+        activated.Should().BeEmpty("no window of the requested mode existed to re-focus");
+    }
+
+    [Fact]
+    public void TryLaunch_WhileReadingViewIsOpen_ReplacesItWithAFullscreenShow()
+    {
+        // The reverse direction: presenting to an audience must not leave the user in a windowed
+        // view just because Reading View happened to be open.
+        var editor = CreateEditor();
+        var customShows = new SlideShowCustomShowSession(() => editor);
+        var created = new List<(FakeWindow Window, bool Browse)>();
+        var activated = new List<FakeWindow>();
+
+        var coordinator = new SlideShowWindowLaunchCoordinator<FakeWindow>(
+            customShows,
+            () => editor.Presentation,
+            () => null,
+            editor.SetSlideNotesText,
+            plan =>
+            {
+                var window = new FakeWindow { IsLive = true };
+                created.Add((window, plan.ForceBrowseWindow));
+                return window;
+            },
+            (_, _) => { },
+            _ => { },
+            window => window.IsLive,
+            activated.Add,
+            window => window.IsLive = false);
+
+        coordinator.TryLaunchReadingView().Should().BeTrue();
+        coordinator.TryLaunch(fromStart: true).Should().BeTrue();
+
+        created.Should().HaveCount(2);
+        created[1].Browse.Should().BeFalse("F5 must give a fullscreen show");
+        activated.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TryLaunchReadingView_Twice_ReusesTheReadingViewWindow()
+    {
+        // Reuse is still correct when the mode matches: the r188 duplicate-window fix must not be
+        // undone by the mode check.
         var editor = CreateEditor();
         var customShows = new SlideShowCustomShowSession(() => editor);
         var created = new List<FakeWindow>();
@@ -103,13 +185,14 @@ public sealed class R188_SlideShowSecondLaunchTests
             (_, _) => { },
             _ => { },
             window => window.IsLive,
-            activated.Add);
+            activated.Add,
+            window => window.IsLive = false);
 
-        coordinator.TryLaunch(fromStart: true).Should().BeTrue();
+        coordinator.TryLaunchReadingView().Should().BeTrue();
         coordinator.TryLaunchReadingView().Should().BeTrue();
 
         created.Should().HaveCount(1);
-        activated.Should().ContainSingle();
+        activated.Should().ContainSingle().Which.Should().BeSameAs(created[0]);
     }
 
     private static EditingSession CreateEditor()

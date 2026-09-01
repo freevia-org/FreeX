@@ -34,6 +34,7 @@ public sealed class SlideShowWindowLaunchCoordinatorTests
             (_, intent) => appliedTiming = intent,
             window => shownWindow = window,
             static _ => false,
+            static _ => { },
             static _ => { });
 
         coordinator.TryLaunch(
@@ -72,6 +73,7 @@ public sealed class SlideShowWindowLaunchCoordinatorTests
             (_, _) => { },
             _ => { },
             static _ => false,
+            static _ => { },
             static _ => { });
 
         coordinator.TryLaunchNamed("Missing").Should().BeFalse();
@@ -98,6 +100,7 @@ public sealed class SlideShowWindowLaunchCoordinatorTests
             (_, _) => { },
             _ => { },
             static _ => false,
+            static _ => { },
             static _ => { });
 
         coordinator.TryLaunchReadingView().Should().BeTrue();

@@ -18,6 +18,7 @@ public sealed class SlideShowWindowLaunchCoordinator<TWindow>
     private readonly Action<TWindow> _showWindow;
     private readonly Func<TWindow, bool> _isWindowLive;
     private readonly Action<TWindow> _activateWindow;
+    private readonly Action<TWindow> _closeWindow;
 
     // r188: the show this coordinator most recently opened, or null once it has closed. Without it
     // every launch built a NEW full-screen window: pressing F5 twice, or clicking Play while a show
@@ -29,6 +30,10 @@ public sealed class SlideShowWindowLaunchCoordinator<TWindow>
     // behaviour by omitting them.
     private TWindow? _liveWindow;
 
+    // r189: whether _liveWindow was opened as the windowed browse/Reading View rather than a
+    // fullscreen show. Reuse requires this to match what the caller is asking for.
+    private bool _liveWindowIsBrowseWindow;
+
     public SlideShowWindowLaunchCoordinator(
         SlideShowCustomShowSession customShows,
         Func<Presentation> getPresentation,
@@ -38,10 +43,12 @@ public sealed class SlideShowWindowLaunchCoordinator<TWindow>
         Action<TWindow, SlideShowTimingIntent> setTimingIntent,
         Action<TWindow> showWindow,
         Func<TWindow, bool> isWindowLive,
-        Action<TWindow> activateWindow)
+        Action<TWindow> activateWindow,
+        Action<TWindow> closeWindow)
     {
         _isWindowLive = isWindowLive ?? throw new ArgumentNullException(nameof(isWindowLive));
         _activateWindow = activateWindow ?? throw new ArgumentNullException(nameof(activateWindow));
+        _closeWindow = closeWindow ?? throw new ArgumentNullException(nameof(closeWindow));
         _customShows = customShows ?? throw new ArgumentNullException(nameof(customShows));
         _getPresentation = getPresentation ?? throw new ArgumentNullException(nameof(getPresentation));
         _getSelectedCaptionTrackIndex = getSelectedCaptionTrackIndex
@@ -107,12 +114,24 @@ public sealed class SlideShowWindowLaunchCoordinator<TWindow>
     {
         // A show already on screen is brought forward instead of being duplicated. The stale
         // reference is dropped first so a window the user closed does not block the next launch.
+        //
+        // r189: the reuse is conditional on the MODE matching. The r188 version of this check
+        // looked only at liveness, so requesting Reading View while a fullscreen show was running
+        // re-focused the fullscreen window and dropped the request -- and pressing F5 during
+        // Reading View kept the user in a windowed view instead of going fullscreen for an
+        // audience. A window in the wrong mode is not the window the user asked for, so it is
+        // closed and replaced rather than activated.
         if (_liveWindow is { } running)
         {
             if (_isWindowLive(running))
             {
-                _activateWindow(running);
-                return;
+                if (_liveWindowIsBrowseWindow == forceBrowseWindow)
+                {
+                    _activateWindow(running);
+                    return;
+                }
+
+                _closeWindow(running);
             }
 
             _liveWindow = null;
@@ -131,6 +150,7 @@ public sealed class SlideShowWindowLaunchCoordinator<TWindow>
         if (timingIntent != SlideShowTimingIntent.None)
             _setTimingIntent(window, timingIntent);
         _liveWindow = window;
+        _liveWindowIsBrowseWindow = forceBrowseWindow;
         _showWindow(window);
     }
 }
