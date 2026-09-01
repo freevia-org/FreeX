@@ -216,6 +216,48 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void SlideZoom_SaveReconciliation_UsesFirstDuplicateTargetForMultipleZooms_AndLeavesMissingTargetUntouched()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "source", NumericId = 700, Title = "Source" });
+        presentation.Slides.Add(new Slide { Id = "duplicate-target", NumericId = 900, Title = "First target" });
+        presentation.Slides.Add(new Slide { Id = "duplicate-target", NumericId = 901, Title = "Second target" });
+
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var firstZoom = session.InsertSlideZoom("duplicate-target");
+        var secondZoom = session.InsertSlideZoom("duplicate-target");
+        var missingTargetZoom = session.InsertSlideZoom("duplicate-target");
+
+        SetTarget(firstZoom.PreservedObject!, "duplicate-target", 999);
+        SetTarget(secondZoom.PreservedObject!, "duplicate-target", 998);
+        SetTarget(missingTargetZoom.PreservedObject!, "missing-target", 997);
+
+        using var _ = WritePptxToMemory(presentation);
+
+        firstZoom.PreservedObject!.ZoomTargetSlideNumericId.Should().Be(900);
+        GetRawTargetId(firstZoom.PreservedObject).Should().Be(900);
+        secondZoom.PreservedObject!.ZoomTargetSlideNumericId.Should().Be(900);
+        GetRawTargetId(secondZoom.PreservedObject).Should().Be(900);
+        missingTargetZoom.PreservedObject!.ZoomTargetSlideNumericId.Should().Be(997);
+        GetRawTargetId(missingTargetZoom.PreservedObject).Should().Be(997);
+
+        static void SetTarget(PreservedObjectInfo info, string slideId, uint numericId)
+        {
+            info.ZoomTargetSlideId = slideId;
+            info.ZoomTargetSlideNumericId = numericId;
+            var root = XElement.Parse(info.RawXml);
+            root.Descendants().Single(element => element.Name.LocalName == "sldZmObj")
+                .SetAttributeValue("sldId", numericId);
+            info.RawXml = root.ToString(SaveOptions.DisableFormatting);
+        }
+
+        static uint GetRawTargetId(PreservedObjectInfo info) =>
+            uint.Parse(XElement.Parse(info.RawXml)
+                .Descendants().Single(element => element.Name.LocalName == "sldZmObj")
+                .Attribute("sldId")!.Value);
+    }
+
+    [Fact]
     public void AuthoredSectionZoom_WritesNativeTargetAndReopens()
     {
         var presentation = new Presentation();

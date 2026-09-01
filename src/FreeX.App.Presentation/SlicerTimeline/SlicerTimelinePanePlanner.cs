@@ -34,7 +34,9 @@ public static class SlicerTimelinePanePlanner
 
     public static IReadOnlyList<SlicerTileItem> BuildSlicerTiles(SlicerModel slicer, IEnumerable<string> sourceItems)
     {
-        var selected = slicer.SelectedItems.ToHashSet(StringComparer.CurrentCultureIgnoreCase);
+        var selected = slicer.SelectedItems.Count == 0
+            ? null
+            : slicer.SelectedItems.ToHashSet(StringComparer.CurrentCultureIgnoreCase);
         var items = new SortedSet<string>(StringComparer.CurrentCultureIgnoreCase);
         foreach (var item in sourceItems)
             items.Add(item);
@@ -47,7 +49,7 @@ public static class SlicerTimelinePanePlanner
 
         var tiles = new List<SlicerTileItem>(items.Count);
         foreach (var item in items)
-            tiles.Add(new SlicerTileItem(slicer.Name, item, selected.Count == 0 || selected.Contains(item)));
+            tiles.Add(new SlicerTileItem(slicer.Name, item, selected is null || selected.Contains(item)));
 
         return tiles;
     }

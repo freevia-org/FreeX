@@ -197,7 +197,11 @@ public sealed class NavigationPaneSession
         string? query)
     {
         ArgumentNullException.ThrowIfNull(document);
-        return BuildHeadings(document, query ?? string.Empty);
+        var normalizedQuery = query ?? string.Empty;
+        QueryMatchIndex? matches = normalizedQuery.Length == 0
+            ? null
+            : BuildQueryMatchIndex(document, normalizedQuery);
+        return BuildHeadings(document, matches);
     }
 
     private NavigationPaneViewState EmptyState() =>
@@ -211,11 +215,14 @@ public sealed class NavigationPaneSession
     {
         ArgumentNullException.ThrowIfNull(document);
         var normalizedQuery = query;
-        var hits = normalizedQuery.Length == 0 ? [] : FindSearchHits(document, normalizedQuery);
+        QueryMatchIndex? matches = normalizedQuery.Length == 0
+            ? null
+            : BuildQueryMatchIndex(document, normalizedQuery);
+        IReadOnlyList<int> hits = matches?.Hits ?? [];
         var nextHitIndex = hits.Count == 0
             ? -1
             : Math.Clamp(searchHitIndex < 0 ? 0 : searchHitIndex, 0, hits.Count - 1);
-        var headings = BuildHeadings(document, normalizedQuery);
+        var headings = BuildHeadings(document, matches);
         var selected = selectedHeadingBlockIndex is { } blockIndex
             && headings.Any(heading => heading.BlockIndex == blockIndex)
                 ? blockIndex
@@ -232,38 +239,43 @@ public sealed class NavigationPaneSession
         return new NavigationPaneViewState(normalizedQuery, headings, hits, nextHitIndex, selected, status);
     }
 
-    private static IReadOnlyList<int> FindSearchHits(TextDocument document, string query)
+    private static QueryMatchIndex BuildQueryMatchIndex(TextDocument document, string query)
     {
         var hits = new List<int>();
+        var prefixCounts = new int[document.Blocks.Count + 1];
         for (var index = 0; index < document.Blocks.Count; index++)
         {
-            if (BlockMatches(document.Blocks[index], query))
+            var matches = BlockMatches(document.Blocks[index], query);
+            prefixCounts[index + 1] = prefixCounts[index] + (matches ? 1 : 0);
+            if (matches)
                 hits.Add(index);
         }
-        return hits;
+        return new QueryMatchIndex(hits, prefixCounts);
     }
 
     private static IReadOnlyList<NavigationHeadingProjection> BuildHeadings(
         TextDocument document,
-        string query)
+        QueryMatchIndex? matches)
     {
         var outline = DocumentOutline.Of(document);
         var projected = new List<NavigationHeadingProjection>(outline.Count);
         foreach (var entry in outline)
         {
-            if (query.Length > 0)
+            if (matches is not null)
             {
                 var (start, end) = OutlineTools.SubtreeRange(document.Blocks, entry.BlockIndex);
-                var matched = false;
-                for (var index = start; index < end && !matched; index++)
-                    matched = BlockMatches(document.Blocks[index], query);
-                if (!matched)
+                if (!matches.Value.AnyInRange(start, end))
                     continue;
             }
 
             projected.Add(new NavigationHeadingProjection(entry.BlockIndex, entry.Level, entry.Text));
         }
         return projected;
+    }
+
+    private readonly record struct QueryMatchIndex(IReadOnlyList<int> Hits, int[] PrefixCounts)
+    {
+        public bool AnyInRange(int start, int end) => PrefixCounts[end] > PrefixCounts[start];
     }
 
     private static bool BlockMatches(Block block, string query)
