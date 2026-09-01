@@ -2527,6 +2527,30 @@ internal sealed record AddressBearingStateSnapshot(
     IReadOnlyList<CrossSheetFormControlRefSnapshot> CrossSheetFormControlRefs,
     IReadOnlyList<CrossSheetPictureRefSnapshot> CrossSheetPictureRefs)
 {
+    private Dictionary<int, StructuredTableModel>? _structuredTablesById;
+
+    /// <summary>
+    /// Finds the pre-shift table with the requested identity without rescanning the complete
+    /// structured-table snapshot for every live table considered by the row/column reband paths.
+    /// The index is lazy because most address-bearing snapshots never need this lookup. TryAdd
+    /// deliberately preserves the former FirstOrDefault behavior if malformed input contains
+    /// duplicate table identities: the first captured table remains authoritative.
+    /// </summary>
+    internal StructuredTableModel? FindStructuredTableById(int tableId)
+    {
+        var index = _structuredTablesById;
+        if (index is null)
+        {
+            index = new Dictionary<int, StructuredTableModel>(StructuredTables.Count);
+            foreach (var table in StructuredTables)
+                index.TryAdd(table.Id, table);
+
+            _structuredTablesById = index;
+        }
+
+        return index.TryGetValue(tableId, out var matchedTable) ? matchedTable : null;
+    }
+
     /// <summary>
     /// Records what <see cref="RowColumnShiftHelpers.ShiftWatchedCells"/> produced from
     /// <see cref="WatchedCells"/> the one time the owning command's structural edit (insert/delete

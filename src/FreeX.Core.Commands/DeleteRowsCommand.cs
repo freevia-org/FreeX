@@ -309,7 +309,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
 
         foreach (var resizedTable in sheet.StructuredTables)
         {
-            var previousTable = _addressStateSnapshot.StructuredTables.FirstOrDefault(t => t.Id == resizedTable.Id);
+            var previousTable = _addressStateSnapshot.FindStructuredTableById(resizedTable.Id);
             if (previousTable is null ||
                 previousTable.Range.Start.Row != resizedTable.Range.Start.Row ||
                 resizedTable.Range.End.Row >= previousTable.Range.End.Row)

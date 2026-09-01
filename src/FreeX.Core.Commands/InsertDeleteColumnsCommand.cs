@@ -222,7 +222,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
 
         foreach (var resizedTable in sheet.StructuredTables)
         {
-            var previousTable = _addressStateSnapshot.StructuredTables.FirstOrDefault(t => t.Id == resizedTable.Id);
+            var previousTable = _addressStateSnapshot.FindStructuredTableById(resizedTable.Id);
             if (previousTable is null ||
                 previousTable.Range.Start.Col != resizedTable.Range.Start.Col ||
                 resizedTable.Range.End.Col <= previousTable.Range.End.Col)
@@ -698,7 +698,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
 
         foreach (var resizedTable in sheet.StructuredTables)
         {
-            var previousTable = _addressStateSnapshot.StructuredTables.FirstOrDefault(t => t.Id == resizedTable.Id);
+            var previousTable = _addressStateSnapshot.FindStructuredTableById(resizedTable.Id);
             if (previousTable is null ||
                 previousTable.Range.Start.Col != resizedTable.Range.Start.Col ||
                 resizedTable.Range.End.Col >= previousTable.Range.End.Col)
