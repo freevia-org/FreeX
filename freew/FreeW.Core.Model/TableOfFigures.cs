@@ -367,14 +367,8 @@ public static class TableOfFigures
         if (block is not Paragraph paragraph)
             return false;
 
-        var nativeFields = paragraph.Runs
-            .Select(run => run.ComplexField)
-            .Prepend(paragraph.SpanningFieldOwner)
-            .Where(field => field is { Keyword: "TOC" })
-            .ToArray();
-        return nativeFields.Length > 0
-            ? nativeFields.Any(field => TryGetNativeLabel(field, out _))
-            : IsTableOfFiguresStyleId(paragraph.StyleId);
+        return HasNativeTableOfFiguresField(paragraph, requestedLabel: null, matchAnyLabel: true, out var hasAnyTocField)
+            || (!hasAnyTocField && IsTableOfFiguresStyleId(paragraph.StyleId));
     }
 
     /// <summary>
@@ -390,14 +384,53 @@ public static class TableOfFigures
         if (block is not Paragraph paragraph)
             return false;
 
-        var nativeFields = paragraph.Runs
-            .Select(run => run.ComplexField)
-            .Prepend(paragraph.SpanningFieldOwner)
-            .Where(field => field is { Keyword: "TOC" })
-            .ToArray();
-        return nativeFields.Length > 0
-            ? nativeFields.Any(field => TryGetNativeLabel(field, out var nativeLabel) && LabelsMatch(nativeLabel, labelText))
-            : IsTableOfFiguresStyleId(paragraph.StyleId, labelText);
+        return HasNativeTableOfFiguresField(paragraph, labelText, matchAnyLabel: false, out var hasAnyTocField)
+            || (!hasAnyTocField && IsTableOfFiguresStyleId(paragraph.StyleId, labelText));
+    }
+
+    private static bool HasNativeTableOfFiguresField(
+        Paragraph paragraph,
+        string? requestedLabel,
+        bool matchAnyLabel,
+        out bool hasAnyTocField)
+    {
+        var sawTocField = false;
+        if (IsMatchingTableOfFiguresField(
+                paragraph.SpanningFieldOwner,
+                requestedLabel,
+                matchAnyLabel,
+                ref sawTocField))
+        {
+            hasAnyTocField = sawTocField;
+            return true;
+        }
+        foreach (var run in paragraph.Runs)
+        {
+            if (IsMatchingTableOfFiguresField(
+                    run.ComplexField,
+                    requestedLabel,
+                    matchAnyLabel,
+                    ref sawTocField))
+            {
+                hasAnyTocField = sawTocField;
+                return true;
+            }
+        }
+        hasAnyTocField = sawTocField;
+        return false;
+    }
+
+    private static bool IsMatchingTableOfFiguresField(
+        ComplexField? field,
+        string? requestedLabel,
+        bool matchAnyLabel,
+        ref bool sawTocField)
+    {
+        if (field is not { Keyword: "TOC" })
+            return false;
+        sawTocField = true;
+        return TryGetNativeLabel(field, out var nativeLabel)
+            && (matchAnyLabel || LabelsMatch(nativeLabel, requestedLabel));
     }
 
     private static bool LabelsMatch(string nativeLabel, string? requestedLabel) =>

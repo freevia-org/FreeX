@@ -439,6 +439,24 @@ public class TableOfContentsTests
     }
 
     [Fact]
+    public void IsTocParagraph_MixedFieldsFindsLaterMatchAndNativeMismatchSuppressesStyleFallback()
+    {
+        var laterMatch = new Paragraph
+        {
+            SpanningFieldOwner = new ComplexField(" TOC \\c \"Figure\" "),
+            Runs = { Run.ComplexFieldRun(" TOC \\o \"1-3\" ", "Chapter One\t1") }
+        };
+        var styledButNativeMismatch = new Paragraph("x")
+        {
+            StyleId = "TOC1",
+            Runs = { Run.ComplexFieldRun(" TOC \\c \"Figure\" ", "Figure 1\t1") }
+        };
+
+        TableOfContents.IsTocParagraph(laterMatch).Should().BeTrue();
+        TableOfContents.IsTocParagraph(styledButNativeMismatch).Should().BeFalse();
+    }
+
+    [Fact]
     public void EnsureStyles_RegistersTocStylesIdempotently()
     {
         var doc = TextDocument.CreateEmpty();

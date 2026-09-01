@@ -245,14 +245,36 @@ public static class TableOfContents
         if (block is not Paragraph paragraph)
             return false;
 
-        var nativeFields = paragraph.Runs
-            .Select(run => run.ComplexField)
-            .Prepend(paragraph.SpanningFieldOwner)
-            .Where(field => field is { Keyword: "TOC" })
-            .ToArray();
-        return nativeFields.Length > 0
-            ? nativeFields.Any(IsNativeTableOfContentsField)
-            : IsTocStyleId(paragraph.StyleId);
+        return HasNativeTableOfContentsField(paragraph, out var hasAnyTocField)
+            || (!hasAnyTocField && IsTocStyleId(paragraph.StyleId));
+    }
+
+    private static bool HasNativeTableOfContentsField(Paragraph paragraph, out bool hasAnyTocField)
+    {
+        var sawTocField = false;
+        if (IsMatchingTocField(paragraph.SpanningFieldOwner, ref sawTocField))
+        {
+            hasAnyTocField = sawTocField;
+            return true;
+        }
+        foreach (var run in paragraph.Runs)
+        {
+            if (IsMatchingTocField(run.ComplexField, ref sawTocField))
+            {
+                hasAnyTocField = sawTocField;
+                return true;
+            }
+        }
+        hasAnyTocField = sawTocField;
+        return false;
+    }
+
+    private static bool IsMatchingTocField(ComplexField? field, ref bool sawTocField)
+    {
+        if (field is not { Keyword: "TOC" })
+            return false;
+        sawTocField = true;
+        return IsNativeTableOfContentsField(field);
     }
 
     private static bool IsNativeTableOfContentsField(ComplexField? field) =>

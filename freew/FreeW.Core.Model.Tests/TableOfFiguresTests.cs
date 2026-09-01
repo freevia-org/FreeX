@@ -313,6 +313,31 @@ public class TableOfFiguresTests
         TableOfFigures.IsTableOfFiguresParagraph(Table.Create(1, 1)).Should().BeFalse();
     }
 
+    [Fact]
+    public void IsTableOfFiguresParagraph_MixedFieldsFindsLaterMatchAndNativeMismatchSuppressesStyleFallback()
+    {
+        var laterMatch = new Paragraph
+        {
+            SpanningFieldOwner = new ComplexField(" TOC \\o \"1-3\" "),
+            Runs = { Run.ComplexFieldRun(" TOC \\c \"Table\" ", "Table 1\t1") }
+        };
+        var styledButWrongFamily = new Paragraph("x")
+        {
+            StyleId = TableOfFigures.EntryStyleId,
+            Runs = { Run.ComplexFieldRun(" TOC \\o \"1-3\" ", "Chapter One\t1") }
+        };
+        var styledButWrongLabel = new Paragraph("x")
+        {
+            StyleId = TableOfFigures.EntryStyleIdFor(Captions.FigureLabelText),
+            Runs = { Run.ComplexFieldRun(" TOC \\c \"Table\" ", "Table 1\t1") }
+        };
+
+        TableOfFigures.IsTableOfFiguresParagraph(laterMatch).Should().BeTrue();
+        TableOfFigures.IsTableOfFiguresParagraph(laterMatch, Captions.TableLabelText).Should().BeTrue();
+        TableOfFigures.IsTableOfFiguresParagraph(styledButWrongFamily).Should().BeFalse();
+        TableOfFigures.IsTableOfFiguresParagraph(styledButWrongLabel, Captions.FigureLabelText).Should().BeFalse();
+    }
+
     // r142 tof-refresh-cross-label-deletion: the label-scoped overload must distinguish a Table of
     // Figures region from a Table of Tables region -- both a styled heading (no native field) and a
     // native-TOC-field-owned entry -- so a refresh can be scoped to its own label only.
