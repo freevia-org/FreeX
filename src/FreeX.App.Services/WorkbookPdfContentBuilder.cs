@@ -1003,14 +1003,29 @@ public static class WorkbookPdfContentBuilder
         // print/PDF path's own `!draftQuality` guard (PrintRenderer.HeaderFooter.cs) around charts and
         // raster pictures. No local guard needed here: text boxes stay unconditional below (vector
         // text content, not "graphics" -- Excel's Draft Quality does not suppress them).
-        foreach (var chart in layout.Charts)
+        if (layout.Charts.Count > 0)
         {
-            AddFillRect(ops, chart.Bounds, chart.Fill, pageHeightPoints, scaleX, scaleY);
-            AddStrokeRect(ops, chart.Bounds, chart.Outline, chart.OutlineThickness, pageHeightPoints, scaleX, scaleY);
-            AddChartPlotOps(workbook, sheet, chart, ops, pageHeightPoints, scaleX, scaleY, textMeasurer);
+            var chartCellAccessor = BuildChartCellAccessor(workbook, sheet);
+            var seriesPalette = ChartStylePlanner.BuildExcelSeriesPalette(workbook.Theme);
+            foreach (var chart in layout.Charts)
+            {
+                AddFillRect(ops, chart.Bounds, chart.Fill, pageHeightPoints, scaleX, scaleY);
+                AddStrokeRect(ops, chart.Bounds, chart.Outline, chart.OutlineThickness, pageHeightPoints, scaleX, scaleY);
+                AddChartPlotOps(
+                    workbook,
+                    sheet,
+                    chart,
+                    chartCellAccessor,
+                    seriesPalette,
+                    ops,
+                    pageHeightPoints,
+                    scaleX,
+                    scaleY,
+                    textMeasurer);
 
-            foreach (var overlay in chart.TextOverlays)
-                AddTextOverlay(ops, overlay, pageHeightPoints, scaleX, scaleY);
+                foreach (var overlay in chart.TextOverlays)
+                    AddTextOverlay(ops, overlay, pageHeightPoints, scaleX, scaleY);
+            }
         }
 
         // R92-consumer-wiring-sweep-1: sheet pictures (Insert > Pictures, or a raster non-linked
@@ -1052,6 +1067,8 @@ public static class WorkbookPdfContentBuilder
         Workbook workbook,
         Sheet sheet,
         PageChartBlock chartBlock,
+        ChartLayoutRequestBuilder.ChartCellAccessor chartCellAccessor,
+        IReadOnlyList<CellColor> palette,
         List<PdfDrawOp> ops,
         double pageHeightPoints,
         double scaleX,
@@ -1071,7 +1088,7 @@ public static class WorkbookPdfContentBuilder
         var request = ChartLayoutRequestBuilder.TryBuild(
             chart,
             plotArea,
-            BuildChartCellAccessor(workbook, sheet),
+            chartCellAccessor,
             textMeasurer);
         if (request is null)
             return;
@@ -1086,7 +1103,6 @@ public static class WorkbookPdfContentBuilder
             return;
         }
 
-        var palette = ChartStylePlanner.BuildExcelSeriesPalette(workbook.Theme);
         var barSeriesCount = chartLayout.Series.Count(series =>
             series.Kind is SeriesGeometryKind.Columns or SeriesGeometryKind.Bars);
 

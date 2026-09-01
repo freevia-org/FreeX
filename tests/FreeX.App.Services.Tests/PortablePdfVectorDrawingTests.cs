@@ -100,6 +100,31 @@ public sealed class PortablePdfVectorDrawingTests
             .HaveCount(2, "three source values should produce two vector line plot segments");
     }
 
+    [Fact]
+    public void AddVectorDrawingOps_BuildsPageInvariantChartDependenciesOnceOutsideChartLoop()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Services", "WorkbookPdfContentBuilder.cs"));
+        var vectorStart = source.IndexOf("private static void AddVectorDrawingOps(", StringComparison.Ordinal);
+        var plotStart = source.IndexOf("private static void AddChartPlotOps(", StringComparison.Ordinal);
+        var barStart = source.IndexOf("private static void AddChartBarOps(", StringComparison.Ordinal);
+
+        vectorStart.Should().BeGreaterThanOrEqualTo(0);
+        plotStart.Should().BeGreaterThan(vectorStart);
+        barStart.Should().BeGreaterThan(plotStart);
+
+        var vectorBlock = source[vectorStart..plotStart];
+        var plotBlock = source[plotStart..barStart];
+        vectorBlock.Should().Contain("if (layout.Charts.Count > 0)",
+            "pages without charts must not allocate chart-only rendering dependencies");
+        vectorBlock.Split("BuildChartCellAccessor(workbook, sheet)").Should().HaveCount(2,
+            "one page should create one accessor even when it renders multiple charts");
+        vectorBlock.Split("BuildExcelSeriesPalette(workbook.Theme)").Should().HaveCount(2,
+            "one page should resolve one theme palette even when it renders multiple charts");
+        plotBlock.Should().NotContain("BuildChartCellAccessor(");
+        plotBlock.Should().NotContain("BuildExcelSeriesPalette(");
+    }
+
     private static PortablePdfExportPlan CreatePageSetupPdfPlan(Workbook workbook)
     {
         var printPlan = WorkbookExportPrintPlanner.CreatePlanFromPageSetup(
