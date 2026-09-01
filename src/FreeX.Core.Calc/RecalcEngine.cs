@@ -13,6 +13,25 @@ namespace FreeX.Core.Calc;
 /// </summary>
 public sealed class RecalcEngine
 {
+    /// <summary>
+    /// When true, an exception from the evaluator that is neither <c>FormulaParseException</c> nor
+    /// <c>FormulaEvalException</c> is rethrown instead of being degraded to <c>#VALUE!</c>. Such an
+    /// exception is a bug in a built-in function, not a spreadsheet error, and a test that wants to
+    /// find those needs to see it.
+    ///
+    /// r193: this replaces a <c>#if DEBUG</c> around the same two catch blocks. The intent was
+    /// right -- surface the bug while developing, degrade in the shipped app -- but every gate in
+    /// this repo builds and tests Release (tools/Invoke-TestGate.ps1 defaults
+    /// Configuration=Release), so the throwing branch was compiled into no build anyone ran and the
+    /// net caught nothing anywhere. As a runtime seam it is at least reachable, and the two
+    /// behaviours can both be asserted.
+    ///
+    /// Defaults to FALSE, so the shipped behaviour is unchanged and no existing test starts failing
+    /// on a latent evaluator bug it was never asked about. A test that wants the strict behaviour
+    /// sets it for its own duration.
+    /// </summary>
+    internal static bool SurfaceUnexpectedEvaluatorExceptions { get; set; }
+
     // Keep only tiny ranges as exact cell edges; larger ranges avoid repeated dependent-list fan-out.
     private const long CompactRangeCellThreshold = 8;
     private const int MaxDependencyPlanCacheEntries = 1024;
@@ -686,13 +705,17 @@ public sealed class RecalcEngine
             }
             catch (Exception)
             {
-#if DEBUG
-                // In debug/test builds, surface unexpected evaluator exceptions instead of
-                // masking them as #VALUE! — a swallowed exception here is a built-in-function bug.
-                throw;
-#else
-                // Release: any unhandled exception from the evaluator (e.g. inverted range,
-                // overflow) must not crash the app — surface it as #VALUE! instead.
+                // r193: this was `#if DEBUG throw; #else degrade #endif`. The intent -- surface an
+                // evaluator bug while developing, degrade to #VALUE! in the shipped app -- is right,
+                // but every gate in this repo builds and tests RELEASE (tools/Invoke-TestGate.ps1
+                // defaults Configuration=Release), so the throw branch ran in no build anyone
+                // executed: the net was inert everywhere it was supposed to help. A runtime seam
+                // keeps the same two behaviours and lets a test choose which one it is exercising.
+                if (SurfaceUnexpectedEvaluatorExceptions)
+                    throw;
+
+                // Any unhandled exception from the evaluator (e.g. inverted range, overflow) must
+                // not crash the app -- surface it as #VALUE! instead.
                 sheet.ClearSpillRange(addr);
                 if (hadSpill)
                 {
@@ -702,7 +725,6 @@ public sealed class RecalcEngine
                 cell.Value = ErrorValue.Value;
                 _spillBlockedAnchors.Remove(addr);
                 AddError(ref errors, addr, "#VALUE!");
-#endif
             }
 
             // addr just (re-)evaluated, so if it is itself the anchor of one or more live
@@ -1348,11 +1370,11 @@ public sealed class RecalcEngine
                 }
                 catch (Exception)
                 {
-#if DEBUG
-                    throw;
-#else
+                    // r193: same seam as the primary evaluator catch above -- see its comment.
+                    if (SurfaceUnexpectedEvaluatorExceptions)
+                        throw;
+
                     cell.Value = ErrorValue.Value;
-#endif
                 }
 
                 var delta = ComputeConvergenceDelta(prevValue, cell.Value);

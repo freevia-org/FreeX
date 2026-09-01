@@ -196,6 +196,24 @@ public sealed class SisterAvaloniaFileCommandWorkflow
     public void MarkSavedWithPath(string path, bool suppressRecentFiles, Action? beforeChanged = null) =>
         _workflow.MarkSavedWithPath(path, suppressRecentFiles, beforeChanged);
 
+    /// <summary>
+    /// r193: the undo save-point pair, which this Avalonia wrapper did not expose even though
+    /// <see cref="FileCommandWorkflow"/> has carried it all along. Without them the Avalonia shells
+    /// could record no save point, so undoing back to the last-saved state left the document still
+    /// marked dirty: the title bar kept its unsaved marker and closing prompted to save a file that
+    /// was byte-for-byte as saved. The WPF sibling wires both through its workarea endpoint and gets
+    /// this right; this is what the Avalonia side needs to do the same.
+    /// </summary>
+    public void MarkSavedAtUndoDepth(int undoDepthAtSave, long undoStackVersionAtSave) =>
+        _workflow.MarkSavedAtUndoDepth(undoDepthAtSave, undoStackVersionAtSave);
+
+    /// <summary>
+    /// Clears the dirty flag when the undo stack is back at the depth recorded by
+    /// <see cref="MarkSavedAtUndoDepth"/>. Returns whether it did.
+    /// </summary>
+    public bool TryMarkCleanIfAtSavePoint(int undoDepth, long undoStackVersion) =>
+        _workflow.TryMarkCleanIfAtSavePoint(undoDepth, undoStackVersion);
+
     public void RefreshTitle() => _owner.Title = BuildTitle();
 
     public string BuildTitle()
