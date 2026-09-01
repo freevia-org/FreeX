@@ -293,7 +293,11 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().NotContain("fetch-depth: 0");
         workflow.Should().NotContain("inputs.platform == 'all' || inputs.platform == matrix.platform");
         workflow.Should().Contain("group: full-signed-release-${{ inputs.release_version }}");
-        workflow.Should().Contain("Full app releases must be dispatched from refs/heads/main.");
+        workflow.Should().Contain("$isMainRelease = $env:GITHUB_REF -eq \"refs/heads/main\"");
+        workflow.Should().Contain("$isTaggedContinuation = $allowedTagRefs -ccontains $env:GITHUB_REF");
+        workflow.Should().Contain("-not ($isMainRelease -or $isTaggedContinuation)");
+        workflow.Should().Contain("Full app releases must start from refs/heads/main or continue from an immutable tag for the requested version.");
+        workflow.Should().Contain("refs/tags/free-suite-v$version");
         workflow.Should().Contain("Later main commits do not invalidate this run.");
         workflow.Should().Contain("name: Validate version and reject conflicting immutable tags");
         workflow.Should().Contain("release_version must be a filesystem-safe semantic version such as 0.8.182.");

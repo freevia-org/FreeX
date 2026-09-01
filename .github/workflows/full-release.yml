@@ -133,10 +133,17 @@ jobs:
       - name: Validate latest release source
         shell: pwsh
         run: |
-          if ($env:GITHUB_REF -ne "refs/heads/main") {
-            throw "Full app releases must be dispatched from refs/heads/main."
+          $version = "${{ inputs.release_version }}".Trim()
+          $apps = if ("${{ inputs.app }}" -eq "all") { @("FreeX", "FreeW", "FreeP") } else { @("${{ inputs.app }}") }
+          $allowedTagRefs = @($apps | ForEach-Object { "refs/tags/$($_.ToLowerInvariant())-v$version" })
+          if ("${{ inputs.app }}" -eq "all") { $allowedTagRefs += "refs/tags/free-suite-v$version" }
+
+          $isMainRelease = $env:GITHUB_REF -eq "refs/heads/main"
+          $isTaggedContinuation = $allowedTagRefs -ccontains $env:GITHUB_REF
+          if (-not ($isMainRelease -or $isTaggedContinuation)) {
+            throw "Full app releases must start from refs/heads/main or continue from an immutable tag for the requested version."
           }
-          Write-Host "Pinned immutable release candidate $env:GITHUB_SHA. Later main commits do not invalidate this run."
+          Write-Host "Pinned immutable release candidate $env:GITHUB_SHA from $env:GITHUB_REF. Later main commits do not invalidate this run."
 
       - name: Validate version and reject conflicting immutable tags
         shell: pwsh
