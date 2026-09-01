@@ -40,17 +40,37 @@ public sealed class FindReplaceDialogSession
         // (rather than "_editor.Changed += InvalidateSearch") so this short-lived dialog session
         // never gets pinned alive by the much longer-lived EditingSession/Bus after the dialog
         // closes -- see round-160 shared-find-navigation F2.
-        _editor.Changed += CreateWeakInvalidationHandler(this);
+        _editor.Changed += CreateWeakInvalidationHandler(this, _editor);
     }
 
-    private static Action CreateWeakInvalidationHandler(FindReplaceDialogSession session)
+    /// <summary>
+    /// r186: the weak reference keeps the SESSION collectable, which is what round-160 F2 was
+    /// about -- but the closure itself stayed in the event invocation list forever, because
+    /// nothing ever unsubscribes it. Opening Find and Replace repeatedly therefore grew that
+    /// list without bound on the long-lived bus, and every document change then invoked every
+    /// dead handler in it. A handler whose target has been collected now removes itself on the
+    /// next notification, which keeps the no-pinning property and bounds the list too.
+    /// </summary>
+    private static Action CreateWeakInvalidationHandler(
+        FindReplaceDialogSession session,
+        EditingSession editor)
     {
         var weakSession = new WeakReference<FindReplaceDialogSession>(session);
-        return () =>
+        Action? handler = null;
+        handler = () =>
         {
             if (weakSession.TryGetTarget(out var target))
+            {
                 target.InvalidateSearch();
+                return;
+            }
+
+            // Removing during invocation is safe: the delegate list is immutable, so the walk
+            // in progress finishes against the old one and later notifications use the new.
+            editor.Changed -= handler;
         };
+
+        return handler;
     }
 
     public FindReplaceDialogInitialState InitialState { get; }
