@@ -42,13 +42,13 @@ public partial class MainWindow
         // r187: applying restarts the whole PROCESS, so it destroys unsaved work in every
         // other open workbook window too -- and only this window had been asked. Warn while
         // the user can still back out. The confirmation above speaks for this window only.
+        //
+        // r188: the prompt text now comes from the shared plan instead of being spelled out here.
+        // r187 wrote this guard into the WPF shell alone and the Avalonia twin kept the bug; that
+        // divergence is only possible while each shell composes its own copy of the decision.
         if (App.Services.GetService<WorkbookWindowRegistry>() is { } registry
             && registry.Windows.Any(window => !ReferenceEquals(window, this) && window.HasUnsavedChanges)
-            && ShowOwnedMessage(
-                   UiText.Get("MainWindowMessage_UpdateDiscardsOtherWindowChanges"),
-                   UiText.Get("MainWindowMessage_SaveChangesTitle"),
-                   MessageBoxButton.OKCancel,
-                   MessageBoxImage.Warning) != MessageBoxResult.OK)
+            && !plan.ShouldApplyDespiteOtherWindows(ShowOwnedSynchronousPrompt(plan.OtherWindowsWarning)))
         {
             return;
         }
@@ -56,12 +56,6 @@ public partial class MainWindow
         // ApplyAndRestart returns false when the apply did not happen; its own contract says
         // the caller must surface that, or the user is left silently on the old version.
         if (!updates.ApplyAndRestart())
-        {
-            ShowOwnedMessage(
-                UiText.Get("MainWindowMessage_UpdateApplyFailed"),
-                UiText.Get("MainWindowMessage_CheckForUpdatesTitle"),
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-        }
+            ShowOwnedSynchronousPrompt(plan.ApplyFailed);
     }
 }

@@ -27,7 +27,7 @@ function Run([string]$File, [string[]]$Arguments) {
     if ($process.ExitCode -ne 0) { throw "'$File' exited with $($process.ExitCode)." }
 }
 function Assert-OneInstalled([string]$Root, [string]$App) {
-    $matches = @(Get-ChildItem -LiteralPath $Root -Recurse -File -Filter "$App.exe" -ErrorAction SilentlyContinue)
+    $matches = @(Get-ChildItem -LiteralPath $Root -Recurse -File -Filter "$App.App.Host.exe" -ErrorAction SilentlyContinue)
     if ($matches.Count -ne 1) { throw "Expected one installed $App executable; found $($matches.Count)." }
     $matches[0].FullName
 }
@@ -46,12 +46,12 @@ try {
         if ($Suite) {
             # Individual -> suite -> individual exercises shared installer identity and destination.
             $first = $Apps[0]
-            Run (Find-One "$first-v$Version-$Runtime-setup.exe") @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$(Join-Path $programRoot $first)")
-            Run (Find-One "FreeSuite-v$Version-$Runtime-setup.exe") @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/TestInstallRoot=$programRoot")
-            foreach ($app in $Apps) { Run (Find-One "$app-v$Version-$Runtime-setup.exe") @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$(Join-Path $programRoot $app)") }
+            Run (Find-One "$first-v$Version-$Runtime-setup.exe") @('--silent','--installto',(Join-Path $programRoot $first))
+            Run (Find-One "FreeSuite-v$Version-$Runtime-setup.exe") @('--silent','--installto',$programRoot)
+            foreach ($app in $Apps) { Run (Find-One "$app-v$Version-$Runtime-setup.exe") @('--silent','--installto',(Join-Path $programRoot $app)) }
         } else {
             $app = $Apps[0]
-            Run (Find-One "$app-v$Version-$Runtime-setup.exe") @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$(Join-Path $programRoot $app)")
+            Run (Find-One "$app-v$Version-$Runtime-setup.exe") @('--silent','--installto',(Join-Path $programRoot $app))
         }
         foreach ($app in $Apps) {
             $data = Join-Path $dataRoot $app
@@ -60,11 +60,23 @@ try {
             'preserve' | Set-Content -LiteralPath $marker -Encoding ascii
             $exe = Assert-OneInstalled $programRoot $app
             Launch-Bounded $exe
-            $uninstaller = @(Get-ChildItem -LiteralPath (Split-Path -Parent $exe) -File -Filter 'unins*.exe')
-            if ($uninstaller.Count -ne 1) { throw "Expected one $app uninstaller; found $($uninstaller.Count)." }
-            Run $uninstaller[0].FullName @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART')
+            $installRoot = Join-Path $programRoot $app
+            $updater = Join-Path $installRoot 'Update.exe'
+            if (-not (Test-Path -LiteralPath $updater)) { throw "Expected the $app Velopack updater at $updater." }
+            Run $updater @('uninstall','--silent')
+            for ($attempt = 0; $attempt -lt 20 -and (Test-Path -LiteralPath $exe); $attempt++) {
+                Start-Sleep -Milliseconds 500
+            }
             if (Test-Path -LiteralPath $exe) { throw "$app executable remained after uninstall." }
             if (-not (Test-Path -LiteralPath $marker)) { throw "$app uninstall removed user data." }
+        }
+    } elseif ($Platform -eq 'macos' -and $Suite) {
+        $package = Find-One "FreeSuite-v$Version-$Runtime.pkg"
+        $expanded = Join-Path $scratch 'expanded-pkg'
+        Run (Get-Command pkgutil -ErrorAction Stop).Source @('--expand-full',$package,$expanded)
+        foreach ($app in $Apps) {
+            $matches = @(Get-ChildItem -LiteralPath $expanded -Recurse -Directory -Filter "$app.app")
+            if ($matches.Count -ne 1) { throw "Expected one signed $app.app payload in the suite package; found $($matches.Count)." }
         }
     } else {
         $bash = (Get-Command bash -ErrorAction Stop).Source

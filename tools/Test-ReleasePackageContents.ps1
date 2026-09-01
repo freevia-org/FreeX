@@ -25,6 +25,10 @@ function Assert-Pe([System.IO.FileInfo]$File, [string]$Description) {
     try {
         if ($stream.ReadByte() -ne 0x4d -or $stream.ReadByte() -ne 0x5a) { throw "$Description is not a Windows PE executable: $($File.Name)" }
     } finally { $stream.Dispose() }
+    $signature = Get-AuthenticodeSignature -LiteralPath $File.FullName
+    if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid) {
+        throw "$Description does not have a valid Authenticode signature: $($File.Name) ($($signature.Status))"
+    }
 }
 
 function Assert-CleanZip([System.IO.FileInfo]$File) {
@@ -50,7 +54,7 @@ if ($Runtime -like 'win-*') {
     $installer = Find-One "$prefix-setup.exe"
     if ($installer.Length -eq 0) { throw "Windows installer missing or empty: $($installer.Name)" }
     Assert-Pe $installer 'Windows installer'
-} else {
+} elseif ($Runtime -like 'linux-*' -or $Scope -eq 'App') {
     if ($Scope -eq 'App') {
         $portable = Find-One "$prefix.zip"
         Assert-CleanZip $portable
@@ -58,6 +62,11 @@ if ($Runtime -like 'win-*') {
     $suffix = if ($Runtime -like 'linux-*') { 'installer' } else { 'apps' }
     $installer = Find-One "$prefix-$suffix.zip"
     Assert-CleanZip $installer
+} else {
+    $installer = Find-One "$prefix.pkg"
+    if ($installer.Length -eq 0) { throw "macOS suite package missing or empty: $($installer.Name)" }
+    & pkgutil --check-signature $installer.FullName
+    if ($LASTEXITCODE -ne 0) { throw "macOS suite package signature validation failed: $($installer.Name)" }
 }
 
 Write-Host "Release package content gate passed for $Scope $Runtime."

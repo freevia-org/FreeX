@@ -19,7 +19,12 @@ public static class Program
 
     [STAThread]
     public static void Main(string[] args)
-        => WpfApplicationStartupRunner.Run(new WpfApplicationStartupSpec<FreeWOptions>(
+    {
+        // Velopack must service install/update/uninstall hooks before WPF creates an Application.
+        // Keep Run() at the real entry point so Velopack recognizes the lifecycle invocation.
+        VelopackBootstrap.Configure().Run();
+
+        WpfApplicationStartupRunner.Run(new WpfApplicationStartupSpec<FreeWOptions>(
             FreeWApplicationStartup.ProductIdentity,
             (options, optionsStore, startupFilePaths) =>
                 new MainWindow(options, optionsStore, startupFilePaths: startupFilePaths))
@@ -37,4 +42,5 @@ public static class Program
                 ApplyCurrentCultureToWpf: AppLocalization.Bootstrap.ApplyCurrentCultureToWpf),
             OnEmergencySnapshot = EmergencySnapshotCrashHandler.TryEmergencySnapshotAllWindows
         }, args);
+    }
 }

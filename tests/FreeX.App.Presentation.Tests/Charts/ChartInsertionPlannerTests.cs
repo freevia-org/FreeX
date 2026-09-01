@@ -212,6 +212,32 @@ public sealed class ChartInsertionPlannerTests
     }
 
     [Fact]
+    public void CreatePlacement_DeduplicatesHiddenIndexesAcrossSourcesWithViewport()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.ColumnWidths[2] = 20;
+        sheet.RowHeights[3] = 50;
+        sheet.HiddenCols.Add(2);
+        sheet.GroupHiddenCols.Add(2);
+        sheet.HiddenRows.Add(3);
+        sheet.FilterHiddenRows.Add(3);
+        sheet.GroupHiddenRows.Add(3);
+        var range = Range(sheet.Id, startRow: 4, startCol: 4, endRow: 4, endCol: 4);
+        var viewport = CreateViewport(firstRow: 1, firstCol: 1, rowCount: 20, columnCount: 20);
+
+        var placement = ChartInsertionPlanner.CreatePlacement(
+            sheet,
+            range,
+            viewport,
+            viewportWidth: 1200,
+            viewportHeight: 800);
+
+        placement.Left.Should().BeApproximately(208, 0.0001);
+        placement.Top.Should().BeApproximately(40, 0.0001);
+    }
+
+    [Fact]
     public void CreateEmbeddedChartPlan_PreservesSourceRangeWhenPlacementSkipsHiddenExtents()
     {
         var workbook = new Workbook("test");

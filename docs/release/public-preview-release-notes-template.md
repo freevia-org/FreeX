@@ -10,15 +10,14 @@ they were completed facts.
 - Release date (UTC): `<date>`
 - Full commit SHA: `<40-character SHA>`
 - Release/tag: `<versioned tag and URL>`
-- Release decision: `<unsigned public preview / internal testing / no-go>`
+- Release decision: `<signed public preview / internal testing / no-go>`
 - Support status: `Public preview; no guaranteed support lifetime or response time.`
 
 ## Trust and Signing Status
 
-> **Preview trust notice:** `<State separately whether Windows executables and
-> installers are signed. State separately whether macOS apps are signed,
-> notarized, and stapled. If pending, say “unsigned” and “unnotarized.” Do not
-> describe an unsigned artifact as trusted, certified, or production-ready.>`
+> **Preview trust notice:** `<Record the verified Freevia publisher for Windows.
+> Record the Developer ID identity, accepted notarization, and stapling status
+> for macOS. Missing evidence is a no-go for canonical publication.>`
 
 Verify SHA-256 checksums before launch. Do not disable SmartScreen, Gatekeeper,
 antivirus, or other operating-system protections globally. `<Link to the

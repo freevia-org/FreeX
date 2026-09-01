@@ -78,6 +78,13 @@ public sealed class CustomParagraphSpacingDialogSession
             : new CustomParagraphSpacingDialogAcceptance(null, validation);
 }
 
+public sealed record DropCapOptionsDialogAcceptance(
+    DropCapOptionsDialogResult? Result,
+    string? ValidationMessage)
+{
+    public bool IsAccepted => Result is not null;
+}
+
 public sealed class DropCapOptionsDialogSession
 {
     private readonly CultureInfo _culture;
@@ -93,8 +100,10 @@ public sealed class DropCapOptionsDialogSession
 
     public IReadOnlyList<string> FontNames => DropCapOptionsDialogPlanner.FontNames;
 
-    public DropCapOptionsDialogResult PlanAcceptance(DropCapOptionsDialogInput input) =>
-        DropCapOptionsDialogPlanner.BuildResult(input, _culture);
+    public DropCapOptionsDialogAcceptance PlanAcceptance(DropCapOptionsDialogInput input) =>
+        DropCapOptionsDialogPlanner.TryBuildResult(input, _culture, out var result, out var error)
+            ? new DropCapOptionsDialogAcceptance(result, ValidationMessage: null)
+            : new DropCapOptionsDialogAcceptance(null, error ?? DropCapOptionsDialogPlanner.ValidationMessage);
 }
 
 public sealed record HyphenationOptionsDialogAcceptance(

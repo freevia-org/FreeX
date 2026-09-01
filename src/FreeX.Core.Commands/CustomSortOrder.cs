@@ -69,6 +69,6 @@ public sealed class CustomSortOrder
 
         return caseSensitive
             ? CaseSensitiveSortComparison.Compare(a ?? "", b ?? "")
-            : string.Compare(a ?? "", b ?? "", StringComparison.OrdinalIgnoreCase);
+            : SortTextComparison.CompareIgnoreCase(a ?? "", b ?? "");
     }
 }

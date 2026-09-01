@@ -1,6 +1,6 @@
 param(
     [string]$ProgressPath = "release/progress.json",
-    [string]$WorkflowPath = ".github/workflows/tester-release.yml",
+    [string]$WorkflowPath = ".github/workflows/full-release.yml",
     [string]$DistributionPlanPath = "docs/release/test-distribution.md",
     [string]$ChecklistPath = "docs/release/tester-release-checklist.md",
     [int]$RunNumber = 0,
@@ -89,57 +89,47 @@ $stream = "v$major.$minor.<run>"
 
 $workflow = Get-Content -LiteralPath $workflowFile -Raw
 foreach ($marker in @(
-    "public_preview_candidate:",
-    "accessibility_keyboard_only:",
-    "accessibility_screen_reader:",
-    "accessibility_uia_catalog:",
-    "accessibility_known_issues:",
+    "name: Full Signed Release",
+    "app:",
+    "platform:",
+    "release_version:",
+    "prerelease:",
     "contents: write",
-    "group: tester-release",
+    "id-token: write",
+    "group: full-signed-release-",
     "Validate latest release source",
     "refs/heads/main",
-    "refs/heads/codex/daily-tester-release-*",
     "dotnet-version: 10.0.400",
-    "tools/Test-RepositoryPreflight.ps1",
-    "tools/Invoke-TestGate.ps1 -Gate release -App FreeX -Platform windows -NoBuild -ResultsDirectory TestResults",
-    "TestResults/*.trx",
-    "Public-preview promotion requires completed accessibility gate inputs",
+    "tools/Test-GitHubReleaseCandidate.ps1",
+    "tools/Get-TestGateMatrix.ps1 -Gate release",
+    "Validate complete release inventory",
     "gh release create",
-    "--draft=false",
-    "Publish single-file tester exe",
-    "tools/Publish-UserTestBuild.ps1",
-    "-PublishMode SingleFile",
-    "Publish MSIX package",
-    "-PublishMode Msix",
-    "signParameters = @{}",
-    "signParameters.AllowUnsignedMsix = `$true",
-    "@signParameters",
-    "FreeX-latest-win-x64.exe",
-    "FreeX-latest-win-x64.exe.sha256",
-    "FreeX-latest-win-x64.msix",
-    "FreeX-latest-win-x64.msix.sha256"
+    "Authenticate to Azure Artifact Signing",
+    "azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43",
+    "Publish-WindowsVelopackPackage.ps1",
+    "New-FreeSuiteWindowsBootstrapper.ps1",
+    "MACOS_CODESIGN_CERTIFICATE_P12",
+    "MACOS_DEVELOPER_ID_APPLICATION",
+    "New-SignedMacOsReleasePackages.ps1"
 )) {
-    Assert-Contains -Text $workflow -Expected $marker -Label "Tester Release workflow"
+    Assert-Contains -Text $workflow -Expected $marker -Label "Full Signed Release workflow"
 }
 
 $distributionPlan = Get-Content -LiteralPath $distributionPlanFile -Raw
-Assert-Contains -Text $distributionPlan -Expected "https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.exe" -Label "Test distribution plan"
-Assert-Contains -Text $distributionPlan -Expected "https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.msix" -Label "Test distribution plan"
-Assert-Contains -Text $distributionPlan -Expected "At $overallCompletion% completion, default tester releases use the ``$stream`` stream." -Label "Test distribution plan"
-Assert-Contains -Text $distributionPlan -Expected "Release dispatches must run from ``main`` or an isolated ``codex/daily-tester-release-*`` branch because the workflow publishes stable latest assets" -Label "Test distribution plan"
-Assert-Contains -Text $distributionPlan -Expected "signs the package when ``FREEX_MSIX_CERTIFICATE_BASE64`` is configured" -Label "Test distribution plan"
-Assert-Contains -Text $distributionPlan -Expected "publishes an unsigned MSIX for tester continuity" -Label "Test distribution plan"
-Assert-Contains -Text $distributionPlan -Expected "Keyboard-only smoke validation" -Label "Test distribution plan"
-Assert-Contains -Text $distributionPlan -Expected "Screen-reader smoke validation" -Label "Test distribution plan"
-Assert-Contains -Text $distributionPlan -Expected "UI Automation catalog review" -Label "Test distribution plan"
+Assert-Contains -Text $distributionPlan -Expected "Full Signed Release" -Label "Test distribution plan"
+Assert-Contains -Text $distributionPlan -Expected "Azure Artifact Signing" -Label "Test distribution plan"
+Assert-Contains -Text $distributionPlan -Expected "Developer ID" -Label "Test distribution plan"
+Assert-Contains -Text $distributionPlan -Expected "notarization" -Label "Test distribution plan"
+Assert-Contains -Text $distributionPlan -Expected "SBOM" -Label "Test distribution plan"
 
 $checklist = Get-Content -LiteralPath $checklistFile -Raw
-Assert-Contains -Text $checklist -Expected "release/progress.json" -Label "Tester release checklist"
-Assert-Contains -Text $checklist -Expected "Test result artifact was uploaded, even for failed release-gate attempts." -Label "Tester release checklist"
-Assert-Contains -Text $checklist -Expected "Versioned ``.exe``, latest ``.exe``, versioned MSIX, latest MSIX, Velopack installer/portable/feed artifacts, and checksum artifacts" -Label "Tester release checklist"
-Assert-Contains -Text $checklist -Expected "Stable latest checksum assets were included for both the ``.exe`` and MSIX packages" -Label "Tester release checklist"
-Assert-Contains -Text $checklist -Expected "Latest ``.exe`` and MSIX download links were checked from the published release." -Label "Tester release checklist"
-Assert-Contains -Text $checklist -Expected "MSIX package was signed with the release certificate when signing secrets were configured; otherwise unsigned MSIX publication was accepted for this internal tester build." -Label "Tester release checklist"
+Assert-Contains -Text $checklist -Expected "exact-SHA CI and CodeQL" -Label "Tester release checklist"
+Assert-Contains -Text $checklist -Expected "standalone executables" -Label "Tester release checklist"
+Assert-Contains -Text $checklist -Expected "Velopack" -Label "Tester release checklist"
+Assert-Contains -Text $checklist -Expected "Free Suite bootstrapper" -Label "Tester release checklist"
+Assert-Contains -Text $checklist -Expected "Developer ID" -Label "Tester release checklist"
+Assert-Contains -Text $checklist -Expected "notarization" -Label "Tester release checklist"
+Assert-Contains -Text $checklist -Expected "checksums, SBOMs, and manifests" -Label "Tester release checklist"
 Assert-Contains -Text $checklist -Expected "Known accessibility issues" -Label "Tester release checklist"
 
 $missingAccessibilityGate = @()

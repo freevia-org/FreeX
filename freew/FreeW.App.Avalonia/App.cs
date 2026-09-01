@@ -1,8 +1,10 @@
+using System.Globalization;
 using Avalonia;
 using Free.Shared.AppServices;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Avalonia;
 using Free.Shared.Shell.Avalonia;
+using FreeW.App.Localization;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Shell;
 
@@ -19,7 +21,15 @@ public sealed partial class App : Application
                 () => AvaloniaAppLocalizationBootstrap.InstallSharedSeams(
                     UiText.Get,
                     UiText.Format,
-                    UiText.CreateAutomationName)),
+                    UiText.CreateAutomationName),
+                // r189: this shell offers a UI-language field with a restart notice; without this
+                // the restart changed nothing. FreeX had the same bug and fixing it there alone
+                // left it here, so the applier is wired through the shared profile for every
+                // sister Avalonia app rather than in one App.cs.
+                uiLanguage => AvaloniaAppLocalizationBootstrap.ApplyAppLanguage(
+                    uiLanguage,
+                    name => AppLanguageCatalog.ResolveCulture(name, CultureInfo.CurrentUICulture),
+                    CultureInfo.CurrentUICulture)),
             new SisterAvaloniaThemeStartupDescriptor<Theme>(
                 FreeWApplicationStartup.Theme,
                 theme => ActiveTheme = theme,

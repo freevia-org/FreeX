@@ -555,6 +555,78 @@ function Assert-ToolSourceCentralization {
     Write-Host "Validated shared tooling source guards."
 }
 
+function Assert-WindowsArtifactSigningContract {
+    param([Parameter(Mandatory = $true)][string]$ToolRoot)
+
+    $signingScript = Get-Content -LiteralPath (Join-Path $ToolRoot "Invoke-WindowsArtifactSigning.ps1") -Raw
+    foreach ($requiredToken in @(
+            '/fd SHA256',
+            'http://timestamp.acs.microsoft.com',
+            '/td SHA256',
+            'Azure.CodeSigning.Dlib.dll',
+            '/dmdf',
+            'verify /v /pa /all',
+            'REPLACE-WITH')) {
+        if (-not $signingScript.Contains($requiredToken)) {
+            throw "Windows Artifact Signing script is missing required contract '$requiredToken'."
+        }
+    }
+
+    $publisher = Get-Content -LiteralPath (Join-Path $ToolRoot "Publish-UserTestBuild.ps1") -Raw
+    foreach ($requiredToken in @('--signTemplate', 'Invoke-WindowsArtifactSigning.ps1', 'Store-submitted MSIX packages are signed by Microsoft')) {
+        if (-not $publisher.Contains($requiredToken)) {
+            throw "FreeX Artifact Signing integration is missing '$requiredToken'."
+        }
+    }
+    if ($publisher.IndexOf('Invoke-WindowsArtifactSigning.ps1', [System.StringComparison]::Ordinal) -gt
+        $publisher.IndexOf('Get-FileHash -LiteralPath $artifactExePath', [System.StringComparison]::Ordinal)) {
+        throw "FreeX single-file artifacts must be signed before their checksums are generated."
+    }
+
+    $familyPublisher = Get-Content -LiteralPath (Join-Path $ToolRoot "Publish-WindowsVelopackPackage.ps1") -Raw
+    foreach ($requiredToken in @(
+            '--signTemplate',
+            'Invoke-WindowsArtifactSigning.ps1',
+            '-VerifyOnly',
+            'Get-FileHash -LiteralPath $artifactPath')) {
+        if (-not $familyPublisher.Contains($requiredToken)) {
+            throw "All-app Windows signing integration is missing '$requiredToken'."
+        }
+    }
+    if ($familyPublisher.IndexOf('-VerifyOnly', [System.StringComparison]::Ordinal) -gt
+        $familyPublisher.IndexOf('Get-FileHash -LiteralPath $artifactPath', [System.StringComparison]::Ordinal)) {
+        throw "All-app Windows artifacts must be verified before their checksums are generated."
+    }
+
+    $suitePackager = Get-Content -LiteralPath (Join-Path $ToolRoot "packaging/New-FreeSuiteWindowsBootstrapper.ps1") -Raw
+    foreach ($requiredToken in @(
+            'FreeSuite.Bootstrapper',
+            'FreeSuite-v$Version-win-x64-setup.exe',
+            'must be Artifact Signed after this script returns',
+            'generated only after that signature is applied')) {
+        if (-not $suitePackager.Contains($requiredToken)) {
+            throw "Free Suite bootstrapper packaging contract is missing '$requiredToken'."
+        }
+    }
+    if ($suitePackager.Contains('Inno Setup') -or $suitePackager.Contains('ISCC')) {
+        throw "The canonical Free Suite Windows bootstrapper must not depend on Inno Setup."
+    }
+
+    $macPackager = Get-Content -LiteralPath (Join-Path $ToolRoot "packaging/New-SignedMacOsReleasePackages.ps1") -Raw
+    foreach ($requiredToken in @(
+            'Developer ID Application:',
+            'xcrun notarytool submit',
+            '"stapler", "staple"',
+            '"stapler", "validate"',
+            'Apple notarization was not accepted')) {
+        if (-not $macPackager.Contains($requiredToken)) {
+            throw "Canonical macOS signing/notarization integration is missing '$requiredToken'."
+        }
+    }
+
+    Write-Host "Validated Windows Artifact Signing source contract."
+}
+
 function Assert-CommandInventoryMenuTraversalCentralization {
     param([Parameter(Mandatory = $true)][string]$ToolRoot)
 
@@ -1725,6 +1797,7 @@ if ($resolvedDirectory.Equals($toolsRoot, [System.StringComparison]::OrdinalIgno
     Assert-GeneratedDocCheckNewlineSemantics -ToolRoot $resolvedDirectory
     Assert-PortableDialogPngAnalyzer -RepoRoot $repoRoot -ToolRoot $resolvedDirectory
     Assert-FidelityCorpusDownloaderBehavior -ToolRoot $resolvedDirectory
+    Assert-WindowsArtifactSigningContract -ToolRoot $resolvedDirectory
 }
 
 $failedScripts = New-Object System.Collections.Generic.List[string]

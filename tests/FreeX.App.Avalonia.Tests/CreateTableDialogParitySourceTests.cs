@@ -10,6 +10,7 @@ public sealed class CreateTableDialogParitySourceTests
         var planner = ReadSource("src", "FreeX.App.Services", "CreateTableDialogPlanner.cs");
         var wpf = ReadSource("src", "FreeX.App.Host", "CreateTableDialog.cs");
         var avalonia = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.InsertObjects.cs");
+        var rangeSelection = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.DialogRangeSelection.cs");
 
         planner.Should().Contain("CreateTableInputParser.TryParse(");
         wpf.Should().Contain("CreateTableDialogPlanner.DefaultFirstRowHasHeaders");
@@ -17,6 +18,8 @@ public sealed class CreateTableDialogParitySourceTests
         avalonia.Should().Contain("CreateTableDialogPlanner.DefaultFirstRowHasHeaders");
         avalonia.Should().Contain("CreateTableDialogPlanner.RangePickerGap");
         avalonia.Should().Contain("Children = { rangePicker, rangeBox }");
+        avalonia.Should().Contain("DialogRangeSelectionFormat.AbsoluteRange");
+        rangeSelection.Should().Contain("\"range.create-table.range\", \"CreateTableDialog\", \"CreateTableRangePicker\", \"CreateTableRangeBox\", DialogRangeSelectionFormat.AbsoluteRange");
     }
 
     [Fact]

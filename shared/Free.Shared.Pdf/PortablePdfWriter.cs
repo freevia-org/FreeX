@@ -86,7 +86,7 @@ public static class PortablePdfWriter
                 Links: BuildLinkAnnotations(page),
                 Destinations: PdfAnnotationPlanner.BuildNamedDestinations(page)))
             .ToArray();
-        WritePdf(stream, pages, fontResources, imageResources.Resources, opacityResources.Resources, patternResources.Resources, headerComment);
+        WritePdf(stream, pages, fontResources, imageResources.Resources, opacityResources.Resources, patternResources.Resources, headerComment, document.Properties);
     }
 
     /// <summary>Serializes <paramref name="document"/> to an in-memory byte array.</summary>
@@ -255,7 +255,8 @@ public static class PortablePdfWriter
         IReadOnlyList<PdfImageResource> imageResources,
         IReadOnlyList<PdfOpacityResource> opacityResources,
         IReadOnlyList<PdfPatternResource> patternResources,
-        string headerComment)
+        string headerComment,
+        PdfDocumentProperties? properties)
     {
         var objects = new List<PdfObject>();
         var firstPageObjectId = 3 + fontResources.Count + imageResources.Count + opacityResources.Count + patternResources.Count;
@@ -358,6 +359,15 @@ public static class PortablePdfWriter
                 $"{target} >>"));
         }
 
+        // r189: the Info dictionary. PdfContentDocument has carried Properties all along and the
+        // Skia and WPF writers both stamp them, but this fallback -- the one used whenever Skia is
+        // unavailable -- dropped them, so a PDF exported on that path had no Title, Author, Subject
+        // or Keywords at all. Appended last so it does not shift any object number the pages,
+        // annotations and destinations already reference.
+        var infoObjectId = TryBuildInfoObject(properties) is { } infoObject
+            ? AppendObject(objects, infoObject)
+            : (int?)null;
+
         WriteAscii(stream, $"%PDF-1.7\n% {headerComment}\n");
         var offsets = new List<long> { 0 };
         for (var objectIndex = 0; objectIndex < objects.Count; objectIndex++)
@@ -376,7 +386,44 @@ public static class PortablePdfWriter
 
         WriteAscii(
             stream,
-            $"trailer\n<< /Size {objects.Count + 1} /Root 1 0 R >>\nstartxref\n{xrefOffset.ToString(CultureInfo.InvariantCulture)}\n%%EOF\n");
+            $"trailer\n<< /Size {objects.Count + 1} /Root 1 0 R{(infoObjectId is { } id ? $" /Info {id} 0 R" : string.Empty)} >>\nstartxref\n{xrefOffset.ToString(CultureInfo.InvariantCulture)}\n%%EOF\n");
+    }
+
+    private static int AppendObject(List<PdfObject> objects, PdfObject value)
+    {
+        objects.Add(value);
+        return objects.Count; // object numbers are 1-based
+    }
+
+    /// <summary>
+    /// The /Info dictionary for <paramref name="properties"/>, or null when there is nothing to
+    /// say. An empty dictionary is worse than none: it makes a reader report the document as having
+    /// blank metadata rather than unspecified metadata, so entries are emitted only for values that
+    /// are actually present.
+    /// </summary>
+    private static PdfObject? TryBuildInfoObject(PdfDocumentProperties? properties)
+    {
+        if (properties is null)
+            return null;
+
+        var entries = new List<string>(5);
+        AppendEntry(entries, "Title", properties.Title);
+        AppendEntry(entries, "Author", properties.Author);
+        AppendEntry(entries, "Subject", properties.Subject);
+        AppendEntry(entries, "Keywords", properties.Keywords);
+        AppendEntry(entries, "Creator", properties.Creator);
+
+        return entries.Count == 0
+            ? null
+            : PdfObject.Ascii($"<< {string.Join(" ", entries)} >>");
+
+        static void AppendEntry(List<string> entries, string key, string? value)
+        {
+            // Whitespace-only is treated as absent: it is what a blank properties field produces,
+            // and stamping it would claim the document has an author named " ".
+            if (!string.IsNullOrWhiteSpace(value))
+                entries.Add($"/{key} {EncodeTextOperand(value)}");
+        }
     }
 
     private static IReadOnlyList<PdfLinkAnnotation> BuildLinkAnnotations(PdfContentPage page)

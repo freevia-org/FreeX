@@ -1,34 +1,58 @@
-# FreeX Tester Release Checklist
+# Full Signed Release Checklist
 
-Use this checklist before promoting a tester build beyond internal validation. Paste the completed gate summary into the `Tester Release` workflow `release_notes` input when the build is intended as a public-preview candidate, set `public_preview_candidate` to true, and complete every accessibility evidence input.
+Use this checklist for prereleases and non-prerelease releases produced by the
+`Full Signed Release` workflow. A full release uses `app=all`, `platform=all`,
+a new semantic version, and `prerelease=false`.
 
-This FreeX-specific checklist is complemented by the suite-wide
-[public-preview readiness gate](public-preview-readiness.md), including crash
-analytics, feedback intake, per-app and suite installers, legal materials, and
-the explicitly deferred certificate gate.
+## Candidate and release gate
 
-## Required Release Gate
+- The workflow was dispatched from `main` at the intended immutable commit.
+- The same commit has successful exact-SHA CI and CodeQL attestations.
+- Every selected release-only test job and the aggregate release gate passed.
+- The version is unused, or every existing version tag already targets the
+  same immutable commit.
+- No other full release for the same version is running.
 
-- Repository preflight, build, and test completed in the release workflow.
-- Test result artifact was uploaded, even for failed release-gate attempts.
-- Versioned `.exe`, latest `.exe`, versioned MSIX, latest MSIX, Velopack installer/portable/feed artifacts, and checksum artifacts were uploaded.
-- Stable latest checksum assets were included for both the `.exe` and MSIX packages.
-- Release ran from `main` or an isolated `codex/daily-tester-release-*` branch for a frozen verified candidate; no overlapping tester-release dispatch was active.
-- MSIX package was signed with the release certificate when signing secrets were configured; otherwise unsigned MSIX publication was accepted for this internal tester build.
-- GitHub release was published with the expected tester stream from `release/progress.json`.
-- Latest `.exe` and MSIX download links were checked from the published release.
-- If the workflow was dispatched with `prerelease=true`, direct release assets were checked from that release because GitHub's `releases/latest` redirect remains on the latest non-prerelease build.
+## Windows trust and packaging
 
-## Public-Preview Accessibility Gate
+- GitHub OIDC authenticated the dedicated Azure release identity without a PFX
+  or client secret.
+- FreeX, FreeW, and FreeP standalone executables and Velopack
+  payloads/installers were signed by Freevia, timestamped, and passed
+  Authenticode verification before checksums were generated.
+- The non-Inno Free Suite bootstrapper was signed and verified after
+  embedding the final signed per-app installers.
+- Signing, timestamping, or signature verification failure stopped publication.
 
-- Keyboard-only smoke validation recorded for workbook open/save, grid navigation/editing, ribbon tab traversal, context menus, dialogs, sheet tabs, and Help.
-- Screen-reader smoke validation recorded for first launch, workbook grid focus, formula bar edits, dialog titles/default buttons, warning messages, and accessibility checker results.
-- UI Automation catalog review recorded for stable names, automation IDs, invoke patterns, and focus order on newly changed controls.
-- Known accessibility issues are listed with affected workflow, severity, and planned follow-up.
-- Workflow accessibility inputs were set for keyboard-only, screen-reader, UI Automation catalog, and known-issues review evidence.
+## Linux and macOS integrity
 
-## Promotion Decision
+- Every Linux portable and installer archive has a matching SHA-256 checksum,
+  SPDX SBOM, runtime manifest, and final release manifest.
+- Every macOS application bundle was signed with the configured Developer ID
+  Application identity before packaging.
+- Apple notarization completed and its ticket was stapled and validated for
+  each individual app bundle. The suite contains those same accepted bundles.
+- Missing Apple credentials, code-signing failure, notarization failure, or
+  stapling/validation failure stopped publication; the full workflow did not
+  downgrade to unsigned macOS assets.
 
-- If every accessibility gate item is complete, mark the release notes as public-preview eligible.
-- If any accessibility gate item is skipped or incomplete, mark the build as internal-only and do not promote it as a public-preview candidate.
+## Published inventory
 
+- FreeX, FreeW, FreeP, and Free Suite releases all target the dispatch SHA and
+  have the requested prerelease state.
+- Every selected runtime includes its expected portable artifact, installer,
+  adjacent checksums, SBOMs, and manifests.
+- The Windows suite release contains the signed suite bootstrapper; Linux and
+  macOS suite releases contain their platform-native aggregate packages.
+- The final remote inventory verification passed after publication.
+
+## Public-preview accessibility gate
+
+- Keyboard-only smoke validation was recorded for core document workflows.
+- Screen-reader smoke validation was recorded for launch, editing, dialogs,
+  warnings, and accessibility results.
+- UI Automation names, IDs, patterns, and focus order were reviewed.
+- Known accessibility issues are listed with severity and planned follow-up.
+
+If any public-preview accessibility item is incomplete, record the build as
+internal-only even when its package signatures and integrity gates pass.

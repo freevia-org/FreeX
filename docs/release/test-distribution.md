@@ -7,7 +7,7 @@
 | 1. Shareable builds | Complete | Framework-dependent user-test builds publish into `artifacts/releases` with version, timestamp, commit, runtime, and mode in the file name. |
 | 2. Feedback intake | Complete | The old May 24 user-test and retest reports were retired after their findings were resolved and absorbed into regression coverage/status history; GitHub issues now include a structured user-test report template for new feedback. |
 | 3. Local diagnostics | Complete | Test builds record local JSONL usage events and crash reports under `%LOCALAPPDATA%\FreeX\Diagnostics`. Those files are not automatically uploaded; the separate Phase 5 transport may send an opt-in crash event. |
-| 4. Hosted release channel | Complete | GitHub Actions publishes latest builds through GitHub Releases with versioned artifacts, a stable latest test build link, and an MSIX package that is signed when release certificate secrets are configured. |
+| 4. Hosted release channel | Complete | GitHub Actions uses GitHub OIDC and Azure Artifact Signing for every direct-download Windows executable and Velopack installer, then publishes versioned artifacts and a stable latest test build link. |
 | 5. Crash analytics | Complete | Opt-in Sentry crash upload is wired behind tester consent and `FREEX_SENTRY_DSN`; local diagnostics remain available without network upload. |
 | 6. Lightweight usage analytics | Complete | Stabilization-only app usage events are recorded through the existing diagnostics pipeline and safe crash breadcrumbs. |
 | 7. Auto-update readiness | Complete | Help exposes the stable latest release page, and Velopack-managed installs can check, download, apply, and restart into an update; plain single-file and MSIX builds retain the manual latest-download path. |
@@ -37,7 +37,14 @@ Latest verified tester release:
 - Asset check: versioned Windows `.exe`, stable-name Windows `.exe`, versioned MSIX, stable-name MSIX, stable macOS arm64/x64 preview zips, Velopack-style assets, and matching checksum assets were published by the workflow after successful hosted release-gate verification. GitHub marked this non-prerelease as latest, so the stable latest Windows and macOS download links resolve through this release.
 - Prior reference point: the older v0.8.114/run 114 release remains a June 12 historical baseline. Current release decisions should use v0.8.127/run 127 unless a later successful tester release supersedes it.
 
-The `Tester Release` GitHub Actions workflow runs repository preflight, restore, build, and the manifest-defined FreeX release gate before publishing a framework-dependent single-file Windows x64 `.exe` plus an MSIX package. The release gate inherits the FreeX commit suites and adds release-only render evidence; it is distinct from commit gates, which exclude visual evidence, packaging, signing, and publication. Windows tester releases are standalone by default: `include_macos_preview=false` means the workflow does not require or query macOS App Preview artifacts. When `include_macos_preview=true`, it finds or uses the requested successful `macOS App Preview` run for the same commit, downloads both runtime app artifacts, and attaches stable macOS internal-preview assets to the same GitHub Release. It uses normal .NET restore/build caching and parallelism for speed and uploads the gate TRX results for every run, including failed release-gate attempts, then uploads both versioned artifacts produced by `tools/Publish-UserTestBuild.ps1` and stable latest assets:
+The `Full Signed Release` GitHub Actions workflow is the canonical release path
+for FreeX, FreeW, FreeP, and Free Suite. It accepts an explicit semantic
+version, pins the `main` SHA, requires successful exact-SHA CI and CodeQL, runs
+the release-only matrix, and publishes nothing until every selected native
+package and trust gate succeeds. See
+[app-platform-publish-lanes.md](app-platform-publish-lanes.md) for its complete
+asset and dispatch contract. The older FreeX-only workflow historically
+published these stable-name assets:
 
 - `FreeX-latest-win-x64.exe`
 - `FreeX-latest-win-x64.exe.sha256`
@@ -57,16 +64,16 @@ When macOS bundling is explicitly enabled, the same release also receives:
 
 Release dispatches must run from `main` or an isolated `codex/daily-tester-release-*` branch because the workflow publishes stable latest assets, and a workflow-level `tester-release` concurrency group prevents overlapping dispatches from moving `latest` backward. Use the daily branch path only for a frozen verified candidate when `origin/main` has already advanced with work intentionally deferred to the next release.
 
-The hosted MSIX publish path signs the package when `FREEX_MSIX_CERTIFICATE_BASE64` is configured, with optional `FREEX_MSIX_CERTIFICATE_PASSWORD` and `FREEX_MSIX_TIMESTAMP_URL` inputs. Until a release certificate is available, the workflow passes `-AllowUnsignedMsix` and publishes an unsigned MSIX for tester continuity. `tools/Publish-UserTestBuild.ps1` derives the manifest `Publisher` from the signing certificate subject when signing is enabled, while direct local unsigned MSIX output still requires explicitly passing `-AllowUnsignedMsix`. Installer trust validation and Store-style submission remain release-gate work.
+The hosted Windows publish path fails closed unless GitHub OIDC authenticates the dedicated release identity and Azure Artifact Signing signs and verifies the standalone executable, the Velopack application payload, and the generated Setup executable. It does not store a PFX or client secret. The MSIX asset is retained only for Store/package validation: Store-bound MSIX packages are submitted with the Partner Center identity and Microsoft signs them during certification. The legacy optional PFX inputs remain isolated to local/direct MSIX validation and are not the direct-download trust path.
 
 Windows tester steps:
 
 1. Download `FreeX-latest-win-x64.exe` and `FreeX-latest-win-x64.exe.sha256` from the release.
 2. Verify the checksum with PowerShell: `Get-FileHash .\FreeX-latest-win-x64.exe -Algorithm SHA256`, then compare it with the `.sha256` file.
-3. Run `FreeX-latest-win-x64.exe`. If Windows SmartScreen warns about an unknown publisher, continue only if the checksum matches the GitHub Release asset and the tester expected this internal build.
-4. Prefer the `.exe` for normal testing. Use the MSIX only for package/install validation; unsigned MSIX packages may need trusted internal-test machine settings until signing is configured. Use the Velopack `FreeXApp-win-Setup.exe` installer or `FreeXApp-win-Portable.zip` portable build to validate the installed/self-update path; installs through Velopack land in a separate `FreeXApp` data directory from the app's own `%LocalAppData%\FreeX` diagnostics/recovery data.
+3. Confirm that Windows reports **Freevia** as the signed publisher, then run `FreeX-latest-win-x64.exe`.
+4. Prefer the signed `.exe` or Velopack installer for normal testing. Use the MSIX only for Store/package validation. Use `FreeXApp-win-Setup.exe` or `FreeXApp-win-Portable.zip` to validate the installed/self-update path; installs through Velopack land in a separate `FreeXApp` data directory from the app's own `%LocalAppData%\FreeX` diagnostics/recovery data.
 
-macOS tester release steps while Developer ID/notarization is pending:
+Legacy macOS internal-preview steps while Developer ID/notarization is pending:
 
 1. Download `FreeX-latest-macos-arm64.zip` for Apple Silicon Macs or `FreeX-latest-macos-x64.zip` for Intel Macs, plus the matching `.sha256`.
 2. Verify the checksum from Terminal: `shasum -a 256 -c FreeX-latest-macos-arm64.zip.sha256`, or use the x64 checksum file on Intel.
@@ -74,7 +81,7 @@ macOS tester release steps while Developer ID/notarization is pending:
 4. Open `FreeX.app`. If macOS blocks the unsigned/internal preview, use Control-click or right-click > Open. If needed, open System Settings > Privacy & Security and choose Open Anyway.
 5. Do not disable Gatekeeper globally. These macOS builds remain internal previews until Developer ID signing, notarization, and stapling evidence are attached.
 
-Tester-facing warning for both platforms: this is an internal preview while signing certificates are pending. macOS and Windows may warn that the publisher cannot be verified. Only open the build if it was expected from the FreeX team and the checksum matches the release asset.
+Tester-facing warning: Windows direct-download executables are signed by Freevia and timestamped by Microsoft. macOS preview assets use their separate signing/notarization lane. Only open a build if it was expected from the FreeX team and the checksum matches the release asset.
 
 Default tester versions come from `release/progress.json`: the current `overallCompletion` value maps to a minor-version band, and the GitHub run number becomes the patch number. At 95% completion, default tester releases use the `v0.8.<run>` stream. Manual `release_version` overrides remain available for special validation builds.
 
@@ -82,7 +89,10 @@ Current release gate: do not treat a new tester release as available until the w
 
 Before dispatching a candidate, run `tools/Test-TesterReleaseReadiness.ps1` from the repo root to preflight `release/progress.json`, workflow accessibility inputs, release docs, and checklist alignment. For a public-preview candidate, include `-PublicPreviewCandidate -AccessibilityKeyboardOnly -AccessibilityScreenReader -AccessibilityUiaCatalog -AccessibilityKnownIssues`; otherwise the preflight reports the build as internal-only.
 
-Use [release/tester-release-checklist.md](tester-release-checklist.md) as the operator checklist for release-gate evidence and public-preview accessibility notes. The `Tester Release` workflow exposes `public_preview_candidate` plus four accessibility evidence inputs; public-preview promotion fails unless keyboard-only, screen-reader, UI Automation catalog, and known-issues review inputs are all completed.
+Use [release/tester-release-checklist.md](tester-release-checklist.md) as the
+operator checklist for the canonical full-release gates and public-preview
+accessibility evidence. Public-preview promotion still requires completed
+keyboard-only, screen-reader, UI Automation catalog, and known-issues review.
 
 For the full suite release map across FreeX, FreeW, and FreeP, see [app-platform-publish-lanes.md](app-platform-publish-lanes.md). Each app/platform lane is independent so Windows, Linux, and macOS packages can be built or rerun separately.
 
@@ -109,7 +119,7 @@ runs. CodeQL uses GitHub's supported C# `build-mode: none` instead of compiling 
 a second time; repository preflight still guards `FreeSuite.CodeQL.slnx` as the complete production
 project inventory.
 
-The canonical `App Tester Release` workflow pins the `main` SHA selected at dispatch. Later commits
+The canonical `Full Signed Release` workflow pins the `main` SHA selected at dispatch. Later commits
 to `main` do not invalidate that immutable candidate. It accepts only an exact-SHA successful CI and
 CodeQL pair, then runs the release-only WPF/UI-host and render-evidence gates. The exact-SHA integration
 attestation plus those release-only gates form the complete release test suite without repeating
@@ -119,7 +129,11 @@ gate and every selected app/suite package before it can create any tag or releas
 Native package jobs retain their content, smoke, manifest, SBOM, checksum, installation, transition,
 and uninstall checks; publication waits for every selected app package and, for an all-app release,
 every suite package. A final hosted verification checks tag SHAs, prerelease state, required assets,
-and non-empty remote asset metadata.
+and non-empty remote asset metadata. Windows publication additionally requires Azure Artifact Signing
+and final Authenticode verification for every standalone executable, Velopack payload/installer, and
+the non-Inno suite bootstrapper. Linux uses checksums, SBOMs, and immutable manifests for integrity.
+macOS publication requires Developer ID signing, accepted notarization, stapling, and validation and
+fails closed rather than publishing an unsigned substitute.
 
 A separate `macOS App Preview` workflow builds and publishes `src/FreeX.App.Avalonia` on architecture-specific hosted macOS runners for `osx-arm64` and `osx-x64`, wraps the output in `FreeX.app` with `FreeX.icns`, verifies bundle metadata, ad-hoc signs by default, optionally Developer ID signs/notarizes when secrets are configured, self-checks each SHA-256 file with `shasum -a 256 -c`, records `zip_sha256` in evidence, and uploads zipped app artifacts, checksum files, tester instructions, smoke evidence, separate diagnostics artifacts, and a post-matrix aggregate readiness artifact. The Windows-runnable `tools/Test-MacOsAppReadiness.ps1` preflight statically checks the app project, `Info.plist`, icon asset, workflow markers, source wiring, and portable-source hygiene. After hosted artifacts are downloaded and unzipped, the Windows-runnable `tools/Test-MacOsPublicPreviewReadiness.ps1` preflight validates both runtime evidence bundles, checksum files, LaunchServices/Open-With/default-open smoke, startup smoke, command key smoke, hosted dialog smoke, Format Cells roundtrip evidence, diagnostics artifact file sets, tester instructions, distribution-candidate signing/notarization/stapler evidence, and release publication artifacts when required for promotion. File-access grant diagnostics in those artifacts are instrumentation/readiness evidence only; hosted CI must not be treated as proof of real macOS security-scoped access to user-selected workbook files.
 

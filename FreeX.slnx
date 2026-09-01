@@ -98,6 +98,7 @@
     <Project Path="freep/FreeP.App.Avalonia.Tests/FreeP.App.Avalonia.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
+    <Project Path="tools/FreeSuite.Bootstrapper/FreeSuite.Bootstrapper.csproj" />
     <Project Path="tools/FreeX.AppIoBench/FreeX.AppIoBench.csproj" />
     <Project Path="tools/FreeX.ChartFileCompare/FreeX.ChartFileCompare.csproj" />
     <Project Path="tools/FreeX.ChartInteropCompare/FreeX.ChartInteropCompare.csproj" />

@@ -1316,86 +1316,21 @@ public sealed class XlsxLoadPackageStreamTests
         Stream stream,
         bool expectedCanReuseBufferForSnapshot)
     {
-        var packageStream = CreateLoadPackageStream(stream);
+        var loadPackage = XlsxFileAdapter.CreateLoadPackageStream(stream);
 
-        var canReuseBufferForSnapshot = GetCanReuseBufferForSnapshot(packageStream.LoadPackage);
-        canReuseBufferForSnapshot.Should().Be(expectedCanReuseBufferForSnapshot);
-        return packageStream.PackageStream;
+        loadPackage.CanReuseBufferForSnapshot.Should().Be(expectedCanReuseBufferForSnapshot);
+        return loadPackage.PackageStream;
     }
 
-    private static MemoryStream CreateLoadPackageStream(Stream stream, long? maxFileBytes = null)
-    {
-        var method = typeof(XlsxFileAdapter).GetMethod(
-            "CreateLoadPackageStream",
-            BindingFlags.NonPublic | BindingFlags.Static,
-            binder: null,
-            maxFileBytes is null ? [typeof(Stream)] : [typeof(Stream), typeof(long)],
-            modifiers: null);
+    private static MemoryStream CreateLoadPackageStream(Stream stream, long? maxFileBytes = null) =>
+        (maxFileBytes is null
+            ? XlsxFileAdapter.CreateLoadPackageStream(stream)
+            : XlsxFileAdapter.CreateLoadPackageStream(stream, maxFileBytes.Value)).PackageStream;
 
-        method.Should().NotBeNull();
-        var arguments = maxFileBytes is null ? new object[] { stream } : [stream, maxFileBytes.Value];
-        var loadPackage = InvokeCreateLoadPackageStream(method!, arguments);
-        loadPackage.Should().NotBeNull();
-        return GetPackageStream(loadPackage!);
-    }
-
-    private static (object LoadPackage, MemoryStream PackageStream) CreateLoadPackageStream(Stream stream)
-    {
-        var method = typeof(XlsxFileAdapter).GetMethod(
-            "CreateLoadPackageStream",
-            BindingFlags.NonPublic | BindingFlags.Static,
-            binder: null,
-            [typeof(Stream)],
-            modifiers: null);
-
-        method.Should().NotBeNull();
-        var loadPackage = InvokeCreateLoadPackageStream(method!, [stream]);
-        loadPackage.Should().NotBeNull();
-        return (loadPackage!, GetPackageStream(loadPackage!));
-    }
-
-    private static object? InvokeCreateLoadPackageStream(MethodInfo method, object[] arguments)
-    {
-        try
-        {
-            return method.Invoke(null, arguments);
-        }
-        catch (TargetInvocationException ex) when (ex.InnerException is not null)
-        {
-            throw ex.InnerException;
-        }
-    }
-
-    private static MemoryStream GetPackageStream(object loadPackage)
-    {
-        var loadPackageType = loadPackage!.GetType();
-        var packageStreamProperty = loadPackageType.GetProperty(
-            "PackageStream",
-            BindingFlags.Instance | BindingFlags.Public);
-        packageStreamProperty.Should().NotBeNull();
-        var packageStream = packageStreamProperty!
-            .GetValue(loadPackage)
-            .Should()
-            .BeOfType<MemoryStream>()
-            .Subject;
-        return packageStream;
-    }
-
-    private static bool GetCanReuseBufferForSnapshot(object loadPackage)
-    {
-        var loadPackageType = loadPackage.GetType();
-        var canReuseBufferForSnapshotProperty = loadPackageType.GetProperty(
-            "CanReuseBufferForSnapshot",
-            BindingFlags.Instance | BindingFlags.Public);
-        canReuseBufferForSnapshotProperty.Should().NotBeNull();
-        var canReuseBufferForSnapshot = canReuseBufferForSnapshotProperty!
-            .GetValue(loadPackage)
-            .Should()
-            .BeOfType<bool>()
-            .Subject;
-
-        return canReuseBufferForSnapshot;
-    }
+    // The reflective scaffold this replaced -- InvokeCreateLoadPackageStream, GetPackageStream and
+    // GetCanReuseBufferForSnapshot -- existed only to reach a private nested record and unwrap
+    // TargetInvocationException. A compiled call needs none of it: LoadPackageStream is internal,
+    // so its members are typed, and exceptions propagate directly.
 
     private static MemoryStream CreateStyleOnlyStrippedPackage(MemoryStream package)
     {

@@ -8075,7 +8075,10 @@ public sealed partial class MainWindow : Window,
             Editor.SetSlideNotesText,
             CreateSlideShowWindow,
             static (window, intent) => window.SetPresenterTimingIntent(intent),
-            ShowSlideShowWindow);
+            ShowSlideShowWindow,
+            static window => window.IsVisible,
+            static window => window.Activate(),
+            static window => window.Close());
 
     private SlideShowWindow CreateSlideShowWindow(SlideShowWindowLaunchPlan launchPlan)
     {

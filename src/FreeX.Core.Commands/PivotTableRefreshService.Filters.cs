@@ -528,7 +528,7 @@ public static partial class PivotTableRefreshService
             _ => 0
         };
 
-    private sealed class PivotKey : IEquatable<PivotKey>
+    internal sealed class PivotKey : IEquatable<PivotKey>
     {
         public PivotKey(IReadOnlyList<string> values)
         {

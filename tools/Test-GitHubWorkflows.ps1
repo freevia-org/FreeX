@@ -32,6 +32,7 @@ $allowedActionPins = @{
     "actions/download-artifact" = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
     "actions/setup-dotnet" = "a98b56852c35b8e3190ac28c8c2271da59106c68"
     "actions/upload-artifact" = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+    "azure/login" = "532459ea530d8321f2fb9bb10d1e0bcf23869a43"
     "github/codeql-action/init" = "db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28"
     "github/codeql-action/analyze" = "db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28"
 }

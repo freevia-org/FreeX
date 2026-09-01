@@ -2091,7 +2091,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         {
             (TextValue ta,   TextValue tb  ) => caseSensitive
                 ? CaseSensitiveSortComparison.Compare(ta.Value, tb.Value)
-                : string.Compare(ta.Value, tb.Value, StringComparison.OrdinalIgnoreCase),
+                : SortTextComparison.CompareIgnoreCase(ta.Value, tb.Value),
             (TextValue,      _             ) => -1,  // text before bool/blank
             (_,              TextValue     ) =>  1,
             (BoolValue ba,   BoolValue bb  ) => ba.Value.CompareTo(bb.Value),

@@ -96,18 +96,17 @@ checks can guarantee non-infringement or legal compliance.
 
 ## Signing Status
 
-- Windows signing certificate: **Pending / Available / Not applicable**
-- macOS Developer ID certificate: **Pending / Available / Not applicable**
-- Current artifacts: **Unsigned preview / Signed candidate**
-- Unsigned-preview warning present in release notes and download instructions:
+- Windows Artifact Signing result: **Verified / Failed / Not applicable**
+- macOS Developer ID and notarization result: **Verified / Failed / Not applicable**
+- Current artifacts: **Signed candidate / Internal diagnostic only**
 
-Certificate availability is not a prerequisite for producing and validating an
-unsigned preview candidate. Unsigned artifacts must not be promoted or described
-as signed, trusted, notarized, or production-ready.
+The canonical Full Signed Release fails closed when required trust credentials
+or verification evidence are unavailable. Unsigned diagnostic artifacts must
+not be promoted or described as signed, trusted, notarized, or production-ready.
 
 ## Decision
 
-- Decision: **Go for internal testing / Go for unsigned public preview / No-go**
+- Decision: **Go for internal testing / Go for signed public preview / No-go**
 - Open blockers:
 - Accepted risks and approver:
 - Rollback triggers and tested action:

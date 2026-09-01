@@ -2166,8 +2166,26 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!plan.ShouldApply(ShowSynchronousPrompt(plan.Confirmation)))
             return;
 
+        // r188: applying restarts the whole PROCESS, so it discards unsaved work in every other
+        // open workbook window too, and only this window was asked. The WPF twin gained this guard
+        // in r187; this shell did not, so the bug survived on Linux and macOS. Both now read the
+        // same plan.
+        if (WindowRegistry.Windows.Any(window => !ReferenceEquals(window, this) && window.HasUnsavedChanges)
+            && !plan.ShouldApplyDespiteOtherWindows(ShowSynchronousPrompt(plan.OtherWindowsWarning)))
+        {
+            return;
+        }
+
         RefreshShell(plan.ApplyingStatus.Resolve(UiText.Get, UiText.Format));
-        _updateService.ApplyAndRestart();
+
+        // ApplyAndRestart returns false when the apply did not happen. The status bar already says
+        // the app is restarting, so swallowing that leaves the user watching a restart that will
+        // never come, on a version they think they have left.
+        if (!_updateService.ApplyAndRestart())
+        {
+            RefreshShell(UiText.Get("MainLoc_Ready"));
+            ShowSynchronousPrompt(plan.ApplyFailed);
+        }
     }
 
     private void ConfigureNativeMenu()
@@ -26786,6 +26804,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ? cursor
             : _session.ActiveCell;
 
+        // r188: captured BEFORE the flag is cleared. Home's target depends on it -- End then Home
+        // reproduces Ctrl+End in Excel -- and the switch below runs after this point, so reading
+        // _endMode there would always see false. The WPF sibling calls its Home helper from inside
+        // the switch for exactly this reason (MainWindow.Selection.cs, R82-app-keyboard-nav-5-2).
+        var endModeBeforeClear = _endMode;
         if (_endMode)
             _endMode = false;
 
@@ -26836,10 +26859,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 : OffsetAddress(current, 0, 1),
             ExcelWorksheetNavigationKey.PageUp => OffsetAddress(current, -pageRows, 0),
             ExcelWorksheetNavigationKey.PageDown => OffsetAddress(current, pageRows, 0),
-            ExcelWorksheetNavigationKey.Home => new CellAddress(
+            // Goes through the shared planner rather than composing the address here: it also
+            // owns the End-then-Home jump and the frozen-pane origin for Ctrl+Home, both of which
+            // the hand-written form above got wrong (it always returned row 1 / column 1).
+            ExcelWorksheetNavigationKey.Home => ExcelWorksheetNavigationPlanner.GetHomeTarget(
+                sheet,
                 _session.ActiveSheet.Id,
-                ctrlHeld ? 1u : current.Row,
-                1u),
+                current,
+                ctrlHeld,
+                endModeBeforeClear),
             // ShouldHandleWorksheetNavigationKey only lets End through when Ctrl is held (plain End
             // is consumed by TryToggleEndMode above), so this always resolves via GetCtrlEndCell.
             ExcelWorksheetNavigationKey.End => ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, _session.ActiveSheet.Id),

@@ -27,7 +27,7 @@ public sealed partial class MainWindow
 
     private static readonly DialogRangePickerRegistration[] DialogRangePickerRegistrations =
     [
-        new("range.create-table.range", "CreateTableDialog", "CreateTableRangePicker", "CreateTableRangeBox", DialogRangeSelectionFormat.Range),
+        new("range.create-table.range", "CreateTableDialog", "CreateTableRangePicker", "CreateTableRangeBox", DialogRangeSelectionFormat.AbsoluteRange),
         new("range.sparklines.data-range", "InsertSparklineDialog", "SparklineSelectDataRangeButton", "SparklineDataRangeBox", DialogRangeSelectionFormat.Range),
         new("range.sparklines.location-range", "InsertSparklineDialog", "SparklineSelectLocationRangeButton", "SparklineLocationRangeBox", DialogRangeSelectionFormat.StartCell),
         new("range.consolidate.reference", "ConsolidateDialog", "ConsolidateBrowseReferenceButton", "ConsolidateReferenceBox", DialogRangeSelectionFormat.Range),

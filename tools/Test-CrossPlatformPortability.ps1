@@ -569,10 +569,10 @@ foreach ($relativePath in $portableShellScripts) {
 }
 Write-PortabilityPhase 'Git index and shell portability'
 
-$appReleaseWorkflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/app-tester-release.yml') -Raw
+$appReleaseWorkflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/full-release.yml') -Raw
 foreach ($windowsOnlyToken in @('powershell.exe', 'cmd.exe')) {
     if ($appReleaseWorkflow.Contains($windowsOnlyToken)) {
-        Add-PortabilityError "App Tester Release contains an unscoped Windows-only command token: $windowsOnlyToken"
+        Add-PortabilityError "Full Signed Release contains an unscoped Windows-only command token: $windowsOnlyToken"
     }
 }
 

@@ -22,8 +22,10 @@ public enum SortKind
 /// optional case-sensitive toggle and an optional "has header row" that pins the first item in place.
 ///
 /// <para>
-/// Text comparison is culture-invariant ordinal (or ordinal-ignore-case) so results are stable across
-/// locales; numbers and dates parse with the invariant culture. The sort is stable — items comparing
+/// Text comparison collates with the current culture (see <see cref="SortKeyComparer"/>), matching
+/// Word: results therefore differ between locales by design, which is what a user sorting accented
+/// text expects. An ordinal tie-break keeps the order total for keys the culture calls equal.
+/// Numbers and dates still parse with the invariant culture. The sort is stable — items comparing
 /// equal keep their original relative order — and the input collections are never mutated: a new,
 /// reordered list of the same item instances is returned, so callers stay in control of how the
 /// reordered items are spliced back into the model.
@@ -34,7 +36,7 @@ public static class ParagraphSort
     /// <summary>
     /// Return <paramref name="paragraphs"/> reordered by <see cref="Paragraph.PlainText"/> as plain
     /// text. When <paramref name="ascending"/> is false the order is reversed;
-    /// <paramref name="caseSensitive"/> selects ordinal vs. ordinal-ignore-case comparison. The same
+    /// <paramref name="caseSensitive"/> selects whether the culture collation ignores case. The same
     /// <see cref="Paragraph"/> instances are returned (never copies), the input is left untouched, and
     /// the sort is stable.
     /// </summary>
@@ -144,7 +146,16 @@ public static class ParagraphSort
     // sort after all parseable ones (and tie-break on text) so the result stays total and deterministic.
     private sealed class SortKeyComparer(SortKind kind, bool caseSensitive) : IComparer<string>
     {
-        private readonly StringComparer _text =
+        // r188: culture-aware, not ordinal. Ordinal orders by UTF-16 code point, which sorts every
+        // accented word after the entire ASCII alphabet -- a German or French speaker sorting a
+        // table column sees those rows dumped at the end rather than alphabetized. Word collates
+        // with the user's locale; so does FreeX's worksheet sort (SortTextComparison). The ordinal
+        // comparer below breaks ties the culture reports as equal, so the order stays total.
+        private readonly StringComparer _text = StringComparer.Create(
+            CultureInfo.CurrentCulture,
+            ignoreCase: !caseSensitive);
+
+        private readonly StringComparer _tieBreak =
             caseSensitive ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
 
         public int Compare(string? x, string? y)
@@ -155,7 +166,7 @@ public static class ParagraphSort
             {
                 SortKind.Number => CompareParsed(x, y, TryParseNumber),
                 SortKind.Date => CompareParsed(x, y, TryParseDate),
-                _ => _text.Compare(x, y),
+                _ => CompareText(x, y),
             };
         }
 
@@ -168,11 +179,20 @@ public static class ParagraphSort
             if (hasX && hasY)
             {
                 var cmp = vx.CompareTo(vy);
-                return cmp != 0 ? cmp : _text.Compare(x, y);
+                return cmp != 0 ? cmp : CompareText(x, y);
             }
             if (hasX != hasY)
                 return hasX ? -1 : 1; // parseable keys first
-            return _text.Compare(x, y);
+            return CompareText(x, y);
+        }
+
+        // Culture collation decides the visible order; ordinal only separates keys the culture
+        // calls equal (ignorable punctuation, compatibility forms), which would otherwise make the
+        // result depend on input order.
+        private int CompareText(string x, string y)
+        {
+            var primary = _text.Compare(x, y);
+            return primary != 0 ? primary : _tieBreak.Compare(x, y);
         }
 
         private delegate bool ParseKey(string text, out double value);

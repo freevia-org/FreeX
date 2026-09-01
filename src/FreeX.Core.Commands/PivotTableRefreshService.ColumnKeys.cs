@@ -188,7 +188,7 @@ public static partial class PivotTableRefreshService
         return keys.Order(PivotKeyComparer.Instance).ToList();
     }
 
-    private static List<IGrouping<PivotKey, IReadOnlyList<ScalarValue>>> BuildRowGroups(
+    internal static List<IGrouping<PivotKey, IReadOnlyList<ScalarValue>>> BuildRowGroups(
         Workbook workbook,
         PivotTableModel pivotTable,
         IReadOnlyList<IReadOnlyList<ScalarValue>> rows,

@@ -389,6 +389,26 @@ public class ComplexFieldEngineTests
     }
 
     [Fact]
+    public void CreateDateField_WithStaleKnownPosition_FallsBackToAttachedParagraph()
+    {
+        var doc = new TextDocument();
+        doc.Styles["Journal"] = new DocumentStyle
+        {
+            Id = "Journal",
+            Name = "Journal",
+            Run = new RunFormatting { LanguageTag = "fr-FR" },
+        };
+        doc.Properties.Created = new DateTimeOffset(new DateTime(2026, 1, 5), TimeSpan.Zero);
+        var paragraph = AddField(doc, " CREATEDATE \\@ \"d MMMM yyyy\" ", "stale");
+        paragraph.StyleId = "Journal";
+        var run = paragraph.Runs[0];
+        var staleParagraph = new Paragraph("no longer owns the field");
+
+        ComplexFieldEngine.Recompute(doc, 0, run, staleParagraph, 0)
+            .Should().Be("5 janvier 2026");
+    }
+
+    [Fact]
     public void CreateDateField_WithNoDirectRunOrStyleLanguage_ResolvesCultureFromDocumentDefault()
     {
         var doc = new TextDocument();

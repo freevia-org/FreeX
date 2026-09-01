@@ -1210,27 +1210,36 @@ public sealed class DocumentReferenceEditingCoordinator
                     allowEmptyResult = DocumentFieldStories.CanRecomputeComplexField(
                         storyParagraph.StoryKind,
                         complexField);
-                    resolved = allowEmptyResult
+                    resolved = allowEmptyResult && ReferenceEquals(fieldDocument, document)
                         ? ComplexFieldEngine.Recompute(
                             fieldDocument,
                             blockIndex,
                             run,
+                            paragraph,
+                            runIndex,
                             fieldPages?.PageNumberAtBlock,
                             fieldPageText)
-                        : ComplexFieldDisplayPlanner.ApplyTemporalPicture(
-                            complexField,
-                            now,
-                            (run.Formatting ?? document.DefaultRun).LanguageTag,
-                            CultureInfo.CurrentCulture,
-                            ResolveLiveFieldResult(
+                        : allowEmptyResult
+                            ? ComplexFieldEngine.Recompute(
                                 fieldDocument,
-                                ComplexFieldDisplayPlanner.ResolveLiveKind(complexField.Keyword),
-                                run.Text,
                                 blockIndex,
-                                fieldPages,
-                                fieldPageText,
-                                fileName,
-                                now));
+                                run,
+                                fieldPages?.PageNumberAtBlock,
+                                fieldPageText)
+                            : ComplexFieldDisplayPlanner.ApplyTemporalPicture(
+                                complexField,
+                                now,
+                                (run.Formatting ?? document.DefaultRun).LanguageTag,
+                                CultureInfo.CurrentCulture,
+                                ResolveLiveFieldResult(
+                                    fieldDocument,
+                                    ComplexFieldDisplayPlanner.ResolveLiveKind(complexField.Keyword),
+                                    run.Text,
+                                    blockIndex,
+                                    fieldPages,
+                                    fieldPageText,
+                                    fileName,
+                                    now));
                 }
                 else if (run.FieldKind != RunFieldKind.None)
                 {

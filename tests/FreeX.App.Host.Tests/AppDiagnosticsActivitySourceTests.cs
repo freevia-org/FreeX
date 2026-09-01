@@ -47,7 +47,9 @@ public sealed class AppDiagnosticsActivitySourceTests
     {
         var reviewSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
-        reviewSource.Should().Contain("private async void CheckForUpdatesBtn_Click(");
+        reviewSource.Should().Contain("private void CheckForUpdatesBtn_Click(");
+        reviewSource.Should().Contain("RunGuardedUiCommand(\"Check for Updates\", CheckForUpdatesAsync)");
+        reviewSource.Should().Contain("private async Task CheckForUpdatesAsync()");
         reviewSource.Should().Contain("RecordDiagnosticEvent(\"update_check_opened\"");
         reviewSource.Should().Contain("[\"source\"] = \"help\"");
         reviewSource.Should().Contain("OpenExternalHelpLink(updates.ReleasesPageUrl, UiText.Get(\"MainWindowMessage_CheckForUpdatesTitle\"))");

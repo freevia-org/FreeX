@@ -1116,6 +1116,46 @@ public sealed class DocumentReferenceEditingCoordinatorTests
     }
 
     [Fact]
+    public void FieldUpdateUsesKnownTablePositionForComplexNoteRefAndDateCulture()
+    {
+        var noteReference = Run.ComplexFieldRun(" NOTEREF _Ref1 \\p \\h ", "stale");
+        var noteMarker = Run.FootnoteReference(1);
+        var created = Run.ComplexFieldRun(" CREATEDATE \\@ \"d MMMM yyyy\" ", "stale");
+        var fieldParagraph = new Paragraph { StyleId = "Journal", Runs = { noteReference, noteMarker, created } };
+        fieldParagraph.BookmarkNames.Add("_Ref1");
+        fieldParagraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.Start, 1, "_Ref1"));
+        fieldParagraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.End, 2));
+
+        var row = new TableRow();
+        row.Cells.Add(new TableCell("decoy"));
+        var fieldCell = new TableCell();
+        fieldCell.Paragraphs.Add(fieldParagraph);
+        row.Cells.Add(fieldCell);
+        var table = new Table();
+        table.Rows.Add(row);
+        var document = new TextDocument();
+        document.Blocks.Add(table);
+        document.Footnotes[1] = new Footnote(1, "note");
+        document.Properties.Created = new DateTimeOffset(new DateTime(2026, 1, 5), TimeSpan.Zero);
+        document.Styles["Journal"] = new DocumentStyle
+        {
+            Id = "Journal",
+            Name = "Journal",
+            Run = new RunFormatting { LanguageTag = "fr-FR" },
+        };
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        var result = session.References.UpdateFields();
+
+        result.UpdatedFieldCount.Should().Be(2);
+        noteReference.Text.Should().Be("1 below");
+        created.Text.Should().Be("5 janvier 2026");
+    }
+
+    [Fact]
     public void FieldUpdateCanEvaluateSubEditorFieldsAgainstOwningDocument()
     {
         var owner = TextDocument.CreateEmpty();
