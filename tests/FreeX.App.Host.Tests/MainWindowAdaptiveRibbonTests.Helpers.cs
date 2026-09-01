@@ -260,33 +260,32 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             return menu;
         }
 
-        public Button? VisibleOrCollapsedRibbonButton(string title) =>
+        private IReadOnlyList<Button> VisibleOrCollapsedRibbonButtons(string title) =>
             HomeRibbonChildren
                 .OfType<DependencyObject>()
                 .SelectMany(WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>)
                 .Concat(HomeRibbonChildren.OfType<DependencyObject>().SelectMany(WpfTestTree.FindLogicalDescendants<DependencyObject>))
                 .OfType<Button>()
                 .Distinct()
-                .FirstOrDefault(button =>
+                .Where(button =>
                     string.Equals(RibbonTooltip.GetTitle(button), title, StringComparison.Ordinal) ||
-                    string.Equals(GetButtonLabel(button), title, StringComparison.Ordinal));
+                    string.Equals(GetButtonLabel(button), title, StringComparison.Ordinal))
+                .ToList();
+
+        public Button? VisibleOrCollapsedRibbonButton(string title) =>
+            VisibleOrCollapsedRibbonButtons(title).FirstOrDefault();
 
         public bool VisibleRibbonButtonHasDropdownChevron(string title) =>
-            VisibleOrCollapsedRibbonButton(title) is { } button &&
-            DropdownChevronCount(button) > 0;
+            VisibleOrCollapsedRibbonButtons(title).Any(button => DropdownChevronCount(button) > 0);
 
         public int VisibleRibbonButtonDropdownChevronCount(string title) =>
-            VisibleOrCollapsedRibbonButton(title) is { } button
-                ? DropdownChevronCount(button)
-                : 0;
+            VisibleOrCollapsedRibbonButtons(title).Sum(DropdownChevronCount);
 
         public bool VisibleRibbonButtonHasDropdownZoneHandler(string title) =>
-            VisibleOrCollapsedRibbonButton(title) is { } button &&
-            RibbonMetadata.GetDropdownZoneHandlerAttached(button);
+            VisibleOrCollapsedRibbonButtons(title).Any(RibbonMetadata.GetDropdownZoneHandlerAttached);
 
         public bool VisibleRibbonButtonHasDropdownZoneHighlight(string title) =>
-            VisibleOrCollapsedRibbonButton(title) is { } button &&
-            HasDropdownZoneHighlight(button);
+            VisibleOrCollapsedRibbonButtons(title).Any(HasDropdownZoneHighlight);
 
         public RibbonCommandContentLayout? NamedRibbonButtonContentLayout(string name)
         {

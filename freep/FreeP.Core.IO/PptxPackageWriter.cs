@@ -5066,6 +5066,24 @@ public static class PptxPackageWriter
     private static XElement BuildLineEndEl(string localName, ShapeLineEnd lineEnd) =>
         new(A + localName, new XAttribute("type", ToLineEndType(lineEnd.Kind)));
 
+    /// <summary>
+    /// r192: DrawingML a:rPr/@sz is ST_TextFontSize -- an int in hundredths of a point bounded to
+    /// [100, 400000] (1pt to 4000pt). The raw `(int)Math.Round(pt * 100)` this replaces produced a
+    /// schema-invalid value for anything outside that range, and for a large enough size the cast
+    /// itself overflowed, writing a negative sz that PowerPoint refuses to open. The ribbon entry
+    /// point clamps too (FreePRibbonCommandWorkflow); this is the last line of defence for a size
+    /// that reached the model some other way, such as a value read from a file another producer
+    /// wrote.
+    /// </summary>
+    private static int ToTextFontSize(double fontSizePt)
+    {
+        if (double.IsNaN(fontSizePt))
+            return 100;
+
+        var hundredths = Math.Round(Math.Clamp(fontSizePt, 1, 4000) * 100);
+        return (int)hundredths;
+    }
+
     private static string ToLineEndType(ShapeLineEndKind kind) =>
         kind switch
         {
@@ -5552,7 +5570,7 @@ public static class PptxPackageWriter
         if (run.Caps != RunTextCaps.None)
             rPr.Add(new XAttribute("cap", run.Caps == RunTextCaps.All ? "all" : "small"));
         if (run.FontSizePt.HasValue)
-            rPr.Add(new XAttribute("sz", (int)Math.Round(run.FontSizePt.Value * 100)));
+            rPr.Add(new XAttribute("sz", ToTextFontSize(run.FontSizePt.Value)));
         if (run.BaselineOffset.HasValue)
             rPr.Add(new XAttribute("baseline", run.BaselineOffset.Value));
 

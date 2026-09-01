@@ -15,14 +15,13 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class MainWindowAdaptiveRibbonTests
 {
-    // Commands that own a dropdown menu in the declarative ribbon (Paste, Orientation) get the split-button
+    // Commands that own a dropdown menu in the declarative ribbon get the split-button
     // treatment: exactly one actionable chevron, a routed dropdown zone, and the split hover highlight.
-    // (Live-ribbon note: AutoSum and Sort & Filter render as plain commands here -- they do not own an
-    // inline dropdown menu, so they correctly carry no split chevron and are covered by the negative case
-    // below and by RibbonMenuButtons_AllTabsUseSplitDropdownTreatment.)
     [Theory]
     [InlineData("Paste")]
     [InlineData("Orientation")]
+    [InlineData("AutoSum")]
+    [InlineData("Sort & Filter")]
     public void RibbonMenuButtons_ShowActionableDropdownGlyph(string title)
     {
         StaTestRunner.Run(() =>
@@ -46,8 +45,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     }
 
     [Theory]
-    [InlineData("AutoSum")]
-    [InlineData("Sort & Filter")]
+    [InlineData("Percent Style")]
+    [InlineData("Wrap Text")]
     public void RibbonPlainCommands_DoNotShowSplitDropdownGlyph(string title)
     {
         StaTestRunner.Run(() =>

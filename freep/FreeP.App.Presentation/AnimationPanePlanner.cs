@@ -948,7 +948,15 @@ public static class AnimationPanePlanner
     {
         culture ??= CultureInfo.CurrentCulture;
         double seconds = ms / 1000.0;
-        return seconds.ToString("0.##", culture);
+
+        // r192: three decimals, not two. The model stores whole milliseconds and this text is not
+        // display-only -- TryParseTimingSeconds reads the very same string back as the source of
+        // truth when the field loses focus. At "0.##" (10ms resolution) a duration that is not a
+        // multiple of 10ms was silently rounded by merely opening the Animation Pane and clicking
+        // away: a 1234ms animation redisplayed as "1.23" and became 1230ms, and a deck could be
+        // walked down 10ms at a time. Durations that ARE multiples of 10ms print identically, so
+        // nothing an author typed by hand looks any different.
+        return seconds.ToString("0.###", culture);
     }
 
     public static bool TryParseDuration(string text, out int ms)
@@ -976,7 +984,12 @@ public static class AnimationPanePlanner
                 || double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out seconds))
             && (allowZero ? seconds >= 0 : seconds > 0))
         {
-            ms = (int)(seconds * 1000.0);
+            // r192: ROUND, not truncate. seconds * 1000.0 is not exact in binary floating point --
+            // "1.005" parses to a double a hair below 1.005, so the old `(int)` cast produced 1004
+            // and the pane lost a millisecond on every focus loss even once the display carried
+            // enough precision to show it. Rounding is also what the user means: the text is a
+            // decimal count of seconds, not a value to floor.
+            ms = (int)Math.Round(seconds * 1000.0, MidpointRounding.AwayFromZero);
             return true;
         }
 

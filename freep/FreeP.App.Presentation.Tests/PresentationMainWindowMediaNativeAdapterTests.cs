@@ -64,6 +64,44 @@ public sealed class PresentationMainWindowMediaNativeAdapterTests
         selectionActions["bookmarks"]();
         buttonActions["close"]();
         router.Events.Should().Equal("refresh", "track:4", "bookmark:2", "command:Close");
+
+        // r192: every button, not just Close. This asserted a COUNT of ten bindings and then
+        // exercised one of them, so swapping any two cases in the Get(PresentationMediaPaneFormCommand)
+        // switch left the set a permutation of the same ten distinct buttons -- HaveCount(10) still
+        // passed, the dictionary never collided, and the one checked entry was untouched. Clicking
+        // "Apply Volume" would have run Apply Timing on BOTH shells with the suite still green.
+        // The expectation is a FIXED table of button name to command, not `buttons.Get(command)`.
+        // Routing the assertion through Get would use the very switch under test on both sides, so
+        // swapping two of its cases moves the expectation with the behaviour and the test stays
+        // green -- measured: it does. The button names come from CreateButtons() below, in the
+        // order PresentationMediaPaneNativeButtons declares them.
+        var expected = new (string Button, PresentationMediaPaneFormCommand Command)[]
+        {
+            ("volume", PresentationMediaPaneFormCommand.ApplyVolume),
+            ("playback", PresentationMediaPaneFormCommand.ApplyPlayback),
+            ("timing", PresentationMediaPaneFormCommand.ApplyTiming),
+            ("bookmark-create", PresentationMediaPaneFormCommand.CreateBookmark),
+            ("bookmark-replace", PresentationMediaPaneFormCommand.ReplaceBookmark),
+            ("bookmark-delete", PresentationMediaPaneFormCommand.DeleteBookmark),
+            ("caption-create", PresentationMediaPaneFormCommand.CreateCaption),
+            ("caption-replace", PresentationMediaPaneFormCommand.ReplaceCaption),
+            ("caption-delete", PresentationMediaPaneFormCommand.DeleteCaption),
+            ("close", PresentationMediaPaneFormCommand.Close),
+        };
+
+        expected.Should().HaveCount(
+            Enum.GetValues<PresentationMediaPaneFormCommand>().Length,
+            "every command must be covered, including any added later");
+
+        foreach (var (button, command) in expected)
+        {
+            router.Events.Clear();
+            buttonActions[button]();
+            router.Events.Should().ContainSingle().Which.Should().Be(
+                $"command:{command}",
+                "the {0} button must raise exactly that command",
+                button);
+        }
     }
 
     private static PresentationMediaPaneNativeButtons<string> CreateButtons() => new(

@@ -80,7 +80,9 @@ public sealed partial class MainWindowXamlKeyTipTests
         keyTipSource.Should().Contain("if (!match.IsEnabled)");
         keyTipSource.Should().Contain("match.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, match));");
 
-        backstageSource.Should().Contain("private async void SaveButton_Click(object sender, RoutedEventArgs e)");
+        backstageSource.Should().Contain("private void SaveButton_Click(object sender, RoutedEventArgs e)");
+        backstageSource.Should().Contain("RunGuardedUiCommand(\"Backstage Save\", SaveFromBackstageAsync)");
+        backstageSource.Should().Contain("private async Task SaveFromBackstageAsync()");
         // Save now delegates the existing-path-vs-dialog DECISION to the shared SaveResolvedAsync helper
         // (MainWindow.WorkbookLifecycle.cs), the same resolution the dirty-gate's "Save then proceed" takes.
         backstageSource.Should().Contain("await SaveResolvedAsync()");

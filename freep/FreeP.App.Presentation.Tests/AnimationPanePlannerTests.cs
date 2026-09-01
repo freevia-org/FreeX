@@ -631,7 +631,13 @@ public sealed class AnimationPanePlannerTests
     [Theory]
     [InlineData("0.75", 750)]
     [InlineData("0.75s", 750)]
-    [InlineData("1.2345", 1234)]
+    // r192: 1.2345s is 1234.5ms -- below the model's 1ms resolution, so it lands between two
+    // representable values and the parse now rounds rather than truncating (1235, was 1234). The
+    // change is not about this case: the truncating cast made `seconds * 1000.0` lose a millisecond
+    // for values that ARE representable, because the product is inexact in binary floating point
+    // ("1.005" parsed to a hair under 1.005 and floored to 1004). This test is about accepting
+    // invariant-culture seconds; the rounding policy was incidental to it.
+    [InlineData("1.2345", 1235)]
     public void TryParseDuration_AcceptsPositiveInvariantSeconds(
         string text,
         int expectedMs)
