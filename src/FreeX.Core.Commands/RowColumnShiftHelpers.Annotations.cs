@@ -425,7 +425,7 @@ internal static partial class RowColumnShiftHelpers
 
         foreach (var change in snapshot)
         {
-            var sheet = workbook.Sheets.FirstOrDefault(s => s.Id == change.Sheet);
+            var sheet = workbook.GetSheet(change.Sheet);
             if (sheet is null)
                 continue;
 

@@ -149,4 +149,26 @@ public sealed class WorksheetPrintPageContentPlannerTests
                 printableHeight: 500)
             .Should().Be(2.0);
     }
+
+    [Fact]
+    public void HyperlinkPlanner_UsesCaseInsensitiveSheetIndex_AndSkipsMissingSheet()
+    {
+        var workbook = new Workbook("Print hyperlinks");
+        var sourceSheet = workbook.AddSheet("Source");
+        var destinationSheet = workbook.AddSheet("Data");
+        var resolvedAddress = new CellAddress(sourceSheet.Id, 1, 1);
+        var missingAddress = new CellAddress(sourceSheet.Id, 2, 1);
+        sourceSheet.Hyperlinks[resolvedAddress] = "data!B2";
+        sourceSheet.Hyperlinks[missingAddress] = "Missing!C3";
+        sourceSheet.HyperlinkMetadata[resolvedAddress] =
+            new HyperlinkMetadata(HyperlinkTargetKind.PlaceInThisDocument);
+        sourceSheet.HyperlinkMetadata[missingAddress] =
+            new HyperlinkMetadata(HyperlinkTargetKind.PlaceInThisDocument);
+
+        var hyperlinks = WorksheetPrintHyperlinkPlanner.BuildPrintableHyperlinks(workbook, sourceSheet);
+
+        hyperlinks.Should().ContainSingle();
+        hyperlinks[(1u, 1u)].TargetAddress.Should().Be(new CellAddress(destinationSheet.Id, 2, 2));
+        hyperlinks.Should().NotContainKey((2u, 1u));
+    }
 }
