@@ -53,6 +53,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 concurrency:
   group: tester-release
@@ -100,6 +101,25 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.400
+
+      - name: Authenticate to Azure Artifact Signing
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Prepare Artifact Signing client
+        shell: pwsh
+        run: |
+          dotnet tool install --global vpk --version 1.2.0
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not install the pinned Velopack signing client bundle."
+          }
+          az account get-access-token --resource https://codesigning.azure.net --output none
+          if ($LASTEXITCODE -ne 0) {
+            throw "GitHub OIDC identity could not obtain an Artifact Signing access token."
+          }
 
       - name: Repository preflight
         shell: pwsh
@@ -209,7 +229,8 @@ jobs:
             -RuntimeIdentifier win-x64 `
             -OutputRoot $outputRoot `
             -Version "${{ steps.meta.outputs.version }}" `
-            -PublishMode SingleFile
+            -PublishMode SingleFile `
+            -ArtifactSigningMetadataPath tools/signing/metadata.json
 
           $versionedExe = Get-ChildItem -LiteralPath $outputRoot -Filter "freex-*-win-x64-singlefile.exe" |
             Sort-Object LastWriteTimeUtc -Descending |
@@ -293,7 +314,8 @@ jobs:
             -RuntimeIdentifier win-x64 `
             -OutputRoot $outputRoot `
             -Version "${{ steps.meta.outputs.version }}" `
-            -PublishMode Velopack
+            -PublishMode Velopack `
+            -ArtifactSigningMetadataPath tools/signing/metadata.json
 
           $vpkOut = Join-Path $outputRoot "velopack-win-x64"
           if (-not (Test-Path -LiteralPath $vpkOut)) {
@@ -308,6 +330,20 @@ jobs:
             Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $uploadRoot $_.Name) -Force
             Write-Host "Staged Velopack asset: $($_.Name)"
           }
+
+      - name: Verify signed Windows release executables
+        shell: pwsh
+        run: |
+          $singleFile = Get-ChildItem -LiteralPath artifacts/upload -Filter "freex-*-win-x64-singlefile.exe" -File -ErrorAction Stop |
+            Select-Object -First 1
+          $setup = Get-ChildItem -LiteralPath artifacts/velopack -Filter "*-Setup.exe" -File -ErrorAction Stop |
+            Select-Object -First 1
+          if ($null -eq $singleFile -or $null -eq $setup) {
+            throw "Signed single-file and Velopack Setup executables are required before publication."
+          }
+          pwsh -NoProfile -File tools/Invoke-WindowsArtifactSigning.ps1 `
+            -Files $singleFile.FullName,$setup.FullName `
+            -VerifyOnly
 
       - name: Upload Velopack artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -531,18 +567,18 @@ jobs:
           Checksum for the latest MSIX package: FreeX-latest-win-x64.msix.sha256
 
           This is a framework-dependent single-file Windows x64 build. It requires the Microsoft .NET Desktop Runtime if Windows prompts for it.
-          The MSIX package is signed when the release certificate secret is configured; otherwise it is published unsigned for tester continuity until a certificate is available. Installer trust validation and Store submission remain release-gate tasks.
+          The direct-download executable and Velopack payload/installer are signed by Freevia through Azure Artifact Signing and timestamped by Microsoft. The MSIX is retained for package validation; Store-bound MSIX packages are signed by Microsoft during certification.
 
           Windows tester steps:
           1. Download FreeX-latest-win-x64.exe and FreeX-latest-win-x64.exe.sha256 from this release.
           2. Verify the checksum with PowerShell: Get-FileHash .\FreeX-latest-win-x64.exe -Algorithm SHA256, then compare it with FreeX-latest-win-x64.exe.sha256.
-          3. Run FreeX-latest-win-x64.exe. If Windows SmartScreen warns about an unknown publisher, continue only if the checksum matches this GitHub release and you expected this internal tester build.
-          4. Prefer the .exe for normal testing. Use the MSIX only for package/install validation; unsigned MSIX packages may need trusted internal-test machine settings until signing is configured.
+          3. Verify that Windows shows Freevia as the signed publisher, then run FreeX-latest-win-x64.exe.
+          4. Prefer the signed .exe or Velopack installer for normal testing. Use the MSIX only for Store/package validation; it is not the direct-download trust path.
 
           $macOsTesterSection
 
           Tester message:
-          This is an internal preview while signing certificates are pending. macOS and Windows may warn that the publisher cannot be verified. Only open the build if you expected this test release from the FreeX team and the checksum matches the release asset.
+          This is an internal preview. Windows executables are signed by Freevia; macOS preview assets remain separately signed/notarized only when their distribution-candidate lane is enabled. Only open a build if you expected it from the FreeX team and its checksum matches the release asset.
 
           Public-preview accessibility gate:
           - Keyboard-only smoke validation: $keyboardOnlyStatus.

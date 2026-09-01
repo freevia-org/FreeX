@@ -85,20 +85,20 @@ Authenticode-sign ZIP, NUPKG, JSON, SBOM, or checksum files.
 
 ## CI with GitHub OIDC
 
-Do not use Quinn Smith's interactive identity in CI and do not store a PFX or
-client secret. Create a dedicated Entra application or managed identity with a
-GitHub federated credential, then grant only that identity **Artifact Signing
-Certificate Profile Signer** at the `freevia-public-signing` profile scope.
-That Azure setup is intentionally not automated by this repository.
+CI uses the dedicated `FreeX GitHub Artifact Signing` Entra application; it has
+no client secret or PFX. Its only federated subject is
+`repo:tony-xmelon/FreeX:environment:public-preview`, and its Azure access is the
+**Artifact Signing Certificate Profile Signer** role at the
+`freevia-public-signing` profile scope.
 
-The Windows release job needs `permissions: id-token: write` and `contents:
-read`, followed by `azure/login@v3` using `AZURE_CLIENT_ID`,
-`AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID`. Restrict the federated subject
-to a protected release environment and the release workflow/ref. Install the
-Artifact Signing client on the runner and add
-`-ArtifactSigningMetadataPath tools/signing/metadata.json` to the SingleFile and
-Velopack commands. Pin third-party actions to reviewed commits.
+The `public-preview` GitHub environment stores `AZURE_CLIENT_ID`,
+`AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID`. They identify the OIDC login;
+none is a credential. `tester-release.yml` grants `id-token: write`, runs the
+commit-pinned Azure Login action, installs the pinned Velopack client bundle,
+and passes `-ArtifactSigningMetadataPath tools/signing/metadata.json` to both
+the SingleFile and Velopack commands.
 
-Enable CI signing only after the workload identity exists, its profile-scoped
-role is verified, and a dry run passes Authenticode verification. The current
-human signer role does not authorize the GitHub runner.
+Every dispatch signs before publication. `prerelease=true` produces a signed
+test/prerelease; `prerelease=false` produces the signed non-prerelease/latest
+release. Publication fails if OIDC login, signing, timestamping, or final
+Authenticode verification fails. The human signer role is not used by GitHub.

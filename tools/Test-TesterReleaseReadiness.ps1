@@ -108,6 +108,10 @@ foreach ($marker in @(
     "--draft=false",
     "Publish single-file tester exe",
     "tools/Publish-UserTestBuild.ps1",
+    "Authenticate to Azure Artifact Signing",
+    "azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43",
+    "-ArtifactSigningMetadataPath tools/signing/metadata.json",
+    "Verify signed Windows release executables",
     "-PublishMode SingleFile",
     "Publish MSIX package",
     "-PublishMode Msix",
@@ -127,8 +131,8 @@ Assert-Contains -Text $distributionPlan -Expected "https://github.com/tony-xmelo
 Assert-Contains -Text $distributionPlan -Expected "https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.msix" -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "At $overallCompletion% completion, default tester releases use the ``$stream`` stream." -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "Release dispatches must run from ``main`` or an isolated ``codex/daily-tester-release-*`` branch because the workflow publishes stable latest assets" -Label "Test distribution plan"
-Assert-Contains -Text $distributionPlan -Expected "signs the package when ``FREEX_MSIX_CERTIFICATE_BASE64`` is configured" -Label "Test distribution plan"
-Assert-Contains -Text $distributionPlan -Expected "publishes an unsigned MSIX for tester continuity" -Label "Test distribution plan"
+Assert-Contains -Text $distributionPlan -Expected "fails closed unless GitHub OIDC authenticates the dedicated release identity" -Label "Test distribution plan"
+Assert-Contains -Text $distributionPlan -Expected "Microsoft signs them during certification" -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "Keyboard-only smoke validation" -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "Screen-reader smoke validation" -Label "Test distribution plan"
 Assert-Contains -Text $distributionPlan -Expected "UI Automation catalog review" -Label "Test distribution plan"
@@ -139,7 +143,7 @@ Assert-Contains -Text $checklist -Expected "Test result artifact was uploaded, e
 Assert-Contains -Text $checklist -Expected "Versioned ``.exe``, latest ``.exe``, versioned MSIX, latest MSIX, Velopack installer/portable/feed artifacts, and checksum artifacts" -Label "Tester release checklist"
 Assert-Contains -Text $checklist -Expected "Stable latest checksum assets were included for both the ``.exe`` and MSIX packages" -Label "Tester release checklist"
 Assert-Contains -Text $checklist -Expected "Latest ``.exe`` and MSIX download links were checked from the published release." -Label "Tester release checklist"
-Assert-Contains -Text $checklist -Expected "MSIX package was signed with the release certificate when signing secrets were configured; otherwise unsigned MSIX publication was accepted for this internal tester build." -Label "Tester release checklist"
+Assert-Contains -Text $checklist -Expected "GitHub OIDC authentication succeeded, and the standalone executable plus Velopack payload/Setup executable were signed by Freevia" -Label "Tester release checklist"
 Assert-Contains -Text $checklist -Expected "Known accessibility issues" -Label "Tester release checklist"
 
 $missingAccessibilityGate = @()

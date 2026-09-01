@@ -14,7 +14,8 @@ the explicitly deferred certificate gate.
 - Versioned `.exe`, latest `.exe`, versioned MSIX, latest MSIX, Velopack installer/portable/feed artifacts, and checksum artifacts were uploaded.
 - Stable latest checksum assets were included for both the `.exe` and MSIX packages.
 - Release ran from `main` or an isolated `codex/daily-tester-release-*` branch for a frozen verified candidate; no overlapping tester-release dispatch was active.
-- MSIX package was signed with the release certificate when signing secrets were configured; otherwise unsigned MSIX publication was accepted for this internal tester build.
+- GitHub OIDC authentication succeeded, and the standalone executable plus Velopack payload/Setup executable were signed by Freevia and passed Authenticode verification before publication.
+- The MSIX was treated only as a Store/package-validation artifact; Store signing remains owned by Microsoft certification.
 - GitHub release was published with the expected tester stream from `release/progress.json`.
 - Latest `.exe` and MSIX download links were checked from the published release.
 - If the workflow was dispatched with `prerelease=true`, direct release assets were checked from that release because GitHub's `releases/latest` redirect remains on the latest non-prerelease build.
@@ -31,4 +32,3 @@ the explicitly deferred certificate gate.
 
 - If every accessibility gate item is complete, mark the release notes as public-preview eligible.
 - If any accessibility gate item is skipped or incomplete, mark the build as internal-only and do not promote it as a public-preview candidate.
-
