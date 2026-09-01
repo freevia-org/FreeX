@@ -140,10 +140,19 @@ public sealed class JsonSettingsStore<T>
 
             // Best effort throughout: quarantining is a courtesy, and failing to do it must never
             // stop the user saving. A single fixed name is deliberate -- repeated corruption should
-            // not accumulate files without bound, and the most recent unreadable copy is the one
-            // worth keeping.
+            // not accumulate files without bound.
+            //
+            // r192: overwrite:false, so the FIRST rescue wins. _loadFailed is per-instance, and
+            // several stores can exist against one path -- FreeW builds a fresh
+            // JsonSettingsStore for the Quick Parts gallery on every window, so opening two windows
+            // over a corrupt file leaves both instances flagged. With overwrite:true the second
+            // window's save copied the file as it stood by then -- the first window's freshly
+            // written, VALID content -- over the rescued original, destroying exactly the bytes
+            // this rescue exists to keep. Letting Copy fail when the backup is already there makes
+            // "has this file been rescued" a property of the filesystem rather than of whichever
+            // instance happens to save first.
             var quarantine = StorePath + ".unreadable";
-            File.Copy(StorePath, quarantine, overwrite: true);
+            File.Copy(StorePath, quarantine, overwrite: false);
         }
         catch
         {
