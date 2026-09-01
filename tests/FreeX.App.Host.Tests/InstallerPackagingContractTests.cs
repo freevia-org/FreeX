@@ -46,6 +46,15 @@ public sealed class InstallerPackagingContractTests
     }
 
     [Fact]
+    public void ReleaseInstallationSmoke_UsesVelopackCanonicalLaunchPath()
+    {
+        var smoke = WorkspaceFileLocator.ReadAllText("tools", "Test-ReleaseInstallation.ps1");
+
+        smoke.Should().Contain("Join-Path (Join-Path (Join-Path $Root $App) 'current')");
+        smoke.Should().NotContain("Get-ChildItem -LiteralPath $Root -Recurse -File -Filter \"$App.App.Host.exe\"");
+    }
+
+    [Fact]
     public void SuitePackages_DelegateToIndividualInstallerIdentities()
     {
         var packager = WorkspaceFileLocator.ReadAllText("tools", "packaging", "New-AppInstallers.ps1");

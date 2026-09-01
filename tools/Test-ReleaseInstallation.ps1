@@ -27,9 +27,14 @@ function Run([string]$File, [string[]]$Arguments) {
     if ($process.ExitCode -ne 0) { throw "'$File' exited with $($process.ExitCode)." }
 }
 function Assert-OneInstalled([string]$Root, [string]$App) {
-    $matches = @(Get-ChildItem -LiteralPath $Root -Recurse -File -Filter "$App.App.Host.exe" -ErrorAction SilentlyContinue)
-    if ($matches.Count -ne 1) { throw "Expected one installed $App executable; found $($matches.Count)." }
-    $matches[0].FullName
+    # Velopack exposes `current` as a junction to the versioned app directory.
+    # A recursive search traverses both names and counts the same installed
+    # executable twice, so validate the canonical launch path directly.
+    $executable = Join-Path (Join-Path (Join-Path $Root $App) 'current') "$App.App.Host.exe"
+    if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
+        throw "Expected the installed $App executable at '$executable'."
+    }
+    (Resolve-Path -LiteralPath $executable).Path
 }
 function Launch-Bounded([string]$Executable) {
     $process = Start-Process -FilePath $Executable -PassThru -WindowStyle Hidden
