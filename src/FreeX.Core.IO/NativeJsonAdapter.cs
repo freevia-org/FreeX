@@ -786,7 +786,11 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         if (string.IsNullOrWhiteSpace(sanitized))
             return "Sheet";
 
-        return sanitized.Length <= 31 ? sanitized : sanitized[..31];
+        // r194: see SurrogateSafeTruncation -- a raw [..31] can leave a lone surrogate that makes
+        // every later .xlsx save throw.
+        return sanitized.Length <= 31
+            ? sanitized
+            : SurrogateSafeTruncation.LimitToTextElements(sanitized, 31);
     }
 
     private static string FormatColor(CellColor color) => NativeJsonColorMapper.FormatColor(color);

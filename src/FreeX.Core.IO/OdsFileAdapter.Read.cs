@@ -535,7 +535,8 @@ public sealed partial class OdsFileAdapter
                 name = name.Replace(bad, '_');
         }
         if (name.Length > 31)
-            name = name[..31];
+            // r194: see SurrogateSafeTruncation.
+            name = SurrogateSafeTruncation.LimitToTextElements(name, 31);
         if (name.StartsWith('\'')) name = name.TrimStart('\'');
         if (name.EndsWith('\'')) name = name.TrimEnd('\'');
         if (string.IsNullOrWhiteSpace(name))

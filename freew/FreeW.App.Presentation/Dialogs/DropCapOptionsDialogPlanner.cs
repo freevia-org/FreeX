@@ -77,7 +77,12 @@ public static class DropCapOptionsDialogPlanner
             new(DropCapOptionsDialogField.Font, FontLabel, FontAutomationId, "Drop cap font"),
             new(DropCapOptionsDialogField.LinesToDrop, LinesToDropLabel, LinesAutomationId, "Lines to drop"),
             new(DropCapOptionsDialogField.DistanceFromText, DistanceFromTextLabel, DistanceAutomationId, "Distance from text"),
-        ]);
+        ],
+        // r194: r190 gave this dialog a validation message and a status control to show it in, but
+        // the surface never declared an id for that control, so unlike Columns, Hyphenation,
+        // LineNumber and ParagraphBreaks the message was invisible to automation and to a screen
+        // reader looking for it by id.
+        ValidationAutomationId: "DropCapValidationMessage");
 
     public static readonly IReadOnlyList<string> FontNames =
         [CurrentFontLabel, "Arial", "Calibri", "Times New Roman", "Georgia", "Cambria"];

@@ -257,6 +257,10 @@ internal static partial class XlsxPivotTableReader
     private static List<PivotFieldModel> ReadPivotFieldIndexes(
         XElement? fieldsElement,
         XNamespace workbookNs,
+        // r194: the cache this pivot reads from, so a field index the file claims can be checked
+        // against the number of fields that actually exist. Null means "unknown" -- only the
+        // documented -2 skip applies then, exactly as before.
+        PivotCacheModel? pivotCache,
         IReadOnlyDictionary<int, IReadOnlyList<string>>? nativeFieldSelections = null,
         IReadOnlyDictionary<int, PivotFieldModel>? nativeFieldGroups = null,
         IReadOnlyDictionary<int, PivotFieldNativeMetadata>? nativeFieldMetadata = null)
@@ -277,7 +281,17 @@ internal static partial class XlsxPivotTableReader
                 // downstream consumer that indexes per-cache-field arrays/dictionaries by SourceFieldIndex
                 // (e.g. PivotTableRefreshService.Writers.cs `headers[rowFields[index].SourceFieldIndex]`),
                 // so it must be skipped here rather than modeled as a normal field.
-                return index.HasValue && index.Value != -2
+                // r194: an index outside the cache field range is not a field this pivot can read.
+                // It reaches ~31 unchecked `row[field.SourceFieldIndex]` sites, every one of which
+                // throws IndexOutOfRange on a file whose rowFields/colFields name a column the
+                // cache does not have -- a shape other producers do emit. Dropping it here, at the
+                // same chokepoint that already drops the -2 Values placeholder for the identical
+                // "corrupts any downstream consumer that indexes by SourceFieldIndex" reason, keeps
+                // the model incapable of holding an impossible index.
+                return index.HasValue
+                    && index.Value != -2
+                    && index.Value >= 0
+                    && (pivotCache is null || index.Value < pivotCache.Fields.Count)
                     ? CreatePivotFieldModel(
                         index.Value,
                         field.Attribute("name")?.Value,
@@ -325,7 +339,7 @@ internal static partial class XlsxPivotTableReader
         if (pageFields.Count > 0)
             return pageFields;
 
-        return ReadPivotFieldIndexes(fieldsElement, workbookNs, nativeFieldSelections, nativeFieldGroups, nativeFieldMetadata);
+        return ReadPivotFieldIndexes(fieldsElement, workbookNs, pivotCache, nativeFieldSelections, nativeFieldGroups, nativeFieldMetadata);
     }
 
     private static string? ReadNativePageFieldSelectedItem(

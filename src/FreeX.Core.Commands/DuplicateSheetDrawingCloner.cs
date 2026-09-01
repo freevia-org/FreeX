@@ -838,6 +838,11 @@ internal static class DuplicateSheetDrawingCloner
             LegendItalic = chart.LegendItalic,
             LegendEntries = chart.LegendEntries.ToList(),
             SeriesColumnMappings = chart.SeriesColumnMappings.ToList(),
+            // r193: the one SeriesIndex-keyed field this initializer forgot. Without it a duplicated
+            // or pasted chart has no series-name override, so the writer falls back to the
+            // recomputed header-cell title and a custom series name set via Select Data silently
+            // reverts on the next save.
+            SeriesNameOverrides = chart.SeriesNameOverrides.ToList(),
             SeriesRangeDataLabels = chart.SeriesRangeDataLabels.ToList(),
             VerbatimSeriesFormulas = chart.VerbatimSeriesFormulas?.ToList(),
             EmbeddedSeriesData = chart.EmbeddedSeriesData?.ToList(),

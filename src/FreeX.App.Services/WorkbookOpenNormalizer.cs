@@ -27,7 +27,11 @@ public static class WorkbookOpenNormalizer
         var sheetName = new string(chars).Trim();
         if (sheetName.Length == 0)
             sheetName = "Sheet1";
-        return sheetName.Length <= 31 ? sheetName : sheetName[..31].Trim();
+        // r194: text-element aware. A raw [..31] can leave half a surrogate pair, and a lone
+        // surrogate in a sheet name aborts every later save to .xlsx. See SurrogateSafeTruncation.
+        return sheetName.Length <= 31
+            ? sheetName
+            : Free.Shared.IO.SurrogateSafeTruncation.LimitToTextElements(sheetName, 31).Trim();
     }
 
     private static bool IsInvalidSheetNameCharacter(char ch) =>
