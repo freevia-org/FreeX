@@ -118,12 +118,7 @@ public sealed class R92_RecoverySaveConflictGuardReconciliationTests
 
     private static async Task<bool> InvokeSaveWorkbookToTargetAsync(MainWindow window, FileSaveTarget target)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "SaveWorkbookToTargetAsync",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        method.Should().NotBeNull("SaveWorkbookToTargetAsync is the real r91 save-conflict-guard entry point");
-
-        var task = (Task<bool>)method!.Invoke(window, [target])!;
+        var task = window.SaveWorkbookToTargetAsync(target);
         return await task;
     }
 

@@ -743,10 +743,10 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("ShellFocusTarget.TaskPane");
         script.Should().Contain("private static bool IsShellFocusCycleKey(KeyEventArgs args)");
         script.Should().Contain("CycleShellFocus(reverse: e.KeyModifiers == KeyModifiers.Shift);");
-        script.Should().Contain("private void CycleShellFocus(bool reverse)");
+        script.Should().Contain("internal void CycleShellFocus(bool reverse)");
         script.Should().Contain("ShellFocusCyclePlanner.TryFocusNextAvailable(");
         script.Should().Contain("private bool IsShellFocusTargetAvailable(ShellFocusTarget target)");
-        script.Should().Contain("private ShellFocusTarget GetCurrentShellFocusTarget()");
+        script.Should().Contain("internal ShellFocusTarget GetCurrentShellFocusTarget()");
         script.Should().Contain("private bool FocusShellRegion(ShellFocusTarget target)");
         script.Should().Contain("private bool FocusFirstEnabledToolbarControl()");
         script.Should().Contain("private IReadOnlyList<Control> GetToolbarFocusTargets()");

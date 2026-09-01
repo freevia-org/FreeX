@@ -1431,7 +1431,7 @@ public partial class MainWindow
         RefreshStatusBar();
     }
 
-    private void ExtendSelection(CellAddress anchor, CellAddress to)
+    internal void ExtendSelection(CellAddress anchor, CellAddress to)
     {
         if (IsSelectionExtensionUnchanged(anchor, to))
             return;
@@ -1590,7 +1590,7 @@ public partial class MainWindow
         RefreshToolbarAfterSelectionChange();
     }
 
-    private void CompleteDragSelectionToolbarRefresh()
+    internal void CompleteDragSelectionToolbarRefresh()
     {
         RefreshPivotFieldListPaneAfterSelectionChange();
 
@@ -1618,7 +1618,7 @@ public partial class MainWindow
         RefreshStatusBar();
     }
 
-    private void CompleteDragSelectionStatusRefresh()
+    internal void CompleteDragSelectionStatusRefresh()
     {
         // The Name Box shows a live "{rows}R x {cols}C" dimension readout while the drag was in
         // progress (ExtendSelection); now that the drag has ended, revert it to the plain range
@@ -1655,7 +1655,7 @@ public partial class MainWindow
             SheetGrid.EffectiveColHeaderHeight);
     }
 
-    private void ExtendHeaderSelection(GridHeaderContextMenuTarget target, uint anchorIndex, uint targetIndex)
+    internal void ExtendHeaderSelection(GridHeaderContextMenuTarget target, uint anchorIndex, uint targetIndex)
     {
         if (IsHeaderSelectionExtensionUnchanged(target, anchorIndex, targetIndex))
             return;

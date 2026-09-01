@@ -137,7 +137,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
         var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var extendSelection = selectionSource[
-            selectionSource.IndexOf("private void ExtendSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("internal void ExtendSelection", StringComparison.Ordinal)..
             selectionSource.IndexOf("internal void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
 
         extendSelection.Should().Contain("ClearSelectionTransientOverlays();");
@@ -153,7 +153,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
         var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var extendSelection = selectionSource[
-            selectionSource.IndexOf("private void ExtendSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("internal void ExtendSelection", StringComparison.Ordinal)..
             selectionSource.IndexOf("internal void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
         var addSelection = selectionSource[
             selectionSource.IndexOf("internal void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
@@ -179,7 +179,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
         var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var extendSelection = selectionSource[
-            selectionSource.IndexOf("private void ExtendSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("internal void ExtendSelection", StringComparison.Ordinal)..
             selectionSource.IndexOf("internal void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
         var addSelection = selectionSource[
             selectionSource.IndexOf("internal void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..

@@ -158,16 +158,12 @@ public sealed class R31_ViewportSelectionLogicTests
     private sealed class ViewportSelectionHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly MethodInfo _updateViewport;
         private readonly MethodInfo _setFreezePanes;
         private readonly FieldInfo _selectionAnchorField;
 
         private ViewportSelectionHarness(MainWindow window)
         {
             _window = window;
-            _updateViewport = typeof(MainWindow)
-                .GetMethod("UpdateViewport", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "UpdateViewport");
             _setFreezePanes = typeof(MainWindow)
                 .GetMethod("SetFreezePanes", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "SetFreezePanes");
@@ -214,7 +210,7 @@ public sealed class R31_ViewportSelectionLogicTests
 
         public void RefreshViewport()
         {
-            _updateViewport.Invoke(_window, []);
+            _window.UpdateViewport();
             PumpDispatcher();
         }
 

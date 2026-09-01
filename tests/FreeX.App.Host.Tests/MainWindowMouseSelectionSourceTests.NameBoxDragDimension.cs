@@ -16,7 +16,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
         var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var extendSelection = selectionSource[
-            selectionSource.IndexOf("private void ExtendSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("internal void ExtendSelection", StringComparison.Ordinal)..
             selectionSource.IndexOf("private static GridRange ExpandRangeToFullyContainMerges", StringComparison.Ordinal)];
 
         extendSelection.Should().Contain("SetCellAddressBoxSelectionText(_dragSelectActive");
@@ -44,7 +44,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
         var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var completeRefresh = selectionSource[
-            selectionSource.IndexOf("private void CompleteDragSelectionStatusRefresh", StringComparison.Ordinal)..
+            selectionSource.IndexOf("internal void CompleteDragSelectionStatusRefresh", StringComparison.Ordinal)..
             selectionSource.IndexOf("private void BeginHeaderSelectionDrag", StringComparison.Ordinal)];
 
         completeRefresh.Should().Contain("if (SheetGrid.SelectedRange is { } activeRange)");

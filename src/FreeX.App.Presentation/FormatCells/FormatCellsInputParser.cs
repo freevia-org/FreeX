@@ -11,11 +11,18 @@ public static class FormatCellsInputParser
     /// </summary>
     public const double MaxFontSize = 409;
 
+    /// <summary>
+    /// The low end of that same range. r183: the bound check used "> 0" and so accepted 0.5 or
+    /// 0.01, contradicting the comment above it -- and nothing downstream re-clamped, so the
+    /// sub-point size was written straight onto the cell style where Excel would have refused it.
+    /// </summary>
+    public const double MinFontSize = 1;
+
     public static double? TryParseFontSize(string text)
     {
         if ((double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.CurrentCulture, out var currentCultureSize) ||
              double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out currentCultureSize)) &&
-            currentCultureSize > 0 &&
+            currentCultureSize >= MinFontSize &&
             currentCultureSize <= MaxFontSize &&
             double.IsFinite(currentCultureSize))
         {

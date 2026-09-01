@@ -14,11 +14,36 @@ public sealed class WpfUserMessageService : IUserMessageService
     private const string DefaultConfirmTitle = "Confirm";
 
     private readonly Func<Window?> _defaultOwnerResolver;
+
+    /// <summary>
+    /// The window a message with no explicit owner should be modal to.
+    ///
+    /// r183: this used to be Application.Current.MainWindow, which WPF sets once from the window
+    /// passed to Application.Run and never reassigns. In a multi-window session (File > New
+    /// Window, or a second document) that is the FIRST window opened, not the one the user is
+    /// working in -- so a Save/Open error raised from the second window appeared modal over the
+    /// first, blocking a window the user was not looking at while the one they were in stayed
+    /// live. Prefer the ACTIVE window and fall back to MainWindow, which also keeps startup
+    /// (no window active yet) behaving as before.
+    /// </summary>
+    private static Window? ResolveDefaultOwner()
+    {
+        if (Application.Current is not { } application)
+            return null;
+
+        foreach (Window window in application.Windows)
+        {
+            if (window.IsActive)
+                return window;
+        }
+
+        return application.MainWindow;
+    }
     private readonly Func<Window?, UserMessageRequest, UserMessageResult> _showMessage;
 
     public WpfUserMessageService()
         : this(
-            () => Application.Current?.MainWindow,
+            ResolveDefaultOwner,
             static (owner, request) => DialogMessageHelper.ShowMessage(
                 owner,
                 request.Message,
