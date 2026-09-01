@@ -53,7 +53,7 @@ foreach ($runtime in $Runtimes) {
     $payloadNames = if ($Scope -eq 'Suite') {
         if ($runtime -like 'win-*') { @("$prefix-setup.exe") }
         elseif ($runtime -like 'linux-*') { @("$prefix-installer.zip") }
-        else { @("$prefix-apps.zip") }
+        else { @("$prefix.pkg") }
     } else {
         if ($runtime -like 'win-*') { @("$prefix.exe", "$prefix-setup.exe") }
         elseif ($runtime -like 'linux-*') { @("$prefix.zip", "$prefix-installer.zip") }

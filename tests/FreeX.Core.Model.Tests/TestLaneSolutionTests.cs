@@ -160,7 +160,7 @@ public sealed class TestLaneSolutionTests
         readme.Should().Contain("Do not run the complete UI lane locally as routine verification");
         plan.Should().Contain("Branch Build And Main Integration Verification");
         plan.Should().Contain("manifest-driven integration");
-        plan.Should().Contain("manifest-defined FreeX release gate");
+        plan.Should().Contain("release-only matrix");
     }
 
     private static string[] ReadSolutionProjects(string solutionPath)

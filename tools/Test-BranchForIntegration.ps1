@@ -98,4 +98,4 @@ if (-not $SkipAffectedTests) {
     }
 }
 
-Write-Host 'Branch integration gate passed. Full cross-platform integration remains owned by GitHub CI; UI/render/release-only gates remain owned by App Tester Release.'
+Write-Host 'Branch integration gate passed. Full cross-platform integration remains owned by GitHub CI; UI/render/release-only, signing, notarization, and publication gates remain owned by Full Signed Release.'

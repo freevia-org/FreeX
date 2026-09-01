@@ -3,8 +3,9 @@
 This runbook covers FreeX, FreeW, and FreeP public-preview candidates. It is an
 operator procedure for repository artifacts; it does not authorize publication,
 make a legal determination, or replace platform-vendor, privacy, security, or
-license advice. Certificate-independent work may be completed while signing
-credentials are pending, but unsigned artifacts must remain clearly labeled.
+license advice. The canonical Full Signed Release fails closed when Windows
+signing or macOS signing/notarization credentials are unavailable; unsigned
+artifacts from diagnostic workflows are internal-only.
 
 Use this runbook with the
 [public-preview readiness gate](public-preview-readiness.md), the
@@ -44,11 +45,9 @@ identifies the remediation and replacement evidence.
 5. Review the intended distribution scope against `LICENSE`,
    `THIRD_PARTY_NOTICES.md`, `THIRD_PARTY_LICENSES.md`, and the exact SBOM. This
    records a review; it does not prove that every obligation is satisfied.
-6. Confirm the release-note draft says whether Windows artifacts are signed and
-   whether macOS artifacts are signed, notarized, and stapled. Pending
-   certificates do not block unsigned-preview acceptance, but they do block any
-   statement that the artifacts are signed, trusted, notarized, or
-   production-ready.
+6. Confirm the release-note draft records verified Freevia signatures for
+   Windows and Developer ID signing, accepted notarization, and stapling for
+   macOS. Missing trust evidence is a no-go for canonical publication.
 
 ## Clean-Machine Acceptance
 
@@ -64,10 +63,9 @@ For every artifact under test:
    intended for recipients.
 2. Verify the SHA-256 value against the candidate checksum before launch. Also
    verify the artifact appears exactly once in the release manifest.
-3. Confirm the unsigned or unnotarized warning is visible before installation
-   instructions. Do not disable SmartScreen, Gatekeeper, antivirus, or other
-   operating-system protections globally. Record an expected trust warning as
-   evidence rather than concealing it.
+3. Confirm Windows displays Freevia as the verified publisher and macOS
+   Gatekeeper accepts the stapled Developer ID ticket. Do not disable
+   SmartScreen, Gatekeeper, antivirus, or other operating-system protections.
 4. Confirm the project license, legal and privacy notices, third-party notices,
    and bundled license texts are available without network access.
 5. Launch offline, create a synthetic file, save, close, reopen, and export one
@@ -106,12 +104,11 @@ For every artifact under test:
 
 - Test every published architecture archive and `.app` bundle on a clean macOS
   account.
-- While certificates are pending, record the expected unsigned and unnotarized
-  Gatekeeper result. Do not instruct users to disable Gatekeeper globally or
-  remove quarantine recursively from broad directories.
+- Confirm Developer ID signature validity, accepted notarization, stapling, and
+  Gatekeeper acceptance. Do not instruct users to disable Gatekeeper globally
+  or remove quarantine recursively from broad directories.
 - Confirm the install script uses a user-selected destination, preserves user
-  data, and reports partial failure. Repeat after signing/notarization becomes
-  available; unsigned evidence cannot be reused for the certificate gate.
+  data, and reports partial failure.
 
 ## Acceptance Result
 

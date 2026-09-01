@@ -57,7 +57,7 @@ remain covered.
 
 ## Release Gate
 
-The release gate adds WPF UI-host batches and release-only render evidence. `App Tester Release`
+The release gate adds WPF UI-host batches and release-only render evidence. `Full Signed Release`
 requires exact-SHA successful CI and CodeQL runs, then executes only these release entries. The
 integration attestation and release-only results together are the complete test suite for the
 immutable release candidate without rerunning integration projects. Packaging, platform-native
@@ -99,7 +99,7 @@ CI selects one manifest entry with `-GateId` on each hosted runner. The establis
 gate` required-check name is retained for branch-protection compatibility, but its aggregate now
 covers the generated matrix for all three apps, including its embedded static and Windows, Linux,
 and macOS platform preflights.
-`App Tester Release` does not repeat those tests: it requires successful `ci.yml` and
+`Full Signed Release` does not repeat those tests: it requires successful `ci.yml` and
 `codeql.yml` runs for its immutable `GITHUB_SHA`, runs the release-only matrix, and starts immutable
 native packaging and installation work in parallel. App publication still waits for the complete
 release-only test gate, every selected package, and the
