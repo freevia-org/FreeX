@@ -14,7 +14,7 @@ public sealed class CrossPlatformPortabilityPreflightTests
         script.Should().Contain("bash -n");
         script.Should().Contain("passes a Windows-separated child path to Join-Path");
         script.Should().Contain("Path.GetRelativePath, which is unavailable in Windows PowerShell 5.1");
-        script.Should().Contain("app-tester-release.yml");
+        script.Should().Contain("full-release.yml");
         script.Should().Contain("all $($powerShellScripts.Count) PowerShell scripts");
         script.Should().Contain("Unicode/case-normalized tracked-path collision");
         script.Should().Contain("must use LF endings");

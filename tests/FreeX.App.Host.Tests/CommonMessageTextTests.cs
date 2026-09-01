@@ -67,7 +67,9 @@ public sealed class CommonMessageTextTests
         var source = DialogSourceTestSupport.ReadShellSources("WpfMessageBoxRealizer.cs");
 
         serviceSource.Should().Contain("DialogMessageHelper.ShowMessage(");
-        serviceSource.Should().Contain("Application.Current?.MainWindow");
+        serviceSource.Should().Contain("ResolveDefaultOwner");
+        serviceSource.Should().Contain("if (window.IsActive)");
+        serviceSource.Should().Contain("return application.MainWindow;");
         source.Should().Contain("ResolveDefaultTitle(title, DefaultErrorTitle, ShellStrings.Current.ErrorTitle)");
         source.Should().Contain("ResolveDefaultTitle(title, DefaultWarningTitle, ShellStrings.Current.WarningTitle)");
         source.Should().Contain("ResolveDefaultTitle(title, DefaultInformationTitle, ShellStrings.Current.InformationTitle)");

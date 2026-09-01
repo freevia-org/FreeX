@@ -10,9 +10,9 @@ public sealed class InstallerPackagingContractTests
     [Fact]
     public void CanonicalWorkflow_PreservesPortableAssetsAndBuildsIndividualAndSuiteInstallers()
     {
-        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "app-tester-release.yml");
+        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "full-release.yml");
 
-        workflow.Should().Contain("-WindowsPackageMode SingleFile");
+        workflow.Should().Contain("tools/Publish-WindowsVelopackPackage.ps1");
         workflow.Should().Contain("tools/packaging/New-AppInstallers.ps1");
         workflow.Should().Contain("tools/New-ReleaseArtifactManifest.ps1");
         workflow.Should().Contain("tools/New-ReleaseSbom.ps1");
@@ -26,7 +26,7 @@ public sealed class InstallerPackagingContractTests
         workflow.Should().Contain("-Apps FreeX,FreeW,FreeP");
         workflow.Should().Contain("-Suite");
         workflow.Should().Contain("free-suite-v$version");
-        workflow.Should().Contain("unsigned/unnotarized `.app` bundle");
+        workflow.Should().Contain("signed/notarized/stapled `.app` bundle");
         workflow.Should().Contain("FreeFamilySentryDsn: ${{ secrets.FREE_FAMILY_SENTRY_DSN }}");
     }
 
@@ -50,7 +50,7 @@ public sealed class InstallerPackagingContractTests
     [Fact]
     public void ReleaseWorkflow_EnforcesImmutableCommitAndFullInventory()
     {
-        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "app-tester-release.yml");
+        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "full-release.yml");
         var manifest = WorkspaceFileLocator.ReadAllText("tools", "New-ReleaseArtifactManifest.ps1");
 
         workflow.Should().Contain("Tag '$tag' is immutable at $tagSha; refusing to replace it with assets from $env:GITHUB_SHA");

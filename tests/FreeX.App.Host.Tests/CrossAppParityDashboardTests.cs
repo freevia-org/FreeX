@@ -311,8 +311,8 @@ public sealed class CrossAppParityDashboardTests
             .Should().Be(freeWWave195.GetProperty("nonLegalRowsStructurallyUnchanged").GetInt32());
 
         var freeP = root.GetProperty("apps")[2];
-        freeP.GetProperty("commandInventory").GetProperty("totalCommands").GetInt32().Should().Be(719);
-        freeP.GetProperty("commandInventory").GetProperty("bothProfiles").GetInt32().Should().Be(719);
+        freeP.GetProperty("commandInventory").GetProperty("totalCommands").GetInt32().Should().Be(725);
+        freeP.GetProperty("commandInventory").GetProperty("bothProfiles").GetInt32().Should().Be(725);
         freeP.GetProperty("commandInventory").GetProperty("actionableMissingWpf").GetInt32().Should().Be(0);
         freeP.GetProperty("commandInventory").GetProperty("actionableMissingAvalonia").GetInt32().Should().Be(0);
         freeP.GetProperty("renderedEvidence").GetProperty("pairedEvidence").GetProperty("pairedScenarioCount").GetInt32().Should().Be(64);
