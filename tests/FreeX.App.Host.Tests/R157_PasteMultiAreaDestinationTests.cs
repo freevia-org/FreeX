@@ -163,21 +163,9 @@ public sealed class R157_PasteMultiAreaDestinationTests
             _window.SheetGrid.SelectedRange = active;
         }
 
-        public void ExecuteCopy() => Invoke("ExecuteCopy", false);
+        public void ExecuteCopy() => _window.ExecuteCopy(false);
 
-        public void ExecutePaste() => Invoke(
-            "ExecutePaste",
-            PasteMode.All,
-            default(PasteSpecialOptions),
-            false,
-            false);
-
-        private void Invoke(string methodName, params object?[] args)
-        {
-            var method = typeof(MainWindow).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), methodName);
-            method.Invoke(_window, args);
-        }
+        public void ExecutePaste() => _window.ExecutePaste(PasteMode.All, default, false, false);
 
         public static PasteMultiAreaHarness Create()
         {

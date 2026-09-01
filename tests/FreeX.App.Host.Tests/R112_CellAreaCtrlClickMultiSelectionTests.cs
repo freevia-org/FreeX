@@ -199,10 +199,7 @@ public sealed class R112_CellAreaCtrlClickMultiSelectionTests
 
             _addAdditionalColumnSelection = window.AddAdditionalColumnSelection;
 
-            var executeCopy = typeof(MainWindow)
-                .GetMethod("ExecuteCopy", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteCopy");
-            _executeCopy = () => executeCopy.Invoke(window, [false]);
+            _executeCopy = () => window.ExecuteCopy(false);
 
             _workbookClipboardSessionField = typeof(MainWindow)
                 .GetField("_workbookClipboardSession", BindingFlags.Instance | BindingFlags.NonPublic)

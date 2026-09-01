@@ -146,9 +146,7 @@ public sealed class R126_UndoRedoInvalidatesClipboardTests
             // drive selection directly rather than through mouse/keyboard event plumbing).
             _selectRange = range => window.SheetGrid.SelectedRange = range;
 
-            var executeCopy = typeof(MainWindow).GetMethod("ExecuteCopy", PrivateInstance)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteCopy");
-            _executeCopy = isCut => executeCopy.Invoke(window, [isCut]);
+            _executeCopy = isCut => window.ExecuteCopy(isCut);
 
             _executeUndo = () => window.ExecuteUndo();
 

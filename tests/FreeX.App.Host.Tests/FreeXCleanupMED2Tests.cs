@@ -133,15 +133,8 @@ public sealed class FreeXCleanupMED2Tests
 
                 grid.SelectedRange = new GridRange(d1, d1);
 
-                var executePaste = typeof(MainWindow).GetMethod(
-                    "ExecutePaste",
-                    BindingFlags.Instance | BindingFlags.NonPublic);
-                executePaste.Should().NotBeNull();
-
                 // externalTextAsText: true == Paste Special > Text/Unicode Text.
-                executePaste!.Invoke(
-                    window,
-                    [PasteMode.All, default(PasteSpecialOptions), false, true]);
+                window.ExecutePaste(PasteMode.All, default, false, true);
                 PumpDispatcher();
 
                 var pastedCell = sheet.GetCell(d1);
