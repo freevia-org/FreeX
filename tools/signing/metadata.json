@@ -1,0 +1,5 @@
+{
+  "Endpoint": "https://eus.codesigning.azure.net/",
+  "CodeSigningAccountName": "free-software-signing",
+  "CertificateProfileName": "freevia-public-signing"
+}
