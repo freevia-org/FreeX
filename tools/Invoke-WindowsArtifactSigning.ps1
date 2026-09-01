@@ -90,13 +90,17 @@ if ([string]$metadata.CodeSigningAccountName -ne "free-software-signing" -or
 $programFilesX86 = [Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFilesX86)
 $programFiles = [Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFiles)
 $localAppData = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
+$userProfile = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)
+$dotnetToolStore = Join-Path $userProfile ".dotnet/tools/.store/vpk"
 $signToolRoots = @(
     (Join-Path $programFilesX86 "Windows Kits/10/bin"),
     (Join-Path $programFiles "Windows Kits/10/bin"),
+    $dotnetToolStore,
     (Join-Path $localAppData "Microsoft/WinGet/Packages")
 )
 $dlibRoots = @(
     (Join-Path $localAppData "Microsoft/MicrosoftArtifactSigningClientTools"),
+    $dotnetToolStore,
     (Join-Path $programFilesX86 "Microsoft/ArtifactSigningClientTools"),
     (Join-Path $programFiles "Microsoft/ArtifactSigningClientTools"),
     (Join-Path $localAppData "Microsoft/WinGet/Packages")

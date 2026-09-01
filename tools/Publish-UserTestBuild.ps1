@@ -383,7 +383,7 @@ if ($PublishMode -eq "Velopack") {
     # Ensure the Velopack CLI is available.
     $vpk = Get-Command vpk -ErrorAction SilentlyContinue
     if ($null -eq $vpk) {
-        dotnet tool install -g vpk
+        dotnet tool install -g vpk --version 1.2.0
         if ($LASTEXITCODE -ne 0) { throw "Failed to install the Velopack CLI (vpk)." }
         $vpk = Get-Command vpk -ErrorAction SilentlyContinue
         if ($null -eq $vpk) { throw "vpk not found on PATH after install; ensure the dotnet global tools dir is on PATH." }

@@ -7,7 +7,7 @@
 | 1. Shareable builds | Complete | Framework-dependent user-test builds publish into `artifacts/releases` with version, timestamp, commit, runtime, and mode in the file name. |
 | 2. Feedback intake | Complete | The old May 24 user-test and retest reports were retired after their findings were resolved and absorbed into regression coverage/status history; GitHub issues now include a structured user-test report template for new feedback. |
 | 3. Local diagnostics | Complete | Test builds record local JSONL usage events and crash reports under `%LOCALAPPDATA%\FreeX\Diagnostics`. Those files are not automatically uploaded; the separate Phase 5 transport may send an opt-in crash event. |
-| 4. Hosted release channel | Complete | GitHub Actions publishes latest builds through GitHub Releases with versioned artifacts, a stable latest test build link, and an MSIX package that is signed when release certificate secrets are configured. |
+| 4. Hosted release channel | Complete | GitHub Actions uses GitHub OIDC and Azure Artifact Signing for every direct-download Windows executable and Velopack installer, then publishes versioned artifacts and a stable latest test build link. |
 | 5. Crash analytics | Complete | Opt-in Sentry crash upload is wired behind tester consent and `FREEX_SENTRY_DSN`; local diagnostics remain available without network upload. |
 | 6. Lightweight usage analytics | Complete | Stabilization-only app usage events are recorded through the existing diagnostics pipeline and safe crash breadcrumbs. |
 | 7. Auto-update readiness | Complete | Help exposes the stable latest release page, and Velopack-managed installs can check, download, apply, and restart into an update; plain single-file and MSIX builds retain the manual latest-download path. |
@@ -57,14 +57,14 @@ When macOS bundling is explicitly enabled, the same release also receives:
 
 Release dispatches must run from `main` or an isolated `codex/daily-tester-release-*` branch because the workflow publishes stable latest assets, and a workflow-level `tester-release` concurrency group prevents overlapping dispatches from moving `latest` backward. Use the daily branch path only for a frozen verified candidate when `origin/main` has already advanced with work intentionally deferred to the next release.
 
-The hosted MSIX publish path signs the package when `FREEX_MSIX_CERTIFICATE_BASE64` is configured, with optional `FREEX_MSIX_CERTIFICATE_PASSWORD` and `FREEX_MSIX_TIMESTAMP_URL` inputs. Until a release certificate is available, the workflow passes `-AllowUnsignedMsix` and publishes an unsigned MSIX for tester continuity. `tools/Publish-UserTestBuild.ps1` derives the manifest `Publisher` from the signing certificate subject when signing is enabled, while direct local unsigned MSIX output still requires explicitly passing `-AllowUnsignedMsix`. Installer trust validation and Store-style submission remain release-gate work.
+The hosted Windows publish path fails closed unless GitHub OIDC authenticates the dedicated release identity and Azure Artifact Signing signs and verifies the standalone executable, the Velopack application payload, and the generated Setup executable. It does not store a PFX or client secret. The MSIX asset is retained only for Store/package validation: Store-bound MSIX packages are submitted with the Partner Center identity and Microsoft signs them during certification. The legacy optional PFX inputs remain isolated to local/direct MSIX validation and are not the direct-download trust path.
 
 Windows tester steps:
 
 1. Download `FreeX-latest-win-x64.exe` and `FreeX-latest-win-x64.exe.sha256` from the release.
 2. Verify the checksum with PowerShell: `Get-FileHash .\FreeX-latest-win-x64.exe -Algorithm SHA256`, then compare it with the `.sha256` file.
-3. Run `FreeX-latest-win-x64.exe`. If Windows SmartScreen warns about an unknown publisher, continue only if the checksum matches the GitHub Release asset and the tester expected this internal build.
-4. Prefer the `.exe` for normal testing. Use the MSIX only for package/install validation; unsigned MSIX packages may need trusted internal-test machine settings until signing is configured. Use the Velopack `FreeXApp-win-Setup.exe` installer or `FreeXApp-win-Portable.zip` portable build to validate the installed/self-update path; installs through Velopack land in a separate `FreeXApp` data directory from the app's own `%LocalAppData%\FreeX` diagnostics/recovery data.
+3. Confirm that Windows reports **Freevia** as the signed publisher, then run `FreeX-latest-win-x64.exe`.
+4. Prefer the signed `.exe` or Velopack installer for normal testing. Use the MSIX only for Store/package validation. Use `FreeXApp-win-Setup.exe` or `FreeXApp-win-Portable.zip` to validate the installed/self-update path; installs through Velopack land in a separate `FreeXApp` data directory from the app's own `%LocalAppData%\FreeX` diagnostics/recovery data.
 
 macOS tester release steps while Developer ID/notarization is pending:
 
@@ -74,7 +74,7 @@ macOS tester release steps while Developer ID/notarization is pending:
 4. Open `FreeX.app`. If macOS blocks the unsigned/internal preview, use Control-click or right-click > Open. If needed, open System Settings > Privacy & Security and choose Open Anyway.
 5. Do not disable Gatekeeper globally. These macOS builds remain internal previews until Developer ID signing, notarization, and stapling evidence are attached.
 
-Tester-facing warning for both platforms: this is an internal preview while signing certificates are pending. macOS and Windows may warn that the publisher cannot be verified. Only open the build if it was expected from the FreeX team and the checksum matches the release asset.
+Tester-facing warning: Windows direct-download executables are signed by Freevia and timestamped by Microsoft. macOS preview assets use their separate signing/notarization lane. Only open a build if it was expected from the FreeX team and the checksum matches the release asset.
 
 Default tester versions come from `release/progress.json`: the current `overallCompletion` value maps to a minor-version band, and the GitHub run number becomes the patch number. At 95% completion, default tester releases use the `v0.8.<run>` stream. Manual `release_version` overrides remain available for special validation builds.
 
