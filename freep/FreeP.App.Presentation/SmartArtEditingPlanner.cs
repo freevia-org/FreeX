@@ -803,6 +803,7 @@ public static class SmartArtEditingPlanner
         var drawingPart = FindDrawingPart(smartArt);
         if (drawingPart is null || drawingPart.Bytes.Length == 0)
             return NotAppliedDrawingCacheResult(smartArt, "No preserved SmartArt drawing cache is available.");
+        var drawingPartDirectory = OpcPathHelper.GetDirectoryName(drawingPart.PartPath);
 
         XDocument drawing;
         try
@@ -877,7 +878,7 @@ public static class SmartArtEditingPlanner
             if (string.IsNullOrWhiteSpace(target))
                 return NotAppliedDrawingCacheResult(smartArt, "The preserved SmartArt picture relationship has no target.");
 
-            updates.Add((node, OpcPathHelper.ResolveRelativeZipPath(OpcPathHelper.GetDirectoryName(drawingPart.PartPath), target)));
+            updates.Add((node, OpcPathHelper.ResolveRelativeZipPath(drawingPartDirectory, target)));
         }
 
         var addedEntries = new List<(SmartArtNode Node, XElement Shape, XElement ShapeProperties, string RelationshipId, string MediaPath)>();
@@ -935,13 +936,22 @@ public static class SmartArtEditingPlanner
                     PackageRelationships + "Relationship",
                     new XAttribute("Id", relationshipId),
                     new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
-                    new XAttribute("Target", OpcPathHelper.GetRelativeZipPath(OpcPathHelper.GetDirectoryName(drawingPart.PartPath), mediaPath))));
+                    new XAttribute("Target", OpcPathHelper.GetRelativeZipPath(drawingPartDirectory, mediaPath))));
             smartArt.Parts[mediaPath] = new DiagramPart
             {
                 PartPath = mediaPath,
                 ContentType = node.Picture!.ContentType,
                 Bytes = node.Picture.Bytes.ToArray(),
             };
+        }
+
+        Dictionary<XElement, int>? cacheShapeOrdinals = null;
+        if (addedEntries.Count > 0)
+        {
+            cacheShapeOrdinals = new Dictionary<XElement, int>(ReferenceEqualityComparer.Instance);
+            var cacheShapeOrdinal = 0;
+            foreach (var cacheShape in drawing.Descendants().Where(IsDrawingShapeElement))
+                cacheShapeOrdinals.Add(cacheShape, cacheShapeOrdinal++);
         }
 
         var removedMediaPaths = new List<string>();
@@ -961,7 +971,7 @@ public static class SmartArtEditingPlanner
 
             entry.Element.Remove();
             relationship.Remove();
-            removedMediaPaths.Add(OpcPathHelper.ResolveRelativeZipPath(OpcPathHelper.GetDirectoryName(drawingPart.PartPath), target));
+            removedMediaPaths.Add(OpcPathHelper.ResolveRelativeZipPath(drawingPartDirectory, target));
         }
 
         foreach (var (node, mediaPath) in updates)
@@ -974,33 +984,36 @@ public static class SmartArtEditingPlanner
             };
         }
 
-        foreach (var mediaPath in removedMediaPaths)
+        if (removedMediaPaths.Count > 0)
         {
-            if (!relationships.Descendants().Any(element =>
-                    element.Name.LocalName == "Relationship"
-                    && string.Equals(
-                        OpcPathHelper.ResolveRelativeZipPath(OpcPathHelper.GetDirectoryName(drawingPart.PartPath), element.Attribute("Target")?.Value ?? string.Empty),
-                        mediaPath,
-                        StringComparison.OrdinalIgnoreCase)))
+            var remainingRelationshipTargets = relationships.Descendants()
+                .Where(element => element.Name.LocalName == "Relationship")
+                .Select(element => OpcPathHelper.ResolveRelativeZipPath(
+                    drawingPartDirectory,
+                    element.Attribute("Target")?.Value ?? string.Empty))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var mediaPath in removedMediaPaths)
             {
-                smartArt.Parts.Remove(mediaPath);
+                if (!remainingRelationshipTargets.Contains(mediaPath))
+                    smartArt.Parts.Remove(mediaPath);
             }
         }
 
         drawingPart.Bytes = SerializeXml(drawing);
         smartArt.PartRels[drawingPart.PartPath] = SerializeXml(relationships);
 
-        if (addedEntries.Count > 0)
+        if (cacheShapeOrdinals is not null)
         {
-            var cacheShapesInOrder = drawing.Descendants().Where(IsDrawingShapeElement).ToArray();
             var fallbackShapesInOrder = SlideShapeTraversal
                 .EnumerateDepthFirst(smartArt.FallbackShapes)
                 .ToArray();
             foreach (var (node, shape, _, _, _) in addedEntries)
             {
-                var shapeIndex = Array.IndexOf(cacheShapesInOrder, shape);
-                if (shapeIndex >= 0 && shapeIndex < fallbackShapesInOrder.Length)
+                if (cacheShapeOrdinals.TryGetValue(shape, out var shapeIndex)
+                    && shapeIndex < fallbackShapesInOrder.Length)
+                {
                     SetFallbackPicturePayload(fallbackShapesInOrder[shapeIndex], node.Picture!);
+                }
             }
         }
 
