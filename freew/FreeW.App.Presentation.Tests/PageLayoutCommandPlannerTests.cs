@@ -76,15 +76,20 @@ public sealed class PageLayoutCommandPlannerTests
     [Fact]
     public void Drop_cap_result_clamps_WPF_authoritative_values()
     {
-        var result = DropCapOptionsDialogPlanner.BuildResult(
+        // r190: BuildResult became TryBuildResult. Values the user actually typed are still clamped
+        // -- asking for 99 dropped lines is an out-of-range request, not a typo -- so this case is
+        // unchanged; only unparseable text is now rejected instead of being silently replaced.
+        DropCapOptionsDialogPlanner.TryBuildResult(
             new DropCapOptionsDialogInput(
                 (int)DropCapDialogPosition.InMargin,
                 "Georgia",
                 "99",
                 "-4"),
-            System.Globalization.CultureInfo.InvariantCulture);
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var result,
+            out _).Should().BeTrue();
 
-        result.Position.Should().Be(DropCapDialogPosition.InMargin);
+        result!.Position.Should().Be(DropCapDialogPosition.InMargin);
         result.LinesToDrop.Should().Be(10);
         result.DistanceFromTextPt.Should().Be(0);
         result.SizePt.Should().Be(144);

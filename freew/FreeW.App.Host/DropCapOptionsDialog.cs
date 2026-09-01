@@ -107,8 +107,17 @@ internal sealed class DropCapOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             : _inMargin.IsChecked == true
                 ? (int)DropCapDialogPosition.InMargin
                 : (int)DropCapDialogPosition.Dropped;
-        _result = _session.PlanAcceptance(
+        // r190: keeps the dialog open and says so, instead of accepting a value the planner had to
+        // invent. Matches the sibling dialogs in this shell (Hyphenation, Columns, LineNumber).
+        var acceptance = _session.PlanAcceptance(
             new DropCapOptionsDialogInput(positionIndex, _font.Text, _lines.Text, _distance.Text));
+        if (!acceptance.IsAccepted)
+        {
+            DialogMessageHelper.ShowWarning(this, acceptance.ValidationMessage);
+            return;
+        }
+
+        _result = acceptance.Result;
         Close();
     }
 

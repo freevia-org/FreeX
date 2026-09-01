@@ -304,6 +304,8 @@ public sealed class DropCapOptionsDialog : FreeWDialogWindow
 {
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
     private readonly DropCapOptionsDialogSession _session;
+    // r190: added with the validation message, so a rejected value has somewhere to be shown.
+    private readonly TextBlock _status = PageLayoutDialogChrome.Status();
     private readonly RadioButton _none;
     private readonly RadioButton _dropped;
     private readonly RadioButton _inMargin;
@@ -347,6 +349,7 @@ public sealed class DropCapOptionsDialog : FreeWDialogWindow
         content.Children.Add(PageLayoutDialogChrome.Row(surface.Field(DropCapOptionsDialogField.Font).Label, _font));
         content.Children.Add(PageLayoutDialogChrome.Row(surface.Field(DropCapOptionsDialogField.LinesToDrop).Label, _lines));
         content.Children.Add(PageLayoutDialogChrome.Row(surface.Field(DropCapOptionsDialogField.DistanceFromText).Label, _distance));
+        content.Children.Add(_status);
         content.Children.Add(PageLayoutDialogChrome.Actions(Accept, () => Close(null)));
         Content = content;
 
@@ -369,8 +372,17 @@ public sealed class DropCapOptionsDialog : FreeWDialogWindow
             : _inMargin.IsChecked == true
                 ? (int)DropCapDialogPosition.InMargin
                 : (int)DropCapDialogPosition.Dropped;
-        Close(_session.PlanAcceptance(
-            new DropCapOptionsDialogInput(index, _font.Text, _lines.Text, _distance.Text)));
+        // r190: report the bad value rather than silently substituting one, matching this shell's
+        // other page-layout dialogs. The planner used to discard both TryParse results.
+        var acceptance = _session.PlanAcceptance(
+            new DropCapOptionsDialogInput(index, _font.Text, _lines.Text, _distance.Text));
+        if (!acceptance.IsAccepted)
+        {
+            PageLayoutDialogChrome.ShowError(_status, acceptance.ValidationMessage!);
+            return;
+        }
+
+        Close(acceptance.Result);
     }
 
     public static void ApplyResult(DocumentView editor, DropCapOptionsDialogResult result)
