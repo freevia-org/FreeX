@@ -193,20 +193,11 @@ public sealed class R112_CellAreaCtrlClickMultiSelectionTests
             _window = window;
             SheetId = sheetId;
 
-            var addOrMoveAdditionalSelection = typeof(MainWindow)
-                .GetMethod("AddOrMoveAdditionalSelection", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "AddOrMoveAdditionalSelection");
-            _addOrMoveAdditionalSelection = addOrMoveAdditionalSelection.CreateDelegate<Action<CellAddress, bool>>(window);
+            _addOrMoveAdditionalSelection = window.AddOrMoveAdditionalSelection;
 
-            var setActiveCell = typeof(MainWindow)
-                .GetMethod("SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SetActiveCell");
-            _setActiveCell = setActiveCell.CreateDelegate<Action<CellAddress>>(window);
+            _setActiveCell = window.SetActiveCell;
 
-            var addAdditionalColumnSelection = typeof(MainWindow)
-                .GetMethod("AddAdditionalColumnSelection", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "AddAdditionalColumnSelection");
-            _addAdditionalColumnSelection = addAdditionalColumnSelection.CreateDelegate<Action<uint>>(window);
+            _addAdditionalColumnSelection = window.AddAdditionalColumnSelection;
 
             var executeCopy = typeof(MainWindow)
                 .GetMethod("ExecuteCopy", BindingFlags.Instance | BindingFlags.NonPublic)

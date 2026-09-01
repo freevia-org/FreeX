@@ -84,7 +84,6 @@ public sealed class FreezeScrollSyncOffsetConversionTests
     {
         public readonly MainWindow Window;
         private readonly MethodInfo _setFreezePanes;
-        private readonly MethodInfo _updateViewport;
 
         private ScrollSyncHarness(MainWindow window)
         {
@@ -92,9 +91,6 @@ public sealed class FreezeScrollSyncOffsetConversionTests
             _setFreezePanes = typeof(MainWindow)
                 .GetMethod("SetFreezePanes", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "SetFreezePanes");
-            _updateViewport = typeof(MainWindow)
-                .GetMethod("UpdateViewport", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "UpdateViewport");
         }
 
         public double VerticalValue => Window.VerticalScroll!.Value;
@@ -153,7 +149,7 @@ public sealed class FreezeScrollSyncOffsetConversionTests
             for (uint row = 1; row <= 200; row++)
                 liveSheet.SetCell(new CellAddress(liveSheet.Id, row, 40), new NumberValue(row));
 
-            harness._updateViewport.Invoke(window, []);
+            window.UpdateViewport();
             PumpDispatcher();
 
             return harness;

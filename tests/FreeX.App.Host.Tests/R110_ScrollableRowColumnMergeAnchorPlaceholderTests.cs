@@ -170,15 +170,11 @@ public sealed class R110_ScrollableRowColumnMergeAnchorPlaceholderTests
     private sealed class ScrollableCountHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly MethodInfo _updateViewport;
         private readonly FieldInfo _selectionAnchorField;
 
         private ScrollableCountHarness(MainWindow window)
         {
             _window = window;
-            _updateViewport = typeof(MainWindow)
-                .GetMethod("UpdateViewport", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "UpdateViewport");
             _selectionAnchorField = typeof(MainWindow)
                 .GetField("_selectionAnchorField", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_selectionAnchorField");
@@ -228,7 +224,7 @@ public sealed class R110_ScrollableRowColumnMergeAnchorPlaceholderTests
 
         public void RefreshViewport()
         {
-            _updateViewport.Invoke(_window, []);
+            _window.UpdateViewport();
             PumpDispatcher();
         }
 

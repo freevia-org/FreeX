@@ -137,7 +137,6 @@ public sealed class R134_GetDataImportShrinkClearsLeftoverCellsWpfTests
 
     private sealed class ShrinkHarness : IDisposable
     {
-        private readonly MethodInfo _importDataFromFileAsync;
 
         private ShrinkHarness(MainWindow window, Workbook originalWorkbook)
         {
@@ -145,9 +144,6 @@ public sealed class R134_GetDataImportShrinkClearsLeftoverCellsWpfTests
             OriginalWorkbook = originalWorkbook;
             OriginalSheetId = originalWorkbook.Sheets[0].Id;
 
-            _importDataFromFileAsync = typeof(MainWindow)
-                .GetMethod("ImportDataFromFileAsync", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ImportDataFromFileAsync");
         }
 
         public MainWindow Window { get; }
@@ -194,9 +190,7 @@ public sealed class R134_GetDataImportShrinkClearsLeftoverCellsWpfTests
 
         public void RunImport(string importPath, IFileAdapter adapter)
         {
-            var task = (Task)_importDataFromFileAsync.Invoke(
-                Window,
-                [importPath, adapter, ".testimport", (FileFormatDescriptor?)null])!;
+            var task = Window.ImportDataFromFileAsync(importPath, adapter, ".testimport", (FileFormatDescriptor?)null);
 
             // Pump the dispatcher while waiting: the awaited Task.Run inside ImportDataFromFileAsync
             // resumes via the DispatcherSynchronizationContext installed on this STA thread, so a

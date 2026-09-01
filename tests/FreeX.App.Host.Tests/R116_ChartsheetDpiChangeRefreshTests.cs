@@ -123,10 +123,7 @@ public sealed class R116_ChartsheetDpiChangeRefreshTests
         currentSheetIdField.Should().NotBeNull();
         currentSheetIdField!.SetValue(window, sheetId);
 
-        var updateViewport = typeof(MainWindow).GetMethod(
-            "UpdateViewport", BindingFlags.Instance | BindingFlags.NonPublic);
-        updateViewport.Should().NotBeNull();
-        updateViewport!.Invoke(window, null);
+        window.UpdateViewport();
     }
 
     private static Image GetChartsheetView(MainWindow window) =>

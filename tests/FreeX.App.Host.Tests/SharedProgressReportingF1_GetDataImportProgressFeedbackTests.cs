@@ -104,7 +104,6 @@ public sealed class SharedProgressReportingF1_GetDataImportProgressFeedbackTests
 
     private sealed class ImportProgressHarness : IDisposable
     {
-        private readonly MethodInfo _importDataFromFileAsync;
 
         private ImportProgressHarness(MainWindow window, Workbook originalWorkbook)
         {
@@ -112,9 +111,6 @@ public sealed class SharedProgressReportingF1_GetDataImportProgressFeedbackTests
             OriginalWorkbook = originalWorkbook;
             OriginalSheetId = originalWorkbook.Sheets[0].Id;
 
-            _importDataFromFileAsync = typeof(MainWindow)
-                .GetMethod("ImportDataFromFileAsync", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ImportDataFromFileAsync");
         }
 
         public MainWindow Window { get; }
@@ -160,9 +156,7 @@ public sealed class SharedProgressReportingF1_GetDataImportProgressFeedbackTests
         /// has run (see the comment at the call site above).
         /// </summary>
         public Task BeginImport(string importPath, IFileAdapter adapter) =>
-            (Task)_importDataFromFileAsync.Invoke(
-                Window,
-                [importPath, adapter, ".testimport", (FileFormatDescriptor?)null])!;
+            Window.ImportDataFromFileAsync(importPath, adapter, ".testimport", (FileFormatDescriptor?)null);
 
         public void PumpUntilComplete(Task task)
         {

@@ -120,7 +120,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     {
         var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
         var extend = selectionSource[
-            selectionSource.IndexOf("private void ExtendHeaderSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("internal void ExtendHeaderSelection", StringComparison.Ordinal)..
             selectionSource.IndexOf("private bool IsHeaderSelectionExtensionUnchanged", StringComparison.Ordinal)];
 
         extend.Should().Contain("var firstCol = Math.Min(anchorIndex, targetIndex);");

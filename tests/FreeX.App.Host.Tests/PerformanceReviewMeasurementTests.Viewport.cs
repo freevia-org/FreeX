@@ -152,15 +152,11 @@ public sealed partial class PerformanceReviewMeasurementTests
     {
         private readonly MainWindow _window;
         private readonly CountingViewportService _viewportService;
-        private readonly MethodInfo _updateViewport;
 
         private ViewportSidePaneRefreshHarness(MainWindow window, CountingViewportService viewportService)
         {
             _window = window;
             _viewportService = viewportService;
-            _updateViewport = typeof(MainWindow)
-                .GetMethod("UpdateViewport", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "UpdateViewport");
         }
 
         public MeasurementResult MeasureUpdateViewport(int iterations)
@@ -172,7 +168,7 @@ public sealed partial class PerformanceReviewMeasurementTests
             for (var i = 0; i < iterations; i++)
             {
                 var step = Stopwatch.StartNew();
-                _updateViewport.Invoke(_window, []);
+                _window.UpdateViewport();
                 PumpDispatcher();
                 step.Stop();
                 timings.Add(step.Elapsed.TotalMilliseconds);

@@ -214,36 +214,17 @@ public sealed partial class PerformanceReviewMeasurementTests
             _window = window;
             _commandBus = commandBus;
             _anchor = new CellAddress(sheetId, 1, 1);
-            var setActiveCell = typeof(MainWindow)
-                .GetMethod("SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SetActiveCell");
-            _setActiveCell = setActiveCell.CreateDelegate<Action<CellAddress>>(window);
+            _setActiveCell = window.SetActiveCell;
 
-            var extendSelection = typeof(MainWindow)
-                .GetMethod("ExtendSelection", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ExtendSelection");
-            _extendSelection = extendSelection.CreateDelegate<Action<CellAddress, CellAddress>>(window);
+            _extendSelection = window.ExtendSelection;
 
-            var addOrMoveAdditionalSelection = typeof(MainWindow)
-                .GetMethod("AddOrMoveAdditionalSelection", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "AddOrMoveAdditionalSelection");
-            _addOrMoveAdditionalSelection = addOrMoveAdditionalSelection.CreateDelegate<Action<CellAddress, bool>>(window);
+            _addOrMoveAdditionalSelection = window.AddOrMoveAdditionalSelection;
 
-            var extendHeaderSelection = typeof(MainWindow)
-                .GetMethod("ExtendHeaderSelection", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ExtendHeaderSelection");
-            _extendHeaderSelection = extendHeaderSelection
-                .CreateDelegate<Action<FreeX.App.UI.GridHeaderContextMenuTarget, uint, uint>>(window);
+            _extendHeaderSelection = window.ExtendHeaderSelection;
 
-            var completeDragSelectionStatusRefresh = typeof(MainWindow)
-                .GetMethod("CompleteDragSelectionStatusRefresh", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "CompleteDragSelectionStatusRefresh");
-            _completeDragSelectionStatusRefresh = completeDragSelectionStatusRefresh.CreateDelegate<Action>(window);
+            _completeDragSelectionStatusRefresh = window.CompleteDragSelectionStatusRefresh;
 
-            var completeDragSelectionToolbarRefresh = typeof(MainWindow)
-                .GetMethod("CompleteDragSelectionToolbarRefresh", BindingFlags.Instance | BindingFlags.NonPublic);
-            _completeDragSelectionToolbarRefresh =
-                completeDragSelectionToolbarRefresh?.CreateDelegate<Action>(window);
+            _completeDragSelectionToolbarRefresh = window.CompleteDragSelectionToolbarRefresh;
             _dragSelectActive = typeof(MainWindow)
                 .GetField("_dragSelectActive", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_dragSelectActive");

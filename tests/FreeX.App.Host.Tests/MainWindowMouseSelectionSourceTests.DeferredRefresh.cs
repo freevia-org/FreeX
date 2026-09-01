@@ -28,7 +28,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
         var windowSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
 
         var extendSelection = selectionSource[
-            selectionSource.IndexOf("private void ExtendSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("internal void ExtendSelection", StringComparison.Ordinal)..
             selectionSource.IndexOf("internal void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
         var addSelection = selectionSource[
             selectionSource.IndexOf("internal void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
@@ -120,7 +120,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
             selectionSource.IndexOf("internal void SetActiveCell", StringComparison.Ordinal)..
             selectionSource.IndexOf("private void EnsureActiveCellSelection", StringComparison.Ordinal)];
         var extendSelection = selectionSource[
-            selectionSource.IndexOf("private void ExtendSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("internal void ExtendSelection", StringComparison.Ordinal)..
             selectionSource.IndexOf("internal void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
         var addSelection = selectionSource[
             selectionSource.IndexOf("internal void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
