@@ -34,6 +34,10 @@ public sealed class SlideShowWindowLaunchCoordinator<TWindow>
     // fullscreen show. Reuse requires this to match what the caller is asking for.
     private bool _liveWindowIsBrowseWindow;
 
+    // r191: the route the live window was opened with, so a launch asking for different content
+    // replaces it rather than silently refocusing the old one.
+    private SlideShowPlaybackRoute? _liveWindowRoute;
+
     public SlideShowWindowLaunchCoordinator(
         SlideShowCustomShowSession customShows,
         Func<Presentation> getPresentation,
@@ -107,6 +111,23 @@ public sealed class SlideShowWindowLaunchCoordinator<TWindow>
         return true;
     }
 
+    /// <summary>
+    /// Whether two launch routes address the same content. <see cref="SlideShowPlaybackRoute"/> is a
+    /// class with reference equality, so the identifying fields are compared: which custom show
+    /// (or none), which slides of the deck it resolved to, and where playback starts. A null
+    /// <paramref name="live"/> means nothing is on screen, which never matches.
+    /// </summary>
+    private static bool RouteMatches(SlideShowPlaybackRoute? live, SlideShowPlaybackRoute requested)
+    {
+        if (live is null)
+            return false;
+
+        return string.Equals(live.CustomShowName, requested.CustomShowName, StringComparison.Ordinal)
+            && live.StartIndex == requested.StartIndex
+            && live.AnimationStartIndex == requested.AnimationStartIndex
+            && live.SourceSlideIndices.SequenceEqual(requested.SourceSlideIndices);
+    }
+
     private void Launch(
         SlideShowPlaybackLaunchPlan playback,
         SlideShowTimingIntent timingIntent,
@@ -125,7 +146,16 @@ public sealed class SlideShowWindowLaunchCoordinator<TWindow>
         {
             if (_isWindowLive(running))
             {
-                if (_liveWindowIsBrowseWindow == forceBrowseWindow)
+                // r191: the ROUTE has to match as well as the mode. The route (which custom show,
+                // which start slide, which animation step) only ever reaches a window through the
+                // launch plan handed to _createWindow, so a reuse that skipped straight to
+                // _activateWindow discarded it: picking a different custom show while one was
+                // already presenting refocused the running show and left the audience on the old
+                // deck, while the presenter believed they had switched. A window showing different
+                // content is not the window the user asked for, so it is replaced -- the same
+                // treatment a mode mismatch already gets.
+                if (_liveWindowIsBrowseWindow == forceBrowseWindow
+                    && RouteMatches(_liveWindowRoute, playback.Route))
                 {
                     // r190: the reused window still has to receive the timing intent. Rehearse
                     // Timings and Record Timings are ordinary ribbon commands with no
@@ -145,6 +175,7 @@ public sealed class SlideShowWindowLaunchCoordinator<TWindow>
             }
 
             _liveWindow = null;
+            _liveWindowRoute = null;
         }
 
         var caption = playback.CaptionSelection;
@@ -161,6 +192,7 @@ public sealed class SlideShowWindowLaunchCoordinator<TWindow>
             _setTimingIntent(window, timingIntent);
         _liveWindow = window;
         _liveWindowIsBrowseWindow = forceBrowseWindow;
+        _liveWindowRoute = playback.Route;
         _showWindow(window);
     }
 }

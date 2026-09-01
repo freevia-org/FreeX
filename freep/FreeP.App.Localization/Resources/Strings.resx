@@ -4098,4 +4098,16 @@
   <data name="Autosave_Recovery_None_Message" xml:space="preserve"><value>No unsaved presentations were found.</value></data>
   <data name="Autosave_Recovery_Failure_Message_Format" xml:space="preserve"><value>Could not recover the presentation.&#xA;&#xA;{0}</value></data>
   <data name="Autosave_Recovery_Backstage_Label" xml:space="preserve"><value>Recover Unsaved Presentations</value></data>
+  <data name="Ribbon_Command_ChangeZoomTarget_Label" xml:space="preserve"><value>Change Zoom Target</value></data>
+  <data name="Ribbon_Command_ChangeZoomTarget_KeyTip" xml:space="preserve"><value>ZT</value></data>
+  <data name="Ribbon_Command_EditSummaryZoomTargets_Label" xml:space="preserve"><value>Edit Summary Zoom</value></data>
+  <data name="Ribbon_Command_EditSummaryZoomTargets_KeyTip" xml:space="preserve"><value>ZE</value></data>
+  <data name="Ribbon_Command_SmartArtCircleArrowProcess_Label" xml:space="preserve"><value>Circle Arrow Process</value></data>
+  <data name="Ribbon_Command_SmartArtCircleArrowProcess_KeyTip" xml:space="preserve"><value>CA</value></data>
+  <data name="Ribbon_Command_SmartArtVerticalArrowList_Label" xml:space="preserve"><value>Vertical Arrow List</value></data>
+  <data name="Ribbon_Command_SmartArtVerticalArrowList_KeyTip" xml:space="preserve"><value>VA</value></data>
+  <data name="Ribbon_Command_SmartArtBasicList_Label" xml:space="preserve"><value>Basic List</value></data>
+  <data name="Ribbon_Command_SmartArtBasicList_KeyTip" xml:space="preserve"><value>BL</value></data>
+  <data name="Ribbon_Command_SmartArtRadialList_Label" xml:space="preserve"><value>Radial List</value></data>
+  <data name="Ribbon_Command_SmartArtRadialList_KeyTip" xml:space="preserve"><value>RL</value></data>
 </root>

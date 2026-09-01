@@ -37,6 +37,9 @@ public sealed class JsonSettingsStore<T>
     /// <summary>Last load/save failure message (null when the last operation succeeded).</summary>
     public string? LastError { get; private set; }
 
+    // r191: set when Load could not read an existing file. See Save.
+    private bool _loadFailed;
+
     private JsonSettingsStore(string storePath, JsonSerializerOptions? jsonOptions)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(storePath);
@@ -92,6 +95,9 @@ public sealed class JsonSettingsStore<T>
     {
         var result = LoadFromPath(StorePath, _jsonOptions);
         LastError = result.Error;
+        // r191: remembered so the first Save can move the unreadable file aside instead of writing
+        // the empty default over it. See Save.
+        _loadFailed = result.Error is not null;
         return result.Value;
     }
 
@@ -103,9 +109,46 @@ public sealed class JsonSettingsStore<T>
     {
         ArgumentNullException.ThrowIfNull(settings);
 
+        // r191 (backlog item 24): a failed Load returns a fresh default and records LastError -- and
+        // no caller in any of the three apps reads LastError. So a settings file that could not be
+        // parsed (a hand edit, a sync conflict, a half-written file from a killed process) came back
+        // as "empty", and the next ordinary save wrote that emptiness over it, destroying whatever
+        // the user had. FreeW's Quick Parts gallery was the case that surfaced it: the library loads
+        // at startup and any Save/Remove afterwards persists the whole in-memory set.
+        //
+        // Rather than require every caller to remember a check nobody has ever made, the store keeps
+        // the unreadable file: it is moved aside once, before the first overwrite, so the data is
+        // still there to recover. Mirrors AutosaveSnapshotStore.QuarantineCandidate, which does the
+        // same for a corrupt autosave rather than deleting it.
+        if (_loadFailed)
+        {
+            _loadFailed = false;
+            TryQuarantineUnreadableFile();
+        }
+
         var error = SaveToPath(settings, StorePath, _jsonOptions);
         LastError = error;
         return error is null;
+    }
+
+    private void TryQuarantineUnreadableFile()
+    {
+        try
+        {
+            if (!File.Exists(StorePath))
+                return;
+
+            // Best effort throughout: quarantining is a courtesy, and failing to do it must never
+            // stop the user saving. A single fixed name is deliberate -- repeated corruption should
+            // not accumulate files without bound, and the most recent unreadable copy is the one
+            // worth keeping.
+            var quarantine = StorePath + ".unreadable";
+            File.Copy(StorePath, quarantine, overwrite: true);
+        }
+        catch
+        {
+            // Ignored: see above.
+        }
     }
 
     /// <summary>

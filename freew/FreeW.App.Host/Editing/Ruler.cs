@@ -291,7 +291,16 @@ public sealed class Ruler : FrameworkElement
 
         // No margin/indent is committed here: capture loss means the gesture was abandoned, not
         // completed, and OnMouseLeftButtonUp is what applies a finished drag.
+        //
+        // r191: the live preview value is cleared alongside it, as the commit path does. The r190
+        // version of this override cleared only _drag, so an abandoned vertical-margin drag left
+        // _dragPreviewMarginPt set; starting a drag on the OTHER margin boundary then had
+        // RenderVertical draw that leftover offset measured from the opposite edge until the first
+        // mouse-move overwrote it. Nothing wrong was ever written to the document -- the committed
+        // margin is computed from the mouse position, not from this field -- but the dashed guide
+        // appeared far from the cursor.
         _drag = null;
+        _dragPreviewMarginPt = null;
         Refresh();
     }
 

@@ -261,6 +261,78 @@ public sealed class R188_SlideShowSecondLaunchTests
         applied.Should().Equal(SlideShowTimingIntent.RehearseTimings);
     }
 
+    [Fact]
+    public void TryLaunch_FromADifferentStartSlide_ReplacesTheRunningShowInsteadOfRefocusingIt()
+    {
+        // r191. Every reuse test written in r188, r189 and r190 drove the coordinator with the SAME
+        // input twice and asserted only how many windows were created and which was activated. The
+        // route -- which show, which start slide, which animation step -- reaches a window ONLY
+        // through the plan handed to createWindow, so the reuse branch discarded it and no
+        // assertion in any of those tests could notice. This is the test that fails when it does.
+        var editor = CreateEditor();
+        var customShows = new SlideShowCustomShowSession(() => editor);
+        var created = new List<SlideShowWindowLaunchPlan>();
+        var activated = new List<FakeWindow>();
+
+        var coordinator = new SlideShowWindowLaunchCoordinator<FakeWindow>(
+            customShows,
+            () => editor.Presentation,
+            () => null,
+            editor.SetSlideNotesText,
+            plan =>
+            {
+                created.Add(plan);
+                return new FakeWindow { IsLive = true };
+            },
+            (_, _) => { },
+            _ => { },
+            window => window.IsLive,
+            activated.Add,
+            window => window.IsLive = false);
+
+        // Start on slide 2, then ask to present from the beginning: a different route.
+        editor.SelectSlide(1);
+        coordinator.TryLaunch(fromStart: false).Should().BeTrue();
+        coordinator.TryLaunch(fromStart: true).Should().BeTrue();
+
+        created.Should().HaveCount(2, "the second launch asks for different content");
+        created[0].PlaybackRoute.StartIndex.Should().NotBe(created[1].PlaybackRoute.StartIndex);
+        activated.Should().BeEmpty("no window showing the requested content existed to refocus");
+    }
+
+    [Fact]
+    public void TryLaunch_WithTheSameRoute_StillReusesTheRunningShow()
+    {
+        // The route check must not defeat the r188 duplicate-window fix: an identical request still
+        // refocuses rather than restarting the presentation.
+        var editor = CreateEditor();
+        var customShows = new SlideShowCustomShowSession(() => editor);
+        var created = new List<SlideShowWindowLaunchPlan>();
+        var activated = new List<FakeWindow>();
+
+        var coordinator = new SlideShowWindowLaunchCoordinator<FakeWindow>(
+            customShows,
+            () => editor.Presentation,
+            () => null,
+            editor.SetSlideNotesText,
+            plan =>
+            {
+                created.Add(plan);
+                return new FakeWindow { IsLive = true };
+            },
+            (_, _) => { },
+            _ => { },
+            window => window.IsLive,
+            activated.Add,
+            window => window.IsLive = false);
+
+        coordinator.TryLaunch(fromStart: true).Should().BeTrue();
+        coordinator.TryLaunch(fromStart: true).Should().BeTrue();
+
+        created.Should().HaveCount(1);
+        activated.Should().ContainSingle();
+    }
+
     private static EditingSession CreateEditor()
     {
         var presentation = Presentation.CreateEmpty();
