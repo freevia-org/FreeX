@@ -426,7 +426,7 @@ public partial class MainWindow
     // matching per-kind command via DrawingObjectCommandPlanner, execute it, and refresh the
     // viewport. Deliberately does NOT move the active cell/anchor -- Excel leaves the underlying
     // cell selection alone while an object owns the arrow keys.
-    private void NudgeSelectedDrawingObject(Key key, bool fine)
+    internal void NudgeSelectedDrawingObject(Key key, bool fine)
     {
         var modifiers = fine ? ModifierKeys.Control : ModifierKeys.None;
         if (!TryPlanSelectedDrawingObjectNudge(key, modifiers, out var plan))

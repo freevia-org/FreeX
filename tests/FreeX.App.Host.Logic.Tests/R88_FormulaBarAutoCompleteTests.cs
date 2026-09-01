@@ -93,14 +93,7 @@ public sealed class R88_FormulaBarAutoCompleteTests
 
     private static void InvokeApplyCellValueAutoCompleteSuggestion(MainWindow window, TextBox editor)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "ApplyCellValueAutoCompleteSuggestion",
-            BindingFlags.Instance | BindingFlags.NonPublic,
-            binder: null,
-            types: [typeof(TextBox)],
-            modifiers: null)
-            ?? throw new MissingMethodException(nameof(MainWindow), "ApplyCellValueAutoCompleteSuggestion(TextBox)");
-        method.Invoke(window, [editor]);
+        window.ApplyCellValueAutoCompleteSuggestion(editor);
     }
 
     private static TextBox? GetInlineEditor(MainWindow window)

@@ -139,11 +139,7 @@ public sealed class R88_WatchWindowAutoRefreshTests
 
         public void InvokeRecalculateIfAutomatic(IReadOnlyList<CellAddress> changedCells)
         {
-            var method = typeof(MainWindow).GetMethod(
-                "RecalculateIfAutomatic",
-                BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "RecalculateIfAutomatic");
-            method.Invoke(Window, [changedCells]);
+            Window.RecalculateIfAutomatic(changedCells);
         }
 
         /// <summary>

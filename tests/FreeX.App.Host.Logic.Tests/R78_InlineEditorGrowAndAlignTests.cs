@@ -185,9 +185,7 @@ public sealed class R78_InlineEditorGrowAndAlignTests
 
     private static void InvokeInsertLineBreak(System.Windows.Controls.TextBox editor)
     {
-        var method = typeof(MainWindow).GetMethod("InsertLineBreak", BindingFlags.Static | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(nameof(MainWindow), "InsertLineBreak");
-        method.Invoke(null, [editor]);
+        MainWindow.InsertLineBreak(editor);
     }
 
     private static System.Windows.Controls.TextBox? GetInlineEditor(MainWindow window)

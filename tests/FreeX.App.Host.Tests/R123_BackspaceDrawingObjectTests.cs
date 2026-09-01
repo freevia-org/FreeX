@@ -150,19 +150,11 @@ public sealed class R123_BackspaceDrawingObjectTests
 
     private static void InvokeClearSelectionAndEditShortcut(MainWindow window)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "ExecuteCommandShortcut",
-            BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteCommandShortcut");
-        method.Invoke(window, [KeyboardCommandShortcut.ClearSelectionAndEdit, window, new RoutedEventArgs()]);
+        window.ExecuteCommandShortcut(KeyboardCommandShortcut.ClearSelectionAndEdit, window, new RoutedEventArgs());
     }
 
     private static void InvokeSetActiveCell(MainWindow window, CellAddress addr)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "SetActiveCell",
-            BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(nameof(MainWindow), "SetActiveCell");
-        method.Invoke(window, [addr]);
+        window.SetActiveCell(addr);
     }
 }

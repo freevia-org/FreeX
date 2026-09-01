@@ -377,7 +377,7 @@ public partial class MainWindow
     private void FormatCellsNumberLauncherBtn_Click(object sender, RoutedEventArgs e) =>
         OpenFormatCellsDialog(FormatCellsDialogTab.Number);
 
-    private void InsertRowBtn_Click(object sender, RoutedEventArgs e)
+    internal void InsertRowBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         InsertRows(range.Start.Row);
@@ -641,7 +641,7 @@ public partial class MainWindow
     /// MainWindow.WorkbookUiState.cs) and to Ctrl+Enter/hyperlink-open
     /// (R112-model-active-cell-vs-selection-1-1).
     /// </summary>
-    private CellAddress ResolveFormatCellsSeedCell(GridRange range) => SheetGrid.ActiveCell ?? range.Start;
+    internal CellAddress ResolveFormatCellsSeedCell(GridRange range) => SheetGrid.ActiveCell ?? range.Start;
 
     private void OpenFormatCellsDialog(FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number)
     {
@@ -796,7 +796,7 @@ public partial class MainWindow
     /// <c>AutofillModifiersResolved</c> event and so must not read the possibly-stale
     /// <see cref="_autofillCtrlHeld"/> field).
     /// </summary>
-    private void ExecuteAutofill(GridRange sourceRange, GridRange fillRange, bool ctrlHeld)
+    internal void ExecuteAutofill(GridRange sourceRange, GridRange fillRange, bool ctrlHeld)
     {
         // R136-services-autofill-grouped-sheets-1: Excel's Group Editing mode mirrors a fill-handle
         // drag to every other grouped sheet, matching this same file's ExecuteFillCells (routed

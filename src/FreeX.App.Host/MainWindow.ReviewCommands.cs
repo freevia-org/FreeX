@@ -21,7 +21,7 @@ public partial class MainWindow
     private CommentListWindow? _reviewCommentsWindow;
     private SessionChangesWindow? _sessionChangesWindow;
 
-    private void SpellCheckBtn_Click(object sender, RoutedEventArgs e)
+    internal void SpellCheckBtn_Click(object sender, RoutedEventArgs e)
     {
         if (!TryCommitPendingSpellCheckEdit())
             return;

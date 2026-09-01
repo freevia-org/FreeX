@@ -15,13 +15,13 @@ public sealed partial class MainWindowSourceHygieneTests
         File.Exists(viewportSourcePath).Should().BeTrue();
         var viewportSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
 
-        mainSource.Should().NotContain("private void UpdateViewport()");
+        mainSource.Should().NotContain("internal void UpdateViewport()");
         mainSource.Should().NotContain("private ViewportModel CreateViewport(");
         mainSource.Should().NotContain("private void EnsureCellVisible(");
         mainSource.Should().NotContain("private void SheetGrid_MouseWheel(");
         mainSource.Should().NotContain("private void Scroll_ValueChanged(");
 
-        viewportSource.Should().Contain("private void UpdateViewport()");
+        viewportSource.Should().Contain("internal void UpdateViewport()");
         viewportSource.Should().Contain("private ViewportModel CreateViewport(");
         viewportSource.Should().Contain("private void EnsureCellVisible(");
         viewportSource.Should().Contain("private void SheetGrid_MouseWheel(");

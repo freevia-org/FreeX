@@ -70,7 +70,7 @@ public partial class MainWindow
             selectedRange => dialog.ApplyRangeSelection(request.Target, FormatWorkbookRange(selectedRange)));
     }
 
-    private void SaveScenarioFromDialog(
+    internal void SaveScenarioFromDialog(
         string? scenarioName,
         string? changingCellsText,
         string? comment,

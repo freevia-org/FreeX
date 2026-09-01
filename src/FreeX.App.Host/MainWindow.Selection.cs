@@ -71,7 +71,7 @@ public partial class MainWindow
     //
     // Header Ctrl+click always starts a new disjoint area; header drag continuation is handled by
     // ExtendHeaderSelection, so this route uses the shared planner's append-only operation.
-    private void AddAdditionalColumnSelection(uint col)
+    internal void AddAdditionalColumnSelection(uint col)
     {
         var range = GridSelectionNavigationPlanner.CreateWholeColumnsRange(_currentSheetId, col, col);
         if (TryAppendDisjointFormulaRangeReference(range))
@@ -697,7 +697,7 @@ public partial class MainWindow
          _ribbonKeyTipSession.IsActive ||
          IsStartScreenVisible());
 
-    private void MainWindow_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    internal void MainWindow_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (IsControlModifierKey(e))
             SheetGrid.RefreshPointerCursor();
@@ -1045,7 +1045,7 @@ public partial class MainWindow
     /// without depending on real OS-level keyboard state -- only <see cref="Keyboard.FocusedElement"/>
     /// (ordinary WPF logical focus, fully controllable in a test) gates the block.
     /// </summary>
-    private bool TryHandleWholeCellKeyboardShortcuts(object sender, System.Windows.Input.KeyEventArgs e, ModifierKeys modifiers)
+    internal bool TryHandleWholeCellKeyboardShortcuts(object sender, System.Windows.Input.KeyEventArgs e, ModifierKeys modifiers)
     {
         if (Keyboard.FocusedElement is TextBox or ComboBox)
             return false;
@@ -1163,7 +1163,7 @@ public partial class MainWindow
         FocusSheetGridIfNeeded();
     }
 
-    private void SetActiveCell(CellAddress addr)
+    internal void SetActiveCell(CellAddress addr)
     {
         if (GetFormulaRangeEntryEditor() is null && GetFormulaReferenceHighlightEditor() is null)
             ClearFormulaRangeEntryState();
@@ -1409,7 +1409,7 @@ public partial class MainWindow
     // call site to know about merges individually. ExpandRangeToFullyContainMerges is a no-op when
     // there are no merges or the range already fully contains every merge it overlaps, so plain
     // single-cell/whole-range navigation is unaffected.
-    private void SetSelectionRange(GridRange range, CellAddress activeCell)
+    internal void SetSelectionRange(GridRange range, CellAddress activeCell)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         var expandedRange = ExpandRangeToFullyContainMerges(sheet, range);
@@ -1477,7 +1477,7 @@ public partial class MainWindow
     private CellAddress GetHomeNavigationTarget(Sheet? sheet, CellAddress current, bool ctrlHeld) =>
         ExcelWorksheetNavigationPlanner.GetHomeTarget(sheet, _currentSheetId, current, ctrlHeld, _endMode);
 
-    private void AddOrMoveAdditionalSelection(CellAddress target, bool extendSelection)
+    internal void AddOrMoveAdditionalSelection(CellAddress target, bool extendSelection)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
 

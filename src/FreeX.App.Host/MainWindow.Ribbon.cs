@@ -42,7 +42,7 @@ public partial class MainWindow
         }
     }
 
-    private void NormalizeRibbonSurface(bool forceLayout = false)
+    internal void NormalizeRibbonSurface(bool forceLayout = false)
     {
         if (_normalizingRibbonSurface)
             return;
@@ -551,7 +551,7 @@ public partial class MainWindow
         return null;
     }
 
-    private static void SetRibbonCommandButtonLabel(ButtonBase button, string label)
+    internal static void SetRibbonCommandButtonLabel(ButtonBase button, string label)
     {
         if (button.Content is string)
         {
@@ -1160,7 +1160,7 @@ public partial class MainWindow
             ForceDropdownWhite(VisualTreeHelper.GetChild(root, i));
     }
 
-    private static FrameworkElement CreateRibbonCommandContent(string commandName, string label, RibbonCommandLayoutKind layoutKind)
+    internal static FrameworkElement CreateRibbonCommandContent(string commandName, string label, RibbonCommandLayoutKind layoutKind)
     {
         var tall = layoutKind is RibbonCommandLayoutKind.Large or RibbonCommandLayoutKind.Medium;
         var icon = RibbonCommandPresentationPlanner.GetIcon(commandName);

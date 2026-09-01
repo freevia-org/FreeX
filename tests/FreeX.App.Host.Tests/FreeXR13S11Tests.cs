@@ -58,12 +58,7 @@ public sealed class FreeXR13S11Tests
                 // left half of B2:C2, matching how a plain click into a merged cell selects it.
                 grid.SelectedRange = new GridRange(b2, b2);
 
-                var method = typeof(MainWindow).GetMethod(
-                    "UnmergeCellsMenuItem_Click",
-                    BindingFlags.Instance | BindingFlags.NonPublic,
-                    [typeof(object), typeof(RoutedEventArgs)]);
-                method.Should().NotBeNull("UnmergeCellsMenuItem_Click should exist as a private click handler on MainWindow");
-                method!.Invoke(window, [window, new RoutedEventArgs()]);
+                window.UnmergeCellsMenuItem_Click(window, new RoutedEventArgs());
                 PumpDispatcher();
 
                 sheet.MergedRegions.Should().NotContain(merge,

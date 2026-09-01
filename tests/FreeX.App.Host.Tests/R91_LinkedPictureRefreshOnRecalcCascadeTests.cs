@@ -90,14 +90,7 @@ public sealed class R91_LinkedPictureRefreshOnRecalcCascadeTests
     /// MainWindow.CommandExecution.cs ultimately reaches.</summary>
     private static bool ExecuteCommandThroughRealChokePoint(MainWindow window, IWorkbookCommand command)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "TryExecuteCommand",
-            BindingFlags.Instance | BindingFlags.NonPublic,
-            binder: null,
-            types: [typeof(IWorkbookCommand), typeof(string)],
-            modifiers: null);
-        method.Should().NotBeNull();
-        return (bool)method!.Invoke(window, [command, "Test Command"])!;
+        return window.TryExecuteCommand(command, "Test Command", out _);
     }
 
     /// <summary>Drives the exact same private RecalculateIfAutomatic choke point every real
@@ -105,10 +98,7 @@ public sealed class R91_LinkedPictureRefreshOnRecalcCascadeTests
     /// TryExecuteCommand returns.</summary>
     private static void InvokeRecalculateIfAutomatic(MainWindow window, IReadOnlyList<CellAddress> changedCells)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "RecalculateIfAutomatic", BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        method!.Invoke(window, [changedCells]);
+        window.RecalculateIfAutomatic(changedCells);
         PumpDispatcher();
     }
 

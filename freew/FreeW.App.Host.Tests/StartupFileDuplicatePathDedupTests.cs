@@ -51,10 +51,9 @@ public sealed class StartupFileDuplicatePathDedupTests : IDisposable
     [Fact]
     public void DeduplicateStartupFilePaths_CollapsesARepeatedPathToItsFirstOccurrence()
     {
-        var method = GetDeduplicateMethod();
         var path = @"C:\work\Report.docx";
 
-        var result = (string[])method.Invoke(null, [new[] { path, path }])!;
+        var result = MainWindow.DeduplicateStartupFilePaths([path, path]);
 
         Assert.Equal([path], result);
     }
@@ -64,11 +63,10 @@ public sealed class StartupFileDuplicatePathDedupTests : IDisposable
     [Fact]
     public void DeduplicateStartupFilePaths_KeepsTwoDistinctPathsInOrder()
     {
-        var method = GetDeduplicateMethod();
         var first = @"C:\work\First.docx";
         var second = @"C:\work\Second.docx";
 
-        var result = (string[])method.Invoke(null, [new[] { first, second } ])!;
+        var result = MainWindow.DeduplicateStartupFilePaths([first, second]);
 
         Assert.Equal([first, second], result);
     }
@@ -136,15 +134,6 @@ public sealed class StartupFileDuplicatePathDedupTests : IDisposable
         Assert.Empty(messages.Messages);
         // One more than the single-path baseline: the additional-window handler for secondPath.
         Assert.Equal(baselineHandlerCount + 1, CountLoadedHandlers(window));
-    }
-
-    private static MethodInfo GetDeduplicateMethod()
-    {
-        var method = typeof(MainWindow).GetMethod(
-            "DeduplicateStartupFilePaths",
-            BindingFlags.Static | BindingFlags.NonPublic);
-        Assert.NotNull(method);
-        return method!;
     }
 
     // WPF routed events (Loaded included) do not expose their registered handlers through a plain

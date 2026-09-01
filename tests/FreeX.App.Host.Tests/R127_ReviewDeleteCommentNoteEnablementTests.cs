@@ -110,10 +110,7 @@ public sealed class R127_ReviewDeleteCommentNoteEnablementTests
     /// click/arrow-key move goes through -- via reflection.</summary>
     private static void SetActiveCell(MainWindow window, CellAddress address)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        method!.Invoke(window, [address]);
+        window.SetActiveCell(address);
     }
 
     private static bool GetRibbonEnabled(MainWindow window, string commandId)

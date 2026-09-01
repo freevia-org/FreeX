@@ -24,7 +24,7 @@ public partial class MainWindow
     private SheetTabsChromeRenderKey? _lastSheetTabsChromeRenderKey;
     private bool _isOpeningSheetTabContextMenuFromKeyboard;
 
-    private void RefreshSheetTabs()
+    internal void RefreshSheetTabs()
     {
         var plan = SheetTabListPlanner.Build(_workbook, _currentSheetId, _groupedSheetIds);
         _currentSheetId = plan.CurrentSheetId;
@@ -134,7 +134,7 @@ public partial class MainWindow
         return null;
     }
 
-    private void SelectSingleSheetTab(SheetId sheetId)
+    internal void SelectSingleSheetTab(SheetId sheetId)
     {
         _currentSheetId = sheetId;
         _groupedSheetIds.Clear();
@@ -351,7 +351,7 @@ public partial class MainWindow
     /// =SUM(Sheet1:Sheet3!A1)) -- appending unconditionally (the pre-fix behavior) always placed
     /// the new sheet outside such a span.
     /// </summary>
-    private void InsertNewSheet(SheetId? insertBeforeSheetId = null)
+    internal void InsertNewSheet(SheetId? insertBeforeSheetId = null)
     {
         SynchronizeWorkbookSessionSelection();
         if (!CompleteWorksheetSessionCommand(

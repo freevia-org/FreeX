@@ -23,12 +23,8 @@ namespace FreeX.App.Host.Tests;
 /// </summary>
 public sealed class R48_FillSeriesAutoFillGateTests
 {
-    private static readonly MethodInfo CanStartFillSeriesMethod = typeof(MainWindow)
-        .GetMethod("CanStartFillSeries", BindingFlags.NonPublic | BindingFlags.Static)
-        ?? throw new MissingMethodException(nameof(MainWindow), "CanStartFillSeries");
-
     private static bool CanStartFillSeries(ScalarValue? startValue) =>
-        (bool)CanStartFillSeriesMethod.Invoke(null, [startValue])!;
+        MainWindow.CanStartFillSeries(startValue);
 
     [Fact]
     public void CanStartFillSeries_TextSeed_IsAllowed_SoAutoFillBecomesReachable()

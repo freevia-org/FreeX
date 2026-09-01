@@ -855,7 +855,7 @@ public sealed partial class MainWindow : Window
     // uses for its own seenPaths guard (shared/Free.Shared.AppServices/StartupFileOpenPlanner.cs),
     // applied here because FreeW's WPF host does not route startup arguments through that planner.
     // Order-preserving so the first occurrence of a duplicated path still becomes the primary window.
-    private static string[] DeduplicateStartupFilePaths(IReadOnlyList<string> startupFilePaths) =>
+    internal static string[] DeduplicateStartupFilePaths(IReadOnlyList<string> startupFilePaths) =>
         startupFilePaths.Distinct(PlatformPathIdentityComparer.Current).ToArray();
 
     private void MainWindow_DragOver(object sender, DragEventArgs e)
@@ -2571,7 +2571,7 @@ public sealed partial class MainWindow : Window
     /// registry, which this assembly deliberately does not stand up in tests (it would race
     /// Application.Current across the suite).
     /// </summary>
-    private List<MainWindow> OpenAdditionalStartupFiles(IReadOnlyList<string> paths)
+    internal List<MainWindow> OpenAdditionalStartupFiles(IReadOnlyList<string> paths)
     {
         var opened = new List<MainWindow>();
         foreach (var path in paths)

@@ -155,7 +155,7 @@ public partial class MainWindow
         return true;
     }
 
-    private void ReapplyAutoFilter()
+    internal void ReapplyAutoFilter()
     {
         if (_workbook.GetSheet(_currentSheetId) is not { } sheet ||
             _filterWorkflowSession.CreateReapplyPlan(sheet) is not { } plan)
@@ -182,7 +182,7 @@ public partial class MainWindow
     }
 
 
-    private bool ApplyAutoFilterDialogResult(GridRange range, uint filterColOffset, AutoFilterDialogResult result, string title)
+    internal bool ApplyAutoFilterDialogResult(GridRange range, uint filterColOffset, AutoFilterDialogResult result, string title)
     {
         if (_workbook.GetSheet(_currentSheetId) is not { } sheet)
             return false;
@@ -328,7 +328,7 @@ public partial class MainWindow
             });
     }
 
-    private IWorkbookCommand CreateDataValidationCommand(
+    internal IWorkbookCommand CreateDataValidationCommand(
         SheetId sheetId,
         DataValidation rule,
         DataValidation? existingRule,
@@ -359,7 +359,7 @@ public partial class MainWindow
         return new CompositeWorkbookCommand("Data Validation", commands);
     }
 
-    private void ClearFilterButton_Click(object sender, RoutedEventArgs e)
+    internal void ClearFilterButton_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } selectedRange ||
             _workbook.GetSheet(_currentSheetId) is not { } sheet)

@@ -10,8 +10,8 @@ public sealed partial class MainWindowMouseSelectionSourceTests
         var contextMenuSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
         var contextMenuHandler = contextMenuSource[
-            contextMenuSource.IndexOf("private void OnGridContextMenuRequested", StringComparison.Ordinal)..
-            contextMenuSource.IndexOf("private void OnGridHeaderContextMenuRequested", StringComparison.Ordinal)];
+            contextMenuSource.IndexOf("internal void OnGridContextMenuRequested", StringComparison.Ordinal)..
+            contextMenuSource.IndexOf("internal void OnGridHeaderContextMenuRequested", StringComparison.Ordinal)];
 
         contextMenuHandler.Should().Contain("SetActiveCell(actualAddr);");
         contextMenuHandler.Should().Contain("HideValidationDropdown();");

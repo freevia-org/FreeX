@@ -78,14 +78,10 @@ public sealed class R152_GoToCrossSheetActivationTests
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly MethodInfo _findGoToMenuItemClick;
 
         private MainWindowHarness(MainWindow window)
         {
             _window = window;
-            _findGoToMenuItemClick = typeof(MainWindow)
-                .GetMethod("FindGoToMenuItem_Click", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "FindGoToMenuItem_Click");
         }
 
         public Workbook Workbook => _window.Session.Workbook;
@@ -141,7 +137,7 @@ public sealed class R152_GoToCrossSheetActivationTests
                         dialog.Close();
                 }), DispatcherPriority.ApplicationIdle);
 
-                _findGoToMenuItemClick.Invoke(_window, [_window, new RoutedEventArgs()]);
+                _window.FindGoToMenuItem_Click(_window, new RoutedEventArgs());
                 PumpDispatcher();
             }
             finally

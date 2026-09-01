@@ -106,15 +106,11 @@ public sealed class R41_FreezePaneScrollPreservationTests
 
     private sealed class FreezePaneHarness : IDisposable
     {
-        private readonly MethodInfo _setFreezePanes;
 
         private FreezePaneHarness(MainWindow window, Workbook workbook)
         {
             Window = window;
             Workbook = workbook;
-            _setFreezePanes = typeof(MainWindow)
-                .GetMethod("SetFreezePanes", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SetFreezePanes");
         }
 
         public MainWindow Window { get; }
@@ -125,7 +121,7 @@ public sealed class R41_FreezePaneScrollPreservationTests
 
         public void SetFreezePanes(uint frozenRows, uint frozenCols)
         {
-            _setFreezePanes.Invoke(Window, [frozenRows, frozenCols]);
+            Window.SetFreezePanes(frozenRows, frozenCols);
             PumpDispatcher();
         }
 

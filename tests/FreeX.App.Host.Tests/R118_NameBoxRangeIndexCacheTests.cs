@@ -66,19 +66,15 @@ public sealed class R118_NameBoxRangeIndexCacheTests
                 new CellAddress(sheet.Id, 1, 1),
                 new CellAddress(sheet.Id, 1, 1));
 
-            var formatMethod = typeof(MainWindow).GetMethod(
-                "FormatNameBoxSelectionText", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "FormatNameBoxSelectionText");
-
             // Warm-up call: builds/primes any lazy cache (or, pre-fix, just does its one scan) so the
             // timed region below measures only the cost of REPEATED calls with no model change in
             // between -- i.e. ordinary repeated navigation, not the unavoidable first-touch cost.
-            formatMethod.Invoke(harness.Window, [queriedRange]);
+            harness.Window.FormatNameBoxSelectionText(queriedRange);
 
             const int repeatedCalls = 4_000;
             var stopwatch = Stopwatch.StartNew();
             for (var i = 0; i < repeatedCalls; i++)
-                formatMethod.Invoke(harness.Window, [queriedRange]);
+                harness.Window.FormatNameBoxSelectionText(queriedRange);
             stopwatch.Stop();
 
             // With the revision-keyed cache, 4,000 repeated queries against an unchanged 20,000-name
@@ -111,12 +107,8 @@ public sealed class R118_NameBoxRangeIndexCacheTests
             var sheet = harness.Workbook.Sheets[0];
             var range = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 3, 3));
 
-            var formatMethod = typeof(MainWindow).GetMethod(
-                "FormatNameBoxSelectionText", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "FormatNameBoxSelectionText");
-
             // Prime the cache with a query BEFORE the name exists, at the current revision.
-            var before = (string)formatMethod.Invoke(harness.Window, [range])!;
+            var before = harness.Window.FormatNameBoxSelectionText(range);
             before.Should().Be("B2:C3");
 
             // Define the name through the real command path (mirrors DefineNamedRangeCommand usage
@@ -126,7 +118,7 @@ public sealed class R118_NameBoxRangeIndexCacheTests
 
             // Querying the SAME range again must now show the freshly-defined name, not the stale
             // A1-style reference the cache returned a moment ago.
-            var after = (string)formatMethod.Invoke(harness.Window, [range])!;
+            var after = harness.Window.FormatNameBoxSelectionText(range);
             after.Should().Be("Budget",
                 "a name defined through the real command path must be visible on the very next Name Box query, proving the cache is invalidated on real model changes rather than only lazily built once");
         });
@@ -145,16 +137,8 @@ public sealed class R118_NameBoxRangeIndexCacheTests
 
         public void DefineNamedRangeThroughCommandBus(string name, GridRange range)
         {
-            var tryExecuteCommand = typeof(MainWindow).GetMethod(
-                "TryExecuteCommand",
-                BindingFlags.Instance | BindingFlags.NonPublic,
-                binder: null,
-                types: [typeof(IWorkbookCommand), typeof(string)],
-                modifiers: null)
-                ?? throw new MissingMethodException(nameof(MainWindow), "TryExecuteCommand");
-
             var command = new DefineNamedRangeCommand(name, range);
-            var result = (bool)tryExecuteCommand.Invoke(Window, [command, "Define Name"])!;
+            var result = Window.TryExecuteCommand(command, "Define Name", out _);
             result.Should().BeTrue("the command bus define-name path must succeed for a fresh, valid name/range pair");
             PumpDispatcher();
         }

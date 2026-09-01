@@ -34,33 +34,17 @@ namespace FreeX.App.Host.Tests;
 /// </remarks>
 public sealed class R128B_StatusBarCalculateIndicatorWpfHostWiringTests
 {
-    private static readonly MethodInfo CalcNowClickMethod =
-        typeof(MainWindow).GetMethod("CalcNowBtn_Click", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(nameof(MainWindow), "CalcNowBtn_Click");
-
-    private static readonly MethodInfo CalcFullClickMethod =
-        typeof(MainWindow).GetMethod("CalcFullBtn_Click", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(nameof(MainWindow), "CalcFullBtn_Click");
-
-    private static readonly MethodInfo CalcSheetClickMethod =
-        typeof(MainWindow).GetMethod("CalcSheetBtn_Click", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(nameof(MainWindow), "CalcSheetBtn_Click");
-
-    private static readonly MethodInfo RebuildDependenciesAndCalculateMethod =
-        typeof(MainWindow).GetMethod("RebuildDependenciesAndCalculate", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(nameof(MainWindow), "RebuildDependenciesAndCalculate");
-
     private static void ClickCalcNow(MainWindow window) =>
-        CalcNowClickMethod.Invoke(window, [null, new RoutedEventArgs()]);
+        window.CalcNowBtn_Click(null!, new RoutedEventArgs());
 
     private static void ClickCalcFull(MainWindow window) =>
-        CalcFullClickMethod.Invoke(window, [null, new RoutedEventArgs()]);
+        window.CalcFullBtn_Click(null!, new RoutedEventArgs());
 
     private static void ClickCalcSheet(MainWindow window) =>
-        CalcSheetClickMethod.Invoke(window, [null, new RoutedEventArgs()]);
+        window.CalcSheetBtn_Click(null!, new RoutedEventArgs());
 
     private static void InvokeRebuildDependenciesAndCalculate(MainWindow window) =>
-        RebuildDependenciesAndCalculateMethod.Invoke(window, null);
+        window.RebuildDependenciesAndCalculate();
 
     /// <summary>
     /// The core repro: real Windows-user action (edit a precedent cell via the formula bar while in

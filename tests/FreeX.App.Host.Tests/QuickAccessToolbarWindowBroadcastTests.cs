@@ -218,10 +218,6 @@ public sealed class QuickAccessToolbarWindowBroadcastTests
     /// </summary>
     private static void InvokeShowOptionsDialogAndClickOk(MainWindow window)
     {
-        var ssOptionsBtnClick = typeof(MainWindow).GetMethod(
-                "SsOptionsBtn_Click", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(nameof(MainWindow), "SsOptionsBtn_Click");
-
         window.Dispatcher.BeginInvoke(new Action(() =>
         {
             var dialog = window.OwnedWindows
@@ -237,7 +233,7 @@ public sealed class QuickAccessToolbarWindowBroadcastTests
             okBtn.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, okBtn));
         }), DispatcherPriority.ApplicationIdle);
 
-        ssOptionsBtnClick.Invoke(window, [window, new RoutedEventArgs()]);
+        window.SsOptionsBtn_Click(window, new RoutedEventArgs());
         PumpDispatcher();
     }
 }

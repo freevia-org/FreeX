@@ -155,9 +155,7 @@ public sealed class R22_SheetMoveOrCopyCreateCopyRecalcTests
 
         public void RecalculateWorkbook()
         {
-            var method = typeof(MainWindow).GetMethod("RecalculateWorkbook", BindingFlags.Instance | BindingFlags.NonPublic, [])
-                ?? throw new MissingMethodException(nameof(MainWindow), "RecalculateWorkbook");
-            method.Invoke(Window, []);
+            Window.RecalculateWorkbook();
         }
 
         public void Dispose()

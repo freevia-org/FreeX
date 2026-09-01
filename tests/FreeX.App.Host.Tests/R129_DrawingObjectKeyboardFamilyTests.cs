@@ -227,28 +227,12 @@ public sealed class R129_DrawingObjectKeyboardFamilyTests
     private sealed class DrawingObjectKeyboardHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly MethodInfo _setActiveCell;
-        private readonly MethodInfo _mainWindowKeyDown;
-        private readonly MethodInfo _executeCommandShortcut;
-        private readonly MethodInfo _nudgeSelectedDrawingObject;
         private readonly FieldInfo _selectionAnchorField;
         private readonly Type _keyboardCommandShortcutType;
 
         private DrawingObjectKeyboardHarness(MainWindow window)
         {
             _window = window;
-            _setActiveCell = typeof(MainWindow)
-                .GetMethod("SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SetActiveCell");
-            _mainWindowKeyDown = typeof(MainWindow)
-                .GetMethod("MainWindow_KeyDown", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "MainWindow_KeyDown");
-            _executeCommandShortcut = typeof(MainWindow)
-                .GetMethod("ExecuteCommandShortcut", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteCommandShortcut");
-            _nudgeSelectedDrawingObject = typeof(MainWindow)
-                .GetMethod("NudgeSelectedDrawingObject", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "NudgeSelectedDrawingObject");
             _selectionAnchorField = typeof(MainWindow)
                 .GetField("_selectionAnchorField", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_selectionAnchorField");
@@ -286,7 +270,7 @@ public sealed class R129_DrawingObjectKeyboardFamilyTests
 
         public void SetActiveCell(CellAddress address)
         {
-            _setActiveCell.Invoke(_window, [address]);
+            _window.SetActiveCell(address);
             PumpDispatcher();
         }
 
@@ -298,27 +282,27 @@ public sealed class R129_DrawingObjectKeyboardFamilyTests
             {
                 RoutedEvent = Keyboard.KeyDownEvent
             };
-            _mainWindowKeyDown.Invoke(_window, [_window, args]);
+            _window.MainWindow_KeyDown(_window, args);
             PumpDispatcher();
         }
 
         public void InvokeNudge(Key key, bool fine)
         {
-            _nudgeSelectedDrawingObject.Invoke(_window, [key, fine]);
+            _window.NudgeSelectedDrawingObject(key, fine);
             PumpDispatcher();
         }
 
         public void InvokeEditCellShortcut()
         {
-            var shortcut = Enum.Parse(_keyboardCommandShortcutType, "EditCell");
-            _executeCommandShortcut.Invoke(_window, [shortcut, _window, new RoutedEventArgs()]);
+            var shortcut = (KeyboardCommandShortcut)Enum.Parse(_keyboardCommandShortcutType, "EditCell");
+            _window.ExecuteCommandShortcut(shortcut, _window, new RoutedEventArgs());
             PumpDispatcher();
         }
 
         public void InvokeFillDownShortcut()
         {
-            var shortcut = Enum.Parse(_keyboardCommandShortcutType, "FillDown");
-            _executeCommandShortcut.Invoke(_window, [shortcut, _window, new RoutedEventArgs()]);
+            var shortcut = (KeyboardCommandShortcut)Enum.Parse(_keyboardCommandShortcutType, "FillDown");
+            _window.ExecuteCommandShortcut(shortcut, _window, new RoutedEventArgs());
             PumpDispatcher();
         }
 

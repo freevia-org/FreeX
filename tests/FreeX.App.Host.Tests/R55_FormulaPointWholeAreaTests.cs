@@ -12,7 +12,7 @@ public sealed class R55_FormulaPointWholeAreaTests
     {
         var source = File.ReadAllText(FindRepositoryFile("src", "FreeX.App.Host", "MainWindow.Selection.cs"));
 
-        var columnMethod = ExtractMethod(source, "private void AddAdditionalColumnSelection");
+        var columnMethod = ExtractMethod(source, "internal void AddAdditionalColumnSelection");
         var rowMethod = ExtractMethod(source, "private void AddAdditionalRowSelection");
 
         columnMethod.Should().Contain("TryAppendDisjointFormulaRangeReference(range)");

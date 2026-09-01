@@ -105,7 +105,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
         var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var addSelection = selectionSource[
-            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("internal void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
             selectionSource.IndexOf("private void RefreshStatusBarAfterDragSelectionChange", StringComparison.Ordinal)];
 
         addSelection.Should().Contain("ClearSelectionTransientOverlays();");
@@ -138,7 +138,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
 
         var extendSelection = selectionSource[
             selectionSource.IndexOf("private void ExtendSelection", StringComparison.Ordinal)..
-            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
+            selectionSource.IndexOf("internal void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
 
         extendSelection.Should().Contain("ClearSelectionTransientOverlays();");
         extendSelection.Should().Contain("SheetGrid.SelectedRange = range;");
@@ -154,9 +154,9 @@ public sealed partial class MainWindowMouseSelectionSourceTests
 
         var extendSelection = selectionSource[
             selectionSource.IndexOf("private void ExtendSelection", StringComparison.Ordinal)..
-            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
+            selectionSource.IndexOf("internal void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
         var addSelection = selectionSource[
-            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("internal void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
             selectionSource.IndexOf("private void RefreshStatusBarAfterDragSelectionChange", StringComparison.Ordinal)];
         var clearTransientOverlays = selectionSource[
             selectionSource.IndexOf("private void ClearSelectionTransientOverlays", StringComparison.Ordinal)..
@@ -180,9 +180,9 @@ public sealed partial class MainWindowMouseSelectionSourceTests
 
         var extendSelection = selectionSource[
             selectionSource.IndexOf("private void ExtendSelection", StringComparison.Ordinal)..
-            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
+            selectionSource.IndexOf("internal void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
         var addSelection = selectionSource[
-            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("internal void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
             selectionSource.IndexOf("private void RefreshToolbarAfterDragSelectionChange", StringComparison.Ordinal)];
 
         extendSelection.Should().Contain("if (IsSelectionExtensionUnchanged(anchor, to))");
