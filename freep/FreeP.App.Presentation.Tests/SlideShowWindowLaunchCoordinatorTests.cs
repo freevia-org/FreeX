@@ -32,7 +32,9 @@ public sealed class SlideShowWindowLaunchCoordinatorTests
                 return new FakeWindow();
             },
             (_, intent) => appliedTiming = intent,
-            window => shownWindow = window);
+            window => shownWindow = window,
+            static _ => false,
+            static _ => { });
 
         coordinator.TryLaunch(
                 fromStart: true,
@@ -68,7 +70,9 @@ public sealed class SlideShowWindowLaunchCoordinatorTests
                 return new FakeWindow();
             },
             (_, _) => { },
-            _ => { });
+            _ => { },
+            static _ => false,
+            static _ => { });
 
         coordinator.TryLaunchNamed("Missing").Should().BeFalse();
         createCount.Should().Be(0);
@@ -92,7 +96,9 @@ public sealed class SlideShowWindowLaunchCoordinatorTests
                 return new FakeWindow();
             },
             (_, _) => { },
-            _ => { });
+            _ => { },
+            static _ => false,
+            static _ => { });
 
         coordinator.TryLaunchReadingView().Should().BeTrue();
 

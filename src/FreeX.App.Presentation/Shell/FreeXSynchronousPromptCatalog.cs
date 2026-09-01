@@ -12,6 +12,8 @@ public enum FreeXSynchronousPromptKind
     ExternallyModifiedFile,
     LossyFormatFeatureLoss,
     UpdateReady,
+    UpdateDiscardsOtherWindowChanges,
+    UpdateApplyFailed,
     SortAdjacentData,
 }
 
@@ -37,9 +39,18 @@ public sealed record FreeXSynchronousPromptDescriptor(
 public sealed record UpdateReadyConfirmationPlan(
     string? Version,
     FreeXSynchronousPromptDescriptor Confirmation,
-    LocalizedTextDescriptor ApplyingStatus)
+    LocalizedTextDescriptor ApplyingStatus,
+    FreeXSynchronousPromptDescriptor OtherWindowsWarning,
+    FreeXSynchronousPromptDescriptor ApplyFailed)
 {
     public bool ShouldApply(UserMessageResult result) => result == UserMessageResult.Ok;
+
+    // r188: Confirmation speaks for the window the user clicked in. Applying restarts the whole
+    // PROCESS, so it also destroys unsaved work in every other open workbook -- none of which was
+    // asked. Both shells must raise OtherWindowsWarning when any other window is dirty. It lives
+    // here rather than in either shell because r187 fixed only the WPF handler and the Avalonia
+    // twin kept the bug; a shared plan is what stops that happening a third time.
+    public bool ShouldApplyDespiteOtherWindows(UserMessageResult result) => result == UserMessageResult.Ok;
 }
 
 /// <summary>Canonical prompt policy shared by the WPF and Avalonia FreeX renderers.</summary>
@@ -54,6 +65,8 @@ public static class FreeXSynchronousPromptCatalog
     public const string UpdateReadyTitleResourceKey = "MainWindowMessage_UpdateFreeXTitle";
     public const string UpdateReadyBodyResourceKey = "MainWindowMessage_UpdateReadyToInstallFormat";
     public const string UpdateApplyingStatusResourceKey = "MainLoc_RestartingToInstall";
+    public const string UpdateDiscardsOtherWindowChangesBodyResourceKey = "MainWindowMessage_UpdateDiscardsOtherWindowChanges";
+    public const string UpdateApplyFailedBodyResourceKey = "MainWindowMessage_UpdateApplyFailed";
     public const string SortAdjacentDataTitleResourceKey = "MainWindowMessage_SortAdjacentDataTitle";
     public const string SortAdjacentDataBodyResourceKey = "MainWindowMessage_SortAdjacentDataBody";
 
@@ -134,6 +147,20 @@ public static class FreeXSynchronousPromptCatalog
                 UserMessageButtons.OkCancel,
                 UserMessageIcon.Information,
                 UserMessageResult.Cancel),
-            LocalizedTextDescriptor.Resource(UpdateApplyingStatusResourceKey, versionSuffix));
+            LocalizedTextDescriptor.Resource(UpdateApplyingStatusResourceKey, versionSuffix),
+            new FreeXSynchronousPromptDescriptor(
+                FreeXSynchronousPromptKind.UpdateDiscardsOtherWindowChanges,
+                LocalizedTextDescriptor.Resource(UpdateReadyTitleResourceKey),
+                LocalizedTextDescriptor.Resource(UpdateDiscardsOtherWindowChangesBodyResourceKey),
+                UserMessageButtons.OkCancel,
+                UserMessageIcon.Warning,
+                UserMessageResult.Cancel),
+            new FreeXSynchronousPromptDescriptor(
+                FreeXSynchronousPromptKind.UpdateApplyFailed,
+                LocalizedTextDescriptor.Resource(UpdateReadyTitleResourceKey),
+                LocalizedTextDescriptor.Resource(UpdateApplyFailedBodyResourceKey),
+                UserMessageButtons.Ok,
+                UserMessageIcon.Warning,
+                UserMessageResult.Ok));
     }
 }
