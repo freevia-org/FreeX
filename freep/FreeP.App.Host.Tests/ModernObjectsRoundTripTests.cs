@@ -1428,6 +1428,56 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
             "payload must survive write/re-read round-trip");
     }
 
+    [Fact]
+    public void UnknownGraphicFrame_MultipleRelationshipAttributesCaptureEachIdOnceInXmlOrder()
+    {
+        const string unknownXml = """
+            <p:graphicFrame xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                            xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <p:nvGraphicFramePr>
+                <p:cNvPr id="41" name="Unknown relationships"/>
+                <p:cNvGraphicFramePr/>
+                <p:nvPr/>
+              </p:nvGraphicFramePr>
+              <p:xfrm>
+                <a:off x="0" y="0"/>
+                <a:ext cx="1828800" cy="914400"/>
+              </p:xfrm>
+              <a:graphic>
+                <a:graphicData uri="http://example.com/future/relationships">
+                  <ex:data xmlns:ex="http://example.com/future/relationships"
+                           r:id="rIdPrimary" r:embed="rIdSecondary">
+                    <ex:reuse r:link="rIdPrimary"/>
+                  </ex:data>
+                </a:graphicData>
+              </a:graphic>
+            </p:graphicFrame>
+            """;
+        var primaryBytes = new byte[] { 1, 2, 3 };
+        var secondaryBytes = new byte[] { 4, 5, 6 };
+
+        var presentation = PptxPackageReader.Read(BuildPptxWithShapeXml(
+            unknownXml,
+            extraParts: new()
+            {
+                ["ppt/media/primary.bin"] = (primaryBytes, "application/octet-stream"),
+                ["ppt/media/secondary.bin"] = (secondaryBytes, "application/octet-stream"),
+            },
+            extraRels: new()
+            {
+                ["rIdPrimary"] = ("http://example.com/relationships/primary", "../media/primary.bin"),
+                ["rIdSecondary"] = ("http://example.com/relationships/secondary", "../media/secondary.bin"),
+            }));
+
+        var preserved = presentation.Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.PreservedObject)
+            .PreservedObject!;
+        preserved.SlideRels.Keys.Should().Equal("rIdPrimary", "rIdSecondary");
+        preserved.Parts["ppt/media/primary.bin"].Should().Equal(primaryBytes);
+        preserved.Parts["ppt/media/secondary.bin"].Should().Equal(secondaryBytes);
+    }
+
     // ── EA1: preserved fallback image gets a content-type Default entry ──────────
 
     [Fact]

@@ -2463,16 +2463,19 @@ public static class PptxPackageReader
         PreservedObjectInfo info)
     {
         var rNs = R.NamespaceName;
+        var partDirectory = GetDirectoryName(partPath);
+        var relationshipsById = new Dictionary<string, OpcRelationshipTarget>(StringComparer.Ordinal);
+        foreach (var relationship in slideRels2)
+            relationshipsById.TryAdd(relationship.Id, relationship);
+
         foreach (var attr in el.Descendants()
                                 .SelectMany(e => e.Attributes())
-                                .Where(a => a.Name.NamespaceName == rNs)
-                                .ToList())
+                                .Where(a => a.Name.NamespaceName == rNs))
         {
             var rId = attr.Value;
-            var rel = slideRels2.FirstOrDefault(r => r.Id == rId);
-            if (rel == default) continue;
-            var targetPath = ResolveRelationshipTargetZipPath(archive, GetDirectoryName(partPath), rel.Target);
             if (info.SlideRels.ContainsKey(rId)) continue;
+            if (!relationshipsById.TryGetValue(rId, out var rel)) continue;
+            var targetPath = ResolveRelationshipTargetZipPath(archive, partDirectory, rel.Target);
             info.SlideRels[rId] = (rel.Type, targetPath);
             CapturePartBytes(targetPath, archive, info);
         }
