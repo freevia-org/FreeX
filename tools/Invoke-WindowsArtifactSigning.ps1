@@ -22,6 +22,9 @@ param(
 
     [string]$TimestampUrl = "http://timestamp.acs.microsoft.com",
 
+    [ValidateRange(1, 5)]
+    [int]$MaxAttempts = 3,
+
     [switch]$VerifyOnly
 )
 
@@ -38,7 +41,8 @@ function Resolve-UniqueSigningTool {
         [Parameter(Mandatory = $true)][string]$DisplayName,
         [Parameter(Mandatory = $true)][string]$FileName,
         [string]$ExplicitPath,
-        [string[]]$SearchRoots
+        [string[]]$SearchRoots,
+        [switch]$RequireX64Path
     )
 
     if (-not [string]::IsNullOrWhiteSpace($ExplicitPath)) {
@@ -51,11 +55,13 @@ function Resolve-UniqueSigningTool {
     }
 
     $matches = @(
-        foreach ($root in $SearchRoots | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -LiteralPath $_ -PathType Container) }) {
-            Get-ChildItem -LiteralPath $root -Filter $FileName -File -Recurse -ErrorAction SilentlyContinue |
-                Where-Object { $_.FullName -match '[\\/]x64[\\/]' }
-        }
-    ) | Sort-Object FullName -Descending -Unique
+        @(
+            foreach ($root in $SearchRoots | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -LiteralPath $_ -PathType Container) }) {
+                Get-ChildItem -LiteralPath $root -Filter $FileName -File -Recurse -ErrorAction SilentlyContinue |
+                    Where-Object { -not $RequireX64Path -or $_.FullName -match '[\\/]x64[\\/]' }
+            }
+        ) | Sort-Object FullName -Descending -Unique
+    )
 
     if ($matches.Count -eq 0) {
         throw "$DisplayName was not found. Install Microsoft.Azure.ArtifactSigningClientTools or pass its path explicitly."
@@ -90,14 +96,21 @@ $signToolRoots = @(
     (Join-Path $localAppData "Microsoft/WinGet/Packages")
 )
 $dlibRoots = @(
+    (Join-Path $localAppData "Microsoft/MicrosoftArtifactSigningClientTools"),
     (Join-Path $programFilesX86 "Microsoft/ArtifactSigningClientTools"),
     (Join-Path $programFiles "Microsoft/ArtifactSigningClientTools"),
     (Join-Path $localAppData "Microsoft/WinGet/Packages")
 )
 
-$resolvedSignTool = Resolve-UniqueSigningTool -DisplayName "x64 SignTool" -FileName "signtool.exe" -ExplicitPath $SignToolPath -SearchRoots $signToolRoots
+$resolvedSignTool = Resolve-UniqueSigningTool -DisplayName "x64 SignTool" -FileName "signtool.exe" -ExplicitPath $SignToolPath -SearchRoots $signToolRoots -RequireX64Path
 if (-not $VerifyOnly) {
     $resolvedDlib = Resolve-UniqueSigningTool -DisplayName "x64 Artifact Signing dlib" -FileName "Azure.CodeSigning.Dlib.dll" -ExplicitPath $DlibPath -SearchRoots $dlibRoots
+}
+
+$azureCliDirectory = Join-Path $programFiles "Microsoft SDKs/Azure/CLI2/wbin"
+if ((Test-Path -LiteralPath $azureCliDirectory -PathType Container) -and
+    -not (($env:PATH -split ';') -contains $azureCliDirectory)) {
+    $env:PATH = "$azureCliDirectory;$env:PATH"
 }
 
 $resolvedFiles = @(
@@ -111,10 +124,16 @@ if ($resolvedFiles.Count -eq 0) {
 
 foreach ($path in $resolvedFiles) {
     if (-not $VerifyOnly) {
-        Write-Host "Artifact Signing: $path"
-        & $resolvedSignTool sign /v /fd SHA256 /tr $TimestampUrl /td SHA256 /dlib $resolvedDlib /dmdf $MetadataPath $path
-        if ($LASTEXITCODE -ne 0) {
-            throw "Artifact Signing failed for '$path' with exit code $LASTEXITCODE."
+        for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+            Write-Host "Artifact Signing (attempt $attempt/$MaxAttempts): $path"
+            & $resolvedSignTool sign /v /fd SHA256 /tr $TimestampUrl /td SHA256 /dlib $resolvedDlib /dmdf $MetadataPath $path
+            if ($LASTEXITCODE -eq 0) {
+                break
+            }
+            if ($attempt -eq $MaxAttempts) {
+                throw "Artifact Signing failed for '$path' after $MaxAttempts attempts (last exit code $LASTEXITCODE)."
+            }
+            Start-Sleep -Seconds ([Math]::Pow(2, $attempt))
         }
     }
 

@@ -29,13 +29,7 @@ param(
     [ValidateSet("Release")]
     [string]$Configuration = "Release",
 
-    [string]$OutputDir,
-
-    [string]$ArtifactSigningMetadataPath,
-
-    [string]$ArtifactSigningSignToolPath,
-
-    [string]$ArtifactSigningDlibPath
+    [string]$OutputDir
 )
 
 $ErrorActionPreference = "Stop"
@@ -294,16 +288,6 @@ foreach ($runtime in $Runtimes) {
         }
 
         Copy-Item -LiteralPath $expectedExe -Destination $packagePath -Force
-        if (-not [string]::IsNullOrWhiteSpace($ArtifactSigningMetadataPath)) {
-            & (Join-Path $PSScriptRoot "Invoke-WindowsArtifactSigning.ps1") `
-                -Files $packagePath `
-                -MetadataPath $ArtifactSigningMetadataPath `
-                -SignToolPath $ArtifactSigningSignToolPath `
-                -DlibPath $ArtifactSigningDlibPath
-            if ($LASTEXITCODE -ne 0) {
-                throw "Artifact Signing failed for $packageName."
-            }
-        }
     } else {
         Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $packagePath -Force
     }

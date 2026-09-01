@@ -40,13 +40,7 @@ param(
 
     [string]$InnoCompilerPath,
 
-    [switch]$GenerateOnly,
-
-    [string]$ArtifactSigningMetadataPath,
-
-    [string]$ArtifactSigningSignToolPath,
-
-    [string]$ArtifactSigningDlibPath
+    [switch]$GenerateOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -146,12 +140,6 @@ function New-WindowsInstaller {
     $lines.Add("SetupIconFile=$(Escape-InnoValue (Join-Path $repoRoot "shared/Free.Shared.Shell/Resources/$($Apps[0]).ico"))")
     if (-not $Suite) { $lines.Add("UninstallDisplayIcon={app}\$($Apps[0]).exe") }
     $lines.Add('WizardStyle=modern')
-    if (-not [string]::IsNullOrWhiteSpace($ArtifactSigningMetadataPath)) {
-        $lines.Add('SignTool=freexartifactsigning')
-        if (-not $Suite) { $lines.Add('SignedUninstaller=yes') }
-        $lines.Add('SignToolRetryCount=3')
-        $lines.Add('SignToolRetryDelay=2500')
-    }
     $lines.Add('')
     $lines.Add('[Files]')
     foreach ($app in $Apps) {
@@ -208,20 +196,7 @@ function New-WindowsInstaller {
 
     if ($GenerateOnly) { return $scriptPath }
     $compiler = Get-InnoCompiler
-    $compilerArgs = @($scriptPath)
-    if (-not [string]::IsNullOrWhiteSpace($ArtifactSigningMetadataPath)) {
-        $signingScript = Join-Path $repoRoot "tools/Invoke-WindowsArtifactSigning.ps1"
-        $powerShell = Get-ToolPowerShellPath
-        $signCommand = "`"$powerShell`" -NoProfile -File `"$signingScript`" -Files `$f -MetadataPath `"$ArtifactSigningMetadataPath`""
-        if (-not [string]::IsNullOrWhiteSpace($ArtifactSigningSignToolPath)) {
-            $signCommand += " -SignToolPath `"$ArtifactSigningSignToolPath`""
-        }
-        if (-not [string]::IsNullOrWhiteSpace($ArtifactSigningDlibPath)) {
-            $signCommand += " -DlibPath `"$ArtifactSigningDlibPath`""
-        }
-        $compilerArgs += "/Sfreexartifactsigning=$signCommand"
-    }
-    & $compiler @compilerArgs
+    & $compiler $scriptPath
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE." }
     $result = Join-Path $OutputDir "$outputBase.exe"
     if (-not (Test-Path -LiteralPath $result)) { throw "Installer output missing: $result" }

@@ -1,11 +1,15 @@
 # Windows Artifact Signing
 
-FreeX's Windows release is not Store-only. The canonical channel publishes a
-self-contained portable executable and an Inno Setup executable directly on
-GitHub Releases. Microsoft Store signing would cover a Store-submitted MSIX,
-but it does not sign these direct-download files. The Windows GitHub assets
-therefore use Azure Artifact Signing with the Public Trust profile when signing
-is explicitly enabled.
+FreeX's current direct-download Windows channel is Velopack, not Inno Setup.
+The tester release also publishes a standalone executable and an MSIX. The
+Velopack installer, the executable inside it, and the standalone executable
+need an Authenticode signature because GitHub distributes them directly.
+
+Microsoft Store submission is different: Partner Center accepts an unsigned
+Store package and Microsoft signs it during certification. Do not apply the
+Public Trust profile to a Store-bound MSIX. The repository's direct-download
+tester MSIX retains its existing certificate path until its manifest identity
+and publisher are deliberately migrated.
 
 The Azure resources are:
 
@@ -14,74 +18,70 @@ The Azure resources are:
 - resource group: `rg-signing`
 - account: `free-software-signing`
 - certificate profile: `freevia-public-signing`
+- account URI: `https://eus.codesigning.azure.net/`
 - timestamp authority: `http://timestamp.acs.microsoft.com`
 
-Signing is an explicit packaging option, never an ordinary build target. The
-portable executable is signed before Inno Setup embeds it. Inno then signs the
-generated uninstaller and final setup executable. SHA-256 files, SBOMs, and
-release manifests are generated only after signing.
+Signing is an explicit packaging option. Ordinary builds do not contact Azure.
+Checksums must be generated after signing.
 
 ## One-time local setup
 
-1. In Azure Portal, open `free-software-signing` and copy **Account URI** from
-   Overview. Replace the placeholder `Endpoint` in
-   `tools/signing/metadata.json` with that exact regional URI. Do not infer the
-   region: an endpoint mismatch normally fails with HTTP 403.
-2. Install the current client bundle on Windows:
+Install Azure CLI, the Artifact Signing client, and a current Windows SDK:
 
-   ```powershell
-   winget install -e --id Microsoft.Azure.ArtifactSigningClientTools
-   ```
+```powershell
+winget install -e --id Microsoft.AzureCLI
+winget install -e --id Microsoft.Azure.ArtifactSigningClientTools
+```
 
-   The client requires a supported x64 SignTool (Windows SDK
-   10.0.2261.755 or newer), the matching x64
-   `Azure.CodeSigning.Dlib.dll`, .NET 8, and the Visual C++ runtime. The script
-   auto-discovers the normal installed paths; `-SignToolPath` and `-DlibPath`
-   are available for a nonstandard or pinned tool directory.
-3. Authenticate the user that has **Artifact Signing Certificate Profile
-   Signer**:
+Then authenticate the user that has **Artifact Signing Certificate Profile
+Signer** and select the correct subscription:
 
-   ```powershell
-   az login --tenant 073e2caa-267e-4a85-8970-e6129ec806a9
-   az account set --subscription cdc114ef-0580-49c2-a5e0-9e43d63b9fd0
-   ```
+```powershell
+az login --tenant 073e2caa-267e-4a85-8970-e6129ec806a9
+az account set --subscription cdc114ef-0580-49c2-a5e0-9e43d63b9fd0
+```
 
-The metadata contains resource names, not credentials. Authentication is
-resolved by the Artifact Signing client at execution time.
+`tools/signing/metadata.json` contains only public resource coordinates, not a
+credential. The signing client obtains a short-lived token when it runs.
 
-## Sign one existing file
+## Sign an existing executable
 
 ```powershell
 pwsh -NoProfile -File tools/Invoke-WindowsArtifactSigning.ps1 `
-  -Files artifacts/release/FreeX-v0.8.200-win-x64.exe
+  -Files artifacts/release/FreeX.exe
 ```
 
-The command signs with SHA-256, adds an RFC 3161 SHA-256 timestamp, then runs
-`signtool verify /pa /all`. It fails before contacting Azure while the endpoint
-placeholder remains. To verify without creating another signature, add
-`-VerifyOnly`.
+The script signs with SHA-256, adds an RFC 3161 SHA-256 timestamp, and runs
+`signtool verify /pa /all`. Use `-VerifyOnly` to validate without submitting a
+new signing operation.
 
-## Build signed portable and installer assets
+## Build signed FreeX direct-download packages
+
+For the standalone tester executable:
 
 ```powershell
-$metadata = (Resolve-Path tools/signing/metadata.json).Path
-
-pwsh -NoProfile -File tools/Publish-SisterAppTesterPackages.ps1 `
-  -App FreeX -Version 0.8.200 -Runtimes win-x64 `
-  -WindowsPackageMode SingleFile -Configuration Release `
-  -OutputDir artifacts/release `
-  -ArtifactSigningMetadataPath $metadata
-
-pwsh -NoProfile -File tools/packaging/New-AppInstallers.ps1 `
-  -Apps FreeX -Platform windows -Version 0.8.200 -Runtime win-x64 `
-  -InputRoot artifacts/release -OutputDir artifacts/release `
-  -ArtifactSigningMetadataPath $metadata
+pwsh -NoProfile -File tools/Publish-UserTestBuild.ps1 `
+  -Configuration Release -RuntimeIdentifier win-x64 `
+  -OutputRoot artifacts/release -Version 0.8.200 `
+  -PublishMode SingleFile `
+  -ArtifactSigningMetadataPath tools/signing/metadata.json
 ```
 
-Use the same installer option for the suite after all three child installers
-have been signed. The suite bootstrapper embeds those signed children and signs
-the final outer setup last. Do not Authenticode-sign ZIP, NUPKG, SBOM, JSON, or
-checksum files.
+For the Velopack installer, portable archive, and update feed:
+
+```powershell
+pwsh -NoProfile -File tools/Publish-UserTestBuild.ps1 `
+  -Configuration Release -RuntimeIdentifier win-x64 `
+  -OutputRoot artifacts/release -Version 0.8.200 `
+  -PublishMode Velopack `
+  -ArtifactSigningMetadataPath tools/signing/metadata.json
+```
+
+Velopack invokes the repository signing wrapper through its native
+`--signTemplate` option, so it signs the Windows application payload and
+generated installer at the correct packaging stages. The wrapper retries
+transient Azure failures and verifies every signed file. Do not
+Authenticode-sign ZIP, NUPKG, JSON, SBOM, or checksum files.
 
 ## CI with GitHub OIDC
 
@@ -91,25 +91,14 @@ GitHub federated credential, then grant only that identity **Artifact Signing
 Certificate Profile Signer** at the `freevia-public-signing` profile scope.
 That Azure setup is intentionally not automated by this repository.
 
-The Windows package job needs `permissions: id-token: write` and `contents:
-read`, followed by `azure/login@v3` using repository secrets
-`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID`. Prefer a
-protected release environment and restrict the federated subject to the release
-workflow/ref. After login, install the Artifact Signing client tools on the
-Windows runner and pass the same `-ArtifactSigningMetadataPath` option to the
-two packaging commands above. Pin every third-party action to a reviewed commit
-before enabling the lane.
+The Windows release job needs `permissions: id-token: write` and `contents:
+read`, followed by `azure/login@v3` using `AZURE_CLIENT_ID`,
+`AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID`. Restrict the federated subject
+to a protected release environment and the release workflow/ref. Install the
+Artifact Signing client on the runner and add
+`-ArtifactSigningMetadataPath tools/signing/metadata.json` to the SingleFile and
+Velopack commands. Pin third-party actions to reviewed commits.
 
-CI must fail closed: signed publication should be enabled only after the exact
-Account URI is committed, the workload identity exists, its profile-scoped
-signer role is verified, and a signed dry run passes `signtool verify /pa /all`.
-The current human signer role does not authorize the GitHub runner.
-
-## Store packages
-
-A future Store-only MSIX lane can be submitted unsigned for Microsoft to sign,
-using the exact Partner Center package identity. Direct signing of the existing
-tester MSIX is separate: its manifest `Publisher` must exactly match the
-Artifact Signing certificate subject DN. Do not guess or copy the current
-tester/PFX-derived publisher value. Store migration does not remove the need to
-sign portable or Inno Setup files while those remain public downloads.
+Enable CI signing only after the workload identity exists, its profile-scoped
+role is verified, and a dry run passes Authenticode verification. The current
+human signer role does not authorize the GitHub runner.

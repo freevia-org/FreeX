@@ -572,17 +572,15 @@ function Assert-WindowsArtifactSigningContract {
         }
     }
 
-    $publisher = Get-Content -LiteralPath (Join-Path $ToolRoot "Publish-SisterAppTesterPackages.ps1") -Raw
-    if ($publisher.IndexOf('Invoke-WindowsArtifactSigning.ps1', [System.StringComparison]::Ordinal) -gt
-        $publisher.IndexOf('Get-FileHash -LiteralPath $packagePath', [System.StringComparison]::Ordinal)) {
-        throw "Windows portable artifacts must be signed before their checksums are generated."
-    }
-
-    $installer = Get-Content -LiteralPath (Join-Path $ToolRoot "packaging/New-AppInstallers.ps1") -Raw
-    foreach ($requiredToken in @('SignTool=freexartifactsigning', 'SignedUninstaller=yes', '/Sfreexartifactsigning=', 'Write-Sha256 $result')) {
-        if (-not $installer.Contains($requiredToken)) {
-            throw "Windows installer signing contract is missing '$requiredToken'."
+    $publisher = Get-Content -LiteralPath (Join-Path $ToolRoot "Publish-UserTestBuild.ps1") -Raw
+    foreach ($requiredToken in @('--signTemplate', 'Invoke-WindowsArtifactSigning.ps1', 'Store-submitted MSIX packages are signed by Microsoft')) {
+        if (-not $publisher.Contains($requiredToken)) {
+            throw "FreeX Artifact Signing integration is missing '$requiredToken'."
         }
+    }
+    if ($publisher.IndexOf('Invoke-WindowsArtifactSigning.ps1', [System.StringComparison]::Ordinal) -gt
+        $publisher.IndexOf('Get-FileHash -LiteralPath $artifactExePath', [System.StringComparison]::Ordinal)) {
+        throw "FreeX single-file artifacts must be signed before their checksums are generated."
     }
 
     Write-Host "Validated Windows Artifact Signing source contract."
