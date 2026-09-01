@@ -120,6 +120,7 @@
 
   <ItemGroup>
     <PackageReference Include="SharpVectors.Wpf" />
+    <PackageReference Include="Velopack" />
   </ItemGroup>
 
   <ItemGroup>
