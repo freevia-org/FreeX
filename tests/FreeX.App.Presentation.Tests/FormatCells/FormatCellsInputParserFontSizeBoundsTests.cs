@@ -22,4 +22,25 @@ public sealed class FormatCellsInputParserFontSizeBoundsTests
     {
         FormatCellsInputParser.TryParseFontSize(input).Should().Be(expected);
     }
+
+    /// <summary>
+    /// r183. The bound check read "> 0", so a sub-point size like 0.5 was accepted and written
+    /// straight onto the cell style -- contradicting this parser's own doc comment, and Excel, which
+    /// rejects anything outside 1-409 inclusive. The upper bound was already pinned here; the lower
+    /// one had no case between 0 and 1, which is exactly where the gap was.
+    /// </summary>
+    [Theory]
+    [InlineData("0.5")]
+    [InlineData("0.01")]
+    [InlineData("0.999")]
+    public void TryParseFontSize_RejectsSizesBelowOnePoint(string text)
+    {
+        FormatCellsInputParser.TryParseFontSize(text).Should().BeNull();
+    }
+
+    [Fact]
+    public void TryParseFontSize_AcceptsExactlyOnePoint()
+    {
+        FormatCellsInputParser.TryParseFontSize("1").Should().Be(1);
+    }
 }
