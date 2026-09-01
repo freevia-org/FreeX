@@ -92,19 +92,49 @@ public static class DropCapOptionsDialogPlanner
             DistanceFromTextText: "0");
     }
 
-    public static DropCapOptionsDialogResult BuildResult(DropCapOptionsDialogInput input, CultureInfo culture)
+    public const string ValidationMessage =
+        "Enter a whole number of lines to drop and a non-negative distance from text.";
+
+    /// <summary>
+    /// r190: this used to be <c>BuildResult</c>, which discarded the bool from both TryParse calls
+    /// (<c>_ = int.TryParse(...)</c>). Unparseable text therefore left the out-parameter at 0, and
+    /// the Math.Clamp below turned that into LinesToDrop=1 and DistanceFromTextPt=0 -- values the
+    /// user never typed, applied silently with no way to tell the dialog had ignored the input.
+    /// Every sibling dialog in this file (Columns, Hyphenation, LineNumber, ParagraphBreaks) already
+    /// reports a bad value instead of substituting one; this now matches them.
+    ///
+    /// Clamping a value the user DID type stays as it was: asking for 40 dropped lines is a real
+    /// request out of range, not a typo, and silently using the nearest legal value is what the
+    /// other dialogs do with it too.
+    /// </summary>
+    public static bool TryBuildResult(
+        DropCapOptionsDialogInput input,
+        CultureInfo culture,
+        out DropCapOptionsDialogResult? result,
+        out string? errorMessage)
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(culture);
 
-        _ = int.TryParse(input.LinesToDropText, NumberStyles.Integer, culture, out var lines);
-        _ = double.TryParse(input.DistanceFromTextText, NumberStyles.Float, culture, out var distance);
+        result = null;
+        errorMessage = null;
+
+        if (!int.TryParse(input.LinesToDropText, NumberStyles.Integer, culture, out var lines) ||
+            !double.TryParse(input.DistanceFromTextText, NumberStyles.Float, culture, out var distance) ||
+            double.IsNaN(distance) ||
+            double.IsInfinity(distance))
+        {
+            errorMessage = ValidationMessage;
+            return false;
+        }
+
         var font = (input.FontText ?? string.Empty).Trim();
 
-        return new DropCapOptionsDialogResult(
+        result = new DropCapOptionsDialogResult(
             Position: (DropCapDialogPosition)Math.Clamp(input.PositionIndex, 0, 2),
             Font: font is "" or CurrentFontLabel ? null : font,
             LinesToDrop: Math.Clamp(lines, 1, 10),
             DistanceFromTextPt: Math.Clamp(distance, 0, 100));
+        return true;
     }
 }

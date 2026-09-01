@@ -274,6 +274,27 @@ public sealed class Ruler : FrameworkElement
         }
     }
 
+    /// <summary>
+    /// r190: <c>_drag</c> was cleared only in <see cref="OnMouseLeftButtonUp"/>, so any route that
+    /// takes capture away without a button-up left the ruler believing a drag was still in
+    /// progress -- an Alt+Tab or a modal dialog opening mid-drag, a touch/pen gesture cancelled by
+    /// the system, or another control calling CaptureMouse. The next mouse move over the ruler then
+    /// resumed dragging the margin or indent the user had let go of, with no button held.
+    /// PaginatedEditorPanel in this same shell already subscribes to LostMouseCapture for its own
+    /// drag; this is the ruler's equivalent.
+    /// </summary>
+    protected override void OnLostMouseCapture(MouseEventArgs e)
+    {
+        base.OnLostMouseCapture(e);
+        if (_drag is null)
+            return;
+
+        // No margin/indent is committed here: capture loss means the gesture was abandoned, not
+        // completed, and OnMouseLeftButtonUp is what applies a finished drag.
+        _drag = null;
+        Refresh();
+    }
+
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);

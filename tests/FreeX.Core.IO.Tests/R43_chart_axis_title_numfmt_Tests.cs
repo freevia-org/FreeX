@@ -148,10 +148,18 @@ public sealed class R43_chart_axis_title_numfmt_Tests
     [Fact]
     public void XlsxAdapter_Save_HorizontalBarChart_CategoryAxisTitleOnLeft_IsRotated()
     {
+        // r190: the model's X*/Y* axis fields denote PHYSICAL position, which is why every other
+        // per-axis property here is routed through categoryAxisIsOnY / valueAxisOnX
+        // (R16/R47/R62/R71 extended that one property at a time). The title was the lone exception:
+        // it was written from XAxisTitle whatever the chart type. That disagreed with the renderer,
+        // which titles a bar chart's LEFT category axis from YAxisTitle
+        // (ChartRenderer.cs -> CreateCategoryAxis(AxisPosition.Left, chart.YAxisTitle)), so a bar
+        // chart's two axis titles appeared swapped on screen. The title now follows the same
+        // routing as its neighbours, and for a bar chart the category axis reads YAxisTitle.
         var chart = new ChartModel
         {
             Type = ChartType.Bar,
-            XAxisTitle = "Region",
+            YAxisTitle = "Region",
         };
 
         var chartXml = SaveChartXml(chart);

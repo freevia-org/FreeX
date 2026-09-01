@@ -195,6 +195,72 @@ public sealed class R188_SlideShowSecondLaunchTests
         activated.Should().ContainSingle().Which.Should().BeSameAs(created[0]);
     }
 
+    [Fact]
+    public void TryLaunch_WithATimingIntent_AppliesItToAReusedWindowToo()
+    {
+        // r190: Rehearse Timings and Record Timings are ribbon commands with no running-show gate,
+        // so a user can invoke either while a show is already up. The reuse branch returned before
+        // _setTimingIntent was called, so the button refocused the show and started no recording.
+        var editor = CreateEditor();
+        var customShows = new SlideShowCustomShowSession(() => editor);
+        var created = new List<FakeWindow>();
+        var applied = new List<SlideShowTimingIntent>();
+
+        var coordinator = new SlideShowWindowLaunchCoordinator<FakeWindow>(
+            customShows,
+            () => editor.Presentation,
+            () => null,
+            editor.SetSlideNotesText,
+            _ =>
+            {
+                var window = new FakeWindow { IsLive = true };
+                created.Add(window);
+                return window;
+            },
+            (_, intent) => applied.Add(intent),
+            _ => { },
+            window => window.IsLive,
+            _ => { },
+            window => window.IsLive = false);
+
+        coordinator.TryLaunch(fromStart: true).Should().BeTrue();
+        applied.Should().BeEmpty("the first launch asked for no timing intent");
+
+        coordinator.TryLaunch(fromStart: true, SlideShowTimingIntent.RecordTimings).Should().BeTrue();
+
+        created.Should().HaveCount(1, "the running show is still reused");
+        applied.Should().Equal(SlideShowTimingIntent.RecordTimings);
+    }
+
+    [Fact]
+    public void TryLaunch_ReusingAWindowWithNoTimingIntent_DoesNotDisturbIt()
+    {
+        // None means "no change", exactly as on the creation path -- reuse must not clear a
+        // recording the user already started.
+        var editor = CreateEditor();
+        var customShows = new SlideShowCustomShowSession(() => editor);
+        var applied = new List<SlideShowTimingIntent>();
+
+        var coordinator = new SlideShowWindowLaunchCoordinator<FakeWindow>(
+            customShows,
+            () => editor.Presentation,
+            () => null,
+            editor.SetSlideNotesText,
+            _ => new FakeWindow { IsLive = true },
+            (_, intent) => applied.Add(intent),
+            _ => { },
+            window => window.IsLive,
+            _ => { },
+            window => window.IsLive = false);
+
+        coordinator.TryLaunch(fromStart: true, SlideShowTimingIntent.RehearseTimings).Should().BeTrue();
+        applied.Should().Equal(SlideShowTimingIntent.RehearseTimings);
+
+        coordinator.TryLaunch(fromStart: true).Should().BeTrue();
+        // None must not be pushed as a change: the reused window keeps the intent it already has.
+        applied.Should().Equal(SlideShowTimingIntent.RehearseTimings);
+    }
+
     private static EditingSession CreateEditor()
     {
         var presentation = Presentation.CreateEmpty();
