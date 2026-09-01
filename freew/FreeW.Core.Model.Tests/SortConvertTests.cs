@@ -63,9 +63,16 @@ public class SortConvertTests
     }
 
     [Fact]
-    public void Sort_CaseSensitive_OrdersByOrdinal()
+    public void Sort_CaseSensitive_PutsLowercaseFirstWithinTheSameWord()
     {
-        // Ordinal: uppercase letters (lower code points) sort before lowercase.
+        // r188: this used to assert ordinal order ("Apple", "Banana", "banana"), because the
+        // comparer was StringComparer.Ordinal. Ordinal ranks EVERY uppercase letter before EVERY
+        // lowercase one, which is a property of UTF-16 code points rather than of how anyone sorts
+        // words -- the old expectation only looked right because "Apple" precedes "Banana"
+        // alphabetically anyway. With culture collation the words group alphabetically and case
+        // decides only the tie, lowercase first: the rule Word applies, and the one FreeX's own
+        // case-sensitive worksheet sort already spells out (CaseSensitiveSortComparison returns
+        // -1 for the lowercase side). The two apps now agree.
         var paragraphs = new[]
         {
             new Paragraph("banana"),
@@ -75,7 +82,7 @@ public class SortConvertTests
 
         var sorted = ParagraphSort.Sort(paragraphs, ascending: true, caseSensitive: true);
 
-        sorted.Select(p => p.PlainText).Should().Equal("Apple", "Banana", "banana");
+        sorted.Select(p => p.PlainText).Should().Equal("Apple", "banana", "Banana");
     }
 
     [Fact]
