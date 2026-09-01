@@ -1,6 +1,6 @@
-name: App Tester Release
+name: Full Signed Release
 
-# The single public tester-release contract for every app/platform combination.
+# The single signed release contract for every app/platform combination.
 # Each package job is independently runnable through the app/platform inputs;
 # the publish job only assembles the resulting assets under one app/version tag.
 on:
@@ -43,7 +43,7 @@ permissions:
 concurrency:
   # A version owns one immutable set of app and suite tags. Serialize every
   # app/platform selection for that version so partial dispatches cannot race.
-  group: app-tester-release-${{ inputs.release_version }}
+  group: full-signed-release-${{ inputs.release_version }}
   cancel-in-progress: false
 
 env:
@@ -173,7 +173,7 @@ jobs:
     name: Release test ${{ matrix.app }} ${{ matrix.platform }} ${{ matrix.displayGateId }}
     needs: [prepare, candidate]
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 45
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare.outputs.release_matrix) }}
@@ -238,7 +238,11 @@ jobs:
     # waits for release-gate, so a failed test can never publish the speculative package artifacts.
     needs: [prepare, candidate]
     runs-on: ${{ matrix.runner }}
+    environment: public-preview
     timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       fail-fast: false
       # Fifteen release-test entries get runner priority; five speculative package jobs
@@ -270,21 +274,22 @@ jobs:
           path: artifacts/sbom-tool
           key: sbom-tool-${{ runner.os }}-${{ runner.arch }}-4.1.5
 
-      - name: Locate Inno Setup
+      - name: Authenticate to Azure Artifact Signing
+        if: matrix.platform == 'windows'
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Prepare Artifact Signing client
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
-          $compiler = @(
-            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
-            "C:\Program Files\Inno Setup 6\ISCC.exe"
-          ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-          if (-not $compiler) {
-            choco install innosetup --version 6.4.3 --yes --no-progress
-            if ($LASTEXITCODE -ne 0) { throw "Could not install the Inno Setup compiler." }
-            $compiler = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          }
-          if (-not (Test-Path -LiteralPath $compiler)) { throw "Inno Setup compiler not found." }
-          "INNO_SETUP_COMPILER=$compiler" >> $env:GITHUB_ENV
+          dotnet tool install --global vpk --version 1.2.0
+          if ($LASTEXITCODE -ne 0) { throw "Could not install the pinned Velopack signing client bundle." }
+          az account get-access-token --resource https://codesigning.azure.net --output none
+          if ($LASTEXITCODE -ne 0) { throw "GitHub OIDC identity could not obtain an Artifact Signing access token." }
 
       - name: Publish self-contained tester package
         shell: pwsh
@@ -293,27 +298,54 @@ jobs:
           # An absent value keeps diagnostics local and does not block packaging.
           FreeFamilySentryDsn: ${{ secrets.FREE_FAMILY_SENTRY_DSN }}
           FreeFamilySentryEnvironment: tester-release
+          MACOS_CODESIGN_CERTIFICATE_P12: ${{ secrets.MACOS_CODESIGN_CERTIFICATE_P12 }}
+          MACOS_CODESIGN_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CODESIGN_CERTIFICATE_PASSWORD }}
+          MACOS_DEVELOPER_ID_APPLICATION: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION }}
+          MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+          MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
         run: |
           $version = "${{ inputs.release_version }}".Trim()
           if ([string]::IsNullOrWhiteSpace($version) -or $version -match "[`r`n]") {
             throw "release_version must be a non-empty single line."
           }
 
-          tools/Publish-SisterAppTesterPackages.ps1 `
-            -App "${{ matrix.app }}" `
-            -Version $version `
-            -Runtimes "${{ matrix.runtime }}" `
-            -WindowsPackageMode SingleFile `
-            -Configuration Release `
-            -OutputDir artifacts\release
-
-          tools/packaging/New-AppInstallers.ps1 `
-            -Apps "${{ matrix.app }}" `
-            -Platform "${{ matrix.platform }}" `
-            -Version $version `
-            -Runtime "${{ matrix.runtime }}" `
-            -InputRoot artifacts\release `
-            -OutputDir artifacts\release
+          if ("${{ matrix.platform }}" -eq "windows") {
+            tools/Publish-WindowsVelopackPackage.ps1 `
+              -App "${{ matrix.app }}" `
+              -Version $version `
+              -RuntimeIdentifier "${{ matrix.runtime }}" `
+              -Configuration Release `
+              -OutputDir artifacts\release `
+              -ArtifactSigningMetadataPath tools\signing\metadata.json
+          } elseif ("${{ matrix.platform }}" -eq "linux") {
+            tools/Publish-SisterAppTesterPackages.ps1 `
+              -App "${{ matrix.app }}" `
+              -Version $version `
+              -Runtimes "${{ matrix.runtime }}" `
+              -Configuration Release `
+              -OutputDir artifacts\release
+            tools/packaging/New-AppInstallers.ps1 `
+              -Apps "${{ matrix.app }}" `
+              -Platform linux `
+              -Version $version `
+              -Runtime "${{ matrix.runtime }}" `
+              -InputRoot artifacts\release `
+              -OutputDir artifacts\release
+          } else {
+            tools/Publish-SisterAppTesterPackages.ps1 `
+              -App "${{ matrix.app }}" `
+              -Version $version `
+              -Runtimes "${{ matrix.runtime }}" `
+              -Configuration Release `
+              -OutputDir artifacts/release
+            tools/packaging/New-SignedMacOsReleasePackages.ps1 `
+              -Apps "${{ matrix.app }}" `
+              -Version $version `
+              -Runtime "${{ matrix.runtime }}" `
+              -InputRoot artifacts/release `
+              -OutputDir artifacts/release
+          }
 
           tools/Test-ReleasePackageContents.ps1 `
             -Scope App `
@@ -376,6 +408,7 @@ jobs:
           path: |
             artifacts/release/${{ matrix.app }}-v${{ inputs.release_version }}-${{ matrix.runtime }}.*
             artifacts/release/${{ matrix.app }}-v${{ inputs.release_version }}-${{ matrix.runtime }}-*
+            artifacts/release/velopack-${{ matrix.app }}-${{ matrix.runtime }}/**
           if-no-files-found: error
           retention-days: 14
 
@@ -384,7 +417,11 @@ jobs:
     needs: [prepare, package]
     if: inputs.app == 'all'
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    environment: public-preview
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare.outputs.suite_matrix) }}
@@ -427,33 +464,64 @@ jobs:
               -RequireSourceManifests
           }
 
-      - name: Locate Inno Setup
+      - name: Authenticate to Azure Artifact Signing
+        if: matrix.platform == 'windows'
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Prepare Artifact Signing client
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
-          $compiler = @(
-            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
-            "C:\Program Files\Inno Setup 6\ISCC.exe"
-          ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-          if (-not $compiler) {
-            choco install innosetup --version 6.4.3 --yes --no-progress
-            if ($LASTEXITCODE -ne 0) { throw "Could not install the Inno Setup compiler." }
-            $compiler = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          }
-          if (-not (Test-Path -LiteralPath $compiler)) { throw "Inno Setup compiler not found." }
-          "INNO_SETUP_COMPILER=$compiler" >> $env:GITHUB_ENV
+          dotnet tool install --global vpk --version 1.2.0
+          if ($LASTEXITCODE -ne 0) { throw "Could not install the pinned Artifact Signing client bundle." }
+          az account get-access-token --resource https://codesigning.azure.net --output none
+          if ($LASTEXITCODE -ne 0) { throw "GitHub OIDC identity could not obtain an Artifact Signing access token." }
 
-      - name: Build unsigned suite installer
+      - name: Build signed suite installer
         shell: pwsh
+        env:
+          MACOS_CODESIGN_CERTIFICATE_P12: ${{ secrets.MACOS_CODESIGN_CERTIFICATE_P12 }}
+          MACOS_CODESIGN_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CODESIGN_CERTIFICATE_PASSWORD }}
+          MACOS_DEVELOPER_ID_APPLICATION: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION }}
+          MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+          MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
         run: |
-          tools/packaging/New-AppInstallers.ps1 `
-            -Apps FreeX,FreeW,FreeP `
-            -Suite `
-            -Platform "${{ matrix.platform }}" `
-            -Version "${{ inputs.release_version }}" `
-            -Runtime "${{ matrix.runtime }}" `
-            -InputRoot downloaded-artifacts `
-            -OutputDir artifacts\suite
+          $version = "${{ inputs.release_version }}"
+          $platform = "${{ matrix.platform }}"
+          if ($platform -eq "windows") {
+            $suite = tools/packaging/New-FreeSuiteWindowsBootstrapper.ps1 `
+              -Version $version `
+              -InputRoot downloaded-artifacts `
+              -OutputDir artifacts/suite
+            tools/Invoke-WindowsArtifactSigning.ps1 `
+              -Files $suite `
+              -MetadataPath tools/signing/metadata.json
+            $name = Split-Path -Leaf $suite
+            $hash = (Get-FileHash -LiteralPath $suite -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $name" | Set-Content -LiteralPath "$suite.sha256" -NoNewline -Encoding ascii
+          } elseif ($platform -eq "linux") {
+            tools/packaging/New-AppInstallers.ps1 `
+              -Apps FreeX,FreeW,FreeP `
+              -Suite `
+              -Platform linux `
+              -Version $version `
+              -Runtime "${{ matrix.runtime }}" `
+              -InputRoot downloaded-artifacts `
+              -OutputDir artifacts/suite
+          } else {
+            tools/packaging/New-SignedMacOsReleasePackages.ps1 `
+              -Apps FreeX,FreeW,FreeP `
+              -Suite `
+              -Version $version `
+              -Runtime "${{ matrix.runtime }}" `
+              -InputRoot downloaded-artifacts `
+              -OutputDir artifacts/suite
+          }
 
           tools/Test-ReleasePackageContents.ps1 `
             -Scope Suite `
@@ -468,7 +536,7 @@ jobs:
           $version = "${{ inputs.release_version }}"
           $runtime = "${{ matrix.runtime }}"
           $prefix = "FreeSuite-v$version-$runtime"
-          $payloadName = if ($runtime -like "win-*") { "$prefix-setup.exe" } elseif ($runtime -like "linux-*") { "$prefix-installer.zip" } else { "$prefix-apps.zip" }
+          $payloadName = if ($runtime -like "win-*") { "$prefix-setup.exe" } elseif ($runtime -like "linux-*") { "$prefix-installer.zip" } else { "$prefix.pkg" }
           Get-ChildItem -LiteralPath downloaded-artifacts -Recurse -File -Filter "*-v$version-$runtime-manifest.json" |
             Copy-Item -Destination artifacts/suite
           $sbomTool = if ($IsWindows) { "artifacts/sbom-tool/sbom-tool.exe" } else { "artifacts/sbom-tool/sbom-tool" }
@@ -595,7 +663,7 @@ jobs:
           path: downloaded-artifacts
           merge-multiple: false
 
-      - name: Create or update tester release
+      - name: Create or update signed release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -604,7 +672,7 @@ jobs:
           $app = "${{ matrix.app }}"
           $version = "${{ inputs.release_version }}".Trim()
           $tag = "$($app.ToLowerInvariant())-v$version"
-          $title = "$app v$version Tester Release"
+          $title = "$app v$version"
           $assetRoot = Join-Path $env:GITHUB_WORKSPACE "release-assets"
           New-Item -ItemType Directory -Force -Path $assetRoot | Out-Null
 
@@ -636,7 +704,7 @@ jobs:
           }
 
           $notes = @'
-          # {{APP}} v{{VERSION}} Tester Release
+          # {{APP}} v{{VERSION}}
 
           Assets are built independently for each selected platform from commit {{SHA}}.
 
@@ -646,8 +714,7 @@ jobs:
 
           1. Download `{{APP}}-v{{VERSION}}-win-x64.exe` and its `.sha256` file.
           2. Verify the download: `Get-FileHash .\{{APP}}-v{{VERSION}}-win-x64.exe -Algorithm SHA256`; compare the hash with the `.sha256` file.
-          3. Move the executable to the directory from which the user will run it, then launch it. It is self-contained and needs no .NET installation or installer.
-          4. To update, close the app and replace the executable in that directory.
+          3. The standalone executable and `-setup.exe` are Authenticode signed by Freevia through Azure Artifact Signing. Use the Velopack setup for an installed, self-updating copy, or run the standalone executable directly.
 
           ### Linux x64 and ARM64
 
@@ -660,12 +727,9 @@ jobs:
 
           1. Choose `osx-x64` for Intel Macs or `osx-arm64` for Apple silicon. Download the matching `.zip` and `.sha256` file.
           2. Verify it with `shasum -a 256 -c {{APP}}-v{{VERSION}}-osx-<architecture>.zip.sha256`.
-          3. Extract it into a stable per-user directory, for example `unzip {{APP}}-v{{VERSION}}-osx-<architecture>.zip -d ~/{{APP}}`.
-          4. Run `chmod +x ~/{{APP}}/{{APP}}` once, then start it with `~/{{APP}}/{{APP}}`. To update, close the app and replace the extracted directory.
+          3. Prefer the matching `-apps.zip`; it contains a Developer ID signed, notarized, and stapled `.app` bundle plus an install helper.
 
-          These tester packages are self-contained. Do not run them from inside the archive; keep the extracted Linux or macOS directory intact. The macOS assets are unsigned portable archives, not signed or notarized `.app` bundles.
-
-          Each platform also includes an installable package: `-setup.exe` on Windows, `-installer.zip` on Linux, and `-apps.zip` containing an unsigned/unnotarized `.app` bundle on macOS. The original portable executable or archive remains available.
+          Each platform includes a portable artifact and an installable package: signed Velopack `-setup.exe` on Windows, `-installer.zip` on Linux, and `-apps.zip` containing a signed/notarized/stapled `.app` bundle on macOS. Linux integrity is covered by SHA-256 checksums, manifests, and SPDX SBOMs.
           '@
           $notes = $notes.
             Replace("{{APP}}", $app).
@@ -725,7 +789,7 @@ jobs:
         run: |
           $version = "${{ inputs.release_version }}".Trim()
           $tag = "free-suite-v$version"
-          $title = "Free Suite v$version Tester Release"
+          $title = "Free Suite v$version"
           $assetRoot = Join-Path $env:GITHUB_WORKSPACE "suite-release-assets"
           New-Item -ItemType Directory -Force -Path $assetRoot | Out-Null
           Get-ChildItem -LiteralPath downloaded-artifacts -File | Copy-Item -Destination $assetRoot
@@ -748,11 +812,11 @@ jobs:
           $assets = @(Get-ChildItem -LiteralPath $assetRoot -File | ForEach-Object { $_.FullName })
           if ($assets.Count -eq 0) { throw "No suite packages were downloaded." }
           $notes = @'
-          # Free Suite v{{VERSION}} Tester Release
+          # Free Suite v{{VERSION}}
 
           This release installs FreeX, FreeW, and FreeP together by invoking the same per-app installers shipped on each app's release page. It does not create separate suite-owned copies, so suite-to-individual upgrades and individual-to-suite upgrades keep the same installation and uninstaller identities. Portable artifacts remain available on the individual release pages.
 
-          Windows uses an unsigned per-user setup executable. Linux uses an installer bundle whose `install.sh` defaults to `~/.local`. macOS contains all three `.app` bundles and an `install.sh` helper; those bundles are currently unsigned and unnotarized.
+          Windows uses a Freevia Authenticode-signed .NET bootstrapper containing the three signed Velopack installers; it has no Inno dependency. Linux uses an installer bundle whose `install.sh` defaults to `~/.local`, protected by SHA-256 checksums, manifests, and an SPDX SBOM. macOS uses a Developer ID Installer-signed, notarized, and stapled `.pkg` containing all three signed/notarized/stapled `.app` bundles.
           '@.Replace("{{VERSION}}", $version)
 
           gh release view $tag *> $null
@@ -844,7 +908,7 @@ jobs:
             $required = @("FreeSuite-v$version-release-manifest.json")
             foreach ($runtime in $runtimes) {
               $prefix = "FreeSuite-v$version-$runtime"
-              $payload = if ($runtime -like "win-*") { "$prefix-setup.exe" } elseif ($runtime -like "linux-*") { "$prefix-installer.zip" } else { "$prefix-apps.zip" }
+              $payload = if ($runtime -like "win-*") { "$prefix-setup.exe" } elseif ($runtime -like "linux-*") { "$prefix-installer.zip" } else { "$prefix.pkg" }
               $required += @($payload, "$payload.sha256", "$prefix-manifest.json", "$prefix.spdx.json", "$prefix.spdx.json.sha256")
               $required += @("FreeX-v$version-$runtime-manifest.json", "FreeW-v$version-$runtime-manifest.json", "FreeP-v$version-$runtime-manifest.json")
             }

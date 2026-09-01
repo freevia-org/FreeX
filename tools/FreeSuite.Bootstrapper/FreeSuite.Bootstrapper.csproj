@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>FreeSuite</AssemblyName>
+    <RootNamespace>FreeSuite.Bootstrapper</RootNamespace>
+    <ApplicationIcon>..\..\shared\Free.Shared.Shell\Resources\FreeX.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <Import Project="../ToolProjects.props" />
+
+  <ItemGroup Condition="'$(SuitePayloadDir)' != ''">
+    <EmbeddedResource Include="$(SuitePayloadDir)/*.exe">
+      <LogicalName>FreeSuite.Payload.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+</Project>
