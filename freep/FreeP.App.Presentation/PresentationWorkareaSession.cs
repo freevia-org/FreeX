@@ -292,6 +292,13 @@ public static class PresentationWorkareaOperationPlanner
         operations.AddRange(
         [
             PresentationWorkareaOperation.RefreshVisibleMediaPane,
+            // r183: drop the previously highlighted animation row BEFORE rebuilding the pane,
+            // exactly as BuildCurrentSlideChanged does. AnimationPaneSession.Refresh() keeps its
+            // stored SelectedAnimationIndex unless the caller resets it, and an in-range explicit
+            // index wins over the shape selection when the timeline plan is built -- so selecting
+            // a different animated shape on the canvas left the pane highlighting the previous
+            // shape row, and "Play From Selected" started from that stale row.
+            PresentationWorkareaOperation.ResetAnimationSelection,
             PresentationWorkareaOperation.RefreshAnimationPaneAfterSelection,
             PresentationWorkareaOperation.RefreshSelectionPane,
             PresentationWorkareaOperation.RefreshAccessibilityMetadata,
