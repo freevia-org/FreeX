@@ -296,7 +296,7 @@ public static class FormulaEvaluationSummaryService
             if (cell?.HasFormula != true || string.IsNullOrWhiteSpace(cell.FormulaText))
                 return null;
 
-            return BuildSummary(workbook, targetSheet, address, cell, new HashSet<CellAddress>(visited));
+            return BuildSummary(workbook, targetSheet, address, cell, visited);
         }
         finally
         {

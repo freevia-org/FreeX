@@ -183,6 +183,17 @@ public sealed class FormulaEvaluationSummaryServiceTests
     }
 
     [Fact]
+    public void NestedSummaryRecursion_ReusesTheBacktrackedVisitedSet()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.Core.Commands", "FormulaEvaluationSummaryService.cs");
+
+        source.Should().Contain(
+            "return BuildSummary(workbook, targetSheet, address, cell, visited);");
+        source.Should().NotContain("new HashSet<CellAddress>(visited)");
+    }
+
+    [Fact]
     public void FormulaEvaluationSession_StepInAndStepOutNavigateSameSheetFormulaReference()
     {
         var workbook = new Workbook("test");
