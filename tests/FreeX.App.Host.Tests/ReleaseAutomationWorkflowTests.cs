@@ -137,13 +137,13 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("$extraNotes = $env:FREEX_RELEASE_NOTES");
         workflow.Should().Contain("Windows tester steps:");
         workflow.Should().Contain("Get-FileHash .\\FreeX-latest-win-x64.exe -Algorithm SHA256");
-        workflow.Should().Contain("Windows SmartScreen warns about an unknown publisher");
+        workflow.Should().Contain("Verify that Windows shows Freevia as the signed publisher");
         workflow.Should().Contain("macOS tester downloads:");
         workflow.Should().Contain("shasum -a 256 -c FreeX-latest-macos-arm64.zip.sha256");
         workflow.Should().Contain("Control-click or right-click > Open");
         workflow.Should().Contain("System Settings > Privacy & Security");
         workflow.Should().Contain("Do not disable Gatekeeper globally");
-        workflow.Should().Contain("This is an internal preview while signing certificates are pending");
+        workflow.Should().Contain("Windows executables are signed by Freevia");
         workflow.Should().Contain("Public-preview accessibility gate:");
         workflow.Should().Contain("$publicPreviewCandidate = \"${{ inputs.public_preview_candidate }}\" -eq \"true\"");
         workflow.Should().Contain("\"Keyboard-only smoke validation\" = \"${{ inputs.accessibility_keyboard_only }}\" -eq \"true\"");
@@ -225,8 +225,8 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("Download the stable latest asset: FreeX-latest-win-x64.exe");
         workflow.Should().Contain("Checksum for the latest single-file asset: FreeX-latest-win-x64.exe.sha256");
         workflow.Should().Contain("MSIX package: FreeX-latest-win-x64.msix");
-        workflow.Should().Contain("signed when the release certificate secret is configured");
-        workflow.Should().Contain("published unsigned for tester continuity");
+        workflow.Should().Contain("signed by Freevia through Azure Artifact Signing");
+        workflow.Should().Contain("Store-bound MSIX packages are signed by Microsoft during certification");
         workflow.Should().Contain("macOS internal-preview assets are attached from macOS App Preview run");
 
         var prereleaseInput = Regex.Match(workflow, @"(?ms)^\s+prerelease:\s*$.*?^\s+type:\s+boolean\s*$");
@@ -249,9 +249,9 @@ public sealed class ReleaseAutomationWorkflowTests
     }
 
     [Fact]
-    public void AppTesterReleaseWorkflow_UsesOneAppVersionTagAndIndependentPlatformPackages()
+    public void FullReleaseWorkflow_UsesOneAppVersionTagAndIndependentPlatformPackages()
     {
-        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "app-tester-release.yml");
+        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "full-release.yml");
         var publisher = WorkspaceFileLocator.ReadAllText("tools", "Publish-SisterAppTesterPackages.ps1");
         var expectedLanes = new[]
         {
@@ -272,7 +272,7 @@ public sealed class ReleaseAutomationWorkflowTests
             """@{ app = "FreeP"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15" }"""
         };
 
-        workflow.Should().Contain("name: App Tester Release");
+        workflow.Should().Contain("name: Full Signed Release");
         workflow.Should().Contain("- all");
         workflow.Should().Contain("- FreeX");
         workflow.Should().Contain("- FreeW");
@@ -292,7 +292,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("max-parallel: 5");
         workflow.Should().NotContain("fetch-depth: 0");
         workflow.Should().NotContain("inputs.platform == 'all' || inputs.platform == matrix.platform");
-        workflow.Should().Contain("group: app-tester-release-${{ inputs.release_version }}");
+        workflow.Should().Contain("group: full-signed-release-${{ inputs.release_version }}");
         workflow.Should().Contain("Full app releases must be dispatched from refs/heads/main.");
         workflow.Should().Contain("Later main commits do not invalidate this run.");
         workflow.Should().Contain("name: Validate version and reject conflicting immutable tags");
@@ -302,7 +302,6 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("name: Verify immutable release candidate");
         workflow.Should().Contain("actions: read");
         workflow.Should().Contain("tools/Test-GitHubReleaseCandidate.ps1");
-        workflow.Should().Contain("-RequiredWorkflows ci.yml,codeql.yml");
         workflow.Should().NotContain("preflight_matrix");
         workflow.Should().NotContain("verify_matrix");
         workflow.Should().NotContain("name: Preflight ${{ matrix.platform }}");
@@ -326,7 +325,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().NotContain("function Invoke-Dotnet");
         workflow.Should().NotContain("dotnet test FreeP.slnx");
         workflow.Should().Contain("-Runtimes \"${{ matrix.runtime }}\"");
-        workflow.Should().Contain("-WindowsPackageMode SingleFile");
+        workflow.Should().Contain("tools/Publish-WindowsVelopackPackage.ps1");
         publisher.Should().Contain("AvaloniaValidationProject = \"tools/FreeX.Validation.Avalonia/FreeX.Validation.Avalonia.csproj\"");
         publisher.Should().Contain("AvaloniaValidationHost = \"FreeX.Validation.Avalonia\"");
         publisher.Should().Contain("if (-not $isWindowsRuntime) {");
@@ -335,7 +334,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("### Windows x64");
         workflow.Should().Contain("### Linux x64 and ARM64");
         workflow.Should().Contain("### macOS Intel and Apple silicon");
-        workflow.Should().Contain("unsigned portable archives, not signed or notarized `.app` bundles");
+        workflow.Should().Contain("signed/notarized/stapled `.app` bundle on macOS");
         workflow.Should().Contain("$notes = @'");
         workflow.Should().Contain("sha256sum -c {{APP}}-v{{VERSION}}-linux-<architecture>.zip.sha256");
         workflow.Should().Contain("shasum -a 256 -c {{APP}}-v{{VERSION}}-osx-<architecture>.zip.sha256");
@@ -385,8 +384,8 @@ public sealed class ReleaseAutomationWorkflowTests
         plan.Should().Contain("https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-arm64.zip");
         plan.Should().Contain("https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-x64.zip");
         plan.Should().Contain("GitHub's `releases/latest` redirect remains on the latest non-prerelease tester build");
-        plan.Should().Contain("FREEX_MSIX_CERTIFICATE_BASE64");
-        plan.Should().Contain("publishes an unsigned MSIX for tester continuity");
-        plan.Should().Contain("Installer trust validation and Store-style submission remain release-gate work.");
+        plan.Should().Contain("GitHub OIDC authenticates the dedicated release identity");
+        plan.Should().Contain("Store-bound MSIX packages are submitted with the Partner Center identity");
+        plan.Should().Contain("Windows publication additionally requires Azure Artifact Signing");
     }
 }

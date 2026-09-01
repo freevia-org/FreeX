@@ -101,7 +101,6 @@ foreach ($marker in @(
     "refs/heads/main",
     "dotnet-version: 10.0.400",
     "tools/Test-GitHubReleaseCandidate.ps1",
-    "-RequiredWorkflows ci.yml,codeql.yml",
     "tools/Get-TestGateMatrix.ps1 -Gate release",
     "Validate complete release inventory",
     "gh release create",

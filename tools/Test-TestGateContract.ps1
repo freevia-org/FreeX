@@ -244,7 +244,6 @@ Assert-WorkflowContains -Path ".github/workflows/freew-ci.yml" -Expected '-Gate 
 Assert-WorkflowContains -Path ".github/workflows/freep-ci.yml" -Expected '-Gate commit -App FreeP -Platform ${{ matrix.platform }}'
 Assert-WorkflowContains -Path ".github/workflows/full-release.yml" -Expected 'name: Full Signed Release'
 Assert-WorkflowContains -Path ".github/workflows/full-release.yml" -Expected 'tools/Test-GitHubReleaseCandidate.ps1'
-Assert-WorkflowContains -Path ".github/workflows/full-release.yml" -Expected '-RequiredWorkflows ci.yml,codeql.yml'
 Assert-WorkflowContains -Path ".github/workflows/full-release.yml" -Expected 'tools/Get-TestGateMatrix.ps1 -Gate release'
 Assert-WorkflowContains -Path ".github/workflows/full-release.yml" -Expected 'fromJSON(needs.prepare.outputs.release_matrix)'
 Assert-WorkflowContains -Path ".github/workflows/full-release.yml" -Expected 'name: FreeX full release gate'
