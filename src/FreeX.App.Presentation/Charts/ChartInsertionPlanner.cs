@@ -159,12 +159,31 @@ public static class ChartInsertionPlanner
         double viewportWidth,
         double viewportHeight)
     {
-        var sourceLeft = GetColumnLeft(sheet, sourceRange.Start.Col);
-        var sourceRight = GetColumnRight(sheet, sourceRange.End.Col);
-        var sourceTop = GetRowTop(sheet, sourceRange.Start.Row);
-        var sourceBottom = GetRowBottom(sheet, sourceRange.End.Row);
+        var hasVisibleViewport = viewport is { RowMetrics.Count: > 0, ColMetrics.Count: > 0 } &&
+                                 viewportWidth > 0 &&
+                                 viewportHeight > 0;
+        var hiddenColumns = sourceRange.Start.Col > 1 ||
+                            sourceRange.End.Col > 1 ||
+                            hasVisibleViewport && viewport!.ColMetrics[0].Col > 1
+            ? GetHiddenColumns(sheet)
+            : null;
+        var hiddenRows = sourceRange.Start.Row > 1 ||
+                         sourceRange.End.Row > 1 ||
+                         hasVisibleViewport && viewport!.RowMetrics[0].Row > 1
+            ? GetHiddenRows(sheet)
+            : null;
+        var sourceLeft = GetColumnLeft(sheet, sourceRange.Start.Col, hiddenColumns);
+        var sourceRight = GetColumnRight(sheet, sourceRange.End.Col, hiddenColumns);
+        var sourceTop = GetRowTop(sheet, sourceRange.Start.Row, hiddenRows);
+        var sourceBottom = GetRowBottom(sheet, sourceRange.End.Row, hiddenRows);
 
-        var visible = GetVisibleWorksheetRect(sheet, viewport, viewportWidth, viewportHeight);
+        var visible = GetVisibleWorksheetRect(
+            sheet,
+            viewport,
+            viewportWidth,
+            viewportHeight,
+            hiddenColumns,
+            hiddenRows);
 
         var left = sourceRight + PlacementGap;
         var top = sourceTop;
@@ -191,7 +210,9 @@ public static class ChartInsertionPlanner
         Sheet sheet,
         ViewportModel? viewport,
         double viewportWidth,
-        double viewportHeight)
+        double viewportHeight,
+        IReadOnlySet<uint>? hiddenColumns,
+        IReadOnlySet<uint>? hiddenRows)
     {
         if (viewport is null ||
             viewport.RowMetrics.Count == 0 ||
@@ -204,8 +225,8 @@ public static class ChartInsertionPlanner
 
         var firstRow = viewport.RowMetrics[0].Row;
         var firstCol = viewport.ColMetrics[0].Col;
-        var left = GetColumnLeft(sheet, firstCol);
-        var top = GetRowTop(sheet, firstRow);
+        var left = GetColumnLeft(sheet, firstCol, hiddenColumns);
+        var top = GetRowTop(sheet, firstRow, hiddenRows);
         return new WorksheetRect(
             left,
             top,
@@ -226,7 +247,10 @@ public static class ChartInsertionPlanner
         return Math.Clamp(value, min, max);
     }
 
-    private static double GetColumnLeft(Sheet sheet, uint column)
+    private static double GetColumnLeft(
+        Sheet sheet,
+        uint column,
+        IReadOnlySet<uint>? hiddenColumns)
     {
         if (column <= 1)
             return 0;
@@ -240,19 +264,28 @@ public static class ChartInsertionPlanner
                 left += GetColumnWidthPixels(width) - defaultWidth;
         }
 
-        foreach (var hiddenColumn in GetHiddenColumns(sheet))
+        if (hiddenColumns is not null)
         {
-            if (hiddenColumn < column)
-                left -= GetRawColumnWidthPixels(sheet, hiddenColumn);
+            foreach (var hiddenColumn in hiddenColumns)
+            {
+                if (hiddenColumn < column)
+                    left -= GetRawColumnWidthPixels(sheet, hiddenColumn);
+            }
         }
 
         return Math.Max(0, left);
     }
 
-    private static double GetColumnRight(Sheet sheet, uint column) =>
-        GetColumnLeft(sheet, column) + GetColumnWidthPixels(sheet, column);
+    private static double GetColumnRight(
+        Sheet sheet,
+        uint column,
+        IReadOnlySet<uint>? hiddenColumns) =>
+        GetColumnLeft(sheet, column, hiddenColumns) + GetColumnWidthPixels(sheet, column);
 
-    private static double GetRowTop(Sheet sheet, uint row)
+    private static double GetRowTop(
+        Sheet sheet,
+        uint row,
+        IReadOnlySet<uint>? hiddenRows)
     {
         if (row <= 1)
             return 0;
@@ -266,17 +299,23 @@ public static class ChartInsertionPlanner
                 top += GetRowHeight(height) - defaultHeight;
         }
 
-        foreach (var hiddenRow in GetHiddenRows(sheet))
+        if (hiddenRows is not null)
         {
-            if (hiddenRow < row)
-                top -= GetRawRowHeight(sheet, hiddenRow);
+            foreach (var hiddenRow in hiddenRows)
+            {
+                if (hiddenRow < row)
+                    top -= GetRawRowHeight(sheet, hiddenRow);
+            }
         }
 
         return Math.Max(0, top);
     }
 
-    private static double GetRowBottom(Sheet sheet, uint row) =>
-        GetRowTop(sheet, row) + GetRowHeight(sheet, row);
+    private static double GetRowBottom(
+        Sheet sheet,
+        uint row,
+        IReadOnlySet<uint>? hiddenRows) =>
+        GetRowTop(sheet, row, hiddenRows) + GetRowHeight(sheet, row);
 
     private static double GetDefaultColumnWidthPixels(Sheet sheet) =>
         GetColumnWidthPixels(sheet.DefaultColumnWidth);

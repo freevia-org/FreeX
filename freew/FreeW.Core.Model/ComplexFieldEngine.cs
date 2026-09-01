@@ -94,7 +94,7 @@ public static class ComplexFieldEngine
             return string.Empty;
 
         var run = paragraph.Runs[runIndex];
-        return Recompute(document, blockIndex, run, pageOf, pageTextOf);
+        return Recompute(document, blockIndex, run, paragraph, runIndex, pageOf, pageTextOf);
     }
 
     /// <summary>
@@ -109,7 +109,43 @@ public static class ComplexFieldEngine
         Run run,
         Func<int, int?>? pageOf = null,
         Func<int, string?>? pageTextOf = null) =>
-        Recompute(document, blockIndex, run, nestedOwner: null, pageOf, pageTextOf);
+        Recompute(
+            document,
+            blockIndex,
+            run,
+            nestedOwner: null,
+            sourcePosition: null,
+            pageOf: pageOf,
+            pageTextOf: pageTextOf);
+
+    /// <summary>
+    /// Recomputes an attached complex-field run when its owning paragraph and run index are already known.
+    /// Invalid or stale position hints fall back to the ordinary document walk.
+    /// </summary>
+    public static string Recompute(
+        TextDocument document,
+        int blockIndex,
+        Run run,
+        Paragraph sourceParagraph,
+        int sourceRunIndex,
+        Func<int, int?>? pageOf = null,
+        Func<int, string?>? pageTextOf = null)
+    {
+        ArgumentNullException.ThrowIfNull(sourceParagraph);
+        FieldSourcePosition? sourcePosition = sourceRunIndex >= 0
+            && sourceRunIndex < sourceParagraph.Runs.Count
+            && ReferenceEquals(sourceParagraph.Runs[sourceRunIndex], run)
+                ? new FieldSourcePosition(sourceParagraph, sourceRunIndex)
+                : null;
+        return Recompute(
+            document,
+            blockIndex,
+            run,
+            nestedOwner: null,
+            sourcePosition: sourcePosition,
+            pageOf: pageOf,
+            pageTextOf: pageTextOf);
+    }
 
     // Nested-field variant: nestedOwner is the real, document-attached Run that owns the field this run
     // is a synthetic stand-in for (RefreshNestedFields builds an unattached Run to recompute a field
@@ -122,6 +158,7 @@ public static class ComplexFieldEngine
         int blockIndex,
         Run run,
         Run? nestedOwner,
+        FieldSourcePosition? sourcePosition,
         Func<int, int?>? pageOf,
         Func<int, string?>? pageTextOf)
     {
@@ -138,17 +175,17 @@ public static class ComplexFieldEngine
         var result = field.Keyword switch
         {
             "=" => ResolveFormula(field),
-            "REF" => ResolveRef(document, field, blockIndex, run, run.Text),
+            "REF" => ResolveRef(document, field, blockIndex, run, run.Text, sourcePosition),
             "PAGEREF" => ResolvePageRef(document, field, run.Text, pageOf, pageTextOf),
-            "NOTEREF" => ResolveNoteRef(document, field, blockIndex, run, run.Text),
+            "NOTEREF" => ResolveNoteRef(document, field, blockIndex, run, run.Text, sourcePosition),
             "SEQ" => ResolveSeq(document, field, run, nestedOwner),
             "CITATION" => Citations.ResolveCitationField(document, field, run.Text),
             "STYLEREF" => ResolveStyleRef(document, field, blockIndex, run.Text),
             "IF" => ResolveIf(document, FieldForIfEvaluation(field), run.Text),
             "DOCPROPERTY" => ResolveDocProperty(document, field, run.Text),
             "DOCVARIABLE" => ResolveDocVariable(document, field, run.Text),
-            "CREATEDATE" => ResolveDocumentDate(document, blockIndex, document.Properties.Created, field, run),
-            "SAVEDATE" => ResolveDocumentDate(document, blockIndex, document.Properties.Modified, field, run),
+            "CREATEDATE" => ResolveDocumentDate(document, blockIndex, document.Properties.Created, field, run, sourcePosition),
+            "SAVEDATE" => ResolveDocumentDate(document, blockIndex, document.Properties.Modified, field, run, sourcePosition),
             "LASTSAVEDBY" => document.Properties.LastModifiedBy is { } lastSavedBy
                 ? ApplyTextGeneralFormats(lastSavedBy, field.Instruction)
                 : run.Text,
@@ -162,7 +199,8 @@ public static class ComplexFieldEngine
                 blockIndex,
                 OpcPackageProperties.ParseW3CDtf(ResolveCoreProperty(document, "lastPrinted")),
                 field,
-                run),
+                run,
+                sourcePosition),
             _ => run.Text
         };
 
@@ -181,6 +219,8 @@ public static class ComplexFieldEngine
 
         return result;
     }
+
+    private readonly record struct FieldSourcePosition(Paragraph Paragraph, int RunIndex);
 
     private static string ResolveFormula(ComplexField field)
     {
@@ -268,7 +308,14 @@ public static class ComplexFieldEngine
             };
             var nestedResult = nested.Field.IsLocked
                 ? nested.CachedResult
-                : Recompute(document, blockIndex, nestedRun, owner, pageOf, pageTextOf);
+                : Recompute(
+                    document,
+                    blockIndex,
+                    nestedRun,
+                    owner,
+                    sourcePosition: null,
+                    pageOf: pageOf,
+                    pageTextOf: pageTextOf);
             nestedRun.Text = nestedResult;
 
             var delta = nested.Placement == NestedComplexFieldPlacement.Instruction
@@ -412,12 +459,18 @@ public static class ComplexFieldEngine
         }
     }
 
-    private static string ResolveDocumentDate(TextDocument document, int blockIndex, DateTimeOffset? value, ComplexField field, Run run)
+    private static string ResolveDocumentDate(
+        TextDocument document,
+        int blockIndex,
+        DateTimeOffset? value,
+        ComplexField field,
+        Run run,
+        FieldSourcePosition? sourcePosition)
     {
         if (value is null)
             return run.Text;
 
-        var culture = ResolveFieldCulture(document, blockIndex, run);
+        var culture = ResolveFieldCulture(document, blockIndex, run, sourcePosition);
         var localValue = value.Value.LocalDateTime;
         return WordFieldDateTimeFormatter.TryFormat(
             localValue,
@@ -435,11 +488,15 @@ public static class ComplexFieldEngine
     // runs only when it differs from what the run would otherwise inherit, so CREATEDATE/SAVEDATE/
     // PRINTDATE fields whose language comes solely from the paragraph style or the document default
     // (the common case) previously fell straight through to CultureInfo.CurrentCulture.
-    private static CultureInfo ResolveFieldCulture(TextDocument document, int blockIndex, Run run)
+    private static CultureInfo ResolveFieldCulture(
+        TextDocument document,
+        int blockIndex,
+        Run run,
+        FieldSourcePosition? sourcePosition)
     {
         var tag = run.Formatting.LanguageTag;
         if (string.IsNullOrEmpty(tag)
-            && FindOwningParagraph(document, blockIndex, run) is { } paragraph)
+            && (sourcePosition?.Paragraph ?? FindOwningParagraph(document, blockIndex, run)) is { } paragraph)
             tag = ResolveStyleLanguageTag(document, paragraph.StyleId);
         if (string.IsNullOrEmpty(tag))
             tag = document.DefaultRun.LanguageTag;
@@ -493,8 +550,13 @@ public static class ComplexFieldEngine
     // when blockIndex names a table spanning several cells' worth of paragraphs. -1/not-found becomes a
     // null run index, matching FindOwningParagraph's own "unlocatable" contract.
     private static (Paragraph? Paragraph, int? RunIndex) FindOwningParagraphAndRunIndex(
-        TextDocument document, int blockIndex, Run run)
+        TextDocument document,
+        int blockIndex,
+        Run run,
+        FieldSourcePosition? sourcePosition)
     {
+        if (sourcePosition is { } known)
+            return (known.Paragraph, known.RunIndex);
         var owningParagraph = FindOwningParagraph(document, blockIndex, run);
         var runIndex = owningParagraph?.Runs.IndexOf(run) ?? -1;
         return (owningParagraph, runIndex >= 0 ? runIndex : null);
@@ -1031,7 +1093,13 @@ public static class ComplexFieldEngine
     // Run.CrossReference-based REF, by rebuilding the equivalent CrossReferenceField from the
     // instruction's bookmark argument and switches, mirroring ResolveNoteRef below. Unresolvable (no such
     // bookmark) falls back to the cached text so the field never blanks.
-    private static string ResolveRef(TextDocument document, ComplexField field, int blockIndex, Run run, string cached)
+    private static string ResolveRef(
+        TextDocument document,
+        ComplexField field,
+        int blockIndex,
+        Run run,
+        string cached,
+        FieldSourcePosition? sourcePosition)
     {
         var name = Argument(field.Instruction);
         if (name.Length == 0)
@@ -1047,7 +1115,8 @@ public static class ComplexFieldEngine
         // r174 remediation: mirrors ResolveNoteRef's own fix below. Without the field's own run position,
         // CrossReferences' above/below tie-break could never place this REF against a target sharing its
         // block (same paragraph, or another cell of the same table) -- see FindOwningParagraphAndRunIndex.
-        var (sourceParagraph, sourceRunIndex) = FindOwningParagraphAndRunIndex(document, blockIndex, run);
+        var (sourceParagraph, sourceRunIndex) = FindOwningParagraphAndRunIndex(
+            document, blockIndex, run, sourcePosition);
         return CrossReferences.ResolveField(
             document, syntheticField, cached, blockIndex,
             sourceRunIndex: sourceRunIndex, sourceParagraph: sourceParagraph);
@@ -1085,7 +1154,13 @@ public static class ComplexFieldEngine
     // rebuilding the equivalent CrossReferenceField from the instruction bookmark/id argument, and
     // honouring the above/below switch the same way REF does. A missing or dangling target falls
     // back to the cached text.
-    private static string ResolveNoteRef(TextDocument document, ComplexField field, int blockIndex, Run run, string cached)
+    private static string ResolveNoteRef(
+        TextDocument document,
+        ComplexField field,
+        int blockIndex,
+        Run run,
+        string cached,
+        FieldSourcePosition? sourcePosition)
     {
         var target = Argument(field.Instruction);
         if (target.Length == 0)
@@ -1110,7 +1185,8 @@ public static class ComplexFieldEngine
         // textually after the field within the SAME paragraph. Passing sourceParagraph too (not just the
         // paragraph-local run index) lets CrossReferences place both positions on one whole-block axis,
         // so a note in a DIFFERENT cell of the same table as the field is no longer always "above" either.
-        var (sourceParagraph, sourceRunIndex) = FindOwningParagraphAndRunIndex(document, blockIndex, run);
+        var (sourceParagraph, sourceRunIndex) = FindOwningParagraphAndRunIndex(
+            document, blockIndex, run, sourcePosition);
         return CrossReferences.ResolveField(
             document, syntheticField, cached, blockIndex,
             sourceRunIndex: sourceRunIndex, sourceParagraph: sourceParagraph);

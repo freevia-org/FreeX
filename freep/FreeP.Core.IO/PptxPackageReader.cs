@@ -1918,11 +1918,7 @@ public static class PptxPackageReader
     private const string OleImageRelType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
 
-    // Relationship types for SmartArt diagram parts
-    private const string DiagramDataRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData";
-    private const string DiagramLayoutRelType  = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout";
-    private const string DiagramQuickStyleRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle";
-    private const string DiagramColorsRelType  = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors";
+    // Relationship type for the SmartArt drawing part
     private const string DiagramDrawingRelType = "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing";
 
     // ── Wave 25A: Zoom, 3D-model, and ink URIs / rel-types ───────────────────
@@ -2632,27 +2628,19 @@ public static class PptxPackageReader
         // Resolve each rel id -> part path via the owning part's preloaded relationships.
         var slideDir  = GetDirectoryName(partPath);
 
-        var relTypeForKey = new Dictionary<string, string>
-        {
-            ["dm"] = DiagramDataRelType,
-            ["lo"] = DiagramLayoutRelType,
-            ["qs"] = DiagramQuickStyleRelType,
-            ["cs"] = DiagramColorsRelType
-        };
-
-        var contentTypeForKey = new Dictionary<string, string>
-        {
-            ["dm"] = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
-            ["lo"] = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml",
-            ["qs"] = "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml",
-            ["cs"] = "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml"
-        };
-
         string? dataPartPath = null;
 
         foreach (var (key, relId) in smart.DiagramRelIds)
         {
-            if (!relTypeForKey.TryGetValue(key, out var relType)) continue;
+            var contentType = key switch
+            {
+                "dm" => "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+                "lo" => "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml",
+                "qs" => "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml",
+                "cs" => "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml",
+                _ => null
+            };
+            if (contentType is null) continue;
 
             // Find target by relId (type not always set correctly — match by id first)
             var target = partRels.FirstOrDefault(r => r.Id == relId).Target;
@@ -2662,10 +2650,9 @@ public static class PptxPackageReader
             var bytes = ReadEntryBytes(archive, absPath);
             if (bytes is null) continue;
 
-            contentTypeForKey.TryGetValue(key, out var ct);
             smart.Parts[absPath] = new DiagramPart
             {
-                ContentType = ct ?? "application/xml",
+                ContentType = contentType,
                 PartPath    = absPath,
                 Bytes       = bytes
             };

@@ -2186,6 +2186,27 @@ public sealed class SmartArtTests : IDisposable
     // ── Round-trip ──────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Reader_SmartArt_StoresExactDiagramPartContentTypes()
+    {
+        var pptxPath = MakeSmartArtPptx(["A", "B"]);
+        var pres = PptxPackageReader.Read(pptxPath);
+
+        var parts = pres.Slides[0].Shapes
+            .First(s => s.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!
+            .Parts;
+
+        parts["ppt/diagrams/data1.xml"].ContentType.Should()
+            .Be("application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml");
+        parts["ppt/diagrams/layout1.xml"].ContentType.Should()
+            .Be("application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml");
+        parts["ppt/diagrams/quickStyle1.xml"].ContentType.Should()
+            .Be("application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml");
+        parts["ppt/diagrams/colors1.xml"].ContentType.Should()
+            .Be("application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml");
+    }
+
+    [Fact]
     public void RoundTrip_SmartArt_DiagramPartsPreserved()
     {
         // Read a hand-crafted SmartArt pptx
