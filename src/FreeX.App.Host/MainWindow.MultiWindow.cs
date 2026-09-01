@@ -220,6 +220,9 @@ public partial class MainWindow
 
     // ── IWorkbookWindow (driven by WorkbookWindowRegistry) ────────────────────
 
+    /// <summary>Whether this window's document has unsaved edits (see IWorkbookWindow).</summary>
+    public bool HasUnsavedChanges => _workbookDirty;
+
     /// <summary>Applies the Excel-style window-number suffix and refreshes the title bar.</summary>
     public void ApplyWindowTitleSuffix(string suffix)
     {

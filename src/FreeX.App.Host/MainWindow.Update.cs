@@ -36,7 +36,32 @@ public partial class MainWindow
         if (updates is null) return;
 
         var plan = FreeXSynchronousPromptCatalog.ForUpdateReady(_stagedUpdateVersion);
-        if (plan.ShouldApply(ShowOwnedSynchronousPrompt(plan.Confirmation)))
-            updates.ApplyAndRestart();
+        if (!plan.ShouldApply(ShowOwnedSynchronousPrompt(plan.Confirmation)))
+            return;
+
+        // r187: applying restarts the whole PROCESS, so it destroys unsaved work in every
+        // other open workbook window too -- and only this window had been asked. Warn while
+        // the user can still back out. The confirmation above speaks for this window only.
+        if (App.Services.GetService<WorkbookWindowRegistry>() is { } registry
+            && registry.Windows.Any(window => !ReferenceEquals(window, this) && window.HasUnsavedChanges)
+            && ShowOwnedMessage(
+                   UiText.Get("MainWindowMessage_UpdateDiscardsOtherWindowChanges"),
+                   UiText.Get("MainWindowMessage_SaveChangesTitle"),
+                   MessageBoxButton.OKCancel,
+                   MessageBoxImage.Warning) != MessageBoxResult.OK)
+        {
+            return;
+        }
+
+        // ApplyAndRestart returns false when the apply did not happen; its own contract says
+        // the caller must surface that, or the user is left silently on the old version.
+        if (!updates.ApplyAndRestart())
+        {
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_UpdateApplyFailed"),
+                UiText.Get("MainWindowMessage_CheckForUpdatesTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
     }
 }

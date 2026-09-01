@@ -27,6 +27,8 @@ public sealed class R90_LinkedPictureRefreshOnEditTests
     /// instead of MainWindow_Loaded replacing it with a fresh one.</summary>
     private sealed class DocumentPlaceholderWindow(WorkbookId documentId) : IWorkbookWindow
     {
+        public bool HasUnsavedChanges => false;
+
         public WorkbookId DocumentId { get; } = documentId;
         public void ApplyWindowTitleSuffix(string suffix) { }
         public void RefreshFromSharedWorkbook() { }

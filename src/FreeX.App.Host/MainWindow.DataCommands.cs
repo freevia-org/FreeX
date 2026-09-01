@@ -887,7 +887,13 @@ public partial class MainWindow
         var proposal = _session.FindGoalSeekProposal(new GoalSeekRequest(setCell, targetValue, changingCell));
         if (!proposal.Success)
         {
-            _messageService.ShowWarning(proposal.ErrorMessage!, "Microsoft Excel");
+            // r187: this dialog was titled "Microsoft Excel". Reproducing Excel BEHAVIOUR is
+            // the point of this app; putting another product's name in the title bar of our
+            // own error box is not -- a user reading it is being told, wrongly, which program
+            // is talking to them. Every other prompt in this shell uses the app's own name.
+            _messageService.ShowWarning(
+                proposal.ErrorMessage!,
+                UiText.Get("MainWindowMessage_SaveChangesTitle"));
             return;
         }
 
