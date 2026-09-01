@@ -77,7 +77,7 @@ public partial class MainWindow
     private void DialogRangePickerDialog_Closed(object? sender, EventArgs e) =>
         CancelDialogRangeSelection(restoreDialog: false);
 
-    private void CompleteDialogRangeSelection(bool applySelection)
+    internal void CompleteDialogRangeSelection(bool applySelection)
     {
         if (_dialogRangeSelectionController.Complete(SheetGrid.SelectedRange, applySelection) is { } transition)
             FinishDialogRangeSelectionTransition(transition);

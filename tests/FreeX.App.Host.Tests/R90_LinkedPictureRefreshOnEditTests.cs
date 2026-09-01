@@ -27,6 +27,8 @@ public sealed class R90_LinkedPictureRefreshOnEditTests
     /// instead of MainWindow_Loaded replacing it with a fresh one.</summary>
     private sealed class DocumentPlaceholderWindow(WorkbookId documentId) : IWorkbookWindow
     {
+        public bool HasUnsavedChanges => false;
+
         public WorkbookId DocumentId { get; } = documentId;
         public void ApplyWindowTitleSuffix(string suffix) { }
         public void RefreshFromSharedWorkbook() { }
@@ -90,14 +92,7 @@ public sealed class R90_LinkedPictureRefreshOnEditTests
     /// MainWindow.CommandExecution.cs ultimately reaches.</summary>
     private static bool ExecuteCommandThroughRealChokePoint(MainWindow window, IWorkbookCommand command)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "TryExecuteCommand",
-            BindingFlags.Instance | BindingFlags.NonPublic,
-            binder: null,
-            types: [typeof(IWorkbookCommand), typeof(string)],
-            modifiers: null);
-        method.Should().NotBeNull();
-        return (bool)method!.Invoke(window, [command, "Test Command"])!;
+        return window.TryExecuteCommand(command, "Test Command", out _);
     }
 
     [Fact]

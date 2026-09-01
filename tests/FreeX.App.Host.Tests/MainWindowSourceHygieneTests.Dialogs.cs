@@ -196,7 +196,7 @@ public sealed partial class MainWindowSourceHygieneTests
     public void InsertSparkline_UsesDialogLocationForInitialInsertAndOwnedValidationWarnings()
     {
         var insertSource = DialogSourceTestSupport.ReadHostSources("MainWindow.InsertCommands.cs");
-        var method = ExtractMethodSource(insertSource, "private void InsertSparkline(");
+        var method = ExtractMethodSource(insertSource, "internal void InsertSparkline(");
 
         method.Should().Contain("new SparklineDialog(");
         method.Should().Contain("SparklinePlanner.ParseKind(type)");

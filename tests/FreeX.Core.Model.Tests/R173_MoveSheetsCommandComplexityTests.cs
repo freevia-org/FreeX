@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Diagnostics;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -21,6 +22,20 @@ public class R173_MoveSheetsCommandComplexityTests
         for (var i = 0; i < sheetCount; i++)
             ids.Add(wb.AddSheet("Sheet" + i).Id);
         return wb;
+    }
+
+    [Fact]
+    public void MoveSheetsCommand_MaterializesRequestedSheetMembershipOnce()
+    {
+        var wb = BuildManySheetWorkbook(200, out var ids);
+        var requested = new CountingReadOnlyList<SheetId>(
+            ids.Where((_, index) => index % 3 == 0).Reverse().ToArray());
+        var command = new MoveSheetsCommand(requested, insertBeforeIndex: 0);
+
+        command.Apply(new TestCommandContext(wb)).Success.Should().BeTrue();
+
+        requested.EnumerationCount.Should().Be(1,
+            "selection membership should be indexed once instead of rescanning the request for every workbook sheet");
     }
 
     [Fact]
@@ -287,5 +302,20 @@ public class R173_MoveSheetsCommandComplexityTests
 
         failures.Should().BeEmpty(
             "every selection/target combination must reorder exactly as remove-then-insert does");
+    }
+
+    private sealed class CountingReadOnlyList<T>(IReadOnlyList<T> values) : IReadOnlyList<T>
+    {
+        public int Count => values.Count;
+        public int EnumerationCount { get; private set; }
+        public T this[int index] => values[index];
+
+        public IEnumerator<T> GetEnumerator()
+        {
+            EnumerationCount++;
+            return values.GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }

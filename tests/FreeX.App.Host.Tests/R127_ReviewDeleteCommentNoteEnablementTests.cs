@@ -27,6 +27,8 @@ public sealed class R127_ReviewDeleteCommentNoteEnablementTests
 {
     private sealed class DocumentPlaceholderWindow(WorkbookId documentId) : IWorkbookWindow
     {
+        public bool HasUnsavedChanges => false;
+
         public WorkbookId DocumentId { get; } = documentId;
         public void ApplyWindowTitleSuffix(string suffix) { }
         public void RefreshFromSharedWorkbook() { }
@@ -110,10 +112,7 @@ public sealed class R127_ReviewDeleteCommentNoteEnablementTests
     /// click/arrow-key move goes through -- via reflection.</summary>
     private static void SetActiveCell(MainWindow window, CellAddress address)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        method!.Invoke(window, [address]);
+        window.SetActiveCell(address);
     }
 
     private static bool GetRibbonEnabled(MainWindow window, string commandId)

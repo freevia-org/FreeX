@@ -560,7 +560,7 @@ public partial class MainWindow
             horizontalScrollValue);
     }
 
-    private void UpdateViewport()
+    internal void UpdateViewport()
     {
         if (_workbookSessionDisposed || SheetGrid == null || _viewportService == null) return;
 

@@ -450,6 +450,37 @@ public sealed class SelectionPaneTests
     }
 
     [Fact]
+    public void Planner_LargeNestedMultiSelectionPreservesOrderDepthAndDuplicateIdMembership()
+    {
+        const int shapeCount = 64;
+        var slide = new Slide { Title = "Large grouped selection" };
+        slide.Shapes.Clear();
+        for (uint id = 1; id <= shapeCount; id++)
+            slide.Shapes.Add(MakeShape(id, $"Top {id}"));
+
+        var group = MakeShape(1000, "Group");
+        group.Kind = SlideShapeKind.Group;
+        for (uint ordinal = 1; ordinal <= shapeCount; ordinal++)
+            group.Children.Add(MakeShape(2000 + ordinal, $"Child {ordinal}"));
+        slide.Shapes.Add(group);
+
+        uint[] selectedIds = [2001, 2032, 2064, 1, 32, 64, 2032, 64];
+        var plan = PresentationSelectionPanePlanner.Build(slide, 0, selectedIds);
+
+        var expectedOrder = new[] { 1000u }
+            .Concat(Enumerable.Range(1, shapeCount).Reverse().Select(ordinal => 2000u + (uint)ordinal))
+            .Concat(Enumerable.Range(1, shapeCount).Reverse().Select(ordinal => (uint)ordinal));
+        plan.Items.Select(item => item.ShapeId).Should().Equal(expectedOrder);
+        plan.Items.Take(shapeCount + 1).Select(item => item.NestingDepth)
+            .Should().Equal(new[] { 0 }.Concat(Enumerable.Repeat(1, shapeCount)));
+        plan.Items.Skip(shapeCount + 1).Should().OnlyContain(item => item.NestingDepth == 0);
+        plan.Items.Where(item => item.IsSelected).Select(item => item.ShapeId)
+            .Should().BeEquivalentTo([2001u, 2032u, 2064u, 1u, 32u, 64u]);
+        plan.SelectedItemIndex.Should().Be(1);
+        plan.SelectedShapeId.Should().BeNull("duplicate IDs in a multi-selection remain membership-only");
+    }
+
+    [Fact]
     public void EditingSession_SelectionPaneMovePreservesGroupAndIsUndoable()
     {
         var presentation = new Presentation();

@@ -225,9 +225,7 @@ public sealed class R143_DataValidationApplyToSameSettingsSelectionLossTests
         DataValidation existingRule,
         bool applyToSameSettings)
     {
-        var method = typeof(MainWindow).GetMethod("CreateDataValidationCommand", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(nameof(MainWindow), "CreateDataValidationCommand");
-        return (IWorkbookCommand)method.Invoke(window, [sheetId, rule, existingRule, applyToSameSettings])!;
+        return window.CreateDataValidationCommand(sheetId, rule, existingRule, applyToSameSettings);
     }
 
     private static MainWindow CreateWindow()

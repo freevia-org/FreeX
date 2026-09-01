@@ -30,12 +30,12 @@ public sealed class DataCommandSourceTests
         filterSource.Should().Contain("_filterWorkflowSession.PlanDialogResult(");
         filterSource.Should().Contain("WorksheetFilterMessagePlanner.GetPlanErrorResourceKey(plan)");
         filterSource.Should().NotContain("new FilterCommand(_currentSheetId, currentRange, filterColOffset");
-        filterSource.Should().Contain("private void ClearFilterButton_Click(object sender, RoutedEventArgs e)");
+        filterSource.Should().Contain("internal void ClearFilterButton_Click(object sender, RoutedEventArgs e)");
         filterSource.Should().Contain("AutoFilterToggleRangePlanner.Create(sheet, selectedRange)");
         filterSource.Should().Contain("AutoFilterDropdownMenuPlanner.HasActiveFilter(sheet, range)");
         filterSource.Should().NotContain("ClearFilterRangePlanner.");
         filterSource.Should().Contain("_filterWorkflowSession.CreateClearAllPlan(sheet, range)");
-        filterSource.Should().Contain("private void ReapplyAutoFilter()");
+        filterSource.Should().Contain("internal void ReapplyAutoFilter()");
 
         dataSource.Should().Contain("new AdvancedFilterDialog(");
         dataSource.Should().Contain("AdvancedFilterPlanner.CreateDefaultListRange(sheet, selected)");

@@ -71,19 +71,11 @@ public sealed class BackstageWorksheetShortcutLeakTests
     private sealed class BackstageShortcutLeakHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly MethodInfo _setActiveCell;
-        private readonly MethodInfo _showStartScreen;
         private readonly object _backstageFrame;
 
         private BackstageShortcutLeakHarness(MainWindow window)
         {
             _window = window;
-            _setActiveCell = typeof(MainWindow)
-                .GetMethod("SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SetActiveCell");
-            _showStartScreen = typeof(MainWindow)
-                .GetMethod("ShowStartScreen", BindingFlags.Instance | BindingFlags.NonPublic, Type.EmptyTypes)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ShowStartScreen");
             _backstageFrame = typeof(MainWindow)
                 .GetField("_backstageFrame", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .GetValue(window)
@@ -112,14 +104,14 @@ public sealed class BackstageWorksheetShortcutLeakTests
 
         public void SelectActiveCell(uint row, uint col)
         {
-            _setActiveCell.Invoke(_window, [new CellAddress(SheetId, row, col)]);
+            _window.SetActiveCell(new CellAddress(SheetId, row, col));
             PumpDispatcher();
         }
 
         public void OpenBackstage()
         {
             _window.Activate();
-            _showStartScreen.Invoke(_window, null);
+            _window.ShowStartScreen();
             _window.UpdateLayout();
             PumpDispatcher();
         }

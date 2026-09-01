@@ -229,9 +229,7 @@ public sealed class MainWindowOutlineCommandLifecycleTests
 
         public bool Undo()
         {
-            var method = typeof(MainWindow).GetMethod("ExecuteUndo", PrivateInstance)
-                         ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteUndo");
-            var result = (bool)method.Invoke(_window, [])!;
+            var result = _window.ExecuteUndo();
             PumpDispatcher();
             return result;
         }

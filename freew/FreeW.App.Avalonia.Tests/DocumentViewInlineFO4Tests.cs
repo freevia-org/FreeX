@@ -159,6 +159,37 @@ public sealed class DocumentViewInlineFO4Tests
     }
 
     [Fact]
+    public async Task Floating_image_with_inline_chart_uses_inline_object_layout_and_collects_both()
+    {
+        var inlineChartCount = -1;
+        var floatingImageCount = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var document = DocWithInlineChart(ChartKind.Column);
+            var paragraph = (Paragraph)document.Blocks[0];
+            paragraph.Runs.Add(new Run(string.Empty, RunFormatting.Default)
+            {
+                Image = new InlineImage(SmallPng(), 72, 54)
+                {
+                    Wrapping = ImageWrapping.Square,
+                    HorizontalAnchor = HorizontalAnchor.Column,
+                    VerticalAnchor = VerticalAnchor.Paragraph,
+                }
+            });
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new Size(816, 2000));
+            inlineChartCount = view.InlineChartCount;
+            floatingImageCount = view.FloatingImageRects.Count;
+        });
+
+        if (!ran) return;
+        inlineChartCount.Should().Be(1, "the inline chart must select the inline-object layout path");
+        floatingImageCount.Should().Be(1, "the same layout path must still collect the floating image");
+    }
+
+    [Fact]
     public async Task Inline_chart_rect_has_positive_height()
     {
         double height = 0;

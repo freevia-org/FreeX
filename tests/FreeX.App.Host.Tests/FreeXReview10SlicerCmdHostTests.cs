@@ -106,7 +106,6 @@ public sealed class FreeXReview10SlicerCmdHostTests
     private sealed class SlicerCmdHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly MethodInfo _onNativeSlicerTileToggleRequested;
 
         public SlicerCmdHarness()
         {
@@ -134,9 +133,6 @@ public sealed class FreeXReview10SlicerCmdHostTests
             _window.UpdateLayout();
             PumpDispatcher();
 
-            _onNativeSlicerTileToggleRequested = typeof(MainWindow)
-                .GetMethod("OnNativeSlicerTileToggleRequested", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "OnNativeSlicerTileToggleRequested");
         }
 
         public Workbook Workbook => _window.Session.Workbook;
@@ -173,7 +169,7 @@ public sealed class FreeXReview10SlicerCmdHostTests
 
         public void InvokeNativeSlicerTileToggle(string slicerName, string caption)
         {
-            _onNativeSlicerTileToggleRequested.Invoke(_window, [slicerName, caption]);
+            _window.OnNativeSlicerTileToggleRequested(slicerName, caption);
             PumpDispatcher();
         }
 

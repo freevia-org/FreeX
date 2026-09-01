@@ -150,13 +150,9 @@ public sealed class R126_UndoRedoInvalidatesClipboardTests
                 ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteCopy");
             _executeCopy = isCut => executeCopy.Invoke(window, [isCut]);
 
-            var executeUndo = typeof(MainWindow).GetMethod("ExecuteUndo", PrivateInstance)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteUndo");
-            _executeUndo = () => executeUndo.Invoke(window, []);
+            _executeUndo = () => window.ExecuteUndo();
 
-            var executeRedo = typeof(MainWindow).GetMethod("ExecuteRedo", PrivateInstance)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteRedo");
-            _executeRedo = () => executeRedo.Invoke(window, []);
+            _executeRedo = () => window.ExecuteRedo();
 
             _tryExecuteEditCells = typeof(MainWindow)
                 .GetMethods(PrivateInstance)

@@ -780,4 +780,24 @@ public class AccessibilityCheckerTests
             .Count(i => i.Rule == AccessibilityRule.ContentControlMissingTitle)
             .Should().Be(1);
     }
+
+    [Fact]
+    public void ContentControlMissingTitle_UsesAdjacentControlIdentityForGrouping()
+    {
+        var doc = CleanDocument();
+        var first = Run.PlainTextControl("First");
+        var secondControl = Run.PlainTextControl("Second");
+        var repeatedAfterGap = new Run("Again") { Control = first.Control };
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { first, secondControl, new Run("gap"), repeatedAfterGap }
+        });
+
+        var issues = AccessibilityChecker.Check(doc).Issues
+            .Where(issue => issue.Rule == AccessibilityRule.ContentControlMissingTitle)
+            .ToList();
+
+        issues.Select(issue => issue.Run)
+            .Should().Equal(first, secondControl, repeatedAfterGap);
+    }
 }

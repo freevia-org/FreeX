@@ -378,6 +378,12 @@ public static class FindReplaceDialogPlanner
     public static IReadOnlyList<(int Start, int Length)> FindAll(
         string? text,
         string? term,
+        FindReplaceSearchOptions options) =>
+        EnumerateMatches(text, term, options).ToList();
+
+    private static IEnumerable<(int Start, int Length)> EnumerateMatches(
+        string? text,
+        string? term,
         FindReplaceSearchOptions options)
     {
         if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(term))
@@ -385,12 +391,11 @@ public static class FindReplaceDialogPlanner
 
         var effective = NormalizeOptions(options);
         return TextSearch.FindAll(
-                text,
-                term,
-                effective.MatchCase,
-                effective.WholeWord,
-                effective.UseWildcards)
-            .ToList();
+            text,
+            term,
+            effective.MatchCase,
+            effective.WholeWord,
+            effective.UseWildcards);
     }
 
     public static bool MatchesExactly(
@@ -398,7 +403,7 @@ public static class FindReplaceDialogPlanner
         string? term,
         FindReplaceSearchOptions options) =>
         text is not null
-        && FindAll(text, term, options)
+        && EnumerateMatches(text, term, options)
             .Any(match => match.Start == 0 && match.Length == text.Length);
 
     /// <summary>
@@ -431,7 +436,7 @@ public static class FindReplaceDialogPlanner
             if (block is Paragraph paragraph)
             {
                 var startAt = step == 0 ? Math.Clamp(fromOffset, 0, paragraph.PlainText.Length) : 0;
-                var match = FindAll(paragraph.PlainText, term, options)
+                var match = EnumerateMatches(paragraph.PlainText, term, options)
                     .FirstOrDefault(item => item.Start >= startAt);
                 if (match.Length > 0)
                     return new FindReplaceMatch(blockIndex, match.Start, match.Length);
@@ -453,7 +458,7 @@ public static class FindReplaceDialogPlanner
         if (startBlock >= 0 && document.Blocks[startBlock] is Paragraph startParagraph)
         {
             var startAt = Math.Clamp(fromOffset, 0, startParagraph.PlainText.Length);
-            var match = FindAll(startParagraph.PlainText, term, options)
+            var match = EnumerateMatches(startParagraph.PlainText, term, options)
                 .FirstOrDefault(item => item.Start < startAt);
             if (match.Length > 0)
                 return new FindReplaceMatch(startBlock, match.Start, match.Length);
@@ -558,7 +563,7 @@ public static class FindReplaceDialogPlanner
             // Only the paragraph the resume point names starts partway in; every later paragraph
             // in the slot is searched from its beginning, as it has not been visited yet.
             var minOffset = paraIdx == fromParagraphIndex ? Math.Max(0, fromOffset) : 0;
-            var match = FindAll(headerFooter.Paragraphs[paraIdx].PlainText, term, options)
+            var match = EnumerateMatches(headerFooter.Paragraphs[paraIdx].PlainText, term, options)
                 .FirstOrDefault(candidate => candidate.Start >= minOffset);
             if (match.Length > 0)
                 return new FindReplaceMatch(-1, match.Start, match.Length,
@@ -583,7 +588,7 @@ public static class FindReplaceDialogPlanner
             switch (block)
             {
                 case Paragraph paragraph:
-                    count += FindAll(paragraph.PlainText, term, effective).Count;
+                    count += EnumerateMatches(paragraph.PlainText, term, effective).Count();
                     break;
                 case Table table:
                     count += EnumerateTableMatches(table, term, effective).Count();
@@ -601,7 +606,7 @@ public static class FindReplaceDialogPlanner
         // separate table walk is needed here the way there is for the body.
         foreach (var paragraph in TextDocumentStoryTraversal.EnumerateParagraphs(
                      document, TextDocumentStorySubset.HeadersFooters))
-            count += FindAll(paragraph.PlainText, term, effective).Count;
+            count += EnumerateMatches(paragraph.PlainText, term, effective).Count();
 
         return count;
     }
@@ -638,7 +643,7 @@ public static class FindReplaceDialogPlanner
                 var paragraphs = projected.Cell.Paragraphs;
                 for (var paraIdx = 0; paraIdx < paragraphs.Count; paraIdx++)
                 {
-                    foreach (var (start, length) in FindAll(paragraphs[paraIdx].PlainText, term, options))
+                    foreach (var (start, length) in EnumerateMatches(paragraphs[paraIdx].PlainText, term, options))
                         yield return new TableTextMatch(row, projected.StartColumn, paraIdx, start, length);
                 }
             }

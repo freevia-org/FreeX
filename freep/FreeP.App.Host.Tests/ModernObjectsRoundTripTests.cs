@@ -1192,6 +1192,100 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         act.Should().NotThrow("a package this writer just produced must always be re-openable");
     }
 
+    [Fact]
+    public void SmartArtRelationships_SharedByTwoShapesOnSameSlide_AreEmittedOnceAndReused()
+    {
+        const string diagramDataRelationshipType =
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData";
+        const string diagramDrawingRelationshipType =
+            "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing";
+        var dataBytes = Encoding.UTF8.GetBytes(
+            "<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\"/>");
+        var drawingBytes = Encoding.UTF8.GetBytes(
+            "<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\"/>");
+
+        SmartArtShape BuildSharedSmartArt()
+        {
+            var smartArt = new SmartArtShape
+            {
+                DrawingPartPath = "ppt/diagrams/drawing1.xml",
+            };
+            smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+            {
+                ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+                PartPath = "ppt/diagrams/data1.xml",
+                Bytes = dataBytes,
+            };
+            smartArt.Parts["ppt/diagrams/drawing1.xml"] = new DiagramPart
+            {
+                ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+                PartPath = "ppt/diagrams/drawing1.xml",
+                Bytes = drawingBytes,
+            };
+            smartArt.DiagramRelIds["dm"] = "rIdAuthoredData";
+            return smartArt;
+        }
+
+        var presentation = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.SmartArt,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 914400,
+            SmartArt = BuildSharedSmartArt(),
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 2,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = 914400,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 914400,
+            SmartArt = BuildSharedSmartArt(),
+        });
+        presentation.Slides.Add(slide);
+
+        using var stream = WritePptxToMemory(presentation);
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var relationshipsEntry = archive.GetEntry("ppt/slides/_rels/slide1.xml.rels");
+            relationshipsEntry.Should().NotBeNull();
+            XDocument relationships;
+            using (var relationshipsStream = relationshipsEntry!.Open())
+                relationships = XDocument.Load(relationshipsStream);
+
+            var smartArtRelationships = relationships.Root!.Elements()
+                .Where(element =>
+                    (string?)element.Attribute("Type") is diagramDataRelationshipType
+                        or diagramDrawingRelationshipType)
+                .ToArray();
+            smartArtRelationships.Select(element => (string?)element.Attribute("Type"))
+                .Should().Equal(diagramDrawingRelationshipType, diagramDataRelationshipType);
+            smartArtRelationships.Should().HaveCount(2);
+
+            var dataRelationshipId = (string?)smartArtRelationships[1].Attribute("Id");
+            dataRelationshipId.Should().NotBeNullOrWhiteSpace();
+            var slideEntry = archive.GetEntry("ppt/slides/slide1.xml");
+            slideEntry.Should().NotBeNull();
+            XDocument slideDocument;
+            using (var slideStream = slideEntry!.Open())
+                slideDocument = XDocument.Load(slideStream);
+
+            XNamespace diagram = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
+            XNamespace relationshipsNamespace =
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            slideDocument.Descendants(diagram + "relIds")
+                .Select(element => (string?)element.Attribute(relationshipsNamespace + "dm"))
+                .Should().Equal(dataRelationshipId, dataRelationshipId);
+        }
+
+        stream.Position = 0;
+        var reopen = () => PptxPackageReader.Read(stream);
+        reopen.Should().NotThrow("shared same-slide SmartArt relationships must remain valid OPC");
+    }
+
     private static Slide BuildSmartArtSlide(uint shapeId, byte[] dataBytes)
     {
         var smart = new SmartArtShape();
@@ -1332,6 +1426,56 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         u2.Should().NotBeNull("unknown graphicFrame must survive round-trip");
         u2!.PreservedObject!.RawXml.Should().Contain("test-payload",
             "payload must survive write/re-read round-trip");
+    }
+
+    [Fact]
+    public void UnknownGraphicFrame_MultipleRelationshipAttributesCaptureEachIdOnceInXmlOrder()
+    {
+        const string unknownXml = """
+            <p:graphicFrame xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                            xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <p:nvGraphicFramePr>
+                <p:cNvPr id="41" name="Unknown relationships"/>
+                <p:cNvGraphicFramePr/>
+                <p:nvPr/>
+              </p:nvGraphicFramePr>
+              <p:xfrm>
+                <a:off x="0" y="0"/>
+                <a:ext cx="1828800" cy="914400"/>
+              </p:xfrm>
+              <a:graphic>
+                <a:graphicData uri="http://example.com/future/relationships">
+                  <ex:data xmlns:ex="http://example.com/future/relationships"
+                           r:id="rIdPrimary" r:embed="rIdSecondary">
+                    <ex:reuse r:link="rIdPrimary"/>
+                  </ex:data>
+                </a:graphicData>
+              </a:graphic>
+            </p:graphicFrame>
+            """;
+        var primaryBytes = new byte[] { 1, 2, 3 };
+        var secondaryBytes = new byte[] { 4, 5, 6 };
+
+        var presentation = PptxPackageReader.Read(BuildPptxWithShapeXml(
+            unknownXml,
+            extraParts: new()
+            {
+                ["ppt/media/primary.bin"] = (primaryBytes, "application/octet-stream"),
+                ["ppt/media/secondary.bin"] = (secondaryBytes, "application/octet-stream"),
+            },
+            extraRels: new()
+            {
+                ["rIdPrimary"] = ("http://example.com/relationships/primary", "../media/primary.bin"),
+                ["rIdSecondary"] = ("http://example.com/relationships/secondary", "../media/secondary.bin"),
+            }));
+
+        var preserved = presentation.Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.PreservedObject)
+            .PreservedObject!;
+        preserved.SlideRels.Keys.Should().Equal("rIdPrimary", "rIdSecondary");
+        preserved.Parts["ppt/media/primary.bin"].Should().Equal(primaryBytes);
+        preserved.Parts["ppt/media/secondary.bin"].Should().Equal(secondaryBytes);
     }
 
     // ── EA1: preserved fallback image gets a content-type Default entry ──────────

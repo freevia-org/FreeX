@@ -104,8 +104,6 @@ public sealed class R15_goto_wpf_Tests
     {
         private readonly MainWindow _window;
         private readonly SpyUserMessageService _messageService;
-        private readonly MethodInfo _setActiveCell;
-        private readonly MethodInfo _selectGoToSpecialMatches;
         private readonly MethodInfo _recalculateWorkbook;
         private readonly Workbook _workbook;
 
@@ -114,15 +112,6 @@ public sealed class R15_goto_wpf_Tests
             _window = window;
             _messageService = messageService;
             _workbook = workbook;
-            _setActiveCell = typeof(MainWindow)
-                .GetMethod("SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SetActiveCell");
-            _selectGoToSpecialMatches = typeof(MainWindow)
-                .GetMethod(
-                    "SelectGoToSpecialMatches",
-                    BindingFlags.Instance | BindingFlags.NonPublic,
-                    [typeof(GoToSpecialKind), typeof(GoToSpecialOptions), typeof(bool)])
-                ?? throw new MissingMethodException(nameof(MainWindow), "SelectGoToSpecialMatches");
             _recalculateWorkbook = typeof(MainWindow)
                 .GetMethod("RecalculateWorkbook", BindingFlags.Instance | BindingFlags.NonPublic, [])
                 ?? throw new MissingMethodException(nameof(MainWindow), "RecalculateWorkbook");
@@ -164,13 +153,13 @@ public sealed class R15_goto_wpf_Tests
         public void SelectActiveCell(uint row, uint col)
         {
             var sheet = _workbook.Sheets[0];
-            _setActiveCell.Invoke(_window, [new CellAddress(sheet.Id, row, col)]);
+            _window.SetActiveCell(new CellAddress(sheet.Id, row, col));
             PumpDispatcher();
         }
 
         public void InvokeGoToSpecial(GoToSpecialKind kind)
         {
-            _selectGoToSpecialMatches.Invoke(_window, [kind, null, true]);
+            _window.SelectGoToSpecialMatches(kind, showEmptyMessage: true);
             PumpDispatcher();
         }
 

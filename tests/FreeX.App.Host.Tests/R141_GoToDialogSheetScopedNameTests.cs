@@ -122,14 +122,10 @@ public sealed class R141_GoToDialogSheetScopedNameTests
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly MethodInfo _findGoToMenuItemClick;
 
         private MainWindowHarness(MainWindow window)
         {
             _window = window;
-            _findGoToMenuItemClick = typeof(MainWindow)
-                .GetMethod("FindGoToMenuItem_Click", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "FindGoToMenuItem_Click");
         }
 
         public Workbook Workbook => _window.Session.Workbook;
@@ -195,7 +191,7 @@ public sealed class R141_GoToDialogSheetScopedNameTests
                     }
                 }), DispatcherPriority.ApplicationIdle);
 
-                _findGoToMenuItemClick.Invoke(_window, [_window, new RoutedEventArgs()]);
+                _window.FindGoToMenuItem_Click(_window, new RoutedEventArgs());
                 PumpDispatcher();
             }
             finally
@@ -229,7 +225,7 @@ public sealed class R141_GoToDialogSheetScopedNameTests
                 dialog.Close();
             }), DispatcherPriority.ApplicationIdle);
 
-            _findGoToMenuItemClick.Invoke(_window, [_window, new RoutedEventArgs()]);
+            _window.FindGoToMenuItem_Click(_window, new RoutedEventArgs());
             PumpDispatcher();
 
             return captured ?? throw new InvalidOperationException("GoToDialog was never located to capture its reference choices.");

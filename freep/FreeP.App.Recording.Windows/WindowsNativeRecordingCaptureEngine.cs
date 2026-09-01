@@ -235,6 +235,29 @@ public class WindowsNativeRecordingCaptureEngine : IWindowsRecordingCaptureEngin
         var completedIndex = Task.WaitAny([task], _deviceOperationTimeout);
         if (completedIndex == -1)
         {
+            // r185: the operation is still running -- WaitAny only stopped WAITING for it. If it
+            // later succeeds it hands back a live capture device that nothing now holds a
+            // reference to and nothing disposes: the camera stays open and recording, its
+            // indicator light stays on, and the device is unavailable to this app and every
+            // other one until the process exits. Dispose whatever arrives late, and observe a
+            // late fault so it does not surface as an unobserved task exception.
+            _ = task.ContinueWith(
+                static completed =>
+                {
+                    if (completed.Status == TaskStatus.RanToCompletion)
+                    {
+                        if (completed.Result is IDisposable lateDevice)
+                            lateDevice.Dispose();
+                    }
+                    else
+                    {
+                        _ = completed.Exception;
+                    }
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+
             throw new TimeoutException(
                 $"{_adapterName}: the Windows camera capture device did not respond within " +
                 $"{_deviceOperationTimeout.TotalSeconds:0.#}s.");

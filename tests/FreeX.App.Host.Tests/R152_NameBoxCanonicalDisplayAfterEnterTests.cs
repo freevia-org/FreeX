@@ -121,7 +121,6 @@ public sealed class R152_NameBoxCanonicalDisplayAfterEnterTests
 
     private sealed class MainWindowHarness : IDisposable
     {
-        private readonly MethodInfo _cellAddressBoxKeyDown;
 
         public MainWindow Window { get; }
         public Workbook Workbook { get; }
@@ -151,9 +150,6 @@ public sealed class R152_NameBoxCanonicalDisplayAfterEnterTests
             // the test operates on the same Workbook instance MainWindow's handlers use.
             Workbook = workbookRef.Current;
 
-            _cellAddressBoxKeyDown = typeof(MainWindow)
-                .GetMethod("CellAddressBox_KeyDown", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "CellAddressBox_KeyDown");
         }
 
         private ComboBox CellAddressBox => (ComboBox)Window.FindName("CellAddressBox")!;
@@ -176,7 +172,7 @@ public sealed class R152_NameBoxCanonicalDisplayAfterEnterTests
             {
                 RoutedEvent = Keyboard.KeyDownEvent
             };
-            _cellAddressBoxKeyDown.Invoke(Window, [CellAddressBox, args]);
+            Window.CellAddressBox_KeyDown(CellAddressBox, args);
             PumpDispatcher();
             return args.Handled;
         }

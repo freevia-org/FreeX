@@ -13,7 +13,7 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private void InvalidateNavigationCaches()
+    internal void InvalidateNavigationCaches()
     {
         _navigationCacheRevision++;
         _statusBarStatsCache.Clear();
@@ -32,7 +32,7 @@ public partial class MainWindow
         SetVisibilityIfChanged(StatusNumLockText, ToVisibility(plan.NumLockVisible));
     }
 
-    private void RefreshStatusBar()
+    internal void RefreshStatusBar()
     {
         RefreshKeyLockIndicators();
 
@@ -390,7 +390,7 @@ public partial class MainWindow
     private (uint start, uint end) GetRowResizeRange(Sheet sheet, uint row) =>
         GridResizePreviewPlanner.GetRowResizeRange(sheet, SheetGrid.SelectedRange, row);
 
-    private void OnColumnResizing(uint col, double newWidthPx)
+    internal void OnColumnResizing(uint col, double newWidthPx)
     {
         CancelPendingViewportResizeRefresh();
         var sheet = _workbook.GetSheet(_currentSheetId);

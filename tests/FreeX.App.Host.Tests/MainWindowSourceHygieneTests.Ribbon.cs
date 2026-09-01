@@ -122,16 +122,16 @@ public sealed partial class MainWindowSourceHygieneTests
         var ribbonSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Ribbon.cs");
 
         mainSource.Should().NotContain("private void UpdateRibbonCompactMode(");
-        mainSource.Should().NotContain("private void NormalizeRibbonSurface(");
+        mainSource.Should().NotContain("internal void NormalizeRibbonSurface(");
         mainSource.Should().NotContain("private void NormalizeExistingRibbonIconText(");
         mainSource.Should().NotContain("private void ApplyToolbarDropdownWhiteBackgrounds(");
-        mainSource.Should().NotContain("private static FrameworkElement CreateRibbonCommandContent(");
+        mainSource.Should().NotContain("internal static FrameworkElement CreateRibbonCommandContent(");
 
         ribbonSource.Should().NotContain("UpdateRibbonCompactMode(");
-        ribbonSource.Should().Contain("private void NormalizeRibbonSurface(");
+        ribbonSource.Should().Contain("internal void NormalizeRibbonSurface(");
         ribbonSource.Should().Contain("private void NormalizeExistingRibbonIconText(");
         ribbonSource.Should().Contain("private void ApplyToolbarDropdownWhiteBackgrounds(");
-        ribbonSource.Should().Contain("private static FrameworkElement CreateRibbonCommandContent(");
+        ribbonSource.Should().Contain("internal static FrameworkElement CreateRibbonCommandContent(");
     }
 
     [Fact]
@@ -140,12 +140,12 @@ public sealed partial class MainWindowSourceHygieneTests
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var quickAnalysisSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
 
-        mainSource.Should().NotContain("private void ShowQuickAnalysisMenu(");
+        mainSource.Should().NotContain("internal void ShowQuickAnalysisMenu(");
         mainSource.Should().NotContain("private void QuickAnalysisMenuItem_Click(");
         mainSource.Should().NotContain("private void QuickAnalysisMenuItem_MouseEnter(");
         mainSource.Should().NotContain("private void QuickAnalysisMenuItem_MouseLeave(");
 
-        quickAnalysisSource.Should().Contain("private void ShowQuickAnalysisMenu(");
+        quickAnalysisSource.Should().Contain("internal void ShowQuickAnalysisMenu(");
         quickAnalysisSource.Should().Contain("private void QuickAnalysisMenuItem_Click(");
         quickAnalysisSource.Should().Contain("private async Task ExecuteQuickAnalysisAsync(");
         quickAnalysisSource.Should().Contain("private void QuickAnalysisMenuItem_MouseEnter(");
@@ -202,13 +202,13 @@ public sealed partial class MainWindowSourceHygieneTests
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var reviewSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
-        mainSource.Should().NotContain("private void SpellCheckBtn_Click(");
+        mainSource.Should().NotContain("internal void SpellCheckBtn_Click(");
         mainSource.Should().NotContain("private void ReviewNewThreadedCommentBtn_Click(");
         mainSource.Should().NotContain("private void ProtectSheetBtn_Click(");
         mainSource.Should().NotContain("private async Task ShareWorkbookAsync(");
         mainSource.Should().NotContain("private void HelpOnlineBtn_Click(");
 
-        reviewSource.Should().Contain("private void SpellCheckBtn_Click(");
+        reviewSource.Should().Contain("internal void SpellCheckBtn_Click(");
         reviewSource.Should().Contain("private void ReviewNewThreadedCommentBtn_Click(");
         reviewSource.Should().Contain("private void ProtectSheetBtn_Click(");
         reviewSource.Should().Contain("private async Task ShareWorkbookAsync(");
@@ -244,8 +244,8 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("WorkbookClipboardSession _workbookClipboardSession");
         mainSource.Should().NotContain("private void CutBtn_Click(");
         mainSource.Should().NotContain("private void PasteMenuItem_Click(");
-        mainSource.Should().NotContain("private void ExecuteCopy(");
-        mainSource.Should().NotContain("private void ExecutePaste(");
+        mainSource.Should().NotContain("internal void ExecuteCopy(");
+        mainSource.Should().NotContain("internal void ExecutePaste(");
         mainSource.Should().NotContain("private void PasteSpecialBtn_Click(");
         mainSource.Should().NotContain("private void ExecutePasteLink(");
 
@@ -253,8 +253,8 @@ public sealed partial class MainWindowSourceHygieneTests
         clipboardSource.Should().NotContain("private record InternalClipboard(");
         clipboardSource.Should().Contain("private void CutBtn_Click(");
         clipboardSource.Should().Contain("private void PasteMenuItem_Click(");
-        clipboardSource.Should().Contain("private void ExecuteCopy(");
-        clipboardSource.Should().Contain("private void ExecutePaste(");
+        clipboardSource.Should().Contain("internal void ExecuteCopy(");
+        clipboardSource.Should().Contain("internal void ExecutePaste(");
         clipboardSource.Should().Contain("private void PasteSpecialBtn_Click(");
         clipboardSource.Should().Contain("private void ExecutePasteLink(");
     }
@@ -316,7 +316,7 @@ public sealed partial class MainWindowSourceHygieneTests
 
         mainSource.Should().NotContain("private void InsertPickerBtn_Click(");
         mainSource.Should().NotContain("private void InsertCellsMenuItem_Click(");
-        mainSource.Should().NotContain("private void InsertRowBtn_Click(");
+        mainSource.Should().NotContain("internal void InsertRowBtn_Click(");
         mainSource.Should().NotContain("private void DeleteSelectedRows(");
         mainSource.Should().NotContain("private void ExecuteKeyboardInsert(");
         mainSource.Should().NotContain("private bool ExecuteKeyboardDeleteCellsWithPrompt(");
@@ -328,7 +328,7 @@ public sealed partial class MainWindowSourceHygieneTests
 
         cellsSource.Should().Contain("private void InsertPickerBtn_Click(");
         cellsSource.Should().Contain("private void InsertCellsMenuItem_Click(");
-        cellsSource.Should().Contain("private void InsertRowBtn_Click(");
+        cellsSource.Should().Contain("internal void InsertRowBtn_Click(");
         cellsSource.Should().Contain("private void DeleteSelectedRows(");
         cellsSource.Should().Contain("private void ExecuteKeyboardInsert(");
         cellsSource.Should().Contain("private bool ExecuteKeyboardDeleteCellsWithPrompt(");
@@ -508,7 +508,7 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private bool TryExecuteRepeatableCurrentSelectionRangesCommand(");
         mainSource.Should().NotContain("private bool TryExecuteRepeatableCurrentRangeCommand(");
         mainSource.Should().NotContain("private bool TryExecuteRepeatableChartLayout(");
-        mainSource.Should().NotContain("private bool ExecuteUndo(");
+        mainSource.Should().NotContain("internal bool ExecuteUndo(");
         mainSource.Should().NotContain("private void ExecuteRepeatLast(");
         mainSource.Should().NotContain("private IWorkbookCommand CreateSingleCellEditCommand(");
 
@@ -520,7 +520,7 @@ public sealed partial class MainWindowSourceHygieneTests
         commandSource.Should().Contain("private bool TryExecuteRepeatableCurrentSelectionRangesCommand(");
         commandSource.Should().Contain("private bool TryExecuteRepeatableCurrentRangeCommand(");
         commandSource.Should().Contain("private bool TryExecuteRepeatableChartLayout(");
-        commandSource.Should().Contain("private bool ExecuteUndo(");
+        commandSource.Should().Contain("internal bool ExecuteUndo(");
         commandSource.Should().Contain("private void ExecuteRepeatLast(");
         commandSource.Should().Contain("private IWorkbookCommand CreateSingleCellEditCommand(");
         commandSource.Should().Contain("ExecuteRepeatable");
@@ -538,19 +538,19 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private void SortAscButton_Click(");
         mainSource.Should().NotContain("private void SortCustomButton_Click(");
         mainSource.Should().NotContain("private void FilterButton_Click(");
-        mainSource.Should().NotContain("private bool ApplyAutoFilterDialogResult(");
+        mainSource.Should().NotContain("internal bool ApplyAutoFilterDialogResult(");
         mainSource.Should().NotContain("private void CfRuleButton_Click(");
         mainSource.Should().NotContain("private void ValidationButton_Click(");
-        mainSource.Should().NotContain("private void ClearFilterButton_Click(");
+        mainSource.Should().NotContain("internal void ClearFilterButton_Click(");
         mainSource.Should().NotContain("private void NamedRangesButton_Click(");
 
         dataFilterSource.Should().Contain("private void SortAscButton_Click(");
         dataFilterSource.Should().Contain("private void SortCustomButton_Click(");
         dataFilterSource.Should().Contain("private void FilterButton_Click(");
-        dataFilterSource.Should().Contain("private bool ApplyAutoFilterDialogResult(");
+        dataFilterSource.Should().Contain("internal bool ApplyAutoFilterDialogResult(");
         dataFilterSource.Should().Contain("private void CfRuleButton_Click(");
         dataFilterSource.Should().Contain("private void ValidationButton_Click(");
-        dataFilterSource.Should().Contain("private void ClearFilterButton_Click(");
+        dataFilterSource.Should().Contain("internal void ClearFilterButton_Click(");
         dataFilterSource.Should().Contain("private void NamedRangesButton_Click(");
         dataFilterSource.Should().Contain("_filterWorkflowSession.PlanDialogResult(");
         workflowSource.Should().Contain("FilterPromptPlanner.TryPlan");
@@ -564,14 +564,14 @@ public sealed partial class MainWindowSourceHygieneTests
 
         mainSource.Should().NotContain("private void InsertCurrentDateOrTime(");
         mainSource.Should().NotContain("private void TableBtn_Click(");
-        mainSource.Should().NotContain("private void InsertSparkline(");
+        mainSource.Should().NotContain("internal void InsertSparkline(");
         mainSource.Should().NotContain("private void InsertLinkBtn_Click(");
         mainSource.Should().NotContain("private void HeaderFooterBtn_Click(");
         mainSource.Should().NotContain("private void SymbolPickerBtn_Click(");
 
         insertSource.Should().Contain("private void InsertCurrentDateOrTime(");
         insertSource.Should().Contain("private void TableBtn_Click(");
-        insertSource.Should().Contain("private void InsertSparkline(");
+        insertSource.Should().Contain("internal void InsertSparkline(");
         insertSource.Should().Contain("private void InsertLinkBtn_Click(");
         insertSource.Should().Contain("private void HeaderFooterBtn_Click(");
         insertSource.Should().Contain("private void SymbolPickerBtn_Click(");
@@ -693,7 +693,7 @@ public sealed partial class MainWindowSourceHygieneTests
         ExtractMethodSource(dataSource, "private async Task GetDataAsync(")
             .Should()
             .Contain("await ImportDataFromFileAsync(result.FileName!, adapter, ext, format);");
-        ExtractMethodSource(dataSource, "private async Task ImportDataFromFileAsync(")
+        ExtractMethodSource(dataSource, "internal async Task ImportDataFromFileAsync(")
             .Should()
             .Contain("await ImportDataFromFileAtDestinationAsync(");
         var importAtDestination = ExtractMethodSource(dataSource, "private async Task<bool> ImportDataFromFileAtDestinationAsync(");
@@ -768,16 +768,16 @@ public sealed partial class MainWindowSourceHygieneTests
         var uiStateSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookUiState.cs");
 
         mainSource.Should().NotContain("private void ApplyOptionsToView(");
-        mainSource.Should().NotContain("private void RecalculateWorkbook(");
-        mainSource.Should().NotContain("private string FormatCellReference(");
+        mainSource.Should().NotContain("internal void RecalculateWorkbook(");
+        mainSource.Should().NotContain("internal string FormatCellReference(");
         mainSource.Should().NotContain("private void RefreshToolbar(");
         mainSource.Should().NotContain("private void ApplyStyleDiff(");
         mainSource.Should().NotContain("private void NavigateToCell(");
         mainSource.Should().NotContain("private void RefreshSheetProtectionUi(");
 
         uiStateSource.Should().Contain("private void ApplyOptionsToView(");
-        uiStateSource.Should().Contain("private void RecalculateWorkbook(");
-        uiStateSource.Should().Contain("private string FormatCellReference(");
+        uiStateSource.Should().Contain("internal void RecalculateWorkbook(");
+        uiStateSource.Should().Contain("internal string FormatCellReference(");
         uiStateSource.Should().Contain("private void RefreshToolbar(");
         uiStateSource.Should().Contain("private void ApplyStyleDiff(");
         uiStateSource.Should().Contain("private void NavigateToCell(");
@@ -1205,7 +1205,7 @@ public sealed partial class MainWindowSourceHygieneTests
     public void QuickAnalysisPreviewAssignments_AvoidNoOpRenderInvalidations()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
-        var showPreview = ExtractMethodSource(source, "private void ShowQuickAnalysisPreview(");
+        var showPreview = ExtractMethodSource(source, "internal void ShowQuickAnalysisPreview(");
         var clearPreview = ExtractMethodSource(source, "private void ClearQuickAnalysisPreview(");
         var applyPreview = ExtractMethodSource(source, "private void ApplyQuickAnalysisPreview(");
 

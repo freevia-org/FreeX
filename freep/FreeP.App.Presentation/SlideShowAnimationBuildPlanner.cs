@@ -17,24 +17,38 @@ public static class SlideShowAnimationBuildPlanner
     public static bool IsParagraphBuild(Slide slide, uint shapeId)
     {
         ArgumentNullException.ThrowIfNull(slide);
+        return ReadParagraphBuildShapeIds(slide).Contains(shapeId);
+    }
+
+    public static HashSet<uint> ReadParagraphBuildShapeIds(Slide slide)
+    {
+        ArgumentNullException.ThrowIfNull(slide);
+        var shapeIds = new HashSet<uint>();
         if (string.IsNullOrWhiteSpace(slide.AnimationBuildListXml))
-            return false;
+            return shapeIds;
 
         try
         {
             var root = XElement.Parse(slide.AnimationBuildListXml, LoadOptions.PreserveWhitespace);
-            return root.Name == P + "bldLst" && root
-                .Elements(P + "bldP")
-                .Any(build =>
-                    uint.TryParse(build.Attribute("spid")?.Value, NumberStyles.Integer,
+            if (root.Name != P + "bldLst")
+                return shapeIds;
+
+            foreach (var build in root.Elements(P + "bldP"))
+            {
+                if (uint.TryParse(build.Attribute("spid")?.Value, NumberStyles.Integer,
                         CultureInfo.InvariantCulture, out var spid)
-                    && spid == shapeId
                     && string.Equals(build.Attribute("build")?.Value, "p",
-                        StringComparison.OrdinalIgnoreCase));
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    shapeIds.Add(spid);
+                }
+            }
+
+            return shapeIds;
         }
         catch (XmlException)
         {
-            return false;
+            return shapeIds;
         }
     }
 

@@ -239,15 +239,11 @@ public sealed class R124_UndoDeleteDrawingObjectSelectionTests
 
     private static void InvokeExecuteUndo(MainWindow window)
     {
-        var method = typeof(MainWindow).GetMethod("ExecuteUndo", PrivateInstance)
-            ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteUndo");
-        method.Invoke(window, []);
+        window.ExecuteUndo();
     }
 
     private static void InvokeExecuteRedo(MainWindow window)
     {
-        var method = typeof(MainWindow).GetMethod("ExecuteRedo", PrivateInstance)
-            ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteRedo");
-        method.Invoke(window, []);
+        window.ExecuteRedo();
     }
 }

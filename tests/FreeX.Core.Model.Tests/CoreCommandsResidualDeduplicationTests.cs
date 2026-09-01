@@ -315,6 +315,27 @@ public sealed class CoreCommandsResidualDeduplicationTests
     }
 
     [Fact]
+    public void StructuralTableRebandPaths_ShareTheSnapshotIdentityIndex()
+    {
+        var snapshotSource = ModelSourceTestSupport.ReadCommandsSource("RowColumnShiftHelpers.AddressState.cs");
+        snapshotSource.Should().Contain("StructuredTableModel? FindStructuredTableById(int tableId)");
+        snapshotSource.Should().Contain("index.TryAdd(table.Id, table)",
+            "the shared index must preserve the former first-match lookup semantics");
+
+        foreach (var file in new[]
+                 {
+                     "DeleteRowsCommand.cs",
+                     "InsertDeleteRowsCommand.cs",
+                     "InsertDeleteColumnsCommand.cs"
+                 })
+        {
+            var source = ModelSourceTestSupport.ReadCommandsSource(file);
+            source.Should().Contain("FindStructuredTableById(resizedTable.Id)", file);
+            source.Should().NotContain("StructuredTables.FirstOrDefault(t => t.Id == resizedTable.Id)", file);
+        }
+    }
+
+    [Fact]
     public void RowAndColumnChartSeriesRemapsShareAxisNeutralMutationCores()
     {
         var source = ModelSourceTestSupport.ReadCommandsSource("RowColumnShiftHelpers.PrintAndCharts.cs");

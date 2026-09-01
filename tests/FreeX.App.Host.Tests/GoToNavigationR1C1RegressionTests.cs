@@ -164,15 +164,11 @@ public sealed class GoToNavigationR1C1RegressionTests
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly MethodInfo _findFormulasMenuItemClick;
         private readonly MethodInfo _recalculateWorkbook;
 
         private MainWindowHarness(MainWindow window)
         {
             _window = window;
-            _findFormulasMenuItemClick = typeof(MainWindow)
-                .GetMethod("FindFormulasMenuItem_Click", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "FindFormulasMenuItem_Click");
             _recalculateWorkbook = typeof(MainWindow)
                 .GetMethod("RecalculateWorkbook", BindingFlags.Instance | BindingFlags.NonPublic, [])
                 ?? throw new MissingMethodException(nameof(MainWindow), "RecalculateWorkbook");
@@ -222,7 +218,7 @@ public sealed class GoToNavigationR1C1RegressionTests
 
         public void InvokeFindFormulasMenuItem()
         {
-            _findFormulasMenuItemClick.Invoke(_window, [_window, new RoutedEventArgs()]);
+            _window.FindFormulasMenuItem_Click(_window, new RoutedEventArgs());
             PumpDispatcher();
         }
 
@@ -230,12 +226,9 @@ public sealed class GoToNavigationR1C1RegressionTests
         {
             // Mirrors FindGoToMenuItem_Click's default-address computation without opening the
             // modal Go To dialog itself.
-            var formatCellReference = typeof(MainWindow)
-                .GetMethod("FormatCellReference", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "FormatCellReference");
             var range = SelectedRange
                 ?? throw new InvalidOperationException("No selection to compute a default address for.");
-            return (string)formatCellReference.Invoke(_window, [range.Start])!;
+            return _window.FormatCellReference(range.Start);
         }
 
         public void SetFormulaEditCell(uint row, uint col)

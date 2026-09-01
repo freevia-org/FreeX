@@ -31,7 +31,7 @@ public partial class MainWindow
         base.OnClosed(e);
     }
 
-    private IntPtr MainWindow_WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    internal IntPtr MainWindow_WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (msg == WM_ENTERSIZEMOVE)
         {

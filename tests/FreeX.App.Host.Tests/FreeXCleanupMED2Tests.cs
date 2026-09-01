@@ -51,14 +51,7 @@ public sealed class FreeXCleanupMED2Tests
             sheet.Id,
             new ViewportRequest(1, 1, 2_000, 2_000));
 
-        var method = typeof(MainWindow).GetMethod(
-            "BuildHtmlClipboardFragment",
-            BindingFlags.Static | BindingFlags.NonPublic);
-        method.Should().NotBeNull("BuildHtmlClipboardFragment should exist as a private static helper on MainWindow");
-
-        var cfHtml = (string?)method!.Invoke(
-            null,
-            [viewport, sheet, range, workbook.Theme]);
+        var cfHtml = MainWindow.BuildHtmlClipboardFragment(viewport, sheet, range, workbook.Theme);
 
         cfHtml.Should().NotBeNull();
 

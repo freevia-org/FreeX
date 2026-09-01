@@ -58,6 +58,73 @@ public sealed class SlideShowAnimationRendererSessionTests
     }
 
     [Fact]
+    public void OverlayPlan_ResolvesDenseReverseOrderedLineAnimationsByShapeId()
+    {
+        const int shapeCount = 256;
+        var presentation = new Presentation();
+        var slide = new Slide();
+        for (var index = 0; index < shapeCount; index++)
+        {
+            slide.Shapes.Add(new SlideShape
+            {
+                Id = (uint)(1000 + index),
+                Kind = SlideShapeKind.AutoShape,
+                Outline = new ShapeOutline.Visible(SrgbColor.Black),
+            });
+        }
+        for (var index = shapeCount - 1; index >= 0; index--)
+        {
+            var shapeId = (uint)(1000 + index);
+            slide.Animations.Add(LineColorAnimation(
+                shapeId,
+                $"{index:X2}{255 - index:X2}{index ^ 0xA5:X2}"));
+            slide.Animations.Add(LineColorAnimation(shapeId, "FFFFFF"));
+        }
+        presentation.Slides.Add(slide);
+
+        var plan = SlideShowAnimationOverlayPlanner.Build(presentation, slide);
+
+        plan.Shapes.Should().HaveCount(shapeCount);
+        for (var planIndex = 0; planIndex < shapeCount; planIndex++)
+        {
+            var shapeIndex = shapeCount - 1 - planIndex;
+            var shapePlan = plan.Shapes[planIndex];
+            shapePlan.ShapeId.Should().Be((uint)(1000 + shapeIndex));
+            var lineLayer = shapePlan.AuxiliaryLayers.Should().ContainSingle().Which;
+            lineLayer.TargetKind.Should().Be(SlideShowAnimationPlaybackTargetKind.Line);
+            lineLayer.Shape.Outline.Should().BeOfType<ShapeOutline.Visible>()
+                .Which.Color.Resolved.ToString().Should().Be(
+                    $"#{shapeIndex:X2}{255 - shapeIndex:X2}{shapeIndex ^ 0xA5:X2}",
+                    "the first matching animation for each shape must remain authoritative");
+        }
+    }
+
+    [Fact]
+    public void ParagraphBuildCatalog_PreservesFilteringDeduplicationAndMalformedFallback()
+    {
+        var slide = new Slide
+        {
+            AnimationBuildListXml = """
+                <p:bldLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+                  <p:bldP spid="7" build="p"/>
+                  <p:bldP spid="7" build="P"/>
+                  <p:bldP spid="8" build="allAtOnce"/>
+                  <p:bldP spid="bad" build="p"/>
+                </p:bldLst>
+                """,
+        };
+
+        SlideShowAnimationBuildPlanner.ReadParagraphBuildShapeIds(slide)
+            .Should().Equal(7u);
+        SlideShowAnimationBuildPlanner.IsParagraphBuild(slide, 7).Should().BeTrue();
+        SlideShowAnimationBuildPlanner.IsParagraphBuild(slide, 8).Should().BeFalse();
+
+        slide.AnimationBuildListXml = "<p:bldLst";
+        SlideShowAnimationBuildPlanner.ReadParagraphBuildShapeIds(slide).Should().BeEmpty();
+        SlideShowAnimationBuildPlanner.IsParagraphBuild(slide, 7).Should().BeFalse();
+    }
+
+    [Fact]
     public void StepPlanOwnsParagraphStaggerSpecialTargetsAndFallbackDecisions()
     {
         var presentation = new Presentation();
@@ -445,6 +512,20 @@ public sealed class SlideShowAnimationRendererSessionTests
             Kind = kind,
             Preset = preset,
             DurationMs = durationMs
+        };
+
+    private static ShapeAnimation LineColorAnimation(uint shapeId, string targetHex) =>
+        new()
+        {
+            ShapeId = shapeId,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.ChangeLineColor,
+            PreservedLineBehaviorXml = $$"""
+                <p:childTnLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                              xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                  <p:animClr><p:to><a:srgbClr val="{{targetHex}}"/></p:to></p:animClr>
+                </p:childTnLst>
+                """,
         };
 
     private static SlideShowAnimationPlaybackOperation Operation(

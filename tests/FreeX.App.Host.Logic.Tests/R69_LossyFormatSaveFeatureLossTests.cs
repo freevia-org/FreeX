@@ -142,19 +142,11 @@ public sealed class R69_LossyFormatSaveFeatureLossTests
 
     private sealed class LossySaveHarness : IDisposable
     {
-        private readonly MethodInfo _saveMethod;
-        private readonly MethodInfo _replaceWorkbookSession;
 
         private LossySaveHarness(MainWindow window, RecordingUserMessageService messageService)
         {
             Window = window;
             MessageService = messageService;
-            _saveMethod = typeof(MainWindow).GetMethod(
-                "SaveWorkbookToTargetAsync", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SaveWorkbookToTargetAsync");
-            _replaceWorkbookSession = typeof(MainWindow).GetMethod(
-                "ReplaceWorkbookSession", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ReplaceWorkbookSession");
         }
 
         public MainWindow Window { get; }
@@ -162,17 +154,15 @@ public sealed class R69_LossyFormatSaveFeatureLossTests
         public RecordingUserMessageService MessageService { get; }
 
         public void SetWorkbook(Workbook workbook) =>
-            _replaceWorkbookSession.Invoke(
-                Window,
-                [new StartupWorkbookLoadResult(
+            Window.ReplaceWorkbookSession(new StartupWorkbookLoadResult(
                     workbook,
                     "Book.fxl",
                     "Opened .fxl.",
-                    IsFallback: false)]);
+                    IsFallback: false));
 
         public bool RunSave(FileSaveTarget target)
         {
-            var task = (Task<bool>)_saveMethod.Invoke(Window, [target])!;
+            var task = Window.SaveWorkbookToTargetAsync(target);
 
             // Pump the dispatcher while waiting: the save's background write resumes via the
             // DispatcherSynchronizationContext installed on this STA thread, so a nested frame (rather

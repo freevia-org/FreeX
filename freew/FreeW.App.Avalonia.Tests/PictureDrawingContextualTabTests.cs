@@ -228,10 +228,15 @@ public sealed class PictureDrawingContextualTabTests
         drawingArrangeIds.Should().Contain(new[]
         {
             "freew.shape-position",
-            "freew.image-bring-to-front",
-            "freew.image-send-to-back",
-            "freew.image-bring-forward",
-            "freew.image-send-backward",
+            // r185: these were image-* here and shape-* in the Picture group -- the two sets
+            // were swapped in the portable overrides only. FreeWRibbonParityTests asserts the
+            // opposite for the same group ("Drawing Tools > Arrange must expose Bring to Front"
+            // via freew.shape-bring-to-front, and that it is registry-backed for shapes), so the
+            // two suites disagreed; the parity test is the one describing intent.
+            "freew.shape-bring-to-front",
+            "freew.shape-send-to-back",
+            "freew.shape-bring-forward",
+            "freew.shape-send-backward",
             "freew.shape-align-left",
             "freew.shape-align-center",
             "freew.shape-align-right",
@@ -244,11 +249,12 @@ public sealed class PictureDrawingContextualTabTests
         }, "Avalonia should use the same shared arrange command ids as WPF for drawing objects");
         drawingArrangeIds.Should().NotContain(new[]
         {
-            "freew.shape-bring-to-front",
-            "freew.shape-send-to-back",
-            "freew.shape-bring-forward",
-            "freew.shape-send-backward",
-        }, "shape-prefixed z-order ids duplicate the shared WPF/Avalonia object-format commands");
+            "freew.image-bring-to-front",
+            "freew.image-send-to-back",
+            "freew.image-bring-forward",
+            "freew.image-send-backward",
+        }, "the Drawing tab must act on the selected SHAPE -- image-prefixed z-order ids belong "
+            + "to the Picture tab, and both families are separately registered commands");
     }
 
     [Fact]

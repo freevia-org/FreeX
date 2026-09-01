@@ -40,6 +40,8 @@ public sealed class SmartArtDeduplicationTests
         planner.Should().Contain("OpcPathHelper.GetRelativeZipPath(");
         planner.Should().Contain("OpcPathHelper.ResolveRelativeZipPath(");
         planner.Should().Contain("SmartArtNodeTraversal.FlattenPreorder(");
+        planner.Should().Contain("if (!usedTargets.Contains(oldMediaPath))");
+        planner.Should().NotContain("if (!replacements.Any(replacement =>");
         planner.Should().NotContain("private static string MakeRelativeZipPath(");
         planner.Should().NotContain("private static string ResolveRelativeZipPath(");
         planner.Should().NotContain("private static string GetDirectoryName(");

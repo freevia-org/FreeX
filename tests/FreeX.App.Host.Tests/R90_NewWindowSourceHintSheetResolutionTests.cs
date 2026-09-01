@@ -31,6 +31,8 @@ public sealed class R90_NewWindowSourceHintSheetResolutionTests
     /// </summary>
     private sealed class DocumentPlaceholderWindow(WorkbookId documentId) : IWorkbookWindow
     {
+        public bool HasUnsavedChanges => false;
+
         public WorkbookId DocumentId { get; } = documentId;
         public void ApplyWindowTitleSuffix(string suffix) { }
         public void RefreshFromSharedWorkbook() { }
@@ -82,9 +84,7 @@ public sealed class R90_NewWindowSourceHintSheetResolutionTests
 
     private static void SelectSheetTab(MainWindow window, SheetId sheetId)
     {
-        var method = typeof(MainWindow).GetMethod("SelectSingleSheetTab", BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        method!.Invoke(window, [sheetId]);
+        window.SelectSingleSheetTab(sheetId);
     }
 
     private static SheetId GetCurrentSheetId(MainWindow window)

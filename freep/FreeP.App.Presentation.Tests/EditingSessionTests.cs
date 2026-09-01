@@ -203,6 +203,93 @@ public sealed class EditingSessionTests
             path.Contains("freep-smartart-picture", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void SynchronizeSmartArtPictures_AddsAndRemovesWhileRetainingSharedNonImageTarget()
+    {
+        var (_, smartArt) = MakeSmartArtSession();
+        var drawingPath = smartArt.DrawingPartPath!;
+        var removedBytes = new byte[] { 1, 2, 3 };
+        var addedBytes = new byte[] { 9, 8, 7, 6 };
+        var previousData = new SmartArtData
+        {
+            Family = smartArt.Data!.Family,
+            LayoutUniqueId = smartArt.Data.LayoutUniqueId,
+            IsLiveLayoutSupported = smartArt.Data.IsLiveLayoutSupported,
+        };
+        previousData.Nodes.Add(new SmartArtNode
+        {
+            ModelId = "n1",
+            Text = "Plan",
+            Picture = new ImagePart { Bytes = removedBytes, ContentType = "image/png" },
+        });
+        previousData.Nodes.Add(new SmartArtNode { ModelId = "n2", Text = "Build" });
+        smartArt.Data.Nodes[0].Picture = null;
+        smartArt.Data.Nodes[1].Picture = new ImagePart
+        {
+            Bytes = addedBytes,
+            ContentType = "image/png",
+        };
+        smartArt.FallbackShapes.Add(new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.AutoShape,
+            Fill = new ShapeFill.Picture(removedBytes.ToArray(), "image/png"),
+        });
+        smartArt.FallbackShapes.Add(new SlideShape
+        {
+            Id = 2,
+            Kind = SlideShapeKind.AutoShape,
+            Fill = new ShapeFill.Solid(SrgbColor.White),
+        });
+        smartArt.Parts[drawingPath] = new DiagramPart
+        {
+            PartPath = drawingPath,
+            ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+            Bytes = Encoding.UTF8.GetBytes(
+                "<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" " +
+                "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" " +
+                "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">" +
+                "<dsp:spTree>" +
+                "<dsp:sp modelId=\"n1\"><dsp:spPr><a:blipFill><a:blip r:embed=\"rIdPic1\"/>" +
+                "</a:blipFill><a:prstGeom prst=\"rect\"/></dsp:spPr></dsp:sp>" +
+                "<dsp:sp modelId=\"n2\"><dsp:spPr><a:solidFill><a:srgbClr val=\"FFFFFF\"/>" +
+                "</a:solidFill><a:prstGeom prst=\"rect\"/></dsp:spPr></dsp:sp>" +
+                "</dsp:spTree></dsp:drawing>"),
+        };
+        smartArt.PartRels[drawingPath] = Encoding.UTF8.GetBytes(
+            "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+            "<Relationship Id=\"rIdPic1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" " +
+            "Target=\"../media/shared.png\"/>" +
+            "<Relationship Id=\"rIdKeep\" Type=\"http://example.com/relationships/metadata\" " +
+            "Target=\"../media/shared.png\"/>" +
+            "</Relationships>");
+        smartArt.Parts["ppt/media/shared.png"] = new DiagramPart
+        {
+            PartPath = "ppt/media/shared.png",
+            ContentType = "image/png",
+            Bytes = removedBytes.ToArray(),
+        };
+
+        var result = SmartArtEditingPlanner.SynchronizePreservedDrawingPictures(
+            smartArt,
+            previousData);
+
+        result.Applied.Should().BeTrue(result.Message);
+        smartArt.Parts.Should().ContainKey("ppt/media/shared.png",
+            "a remaining non-image relationship still owns the shared target");
+        var addedPart = smartArt.Parts.Values.Single(part =>
+            part.PartPath.Contains("freep-smartart-picture", StringComparison.Ordinal));
+        addedPart.Bytes.Should().Equal(addedBytes);
+        smartArt.FallbackShapes.Should().ContainSingle();
+        smartArt.FallbackShapes[0].Fill.Should().BeOfType<ShapeFill.Picture>()
+            .Which.ImageBytes.Should().Equal(addedBytes);
+        var relationshipsXml = Encoding.UTF8.GetString(smartArt.PartRels[drawingPath]);
+        relationshipsXml.Should().NotContain("rIdPic1");
+        relationshipsXml.Should().Contain("rIdKeep");
+        relationshipsXml.IndexOf("rIdKeep", StringComparison.Ordinal).Should().BeLessThan(
+            relationshipsXml.IndexOf("rIdFreePSmartArtPic", StringComparison.Ordinal));
+    }
+
     // ── Construction ──────────────────────────────────────────────────────────────
 
     [Fact]

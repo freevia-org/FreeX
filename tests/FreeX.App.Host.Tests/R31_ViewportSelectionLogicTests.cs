@@ -158,24 +158,12 @@ public sealed class R31_ViewportSelectionLogicTests
     private sealed class ViewportSelectionHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly MethodInfo _setActiveCell;
-        private readonly MethodInfo _mainWindowKeyDown;
-        private readonly MethodInfo _updateViewport;
         private readonly MethodInfo _setFreezePanes;
         private readonly FieldInfo _selectionAnchorField;
 
         private ViewportSelectionHarness(MainWindow window)
         {
             _window = window;
-            _setActiveCell = typeof(MainWindow)
-                .GetMethod("SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SetActiveCell");
-            _mainWindowKeyDown = typeof(MainWindow)
-                .GetMethod("MainWindow_KeyDown", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "MainWindow_KeyDown");
-            _updateViewport = typeof(MainWindow)
-                .GetMethod("UpdateViewport", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "UpdateViewport");
             _setFreezePanes = typeof(MainWindow)
                 .GetMethod("SetFreezePanes", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "SetFreezePanes");
@@ -208,7 +196,7 @@ public sealed class R31_ViewportSelectionLogicTests
 
         public void SelectActiveCell(uint row, uint col)
         {
-            _setActiveCell.Invoke(_window, [new CellAddress(SheetId, row, col)]);
+            _window.SetActiveCell(new CellAddress(SheetId, row, col));
             PumpDispatcher();
         }
 
@@ -222,7 +210,7 @@ public sealed class R31_ViewportSelectionLogicTests
 
         public void RefreshViewport()
         {
-            _updateViewport.Invoke(_window, []);
+            _window.UpdateViewport();
             PumpDispatcher();
         }
 
@@ -240,7 +228,7 @@ public sealed class R31_ViewportSelectionLogicTests
             {
                 RoutedEvent = Keyboard.KeyDownEvent
             };
-            _mainWindowKeyDown.Invoke(_window, [_window, args]);
+            _window.MainWindow_KeyDown(_window, args);
             PumpDispatcher();
         }
 

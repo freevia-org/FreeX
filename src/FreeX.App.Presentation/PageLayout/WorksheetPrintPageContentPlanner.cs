@@ -829,8 +829,7 @@ public static class WorksheetPrintHyperlinkPlanner
     }
 
     private static SheetId? ResolveSheetIdByName(Workbook workbook, string sheetName) =>
-        workbook.Sheets.FirstOrDefault(
-            sheet => string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase))?.Id;
+        workbook.GetSheet(sheetName)?.Id;
 }
 
 public static class WorksheetPrintCellGeometryPlanner

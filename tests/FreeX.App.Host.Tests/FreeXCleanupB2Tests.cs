@@ -189,16 +189,12 @@ public sealed class FreeXCleanupB2RightToLeftTests
     private sealed class RightToLeftHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly MethodInfo _updateViewport;
         private readonly FieldInfo _currentSheetIdField;
 
         private RightToLeftHarness(MainWindow window, Workbook workbook)
         {
             _window = window;
             Workbook = workbook;
-            _updateViewport = typeof(MainWindow)
-                .GetMethod("UpdateViewport", BindingFlags.Instance | BindingFlags.NonPublic, [])
-                ?? throw new MissingMethodException(nameof(MainWindow), "UpdateViewport");
             _currentSheetIdField = typeof(MainWindow)
                 .GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_currentSheetId");
@@ -212,7 +208,7 @@ public sealed class FreeXCleanupB2RightToLeftTests
 
         public void RefreshViewport()
         {
-            _updateViewport.Invoke(_window, []);
+            _window.UpdateViewport();
             PumpDispatcher();
         }
 

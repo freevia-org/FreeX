@@ -304,25 +304,34 @@ public static class SlideShowMorphPlanner
             foreach (var targetShape in targetShapes.Where(s =>
                          !usedTarget.Contains(s) && !string.IsNullOrWhiteSpace(s.PlainText)))
             {
-                var candidates = sourceShapes
-                    .Where(s => !usedSource.Contains(s) && !string.IsNullOrWhiteSpace(s.PlainText))
-                    .Select(sourceShape =>
-                        (Shape: sourceShape,
-                         Score: TextMatchScore(sourceShape.PlainText, targetShape.PlainText, option)))
-                    .Where(candidate => candidate.Score > 0)
-                    .OrderByDescending(candidate => candidate.Score)
-                    .ToList();
-
-                if (candidates.Count == 0 ||
-                    candidates.Count > 1 && candidates[0].Score == candidates[1].Score)
+                SlideShape? bestShape = null;
+                var bestScore = 0;
+                var bestIsTied = false;
+                foreach (var sourceShape in sourceShapes)
                 {
-                    continue;
+                    if (usedSource.Contains(sourceShape) || string.IsNullOrWhiteSpace(sourceShape.PlainText))
+                        continue;
+
+                    var score = TextMatchScore(sourceShape.PlainText, targetShape.PlainText, option);
+                    if (score > bestScore)
+                    {
+                        bestShape = sourceShape;
+                        bestScore = score;
+                        bestIsTied = false;
+                    }
+                    else if (score > 0 && score == bestScore)
+                    {
+                        bestIsTied = true;
+                    }
                 }
 
+                if (bestShape is null || bestIsTied)
+                    continue;
+
                 AddMatch(
-                    candidates[0].Shape,
+                    bestShape,
                     targetShape,
-                    $"{option}:text:{candidates[0].Score}");
+                    $"{option}:text:{bestScore}");
             }
         }
 

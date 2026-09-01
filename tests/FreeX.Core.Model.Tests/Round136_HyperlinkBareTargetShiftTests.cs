@@ -89,4 +89,25 @@ public sealed class Round136_HyperlinkBareTargetShiftTests
         sheet2.Hyperlinks[otherSheetAddr].Should().Be("A10");
         sheet1.Hyperlinks[namedRangeAddr].Should().Be("MyNamedRange");
     }
+
+    [Fact]
+    public void InsertRows_ShiftsQualifiedHyperlinkOnOtherSheet_AndIndexedUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var editedSheet = wb.AddSheet("Sheet1");
+        var hyperlinkSheet = wb.AddSheet("Sheet2");
+        var ctx = new TestCommandContext(wb);
+        var hyperlinkAddress = new CellAddress(hyperlinkSheet.Id, 1, 1);
+        hyperlinkSheet.Hyperlinks[hyperlinkAddress] = "Sheet1!A10";
+        hyperlinkSheet.HyperlinkMetadata[hyperlinkAddress] =
+            new HyperlinkMetadata(HyperlinkTargetKind.PlaceInThisDocument);
+        var command = new InsertRowsCommand(editedSheet.Id, beforeRow: 10, count: 5);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        hyperlinkSheet.Hyperlinks[hyperlinkAddress].Should().Be("Sheet1!A15");
+
+        command.Revert(ctx);
+        hyperlinkSheet.Hyperlinks[hyperlinkAddress].Should().Be("Sheet1!A10",
+            "undo must resolve the snapshot's owning sheet by identity and restore its raw target");
+    }
 }

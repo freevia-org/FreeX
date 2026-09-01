@@ -6940,13 +6940,26 @@ public sealed partial class DocumentView : Control
                 // Paragraphs whose images are ALL floating (anchored) are laid out as normal text
                 // paragraphs so that the anchor content-Y is tracked; their images are collected
                 // into _floatingImages by CollectFloatingObjects() called from within each layout method.
-                var hasInlineImage   = paragraph.Runs.Any(r => r.Image    is { IsFloating: false });
-                var hasInlineShape   = paragraph.Runs.Any(r => r.Shape    is { IsFloating: false });
-                var hasInlineChart   = paragraph.Runs.Any(r => r.Chart    is { IsFloating: false });
-                var hasInlineWordArt = paragraph.Runs.Any(r => r.WordArt  is { IsFloating: false });
-                var hasInlineSmArt   = paragraph.Runs.Any(r => r.SmartArt is { IsFloating: false });
-                var hasEmbeddedObject = paragraph.Runs.Any(r => r.EmbeddedObject is not null);
-                var hasAnyImage    = paragraph.Runs.Any(r => r.Image is not null);
+                var hasInlineImage = false;
+                var hasInlineShape = false;
+                var hasInlineChart = false;
+                var hasInlineWordArt = false;
+                var hasInlineSmArt = false;
+                var hasEmbeddedObject = false;
+                var hasAnyImage = false;
+                foreach (var run in paragraph.Runs)
+                {
+                    if (run.Image is { } image)
+                    {
+                        hasAnyImage = true;
+                        hasInlineImage |= !image.IsFloating;
+                    }
+                    hasInlineShape |= run.Shape is { IsFloating: false };
+                    hasInlineChart |= run.Chart is { IsFloating: false };
+                    hasInlineWordArt |= run.WordArt is { IsFloating: false };
+                    hasInlineSmArt |= run.SmartArt is { IsFloating: false };
+                    hasEmbeddedObject |= run.EmbeddedObject is not null;
+                }
                 if (hasAnyImage && !hasInlineShape && !hasInlineChart && !hasInlineWordArt && !hasInlineSmArt
                     && !hasEmbeddedObject)
                 {

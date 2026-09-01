@@ -85,15 +85,8 @@ public sealed class MainWindowSheetTabDeleteActivatesAdjacentTests
 
     private static void SelectSheetTab(MainWindow window, SheetId sheetId)
     {
-        var selectSingleSheetTab = typeof(MainWindow)
-            .GetMethod("SelectSingleSheetTab", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(nameof(MainWindow), "SelectSingleSheetTab");
-        var updateViewport = typeof(MainWindow)
-            .GetMethod("UpdateViewport", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(nameof(MainWindow), "UpdateViewport");
-
-        selectSingleSheetTab.Invoke(window, [sheetId]);
-        updateViewport.Invoke(window, []);
+        window.SelectSingleSheetTab(sheetId);
+        window.UpdateViewport();
     }
 
     private static void InvokeSheetTabContextMenuClick(MainWindow window, string methodName, SheetId clickedSheetId)

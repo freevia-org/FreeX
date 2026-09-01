@@ -34,6 +34,8 @@ public sealed class R120_NewWindowSeedsActiveCellAndSelectionTests
     /// </summary>
     private sealed class DocumentPlaceholderWindow(WorkbookId documentId) : IWorkbookWindow
     {
+        public bool HasUnsavedChanges => false;
+
         public WorkbookId DocumentId { get; } = documentId;
         public void ApplyWindowTitleSuffix(string suffix) { }
         public void RefreshFromSharedWorkbook() { }
@@ -86,9 +88,7 @@ public sealed class R120_NewWindowSeedsActiveCellAndSelectionTests
     /// <summary>Drives the same private selection setter the real grid/Name Box/Go To use.</summary>
     private static void SetSelectionRange(MainWindow window, GridRange range, CellAddress activeCell)
     {
-        var method = typeof(MainWindow).GetMethod("SetSelectionRange", BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        method!.Invoke(window, [range, activeCell]);
+        window.SetSelectionRange(range, activeCell);
     }
 
     private static void SetNewWindowSourceHint(MainWindow newWindow, MainWindow source) =>

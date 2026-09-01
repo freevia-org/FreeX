@@ -22,6 +22,10 @@ public static class PresentationSelectionPanePlanner
         var selected = selectedShapeIds ?? Array.Empty<uint>();
         if (slide is null)
             return new(slideIndex, false, null, []);
+        uint? singleSelectedShapeId = selected.Count == 1 ? selected[0] : null;
+        HashSet<uint>? multipleSelectedShapeIds = selected.Count > 1
+            ? new HashSet<uint>(selected)
+            : null;
 
         // PowerPoint presents the front-most object first, while the model stores painter order.
         // Keep group children in the same local order directly beneath their group so the pane
@@ -36,7 +40,8 @@ public static class PresentationSelectionPanePlanner
                 entry.Shape.Kind,
                 DescribeKind(entry.Shape.Kind, entry.Shape.Id),
                 entry.Shape.IsHidden,
-                selected.Contains(entry.Shape.Id),
+                singleSelectedShapeId == entry.Shape.Id
+                    || multipleSelectedShapeIds?.Contains(entry.Shape.Id) == true,
                 entry.Depth,
                 CanMoveUp: entry.SiblingIndex < entry.SiblingCount - 1,
                 CanMoveDown: entry.SiblingIndex > 0))
@@ -45,7 +50,7 @@ public static class PresentationSelectionPanePlanner
         return new(
             slideIndex,
             true,
-            selected.Count == 1 ? selected[0] : null,
+            singleSelectedShapeId,
             items);
     }
 

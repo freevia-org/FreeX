@@ -28,10 +28,10 @@ public sealed partial class MainWindowMouseSelectionSourceTests
         var windowSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
 
         var extendSelection = selectionSource[
-            selectionSource.IndexOf("private void ExtendSelection", StringComparison.Ordinal)..
-            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
+            selectionSource.IndexOf("internal void ExtendSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("internal void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
         var addSelection = selectionSource[
-            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("internal void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
             selectionSource.IndexOf("private void RefreshStatusBarAfterDragSelectionChange", StringComparison.Ordinal)];
         var refreshHelper = selectionSource[
             selectionSource.IndexOf("private void RefreshStatusBarAfterDragSelectionChange", StringComparison.Ordinal)..
@@ -56,7 +56,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
         var windowSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
 
         var addSelection = selectionSource[
-            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("internal void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
             selectionSource.IndexOf("private void RefreshToolbarAfterDragSelectionChange", StringComparison.Ordinal)];
         var refreshHelper = selectionSource[
             selectionSource.IndexOf("private void RefreshToolbarAfterDragSelectionChange", StringComparison.Ordinal)..
@@ -103,7 +103,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
         var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var addSelection = selectionSource[
-            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("internal void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
             selectionSource.IndexOf("private bool IsSelectionExtensionUnchanged", StringComparison.Ordinal)];
 
         addSelection.Should().Contain("GridSelectionNavigationPlanner.UpdateDisjointSelectionAreas(");
@@ -117,13 +117,13 @@ public sealed partial class MainWindowMouseSelectionSourceTests
         var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
         var setActiveCell = selectionSource[
-            selectionSource.IndexOf("private void SetActiveCell", StringComparison.Ordinal)..
+            selectionSource.IndexOf("internal void SetActiveCell", StringComparison.Ordinal)..
             selectionSource.IndexOf("private void EnsureActiveCellSelection", StringComparison.Ordinal)];
         var extendSelection = selectionSource[
-            selectionSource.IndexOf("private void ExtendSelection", StringComparison.Ordinal)..
-            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
+            selectionSource.IndexOf("internal void ExtendSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("internal void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
         var addSelection = selectionSource[
-            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("internal void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
             selectionSource.IndexOf("private bool IsSelectionExtensionUnchanged", StringComparison.Ordinal)];
         var helper = selectionSource[
             selectionSource.IndexOf("private void SetCellAddressBoxSelectionText", StringComparison.Ordinal)..

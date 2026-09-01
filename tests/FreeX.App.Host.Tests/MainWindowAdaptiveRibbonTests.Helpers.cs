@@ -58,15 +58,11 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         private readonly MainWindow _window;
         private readonly bool _ownsWindow;
-        private readonly MethodInfo _normalizeRibbonSurface;
 
         private MainWindowHarness(MainWindow window, bool ownsWindow = false)
         {
             _window = window;
             _ownsWindow = ownsWindow;
-            _normalizeRibbonSurface = typeof(MainWindow)
-                .GetMethod("NormalizeRibbonSurface", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "NormalizeRibbonSurface");
         }
 
         public IReadOnlyList<string> CollapsedRibbonGroupNames =>
@@ -772,7 +768,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         public void NormalizeRibbonSurface()
         {
-            _normalizeRibbonSurface.Invoke(_window, [true]);
+            _window.NormalizeRibbonSurface(true);
             _window.UpdateLayout();
             PumpDispatcher();
         }

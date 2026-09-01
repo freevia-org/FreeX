@@ -66,9 +66,7 @@ public sealed class R104_IncreaseFontSizeAutoFitRowClampTests
                 uncappedEstimate.Should().BeGreaterThan(AutoFitSizingService.MaximumRowHeight,
                     "the test is only meaningful if the naive estimate exceeds the pixel ceiling");
 
-                var method = typeof(MainWindow).GetMethod("IncreaseFontSizeBtn_Click", BindingFlags.NonPublic | BindingFlags.Instance);
-                method.Should().NotBeNull();
-                method!.Invoke(window, [null, new RoutedEventArgs()]);
+                window.IncreaseFontSizeBtn_Click(null!, new RoutedEventArgs());
                 PumpDispatcher();
 
                 // No "Auto Fit Row Height" error/warning should have been surfaced to the user.
@@ -132,8 +130,7 @@ public sealed class R104_IncreaseFontSizeAutoFitRowClampTests
                 var expectedHeight = FontSizePlanner.EstimateFittingRowHeight(FontSizePlanner.Increase(seedFontSize));
                 expectedHeight.Should().BeLessThan(AutoFitSizingService.MaximumRowHeight);
 
-                var method = typeof(MainWindow).GetMethod("IncreaseFontSizeBtn_Click", BindingFlags.NonPublic | BindingFlags.Instance);
-                method!.Invoke(window, [null, new RoutedEventArgs()]);
+                window.IncreaseFontSizeBtn_Click(null!, new RoutedEventArgs());
                 PumpDispatcher();
 
                 messages.Messages.Should().BeEmpty();

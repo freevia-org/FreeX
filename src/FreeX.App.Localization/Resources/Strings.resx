@@ -16018,6 +16018,12 @@ Continue saving?</value>
   <data name="FormatCells_FillPatternNone" xml:space="preserve">
     <value>None</value>
   </data>
+  <data name="MainWindowMessage_UpdateDiscardsOtherWindowChanges" xml:space="preserve">
+    <value>Other open workbooks have unsaved changes. Installing the update restarts FreeX and those changes will be lost. Save them first, or select OK to install anyway.</value>
+  </data>
+  <data name="MainWindowMessage_UpdateApplyFailed" xml:space="preserve">
+    <value>The update could not be installed. FreeX is still running the previous version.</value>
+  </data>
   <data name="MainWindowMessage_SaveChangesTitle" xml:space="preserve">
     <value>FreeX</value>
   </data>

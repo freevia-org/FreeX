@@ -604,32 +604,54 @@ public static class SlideShowAnimationOverlayPlanner
         ArgumentNullException.ThrowIfNull(presentation);
         ArgumentNullException.ThrowIfNull(slide);
 
-        var entranceShapeIds = slide.Animations
-            .Where(animation =>
-                (animation.Kind is AnimationKind.Entrance or AnimationKind.Motion)
+        var entranceShapeIds = new HashSet<uint>();
+        var animatedShapeIds = new List<uint>();
+        var animatedShapeIdSet = new HashSet<uint>();
+        var animationsByShapeId = new Dictionary<uint, List<ShapeAnimation>>();
+        foreach (var animation in slide.Animations)
+        {
+            if (!animationsByShapeId.TryGetValue(animation.ShapeId, out var shapeAnimations))
+            {
+                shapeAnimations = [];
+                animationsByShapeId.Add(animation.ShapeId, shapeAnimations);
+            }
+            shapeAnimations.Add(animation);
+
+            if ((animation.Kind is AnimationKind.Entrance or AnimationKind.Motion)
                 && animation.TriggerShapeId is null)
-            .Select(animation => animation.ShapeId)
-            .ToHashSet();
-        var animatedShapeIds = slide.Animations
-            .Where(animation => animation.Kind is AnimationKind.Entrance
-                or AnimationKind.Motion
-                or AnimationKind.Emphasis
-                or AnimationKind.Exit)
-            .Select(animation => animation.ShapeId)
-            .Distinct()
-            .ToArray();
-        var plans = new List<SlideShowAnimationOverlayShapePlan>(animatedShapeIds.Length);
+            {
+                entranceShapeIds.Add(animation.ShapeId);
+            }
+
+            if (animation.Kind is AnimationKind.Entrance
+                    or AnimationKind.Motion
+                    or AnimationKind.Emphasis
+                    or AnimationKind.Exit
+                && animatedShapeIdSet.Add(animation.ShapeId))
+            {
+                animatedShapeIds.Add(animation.ShapeId);
+            }
+        }
+
+        if (animatedShapeIds.Count == 0)
+            return SlideShowAnimationOverlayPlan.Empty;
+
+        var shapesById = new Dictionary<uint, SlideShape>();
+        foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
+            shapesById.TryAdd(shape.Id, shape);
+        var paragraphBuildShapeIds = SlideShowAnimationBuildPlanner.ReadParagraphBuildShapeIds(slide);
+        var plans = new List<SlideShowAnimationOverlayShapePlan>(animatedShapeIds.Count);
 
         foreach (var shapeId in animatedShapeIds)
         {
-            var shape = SlideShapeTraversal.FindById(slide, shapeId);
-            if (shape is null)
+            if (!shapesById.TryGetValue(shapeId, out var shape))
             {
                 continue;
             }
 
-            var rangedAnimations = slide.Animations
-                .Where(animation => animation.ShapeId == shapeId && animation.ParagraphRangeStart.HasValue)
+            var shapeAnimations = animationsByShapeId[shapeId];
+            var rangedAnimations = shapeAnimations
+                .Where(animation => animation.ParagraphRangeStart.HasValue)
                 .ToArray();
             var useParagraphRanges = rangedAnimations.Length > 0
                 && SlideShowAnimationBuildPlanner.ParagraphRangesCoverWholeShape(shape, rangedAnimations);
@@ -653,7 +675,7 @@ public static class SlideShowAnimationOverlayPlanner
                     .Select(plan => plan!)
                     .ToArray()
                 : Array.Empty<SlideShowAnimationParagraphRangeOverlayPlan>();
-            var paragraphShapes = SlideShowAnimationBuildPlanner.IsParagraphBuild(slide, shapeId)
+            var paragraphShapes = paragraphBuildShapeIds.Contains(shapeId)
                 ? SlideShowAnimationBuildPlanner.CreateParagraphShapes(shape)
                 : Array.Empty<SlideShape>();
             SlideShape? paragraphBackground = null;
@@ -667,13 +689,12 @@ public static class SlideShowAnimationOverlayPlanner
                 shapeId,
                 shape,
                 entranceShapeIds.Contains(shapeId) ? 0 : 1,
-                SuppressBaseShape: slide.Animations.Any(animation =>
-                    animation.ShapeId == shapeId
-                    && animation.Kind is AnimationKind.Entrance or AnimationKind.Motion),
+                SuppressBaseShape: shapeAnimations.Any(animation =>
+                    animation.Kind is AnimationKind.Entrance or AnimationKind.Motion),
                 paragraphBackground,
                 paragraphShapes,
                 paragraphRangeShapes,
-                BuildAuxiliaryLayers(presentation, slide, shape)));
+                BuildAuxiliaryLayers(presentation, slide.ColorMapOverride, shape, shapeAnimations)));
         }
 
         return plans.Count == 0
@@ -695,26 +716,27 @@ public static class SlideShowAnimationOverlayPlanner
 
     private static IReadOnlyList<SlideShowAnimationAuxiliaryOverlayPlan> BuildAuxiliaryLayers(
         Presentation presentation,
-        Slide slide,
-        SlideShape shape)
+        IReadOnlyDictionary<string, string>? effectiveColorMap,
+        SlideShape shape,
+        IReadOnlyList<ShapeAnimation> animations)
     {
         var layers = new List<SlideShowAnimationAuxiliaryOverlayPlan>(4);
         AddLayer(
             layers,
             SlideShowAnimationPlaybackTargetKind.Fill,
-            BuildFillMaskShape(slide, shape));
+            BuildFillMaskShape(shape, animations));
         AddLayer(
             layers,
             SlideShowAnimationPlaybackTargetKind.Line,
-            BuildLineColorShape(presentation, slide, shape));
+            BuildLineColorShape(presentation, effectiveColorMap, shape, animations));
         AddLayer(
             layers,
             SlideShowAnimationPlaybackTargetKind.FontStyle,
-            BuildFontStyleShape(slide, shape));
+            BuildFontStyleShape(shape, animations));
         AddLayer(
             layers,
             SlideShowAnimationPlaybackTargetKind.FontSize,
-            BuildFontSizeShape(slide, shape));
+            BuildFontSizeShape(shape, animations));
         return layers;
     }
 
@@ -727,12 +749,12 @@ public static class SlideShowAnimationOverlayPlanner
             layers.Add(new SlideShowAnimationAuxiliaryOverlayPlan(targetKind, shape));
     }
 
-    private static SlideShape? BuildFillMaskShape(Slide slide, SlideShape shape)
+    private static SlideShape? BuildFillMaskShape(
+        SlideShape shape,
+        IReadOnlyList<ShapeAnimation> animations)
     {
         if (shape.Fill is ShapeFill.None
-            || !slide.Animations.Any(animation =>
-                animation.ShapeId == shape.Id
-                && animation.Preset == AnimationPreset.ChangeFillColor))
+            || !animations.Any(animation => animation.Preset == AnimationPreset.ChangeFillColor))
         {
             return null;
         }
@@ -745,12 +767,12 @@ public static class SlideShowAnimationOverlayPlanner
 
     private static SlideShape? BuildLineColorShape(
         Presentation presentation,
-        Slide slide,
-        SlideShape shape)
+        IReadOnlyDictionary<string, string>? effectiveColorMap,
+        SlideShape shape,
+        IReadOnlyList<ShapeAnimation> animations)
     {
-        var animation = slide.Animations.FirstOrDefault(candidate =>
-            candidate.ShapeId == shape.Id
-            && candidate.Preset == AnimationPreset.ChangeLineColor);
+        var animation = animations.FirstOrDefault(candidate =>
+            candidate.Preset == AnimationPreset.ChangeLineColor);
         if (animation is null
             || shape.TextBody is not null
             || shape.Outline is not ShapeOutline.Visible outline)
@@ -762,7 +784,7 @@ public static class SlideShowAnimationOverlayPlanner
             animation,
             startDelayMs: 0,
             presentation,
-            slide.ColorMapOverride);
+            effectiveColorMap);
         if (!TryParseColor(playback.ColorToHex, out var lineColor))
         {
             return null;
@@ -778,11 +800,12 @@ public static class SlideShowAnimationOverlayPlanner
         return lineShape;
     }
 
-    private static SlideShape? BuildFontStyleShape(Slide slide, SlideShape shape)
+    private static SlideShape? BuildFontStyleShape(
+        SlideShape shape,
+        IReadOnlyList<ShapeAnimation> animations)
     {
-        var animation = slide.Animations.FirstOrDefault(candidate =>
-            candidate.ShapeId == shape.Id
-            && candidate.Preset is AnimationPreset.ChangeFontStyle
+        var animation = animations.FirstOrDefault(candidate =>
+            candidate.Preset is AnimationPreset.ChangeFontStyle
                 or AnimationPreset.Bold
                 or AnimationPreset.Underline);
         var runs = shape.TextBody?.Paragraphs.SelectMany(paragraph => paragraph.Runs).ToArray();
@@ -817,11 +840,12 @@ public static class SlideShowAnimationOverlayPlanner
         return fontStyleShape;
     }
 
-    private static SlideShape? BuildFontSizeShape(Slide slide, SlideShape shape)
+    private static SlideShape? BuildFontSizeShape(
+        SlideShape shape,
+        IReadOnlyList<ShapeAnimation> animations)
     {
-        var animation = slide.Animations.FirstOrDefault(candidate =>
-            candidate.ShapeId == shape.Id
-            && candidate.Preset is AnimationPreset.Grow or AnimationPreset.Shrink
+        var animation = animations.FirstOrDefault(candidate =>
+            candidate.Preset is AnimationPreset.Grow or AnimationPreset.Shrink
             && SlideShowPlaybackPlanner.ResolveFontSizeBehavior(candidate) is not null);
         var runs = shape.TextBody?.Paragraphs.SelectMany(paragraph => paragraph.Runs).ToArray();
         var size = animation is null

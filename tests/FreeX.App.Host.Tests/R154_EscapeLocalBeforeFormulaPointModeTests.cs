@@ -70,7 +70,6 @@ public sealed class R154_EscapeLocalBeforeFormulaPointModeTests
     {
         private readonly MainWindow _owner;
         private readonly MainWindow _source;
-        private readonly MethodInfo _sourceKeyDown;
         private readonly CellAddress _formulaCell;
 
         private TwoWindowEscapeHarness(MainWindow owner, MainWindow source, CellAddress formulaCell)
@@ -78,9 +77,6 @@ public sealed class R154_EscapeLocalBeforeFormulaPointModeTests
             _owner = owner;
             _source = source;
             _formulaCell = formulaCell;
-            _sourceKeyDown = typeof(MainWindow)
-                .GetMethod("MainWindow_KeyDown", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "MainWindow_KeyDown");
         }
 
         public static TwoWindowEscapeHarness Create()
@@ -150,7 +146,7 @@ public sealed class R154_EscapeLocalBeforeFormulaPointModeTests
             {
                 RoutedEvent = Keyboard.KeyDownEvent
             };
-            _sourceKeyDown.Invoke(_source, [_source, args]);
+            _source.MainWindow_KeyDown(_source, args);
             PumpDispatcher();
         }
 

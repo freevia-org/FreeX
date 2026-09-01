@@ -28,6 +28,8 @@ public sealed class R91_KeyboardEditGateSuppressesWholeCellShortcutsTests
 {
     private sealed class DocumentPlaceholderWindow(WorkbookId documentId) : IWorkbookWindow
     {
+        public bool HasUnsavedChanges => false;
+
         public WorkbookId DocumentId { get; } = documentId;
         public void ApplyWindowTitleSuffix(string suffix) { }
         public void RefreshFromSharedWorkbook() { }
@@ -89,22 +91,13 @@ public sealed class R91_KeyboardEditGateSuppressesWholeCellShortcutsTests
 
     private static void SetActiveCell(MainWindow window, CellAddress cell)
     {
-        var method = typeof(MainWindow).GetMethod("SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        method!.Invoke(window, [cell]);
+        window.SetActiveCell(cell);
         PumpDispatcher();
     }
 
     private static void ShowInlineEditor(MainWindow window, CellAddress cell)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "ShowInlineEditor",
-            BindingFlags.Instance | BindingFlags.NonPublic,
-            binder: null,
-            types: [typeof(CellAddress), typeof(double?)],
-            modifiers: null);
-        method.Should().NotBeNull();
-        method!.Invoke(window, [cell, null]);
+        window.ShowInlineEditor(cell, null);
         PumpDispatcher();
     }
 
@@ -117,10 +110,7 @@ public sealed class R91_KeyboardEditGateSuppressesWholeCellShortcutsTests
             RoutedEvent = Keyboard.KeyDownEvent
         };
 
-        var method = typeof(MainWindow).GetMethod(
-            "TryHandleWholeCellKeyboardShortcuts", BindingFlags.Instance | BindingFlags.NonPublic);
-        method.Should().NotBeNull();
-        var result = (bool)method!.Invoke(window, [window, args, modifiers])!;
+        var result = window.TryHandleWholeCellKeyboardShortcuts(window, args, modifiers);
         handled = args.Handled;
         PumpDispatcher();
         return result;

@@ -93,6 +93,30 @@ public sealed class PresentationWorkareaSessionTests
         endpoint.SelectedShapeIds.Should().OnlyContain(ids => ids.SequenceEqual(new[] { 73u }));
     }
 
+    /// <summary>
+    /// r183. Selecting a different animated shape on the canvas rebuilt the Animation Pane but left
+    /// its stored SelectedAnimationIndex alone, and an in-range explicit index wins over the shape
+    /// selection when the timeline plan is built -- so the pane kept highlighting the PREVIOUS
+    /// shape's row, and "Play From Selected" started playback from that stale row.
+    /// BuildCurrentSlideChanged already resets the selection before refreshing; this is the same
+    /// step for the selection transition.
+    /// </summary>
+    [Fact]
+    public void SelectionChangedResetsTheAnimationSelectionBeforeRefreshingThePane()
+    {
+        var operations = PresentationWorkareaOperationPlanner.BuildSelectionChanged(
+            isAltTextPaneVisible: false,
+            isSmartArtPaneVisible: false).Operations;
+
+        operations.Should().Contain(PresentationWorkareaOperation.ResetAnimationSelection,
+            "a canvas selection change must re-derive the highlighted animation row, not reuse one");
+
+        var reset = operations.ToList().IndexOf(PresentationWorkareaOperation.ResetAnimationSelection);
+        var refresh = operations.ToList().IndexOf(
+            PresentationWorkareaOperation.RefreshAnimationPaneAfterSelection);
+        reset.Should().BeLessThan(refresh, "resetting after the rebuild would leave the stale row rendered");
+    }
+
     [Fact]
     public void ReplacementDetachesTheOldEditor()
     {

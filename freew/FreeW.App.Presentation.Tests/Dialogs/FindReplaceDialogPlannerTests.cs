@@ -296,6 +296,24 @@ public sealed class FindReplaceDialogPlannerTests
     }
 
     [Theory]
+    [InlineData(5, 8)]
+    [InlineData(11, 0)]
+    public void FindNextMatch_ManyMatchesSelectsNextOrWrapsToFirst(int fromOffset, int expectedStart)
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks[0] = new Paragraph("cat cat cat");
+
+        var match = FindReplaceDialogPlanner.FindNextMatch(
+            document,
+            "cat",
+            new FindReplaceSearchOptions(),
+            fromBlock: 0,
+            fromOffset: fromOffset);
+
+        match.Should().Be(new FindReplaceMatch(0, expectedStart, 3));
+    }
+
+    [Theory]
     [InlineData("the", 0, 0, 0, 0, 3)]
     [InlineData("the", 0, 3, 1, 11, 3)]
     [InlineData("quick", 1, 0, 0, 4, 5)]

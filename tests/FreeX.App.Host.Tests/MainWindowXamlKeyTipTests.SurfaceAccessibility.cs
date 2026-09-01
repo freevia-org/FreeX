@@ -70,7 +70,7 @@ public sealed partial class MainWindowXamlKeyTipTests
         nameBox.Attribute("IsEditable")?.Value.Should().Be("True");
         nameBox.Attribute("StaysOpenOnEdit")?.Value.Should().Be("True");
         nameBox.Attribute("KeyDown")?.Value.Should().Be("CellAddressBox_KeyDown");
-        source.Should().Contain("private void CellAddressBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)");
+        source.Should().Contain("internal void CellAddressBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)");
         // K24/K48: whole-column (A:A) / whole-row (5:5) reference parsing moved from
         // GoToDialog's own parser into the shared WorkbookReferenceNavigator so the Name Box,
         // Go To dialog, and Go To Special all resolve references identically.

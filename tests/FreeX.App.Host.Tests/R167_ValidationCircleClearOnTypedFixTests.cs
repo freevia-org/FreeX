@@ -100,7 +100,6 @@ public sealed class R167_ValidationCircleClearOnTypedFixTests
         public MainWindow Window { get; }
         public Workbook Workbook { get; }
 
-        private readonly MethodInfo _commitEdit;
 
         public MainWindowHarness()
         {
@@ -125,9 +124,6 @@ public sealed class R167_ValidationCircleClearOnTypedFixTests
             // the test operates on the same Workbook instance MainWindow's handlers use.
             Workbook = workbookRef.Current;
 
-            _commitEdit = typeof(MainWindow)
-                .GetMethod("CommitEdit", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "CommitEdit");
         }
 
         public void InvokePrivateHandler(string methodName) =>
@@ -143,7 +139,7 @@ public sealed class R167_ValidationCircleClearOnTypedFixTests
         {
             ((SheetGridView)Window.FindName("SheetGrid")).SelectedRange = new FreeX.Core.Model.GridRange(address, address);
             ((TextBox)Window.FindName("FormulaBar")).Text = text;
-            ((bool)_commitEdit.Invoke(Window, null)!).Should().BeTrue();
+            (Window.CommitEdit()).Should().BeTrue();
             PumpDispatcher();
         }
 

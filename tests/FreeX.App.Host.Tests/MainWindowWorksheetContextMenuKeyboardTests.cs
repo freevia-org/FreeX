@@ -442,40 +442,12 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
     {
         private readonly MainWindow _window;
         private readonly RecordingUserMessageService _messageService;
-        private readonly MethodInfo _openKeyboardContextMenu;
-        private readonly MethodInfo _onGridContextMenuRequested;
-        private readonly MethodInfo _onGridHeaderContextMenuRequested;
-        private readonly MethodInfo _getWorksheetContextMenuTargetKind;
-        private readonly MethodInfo _applyAutoFilterDialogResult;
-        private readonly MethodInfo _reapplyAutoFilter;
-        private readonly MethodInfo _clearFilterButtonClick;
         private readonly FieldInfo _currentSheetIdField;
 
         private MainWindowHarness(MainWindow window, RecordingUserMessageService messageService)
         {
             _window = window;
             _messageService = messageService;
-            _openKeyboardContextMenu = typeof(MainWindow)
-                .GetMethod("OpenKeyboardContextMenu", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "OpenKeyboardContextMenu");
-            _onGridContextMenuRequested = typeof(MainWindow)
-                .GetMethod("OnGridContextMenuRequested", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "OnGridContextMenuRequested");
-            _onGridHeaderContextMenuRequested = typeof(MainWindow)
-                .GetMethod("OnGridHeaderContextMenuRequested", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "OnGridHeaderContextMenuRequested");
-            _getWorksheetContextMenuTargetKind = typeof(MainWindow)
-                .GetMethod("GetWorksheetContextMenuTargetKind", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "GetWorksheetContextMenuTargetKind");
-            _applyAutoFilterDialogResult = typeof(MainWindow)
-                .GetMethod("ApplyAutoFilterDialogResult", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ApplyAutoFilterDialogResult");
-            _reapplyAutoFilter = typeof(MainWindow)
-                .GetMethod("ReapplyAutoFilter", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ReapplyAutoFilter");
-            _clearFilterButtonClick = typeof(MainWindow)
-                .GetMethod("ClearFilterButton_Click", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ClearFilterButton_Click");
             _currentSheetIdField = typeof(MainWindow)
                 .GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_currentSheetId");
@@ -636,26 +608,26 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
                 allowedValues.Select(value => new AutoFilterDialogItem(value, value, true)),
                 "",
                 "");
-            var applied = (bool)_applyAutoFilterDialogResult.Invoke(_window, [range, 0u, result, "Filter"])!;
+            var applied = _window.ApplyAutoFilterDialogResult(range, 0u, result, "Filter");
             applied.Should().BeTrue();
             PumpDispatcher();
         }
 
         public void ReapplyAutoFilter()
         {
-            _reapplyAutoFilter.Invoke(_window, []);
+            _window.ReapplyAutoFilter();
             PumpDispatcher();
         }
 
         public void ClearAutoFilter()
         {
-            _clearFilterButtonClick.Invoke(_window, [_window, new RoutedEventArgs()]);
+            _window.ClearFilterButton_Click(_window, new RoutedEventArgs());
             PumpDispatcher();
         }
 
         public void OpenKeyboardContextMenu()
         {
-            _openKeyboardContextMenu.Invoke(_window, null);
+            _window.OpenKeyboardContextMenu();
             PumpDispatcher();
             PumpDispatcher();
             PumpDispatcher();
@@ -664,9 +636,7 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
         public void OpenMouseContextMenu(uint row, uint col)
         {
             var sheet = CurrentSheet;
-            _onGridContextMenuRequested.Invoke(
-                _window,
-                [new CellAddress(sheet.Id, row, col), new System.Windows.Point(100, 100)]);
+            _window.OnGridContextMenuRequested(new CellAddress(sheet.Id, row, col), new System.Windows.Point(100, 100));
             PumpDispatcher();
             PumpDispatcher();
             PumpDispatcher();
@@ -674,9 +644,7 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
 
         public void OpenMouseHeaderContextMenu(FreeX.App.UI.GridHeaderContextMenuTarget target, uint index)
         {
-            _onGridHeaderContextMenuRequested.Invoke(
-                _window,
-                [target, index, new System.Windows.Point(100, 100)]);
+            _window.OnGridHeaderContextMenuRequested(target, index, new System.Windows.Point(100, 100));
             PumpDispatcher();
             PumpDispatcher();
             PumpDispatcher();
@@ -685,9 +653,8 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
         public string ContextMenuTargetKind(uint row, uint col)
         {
             var sheet = CurrentSheet;
-            return _getWorksheetContextMenuTargetKind
-                .Invoke(_window, [new CellAddress(sheet.Id, row, col)])
-                ?.ToString() ?? "";
+            return _window.GetWorksheetContextMenuTargetKind(new CellAddress(sheet.Id, row, col))
+                .ToString();
         }
 
         public static MainWindowHarness Create()

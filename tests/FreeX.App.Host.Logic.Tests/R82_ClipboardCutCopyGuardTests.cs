@@ -264,8 +264,6 @@ public sealed class R82_ClipboardCutCopyGuardTests
 
     private sealed class Harness : IDisposable
     {
-        private readonly MethodInfo _executeCopy;
-        private readonly MethodInfo _executePaste;
         private readonly FieldInfo _clipboardSessionField;
 
         public MainWindow Window { get; }
@@ -297,10 +295,6 @@ public sealed class R82_ClipboardCutCopyGuardTests
             // workbook afterward, mirroring every other MainWindow-construction test harness.
             Workbook = workbookRef.Current;
 
-            _executeCopy = typeof(MainWindow).GetMethod("ExecuteCopy", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteCopy");
-            _executePaste = typeof(MainWindow).GetMethod("ExecutePaste", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ExecutePaste");
             _clipboardSessionField = typeof(MainWindow)
                 .GetField("_workbookClipboardSession", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_workbookClipboardSession");
@@ -311,13 +305,13 @@ public sealed class R82_ClipboardCutCopyGuardTests
 
         public void InvokeExecuteCopy(bool isCut)
         {
-            _executeCopy.Invoke(Window, [isCut]);
+            Window.ExecuteCopy(isCut);
             PumpDispatcher();
         }
 
         public void InvokeExecutePaste()
         {
-            _executePaste.Invoke(Window, [PasteMode.All, default(PasteSpecialOptions), false, false]);
+            Window.ExecutePaste(PasteMode.All, default(PasteSpecialOptions), false, false);
             PumpDispatcher();
         }
 

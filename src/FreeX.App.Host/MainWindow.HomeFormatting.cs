@@ -217,7 +217,7 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private void UnmergeCellsMenuItem_Click(object sender, RoutedEventArgs e)
+    internal void UnmergeCellsMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is null) return;
         if (!TryExecuteWorksheetLayout(_session.UnmergeSelectedRange, "Unmerge Cells"))
@@ -614,7 +614,7 @@ public partial class MainWindow
     /// backward-extended selection (e.g. click C5, Shift+click A1) increases/decreases from A1's
     /// font size while the ribbon shows C5's.
     /// </summary>
-    private void IncreaseFontSizeBtn_Click(object sender, RoutedEventArgs e)
+    internal void IncreaseFontSizeBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         var style = _workbook.GetStyle(sheet?.GetCell(ResolveFormatCellsSeedCell(SheetGrid.SelectedRange ?? default))?.StyleId ?? StyleId.Default);

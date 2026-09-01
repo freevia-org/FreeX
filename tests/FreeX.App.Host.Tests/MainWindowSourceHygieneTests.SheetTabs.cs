@@ -11,13 +11,13 @@ public sealed partial class MainWindowSourceHygieneTests
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var sheetTabsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
 
-        mainSource.Should().NotContain("private void RefreshSheetTabs()");
+        mainSource.Should().NotContain("internal void RefreshSheetTabs()");
         mainSource.Should().NotContain("private void SheetTab_MouseLeftButtonDown(");
         mainSource.Should().NotContain("private void UpdateSheetTabNavigation()");
         mainSource.Should().NotContain("private void RenameSheetFromTab(");
         mainSource.Should().NotContain("private void MoveSheetTab(");
 
-        sheetTabsSource.Should().Contain("private void RefreshSheetTabs()");
+        sheetTabsSource.Should().Contain("internal void RefreshSheetTabs()");
         sheetTabsSource.Should().Contain("private void SheetTab_MouseLeftButtonDown(");
         sheetTabsSource.Should().Contain("private void UpdateSheetTabNavigation()");
         sheetTabsSource.Should().Contain("private void RenameSheetFromTab(");
@@ -29,7 +29,7 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var hostDirectory = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.SheetTabs.cs");
         var sheetTabsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
-        var refreshSource = ExtractMethodSource(sheetTabsSource, "private void RefreshSheetTabs()");
+        var refreshSource = ExtractMethodSource(sheetTabsSource, "internal void RefreshSheetTabs()");
         var mapperSource = ExtractMethodSource(sheetTabsSource, "private static SheetTabViewModel MapSheetTabListEntry(");
         var presentationSource = File.ReadAllText(TestWorkspaceFileLocator.Find(
             "src",
@@ -55,13 +55,13 @@ public sealed partial class MainWindowSourceHygieneTests
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var contextMenuSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
-        mainSource.Should().NotContain("private void OnGridContextMenuRequested(");
+        mainSource.Should().NotContain("internal void OnGridContextMenuRequested(");
         mainSource.Should().NotContain("private async void ExecuteWorksheetContextMenuAction(");
-        mainSource.Should().NotContain("private void OpenKeyboardContextMenu(");
+        mainSource.Should().NotContain("internal void OpenKeyboardContextMenu(");
 
-        contextMenuSource.Should().Contain("private void OnGridContextMenuRequested(");
+        contextMenuSource.Should().Contain("internal void OnGridContextMenuRequested(");
         contextMenuSource.Should().Contain("private async void ExecuteWorksheetContextMenuAction(");
-        contextMenuSource.Should().Contain("private void OpenKeyboardContextMenu(");
+        contextMenuSource.Should().Contain("internal void OpenKeyboardContextMenu(");
         contextMenuSource.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind, state)");
         contextMenuSource.Should().Contain("MenuKeyTipAssigner.AssignUniqueKeyTips");
     }
@@ -88,20 +88,20 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private void SelectRow(");
         mainSource.Should().NotContain("private void SheetGrid_MouseDown(");
         mainSource.Should().NotContain("private void MainWindow_TextInput(");
-        mainSource.Should().NotContain("private void MainWindow_KeyDown(");
-        mainSource.Should().NotContain("private void SetActiveCell(");
+        mainSource.Should().NotContain("internal void MainWindow_KeyDown(");
+        mainSource.Should().NotContain("internal void SetActiveCell(");
         mainSource.Should().NotContain("private void SelectCurrentRegionOrAll(");
-        mainSource.Should().NotContain("private void AddOrMoveAdditionalSelection(");
+        mainSource.Should().NotContain("internal void AddOrMoveAdditionalSelection(");
         mainSource.Should().NotContain("private void SheetGrid_MouseMove(");
         mainSource.Should().NotContain("private void SheetGrid_MouseUp(");
 
         selectionSource.Should().Contain("private void SelectRow(");
         selectionSource.Should().Contain("private void SheetGrid_MouseDown(");
         selectionSource.Should().Contain("private void MainWindow_TextInput(");
-        selectionSource.Should().Contain("private void MainWindow_KeyDown(");
-        selectionSource.Should().Contain("private void SetActiveCell(");
+        selectionSource.Should().Contain("internal void MainWindow_KeyDown(");
+        selectionSource.Should().Contain("internal void SetActiveCell(");
         selectionSource.Should().Contain("private void SelectCurrentRegionOrAll(");
-        selectionSource.Should().Contain("private void AddOrMoveAdditionalSelection(");
+        selectionSource.Should().Contain("internal void AddOrMoveAdditionalSelection(");
         selectionSource.Should().Contain("private void SheetGrid_MouseMove(");
         selectionSource.Should().Contain("private void SheetGrid_MouseUp(");
         selectionSource.Should().Contain("ExcelWorksheetNavigationPlanner");
@@ -122,20 +122,20 @@ public sealed partial class MainWindowSourceHygieneTests
             "FormulaReferenceEditingController.cs");
 
         mainSource.Should().NotContain("private void EnterEditMode(");
-        mainSource.Should().NotContain("private void ShowInlineEditor(");
+        mainSource.Should().NotContain("internal void ShowInlineEditor(");
         mainSource.Should().NotContain("private void RefreshValidationDropdown(");
         mainSource.Should().NotContain("private void OpenActiveDropdown(");
         mainSource.Should().NotContain("private void InlineEditor_KeyDown(");
-        mainSource.Should().NotContain("private void FormulaBar_KeyDown(");
-        mainSource.Should().NotContain("private bool CommitEdit(");
+        mainSource.Should().NotContain("internal void FormulaBar_KeyDown(");
+        mainSource.Should().NotContain("internal bool CommitEdit(");
         mainSource.Should().NotContain("private bool TryCreateCellFromEntryText(");
         mainSource.Should().NotContain("private bool CommitPreparedEdits(");
 
         editingSource.Should().Contain("private void EnterEditMode(");
-        editingSource.Should().Contain("private void ShowInlineEditor(");
+        editingSource.Should().Contain("internal void ShowInlineEditor(");
         editingSource.Should().Contain("private void InlineEditor_KeyDown(");
-        editingSource.Should().Contain("private void FormulaBar_KeyDown(");
-        editingSource.Should().Contain("private bool CommitEdit(");
+        editingSource.Should().Contain("internal void FormulaBar_KeyDown(");
+        editingSource.Should().Contain("internal bool CommitEdit(");
         editingSource.Should().Contain("_session.CommitCellText(");
         editingSource.Should().Contain("_session.CommitCellTextAcrossSelection(");
         editingSource.Should().NotContain("private bool TryCreateCellFromEntryText(");
@@ -179,8 +179,8 @@ public sealed partial class MainWindowSourceHygieneTests
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var gridSource = DialogSourceTestSupport.ReadHostSources("MainWindow.GridStatus.cs");
 
-        mainSource.Should().NotContain("private void RefreshStatusBar(");
-        mainSource.Should().NotContain("private void OnColumnResizing(");
+        mainSource.Should().NotContain("internal void RefreshStatusBar(");
+        mainSource.Should().NotContain("internal void OnColumnResizing(");
         mainSource.Should().NotContain("private void OnColumnResized(");
         mainSource.Should().NotContain("private void OnRowResizing(");
         mainSource.Should().NotContain("private void OnRowResized(");
@@ -188,8 +188,8 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private void CaptureColumnResizeSnapshot(");
         mainSource.Should().NotContain("private void CaptureRowResizeSnapshot(");
 
-        gridSource.Should().Contain("private void RefreshStatusBar(");
-        gridSource.Should().Contain("private void OnColumnResizing(");
+        gridSource.Should().Contain("internal void RefreshStatusBar(");
+        gridSource.Should().Contain("internal void OnColumnResizing(");
         gridSource.Should().Contain("private void OnColumnResized(");
         gridSource.Should().Contain("private void OnRowResizing(");
         gridSource.Should().Contain("private void OnRowResized(");
@@ -385,7 +385,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
         // Round 84 (dd5f3056c3) gave InsertNewSheet an optional insertBeforeSheetId parameter so a
         // sheet-tab context-menu "Insert" could insert before a specific tab, not just append.
-        var insert = ExtractMethodSource(source, "private void InsertNewSheet(SheetId? insertBeforeSheetId = null)");
+        var insert = ExtractMethodSource(source, "internal void InsertNewSheet(SheetId? insertBeforeSheetId = null)");
         var dragMove = ExtractMethodSource(source, "private void CommitPendingSheetTabDragDrop()");
         var rename = ExtractMethodSource(source, "private void RenameSheet(");
         var deleteRoute = ExtractMethodSource(source, "private void SheetCtxDelete_Click(");
@@ -628,7 +628,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var keyboardFocusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardFocus.cs");
 
         selectionSource.Should().Contain("if (TryHandleFocusedStatusBarKeyboardNavigation(e))");
-        keyboardFocusSource.Should().Contain("private bool TryHandleFocusedStatusBarKeyboardNavigation(System.Windows.Input.KeyEventArgs e)");
+        keyboardFocusSource.Should().Contain("internal bool TryHandleFocusedStatusBarKeyboardNavigation(System.Windows.Input.KeyEventArgs e)");
         keyboardFocusSource.Should().Contain("!IsDescendantOf(focusedElement, StatusBarGrid)");
         keyboardFocusSource.Should().Contain("Keyboard.Modifiers is not ModifierKeys.None and not ModifierKeys.Shift");
         keyboardFocusSource.Should().Contain("new TraversalRequest(Keyboard.Modifiers == ModifierKeys.Shift");
@@ -1050,7 +1050,7 @@ public sealed partial class MainWindowSourceHygieneTests
 
         editingSource.Should().Contain("dialog.ResultCommitted += (_, result) =>");
         editingSource.Should().Contain("ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, result, \"AutoFilter\")");
-        dataFilterSource.Should().Contain("private bool ApplyAutoFilterDialogResult(");
+        dataFilterSource.Should().Contain("internal bool ApplyAutoFilterDialogResult(");
         dataFilterSource.Should().Contain("_filterWorkflowSession.PlanDialogResult(");
         workflowSource.Should().Contain("FilterPromptPlanner.TryPlan");
         promptPlannerSource.Should().Contain("FilterInputParser.ParseAllowedValues");
@@ -1070,10 +1070,10 @@ public sealed partial class MainWindowSourceHygieneTests
         ExtractMethodSource(dataFilterSource, "private void FilterButton_Click(")
             .Should()
             .Contain("UpdateFilterViewportAndStatusBar();");
-        ExtractMethodSource(dataFilterSource, "private void ReapplyAutoFilter()")
+        ExtractMethodSource(dataFilterSource, "internal void ReapplyAutoFilter()")
             .Should()
             .Contain("UpdateFilterViewportAndStatusBar();");
-        ExtractMethodSource(dataFilterSource, "private void ClearFilterButton_Click(")
+        ExtractMethodSource(dataFilterSource, "internal void ClearFilterButton_Click(")
             .Should()
             .Contain("UpdateFilterViewportAndStatusBar();");
 

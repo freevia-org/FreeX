@@ -72,6 +72,13 @@ public sealed record BackstageFrameActivation<TContent>(
 public sealed class BackstageFrameSession<TContent>
 {
     private IReadOnlyList<SisterBackstageEntryPlan<TContent>> _entries = [];
+    private IReadOnlyDictionary<string, SisterBackstageEntryPlan<TContent>> _entriesByStableId =
+        new Dictionary<string, SisterBackstageEntryPlan<TContent>>(StringComparer.Ordinal);
+    private IReadOnlyDictionary<string, SisterBackstageEntryPlan<TContent>> _entriesByAutomationId =
+        new Dictionary<string, SisterBackstageEntryPlan<TContent>>(StringComparer.Ordinal);
+    private IReadOnlyDictionary<string, SisterBackstageEntryPlan<TContent>> _entriesByLabel =
+        new Dictionary<string, SisterBackstageEntryPlan<TContent>>(StringComparer.OrdinalIgnoreCase);
+    private SisterBackstageEntryPlan<TContent>? _firstPane;
 
     public IReadOnlyList<SisterBackstageEntryPlan<TContent>> Entries => _entries;
 
@@ -85,7 +92,28 @@ public sealed class BackstageFrameSession<TContent>
     {
         ArgumentNullException.ThrowIfNull(entries);
 
-        _entries = entries.ToArray();
+        var entryRows = entries.ToArray();
+        var entriesByStableId = new Dictionary<string, SisterBackstageEntryPlan<TContent>>(StringComparer.Ordinal);
+        var entriesByAutomationId = new Dictionary<string, SisterBackstageEntryPlan<TContent>>(StringComparer.Ordinal);
+        var entriesByLabel = new Dictionary<string, SisterBackstageEntryPlan<TContent>>(StringComparer.OrdinalIgnoreCase);
+        SisterBackstageEntryPlan<TContent>? firstPane = null;
+        foreach (var entry in entryRows)
+        {
+            if (entry.StableId is { } stableId)
+                entriesByStableId.TryAdd(stableId, entry);
+            if (entry.AutomationId is { } automationId)
+                entriesByAutomationId.TryAdd(automationId, entry);
+            if (entry.Label is { } label)
+                entriesByLabel.TryAdd(label, entry);
+            if (firstPane is null && entry.Kind == SisterBackstageEntryKind.Pane)
+                firstPane = entry;
+        }
+
+        _entries = entryRows;
+        _entriesByStableId = entriesByStableId;
+        _entriesByAutomationId = entriesByAutomationId;
+        _entriesByLabel = entriesByLabel;
+        _firstPane = firstPane;
         IsOpen = false;
         CurrentEntryId = null;
         CurrentPaneLabel = null;
@@ -96,8 +124,7 @@ public sealed class BackstageFrameSession<TContent>
         IsOpen = true;
 
         var entry = string.IsNullOrWhiteSpace(paneIdOrLabel)
-            ? _entries.FirstOrDefault(candidate =>
-                candidate.Kind == SisterBackstageEntryKind.Pane)
+            ? _firstPane
             : FindEntry(paneIdOrLabel!);
         return entry?.Kind == SisterBackstageEntryKind.Pane
             ? Activate(entry)
@@ -117,12 +144,9 @@ public sealed class BackstageFrameSession<TContent>
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(idOrLabel);
 
-        return _entries.FirstOrDefault(entry =>
-                   string.Equals(entry.StableId, idOrLabel, StringComparison.Ordinal))
-            ?? _entries.FirstOrDefault(entry =>
-                   string.Equals(entry.AutomationId, idOrLabel, StringComparison.Ordinal))
-            ?? _entries.FirstOrDefault(entry =>
-                   string.Equals(entry.Label, idOrLabel, StringComparison.OrdinalIgnoreCase));
+        return _entriesByStableId.GetValueOrDefault(idOrLabel)
+            ?? _entriesByAutomationId.GetValueOrDefault(idOrLabel)
+            ?? _entriesByLabel.GetValueOrDefault(idOrLabel);
     }
 
     public BackstageFrameActivation<TContent>? TryActivate(string idOrLabel)

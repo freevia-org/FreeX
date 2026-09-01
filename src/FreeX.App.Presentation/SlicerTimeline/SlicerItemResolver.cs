@@ -52,8 +52,9 @@ public static class SlicerItemResolver
         var kinds = field.SharedItemKinds;
         var available = new List<string>(slicer.CacheItems.Count > 0 ? slicer.CacheItems.Count : sharedItems.Count);
         var availableSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var selectedFromCache = new List<string>();
-        var selectedSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var shouldProjectNativeSelection = !slicer.SelectionCaptured && slicer.SelectedItems.Count == 0;
+        List<string>? selectedFromCache = null;
+        HashSet<string>? selectedSeen = null;
 
         if (slicer.CacheItems.Count == 0)
         {
@@ -66,9 +67,7 @@ public static class SlicerItemResolver
                 AddPivotCacheItem(item.Index, item.IsSelected);
         }
 
-        if (!slicer.SelectionCaptured &&
-            slicer.SelectedItems.Count == 0 &&
-            selectedFromCache.Count > 0 &&
+        if (selectedFromCache is { Count: > 0 } &&
             selectedFromCache.Count < available.Count)
         {
             slicer.SelectedItems.AddRange(selectedFromCache);
@@ -92,8 +91,12 @@ public static class SlicerItemResolver
 
             if (availableSeen.Add(caption))
                 available.Add(caption);
-            if (isSelected && selectedSeen.Add(caption))
-                selectedFromCache.Add(caption);
+            if (shouldProjectNativeSelection &&
+                isSelected &&
+                (selectedSeen ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase)).Add(caption))
+            {
+                (selectedFromCache ??= []).Add(caption);
+            }
         }
     }
 

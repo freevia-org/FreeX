@@ -147,8 +147,6 @@ public sealed class R119_AppHostExceptDataTablesRecalcTests
     private sealed class DataTableRecalcHarness : IDisposable
     {
         private readonly ICommandBus _commandBus;
-        private readonly MethodInfo _commitEdit;
-        private readonly MethodInfo _recalculateIfAutomatic;
 
         public MainWindow Window { get; }
         public Workbook Workbook { get; }
@@ -179,12 +177,6 @@ public sealed class R119_AppHostExceptDataTablesRecalcTests
             Workbook = workbookRef.Current;
             Sheet = Workbook.GetSheetAt(0);
 
-            _commitEdit = typeof(MainWindow)
-                .GetMethod("CommitEdit", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "CommitEdit");
-            _recalculateIfAutomatic = typeof(MainWindow)
-                .GetMethod("RecalculateIfAutomatic", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "RecalculateIfAutomatic");
         }
 
         /// <summary>
@@ -224,7 +216,7 @@ public sealed class R119_AppHostExceptDataTablesRecalcTests
             // Mirrors the real production call site (MainWindow.DataCommands.cs's Data Table dialog
             // handler): TryExecuteCommand followed by RecalculateIfAutomatic(outcome.AffectedCells)
             // is what actually evaluates the freshly-created body cells' values for the first time.
-            _recalculateIfAutomatic.Invoke(Window, [createResult.AffectedCells ?? Array.Empty<CellAddress>()]);
+            Window.RecalculateIfAutomatic(createResult.AffectedCells ?? Array.Empty<CellAddress>());
 
             return (multiplier, new CellAddress(Sheet.Id, 2, 4), new CellAddress(Sheet.Id, 3, 4));
         }
@@ -244,7 +236,7 @@ public sealed class R119_AppHostExceptDataTablesRecalcTests
         {
             ((SheetGridView)Window.FindName("SheetGrid")).SelectedRange = new GridRange(address, address);
             ((TextBox)Window.FindName("FormulaBar")).Text = text;
-            ((bool)_commitEdit.Invoke(Window, null)!).Should().BeTrue();
+            (Window.CommitEdit()).Should().BeTrue();
             PumpDispatcher();
         }
 

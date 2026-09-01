@@ -36,6 +36,8 @@ public sealed class R116_ChartsheetDpiChangeRefreshTests
     /// instead of MainWindow_Loaded replacing it with a fresh one.</summary>
     private sealed class DocumentPlaceholderWindow(WorkbookId documentId) : IWorkbookWindow
     {
+        public bool HasUnsavedChanges => false;
+
         public WorkbookId DocumentId { get; } = documentId;
         public void ApplyWindowTitleSuffix(string suffix) { }
         public void RefreshFromSharedWorkbook() { }
@@ -123,10 +125,7 @@ public sealed class R116_ChartsheetDpiChangeRefreshTests
         currentSheetIdField.Should().NotBeNull();
         currentSheetIdField!.SetValue(window, sheetId);
 
-        var updateViewport = typeof(MainWindow).GetMethod(
-            "UpdateViewport", BindingFlags.Instance | BindingFlags.NonPublic);
-        updateViewport.Should().NotBeNull();
-        updateViewport!.Invoke(window, null);
+        window.UpdateViewport();
     }
 
     private static Image GetChartsheetView(MainWindow window) =>
@@ -151,10 +150,7 @@ public sealed class R116_ChartsheetDpiChangeRefreshTests
         window.UpdateLayout();
         chartsheetView.ActualWidth.Should().BeGreaterThan(0, "the placeholder bitmap must have given ChartsheetView a real measured size");
 
-        var renderMethod = typeof(MainWindow).GetMethod(
-            "RenderActiveChartsheet", BindingFlags.Instance | BindingFlags.NonPublic);
-        renderMethod.Should().NotBeNull();
-        renderMethod!.Invoke(window, [chartsheet]);
+        window.RenderActiveChartsheet(chartsheet);
 
         var initialSource = chartsheetView.Source as BitmapSource;
         initialSource.Should().NotBeNull("RenderActiveChartsheet must have produced a real chart bitmap once ChartsheetView had a size");

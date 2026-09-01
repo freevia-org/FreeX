@@ -27,13 +27,13 @@ public sealed partial class MainWindowSourceHygieneTests
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
-        mainSource.Should().NotContain("private void ShowStartScreen()");
+        mainSource.Should().NotContain("internal void ShowStartScreen()");
         mainSource.Should().NotContain("private void UpdateSsRecentList(");
         mainSource.Should().NotContain("private async Task OpenFileAsync(");
         mainSource.Should().NotContain("private async void OpenButton_Click(");
         mainSource.Should().NotContain("private async Task<bool> SaveWorkbookWithDialogAsync()");
 
-        backstageSource.Should().Contain("private void ShowStartScreen()");
+        backstageSource.Should().Contain("internal void ShowStartScreen()");
         backstageSource.Should().Contain("private void UpdateSsRecentList(");
         backstageSource.Should().Contain("private async Task OpenFileAsync(");
         backstageSource.Should().Contain("private void OpenButton_Click(");
@@ -221,7 +221,7 @@ public sealed partial class MainWindowSourceHygieneTests
         saveAsMethod.Should().Contain("await SaveWorkbookWithDialogAsync()");
         saveAsMethod.Should().Contain("HideStartScreen();");
 
-        var saveTargetMethod = ExtractMethodSource(backstageSource, "private async Task<bool> SaveWorkbookToTargetAsync(");
+        var saveTargetMethod = ExtractMethodSource(backstageSource, "internal async Task<bool> SaveWorkbookToTargetAsync(");
         saveTargetMethod.Should().Contain("_fileWorkflow.ShouldSkipSaveTargetWrite(_workbookDirty, _currentFilePath, target)");
         saveTargetMethod.Should().NotContain("FileSavePlanner.CanSkipCleanSave(");
         saveTargetMethod.IndexOf("_fileWorkflow.ShouldSkipSaveTargetWrite", StringComparison.Ordinal)
@@ -649,7 +649,7 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
         var methodStart = backstageSource.IndexOf("private void SsMoreTemplatesBtn_Click", StringComparison.Ordinal);
-        var nextMethodStart = backstageSource.IndexOf("private void SsOptionsBtn_Click", methodStart, StringComparison.Ordinal);
+        var nextMethodStart = backstageSource.IndexOf("internal void SsOptionsBtn_Click", methodStart, StringComparison.Ordinal);
 
         methodStart.Should().BeGreaterThanOrEqualTo(0);
         nextMethodStart.Should().BeGreaterThan(methodStart);

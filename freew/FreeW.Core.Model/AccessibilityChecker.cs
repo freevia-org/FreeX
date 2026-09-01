@@ -180,8 +180,10 @@ public static class AccessibilityChecker
     private static void CheckParagraph(
         TextDocument document, Paragraph paragraph, int blockIndex, List<AccessibilityIssue> issues)
     {
-        foreach (var run in paragraph.Runs)
+        var runs = paragraph.Runs;
+        for (var runIndex = 0; runIndex < runs.Count; runIndex++)
         {
+            var run = runs[runIndex];
             // Missing image alt text (Error). A picture the user explicitly marked "decorative" (Word's
             // Alt Text pane "Mark as decorative" checkbox, InlineImage.IsDecorative) is intentionally
             // content-free and is exempt -- matching real Word's own Accessibility Checker and FreeX's
@@ -203,7 +205,7 @@ public static class AccessibilityChecker
             if (run.Control is { } control
                 && string.IsNullOrWhiteSpace(control.Alias)
                 && string.IsNullOrWhiteSpace(control.Tag)
-                && IsFirstRunOfContentControl(paragraph, run))
+                && (runIndex == 0 || !ReferenceEquals(runs[runIndex - 1].Control, control)))
             {
                 issues.Add(new AccessibilityIssue(
                     AccessibilityRule.ContentControlMissingTitle,
@@ -429,14 +431,6 @@ public static class AccessibilityChecker
         document.Paragraphs.Any(p =>
             !DocumentOutline.TryGetLevel(p.StyleId, out _) &&
             !string.IsNullOrWhiteSpace(p.PlainText));
-
-    // One content control spans every consecutive run sharing its instance (the grouping the docx writer
-    // wraps in a single w:sdt), so only its first run reports the finding.
-    private static bool IsFirstRunOfContentControl(Paragraph paragraph, Run run)
-    {
-        var index = paragraph.Runs.IndexOf(run);
-        return index <= 0 || !ReferenceEquals(paragraph.Runs[index - 1].Control, run.Control);
-    }
 
     // A run is a hyperlink when it carries either an external URL or an internal bookmark anchor.
     private static bool IsHyperlink(Run run) =>

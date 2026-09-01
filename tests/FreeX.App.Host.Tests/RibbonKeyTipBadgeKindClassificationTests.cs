@@ -60,11 +60,6 @@ public sealed class RibbonKeyTipBadgeKindClassificationTests
 
     private static RibbonKeyTipBadgeKind GetKeyTipBadgeKind(FrameworkElement element)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "GetKeyTipBadgeKind",
-            BindingFlags.Static | BindingFlags.NonPublic);
-
-        method.Should().NotBeNull();
-        return (RibbonKeyTipBadgeKind)method!.Invoke(null, [element])!;
+        return MainWindow.GetKeyTipBadgeKind(element);
     }
 }

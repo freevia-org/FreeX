@@ -204,11 +204,6 @@ public sealed class NameBoxSheetScopedNavigationTests
         private readonly MainWindow _window;
         private readonly FieldInfo _currentSheetIdField;
         private readonly FieldInfo _sheetTabsField;
-        private readonly MethodInfo _setActiveCell;
-        private readonly MethodInfo _refreshSheetTabs;
-        private readonly MethodInfo _cellAddressBoxKeyDown;
-        private readonly MethodInfo _cellAddressBoxSelectionChanged;
-        private readonly MethodInfo _cellAddressBoxDropDownOpened;
 
         private MainWindowHarness(MainWindow window)
         {
@@ -219,21 +214,6 @@ public sealed class NameBoxSheetScopedNavigationTests
             _sheetTabsField = typeof(MainWindow)
                 .GetField("_sheetTabs", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_sheetTabs");
-            _setActiveCell = typeof(MainWindow)
-                .GetMethod("SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SetActiveCell");
-            _refreshSheetTabs = typeof(MainWindow)
-                .GetMethod("RefreshSheetTabs", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "RefreshSheetTabs");
-            _cellAddressBoxKeyDown = typeof(MainWindow)
-                .GetMethod("CellAddressBox_KeyDown", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "CellAddressBox_KeyDown");
-            _cellAddressBoxSelectionChanged = typeof(MainWindow)
-                .GetMethod("CellAddressBox_SelectionChanged", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "CellAddressBox_SelectionChanged");
-            _cellAddressBoxDropDownOpened = typeof(MainWindow)
-                .GetMethod("CellAddressBox_DropDownOpened", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "CellAddressBox_DropDownOpened");
         }
 
         public Workbook Workbook => _window.Session.Workbook;
@@ -267,14 +247,14 @@ public sealed class NameBoxSheetScopedNavigationTests
 
         public void RefreshSheetTabs()
         {
-            _refreshSheetTabs.Invoke(_window, null);
+            _window.RefreshSheetTabs();
             PumpDispatcher();
         }
 
         public void SelectActiveCell(uint row, uint col)
         {
             var sheet = Workbook.Sheets[0];
-            _setActiveCell.Invoke(_window, [new CellAddress(sheet.Id, row, col)]);
+            _window.SetActiveCell(new CellAddress(sheet.Id, row, col));
             PumpDispatcher();
         }
 
@@ -292,14 +272,14 @@ public sealed class NameBoxSheetScopedNavigationTests
             {
                 RoutedEvent = Keyboard.KeyDownEvent
             };
-            _cellAddressBoxKeyDown.Invoke(_window, [CellAddressBox, args]);
+            _window.CellAddressBox_KeyDown(CellAddressBox, args);
             PumpDispatcher();
             return args.Handled;
         }
 
         public IReadOnlyList<string> OpenCellAddressBoxDropdown()
         {
-            _cellAddressBoxDropDownOpened.Invoke(_window, [CellAddressBox, EventArgs.Empty]);
+            _window.CellAddressBox_DropDownOpened(CellAddressBox, EventArgs.Empty);
             PumpDispatcher();
             return ((IEnumerable<NameBoxNavigationItem>)CellAddressBox.ItemsSource)
                 .Select(item => item.Name)
@@ -321,7 +301,7 @@ public sealed class NameBoxSheetScopedNavigationTests
                 Selector.SelectionChangedEvent,
                 new List<object>(),
                 new List<object> { item });
-            _cellAddressBoxSelectionChanged.Invoke(_window, [comboBox, args]);
+            _window.CellAddressBox_SelectionChanged(comboBox, args);
             comboBox.IsDropDownOpen = false;
             PumpDispatcher();
         }

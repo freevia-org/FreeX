@@ -147,12 +147,7 @@ public sealed class R84_InsertSheetContextMenuThreeDSpanTests
 
         public void InvokeInsertNewSheet(SheetId? insertBeforeSheetId)
         {
-            var method = typeof(MainWindow).GetMethod(
-                "InsertNewSheet",
-                BindingFlags.Instance | BindingFlags.NonPublic,
-                [typeof(SheetId?)])
-                ?? throw new MissingMethodException(nameof(MainWindow), "InsertNewSheet");
-            method.Invoke(Window, [insertBeforeSheetId]);
+            Window.InsertNewSheet(insertBeforeSheetId);
         }
 
         public void InvokeSheetTabContextMenuClick(string methodName, SheetId clickedSheetId)

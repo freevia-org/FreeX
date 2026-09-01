@@ -39,7 +39,7 @@ public partial class MainWindow
     /// Replaces this window's document owner while preserving its WPF command/recalc adapters.
     /// An outgoing shared session stays alive until its remaining sibling views close.
     /// </summary>
-    private void ReplaceWorkbookSession(StartupWorkbookLoadResult source)
+    internal void ReplaceWorkbookSession(StartupWorkbookLoadResult source)
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -121,7 +121,7 @@ public partial class MainWindow
         };
     }
 
-    private void MainWindow_Closing(object? sender, CancelEventArgs e) =>
+    internal void MainWindow_Closing(object? sender, CancelEventArgs e) =>
         RunGuardedUiCommand("Close Workbook", () => CloseWindowAsync(sender, e));
 
     private async Task CloseWindowAsync(object? sender, CancelEventArgs e)

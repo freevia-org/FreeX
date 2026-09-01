@@ -271,7 +271,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
 
         foreach (var resizedTable in sheet.StructuredTables)
         {
-            var previousTable = _addressStateSnapshot.StructuredTables.FirstOrDefault(t => t.Id == resizedTable.Id);
+            var previousTable = _addressStateSnapshot.FindStructuredTableById(resizedTable.Id);
             // A table only gains newly-inserted rows in its body when the insert point fell
             // strictly inside it (Start.Row unchanged, End.Row pushed down by the insert) -- one
             // that shifted down as a whole (its Start.Row moved too, because the insert landed at

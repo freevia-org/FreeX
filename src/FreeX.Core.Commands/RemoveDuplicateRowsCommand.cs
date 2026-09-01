@@ -1,3 +1,4 @@
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -198,7 +199,28 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand, IEstimatesMem
                 {
                     if (snap.Cell is not null)
                     {
-                        sheet.SetCell(target, snap.Cell.Clone());
+                        var clone = snap.Cell.Clone();
+
+                        // r182: compacting a surviving row upward moves it, and Excel rewrites a
+                        // moved cell relative references by the distance it travelled -- exactly
+                        // what SortCommand already does for the permutation it performs (see its
+                        // N37 comment). Without this a formula like =B5 in a row that compacts up
+                        // three rows still reads B5 instead of B2, so surviving rows silently
+                        // point at other rows data, or at rows the operation just deleted.
+                        // Absolute references are unaffected, and rowDelta is 0 for a row that
+                        // did not move.
+                        var rowDelta = (int)targetRow - (int)sourceRow;
+                        if (rowDelta != 0 && clone.HasFormula && clone.FormulaText is { } formula)
+                        {
+                            RowColumnShiftHelpers.SetFormulaTextPreservingArrayIdentity(
+                                clone,
+                                FormulaRewriter.Rewrite(
+                                    formula,
+                                    new PasteOffsetOp(rowDelta, 0),
+                                    sheet.Name) ?? formula);
+                        }
+
+                        sheet.SetCell(target, clone);
                     }
                     else if (snap.StyleOnly.HasValue)
                     {

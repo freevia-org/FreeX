@@ -19,7 +19,7 @@ public sealed partial class AutoFilterDialogTests
         source.Should().NotContain("new CellFontColorFilterCommand");
         source.Should().NotContain("FilterPromptPlanner.TryPlan");
 
-        var dialogResultHandler = SourceMethodExtractor.ExtractMethodSource(source, "private bool ApplyAutoFilterDialogResult(");
+        var dialogResultHandler = SourceMethodExtractor.ExtractMethodSource(source, "internal bool ApplyAutoFilterDialogResult(");
         dialogResultHandler.Should().NotContain("new CompositeWorkbookCommand");
 
         var filterButtonHandler = SourceMethodExtractor.ExtractMethodSource(source, "private void FilterButton_Click(");
@@ -35,7 +35,7 @@ public sealed partial class AutoFilterDialogTests
         var homeEditingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeEditing.cs");
 
         dataSource.Should().Contain("private readonly WorksheetFilterWorkflowSession _filterWorkflowSession = new();");
-        dataSource.Should().Contain("private void ReapplyAutoFilter()");
+        dataSource.Should().Contain("internal void ReapplyAutoFilter()");
         dataSource.Should().Contain("_filterWorkflowSession.CreateReapplyPlan(sheet)");
         dataSource.Should().Contain("_session.ExecuteWorksheetFilterReapplyPlan(plan, \"Reapply Filter\")");
         dataSource.Should().NotContain("plan.CreateCommand(\"Reapply Filter\")");

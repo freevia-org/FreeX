@@ -385,7 +385,7 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private void SetFreezePanes(uint frozenRows, uint frozenCols) =>
+    internal void SetFreezePanes(uint frozenRows, uint frozenCols) =>
         ApplyFreezePanes(() => _session.SetFreezePanes(frozenRows, frozenCols));
 
     private void SplitViewBtn_Click(object sender, RoutedEventArgs e)

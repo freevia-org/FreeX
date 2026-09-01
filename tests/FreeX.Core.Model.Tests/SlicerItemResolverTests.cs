@@ -102,6 +102,43 @@ public sealed class SlicerItemResolverTests
         slicer.SelectedItems.Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void ResolveAvailableItems_PivotSlicer_ExplicitSelectionStateTakesPrecedence(
+        bool selectionCaptured,
+        bool hasSelectedItems)
+    {
+        var workbook = new Workbook("PivotExplicitSelection");
+        workbook.AddSheet("Pivots");
+        var cache = new PivotCacheModel { CacheId = 1 };
+        cache.Fields.Add(new PivotCacheFieldModel("Market", SharedItems: ["East", "South", "West"]));
+        workbook.PivotCaches.Add(cache);
+
+        var slicer = new SlicerModel
+        {
+            Name = "Market",
+            SourceFieldName = "Market",
+            SelectionCaptured = selectionCaptured,
+            CacheItems =
+            [
+                new SlicerCacheItem(0, false),
+                new SlicerCacheItem(1, true),
+                new SlicerCacheItem(2, false),
+            ],
+        };
+        if (hasSelectedItems)
+            slicer.SelectedItems.Add("East");
+
+        var items = SlicerItemResolver.ResolveAvailableItems(slicer, workbook);
+
+        items.Should().Equal("East", "South", "West");
+        if (hasSelectedItems)
+            slicer.SelectedItems.Should().Equal("East");
+        else
+            slicer.SelectedItems.Should().BeEmpty();
+    }
+
     [Fact]
     public void ResolveAvailableItems_BoundPivotCacheWithoutCacheItems_ReturnsSharedItems()
     {

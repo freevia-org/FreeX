@@ -464,52 +464,59 @@ public static class DocumentSaveCompatibilityPlanner
     {
         public static DocumentSaveFeatureEvidence From(TextDocument document)
         {
-            var paragraphs = EnumerateAllParagraphs(document).ToArray();
-            var runs = paragraphs.SelectMany(paragraph => paragraph.Runs).ToArray();
-
             var hasMacroProject = document.Preserved.Parts.Any(part => IsMacroPart(part.PartName));
             var hasPreservedPackageParts =
                 !document.Preserved.IsEmpty ||
                 document.Preserved.ContentTypeDefaults.Count > 0 ||
                 document.EmbeddedFonts.Count > 0;
-            var hasComments = document.Comments.Count > 0 || runs.Any(run => run.CommentId.HasValue);
-            var hasRevisions = TrackChanges.HasRevisions(document) ||
-                paragraphs.Any(paragraph => paragraph.ParagraphFormatRevision is not null) ||
-                runs.Any(run => run.Revision != RevisionKind.None || run.FormatRevision is not null);
+            var hasComments = document.Comments.Count > 0;
+            var hasRevisions = TrackChanges.HasRevisions(document);
             var hasProtection = document.Protection.IsProtected || document.MarkedAsFinal;
             var hasFieldsReferences = document.Sources.Count > 0 ||
                 document.Citations.Count > 0 ||
-                document.IndexEntries.Count > 0 ||
-                paragraphs.Any(paragraph => paragraph.BookmarkNames.Count > 0 || paragraph.PreservedNumbering is not null) ||
-                runs.Any(run =>
-                    run.FieldKind != RunFieldKind.None ||
-                    run.TableFormula is not null ||
-                    run.CrossReference is not null ||
-                    run.ComplexField is not null ||
-                    !string.IsNullOrWhiteSpace(run.HyperlinkAnchor));
+                document.IndexEntries.Count > 0;
             var hasNotes = document.Footnotes.Count > 0 ||
                 document.Endnotes.Count > 0 ||
                 !document.FootnoteNumbering.IsDefault ||
-                !document.EndnoteNumbering.IsDefault ||
-                runs.Any(run => run.FootnoteId.HasValue || run.EndnoteId.HasValue);
+                !document.EndnoteNumbering.IsDefault;
             var hasTables = document.Blocks.OfType<Table>().Any();
-            var hasDrawings = runs.Any(run =>
-                run.Image is not null ||
-                run.Equation is not null ||
-                run.Shape is not null ||
-                run.WordArt is not null ||
-                run.Chart is not null ||
-                run.EmbeddedObject is not null ||
-                run.SmartArt is not null ||
-                run.PreservedDrawing is not null ||
-                run.DrawingGroup is not null);
-            var hasContentControls = document.Blocks.Any(block => block.BlockContentControl is not null) ||
-                runs.Any(run => run.Control is not null);
+            var hasDrawings = false;
+            var hasContentControls = document.Blocks.Any(block => block.BlockContentControl is not null);
             var hasHeadersFooters = document.Sections.Any(section => !section.HeadersFooters.IsEmpty);
             var hasRichFormatting =
-                paragraphs.Any(HasRichParagraphFormatting) ||
-                runs.Any(run => HasRichRunFormatting(run.Formatting)) ||
                 !document.MultiLevelList.NumberFormats.SequenceEqual(MultiLevelListFormat.DecimalNumberFormats);
+
+            foreach (var paragraph in EnumerateAllParagraphs(document))
+            {
+                hasRevisions |= paragraph.ParagraphFormatRevision is not null;
+                hasFieldsReferences |= paragraph.BookmarkNames.Count > 0 || paragraph.PreservedNumbering is not null;
+                hasRichFormatting |= HasRichParagraphFormatting(paragraph);
+
+                foreach (var run in paragraph.Runs)
+                {
+                    hasComments |= run.CommentId.HasValue;
+                    hasRevisions |= run.Revision != RevisionKind.None || run.FormatRevision is not null;
+                    hasFieldsReferences |=
+                        run.FieldKind != RunFieldKind.None ||
+                        run.TableFormula is not null ||
+                        run.CrossReference is not null ||
+                        run.ComplexField is not null ||
+                        !string.IsNullOrWhiteSpace(run.HyperlinkAnchor);
+                    hasNotes |= run.FootnoteId.HasValue || run.EndnoteId.HasValue;
+                    hasDrawings |=
+                        run.Image is not null ||
+                        run.Equation is not null ||
+                        run.Shape is not null ||
+                        run.WordArt is not null ||
+                        run.Chart is not null ||
+                        run.EmbeddedObject is not null ||
+                        run.SmartArt is not null ||
+                        run.PreservedDrawing is not null ||
+                        run.DrawingGroup is not null;
+                    hasContentControls |= run.Control is not null;
+                    hasRichFormatting |= HasRichRunFormatting(run.Formatting);
+                }
+            }
 
             return new DocumentSaveFeatureEvidence(
                 hasMacroProject,

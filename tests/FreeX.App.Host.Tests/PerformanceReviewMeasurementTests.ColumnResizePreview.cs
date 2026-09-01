@@ -42,15 +42,11 @@ public sealed partial class PerformanceReviewMeasurementTests
     {
         private readonly MainWindow _window;
         private readonly CountingViewportService _viewportService;
-        private readonly MethodInfo _onColumnResizing;
 
         private ColumnResizePreviewHarness(MainWindow window, CountingViewportService viewportService)
         {
             _window = window;
             _viewportService = viewportService;
-            _onColumnResizing = typeof(MainWindow)
-                .GetMethod("OnColumnResizing", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "OnColumnResizing");
         }
 
         public MeasurementResult MeasurePreview(int iterations)
@@ -63,7 +59,7 @@ public sealed partial class PerformanceReviewMeasurementTests
             {
                 var width = 72d + i % 40;
                 var step = Stopwatch.StartNew();
-                _onColumnResizing.Invoke(_window, [3u, width]);
+                _window.OnColumnResizing(3u, width);
                 PumpDispatcher();
                 step.Stop();
                 timings.Add(step.Elapsed.TotalMilliseconds);

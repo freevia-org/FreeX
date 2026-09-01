@@ -91,8 +91,8 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
         var contextMenuRequested = source[
-            source.IndexOf("private void OnGridContextMenuRequested", StringComparison.Ordinal)..
-            source.IndexOf("private void OnGridHeaderContextMenuRequested", StringComparison.Ordinal)];
+            source.IndexOf("internal void OnGridContextMenuRequested", StringComparison.Ordinal)..
+            source.IndexOf("internal void OnGridHeaderContextMenuRequested", StringComparison.Ordinal)];
 
         contextMenuRequested.Should().Contain("HideValidationDropdown();");
         contextMenuRequested.Should().Contain("ClearCommentPreview();");

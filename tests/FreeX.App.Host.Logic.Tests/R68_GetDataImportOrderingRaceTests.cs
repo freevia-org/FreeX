@@ -121,8 +121,6 @@ public sealed class R68_GetDataImportOrderingRaceTests
 
     private sealed class ImportRaceHarness : IDisposable
     {
-        private readonly MethodInfo _importDataFromFileAsync;
-        private readonly MethodInfo _replaceWorkbookSession;
         private readonly FieldInfo _isImportingDataField;
         private readonly Dictionary<WorkbookId, Workbook> _workbooksById;
 
@@ -136,12 +134,6 @@ public sealed class R68_GetDataImportOrderingRaceTests
             OriginalSheetId = originalWorkbook.Sheets[0].Id;
             _workbooksById = workbooksById;
 
-            _importDataFromFileAsync = typeof(MainWindow)
-                .GetMethod("ImportDataFromFileAsync", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ImportDataFromFileAsync");
-            _replaceWorkbookSession = typeof(MainWindow)
-                .GetMethod("ReplaceWorkbookSession", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ReplaceWorkbookSession");
             _isImportingDataField = typeof(MainWindow)
                 .GetField("_isImportingData", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_isImportingData");
@@ -180,20 +172,16 @@ public sealed class R68_GetDataImportOrderingRaceTests
         public void SwapCurrentWorkbook(Workbook newWorkbook)
         {
             Window.Dispatcher.Invoke(() =>
-                _replaceWorkbookSession.Invoke(
-                    Window,
-                    [new StartupWorkbookLoadResult(
+                Window.ReplaceWorkbookSession(new StartupWorkbookLoadResult(
                         newWorkbook,
                         "Book2.fxl",
                         "Opened .fxl.",
-                        IsFallback: false)]));
+                        IsFallback: false)));
         }
 
         public void RunImport(string importPath, IFileAdapter adapter)
         {
-            var task = (Task)_importDataFromFileAsync.Invoke(
-                Window,
-                [importPath, adapter, ".testimport", (FileFormatDescriptor?)null])!;
+            var task = Window.ImportDataFromFileAsync(importPath, adapter, ".testimport", (FileFormatDescriptor?)null);
 
             // Pump the dispatcher while waiting: the awaited Task.Run inside ImportDataFromFileAsync
             // resumes via the DispatcherSynchronizationContext installed on this STA thread, so a

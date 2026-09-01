@@ -96,6 +96,21 @@ public sealed class PdfFileAdapterTests
             .Equal("Left 1", "Left 2", "Left 3", "Right 1", "Right 2", "Right 3");
     }
 
+    [Fact]
+    public void ColumnSplit_UsesLinearGapSelectionAndSinglePassLetterPartitioning()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText("freew", "FreeW.Core.IO", "PdfTextReader.cs");
+        var method = source.Split("private static IReadOnlyList<IReadOnlyList<Letter>> SplitLettersForReading(Page page)")[1]
+            .Split("private static List<Paragraph> ExtractPageBlocks(Page page)")[0];
+
+        method.Should().Contain("WordGap? widestGap = null;");
+        method.Should().Contain("foreach (var letter in letters)");
+        method.Should().NotContain(".Zip(");
+        method.Should().NotContain(".OrderByDescending(");
+        method.Should().NotContain("leftWords");
+        method.Should().NotContain("rightWords");
+    }
+
     /// <summary>
     /// Builds a one-page PDF whose <paramref name="lines"/> are drawn top-to-bottom with a standard font, and
     /// returns its bytes. Each line is placed on a separate baseline so the extractor recovers line breaks.

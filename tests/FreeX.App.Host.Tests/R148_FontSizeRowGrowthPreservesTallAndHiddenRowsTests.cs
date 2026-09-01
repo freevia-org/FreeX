@@ -77,9 +77,7 @@ public sealed class R148_FontSizeRowGrowthPreservesTallAndHiddenRowsTests
                 expectedFittedHeight.Should().BeLessThan(tallCustomHeight,
                     "the test is only meaningful if the font-driven fitting height would have collapsed row 1's tall custom height");
 
-                var method = typeof(MainWindow).GetMethod("IncreaseFontSizeBtn_Click", BindingFlags.NonPublic | BindingFlags.Instance);
-                method.Should().NotBeNull();
-                method!.Invoke(window, [null, new RoutedEventArgs()]);
+                window.IncreaseFontSizeBtn_Click(null!, new RoutedEventArgs());
                 PumpDispatcher();
 
                 messages.Messages.Should().BeEmpty();
