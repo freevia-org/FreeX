@@ -92,7 +92,11 @@ internal sealed record FreePRibbonProfile(
             [FreePRibbonHomeGroupId.Edit] = 75,
             [FreePRibbonHomeGroupId.Editing] = 70,
         },
-        SlideShowGroupKeyTip: () => FreePRibbonText.SlideShowGroupWpfKeyTip,
+        // r185: the Avalonia profile was pointing at the WPF keytip. FreePRibbonText declares a
+        // separate SlideShowGroupAvaloniaKeyTip resource precisely because the two shells need
+        // different letters, and it was never referenced -- so the Avalonia Slide Show group
+        // advertised the WPF letter, which collides with another group there.
+        SlideShowGroupKeyTip: () => FreePRibbonText.SlideShowGroupAvaloniaKeyTip,
         SlideShowFromCurrentSlideIcon: RibbonCommandIconKind.Previous,
         IncludeAnimationSeparators: false,
         AnimationTriggerWidth: 120);

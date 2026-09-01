@@ -576,7 +576,13 @@ public static class OpcMediaTypes
     public static string GetDrawingMediaContentType(string path)
     {
         var extension = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
-        if (extension is "jpg" or "jpeg" or "gif" or "bmp" or "tif" or "tiff" or "svg" or "wmf" or "emf" &&
+        // r185: "webp" was missing from this list even though DefaultContentTypes already maps it,
+        // so a reloaded .webp picture part fell through to the image/png default below. The bytes
+        // are still WebP, so the part gets written declaring a type it is not -- and a consumer
+        // that trusts the declared type (including this suite on the next open) sees a corrupt
+        // PNG. Anything DefaultContentTypes knows an image type for should use it; the fallback
+        // is only for extensions it does not recognise at all.
+        if (extension is "jpg" or "jpeg" or "gif" or "bmp" or "tif" or "tiff" or "svg" or "wmf" or "emf" or "webp" &&
             TryGetDefaultContentType(extension, out var contentType))
         {
             return contentType;
