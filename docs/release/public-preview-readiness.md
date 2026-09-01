@@ -137,29 +137,26 @@ Windows public-preview publication retains these download choices:
 
 | Scope | Portable artifact | Installable artifact |
 | --- | --- | --- |
-| FreeX only | standalone FreeX executable | per-user FreeX Inno Setup installer |
-| FreeW only | standalone FreeW executable | per-user FreeW Inno Setup installer |
-| FreeP only | standalone FreeP executable | per-user FreeP Inno Setup installer |
-| Entire suite | the three standalone executables remain individually available | per-user Free Suite Inno Setup installer with all three apps |
+| FreeX only | signed standalone FreeX executable | signed per-user FreeX Velopack installer |
+| FreeW only | signed standalone FreeW executable | signed per-user FreeW Velopack installer |
+| FreeP only | signed standalone FreeP executable | signed per-user FreeP Velopack installer |
+| Entire suite | the three signed standalone executables remain individually available | signed non-Inno Free Suite bootstrapper over the signed app installers |
 
-An installer is additional to, not a replacement for, the standalone executable.
-Checksums are generated after all packaging steps that modify an artifact. Until
-certificates arrive, installer and portable artifacts may be published only as
-explicitly labeled unsigned previews; production workflows must not pretend they
-are signed.
+An installer is additional to, not a replacement for, the standalone
+executable. Checksums are generated after all packaging and signing steps that
+modify an artifact. The canonical full-release workflow fails closed instead of
+publishing an unsigned Windows fallback.
 
-Linux and macOS retain the per-app, per-architecture archives and also provide a
-suite-level bundle with an install script where no native signed package is yet
-available. The script must support a normal user-scoped installation, report
-partial failure, avoid overwriting user data, and document uninstall/update
-steps. Do not describe a ZIP archive or install script as a signed native
-package. macOS packages remain explicitly unsigned and unnotarized until the
-Developer ID certificate gate is complete.
+Linux and macOS retain per-app, per-architecture archives and suite-level
+packages. Linux trust is expressed through checksums, SBOMs, and immutable
+manifests, not a native code signature. Canonical macOS releases require
+Developer ID signing, hardened runtime, accepted notarization, stapling, and
+Gatekeeper validation; the workflow does not downgrade to unsigned bundles.
 
 ## Certificate Gate
 
-Do not make certificate availability a workflow requirement while certificate
-issuance is pending. Before promotion beyond unsigned preview:
+The canonical full-release workflow treats certificate availability as a
+publication requirement:
 
 - Windows executables and installers are signed by the intended publisher,
   RFC 3161 timestamped, and verified on a clean machine. Checksums are regenerated

@@ -1,15 +1,14 @@
 # Windows Artifact Signing
 
-FreeX's current direct-download Windows channel is Velopack, not Inno Setup.
-The tester release also publishes a standalone executable and an MSIX. The
-Velopack installer, the executable inside it, and the standalone executable
-need an Authenticode signature because GitHub distributes them directly.
+FreeX, FreeW, and FreeP use Velopack for their direct-download Windows
+installers, not Inno Setup. Each release also publishes a standalone
+executable. The Velopack application payload, generated installer, standalone
+executable, and repository-owned Free Suite bootstrapper need Authenticode
+signatures because GitHub distributes them directly.
 
 Microsoft Store submission is different: Partner Center accepts an unsigned
 Store package and Microsoft signs it during certification. Do not apply the
-Public Trust profile to a Store-bound MSIX. The repository's direct-download
-tester MSIX retains its existing certificate path until its manifest identity
-and publisher are deliberately migrated.
+Public Trust profile to a Store-bound MSIX.
 
 The Azure resources are:
 
@@ -55,7 +54,7 @@ The script signs with SHA-256, adds an RFC 3161 SHA-256 timestamp, and runs
 `signtool verify /pa /all`. Use `-VerifyOnly` to validate without submitting a
 new signing operation.
 
-## Build signed FreeX direct-download packages
+## Build signed direct-download packages
 
 For the standalone tester executable:
 
@@ -93,12 +92,17 @@ no client secret or PFX. Its only federated subject is
 
 The `public-preview` GitHub environment stores `AZURE_CLIENT_ID`,
 `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID`. They identify the OIDC login;
-none is a credential. `tester-release.yml` grants `id-token: write`, runs the
-commit-pinned Azure Login action, installs the pinned Velopack client bundle,
-and passes `-ArtifactSigningMetadataPath tools/signing/metadata.json` to both
-the SingleFile and Velopack commands.
+none is a credential. `full-release.yml` grants `id-token: write`, runs the
+commit-pinned Azure Login action, and installs the pinned signing client. Its
+Windows jobs sign and verify each standalone executable and each app's
+Velopack payload/installer before hashing. The suite job then embeds those
+final signed app installers, signs and verifies the non-Inno suite bootstrapper,
+and only then generates its checksum, SBOM, and manifest.
 
 Every dispatch signs before publication. `prerelease=true` produces a signed
-test/prerelease; `prerelease=false` produces the signed non-prerelease/latest
-release. Publication fails if OIDC login, signing, timestamping, or final
-Authenticode verification fails. The human signer role is not used by GitHub.
+test/prerelease; `prerelease=false` produces a signed non-prerelease release.
+Publication fails if OIDC login, signing, timestamping, or final Authenticode
+verification fails. The human signer role is not used by GitHub. Azure Artifact
+Signing does not sign Linux archives or macOS bundles; those lanes use the
+integrity and Apple trust processes documented in
+[app-platform-publish-lanes.md](app-platform-publish-lanes.md).

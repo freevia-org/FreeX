@@ -583,6 +583,47 @@ function Assert-WindowsArtifactSigningContract {
         throw "FreeX single-file artifacts must be signed before their checksums are generated."
     }
 
+    $familyPublisher = Get-Content -LiteralPath (Join-Path $ToolRoot "Publish-WindowsVelopackPackage.ps1") -Raw
+    foreach ($requiredToken in @(
+            '--signTemplate',
+            'Invoke-WindowsArtifactSigning.ps1',
+            '-VerifyOnly',
+            'Get-FileHash -LiteralPath $artifactPath')) {
+        if (-not $familyPublisher.Contains($requiredToken)) {
+            throw "All-app Windows signing integration is missing '$requiredToken'."
+        }
+    }
+    if ($familyPublisher.IndexOf('-VerifyOnly', [System.StringComparison]::Ordinal) -gt
+        $familyPublisher.IndexOf('Get-FileHash -LiteralPath $artifactPath', [System.StringComparison]::Ordinal)) {
+        throw "All-app Windows artifacts must be verified before their checksums are generated."
+    }
+
+    $suitePackager = Get-Content -LiteralPath (Join-Path $ToolRoot "packaging/New-FreeSuiteWindowsBootstrapper.ps1") -Raw
+    foreach ($requiredToken in @(
+            'FreeSuite.Bootstrapper',
+            'FreeSuite-v$Version-win-x64-setup.exe',
+            'must be Artifact Signed after this script returns',
+            'generated only after that signature is applied')) {
+        if (-not $suitePackager.Contains($requiredToken)) {
+            throw "Free Suite bootstrapper packaging contract is missing '$requiredToken'."
+        }
+    }
+    if ($suitePackager.Contains('Inno Setup') -or $suitePackager.Contains('ISCC')) {
+        throw "The canonical Free Suite Windows bootstrapper must not depend on Inno Setup."
+    }
+
+    $macPackager = Get-Content -LiteralPath (Join-Path $ToolRoot "packaging/New-SignedMacOsReleasePackages.ps1") -Raw
+    foreach ($requiredToken in @(
+            'Developer ID Application:',
+            'xcrun notarytool submit',
+            '"stapler", "staple"',
+            '"stapler", "validate"',
+            'Apple notarization was not accepted')) {
+        if (-not $macPackager.Contains($requiredToken)) {
+            throw "Canonical macOS signing/notarization integration is missing '$requiredToken'."
+        }
+    }
+
     Write-Host "Validated Windows Artifact Signing source contract."
 }
 

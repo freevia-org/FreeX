@@ -1,6 +1,6 @@
 param(
     [string]$ProjectRoot = ".",
-    [string]$WorkflowPath = ".github/workflows/tester-release.yml"
+    [string]$WorkflowPath = ".github/workflows/full-release.yml"
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,13 +16,13 @@ if (-not (Test-Path -LiteralPath $resolvedProjectRoot -PathType Container)) {
 
 $resolvedWorkflowPath = Resolve-ToolRepoPath -Path $WorkflowPath -RepoRoot $repoRoot
 if (-not (Test-Path -LiteralPath $resolvedWorkflowPath -PathType Leaf)) {
-    throw "Tester Release workflow was not found: $resolvedWorkflowPath"
+    throw "Full Signed Release workflow was not found: $resolvedWorkflowPath"
 }
 
 $workflow = Get-Content -LiteralPath $resolvedWorkflowPath -Raw
 $dotnetVersionMatch = [regex]::Match($workflow, "(?m)^\s*dotnet-version:\s*['""]?(?<major>\d+)\.(?<minor>\d+)\.(?<patch>x|\d+)['""]?\s*$")
 if (-not $dotnetVersionMatch.Success) {
-    throw "Tester Release workflow is missing a dotnet-version SDK such as 10.0.400."
+    throw "Full Signed Release workflow is missing a dotnet-version SDK such as 10.0.400."
 }
 
 $requiredMajor = [int]$dotnetVersionMatch.Groups["major"].Value
@@ -33,7 +33,7 @@ $requiredSdk = "$requiredMajor.$requiredMinor.$requiredPatchText"
 
 $dotnetCommand = Get-Command dotnet -ErrorAction SilentlyContinue
 if ($null -eq $dotnetCommand) {
-    throw ".NET SDK $requiredSdk is required by the Tester Release workflow, but dotnet was not found on PATH."
+    throw ".NET SDK $requiredSdk is required by the Full Signed Release workflow, but dotnet was not found on PATH."
 }
 
 $sdkLines = & dotnet --list-sdks 2>&1
@@ -66,7 +66,7 @@ $matchingSdkVersions = @(
 )
 
 if ($matchingSdkVersions.Count -eq 0) {
-    throw ".NET SDK $requiredSdk is required by the Tester Release workflow. Installed SDKs: $($installedVersions -join ', ')"
+    throw ".NET SDK $requiredSdk is required by the Full Signed Release workflow. Installed SDKs: $($installedVersions -join ', ')"
 }
 
 $projectFiles = @(
