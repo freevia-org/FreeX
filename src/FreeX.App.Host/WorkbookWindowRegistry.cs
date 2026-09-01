@@ -41,6 +41,15 @@ public interface IWorkbookWindow
     /// </summary>
     void RefreshTitleBar();
 
+    /// <summary>
+    /// Whether this window is viewing a document with unsaved edits.
+    ///
+    /// r187: added so a process-wide action can ask before destroying work it does not own.
+    /// Applying a self-update restarts the whole process, and that path prompted only the
+    /// window the user clicked in -- every other open workbook was killed with its edits.
+    /// </summary>
+    bool HasUnsavedChanges { get; }
+
     /// <summary>Brings this window to the foreground (Switch Windows / New Window activation).</summary>
     void ActivateWindow();
 

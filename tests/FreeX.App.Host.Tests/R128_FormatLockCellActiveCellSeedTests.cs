@@ -22,6 +22,8 @@ public sealed class R128_FormatLockCellActiveCellSeedTests
 {
     private sealed class DocumentPlaceholderWindow(WorkbookId documentId) : IWorkbookWindow
     {
+        public bool HasUnsavedChanges => false;
+
         public WorkbookId DocumentId { get; } = documentId;
         public void ApplyWindowTitleSuffix(string suffix) { }
         public void RefreshFromSharedWorkbook() { }

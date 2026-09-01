@@ -34,6 +34,8 @@ public sealed class R120_NewWindowSeedsActiveCellAndSelectionTests
     /// </summary>
     private sealed class DocumentPlaceholderWindow(WorkbookId documentId) : IWorkbookWindow
     {
+        public bool HasUnsavedChanges => false;
+
         public WorkbookId DocumentId { get; } = documentId;
         public void ApplyWindowTitleSuffix(string suffix) { }
         public void RefreshFromSharedWorkbook() { }

@@ -9,6 +9,8 @@ internal sealed class TestWorkbookWindow : IWorkbookWindow
 {
     // Defaults to the same (default) id for every fake, so tests that model several views of
     // one document need no setup; multi-document tests assign distinct ids explicitly.
+    public bool HasUnsavedChanges => false;
+
     public WorkbookId DocumentId { get; set; }
 
     public string? Suffix { get; private set; }

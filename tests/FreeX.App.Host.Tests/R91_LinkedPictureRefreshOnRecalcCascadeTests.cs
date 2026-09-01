@@ -27,6 +27,8 @@ public sealed class R91_LinkedPictureRefreshOnRecalcCascadeTests
 {
     private sealed class DocumentPlaceholderWindow(WorkbookId documentId) : IWorkbookWindow
     {
+        public bool HasUnsavedChanges => false;
+
         public WorkbookId DocumentId { get; } = documentId;
         public void ApplyWindowTitleSuffix(string suffix) { }
         public void RefreshFromSharedWorkbook() { }

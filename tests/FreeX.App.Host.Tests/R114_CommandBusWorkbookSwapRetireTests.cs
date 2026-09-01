@@ -34,6 +34,8 @@ public sealed class R114_CommandBusWorkbookSwapRetireTests
     /// R90_NewWindowSourceHintSheetResolutionTests.</summary>
     private sealed class DocumentPlaceholderWindow(WorkbookId documentId) : IWorkbookWindow
     {
+        public bool HasUnsavedChanges => false;
+
         public WorkbookId DocumentId { get; } = documentId;
         public void ApplyWindowTitleSuffix(string suffix) { }
         public void RefreshFromSharedWorkbook() { }
