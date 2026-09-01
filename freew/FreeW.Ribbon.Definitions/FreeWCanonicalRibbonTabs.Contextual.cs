@@ -61,10 +61,17 @@ internal static partial class FreeWCanonicalRibbonTabs
                                 Icon = new RibbonCommandIcon(RibbonCommandIconKind.Wrap),
                             });
                             group.Dropdown("freew.image-rotate", "Rotate", BuildRotateMenu("image"));
-                            group.Button("freew.shape-bring-to-front", "Bring to Front");
-                            group.Button("freew.shape-send-to-back", "Send to Back");
-                            group.Button("freew.shape-bring-forward", "Bring Forward");
-                            group.Button("freew.shape-send-backward", "Send Backward");
+                            // r185: these four were freew.shape-* in the PICTURE group and
+                            // freew.image-* in the DRAWING group -- a straight swap, and only in
+                            // the portable/Avalonia overrides; the WPF canonical closures above
+                            // each use the right family. So on Linux/macOS the Picture Format
+                            // tab z-order buttons acted on the selected SHAPE and the Drawing
+                            // Format ones acted on the selected PICTURE, i.e. they did nothing
+                            // visible when only the tab own object type was selected.
+                            group.Button("freew.image-bring-to-front", "Bring to Front");
+                            group.Button("freew.image-send-to-back", "Send to Back");
+                            group.Button("freew.image-bring-forward", "Bring Forward");
+                            group.Button("freew.image-send-backward", "Send Backward");
                             group.Button("freew.image-align-left", "Align Left");
                             group.Button("freew.image-align-center", "Align Center");
                             group.Button("freew.image-align-right", "Align Right");
@@ -382,10 +389,12 @@ internal static partial class FreeWCanonicalRibbonTabs
                             group.Dropdown("freew.shape-position", "Position", BuildFloatingPositionMenu("shape"));
                             group.Dropdown("freew.shape-wrap", "Wrap Text", BuildWrapMenu("shape"));
                             group.Dropdown("freew.shape-rotate", "Rotate", BuildRotateMenu("shape"));
-                            group.Button("freew.image-bring-to-front", "Bring to Front");
-                            group.Button("freew.image-send-to-back", "Send to Back");
-                            group.Button("freew.image-bring-forward", "Bring Forward");
-                            group.Button("freew.image-send-backward", "Send Backward");
+                            // r185: see the Picture Format group above -- these two sets were
+                            // swapped with each other.
+                            group.Button("freew.shape-bring-to-front", "Bring to Front");
+                            group.Button("freew.shape-send-to-back", "Send to Back");
+                            group.Button("freew.shape-bring-forward", "Bring Forward");
+                            group.Button("freew.shape-send-backward", "Send Backward");
                             group.Button("freew.shape-align-left", "Align Left");
                             group.Button("freew.shape-align-center", "Align Center");
                             group.Button("freew.shape-align-right", "Align Right");

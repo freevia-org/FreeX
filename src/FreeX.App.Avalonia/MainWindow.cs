@@ -26210,7 +26210,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (e.Key == Key.F1 && e.KeyModifiers == (KeyModifiers.Alt | KeyModifiers.Shift))
             {
                 e.Handled = true;
-                AddNewSheet();
+                // r185: insert BEFORE the active sheet, like Shift+F11 just above and like the
+                // WPF host. The parameterless AddNewSheet() passes insertBeforeSheetId: null,
+                // which appends at the end of the tab strip -- so with the active sheet anywhere
+                // but last, the same keystroke put the new sheet somewhere Excel would not.
+                AddNewSheet(_session.ActiveSheet.Id);
                 return;
             }
 

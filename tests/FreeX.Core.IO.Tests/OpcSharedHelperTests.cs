@@ -909,4 +909,32 @@ public sealed class OpcSharedHelperTests
         using var writer = new StreamWriter(entry.Open());
         writer.Write(text);
     }
+
+    /// <summary>
+    /// r185. GetDrawingMediaContentType gated on an inline extension list that omitted "webp", even
+    /// though DefaultContentTypes already maps webp to image/webp. A reloaded .webp picture part
+    /// therefore fell through to the image/png default and was written declaring a type it is not,
+    /// so anything trusting the declared type -- including this suite on the next open -- sees a
+    /// corrupt PNG.
+    /// </summary>
+    [Theory]
+    [InlineData("logo.webp", "image/webp")]
+    [InlineData("logo.png", "image/png")]
+    [InlineData("logo.jpg", "image/jpeg")]
+    [InlineData("logo.gif", "image/gif")]
+    [InlineData("logo.svg", "image/svg+xml")]
+    public void GetDrawingMediaContentType_UsesTheRealTypeForEveryFormatItKnows(
+        string path,
+        string expected)
+    {
+        OpcMediaTypes.GetDrawingMediaContentType(path).Should().Be(expected);
+    }
+
+    [Fact]
+    public void GetDrawingMediaContentType_StillFallsBackToPngForAnUnknownExtension()
+    {
+        // Sibling no-regression: the fallback exists for extensions the map does not know, and must
+        // stay -- it is what keeps an unrecognised part writable at all.
+        OpcMediaTypes.GetDrawingMediaContentType("logo.unknownext").Should().Be("image/png");
+    }
 }
