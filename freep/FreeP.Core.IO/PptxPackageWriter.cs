@@ -6321,6 +6321,7 @@ public static class PptxPackageWriter
         WriteSlideSmartArt(ZipArchive archive, Slide slide, HashSet<string> usedRelIds, HashSet<string> writtenParts)
     {
         var slideRels  = new List<(string, string, string)>();
+        var slideRelIdsByTypeAndTarget = new Dictionary<(string RelType, string Target), string>();
         var relIdRemap = new Dictionary<uint, Dictionary<string, string>>();
 
         // R135 GATE FIX: writtenParts is now passed in by the caller and shared GLOBALLY across
@@ -6364,20 +6365,19 @@ public static class PptxPackageWriter
                     ? smart.DrawingPartPath
                     : null;
             string? drawingRelationshipId = null;
-            string? drawingTarget = null;
             if (drawingPartPath is not null)
             {
                 var partPathFromPpt = drawingPartPath.StartsWith("ppt/", StringComparison.OrdinalIgnoreCase)
                     ? drawingPartPath["ppt/".Length..]
                     : drawingPartPath;
-                drawingTarget = $"../{partPathFromPpt}";
+                var drawingTarget = $"../{partPathFromPpt}";
 
-                var existingDrawingRelationship = slideRels.FirstOrDefault(relationship =>
-                    relationship.Item3 == drawingTarget
-                    && relationship.Item2 == DiagramDrawingRelType);
-                if (existingDrawingRelationship != default)
+                var drawingRelationshipKey = (DiagramDrawingRelType, drawingTarget);
+                if (slideRelIdsByTypeAndTarget.TryGetValue(
+                        drawingRelationshipKey,
+                        out var existingDrawingRelationshipId))
                 {
-                    drawingRelationshipId = existingDrawingRelationship.Item1;
+                    drawingRelationshipId = existingDrawingRelationshipId;
                 }
                 else
                 {
@@ -6390,6 +6390,7 @@ public static class PptxPackageWriter
                     }
 
                     slideRels.Add((drawingRelationshipId, DiagramDrawingRelType, drawingTarget));
+                    slideRelIdsByTypeAndTarget.Add(drawingRelationshipKey, drawingRelationshipId);
                 }
             }
 
@@ -6465,16 +6466,17 @@ public static class PptxPackageWriter
 
                 // S4: reuse existing relId if this exact part was already registered (shared
                 // part across shapes), otherwise allocate a fresh collision-free relId.
-                var existing = slideRels.FirstOrDefault(r => r.Item3 == target && r.Item2 == relType);
+                var relationshipKey = (relType, target);
                 string newRelId;
-                if (existing != default)
+                if (slideRelIdsByTypeAndTarget.TryGetValue(relationshipKey, out var existingRelId))
                 {
-                    newRelId = existing.Item1; // reuse the already-assigned id
+                    newRelId = existingRelId; // reuse the already-assigned id
                 }
                 else
                 {
                     newRelId = AllocDgmRelId();
                     slideRels.Add((newRelId, relType, target));
+                    slideRelIdsByTypeAndTarget.Add(relationshipKey, newRelId);
                 }
 
                 shapeRemap[key] = newRelId;
