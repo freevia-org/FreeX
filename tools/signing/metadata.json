@@ -1,0 +1,5 @@
+{
+  "Endpoint": "https://REPLACE-WITH-ACCOUNT-URI.codesigning.azure.net",
+  "CodeSigningAccountName": "free-software-signing",
+  "CertificateProfileName": "freevia-public-signing"
+}

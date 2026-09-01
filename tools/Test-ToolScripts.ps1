@@ -555,6 +555,39 @@ function Assert-ToolSourceCentralization {
     Write-Host "Validated shared tooling source guards."
 }
 
+function Assert-WindowsArtifactSigningContract {
+    param([Parameter(Mandatory = $true)][string]$ToolRoot)
+
+    $signingScript = Get-Content -LiteralPath (Join-Path $ToolRoot "Invoke-WindowsArtifactSigning.ps1") -Raw
+    foreach ($requiredToken in @(
+            '/fd SHA256',
+            'http://timestamp.acs.microsoft.com',
+            '/td SHA256',
+            'Azure.CodeSigning.Dlib.dll',
+            '/dmdf',
+            'verify /v /pa /all',
+            'REPLACE-WITH')) {
+        if (-not $signingScript.Contains($requiredToken)) {
+            throw "Windows Artifact Signing script is missing required contract '$requiredToken'."
+        }
+    }
+
+    $publisher = Get-Content -LiteralPath (Join-Path $ToolRoot "Publish-SisterAppTesterPackages.ps1") -Raw
+    if ($publisher.IndexOf('Invoke-WindowsArtifactSigning.ps1', [System.StringComparison]::Ordinal) -gt
+        $publisher.IndexOf('Get-FileHash -LiteralPath $packagePath', [System.StringComparison]::Ordinal)) {
+        throw "Windows portable artifacts must be signed before their checksums are generated."
+    }
+
+    $installer = Get-Content -LiteralPath (Join-Path $ToolRoot "packaging/New-AppInstallers.ps1") -Raw
+    foreach ($requiredToken in @('SignTool=freexartifactsigning', 'SignedUninstaller=yes', '/Sfreexartifactsigning=', 'Write-Sha256 $result')) {
+        if (-not $installer.Contains($requiredToken)) {
+            throw "Windows installer signing contract is missing '$requiredToken'."
+        }
+    }
+
+    Write-Host "Validated Windows Artifact Signing source contract."
+}
+
 function Assert-CommandInventoryMenuTraversalCentralization {
     param([Parameter(Mandatory = $true)][string]$ToolRoot)
 
@@ -1725,6 +1758,7 @@ if ($resolvedDirectory.Equals($toolsRoot, [System.StringComparison]::OrdinalIgno
     Assert-GeneratedDocCheckNewlineSemantics -ToolRoot $resolvedDirectory
     Assert-PortableDialogPngAnalyzer -RepoRoot $repoRoot -ToolRoot $resolvedDirectory
     Assert-FidelityCorpusDownloaderBehavior -ToolRoot $resolvedDirectory
+    Assert-WindowsArtifactSigningContract -ToolRoot $resolvedDirectory
 }
 
 $failedScripts = New-Object System.Collections.Generic.List[string]
