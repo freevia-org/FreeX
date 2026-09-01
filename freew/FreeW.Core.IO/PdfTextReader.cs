@@ -123,27 +123,53 @@ public static class PdfTextReader
             return [letters];
 
         var pageWidth = Math.Max(1, page.Width);
-        var gaps = words
-            .Zip(words.Skip(1), (left, right) => new WordGap(left.Right, right.Left))
-            .Where(gap => gap.Width > pageWidth * 0.10)
-            .OrderByDescending(gap => gap.Width)
-            .ToList();
-        if (gaps.Count == 0)
+        var minimumGapWidth = pageWidth * 0.10;
+        WordGap? widestGap = null;
+        for (var index = 1; index < words.Count; index++)
+        {
+            var gap = new WordGap(words[index - 1].Right, words[index].Left);
+            if (gap.Width > minimumGapWidth &&
+                (!widestGap.HasValue || gap.Width > widestGap.Value.Width))
+            {
+                widestGap = gap;
+            }
+        }
+        if (widestGap is not { } splitGap)
             return [letters];
 
-        var splitX = (gaps[0].LeftEdge + gaps[0].RightEdge) / 2;
-        var leftWords = words.Where(word => word.CenterX < splitX).ToList();
-        var rightWords = words.Where(word => word.CenterX >= splitX).ToList();
-        if (leftWords.Count < 2 || rightWords.Count < 2)
+        var splitX = (splitGap.LeftEdge + splitGap.RightEdge) / 2;
+        var leftWordCount = 0;
+        var rightWordCount = 0;
+        var leftRight = double.NegativeInfinity;
+        var rightLeft = double.PositiveInfinity;
+        foreach (var word in words)
+        {
+            if (word.CenterX < splitX)
+            {
+                leftWordCount++;
+                leftRight = Math.Max(leftRight, word.Right);
+            }
+            else
+            {
+                rightWordCount++;
+                rightLeft = Math.Min(rightLeft, word.Left);
+            }
+        }
+        if (leftWordCount < 2 || rightWordCount < 2)
             return [letters];
 
-        var leftRight = leftWords.Max(word => word.Right);
-        var rightLeft = rightWords.Min(word => word.Left);
         if (rightLeft - leftRight < pageWidth * 0.08)
             return [letters];
 
-        var leftLetters = letters.Where(letter => letter.GlyphRectangle.BottomLeft.X < splitX).ToList();
-        var rightLetters = letters.Where(letter => letter.GlyphRectangle.BottomLeft.X >= splitX).ToList();
+        var leftLetters = new List<Letter>();
+        var rightLetters = new List<Letter>();
+        foreach (var letter in letters)
+        {
+            if (letter.GlyphRectangle.BottomLeft.X < splitX)
+                leftLetters.Add(letter);
+            else
+                rightLetters.Add(letter);
+        }
         return leftLetters.Count == 0 || rightLetters.Count == 0
             ? [letters]
             : [leftLetters, rightLetters];

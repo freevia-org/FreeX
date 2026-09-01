@@ -31,7 +31,8 @@ public sealed class MoveSheetsCommand : IWorkbookCommand, IWholeWorkbookRecalcCo
             return new CommandOutcome(false, "Sheet index is out of range.");
 
         var currentOrder = ctx.Workbook.Sheets.Select(sheet => sheet.Id).ToList();
-        var selectedIds = currentOrder.Where(_sheetIds.Contains).ToList();
+        var selectedSet = _sheetIds.ToHashSet();
+        var selectedIds = currentOrder.Where(selectedSet.Contains).ToList();
         if (selectedIds.Count == 0)
             return new CommandOutcome(false, "Source sheet was not found.");
 
@@ -40,7 +41,7 @@ public sealed class MoveSheetsCommand : IWorkbookCommand, IWholeWorkbookRecalcCo
         // command reorders sheets directly rather than delegating to MoveSheetCommand per sheet.
         foreach (var id in selectedIds)
         {
-            if (ctx.Workbook.Sheets.FirstOrDefault(sheet => sheet.Id == id) is { } candidate &&
+            if (ctx.Workbook.GetSheet(id) is { } candidate &&
                 CommandGuards.RejectIfProtected(candidate) is { } sheetProtectedOutcome)
             {
                 return sheetProtectedOutcome;
@@ -48,7 +49,6 @@ public sealed class MoveSheetsCommand : IWorkbookCommand, IWholeWorkbookRecalcCo
         }
 
         _previousOrder = currentOrder;
-        var selectedSet = selectedIds.ToHashSet();
         var remaining = currentOrder.Where(id => !selectedSet.Contains(id)).ToList();
         var selectedBeforeTarget = currentOrder
             .Take(Math.Min(_insertBeforeIndex, currentOrder.Count))

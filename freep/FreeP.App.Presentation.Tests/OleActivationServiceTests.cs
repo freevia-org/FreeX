@@ -253,6 +253,68 @@ public sealed class OleActivationServiceTests : IDisposable
         launcher.LaunchCalls.Should().Be(0);
     }
 
+    /// <summary>
+    /// r182. The activation filter was a DENYLIST of executable/script extensions, applied to an
+    /// extension that comes verbatim from the OPC relationship target inside the .pptx -- from the
+    /// document author. Activation shell-opens the materialised temp file, so any extension the OS
+    /// has a handler for runs something. A denylist cannot be complete on Windows; every extension
+    /// below executes through the shell and none of them were listed.
+    /// </summary>
+    [Theory]
+    [InlineData("payload.hta")]
+    [InlineData("payload.scr")]
+    [InlineData("payload.lnk")]
+    [InlineData("payload.cpl")]
+    [InlineData("payload.msc")]
+    [InlineData("payload.jar")]
+    [InlineData("payload.reg")]
+    [InlineData("payload.application")]
+    [InlineData("payload.pif")]
+    [InlineData("payload.ws")]
+    [InlineData("payload.settingcontent-ms")]
+    public void TryActivate_RejectsEverythingOutsideTheDocumentAllowlist(string fileName)
+    {
+        var temp = new FakeTempStore();
+        var launcher = new FakeLauncher();
+
+        OleActivationService.TryActivate(
+                new OleActivationPlan([1, 2, 3], fileName),
+                _ => { },
+                temp,
+                launcher)
+            .Should().BeFalse();
+        temp.MaterializeCalls.Should().Be(0, "nothing may even be written to disk for a payload we will not open");
+        launcher.LaunchCalls.Should().Be(0);
+    }
+
+    /// <summary>
+    /// Sibling no-regression: the allowlist must still activate the document types an embedded
+    /// object legitimately carries, or inverting the filter would break the feature it protects.
+    /// </summary>
+    [Theory]
+    [InlineData("report.xlsx")]
+    [InlineData("letter.docx")]
+    [InlineData("deck.pptx")]
+    [InlineData("scan.pdf")]
+    [InlineData("photo.png")]
+    // The unknown-payload fallback stays activatable: no handler is registered for .bin, so it is
+    // not an execute vector, and refusing it would break activating an embedded object whose type
+    // the package never declared (InlineOleExternalActivationEndToEndTests covers that flow).
+    [InlineData("payload.bin")]
+    public void TryActivate_StillOpensOrdinaryDocumentPayloads(string fileName)
+    {
+        var temp = new FakeTempStore();
+        var launcher = new FakeLauncher();
+
+        OleActivationService.TryActivate(
+                new OleActivationPlan([1, 2, 3], fileName),
+                _ => { },
+                temp,
+                launcher)
+            .Should().BeTrue();
+        launcher.LaunchCalls.Should().Be(1);
+    }
+
     [Theory]
     [InlineData(".XLSX", "xlsx")]
     [InlineData("docx", "docx")]

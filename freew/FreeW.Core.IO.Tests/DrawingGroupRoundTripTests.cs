@@ -202,6 +202,17 @@ public sealed class DrawingGroupRoundTripTests
         return group;
     }
 
+    private static DrawingGroup DenseRelationshipBackedGroup()
+    {
+        var group = ChartAndSmartArtGroup();
+        for (var index = 0; index < 96; index++)
+        {
+            group.Children.Add(new InlineImage(OnePixelPng, 12, 12));
+            group.ChildOffsets.Add((index * 2, 54));
+        }
+        return group;
+    }
+
     private static DrawingGroup NestedGroup()
     {
         var inner = new DrawingGroup
@@ -319,9 +330,9 @@ public sealed class DrawingGroupRoundTripTests
     /// retaining the companion SmartArt frame. ChartEx is a Word-valid DrawingML payload that FreeW does not
     /// model, so the complete relationship-backed group must travel through the preservation path.
     /// </summary>
-    private static byte[] AuthorChartExAndSmartArtGroupPackage()
+    private static byte[] AuthorChartExAndSmartArtGroupPackage(DrawingGroup? group = null)
     {
-        var sourceBytes = WriteBytes(DocumentWith(ChartAndSmartArtGroup()));
+        var sourceBytes = WriteBytes(DocumentWith(group ?? ChartAndSmartArtGroup()));
         using var sourceStream = new MemoryStream(sourceBytes);
         using var source = new ZipArchive(sourceStream, ZipArchiveMode.Read);
 
@@ -549,6 +560,39 @@ public sealed class DrawingGroupRoundTripTests
 
         var reopened = DocxReader.Read(new MemoryStream(rewritten));
         ((Paragraph)reopened.Blocks[0]).Runs.Single().PreservedDrawing.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void DrawingGroup_DenseRelationshipBackedChildren_PreservesEveryLocalReferenceOnce()
+    {
+        var source = AuthorChartExAndSmartArtGroupPackage(DenseRelationshipBackedGroup());
+
+        var read = DocxReader.Read(new MemoryStream(source));
+        var preserved = ((Paragraph)read.Blocks[0]).Runs.Single().PreservedDrawing;
+
+        preserved.Should().NotBeNull();
+        preserved!.References.Should().HaveCountGreaterThan(6);
+        preserved.References.Select(reference => reference.OriginalRelId).Should().OnlyHaveUniqueItems();
+
+        var rewritten = WriteBytes(read);
+        var relationships = EntryXml(rewritten, "word/_rels/document.xml.rels").Root!
+            .Elements(Rel + "Relationship")
+            .ToList();
+        relationships.Should().ContainSingle(relationship =>
+            relationship.Attribute("Type")!.Value == "http://schemas.microsoft.com/office/2014/relationships/chartEx");
+        relationships.Count(relationship => relationship.Attribute("Type")!.Value.EndsWith("/image", StringComparison.Ordinal))
+            .Should().Be(96);
+    }
+
+    [Fact]
+    public void PartLocalDrawingCapture_SourceGuardUsesSuccessOnlyRelationshipIndexes()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllText("freew", "FreeW.Core.IO", "DocxReader.cs");
+
+        source.Should().Contain("var capturedRelationshipIds = new HashSet<string>(StringComparer.Ordinal);")
+            .And.Contain("capturedRelationshipIds.Contains(relationshipId)")
+            .And.Contain("capturedRelationshipIds.Add(relationshipId);")
+            .And.NotContain("references.Any(reference => reference.OriginalRelId == relationshipId)");
     }
 
     [Fact]

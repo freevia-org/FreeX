@@ -2043,6 +2043,7 @@ public static class SmartArtEditingPlanner
         if (smartArt.Data is null)
             return false;
 
+        var drawingDirectory = OpcPathHelper.GetDirectoryName(drawingPartPath);
         var nodes = SmartArtNodeTraversal.FlattenPreorder(smartArt.Data);
         var pictureNodes = nodes
             .Where(node => node.Picture?.Bytes is { Length: > 0 })
@@ -2067,7 +2068,7 @@ public static class SmartArtEditingPlanner
         var oldMediaPaths = imageElements
             .Select(element => element.Attribute("Target")?.Value)
             .Where(target => !string.IsNullOrWhiteSpace(target))
-            .Select(target => OpcPathHelper.ResolveRelativeZipPath(OpcPathHelper.GetDirectoryName(drawingPartPath), target!))
+            .Select(target => OpcPathHelper.ResolveRelativeZipPath(drawingDirectory, target!))
             .ToArray();
         var usedTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var replacements = new List<XElement>();
@@ -2081,11 +2082,14 @@ public static class SmartArtEditingPlanner
 
             var mediaPath = index < imageElements.Count
                 ? OpcPathHelper.ResolveRelativeZipPath(
-                    OpcPathHelper.GetDirectoryName(drawingPartPath),
+                    drawingDirectory,
                     imageElements[index].Attribute("Target")?.Value ?? string.Empty)
                 : AllocatePictureMediaPath(smartArt, picture.ContentType, index + 1);
             if (!usedTargets.Add(mediaPath))
+            {
                 mediaPath = AllocatePictureMediaPath(smartArt, picture.ContentType, index + 1);
+                usedTargets.Add(mediaPath);
+            }
 
             var existing = index < imageElements.Count
                 ? new XElement(imageElements[index])
@@ -2095,7 +2099,7 @@ public static class SmartArtEditingPlanner
             existing.SetAttributeValue("Id", relationshipId);
             existing.SetAttributeValue(
                 "Target",
-                OpcPathHelper.GetRelativeZipPath(OpcPathHelper.GetDirectoryName(drawingPartPath), mediaPath));
+                OpcPathHelper.GetRelativeZipPath(drawingDirectory, mediaPath));
             replacements.Add(existing);
 
             smartArt.Parts[mediaPath] = new DiagramPart
@@ -2123,16 +2127,8 @@ public static class SmartArtEditingPlanner
 
         foreach (var oldMediaPath in oldMediaPaths)
         {
-            if (!replacements.Any(replacement =>
-                    string.Equals(
-                        OpcPathHelper.ResolveRelativeZipPath(
-                            OpcPathHelper.GetDirectoryName(drawingPartPath),
-                            replacement.Attribute("Target")?.Value ?? string.Empty),
-                        oldMediaPath,
-                        StringComparison.OrdinalIgnoreCase)))
-            {
+            if (!usedTargets.Contains(oldMediaPath))
                 smartArt.Parts.Remove(oldMediaPath);
-            }
         }
 
         return true;
