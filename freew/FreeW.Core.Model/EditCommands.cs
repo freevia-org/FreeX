@@ -3771,6 +3771,23 @@ public sealed class SetFloatingPositionCommand(
 
     public string Label => "Set Position";
 
+    // r203: mirrors what Apply would write. NOTE it must NOT call GetFloatingPlacement, whose ??=
+    // CREATES the placement -- a HasEffect that mutates would be worse than the bug it fixes.
+    public bool HasEffect(IDocumentCommandContext context)
+    {
+        if (!TryPeekRun(context, paragraphIndex, runIndex, out var run))
+            return false;
+        if (!CarriesFloatingPlacement(run))
+            return false;
+        if (PeekFloatingPlacement(run) is not { } existing)
+            return true; // applying would create the placement, which is a change
+
+        return existing.HorizontalOffsetPt != horizontalOffsetPt
+            || existing.VerticalOffsetPt != verticalOffsetPt
+            || existing.HorizontalAnchor != horizontalAnchor
+            || existing.VerticalAnchor != verticalAnchor;
+    }
+
     public void Apply(IDocumentCommandContext context)
     {
         if (!TryGetPlacement(context, out var pl)) return;
@@ -3797,6 +3814,28 @@ public sealed class SetFloatingPositionCommand(
         pl = GetFloatingPlacement(p.Runs[runIndex])!;
         return pl is not null;
     }
+
+    /// <summary>The run at (paragraphIndex, runIndex), or false when the address does not resolve.</summary>
+    internal static bool TryPeekRun(
+        IDocumentCommandContext context, int paragraphIndex, int runIndex, out Run run)
+    {
+        run = null!;
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count) return false;
+        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
+        if (runIndex < 0 || runIndex >= p.Runs.Count) return false;
+        run = p.Runs[runIndex];
+        return true;
+    }
+
+    /// <summary>Whether this run is a floating object whose position lives in a placement.</summary>
+    internal static bool CarriesFloatingPlacement(Run run) =>
+        run.Shape is not null || run.Chart is not null || run.SmartArt is not null
+        || run.WordArt is not null || run.DrawingGroup is not null;
+
+    /// <summary>The existing placement, WITHOUT creating one. See HasEffect.</summary>
+    internal static FloatingPlacement? PeekFloatingPlacement(Run run) =>
+        run.Shape?.Placement ?? run.Chart?.Placement ?? run.SmartArt?.Placement
+        ?? run.WordArt?.Placement ?? run.DrawingGroup?.Placement;
 
     public static FloatingPlacement? GetFloatingPlacement(Run run)
     {
@@ -3828,6 +3867,29 @@ public sealed class SetFloatingSizeCommand(
     private bool _applied;
 
     public string Label => "Resize";
+
+    // r203: mirrors what TryMutate would write, without writing it.
+    public bool HasEffect(IDocumentCommandContext context)
+    {
+        if (!SetFloatingPositionCommand.TryPeekRun(context, paragraphIndex, runIndex, out var run))
+            return false;
+
+        return CurrentSize(run) is not { } size
+            ? false
+            : size.Width != widthPt || size.Height != heightPt;
+    }
+
+    /// <summary>The floating object's current size, in the same order TryMutate resolves it.</summary>
+    private static (double Width, double Height)? CurrentSize(Run run)
+    {
+        if (run.Image is { IsFloating: true } img) return (img.WidthPt, img.HeightPt);
+        if (run.Shape is { } shape) return (shape.WidthPt, shape.HeightPt);
+        if (run.Chart is { } chart) return (chart.WidthPt, chart.HeightPt);
+        if (run.SmartArt is { } sa) return (sa.WidthPt, sa.HeightPt);
+        if (run.DrawingGroup is { } grp) return (grp.WidthPt, grp.HeightPt);
+        if (run.EmbeddedObject is { } embedded) return (embedded.WidthPt, embedded.HeightPt);
+        return null;
+    }
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -3879,6 +3941,23 @@ public sealed class SetFloatingWrapCommand(
     private bool _applied;
 
     public string Label => "Wrap Text";
+
+    // r203: the coordinator that builds this command already carried a comment naming this exact
+    // risk -- "SetFloatingWrapCommand would apply as a genuine no-op but still push an inert entry
+    // (it doesn't override IDocumentCommand.HasEffect)". It does now.
+    public bool HasEffect(IDocumentCommandContext context)
+    {
+        if (!SetFloatingPositionCommand.TryPeekRun(context, paragraphIndex, runIndex, out var run))
+            return false;
+        if (run.Image is { } img)
+            return img.Wrapping != wrapping;
+        if (!SetFloatingPositionCommand.CarriesFloatingPlacement(run))
+            return false;
+
+        // No placement yet: applying creates one, which is a change.
+        return SetFloatingPositionCommand.PeekFloatingPlacement(run) is not { } pl
+            || pl.Wrapping != wrapping;
+    }
 
     public void Apply(IDocumentCommandContext context)
     {
