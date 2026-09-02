@@ -66,6 +66,22 @@ public sealed class GroupRowsCommand : IWorkbookCommand
             _startRow,
             _endRow);
 
+        // r232: decided on the record, as r223 did for the Expand/Collapse siblings in this
+        // same file. Every mutation above is captured for Revert, so comparing the live
+        // outline state against those snapshots says exactly whether the group moved.
+        // Ungrouping rows that carry no outline level -- pressing Ungroup on a plain
+        // selection -- writes nothing, and so does re-grouping at a level the rows already
+        // have.
+        if (_previouslyHiddenByGroup.Count == 0
+            && sheet.CollapsedAnchorRows.SetEquals(_previousCollapsedAnchors)
+            && _previousLevels.All(entry =>
+                sheet.RowOutlineLevels.TryGetValue(entry.Key, out var live)
+                    ? live == entry.Value
+                    : entry.Value == 0))
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         return new CommandOutcome(true);
     }
 

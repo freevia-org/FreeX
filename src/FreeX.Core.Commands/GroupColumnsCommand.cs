@@ -66,6 +66,17 @@ public sealed class GroupColumnsCommand : IWorkbookCommand
             _startCol,
             _endCol);
 
+        // r232: the column twin of the GroupRows guard.
+        if (_previouslyHiddenByGroup.Count == 0
+            && sheet.CollapsedAnchorCols.SetEquals(_previousCollapsedAnchors)
+            && _previousLevels.All(entry =>
+                sheet.ColOutlineLevels.TryGetValue(entry.Key, out var live)
+                    ? live == entry.Value
+                    : entry.Value == 0))
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         return new CommandOutcome(true);
     }
 

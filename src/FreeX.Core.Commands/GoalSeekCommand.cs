@@ -32,6 +32,16 @@ public sealed class GoalSeekCommand : IWorkbookCommand
         if (sheet.IsProtected && !CommandGuards.CanEditCell(ctx.Workbook, sheet, _changingCell))
             return CommandGuards.RejectSheetProtected();
 
+        // r232: Goal Seek writes the value its solve arrived at, and a solve that starts from a
+        // cell already holding the answer arrives back at it -- re-running Goal Seek with the same
+        // target, or seeking a goal the sheet already satisfies. Compared against the cell's current
+        // NUMBER rather than its cell object, because that is the whole of what Apply writes.
+        if (sheet.GetValue(_changingCell.Row, _changingCell.Col) is NumberValue current
+            && current.Value.Equals(_newValue))
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         _originalCell = sheet.GetCell(_changingCell)?.Clone();
         sheet.SetCell(_changingCell, new NumberValue(_newValue));
         return new CommandOutcome(true, AffectedCells: [_changingCell]);

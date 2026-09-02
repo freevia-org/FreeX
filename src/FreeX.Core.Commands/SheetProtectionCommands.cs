@@ -238,12 +238,17 @@ public sealed class AllowEditRangeCommand : IWorkbookCommand
             return CommandGuards.RejectAllowedEditRangeOnTargetSheet();
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (!sheet.AllowEditRanges.Contains(_range))
+        if (sheet.AllowEditRanges.Contains(_range))
         {
-            sheet.AllowEditRanges.Add(_range);
-            _added = true;
+            // r232: the fifth instance of the shape r226 went looking for -- the command already
+            // knew, via this exact Contains check, that it had nothing to add, and said nothing.
+            // The Allow Users to Edit Ranges dialog lists the existing ranges and lets New be
+            // pressed with the same selection still active, so re-adding one is an ordinary gesture.
+            return new CommandOutcome(true, IsNoOp: true);
         }
 
+        sheet.AllowEditRanges.Add(_range);
+        _added = true;
         return new CommandOutcome(true);
     }
 
