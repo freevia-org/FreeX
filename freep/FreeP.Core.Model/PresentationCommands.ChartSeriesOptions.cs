@@ -36,6 +36,12 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
         PresentationCommandSizeEstimator.EstimateBytes(_oldMarkerStyle?.Fill),
     });
 
+    // r202: mirrors the guard Apply opens with -- otherwise the bus pushes an undo entry for a
+    // command that changed nothing, and that push clears the redo stack.
+    public bool HasEffect(Presentation p) =>
+        ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId) is { } chart
+        && _newOptions.SeriesIndex >= 0 && _newOptions.SeriesIndex < chart.Series.Count;
+
     public void Apply(Presentation p)
     {
         var chart = ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId);

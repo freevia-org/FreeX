@@ -382,6 +382,12 @@ public sealed class ReplaceSmartArtCommand : IPresentationCommand
         PresentationCommandSizeEstimator.EstimateBytes(_after),
     });
 
+    // r202: mirrors the guard CopyState opens with -- otherwise the bus pushes an undo entry for
+    // a command that changed nothing, and that push clears redo.
+    public bool HasEffect(Presentation presentation) =>
+        _slideIndex >= 0 && _slideIndex < presentation.Slides.Count
+        && ShapeHelper.Find(presentation, _slideIndex, _shapeId)?.SmartArt is not null;
+
     public void Apply(Presentation presentation) => CopyState(presentation, _after);
 
     public void Revert(Presentation presentation) => CopyState(presentation, _before);
@@ -4396,6 +4402,11 @@ public sealed class SetShapeGeometryAdjustmentCommand : IPresentationCommand
 
     public string Label => "Edit Shape Geometry";
 
+    // r202: mirrors the guard Apply opens with -- the bus would otherwise push an undo entry for
+    // a command that changed nothing, and that push clears redo.
+    public bool HasEffect(Presentation p) =>
+        ShapeHelper.Find(p, _slideIndex, _shapeId) is not null;
+
     public void Apply(Presentation p)
     {
         var shape = ShapeHelper.Find(p, _slideIndex, _shapeId);
@@ -4987,6 +4998,11 @@ public sealed class SetShapeTextCommand : IPresentationCommand
         PresentationCommandSizeEstimator.EstimateBytes(_oldBody),
     });
 
+    // r202: mirrors the guard Apply opens with -- the bus would otherwise push an undo entry for
+    // a command that changed nothing, and that push clears redo.
+    public bool HasEffect(Presentation p) =>
+        ShapeHelper.Find(p, _slideIndex, _shapeId) is not null;
+
     public void Apply(Presentation p)
     {
         var s = ShapeHelper.Find(p, _slideIndex, _shapeId);
@@ -5487,6 +5503,11 @@ public sealed class SetSlideTransitionCommand : IPresentationCommand
 
     public string Label => "Set Transition";
 
+    // r202: mirrors the guard Apply opens with -- the bus would otherwise push an undo entry for
+    // a command that changed nothing, and that push clears redo.
+    public bool HasEffect(Presentation p) =>
+        _slideIndex >= 0 && _slideIndex < p.Slides.Count && !Equals(p.Slides[_slideIndex].Transition, _newTransition);
+
     public void Apply(Presentation p)
     {
         if (_slideIndex < 0 || _slideIndex >= p.Slides.Count) return;
@@ -5758,6 +5779,11 @@ public sealed class SetSlideNotesCommand : IPresentationCommand
         PresentationCommandSizeEstimator.EstimateBytes(_newNotes),
         PresentationCommandSizeEstimator.EstimateBytes(_oldNotes),
     });
+
+    // r202: mirrors the guard Apply opens with -- the bus would otherwise push an undo entry for
+    // a command that changed nothing, and that push clears redo.
+    public bool HasEffect(Presentation p) =>
+        _slideIndex >= 0 && _slideIndex < p.Slides.Count;
 
     public void Apply(Presentation p)
     {

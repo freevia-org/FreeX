@@ -17,6 +17,11 @@ public sealed class SetChartBubbleOptionsCommand : IPresentationCommand
 
     public string Label => "Set Bubble Chart Options";
 
+    // r202: mirrors the guard Apply opens with -- otherwise the bus pushes an undo entry for a
+    // command that changed nothing, and that push clears the redo stack.
+    public bool HasEffect(Presentation p) =>
+        ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId) is { ChartType: ChartType.Bubble };
+
     public void Apply(Presentation p)
     {
         var chart = ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId);

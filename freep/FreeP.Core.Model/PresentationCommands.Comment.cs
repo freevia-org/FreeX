@@ -41,6 +41,13 @@ public sealed class CommentMutationCommand : IPresentationCommand
 
     public string Label => _label;
 
+    // r202: mirrors the guard Apply opens with, plus the index check every branch repeats.
+    // Without it the bus pushed an undo entry for a comment mutation that landed nowhere, and that
+    // push clears redo.
+    public bool HasEffect(Presentation presentation) =>
+        GetComments(presentation) is { } comments
+        && (_before is null ? _index >= 0 && _index <= comments.Count : _index >= 0 && _index < comments.Count);
+
     public void Apply(Presentation presentation)
     {
         var comments = GetComments(presentation);

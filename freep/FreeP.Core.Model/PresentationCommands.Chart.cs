@@ -253,6 +253,14 @@ public sealed class SetChartExSeriesLayoutCommand : IPresentationCommand
 
     public string Label => "Set ChartEx Series Layout";
 
+    // r202: mirrors the guard Apply opens with -- otherwise the bus pushes an undo entry for a
+    // command that changed nothing, and that push clears the redo stack.
+    public bool HasEffect(Presentation p) =>
+        ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId) is { IsChartEx: true } chart
+        && !string.IsNullOrWhiteSpace(chart.PreservedChartExXml)
+        && _seriesIndex >= 0 && _seriesIndex < chart.Series.Count
+        && !string.IsNullOrWhiteSpace(_newLayoutId);
+
     public void Apply(Presentation p)
     {
         var chart = ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId);
@@ -654,6 +662,11 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
 
     public string Label => "Edit Chart Data";
     public int EstimatedBytes => 1024;
+
+    // r202: mirrors the guard Apply opens with -- otherwise the bus pushes an undo entry for a
+    // command that changed nothing, and that push clears the redo stack.
+    public bool HasEffect(Presentation p) =>
+        ChartHelper.FindDataEditable(p, _slideIndex, _shapeId) is not null;
 
     public void Apply(Presentation p)
     {

@@ -20,6 +20,11 @@ public sealed class SetChartProtectionOptionsCommand : IPresentationCommand
 
     public string Label => "Set Chart Protection";
 
+    // r202: mirrors the guard Apply opens with -- otherwise the bus pushes an undo entry for a
+    // command that changed nothing, and that push clears the redo stack.
+    public bool HasEffect(Presentation presentation) =>
+        ChartHelper.Find(presentation, _slideIndex, _shapeId) is not null;
+
     public void Apply(Presentation presentation)
     {
         var chart = ChartHelper.Find(presentation, _slideIndex, _shapeId);

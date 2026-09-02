@@ -49,6 +49,11 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
 
     public string Label => "Set Chart Axis Options";
 
+    // r202: the same guard Apply opens with. Without it the bus pushed an undo entry for a
+    // command that a protection-locked chart makes a no-op -- and that push clears redo.
+    public bool HasEffect(Presentation p) =>
+        ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId) is not null;
+
     public void Apply(Presentation p)
     {
         var chart = ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId);
