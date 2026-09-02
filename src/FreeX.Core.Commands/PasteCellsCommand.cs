@@ -138,6 +138,13 @@ public sealed class PasteCellsCommand : IWorkbookCommand, IEstimatesMemory
             affected.Add(addr);
         }
 
+        // r221: decided AFTER the loop, on the record of what it did -- no mirror to keep in step.
+        // NOTE the limit, stated rather than implied: this catches "there was nothing to paste",
+        // not "the pasted values equalled what was already there". The second needs a value-by-value
+        // comparison and is not claimed here.
+        if (affected.Count == 0)
+            return new CommandOutcome(true, IsNoOp: true);
+
         return new CommandOutcome(true, AffectedCells: affected);
     }
 
@@ -206,6 +213,12 @@ public sealed class PasteMergedRegionsCommand : IWorkbookCommand
             targetSheet.AddMergedRegion(mapped);
             _addedRegions.Add(mapped);
         }
+
+        // r221: the code above already documents the gesture -- "a destination that already overlaps an
+        // existing merge is left alone" -- so pasting merges onto an already-merged destination adds
+        // nothing. _addedRegions is the exact record of what was added, so an empty one is proof.
+        if (_addedRegions.Count == 0)
+            return new CommandOutcome(true, IsNoOp: true);
 
         return new CommandOutcome(true, AffectedCells: _addedRegions.SelectMany(r => r.AllCells()).Distinct().ToList());
     }

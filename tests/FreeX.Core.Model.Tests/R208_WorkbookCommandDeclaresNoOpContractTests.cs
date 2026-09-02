@@ -82,6 +82,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
             + "same negation gate as the sheet twin",
         ["UnprotectWorkbookCommand"] =
             "the other half of that gate: only issued when the structure IS protected",
+        ["PasteRangeAsPictureCommand"] =
+            "r221: the picture is built by the caller and handed in ready-made, and Apply's only "
+            + "mutation is to add it -- there is no path that reaches the add and skips it",
         ["ClearSparklineCommand"] =
             "returns Success:false when the sparkline is not found, and otherwise always removes one "
             + "-- there is no path where it finds the target and leaves it in place",
@@ -121,6 +124,14 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // clearing filters that are already clear replaces empty collections with empty ones, but
         // deciding that means proving the re-render is unnecessary too.
         "ClearPivotTableViewCommand",
+        // r221: the two Paste commands with no record of what they wrote. Both are no-op-capable --
+        // pasting column widths onto columns that already have them, or validation rules identical
+        // to the destination's -- but neither accumulates an `affected`/`_added` list the way its
+        // eleven siblings do, so there is nothing exact to test after the loop. Deciding them needs
+        // a before/after snapshot comparison, which is a change to how they work rather than a
+        // guard bolted on, and is the honest reason they are here instead of fixed.
+        "PasteColumnWidthsCommand",
+        "PasteDataValidationCommand",
         "ConfigurePivotChartOptionsCommand",
         "ConfigurePivotTableCalculatedItemsCommand",
         "ConfigurePivotTableFieldFiltersCommand",
@@ -236,19 +247,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "NudgePictureCommand",
         "NudgeTextBoxCommand",
         "OneVariableDataTableCommand",
-        "PasteCellsCommand",
-        "PasteChartsCommand",
-        "PasteColumnWidthsCommand",
-        "PasteCommentsCommand",
-        "PasteConditionalFormatsCommand",
-        "PasteDataValidationCommand",
-        "PasteFormatsCommand",
-        "PasteMergedRegionsCommand",
-        "PastePicturesCommand",
-        "PasteRangeAsPictureCommand",
-        "PasteShapesCommand",
-        "PasteSpecialCellsCommand",
-        "PasteTextBoxesCommand",
         "PropagateCalculatedColumnCommand",
         "ReapplyStructuredTableStyleCommand",
         "RefreshPivotTableCommand",
@@ -289,9 +287,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 here.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 here.</para>
     /// </summary>
-    private const int OutstandingCeiling = 139;
+    private const int OutstandingCeiling = 128;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()
@@ -333,7 +331,7 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     [Fact]
     public void TheNeverExaminedListStillOnlyShrinks() =>
         NeverExaminedForThisClass.Count.Should().BeLessThanOrEqualTo(
-            121,
+            108,
             "the never-examined column specifically must keep draining, or the combined ceiling "
             + "could be satisfied by fixing easy known-broken entries while nobody ever looks at the "
             + "rest. This bound is the r218 count and comes down as rounds examine.");

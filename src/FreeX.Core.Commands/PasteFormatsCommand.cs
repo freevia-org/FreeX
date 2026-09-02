@@ -57,6 +57,13 @@ public sealed class PasteFormatsCommand : IWorkbookCommand, IEstimatesMemory
             affected.Add(addr);
         }
 
+        // r221: decided AFTER the loop, on the record of what it did -- no mirror to keep in step.
+        // NOTE the limit, stated rather than implied: this catches "there was nothing to paste",
+        // not "the pasted values equalled what was already there". The second needs a value-by-value
+        // comparison and is not claimed here.
+        if (affected.Count == 0)
+            return new CommandOutcome(true, IsNoOp: true);
+
         return new CommandOutcome(true, AffectedCells: affected);
     }
 

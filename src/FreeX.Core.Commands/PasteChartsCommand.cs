@@ -101,6 +101,13 @@ public sealed class PasteChartsCommand : IWorkbookCommand
             }
         }
 
+        // r221: decided AFTER the loop, on the record of what it actually did. There is no mirror
+        // to keep in step with the mutation here -- an empty `affected` IS the proof that nothing
+        // was written, whatever combination of empty source, filtered mapping or zero tiles caused
+        // it. Paste Special offers this aspect whether or not the copied range carries any.
+        if (affected.Count == 0)
+            return new CommandOutcome(true, IsNoOp: true);
+
         return new CommandOutcome(true, AffectedCells: affected.Distinct().ToList());
     }
 
