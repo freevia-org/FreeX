@@ -547,7 +547,10 @@ public sealed partial class OdsFileAdapter
         while (workbook.GetSheet(name) is not null)
         {
             var tail = $" ({suffix++})";
-            name = baseName.Length + tail.Length > 31 ? baseName[..(31 - tail.Length)] + tail : baseName + tail;
+            // r195: see SurrogateSafeTruncation.
+            name = baseName.Length + tail.Length > 31
+                ? SurrogateSafeTruncation.LimitToTextElements(baseName, 31 - tail.Length) + tail
+                : baseName + tail;
         }
         return name;
     }

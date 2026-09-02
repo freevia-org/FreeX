@@ -769,7 +769,9 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         while (workbook.ValidateSheetName(candidate) is not null)
         {
             var marker = $" ({suffix++})";
-            candidate = string.Concat(baseName.AsSpan(0, Math.Min(baseName.Length, 31 - marker.Length)), marker);
+            // r195: see SurrogateSafeTruncation -- this loop re-slices at a different cut point than
+            // the initial truncation, so it needs the same guard.
+            candidate = SurrogateSafeTruncation.LimitToTextElements(baseName, 31 - marker.Length) + marker;
         }
 
         return candidate;

@@ -21,6 +21,25 @@ public sealed class R193_ChartCloneSeriesNameOverrideTests
     private static readonly SheetId SheetIdA = new(Guid.NewGuid());
     private static readonly SheetId SheetIdB = new(Guid.NewGuid());
 
+    private static bool HasLoneSurrogate(string text)
+    {
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (char.IsHighSurrogate(text[i]))
+            {
+                if (i + 1 >= text.Length || !char.IsLowSurrogate(text[i + 1]))
+                    return true;
+                i++;
+                continue;
+            }
+
+            if (char.IsLowSurrogate(text[i]))
+                return true;
+        }
+
+        return false;
+    }
+
     private static ChartModel ChartWithOverride() => new()
     {
         Type = ChartType.Column,
@@ -60,5 +79,30 @@ public sealed class R193_ChartCloneSeriesNameOverrideTests
         var clone = DuplicateSheetDrawingCloner.CloneChart(new ChartModel { Type = ChartType.Column }, SheetIdA, SheetIdB);
 
         clone.SeriesNameOverrides.Should().NotBeNull().And.BeEmpty();
+    }
+
+    [Fact]
+    public void GenerateCopyName_WhenTheSuffixCutFallsInsideAPair_StillProducesAWellFormedName()
+    {
+        // r195: r194 guarded the INITIAL sheet-name truncation but not the dedup loops, which
+        // re-slice at a different cut point -- 31 minus the " (N)" suffix. So the same lone-surrogate
+        // name stayed reachable by renaming a sheet and duplicating it, after which every save to
+        // .xlsx throws. Reported by the meta lens auditing r194's own commit.
+        var workbook = new Workbook("test");
+
+        // 26 ASCII + one astral emoji (2 code units) + 3 ASCII = 31 code units. The " (2)" suffix
+        // forces a cut at 27, which lands inside the pair.
+        var name = new string('A', 26) + "\U0001F600" + "bcd";
+        name.Length.Should().Be(31);
+
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.Name = name;
+
+        var copy = DuplicateSheetNameGenerator.GenerateCopyName(workbook, name);
+
+        HasLoneSurrogate(copy).Should().BeFalse(
+            "a lone surrogate in a sheet name makes every later .xlsx save throw; got '{0}'",
+            copy);
+        copy.Length.Should().BeLessThanOrEqualTo(31);
     }
 }

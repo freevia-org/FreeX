@@ -49,7 +49,11 @@ public sealed class EditingSession : ICanvasGestureEditingSession
     // silently reattaches to that unrelated shape. A shared, ever-increasing watermark makes an
     // id permanently retired once handed out, so reuse cannot happen no matter which holder
     // failed to let go of it. See round-159 sweep97 F1.
-    private uint? _shapeIdWatermark;
+    //
+    // r195: a FLOOR, not a cache. AllocateShapeId raises it to the live document's maximum on every
+    // call, because two commands outside this class allocate shape ids from their own scans and
+    // cannot update this field. See AllocateShapeId.
+    private uint _shapeIdWatermark;
 
     // ── Clipboard state ───────────────────────────────────────────────────────────
 
@@ -2250,21 +2254,37 @@ public sealed class EditingSession : ICanvasGestureEditingSession
     }
 
     /// <summary>
-    /// Hands out the next shape id from <see cref="_shapeIdWatermark"/>, seeding it (once, from
-    /// every shape currently in the presentation) on first use. Every id-granting path in this
-    /// class -- direct inserts via <see cref="NextShapeId"/> and the paste/SmartArt-conversion
-    /// remapper via <see cref="AssignShapeIds"/> -- must call this instead of scanning the live
-    /// shape list, or the two paths could still hand out the same id to two different shapes.
+    /// Hands out the next shape id, above every id currently in the presentation. Every id-granting
+    /// path in this class -- direct inserts via <see cref="NextShapeId"/> and the paste/SmartArt
+    /// remapper via <see cref="AssignShapeIds"/> -- must call this rather than scanning the live
+    /// shape list itself, or the two could hand the same id to two different shapes.
+    ///
+    /// r195: the watermark used to be CACHED, seeded once per session. That was safe only while
+    /// this class was the sole allocator, and it is not: SetSlideLayoutCommand (r193) and
+    /// HeaderFooterCommandPlanner (r194) each add shapes with ids from their own local scan, and
+    /// neither can update a private field in here. Applying a layout or inserting a header therefore
+    /// left the cache stale, and the next insert re-issued an id that shape already had -- after
+    /// which every by-id lookup on that slide (delete, reorder, select) resolved to whichever of the
+    /// two came first in the list, so deleting the shape the user clicked could remove the other.
+    ///
+    /// The counter is kept, but its FLOOR is re-read from the live document on every allocation, so
+    /// ids another allocator has since handed out are accounted for. A plain recompute would have
+    /// been wrong: <see cref="AssignShapeIds"/> allocates in a loop for a pasted subtree that is not
+    /// in the presentation yet, so a live scan alone returns the same value every iteration and every
+    /// pasted shape gets one id. Keeping the counter also preserves the property that doc comment
+    /// relies on -- ids only ever increase, so a pasted shape cannot take an id some other holder
+    /// (selection, animation trigger, connector endpoint) still remembers from an undone edit.
     /// </summary>
     private uint AllocateShapeId()
     {
-        _shapeIdWatermark ??= Presentation.Slides
+        var liveMax = Presentation.Slides
             .SelectMany(SlideShapeTraversal.EnumerateDepthFirst)
             .Select(shape => shape.Id)
             .DefaultIfEmpty()
             .Max();
-        _shapeIdWatermark = _shapeIdWatermark.Value + 1u;
-        return _shapeIdWatermark.Value;
+
+        _shapeIdWatermark = Math.Max(_shapeIdWatermark, liveMax) + 1u;
+        return _shapeIdWatermark;
     }
 
     private int NextSmartArtPartIndex()
