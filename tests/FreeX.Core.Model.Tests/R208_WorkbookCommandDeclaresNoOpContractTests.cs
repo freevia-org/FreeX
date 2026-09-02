@@ -116,6 +116,16 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // removal below that check is unconditional. A command that cannot find what it was asked
         // to delete reports an error rather than a quiet success, which keeps it off the undo stack
         // just as effectively.
+        // r225: the three Nudge siblings that do NOT clamp. They add the delta straight to an anchor
+        // offset with no floor, and BuildNudgeCommand is documented as the arrow-key entry point, so
+        // the delta is never zero and the object always moves. NudgeChartCommand is the odd one out
+        // -- it clamps with Math.Max(0, ...) and so saturates at the edge -- and was fixed in r225.
+        ["NudgePictureCommand"] = "unclamped += on the anchor offset, from a non-zero arrow-key delta",
+        ["NudgeDrawingShapeCommand"] = "unclamped += on the anchor offset, same as the picture twin",
+        ["NudgeTextBoxCommand"] = "unclamped += on the anchor offset, same as the picture twin",
+        ["MoveChartToNewSheetCommand"] =
+            "always creates a new chart sheet and moves the chart onto it; there is no same-place "
+            + "path, unlike its MoveChartCommand sibling",
         ["DeleteCellsCommand"] = "always runs the shift once the range and direction validate",
         ["DeleteColumnsCommand"] = "always removes the requested columns",
         ["DeleteCommentCommand"] = "removes after a found-check that errors on a miss",
@@ -175,6 +185,32 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // r220: ClearPivotTableView belongs to the same RefreshGuarded family for the same reason --
         // clearing filters that are already clear replaces empty collections with empty ones, but
         // deciding that means proving the re-render is unnecessary too.
+        // r225: the AutoFilter family. Re-applying a filter that is already in effect -- clicking
+        // the same colour swatch, re-confirming the same Top 10 -- recomputes the same hidden-row
+        // set and writes back the same WorksheetAutoFilterColumnModel. Reachable and ordinary.
+        // Not fixed here for the reason r221 made explicit about over-promising: each of these
+        // touches BOTH the hidden-row set and the autofilter/structured-table column models, and a
+        // guard covering only one of them would let the command declare IsNoOp while still being
+        // wrong on the other. TopBottomFilterCommand already has one quiet-success path (count 0
+        // with no owned rows) that would be easy to mark alone, and marking it alone is exactly the
+        // partial fix that would take the command off this list without making it correct. They
+        "AdvancedFilterCommand",
+        "AverageFilterCommand",
+        "CellFillColorFilterCommand",
+        "CellFontColorFilterCommand",
+        "CellNoFillColorFilterCommand",
+        "FilterCommand",
+        "FilterConditionCommand",
+        "TopBottomFilterCommand",
+        // need a snapshot-versus-target comparison over both models, the way r219's group does.
+        // r225: the two structural moves with a same-destination path. MovePivotTableCommand with
+        // _targetStart equal to the pivot's current start produces a movedRange equal to the old one
+        // and then re-renders over the same cells; MoveRangeCommand with the destination equal to
+        // the source start writes the same cells back. Both reachable by dragging something and
+        // dropping it where it started. Same reason as the filters for not fixing them here: each
+        "MovePivotTableCommand",
+        "MoveRangeCommand",
+        // needs a real before/after comparison, not a guard on the arguments.
         "ClearPivotTableViewCommand",
         // r221: the two Paste commands with no record of what they wrote. Both are no-op-capable --
         // pasting column widths onto columns that already have them, or validation rules identical
@@ -240,14 +276,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// </summary>
     private static readonly HashSet<string> NeverExaminedForThisClass =
     [
-        "AdvancedFilterCommand",
         "AllowEditRangeCommand",
         "ApplyConditionalFormatCommand",
         "AutofillCommand",
-        "AverageFilterCommand",
-        "CellFillColorFilterCommand",
-        "CellFontColorFilterCommand",
-        "CellNoFillColorFilterCommand",
         "ChangeChartSourceCommand",
         "ChangeChartTypeCommand",
         "ChangePivotChartTypeCommand",
@@ -265,8 +296,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "ExternalTextPasteSpecialCommand",
         "ExternalTextPasteValuesCommand",
         "FillCellsCommand",
-        "FilterCommand",
-        "FilterConditionCommand",
         "FlashFillCommand",
         "ForecastSheetCommand",
         "FormControlInteractionCommand",
@@ -279,14 +308,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "ImportSheetCommand",
         "MergeCellsCommand",
         "MergeScenarioCommand",
-        "MoveChartCommand",
-        "MoveChartToNewSheetCommand",
-        "MovePivotTableCommand",
-        "MoveRangeCommand",
-        "NudgeChartCommand",
-        "NudgeDrawingShapeCommand",
-        "NudgePictureCommand",
-        "NudgeTextBoxCommand",
         "OneVariableDataTableCommand",
         "PropagateCalculatedColumnCommand",
         "ReapplyStructuredTableStyleCommand",
@@ -303,7 +324,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "ShowAllNotesCommand",
         "ShowHideCommentCommand",
         "SubtotalCommand",
-        "TopBottomFilterCommand",
         "TwoVariableDataTableCommand",
         "UpdateThreadedCommentReplyCommand",
         "UpdateThreadedCommentTextCommand",
@@ -321,9 +341,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 here.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 here.</para>
     /// </summary>
-    private const int OutstandingCeiling = 87;
+    private const int OutstandingCeiling = 85;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()
@@ -366,7 +386,7 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     [Fact]
     public void TheNeverExaminedListStillOnlyShrinks() =>
         NeverExaminedForThisClass.Count.Should().BeLessThanOrEqualTo(
-            67,
+            51,
             "the never-examined column specifically must keep draining, or the combined ceiling "
             + "could be satisfied by fixing easy known-broken entries while nobody ever looks at the "
             + "rest. This bound is the r218 count and comes down as rounds examine.");
