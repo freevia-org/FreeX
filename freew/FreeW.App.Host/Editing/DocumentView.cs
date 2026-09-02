@@ -317,7 +317,10 @@ public sealed partial class DocumentView : RichTextBox
         AcceptsTab = true;
         IsDocumentEnabled = true;
         SpellCheck.IsEnabled = !IsNativeSpellCheckSuppressed();
-        VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+        // MainWindow supplies the workspace ScrollViewer. A RichTextBox-local scrollbar makes the
+        // document appear to scroll inside one page in Print Layout rather than moving the page desk.
+        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+        VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
         BorderThickness = new Thickness(1);
         BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));
         Background = Brushes.White;
