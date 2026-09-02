@@ -694,9 +694,19 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
         if (!CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))
             return CommandGuards.RejectStructuredTableNotFound();
 
-        _previousTable = sheet.StructuredTables[tableIndex];
-        sheet.StructuredTables[tableIndex] = CopyWithStyleOptions(
-            _previousTable,
+        var table = sheet.StructuredTables[tableIndex];
+
+        // r219: same trick as ConfigureSparklineCommand, and for the same reason. Rather than
+        // hand-listing the seven inputs -- a list that can silently fall out of step with the `with`
+        // expression it is supposed to mirror -- build the target state and compare it against the
+        // state it was derived FROM. Comparing against that same instance also keeps the untouched
+        // members reference-identical, so the record struct's equality is exact rather than
+        // accidentally always-false. Table Design's style-option checkboxes show the current state,
+        // so re-ticking one that is already ticked is an ordinary gesture.
+        var currentState = table.CaptureCopyState();
+        var targetState = WithStyleOptions(
+            currentState,
+            table,
             _showFirstColumn,
             _showLastColumn,
             _showRowStripes,
@@ -705,6 +715,11 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
             _updateStyleName,
             _hasAutoFilter,
             _totalsRowShown);
+        if (targetState == currentState)
+            return new CommandOutcome(true, IsNoOp: true);
+
+        _previousTable = table;
+        sheet.StructuredTables[tableIndex] = StructuredTableModel.FromCopyState(targetState);
 
         return new CommandOutcome(true);
     }
@@ -719,7 +734,13 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
             sheet.StructuredTables[tableIndex] = _previousTable;
     }
 
-    private static StructuredTableModel CopyWithStyleOptions(
+    /// <summary>
+    /// The single `with` expression this command applies. Kept as its own function so Apply can build
+    /// the target state, compare it against the state it came from, and write it -- one description of
+    /// the change, used for both the decision and the mutation, so the two cannot disagree.
+    /// </summary>
+    private static StructuredTableCopyState WithStyleOptions(
+        StructuredTableCopyState state,
         StructuredTableModel table,
         bool showFirstColumn,
         bool showLastColumn,
@@ -730,7 +751,7 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
         bool? hasAutoFilter,
         bool? totalsRowShown)
     {
-        var state = table.CaptureCopyState() with
+        return state with
         {
             HasAutoFilter = hasAutoFilter ?? table.HasAutoFilter,
             TotalsRowShown = totalsRowShown ?? table.TotalsRowShown,
@@ -740,7 +761,6 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
             ShowRowStripes = showRowStripes,
             ShowColumnStripes = showColumnStripes
         };
-        return StructuredTableModel.FromCopyState(state);
     }
 }
 
