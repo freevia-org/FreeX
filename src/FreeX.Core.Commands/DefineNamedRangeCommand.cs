@@ -81,6 +81,29 @@ public sealed class DefineNamedRangeCommand : IWorkbookCommand, IAffectedCellsCo
 
             if (_existed)
                 ctx.Workbook.TryGetScopedNamedRangeMetadata(_name, scopeSheetId, out _previousMetadata);
+
+            // r222: the Name Manager's Edit dialog pre-fills the current Refers To, comment and
+            // hidden flag, so pressing OK unchanged redefines a name to exactly what it already is.
+            // Three clauses, each earning its place:
+            //   - the range must match;
+            //   - the metadata must match the EFFECTIVE value Define writes, which is
+            //     `metadata ?? WorkbookScope`, not the raw argument;
+            //   - no scoped named FORMULA may share the key, because Define deletes one as a side
+            //     effect (see Workbook.DefineNamedRange) and that deletion is a real change.
+            // Unlike the workbook-global branch below there is no key-casing clause, and that is a
+            // difference in the model rather than an oversight here: the scoped overload assigns
+            // through a case-insensitive comparer without removing first, so it cannot re-case a
+            // stored key even when asked to. See the note in docs/review/region-coverage.md.
+            if (_existed
+                && _previousRange.Equals(_range)
+                && !ctx.Workbook.ScopedNamedFormulas.ContainsKey((_name, scopeSheetId))
+                && Equals(
+                    _previousMetadata ?? NamedRangeMetadata.WorkbookScope,
+                    _metadata ?? NamedRangeMetadata.WorkbookScope))
+            {
+                return new CommandOutcome(true, IsNoOp: true);
+            }
+
             ctx.Workbook.DefineNamedRange(_name, _range, _metadata, scopeSheetId);
             _affectedCells = _existed
                 ? NamedDefinitionRecalcHelper.FindCellsReferencingName(ctx.Workbook, _name, scopeSheetId)
@@ -95,6 +118,24 @@ public sealed class DefineNamedRangeCommand : IWorkbookCommand, IAffectedCellsCo
 
         if (_existed && ctx.Workbook.TryGetNamedRangeMetadata(_name, out var metadata))
             _previousMetadata = metadata;
+
+        // r222: same guard as the scoped branch, plus the clause that branch does not need. This
+        // overload deliberately removes the key before re-adding it so a case-only rename
+        // ("revenue" -> "Revenue") actually takes effect -- Workbook.DefineNamedRange says so in a
+        // comment. So the stored key's CASING is part of what this command can change, and a guard
+        // that compared only the range and metadata would silently swallow a rename the user asked
+        // for. Ordinal comparison against the stored key, exactly as r217's renames concluded.
+        if (_existed
+            && _previousRange.Equals(_range)
+            && !ctx.Workbook.NamedFormulas.ContainsKey(_name)
+            && ctx.Workbook.NamedRanges.Keys.Any(key => string.Equals(key, _name, StringComparison.Ordinal))
+            && Equals(
+                _previousMetadata ?? NamedRangeMetadata.WorkbookScope,
+                _metadata ?? NamedRangeMetadata.WorkbookScope))
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         ctx.Workbook.DefineNamedRange(_name, _range, _metadata);
         _affectedCells = _existed
             ? NamedDefinitionRecalcHelper.FindCellsReferencingName(ctx.Workbook, _name, null)
@@ -321,6 +362,21 @@ public sealed class DefineNamedFormulaCommand : IWorkbookCommand, IAffectedCells
             _existed = ctx.Workbook.ScopedNamedFormulas.TryGetValue((_name, scopeSheetId), out _previousFormulaText);
             if (_metadata is not null && ctx.Workbook.TryGetScopedNamedRangeMetadata(_name, scopeSheetId, out var previousScopedMetadata))
                 _previousMetadata = previousScopedMetadata;
+
+            // r222: the formula twin of the named-range guard. Note the null-metadata clause is the
+            // OPPOSITE of the range command's, and deliberately so: DefineNamedFormula documents
+            // null as "leave whatever metadata is stored untouched", where DefineNamedRange writes
+            // WorkbookScope in its place. Same argument, two meanings, so the two guards cannot
+            // share a shape. The range clause is here for the same reason the formula clause is
+            // there -- defining a formula deletes a colliding scoped range as a side effect.
+            if (_existed
+                && string.Equals(_previousFormulaText, _formulaText, StringComparison.Ordinal)
+                && !ctx.Workbook.ScopedNamedRanges.ContainsKey((_name, scopeSheetId))
+                && (_metadata is null || Equals(_previousMetadata, _metadata)))
+            {
+                return new CommandOutcome(true, IsNoOp: true);
+            }
+
             ctx.Workbook.DefineNamedFormula(_name, _formulaText, scopeSheetId, _metadata);
             _affectedCells = _existed
                 ? NamedDefinitionRecalcHelper.FindCellsReferencingName(ctx.Workbook, _name, scopeSheetId)
@@ -331,6 +387,19 @@ public sealed class DefineNamedFormulaCommand : IWorkbookCommand, IAffectedCells
         _existed = ctx.Workbook.NamedFormulas.TryGetValue(_name, out _previousFormulaText);
         if (_metadata is not null && ctx.Workbook.TryGetNamedRangeMetadata(_name, out var previousMetadata))
             _previousMetadata = previousMetadata;
+
+        // r222: the workbook-global formula branch. No key-casing clause here, unlike the global
+        // RANGE branch: this one assigns straight through the dictionary indexer rather than
+        // removing first, so it cannot re-case a stored key and a case-only difference genuinely
+        // changes nothing. The asymmetry is in the model, and checking it beat assuming the two
+        // global branches behaved alike.
+        if (_existed
+            && string.Equals(_previousFormulaText, _formulaText, StringComparison.Ordinal)
+            && (_metadata is null || Equals(_previousMetadata, _metadata)))
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         ctx.Workbook.NamedFormulas[_name] = _formulaText;
         if (_metadata is not null)
         {
@@ -421,6 +490,20 @@ public sealed class CreateNamedRangesFromSelectionCommand : IWorkbookCommand
         var definitions = BuildDefinitions(ctx.Workbook, sheet).ToList();
         if (definitions.Count == 0)
             return new CommandOutcome(false, "No valid labels were found in the selection.");
+
+        // r222: Create from Selection is idempotent by nature -- run it twice on the same labelled
+        // block and the second run re-defines every name to the range it already has. Compared
+        // against the STORED key text as well as the range, for the same reason the single-name
+        // command does: this path goes through the global DefineNamedRange overload, which removes
+        // and re-adds so that a case-only rename takes effect.
+        if (definitions.All(definition =>
+                ctx.Workbook.TryGetNamedRange(definition.Name, out var existing)
+                && existing.Equals(definition.Range)
+                && ctx.Workbook.NamedRanges.Keys.Any(key =>
+                    string.Equals(key, definition.Name, StringComparison.Ordinal))))
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
 
         _snapshot = CaptureNamedRangeSnapshot(ctx.Workbook);
         foreach (var (name, range) in definitions)

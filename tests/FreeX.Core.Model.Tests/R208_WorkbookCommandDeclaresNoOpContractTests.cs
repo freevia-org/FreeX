@@ -82,6 +82,35 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
             + "same negation gate as the sheet twin",
         ["UnprotectWorkbookCommand"] =
             "the other half of that gate: only issued when the structure IS protected",
+        // r222, the Add/Create/Insert family. Every one of these was read, not assumed: in each,
+        // the mutation that creates the object is unconditional once the guard checks above it have
+        // passed, and every guard that can fail returns Success:false rather than a quiet success.
+        // There is no path that reaches the add and skips it. The three commands in this family that
+        // DO have a same-value path -- the two Define* and Create from Selection -- were fixed in
+        // r222 instead of listed here.
+        ["AddChartCommand"] = "sheet.Charts.Add is unconditional once the guards pass",
+        ["AddChartSheetCommand"] = "always creates or re-adds the chart sheet",
+        ["AddDrawingShapeCommand"] = "sheet.DrawingShapes.Add is unconditional",
+        ["AddFormControlCommand"] = "sheet.FormControls.Add is unconditional",
+        ["AddPivotChartCommand"] = "builds a ChartModel and adds it unconditionally",
+        ["AddPivotTableCommand"] = "builds cache and table and adds them unconditionally",
+        ["AddPivotTableToNewWorksheetCommand"] =
+            "delegates to AddPivotTableCommand after creating the sheet; both always add",
+        ["AddSheetCommand"] = "always inserts a sheet (the existingId path is redo re-using an id)",
+        ["AddSlicerCommand"] = "Workbook.Slicers.Add is unconditional",
+        ["AddSparklineCommand"] = "sheet.Sparklines.Add is unconditional",
+        ["AddTextBoxCommand"] = "sheet.TextBoxes.Add is unconditional",
+        ["AddThreadedCommentReplyCommand"] =
+            "returns ThreadedCommentNotFound when there is no thread, and otherwise always appends "
+            + "the reply -- an empty reply is still a reply",
+        ["AddTimelineCommand"] = "Workbook.Timelines.Add is unconditional",
+        ["CreateStructuredTableCommand"] = "always constructs and inserts a StructuredTableModel",
+        ["CreateStyledStructuredTableCommand"] =
+            "delegates to CreateStructuredTableCommand, which always inserts",
+        ["InsertCellsCommand"] = "always runs a shift operation over the requested region",
+        ["InsertColumnsCommand"] = "always runs the column shift",
+        ["InsertPictureCommand"] = "sheet.Pictures.Add is unconditional",
+        ["InsertRowsCommand"] = "always runs the row shift",
         ["PasteRangeAsPictureCommand"] =
             "r221: the picture is built by the caller and handed in ready-made, and Apply's only "
             + "mutation is to add it -- there is no path that reaches the add and skips it",
@@ -165,19 +194,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// </summary>
     private static readonly HashSet<string> NeverExaminedForThisClass =
     [
-        "AddChartCommand",
-        "AddChartSheetCommand",
-        "AddDrawingShapeCommand",
-        "AddFormControlCommand",
-        "AddPivotChartCommand",
-        "AddPivotTableCommand",
-        "AddPivotTableToNewWorksheetCommand",
-        "AddSheetCommand",
-        "AddSlicerCommand",
-        "AddSparklineCommand",
-        "AddTextBoxCommand",
-        "AddThreadedCommentReplyCommand",
-        "AddTimelineCommand",
         "AdvancedFilterCommand",
         "AllowEditRangeCommand",
         "ApplyConditionalFormatCommand",
@@ -196,12 +212,7 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "ConvertNotesToCommentsCommand",
         "ConvertStructuredTableToRangeCommand",
         "CopyRangeCommand",
-        "CreateNamedRangesFromSelectionCommand",
-        "CreateStructuredTableCommand",
-        "CreateStyledStructuredTableCommand",
         "DataTableBodyRefreshCommand",
-        "DefineNamedFormulaCommand",
-        "DefineNamedRangeCommand",
         "DeleteCellsCommand",
         "DeleteColumnsCommand",
         "DeleteCommentCommand",
@@ -232,10 +243,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "GroupedApplyStyleCommand",
         "GroupedEditCellsCommand",
         "ImportSheetCommand",
-        "InsertCellsCommand",
-        "InsertColumnsCommand",
-        "InsertPictureCommand",
-        "InsertRowsCommand",
         "MergeCellsCommand",
         "MergeScenarioCommand",
         "MoveChartCommand",
@@ -287,9 +294,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 here.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 here.</para>
     /// </summary>
-    private const int OutstandingCeiling = 128;
+    private const int OutstandingCeiling = 106;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()
@@ -331,7 +338,7 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     [Fact]
     public void TheNeverExaminedListStillOnlyShrinks() =>
         NeverExaminedForThisClass.Count.Should().BeLessThanOrEqualTo(
-            108,
+            86,
             "the never-examined column specifically must keep draining, or the combined ceiling "
             + "could be satisfied by fixing easy known-broken entries while nobody ever looks at the "
             + "rest. This bound is the r218 count and comes down as rounds examine.");
