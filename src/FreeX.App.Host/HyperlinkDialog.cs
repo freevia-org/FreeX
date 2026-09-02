@@ -14,7 +14,7 @@ public sealed class HyperlinkDialog : Window
     private readonly TextBox _displayBox = new();
     private readonly Button _screenTipButton = new() { Content = UiText.Get("Hyperlink_ScreenTip") };
     private readonly Button _bookmarkButton = new() { Content = UiText.Get("Hyperlink_Bookmark") };
-    private readonly Button _browseButton = new() { Content = "_Browse..." };
+    private readonly Button _browseButton = new() { Content = UiText.Get("Hyperlink_Browse") };
     private readonly ListBox _linkTypes = new();
     private readonly Label _targetLabel;
     private string _screenTip = "";
@@ -81,9 +81,9 @@ public sealed class HyperlinkDialog : Window
         _bookmarkButton.Click += BookmarkButton_Click;
         _browseButton.Click += BrowseButton_Click;
         _browseButton.MinWidth = HyperlinkDialogPlanner.SecondaryButtonWidth;
-        AutomationProperties.SetName(_browseButton, "Browse for a file");
+        AutomationProperties.SetName(_browseButton, UiText.Get("Hyperlink_BrowseForAFile"));
         AutomationProperties.SetAutomationId(_browseButton, "HyperlinkBrowseButton");
-        AutomationProperties.SetHelpText(_browseButton, "Choose a local file for this hyperlink.");
+        AutomationProperties.SetHelpText(_browseButton, UiText.Get("Hyperlink_ChooseALocalFileForThisHyperlink"));
 
         var folderText = new TextBox
         {
@@ -93,7 +93,7 @@ public sealed class HyperlinkDialog : Window
             Height = HyperlinkDialogPlanner.FieldHeight,
             VerticalContentAlignment = System.Windows.VerticalAlignment.Center,
         };
-        AutomationProperties.SetName(folderText, "Current folder");
+        AutomationProperties.SetName(folderText, UiText.Get("Hyperlink_CurrentFolder"));
         AutomationProperties.SetAutomationId(folderText, "HyperlinkCurrentFolderText");
         var browseGrid = new Grid { Margin = new Thickness(0, 0, 0, 4) };
         browseGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LabelColumnWidth) });
@@ -101,7 +101,7 @@ public sealed class HyperlinkDialog : Window
         browseGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.SecondaryButtonWidth + HyperlinkDialogPlanner.ButtonGap) });
         var folderLabel = new Label
         {
-            Content = "Look _in:",
+            Content = UiText.Get("Hyperlink_LookIn"),
             Target = folderText,
             Padding = new Thickness(0),
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
@@ -119,7 +119,7 @@ public sealed class HyperlinkDialog : Window
             SelectedIndex = 0,
             IsTabStop = false,
         };
-        AutomationProperties.SetName(currentFolderContext, "Current folder link location");
+        AutomationProperties.SetName(currentFolderContext, UiText.Get("Hyperlink_CurrentFolderLinkLocation"));
         AutomationProperties.SetAutomationId(currentFolderContext, "HyperlinkCurrentFolderContext");
 
         var detailPanel = new Grid();
