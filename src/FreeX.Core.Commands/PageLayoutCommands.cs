@@ -23,6 +23,10 @@ public sealed class SetPrintAreaCommand : IWorkbookCommand
             return new CommandOutcome(false, "Print area must be on the target sheet.");
 
         var sheet = ctx.GetSheet(_sheetId);
+        // r209: an equal-value setter -- see SetPageOrientationCommand.
+        if (sheet.PrintAreas.Count == 1 && sheet.PrintAreas[0].Equals(_printArea))
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousPrintAreas = sheet.PrintAreas.ToList();
         sheet.PrintArea = _printArea;
         return new CommandOutcome(true);

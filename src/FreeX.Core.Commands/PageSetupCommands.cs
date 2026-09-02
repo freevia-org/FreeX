@@ -23,6 +23,11 @@ public sealed class SetPageOrientationCommand : IWorkbookCommand
             return PageSetupCommandGuards.PageOrientationNotSupported();
 
         var sheet = ctx.GetSheet(_sheetId);
+        // r209: an equal-value setter. The ribbon/dialog pre-populates the current value, so
+        // re-confirming it pushed an undo entry that changed nothing -- and that push clears redo.
+        if (sheet.PageOrientation == _orientation)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousOrientation = sheet.PageOrientation;
         sheet.PageOrientation = _orientation;
         return new CommandOutcome(true);
@@ -55,6 +60,11 @@ public sealed class SetPaperSizeCommand : IWorkbookCommand
             return PageSetupCommandGuards.PaperSizeNotSupported();
 
         var sheet = ctx.GetSheet(_sheetId);
+        // r209: an equal-value setter. The ribbon/dialog pre-populates the current value, so
+        // re-confirming it pushed an undo entry that changed nothing -- and that push clears redo.
+        if (sheet.PaperSize == _paperSize)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousPaperSize = sheet.PaperSize;
         sheet.PaperSize = _paperSize;
         return new CommandOutcome(true);
@@ -99,6 +109,14 @@ public sealed class SetPageMarginsCommand : IWorkbookCommand
             return PageSetupCommandGuards.PageMarginsCannotBeNegative();
 
         var sheet = ctx.GetSheet(_sheetId);
+        // r209: an equal-value setter -- see SetPageOrientationCommand.
+        if (sheet.PageMargins.Equals(_margins)
+            && sheet.HeaderMargin == _headerMargin
+            && sheet.FooterMargin == _footerMargin)
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         _previousMargins = sheet.PageMargins;
         _previousHeaderMargin = sheet.HeaderMargin;
         _previousFooterMargin = sheet.FooterMargin;
