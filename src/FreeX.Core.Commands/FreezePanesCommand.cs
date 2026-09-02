@@ -93,6 +93,18 @@ public sealed class SetSplitPanesCommand : IWorkbookCommand
             return new CommandOutcome(false, "Split pane position is outside the worksheet bounds.");
 
         var sheet = ctx.GetSheet(_sheetId);
+        // r211: an equal-value setter -- but the mirror must be COMPLETE. Establishing a real split
+        // also clears any freeze below, so matching split positions alone is not "no change" when a
+        // freeze is still in place and a real split is being asked for. Reporting a no-op there
+        // would SUPPRESS the freeze clear -- the dangerous direction r204 recorded.
+        if (sheet.SplitRow == _splitRow
+            && sheet.SplitColumn == _splitColumn
+            && ((_splitRow is null && _splitColumn is null)
+                || (sheet.FrozenRows == 0 && sheet.FrozenCols == 0)))
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         _previousSplitRow = sheet.SplitRow;
         _previousSplitColumn = sheet.SplitColumn;
         _previousFrozenRows = sheet.FrozenRows;

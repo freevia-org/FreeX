@@ -255,6 +255,13 @@ public sealed class SetPictureCropCommand : IWorkbookCommand
         if (picture.Kind != PictureKind.Image)
             return new CommandOutcome(false, "Only inserted image pictures can be cropped.");
 
+        // r211: an equal-value setter. All four crop edges are written, so all four are compared.
+        if (picture.CropLeft == _left && picture.CropTop == _top
+            && picture.CropRight == _right && picture.CropBottom == _bottom)
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         _previous = (picture.CropLeft, picture.CropTop, picture.CropRight, picture.CropBottom);
         picture.CropLeft = _left;
         picture.CropTop = _top;
