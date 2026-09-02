@@ -598,15 +598,14 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
             ? 1
             : workbook.PivotCaches.Max(cache => cache.CacheId) + 1;
 
-    private static int NextWorkbookTableId(Workbook workbook)
-    {
-        var maxId = 0;
-        foreach (var sheet in workbook.Sheets)
-        foreach (var table in sheet.StructuredTables)
-            maxId = Math.Max(maxId, table.Id);
-
-        return maxId + 1;
-    }
+    // r197: delegates to CreateStructuredTableCommand.NextTableId rather than scanning live tables.
+    // A local scan sees only ids still in use, so it re-issues the id of a table the user deleted --
+    // which CommandGuards.PinOrphanedPivotCacheSourceTableIds deliberately keeps pinned on any pivot
+    // cache or slicer that was bound to it. The duplicated sheet's new table then inherits that
+    // binding and the pivot or slicer silently reports on unrelated data. See NextTableId's own
+    // comment for why the watermark, the slicers and the pivot caches all have to be folded in.
+    private static int NextWorkbookTableId(Workbook workbook) =>
+        CreateStructuredTableCommand.NextTableId(workbook);
 
     private static string GenerateUniqueTableName(Workbook workbook, Sheet copy, string sourceName)
     {

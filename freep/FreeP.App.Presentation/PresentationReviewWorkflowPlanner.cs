@@ -4485,21 +4485,49 @@ public static class PresentationReviewWorkflowPlanner
     private static string NormalizeAltTextDescription(string? value)
         => NormalizeText(value) ?? string.Empty;
 
+    // r197: compiled test seam for the surrogate-safety tests -- this codebase prefers these to
+    // reflection into private members.
+    internal static string NormalizeInitialsForTest(string? initials, string? author) =>
+        NormalizeInitials(initials, author);
+
     private static string NormalizeInitials(string? initials, string? author)
     {
+        // r197: both the truncation and the first-letter pick below are text-element aware. The
+        // result is STORED as SlideComment.Initials and written straight into the OOXML author
+        // element's initials attribute, so a lone surrogate here does not merely look wrong -- it
+        // makes constructing that XElement throw and aborts the WHOLE .pptx save, permanently,
+        // exactly as the r193 Drop Cap and r194 sheet-name cases did. The author name is read
+        // verbatim from dc:creator, which any producer may set to anything.
         var normalized = NormalizeText(initials);
         if (normalized is not null)
         {
-            return normalized.Length <= 3 ? normalized : normalized[..3];
+            return Free.Shared.IO.SurrogateSafeTruncation.LimitToTextElements(normalized, 3);
         }
 
         var name = NormalizeText(author) ?? "FreeP User";
         var parts = name
             .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Take(3)
-            .Select(part => char.ToUpperInvariant(part[0]));
+            .Select(FirstLetterOf)
+            .Where(part => part.Length > 0);
         var derived = string.Concat(parts);
         return string.IsNullOrWhiteSpace(derived) ? "FU" : derived;
+    }
+
+    /// <summary>
+    /// The leading TEXT ELEMENT of <paramref name="part"/>, upper-cased -- never half of a surrogate
+    /// pair. Empty when the part carries nothing usable, so the caller drops it rather than emitting
+    /// a fragment. <c>NormalizeInitialsBadge</c> a few hundred lines up already avoids the same trap
+    /// for the display-only badge by picking the first letter-or-digit; this is the equivalent for
+    /// the value that gets stored and written to the file.
+    /// </summary>
+    private static string FirstLetterOf(string part)
+    {
+        if (string.IsNullOrEmpty(part))
+            return string.Empty;
+
+        var length = System.Globalization.StringInfo.GetNextTextElementLength(part);
+        return part[..length].ToUpperInvariant();
     }
 
     private static string BuildPreview(string? text)

@@ -122,7 +122,12 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
     // always comes back with SourceTableId null -- safe, not a gap, because PivotTableRefreshService
     // only ever fills a null SourceTableId in from a table that is CURRENTLY live, never from a freed
     // one, so nothing durable dangles on that path for this fold to need to protect.
-    private static int NextTableId(Workbook workbook)
+    // r197: internal so DuplicateSheetCommand uses THIS allocator instead of its own live-table
+    // scan. That scan was the third instance of the "second allocator for one id space" class this
+    // review program has confirmed, and here it defeats the protection the comment above describes:
+    // duplicating a sheet could re-issue the id of a deleted table that a pivot cache or slicer is
+    // still pinned to, silently binding the new table to the old one's data.
+    internal static int NextTableId(Workbook workbook)
     {
         var maxId = workbook.NextStructuredTableIdWatermark;
         foreach (var otherSheet in workbook.Sheets)
