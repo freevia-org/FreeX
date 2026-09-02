@@ -21,6 +21,7 @@ public sealed partial class MainWindow
     internal DocumentView? SplitEditorForTests => _splitEditor;
     internal Grid? SplitGridForTests => _splitGrid;
     internal DocumentView ActiveDocumentEditorForTests => ResolveActiveDocumentEditor();
+    internal ScrollViewer WorkspaceScrollerForTests => _workspaceScroller;
 
     internal void NavigateSideToSideNextPairForTests() =>
         NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.NextPair);
