@@ -148,6 +148,16 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         ["ClearSparklineCommand"] =
             "returns Success:false when the sparkline is not found, and otherwise always removes one "
             + "-- there is no path where it finds the target and leaves it in place",
+        // r228: two genuine toggles, sound for the same structural reason as
+        // ToggleWorksheetAutoFilterCommand below -- each reads the CURRENT state and flips it, so
+        // there is no same-value path to guard. This is the self-guaranteeing shape r207 preferred,
+        // and it is worth distinguishing from the equal-value setters in the same files: those take
+        // the target state as an argument and can be handed the one already in place.
+        ["ShowHideCommentCommand"] =
+            "reads sheet.ShownComments.Contains(address) and flips it -- a toggle, not a setter",
+        ["ShowAllNotesCommand"] =
+            "computes allShown from the current state and then either shows every note or hides "
+            + "every note; it also errors when the sheet has no notes at all",
         ["ToggleWorksheetAutoFilterCommand"] =
             "self-guaranteeing: Apply reads sheet.AutoFilter fresh and branches on it, so it either "
             + "creates or removes the filter -- there is no same-value path",
@@ -311,18 +321,12 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "RefreshStructuredTableTotalsCommand",
         "RejectedWorkbookCommand",
         "ResizeStructuredTableCommand",
-        "ResolveThreadedCommentCommand",
         "SaveCustomViewCommand",
         "SaveScenarioCommand",
         "ScenarioSummaryReportCommand",
         "SetDataValidationCommand",
-        "SetSelectionPaneObjectVisibilityCommand",
-        "ShowAllNotesCommand",
-        "ShowHideCommentCommand",
         "SubtotalCommand",
         "TwoVariableDataTableCommand",
-        "UpdateThreadedCommentReplyCommand",
-        "UpdateThreadedCommentTextCommand",
     ];
 
     /// <summary>
@@ -337,9 +341,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 here.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 here.</para>
     /// </summary>
-    private const int OutstandingCeiling = 84;
+    private const int OutstandingCeiling = 78;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()
@@ -382,7 +386,7 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     [Fact]
     public void TheNeverExaminedListStillOnlyShrinks() =>
         NeverExaminedForThisClass.Count.Should().BeLessThanOrEqualTo(
-            50,
+            44,
             "the never-examined column specifically must keep draining, or the combined ceiling "
             + "could be satisfied by fixing easy known-broken entries while nobody ever looks at the "
             + "rest. This bound is the r218 count and comes down as rounds examine.");

@@ -35,6 +35,13 @@ public sealed class SetSelectionPaneObjectVisibilityCommand : IWorkbookCommand
         if (SelectionPaneObjectAccess.RejectIfEditObjectsBlocked(sheet, target) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r228: an equal-value setter with an eye icon on top of it. The Selection pane shows each
+        // object's current visibility, and the shells also drive this from a Show All / Hide All
+        // sweep that sets every object to the same value -- so the objects already in that state
+        // reach here unchanged, one wasted undo entry each.
+        if (target.IsVisible == _isVisible)
+            return new CommandOutcome(true, AffectedCells: [target.Anchor], IsNoOp: true);
+
         _previous = target.IsVisible;
         target.IsVisible = _isVisible;
         _applied = true;
