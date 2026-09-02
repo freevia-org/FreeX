@@ -42,6 +42,15 @@ public sealed class SetCommentCommand : IWorkbookCommand
             && CommentCommandGuards.RejectIfCellHasThreadedComment(sheet, _address) is { } threadedOutcome)
             return threadedOutcome;
 
+        // r213: an equal-value setter -- see SetChartStyleCommand.
+        // Only a note that ALREADY exists can be a no-op: a brand-new one also writes the author
+        // below, so it always changes something.
+        if (sheet.Comments.TryGetValue(_address, out var existingComment)
+            && string.Equals(existingComment, _comment, StringComparison.Ordinal))
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         _hadPrevious = sheet.Comments.TryGetValue(_address, out _previousComment);
         sheet.Comments[_address] = _comment;
 

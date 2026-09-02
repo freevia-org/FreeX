@@ -66,6 +66,10 @@ public sealed class SetPrintAreasCommand : IWorkbookCommand
         }
 
         var sheet = ctx.GetSheet(_sheetId);
+        // r213: an equal-value setter -- see SetChartStyleCommand.
+        if (sheet.PrintAreas.SequenceEqual(_printAreas))
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousPrintAreas = sheet.PrintAreas.ToList();
         sheet.SetPrintAreas(_printAreas);
         return new CommandOutcome(true);

@@ -85,12 +85,10 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     private static readonly HashSet<string> KnownNoOpCapableNotYetFixed =
     [
         "ApplyCustomViewCommand",
-        "ApplyScenarioCommand",
         "ApplyStructuredTableStyleCommand",
         "ApplyStyleCommand",
         "SetColumnOutlineGroupCollapsedCommand",
         "SetColumnWidthCommand",
-        "SetCommentCommand",
         "SetDrawingShapeColorsCommand",
         "SetDrawingShapeEffectCommand",
         "SetDrawingShapeGradientCommand",
@@ -98,7 +96,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "SetHyperlinkCommand",
         "SetPageBreaksCommand",
         "SetPageSetupCommand",
-        "SetPrintAreasCommand",
         "SetRowHeightCommand",
         "SetSlicerSelectionCommand",
         "SetTextBoxColorsCommand",
@@ -106,7 +103,7 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     ];
 
     /// <summary>The ceiling on the known-broken list. Lower it as rounds fix; never raise it.</summary>
-    private const int DebtCeiling = 19;
+    private const int DebtCeiling = 16;
 
     [Fact]
     public void EverySetterShapedCommandDeclaresWhetherItCanNoOp()

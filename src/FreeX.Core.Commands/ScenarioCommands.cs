@@ -114,6 +114,26 @@ public sealed class ApplyScenarioCommand : IWorkbookCommand
         if (ScenarioProtectionGuards.RejectIfChangingCellsProtected(ctx.Workbook, scenario.ChangingCells) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r213: applying a scenario whose values every changing cell already holds writes the same
+        // bytes back. The scenario list highlights the active scenario, so re-clicking Show on it is
+        // an ordinary gesture -- and the undo entry it pushed cleared redo.
+        // Checked in a separate pass so no cell is written before the answer is known.
+        var alreadyMatches = true;
+        foreach (var change in scenario.ChangingCells)
+        {
+            var probeSheet = ctx.Workbook.GetSheet(change.Address.Sheet);
+            if (probeSheet is null)
+                return ScenarioCommandHelpers.ChangingCellsOutsideWorkbook();
+            if (!Equals(probeSheet.GetCell(change.Address)?.Value, change.Value))
+            {
+                alreadyMatches = false;
+                break;
+            }
+        }
+
+        if (alreadyMatches)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _snapshot = [];
         foreach (var change in scenario.ChangingCells)
         {
