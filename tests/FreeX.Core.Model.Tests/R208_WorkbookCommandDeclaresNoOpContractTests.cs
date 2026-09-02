@@ -103,11 +103,10 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "SetSlicerSelectionCommand",
         "SetTextBoxColorsCommand",
         "SetTimelineRangeCommand",
-        "SetWorkbookWindowArrangementCommand",
     ];
 
     /// <summary>The ceiling on the known-broken list. Lower it as rounds fix; never raise it.</summary>
-    private const int DebtCeiling = 20;
+    private const int DebtCeiling = 19;
 
     [Fact]
     public void EverySetterShapedCommandDeclaresWhetherItCanNoOp()

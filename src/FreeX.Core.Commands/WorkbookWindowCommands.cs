@@ -20,6 +20,10 @@ public sealed class SetWorkbookWindowArrangementCommand : IWorkbookCommand
         if (!Enum.IsDefined(_arrangement))
             return new CommandOutcome(false, "Window arrangement is not supported.");
 
+        // r212: an equal-value setter -- see SetChartStyleCommand.
+        if (ctx.Workbook.WindowArrangement == _arrangement)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousArrangement = ctx.Workbook.WindowArrangement;
         ctx.Workbook.WindowArrangement = _arrangement;
         return new CommandOutcome(true);
