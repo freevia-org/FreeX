@@ -44,6 +44,13 @@ public sealed class R201_NativeDtoCoverageContractTests
             "a fresh per-load identity; nothing durable stores it, so regenerating cannot dangle "
             + "the way a structured-table id can (see finding 60)",
         ["ConditionalFormat.Id"] = "a fresh per-load identity, as DataValidation.Id",
+        ["Workbook.NextStructuredTableIdWatermark"] =
+            "deliberately NOT persisted: R109 folds every slicer's and pivot cache's SourceTableId "
+            + "into CreateStructuredTableCommand.NextTableId, and "
+            + "R109_StructuredTableIdWatermarkPersistenceTests asserts the reloaded watermark is 0 "
+            + "precisely because that floor-fold is what blocks reissuing a freed id. r201 carried it "
+            + "and that test caught it -- the fold makes persistence unnecessary, and a durable "
+            + "watermark would only ratchet the id space upward across every save",
     };
 
     /// <summary>

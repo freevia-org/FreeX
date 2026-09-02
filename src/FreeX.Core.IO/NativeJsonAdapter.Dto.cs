@@ -26,12 +26,6 @@ public sealed partial class NativeJsonAdapter
         // is the one piece of macro state that IS part of the model and was being silently dropped.
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool HasVbaProjectPackage { get; set; }
-        // r201: the structured-table id FLOOR. r197 established that this watermark exists so a
-        // deleted table's id is never handed out again while a pivot cache or slicer is still pinned
-        // to it. Not carrying it meant reopening a .fxl reset the floor, and the very collision the
-        // watermark prevents came back -- reachable through autosave/crash recovery, which goes
-        // through this adapter exclusively.
-        public int NextStructuredTableIdWatermark { get; set; }
         public bool? ShowSheetTabs { get; set; }
         public int? SheetTabRatio { get; set; }
         public int? FirstVisibleSheetIndex { get; set; }

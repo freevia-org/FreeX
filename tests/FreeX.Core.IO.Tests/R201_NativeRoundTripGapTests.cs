@@ -53,17 +53,6 @@ public sealed class R201_NativeRoundTripGapTests
     }
 
     [Fact]
-    public void TheStructuredTableIdWatermarkSurvives()
-    {
-        // The floor r197 established so a deleted table's id is never reissued while a pivot cache is
-        // still pinned to it. Losing it on reopen brings back the collision the watermark prevents.
-        var workbook = NewWorkbook(out _);
-        workbook.NextStructuredTableIdWatermark = 17;
-
-        RoundTrip(workbook).NextStructuredTableIdWatermark.Should().Be(17);
-    }
-
-    [Fact]
     public void ACellsQuotePrefixSurvives()
     {
         // The leading apostrophe that makes a numeric-looking cell text and drives Excel's
