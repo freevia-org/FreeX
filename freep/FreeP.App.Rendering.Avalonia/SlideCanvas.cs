@@ -2703,6 +2703,26 @@ public sealed partial class SlideCanvas : Control
 
     // ── Composition helper ───────────────────────────────────────────────────
 
+    /// <summary>
+    /// The index <see cref="SlideCompositor"/> resolves a slidenum field against.
+    /// </summary>
+    /// <remarks>
+    /// r199: derived from the deck, the way the WPF sibling has always done it, rather than trusted
+    /// from <see cref="SlideIndex"/>. Setting <see cref="Slide"/> alone left the index behind, and
+    /// SlideShowWindow assigns Slide at twenty-odd navigation sites and SlideIndex at none -- so
+    /// every slide of a live presentation on this shell numbered itself "1". The property stays for
+    /// callers rendering a slide that is not in the deck (a detached copy, a thumbnail of a draft),
+    /// which is the only case IndexOf cannot answer.
+    /// </remarks>
+    internal int ResolveSlideIndex()
+    {
+        if (_presentation is null || _slide is null)
+            return _slideIndex;
+
+        var index = _presentation.Slides.IndexOf(_slide);
+        return index >= 0 ? index : _slideIndex;
+    }
+
     private void EnsureOps()
     {
         if (_cachedOps is not null) return;
@@ -2729,7 +2749,7 @@ public sealed partial class SlideCanvas : Control
                 : SlideCompositor.Compose(
                     _presentation,
                     _slide,
-                    _slideIndex,
+                    ResolveSlideIndex(),
                     RenderSlideBackground);
         }
         catch (Exception)

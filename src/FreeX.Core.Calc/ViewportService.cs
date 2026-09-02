@@ -27,7 +27,7 @@ public sealed partial class ViewportService : IViewportService
             request.AvailableHeight,
             request.FrozenRowsOverride ?? sheet.FrozenRows);
         var lastVisibleRow = rowMetrics.Count > 0 ? rowMetrics[^1].Row : 0u;
-        var rowOutlineGroups = sheet.ShowOutlineSymbols == false
+        var rowOutlineGroups = (request.ShowOutlineSymbolsOverride ?? sheet.ShowOutlineSymbols) == false
             ? (IReadOnlyList<OutlineGroupRange>)[]
             : BuildRowOutlineGroups(sheet);
         return (lastVisibleRow, rowOutlineGroups);
@@ -190,10 +190,12 @@ public sealed partial class ViewportService : IViewportService
         var drawingObjects = request.IncludeObjects && request.IncludeDrawingObjectBounds
             ? BuildDrawingObjectBounds(sheet, workbook.Theme, rowMetrics, colMetrics)
             : [];
-        var rowOutlineGroups = sheet.ShowOutlineSymbols == false
+        // r199: this view's own Ctrl+8 state when the caller supplies one, else the shared field.
+        var showOutlineSymbols = request.ShowOutlineSymbolsOverride ?? sheet.ShowOutlineSymbols;
+        var rowOutlineGroups = showOutlineSymbols == false
             ? []
             : BuildRowOutlineGroups(sheet);
-        var columnOutlineGroups = sheet.ShowOutlineSymbols == false
+        var columnOutlineGroups = showOutlineSymbols == false
             ? []
             : BuildColumnOutlineGroups(sheet);
         var borderFringe = BuildBorderFringe(workbook, sheet, rowMetrics, colMetrics, ref styleCache);

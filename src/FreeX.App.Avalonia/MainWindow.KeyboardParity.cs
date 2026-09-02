@@ -460,7 +460,8 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var next = !(_session.ActiveSheet.ShowOutlineSymbols ?? true);
+        // r199: this view's own state, not the shared field a sibling window may have just changed.
+        var next = !_session.IsShowingOutlineSymbols;
         var result = _session.SetShowOutlineSymbols(next);
         RefreshShell(result.Success
             ? UiText.Get(next ? "KeyboardLoc_ShowingOutlineSymbols" : "KeyboardLoc_HidingOutlineSymbols")

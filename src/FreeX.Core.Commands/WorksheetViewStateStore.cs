@@ -36,7 +36,10 @@ public readonly record struct WorksheetViewStateSnapshot(
     uint FrozenCols = 0,
     uint? SplitRow = null,
     uint? SplitColumn = null,
-    bool ShowFormulas = false);
+    bool ShowFormulas = false,
+    // r199: Show Outline Symbols (Ctrl+8) joins the group. Defaults to true, matching
+    // Sheet.ShowOutlineSymbols's null-means-shown convention.
+    bool ShowOutlineSymbols = true);
 
 /// <summary>
 /// Remembers each worksheet's view mode, zoom level, and View tab display toggles within a
@@ -77,7 +80,8 @@ public sealed class WorksheetViewStateStore
             sheet.FrozenCols,
             sheet.SplitRow,
             sheet.SplitColumn,
-            sheet.ShowFormulas);
+            sheet.ShowFormulas,
+            sheet.ShowOutlineSymbols ?? true);
         _bySheet[sheet.Id] = seeded;
         return seeded;
     }

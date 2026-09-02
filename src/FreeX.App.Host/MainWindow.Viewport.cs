@@ -391,7 +391,8 @@ public partial class MainWindow
                     sheet.FrozenCols,
                     sheet.SplitRow,
                     sheet.SplitColumn,
-                    sheet.ShowFormulas));
+                    sheet.ShowFormulas,
+                    sheet.ShowOutlineSymbols ?? true));
         }
     }
 
@@ -991,7 +992,8 @@ public partial class MainWindow
             FrozenRowsOverride: viewState.FrozenRows,
             FrozenColsOverride: viewState.FrozenCols,
             SplitOverride: new SplitPaneStateOverride(viewState.SplitRow, viewState.SplitColumn),
-            ShowFormulasOverride: viewState.ShowFormulas);
+            ShowFormulasOverride: viewState.ShowFormulas,
+            ShowOutlineSymbolsOverride: viewState.ShowOutlineSymbols);
 
         return _viewportService.GetViewport(_workbook, _currentSheetId, request);
     }

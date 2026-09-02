@@ -4279,6 +4279,19 @@ public sealed class ChangeDrawingGroupChildZOrderCommand : IDocumentCommand
         _ => "Reorder Group Child"
     };
 
+    // r199: mirrors Apply's two early exits below. Without this the bus pushed an undo entry for a
+    // Bring Forward on a child that is already frontmost within its group -- a step that does nothing
+    // when undone, and whose push clears the redo stack. The sibling ChangeZOrderCommand (line ~2208)
+    // has had this override all along; this command was written without it.
+    public bool HasEffect(IDocumentCommandContext context)
+    {
+        if (!TryGetOwningGroup(context, out var owningGroup) || _childPath.Count == 0)
+            return false;
+
+        var sourceIndex = _childPath[^1];
+        return ResolveTargetIndex(sourceIndex, owningGroup.Children.Count, _operation) != sourceIndex;
+    }
+
     public void Apply(IDocumentCommandContext context)
     {
         if (!TryGetOwningGroup(context, out var owningGroup) || _childPath.Count == 0)
