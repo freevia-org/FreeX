@@ -111,6 +111,29 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         ["InsertColumnsCommand"] = "always runs the column shift",
         ["InsertPictureCommand"] = "sheet.Pictures.Add is unconditional",
         ["InsertRowsCommand"] = "always runs the row shift",
+        // r224, the Delete/Remove family. The pattern that makes these sound is uniform and was
+        // checked in each: the target is looked up first, a miss returns Success:false, and the
+        // removal below that check is unconditional. A command that cannot find what it was asked
+        // to delete reports an error rather than a quiet success, which keeps it off the undo stack
+        // just as effectively.
+        ["DeleteCellsCommand"] = "always runs the shift once the range and direction validate",
+        ["DeleteColumnsCommand"] = "always removes the requested columns",
+        ["DeleteCommentCommand"] = "removes after a found-check that errors on a miss",
+        ["DeleteCustomViewCommand"] = "RemoveAt after an index lookup that errors on a miss",
+        ["DeleteDrawingObjectCommand"] =
+            "dispatches per object kind; each branch does a FindIndex and errors on a miss before "
+            + "removing, and an unsupported kind errors too",
+        ["DeleteScenarioCommand"] = "RemoveAt after an index lookup that errors on a miss",
+        ["DeleteThreadedCommentCommand"] = "removes after a found-check that errors on a miss",
+        ["DeleteThreadedCommentReplyCommand"] = "RemoveAt after a reply-index check",
+        ["RemoveAllowEditRangeCommand"] = "RemoveAt after an index lookup that errors on a miss",
+        ["RemoveChartSeriesCommand"] =
+            "errors for a pivot chart, an unsupported chart type, and a chart with no series to "
+            + "remove, so every path that reaches the removal has one to remove",
+        ["RemoveNamedRangeCommand"] =
+            "every branch either removes a range or a formula, or returns Success:false because the "
+            + "name does not exist -- all four exits were read",
+        ["RemoveSheetCommand"] = "always removes the sheet once the guards pass",
         ["PasteRangeAsPictureCommand"] =
             "r221: the picture is built by the caller and handed in ready-made, and Apply's only "
             + "mutation is to add it -- there is no path that reaches the add and skips it",
@@ -194,6 +217,12 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     {
         ["BringDrawingShapeForwardCommand"] = "TryMoveZOrder",
         ["SendDrawingShapeBackwardCommand"] = "TryMoveZOrder",
+        // r224: a second shape of the same thing. RemoveSheetsCommand's whole Apply is
+        // `_composite.Apply(ctx)`, and CompositeWorkbookCommand deliberately bubbles IsNoOp up --
+        // it starts allNoOp true so a composite wrapping zero children, or one whose children were
+        // all no-ops, reports IsNoOp itself. So this command already reports correctly and the
+        // per-class scan simply cannot see through the delegation.
+        ["RemoveSheetsCommand"] = "CompositeWorkbookCommand",
     };
 
     /// <summary>
@@ -228,15 +257,7 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "ConvertStructuredTableToRangeCommand",
         "CopyRangeCommand",
         "DataTableBodyRefreshCommand",
-        "DeleteCellsCommand",
-        "DeleteColumnsCommand",
-        "DeleteCommentCommand",
-        "DeleteCustomViewCommand",
-        "DeleteDrawingObjectCommand",
         "DeleteRowsCommand",
-        "DeleteScenarioCommand",
-        "DeleteThreadedCommentCommand",
-        "DeleteThreadedCommentReplyCommand",
         "DrillDownPivotTableCommand",
         "DuplicateDrawingObjectCommand",
         "DuplicateSheetCommand",
@@ -272,12 +293,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "RefreshPivotTableCommand",
         "RefreshStructuredTableTotalsCommand",
         "RejectedWorkbookCommand",
-        "RemoveAllowEditRangeCommand",
-        "RemoveChartSeriesCommand",
-        "RemoveHyperlinksCommand",
-        "RemoveNamedRangeCommand",
-        "RemoveSheetCommand",
-        "RemoveSheetsCommand",
         "ResizeStructuredTableCommand",
         "ResolveThreadedCommentCommand",
         "SaveCustomViewCommand",
@@ -306,9 +321,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 here.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 here.</para>
     /// </summary>
-    private const int OutstandingCeiling = 101;
+    private const int OutstandingCeiling = 87;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()
@@ -351,7 +366,7 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     [Fact]
     public void TheNeverExaminedListStillOnlyShrinks() =>
         NeverExaminedForThisClass.Count.Should().BeLessThanOrEqualTo(
-            81,
+            67,
             "the never-examined column specifically must keep draining, or the combined ceiling "
             + "could be satisfied by fixing easy known-broken entries while nobody ever looks at the "
             + "rest. This bound is the r218 count and comes down as rounds examine.");
@@ -385,9 +400,21 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
 
         foreach (var (command, helper) in DeclaresIsNoOpThroughAHelper)
         {
-            var helperBody = new Regex(
-                    helper + @"\b[^{]*\{(?:[^{}]|\{[^{}]*\})*\}", RegexOptions.Singleline)
-                .Match(allSource);
+            // r224: a delegate can be a helper METHOD (TryMoveZOrder) or a whole COMMAND CLASS
+            // (CompositeWorkbookCommand), and the two need different extents. The first version of
+            // this test only knew about methods, so it matched CompositeWorkbookCommand's
+            // constructor -- a body with no IsNoOp in it -- and failed a claim that was true. It
+            // refused to certify what it could not read, which is the right failure to have.
+            var isClass = new Regex(@"\bclass\s+" + helper + @"\b").IsMatch(allSource);
+            var helperBody = isClass
+                ? new Regex(
+                        @"\bclass\s+" + helper + @"\b.*?(?=\n(?:public|internal)\s+(?:sealed\s+)?class\s|\z)",
+                        RegexOptions.Singleline)
+                    .Match(allSource)
+                : new Regex(
+                        helper + @"\b[^{;]*\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}",
+                        RegexOptions.Singleline)
+                    .Match(allSource);
 
             helperBody.Success.Should().BeTrue($"{helper} must exist for {command} to delegate to it");
             helperBody.Value.Should().Contain(

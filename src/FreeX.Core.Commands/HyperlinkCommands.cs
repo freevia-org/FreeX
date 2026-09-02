@@ -182,6 +182,13 @@ public sealed class RemoveHyperlinksCommand : IWorkbookCommand
         if (_snapshot.Keys.Any(address => !CommandGuards.CanEditCell(ctx.Workbook, sheet, address)))
             return CommandGuards.RejectSheetProtected();
 
+        // r224: the twin of r220's ClearHyperlinksCommand guard, in the command next door. Remove
+        // Hyperlinks over a selection that carries none removes nothing AND restyles nothing -- the
+        // underline/colour reset below only runs over _snapshot's keys, so an empty snapshot means
+        // the whole method is inert.
+        if (_snapshot.Count == 0 && _metadataSnapshot.Count == 0)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _cellSnapshot = [];
         foreach (var addr in _snapshot.Keys)
         {
