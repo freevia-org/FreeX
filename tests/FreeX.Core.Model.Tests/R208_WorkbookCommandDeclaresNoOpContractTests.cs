@@ -70,6 +70,21 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         ["SetWorksheetZoomCommand"] =
             "WorkbookSession.SetZoomPercent clamps then returns a no-op result when every target "
             + "sheet already has that zoom",
+        // r220. The protection family is gated at the planner, which is the structural defence r207
+        // preferred over an override: ProtectionWorkflowSession branches on the CURRENT state --
+        // protected sheets get Unprotect, unprotected ones get Protect -- so neither command can be
+        // issued against a target already in the state it would produce.
+        ["ProtectSheetCommand"] =
+            "ProtectionWorkflowSession.CreateSheetCommandPlan issues this only when the sheet is NOT "
+            + "protected; a protected one gets UnprotectSheetCommand instead -- a negation gate",
+        ["ProtectWorkbookCommand"] =
+            "CreateWorkbookCommandPlan issues this only when the structure is NOT protected -- the "
+            + "same negation gate as the sheet twin",
+        ["UnprotectWorkbookCommand"] =
+            "the other half of that gate: only issued when the structure IS protected",
+        ["ClearSparklineCommand"] =
+            "returns Success:false when the sparkline is not found, and otherwise always removes one "
+            + "-- there is no path where it finds the target and leaves it in place",
         ["ToggleWorksheetAutoFilterCommand"] =
             "self-guaranteeing: Apply reads sheet.AutoFilter fresh and branches on it, so it either "
             + "creates or removes the filter -- there is no same-value path",
@@ -102,6 +117,10 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // many fields in a guard is precisely the brittle mirror r218 avoided -- it needs a
         // snapshot-versus-target comparison the way ConfigureSparklineCommand got one, not a
         // transcription that can fall out of step.
+        // r220: ClearPivotTableView belongs to the same RefreshGuarded family for the same reason --
+        // clearing filters that are already clear replaces empty collections with empty ones, but
+        // deciding that means proving the re-render is unnecessary too.
+        "ClearPivotTableViewCommand",
         "ConfigurePivotChartOptionsCommand",
         "ConfigurePivotTableCalculatedItemsCommand",
         "ConfigurePivotTableFieldFiltersCommand",
@@ -161,15 +180,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "ChangeChartTypeCommand",
         "ChangePivotChartTypeCommand",
         "ChangePivotTableSourceCommand",
-        "ClearAllowEditRangesCommand",
-        "ClearCommentsCommand",
-        "ClearConditionalFormatsCommand",
-        "ClearContentsCommand",
-        "ClearHyperlinksCommand",
-        "ClearPivotTableViewCommand",
-        "ClearPrintAreaCommand",
-        "ClearSparklineCommand",
-        "ClearWorksheetBackgroundCommand",
         "CollapseRowGroupCommand",
         "ConsolidateCommand",
         "ConvertNotesToCommentsCommand",
@@ -240,8 +250,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "PasteSpecialCellsCommand",
         "PasteTextBoxesCommand",
         "PropagateCalculatedColumnCommand",
-        "ProtectSheetCommand",
-        "ProtectWorkbookCommand",
         "ReapplyStructuredTableStyleCommand",
         "RefreshPivotTableCommand",
         "RefreshStructuredTableTotalsCommand",
@@ -265,8 +273,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "SubtotalCommand",
         "TopBottomFilterCommand",
         "TwoVariableDataTableCommand",
-        "UnprotectSheetCommand",
-        "UnprotectWorkbookCommand",
         "UpdateThreadedCommentReplyCommand",
         "UpdateThreadedCommentTextCommand",
     ];
@@ -283,9 +289,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 here.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 here.</para>
     /// </summary>
-    private const int OutstandingCeiling = 151;
+    private const int OutstandingCeiling = 139;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()
@@ -327,7 +333,7 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     [Fact]
     public void TheNeverExaminedListStillOnlyShrinks() =>
         NeverExaminedForThisClass.Count.Should().BeLessThanOrEqualTo(
-            134,
+            121,
             "the never-examined column specifically must keep draining, or the combined ceiling "
             + "could be satisfied by fixing easy known-broken entries while nobody ever looks at the "
             + "rest. This bound is the r218 count and comes down as rounds examine.");

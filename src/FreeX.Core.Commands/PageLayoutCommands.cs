@@ -97,6 +97,11 @@ public sealed class ClearPrintAreaCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        // r220: Page Layout > Print Area > Clear Print Area stays enabled whether or not one is set,
+        // so clearing when there is nothing to clear is a button the user can press at any time.
+        if (sheet.PrintAreas.Count == 0)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousPrintAreas = sheet.PrintAreas.ToList();
         sheet.PrintArea = null;
         return new CommandOutcome(true);

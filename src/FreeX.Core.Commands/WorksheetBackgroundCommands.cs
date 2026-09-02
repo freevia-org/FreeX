@@ -58,6 +58,11 @@ public sealed class ClearWorksheetBackgroundCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        // r220: the sibling setter above got this guard in r210; the clear did not. Delete
+        // Background is reachable on a sheet that has none.
+        if (sheet.BackgroundImage is null)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousBackground = sheet.BackgroundImage;
         sheet.BackgroundImage = null;
         _applied = true;

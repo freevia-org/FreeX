@@ -176,6 +176,20 @@ public sealed class UnprotectSheetCommand : IWorkbookCommand
         if (!ProtectionPasswordHelper.VerifyStoredPassword(sheet.ProtectionPassword, _password))
             return new CommandOutcome(false, "The password you supplied is not correct.");
 
+        // r220: unprotecting a sheet that is not protected. The password check above passes (no
+        // stored password, none typed), and then every write below is a self-assignment -- but ONLY
+        // if the preserved metadata bag is already null too. That last clause is the point: an
+        // unprotected sheet loaded from a file can still carry a ProtectionMetadata bag, and
+        // clearing it IS a change to what gets written back. Comparing only IsProtected would have
+        // suppressed that, which is the dangerous direction.
+        if (!sheet.IsProtected
+            && sheet.ProtectionPassword is null
+            && sheet.ProtectionPermissions.Count == 0
+            && sheet.ProtectionMetadata is null)
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         _previousProtected = sheet.IsProtected;
         _previousPassword = sheet.ProtectionPassword;
         _previousPermissions = sheet.ProtectionPermissions.ToList();
@@ -296,6 +310,11 @@ public sealed class ClearAllowEditRangesCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var ranges = ctx.GetSheet(_sheetId).AllowEditRanges;
+
+        // r220: clearing an already-empty list.
+        if (ranges.Count == 0)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousRanges = [.. ranges];
         ranges.Clear();
         return new CommandOutcome(true);

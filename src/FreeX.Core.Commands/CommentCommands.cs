@@ -379,6 +379,12 @@ public sealed class ClearCommentsCommand : IWorkbookCommand
             .Where(_range.Contains)
             .Distinct()
             .ToList();
+
+        // r220: Clear > Comments over a selection that carries none. The r164 rewrite above already
+        // computed exactly the set of cells this command can touch, so an empty list is proof there
+        // is nothing to do -- no separate predicate to keep in step with the loop below.
+        if (addresses.Count == 0)
+            return new CommandOutcome(true, IsNoOp: true);
         foreach (var addr in addresses)
         {
             if (sheet.Comments.TryGetValue(addr, out var comment))

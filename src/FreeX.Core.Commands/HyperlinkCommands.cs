@@ -123,6 +123,12 @@ public sealed class ClearHyperlinksCommand : IWorkbookCommand
         if (_snapshot.Keys.Any(address => !CommandGuards.CanEditCell(ctx.Workbook, sheet, address)))
             return CommandGuards.RejectSheetProtected();
 
+        // r220: Clear > Hyperlinks over a selection that holds none. Placed after the protection
+        // check rather than before it only for symmetry -- with both snapshots empty that check
+        // cannot fail, so the two orderings are equivalent.
+        if (_snapshot.Count == 0 && _metadataSnapshot.Count == 0)
+            return new CommandOutcome(true, IsNoOp: true);
+
         foreach (var addr in _snapshot.Keys)
             sheet.Hyperlinks.Remove(addr);
         foreach (var addr in _metadataSnapshot.Keys)

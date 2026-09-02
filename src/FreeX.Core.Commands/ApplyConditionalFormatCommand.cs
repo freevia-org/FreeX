@@ -139,6 +139,17 @@ public sealed class ClearConditionalFormatsCommand : IWorkbookCommand
             newRules.Add(shrunk);
         }
 
+        // r220: reference equality is exactly the right test here, and that is not a shortcut. A
+        // rule the loop left alone is added to newRules BY REFERENCE; a rule it shrank is a fresh
+        // Clone; a rule it dropped is missing. So "same count and every element the same object"
+        // means the loop changed nothing -- Clear Rules over a selection no rule covers.
+        if (newRules.Count == sheet.ConditionalFormats.Count
+            && !newRules.Where((rule, index) => !ReferenceEquals(rule, sheet.ConditionalFormats[index])).Any())
+        {
+            _previousRules = null;
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         sheet.ConditionalFormats.Clear();
         sheet.ConditionalFormats.AddRange(newRules);
         return new CommandOutcome(true);

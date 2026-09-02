@@ -54,8 +54,12 @@ public sealed class ClearContentsCommand : IWorkbookCommand, IEstimatesMemory
         var scope = SheetRangeScope.ClampToPopulated(sheet, _range);
         if (scope is null)
         {
+            // r220: this early return was already correct about there being nothing to clear -- a
+            // null scope means no populated cell intersects the selection -- it just never said so,
+            // and pressing Delete over empty cells is about as ordinary as gestures get. Saying it
+            // keeps the undo entry off the stack, and so keeps the user's pending redo alive.
             _snapshot = [];
-            return new CommandOutcome(true, AffectedCells: []);
+            return new CommandOutcome(true, AffectedCells: [], IsNoOp: true);
         }
 
         var effectiveRange = scope.Value;
