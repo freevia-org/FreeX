@@ -1106,6 +1106,15 @@ public partial class MainWindow
 
             ApplyFormulaErrorCheckingOptions(dlg.DisabledFormulaErrorCodesResult);
             ApplyOptionsCalculationSubmission(dlg.CalculationSubmission);
+
+            // r196: the Trust Center's crash-report opt-in used to be read once at startup, so
+            // unticking it changed nothing until the app was restarted -- the user withdrew consent
+            // and reports kept being sent. The checkbox carries no restart notice, and this is the
+            // one direction that must not lag. Applied alongside every other side effect this
+            // handler already drives immediately.
+            if (App.Services.GetService(typeof(ICrashAnalytics)) is ICrashAnalytics crashAnalytics)
+                crashAnalytics.ApplyOptIn(_options.CrashAnalyticsEnabled);
+
             RebuildQuickAccessToolbar();
 
             // Same shared-AppOptions defect the QAT context menu's

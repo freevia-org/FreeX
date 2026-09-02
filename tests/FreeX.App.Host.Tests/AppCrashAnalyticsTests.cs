@@ -143,6 +143,11 @@ public sealed class AppCrashAnalyticsTests
 
         public bool SendTestReport() => true;
 
+        // r196: records the last applied opt-in so a test can assert the Options commit reached it.
+        public bool? LastAppliedOptIn { get; private set; }
+
+        public void ApplyOptIn(bool enabled) => LastAppliedOptIn = enabled;
+
         public void Dispose()
         {
         }
@@ -162,6 +167,11 @@ public sealed class AppCrashAnalyticsTests
             throw new InvalidOperationException("remote unavailable");
 
         public bool SendTestReport() => false;
+
+        // r196: this fake exists to prove failures are swallowed, so opting in must not throw either.
+        public void ApplyOptIn(bool enabled)
+        {
+        }
 
         public void Dispose()
         {

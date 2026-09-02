@@ -9,7 +9,14 @@ public sealed class SentryCrashAnalytics : ICrashAnalytics, Free.Shared.AppServi
     private IDisposable? _runtimeRegistration;
     private bool _isEnabled;
 
-    public bool IsEnabled => _isEnabled;
+    // r196: the LIVE opt-in, separate from _isEnabled (which records that the SDK was
+    // initialised). Volatile because a crash can be captured on any thread while the Options
+    // dialog commits on the UI one.
+    private volatile bool _optedIn;
+
+    public bool IsEnabled => _isEnabled && _optedIn;
+
+    public void ApplyOptIn(bool enabled) => _optedIn = enabled;
 
     public void Initialize(AppCrashAnalyticsOptions crashAnalyticsOptions, AppDiagnosticsMetadata metadata)
     {
@@ -29,17 +36,24 @@ public sealed class SentryCrashAnalytics : ICrashAnalytics, Free.Shared.AppServi
                 sentryEvent.SetTag("freex.runtime", metadata.RuntimeDescription);
                 sentryEvent.SetTag("freex.os", metadata.OperatingSystemDescription);
                 sentryEvent.SetTag("freex.architecture", metadata.ProcessArchitecture);
+                // r196: the last gate before anything leaves the process. Checked HERE as well as in
+                // the methods below so an event the SDK captured on its own -- an unhandled
+                // exception -- is dropped too once the user has opted out mid-session.
+                if (!_optedIn)
+                    return null;
+
                 Free.Shared.AppServices.AppCrashDataRedactor.Redact(sentryEvent);
                 return sentryEvent;
             });
         });
         _isEnabled = true;
+        _optedIn = true;
         _runtimeRegistration = Free.Shared.AppServices.AppCrashAnalyticsRuntime.Register(this);
     }
 
     public void RecordBreadcrumb(string eventName, IReadOnlyDictionary<string, string?>? properties = null)
     {
-        if (!_isEnabled)
+        if (!IsEnabled)
             return;
 
         var data = Free.Shared.AppServices.AppDiagnosticsFileStore.SanitizeProperties(properties)
@@ -57,7 +71,7 @@ public sealed class SentryCrashAnalytics : ICrashAnalytics, Free.Shared.AppServi
 
     public void CaptureCrash(Exception exception, string source)
     {
-        if (!_isEnabled)
+        if (!IsEnabled)
             return;
 
         SentrySdk.ConfigureScope(scope =>
@@ -70,7 +84,7 @@ public sealed class SentryCrashAnalytics : ICrashAnalytics, Free.Shared.AppServi
 
     public bool SendTestReport()
     {
-        if (!_isEnabled)
+        if (!IsEnabled)
             return false;
 
         var sentryEvent = new SentryEvent
