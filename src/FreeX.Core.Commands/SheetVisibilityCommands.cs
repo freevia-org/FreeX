@@ -31,6 +31,19 @@ public sealed class SetRowsHiddenCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatRows) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r200: Hide on an already-hidden span, or Unhide on an all-visible one, changes nothing --
+        // and an undo entry for it clears the redo stack. Both tests walk the hidden-row SETS rather
+        // than the selected range: Ctrl+A selects 1,048,576 rows, and r164 established that a scan
+        // of that shape on the UI thread is its own defect.
+        var rowCount = _endRow - _startRow + 1;
+        var hiddenInRange = sheet.HiddenRows.Count(row => row >= _startRow && row <= _endRow);
+        var changesAnything = _hidden
+            ? hiddenInRange < rowCount
+            : hiddenInRange > 0 || sheet.GroupHiddenRows.Any(row => row >= _startRow && row <= _endRow);
+
+        if (!changesAnything)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousHiddenRows = RangeSnapshot.Capture(sheet.HiddenRows, _startRow, _endRow);
         for (uint row = _startRow; row <= _endRow; row++)
         {
@@ -92,6 +105,17 @@ public sealed class SetColumnsHiddenCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatColumns) is { } protectedOutcome)
             return protectedOutcome;
+
+        // r200: mirrors SetRowsHiddenCommand's no-op test above -- fixed together, because a helper
+        // and its copy drifting apart is exactly how this class has kept hiding.
+        var colCount = _endCol - _startCol + 1;
+        var hiddenInRange = sheet.HiddenCols.Count(col => col >= _startCol && col <= _endCol);
+        var changesAnything = _hidden
+            ? hiddenInRange < colCount
+            : hiddenInRange > 0 || sheet.GroupHiddenCols.Any(col => col >= _startCol && col <= _endCol);
+
+        if (!changesAnything)
+            return new CommandOutcome(true, IsNoOp: true);
 
         _previousHiddenCols = RangeSnapshot.Capture(sheet.HiddenCols, _startCol, _endCol);
         for (uint col = _startCol; col <= _endCol; col++)

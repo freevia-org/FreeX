@@ -56,16 +56,17 @@ public static class TextToColumnsSplitter
                 continue;
             }
 
-            if (IsDelimiter(ch, delimiters))
+            if (DelimiterLengthAt(text, index, delimiters) is var delimiterLength && delimiterLength > 0)
             {
                 parts.Add(current.ToString());
                 current.Clear();
                 atFieldStart = true;
+                index += delimiterLength - 1;
 
                 if (treatConsecutiveDelimitersAsOne)
                 {
-                    while (index + 1 < text.Length && IsDelimiter(text[index + 1], delimiters))
-                        index++;
+                    while (index + 1 < text.Length && DelimiterLengthAt(text, index + 1, delimiters) is var next && next > 0)
+                        index += next;
                 }
 
                 continue;
@@ -123,15 +124,17 @@ public static class TextToColumnsSplitter
 
         for (var index = 0; index < text.Length; index++)
         {
-            if (!IsDelimiter(text[index], delimiters))
+            var length = DelimiterLengthAt(text, index, delimiters);
+            if (length == 0)
                 continue;
 
             parts[writeIndex++] = text.Substring(start, index - start);
+            index += length - 1;
 
             if (treatConsecutiveDelimitersAsOne)
             {
-                while (index + 1 < text.Length && IsDelimiter(text[index + 1], delimiters))
-                    index++;
+                while (index + 1 < text.Length && DelimiterLengthAt(text, index + 1, delimiters) is var next && next > 0)
+                    index += next;
             }
 
             start = index + 1;
@@ -149,28 +152,62 @@ public static class TextToColumnsSplitter
         var count = 1;
         for (var index = 0; index < text.Length; index++)
         {
-            if (!IsDelimiter(text[index], delimiters))
+            var length = DelimiterLengthAt(text, index, delimiters);
+            if (length == 0)
                 continue;
 
             count++;
+            index += length - 1;
             if (treatConsecutiveDelimitersAsOne)
             {
-                while (index + 1 < text.Length && IsDelimiter(text[index + 1], delimiters))
-                    index++;
+                while (index + 1 < text.Length && DelimiterLengthAt(text, index + 1, delimiters) is var next && next > 0)
+                    index += next;
             }
         }
 
         return count;
     }
 
-    private static bool IsDelimiter(char ch, string delimiters)
+    /// <summary>
+    /// The length of the delimiter matching <paramref name="text"/> at <paramref name="index"/>, or 0.
+    /// </summary>
+    /// <remarks>
+    /// r200: <paramref name="delimiters"/> is a SET of delimiters concatenated together, and this used
+    /// to test one UTF-16 code unit against it. A custom delimiter outside the BMP is TWO code units,
+    /// so each half matched on its own -- splitting inside every unrelated astral character that
+    /// happened to share the same surrogate half, and writing the orphaned halves into new cells.
+    /// Matching by text element also lets a multi-unit delimiter consume its whole length.
+    /// </remarks>
+    private static int DelimiterLengthAt(string text, int index, string delimiters)
     {
         if (string.IsNullOrEmpty(delimiters))
-            return ch == ',';
+            return text[index] == ',' ? 1 : 0;
 
-        return delimiters.Length == 1
-            ? ch == delimiters[0]
-            : delimiters.IndexOf(ch) >= 0;
+        // Walked by code point rather than with StringInfo: this runs once per character of every
+        // split line, and an enumerator plus a string per delimiter per position turned a
+        // 7MB allocation budget into 86MB -- caught by this file's own allocation test.
+        for (var d = 0; d < delimiters.Length; d++)
+        {
+            if (char.IsHighSurrogate(delimiters[d]) &&
+                d + 1 < delimiters.Length &&
+                char.IsLowSurrogate(delimiters[d + 1]))
+            {
+                if (index + 1 < text.Length &&
+                    text[index] == delimiters[d] &&
+                    text[index + 1] == delimiters[d + 1])
+                {
+                    return 2;
+                }
+
+                d++;
+                continue;
+            }
+
+            if (text[index] == delimiters[d])
+                return 1;
+        }
+
+        return 0;
     }
 
     private static List<int> NormalizeBreakPositions(IReadOnlyList<int> breakPositions)

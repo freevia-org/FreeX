@@ -183,6 +183,16 @@ public sealed class ReplaceAllConditionalFormatsCommand : IWorkbookCommand
             if (ConditionalFormatValidator.Validate(_sheetId, rule) is { } validationOutcome)
                 return validationOutcome;
 
+        // r200: the Manage Rules dialog rebuilds this list and commits whether or not the user
+        // changed anything, so closing it with OK after only looking pushed an undo entry -- which
+        // clears redo. Reference equality is the right test: an untouched rule is the very instance
+        // the dialog was handed, and an edited one is a rebuilt object.
+        if (_newRules.Count == sheet.ConditionalFormats.Count &&
+            !_newRules.Where((rule, index) => !ReferenceEquals(rule, sheet.ConditionalFormats[index])).Any())
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         _previousRules = [.. sheet.ConditionalFormats];
         sheet.ConditionalFormats.Clear();
         sheet.ConditionalFormats.AddRange(_newRules);

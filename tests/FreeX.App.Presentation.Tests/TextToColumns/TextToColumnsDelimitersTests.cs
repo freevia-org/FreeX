@@ -18,7 +18,7 @@ public sealed class TextToColumnsDelimitersTests
     [Fact]
     public void CharacterFor_Custom_UsesProvidedChar()
     {
-        TextToColumnsDelimiters.CharacterFor(TextToColumnsDelimiterKind.Custom, '#').Should().Be("#");
+        TextToColumnsDelimiters.CharacterFor(TextToColumnsDelimiterKind.Custom, "#").Should().Be("#");
     }
 
     [Fact]

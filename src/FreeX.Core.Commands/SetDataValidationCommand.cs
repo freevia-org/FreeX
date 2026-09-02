@@ -242,7 +242,12 @@ public sealed class ClearDataValidationCommand : IWorkbookCommand
 
         _removed.Reverse();
         _added.Reverse();
-        return new CommandOutcome(true);
+
+        // r200: no rule overlapped the selection, so nothing was cleared -- and an undo entry for that
+        // clears the redo stack.
+        return _removed.Count == 0
+            ? new CommandOutcome(true, IsNoOp: true)
+            : new CommandOutcome(true);
     }
 
     public void Revert(ICommandContext ctx)

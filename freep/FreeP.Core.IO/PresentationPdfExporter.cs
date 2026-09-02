@@ -1985,7 +1985,10 @@ public static class PresentationPdfExporter
         if (value.Length <= maxLength)
             return value;
 
-        return value[..Math.Max(0, maxLength - 3)] + "...";
+        // r200: the twin of SlidePrintMarkupPlanner.Trim. Not a live defect here -- PortablePdfWriter
+        // throws on any non-WinAnsi text before this could be written -- but kept identical so the
+        // pair cannot drift apart again, which is how this class has hidden twice before.
+        return Free.Shared.IO.SurrogateSafeTruncation.LimitToTextElements(value, Math.Max(0, maxLength - 3)) + "...";
     }
 
     private static void AppendInkMarkup(

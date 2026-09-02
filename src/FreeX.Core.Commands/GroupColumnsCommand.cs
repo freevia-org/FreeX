@@ -345,8 +345,9 @@ public sealed class CollapseColGroupCommand : IWorkbookCommand
 
         if (_selectionStart is { } selStart)
         {
+            // r200: the selection touches no outline group, so nothing collapses or expands.
             if (ColumnOutlineGroupScope.Resolve(sheet.ColOutlineLevels, selStart, _selectionEnd ?? selStart) is not { } group)
-                return new CommandOutcome(true);
+                return new CommandOutcome(true, IsNoOp: true);
 
             foreach (var (col, lvl) in sheet.ColOutlineLevels)
             {

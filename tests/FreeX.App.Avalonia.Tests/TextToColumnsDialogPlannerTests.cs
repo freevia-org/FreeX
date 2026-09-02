@@ -138,7 +138,7 @@ public sealed class TextToColumnsDialogPlannerTests
         bool comma = false,
         bool space = false,
         bool other = false,
-        char? otherDelimiter = null,
+        string? otherDelimiter = null,
         TextToColumnsTextQualifier qualifier = TextToColumnsTextQualifier.DoubleQuote) =>
         new(
             SplitMode: TextToColumnsSplitMode.Delimited,

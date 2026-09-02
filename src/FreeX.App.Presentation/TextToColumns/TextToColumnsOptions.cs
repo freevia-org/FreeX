@@ -117,7 +117,7 @@ public sealed record TextToColumnsOptions
     /// </summary>
     public static TextToColumnsOptions Delimited(
         IEnumerable<TextToColumnsDelimiterKind> delimiterKinds,
-        char? customDelimiter = null,
+        string? customDelimiter = null,
         bool treatConsecutiveDelimitersAsOne = false,
         TextToColumnsTextQualifier textQualifier = TextToColumnsTextQualifier.DoubleQuote,
         IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null) =>

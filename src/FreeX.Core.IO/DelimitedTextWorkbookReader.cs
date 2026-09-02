@@ -34,10 +34,11 @@ internal static partial class DelimitedTextWorkbookReader
     // truncates on open -- silent data loss the user believes was imported intact. Real Excel's own
     // CSV import truncates an oversized field to this limit rather than rejecting the whole row, so
     // mirror that here.
-    private const int ExcelCellTextLimit = 32767;
+    private const int ExcelCellTextLimit = Free.Shared.IO.SurrogateSafeTruncation.SpreadsheetCellTextLimit;
 
+    // r200: one implementation, in the shared tier -- this cap had three, all cutting mid-surrogate.
     private static string TruncateToExcelCellTextLimit(string text) =>
-        text.Length > ExcelCellTextLimit ? text[..ExcelCellTextLimit] : text;
+        Free.Shared.IO.SurrogateSafeTruncation.LimitToCellText(text);
 
     public static Workbook Load(
         Stream stream,

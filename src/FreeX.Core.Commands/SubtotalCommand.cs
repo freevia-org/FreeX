@@ -471,9 +471,15 @@ public sealed class RemoveSubtotalRowsCommand : IWorkbookCommand
             _deletes.Add(delete);
         }
 
-        if (_deletes.Count > 0)
-            ClearDetailRowOutline(sheet, (uint)_deletes.Count);
+        if (_deletes.Count == 0)
+        {
+            // r200: the range held no subtotal rows, so Remove All removed nothing -- and an undo
+            // entry for it clears the redo stack. Note this is also the branch that skips
+            // ClearDetailRowOutline, so it already knew it had done nothing.
+            return new CommandOutcome(true, IsNoOp: true);
+        }
 
+        ClearDetailRowOutline(sheet, (uint)_deletes.Count);
         return new CommandOutcome(true);
     }
 

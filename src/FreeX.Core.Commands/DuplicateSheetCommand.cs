@@ -349,9 +349,11 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
         for (var n = 2; n < 10_000; n++)
         {
             var suffix = $"_{n}";
-            var baseName = sourceName.Length + suffix.Length <= 255
-                ? sourceName
-                : sourceName[..(255 - suffix.Length)];
+            // r200: cut on a text-element boundary. PivotTable names have no length cap and no
+            // character-class gate (unlike structured-table names), so a user-typed name can carry an
+            // astral character across this computed cut point.
+            var baseName = Free.Shared.IO.SurrogateSafeTruncation.LimitToTextElements(
+                sourceName, 255 - suffix.Length);
             var candidate = baseName + suffix;
 
             if (workbook.Sheets.Any(s => s.PivotTables.Any(p =>

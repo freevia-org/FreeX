@@ -26,6 +26,15 @@ public sealed class ClearWorksheetOutlineCommand : IWorkbookCommand
         if (RejectProtectedOutlineClear(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r200: nothing to clear means nothing to undo. Pushing an entry anyway clears redo, so
+        // Clear Outline on a sheet that has no outline discarded a real redo the user still had.
+        if (sheet.RowOutlineLevels.Count == 0 && sheet.ColOutlineLevels.Count == 0 &&
+            sheet.GroupHiddenRows.Count == 0 && sheet.GroupHiddenCols.Count == 0 &&
+            sheet.CollapsedAnchorRows.Count == 0 && sheet.CollapsedAnchorCols.Count == 0)
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         _previousRowLevels = new Dictionary<uint, int>(sheet.RowOutlineLevels);
         _previousColumnLevels = new Dictionary<uint, int>(sheet.ColOutlineLevels);
         _previousGroupHiddenRows = [.. sheet.GroupHiddenRows];

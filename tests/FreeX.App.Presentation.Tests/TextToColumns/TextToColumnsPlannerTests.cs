@@ -98,7 +98,7 @@ public sealed class TextToColumnsPlannerTests
         var sources = new[] { "a|b|c" };
         var options = TextToColumnsOptions.Delimited(
             [TextToColumnsDelimiterKind.Custom],
-            customDelimiter: '|');
+            customDelimiter: "|");
 
         var result = TextToColumnsPlanner.Plan(sources, options);
 

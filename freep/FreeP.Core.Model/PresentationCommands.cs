@@ -3664,6 +3664,11 @@ public sealed class DeleteShapeCommand : IPresentationCommand
 
     public string Label => "Delete Shape";
 
+    // r200: see MoveShapeCommand.HasEffect -- pressing Delete on a protection-locked chart deleted
+    // nothing but still pushed an undo entry, which clears redo.
+    public bool HasEffect(Presentation p) =>
+        ShapeHelper.Find(p, _slideIndex, _shapeId) is { } shape && ChartHelper.IsObjectEditable(shape);
+
     public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_captured);
 
     public void Apply(Presentation p)
@@ -3961,6 +3966,11 @@ public sealed class MoveShapeCommand : IPresentationCommand
 
     public string Label => "Move Shape";
 
+    // r200: a chart with ChartObjectProtected still selects and drags, so this guard fires on an
+    // ordinary gesture. FlipShapeCommand got the matching HasEffect; its four siblings did not.
+    public bool HasEffect(Presentation p) =>
+        ShapeHelper.Find(p, _slideIndex, _shapeId) is { } shape && ChartHelper.IsObjectEditable(shape);
+
     public void Apply(Presentation p)
     {
         var s = ShapeHelper.Find(p, _slideIndex, _shapeId);
@@ -4062,6 +4072,11 @@ public sealed class ResizeShapeCommand : IPresentationCommand
     }
 
     public string Label => "Resize Shape";
+
+    // r200: a chart with ChartObjectProtected still selects and drags, so this guard fires on an
+    // ordinary gesture. FlipShapeCommand got the matching HasEffect; its four siblings did not.
+    public bool HasEffect(Presentation p) =>
+        ShapeHelper.Find(p, _slideIndex, _shapeId) is { } shape && ChartHelper.IsObjectEditable(shape);
 
     public void Apply(Presentation p)
     {
@@ -4736,6 +4751,11 @@ public sealed class RotateShapeCommand : IPresentationCommand
 
     public string Label => "Rotate Shape";
 
+    // r200: a chart with ChartObjectProtected still selects and drags, so this guard fires on an
+    // ordinary gesture. FlipShapeCommand got the matching HasEffect; its four siblings did not.
+    public bool HasEffect(Presentation p) =>
+        ShapeHelper.Find(p, _slideIndex, _shapeId) is { } shape && ChartHelper.IsObjectEditable(shape);
+
     public void Apply(Presentation p)
     {
         var s = ShapeHelper.Find(p, _slideIndex, _shapeId);
@@ -5363,6 +5383,11 @@ public sealed class SetRunFontCommand : IPresentationCommand
 
     public string Label => "Set Font";
 
+    // r200: re-confirming the value the ribbon combo already shows is an ordinary action, and it
+    // used to push one inert undo entry per selected run -- each of which clears redo.
+    public bool HasEffect(Presentation p) =>
+        GetRun(p) is { } run && !string.Equals(run.FontFamily, _newFont, StringComparison.Ordinal);
+
     public void Apply(Presentation p)
     {
         var run = GetRun(p);
@@ -5409,6 +5434,10 @@ public sealed class SetRunFontSizeCommand : IPresentationCommand
     }
 
     public string Label => "Set Font Size";
+
+    // r200: see SetRunFontCommand.HasEffect.
+    public bool HasEffect(Presentation p) =>
+        GetRun(p) is { } run && run.FontSizePt != _newSize;
 
     public void Apply(Presentation p)
     {
@@ -5765,6 +5794,10 @@ public sealed class SetRunColorCommand : IPresentationCommand
     }
 
     public string Label => "Set Color";
+
+    // r200: see SetRunFontCommand.HasEffect.
+    public bool HasEffect(Presentation p) =>
+        GetRun(p) is { } run && !Equals(run.Color, _newColor);
 
     public void Apply(Presentation p)
     {

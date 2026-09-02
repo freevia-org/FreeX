@@ -51,4 +51,28 @@ public static class SurrogateSafeTruncation
 
         return value[..kept];
     }
+
+    /// <summary>
+    /// The maximum number of characters a spreadsheet cell may hold as text.
+    /// </summary>
+    public const int SpreadsheetCellTextLimit = 32767;
+
+    /// <summary>
+    /// <paramref name="text"/> capped at <see cref="SpreadsheetCellTextLimit"/>, cut on a text-element
+    /// boundary.
+    /// </summary>
+    /// <remarks>
+    /// r200: this cap had THREE implementations -- typed cell entry, external-clipboard paste and
+    /// delimited-text import each declared the constant and the one-line slice again -- and all three
+    /// cut with <c>text[..32767]</c>. Text whose 32767th code unit falls inside a surrogate pair was
+    /// stored ending in a lone surrogate, which reaches ClosedXML unsanitized and round-trips through
+    /// .xlsx as an <c>_xD83D_</c> escape: a glyphless box in place of the user's text, produced by the
+    /// very truncation meant to keep the save safe.
+    /// <para>
+    /// One implementation, so the next caller inherits the fix instead of the bug -- which is exactly
+    /// what did NOT happen when r198 fixed one Flash Fill initial helper and left its copy alone.
+    /// </para>
+    /// </remarks>
+    public static string LimitToCellText(string? text) =>
+        LimitToTextElements(text, SpreadsheetCellTextLimit);
 }

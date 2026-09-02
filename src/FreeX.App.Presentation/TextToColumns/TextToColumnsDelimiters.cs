@@ -8,17 +8,21 @@ public sealed record TextToColumnsDelimiterPlan(
 public static class TextToColumnsDelimiters
 {
     /// <summary>The character a single delimiter kind expands to.</summary>
+    // r200: string, not char -- a one-character delimiter box can hold an astral character, which is
+    // TWO UTF-16 code units. Taking one made the delimiter a lone surrogate half, and the splitter
+    // scans the cell text per code unit, so it then split inside every unrelated astral character
+    // sharing that high surrogate and wrote the halves into new cells.
     public static string CharacterFor(
         TextToColumnsDelimiterKind kind,
-        char? customDelimiter = null) => kind switch
+        string? customDelimiter = null) => kind switch
     {
         TextToColumnsDelimiterKind.Comma => ",",
         TextToColumnsDelimiterKind.Semicolon => ";",
         TextToColumnsDelimiterKind.Tab => "\t",
         TextToColumnsDelimiterKind.Space => " ",
-        TextToColumnsDelimiterKind.Custom => customDelimiter is { } ch
-            ? ch.ToString()
-            : throw new ArgumentException("A custom delimiter character is required.", nameof(customDelimiter)),
+        TextToColumnsDelimiterKind.Custom => string.IsNullOrEmpty(customDelimiter)
+            ? throw new ArgumentException("A custom delimiter character is required.", nameof(customDelimiter))
+            : LeadingTextElement(customDelimiter),
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unsupported delimiter kind.")
     };
 
@@ -32,7 +36,7 @@ public static class TextToColumnsDelimiters
         TextToColumnsDelimiterKind.Space => " ",
         TextToColumnsDelimiterKind.Custom => string.IsNullOrEmpty(customDelimiter)
             ? throw new ArgumentException("Custom delimiter is required.", nameof(customDelimiter))
-            : customDelimiter[0].ToString(),
+            : LeadingTextElement(customDelimiter),
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unsupported delimiter kind.")
     };
 
@@ -42,7 +46,7 @@ public static class TextToColumnsDelimiters
     /// </summary>
     public static string Resolve(
         IEnumerable<TextToColumnsDelimiterKind> kinds,
-        char? customDelimiter = null)
+        string? customDelimiter = null)
     {
         ArgumentNullException.ThrowIfNull(kinds);
 
@@ -82,4 +86,8 @@ public static class TextToColumnsDelimiters
 
         return new TextToColumnsDelimiterPlan(primaryKind, delimiters);
     }
+
+    /// <summary>The leading text element of <paramref name="value"/>, so an astral character stays whole.</summary>
+    private static string LeadingTextElement(string value) =>
+        value[..System.Globalization.StringInfo.GetNextTextElementLength(value)];
 }

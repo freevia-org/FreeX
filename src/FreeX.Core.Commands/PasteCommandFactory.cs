@@ -1538,10 +1538,11 @@ public static class PasteCommandFactory
     // believes was saved intact. Real Excel's own paste behavior for an oversized field is to
     // truncate the pasted text to this limit rather than reject the whole paste, so mirror that here
     // rather than erroring the cell out.
-    internal const int ExcelCellTextLimit = 32767;
+    internal const int ExcelCellTextLimit = Free.Shared.IO.SurrogateSafeTruncation.SpreadsheetCellTextLimit;
 
+    // r200: one implementation, in the shared tier -- this cap had three, all cutting mid-surrogate.
     internal static string TruncateToExcelCellTextLimit(string text) =>
-        text.Length > ExcelCellTextLimit ? text[..ExcelCellTextLimit] : text;
+        Free.Shared.IO.SurrogateSafeTruncation.LimitToCellText(text);
 
     internal static ScalarValue ParseClipboardValue(string text)
     {
