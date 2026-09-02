@@ -4892,6 +4892,19 @@ public sealed class DistributeTableRowsCommand(int blockIndex) : IDocumentComman
     private (double? HeightPt, TableRowHeightRule HeightRule)[]? _previous;
     private bool _applied;
 
+    /// <summary>
+    /// r227: mirrors Apply completely -- the table must resolve, it must have rows, and the
+    /// distributed heights must not already be in place. The third clause is the one this
+    /// command was missing: Distribute Rows twice in a row writes the same heights the
+    /// second time, and DistributeRows' own bool says only that the operation APPLIED, not
+    /// that it changed anything. WouldDistributeRows shares the target-height calculation
+    /// with the mutation so the two cannot disagree.
+    /// </summary>
+    public bool HasEffect(IDocumentCommandContext context) =>
+        TryGetTable(context, out var table)
+        && table.Rows.Count > 0
+        && TableLayoutOperations.WouldDistributeRows(table);
+
     public string Label => "Distribute Rows";
 
     public void Apply(IDocumentCommandContext context)
@@ -4934,6 +4947,12 @@ public sealed class DistributeTableColumnsCommand(int blockIndex) : IDocumentCom
     private double[]? _previousGridWidths;
     private double?[][]? _previousCellWidths;
     private bool _applied;
+    /// <summary>r227: the column twin of the Distribute Rows mirror above.</summary>
+    public bool HasEffect(IDocumentCommandContext context) =>
+        TryGetTable(context, out var table)
+        && table.ColumnCount > 0
+        && TableLayoutOperations.WouldDistributeColumns(table);
+
 
     public string Label => "Distribute Columns";
 

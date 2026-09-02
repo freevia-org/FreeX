@@ -161,8 +161,6 @@ public sealed class R203_CommandDeclaresHasEffectContractTests
         "ApplyTableStyleCommand",
         "ArrangeFloatingObjectsCommand",
         "DesignCatalogCommand",
-        "DistributeTableColumnsCommand",
-        "DistributeTableRowsCommand",
         "FormatParagraphRunsCommand",
         "MoveShapeEditPointCommand",
         "MutateSmartArtStructureCommand",
@@ -208,7 +206,7 @@ public sealed class R203_CommandDeclaresHasEffectContractTests
     /// The ceiling on <see cref="NotYetAdjudicated"/>. Lower it as rounds adjudicate; never raise it.
     /// </summary>
     /// <summary>The ceiling on the two debt lists together. Lower it as rounds pay down; never raise it.</summary>
-    private const int DebtCeiling = 26;
+    private const int DebtCeiling = 24;
     [Fact]
     public void EveryDocumentCommandDeclaresWhetherItHasEffect()
     {
