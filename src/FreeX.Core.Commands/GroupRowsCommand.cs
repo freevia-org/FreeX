@@ -344,7 +344,7 @@ public sealed class CollapseRowGroupCommand : IWorkbookCommand
         if (_selectionStart is { } selStart)
         {
             if (RowOutlineGroupScope.Resolve(sheet.RowOutlineLevels, selStart, _selectionEnd ?? selStart) is not { } group)
-                return new CommandOutcome(true);
+                return OutcomeFor(sheet);
 
             foreach (var (row, lvl) in sheet.RowOutlineLevels)
             {
@@ -357,7 +357,7 @@ public sealed class CollapseRowGroupCommand : IWorkbookCommand
 
             if (RowGroupAnchorHelper.ComputeAnchor(summaryBelow, group.Start, group.End) is { } anchor)
                 sheet.CollapsedAnchorRows.Add(anchor);
-            return new CommandOutcome(true);
+            return OutcomeFor(sheet);
         }
 
         foreach (var (row, lvl) in sheet.RowOutlineLevels)
@@ -380,8 +380,23 @@ public sealed class CollapseRowGroupCommand : IWorkbookCommand
             if (RowGroupAnchorHelper.ComputeAnchor(summaryBelow, run.Start, run.End) is { } anchor)
                 sheet.CollapsedAnchorRows.Add(anchor);
         }
-        return new CommandOutcome(true);
+        return OutcomeFor(sheet);
     }
+
+    /// <summary>
+    /// r223: decided on the record this command already keeps. Both snapshots below are
+    /// captured for Revert before anything is touched, so comparing the live sets against
+    /// them at every exit tells us exactly whether the outline moved -- expanding a group
+    /// that is already expanded, or collapsing one already collapsed, removes and adds
+    /// nothing. No separate predicate to keep in step with the three mutation paths.
+    /// </summary>
+    private CommandOutcome OutcomeFor(Sheet sheet) =>
+        _previousHiddenRows is not null
+        && _previousCollapsedAnchors is not null
+        && sheet.GroupHiddenRows.SetEquals(_previousHiddenRows)
+        && sheet.CollapsedAnchorRows.SetEquals(_previousCollapsedAnchors)
+            ? new CommandOutcome(true, IsNoOp: true)
+            : new CommandOutcome(true);
 
     public void Revert(ICommandContext ctx)
     {
@@ -429,7 +444,7 @@ public sealed class ExpandRowGroupCommand : IWorkbookCommand
         if (_selectionStart is { } selStart)
         {
             if (RowOutlineGroupScope.Resolve(sheet.RowOutlineLevels, selStart, _selectionEnd ?? selStart) is not { } group)
-                return new CommandOutcome(true);
+                return OutcomeFor(sheet);
 
             var nestedHidden = RowGroupAnchorHelper.BuildNestedCollapsedHiddenSet(
                 sheet.RowOutlineLevels, sheet.CollapsedAnchorRows, summaryBelow, group.Level);
@@ -456,7 +471,7 @@ public sealed class ExpandRowGroupCommand : IWorkbookCommand
                 summaryBelow,
                 group.Start,
                 group.End);
-            return new CommandOutcome(true);
+            return OutcomeFor(sheet);
         }
 
         foreach (var row in sheet.GroupHiddenRows.ToList())
@@ -484,8 +499,23 @@ public sealed class ExpandRowGroupCommand : IWorkbookCommand
                 summaryBelow,
                 run.Start,
                 run.End);
-        return new CommandOutcome(true);
+        return OutcomeFor(sheet);
     }
+
+    /// <summary>
+    /// r223: decided on the record this command already keeps. Both snapshots below are
+    /// captured for Revert before anything is touched, so comparing the live sets against
+    /// them at every exit tells us exactly whether the outline moved -- expanding a group
+    /// that is already expanded, or collapsing one already collapsed, removes and adds
+    /// nothing. No separate predicate to keep in step with the three mutation paths.
+    /// </summary>
+    private CommandOutcome OutcomeFor(Sheet sheet) =>
+        _previousHiddenRows is not null
+        && _previousCollapsedAnchors is not null
+        && sheet.GroupHiddenRows.SetEquals(_previousHiddenRows)
+        && sheet.CollapsedAnchorRows.SetEquals(_previousCollapsedAnchors)
+            ? new CommandOutcome(true, IsNoOp: true)
+            : new CommandOutcome(true);
 
     public void Revert(ICommandContext ctx)
     {

@@ -360,7 +360,7 @@ public sealed class CollapseColGroupCommand : IWorkbookCommand
 
             if (ColumnGroupAnchorHelper.ComputeAnchor(summaryRight, group.Start, group.End) is { } anchor)
                 sheet.CollapsedAnchorCols.Add(anchor);
-            return new CommandOutcome(true);
+            return OutcomeFor(sheet);
         }
 
         foreach (var (col, lvl) in sheet.ColOutlineLevels)
@@ -383,8 +383,17 @@ public sealed class CollapseColGroupCommand : IWorkbookCommand
             if (ColumnGroupAnchorHelper.ComputeAnchor(summaryRight, run.Start, run.End) is { } anchor)
                 sheet.CollapsedAnchorCols.Add(anchor);
         }
-        return new CommandOutcome(true);
+        return OutcomeFor(sheet);
     }
+
+    /// <summary>r223: see the sibling helpers -- decided on the snapshots kept for Revert.</summary>
+    private CommandOutcome OutcomeFor(Sheet sheet) =>
+        _previousHiddenCols is not null
+        && _previousCollapsedAnchors is not null
+        && sheet.GroupHiddenCols.SetEquals(_previousHiddenCols)
+        && sheet.CollapsedAnchorCols.SetEquals(_previousCollapsedAnchors)
+            ? new CommandOutcome(true, IsNoOp: true)
+            : new CommandOutcome(true);
 
     public void Revert(ICommandContext ctx)
     {
@@ -432,7 +441,7 @@ public sealed class ExpandColGroupCommand : IWorkbookCommand
         if (_selectionStart is { } selStart)
         {
             if (ColumnOutlineGroupScope.Resolve(sheet.ColOutlineLevels, selStart, _selectionEnd ?? selStart) is not { } group)
-                return new CommandOutcome(true);
+                return OutcomeFor(sheet);
 
             var nestedHidden = ColumnGroupAnchorHelper.BuildNestedCollapsedHiddenSet(
                 sheet.ColOutlineLevels, sheet.CollapsedAnchorCols, summaryRight, group.Level);
@@ -459,7 +468,7 @@ public sealed class ExpandColGroupCommand : IWorkbookCommand
                 summaryRight,
                 group.Start,
                 group.End);
-            return new CommandOutcome(true);
+            return OutcomeFor(sheet);
         }
 
         foreach (var col in sheet.GroupHiddenCols.ToList())
@@ -487,8 +496,23 @@ public sealed class ExpandColGroupCommand : IWorkbookCommand
                 summaryRight,
                 run.Start,
                 run.End);
-        return new CommandOutcome(true);
+        return OutcomeFor(sheet);
     }
+
+    /// <summary>
+    /// r223: decided on the record this command already keeps. Both snapshots below are
+    /// captured for Revert before anything is touched, so comparing the live sets against
+    /// them at every exit tells us exactly whether the outline moved -- expanding a group
+    /// that is already expanded, or collapsing one already collapsed, removes and adds
+    /// nothing. No separate predicate to keep in step with the three mutation paths.
+    /// </summary>
+    private CommandOutcome OutcomeFor(Sheet sheet) =>
+        _previousHiddenCols is not null
+        && _previousCollapsedAnchors is not null
+        && sheet.GroupHiddenCols.SetEquals(_previousHiddenCols)
+        && sheet.CollapsedAnchorCols.SetEquals(_previousCollapsedAnchors)
+            ? new CommandOutcome(true, IsNoOp: true)
+            : new CommandOutcome(true);
 
     public void Revert(ICommandContext ctx)
     {

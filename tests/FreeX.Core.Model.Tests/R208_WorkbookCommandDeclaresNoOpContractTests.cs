@@ -180,6 +180,23 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     ];
 
     /// <summary>
+    /// r223: commands that DO report IsNoOp, but through a shared helper rather than in their own
+    /// class body -- so the source scan, which only reads each class, cannot see it. A false unknown,
+    /// not a defect and not an exemption, which is why it gets its own list rather than being filed
+    /// under "judged sound": these commands do not merely fail to no-op, they correctly report it.
+    /// <para>
+    /// The value is the delegate name. <see cref="EveryDelegatedEntryNamesAHelperThatReportsNoOp"/>
+    /// checks that the named helper really does report IsNoOp, so the claim is machine-checked and
+    /// cannot rot into a comment that used to be true.
+    /// </para>
+    /// </summary>
+    private static readonly Dictionary<string, string> DeclaresIsNoOpThroughAHelper = new()
+    {
+        ["BringDrawingShapeForwardCommand"] = "TryMoveZOrder",
+        ["SendDrawingShapeBackwardCommand"] = "TryMoveZOrder",
+    };
+
+    /// <summary>
     /// r217: commands nobody has judged for this class yet. This list makes no claim about them --
     /// it is the "never examined" column of the three-list structure, kept separate from
     /// <see cref="DeliberatelyNeverReportsNoOp"/> (judged sound, with a reason) and
@@ -199,7 +216,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "ApplyConditionalFormatCommand",
         "AutofillCommand",
         "AverageFilterCommand",
-        "BringDrawingShapeForwardCommand",
         "CellFillColorFilterCommand",
         "CellFontColorFilterCommand",
         "CellNoFillColorFilterCommand",
@@ -207,7 +223,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "ChangeChartTypeCommand",
         "ChangePivotChartTypeCommand",
         "ChangePivotTableSourceCommand",
-        "CollapseRowGroupCommand",
         "ConsolidateCommand",
         "ConvertNotesToCommentsCommand",
         "ConvertStructuredTableToRangeCommand",
@@ -226,8 +241,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "DuplicateDrawingObjectCommand",
         "DuplicateSheetCommand",
         "EditCellsCommand",
-        "ExpandColGroupCommand",
-        "ExpandRowGroupCommand",
         "ExternalTextPasteSpecialCommand",
         "ExternalTextPasteValuesCommand",
         "FillCellsCommand",
@@ -270,7 +283,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "SaveCustomViewCommand",
         "SaveScenarioCommand",
         "ScenarioSummaryReportCommand",
-        "SendDrawingShapeBackwardCommand",
         "SetDataValidationCommand",
         "SetSelectionPaneObjectVisibilityCommand",
         "ShowAllNotesCommand",
@@ -294,9 +306,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 here.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 here.</para>
     /// </summary>
-    private const int OutstandingCeiling = 106;
+    private const int OutstandingCeiling = 101;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()
@@ -306,6 +318,7 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
             .Select(entry => entry.Key)
             .Where(name => !DeliberatelyNeverReportsNoOp.ContainsKey(name)
                            && !KnownNoOpCapableNotYetFixed.Contains(name)
+                           && !DeclaresIsNoOpThroughAHelper.ContainsKey(name)
                            && !NeverExaminedForThisClass.Contains(name))
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToList();
@@ -338,7 +351,7 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     [Fact]
     public void TheNeverExaminedListStillOnlyShrinks() =>
         NeverExaminedForThisClass.Count.Should().BeLessThanOrEqualTo(
-            86,
+            81,
             "the never-examined column specifically must keep draining, or the combined ceiling "
             + "could be satisfied by fixing easy known-broken entries while nobody ever looks at the "
             + "rest. This bound is the r218 count and comes down as rounds examine.");
@@ -356,6 +369,36 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
             .Should().BeEmpty(
                 "remove entries whose command is gone or which now report IsNoOp -- a stale entry "
                 + "would silently cover a future command of the same name");
+    }
+
+    /// <summary>
+    /// r223: the delegation claim is checked, not asserted. Each entry names the helper its command
+    /// returns the outcome of; that helper's source must contain an IsNoOp report, and the command's
+    /// own body must actually call it. Without this, the list would be a place to park anything.
+    /// </summary>
+    [Fact]
+    public void EveryDelegatedEntryNamesAHelperThatReportsNoOp()
+    {
+        var allSource = string.Join(
+            "\n",
+            Directory.GetFiles(CommandsDirectory(), "*.cs").Select(File.ReadAllText));
+
+        foreach (var (command, helper) in DeclaresIsNoOpThroughAHelper)
+        {
+            var helperBody = new Regex(
+                    helper + @"\b[^{]*\{(?:[^{}]|\{[^{}]*\})*\}", RegexOptions.Singleline)
+                .Match(allSource);
+
+            helperBody.Success.Should().BeTrue($"{helper} must exist for {command} to delegate to it");
+            helperBody.Value.Should().Contain(
+                "IsNoOp",
+                $"{command} is listed as reporting IsNoOp through {helper}, so {helper} had better "
+                + "still do it -- if this fails the delegation was removed and the command is now "
+                + "silently undeclared");
+            allSource.Should().Contain(
+                helper,
+                $"{command} must actually call {helper}");
+        }
     }
 
     [Fact]
