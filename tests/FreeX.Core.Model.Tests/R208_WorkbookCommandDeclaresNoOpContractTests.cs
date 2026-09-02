@@ -153,6 +153,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // there is no same-value path to guard. This is the self-guaranteeing shape r207 preferred,
         // and it is worth distinguishing from the equal-value setters in the same files: those take
         // the target state as an argument and can be handed the one already in place.
+        ["SubtotalCommand"] =
+            "r229: errors for a range without a header row and at least one data row, and for "
+            + "subtotal columns outside the range; every path past those inserts subtotal rows",
         ["ShowHideCommentCommand"] =
             "reads sheet.ShownComments.Contains(address) and flips it -- a toggle, not a setter",
         ["ShowAllNotesCommand"] =
@@ -217,6 +220,15 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // dropping it where it started. Same reason as the filters for not fixing them here: each
         "MovePivotTableCommand",
         "MoveRangeCommand",
+        // r229: the two fill commands whose target list is never empty. Fill Down over cells that
+        // already hold the value being filled, or autofilling a series back over itself, changes
+        // nothing -- but unlike FlashFillCommand next door, these two validate a non-empty target
+        // set and then write to all of it, so the post-hoc "did we write anything" test that fixed
+        // the rest of this family would never fire here. Deciding them needs a value comparison per
+        // cell, which is the same boundary r221 drew around the Paste guards and declined to cross
+        // by guessing.
+        "AutofillCommand",
+        "FillCellsCommand",
         // needs a real before/after comparison, not a guard on the arguments.
         "ClearPivotTableViewCommand",
         // r221: the two Paste commands with no record of what they wrote. Both are no-op-capable --
@@ -285,7 +297,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     [
         "AllowEditRangeCommand",
         "ApplyConditionalFormatCommand",
-        "AutofillCommand",
         "ChangeChartSourceCommand",
         "ChangeChartTypeCommand",
         "ChangePivotChartTypeCommand",
@@ -302,8 +313,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "EditCellsCommand",
         "ExternalTextPasteSpecialCommand",
         "ExternalTextPasteValuesCommand",
-        "FillCellsCommand",
-        "FlashFillCommand",
         "ForecastSheetCommand",
         "FormControlInteractionCommand",
         "FormatPainterDataValidationCommand",
@@ -315,7 +324,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "MergeCellsCommand",
         "MergeScenarioCommand",
         "OneVariableDataTableCommand",
-        "PropagateCalculatedColumnCommand",
         "ReapplyStructuredTableStyleCommand",
         "RefreshPivotTableCommand",
         "RefreshStructuredTableTotalsCommand",
@@ -325,7 +333,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "SaveScenarioCommand",
         "ScenarioSummaryReportCommand",
         "SetDataValidationCommand",
-        "SubtotalCommand",
         "TwoVariableDataTableCommand",
     ];
 
@@ -341,9 +348,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 here.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 here.</para>
     /// </summary>
-    private const int OutstandingCeiling = 78;
+    private const int OutstandingCeiling = 75;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()
@@ -386,7 +393,7 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     [Fact]
     public void TheNeverExaminedListStillOnlyShrinks() =>
         NeverExaminedForThisClass.Count.Should().BeLessThanOrEqualTo(
-            44,
+            39,
             "the never-examined column specifically must keep draining, or the combined ceiling "
             + "could be satisfied by fixing easy known-broken entries while nobody ever looks at the "
             + "rest. This bound is the r218 count and comes down as rounds examine.");

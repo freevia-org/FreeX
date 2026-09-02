@@ -566,6 +566,21 @@ internal sealed class PropagateCalculatedColumnCommand : IWorkbookCommand
         // shift from.
         var (firstDataRow, _) = StructuredTableEditEffects.GetDataBodyRowBounds(table);
         var normalizedFormula = StructuredTableEditEffects.ShiftFormulaRows(_sourceFormulaText, _sourceRow, firstDataRow, sheet.Name);
+
+        // r229: two writes, so two clauses -- the cell fills recorded in _snapshot AND the column's
+        // stored formula. Note what is NOT used here: SetCalculatedColumnFormula returns a bool, and
+        // that bool reports whether the COLUMN WAS FOUND, not whether anything changed. It returns
+        // true for a re-set of the identical formula. That is the second time this round's method
+        // has met a bool that reads like a did-it-change flag and is not (see r227's
+        // TableLayoutOperations.DistributeColumns), which is reason enough to check rather than
+        // assume every time.
+        if (_snapshot.Count == 0
+            && string.Equals(_previousColumn.CalculatedColumnFormula, normalizedFormula, StringComparison.Ordinal))
+        {
+            _snapshot = null;
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         table.SetCalculatedColumnFormula(_columnId, normalizedFormula);
         _applied = true;
 
