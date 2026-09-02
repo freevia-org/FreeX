@@ -282,6 +282,21 @@ public sealed class SetTextBoxColorsCommand : IWorkbookCommand
         if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet, textBox) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r215: the sibling SetDrawingShapeColorsCommand gates its IsSourceLoaded clear on
+        // (_updateFill || _updateOutline); this one clears UNCONDITIONALLY. The mirrors therefore
+        // differ, and copying the shape version here would wrongly report a no-op for a
+        // source-loaded text box with nothing else to change.
+        if (!textBox.IsSourceLoaded
+            && (!_updateFill
+                || (textBox.HasFill == (_hasFill ?? (_fillColor is not null))
+                    && Equals(textBox.FillColor, _fillColor)
+                    && textBox.FillThemeColor is null))
+            && (!_updateOutline
+                || (Equals(textBox.OutlineColor, _outlineColor) && textBox.OutlineThemeColor is null)))
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         _previousFillColor = textBox.FillColor;
         _previousOutlineColor = textBox.OutlineColor;
         _previousFillThemeColor = textBox.FillThemeColor;

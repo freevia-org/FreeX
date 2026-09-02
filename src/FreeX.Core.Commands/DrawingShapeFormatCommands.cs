@@ -52,6 +52,22 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
         if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet, shape) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r215: mirrors BOTH conditional blocks and the IsSourceLoaded clear, which is itself gated on
+        // (_updateFill || _updateOutline) -- so the mirror is gated the same way rather than
+        // assuming the clear always happens.
+        var fillUnchanged = !_updateFill
+            || (shape.HasFill == (_hasFill ?? (_fillColor is not null))
+                && Equals(shape.FillColor, _fillColor)
+                && shape.GradientFillEndColor is null
+                && shape.GradientFillDirection == DrawingShapeGradientDirection.DiagonalDown
+                && shape.FillThemeColor is null);
+        var outlineUnchanged = !_updateOutline
+            || (Equals(shape.OutlineColor, _outlineColor) && shape.OutlineThemeColor is null);
+        var sourceFlagUnchanged = !(_updateFill || _updateOutline) || !shape.IsSourceLoaded;
+
+        if (fillUnchanged && outlineUnchanged && sourceFlagUnchanged)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousFillColor = shape.FillColor;
         _previousOutlineColor = shape.OutlineColor;
         _previousGradientFillEndColor = shape.GradientFillEndColor;
