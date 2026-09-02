@@ -40,8 +40,10 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand, IEstimatesMemory
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        // r226: nothing to edit, or no sheet to edit it on -- checked before any mutation, so this
+        // was already a no-op in fact and only lacked the word.
         if (_sheetIds.Count == 0 || _sourceEdits.Count == 0)
-            return new CommandOutcome(true, AffectedCells: []);
+            return new CommandOutcome(true, AffectedCells: [], IsNoOp: true);
 
         foreach (var sheetId in _sheetIds)
         {

@@ -305,8 +305,13 @@ public sealed class SetStructuredTableTotalsRowCommand : IWorkbookCommand
 
         if (!CommandGuards.TryFindStructuredTable(sheet, _tableId, out var table))
             return CommandGuards.RejectStructuredTableNotFound();
+        // r226: same correction as ApplyStructuredTableFiltersCommand. r208 recorded this as sound
+        // because "the planner adds it only when the value differs, and both shells pass the
+        // negation" -- which may well be true of today's callers, but the command also checks for
+        // itself and then said nothing. The caller gate and the command's own check are two
+        // defences; recording the first as the reason left the second silently useless.
         if (table.TotalsRowShown == _showTotalsRow)
-            return new CommandOutcome(true, AffectedCells: [table.Range.End]);
+            return new CommandOutcome(true, AffectedCells: [table.Range.End], IsNoOp: true);
         if (table.Columns.Count == 0)
             return CommandGuards.RejectStructuredTableHasNoColumns();
 

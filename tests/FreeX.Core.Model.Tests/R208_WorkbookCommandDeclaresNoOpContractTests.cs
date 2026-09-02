@@ -50,8 +50,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         ["SetRowOutlineGroupCollapsedCommand"] = "the caller passes !group.IsCollapsed -- a negation gate",
         ["SetSheetHiddenCommand"] =
             "UnhideSheet returns early for a visible sheet, and a hidden sheet cannot be selected to hide",
-        ["SetStructuredTableTotalsRowCommand"] =
-            "the planner adds it only when the value differs, and both shells pass the negation",
         ["SetTextBoxTextCommand"] = "both callers compare the edited text against the original first",
         ["SetThreadedCommentCommand"] = "only built for genuine New Comment creation",
         ["SetTimelineGranularityCommand"] = "the caller only issues a granularity that differs",
@@ -154,7 +152,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
             "self-guaranteeing: Apply reads sheet.AutoFilter fresh and branches on it, so it either "
             + "creates or removes the filter -- there is no same-value path",
         // The r208 census claimed these could no-op; two verifiers each refuted it.
-        ["ApplyStructuredTableFiltersCommand"] = "refuted: the caller only issues a changed filter set",
         ["SetAllowEditRangePasswordCommand"] = "refuted: the dialog only commits a changed password",
         ["SetCalculationModeCommand"] = "refuted: the ribbon gates on the current mode",
         ["SetChartBoundsCommand"] = "refuted: issued from a drag that has already moved the chart",
@@ -304,7 +301,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "GroupColumnsCommand",
         "GroupRowsCommand",
         "GroupedApplyStyleCommand",
-        "GroupedEditCellsCommand",
         "ImportSheetCommand",
         "MergeCellsCommand",
         "MergeScenarioCommand",
@@ -341,9 +337,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 here.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 here.</para>
     /// </summary>
-    private const int OutstandingCeiling = 85;
+    private const int OutstandingCeiling = 84;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()
@@ -386,7 +382,7 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     [Fact]
     public void TheNeverExaminedListStillOnlyShrinks() =>
         NeverExaminedForThisClass.Count.Should().BeLessThanOrEqualTo(
-            51,
+            50,
             "the never-examined column specifically must keep draining, or the combined ceiling "
             + "could be satisfied by fixing easy known-broken entries while nobody ever looks at the "
             + "rest. This bound is the r218 count and comes down as rounds examine.");
