@@ -72,6 +72,7 @@ public sealed partial class NativeJsonAdapter
             Uses1904DateSystem = workbook.Uses1904DateSystem,
             ShowInkAnnotations = workbook.ShowInkAnnotations,
             HasVbaProjectPackage = workbook.HasVbaProjectPackage,
+            NextStructuredTableIdWatermark = workbook.NextStructuredTableIdWatermark,
             ShowSheetTabs = workbook.ShowSheetTabs,
             SheetTabRatio = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(workbook.SheetTabRatio, 1000),
             FirstVisibleSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(workbook.FirstVisibleSheetIndex, Math.Max(0, workbook.Sheets.Count - 1)),
@@ -141,6 +142,10 @@ public sealed partial class NativeJsonAdapter
                 IsHidden = s.IsHidden,
                 IsVeryHidden = s.IsVeryHidden,
                 TabColor = s.TabColor is { } color ? FormatColor(color) : null,
+                CodeName = s.CodeName,
+                TabThemeColor = NativeJsonColorMapper.FromThemeColorReference(s.TabThemeColor),
+                DefaultColumnWidth = s.DefaultColumnWidth,
+                DefaultRowHeight = s.DefaultRowHeight,
                 IsProtected = s.IsProtected,
                 ProtectionPassword = s.IsProtected && s.ProtectionPassword is { } shp
                     ? StoreProtectionPassword(shp)
@@ -570,6 +575,9 @@ public sealed partial class NativeJsonAdapter
                 cell.HasFormula ? NormalizeNativeFormulaText(cell.FormulaText!) : null,
                 cell.HasFormula ? cell.ArrayMode : FormulaArrayMode.Dynamic,
                 cell.IgnoreFormulaError,
+                cell.QuotePrefix,
+                cell.LegacyArrayRows,
+                cell.LegacyArrayCols,
                 GetNativeStyleId(cell.StyleId),
                 style: null,
                 options,

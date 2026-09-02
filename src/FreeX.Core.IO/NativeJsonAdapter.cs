@@ -59,6 +59,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         workbook.Uses1904DateSystem = dto.Uses1904DateSystem;
         workbook.ShowInkAnnotations = dto.ShowInkAnnotations ?? true;
         workbook.HasVbaProjectPackage = dto.HasVbaProjectPackage;
+        workbook.NextStructuredTableIdWatermark = dto.NextStructuredTableIdWatermark;
         workbook.ShowSheetTabs = dto.ShowSheetTabs;
         workbook.SheetTabRatio = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.SheetTabRatio, 1000);
         workbook.FirstVisibleSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.FirstVisibleSheetIndex, Math.Max(0, (dto.Sheets?.Count ?? 1) - 1));
@@ -112,6 +113,12 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.IsVeryHidden = sDto.IsVeryHidden;
             sheet.Kind = NativeJsonValueSanitizer.ValidEnumOrDefault(sDto.Kind, SheetKind.Worksheet);
             sheet.TabColor = sDto.TabColor is { } tabColor ? ParseColor(tabColor) : null;
+            sheet.CodeName = sDto.CodeName;
+            sheet.TabThemeColor = NativeJsonColorMapper.ToThemeColorReference(sDto.TabThemeColor);
+            if (sDto.DefaultColumnWidth is { } defaultColumnWidth)
+                sheet.DefaultColumnWidth = defaultColumnWidth;
+            if (sDto.DefaultRowHeight is { } defaultRowHeight)
+                sheet.DefaultRowHeight = defaultRowHeight;
             sheet.IsProtected = sDto.IsProtected;
             sheet.ProtectionPassword = sDto.IsProtected ? sDto.ProtectionPassword : null;
             sheet.ProtectionMetadata = ToWorksheetProtectionMetadata(sDto.ProtectionMetadata);
@@ -472,6 +479,12 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                     if (cDto.Formula != null && value is not BlankValue)
                         cell.Value = value;
                     cell.IgnoreFormulaError = cDto.IgnoreFormulaError;
+                    cell.QuotePrefix = cDto.QuotePrefix;
+                    // r201: AFTER the formula is set. Cell.FormulaText's setter zeroes ArrayMode and
+                    // both Legacy* fields on every assignment (a fresh edit is always a modern
+                    // formula), so assigning these first would silently restore nothing.
+                    cell.LegacyArrayRows = cDto.LegacyArrayRows;
+                    cell.LegacyArrayCols = cDto.LegacyArrayCols;
                     if (ResolveCellStyleId(workbook, cellStyleTable, ref styleIdCache, cDto.StyleId, cDto.Style) is { } styleId)
                         cell.StyleId = styleId;
                     sheet.SetCell(addr, cell);

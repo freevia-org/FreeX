@@ -26,6 +26,12 @@ public sealed partial class NativeJsonAdapter
         // is the one piece of macro state that IS part of the model and was being silently dropped.
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool HasVbaProjectPackage { get; set; }
+        // r201: the structured-table id FLOOR. r197 established that this watermark exists so a
+        // deleted table's id is never handed out again while a pivot cache or slicer is still pinned
+        // to it. Not carrying it meant reopening a .fxl reset the floor, and the very collision the
+        // watermark prevents came back -- reachable through autosave/crash recovery, which goes
+        // through this adapter exclusively.
+        public int NextStructuredTableIdWatermark { get; set; }
         public bool? ShowSheetTabs { get; set; }
         public int? SheetTabRatio { get; set; }
         public int? FirstVisibleSheetIndex { get; set; }
@@ -530,6 +536,15 @@ public sealed partial class NativeJsonAdapter
         public bool IsHidden { get; set; }
         public bool IsVeryHidden { get; set; }
         public string? TabColor { get; set; }
+        // r201: VBA/OOXML sheet code name, previously dropped on a .fxl round trip.
+        public string? CodeName { get; set; }
+        // r201: the theme LINK, not just the resolved RGB. R123 added Sheet.TabThemeColor so a
+        // theme-linked tab colour survives a save instead of being baked to literal RGB; this DTO
+        // carried only TabColor, so a .fxl round trip undid exactly what R123 established.
+        public ThemeColorReferenceDto? TabThemeColor { get; set; }
+        // r201: sheet-level defaults, previously reset to 8.43/20.0 on every .fxl round trip.
+        public double? DefaultColumnWidth { get; set; }
+        public double? DefaultRowHeight { get; set; }
         public bool IsProtected { get; set; }
         public string? ProtectionPassword { get; set; }
         public List<SheetProtectionPermission> ProtectionPermissions { get; set; } = [];
