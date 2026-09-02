@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 using FreeX.Core.Formula;
@@ -1483,6 +1484,12 @@ public sealed partial class ViewportService : IViewportService
             return string.Empty;
         }
 
+        // numFmtId 14 is Excel's built-in, locale-sensitive short-date format.  The model keeps
+        // its canonical OOXML code (m/d/yy), but the grid must render the user's Windows short
+        // date pattern rather than treating that code as an invariant custom date format.
+        if (TryFormatBuiltInShortDate(cell.Value, style.NumberFormat, workbook.Uses1904DateSystem, out var shortDate))
+            return shortDate;
+
         // Excel never shows the width-based '#' overflow indicator when ShrinkToFit is on --
         // the real value shrinks (font-wise, in GridView's render pass) to fit the column
         // instead. Suppressing the indicator here lets the real formatted text reach that
@@ -1505,6 +1512,32 @@ public sealed partial class ViewportService : IViewportService
         }
 
         return result.Text;
+    }
+
+    private static bool TryFormatBuiltInShortDate(
+        ScalarValue value,
+        string numberFormat,
+        bool uses1904DateSystem,
+        out string text)
+    {
+        text = string.Empty;
+        var serial = value switch
+        {
+            NumberValue number => number.Value,
+            DateTimeValue dateTime => dateTime.Value,
+            _ => double.NaN
+        };
+
+        if (!BuiltInNumberFormatCatalog.TryResolveNumberFormatIdForCode(numberFormat, out var numberFormatId) ||
+            numberFormatId != 14 ||
+            (!uses1904DateSystem && ExcelDateSystem.IsPhantomLeapDaySerial(serial)) ||
+            !ExcelDateSystem.TrySerialToDate(serial, uses1904DateSystem, out var date))
+        {
+            return false;
+        }
+
+        text = date.ToString("d", CultureInfo.CurrentCulture);
+        return true;
     }
 
     /// <summary>
