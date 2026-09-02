@@ -51,6 +51,19 @@ public sealed class RenameStructuredTableCommand : IWorkbookCommand
 
         var normalizedName = _newName.Trim();
         _previousTable = sheet.StructuredTables[tableIndex];
+
+        // r217: Table Design > Table Name pre-populates the current name, so tabbing out of the box
+        // re-submits it. Everything below -- the workbook-wide CF/DV/chart rewrite, CopyTable, the
+        // pivot-cache repoint -- then runs with a RenameTableOp whose halves are identical, doing
+        // real work to produce the same table and still pushing an undo entry that clears redo.
+        // Compared against the TRIMMED name because that is what gets written; ordinal because a
+        // case-only rename is a real one and ValidateTableName above has already allowed it.
+        if (string.Equals(_previousTable.Name, normalizedName, StringComparison.Ordinal))
+        {
+            _previousTable = null;
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         var renameOp = new RenameTableOp(_previousTable.Name, normalizedName);
 
         // A table's own CalculatedColumnFormula/TotalsRowFormula metadata can carry a

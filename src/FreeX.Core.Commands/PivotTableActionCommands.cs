@@ -36,8 +36,11 @@ public sealed class RenamePivotTableCommand : IWorkbookCommand
             return new CommandOutcome(false, "PivotTable name is already in use.");
 
         _oldName = pivotTable.Name;
+        // r217: the same-name check was already here and already correct -- only the signal was
+        // missing, so the bus still pushed an undo entry for a rename that renamed nothing and the
+        // push cleared the user's pending redo. AffectedCells stays so the view still repaints.
         if (string.Equals(_oldName, _newName, StringComparison.Ordinal))
-            return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
+            return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start], IsNoOp: true);
 
         _updatedCharts.Clear();
         _updatedSlicers.Clear();

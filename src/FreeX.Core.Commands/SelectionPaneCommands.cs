@@ -252,6 +252,15 @@ public sealed class RenameSelectionPaneObjectCommand : IWorkbookCommand
         if (SelectionPaneObjectAccess.RejectIfEditObjectsBlocked(sheet, target) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r217: this one is worse than a phantom undo entry. The R124 comment below deliberately
+        // clears IsSourceLoaded so the writer regenerates the anchor under the new name -- correct
+        // for a real rename, but on a rename to the SAME name (the pane edits in place, so pressing
+        // Enter on an unchanged label lands here) it throws away a loaded object's original anchor
+        // XML and re-synthesises it for no reason. Compared ordinal against the already-trimmed
+        // _newName; a case-only rename is a real rename and still takes the path below.
+        if (string.Equals(target.Name, _newName, StringComparison.Ordinal))
+            return new CommandOutcome(true, AffectedCells: [target.Anchor], IsNoOp: true);
+
         _previousName = target.Name;
         _previousIsSourceLoaded = target.IsSourceLoaded;
         target.Name = _newName;

@@ -20,9 +20,14 @@ namespace FreeX.Core.Model.Tests;
 /// available without a bus-level or analyzer-level change.
 /// </para>
 /// <para>
-/// Scope: the SETTER-SHAPED commands (Set*, Apply*, Toggle*). r207 measured this shape at ~90%
-/// defective in FreeW against ~21% for structural commands, so it is where the class actually lives.
-/// The 61 in scope were censused in r208; 35 came back no-op-capable.
+/// Scope: EVERY IWorkbookCommand, as of r217. It began at the setter-shaped ones (Set*, Apply*,
+/// Toggle*) because r207 measured that shape at ~90% defective in FreeW against ~21% for structural
+/// commands, so it is where the class lives densest. But "we looked where it was densest" was being
+/// read off as "we looked", and the rest of the population was invisible to the accounting rather
+/// than judged clean. r217 widened the scan to all of them and put the remainder in
+/// <see cref="NeverExaminedForThisClass"/> -- a list that asserts nothing about those commands
+/// except that nobody has yet decided. That is the honest state, and unlike silence it is counted,
+/// capped, and cannot absorb a newly written command.
 /// </para>
 /// </summary>
 public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
@@ -97,30 +102,205 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "SetTimelineRangeCommand",
     ];
 
+    /// <summary>
+    /// r217: commands nobody has judged for this class yet. This list makes no claim about them --
+    /// it is the "never examined" column of the three-list structure, kept separate from
+    /// <see cref="DeliberatelyNeverReportsNoOp"/> (judged sound, with a reason) and
+    /// <see cref="KnownNoOpCapableNotYetFixed"/> (known broken, with evidence) precisely so that
+    /// "we know it is broken" cannot hide inside "nobody looked" or vice versa.
+    /// <para>
+    /// Entries leave by being examined -- either fixed to report IsNoOp, or moved to one of the
+    /// other two lists with the reasoning written down. Nothing may join: a newly written command
+    /// fails <see cref="EveryWorkbookCommandDeclaresWhetherItCanNoOp"/> until someone classifies it,
+    /// which is the whole point of widening the scan.
+    /// </para>
+    /// </summary>
+    private static readonly HashSet<string> NeverExaminedForThisClass =
+    [
+        "AddChartCommand",
+        "AddChartSheetCommand",
+        "AddDrawingShapeCommand",
+        "AddFormControlCommand",
+        "AddPivotChartCommand",
+        "AddPivotTableCommand",
+        "AddPivotTableToNewWorksheetCommand",
+        "AddSheetCommand",
+        "AddSlicerCommand",
+        "AddSparklineCommand",
+        "AddTextBoxCommand",
+        "AddThreadedCommentReplyCommand",
+        "AddTimelineCommand",
+        "AdvancedFilterCommand",
+        "AllowEditRangeCommand",
+        "ApplyConditionalFormatCommand",
+        "AutofillCommand",
+        "AverageFilterCommand",
+        "BringDrawingShapeForwardCommand",
+        "CellFillColorFilterCommand",
+        "CellFontColorFilterCommand",
+        "CellNoFillColorFilterCommand",
+        "ChangeChartSourceCommand",
+        "ChangeChartTypeCommand",
+        "ChangePivotChartTypeCommand",
+        "ChangePivotTableSourceCommand",
+        "ClearAllowEditRangesCommand",
+        "ClearCommentsCommand",
+        "ClearConditionalFormatsCommand",
+        "ClearContentsCommand",
+        "ClearHyperlinksCommand",
+        "ClearPivotTableViewCommand",
+        "ClearPrintAreaCommand",
+        "ClearSparklineCommand",
+        "ClearWorksheetBackgroundCommand",
+        "CollapseRowGroupCommand",
+        "ConfigureChartHiddenEmptyCellsCommand",
+        "ConfigurePivotChartOptionsCommand",
+        "ConfigurePivotTableCalculatedItemsCommand",
+        "ConfigurePivotTableFieldFiltersCommand",
+        "ConfigurePivotTableLayoutCommand",
+        "ConfigurePivotTableOptionsCommand",
+        "ConfigurePivotTableViewCommand",
+        "ConfigureSparklineCommand",
+        "ConfigureStructuredTableStyleOptionsCommand",
+        "ConsolidateCommand",
+        "ConvertNotesToCommentsCommand",
+        "ConvertStructuredTableToRangeCommand",
+        "CopyRangeCommand",
+        "CreateNamedRangesFromSelectionCommand",
+        "CreateStructuredTableCommand",
+        "CreateStyledStructuredTableCommand",
+        "DataTableBodyRefreshCommand",
+        "DefineNamedFormulaCommand",
+        "DefineNamedRangeCommand",
+        "DeleteCellsCommand",
+        "DeleteColumnsCommand",
+        "DeleteCommentCommand",
+        "DeleteCustomViewCommand",
+        "DeleteDrawingObjectCommand",
+        "DeleteRowsCommand",
+        "DeleteScenarioCommand",
+        "DeleteThreadedCommentCommand",
+        "DeleteThreadedCommentReplyCommand",
+        "DrillDownPivotTableCommand",
+        "DuplicateDrawingObjectCommand",
+        "DuplicateSheetCommand",
+        "EditCellsCommand",
+        "ExpandColGroupCommand",
+        "ExpandRowGroupCommand",
+        "ExternalTextPasteSpecialCommand",
+        "ExternalTextPasteValuesCommand",
+        "FillCellsCommand",
+        "FilterCommand",
+        "FilterConditionCommand",
+        "FlashFillCommand",
+        "ForecastSheetCommand",
+        "FormControlInteractionCommand",
+        "FormatPainterDataValidationCommand",
+        "GoalSeekCommand",
+        "GroupColumnsCommand",
+        "GroupRowsCommand",
+        "GroupedApplyStyleCommand",
+        "GroupedEditCellsCommand",
+        "ImportSheetCommand",
+        "InsertCellsCommand",
+        "InsertColumnsCommand",
+        "InsertPictureCommand",
+        "InsertRowsCommand",
+        "MergeCellsCommand",
+        "MergeScenarioCommand",
+        "MoveChartCommand",
+        "MoveChartToNewSheetCommand",
+        "MovePivotTableCommand",
+        "MoveRangeCommand",
+        "NudgeChartCommand",
+        "NudgeDrawingShapeCommand",
+        "NudgePictureCommand",
+        "NudgeTextBoxCommand",
+        "OneVariableDataTableCommand",
+        "PasteCellsCommand",
+        "PasteChartsCommand",
+        "PasteColumnWidthsCommand",
+        "PasteCommentsCommand",
+        "PasteConditionalFormatsCommand",
+        "PasteDataValidationCommand",
+        "PasteFormatsCommand",
+        "PasteMergedRegionsCommand",
+        "PastePicturesCommand",
+        "PasteRangeAsPictureCommand",
+        "PasteShapesCommand",
+        "PasteSpecialCellsCommand",
+        "PasteTextBoxesCommand",
+        "PropagateCalculatedColumnCommand",
+        "ProtectSheetCommand",
+        "ProtectWorkbookCommand",
+        "ReapplyStructuredTableStyleCommand",
+        "RefreshPivotTableCommand",
+        "RefreshStructuredTableTotalsCommand",
+        "RejectedWorkbookCommand",
+        "RemoveAllowEditRangeCommand",
+        "RemoveChartSeriesCommand",
+        "RemoveHyperlinksCommand",
+        "RemoveNamedRangeCommand",
+        "RemoveSheetCommand",
+        "RemoveSheetsCommand",
+        "RepositionPictureCommand",
+        "RepositionShapeCommand",
+        "RepositionTextBoxCommand",
+        "ResizeDrawingShapeCommand",
+        "ResizePictureCommand",
+        "ResizeStructuredTableCommand",
+        "ResizeTextBoxCommand",
+        "ResolveThreadedCommentCommand",
+        "RotateDrawingShapeCommand",
+        "RotatePictureCommand",
+        "RotateTextBoxCommand",
+        "SaveCustomViewCommand",
+        "SaveScenarioCommand",
+        "ScenarioSummaryReportCommand",
+        "SendDrawingShapeBackwardCommand",
+        "SetDataValidationCommand",
+        "SetSelectionPaneObjectVisibilityCommand",
+        "ShowAllNotesCommand",
+        "ShowHideCommentCommand",
+        "SubtotalCommand",
+        "TopBottomFilterCommand",
+        "TwoVariableDataTableCommand",
+        "UnprotectSheetCommand",
+        "UnprotectWorkbookCommand",
+        "UpdateThreadedCommentReplyCommand",
+        "UpdateThreadedCommentTextCommand",
+    ];
+
     /// <summary>The ceiling on the known-broken list. Lower it as rounds fix; never raise it.</summary>
     private const int DebtCeiling = 11;
 
+    /// <summary>The ceiling on the never-examined list. Same rule: it only ever comes down.</summary>
+    private const int UnexaminedCeiling = 152;
+
     [Fact]
-    public void EverySetterShapedCommandDeclaresWhetherItCanNoOp()
+    public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()
     {
-        var undeclared = SetterShapedCommands()
+        var undeclared = AllWorkbookCommands()
             .Where(entry => !entry.Value)
             .Select(entry => entry.Key)
             .Where(name => !DeliberatelyNeverReportsNoOp.ContainsKey(name)
-                           && !KnownNoOpCapableNotYetFixed.Contains(name))
+                           && !KnownNoOpCapableNotYetFixed.Contains(name)
+                           && !NeverExaminedForThisClass.Contains(name))
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToList();
 
-        SetterShapedCommands().Should().HaveCountGreaterThan(50,
+        AllWorkbookCommands().Should().HaveCountGreaterThan(200,
             "the source scan must actually be finding commands -- an empty scan would make this test "
             + "pass while guarding nothing");
 
         undeclared.Should().BeEmpty(
-            "a Set*/Apply*/Toggle* command that never returns IsNoOp has not been checked for the "
-            + "case where it is asked to set what is already there. If it can be, return "
-            + "CommandOutcome(true, IsNoOp: true) on that path so the bus skips the push and the "
-            + "user's pending redo survives. If it genuinely always changes something, add it above "
-            + "with the reason. Undeclared:\n" + string.Join("\n", undeclared));
+            "a command that never returns IsNoOp has not been checked for the case where it is "
+            + "asked to do what is already done. If it can be, return CommandOutcome(true, "
+            + "IsNoOp: true) on that path so the bus skips the push and the user's pending redo "
+            + "survives. If it genuinely always changes something, add it to "
+            + "DeliberatelyNeverReportsNoOp with the reason. Adding it to "
+            + "NeverExaminedForThisClass is NOT an option -- that list is capped and only shrinks. "
+            + "Undeclared:\n" + string.Join("\n", undeclared));
     }
 
     [Fact]
@@ -131,12 +311,22 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
             + "IsNoOp; nothing may join it, and the ceiling must be lowered to match.");
 
     [Fact]
+    public void TheNeverExaminedListOnlyEverShrinks() =>
+        NeverExaminedForThisClass.Count.Should().BeLessThanOrEqualTo(
+            UnexaminedCeiling,
+            "this list is the honest record of what nobody has looked at. A command leaves it by "
+            + "being examined -- fixed, or moved to one of the judged lists with the reason. Nothing "
+            + "may join it: a command written after r217 has no claim to never having been looked "
+            + "at, and the ceiling must come down as rounds work through it.");
+
+    [Fact]
     public void EveryEntryStillNamesALiveCommandThatStillLacksAnIsNoOp()
     {
-        var live = SetterShapedCommands();
+        var live = AllWorkbookCommands();
 
         DeliberatelyNeverReportsNoOp.Keys
             .Concat(KnownNoOpCapableNotYetFixed)
+            .Concat(NeverExaminedForThisClass)
             .Where(name => !live.TryGetValue(name, out var declares) || declares)
             .OrderBy(name => name, StringComparer.Ordinal)
             .Should().BeEmpty(
@@ -145,20 +335,31 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     }
 
     [Fact]
-    public void NoCommandIsInBothLists() =>
-        DeliberatelyNeverReportsNoOp.Keys.Intersect(KnownNoOpCapableNotYetFixed).Should().BeEmpty(
+    public void NoCommandIsInMoreThanOneList()
+    {
+        var judged = DeliberatelyNeverReportsNoOp.Keys.ToList();
+
+        judged.Intersect(KnownNoOpCapableNotYetFixed).Should().BeEmpty(
             "a command is either judged sound or known broken; being in both hides which");
+        judged.Intersect(NeverExaminedForThisClass).Should().BeEmpty(
+            "a command that has been judged sound has, by definition, been examined");
+        KnownNoOpCapableNotYetFixed.Intersect(NeverExaminedForThisClass).Should().BeEmpty(
+            "a command with two verifiers' evidence behind it has been examined -- letting it also "
+            + "sit in the never-examined list is exactly the blurring the three lists exist to stop");
+    }
 
     /// <summary>
-    /// Every Set*/Apply*/Toggle* IWorkbookCommand, mapped to whether its own class body mentions
-    /// IsNoOp. Read from SOURCE because a return value is invisible to reflection -- see the class
-    /// remarks for why that is the strongest check available here.
+    /// Every IWorkbookCommand, mapped to whether its own class body mentions IsNoOp. Read from
+    /// SOURCE because a return value is invisible to reflection -- see the class remarks for why
+    /// that is the strongest check available here. r217 dropped the Set*/Apply*/Toggle* restriction
+    /// from this pattern; that filter was the reason two thirds of the population never reached the
+    /// accounting at all.
     /// </summary>
-    private static Dictionary<string, bool> SetterShapedCommands()
+    private static Dictionary<string, bool> AllWorkbookCommands()
     {
         var result = new Dictionary<string, bool>(StringComparer.Ordinal);
         var declaration = new Regex(
-            @"class\s+((?:Set|Apply|Toggle)\w*Command)\b[^;]*:\s*[^{]*IWorkbookCommand",
+            @"class\s+(\w+Command)\b[^;]*:\s*[^{]*IWorkbookCommand",
             RegexOptions.Compiled);
 
         foreach (var path in Directory.GetFiles(CommandsDirectory(), "*.cs"))
