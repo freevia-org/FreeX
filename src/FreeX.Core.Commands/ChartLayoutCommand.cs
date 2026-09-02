@@ -188,6 +188,11 @@ public sealed partial class SetChartLayoutCommand : IWorkbookCommand
         if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet, chart) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r210: an equal-value setter -- see SetChartStyleCommand.
+        // Capture returns the same record type the options come in, so this is a value compare.
+        if (Capture(chart) == _options)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previous = Capture(chart);
         ApplyOptions(chart, _options);
         return new CommandOutcome(true, AffectedCells: [chart.DataRange.Start]);

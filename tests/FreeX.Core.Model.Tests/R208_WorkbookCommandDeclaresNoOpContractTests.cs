@@ -88,12 +88,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "ApplyScenarioCommand",
         "ApplyStructuredTableStyleCommand",
         "ApplyStyleCommand",
-        "SetChartLayoutCommand",
-        "SetChartStyleCommand",
         "SetColumnOutlineGroupCollapsedCommand",
         "SetColumnWidthCommand",
         "SetCommentCommand",
-        "SetDrawingObjectRotationCommand",
         "SetDrawingShapeColorsCommand",
         "SetDrawingShapeEffectCommand",
         "SetDrawingShapeGradientCommand",
@@ -102,7 +99,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "SetPageBreaksCommand",
         "SetPageSetupCommand",
         "SetPictureCropCommand",
-        "SetPictureLockAspectRatioCommand",
         "SetPrintAreasCommand",
         "SetRowHeightCommand",
         "SetSlicerSelectionCommand",
@@ -110,11 +106,10 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "SetTextBoxColorsCommand",
         "SetTimelineRangeCommand",
         "SetWorkbookWindowArrangementCommand",
-        "SetWorksheetBackgroundCommand",
     ];
 
     /// <summary>The ceiling on the known-broken list. Lower it as rounds fix; never raise it.</summary>
-    private const int DebtCeiling = 27;
+    private const int DebtCeiling = 22;
 
     [Fact]
     public void EverySetterShapedCommandDeclaresWhetherItCanNoOp()

@@ -23,6 +23,11 @@ public sealed class SetWorksheetBackgroundCommand : IWorkbookCommand
             return new CommandOutcome(false, "Background image cannot be empty.");
 
         var sheet = ctx.GetSheet(_sheetId);
+        // r210: an equal-value setter -- the gallery/toggle pre-populates the current value, so
+        // re-confirming it pushed an undo entry that changed nothing, and that push clears redo.
+        if (Equals(sheet.BackgroundImage, _background))
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousBackground = sheet.BackgroundImage;
         sheet.BackgroundImage = _background;
         _applied = true;

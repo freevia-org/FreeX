@@ -87,6 +87,11 @@ public sealed class SetChartStyleCommand : IWorkbookCommand
         if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet, chart) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r210: an equal-value setter -- the gallery/toggle pre-populates the current value, so
+        // re-confirming it pushed an undo entry that changed nothing, and that push clears redo.
+        if (chart.ChartStyleId == _chartStyleId)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousChartStyleId = chart.ChartStyleId;
         chart.ChartStyleId = _chartStyleId;
         _applied = true;

@@ -46,6 +46,11 @@ public sealed class SetDrawingObjectRotationCommand : IWorkbookCommand
             SelectionPaneObjectAccess.RejectIfEditObjectsBlocked(sheet, objectRef) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r210: an equal-value setter -- see SetChartStyleCommand.
+        // Compared AFTER normalising, so 370 and 10 are correctly the same rotation.
+        if (target.RotationDegrees == ObjectRotationNormalizer.NormalizeDegrees(_rotationDegrees))
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousRotationDegrees = target.RotationDegrees;
         target.RotationDegrees = ObjectRotationNormalizer.NormalizeDegrees(_rotationDegrees);
         _applied = true;

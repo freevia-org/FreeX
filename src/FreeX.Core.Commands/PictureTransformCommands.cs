@@ -195,6 +195,11 @@ public sealed class SetPictureLockAspectRatioCommand : IWorkbookCommand
         if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet, picture) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r210: an equal-value setter -- the gallery/toggle pre-populates the current value, so
+        // re-confirming it pushed an undo entry that changed nothing, and that push clears redo.
+        if (picture.LockAspectRatio == _lockAspectRatio)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousLockAspectRatio = picture.LockAspectRatio;
         picture.LockAspectRatio = _lockAspectRatio;
         _applied = true;
