@@ -62,7 +62,13 @@ public sealed class R203_CommandDeclaresHasEffectContractTests
     /// </summary>
     /// <remarks>
     /// These are not unknowns -- they are known defects with the evidence recorded in
-    /// docs/review/region-coverage.md finding 89. They are listed separately from
+    /// docs/review/region-coverage.md findings 89 and 91.
+    /// <para>
+    /// Two of them -- ReplaceParagraphRunsCommand and ReplaceCellParagraphRunsCommand -- CANNOT be
+    /// fixed by a HasEffect override at all: they take an opaque Action&lt;Paragraph&gt; rebuild
+    /// delegate, so the only way to know whether it changes anything is to run it, and running it
+    /// mutates. They need a bus-level before/after comparison instead. See finding 93.
+    /// </para> They are listed separately from
     /// <see cref="NotYetAdjudicated"/> because conflating "nobody looked" with "we looked and it is
     /// broken" would let the second hide inside the first.
     /// </remarks>
@@ -77,23 +83,11 @@ public sealed class R203_CommandDeclaresHasEffectContractTests
         "ReplaceShapeTextParagraphsCommand",
         "ReplaceSmartArtContentCommand",
         "ReplaceSourcesCommand",
-        "SetCellAlignmentCommand",
-        "SetCellBordersCommand",
         "SetCellParagraphMarkRevisionCommand",
-        "SetCellShadingCommand",
-        "SetCellTextDirectionCommand",
-        "SetChartAxisTitlesCommand",
-        "SetChartColorSchemeCommand",
-        "SetChartKindCommand",
-        "SetChartQuickLayoutCommand",
-        "SetChartStyleCommand",
-        "SetChartTitleCommand",
         "SetNoteNumberingOptionsCommand",
         "SetPageSettingsCommand",
         "SetParagraphBookmarkNameCommand",
-        "SetParagraphFormattingCommand",
         "SetParagraphMarkRevisionCommand",
-        "SetParagraphStyleCommand",
         "SetTableAutoFitCommand",
     ];
     /// <summary>
@@ -170,7 +164,7 @@ public sealed class R203_CommandDeclaresHasEffectContractTests
     /// The ceiling on <see cref="NotYetAdjudicated"/>. Lower it as rounds adjudicate; never raise it.
     /// </summary>
     /// <summary>The ceiling on the two debt lists together. Lower it as rounds pay down; never raise it.</summary>
-    private const int DebtCeiling = 79;
+    private const int DebtCeiling = 67;
     [Fact]
     public void EveryDocumentCommandDeclaresWhetherItHasEffect()
     {

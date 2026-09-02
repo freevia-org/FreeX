@@ -128,6 +128,10 @@ public sealed class SetParagraphFormattingCommand(int index, ParagraphFormatting
 
     public string Label => "Paragraph Formatting";
 
+    // r205 census, fixed r206: an equal-value setter -- see SetCellShadingCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ParagraphAt(context, index).Formatting != formatting;
+
     public void Apply(IDocumentCommandContext context)
     {
         var paragraph = ParagraphAt(context, index);
@@ -185,6 +189,10 @@ public sealed class SetParagraphStyleCommand(int index, string? styleId) : IDocu
     private bool _applied;
 
     public string Label => "Apply Style";
+
+    // r205 census, fixed r206: an equal-value setter -- see SetCellShadingCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ParagraphAt(context, index).StyleId != styleId;
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -1386,6 +1394,12 @@ public sealed class SetCellShadingCommand(
 
     public string Label => "Set Cell Shading";
 
+    // r205 census, fixed r206: an equal-value setter -- re-confirming what the ribbon already shows
+    // pushed an undo entry that changed nothing, and that push clears redo.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        TryGetCell(context, out var cell)
+        && cell.ShadingColorHex != (string.IsNullOrEmpty(colorHex) ? null : colorHex);
+
     public void Apply(IDocumentCommandContext context)
     {
         if (!TryGetCell(context, out var cell))
@@ -1428,6 +1442,8 @@ public sealed class SetCellBorderPayloadCommand(
 
     public string Label => "Set Cell Borders";
 
+    // r205 census: this is SetCellBorderPayloadCommand, whose no-op claim two verifiers REFUTED --
+    // no caller supplies the payload the cell already has. Judged, not overridden.
     public void Apply(IDocumentCommandContext context)
     {
         if (!TryGetCell(context, out var cell))
@@ -1475,6 +1491,11 @@ public sealed class SetCellTextDirectionCommand(
     private bool _applied;
 
     public string Label => "Set Cell Text Direction";
+
+    // r205 census, fixed r206: an equal-value setter -- re-confirming what the ribbon already shows
+    // pushed an undo entry that changed nothing, and that push clears redo.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        TryGetCell(context, out var cell) && cell.TextDirection != direction;
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -1531,6 +1552,12 @@ public sealed class SetCellAlignmentCommand(
     private bool _applied;
 
     public string Label => "Set Cell Alignment";
+
+    // r205 census, fixed r206: an equal-value setter -- see SetCellShadingCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        TryGetCell(context, out var cell)
+        && (cell.VerticalAlignment != verticalAlignment
+            || cell.Paragraphs.Any(p => p.Formatting.Alignment != horizontalAlignment));
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -1594,6 +1621,12 @@ public sealed class SetCellBordersCommand(
     private bool _applied;
 
     public string Label => clearEdges ? "Clear Cell Border" : "Set Cell Border";
+
+    // r205 census, fixed r206: an equal-value setter -- see SetCellShadingCommand.HasEffect.
+    // ApplyEdges is pure, so computing the would-be result here is safe.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        TryGetCell(context, out var cell)
+        && !Equals(cell.Borders, ApplyEdges(cell.Borders, edges, style, colorHex, widthPt, clearEdges));
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -5091,6 +5124,12 @@ public sealed class SetChartKindCommand(int paragraphIndex, int runIndex, ChartK
 
     public string Label => "Change Chart Type";
 
+    // r205 census, fixed r206: an equal-value setter -- re-confirming what the ribbon already shows
+    // pushed an undo entry that changed nothing, and that push clears redo.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is { } chart
+        && chart.Kind != kind;
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart) return;
@@ -5118,6 +5157,12 @@ public sealed class SetChartStyleCommand(int paragraphIndex, int runIndex, int s
 
     public string Label => "Change Chart Style";
 
+    // r205 census, fixed r206: an equal-value setter -- re-confirming what the ribbon already shows
+    // pushed an undo entry that changed nothing, and that push clears redo.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is { } chart
+        && chart.StyleId != styleId;
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart) return;
@@ -5144,6 +5189,11 @@ public sealed class SetChartColorSchemeCommand(int paragraphIndex, int runIndex,
     private bool _applied;
 
     public string Label => "Change Chart Colors";
+
+    // r205 census, fixed r206: an equal-value setter -- see SetCellShadingCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is { } chart
+        && chart.ColorSchemeId != colorSchemeId;
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -5176,6 +5226,11 @@ public sealed class SetChartQuickLayoutCommand(
     private bool _applied;
 
     public string Label => "Change Chart Layout";
+
+    // r205 census, fixed r206: an equal-value setter -- see SetCellShadingCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is { } chart
+        && chart.QuickLayoutId != layout.Id;
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -5240,6 +5295,12 @@ public sealed class SetChartTitleCommand(int paragraphIndex, int runIndex, strin
 
     public string Label => "Set Chart Title";
 
+    // r205 census, fixed r206: an equal-value setter -- see SetCellShadingCommand.HasEffect.
+    // Setting a title also CLEARS QuickLayoutId, so a non-zero one is itself a change.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is { } chart
+        && (chart.Title != Normalize(title) || chart.QuickLayoutId != 0);
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart)
@@ -5282,6 +5343,15 @@ public sealed class SetChartAxisTitlesCommand(
     private bool _applied;
 
     public string Label => "Set Chart Axis Titles";
+
+    // r205 census, fixed r206: an equal-value setter -- see SetCellShadingCommand.HasEffect.
+    // Mirrors BOTH guards, including the pie/doughnut one, and the QuickLayoutId clear.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is { } chart
+        && chart.Kind is not (ChartKind.Pie or ChartKind.Doughnut)
+        && (chart.CategoryAxisTitle != Normalize(categoryAxisTitle)
+            || chart.ValueAxisTitle != Normalize(valueAxisTitle)
+            || chart.QuickLayoutId != 0);
 
     public void Apply(IDocumentCommandContext context)
     {
