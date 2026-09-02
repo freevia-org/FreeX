@@ -229,6 +229,11 @@ public sealed class SetShapeTextRunContentControlCommand(
 
     public DocumentCommandMutationKind MutationKind => DocumentCommandMutationKind.FormField;
 
+    // r203 census, fixed r204: an equal-value setter -- re-confirming what the ribbon already shows
+    // pushed an undo entry that changed nothing, and that push clears redo.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        TryGetRun(context, out var run, out _) && (run.Text != text || !Equals(run.Control, control));
+
     public void Apply(IDocumentCommandContext context)
     {
         if (!TryGetRun(context, out var run, out var shape))

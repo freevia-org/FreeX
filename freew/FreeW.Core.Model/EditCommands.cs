@@ -1676,6 +1676,11 @@ public sealed class SetImageSizeCommand(int paragraphIndex, int runIndex, double
 
     public string Label => "Resize Image";
 
+    // r203 census, fixed r204: an equal-value setter. Re-confirming what the ribbon control already
+    // shows pushed an undo entry that changed nothing -- and that push clears redo.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image && (image.WidthPt != widthPt || image.HeightPt != heightPt);
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ImageAt(context) is not { } image)
@@ -1716,6 +1721,12 @@ public sealed class SetImageAltTextCommand(int paragraphIndex, int runIndex, str
 
     public string Label => "Image Alt Text";
 
+    // r203 census, fixed r204: an equal-value setter. Re-confirming what the ribbon control already
+    // shows pushed an undo entry that changed nothing -- and that push clears redo.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image
+        && image.AltText != (string.IsNullOrWhiteSpace(altText) ? null : altText.Trim());
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ImageAt(context) is not { } image) return;
@@ -1748,6 +1759,12 @@ public sealed class SetImageRotationCommand(int paragraphIndex, int runIndex, do
 
     public string Label => "Rotate/Flip Image";
 
+    // r203 census, fixed r204: an equal-value setter. Re-confirming what the ribbon control already
+    // shows pushed an undo entry that changed nothing -- and that push clears redo.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image
+        && (image.RotationAngle != angleDeg || image.FlipH != flipH || image.FlipV != flipV);
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ImageAt(context) is not { } image) return;
@@ -1778,6 +1795,12 @@ public sealed class SetImageCropCommand(int paragraphIndex, int runIndex, double
     private bool _applied;
 
     public string Label => "Crop Image";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image
+        && (image.CropLeft != left || image.CropRight != right
+            || image.CropTop != top || image.CropBottom != bottom);
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -1811,6 +1834,12 @@ public sealed class SetImageBorderCommand(int paragraphIndex, int runIndex, stri
     private bool _applied;
 
     public string Label => "Picture Border";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image
+        && (image.BorderColorHex != colorHex || image.BorderWidthPt != widthPt
+            || image.BorderDash != dash);
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -1938,6 +1967,12 @@ public sealed class SetImageAdjustCommand(
 
     public string Label => "Picture Adjust";
 
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image
+        && (image.BrightnessPct != brightnessPct || image.ContrastPct != contrastPct
+            || image.SaturationPct != saturationPct || image.TransparencyPct != transparencyPct);
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ImageAt(context) is not { } image) return;
@@ -1984,6 +2019,15 @@ public sealed class SetImageEffectCommand(
     private bool _applied;
 
     public string Label => "Picture Effect";
+
+    // r203 census, fixed r204: an equal-value setter. Note ImportedEffects is CLEARED
+    // unconditionally, so a non-null one makes this a real change even when every preset matches.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image
+        && (image.ImportedEffects is not null
+            || image.ShadowPreset != shadowPreset || image.GlowSizePt != glowSizePt
+            || image.GlowColorHex != glowColorHex || image.ReflectionPreset != reflectionPreset
+            || image.SoftEdgePt != softEdgePt || image.BevelPreset != bevelPreset);
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -2037,6 +2081,11 @@ public sealed class SetImageRecolorCommand(
     private bool _applied;
 
     public string Label => "Picture Recolor";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image
+        && (image.RecolorMode != recolorMode || image.ColorTemperature != colorTemperature);
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -2096,6 +2145,16 @@ public sealed class SetImageStyleCommand(
 
     public string Label => "Apply Picture Style";
 
+    // r203 census, fixed r204: an equal-value setter. Note ImportedEffects is CLEARED
+    // unconditionally, so a non-null one makes this a real change even when every preset matches.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image
+        && (image.ImportedEffects is not null
+            || image.BorderColorHex != borderColorHex || image.BorderWidthPt != borderWidthPt
+            || image.BorderDash != borderDash || image.ShadowPreset != shadowPreset
+            || image.ReflectionPreset != reflectionPreset || image.SoftEdgePt != softEdgePt
+            || image.PictureStylePreset != stylePreset);
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ImageAt(context) is not { } image) return;
@@ -2150,6 +2209,14 @@ public sealed class SetImagePositionCommand(int paragraphIndex, int runIndex,
     private bool _applied;
 
     public string Label => "Set Image Position";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image
+        && (image.HorizontalOffsetPt != horizontalOffsetPt
+            || image.VerticalOffsetPt != verticalOffsetPt
+            || image.HorizontalAnchor != horizontalAnchor
+            || image.VerticalAnchor != verticalAnchor);
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -2518,6 +2585,10 @@ public sealed class SetShapeKindCommand(
 
     public string Label => "Change Shape";
 
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ShapeAt(context) is { } shape && shape.Kind != kind;
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ShapeAt(context) is not { } shape) return;
@@ -2553,6 +2624,10 @@ public sealed class SetShapeFillCommand(
 
     public string Label => "Shape Fill";
 
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ShapeAt(context) is { } shape && shape.FillColorHex != colorHex;
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ShapeAt(context) is not { } shape) return;
@@ -2587,6 +2662,12 @@ public sealed class SetShapeOutlineCommand(int paragraphIndex, int runIndex,
 
     public string Label => "Shape Outline";
 
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ShapeAt(context) is { } shape
+        && (shape.OutlineColorHex != colorHex || shape.OutlineWidthPt != widthPt
+            || shape.OutlineDash != dash);
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ShapeAt(context) is not { } shape) return;
@@ -2618,6 +2699,10 @@ public sealed class SetShapeSizeCommand(int paragraphIndex, int runIndex, double
     private bool _applied;
 
     public string Label => "Resize Shape";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ShapeAt(context) is { } shape && (shape.WidthPt != widthPt || shape.HeightPt != heightPt);
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -2654,6 +2739,10 @@ public sealed class SetShapeAltTextCommand(
 
     public string Label => "Shape Alt Text";
 
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ShapeAt(context) is { } shape && shape.AltText != altText;
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ShapeAt(context) is not { } shape) return;
@@ -2688,6 +2777,11 @@ public sealed class SetShapeTextDirectionCommand(
     private bool _applied;
 
     public string Label => "Text Direction";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ShapeTextTargetResolver.TryGetShape(context, paragraphIndex, runIndex, childPath, out var shape)
+        && shape.TextDirection != direction;
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -3108,6 +3202,18 @@ public sealed class SetShapePositionCommand(int paragraphIndex, int runIndex,
 
     public string Label => "Set Shape Position";
 
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    // Applying CREATES the placement when absent, so an absent one is itself a change. HasEffect
+    // must not create it -- see SetFloatingPositionCommand.HasEffect for the same trap.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ShapeAt(context) is not { } shape
+            ? false
+            : shape.Placement is not { } placement
+              || placement.HorizontalOffsetPt != horizontalOffsetPt
+              || placement.VerticalOffsetPt != verticalOffsetPt
+              || placement.HorizontalAnchor != horizontalAnchor
+              || placement.VerticalAnchor != verticalAnchor;
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ShapeAt(context) is not { } shape) return;
@@ -3143,6 +3249,10 @@ public sealed class SetWordArtAltTextCommand(int paragraphIndex, int runIndex, s
 
     public string Label => "WordArt Alt Text";
 
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        WordArtAt(context) is { } wordArt && wordArt.AltText != altText;
+
     public void Apply(IDocumentCommandContext context)
     {
         if (WordArtAt(context) is not { } wordArt) return;
@@ -3172,6 +3282,10 @@ public sealed class SetWordArtStyleCommand(int paragraphIndex, int runIndex, Wor
     private bool _applied;
 
     public string Label => "WordArt Style";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        WordArtAt(context) is { } wordArt && wordArt.Style != style;
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -3266,6 +3380,14 @@ public sealed class SetShapeExtendedFillCommand(
 
     public string Label => "Shape Fill";
 
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    // Setting an extended fill also CLEARS the solid colour, so a non-null FillColorHex makes this
+    // a real change even when the extended fill matches.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ShapeAt(context) is { } shape
+        && (!Equals(shape.ExtendedFill, fill)
+            || (fill is not null && shape.FillColorHex is not null));
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ShapeAt(context) is not { } shape) return;
@@ -3301,6 +3423,10 @@ public sealed class SetShapeEffectsCommand(
 
     public string Label => "Shape Effects";
 
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ShapeAt(context) is { } shape && !Equals(shape.Effects, effects);
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ShapeAt(context) is not { } shape) return;
@@ -3328,6 +3454,10 @@ public sealed class SetWordArtWarpCommand(int paragraphIndex, int runIndex, Word
     private bool _applied;
 
     public string Label => "WordArt Transform";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        WordArtAt(context) is { } wordArt && wordArt.Warp != warp;
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -3624,6 +3754,10 @@ public sealed class SetImageArtisticEffectCommand(
     private bool _applied;
 
     public string Label => "Artistic Effect";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image && image.ArtisticEffect != effect;
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -4011,6 +4145,24 @@ public sealed class SetFloatingRotationCommand(
 
     public string Label => "Rotate/Flip";
 
+    // r203 census, fixed r204: an equal-value setter. The peek must not call TryMutate, which writes.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        SetFloatingPositionCommand.TryPeekRun(context, paragraphIndex, runIndex, out var run)
+        && CurrentRotation(run) is { } current
+        && (current.Angle != angleDeg || current.FlipH != flipH || current.FlipV != flipV);
+
+    /// <summary>The object's current rotation, in the same order TryMutate resolves it.</summary>
+    private static (double Angle, bool FlipH, bool FlipV)? CurrentRotation(Run run)
+    {
+        if (run.Image is { } img) return (img.RotationAngle, img.FlipH, img.FlipV);
+        if (run.Shape is { } shape) return (shape.RotationAngle, shape.FlipH, shape.FlipV);
+        if (run.Chart is { } chart) return (chart.RotationAngle, chart.FlipH, chart.FlipV);
+        if (run.SmartArt is { } sa) return (sa.RotationAngle, sa.FlipH, sa.FlipV);
+        if (run.WordArt is { } wa) return (wa.RotationAngle, wa.FlipH, wa.FlipV);
+        if (run.DrawingGroup is { } grp) return (grp.RotationAngle, grp.FlipH, grp.FlipV);
+        return null;
+    }
+
     public void Apply(IDocumentCommandContext context)
     {
         if (!TryMutate(context, angleDeg, flipH, flipV, out _prevAngle, out _prevFlipH, out _prevFlipV)) return;
@@ -4111,6 +4263,31 @@ public sealed class SetDrawingGroupChildRotationCommand : IDocumentCommand
     }
 
     public string Label => "Rotate Group Child";
+
+    // r203 census, fixed r204: an equal-value setter. The peek must not call TryMutate, which writes.
+    public bool HasEffect(IDocumentCommandContext context)
+    {
+        if (context.Document.Blocks.Count <= _paragraphIndex || _paragraphIndex < 0)
+            return false;
+        if (context.Document.Blocks[_paragraphIndex] is not Paragraph paragraph
+            || _runIndex < 0 || _runIndex >= paragraph.Runs.Count
+            || paragraph.Runs[_runIndex].DrawingGroup is not { } rootGroup
+            || !DrawingGroupChildPathResolver.TryGetChild(rootGroup, _childPath, out _, out var child))
+        {
+            return false;
+        }
+
+        return child switch
+        {
+            InlineImage image => image.RotationAngle != _angleDeg || image.FlipH != _flipH || image.FlipV != _flipV,
+            Shape shape => shape.RotationAngle != _angleDeg || shape.FlipH != _flipH || shape.FlipV != _flipV,
+            WordArt wordArt => wordArt.RotationAngle != _angleDeg || wordArt.FlipH != _flipH || wordArt.FlipV != _flipV,
+            Chart chart => chart.RotationAngle != _angleDeg || chart.FlipH != _flipH || chart.FlipV != _flipV,
+            SmartArt smartArt => smartArt.RotationAngle != _angleDeg || smartArt.FlipH != _flipH || smartArt.FlipV != _flipV,
+            DrawingGroup group => group.RotationAngle != _angleDeg || group.FlipH != _flipH || group.FlipV != _flipV,
+            _ => false,
+        };
+    }
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -4257,6 +4434,22 @@ public sealed class SetDrawingGroupChildPositionCommand : IDocumentCommand
     }
 
     public string Label => "Move Group Child";
+
+    // r203 census, fixed r204: an equal-value setter. The peek must not call TryMutate, which
+    // writes -- nor EnsureOffsetSlot, which grows the offsets list.
+    public bool HasEffect(IDocumentCommandContext context)
+    {
+        if (!TryGetChild(context, out var group, out _))
+            return false;
+
+        var childIndex = _childPath[^1];
+        // No slot yet: applying creates one, which is a change.
+        if (childIndex < 0 || childIndex >= group.ChildOffsets.Count)
+            return true;
+
+        var current = group.ChildOffsets[childIndex];
+        return current.X != _horizontalOffsetPt || current.Y != _verticalOffsetPt;
+    }
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -4489,6 +4682,18 @@ public sealed class SetDrawingGroupChildSizeCommand : IDocumentCommand
     }
 
     public string Label => "Resize Group Child";
+
+    // r203 census, fixed r204: an equal-value setter. The peek must not call TryMutate, which
+    // writes -- nor EnsureOffsetSlot, which grows the offsets list.
+    public bool HasEffect(IDocumentCommandContext context)
+    {
+        if (_widthPt <= 0 || _heightPt <= 0 || !TryGetChild(context, out var group, out _))
+            return false;
+
+        var childIndex = _childPath[^1];
+        return group.ChildWidthPt(childIndex) != _widthPt
+            || group.ChildHeightPt(childIndex) != _heightPt;
+    }
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -5172,6 +5377,11 @@ public sealed class SetSmartArtLayoutCommand(
 
     public string Label => "Change SmartArt Layout";
 
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ChartSmartArtCommandHelpers.SmartArtAt(context, paragraphIndex, runIndex) is { } sa
+        && (sa.Kind != kind || (layoutId is not null && sa.LayoutId != layoutId));
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ChartSmartArtCommandHelpers.SmartArtAt(context, paragraphIndex, runIndex) is not { } sa) return;
@@ -5202,6 +5412,11 @@ public sealed class SetSmartArtColorCommand(int paragraphIndex, int runIndex, st
     private bool _applied;
 
     public string Label => "Change SmartArt Colors";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ChartSmartArtCommandHelpers.SmartArtAt(context, paragraphIndex, runIndex) is { } sa
+        && sa.ColorSchemeId != colorSchemeId;
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -5375,6 +5590,11 @@ public sealed class SetSmartArtStyleCommand(int paragraphIndex, int runIndex, st
     private bool _applied;
 
     public string Label => "Change SmartArt Style";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ChartSmartArtCommandHelpers.SmartArtAt(context, paragraphIndex, runIndex) is { } smartArt
+        && smartArt.StyleId != styleId;
 
     public void Apply(IDocumentCommandContext context)
     {
