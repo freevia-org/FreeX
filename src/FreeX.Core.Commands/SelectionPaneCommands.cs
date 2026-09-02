@@ -61,8 +61,6 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
     private readonly SelectionPaneObjectKind _kind;
     private readonly Guid _objectId;
     private readonly bool _forward;
-    private int _fromIndex = -1;
-    private int _toIndex = -1;
     private List<DrawingObjectZOrderEntry>? _previousDrawingOrder;
     private bool _hadExplicitDrawingOrder;
 
@@ -80,11 +78,12 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
     {
         var sheet = ctx.GetSheet(_sheetId);
 
-        // R62-meta-1: a Chart now moves through the same DrawingObjectZOrder-backed path as every
-        // other supported kind. Routing it through Move(sheet.Charts, ...) instead (the old
-        // behaviour) only ever reordered the Charts list -- it never touched DrawingObjectZOrder,
-        // so a chart's Bring Forward/Send Backward had zero effect on its position relative to
-        // shapes/pictures/text boxes in the same drawing stack.
+        // R62-meta-1: every supported kind moves through the same DrawingObjectZOrder-backed path.
+        // The old behaviour swapped the object inside its own per-kind list (sheet.Charts,
+        // sheet.Pictures, ...) and never touched DrawingObjectZOrder, so Bring Forward/Send
+        // Backward had zero effect on an object's position relative to the other kinds sharing the
+        // same drawing stack. That per-list routing has no callers left and is gone (r227); the
+        // per-kind Revert that undid those list swaps went with it.
         return _kind switch
         {
             SelectionPaneObjectKind.Chart or
@@ -111,44 +110,6 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
             _hadExplicitDrawingOrder = false;
             return;
         }
-
-        if (_fromIndex < 0 || _toIndex < 0)
-            return;
-
-        var sheet = ctx.GetSheet(_sheetId);
-        switch (_kind)
-        {
-            case SelectionPaneObjectKind.Chart:
-                Swap(sheet.Charts);
-                break;
-            case SelectionPaneObjectKind.Picture:
-                Swap(sheet.Pictures);
-                break;
-            case SelectionPaneObjectKind.TextBox:
-                Swap(sheet.TextBoxes);
-                break;
-            case SelectionPaneObjectKind.Shape:
-                Swap(sheet.DrawingShapes);
-                break;
-        }
-        _fromIndex = -1;
-        _toIndex = -1;
-    }
-
-    private CommandOutcome Move<T>(List<T> list, Func<T, Guid> getId, Func<T, CellAddress> getAnchor)
-    {
-        var index = FindObjectIndex(list, getId, _objectId);
-        if (index < 0)
-            return SelectionPaneObjectAccess.ObjectNotFound();
-
-        var toIndex = _forward ? index + 1 : index - 1;
-        if (toIndex < 0 || toIndex >= list.Count)
-            return new CommandOutcome(true);
-
-        _fromIndex = index;
-        _toIndex = toIndex;
-        (list[_fromIndex], list[_toIndex]) = (list[_toIndex], list[_fromIndex]);
-        return new CommandOutcome(true, AffectedCells: [getAnchor(list[_toIndex])]);
     }
 
     private CommandOutcome MoveDrawingObject(Sheet sheet)
@@ -199,20 +160,6 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
         SelectionPaneObjectAccess.Find(sheet, _kind, _objectId) is { } target
             ? [target.Anchor]
             : [];
-
-    private void Swap<T>(List<T> list) =>
-        (list[_fromIndex], list[_toIndex]) = (list[_toIndex], list[_fromIndex]);
-
-    private static int FindObjectIndex<T>(IReadOnlyList<T> list, Func<T, Guid> getId, Guid objectId)
-    {
-        for (var index = 0; index < list.Count; index++)
-        {
-            if (getId(list[index]) == objectId)
-                return index;
-        }
-
-        return -1;
-    }
 }
 
 public sealed class RenameSelectionPaneObjectCommand : IWorkbookCommand
