@@ -19,6 +19,89 @@ public sealed class R203_CommandDeclaresHasEffectContractTests
     /// </summary>
     private static readonly Dictionary<string, string> DeliberatelyInheritsTheDefault = new()
     {
+        // Judged by the r207 census (the last 52), with its reason.
+        ["AcceptAllRevisionsCommand"] =
+            "the caller checks TrackChanges.HasRevisions first, and Resolve re-checks it synchronously",
+        ["AcceptRevisionCommand"] =
+            "only built by RevisionResolutionCoordinator, which has no production caller",
+        ["RejectAllRevisionsCommand"] =
+            "as AcceptAllRevisionsCommand",
+        ["RejectRevisionCommand"] =
+            "as AcceptRevisionCommand",
+        ["RevisionResolutionCommand"] =
+            "as AcceptRevisionCommand",
+        ["AddCommentCommand"] =
+            "the caller excludes both early returns -- bad block index and no commentable range",
+        ["AddCommentReplyCommand"] =
+            "the caller looks the comment up first and mints an id strictly above every existing one",
+        ["ApplyCitationStyleCommand"] =
+            "the caller returns early when the style already equals the document's",
+        ["ApplyManualHyphenationCommand"] =
+            "every edit comes from the hyphenation planner, whose candidates cannot already carry a soft hyphen",
+        ["CarryMergedCellContentCommand"] =
+            "never executed standalone -- always batched with a MergeCells command that does mutate",
+        ["CompositeDocumentCommand"] =
+            "a batch wrapper; it is only pushed when the batch is non-empty",
+        ["DeleteCommentCommand"] =
+            "the caller confirms the comment exists",
+        ["DeleteNoteCommand"] =
+            "the caller confirms the note exists",
+        ["DeleteParagraphCommand"] =
+            "removes a block unconditionally once the index resolves",
+        ["DeleteTableColumnCommand"] =
+            "the caller gates the last-column case",
+        ["DeleteTableRowCommand"] =
+            "the caller gates the last-row case",
+        ["EnsureHeaderFooterCommand"] =
+            "creates the header/footer when absent; the caller only issues it when one is needed",
+        ["GroupFloatingObjectsCommand"] =
+            "requires two or more targets, and grouping them always restructures the run",
+        ["InsertBlockCommand"] =
+            "an insert has no already-there case",
+        ["InsertCrossReferenceCommand"] =
+            "inserts a new field run",
+        ["InsertNoteCommand"] =
+            "inserts a new note and its reference mark",
+        ["InsertParagraphCommand"] =
+            "inserts a block unconditionally",
+        ["InsertShapeTextParagraphBreakCommand"] =
+            "splits a paragraph, which always changes the paragraph list",
+        ["InsertTableCellFormulaCommand"] =
+            "inserts a field into the cell",
+        ["InsertTableCellNoteCommand"] =
+            "inserts a note reference into the cell",
+        ["InsertTableColumnCommand"] =
+            "an insert has no already-there case",
+        ["InsertTableRowCommand"] =
+            "an insert has no already-there case",
+        ["MergeCellsHorizontalCommand"] =
+            "the caller requires two distinct cells",
+        ["MergeCellsVerticalCommand"] =
+            "the caller requires two distinct cells",
+        ["MergeShapeTextParagraphWithPreviousCommand"] =
+            "the caller requires a previous paragraph to merge into",
+        ["NudgeImagePositionCommand"] =
+            "the caller never issues a zero delta",
+        ["RemoveBookmarkAtCommand"] =
+            "the caller confirms a bookmark is there",
+        ["RemoveBookmarkCommand"] =
+            "the caller confirms the bookmark exists",
+        ["RemoveFloatingRunCommand"] =
+            "removes a run unconditionally once it resolves",
+        ["ReorderBlocksCommand"] =
+            "the caller excludes the identity ordering",
+        ["SpliceCellParagraphsCommand"] =
+            "splices a paragraph list, which always changes it",
+        ["SpliceHeaderFooterParagraphsCommand"] =
+            "as SpliceCellParagraphsCommand",
+        ["StyleCatalogCommand"] =
+            "the caller only issues it for a style that differs",
+        ["ToggleObjectWrappingCommand"] =
+            "a toggle: the caller passes the opposite of the current wrapping",
+        ["EditHeaderFooterParagraphCommand"] =
+            "r207 census claimed a no-op; two verifiers REFUTED it on the replace path",
+        ["UngroupFloatingObjectsCommand"] =
+            "r207 census claimed a no-op; two verifiers REFUTED it -- the reader enforces the >=2-children invariant",
         // Judged by the r205 census, with its reason.
         ["ReplaceCellContentControlRunSpanCommand"] =
             "its three callers each return before invoking it when there is nothing to insert or "
@@ -74,6 +157,17 @@ public sealed class R203_CommandDeclaresHasEffectContractTests
     /// </remarks>
     private static readonly HashSet<string> KnownNoOpCapableNotYetFixed =
     [
+        "ApplyShapeStyleCommand",
+        "ApplyTableStyleCommand",
+        "ArrangeFloatingObjectsCommand",
+        "DesignCatalogCommand",
+        "DistributeTableColumnsCommand",
+        "DistributeTableRowsCommand",
+        "FormatParagraphRunsCommand",
+        "MoveShapeEditPointCommand",
+        "MutateSmartArtStructureCommand",
+        "ResetImageSizeCommand",
+        "SplitCellCommand",
         "ReplaceBlocksCommand",
         "ReplaceCellParagraphRunsCommand",
         "ReplaceChartDataCommand",
@@ -91,7 +185,9 @@ public sealed class R203_CommandDeclaresHasEffectContractTests
         "SetTableAutoFitCommand",
     ];
     /// <summary>
-    /// Commands nobody has judged yet. This is DEBT, named as debt.
+    /// Commands nobody has judged yet. This is DEBT, named as debt -- and as of r207 it is EMPTY:
+    /// every one of FreeW's 128 commands has been judged. It stays because the contract needs a
+    /// place for the next unjudged command to be refused, not to hold one.
     /// </summary>
     /// <remarks>
     /// FreeW had 128 commands inheriting the default when this contract was written. A blanket
@@ -107,64 +203,12 @@ public sealed class R203_CommandDeclaresHasEffectContractTests
     /// </remarks>
     private static readonly HashSet<string> NotYetAdjudicated =
     [
-        "AcceptAllRevisionsCommand",
-        "AcceptRevisionCommand",
-        "AddCommentCommand",
-        "AddCommentReplyCommand",
-        "ApplyCitationStyleCommand",
-        "ApplyManualHyphenationCommand",
-        "ApplyShapeStyleCommand",
-        "ApplyTableStyleCommand",
-        "ArrangeFloatingObjectsCommand",
-        "CarryMergedCellContentCommand",
-        "CompositeDocumentCommand",
-        "DeleteCommentCommand",
-        "DeleteNoteCommand",
-        "DeleteParagraphCommand",
-        "DeleteTableColumnCommand",
-        "DeleteTableRowCommand",
-        "DesignCatalogCommand",
-        "DistributeTableColumnsCommand",
-        "DistributeTableRowsCommand",
-        "EditHeaderFooterParagraphCommand",
-        "EnsureHeaderFooterCommand",
-        "FormatParagraphRunsCommand",
-        "GroupFloatingObjectsCommand",
-        "InsertBlockCommand",
-        "InsertCrossReferenceCommand",
-        "InsertNoteCommand",
-        "InsertParagraphCommand",
-        "InsertShapeTextParagraphBreakCommand",
-        "InsertTableCellFormulaCommand",
-        "InsertTableCellNoteCommand",
-        "InsertTableColumnCommand",
-        "InsertTableRowCommand",
-        "MergeCellsHorizontalCommand",
-        "MergeCellsVerticalCommand",
-        "MergeShapeTextParagraphWithPreviousCommand",
-        "MoveShapeEditPointCommand",
-        "MutateSmartArtStructureCommand",
-        "NudgeImagePositionCommand",
-        "RejectAllRevisionsCommand",
-        "RejectRevisionCommand",
-        "RemoveBookmarkAtCommand",
-        "RemoveBookmarkCommand",
-        "RemoveFloatingRunCommand",
-        "ReorderBlocksCommand",
-        "ResetImageSizeCommand",
-        "RevisionResolutionCommand",
-        "SpliceCellParagraphsCommand",
-        "SpliceHeaderFooterParagraphsCommand",
-        "SplitCellCommand",
-        "StyleCatalogCommand",
-        "ToggleObjectWrappingCommand",
-        "UngroupFloatingObjectsCommand",
     ];
     /// <summary>
     /// The ceiling on <see cref="NotYetAdjudicated"/>. Lower it as rounds adjudicate; never raise it.
     /// </summary>
     /// <summary>The ceiling on the two debt lists together. Lower it as rounds pay down; never raise it.</summary>
-    private const int DebtCeiling = 67;
+    private const int DebtCeiling = 26;
     [Fact]
     public void EveryDocumentCommandDeclaresWhetherItHasEffect()
     {
