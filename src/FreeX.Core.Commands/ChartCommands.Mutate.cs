@@ -37,10 +37,15 @@ public sealed class ChangePivotChartTypeCommand : IWorkbookCommand
         if (ChartAuthoringPlanner.RejectIfUnsupported(_chartType) is { } unsupportedOutcome)
             return unsupportedOutcome;
 
+        // r230: the pivot twin of the guard above, deriving the flag the same way Apply does.
+        var pivotFirstColIsCategories = _chartType is not (ChartType.Scatter or ChartType.Bubble);
+        if (chart.Type == _chartType && chart.FirstColIsCategories == pivotFirstColIsCategories)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousType = chart.Type;
         _previousFirstColIsCategories = chart.FirstColIsCategories;
         chart.Type = _chartType;
-        chart.FirstColIsCategories = _chartType is not (ChartType.Scatter or ChartType.Bubble);
+        chart.FirstColIsCategories = pivotFirstColIsCategories;
         return new CommandOutcome(true, AffectedCells: [chart.DataRange.Start]);
     }
 
@@ -155,6 +160,14 @@ public sealed class ChangeChartTypeCommand : IWorkbookCommand
         var firstColIsCategories = _chartType is not (ChartType.Scatter or ChartType.Bubble);
         if (!HasUsableChartData(_chartType, chart.DataRange, chart.FirstRowIsHeader, firstColIsCategories, chart.SeriesInRows))
             return new CommandOutcome(false, "Chart data range is not valid for the selected chart type.");
+
+        // r230: the Change Chart Type gallery highlights the chart's current type, so clicking the
+        // highlighted tile is an ordinary gesture. Two writes, two clauses -- and the second is not
+        // decoration: FirstColIsCategories is derived from the requested type, so a chart whose flag
+        // was set by hand can differ from what this type implies, and that is a real edit even
+        // though the type matches.
+        if (chart.Type == _chartType && chart.FirstColIsCategories == firstColIsCategories)
+            return new CommandOutcome(true, IsNoOp: true);
 
         _previousType = chart.Type;
         _previousFirstColIsCategories = chart.FirstColIsCategories;
@@ -280,6 +293,19 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
                 nextFirstColIsCategories,
                 nextSeriesInRows))
             return new CommandOutcome(false, "Chart data range must include at least one data series and one data point.");
+
+        // r230: four clauses because Apply makes exactly four writes -- DataRange and the three
+        // flags. The long clear block below is already gated on the range or orientation having
+        // changed, so when all four match it is skipped and every remaining line is a
+        // self-assignment. Select Data pre-fills the current range and the current header/category
+        // checkboxes, so pressing OK unchanged lands here.
+        if (_dataRange == chart.DataRange
+            && nextFirstRowIsHeader == chart.FirstRowIsHeader
+            && nextFirstColIsCategories == chart.FirstColIsCategories
+            && nextSeriesInRows == chart.SeriesInRows)
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
 
         _previousDataRange = chart.DataRange;
         _previousFirstRowIsHeader = chart.FirstRowIsHeader;

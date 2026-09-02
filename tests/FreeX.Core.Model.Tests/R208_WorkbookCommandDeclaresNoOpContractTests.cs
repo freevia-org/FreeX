@@ -297,9 +297,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     [
         "AllowEditRangeCommand",
         "ApplyConditionalFormatCommand",
-        "ChangeChartSourceCommand",
-        "ChangeChartTypeCommand",
-        "ChangePivotChartTypeCommand",
         "ChangePivotTableSourceCommand",
         "ConsolidateCommand",
         "ConvertNotesToCommentsCommand",
@@ -348,9 +345,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 here.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 here.</para>
     /// </summary>
-    private const int OutstandingCeiling = 75;
+    private const int OutstandingCeiling = 72;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()
@@ -393,7 +390,7 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     [Fact]
     public void TheNeverExaminedListStillOnlyShrinks() =>
         NeverExaminedForThisClass.Count.Should().BeLessThanOrEqualTo(
-            39,
+            36,
             "the never-examined column specifically must keep draining, or the combined ceiling "
             + "could be satisfied by fixing easy known-broken entries while nobody ever looks at the "
             + "rest. This bound is the r218 count and comes down as rounds examine.");
