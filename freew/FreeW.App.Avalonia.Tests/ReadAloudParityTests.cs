@@ -357,6 +357,7 @@ public sealed class ReadAloudParityTests
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             return;
 
+        var outputPath = Path.Combine(Path.GetTempPath(), $"freew-read-aloud-{Guid.NewGuid():N}.txt");
         var powershell = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.System),
             "WindowsPowerShell",
@@ -364,17 +365,17 @@ public sealed class ReadAloudParityTests
             "powershell.exe");
         File.Exists(powershell).Should().BeTrue();
 
-        var outputPath = Path.Combine(Path.GetTempPath(), $"freew-read-aloud-{Guid.NewGuid():N}.txt");
+        var escapedOutputPath = outputPath.Replace("'", "''", StringComparison.Ordinal);
         var backend = new AvaloniaSpeechEngine.SpeechBackend(
             powershell,
             [
                 "-NoProfile",
                 "-NonInteractive",
                 "-Command",
-                "$p=[Console]::In.ReadToEnd(); 1..500 | ForEach-Object { " +
+                $"$p='{escapedOutputPath}'; 1..500 | ForEach-Object {{ " +
                 "[IO.File]::AppendAllText($p, 'x'); Start-Sleep -Milliseconds 20 }",
             ],
-            WriteTextToStandardInput: true,
+            WriteTextToStandardInput: false,
             SupportsPause: true);
         var runner = new AvaloniaSpeechEngine.ProcessSpeechRunner();
         using var process = runner.Start(backend, outputPath, () => { });
