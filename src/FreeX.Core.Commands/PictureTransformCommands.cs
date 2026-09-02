@@ -48,6 +48,19 @@ public sealed class ResizePictureCommand : IWorkbookCommand
         if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet, picture) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r218: Size &amp; Properties pre-fills the current width and height, so tabbing out of the
+        // boxes re-submits them. Exact double equality is deliberate and is the SAFE direction to be
+        // wrong in: a value that came back through a text box at a different precision compares
+        // unequal and takes the real-edit path, which costs an undo entry; a tolerance would risk
+        // swallowing a genuine one-hundredth-of-a-point resize.
+        if (picture.Width.Equals(_width)
+            && picture.Height.Equals(_height)
+            && (!_flipHorizontal.HasValue || picture.FlipHorizontal == _flipHorizontal.Value)
+            && (!_flipVertical.HasValue || picture.FlipVertical == _flipVertical.Value))
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         _previousWidth = picture.Width;
         _previousHeight = picture.Height;
         _previousFlipHorizontal = picture.FlipHorizontal;
@@ -102,6 +115,11 @@ public sealed class RepositionPictureCommand : IWorkbookCommand
         // author-unlocked picture stays movable even while the sheet blocks "Edit objects".
         if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet, picture) is { } protectedOutcome)
             return protectedOutcome;
+        // r218: a drag that ends in the cell it started from -- picked up, moved, put back, or
+        // nudged less than one cell -- lands here with the anchor the picture already has.
+        if (picture.Anchor == _anchor)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousAnchor = picture.Anchor;
         picture.Anchor = _anchor;
         _applied = true;
@@ -149,8 +167,15 @@ public sealed class RotatePictureCommand : IWorkbookCommand
         if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet, picture) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r218: compare against what Apply WRITES, not what the caller passed. The rotation is
+        // normalised on the way in, so asking for 370 degrees on a picture already at 10 is no
+        // change -- comparing against the raw request would call that a real edit.
+        var normalizedRotation = ObjectRotationNormalizer.NormalizeDegrees(_rotationDegrees);
+        if (picture.RotationDegrees.Equals(normalizedRotation))
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousRotationDegrees = picture.RotationDegrees;
-        picture.RotationDegrees = ObjectRotationNormalizer.NormalizeDegrees(_rotationDegrees);
+        picture.RotationDegrees = normalizedRotation;
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [picture.Anchor]);
     }

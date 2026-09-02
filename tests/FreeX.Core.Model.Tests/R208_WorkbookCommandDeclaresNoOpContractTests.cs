@@ -243,17 +243,8 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "RemoveNamedRangeCommand",
         "RemoveSheetCommand",
         "RemoveSheetsCommand",
-        "RepositionPictureCommand",
-        "RepositionShapeCommand",
-        "RepositionTextBoxCommand",
-        "ResizeDrawingShapeCommand",
-        "ResizePictureCommand",
         "ResizeStructuredTableCommand",
-        "ResizeTextBoxCommand",
         "ResolveThreadedCommentCommand",
-        "RotateDrawingShapeCommand",
-        "RotatePictureCommand",
-        "RotateTextBoxCommand",
         "SaveCustomViewCommand",
         "SaveScenarioCommand",
         "ScenarioSummaryReportCommand",
@@ -275,7 +266,7 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     private const int DebtCeiling = 11;
 
     /// <summary>The ceiling on the never-examined list. Same rule: it only ever comes down.</summary>
-    private const int UnexaminedCeiling = 152;
+    private const int UnexaminedCeiling = 143;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()

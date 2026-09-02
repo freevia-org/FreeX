@@ -46,6 +46,16 @@ public sealed class ResizeDrawingShapeCommand : IWorkbookCommand
         if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet, shape) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r218: the picture twin of this guard, for the same gesture -- see ResizePictureCommand for
+        // why exact double equality is the safe direction here.
+        if (shape.Width.Equals(_width)
+            && shape.Height.Equals(_height)
+            && (!_flipHorizontal.HasValue || shape.FlipHorizontal == _flipHorizontal.Value)
+            && (!_flipVertical.HasValue || shape.FlipVertical == _flipVertical.Value))
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         _previousWidth = shape.Width;
         _previousHeight = shape.Height;
         _previousFlipHorizontal = shape.FlipHorizontal;
@@ -101,8 +111,13 @@ public sealed class RotateDrawingShapeCommand : IWorkbookCommand
         if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet, shape) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r218: compared against the NORMALISED angle, as RotatePictureCommand explains.
+        var normalizedRotation = ObjectRotationNormalizer.NormalizeDegrees(_rotationDegrees);
+        if (shape.RotationDegrees.Equals(normalizedRotation))
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousRotationDegrees = shape.RotationDegrees;
-        shape.RotationDegrees = ObjectRotationNormalizer.NormalizeDegrees(_rotationDegrees);
+        shape.RotationDegrees = normalizedRotation;
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [shape.Anchor]);
     }

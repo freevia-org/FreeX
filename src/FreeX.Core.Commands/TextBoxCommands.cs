@@ -108,6 +108,15 @@ public sealed class ResizeTextBoxCommand : IWorkbookCommand
         if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet, textBox) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r218: the text-box twin of ResizePictureCommand's guard, for the same gesture.
+        if (textBox.Width.Equals(_width)
+            && textBox.Height.Equals(_height)
+            && (!_flipHorizontal.HasValue || textBox.FlipHorizontal == _flipHorizontal.Value)
+            && (!_flipVertical.HasValue || textBox.FlipVertical == _flipVertical.Value))
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         _previousWidth = textBox.Width;
         _previousHeight = textBox.Height;
         _previousFlipHorizontal = textBox.FlipHorizontal;
@@ -211,9 +220,17 @@ public sealed class RotateTextBoxCommand : IWorkbookCommand
         if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet, textBox) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r218: this one is the RenameSelectionPaneObject shape again. The R62 clear below is right
+        // for a real rotation, but on a re-submitted angle it would discard a loaded text box's
+        // preserved source XML for a rotation that did not move. Compared against the NORMALISED
+        // angle, so 370 degrees on a text box already at 10 is correctly no change.
+        var normalizedRotation = ObjectRotationNormalizer.NormalizeDegrees(_rotationDegrees);
+        if (textBox.RotationDegrees.Equals(normalizedRotation))
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousRotationDegrees = textBox.RotationDegrees;
         _previousIsSourceLoaded = textBox.IsSourceLoaded;
-        textBox.RotationDegrees = ObjectRotationNormalizer.NormalizeDegrees(_rotationDegrees);
+        textBox.RotationDegrees = normalizedRotation;
         // R62-io-drawing-textbox-6-1: mirror DrawingShapeFormatCommands' fix for the same class of
         // bug — a loaded text box's edit must clear IsSourceLoaded so the full writer emits the
         // edited object instead of silently discarding the rotation via the preserved source XML.
@@ -366,6 +383,10 @@ public sealed class RepositionTextBoxCommand : IWorkbookCommand
         // author-unlocked text box stays movable even while the sheet blocks "Edit objects".
         if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet, textBox) is { } protectedOutcome)
             return protectedOutcome;
+        // r218: a drag that ends in the cell it started from -- see RepositionPictureCommand.
+        if (textBox.Anchor == _anchor)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousAnchor = textBox.Anchor;
         textBox.Anchor = _anchor;
         _applied = true;
