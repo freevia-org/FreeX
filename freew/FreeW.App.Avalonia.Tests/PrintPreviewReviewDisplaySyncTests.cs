@@ -102,6 +102,55 @@ public sealed class PrintPreviewReviewDisplaySyncTests
             string.Concat(texts).Should().Contain("Plain");
         }, CancellationToken.None);
 
+    // ── r198: Balloons is a fourth Show Markup toggle the block above missed ───────────────────
+    // It lives on DocumentView rather than in ReviewDisplayState, so the preview stayed at its
+    // default false however the live editor was set -- while ExportPdfAsync/PrintAsync, which render
+    // from the live editor, drew the right-margin strip. The WPF host has this right already
+    // (PrintPreviewWindow.ResolvePrintBalloonSources reads editor.ShowMarkupBalloons); only the
+    // Avalonia preview, which renders a snapshot, had nowhere to read it from.
+
+    [Fact]
+    public Task PrintPreviewDialog_LiveEditorShowingBalloons_DrawsTheBalloonStripInThePreview() =>
+        Session.Dispatch(() =>
+        {
+            var dialog = new PrintPreviewDialog(
+                DocWithTrackedDeletion(),
+                "Test.docx",
+                reviewDisplayState: ReviewDisplayState.Default,
+                showMarkupBalloons: true);
+
+            var preview = FindPreviewDocumentView(dialog);
+            var text = string.Concat(preview.BuildPdfContent().Pages
+                .SelectMany(page => page.Ops)
+                .OfType<PdfText>()
+                .Select(op => op.Text));
+
+            // The balloon carries its author and a "Deleted" kind label; neither appears in the body.
+            text.Should().Contain("Alice",
+                "the preview must show the same markup strip Print and Create PDF render");
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task PrintPreviewDialog_LiveEditorWithBalloonsOff_DrawsNoBalloonStrip() =>
+        Session.Dispatch(() =>
+        {
+            // The control, and the behaviour every existing call site keeps by default.
+            var dialog = new PrintPreviewDialog(
+                DocWithTrackedDeletion(),
+                "Test.docx",
+                reviewDisplayState: ReviewDisplayState.Default,
+                showMarkupBalloons: false);
+
+            var preview = FindPreviewDocumentView(dialog);
+            var text = string.Concat(preview.BuildPdfContent().Pages
+                .SelectMany(page => page.Ops)
+                .OfType<PdfText>()
+                .Select(op => op.Text));
+
+            text.Should().NotContain("Alice");
+            text.Should().Contain("DELETED", "the body still renders under All Markup");
+        }, CancellationToken.None);
+
     // ── Sibling: an editor already in All Markup must still show deleted text (no accidental flip) ──
 
     [Fact]

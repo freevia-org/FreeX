@@ -187,7 +187,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
 
         // Guard against inverted ranges — uint subtraction would wrap to ~4B
         if (_range.End.Row < _range.Start.Row || _range.End.Col < _range.Start.Col)
-            return new CommandOutcome(true); // nothing to sort
+            return new CommandOutcome(true, IsNoOp: true); // nothing to sort
 
         // r164 remediation, dense whole-sheet enumeration: the protection scan just below, the
         // snapshot builders and the row/column swaps all walk every address of _range, so Ctrl+A
@@ -198,7 +198,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         // trimmed: the sort key is an OFFSET from _range.Start.Col and the header is _range.Start.Row,
         // so moving the start would re-point the key at a different column.
         if (SheetRangeScope.ClampEndToPopulated(sheet, _range) is not { } populated)
-            return new CommandOutcome(true); // nothing populated to sort
+            return new CommandOutcome(true, IsNoOp: true); // nothing populated to sort
 
         _range = populated;
 

@@ -18,6 +18,15 @@ public sealed partial class NativeJsonAdapter
             if (!Enum.IsDefined(sparklineDto.Kind))
                 return null;
 
+            // r198: the date axis is a per-group setting; drop it rather than the whole sparkline
+            // if it names a range on another sheet.
+            var dateAxisRange = sparklineDto.DateAxisRange is null
+                ? (GridRange?)null
+                : GridRange.Parse(sparklineDto.DateAxisRange, sheetId) is var parsedDateAxis
+                  && parsedDateAxis.Start.Sheet == sheetId && parsedDateAxis.End.Sheet == sheetId
+                    ? parsedDateAxis
+                    : null;
+
             return new SparklineModel
             {
                 DataRange           = dataRange,
@@ -47,6 +56,7 @@ public sealed partial class NativeJsonAdapter
                 ManualMin           = sparklineDto.ManualMin,
                 ManualMax           = sparklineDto.ManualMax,
                 DisplayEmptyCellsAs = sparklineDto.DisplayEmptyCellsAs,
+                DateAxisRange       = dateAxisRange,
             };
         }
         catch (FormatException)
@@ -89,6 +99,7 @@ public sealed partial class NativeJsonAdapter
         ManualMin           = sparkline.ManualMin,
         ManualMax           = sparkline.ManualMax,
         DisplayEmptyCellsAs = sparkline.DisplayEmptyCellsAs,
+        DateAxisRange       = sparkline.DateAxisRange?.ToString(),
     };
 
     // ── Color serialization helpers ────────────────────────────────────────────

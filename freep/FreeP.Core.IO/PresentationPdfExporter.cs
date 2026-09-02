@@ -918,7 +918,8 @@ public static class PresentationPdfExporter
                         new ShapeBox(cellX, cellBottom, cellWidth, cellHeight),
                         cell.TextBody,
                         PlainTextOf(cell.TextBody),
-                        hasText: true);
+                        hasText: true,
+                        cell.Anchor);
             }
         }
     }
@@ -1636,7 +1637,15 @@ public static class PresentationPdfExporter
     private static (double X, double Y) ToPdfPoint((long X, long Y) point, double slideHeightPoints) =>
         PresentationPdfScenePlanner.ToPdfPoint(point, slideHeightPoints);
 
-    private static void AppendShapeText(List<PdfDrawOp> ops, ShapeBox box, TextBody? textBody, string content, bool hasText)
+    private static void AppendShapeText(
+        List<PdfDrawOp> ops,
+        ShapeBox box,
+        TextBody? textBody,
+        string content,
+        bool hasText,
+        // r198: a table cell's vertical anchor. Null keeps the historical top-anchored behaviour
+        // every non-table caller relies on.
+        TableCellAnchor? anchor = null)
     {
         var lines = BuildShapeTextLines(textBody, content, hasText, box.Width, box.Height);
         if (lines.Count == 0)
@@ -1654,7 +1663,20 @@ public static class PresentationPdfExporter
         // reproduce that layout -- guarantees no authored text ever silently vanishes from the
         // exported PDF's text layer, which is the actual defect: position accuracy for the
         // (invisible) overflow lines is a lesser concern than dropping content outright.
-        var y = box.Y + box.Height - ShapeTextInsetPt - lines[0].FontSizePt;
+        // r198: honour the cell's vertical anchor. The screen renderer and Full Page Slides export
+        // both do; notes pages and handouts drew every cell top-anchored, so a Middle- or
+        // Bottom-anchored cell came out misplaced. The total height is the sum of the leadings,
+        // which is what the loop below actually advances by.
+        var textHeight = lines.Sum(line => line.LeadingPt);
+        var slack = Math.Max(0, box.Height - (2 * ShapeTextInsetPt) - textHeight);
+        var anchorOffset = anchor switch
+        {
+            TableCellAnchor.Middle => slack / 2,
+            TableCellAnchor.Bottom => slack,
+            _ => 0,
+        };
+
+        var y = box.Y + box.Height - ShapeTextInsetPt - lines[0].FontSizePt - anchorOffset;
         foreach (var line in lines)
         {
             ops.Add(new PdfText(

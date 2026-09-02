@@ -2311,6 +2311,9 @@ public static partial class FlashFillService
         return tokens.Length == tokenCount && tokens.All(token => token.Length > 0);
     }
 
+    // r198: the leading TEXT ELEMENT, not value[0] — see FlashFillTextPrimitives.GetUpperInitial.
     private static string GetFirstInitial(string value) =>
-        string.IsNullOrEmpty(value) ? string.Empty : value[0].ToString();
+        string.IsNullOrEmpty(value)
+            ? string.Empty
+            : value[..System.Globalization.StringInfo.GetNextTextElementLength(value)];
 }

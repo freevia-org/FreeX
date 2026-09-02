@@ -1431,7 +1431,8 @@ public sealed partial class MainWindow : Window
                 ExportPdfAsync,
                 DirectPrintCapability,
                 PrintAsync,
-                _editor.CurrentReviewDisplayState).ShowDialog(this);
+                _editor.CurrentReviewDisplayState,
+                _editor.ShowMarkupBalloons).ShowDialog(this);
         }
         catch (Exception ex)
         {

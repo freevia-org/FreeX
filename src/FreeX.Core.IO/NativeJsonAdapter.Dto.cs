@@ -840,6 +840,18 @@ public sealed partial class NativeJsonAdapter
         public RgbColor? DataBarAxisColor { get; set; }
         public RgbColor? DataBarNegativeFillColor { get; set; }
         public RgbColor? DataBarNegativeBorderColor { get; set; }
+
+        // r198: the seven this DTO carried none of. Each is populated from real .xlsx and drives
+        // real output on the .xlsx write path, so a Save As .fxl and reopen was flattening a
+        // theme-linked colour stop to literal RGB -- after which it no longer tracks a theme change --
+        // and losing the data bar's negative-value and direction choices.
+        public CfColorStopSource? MinColorSource { get; set; }
+        public CfColorStopSource? MidColorSource { get; set; }
+        public CfColorStopSource? MaxColorSource { get; set; }
+        public CfColorStopSource? DataBarColorSource { get; set; }
+        public bool DataBarNegativeFillSameAsPositive { get; set; }
+        public bool DataBarNegativeBorderSameAsPositive { get; set; }
+        public string? DataBarDirection { get; set; }
         public bool AboveAverage { get; set; } = true;
         public bool EqualAverage { get; set; }
         public int? StdDevCount { get; set; }
@@ -1246,6 +1258,9 @@ public sealed partial class NativeJsonAdapter
 
         // Empty-cell handling
         public SparklineEmptyCellDisplay DisplayEmptyCellsAs { get; set; } = SparklineEmptyCellDisplay.Gap;
+
+        // r198: date axis (Sparkline Tools > Axis > Date Axis Type); null = general axis.
+        public string? DateAxisRange { get; set; }
     }
 
     private class PivotCacheDto

@@ -171,7 +171,7 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
 
         var toIndex = _forward ? index + 1 : index - 1;
         if (toIndex < 0 || toIndex >= normalizedOrder.Count)
-            return new CommandOutcome(true);
+            return new CommandOutcome(true, IsNoOp: true); // already at the front/back: no undo entry, so redo survives
 
         _hadExplicitDrawingOrder = sheet.DrawingObjectZOrder.Count > 0;
         _previousDrawingOrder = sheet.DrawingObjectZOrder.ToList();
