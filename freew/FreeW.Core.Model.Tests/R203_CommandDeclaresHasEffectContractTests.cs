@@ -19,6 +19,29 @@ public sealed class R203_CommandDeclaresHasEffectContractTests
     /// </summary>
     private static readonly Dictionary<string, string> DeliberatelyInheritsTheDefault = new()
     {
+        // Judged by the r205 census, with its reason.
+        ["ReplaceCellContentControlRunSpanCommand"] =
+            "its three callers each return before invoking it when there is nothing to insert or "
+            + "nothing of the field left to delete, so every reachable call changes the span",
+        ["ReplaceContentControlRunSpanCommand"] = "same caller gates as its cell twin",
+        ["ReplaceTableCellParagraphRunsCommand"] =
+            "its one caller builds every address in the same synchronous pass and always splices in "
+            + "a new index-mark run",
+        ["SetChartLegendCommand"] =
+            "reached only through ToggleChartLegend, which passes !IsLegendVisible -- always a flip",
+        ["SetCommentResolvedCommand"] =
+            "both UI entry points call TryToggleCommentResolved, which passes !comment.Resolved; the "
+            + "one API that could pass the current value has no production caller",
+        ["SetTableFormattingCommand"] =
+            "every production caller passes a negating transform on a record read in the same call",
+        ["SetRunFormattingCommand"] =
+            "DEAD: zero call sites anywhere, tests included. Formatting goes through "
+            + "FormatParagraphRunsCommand. See finding 92 -- the right fix is deletion",
+        // The r205 census claimed these could no-op; two verifiers each refuted it.
+        ["SetCellBorderPayloadCommand"] = "refuted on reachability: no caller supplies the current payload",
+        ["SetMultiLevelNumberFormatsCommand"] = "refuted: the caller only issues it after a real edit",
+        ["SetTableCellContentCommand"] =
+            "refuted: both label-sheet callers regenerate content that differs from what is there",
         // Judged by the r203 census, with its reason.
         ["SetShapeCustomGeometryCommand"] =
             "its only caller, ConvertShapeToFreeform, returns NoChange before constructing it "
@@ -45,6 +68,33 @@ public sealed class R203_CommandDeclaresHasEffectContractTests
     /// </remarks>
     private static readonly HashSet<string> KnownNoOpCapableNotYetFixed =
     [
+        "ReplaceBlocksCommand",
+        "ReplaceCellParagraphRunsCommand",
+        "ReplaceChartDataCommand",
+        "ReplaceContentControlRunCommand",
+        "ReplaceNoteContentCommand",
+        "ReplaceParagraphRunsCommand",
+        "ReplaceShapeTextParagraphsCommand",
+        "ReplaceSmartArtContentCommand",
+        "ReplaceSourcesCommand",
+        "SetCellAlignmentCommand",
+        "SetCellBordersCommand",
+        "SetCellParagraphMarkRevisionCommand",
+        "SetCellShadingCommand",
+        "SetCellTextDirectionCommand",
+        "SetChartAxisTitlesCommand",
+        "SetChartColorSchemeCommand",
+        "SetChartKindCommand",
+        "SetChartQuickLayoutCommand",
+        "SetChartStyleCommand",
+        "SetChartTitleCommand",
+        "SetNoteNumberingOptionsCommand",
+        "SetPageSettingsCommand",
+        "SetParagraphBookmarkNameCommand",
+        "SetParagraphFormattingCommand",
+        "SetParagraphMarkRevisionCommand",
+        "SetParagraphStyleCommand",
+        "SetTableAutoFitCommand",
     ];
     /// <summary>
     /// Commands nobody has judged yet. This is DEBT, named as debt.
@@ -107,45 +157,8 @@ public sealed class R203_CommandDeclaresHasEffectContractTests
         "RemoveBookmarkCommand",
         "RemoveFloatingRunCommand",
         "ReorderBlocksCommand",
-        "ReplaceBlocksCommand",
-        "ReplaceCellContentControlRunSpanCommand",
-        "ReplaceCellParagraphRunsCommand",
-        "ReplaceChartDataCommand",
-        "ReplaceContentControlRunCommand",
-        "ReplaceContentControlRunSpanCommand",
-        "ReplaceNoteContentCommand",
-        "ReplaceParagraphRunsCommand",
-        "ReplaceShapeTextParagraphsCommand",
-        "ReplaceSmartArtContentCommand",
-        "ReplaceSourcesCommand",
-        "ReplaceTableCellParagraphRunsCommand",
         "ResetImageSizeCommand",
         "RevisionResolutionCommand",
-        "SetCellAlignmentCommand",
-        "SetCellBorderPayloadCommand",
-        "SetCellBordersCommand",
-        "SetCellParagraphMarkRevisionCommand",
-        "SetCellShadingCommand",
-        "SetCellTextDirectionCommand",
-        "SetChartAxisTitlesCommand",
-        "SetChartColorSchemeCommand",
-        "SetChartKindCommand",
-        "SetChartLegendCommand",
-        "SetChartQuickLayoutCommand",
-        "SetChartStyleCommand",
-        "SetChartTitleCommand",
-        "SetCommentResolvedCommand",
-        "SetMultiLevelNumberFormatsCommand",
-        "SetNoteNumberingOptionsCommand",
-        "SetPageSettingsCommand",
-        "SetParagraphBookmarkNameCommand",
-        "SetParagraphFormattingCommand",
-        "SetParagraphMarkRevisionCommand",
-        "SetParagraphStyleCommand",
-        "SetRunFormattingCommand",
-        "SetTableAutoFitCommand",
-        "SetTableCellContentCommand",
-        "SetTableFormattingCommand",
         "SpliceCellParagraphsCommand",
         "SpliceHeaderFooterParagraphsCommand",
         "SplitCellCommand",
@@ -157,7 +170,7 @@ public sealed class R203_CommandDeclaresHasEffectContractTests
     /// The ceiling on <see cref="NotYetAdjudicated"/>. Lower it as rounds adjudicate; never raise it.
     /// </summary>
     /// <summary>The ceiling on the two debt lists together. Lower it as rounds pay down; never raise it.</summary>
-    private const int DebtCeiling = 89;
+    private const int DebtCeiling = 79;
     [Fact]
     public void EveryDocumentCommandDeclaresWhetherItHasEffect()
     {
