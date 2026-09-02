@@ -153,6 +153,13 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // there is no same-value path to guard. This is the self-guaranteeing shape r207 preferred,
         // and it is worth distinguishing from the equal-value setters in the same files: those take
         // the target state as an argument and can be handed the one already in place.
+        ["ConvertNotesToCommentsCommand"] =
+            "r231: returns Success:false with \"All notes already have threaded comments -- nothing "
+            + "to convert\" when the loop converts none, so the run-it-twice case is already covered "
+            + "-- this one was expected to be a fix and reading it said otherwise",
+        ["DrillDownPivotTableCommand"] =
+            "r231: errors for a disabled drill, a missing pivot table and an empty detail set; every "
+            + "path past those adds a detail sheet",
         ["SubtotalCommand"] =
             "r229: errors for a range without a header row and at least one data row, and for "
             + "subtotal columns outside the range; every path past those inserts subtotal rows",
@@ -229,6 +236,30 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // by guessing.
         "AutofillCommand",
         "FillCellsCommand",
+        // r231: the save/reapply/refresh group, each with its own reason for not being fixed here.
+        //
+        // SaveScenario and SaveCustomView replace an existing entry with a freshly captured one, so
+        // saving twice with nothing changed in between writes an equal value. Both targets ARE
+        // records, and the obvious guard is `newValue == previous` -- but both records carry LIST
+        // members, which record equality compares by reference, so against a freshly built instance
+        // it is always false. That guard would never fire while looking exactly like the ones that
+        // do work. Same objection r229 raised against a post-hoc test on Autofill: a guard that
+        // cannot fire is worse than an honest entry here, because it takes the command off this list.
+        "SaveScenarioCommand",
+        "SaveCustomViewCommand",
+        // MergeCells over a range already merged exactly that way absorbs the existing region and
+        // re-adds it, blanking cells that are already blank. Net effect nil, but establishing that
+        // means reasoning through five loops rather than adding a guard.
+        "MergeCellsCommand",
+        // RefreshStructuredTableTotals rewrites every totals cell from the current data; when the
+        // data has not changed it writes back what is there. Deciding needs a per-cell comparison.
+        "RefreshStructuredTableTotalsCommand",
+        // ReapplyStructuredTableStyle is a delegation case of a kind r223/r224 did not have: it
+        // returns ApplyStructuredTableStyleCommand's outcome, and THAT command is on this list. So it
+        // inherits the defect rather than a correct signal -- delegation propagates both -- and
+        // fixing the inner command fixes this one for free. It is listed separately so the count
+        // stays honest, not because it needs its own fix.
+        "ReapplyStructuredTableStyleCommand",
         // needs a real before/after comparison, not a guard on the arguments.
         "ClearPivotTableViewCommand",
         // r221: the two Paste commands with no record of what they wrote. Both are no-op-capable --
@@ -299,12 +330,10 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "ApplyConditionalFormatCommand",
         "ChangePivotTableSourceCommand",
         "ConsolidateCommand",
-        "ConvertNotesToCommentsCommand",
         "ConvertStructuredTableToRangeCommand",
         "CopyRangeCommand",
         "DataTableBodyRefreshCommand",
         "DeleteRowsCommand",
-        "DrillDownPivotTableCommand",
         "DuplicateDrawingObjectCommand",
         "DuplicateSheetCommand",
         "EditCellsCommand",
@@ -318,16 +347,11 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "GroupRowsCommand",
         "GroupedApplyStyleCommand",
         "ImportSheetCommand",
-        "MergeCellsCommand",
         "MergeScenarioCommand",
         "OneVariableDataTableCommand",
-        "ReapplyStructuredTableStyleCommand",
         "RefreshPivotTableCommand",
-        "RefreshStructuredTableTotalsCommand",
         "RejectedWorkbookCommand",
         "ResizeStructuredTableCommand",
-        "SaveCustomViewCommand",
-        "SaveScenarioCommand",
         "ScenarioSummaryReportCommand",
         "SetDataValidationCommand",
         "TwoVariableDataTableCommand",
@@ -345,9 +369,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 here.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 here.</para>
     /// </summary>
-    private const int OutstandingCeiling = 72;
+    private const int OutstandingCeiling = 70;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()
@@ -390,7 +414,7 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     [Fact]
     public void TheNeverExaminedListStillOnlyShrinks() =>
         NeverExaminedForThisClass.Count.Should().BeLessThanOrEqualTo(
-            36,
+            29,
             "the never-examined column specifically must keep draining, or the combined ceiling "
             + "could be satisfied by fixing easy known-broken entries while nobody ever looks at the "
             + "rest. This bound is the r218 count and comes down as rounds examine.");
