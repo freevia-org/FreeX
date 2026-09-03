@@ -222,6 +222,17 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // r220: ClearPivotTableView belongs to the same RefreshGuarded family for the same reason --
         // clearing filters that are already clear replaces empty collections with empty ones, but
         // deciding that means proving the re-render is unnecessary too.
+        // r256: the Configure family is fixed -- ConfigurePivotTableView/FieldFilters/Layout/
+        // CalculatedItems and ClearPivotTableView are OFF this list. r219's obstacle ("deciding no
+        // change means also proving the re-render is unnecessary") is true of a PREDICTIVE guard and
+        // false of a post-hoc one: _targetSnapshot IS the block the re-render overwrote, so comparing
+        // it against the sheet afterwards observes what the re-render produced rather than guessing.
+        // Model half: PivotSnapshotComparison + Matches on the snapshot records.
+        // Four pivot commands remain, each for its OWN reason rather than the family's:
+        // ChangePivotTableSource's snapshot holds the cache OBJECT, which Apply mutates in place, so
+        // comparing against it is the cannot-fire guard r231 refused; RefreshPivotTable,
+        // ConfigurePivotTableOptions and ConfigurePivotChartOptions each carry snapshot fields no
+        // pivot-state record covers.
         // r225: the AutoFilter family. Re-applying a filter that is already in effect -- clicking
         // the same colour swatch, re-confirming the same Top 10 -- recomputes the same hidden-row
         // set and writes back the same WorksheetAutoFilterColumnModel. Reachable and ordinary.
@@ -317,7 +328,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // rather than a correct signal. It also re-applies control state on redo, which the inner
         // command knows nothing about, so fixing EditCells alone will not settle this one.
         // needs a real before/after comparison, not a guard on the arguments.
-        "ClearPivotTableViewCommand",
         // r221: the two Paste commands with no record of what they wrote. Both are no-op-capable --
         // pasting column widths onto columns that already have them, or validation rules identical
         // to the destination's -- but neither accumulates an `affected`/`_added` list the way its
@@ -338,11 +348,7 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // it has no snapshot of the columns it wrote.
         "PasteColumnWidthsCommand",
         "ConfigurePivotChartOptionsCommand",
-        "ConfigurePivotTableCalculatedItemsCommand",
-        "ConfigurePivotTableFieldFiltersCommand",
-        "ConfigurePivotTableLayoutCommand",
         "ConfigurePivotTableOptionsCommand",
-        "ConfigurePivotTableViewCommand",
         "SetHyperlinkCommand",
         "SetSlicerSelectionCommand",
         "SetTimelineRangeCommand",
@@ -413,9 +419,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 at r238, 44 at r239, 43 at r240, 41 at r242, 40 at r243, 39 at r244, 37 at r245, 36 at r246, 34 at r247, 33 at r248, 32 at r249, 31 at r250, 30 at r253, 25 at r254, 23 at r255, 21 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 at r238, 44 at r239, 43 at r240, 41 at r242, 40 at r243, 39 at r244, 37 at r245, 36 at r246, 34 at r247, 33 at r248, 32 at r249, 31 at r250, 30 at r253, 25 at r254, 23 at r255, 21 with the parallel data-validation pair, 16 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
     /// </summary>
-    private const int OutstandingCeiling = 21;
+    private const int OutstandingCeiling = 16;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()

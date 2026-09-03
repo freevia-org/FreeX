@@ -4,6 +4,13 @@ namespace FreeX.Core.Commands;
 
 internal interface IPivotTableCommandStateSnapshot
 {
+    /// <summary>
+    /// r256: true when the pivot still holds exactly what Capture recorded, so a command can decide
+    /// post-hoc whether it wrote anything. Compared by CONTENT -- every implementation is a record of
+    /// lists captured with ToList(), which record equality compares by reference.
+    /// </summary>
+    bool Matches(PivotTableModel pivotTable);
+
     void Restore(PivotTableModel pivotTable);
 }
 
@@ -25,6 +32,16 @@ internal sealed record PivotFilterStateSnapshot(
             pivotTable.ValueFilters.ToList(),
             pivotTable.Sorts.ToList(),
             pivotTable.LastRenderedRange);
+
+    /// <summary>r256: true when the pivot still holds exactly what Capture recorded.</summary>
+    public bool Matches(PivotTableModel pivotTable) =>
+        PivotSnapshotComparison.SameFields(RowFields, pivotTable.RowFields)
+        && PivotSnapshotComparison.SameFields(ColumnFields, pivotTable.ColumnFields)
+        && PivotSnapshotComparison.SameFields(PageFields, pivotTable.PageFields)
+        && PivotSnapshotComparison.SameScalarRecords(LabelFilters, pivotTable.LabelFilters)
+        && PivotSnapshotComparison.SameScalarRecords(ValueFilters, pivotTable.ValueFilters)
+        && PivotSnapshotComparison.SameScalarRecords(Sorts, pivotTable.Sorts)
+        && LastRenderedRange == pivotTable.LastRenderedRange;
 
     public void Restore(PivotTableModel pivotTable)
     {
@@ -59,6 +76,17 @@ internal sealed record PivotLayoutStateSnapshot(
             pivotTable.Sorts.ToList(),
             pivotTable.LastRenderedRange);
 
+    /// <summary>r256: true when the pivot still holds exactly what Capture recorded.</summary>
+    public bool Matches(PivotTableModel pivotTable) =>
+        PivotSnapshotComparison.SameFields(RowFields, pivotTable.RowFields)
+        && PivotSnapshotComparison.SameFields(ColumnFields, pivotTable.ColumnFields)
+        && PivotSnapshotComparison.SameFields(PageFields, pivotTable.PageFields)
+        && PivotSnapshotComparison.SameScalarRecords(DataFields, pivotTable.DataFields)
+        && PivotSnapshotComparison.SameScalarRecords(LabelFilters, pivotTable.LabelFilters)
+        && PivotSnapshotComparison.SameScalarRecords(ValueFilters, pivotTable.ValueFilters)
+        && PivotSnapshotComparison.SameScalarRecords(Sorts, pivotTable.Sorts)
+        && LastRenderedRange == pivotTable.LastRenderedRange;
+
     public void Restore(PivotTableModel pivotTable)
     {
         PivotTableCommandCollections.Replace(pivotTable.RowFields, RowFields);
@@ -84,6 +112,13 @@ internal sealed record PivotViewStateSnapshot(
             pivotTable.ValueFilters.ToList(),
             pivotTable.Sorts.ToList(),
             pivotTable.LastRenderedRange);
+
+    /// <summary>r256: true when the pivot still holds exactly what Capture recorded.</summary>
+    public bool Matches(PivotTableModel pivotTable) =>
+        PivotSnapshotComparison.SameScalarRecords(LabelFilters, pivotTable.LabelFilters)
+        && PivotSnapshotComparison.SameScalarRecords(ValueFilters, pivotTable.ValueFilters)
+        && PivotSnapshotComparison.SameScalarRecords(Sorts, pivotTable.Sorts)
+        && LastRenderedRange == pivotTable.LastRenderedRange;
 
     public void Restore(PivotTableModel pivotTable)
     {
@@ -111,6 +146,15 @@ internal sealed record PivotCalculatedItemsStateSnapshot(
             pivotTable.CalculatedItems.ToList(),
             pivotTable.LastRenderedRange);
 
+    /// <summary>r256: true when the pivot still holds exactly what Capture recorded.</summary>
+    public bool Matches(PivotTableModel pivotTable) =>
+        PivotSnapshotComparison.SameFields(RowFields, pivotTable.RowFields)
+        && PivotSnapshotComparison.SameFields(ColumnFields, pivotTable.ColumnFields)
+        && PivotSnapshotComparison.SameFields(PageFields, pivotTable.PageFields)
+        && PivotSnapshotComparison.SameScalarRecords(CalculatedFields, pivotTable.CalculatedFields)
+        && PivotSnapshotComparison.SameScalarRecords(CalculatedItems, pivotTable.CalculatedItems)
+        && LastRenderedRange == pivotTable.LastRenderedRange;
+
     public void Restore(PivotTableModel pivotTable)
     {
         PivotTableCommandCollections.Replace(pivotTable.RowFields, RowFields);
@@ -134,6 +178,13 @@ internal sealed record PivotFieldLayoutStateSnapshot(
             pivotTable.ColumnFields.ToList(),
             pivotTable.PageFields.ToList(),
             pivotTable.LastRenderedRange);
+
+    /// <summary>r256: true when the pivot still holds exactly what Capture recorded.</summary>
+    public bool Matches(PivotTableModel pivotTable) =>
+        PivotSnapshotComparison.SameFields(RowFields, pivotTable.RowFields)
+        && PivotSnapshotComparison.SameFields(ColumnFields, pivotTable.ColumnFields)
+        && PivotSnapshotComparison.SameFields(PageFields, pivotTable.PageFields)
+        && LastRenderedRange == pivotTable.LastRenderedRange;
 
     public void Restore(PivotTableModel pivotTable)
     {

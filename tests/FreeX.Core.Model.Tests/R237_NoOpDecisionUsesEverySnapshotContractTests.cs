@@ -47,6 +47,11 @@ public sealed class R237_NoOpDecisionUsesEverySnapshotContractTests
         ["CellFontColorFilterCommand"] = "NothingChanged",
         ["FilterCommand"] = "NothingChanged",
         ["AdvancedFilterCommand"] = "NothingChanged",
+        ["ConfigurePivotTableFieldFiltersCommand"] = "NothingChanged",
+        ["ConfigurePivotTableViewCommand"] = "NothingChanged",
+        ["ConfigurePivotTableLayoutCommand"] = "NothingChanged",
+        ["ConfigurePivotTableCalculatedItemsCommand"] = "NothingChanged",
+        ["ClearPivotTableViewCommand"] = "NothingChanged",
     };
 
     [Fact]

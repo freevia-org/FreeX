@@ -79,8 +79,30 @@ public sealed class ConfigurePivotTableLayoutCommand : IWorkbookCommand
             _oldMergedRegions = null;
             return failure;
         }
-        return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
+        return new CommandOutcome(
+            true,
+            AffectedCells: [pivotTable.TargetRange.Start],
+            IsNoOp: NothingChanged(sheet, pivotTable, oldFootprint));
     }
+
+    /// <summary>
+    /// r256: re-applying the layout already in effect -- dropping a field back where it came from,
+    /// re-confirming the Field List without moving anything -- writes exactly what is already there.
+    /// Without this the command still pushed an undo entry, and UndoRedoStack.Push clears the redo
+    /// stack, destroying a real edit the user could have redone.
+    ///
+    /// <para>r219 left this family unfixed because deciding "no change" meant also proving the
+    /// re-render was unnecessary. The POST-HOC form does not have to prove it: <c>_targetSnapshot</c>
+    /// IS the block the re-render overwrote, so comparing it against the sheet observes what the
+    /// re-render actually produced. This command captures a third thing -- the merged regions its
+    /// re-render can strip -- and Revert restores exactly those three, so the decision covers all
+    /// three.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet sheet, PivotTableModel pivotTable, GridRange oldFootprint) =>
+        _snapshot is not null
+        && _snapshot.Matches(pivotTable)
+        && PivotSnapshotComparison.RenderedCellsUnchanged(sheet, _targetSnapshot)
+        && PivotSnapshotComparison.MergedRegionsUnchanged(sheet, _oldMergedRegions, oldFootprint);
 
     public void Revert(ICommandContext ctx)
     {

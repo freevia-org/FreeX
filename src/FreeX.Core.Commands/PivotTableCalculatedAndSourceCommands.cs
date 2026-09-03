@@ -77,8 +77,27 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
             return failure;
         }
 
-        return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
+        return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start], IsNoOp: NothingChanged(sheet, pivotTable));
     }
+
+    /// <summary>
+    /// r256: re-applying the pivot configuration already in effect writes exactly what is already
+    /// there -- the dialogs hand back the pivot's own current state as their default, so
+    /// re-confirming one reaches Apply with every argument equal to current state. Without this the
+    /// command still pushed an undo entry, and UndoRedoStack.Push clears the redo stack, destroying
+    /// a real edit the user could have redone.
+    ///
+    /// <para>r219 left this family unfixed because deciding "no change" meant also proving the
+    /// re-render was unnecessary, and guessing at that is how a guard suppresses a real edit. The
+    /// POST-HOC form does not have to prove it: <c>_targetSnapshot</c> IS the block the re-render
+    /// overwrote, so comparing it against the sheet afterwards observes what the re-render actually
+    /// produced instead of predicting it. Together with the model comparison that is the whole of
+    /// what Revert restores.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet sheet, PivotTableModel pivotTable) =>
+        _snapshot is not null
+        && _snapshot.Matches(pivotTable)
+        && PivotSnapshotComparison.RenderedCellsUnchanged(sheet, _targetSnapshot);
 
     public void Revert(ICommandContext ctx)
     {
