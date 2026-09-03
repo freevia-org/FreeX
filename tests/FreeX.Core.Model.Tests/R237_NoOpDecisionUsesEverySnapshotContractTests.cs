@@ -32,6 +32,7 @@ public sealed class R237_NoOpDecisionUsesEverySnapshotContractTests
         ["FillCellsCommand"] = "NothingChanged",
         ["AutofillCommand"] = "NothingChanged",
         ["GroupedApplyStyleCommand"] = "NothingChanged",
+        ["SetPageSetupCommand"] = "NothingChanged",
         ["RefreshStructuredTableTotalsCommand"] = "NothingChanged",
     };
 
