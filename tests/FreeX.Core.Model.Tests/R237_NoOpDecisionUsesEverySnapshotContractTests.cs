@@ -29,6 +29,7 @@ public sealed class R237_NoOpDecisionUsesEverySnapshotContractTests
     private static readonly Dictionary<string, string> DecisionMethods = new()
     {
         ["FillCellsCommand.cs"] = "NothingChanged",
+        ["AutofillCommand.cs"] = "NothingChanged",
     };
 
     [Fact]
