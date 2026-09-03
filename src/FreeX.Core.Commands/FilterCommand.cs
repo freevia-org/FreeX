@@ -445,8 +445,25 @@ public sealed class CellFillColorFilterCommand : IWorkbookCommand
                 ColorFilter = new WorksheetAutoFilterColorFilterModel(CellColor: true, Color: _fillColor)
             });
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(true, IsNoOp: NothingChanged(sheet));
     }
+
+    /// <summary>
+    /// r254: this filter is re-applicable -- the Filter menu leaves the criterion in place, and
+    /// picking the same one again writes exactly what is already there. Without this the command
+    /// still pushed an undo entry, and UndoRedoStack.Push clears the redo stack, destroying a real
+    /// edit the user could have redone.
+    ///
+    /// <para>The decision is POST-HOC and reads the command's own undo record, which is by
+    /// construction the complete list of what Apply writes: Revert restores exactly these three
+    /// snapshots and nothing else, so if none of them differs from the sheet, nothing was written.
+    /// Nothing here mirrors the edit, so nothing here can drift from it.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet? sheet) =>
+        sheet is not null
+        && WorksheetAutoFilterColumnSync.Unchanged(sheet, _range, _previousAutoFilterColumns)
+        && StructuredTableFilterColumnSync.Unchanged(sheet, _tableFilterSnapshot)
+        && (!_undoSnapshot.HasSnapshot || _undoSnapshot.Matches(sheet));
 
     public void Revert(ICommandContext ctx)
     {
@@ -549,8 +566,25 @@ public sealed class CellNoFillColorFilterCommand : IWorkbookCommand
                 ColorFilter = new WorksheetAutoFilterColorFilterModel(CellColor: true)
             });
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(true, IsNoOp: NothingChanged(sheet));
     }
+
+    /// <summary>
+    /// r254: this filter is re-applicable -- the Filter menu leaves the criterion in place, and
+    /// picking the same one again writes exactly what is already there. Without this the command
+    /// still pushed an undo entry, and UndoRedoStack.Push clears the redo stack, destroying a real
+    /// edit the user could have redone.
+    ///
+    /// <para>The decision is POST-HOC and reads the command's own undo record, which is by
+    /// construction the complete list of what Apply writes: Revert restores exactly these three
+    /// snapshots and nothing else, so if none of them differs from the sheet, nothing was written.
+    /// Nothing here mirrors the edit, so nothing here can drift from it.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet? sheet) =>
+        sheet is not null
+        && WorksheetAutoFilterColumnSync.Unchanged(sheet, _range, _previousAutoFilterColumns)
+        && StructuredTableFilterColumnSync.Unchanged(sheet, _tableFilterSnapshot)
+        && (!_undoSnapshot.HasSnapshot || _undoSnapshot.Matches(sheet));
 
     public void Revert(ICommandContext ctx)
     {
@@ -654,8 +688,25 @@ public sealed class CellFontColorFilterCommand : IWorkbookCommand
                 ColorFilter = new WorksheetAutoFilterColorFilterModel(CellColor: false, Color: _fontColor)
             });
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(true, IsNoOp: NothingChanged(sheet));
     }
+
+    /// <summary>
+    /// r254: this filter is re-applicable -- the Filter menu leaves the criterion in place, and
+    /// picking the same one again writes exactly what is already there. Without this the command
+    /// still pushed an undo entry, and UndoRedoStack.Push clears the redo stack, destroying a real
+    /// edit the user could have redone.
+    ///
+    /// <para>The decision is POST-HOC and reads the command's own undo record, which is by
+    /// construction the complete list of what Apply writes: Revert restores exactly these three
+    /// snapshots and nothing else, so if none of them differs from the sheet, nothing was written.
+    /// Nothing here mirrors the edit, so nothing here can drift from it.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet? sheet) =>
+        sheet is not null
+        && WorksheetAutoFilterColumnSync.Unchanged(sheet, _range, _previousAutoFilterColumns)
+        && StructuredTableFilterColumnSync.Unchanged(sheet, _tableFilterSnapshot)
+        && (!_undoSnapshot.HasSnapshot || _undoSnapshot.Matches(sheet));
 
     public void Revert(ICommandContext ctx)
     {
@@ -1041,6 +1092,36 @@ internal static class StructuredTableFilterColumnSync
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// r254: true when the structured table's own filter-column list holds the same content it held
+    /// when <paramref name="snapshot"/> was captured -- the table half of an AutoFilter command's
+    /// no-op decision, alongside <see cref="WorksheetAutoFilterColumnSync.Unchanged"/> and
+    /// <c>FilterUndoSnapshot.Matches</c>.
+    ///
+    /// <para>Asked AFTER <see cref="Apply"/> has run, so it reads the record of what the edit did
+    /// rather than mirroring it. A null snapshot means <see cref="Apply"/> found no matching table
+    /// and returned without touching anything. Content comparison, not record equality: the
+    /// replacement column is freshly built and shares no collection reference with the one it
+    /// replaced.</para>
+    /// </summary>
+    public static bool Unchanged(Sheet sheet, StructuredTableFilterColumnSnapshot? snapshot)
+    {
+        if (snapshot is not { } value)
+            return true;
+        if (!CommandGuards.TryFindStructuredTableIndex(sheet, value.TableId, out var tableIndex))
+            return true;
+
+        var current = sheet.StructuredTables[tableIndex].FilterColumns;
+        if (current.Count != value.PreviousFilterColumns.Count)
+            return false;
+        for (var i = 0; i < current.Count; i++)
+        {
+            if (!current[i].SameAs(value.PreviousFilterColumns[i]))
+                return false;
+        }
+        return true;
     }
 
     /// <summary>Undoes an <see cref="Apply"/> call, restoring the exact previous list contents.</summary>

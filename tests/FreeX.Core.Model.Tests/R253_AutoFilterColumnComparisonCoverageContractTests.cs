@@ -18,16 +18,27 @@ namespace FreeX.Core.Model.Tests;
 /// <c>SameAs</c> return false for two identical filters, which loses no data, and an unhandled
 /// nested-model member makes it return TRUE for two different ones, which reports a real edit as a
 /// no-op and drops it from the undo stack.</para>
+///
+/// <para>r254: extended to the structured-table mirror of the model. A table carries its own
+/// <c>&lt;autoFilter&gt;</c> inside the table part, so the same criterion has a second model of the
+/// same shape, compared the same way and checked by the same contract.</para>
 /// </summary>
 public sealed class R253_AutoFilterColumnComparisonCoverageContractTests
 {
+    /// <summary>The compared types, each with the strip method that removes its reference members.</summary>
+    public static TheoryData<string, string> ComparedModels() => new()
+    {
+        { nameof(WorksheetAutoFilterColumnModel), "Strip" },
+        { nameof(StructuredTableFilterColumnModel), "StripTable" },
+    };
+
     /// <summary>
     /// The nested filter models each carry scalars plus one <c>NativeAttributes</c> dictionary, and
     /// the comparison handles that shape with <c>with { NativeAttributes = null }</c> plus a map
     /// comparison. A different reference-typed member added to one of them would be compared by
     /// reference and silently ignored.
     /// </summary>
-    private static readonly Type[] NestedModels =
+    public static TheoryData<Type> NestedModels() =>
     [
         typeof(WorksheetAutoFilterTop10Model),
         typeof(WorksheetAutoFilterDynamicFilterModel),
@@ -35,18 +46,20 @@ public sealed class R253_AutoFilterColumnComparisonCoverageContractTests
         typeof(WorksheetAutoFilterIconFilterModel),
         typeof(WorksheetAutoFilterCustomFilterModel),
         typeof(WorksheetAutoFilterDateGroupItemModel),
+        typeof(StructuredTableCustomFilterModel),
     ];
 
-    [Fact]
-    public void StripRemovesEveryMemberRecordEqualityWouldCompareByReference()
+    [Theory]
+    [MemberData(nameof(ComparedModels))]
+    public void StripRemovesEveryMemberRecordEqualityWouldCompareByReference(string typeName, string stripMethod)
     {
         var source = ComparisonSource();
-        var stripBody = MemberBody(source, source.IndexOf("private static WorksheetAutoFilterColumnModel Strip(", StringComparison.Ordinal));
-        stripBody.Should().NotBeNullOrEmpty("Strip must exist for this contract to check anything");
+        var stripBody = MemberBody(source, source.IndexOf($"private static {typeName} {stripMethod}(", StringComparison.Ordinal));
+        stripBody.Should().NotBeNullOrEmpty($"{stripMethod} must exist for this contract to check anything");
 
-        var referenceCompared = ReferenceComparedMembers(typeof(WorksheetAutoFilterColumnModel));
+        var referenceCompared = ReferenceComparedMembers(ResolveModel(typeName));
 
-        referenceCompared.Should().HaveCountGreaterThan(8,
+        referenceCompared.Should().HaveCountGreaterThan(4,
             "a short list would mean the classification broke and this contract passed while guarding nothing");
 
         var missing = referenceCompared
@@ -55,52 +68,58 @@ public sealed class R253_AutoFilterColumnComparisonCoverageContractTests
 
         missing.Should().BeEmpty(
             "record equality compares these by reference, so leaving one in the stripped pair makes "
-            + "SameAs answer 'changed' for two filters built the same way. Missing from Strip:\n"
+            + $"SameAs answer 'changed' for two filters built the same way. Missing from {stripMethod}:\n"
             + string.Join("\n", missing));
     }
 
-    [Fact]
-    public void SameAsComparesEveryStrippedMemberByContent()
+    [Theory]
+    [MemberData(nameof(ComparedModels))]
+    public void SameAsComparesEveryStrippedMemberByContent(string typeName, string stripMethod)
     {
         var source = ComparisonSource();
-        var sameBody = MemberBody(source, source.IndexOf("public static bool SameAs(", StringComparison.Ordinal));
-        sameBody.Should().NotBeNullOrEmpty("SameAs must exist for this contract to check anything");
+        var sameBody = MemberBody(source, source.IndexOf($"public static bool SameAs(this {typeName}? left", StringComparison.Ordinal));
+        sameBody.Should().NotBeNullOrEmpty($"SameAs for {typeName} must exist for this contract to check anything");
 
-        var missing = ReferenceComparedMembers(typeof(WorksheetAutoFilterColumnModel))
+        var missing = ReferenceComparedMembers(ResolveModel(typeName))
             .Where(name => !Regex.IsMatch(sameBody!, @"\bleft\." + Regex.Escape(name) + @"\b"))
             .ToList();
 
         missing.Should().BeEmpty(
-            "Strip removes these from the record-equality comparison, so a member stripped but never "
-            + "compared afterwards is ignored outright -- SameAs would call two different filters the "
-            + "same and the command would drop a real edit. Missing from SameAs:\n"
+            $"{stripMethod} removes these from the record-equality comparison, so a member stripped "
+            + "but never compared afterwards is ignored outright -- SameAs would call two different "
+            + $"filters the same and the command would drop a real edit. Missing from SameAs({typeName}):\n"
             + string.Join("\n", missing));
     }
 
-    [Fact]
-    public void NestedFilterModelsCarryNoReferenceMemberBeyondNativeAttributes()
+    [Theory]
+    [MemberData(nameof(NestedModels))]
+    public void NestedFilterModelsCarryNoReferenceMemberBeyondNativeAttributes(Type nested)
     {
-        foreach (var nested in NestedModels)
-        {
-            var unexpected = ReferenceComparedMembers(nested)
-                .Where(name => !string.Equals(name, "NativeAttributes", StringComparison.Ordinal))
-                .ToList();
+        var unexpected = ReferenceComparedMembers(nested)
+            .Where(name => !string.Equals(name, "NativeAttributes", StringComparison.Ordinal))
+            .ToList();
 
-            unexpected.Should().BeEmpty(
-                $"{nested.Name} is compared by stripping NativeAttributes and letting record equality "
-                + "cover the rest, which is only correct while NativeAttributes is its only "
-                + "reference-compared member. Extend WorksheetAutoFilterColumnComparison's helper for "
-                + $"{nested.Name} before adding:\n"
-                + string.Join("\n", unexpected));
-        }
+        unexpected.Should().BeEmpty(
+            $"{nested.Name} is compared by stripping NativeAttributes and letting record equality "
+            + "cover the rest, which is only correct while NativeAttributes is its only "
+            + "reference-compared member. Extend WorksheetAutoFilterColumnComparison's helper for "
+            + $"{nested.Name} before adding:\n"
+            + string.Join("\n", unexpected));
     }
+
+    private static Type ResolveModel(string typeName) =>
+        typeof(WorksheetAutoFilterColumnModel).Assembly.GetType($"FreeX.Core.Model.{typeName}")
+        ?? throw new InvalidOperationException($"{typeName} not found");
 
     /// <summary>
     /// Members whose declared type <c>EqualityComparer&lt;T&gt;.Default</c> compares by reference --
-    /// every reference type except <c>string</c>, which has value equality.
+    /// every reference type except <c>string</c>, which has value equality. Get-only computed
+    /// properties are excluded: they are derived from other members rather than being state of
+    /// their own, and a record's copy constructor cannot set them.
     /// </summary>
     private static List<string> ReferenceComparedMembers(Type type) =>
         type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(property => property.CanWrite)
             .Where(property => !property.PropertyType.IsValueType && property.PropertyType != typeof(string))
             .Where(property => !string.Equals(property.Name, "EqualityContract", StringComparison.Ordinal))
             .Select(property => property.Name)

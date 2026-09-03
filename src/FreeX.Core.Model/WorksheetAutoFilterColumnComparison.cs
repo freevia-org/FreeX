@@ -158,6 +158,65 @@ public static class WorksheetAutoFilterColumnComparison
         return true;
     }
 
+
+    // ── the structured-table mirror of the same model ────────────────────────────────────────────
+    // A table carries its own <autoFilter> inside the table part, so the same criterion has a second
+    // model with the same shape and the same reference-equality problem. It is compared the same
+    // way, and the coverage contract checks this Strip too.
+    private static readonly IReadOnlyList<StructuredTableCustomFilterModel> NoTableCustomFilters = [];
+
+    /// <summary>
+    /// True when <paramref name="left"/> and <paramref name="right"/> describe the same structured-table
+    /// filter criterion -- every member compared by content, however either was constructed.
+    /// </summary>
+    public static bool SameAs(this StructuredTableFilterColumnModel? left, StructuredTableFilterColumnModel? right)
+    {
+        if (ReferenceEquals(left, right))
+            return true;
+        if (left is null || right is null)
+            return false;
+
+        if (StripTable(left) != StripTable(right))
+            return false;
+
+        return SameStrings(left.Values, right.Values)
+            && SameTableCustomFilters(left.CustomFilters, right.CustomFilters)
+            && SameMap(left.NativeCustomFiltersAttributes, right.NativeCustomFiltersAttributes)
+            && SameStrings(left.NativeFilterXmls, right.NativeFilterXmls)
+            && SameMap(left.NativeAttributes, right.NativeAttributes)
+            && SameColorFilter(left.ColorFilter, right.ColorFilter)
+            && SameDateGroups(left.DateGroups, right.DateGroups);
+    }
+
+    private static StructuredTableFilterColumnModel StripTable(StructuredTableFilterColumnModel model) => model with
+    {
+        Values = NoStrings,
+        CustomFilters = NoTableCustomFilters,
+        NativeCustomFiltersAttributes = null,
+        NativeFilterXmls = NoStrings,
+        NativeAttributes = null,
+        ColorFilter = null,
+        DateGroups = NoDateGroups,
+    };
+
+    private static bool SameTableCustomFilter(StructuredTableCustomFilterModel left, StructuredTableCustomFilterModel right) =>
+        (left with { NativeAttributes = null }) == (right with { NativeAttributes = null })
+        && SameMap(left.NativeAttributes, right.NativeAttributes);
+
+    private static bool SameTableCustomFilters(
+        IReadOnlyList<StructuredTableCustomFilterModel>? left,
+        IReadOnlyList<StructuredTableCustomFilterModel>? right)
+    {
+        if (ReferenceEquals(left, right)) return true;
+        if (left is null || right is null) return false;
+        if (left.Count != right.Count) return false;
+        for (var i = 0; i < left.Count; i++)
+        {
+            if (!SameTableCustomFilter(left[i], right[i]))
+                return false;
+        }
+        return true;
+    }
     private static bool SameMap(IReadOnlyDictionary<string, string>? left, IReadOnlyDictionary<string, string>? right)
     {
         if (ReferenceEquals(left, right)) return true;

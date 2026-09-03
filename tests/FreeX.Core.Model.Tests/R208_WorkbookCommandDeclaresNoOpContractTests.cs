@@ -232,12 +232,7 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // with no owned rows) that would be easy to mark alone, and marking it alone is exactly the
         // partial fix that would take the command off this list without making it correct. They
         "AdvancedFilterCommand",
-        "CellFillColorFilterCommand",
-        "CellFontColorFilterCommand",
-        "CellNoFillColorFilterCommand",
         "FilterCommand",
-        "FilterConditionCommand",
-        "TopBottomFilterCommand",
         // need a snapshot-versus-target comparison over both models, the way r219's group does.
         // r253: AverageFilterCommand is OFF this list -- the eight-command block is now seven. Its
         // two snapshot fields (_undoSnapshot, _previousAutoFilterColumns) are exactly the two halves
@@ -247,6 +242,16 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // The remaining seven each carry a THIRD snapshot -- a StructuredTableFilterColumnSnapshot,
         // a table-reband cell snapshot, a slicer-sync snapshot, or a copy-to cell snapshot -- and
         // stay here until that half has its own content comparison too.
+        // r254: five more OFF -- the block is down to two. StructuredTableFilterColumnSync.Unchanged
+        // supplies the third half (content comparison of the table's own filterColumn list, via
+        // WorksheetAutoFilterColumnComparison.SameAs for StructuredTableFilterColumnModel), which is
+        // exactly what CellFillColorFilter/CellFontColorFilter/CellNoFillColorFilter/FilterCondition/
+        // TopBottomFilter were missing: each has precisely three snapshot fields, and each Revert
+        // restores precisely those three, so a post-hoc decision over all three is complete.
+        // The two that remain are the ones whose extra snapshots are NOT filter models at all:
+        // FilterCommand also repaints a banded table's data body and rewrites slicer selections, and
+        // AdvancedFilterCommand writes a copy-to block of cells. Both need a cell-level comparison
+        // rather than another filter-model one.
         // r225: the two structural moves with a same-destination path. MovePivotTableCommand with
         // _targetStart equal to the pivot's current start produces a movedRange equal to the old one
         // and then re-renders over the same cells; MoveRangeCommand with the destination equal to
@@ -396,9 +401,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 at r238, 44 at r239, 43 at r240, 41 at r242, 40 at r243, 39 at r244, 37 at r245, 36 at r246, 34 at r247, 33 at r248, 32 at r249, 31 at r250, 30 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 at r238, 44 at r239, 43 at r240, 41 at r242, 40 at r243, 39 at r244, 37 at r245, 36 at r246, 34 at r247, 33 at r248, 32 at r249, 31 at r250, 30 at r253, 25 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
     /// </summary>
-    private const int OutstandingCeiling = 30;
+    private const int OutstandingCeiling = 25;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()
