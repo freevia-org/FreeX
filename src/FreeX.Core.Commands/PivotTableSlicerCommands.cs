@@ -244,7 +244,10 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
             PivotTableRefreshService.UpdateBoundPivotCharts(ctx.Workbook, targetSheet, pivotTable);
         }
 
-        return new CommandOutcome(true, AffectedCells: resolvedTargets.Select(t => t.PivotTable.TargetRange.Start).ToArray());
+        return new CommandOutcome(
+            true,
+            AffectedCells: resolvedTargets.Select(t => t.PivotTable.TargetRange.Start).ToArray(),
+            IsNoOp: NothingChanged(ctx, slicer, columnOffset: -1));
 
         void RestoreAllSlicerTargets()
         {
@@ -303,7 +306,72 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
 
         new ApplyStructuredTableFiltersCommand(sheet.Id, tableId).Apply(ctx);
 
-        return new CommandOutcome(true, AffectedCells: [table.Range.Start]);
+        return new CommandOutcome(
+            true,
+            AffectedCells: [table.Range.Start],
+            IsNoOp: NothingChanged(ctx, slicer, columnOffset));
+    }
+
+    /// <summary>
+    /// r263: re-clicking a slicer tile back to the selection already in effect -- or re-applying a
+    /// saved report connection -- writes the same selection and re-renders the same pivots. Without
+    /// this the command still pushed an undo entry, and UndoRedoStack.Push clears the redo stack,
+    /// destroying a real edit the user could have redone.
+    ///
+    /// <para>POST-HOC over everything Revert restores on the PIVOT path: the slicer's own selection
+    /// and each bound pivot's field state (through the snapshot), the re-rendered cell blocks, and
+    /// the merged regions those re-renders can strip.</para>
+    /// </summary>
+    /// <para>The command has TWO mutually exclusive paths with disjoint undo records -- a slicer
+    /// bound to pivots re-renders them, one bound to a structured table writes a value filter on a
+    /// table column -- so this decides on whichever path actually ran. Keeping it as ONE decision is
+    /// what lets the r237 contract see that all four snapshot fields participate; two decisions, one
+    /// per path, hid half of them from it.</para>
+    /// </summary>
+    private bool NothingChanged(ICommandContext ctx, SlicerModel slicer, int columnOffset)
+    {
+        if (_tableSnapshot is not null)
+            return _tableSnapshot.Matches(ctx, slicer, columnOffset);
+
+        return _snapshot is not null
+            && _snapshot.Matches(slicer)
+            && TargetSnapshotsUnchanged(_targetSnapshots)
+            && MergedRegionsUnchanged(_mergedRegionsSnapshot);
+    }
+
+    private static bool TargetSnapshotsUnchanged(
+        List<(Sheet Sheet, PivotTableModel PivotTable, List<(CellAddress Address, Cell? Cell)> Snapshot)>? targetSnapshots)
+    {
+        if (targetSnapshots is null)
+            return true;
+
+        foreach (var (sheet, _, snapshot) in targetSnapshots)
+        {
+            if (!PivotSnapshotComparison.RenderedCellsUnchanged(sheet, snapshot))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool MergedRegionsUnchanged(List<(Sheet Sheet, List<GridRange> MergedRegions)>? mergedRegionsSnapshot)
+    {
+        if (mergedRegionsSnapshot is null)
+            return true;
+
+        foreach (var (sheet, captured) in mergedRegionsSnapshot)
+        {
+            // The capture is per sheet and unscoped, so the comparison is too.
+            if (sheet.MergedRegions.Count != captured.Count)
+                return false;
+            foreach (var region in captured)
+            {
+                if (!sheet.MergedRegions.Contains(region))
+                    return false;
+            }
+        }
+
+        return true;
     }
 
     public void Revert(ICommandContext ctx)
@@ -374,6 +442,27 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
                 columnOffset,
                 table.FilterColumns.FirstOrDefault(filter => filter.ColumnId == columnOffset));
 
+        /// <summary>
+        /// r263: true when everything Capture recorded still holds. Content comparison throughout --
+        /// SelectedItems is a fresh list on every capture, and the filter column is a record carrying
+        /// its own collections, compared through the r254 comparison rather than <c>==</c>.
+        /// </summary>
+        public bool Matches(ICommandContext ctx, SlicerModel slicer, int columnOffset)
+        {
+            if (!PivotSnapshotComparison.SameStrings(SelectedItems, slicer.SelectedItems)
+                || SelectionCaptured != slicer.SelectionCaptured
+                || ColumnOffset != columnOffset)
+            {
+                return false;
+            }
+
+            if (PivotTableSlicerCommandLookups.FindSourceTable(ctx.Workbook, TableId) is not { } source)
+                return true;
+
+            var current = source.Table.FilterColumns.FirstOrDefault(filter => filter.ColumnId == columnOffset);
+            return PreviousFilterColumn.SameAs(current);
+        }
+
         public void Restore(ICommandContext ctx, SlicerModel slicer)
         {
             slicer.SelectedItems.Clear();
@@ -412,6 +501,28 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
                 slicer.SelectedItems.ToList(),
                 slicer.SelectionCaptured,
                 targets.Select(t => PivotTableTargetStateSnapshot.Capture(t.Sheet, t.PivotTable)).ToList());
+
+        /// <summary>
+        /// r263: true when everything Capture recorded still holds. The per-pivot half goes through
+        /// <c>PivotFieldLayoutStateSnapshot.Matches</c> (r256), because those field lists are rebuilt
+        /// by the re-render and record equality would compare them by reference.
+        /// </summary>
+        public bool Matches(SlicerModel slicer)
+        {
+            if (!PivotSnapshotComparison.SameStrings(SelectedItems, slicer.SelectedItems)
+                || SelectionCaptured != slicer.SelectionCaptured)
+            {
+                return false;
+            }
+
+            foreach (var snapshot in PivotTables)
+            {
+                if (!snapshot.State.Matches(snapshot.PivotTable))
+                    return false;
+            }
+
+            return true;
+        }
 
         public void Restore(SlicerModel slicer)
         {

@@ -63,6 +63,8 @@ public sealed class R237_NoOpDecisionUsesEverySnapshotContractTests
         ["SetHyperlinkCommand"] = "NothingChanged",
         ["MergeCellsCommand"] = "NothingChanged",
         ["RefreshPivotTableCommand"] = "NothingChanged",
+        ["SetSlicerSelectionCommand"] = "NothingChanged",
+        ["SetTimelineRangeCommand"] = "NothingChanged",
     };
 
     [Fact]
