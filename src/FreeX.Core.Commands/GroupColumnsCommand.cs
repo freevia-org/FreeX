@@ -608,8 +608,22 @@ public sealed class SetColumnOutlineGroupCollapsedCommand : IWorkbookCommand
             }
         }
 
-        return new CommandOutcome(true);
+        // r242: the third command in this file to take the r223 decision -- compare the live
+        // outline state against the snapshots taken for Revert before anything moved.
+        // Its row twin is judged sound because the caller passes !group.IsCollapsed, a
+        // negation gate; this one has no such caller guarantee, which is exactly why the
+        // r208 census separated them.
+        return OutcomeFor(sheet);
     }
+
+    /// <summary>r242: the same decision the two Expand/Collapse commands in this file use.</summary>
+    private CommandOutcome OutcomeFor(Sheet sheet) =>
+        _previousHiddenCols is not null
+        && _previousCollapsedAnchors is not null
+        && sheet.GroupHiddenCols.SetEquals(_previousHiddenCols)
+        && sheet.CollapsedAnchorCols.SetEquals(_previousCollapsedAnchors)
+            ? new CommandOutcome(true, IsNoOp: true)
+            : new CommandOutcome(true);
 
     public void Revert(ICommandContext ctx)
     {
