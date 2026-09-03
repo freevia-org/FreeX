@@ -70,8 +70,23 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
             }
         }
 
+        // r240: this command rewrites every totals cell from the current data, so refreshing
+        // a table whose data has not moved writes back exactly what is there. _previousCells
+        // is its only undo snapshot, so consulting it is the whole of the question.
+        if (NothingChanged(sheet))
+            return new CommandOutcome(true, IsNoOp: true);
+
         return new CommandOutcome(true, AffectedCells: affectedCells);
     }
+
+    /// <summary>
+    /// r240: whether the refresh left every totals cell as it found it. _previousCells is this
+    /// command's only undo snapshot, so per the r237 invariant it is also the whole of what
+    /// has to be compared.
+    /// </summary>
+    private bool NothingChanged(Sheet sheet) =>
+        _previousCells.All(entry =>
+            CellEditCompanionSnapshot.SameCellOrAbsent(sheet, entry.Key, entry.Value));
 
     public void Revert(ICommandContext ctx)
     {

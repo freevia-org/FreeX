@@ -279,7 +279,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "MergeCellsCommand",
         // RefreshStructuredTableTotals rewrites every totals cell from the current data; when the
         // data has not changed it writes back what is there. Deciding needs a per-cell comparison.
-        "RefreshStructuredTableTotalsCommand",
         // ReapplyStructuredTableStyle is a delegation case of a kind r223/r224 did not have: it
         // returns ApplyStructuredTableStyleCommand's outcome, and THAT command is on this list. So it
         // inherits the defect rather than a correct signal -- delegation propagates both -- and
@@ -394,9 +393,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 at r238, 44 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 at r238, 44 at r239, 43 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
     /// </summary>
-    private const int OutstandingCeiling = 44;
+    private const int OutstandingCeiling = 43;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()
