@@ -61,6 +61,7 @@ public sealed class R237_NoOpDecisionUsesEverySnapshotContractTests
         ["ConfigurePivotTableOptionsCommand"] = "NothingChanged",
         ["PasteColumnWidthsCommand"] = "NothingChanged",
         ["SetHyperlinkCommand"] = "NothingChanged",
+        ["MergeCellsCommand"] = "NothingChanged",
     };
 
     [Fact]
