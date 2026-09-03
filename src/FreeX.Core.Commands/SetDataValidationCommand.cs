@@ -63,6 +63,13 @@ public sealed class SetDataValidationCommand : IWorkbookCommand
         if (matchedRule is not null)
         {
             var idx = FindDataValidationIndex(sheet, matchedRule.Id);
+            // r250: the Data Validation dialog pre-fills the rule being edited, so pressing OK
+            // without changing anything replaces a rule with an equal one. DataValidation is a class
+            // with reference equality, so this needs SameAs -- whose coverage contract derives the
+            // member list from CloneForRanges, per r249.
+            if (idx >= 0 && sheet.DataValidations[idx].SameAs(_rule))
+                return new CommandOutcome(true, IsNoOp: true);
+
             _previous = idx >= 0 ? sheet.DataValidations[idx] : null;
             if (idx >= 0)
                 sheet.DataValidations[idx] = _rule;

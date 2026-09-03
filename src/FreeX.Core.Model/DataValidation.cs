@@ -95,6 +95,65 @@ public sealed class DataValidation
         return clone;
     }
 
+    /// <summary>
+    /// r250: content comparison, checked against <see cref="CloneForRanges"/> by
+    /// R250_DataValidationComparisonCoverageContractTests -- the r249 shape, where the type's
+    /// own clone is the field list because it has to be complete or cloning loses data.
+    /// <para>
+    /// The four Native* members and AdditionalRanges are collections. The clone assigns the
+    /// first four BY REFERENCE, so a clone compares equal to its source on them -- but two
+    /// independently built rules with identical content do not, which is the case a no-op
+    /// decision actually faces. They are compared by content here for that reason.
+    /// </para>
+    /// </summary>
+    public bool SameAs(DataValidation other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+
+        return Id == other.Id
+            && Equals(AppliesTo, other.AppliesTo)
+            && Type == other.Type
+            && Operator == other.Operator
+            && string.Equals(Formula1, other.Formula1, StringComparison.Ordinal)
+            && string.Equals(Formula2, other.Formula2, StringComparison.Ordinal)
+            && AllowBlank == other.AllowBlank
+            && ShowDropdown == other.ShowDropdown
+            && AlertStyle == other.AlertStyle
+            && ShowInputMessage == other.ShowInputMessage
+            && ShowErrorMessage == other.ShowErrorMessage
+            && string.Equals(ErrorTitle, other.ErrorTitle, StringComparison.Ordinal)
+            && string.Equals(ErrorMessage, other.ErrorMessage, StringComparison.Ordinal)
+            && string.Equals(PromptTitle, other.PromptTitle, StringComparison.Ordinal)
+            && string.Equals(PromptMessage, other.PromptMessage, StringComparison.Ordinal)
+            && IsX14 == other.IsX14
+            && SameMap(NativeAttributes, other.NativeAttributes)
+            && SameMap(NativeContainerAttributes, other.NativeContainerAttributes)
+            && SameList(NativeChildXmls, other.NativeChildXmls)
+            && SameList(NativeContainerChildXmls, other.NativeContainerChildXmls)
+            && AdditionalRanges.Count == other.AdditionalRanges.Count
+            && AdditionalRanges.SequenceEqual(other.AdditionalRanges);
+    }
+
+    private static bool SameList(IReadOnlyList<string>? left, IReadOnlyList<string>? right)
+    {
+        if (left is null || right is null)
+            return left is null && right is null;
+
+        return left.Count == right.Count && left.SequenceEqual(right, StringComparer.Ordinal);
+    }
+
+    private static bool SameMap(
+        IReadOnlyDictionary<string, string>? left,
+        IReadOnlyDictionary<string, string>? right)
+    {
+        if (left is null || right is null)
+            return left is null && right is null;
+
+        return left.Count == right.Count
+            && left.All(entry => right.TryGetValue(entry.Key, out var value)
+                && string.Equals(entry.Value, value, StringComparison.Ordinal));
+    }
+
     public bool Overlaps(GridRange range)
     {
         if (AppliesTo.Overlaps(range))
