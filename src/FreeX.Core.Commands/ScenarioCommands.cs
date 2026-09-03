@@ -72,8 +72,29 @@ public sealed class SaveScenarioCommand : IWorkbookCommand
         }
 
         _applied = true;
-        return new CommandOutcome(true, AffectedCells: ScenarioCommandHelpers.BuildAffectedCells(_scenario.ChangingCells));
+        return new CommandOutcome(
+            true,
+            AffectedCells: ScenarioCommandHelpers.BuildAffectedCells(_scenario.ChangingCells),
+            IsNoOp: NothingChanged());
     }
+
+    /// <summary>
+    /// r258: saving a scenario again under the same name with nothing changed in between writes back
+    /// an equal scenario -- re-confirming the Scenario Manager's Edit dialog without touching a
+    /// value. Without this the command still pushed an undo entry, and UndoRedoStack.Push clears the
+    /// redo stack, destroying a real edit the user could have redone.
+    ///
+    /// <para>r231 declined to guard this because <c>newValue == previous</c> could not fire:
+    /// WorkbookScenario carries a ChangingCells list, which record equality compares by reference,
+    /// and every save builds a fresh one. <see cref="SaveTargetComparison"/> compares it by content.
+    /// The decision covers the command's whole undo record -- Revert replaces
+    /// <c>_previousScenario</c> at <c>_previousIndex</c>, or removes the added scenario when there
+    /// was none -- and that second case is never a no-op, which is why it answers false.</para>
+    /// </summary>
+    private bool NothingChanged() =>
+        _previousIndex >= 0
+        && _previousScenario is not null
+        && SaveTargetComparison.Same(_previousScenario, _scenario);
 
     public void Revert(ICommandContext ctx)
     {
