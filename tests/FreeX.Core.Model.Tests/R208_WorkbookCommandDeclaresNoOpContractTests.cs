@@ -289,7 +289,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "ChangePivotTableSourceCommand",
         "DataTableBodyRefreshCommand",
         "ExternalTextPasteSpecialCommand",
-        "ExternalTextPasteValuesCommand",
         "FormatPainterDataValidationCommand",
         "GroupedApplyStyleCommand",
         "MergeScenarioCommand",
@@ -300,7 +299,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // which is on this list -- so like ReapplyStructuredTableStyle in r231 it inherits the defect
         // rather than a correct signal. It also re-applies control state on redo, which the inner
         // command knows nothing about, so fixing EditCells alone will not settle this one.
-        "FormControlInteractionCommand",
         // needs a real before/after comparison, not a guard on the arguments.
         "ClearPivotTableViewCommand",
         // r221: the two Paste commands with no record of what they wrote. Both are no-op-capable --
@@ -350,6 +348,14 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // all no-ops, reports IsNoOp itself. So this command already reports correctly and the
         // per-class scan simply cannot see through the delegation.
         ["RemoveSheetsCommand"] = "CompositeWorkbookCommand",
+        // r235: both delegate their whole edit to EditCellsCommand, which r234 taught to compare
+        // written values against what was there -- so both now report correctly and only the
+        // per-class source scan cannot see it. FormControlInteractionCommand needs one extra step of
+        // argument: it DOES write control state of its own, but only inside `if (_applied)`, which
+        // is the redo path. Redo only runs for an entry that was pushed, and a no-op is never
+        // pushed, so on first Apply this command is pure delegation.
+        ["ExternalTextPasteValuesCommand"] = "EditCellsCommand",
+        ["FormControlInteractionCommand"] = "EditCellsCommand",
     };
 
     /// <summary>
@@ -381,9 +387,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
     /// </summary>
-    private const int OutstandingCeiling = 49;
+    private const int OutstandingCeiling = 47;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()
