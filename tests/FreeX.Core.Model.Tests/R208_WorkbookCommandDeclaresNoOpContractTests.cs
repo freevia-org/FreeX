@@ -208,6 +208,11 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// </summary>
     private static readonly HashSet<string> KnownNoOpCapableNotYetFixed =
     [
+        // r267: EMPTY. MoveRangeCommand was the last entry. Its one reachable no-op -- r225's own
+        // "dropping it where it started" -- was already an explicit early return that captures empty
+        // snapshots and writes nothing; it just never said IsNoOp. The wide decision built alongside it
+        // covers the full apply path (moving an empty range onto blanks), and the two are proved
+        // load-bearing on disjoint tests.
         // r219, the pivot Configure family. Evidence is in the callers, not inference:
         // PivotApplicationSession.PlanFieldFilters passes `sorts ?? PivotTable.Sorts.ToList()` and
         // PlanFieldSort passes the pivot's own LabelFilters/ValueFilters straight back, so
@@ -277,7 +282,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // and then re-renders over the same cells; MoveRangeCommand with the destination equal to
         // the source start writes the same cells back. Both reachable by dragging something and
         // dropping it where it started. Same reason as the filters for not fixing them here: each
-        "MoveRangeCommand",
         // r266: the two comparisons MoveRange's decision was missing now exist and are contract-checked
         // (MoveRangeSnapshotComparison: sparklines, and a chart's verbatim formula snapshot). Both were
         // incomplete as first written -- 8 of 29 sparkline members, 3 of 6 verbatim ones -- and both
@@ -457,9 +461,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 at r238, 44 at r239, 43 at r240, 41 at r242, 40 at r243, 39 at r244, 37 at r245, 36 at r246, 34 at r247, 33 at r248, 32 at r249, 31 at r250, 30 at r253, 25 at r254, 23 at r255, 21 with the parallel data-validation pair, 16 at r256, 13 at r257, 11 at r258, 9 at r259, 7 at r260, 6 at r261, 5 at r262, 3 at r263, 2 at r264, 1 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 at r238, 44 at r239, 43 at r240, 41 at r242, 40 at r243, 39 at r244, 37 at r245, 36 at r246, 34 at r247, 33 at r248, 32 at r249, 31 at r250, 30 at r253, 25 at r254, 23 at r255, 21 with the parallel data-validation pair, 16 at r256, 13 at r257, 11 at r258, 9 at r259, 7 at r260, 6 at r261, 5 at r262, 3 at r263, 2 at r264, 1 at r265, 0 here -- the list is EMPTY -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
     /// </summary>
-    private const int OutstandingCeiling = 1;
+    private const int OutstandingCeiling = 0;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()

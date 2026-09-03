@@ -67,6 +67,7 @@ public sealed class R237_NoOpDecisionUsesEverySnapshotContractTests
         ["SetTimelineRangeCommand"] = "NothingChanged",
         ["ChangePivotTableSourceCommand"] = "NothingChanged",
         ["ResizeStructuredTableCommand"] = "NothingChanged",
+        ["MoveRangeCommand"] = "NothingChanged",
     };
 
     [Fact]

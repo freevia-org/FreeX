@@ -138,11 +138,14 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
         var targetRange = new GridRange(_destination, targetEnd);
         if (!isCrossSheet && targetRange == _sourceRange)
         {
+            // r267: dropping the range where it started -- r225's own example of this command's
+            // no-op. This path writes NOTHING: it captures empty snapshots and returns, so the no-op
+            // is true by construction rather than by comparison, and Revert has nothing to restore.
             _affectedCells = [];
             _payloadAffectedCells = [];
             _snapshot = [];
             _formulaSnapshot = [];
-            return new CommandOutcome(true, AffectedCells: _affectedCells);
+            return new CommandOutcome(true, AffectedCells: _affectedCells, IsNoOp: true);
         }
 
         var sourceSheet = ctx.GetSheet(_sheetId);
@@ -448,7 +451,251 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
         }
 
         _affectedCells = MergeAffectedCells(affected, _formulaSnapshot.Keys);
-        return new CommandOutcome(true, AffectedCells: _affectedCells);
+        return new CommandOutcome(
+            true,
+            AffectedCells: _affectedCells,
+            IsNoOp: NothingChanged(ctx, sourceSheet, destSheet));
+    }
+
+
+    /// <summary>
+    /// r267: dragging a range and dropping it where it started -- or a Cut/Paste whose destination is
+    /// the source range's own top-left -- writes every cell back to itself. r225 recorded it as
+    /// "reachable by dragging something and dropping it where it started"; without this the command
+    /// still pushed an undo entry, and UndoRedoStack.Push clears the redo stack, destroying a real
+    /// edit the user could have redone.
+    ///
+    /// <para>This is the widest decision in the program, because this command has the most to write:
+    /// twenty-six snapshots, and Revert restores exactly those. Every one is compared here, through
+    /// the comparisons r234 (cells), r265 (structured tables) and r266 (sparklines, chart verbatim
+    /// formulas) built. It is long, but nothing in it is clever: each clause asks the same question
+    /// of one more thing the command can write.</para>
+    ///
+    /// <para>Three clauses are CONSERVATIVE by design and marked below: the rewrite maps record a
+    /// prior value only when a rewrite actually happened, so a non-empty map is taken as "changed"
+    /// without re-reading the rule by id. That can only under-report a no-op, never over-report one --
+    /// the safe direction, and why leaving the sharper comparison unbuilt is acceptable.</para>
+    /// </summary>
+    private bool NothingChanged(ICommandContext ctx, Sheet sourceSheet, Sheet destSheet)
+    {
+        if (_snapshot is null)
+            return false;
+
+        Sheet Resolve(SheetId id) => id == _sheetId ? sourceSheet : destSheet;
+
+        foreach (var snapshot in _snapshot)
+        {
+            var sheet = Resolve(snapshot.Address.Sheet);
+            if (!CellEditCompanionSnapshot.SameCellOrAbsent(sheet, snapshot.Address, snapshot.Cell))
+                return false;
+            if (sheet.GetStyleOnly(snapshot.Address.Row, snapshot.Address.Col) != snapshot.StyleOnly)
+                return false;
+        }
+
+        // Formula rewrites elsewhere in the workbook: the map holds the PRIOR text of every formula
+        // the rewrite touched, so comparing it against what those cells hold now is exact.
+        if (_formulaSnapshot is not null)
+        {
+            foreach (var (address, priorFormula) in _formulaSnapshot)
+            {
+                var cell = Resolve(address.Sheet).GetCell(address);
+                if (!string.Equals(cell?.FormulaText, priorFormula, StringComparison.Ordinal))
+                    return false;
+            }
+        }
+
+        // Conservative: a non-empty rewrite map means a rule formula or threshold was rewritten.
+        if (_cfFormulaSnapshot is { Count: > 0 } || _cfThresholdSnapshot is { Count: > 0 } || _dvFormulaSnapshot is { Count: > 0 })
+            return false;
+        // Conservative: a non-empty relocation list means a spill payload moved.
+        if (_spillRelocations is { Count: > 0 })
+            return false;
+
+        // Every snapshot is named HERE, in the decision, rather than only inside the helper that
+        // compares it. The r237 contract reads this body, and a field visible only in a helper is a
+        // field the contract cannot police -- the same structural point it made in r255, r259 and
+        // r263. With twenty-six of them the parameter lists are long; that is the price of the
+        // decision being readable as a list of everything this command can write.
+        return CompanionStateUnchanged(
+                Resolve,
+                _commentSnapshot,
+                _commentAuthorsSnapshot,
+                _shownCommentsSnapshot,
+                _threadedCommentSnapshot,
+                _hyperlinkSnapshot,
+                _hyperlinkMetadataSnapshot,
+                _richTextRunsSnapshot,
+                _phoneticGuideSnapshot,
+                _sparklineSnapshot)
+            && RuleRangesUnchanged(_dataValidationSnapshot, _conditionalFormatSnapshot)
+            && SheetStructureUnchanged(
+                sourceSheet,
+                destSheet,
+                _mergedRegionsSnapshot,
+                _destMergedRegionsSnapshot,
+                _sourceTablesSnapshot,
+                _destTablesSnapshot)
+            && WorkbookWideStateUnchanged(
+                ctx.Workbook,
+                Resolve,
+                _namedRangeSnapshot,
+                _scopedNamedRangeSnapshot,
+                _chartVerbatimSnapshot,
+                _chartDataRangeSnapshot,
+                _sparklineDataRangeSnapshot);
+    }
+
+    /// <summary>The nine per-address companion collections, over exactly the addresses captured.</summary>
+    private bool CompanionStateUnchanged(
+        Func<SheetId, Sheet> resolve,
+        Dictionary<CellAddress, string>? comments,
+        Dictionary<CellAddress, string>? commentAuthors,
+        HashSet<CellAddress>? shownComments,
+        Dictionary<CellAddress, ThreadedComment>? threadedComments,
+        Dictionary<CellAddress, string>? hyperlinks,
+        Dictionary<CellAddress, HyperlinkMetadata>? hyperlinkMetadata,
+        Dictionary<CellAddress, IReadOnlyList<CellTextRun>>? richTextRuns,
+        Dictionary<CellAddress, CellPhoneticGuide>? phoneticGuides,
+        Dictionary<CellAddress, SparklineModel>? sparklines) =>
+        MoveRangeSnapshotComparison.SameScopedDictionary(resolve, static s => s.Comments, comments, _payloadAffectedCells, static (a, b) => string.Equals(a, b, StringComparison.Ordinal))
+        && MoveRangeSnapshotComparison.SameScopedDictionary(resolve, static s => s.CommentAuthors, commentAuthors, _payloadAffectedCells, static (a, b) => string.Equals(a, b, StringComparison.Ordinal))
+        && MoveRangeSnapshotComparison.SameScopedAddressSet(resolve, static s => s.ShownComments, shownComments, _payloadAffectedCells)
+        && MoveRangeSnapshotComparison.SameScopedDictionary(resolve, static s => s.ThreadedComments, threadedComments, _payloadAffectedCells, static (a, b) => ReferenceEquals(a, b))
+        && MoveRangeSnapshotComparison.SameScopedDictionary(resolve, static s => s.Hyperlinks, hyperlinks, _payloadAffectedCells, static (a, b) => string.Equals(a, b, StringComparison.Ordinal))
+        && MoveRangeSnapshotComparison.SameScopedDictionary(resolve, static s => s.HyperlinkMetadata, hyperlinkMetadata, _payloadAffectedCells, static (a, b) => a == b)
+        && MoveRangeSnapshotComparison.SameScopedDictionary(resolve, static s => s.RichTextRuns, richTextRuns, _payloadAffectedCells, static (a, b) => MoveRangeSnapshotComparison.SameList(a, b, static (x, y) => x == y))
+        && MoveRangeSnapshotComparison.SameScopedDictionary(resolve, static s => s.CellPhoneticGuides, phoneticGuides, _payloadAffectedCells, static (a, b) => ReferenceEquals(a, b))
+        && SparklinesUnchanged(resolve, sparklines);
+
+    /// <summary>
+    /// Sparklines live in a LIST keyed by their own Location rather than a per-address dictionary, so
+    /// they get their own lookup -- the capture recorded whichever sparkline sat at each affected
+    /// address, and the comparison asks what sits there now.
+    /// </summary>
+    private bool SparklinesUnchanged(Func<SheetId, Sheet> resolve, Dictionary<CellAddress, SparklineModel>? sparklines)
+    {
+        if (sparklines is null)
+            return true;
+
+        foreach (var address in _payloadAffectedCells)
+        {
+            var current = resolve(address.Sheet).Sparklines.FirstOrDefault(sparkline => sparkline.Location.Equals(address));
+            var captured = sparklines.TryGetValue(address, out var before) ? before : null;
+            if ((current is null) != (captured is null))
+                return false;
+            if (current is not null && !MoveRangeSnapshotComparison.SameSparkline(current, captured!))
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The rule-range snapshots hold each rule OBJECT alongside the ranges it had, and Revert writes
+    /// those ranges back onto that same object -- so the comparison asks the object what it holds now.
+    /// </summary>
+    private static bool RuleRangesUnchanged(
+        List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? dataValidations,
+        List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? conditionalFormats)
+    {
+        if (dataValidations is not null)
+        {
+            foreach (var (rule, appliesTo, additionalRanges) in dataValidations)
+            {
+                if (!rule.AppliesTo.Equals(appliesTo)
+                    || !MoveRangeSnapshotComparison.SameList(additionalRanges, rule.AdditionalRanges, static (a, b) => a.Equals(b)))
+                {
+                    return false;
+                }
+            }
+        }
+
+        if (conditionalFormats is not null)
+        {
+            foreach (var (rule, appliesTo, additionalRanges) in conditionalFormats)
+            {
+                if (!rule.AppliesTo.Equals(appliesTo)
+                    || !MoveRangeSnapshotComparison.SameList(additionalRanges, rule.AdditionalRanges ?? [], static (a, b) => a.Equals(b)))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>Merged regions and structured tables, at both ends of the move.</summary>
+    private static bool SheetStructureUnchanged(
+        Sheet sourceSheet,
+        Sheet destSheet,
+        List<GridRange>? sourceMergedRegions,
+        List<GridRange>? destMergedRegions,
+        List<StructuredTableModel>? sourceTables,
+        List<StructuredTableModel>? destTables) =>
+        MoveRangeSnapshotComparison.SameList(sourceMergedRegions, sourceMergedRegions is null ? null : sourceSheet.MergedRegions.ToList(), static (a, b) => a.Equals(b))
+        && MoveRangeSnapshotComparison.SameList(destMergedRegions, destMergedRegions is null ? null : destSheet.MergedRegions.ToList(), static (a, b) => a.Equals(b))
+        && MoveRangeSnapshotComparison.SameList(sourceTables, sourceTables is null ? null : sourceSheet.StructuredTables.ToList(), StructuredTableComparison.Same)
+        && MoveRangeSnapshotComparison.SameList(destTables, destTables is null ? null : destSheet.StructuredTables.ToList(), StructuredTableComparison.Same);
+
+    /// <summary>Named ranges, chart formulas and chart data ranges, which a move rewrites workbook-wide.</summary>
+    private static bool WorkbookWideStateUnchanged(
+        Workbook workbook,
+        Func<SheetId, Sheet> resolve,
+        Dictionary<string, NamedRangeSnapshot>? namedRanges,
+        Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? scopedNamedRanges,
+        List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? chartVerbatim,
+        List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? chartDataRanges,
+        List<(SparklineModel Sparkline, GridRange OriginalDataRange)>? sparklineDataRanges)
+    {
+        if (namedRanges is not null)
+        {
+            foreach (var (name, captured) in namedRanges)
+            {
+                if (!workbook.NamedRanges.TryGetValue(name, out var current) || !current.Equals(captured.Range))
+                    return false;
+            }
+        }
+
+        if (scopedNamedRanges is not null)
+        {
+            foreach (var (key, captured) in scopedNamedRanges)
+            {
+                if (!workbook.ScopedNamedRanges.TryGetValue(key, out var current) || !current.Equals(captured.Range))
+                    return false;
+            }
+        }
+
+        if (chartVerbatim is not null)
+        {
+            foreach (var hostSnapshot in chartVerbatim)
+            {
+                var current = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(resolve(hostSnapshot.HostSheet));
+                if (!MoveRangeSnapshotComparison.SameList(hostSnapshot.Charts, current, MoveRangeSnapshotComparison.SameChartVerbatim))
+                    return false;
+            }
+        }
+
+        if (chartDataRanges is not null)
+        {
+            foreach (var hostSnapshot in chartDataRanges)
+            {
+                var current = resolve(hostSnapshot.HostSheet).Charts.Select(chart => chart.DataRange).ToList();
+                if (!MoveRangeSnapshotComparison.SameList(hostSnapshot.Ranges, current, static (a, b) => a.Equals(b)))
+                    return false;
+            }
+        }
+
+        if (sparklineDataRanges is not null)
+        {
+            foreach (var (sparkline, originalDataRange) in sparklineDataRanges)
+            {
+                if (!sparkline.DataRange.Equals(originalDataRange))
+                    return false;
+            }
+        }
+
+        return true;
     }
 
     public void Revert(ICommandContext ctx)

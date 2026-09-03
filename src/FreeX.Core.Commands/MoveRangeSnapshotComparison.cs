@@ -104,6 +104,54 @@ internal static class MoveRangeSnapshotComparison
         return true;
     }
 
+
+    /// <summary>
+    /// A per-address companion collection, compared over exactly the addresses the snapshot was
+    /// captured across. Present-with-this-value versus absent: the capture records only the addresses
+    /// that HAD an entry, so an address that has one now and did not before is a change even though
+    /// the captured map says nothing about it.
+    /// </summary>
+    internal static bool SameScopedDictionary<TValue>(
+        Func<SheetId, Sheet> resolveSheet,
+        Func<Sheet, Dictionary<CellAddress, TValue>> selector,
+        Dictionary<CellAddress, TValue>? captured,
+        IReadOnlyList<CellAddress> addresses,
+        Func<TValue, TValue, bool> same)
+    {
+        if (captured is null)
+            return true;
+
+        foreach (var address in addresses)
+        {
+            var presentNow = selector(resolveSheet(address.Sheet)).TryGetValue(address, out var now);
+            var presentBefore = captured.TryGetValue(address, out var before);
+            if (presentNow != presentBefore)
+                return false;
+            if (presentNow && !same(now!, before!))
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>The set-shaped counterpart, for shown-comment flags.</summary>
+    internal static bool SameScopedAddressSet(
+        Func<SheetId, Sheet> resolveSheet,
+        Func<Sheet, HashSet<CellAddress>> selector,
+        HashSet<CellAddress>? captured,
+        IReadOnlyList<CellAddress> addresses)
+    {
+        if (captured is null)
+            return true;
+
+        foreach (var address in addresses)
+        {
+            if (selector(resolveSheet(address.Sheet)).Contains(address) != captured.Contains(address))
+                return false;
+        }
+
+        return true;
+    }
     /// <summary>
     /// Every entry a snapshot recorded still holds the value it recorded, and the map has not grown.
     /// This is the shape most of MoveRange's snapshots have -- comments, hyperlinks, formulas,
