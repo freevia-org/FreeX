@@ -245,6 +245,16 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // dropping it where it started. Same reason as the filters for not fixing them here: each
         "MovePivotTableCommand",
         "MoveRangeCommand",
+        // r236 REFINES the r233 diagnosis for these, and for GroupedApplyStyleCommand below.
+        // r234 built the cell comparison they were said to need, and it is not sufficient for them:
+        // all three write COMPANION state as well -- hyperlinks, hyperlink metadata, rich-text runs
+        // -- and keep it in SEPARATE parallel snapshot lists from their cell snapshot. So no single
+        // snapshot answers "did anything change", and a comparison built on the cell list alone
+        // would report unchanged for a fill that altered only a hyperlink. The remedy is to capture
+        // CellEditCompanionSnapshot (which covers all four) instead of three parallel tuples -- a
+        // change to how these commands hold their undo state, not a guard added to them.
+        // Checked rather than assumed, and it cut both ways: the same look confirmed their UNDO is
+        // complete, because those parallel snapshots do get restored.
         // r229: the two fill commands whose target list is never empty. Fill Down over cells that
         // already hold the value being filled, or autofilling a series back over itself, changes
         // nothing -- but unlike FlashFillCommand next door, these two validate a non-empty target
