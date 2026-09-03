@@ -441,7 +441,8 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
             0,
             "the never-examined column specifically must keep draining, or the combined ceiling "
             + "could be satisfied by fixing easy known-broken entries while nobody ever looks at the "
-            + "rest. This bound is the r218 count and comes down as rounds examine.");
+            + "rest. r232 drained this column to zero, so the bound is now 0 and the assertion has "
+            + "become 'nothing may ever go back in here unexamined' rather than a shrinking count.");
 
     [Fact]
     public void EveryEntryStillNamesALiveCommandThatStillLacksAnIsNoOp()
