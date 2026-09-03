@@ -30,6 +30,7 @@ public sealed class R237_NoOpDecisionUsesEverySnapshotContractTests
     {
         ["FillCellsCommand.cs"] = "NothingChanged",
         ["AutofillCommand.cs"] = "NothingChanged",
+        ["GroupedApplyStyleCommand.cs"] = "NothingChanged",
     };
 
     [Fact]

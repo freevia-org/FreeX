@@ -298,7 +298,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "DataTableBodyRefreshCommand",
         "ExternalTextPasteSpecialCommand",
         "FormatPainterDataValidationCommand",
-        "GroupedApplyStyleCommand",
         "MergeScenarioCommand",
         "RefreshPivotTableCommand",
         "ResizeStructuredTableCommand",
@@ -395,9 +394,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 at r238, 44 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
     /// </summary>
-    private const int OutstandingCeiling = 45;
+    private const int OutstandingCeiling = 44;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()
