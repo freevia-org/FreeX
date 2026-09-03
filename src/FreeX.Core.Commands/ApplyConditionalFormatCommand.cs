@@ -32,6 +32,14 @@ public sealed class ApplyConditionalFormatCommand : IWorkbookCommand
         var idx = FindConditionalFormatIndex(sheet, _format.Id);
         if (idx >= 0)
         {
+            // r249: the Conditional Formatting rules dialog pre-fills the rule being edited,
+            // so pressing OK without changing anything replaces a rule with an equal one.
+            // ConditionalFormat.SameAs compares content, because the type is a class with
+            // reference equality and sixty members -- and its coverage contract derives that
+            // member list from Clone, which the type has to keep correct anyway.
+            if (sheet.ConditionalFormats[idx].SameAs(_format))
+                return new CommandOutcome(true, IsNoOp: true);
+
             _previous = sheet.ConditionalFormats[idx];
             sheet.ConditionalFormats[idx] = _format;
         }
