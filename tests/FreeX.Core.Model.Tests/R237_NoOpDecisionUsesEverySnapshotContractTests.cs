@@ -45,6 +45,8 @@ public sealed class R237_NoOpDecisionUsesEverySnapshotContractTests
         ["CellFillColorFilterCommand"] = "NothingChanged",
         ["CellNoFillColorFilterCommand"] = "NothingChanged",
         ["CellFontColorFilterCommand"] = "NothingChanged",
+        ["FilterCommand"] = "NothingChanged",
+        ["AdvancedFilterCommand"] = "NothingChanged",
     };
 
     [Fact]

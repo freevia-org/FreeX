@@ -83,7 +83,7 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
                 if (!matchedRows.Contains(row))
                     sheet.FilterHiddenRows.Add(row);
             }
-            return new CommandOutcome(true);
+            return new CommandOutcome(true, IsNoOp: NothingChanged(sheet));
         }
 
         if (_copyTo.Value.Sheet != sheet.Id)
@@ -100,9 +100,10 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
         // destination corner while running the command forward selected the whole copy-to range --
         // undo visibly shrank the selection. Reporting the range the user nominated keeps both
         // directions on the same selection.
+        var isNoOp = NothingChanged(sheet);
         return _copyToRange is { } copyToRange
-            ? new CommandOutcome(true, AffectedCells: [copyToRange.Start, copyToRange.End])
-            : new CommandOutcome(true, AffectedCells: [_copyTo.Value]);
+            ? new CommandOutcome(true, AffectedCells: [copyToRange.Start, copyToRange.End], IsNoOp: isNoOp)
+            : new CommandOutcome(true, AffectedCells: [_copyTo.Value], IsNoOp: isNoOp);
     }
 
     public static bool IsListRangeWithinSupportedBounds(GridRange range) =>
@@ -171,6 +172,40 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
             return new CommandOutcome(false, CopyOutputTooLargeMessage);
 
         return null;
+    }
+
+    /// <summary>
+    /// r255: Advanced Filter is re-runnable from the ribbon with the dialog's settings unchanged --
+    /// the same list range, the same criteria range, the same destination -- and Excel users re-run
+    /// it after editing the criteria block, which frequently leaves the same rows matching. Without
+    /// this the command still pushed an undo entry, and UndoRedoStack.Push clears the redo stack,
+    /// destroying a real edit the user could have redone.
+    ///
+    /// <para>The decision is POST-HOC and reads the command's own undo record, which is by
+    /// construction the complete list of what Apply writes: Revert restores exactly
+    /// <c>_previousFilterHiddenRows</c> and <c>_copySnapshot</c> and nothing else. The copy half is
+    /// compared cell by cell with the same comparison the cell-editing commands use, so "unchanged"
+    /// means every field of every written cell matches what was there -- not merely that the same
+    /// addresses were touched.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet sheet)
+    {
+        if (_previousFilterHiddenRows is not null
+            && !_previousFilterHiddenRows.SetEquals(sheet.FilterHiddenRows))
+        {
+            return false;
+        }
+
+        if (_copySnapshot is not null)
+        {
+            foreach (var (address, oldCell) in _copySnapshot)
+            {
+                if (!CellEditCompanionSnapshot.SameCellOrAbsent(sheet, address, oldCell))
+                    return false;
+            }
+        }
+
+        return true;
     }
 
     public void Revert(ICommandContext ctx)

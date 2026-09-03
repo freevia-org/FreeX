@@ -125,7 +125,7 @@ public sealed class FilterCommand : IWorkbookCommand
         // so Revert can restore any explicit user fill the reband's forceFill just overwrote.
         _tableRebandSnapshot = StructuredTableBandingReflow.ReflowIfMatched(ctx.Workbook, sheet, _range);
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(true, IsNoOp: NothingChanged(ctx, sheet));
     }
 
     /// <summary>
@@ -296,6 +296,82 @@ public sealed class FilterCommand : IWorkbookCommand
                     sheet.FilterHiddenRows.Remove(row);
             }
         }
+    }
+
+    /// <summary>
+    /// r255: applying a value filter that is already applied -- re-confirming the same checkbox set
+    /// in the filter dropdown, or clearing a column that carries no filter -- writes exactly what is
+    /// already there. Without this the command still pushed an undo entry, and UndoRedoStack.Push
+    /// clears the redo stack, destroying a real edit the user could have redone.
+    ///
+    /// <para>This is the widest decision of the AutoFilter group, because this command has the most
+    /// to write: five snapshots, and Revert restores exactly those five. Each is compared by
+    /// content -- the two filter-column models through
+    /// <see cref="WorksheetAutoFilterColumnComparison"/>, the reband's cell block through the same
+    /// cell comparison the cell-editing commands use, and the slicer selections item by item -- so
+    /// "unchanged" means nothing the command can write differs, rather than that the obvious half
+    /// matches.</para>
+    /// </summary>
+    private bool NothingChanged(ICommandContext ctx, Sheet sheet)
+    {
+        if (!WorksheetAutoFilterColumnSync.Unchanged(sheet, _range, _previousAutoFilterColumns))
+            return false;
+
+        if (_undoSnapshot.HasSnapshot && !_undoSnapshot.Matches(sheet))
+            return false;
+
+        if (!TableFilterColumnsUnchanged(sheet, _previousTableFilterColumns))
+            return false;
+
+        if (_slicerSyncSnapshots is not null)
+        {
+            foreach (var snapshot in _slicerSyncSnapshots)
+            {
+                var slicer = ctx.Workbook.Slicers.FirstOrDefault(
+                    s => string.Equals(s.Name, snapshot.SlicerName, StringComparison.Ordinal));
+                if (slicer is null)
+                    continue;
+                if (slicer.SelectionCaptured != snapshot.PreviousSelectionCaptured)
+                    return false;
+                if (!slicer.SelectedItems.SequenceEqual(snapshot.PreviousSelectedItems, StringComparer.Ordinal))
+                    return false;
+            }
+        }
+
+        if (_tableRebandSnapshot is not null)
+        {
+            foreach (var (address, oldCell) in _tableRebandSnapshot)
+            {
+                if (!CellEditCompanionSnapshot.SameCellOrAbsent(sheet, address, oldCell))
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The structured-table half of <see cref="NothingChanged"/>, mirroring how Revert finds the
+    /// table it restores: by <c>_tableId</c>, which is -1 when no table matched the range.
+    /// </summary>
+    private bool TableFilterColumnsUnchanged(
+        Sheet sheet,
+        List<StructuredTableFilterColumnModel>? previousFilterColumns)
+    {
+        if (_tableId == -1 || previousFilterColumns is null)
+            return true;
+        if (!CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))
+            return true;
+
+        var current = sheet.StructuredTables[tableIndex].FilterColumns;
+        if (current.Count != previousFilterColumns.Count)
+            return false;
+        for (var i = 0; i < current.Count; i++)
+        {
+            if (!current[i].SameAs(previousFilterColumns[i]))
+                return false;
+        }
+        return true;
     }
 
     public void Revert(ICommandContext ctx)
