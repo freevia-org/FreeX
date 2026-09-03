@@ -58,6 +58,32 @@ public sealed class DataValidation
     public DataValidation Clone() =>
         CloneForRanges(AppliesTo, AdditionalRanges, Id);
 
+    /// <summary>
+    /// Clones the rule onto new range(s) under a FRESH <see cref="Id"/> -- the shape every COPY of a
+    /// rule uses (Format Painter, Paste Validation, the subtract-and-replace loops that split a rule
+    /// around a cleared footprint, sheet duplication, grouped-sheet fan-out).
+    /// <para>
+    /// r256 asked whether the minting is worth its cost and decided to KEEP it. The cost is small
+    /// and bounded: <see cref="Id"/> is a purely in-memory identity -- it appears in no writer and no
+    /// reader (the OOXML <c>dataValidation</c> element has no such attribute, and
+    /// <c>NativeJsonAdapter</c>'s DTO carries no Id field), so re-copying a rule cannot change a
+    /// saved byte. What it would buy is not worth it: a copy that kept its source's Id lands in the
+    /// SAME <c>Sheet.DataValidations</c> list as its source in the ordinary same-sheet paint or
+    /// paste, and two rules there under one Id collide in every consumer that resolves a rule by it
+    /// -- <c>SetDataValidationCommand.FindDataValidationIndex</c> and
+    /// <c>FindDataValidationReplacement</c> take the first match, so editing the copy would rewrite
+    /// the source; <c>RowColumnShiftHelpers.Rules</c> keys its formula snapshot on
+    /// <c>(rule.Id, slot)</c>, so the second rule would overwrite the first's entry and undo of a
+    /// row insert would restore the wrong formula into one of them.
+    /// </para>
+    /// <para>
+    /// The churn's one real consequence -- that a re-copy could never be recognised as a no-op --
+    /// is addressed instead by <see cref="SameAs(DataValidation, bool)"/>'s <c>ignoreIdentity</c>
+    /// option, which lets a command compare CONTENT without either side pretending the two rules are
+    /// the same object. A SNAPSHOT, by contrast, must preserve identity and uses
+    /// <see cref="Clone"/>: restoring an undo under fresh Ids would make undo an edit of its own.
+    /// </para>
+    /// </summary>
     public DataValidation CloneWithNewIdentity(
         GridRange appliesTo,
         IEnumerable<GridRange>? additionalRanges = null) =>
@@ -105,12 +131,20 @@ public sealed class DataValidation
     /// independently built rules with identical content do not, which is the case a no-op
     /// decision actually faces. They are compared by content here for that reason.
     /// </para>
+    /// <para>
+    /// r256: <paramref name="ignoreIdentity"/> compares everything EXCEPT <see cref="Id"/>, for the
+    /// callers that must decide "is this the same rule content" across a COPY. Copying mints a fresh
+    /// Id by design (see <see cref="CloneWithNewIdentity"/>), so for Format Painter and Paste
+    /// Validation the default form can never fire. It is opt-in rather than the default because the
+    /// Id is a real distinction everywhere else: <c>SetDataValidationCommand</c>'s equal-rule check
+    /// is deciding whether ONE rule was edited, and there the identity has to match.
+    /// </para>
     /// </summary>
-    public bool SameAs(DataValidation other)
+    public bool SameAs(DataValidation other, bool ignoreIdentity = false)
     {
         ArgumentNullException.ThrowIfNull(other);
 
-        return Id == other.Id
+        return (ignoreIdentity || Id == other.Id)
             && Equals(AppliesTo, other.AppliesTo)
             && Type == other.Type
             && Operator == other.Operator

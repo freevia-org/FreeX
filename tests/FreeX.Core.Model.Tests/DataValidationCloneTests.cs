@@ -61,6 +61,29 @@ public sealed class DataValidationCloneTests
     }
 
     [Fact]
+    public void SameAs_IgnoreIdentity_ComparesEverythingExceptTheId()
+    {
+        // r256: copies mint a fresh Id by design (CloneWithNewIdentity), so the callers deciding
+        // whether a re-copy changed anything need a comparison the churn cannot defeat -- and one
+        // that still catches every other member.
+        var source = CreateRule();
+        var copy = source.CloneWithNewIdentity(source.AppliesTo, source.AdditionalRanges);
+
+        source.SameAs(copy).Should().BeFalse("the default form is identity-sensitive");
+        source.SameAs(copy, ignoreIdentity: true).Should().BeTrue();
+
+        copy.ErrorMessage = source.ErrorMessage + "!";
+        source.SameAs(copy, ignoreIdentity: true).Should().BeFalse(
+            "ignoring the Id must not weaken the comparison of anything else");
+
+        var elsewhere = source.CloneWithNewIdentity(
+            Range(source.AppliesTo.Start.Sheet, 20, 1, 20, 1),
+            source.AdditionalRanges);
+        source.SameAs(elsewhere, ignoreIdentity: true).Should().BeFalse(
+            "a copy onto a different range is a different rule");
+    }
+
+    [Fact]
     public void Overlaps_ChecksPrimaryAndAdditionalRangesWithoutMaterializingThem()
     {
         var source = CreateRule();

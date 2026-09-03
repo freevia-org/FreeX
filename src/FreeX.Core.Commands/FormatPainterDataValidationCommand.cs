@@ -36,11 +36,23 @@ public sealed class FormatPainterDataValidationCommand : IWorkbookCommand
             return protectedOutcome;
 
         var sourceRules = sourceSheet.DataValidations.Select(DataValidationCopySupport.CloneValidation).ToList();
-        _previous = targetSheet.DataValidations.Select(DataValidationCopySupport.CloneValidation).ToList();
+        var originals = targetSheet.DataValidations.ToList();
+        _previous = DataValidationListSnapshot.Capture(targetSheet);
         RemoveValidationFromTargetRange(targetSheet);
 
         foreach (var copiedRule in CreateCopiedRules(sourceRules, targetSheet.Name))
             targetSheet.DataValidations.Add(copiedRule);
+
+        // r256: painting the same source over the same target twice rebuilds an identical rule list.
+        // Apply's only mutation is this list -- Revert restores exactly it and nothing else -- so the
+        // whole-list comparison is a complete no-op decision rather than a partial one. It has to
+        // ignore Id, because every copy above is minted with a fresh one by design.
+        if (DataValidationListSnapshot.Unchanged(originals, targetSheet.DataValidations))
+        {
+            DataValidationListSnapshot.Restore(targetSheet, originals);
+            _previous = null;
+            return new CommandOutcome(true, IsNoOp: true);
+        }
 
         return new CommandOutcome(true);
     }
@@ -51,9 +63,11 @@ public sealed class FormatPainterDataValidationCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_targetRange.Start.Sheet);
+        // r256: identity-preserving (Clone, not CloneValidation) -- undo must put the rules back
+        // under the Ids they had, since rules are resolved by Id elsewhere.
         sheet.DataValidations.Clear();
         foreach (var rule in _previous)
-            sheet.DataValidations.Add(DataValidationCopySupport.CloneValidation(rule));
+            sheet.DataValidations.Add(rule.Clone());
     }
 
     private IEnumerable<DataValidation> CreateCopiedRules(

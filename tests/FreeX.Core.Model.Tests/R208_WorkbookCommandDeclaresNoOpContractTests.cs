@@ -310,7 +310,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "ChangePivotTableSourceCommand",
         "DataTableBodyRefreshCommand",
         "ExternalTextPasteSpecialCommand",
-        "FormatPainterDataValidationCommand",
         "RefreshPivotTableCommand",
         "ResizeStructuredTableCommand",
         // FormControlInteractionCommand delegates its edit to _cellEdit.Apply -- an EditCellsCommand,
@@ -325,8 +324,19 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // eleven siblings do, so there is nothing exact to test after the loop. Deciding them needs
         // a before/after snapshot comparison, which is a change to how they work rather than a
         // guard bolted on, and is the honest reason they are here instead of fixed.
+        // r256: PasteDataValidationCommand is OFF this list, and FormatPainterDataValidationCommand
+        // with it -- r221's diagnosis was right about the missing `_added` list and wrong about
+        // needing one. Both already snapshot the target sheet's ENTIRE DataValidations list before
+        // mutating, and both Reverts restore precisely that list and nothing else, so the snapshot
+        // is a complete account of what either command can change; a whole-list before/after
+        // comparison decides them outright (DataValidationListSnapshot.Unchanged). The one thing
+        // genuinely in the way was that copying a rule mints a fresh Id every time, so a comparison
+        // of a re-copy against its predecessor could never fire. r256 examined that minting, kept it
+        // -- a copy that kept its source's Id collides with the source in the same list, where
+        // SetDataValidationCommand resolves rules by Id -- and added SameAs's ignoreIdentity option
+        // for the callers that must compare content ACROSS a copy. PasteColumnWidthsCommand stays:
+        // it has no snapshot of the columns it wrote.
         "PasteColumnWidthsCommand",
-        "PasteDataValidationCommand",
         "ConfigurePivotChartOptionsCommand",
         "ConfigurePivotTableCalculatedItemsCommand",
         "ConfigurePivotTableFieldFiltersCommand",
@@ -403,9 +413,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 at r238, 44 at r239, 43 at r240, 41 at r242, 40 at r243, 39 at r244, 37 at r245, 36 at r246, 34 at r247, 33 at r248, 32 at r249, 31 at r250, 30 at r253, 25 at r254, 23 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 at r238, 44 at r239, 43 at r240, 41 at r242, 40 at r243, 39 at r244, 37 at r245, 36 at r246, 34 at r247, 33 at r248, 32 at r249, 31 at r250, 30 at r253, 25 at r254, 23 at r255, 21 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
     /// </summary>
-    private const int OutstandingCeiling = 23;
+    private const int OutstandingCeiling = 21;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()
