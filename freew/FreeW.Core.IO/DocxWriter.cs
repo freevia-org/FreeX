@@ -5058,7 +5058,7 @@ public static class DocxWriter
                 new XElement(A + "cxnLst"),
                 new XElement(A + "rect",
                     new XAttribute("l", "0"), new XAttribute("t", "0"),
-                    new XAttribute("r", cg.Width.ToString()), new XAttribute("b", cg.Height.ToString())),
+                    new XAttribute("r", cg.Width.ToString(System.Globalization.CultureInfo.InvariantCulture)), new XAttribute("b", cg.Height.ToString(System.Globalization.CultureInfo.InvariantCulture))),
                 new XElement(A + "pathLst", path));
         }
         else
