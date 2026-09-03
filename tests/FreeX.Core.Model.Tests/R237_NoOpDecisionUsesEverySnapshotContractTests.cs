@@ -57,6 +57,8 @@ public sealed class R237_NoOpDecisionUsesEverySnapshotContractTests
         ["ExternalTextPasteSpecialCommand"] = "NothingChanged",
         ["SaveScenarioCommand"] = "NothingChanged",
         ["SaveCustomViewCommand"] = "NothingChanged",
+        ["ConfigurePivotChartOptionsCommand"] = "NothingChanged",
+        ["ConfigurePivotTableOptionsCommand"] = "NothingChanged",
     };
 
     [Fact]

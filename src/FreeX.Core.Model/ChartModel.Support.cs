@@ -359,6 +359,42 @@ public sealed class ChartDataTableModel
         TextThemeColor = TextThemeColor,
         FontSize = FontSize
     };
+
+    /// <summary>
+    /// r259: content comparison for the data-table formatting model, so a command can decide
+    /// post-hoc whether it changed anything.
+    ///
+    /// <para>This is a CLASS, not a record, so <c>==</c> is plain reference equality with no value
+    /// semantics at all -- and commands capture it with <see cref="Clone"/>, which guarantees a
+    /// different instance. A guard written with <c>==</c> here would be wrong in the same way r231's
+    /// would have been on the save records, only more so: there is not even a partial value
+    /// comparison to fall back on.</para>
+    ///
+    /// <para>Every member is a value type with value equality, so each is compared with <c>==</c>
+    /// individually. <c>R259_ChartDataTableComparisonCoverageContractTests</c> derives the field list
+    /// from <see cref="Clone"/> -- which has to be complete or cloning would lose formatting -- and
+    /// fails if a member Clone copies is not compared here.</para>
+    /// </summary>
+    public bool SameAs(ChartDataTableModel? other)
+    {
+        if (ReferenceEquals(this, other))
+            return true;
+        if (other is null)
+            return false;
+
+        return ShowHorizontalBorder == other.ShowHorizontalBorder
+            && ShowVerticalBorder == other.ShowVerticalBorder
+            && ShowOutline == other.ShowOutline
+            && ShowLegendKeys == other.ShowLegendKeys
+            && FillColor == other.FillColor
+            && FillThemeColor == other.FillThemeColor
+            && BorderColor == other.BorderColor
+            && BorderThemeColor == other.BorderThemeColor
+            && BorderThickness == other.BorderThickness
+            && TextColor == other.TextColor
+            && TextThemeColor == other.TextThemeColor
+            && FontSize == other.FontSize;
+    }
 }
 
 public sealed class Chart3DViewModel

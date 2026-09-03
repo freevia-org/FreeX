@@ -219,6 +219,13 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // many fields in a guard is precisely the brittle mirror r218 avoided -- it needs a
         // snapshot-versus-target comparison the way ConfigureSparklineCommand got one, not a
         // transcription that can fall out of step.
+        // r259: ConfigurePivotTableOptions and ConfigurePivotChartOptions are OFF this list. r219's
+        // objection to the first -- "a 25-field assignment block, and hand-listing that many fields in
+        // a guard is precisely the brittle mirror r218 avoided" -- is answered by hand-listing
+        // NOTHING: the decision re-runs PivotOptionsSnapshot.Capture and compares records, which is
+        // complete by construction and needs no edit when a setting is added. The chart one needed a
+        // real comparison instead: ChartDataTableModel is a CLASS captured by Clone, so == compares
+        // identity and nothing else.
         // r220: ClearPivotTableView belongs to the same RefreshGuarded family for the same reason --
         // clearing filters that are already clear replaces empty collections with empty ones, but
         // deciding that means proving the re-render is unnecessary too.
@@ -355,8 +362,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // for the callers that must compare content ACROSS a copy. PasteColumnWidthsCommand stays:
         // it has no snapshot of the columns it wrote.
         "PasteColumnWidthsCommand",
-        "ConfigurePivotChartOptionsCommand",
-        "ConfigurePivotTableOptionsCommand",
         "SetHyperlinkCommand",
         "SetSlicerSelectionCommand",
         "SetTimelineRangeCommand",
@@ -427,9 +432,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 at r238, 44 at r239, 43 at r240, 41 at r242, 40 at r243, 39 at r244, 37 at r245, 36 at r246, 34 at r247, 33 at r248, 32 at r249, 31 at r250, 30 at r253, 25 at r254, 23 at r255, 21 with the parallel data-validation pair, 16 at r256, 13 at r257, 11 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 at r238, 44 at r239, 43 at r240, 41 at r242, 40 at r243, 39 at r244, 37 at r245, 36 at r246, 34 at r247, 33 at r248, 32 at r249, 31 at r250, 30 at r253, 25 at r254, 23 at r255, 21 with the parallel data-validation pair, 16 at r256, 13 at r257, 11 at r258, 9 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
     /// </summary>
-    private const int OutstandingCeiling = 11;
+    private const int OutstandingCeiling = 9;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()

@@ -256,7 +256,53 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             AutofitPivotColumns(sheet, renderedRange);
         }
 
-        return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
+        return new CommandOutcome(
+            true,
+            AffectedCells: [pivotTable.TargetRange.Start],
+            IsNoOp: NothingChanged(sheet, pivotTable, cache));
+    }
+
+    /// <summary>
+    /// r259: re-confirming the PivotTable Options dialog without changing anything writes all
+    /// thirty-seven settings back as they were -- the dialog pre-fills every one of them from the
+    /// pivot, so OK-without-changes is the ordinary case. Without this the command still pushed an
+    /// undo entry, and UndoRedoStack.Push clears the redo stack, destroying a real edit the user
+    /// could have redone.
+    ///
+    /// <para>r219 declined this one specifically because "its Apply is a 25-field assignment block,
+    /// and hand-listing that many fields in a guard is precisely the brittle mirror r218 avoided".
+    /// Nothing is hand-listed here: the decision RE-RUNS <c>PivotOptionsSnapshot.Capture</c> and
+    /// compares the result with the snapshot Apply already took. The comparison is complete by
+    /// construction, because it is the same capture the undo record uses, and a setting added to the
+    /// snapshot is carried into the decision with no edit here. Record equality is content equality
+    /// for this one, because every member is a scalar -- which
+    /// <c>R259_PivotOptionsSnapshotIsScalarOnlyContractTests</c> checks rather than assumes.</para>
+    ///
+    /// <para>The other two snapshots are compared alongside it: the rendered cell block, and the
+    /// column widths the autofit overwrote. Revert restores exactly those three.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet sheet, PivotTableModel pivotTable, PivotCacheModel? cache) =>
+        _snapshot is not null
+        && PivotOptionsSnapshot.Capture(pivotTable, cache) == _snapshot
+        && PivotSnapshotComparison.RenderedCellsUnchanged(sheet, _targetSnapshot)
+        && AutofitWidthsUnchanged(sheet, _autofitColumnWidthsSnapshot);
+
+    private bool AutofitWidthsUnchanged(Sheet sheet, Dictionary<uint, double>? capturedWidths)
+    {
+        if (_autofitAppliedRange is not { } autofitRange || capturedWidths is null)
+            return true;
+
+        var current = RangeSnapshot.Capture(sheet.ColumnWidths, autofitRange.Start.Col, autofitRange.End.Col);
+        if (current.Count != capturedWidths.Count)
+            return false;
+
+        foreach (var (column, width) in capturedWidths)
+        {
+            if (!current.TryGetValue(column, out var currentWidth) || currentWidth != width)
+                return false;
+        }
+
+        return true;
     }
 
     public void Revert(ICommandContext ctx)
