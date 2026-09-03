@@ -72,7 +72,7 @@ public sealed class InsertCommandSourceTests
         var drawingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
 
         insertSource.Should().Contain("HyperlinkDialogPrefill.FromCell(");
-        insertSource.Should().Contain("new HyperlinkDialog(prefill.Target, prefill.DisplayText)");
+        insertSource.Should().Contain("new HyperlinkDialog(prefill.Target, prefill.DisplayText, _currentFilePath)");
         insertSource.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
         insertSource.Should().Contain("var address = GroupedSheetRangePlanner.RemapRangeToSheet(currentRange, sheetId).Start;");
         insertSource.Should().Contain("new SetHyperlinkCommand(");

@@ -35,7 +35,7 @@ public sealed record HyperlinkDialogPrefill(
 {
     public static HyperlinkDialogPrefill FromCell(Sheet? sheet, CellAddress address)
     {
-        const string DefaultTarget = "https://";
+        const string DefaultTarget = "";
 
         if (sheet is null)
         {
@@ -96,20 +96,22 @@ public sealed record HyperlinkDialogPrefill(
 /// </summary>
 public static class HyperlinkDialogPlanner
 {
-    public const double Width = 560;
-    public const double Height = 300;
-    public const double MinWidth = 520;
-    public const double MinHeight = 300;
-    public const double DialogMargin = 16;
-    public const double LinkTypeColumnWidth = 170;
+    // At 125% Windows scaling these land on Excel's roughly 950 x 420 px Ctrl+K
+    // frame, while keeping the logical surface compact enough for smaller displays.
+    public const double Width = 760;
+    public const double Height = 338;
+    public const double MinWidth = 720;
+    public const double MinHeight = 338;
+    public const double DialogMargin = 10;
+    public const double LinkTypeColumnWidth = 132;
     public const double LinkTypeColumnGap = 12;
-    public const double LabelColumnWidth = 110;
+    public const double LabelColumnWidth = 88;
     public const double FieldHeight = 24;
     public const double FieldBottomMargin = 8;
     public const double ButtonGap = 8;
     public const double SecondaryButtonWidth = 96;
     public const double ActionButtonWidth = 72;
-    public const double LinkTypeListHeight = 96;
+    public const double LinkTypeListHeight = 148;
 
     public static ValidationPresentationDescriptor<HyperlinkDialogFocusTarget> DescribeValidationError(
         HyperlinkDialogValidationError error)

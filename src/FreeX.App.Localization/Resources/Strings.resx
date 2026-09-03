@@ -16499,6 +16499,24 @@ Continue saving?</value>
   <data name="Hyperlink_Bookmark" xml:space="preserve">
     <value>_Bookmark...</value>
   </data>
+  <data name="Hyperlink_Browse" xml:space="preserve">
+    <value>_Browse...</value>
+  </data>
+  <data name="Hyperlink_BrowseForAFile" xml:space="preserve">
+    <value>Browse for a file</value>
+  </data>
+  <data name="Hyperlink_ChooseALocalFileForThisHyperlink" xml:space="preserve">
+    <value>Choose a local file for this hyperlink.</value>
+  </data>
+  <data name="Hyperlink_CurrentFolder" xml:space="preserve">
+    <value>Current folder</value>
+  </data>
+  <data name="Hyperlink_CurrentFolderLinkLocation" xml:space="preserve">
+    <value>Current folder link location</value>
+  </data>
+  <data name="Hyperlink_LookIn" xml:space="preserve">
+    <value>Look _in:</value>
+  </data>
   <data name="WatchWindow_CloseTheWatchWindow" xml:space="preserve">
     <value>Close the Watch Window.</value>
   </data>
