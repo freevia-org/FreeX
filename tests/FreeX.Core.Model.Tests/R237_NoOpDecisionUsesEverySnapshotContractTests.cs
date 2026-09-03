@@ -65,6 +65,7 @@ public sealed class R237_NoOpDecisionUsesEverySnapshotContractTests
         ["RefreshPivotTableCommand"] = "NothingChanged",
         ["SetSlicerSelectionCommand"] = "NothingChanged",
         ["SetTimelineRangeCommand"] = "NothingChanged",
+        ["ChangePivotTableSourceCommand"] = "NothingChanged",
     };
 
     [Fact]

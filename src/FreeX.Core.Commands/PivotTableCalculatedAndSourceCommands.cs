@@ -231,8 +231,29 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
         // pivot's materialized output just like every other refresh-triggering mutation -- without this,
         // a PivotChart bound to this pivot table keeps rendering the cells the pivot occupied against the
         // OLD source, silently inconsistent with the pivot right next to it.
-        return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
+        return new CommandOutcome(
+            true,
+            AffectedCells: [pivotTable.TargetRange.Start],
+            IsNoOp: NothingChanged(sheet, pivotTable, CommandGuards.FindPivotCache(ctx.Workbook, pivotTable)));
     }
+
+    /// <summary>
+    /// r264: re-pointing a pivot at the source range it already uses -- re-confirming the Change Data
+    /// Source dialog without editing the reference, which is how a user checks what the source IS --
+    /// writes back the same range and re-renders the same cells. Without this the command still
+    /// pushed an undo entry, and UndoRedoStack.Push clears the redo stack, destroying a real edit the
+    /// user could have redone.
+    ///
+    /// <para>POST-HOC over both snapshots: the source/cache state through
+    /// <c>PivotSourceSnapshot.Matches</c>, and the rendered cell block. r231 held this command back
+    /// because a comparison "would never fire while looking exactly like the ones that do work" --
+    /// true of a content comparison against the live cache object, and not true of the captured
+    /// fields beside it.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet sheet, PivotTableModel pivotTable, PivotCacheModel? currentCache) =>
+        _snapshot is not null
+        && _snapshot.Matches(pivotTable, currentCache)
+        && PivotSnapshotComparison.RenderedCellsUnchanged(sheet, _targetSnapshot);
 
     public void Revert(ICommandContext ctx)
     {
@@ -342,6 +363,27 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
                 cache?.Fields.ToList() ?? []);
 
         /// <summary>
+        /// <summary>
+        /// r264: true when everything Capture recorded still holds.
+        ///
+        /// <para>r231 declined to guard this command on the grounds that a comparison could not fire.
+        /// The obstacle it named was real but narrower than it looked: <c>OriginalCache</c> is the
+        /// LIVE cache object when Apply mutates in place, so comparing its CONTENT against itself is
+        /// vacuous. Its identity is not: a source change that crosses the table/range boundary swaps
+        /// in a replacement cache, and <c>ReferenceEquals</c> sees that. Every mutable field of the
+        /// cache is captured separately here, so those carry the content half.</para>
+        /// </summary>
+        public bool Matches(PivotTableModel pivotTable, PivotCacheModel? currentCache) =>
+            SourceRange == pivotTable.SourceRange
+            && LastRenderedRange == pivotTable.LastRenderedRange
+            && ReferenceEquals(OriginalCache, currentCache)
+            && OriginalCacheSourceType == currentCache?.SourceType
+            && string.Equals(OriginalCacheSourceSheetName, currentCache?.SourceSheetName, StringComparison.Ordinal)
+            && string.Equals(OriginalCacheSourceReference, currentCache?.SourceReference, StringComparison.Ordinal)
+            && string.Equals(OriginalCacheSourceTableName, currentCache?.SourceTableName, StringComparison.Ordinal)
+            && OriginalCacheSourceTableId == currentCache?.SourceTableId
+            && PivotSnapshotComparison.SameCacheFields(OriginalCacheFields, currentCache?.Fields.ToList() ?? []);
+
         /// Restores the exact prior cache state -- including SourceType (init-only, so it can only ever
         /// be restored by putting the untouched original object back, never by field assignment) and
         /// whether SourceTableId had been established yet (null) or was already pinned to a stable id (an
