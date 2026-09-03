@@ -39,10 +39,31 @@ public sealed class R269_SyncOverAsyncInventoryContractTests
             + "because AtomicExportExecutor awaits WITHOUT ConfigureAwait(false) in three places and "
             + "has two bare `await using` disposals, so a UI-thread caller of the path overload WOULD "
             + "deadlock. If one is ever added, fix the executor's awaits first."),
+
+        // r272: found by auditing the layer list, which had missed both shared shells.
+        ["shared/Free.Shared.Shell.Avalonia/SisterAvaloniaFileCommandWorkflow.cs"] = (1,
+            "A loaded gun with the safety on. PromptSaveChangesSync blocks on an Avalonia MODAL "
+            + "dialog's ShowAsync -- a dialog the UI thread must pump to answer -- so calling it on "
+            + "that thread deadlocks with certainty, not by luck of scheduling. It is reachable only "
+            + "through the public sync ConfirmCloseAllowed overload, which NO app calls: every "
+            + "Avalonia caller uses ConfirmCloseAllowedAsync. Two sibling source tests already forbid "
+            + "the windows from naming PromptSaveChangesSync, so the hazard was known; what was "
+            + "missing is anything covering the shared shell that still offers it."),
+
+        ["freep/FreeP.App.Recording.Windows/WindowsNativeRecordingCaptureEngine.cs"] = (1,
+            "Safe by construction: the work is started with Task.Run, so it runs on the thread pool "
+            + "and needs nothing from the blocking caller. The WaitAny timeout ahead of it exists so a "
+            + "wedged capture device cannot block forever."),
     };
 
     private static readonly string[] Layers =
     [
+        // r272: the shared shells are UI code every app runs on; omitting them left this
+        // inventory blind to a blocking call on the save-changes prompt.
+        "shared/Free.Shared.Shell.Avalonia",
+        "shared/Free.Shared.Shell.Wpf",
+        "src/FreeX.App.UI",
+        "freep/FreeP.App.Recording.Windows",
         "src/FreeX.App.Host",
         "src/FreeX.App.Avalonia",
         "src/FreeX.App.Presentation",

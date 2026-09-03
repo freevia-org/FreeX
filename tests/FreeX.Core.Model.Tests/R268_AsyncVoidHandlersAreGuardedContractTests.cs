@@ -38,6 +38,17 @@ public sealed class R268_AsyncVoidHandlersAreGuardedContractTests
         "freep/FreeP.App.Host",
         "freep/FreeP.App.Rendering.Avalonia",
         "freep/FreeP.App.Rendering.Wpf",
+        // r272: added after auditing these lists against the repo. The first draft scanned eleven
+        // projects and MISSED seven UI-bearing ones -- including both shared shells, which all three
+        // apps run on, so a hole there was a hole in every app at once.
+        "shared/Free.Shared.Shell.Avalonia",
+        "shared/Free.Shared.Shell.Wpf",
+        "src/FreeX.App.UI",
+        "freep/FreeP.App.Presentation",
+        "freep/FreeP.App.Media",
+        "freep/FreeP.App.Ole.Windows",
+        "freep/FreeP.App.Recording",
+        "freep/FreeP.App.Recording.Windows",
     ];
 
     [Fact]

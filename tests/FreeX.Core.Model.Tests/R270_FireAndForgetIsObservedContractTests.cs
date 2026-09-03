@@ -38,6 +38,17 @@ public sealed class R270_FireAndForgetIsObservedContractTests
         "freep/FreeP.App.Host",
         "freep/FreeP.App.Rendering.Avalonia",
         "freep/FreeP.App.Rendering.Wpf",
+        // r272: added after auditing these lists against the repo. The first draft scanned eleven
+        // projects and MISSED seven UI-bearing ones -- including both shared shells, which all three
+        // apps run on, so a hole there was a hole in every app at once.
+        "shared/Free.Shared.Shell.Avalonia",
+        "shared/Free.Shared.Shell.Wpf",
+        "src/FreeX.App.UI",
+        "freep/FreeP.App.Presentation",
+        "freep/FreeP.App.Media",
+        "freep/FreeP.App.Ole.Windows",
+        "freep/FreeP.App.Recording",
+        "freep/FreeP.App.Recording.Windows",
     ];
 
     /// <summary>
@@ -173,7 +184,15 @@ public sealed class R270_FireAndForgetIsObservedContractTests
 
             var body = MethodBody(lines, i);
             var firstTry = body.FindIndex(l => Regex.IsMatch(l, @"^\s*try\s*[\{]?\s*$"));
-            var firstAwait = body.FindIndex(l => l.Contains("await ", StringComparison.Ordinal));
+
+            // `await Task.Yield()` is the one await that provably cannot fault -- its awaiter only
+            // reschedules -- and the shared window-close coordinator opens with it deliberately, to
+            // leave the synchronous Closing callback before doing anything else. Requiring it inside
+            // the try would force a pointless edit to correct shared code.
+            var firstAwait = body.FindIndex(l =>
+                l.Contains("await ", StringComparison.Ordinal)
+                && !l.Contains("Task.Yield()", StringComparison.Ordinal));
+
             return firstAwait < 0 || (firstTry >= 0 && firstTry < firstAwait);
         }
 
