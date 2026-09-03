@@ -247,8 +247,35 @@ public sealed class ApplyCustomViewCommand : IWorkbookCommand
         if (CustomViewStatePlanner.SanitizeActiveSheetIndex(ctx.Workbook, view.ActiveSheetIndex) is { } activeSheetIndex)
             ctx.Workbook.ActiveSheetIndex = activeSheetIndex;
 
+        // r248: applying the custom view the workbook is already showing. Both snapshots
+        // participate -- the per-sheet view state and the active sheet -- and the state
+        // comparison goes through WorksheetCustomViewStateComparer rather than the record's
+        // own ==, because that record carries list members which records compare by
+        // REFERENCE, and every capture builds fresh lists.
+        if (NothingChanged(ctx))
+            return new CommandOutcome(true, IsNoOp: true);
+
         return new CommandOutcome(true);
     }
+    /// <summary>r248: every snapshot this command keeps -- see the r237 invariant.</summary>
+    private bool NothingChanged(ICommandContext ctx)
+    {
+        if (_previousActiveSheetIndex != CustomViewStatePlanner.CaptureActiveSheetIndex(ctx.Workbook))
+            return false;
+
+        if (_previousStates is null)
+            return true;
+
+        var live = ctx.Workbook.Sheets
+            .Select(sheet => SaveCustomViewCommand.CaptureExtendedState(
+                sheet, CustomViewStatePlanner.CaptureSheetState(sheet)))
+            .ToList();
+
+        return live.Count == _previousStates.Count
+            && live.Zip(_previousStates).All(pair =>
+                WorksheetCustomViewStateComparer.Same(pair.First, pair.Second));
+    }
+
 
     public void Revert(ICommandContext ctx)
     {
