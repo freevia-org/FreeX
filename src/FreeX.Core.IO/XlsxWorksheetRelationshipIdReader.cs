@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Xml;
 using System.Xml.Linq;
+using Free.Shared.Opc;
 
 namespace FreeX.Core.IO;
 
@@ -16,6 +17,7 @@ internal static class XlsxWorksheetRelationshipIdReader
         using var reader = XmlReader.Create(stream, new XmlReaderSettings
         {
             DtdProcessing = DtdProcessing.Prohibit,
+            MaxCharactersInDocument = SecureXmlReaderSettings.DefaultMaxCharactersInDocument,
             IgnoreComments = true,
             IgnoreProcessingInstructions = true,
             IgnoreWhitespace = true,

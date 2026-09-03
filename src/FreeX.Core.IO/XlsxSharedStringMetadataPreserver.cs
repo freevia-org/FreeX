@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
+using Free.Shared.Opc;
 
 namespace FreeX.Core.IO;
 
@@ -274,6 +275,7 @@ internal static class XlsxSharedStringMetadataPreserver
         var settings = new XmlReaderSettings
         {
             DtdProcessing = DtdProcessing.Prohibit,
+            MaxCharactersInDocument = SecureXmlReaderSettings.DefaultMaxCharactersInDocument,
             XmlResolver = null,
             IgnoreComments = true,
             IgnoreProcessingInstructions = true
@@ -353,6 +355,7 @@ internal static class XlsxSharedStringMetadataPreserver
         var settings = new XmlReaderSettings
         {
             DtdProcessing = DtdProcessing.Prohibit,
+            MaxCharactersInDocument = SecureXmlReaderSettings.DefaultMaxCharactersInDocument,
             XmlResolver = null,
             IgnoreComments = true,
             IgnoreProcessingInstructions = true
@@ -411,6 +414,7 @@ internal static class XlsxSharedStringMetadataPreserver
         var settings = new XmlReaderSettings
         {
             DtdProcessing = DtdProcessing.Prohibit,
+            MaxCharactersInDocument = SecureXmlReaderSettings.DefaultMaxCharactersInDocument,
             XmlResolver = null,
             IgnoreComments = true,
             IgnoreProcessingInstructions = true
