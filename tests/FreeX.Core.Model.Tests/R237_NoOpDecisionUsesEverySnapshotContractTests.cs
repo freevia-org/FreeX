@@ -34,6 +34,8 @@ public sealed class R237_NoOpDecisionUsesEverySnapshotContractTests
         ["GroupedApplyStyleCommand"] = "NothingChanged",
         ["SetPageSetupCommand"] = "NothingChanged",
         ["SetHeaderFooterCommand"] = "NothingChanged",
+        ["SetRowHeightCommand"] = "NothingChanged",
+        ["SetColumnWidthCommand"] = "NothingChanged",
         ["RefreshStructuredTableTotalsCommand"] = "NothingChanged",
     };
 
