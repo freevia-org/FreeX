@@ -278,6 +278,11 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // the source start writes the same cells back. Both reachable by dragging something and
         // dropping it where it started. Same reason as the filters for not fixing them here: each
         "MoveRangeCommand",
+        // r266: the two comparisons MoveRange's decision was missing now exist and are contract-checked
+        // (MoveRangeSnapshotComparison: sparklines, and a chart's verbatim formula snapshot). Both were
+        // incomplete as first written -- 8 of 29 sparkline members, 3 of 6 verbatim ones -- and both
+        // were caught by their contracts rather than by re-reading. The decision itself is still to
+        // assemble: twenty-four clauses, which is a round of its own.
         // r265: ResizeStructuredTable is OFF this list. Its table half needed a 27-member content
         // comparison (StructuredTableComparison) because every structural edit goes through CopyTable,
         // which builds a new instance -- the cannot-fire shape in the largest model yet. Its delegated
