@@ -697,7 +697,7 @@ internal struct FilterUndoSnapshot
     // ApplyColumnOwnedVisibility/ClearColumnOwnedRange AND-across-columns decision.
     private Dictionary<uint, HashSet<uint>>? _columnFilterOwnedRows;
 
-    public bool HasSnapshot => _hiddenRows is not null;
+    public readonly bool HasSnapshot => _hiddenRows is not null;
 
     public void Reset()
     {
@@ -723,6 +723,59 @@ internal struct FilterUndoSnapshot
             : sheet.ColumnFilterOwnedRows.ToDictionary(
                 kvp => kvp.Key,
                 HashSet<uint> (kvp) => [.. kvp.Value]);
+    }
+
+    /// <summary>
+    /// r252: whether the sheet still matches what this snapshot captured -- the question the eight
+    /// filter commands need and could not ask. r225 put them all on the debt list because each
+    /// touches BOTH the hidden-row state and the autofilter column model, so a guard covering one
+    /// would have been a partial mirror; this covers the first half completely, field for field with
+    /// <see cref="Capture"/>.
+    /// <para>
+    /// R252_FilterSnapshotComparisonCoverageContractTests compares this method against Capture and
+    /// fails if Capture reads a sheet member this does not. Capture is the maintained list of what
+    /// filter state consists of -- it has to be, or undo would lose some -- which is the same
+    /// source-of-truth trick r249 used with Clone.
+    /// </para>
+    /// </summary>
+    public readonly bool Matches(Sheet sheet)
+    {
+        if (!HasSnapshot)
+            return false;
+
+        return SameSet(_hiddenRows, sheet.HiddenRows)
+            && SameSet(_filterHiddenRows, sheet.FilterHiddenRows)
+            && SameSet(_valueFilterHiddenRows, sheet.ValueFilterHiddenRows)
+            && SameValueFilterColumns(_activeValueFilterColumns, sheet.ActiveValueFilterColumns)
+            && SameOwnedRows(_columnFilterOwnedRows, sheet.ColumnFilterOwnedRows);
+    }
+
+    private static bool SameSet(uint[]? captured, HashSet<uint> live) =>
+        captured is not null && captured.Length == live.Count && live.SetEquals(captured);
+
+    private static bool SameValueFilterColumns(
+        Dictionary<uint, IReadOnlyList<string>>? captured,
+        IReadOnlyDictionary<uint, IReadOnlyList<string>> live)
+    {
+        if (captured is null)
+            return live.Count == 0;
+
+        return captured.Count == live.Count
+            && captured.All(entry => live.TryGetValue(entry.Key, out var values)
+                && entry.Value.Count == values.Count
+                && entry.Value.SequenceEqual(values, StringComparer.Ordinal));
+    }
+
+    private static bool SameOwnedRows(
+        Dictionary<uint, HashSet<uint>>? captured,
+        IReadOnlyDictionary<uint, HashSet<uint>> live)
+    {
+        if (captured is null)
+            return live.Count == 0;
+
+        return captured.Count == live.Count
+            && captured.All(entry => live.TryGetValue(entry.Key, out var rows)
+                && rows.SetEquals(entry.Value));
     }
 
     public void CaptureIfNeeded(Sheet sheet)
