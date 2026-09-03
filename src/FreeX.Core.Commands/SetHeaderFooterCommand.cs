@@ -121,7 +121,70 @@ public sealed class SetHeaderFooterCommand : IWorkbookCommand
         sheet.HeaderFooterScaleWithDocument = _scaleWithDocument;
         sheet.HeaderFooterAlignWithMargins = _alignWithMargins;
         _applied = true;
+        // r244: the Header and Footer dialog pre-fills every box and checkbox from the sheet,
+        // so OK without editing rewrites all sixteen fields with what they already hold.
+        if (NothingChanged(sheet))
+            return new CommandOutcome(true, IsNoOp: true);
+
         return new CommandOutcome(true);
+    }
+
+
+    /// <summary>
+    /// r244: whether the Header/Footer dialog's OK wrote anything different. Sixteen snapshot
+    /// fields, sixteen assignments; the r237 participation contract fails if one is missed.
+    /// <para>
+    /// The six picture sets need SameHeaderFooterPictures rather than Equals, and that is the
+    /// fourth time this program has met the same trap: a record whose equality LOOKS like value
+    /// equality but contains an array, compared by reference. Worse here than usual, because
+    /// the snapshot is taken with DeepClone -- which exists to make undo safe and, as a side
+    /// effect, guarantees the naive comparison is always false. A guard built on Equals would
+    /// have compiled, read correctly, and never once reported a no-op.
+    /// </para>
+    /// </summary>
+    private bool NothingChanged(Sheet sheet) =>
+        Equals(_previousHeader, sheet.PageHeader)
+        && Equals(_previousFooter, sheet.PageFooter)
+        && Equals(_previousFirstPageHeader, sheet.FirstPageHeader)
+        && Equals(_previousFirstPageFooter, sheet.FirstPageFooter)
+        && Equals(_previousEvenPageHeader, sheet.EvenPageHeader)
+        && Equals(_previousEvenPageFooter, sheet.EvenPageFooter)
+        && SameHeaderFooterPictures(_previousHeaderPictures, sheet.PageHeaderPictures)
+        && SameHeaderFooterPictures(_previousFooterPictures, sheet.PageFooterPictures)
+        && SameHeaderFooterPictures(_previousFirstPageHeaderPictures, sheet.FirstPageHeaderPictures)
+        && SameHeaderFooterPictures(_previousFirstPageFooterPictures, sheet.FirstPageFooterPictures)
+        && SameHeaderFooterPictures(_previousEvenPageHeaderPictures, sheet.EvenPageHeaderPictures)
+        && SameHeaderFooterPictures(_previousEvenPageFooterPictures, sheet.EvenPageFooterPictures)
+        && Equals(_previousDifferentFirstPage, sheet.DifferentFirstPageHeaderFooter)
+        && Equals(_previousDifferentOddEvenPages, sheet.DifferentOddEvenHeaderFooter)
+        && Equals(_previousScaleWithDocument, sheet.HeaderFooterScaleWithDocument)
+        && Equals(_previousAlignWithMargins, sheet.HeaderFooterAlignWithMargins);
+
+    /// <summary>
+    /// r244: content comparison for a header/footer picture set. WorksheetHeaderFooterPicture
+    /// is a record, so == compares its fields -- but ImageBytes is a byte[], which records
+    /// compare BY REFERENCE. Two sets holding identical images are unequal under ==, always,
+    /// because the snapshot's arrays came from DeepClone.
+    /// </summary>
+    private static bool SameHeaderFooterPictures(
+        WorksheetHeaderFooterPictureSet left,
+        WorksheetHeaderFooterPictureSet right) =>
+        SamePicture(left.Left, right.Left)
+        && SamePicture(left.Center, right.Center)
+        && SamePicture(left.Right, right.Right);
+
+    private static bool SamePicture(
+        WorksheetHeaderFooterPicture? left,
+        WorksheetHeaderFooterPicture? right)
+    {
+        if (left is null || right is null)
+            return left is null && right is null;
+
+        return string.Equals(left.ContentType, right.ContentType, StringComparison.Ordinal)
+            && string.Equals(left.FileName, right.FileName, StringComparison.Ordinal)
+            && left.Width.Equals(right.Width)
+            && left.Height.Equals(right.Height)
+            && left.ImageBytes.AsSpan().SequenceEqual(right.ImageBytes);
     }
 
     public void Revert(ICommandContext ctx)
