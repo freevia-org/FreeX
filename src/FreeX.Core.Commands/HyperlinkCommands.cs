@@ -65,7 +65,67 @@ public sealed class SetHyperlinkCommand : IWorkbookCommand
         // GroupedEditCellsCommand's handling).
         sheet.RichTextRuns.Remove(_address);
         sheet.CellPhoneticGuides.Remove(_address);
-        return new CommandOutcome(true, AffectedCells: [_address]);
+        return new CommandOutcome(true, AffectedCells: [_address], IsNoOp: NothingChanged(sheet));
+    }
+
+    /// <summary>
+    /// r260: re-applying the same hyperlink -- re-confirming the Insert Hyperlink dialog on a cell
+    /// that already carries that link, with the same display text and screen tip -- writes back
+    /// exactly what is there. Without this the command still pushed an undo entry, and
+    /// UndoRedoStack.Push clears the redo stack, destroying a real edit the user could have redone.
+    ///
+    /// <para>The decision is POST-HOC over the command's whole undo record: Revert restores the cell,
+    /// the hyperlink target, the metadata, the rich-text runs and the phonetic guide, and nothing
+    /// else, so all five are compared. The two "had" flags matter as much as the values -- Apply
+    /// REMOVES the rich-text runs and the phonetic guide, so a cell that had either and no longer
+    /// does has changed even though every other field matches.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet sheet) =>
+        CellEditCompanionSnapshot.SameCellOrAbsent(sheet, _address, _oldCell)
+        && SameOptionalEntry(sheet.Hyperlinks, _hadOldTarget, _oldTarget)
+        && SameOptionalEntry(sheet.HyperlinkMetadata, _hadOldMetadata, _oldMetadata)
+        && SameOptionalRuns(sheet, _hadOldRichTextRuns, _oldRichTextRuns)
+        && SameOptionalEntry(sheet.CellPhoneticGuides, _hadOldPhoneticGuide, _oldPhoneticGuide);
+
+    /// <summary>
+    /// Present-with-this-value versus absent, for the per-address companion maps. The captured value
+    /// is the sheet's own instance rather than a copy, so for these types equality is content
+    /// equality: <c>HyperlinkMetadata</c> is a record of three scalars, and a phonetic guide taken
+    /// out of the map and put back is the same object.
+    /// </summary>
+    private bool SameOptionalEntry<T>(IDictionary<CellAddress, T> map, bool hadValue, T? captured)
+    {
+        var present = map.TryGetValue(_address, out var current);
+        if (present != hadValue)
+            return false;
+
+        return !present || EqualityComparer<T?>.Default.Equals(current, captured);
+    }
+
+    /// <summary>
+    /// Rich-text runs need element-wise comparison rather than the list's own equality: the list is
+    /// an <c>IReadOnlyList</c>, compared by reference, while <c>CellTextRun</c> is a record of
+    /// scalars whose equality is content equality.
+    /// </summary>
+    private bool SameOptionalRuns(Sheet sheet, bool hadRuns, IReadOnlyList<CellTextRun>? captured)
+    {
+        var present = sheet.RichTextRuns.TryGetValue(_address, out var current);
+        if (present != hadRuns)
+            return false;
+        if (!present)
+            return true;
+        if (current is null || captured is null)
+            return ReferenceEquals(current, captured);
+        if (current.Count != captured.Count)
+            return false;
+
+        for (var i = 0; i < current.Count; i++)
+        {
+            if (current[i] != captured[i])
+                return false;
+        }
+
+        return true;
     }
 
     public void Revert(ICommandContext ctx)

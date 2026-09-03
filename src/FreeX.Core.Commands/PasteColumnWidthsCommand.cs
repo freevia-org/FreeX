@@ -58,12 +58,7 @@ public sealed class PasteColumnWidthsCommand : IWorkbookCommand
         var pasteColCount = _sourceRange.ColCount;
         var targetColCount = GetTargetColCount();
         var destinationEndCol = _destinationStartCol + targetColCount - 1;
-        _previousWidths = new Dictionary<uint, double>();
-        for (var col = _destinationStartCol; col <= destinationEndCol; col++)
-        {
-            if (targetSheet.ColumnWidths.TryGetValue(col, out var width))
-                _previousWidths[col] = width;
-        }
+        _previousWidths = CaptureDestinationWidths(targetSheet);
 
         for (uint tileOffset = 0; tileOffset + pasteColCount <= targetColCount; tileOffset += pasteColCount)
         {
@@ -85,7 +80,55 @@ public sealed class PasteColumnWidthsCommand : IWorkbookCommand
             }
         }
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(true, IsNoOp: NothingChanged(targetSheet));
+    }
+
+    /// <summary>
+    /// r260: the destination columns' widths, over exactly the range this command writes. Shared by
+    /// the capture in Apply and the comparison in <see cref="NothingChanged"/> so the two cannot
+    /// describe different ranges.
+    /// </summary>
+    private Dictionary<uint, double> CaptureDestinationWidths(Sheet sheet)
+    {
+        var widths = new Dictionary<uint, double>();
+        var destinationEndCol = _destinationStartCol + GetTargetColCount() - 1;
+        for (var col = _destinationStartCol; col <= destinationEndCol; col++)
+        {
+            if (sheet.ColumnWidths.TryGetValue(col, out var width))
+                widths[col] = width;
+        }
+        return widths;
+    }
+
+    /// <summary>
+    /// r260: pasting column widths onto columns that already have them writes what is already
+    /// there -- pasting a copied block back over itself, or onto a column range formatted the same
+    /// way. Without this the command still pushed an undo entry, and UndoRedoStack.Push clears the
+    /// redo stack, destroying a real edit the user could have redone.
+    ///
+    /// <para>r221 grouped this with PasteDataValidation as needing "a before/after snapshot
+    /// comparison, which is a change to how they work rather than a guard bolted on", because
+    /// neither accumulates the affected list its eleven siblings do. That is true of the
+    /// did-we-write-anything test, and this command turns out already to hold the BEFORE half:
+    /// <c>_previousWidths</c> is exactly what Revert restores, so comparing it against the same
+    /// range afterwards is the whole decision.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet sheet)
+    {
+        if (_previousWidths is null)
+            return true;
+
+        var current = CaptureDestinationWidths(sheet);
+        if (current.Count != _previousWidths.Count)
+            return false;
+
+        foreach (var (col, width) in _previousWidths)
+        {
+            if (!current.TryGetValue(col, out var currentWidth) || currentWidth != width)
+                return false;
+        }
+
+        return true;
     }
 
     public void Revert(ICommandContext ctx)

@@ -59,6 +59,8 @@ public sealed class R237_NoOpDecisionUsesEverySnapshotContractTests
         ["SaveCustomViewCommand"] = "NothingChanged",
         ["ConfigurePivotChartOptionsCommand"] = "NothingChanged",
         ["ConfigurePivotTableOptionsCommand"] = "NothingChanged",
+        ["PasteColumnWidthsCommand"] = "NothingChanged",
+        ["SetHyperlinkCommand"] = "NothingChanged",
     };
 
     [Fact]
@@ -73,7 +75,7 @@ public sealed class R237_NoOpDecisionUsesEverySnapshotContractTests
             body.Should().NotBeNullOrEmpty($"{className} must exist for this contract to check it");
 
             var fields = new Regex(
-                    @"private\s+[^;=]*?\b(_(?:\w*[Ss]napshot|previous\w*))\s*(?:=|;)",
+                    @"private\s+[^;=]*?\b(_(?:\w*[Ss]napshot|previous\w*|old\w*|hadOld\w*))\s*(?:=|;)",
                     RegexOptions.Compiled)
                 .Matches(body!)
                 .Select(match => match.Groups[1].Value)
