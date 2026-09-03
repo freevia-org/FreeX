@@ -39,6 +39,7 @@ public sealed class R237_NoOpDecisionUsesEverySnapshotContractTests
         ["SetRowHeightCommand"] = "NothingChanged",
         ["SetColumnWidthCommand"] = "NothingChanged",
         ["RefreshStructuredTableTotalsCommand"] = "NothingChanged",
+        ["AverageFilterCommand"] = "NothingChanged",
     };
 
     [Fact]

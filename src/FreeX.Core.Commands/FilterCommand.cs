@@ -935,6 +935,42 @@ internal static class WorksheetAutoFilterColumnSync
         return previous;
     }
 
+    /// <summary>
+    /// r253: true when the AutoFilter model holds the same content it held when
+    /// <paramref name="previousFilterColumns"/> was captured -- the AutoFilter-model half of an
+    /// AutoFilter command's no-op decision (the hidden-row half is
+    /// <c>FilterUndoSnapshot.Matches</c>).
+    ///
+    /// <para>Asked AFTER <see cref="Apply"/> has run, so it does not mirror the edit: it reads the
+    /// record of what the edit did. A null snapshot means <see cref="Apply"/> found no matching
+    /// worksheet AutoFilter and returned without touching anything.</para>
+    ///
+    /// <para>Content comparison, not record equality: a re-applied filter is a freshly built column
+    /// model whose collections share no reference with the ones it replaced, so record equality
+    /// would report "changed" every time (see <see cref="WorksheetAutoFilterColumnComparison"/>).</para>
+    /// </summary>
+    public static bool Unchanged(
+        Sheet sheet,
+        GridRange range,
+        List<WorksheetAutoFilterColumnModel>? previousFilterColumns)
+    {
+        if (previousFilterColumns is null)
+            return true;
+
+        var autoFilter = sheet.AutoFilter;
+        if (autoFilter is null || !IsMatchingRange(autoFilter, range))
+            return true;
+
+        var current = autoFilter.FilterColumns;
+        if (current.Count != previousFilterColumns.Count)
+            return false;
+        for (var i = 0; i < current.Count; i++)
+        {
+            if (!current[i].SameAs(previousFilterColumns[i]))
+                return false;
+        }
+        return true;
+    }
     /// <summary>Undoes an <see cref="Apply"/> call, restoring the exact previous list contents.</summary>
     public static void Restore(Sheet sheet, GridRange range, List<WorksheetAutoFilterColumnModel>? previousFilterColumns)
     {

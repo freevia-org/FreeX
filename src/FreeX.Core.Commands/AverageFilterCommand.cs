@@ -81,7 +81,7 @@ public sealed class AverageFilterCommand : IWorkbookCommand
         // structured table's shown Totals Row from the Above/Below-Average data set and statistic.
         var lastDataRow = StructuredTableEditEffects.GetFilterableLastRow(sheet, _range);
         if (firstDataRow > lastDataRow)
-            return new CommandOutcome(true);
+            return new CommandOutcome(true, IsNoOp: NothingChanged(sheet));
 
         var dataRowCount = (int)Math.Min(lastDataRow - firstDataRow + 1, (uint)int.MaxValue);
         var values = ArrayPool<double>.Shared.Rent(dataRowCount);
@@ -118,11 +118,11 @@ public sealed class AverageFilterCommand : IWorkbookCommand
             if (numericCount == 0)
             {
                 if (!sheet.ColumnFilterOwnedRows.TryGetValue(filterCol, out var ownedRows) || ownedRows.Count == 0)
-                    return new CommandOutcome(true);
+                    return new CommandOutcome(true, IsNoOp: NothingChanged(sheet));
 
                 _undoSnapshot.CaptureIfNeeded(sheet);
                 FilterHiddenRowUpdater.ClearColumnOwnedRange(sheet, filterCol, _range);
-                return new CommandOutcome(true);
+                return new CommandOutcome(true, IsNoOp: NothingChanged(sheet));
             }
 
             var average = sum / numericCount;
@@ -144,8 +144,26 @@ public sealed class AverageFilterCommand : IWorkbookCommand
             ArrayPool<double>.Shared.Return(values);
         }
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(true, IsNoOp: NothingChanged(sheet));
     }
+
+
+    /// <summary>
+    /// r253: Above/Below-Average filtering is re-applicable -- the Filter menu leaves the criterion
+    /// checked, and re-running it (or running it on a column whose rows already satisfy it) writes
+    /// exactly what is already there. Without this the command still pushed an undo entry, and
+    /// UndoRedoStack.Push clears the redo stack, destroying a real edit the user could have redone.
+    ///
+    /// <para>The decision is POST-HOC and reads the command's own undo record, which is by
+    /// construction the complete list of what Apply writes: Revert restores exactly
+    /// <c>_previousAutoFilterColumns</c> and <c>_undoSnapshot</c>, so if neither differs from the
+    /// sheet, nothing was written. Nothing here mirrors the edit, so nothing here can drift from
+    /// it.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet? sheet) =>
+        sheet is not null
+        && WorksheetAutoFilterColumnSync.Unchanged(sheet, _range, _previousAutoFilterColumns)
+        && (!_undoSnapshot.HasSnapshot || _undoSnapshot.Matches(sheet));
 
     public void Revert(ICommandContext ctx)
     {
