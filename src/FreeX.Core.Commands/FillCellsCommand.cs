@@ -164,6 +164,15 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
             CopyComments(sheet, source, target);
         }
 
+        // r237: complete because it walks EVERY snapshot this command keeps. That is not a
+        // coincidence of care -- the undo snapshots ARE, by construction, the full record of
+        // what the command writes, so undo-completeness and no-op-completeness are the same
+        // list. R237_NoOpDecisionUsesEverySnapshotContractTests holds that invariant: add a
+        // sixth snapshot field without extending NothingChanged and the build stays green but
+        // the contract fails.
+        if (NothingChanged(sheet))
+            return new CommandOutcome(true, IsNoOp: true);
+
         return new CommandOutcome(true, AffectedCells: targets);
     }
 
@@ -504,6 +513,15 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
             writtenCells.Add(target);
         }
 
+        // r237: complete because it walks EVERY snapshot this command keeps. That is not a
+        // coincidence of care -- the undo snapshots ARE, by construction, the full record of
+        // what the command writes, so undo-completeness and no-op-completeness are the same
+        // list. R237_NoOpDecisionUsesEverySnapshotContractTests holds that invariant: add a
+        // sixth snapshot field without extending NothingChanged and the build stays green but
+        // the contract fails.
+        if (NothingChanged(sheet))
+            return new CommandOutcome(true, IsNoOp: true);
+
         return new CommandOutcome(true, AffectedCells: writtenCells);
     }
 
@@ -520,5 +538,60 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// r237: whether this command's writes left the sheet as it found it. Every snapshot field the
+    /// command keeps for undo is consulted, because those snapshots are exactly the set of things it
+    /// writes -- a comparison that skipped one would report "nothing changed" for a fill that
+    /// altered only, say, a hyperlink.
+    /// </summary>
+    private bool NothingChanged(Sheet sheet)
+    {
+        if (_snapshot is not null && !_snapshot.TrueForAll(entry =>
+                CellEditCompanionSnapshot.SameCellOrAbsent(sheet, entry.Address, entry.OldCell)
+                && (entry.OldCell is not null
+                    || Nullable.Equals(entry.OldStyleOnly, sheet.GetStyleOnly(entry.Address.Row, entry.Address.Col)))))
+        {
+            return false;
+        }
+
+        if (_hyperlinkSnapshot is not null && !_hyperlinkSnapshot.TrueForAll(entry =>
+                SameMapEntry(sheet.Hyperlinks, entry.Address, entry.HadTarget, entry.Target)
+                && SameMapEntry(sheet.HyperlinkMetadata, entry.Address, entry.HadMetadata, entry.Metadata)))
+        {
+            return false;
+        }
+
+        if (_richTextRunsSnapshot is not null && !_richTextRunsSnapshot.TrueForAll(entry =>
+                SameMapEntry(sheet.RichTextRuns, entry.Address, entry.HadRuns, entry.Runs)))
+        {
+            return false;
+        }
+
+        if (_phoneticGuideSnapshot is not null && !_phoneticGuideSnapshot.TrueForAll(entry =>
+                SameMapEntry(sheet.CellPhoneticGuides, entry.Address, entry.HadPhoneticGuide, entry.PhoneticGuide)))
+        {
+            return false;
+        }
+
+        return _commentSnapshot is null || _commentSnapshot.TrueForAll(entry =>
+            SameMapEntry(sheet.Comments, entry.Address, entry.HadComment, entry.Comment)
+            && SameMapEntry(sheet.CommentAuthors, entry.Address, entry.HadCommentAuthor, entry.CommentAuthor)
+            && entry.HadShown == sheet.ShownComments.Contains(entry.Address)
+            && SameMapEntry(sheet.ThreadedComments, entry.Address, entry.HadThreadedComment, entry.ThreadedComment));
+    }
+
+    private static bool SameMapEntry<T>(
+        IDictionary<CellAddress, T> entries,
+        CellAddress address,
+        bool had,
+        T? captured)
+    {
+        var present = entries.TryGetValue(address, out var live);
+        if (present != had)
+            return false;
+
+        return !present || EqualityComparer<T?>.Default.Equals(captured, live);
     }
 }

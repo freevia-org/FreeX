@@ -109,6 +109,16 @@ internal sealed record CellEditCompanionSnapshot(
     /// Every settable member of <see cref="Cell"/> except <c>CachedAst</c>, which is a derived parse
     /// cache. Kept as a named method so the r234 coverage contract can point at it.
     /// </summary>
+    /// <summary>r237: null-tolerant form of <see cref="SameCell"/> against the live sheet.</summary>
+    internal static bool SameCellOrAbsent(Sheet sheet, CellAddress address, Cell? captured)
+    {
+        var live = sheet.GetCell(address);
+        if (captured is null || live is null)
+            return captured is null && live is null;
+
+        return SameCell(captured, live);
+    }
+
     internal static bool SameCell(Cell left, Cell right) =>
         Equals(left.Value, right.Value)
         && string.Equals(left.FormulaText, right.FormulaText, StringComparison.Ordinal)
