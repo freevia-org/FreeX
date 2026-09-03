@@ -377,8 +377,34 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand, IEstimatesMemor
             return failure;
         }
 
-        return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
+        return new CommandOutcome(
+            true,
+            AffectedCells: [pivotTable.TargetRange.Start],
+            IsNoOp: NothingChanged(ctx, sheet, pivotTable, oldFootprint));
     }
+
+    /// <summary>
+    /// r262: refreshing a pivot whose source has not changed writes back the same render, the same
+    /// field lists and the same cache items -- and F5 on an unchanged workbook is the most ordinary
+    /// way to reach this command. Without this it still pushed an undo entry, and UndoRedoStack.Push
+    /// clears the redo stack, destroying a real edit the user could have redone.
+    ///
+    /// <para>POST-HOC over all four snapshots: the rendered cell block, the last-rendered range, the
+    /// field/cache/slicer snapshot, and the merged regions the re-render can strip. r261 wrote this
+    /// and reverted it because it never reported a no-op; the cause was a missing clause in
+    /// <c>SameCacheFields</c>, not this decision.</para>
+    /// </summary>
+    private bool NothingChanged(
+        ICommandContext ctx,
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        GridRange oldFootprint) =>
+        _lastRenderedRangeSnapshot == pivotTable.LastRenderedRange
+        && PivotSnapshotComparison.RenderedCellsUnchanged(sheet, _targetSnapshot)
+        && (_fieldSnapshot is null
+            || _fieldSnapshot.Matches(ctx.Workbook, pivotTable, CommandGuards.FindPivotCache(ctx.Workbook, pivotTable)))
+        && PivotSnapshotComparison.MergedRegionsUnchanged(
+            sheet, _oldMergedRegions, region => region.Overlaps(oldFootprint));
 
     public void Revert(ICommandContext ctx)
     {
@@ -444,6 +470,37 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand, IEstimatesMemor
                     .Where(slicer => string.Equals(slicer.SourcePivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase))
                     .Select(slicer => (slicer.Name, slicer.CacheItems.ToList()))
                     .ToList());
+
+        /// <summary>
+        /// r262: true when everything Capture recorded still holds. Content comparison throughout:
+        /// every member is a list rebuilt in place by the refresh, so record equality would compare
+        /// references and answer "changed" on every refresh, including one over unchanged data.
+        /// </summary>
+        public bool Matches(Workbook workbook, PivotTableModel pivotTable, PivotCacheModel? cache)
+        {
+            if (!PivotSnapshotComparison.SameFields(RowFields, pivotTable.RowFields)
+                || !PivotSnapshotComparison.SameFields(ColumnFields, pivotTable.ColumnFields)
+                || !PivotSnapshotComparison.SameFields(PageFields, pivotTable.PageFields)
+                || !PivotSnapshotComparison.SameScalarRecords(DataFields, pivotTable.DataFields)
+                || CacheId != cache?.CacheId
+                || !PivotSnapshotComparison.SameCacheFields(CacheFields, cache?.Fields.ToList() ?? []))
+            {
+                return false;
+            }
+
+            foreach (var (slicerName, cacheItems) in SlicerCacheItems)
+            {
+                var slicer = workbook.Slicers.FirstOrDefault(candidate =>
+                    string.Equals(candidate.Name, slicerName, StringComparison.OrdinalIgnoreCase));
+                if (slicer is null)
+                    continue;
+
+                if (!PivotSnapshotComparison.SameScalarRecords(cacheItems, slicer.CacheItems))
+                    return false;
+            }
+
+            return true;
+        }
 
         public void Restore(PivotTableModel pivotTable, Workbook workbook)
         {

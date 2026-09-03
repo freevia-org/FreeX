@@ -336,7 +336,11 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // all ordinary, all currently pushing an undo entry.
         "ChangePivotTableSourceCommand",
         "ResizeStructuredTableCommand",
-        "RefreshPivotTableCommand",
+        // r262: RefreshPivotTable is OFF this list too -- and the command was never the problem. The
+        // comparison r261 added for the cache fields stripped ONE of PivotCacheFieldModel's THREE
+        // collection members, so the other two were compared by reference and the guard could never
+        // report a no-op. Fixed, with the coverage contract that was missing; it caught a third
+        // member (GroupItems) my hand-written fix had also missed, on its first run.
         // r261: MergeCells is OFF this list -- a post-hoc decision over the six things its Revert
         // restores (the merged region, the absorbed regions, the covered cells, and the four
         // per-address comment collections). RefreshPivotTable STAYS, and its entry is now sharper than
@@ -435,9 +439,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 at r238, 44 at r239, 43 at r240, 41 at r242, 40 at r243, 39 at r244, 37 at r245, 36 at r246, 34 at r247, 33 at r248, 32 at r249, 31 at r250, 30 at r253, 25 at r254, 23 at r255, 21 with the parallel data-validation pair, 16 at r256, 13 at r257, 11 at r258, 9 at r259, 7 at r260, 6 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 at r238, 44 at r239, 43 at r240, 41 at r242, 40 at r243, 39 at r244, 37 at r245, 36 at r246, 34 at r247, 33 at r248, 32 at r249, 31 at r250, 30 at r253, 25 at r254, 23 at r255, 21 with the parallel data-validation pair, 16 at r256, 13 at r257, 11 at r258, 9 at r259, 7 at r260, 6 at r261, 5 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
     /// </summary>
-    private const int OutstandingCeiling = 6;
+    private const int OutstandingCeiling = 5;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()

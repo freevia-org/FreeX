@@ -60,7 +60,62 @@ internal static class PivotSnapshotComparison
         return true;
     }
 
-    private static bool SameStrings(IReadOnlyList<string>? left, IReadOnlyList<string>? right)
+
+    private static readonly IReadOnlyList<char> NoChars = [];
+
+    /// <summary>
+    /// r262: <see cref="PivotCacheFieldModel"/> carries THREE collection members -- <c>SharedItems</c>,
+    /// <c>SharedItemKinds</c> and <c>GroupItems</c> -- and a refresh rebuilds the cache's field list in place from the
+    /// source, so both must be stripped and compared by content.
+    ///
+    /// <para>r261 stripped only the first, which left the second compared by REFERENCE inside the
+    /// stripped record equality. That made this comparison answer "changed" after every refresh,
+    /// which is why r261's RefreshPivotTable guard could never report a no-op and was reverted. The
+    /// diagnosis took a round because the symptom -- a guard that never fires -- looks identical
+    /// whether the command really does write every time or the comparison is simply wrong.</para>
+    ///
+    /// <para>The third member, <c>GroupItems</c>, was missed AGAIN when this was rewritten by hand in
+    /// r262 -- and caught on its first run by the coverage contract that should have existed in r261.
+    /// <c>R262_CacheFieldComparisonCoverageContractTests</c> fails if a fourth is added.</para>
+    /// </summary>
+    internal static bool SameCacheFields(IReadOnlyList<PivotCacheFieldModel> left, IReadOnlyList<PivotCacheFieldModel> right)
+    {
+        if (ReferenceEquals(left, right)) return true;
+        if (left.Count != right.Count) return false;
+        for (var i = 0; i < left.Count; i++)
+        {
+            if (Strip(left[i]) != Strip(right[i]))
+                return false;
+            if (!SameStrings(left[i].SharedItems, right[i].SharedItems))
+                return false;
+            if (!SameChars(left[i].SharedItemKinds, right[i].SharedItemKinds))
+                return false;
+            if (!SameStrings(left[i].GroupItems, right[i].GroupItems))
+                return false;
+        }
+        return true;
+    }
+
+    private static PivotCacheFieldModel Strip(PivotCacheFieldModel field) => field with
+    {
+        SharedItems = NoStrings,
+        SharedItemKinds = NoChars,
+        GroupItems = NoStrings,
+    };
+
+    private static bool SameChars(IReadOnlyList<char>? left, IReadOnlyList<char>? right)
+    {
+        if (ReferenceEquals(left, right)) return true;
+        if (left is null || right is null) return false;
+        if (left.Count != right.Count) return false;
+        for (var i = 0; i < left.Count; i++)
+        {
+            if (left[i] != right[i])
+                return false;
+        }
+        return true;
+    }
+    internal static bool SameStrings(IReadOnlyList<string>? left, IReadOnlyList<string>? right)
     {
         if (ReferenceEquals(left, right)) return true;
         if (left is null || right is null) return false;
