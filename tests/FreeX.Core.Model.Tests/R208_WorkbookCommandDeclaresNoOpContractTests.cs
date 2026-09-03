@@ -270,8 +270,13 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // and then re-renders over the same cells; MoveRangeCommand with the destination equal to
         // the source start writes the same cells back. Both reachable by dragging something and
         // dropping it where it started. Same reason as the filters for not fixing them here: each
-        "MovePivotTableCommand",
         "MoveRangeCommand",
+        // r257: MovePivotTable is OFF this list -- dropping a pivot where it started skips the whole
+        // move block, and a post-hoc decision over its five snapshots (target range, last-rendered
+        // range, the captured cell block, the old footprint's merged regions) settles it.
+        // MoveRangeCommand stays, and the reason is now countable: THIRTY snapshot fields, from cells
+        // and comments through conditional-format formula maps to spill relocations. A decision over
+        // all thirty is a round of its own; a decision over fewer is the partial mirror r225 declined.
         // r236 REFINES the r233 diagnosis for these, and for GroupedApplyStyleCommand below.
         // r234 built the cell comparison they were said to need, and it is not sufficient for them:
         // all three write COMPANION state as well -- hyperlinks, hyperlink metadata, rich-text runs
@@ -319,8 +324,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // pivot or data table whose source has not moved, resizing a table to its current range --
         // all ordinary, all currently pushing an undo entry.
         "ChangePivotTableSourceCommand",
-        "DataTableBodyRefreshCommand",
-        "ExternalTextPasteSpecialCommand",
         "RefreshPivotTableCommand",
         "ResizeStructuredTableCommand",
         // FormControlInteractionCommand delegates its edit to _cellEdit.Apply -- an EditCellsCommand,
@@ -419,9 +422,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 at r238, 44 at r239, 43 at r240, 41 at r242, 40 at r243, 39 at r244, 37 at r245, 36 at r246, 34 at r247, 33 at r248, 32 at r249, 31 at r250, 30 at r253, 25 at r254, 23 at r255, 21 with the parallel data-validation pair, 16 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 at r238, 44 at r239, 43 at r240, 41 at r242, 40 at r243, 39 at r244, 37 at r245, 36 at r246, 34 at r247, 33 at r248, 32 at r249, 31 at r250, 30 at r253, 25 at r254, 23 at r255, 21 with the parallel data-validation pair, 16 at r256, 13 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
     /// </summary>
-    private const int OutstandingCeiling = 16;
+    private const int OutstandingCeiling = 13;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()

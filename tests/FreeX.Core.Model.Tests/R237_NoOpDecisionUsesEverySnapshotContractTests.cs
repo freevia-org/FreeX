@@ -52,6 +52,9 @@ public sealed class R237_NoOpDecisionUsesEverySnapshotContractTests
         ["ConfigurePivotTableLayoutCommand"] = "NothingChanged",
         ["ConfigurePivotTableCalculatedItemsCommand"] = "NothingChanged",
         ["ClearPivotTableViewCommand"] = "NothingChanged",
+        ["MovePivotTableCommand"] = "NothingChanged",
+        ["DataTableBodyRefreshCommand"] = "NothingChanged",
+        ["ExternalTextPasteSpecialCommand"] = "NothingChanged",
     };
 
     [Fact]

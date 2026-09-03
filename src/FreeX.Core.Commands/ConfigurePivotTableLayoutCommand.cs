@@ -102,7 +102,7 @@ public sealed class ConfigurePivotTableLayoutCommand : IWorkbookCommand
         _snapshot is not null
         && _snapshot.Matches(pivotTable)
         && PivotSnapshotComparison.RenderedCellsUnchanged(sheet, _targetSnapshot)
-        && PivotSnapshotComparison.MergedRegionsUnchanged(sheet, _oldMergedRegions, oldFootprint);
+        && PivotSnapshotComparison.MergedRegionsUnchanged(sheet, _oldMergedRegions, region => region.Overlaps(oldFootprint));
 
     public void Revert(ICommandContext ctx)
     {

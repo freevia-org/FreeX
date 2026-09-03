@@ -768,7 +768,35 @@ internal sealed class DataTableBodyRefreshCommand : IWorkbookCommand
                 _registration.IsRowOriented ? DataTableInputOrientation.Row : DataTableInputOrientation.Column,
                 masterFormula, Write);
 
-        return new CommandOutcome(true, AffectedCells: affected);
+        return new CommandOutcome(true, AffectedCells: affected, IsNoOp: NothingChanged(sheet));
+    }
+
+    /// <summary>
+    /// r257: this command re-runs the whole Data Table body from the master formula whenever a cell
+    /// the table depends on is edited, so it fires on edits that leave the results identical --
+    /// changing a cell outside the substituted inputs, or re-entering the same value. Without this
+    /// it still pushed an undo entry, and UndoRedoStack.Push clears the redo stack, destroying a
+    /// real edit the user could have redone.
+    ///
+    /// <para>r240 wrote a guard here and REVERTED it, because there was no behavioural test and the
+    /// stale-entry contract correctly refused an entry that declared IsNoOp while still being listed
+    /// as broken. This one keeps the guard and adds the tests. The decision is POST-HOC over the
+    /// command's whole undo record: <c>_snapshot</c> is the only thing Revert restores, and the
+    /// comparison is the cell-editing commands' own, so "unchanged" means every field of every
+    /// written cell matches what was there.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet sheet)
+    {
+        if (_snapshot is null)
+            return true;
+
+        foreach (var (address, previousCell) in _snapshot)
+        {
+            if (!CellEditCompanionSnapshot.SameCellOrAbsent(sheet, address, previousCell))
+                return false;
+        }
+
+        return true;
     }
 
     public void Revert(ICommandContext ctx)

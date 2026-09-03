@@ -1917,7 +1917,35 @@ internal sealed class ExternalTextPasteSpecialCommand : IWorkbookCommand, IAffec
             sheet.SetCell(address, existing);
         }
 
-        return new CommandOutcome(true, AffectedCells: _affectedCells);
+        return new CommandOutcome(true, AffectedCells: _affectedCells, IsNoOp: NothingChanged(sheet));
+    }
+
+    /// <summary>
+    /// r257: pasting external text over a range that already holds exactly that text writes what is
+    /// already there -- re-pasting the same clipboard contents, or pasting a block back over the
+    /// place it was copied from. Without this the command still pushed an undo entry, and
+    /// UndoRedoStack.Push clears the redo stack, destroying a real edit the user could have redone.
+    ///
+    /// <para>The decision is POST-HOC over the command's whole undo record. It mirrors Revert's own
+    /// two cases rather than just the cell one: where Revert restores a style-only entry for an
+    /// address that held no cell, the comparison checks that style-only entry too, so a paste that
+    /// changed nothing but the style-only slot is not reported as a no-op.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet sheet)
+    {
+        if (_snapshot is null)
+            return true;
+
+        foreach (var (address, oldCell, oldStyleOnly) in _snapshot)
+        {
+            if (!CellEditCompanionSnapshot.SameCellOrAbsent(sheet, address, oldCell))
+                return false;
+
+            if (oldCell is null && sheet.GetStyleOnly(address.Row, address.Col) != oldStyleOnly)
+                return false;
+        }
+
+        return true;
     }
 
     public void Revert(ICommandContext ctx)

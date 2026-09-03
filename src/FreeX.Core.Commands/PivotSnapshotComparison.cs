@@ -97,12 +97,18 @@ internal static class PivotSnapshotComparison
     /// Compared as a set over the same footprint the capture used, since re-adding the same regions
     /// in a different order is not a change the user can see or the file can record.
     /// </summary>
-    internal static bool MergedRegionsUnchanged(Sheet sheet, List<GridRange>? captured, GridRange footprint)
+    internal static bool MergedRegionsUnchanged(
+        Sheet sheet,
+        List<GridRange>? captured,
+        Func<GridRange, bool> overlapsCapturedFootprint)
     {
         if (captured is null)
             return true;
 
-        var current = sheet.MergedRegions.Where(region => region.Overlaps(footprint)).ToList();
+        // The predicate is the caller's own capture filter, passed in rather than reconstructed here,
+        // so the set compared is by construction the set captured -- one command scopes its capture to
+        // a single footprint, another to the union of two.
+        var current = sheet.MergedRegions.Where(overlapsCapturedFootprint).ToList();
         if (current.Count != captured.Count)
             return false;
 

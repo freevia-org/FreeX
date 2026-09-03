@@ -339,8 +339,33 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
             PivotTableRefreshService.UpdateBoundPivotCharts(ctx.Workbook, sheet, pivotTable);
         }
 
-        return new CommandOutcome(true, AffectedCells: [_newTargetRange.Value.Start]);
+        return new CommandOutcome(
+            true,
+            AffectedCells: [_newTargetRange.Value.Start],
+            IsNoOp: NothingChanged(sheet, pivotTable));
     }
+
+    /// <summary>
+    /// r257: dragging a PivotTable and dropping it where it started leaves
+    /// <c>_oldTargetRange == _newTargetRange</c>, and the entire move block below is skipped -- the
+    /// command does nothing at all. r225 recorded that as reachable and ordinary and left it on the
+    /// debt because the fix needed a real before/after comparison rather than a guard on the
+    /// arguments. This is that comparison.
+    ///
+    /// <para>POST-HOC over the command's whole undo record: Revert restores the target range, the
+    /// last-rendered range, the captured cell block and the old footprint's merged regions, and
+    /// nothing else. The merged-region half is compared over the same two-footprint filter the
+    /// capture used, passed in rather than restated.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet sheet, PivotTableModel pivotTable) =>
+        _oldTargetRange == pivotTable.TargetRange
+        && _oldLastRenderedRange == pivotTable.LastRenderedRange
+        && PivotSnapshotComparison.RenderedCellsUnchanged(sheet, _rangeSnapshot)
+        && PivotSnapshotComparison.MergedRegionsUnchanged(
+            sheet,
+            _oldMergedRegions,
+            region => region.Overlaps(_oldTargetRange!.Value)
+                || (_oldLastRenderedRange is { } renderedRange && region.Overlaps(renderedRange)));
 
     public void Revert(ICommandContext ctx)
     {
