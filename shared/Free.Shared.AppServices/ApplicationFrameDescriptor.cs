@@ -39,13 +39,13 @@ public sealed class ApplicationFrameDescriptor
     }
 
     public string ResolveDataFolderLabel() =>
-        ResolveDataFolderLabel(PlatformApplicationDataPathProvider.LocalInstance);
+        ResolveDataFolderLabel(PlatformApplicationDataPathProvider.Instance);
 
     public string ResolveDataFolderLabel(IApplicationDataPathProvider pathProvider) =>
         AppStoragePathPlanner.GetApplicationDataDirectoryLabelOrFallback(pathProvider);
 
     public string ResolveDataFolderLabel(string optionsStorePath) =>
-        ResolveDataFolderLabel(optionsStorePath, PlatformApplicationDataPathProvider.LocalInstance);
+        ResolveDataFolderLabel(optionsStorePath, PlatformApplicationDataPathProvider.Instance);
 
     public string ResolveDataFolderLabel(
         string optionsStorePath,
