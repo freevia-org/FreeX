@@ -278,6 +278,13 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // the source start writes the same cells back. Both reachable by dragging something and
         // dropping it where it started. Same reason as the filters for not fixing them here: each
         "MoveRangeCommand",
+        // r265: ResizeStructuredTable is OFF this list. Its table half needed a 27-member content
+        // comparison (StructuredTableComparison) because every structural edit goes through CopyTable,
+        // which builds a new instance -- the cannot-fire shape in the largest model yet. Its delegated
+        // totals refresh is consulted through its OWN IsNoOp, which r245 made trustworthy; r231's
+        // warning that "delegation propagates both" was what said to check that first.
+        // ONE command remains: MoveRangeCommand, blocked on size (thirty snapshot fields) rather than
+        // on any missing technique.
         // r264: ChangePivotTableSource is OFF this list. r231's cannot-fire objection was right about
         // ONE member -- OriginalCache is the live object when Apply mutates in place -- and wrong
         // about the snapshot, which captures every mutable cache field beside it. The object is
@@ -339,7 +346,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // re-applying a style a range already has, re-importing an unchanged sheet, refreshing a
         // pivot or data table whose source has not moved, resizing a table to its current range --
         // all ordinary, all currently pushing an undo entry.
-        "ResizeStructuredTableCommand",
         // r263: SetSlicerSelection and SetTimelineRange are OFF this list -- post-hoc decisions over
         // the slicer/timeline state, the per-target rendered cell blocks and the merged regions those
         // re-renders can strip. SetSlicerSelection's two mutually exclusive paths (pivot-bound and
@@ -446,9 +452,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 at r238, 44 at r239, 43 at r240, 41 at r242, 40 at r243, 39 at r244, 37 at r245, 36 at r246, 34 at r247, 33 at r248, 32 at r249, 31 at r250, 30 at r253, 25 at r254, 23 at r255, 21 with the parallel data-validation pair, 16 at r256, 13 at r257, 11 at r258, 9 at r259, 7 at r260, 6 at r261, 5 at r262, 3 at r263, 2 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 at r238, 44 at r239, 43 at r240, 41 at r242, 40 at r243, 39 at r244, 37 at r245, 36 at r246, 34 at r247, 33 at r248, 32 at r249, 31 at r250, 30 at r253, 25 at r254, 23 at r255, 21 with the parallel data-validation pair, 16 at r256, 13 at r257, 11 at r258, 9 at r259, 7 at r260, 6 at r261, 5 at r262, 3 at r263, 2 at r264, 1 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
     /// </summary>
-    private const int OutstandingCeiling = 2;
+    private const int OutstandingCeiling = 1;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()

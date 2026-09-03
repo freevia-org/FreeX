@@ -375,10 +375,15 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
         // against the table (e.g. SUM(Table[Column])) silently excluded it as "the totals row".
         // Gating this refresh on growth only (the previous behavior) fixed the grow direction and left
         // the shrink direction broken.
+        // r265: the delegated refresh reports its own IsNoOp (fixed r245), so its verdict is carried
+        // into this command's decision rather than re-derived -- delegation propagates a correct
+        // signal here, which is what r231 said it could not be relied on to do before that fix.
+        var totalsRefreshChangedSomething = false;
         if (resizedTable.TotalsRowShown)
         {
             _totalsRefreshCommand = new RefreshStructuredTableTotalsCommand(_sheetId, _tableId);
             var totalsRefreshOutcome = _totalsRefreshCommand.Apply(ctx);
+            totalsRefreshChangedSomething = totalsRefreshOutcome.Success && !totalsRefreshOutcome.IsNoOp;
             if (totalsRefreshOutcome.Success && totalsRefreshOutcome.AffectedCells is { Count: > 0 } totalsAffected)
                 affectedCells.AddRange(totalsAffected);
         }
@@ -398,7 +403,89 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
                 affectedCells.Add(address);
         }
 
-        return new CommandOutcome(true, AffectedCells: affectedCells);
+        return new CommandOutcome(
+            true,
+            AffectedCells: affectedCells,
+            IsNoOp: NothingChanged(sheet, totalsRefreshChangedSomething));
+    }
+
+    /// <summary>
+    /// r265: resizing a table to the range it already occupies -- dragging the resize handle back,
+    /// or re-confirming the Resize Table dialog to check what the range IS -- rebuilds an equal table
+    /// and rewrites the same cells. Without this the command still pushed an undo entry, and
+    /// UndoRedoStack.Push clears the redo stack, destroying a real edit the user could have redone.
+    ///
+    /// <para>POST-HOC over the seven things Revert restores: the delegated totals refresh, the
+    /// captured cells, the four filter-state collections, and the table itself. The table half needs
+    /// a CONTENT comparison because every structural edit goes through CopyTable, which builds a new
+    /// instance -- reference equality there could never report unchanged.</para>
+    ///
+    /// <para>The delegated totals refresh is consulted through its OWN outcome rather than re-derived
+    /// here. r231 noted that delegation propagates a wrong signal as readily as a right one; that
+    /// command reports IsNoOp correctly since r245, so consulting it is now sound, and doing so keeps
+    /// one decision rather than two copies of the same question.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet sheet, bool totalsRefreshChangedSomething)
+    {
+        if (_previousTable is null || totalsRefreshChangedSomething)
+            return false;
+
+        if (_totalsRefreshCommand is not null && !CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out _))
+            return false;
+
+        foreach (var (address, cell) in _previousCells)
+        {
+            if (!CellEditCompanionSnapshot.SameCellOrAbsent(sheet, address, cell))
+                return false;
+        }
+
+        if (_previousFilterHiddenRows is not null && !_previousFilterHiddenRows.SetEquals(sheet.FilterHiddenRows))
+            return false;
+        if (_previousValueFilterHiddenRows is not null && !_previousValueFilterHiddenRows.SetEquals(sheet.ValueFilterHiddenRows))
+            return false;
+        if (!SameValueFilterColumns(_previousActiveValueFilterColumns, sheet.ActiveValueFilterColumns))
+            return false;
+        if (!SameOwnedRows(_previousColumnFilterOwnedRows, sheet.ColumnFilterOwnedRows))
+            return false;
+
+        return CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex)
+            && StructuredTableComparison.Same(_previousTable, sheet.StructuredTables[tableIndex]);
+    }
+
+    private static bool SameValueFilterColumns(
+        Dictionary<uint, IReadOnlyList<string>>? captured,
+        IReadOnlyDictionary<uint, IReadOnlyList<string>> current)
+    {
+        if (captured is null)
+            return true;
+        if (captured.Count != current.Count)
+            return false;
+
+        foreach (var (col, values) in captured)
+        {
+            if (!current.TryGetValue(col, out var currentValues) || !values.SequenceEqual(currentValues, StringComparer.Ordinal))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool SameOwnedRows(
+        Dictionary<uint, HashSet<uint>>? captured,
+        IReadOnlyDictionary<uint, HashSet<uint>> current)
+    {
+        if (captured is null)
+            return true;
+        if (captured.Count != current.Count)
+            return false;
+
+        foreach (var (col, owned) in captured)
+        {
+            if (!current.TryGetValue(col, out var currentOwned) || !owned.SetEquals(currentOwned))
+                return false;
+        }
+
+        return true;
     }
 
     public void Revert(ICommandContext ctx)
