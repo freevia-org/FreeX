@@ -397,6 +397,14 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand, IEstima
         var configureOutcome = _configureCommand.Apply(ctx);
         if (!configureOutcome.Success)
             return configureOutcome;
+        // r247: bubble the children up, exactly as CompositeWorkbookCommand does (r224).
+        // This command is a composite in all but name -- one
+        // ConfigureStructuredTableStyleOptionsCommand (fixed in r219) plus a set of
+        // ApplyStyleCommands (fixed in r246) -- so once every child can say whether it
+        // changed anything, the parent can too, and re-applying a style the table already
+        // carries is reported for what it is. Starts from the option change so a run with no
+        // style commands at all still answers correctly.
+        var allNoOp = configureOutcome.IsNoOp;
 
         table = FindRequiredStructuredTable(sheet, _tableId);
         foreach (var styleCommand in BuildStyleCommands(table))
@@ -443,10 +451,13 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand, IEstima
                 return styleOutcome;
             }
 
+            if (!styleOutcome.IsNoOp)
+                allNoOp = false;
+
             _appliedStyleCommands.Add(styleCommand);
         }
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(true, IsNoOp: allNoOp);
     }
 
     public void Revert(ICommandContext ctx) => RevertAppliedCommands(ctx);

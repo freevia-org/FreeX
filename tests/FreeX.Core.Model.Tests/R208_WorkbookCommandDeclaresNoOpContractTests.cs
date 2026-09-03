@@ -287,7 +287,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // inherits the defect rather than a correct signal -- delegation propagates both -- and
         // fixing the inner command fixes this one for free. It is listed separately so the count
         // stays honest, not because it needs its own fix.
-        "ReapplyStructuredTableStyleCommand",
         // r232: the last of the cell-writing commands, all held here by the same boundary r221 drew
         // and r229 restated. Each writes values into a target set that its guards have already
         // established is non-empty, so "did we write anything" is always yes; deciding whether the
@@ -323,7 +322,6 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         "ConfigurePivotTableLayoutCommand",
         "ConfigurePivotTableOptionsCommand",
         "ConfigurePivotTableViewCommand",
-        "ApplyStructuredTableStyleCommand",
         "SetHyperlinkCommand",
         "SetSlicerSelectionCommand",
         "SetTimelineRangeCommand",
@@ -358,6 +356,11 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
         // pushed, so on first Apply this command is pure delegation.
         ["ExternalTextPasteValuesCommand"] = "EditCellsCommand",
         ["FormControlInteractionCommand"] = "EditCellsCommand",
+        // r247: the delegation r231 recorded as inheriting a DEFECT now inherits the fix. Its whole
+        // Apply returns ApplyStructuredTableStyleCommand's outcome, and that command learned to
+        // report IsNoOp this round, so this one reports correctly and only the per-class scan
+        // cannot see it -- the same mechanism as r223 and r224, arriving by the opposite route.
+        ["ReapplyStructuredTableStyleCommand"] = "ApplyStructuredTableStyleCommand",
     };
 
     /// <summary>
@@ -389,9 +392,9 @@ public sealed class R208_WorkbookCommandDeclaresNoOpContractTests
     /// examination is supposed to show up. Both lists still exist and are still kept apart, so "we
     /// know it is broken" and "nobody looked" stay legible as different states.
     /// </para>
-    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 at r238, 44 at r239, 43 at r240, 41 at r242, 40 at r243, 39 at r244, 37 at r245, 36 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
+    /// <para>History: 163 at r217 (11 + 152), 154 at r218, 151 at r219, 139 at r220, 128 at r221, 106 at r222, 101 at r223, 87 at r224, 85 at r225, 84 at r226, 78 at r228, 75 at r229, 72 at r230, 70 at r231, 50 at r232, 49 at r234, 47 at r235, 46 at r237, 45 at r238, 44 at r239, 43 at r240, 41 at r242, 40 at r243, 39 at r244, 37 at r245, 36 at r246, 34 here -- and the never-examined column reaches ZERO, so every one of the 233 commands has now been looked at.</para>
     /// </summary>
-    private const int OutstandingCeiling = 36;
+    private const int OutstandingCeiling = 34;
 
     [Fact]
     public void EveryWorkbookCommandDeclaresWhetherItCanNoOp()
