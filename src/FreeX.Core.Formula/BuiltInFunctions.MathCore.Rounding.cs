@@ -437,6 +437,8 @@ public static partial class BuiltInFunctions
             }
             catch (OverflowException)
             {
+                // The decimal path is a PRECISION correction, not the answer: on overflow fall
+                // through to the double computation below rather than failing the formula.
             }
         }
 
@@ -453,6 +455,8 @@ public static partial class BuiltInFunctions
             }
             catch (OverflowException)
             {
+                // The decimal path is a PRECISION correction, not the answer: on overflow fall
+                // through to the double computation below rather than failing the formula.
             }
         }
 
@@ -471,6 +475,8 @@ public static partial class BuiltInFunctions
             }
             catch (OverflowException)
             {
+                // The decimal path is a PRECISION correction, not the answer: on overflow fall
+                // through to the double computation below rather than failing the formula.
             }
         }
 
