@@ -41,12 +41,60 @@ public static class DrawingMlThemeXml
         if (fontScheme.Name != DrawingNamespace + "fontScheme")
             return null;
 
-        fontScheme.Element(DrawingNamespace + "majorFont")?
-            .Element(DrawingNamespace + "latin")?
-            .SetAttributeValue("typeface", majorLatinFont);
-        fontScheme.Element(DrawingNamespace + "minorFont")?
-            .Element(DrawingNamespace + "latin")?
-            .SetAttributeValue("typeface", minorLatinFont);
+        ApplyLatinTypeface(fontScheme, "majorFont", majorLatinFont);
+        ApplyLatinTypeface(fontScheme, "minorFont", minorLatinFont);
         return fontScheme;
+    }
+
+    /// <summary>
+    /// r351: sets one font collection's Latin typeface, creating whatever the source omitted.
+    ///
+    /// <para>This was a <c>?.</c> chain, so a source <c>a:fontScheme</c> missing <c>a:majorFont</c>
+    /// or its <c>a:latin</c> silently swallowed the edit: the caller's chosen typeface was dropped
+    /// and the unchanged XML returned as if patched. It also returned XML the schema rejects --
+    /// <c>CT_FontCollection</c> requires <c>latin</c>, <c>ea</c> and <c>cs</c>, in that order --
+    /// so the saved file was invalid on top of being wrong. Both apps patch through here
+    /// (<c>WorkbookTheme.WithFonts</c> and <c>PptxPackageWriter</c>), so both lost the edit.</para>
+    ///
+    /// <para>Order matters and is enforced rather than assumed: the three required children are
+    /// re-seated at the front in schema order, which leaves any script-specific <c>a:font</c>
+    /// children that follow them untouched.</para>
+    /// </summary>
+    private static void ApplyLatinTypeface(XElement fontScheme, string collectionName, string typeface)
+    {
+        var collection = fontScheme.Element(DrawingNamespace + collectionName);
+        if (collection is null)
+        {
+            collection = new XElement(DrawingNamespace + collectionName);
+
+            // majorFont precedes minorFont in CT_FontScheme.
+            if (collectionName == "majorFont")
+                fontScheme.AddFirst(collection);
+            else
+                fontScheme.Add(collection);
+        }
+
+        var latin = EnsureChild(collection, "latin");
+        var ea = EnsureChild(collection, "ea");
+        var cs = EnsureChild(collection, "cs");
+
+        latin.SetAttributeValue("typeface", typeface);
+
+        // Re-seat in schema order (latin, ea, cs), preserving any a:font children after them.
+        cs.Remove();
+        ea.Remove();
+        latin.Remove();
+        collection.AddFirst(latin, ea, cs);
+    }
+
+    private static XElement EnsureChild(XElement parent, string name)
+    {
+        var existing = parent.Element(DrawingNamespace + name);
+        if (existing is not null)
+            return existing;
+
+        var created = new XElement(DrawingNamespace + name, new XAttribute("typeface", string.Empty));
+        parent.Add(created);
+        return created;
     }
 }
