@@ -4488,8 +4488,19 @@ public static class DocxReader
         var grid = tbl.Element(W + "tblGrid");
         if (grid is not null)
         {
-            foreach (var gridCol in grid.Elements(W + "gridCol"))
-                table.ColumnWidthsPt.Add(DxaToPoints(gridCol.Attribute(W + "w")?.Value));
+            // r335: w:w is OPTIONAL on w:gridCol -- a grid may declare the column COUNT while leaving
+            // the widths to the layout engine, which is what the writer now emits for a table whose
+            // model carries no widths (tblGrid itself is mandatory, so it can no longer be omitted).
+            // Reading a width from an attribute that is not there invented one, so a width-less table
+            // came back carrying widths. If any column lacks an explicit width the grid does not
+            // describe a usable set, so none are taken: partial widths would misalign the columns
+            // they do describe.
+            var columns = grid.Elements(W + "gridCol").ToList();
+            if (columns.Count > 0 && columns.All(c => c.Attribute(W + "w") is not null))
+            {
+                foreach (var gridCol in columns)
+                    table.ColumnWidthsPt.Add(DxaToPoints(gridCol.Attribute(W + "w")?.Value));
+            }
         }
 
         var rowIndex = 0;

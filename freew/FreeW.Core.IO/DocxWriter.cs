@@ -2460,21 +2460,33 @@ public static class DocxWriter
         // Reconcile against the actual grid-column total (max over rows of summed GridSpans) to keep the
         // file valid even when ColumnWidthsPt has drifted out of sync with the row contents (H4 fix):
         // pad with the last known width when the model has fewer entries, truncate when it has more.
-        if (table.ColumnWidthsPt.Count > 0)
+        // r335: w:tblGrid is MANDATORY in CT_Tbl (tblPr, tblGrid, then rows), not conditional on
+        // knowing widths. Emitting it only when ColumnWidthsPt was populated meant any table without
+        // stored widths wrote w:tr straight after w:tblPr, which the schema rejects -- and
+        // Table.Create(rows, columns), the model's own factory for a uniform table, produces exactly
+        // that. So inserting a table and saving wrote an invalid .docx. w:w on w:gridCol is optional,
+        // so when widths are unknown the grid is emitted without them and Word autofits, rather than
+        // inventing measurements the model never had.
+        var widths = table.ColumnWidthsPt;
+        var actualGridCols = table.Rows.Count == 0
+            ? Math.Max(widths.Count, 1)
+            : Math.Max(1, table.Rows.Max(r => r.Cells.Sum(c => Math.Max(1, c.GridSpan))));
+        var grid = new XElement(W + "tblGrid");
+        for (var col = 0; col < actualGridCols; col++)
         {
-            var actualGridCols = table.Rows.Count == 0 ? table.ColumnWidthsPt.Count
-                : table.Rows.Max(r => r.Cells.Sum(c => Math.Max(1, c.GridSpan)));
-            var widths = table.ColumnWidthsPt;
-            var grid = new XElement(W + "tblGrid");
-            for (var col = 0; col < actualGridCols; col++)
+            if (widths.Count == 0)
             {
-                // Use the stored width for this column; if widths are shorter, repeat the last entry
-                // so Word at least has a plausible grid rather than zero-width phantom columns.
-                var w = col < widths.Count ? widths[col] : widths[^1];
-                grid.Add(new XElement(W + "gridCol", new XAttribute(W + "w", PointsToDxa(w))));
+                grid.Add(new XElement(W + "gridCol"));
+                continue;
             }
-            tbl.Add(grid);
+
+            // Use the stored width for this column; if widths are shorter, repeat the last entry
+            // so Word at least has a plausible grid rather than zero-width phantom columns.
+            var w = col < widths.Count ? widths[col] : widths[^1];
+            grid.Add(new XElement(W + "gridCol", new XAttribute(W + "w", PointsToDxa(w))));
         }
+
+        tbl.Add(grid);
 
         var fmt = table.Formatting;
         for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
