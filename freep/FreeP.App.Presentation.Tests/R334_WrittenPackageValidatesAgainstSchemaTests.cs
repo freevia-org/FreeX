@@ -252,4 +252,38 @@ public sealed class R334_WrittenPackageValidatesAgainstSchemaTests
             + "valid XML -- r334 fixed the second, this pins the first");
     }
 
+    /// <summary>
+    /// r341: schema validity is not data survival. r340 proved a deck with an empty slide parses;
+    /// this asks whether reloading gives the slide back. An empty slide is the kind of thing a
+    /// reader can treat as nothing to build.
+    /// </summary>
+    [Fact]
+    public void AnEmptySlideSurvivesAReload()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide());
+        var second = new Slide();
+        second.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Name = "Body",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 100_000,
+            OffsetYEmu = 100_000,
+            ExtentCxEmu = 1_000_000,
+            ExtentCyEmu = 500_000,
+        });
+        presentation.Slides.Add(second);
+        presentation.Slides.Add(new Slide());
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+        var reloaded = PptxPackageReader.Read(stream);
+
+        reloaded.Slides.Should().HaveCount(3,
+            "an empty slide is still a slide; dropping it renumbers everything after it");
+    }
+
 }

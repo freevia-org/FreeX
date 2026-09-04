@@ -219,4 +219,28 @@ public sealed class R335_WrittenDocumentValidatesAgainstSchemaTests
             "a row that lost its last cell must not produce an invalid package");
     }
 
+    /// <summary>
+    /// r341: the survival question for this writer. An empty paragraph between two populated ones is
+    /// a blank line the user deliberately typed; a reader that skips "empty" content silently closes
+    /// the gap and reflows the document.
+    /// </summary>
+    [Fact]
+    public void EmptyParagraphsSurviveAReload()
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("first"));
+        document.Blocks.Add(new Paragraph());
+        document.Blocks.Add(new Paragraph());
+        document.Blocks.Add(new Paragraph("last"));
+
+        using var stream = new MemoryStream();
+        new DocxFileAdapter().Save(document, stream);
+        stream.Position = 0;
+        var reloaded = new DocxFileAdapter().Load(stream);
+
+        var texts = reloaded.Blocks.OfType<Paragraph>().Select(p => p.PlainText).ToList();
+        texts.Should().Equal(["first", "", "", "last"],
+            "the blank lines between the two paragraphs are content the user typed");
+    }
+
 }

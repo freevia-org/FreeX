@@ -136,4 +136,27 @@ public sealed class R336_WrittenWorkbookValidatesAgainstSchemaTests
             "a merge over cells that carry no values is ordinary and must validate");
     }
 
+    /// <summary>
+    /// r341: schema validity and data survival are different properties. r340 proved these degenerate
+    /// packages parse against the schema; it did not ask whether reloading one gives back what was
+    /// saved. A sheet with no cells is exactly the kind of thing a loader drops as "nothing here".
+    /// </summary>
+    [Fact]
+    public void AnEmptySheetSurvivesAReload()
+    {
+        var workbook = new Workbook("Book1");
+        workbook.AddSheet("Empty");
+        workbook.AddSheet("AlsoEmpty");
+        var populated = workbook.AddSheet("HasData");
+        populated.SetCell(new CellAddress(populated.Id, 1, 1), new TextValue("x"));
+
+        using var stream = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, stream);
+        stream.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(stream);
+
+        reloaded.Sheets.Select(s => s.Name).Should().Contain(["Empty", "AlsoEmpty", "HasData"],
+            "an empty sheet is a sheet; dropping it silently loses the user's structure");
+    }
+
 }
