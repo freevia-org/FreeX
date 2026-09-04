@@ -905,9 +905,70 @@ internal static class XlsxSourceDrawingGeometryRewriter
             .Element(SpreadsheetDrawingNs + "nvPicPr")?
             .Element(SpreadsheetDrawingNs + "cNvPr");
         if (cNvPr is not null)
+        {
             changed |= SetOrRemoveAttribute(cNvPr, "descr", string.IsNullOrWhiteSpace(picture.AltText) ? null : picture.AltText);
 
+            // r316/r317: alt text was patched here but its two neighbours were not, so editing a
+            // picture's Title or marking it decorative was kept for a picture FreeX authored and
+            // silently dropped for one loaded from a file. The shape path
+            // (RewriteShapeAltTextAndTitle) has always patched title; this is the picture path
+            // catching up with both it and the fresh writer.
+            changed |= SetOrRemoveAttribute(cNvPr, "title", string.IsNullOrWhiteSpace(picture.Title) ? null : picture.Title);
+            changed |= SetDecorative(cNvPr, drawingNs, picture.IsDecorative);
+        }
+
         return changed;
+    }
+
+    /// <summary>
+    /// Adds or removes the "Mark as decorative" extension on a preserved <c>cNvPr</c>, mirroring
+    /// <c>XlsxWorksheetDrawingObjectWriter.ToDecorativeExtLst</c>.
+    ///
+    /// <para>CT_NonVisualDrawingProps orders its children hlinkClick?, hlinkHover?, extLst?, so a new
+    /// extLst is appended last. An existing extLst is reused rather than replaced: ECMA-376 permits
+    /// only one, and it may already carry the linked-picture-snapshot extension.</para>
+    /// </summary>
+    private static bool SetDecorative(XElement cNvPr, XNamespace drawingNs, bool isDecorative)
+    {
+        XNamespace decorativeNs = "http://schemas.microsoft.com/office/drawing/2017/decorative";
+        var extLst = cNvPr.Element(drawingNs + "extLst");
+        var existing = extLst?
+            .Elements(drawingNs + "ext")
+            .FirstOrDefault(ext => string.Equals(
+                ext.Attribute("uri")?.Value,
+                XlsxWorksheetDrawingPartReader.DrawingMlDecorativeExtensionUri,
+                StringComparison.OrdinalIgnoreCase));
+
+        if (!isDecorative)
+        {
+            if (existing is null)
+                return false;
+
+            existing.Remove();
+            if (extLst is not null && !extLst.HasElements)
+                extLst.Remove();
+            return true;
+        }
+
+        if (existing is not null)
+            return false;
+
+        extLst ??= AppendExtensionList(cNvPr, drawingNs);
+        extLst.Add(new XElement(
+            drawingNs + "ext",
+            new XAttribute("uri", XlsxWorksheetDrawingPartReader.DrawingMlDecorativeExtensionUri),
+            new XElement(
+                decorativeNs + "decorative",
+                new XAttribute(XNamespace.Xmlns + "adec", decorativeNs.NamespaceName),
+                new XAttribute("val", "1"))));
+        return true;
+    }
+
+    private static XElement AppendExtensionList(XElement cNvPr, XNamespace drawingNs)
+    {
+        var extLst = new XElement(drawingNs + "extLst");
+        cNvPr.Add(extLst);
+        return extLst;
     }
 
     private static bool SetPictureTransform(XElement xfrm, PictureModel picture)

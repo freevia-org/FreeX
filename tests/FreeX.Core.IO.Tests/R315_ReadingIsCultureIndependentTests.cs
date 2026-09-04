@@ -69,24 +69,41 @@ public sealed class R315_ReadingIsCultureIndependentTests
         _ => throw new ArgumentOutOfRangeException(nameof(name), name, "unmapped adapter"),
     };
 
+    /// <summary>
+    /// Runs the load on a DEDICATED thread carrying the culture, for the reason recorded in r313's
+    /// equivalent helper: setting the ambient culture on a shared, pooled test thread made that test
+    /// pass alone and fail intermittently in a full-lane run.
+    /// </summary>
     private static Workbook LoadUnder(IFileAdapter adapter, byte[] saved, string cultureName)
     {
-        var previousCulture = CultureInfo.CurrentCulture;
-        var previousUiCulture = CultureInfo.CurrentUICulture;
-        try
+        Workbook? loaded = null;
+        Exception? failure = null;
+        var thread = new Thread(() =>
         {
-            var culture = new CultureInfo(cultureName);
-            CultureInfo.CurrentCulture = culture;
-            CultureInfo.CurrentUICulture = culture;
+            try
+            {
+                var culture = new CultureInfo(cultureName);
+                CultureInfo.CurrentCulture = culture;
+                CultureInfo.CurrentUICulture = culture;
 
-            using var stream = new MemoryStream(saved);
-            return adapter.Load(stream);
-        }
-        finally
-        {
-            CultureInfo.CurrentCulture = previousCulture;
-            CultureInfo.CurrentUICulture = previousUiCulture;
-        }
+                using var stream = new MemoryStream(saved);
+                loaded = adapter.Load(stream);
+            }
+            catch (Exception ex)
+            {
+                // Rethrown on the test's own thread below; without this the thread dies silently and
+                // the failure reads as "loaded was null" rather than as what actually went wrong.
+                failure = ex;
+            }
+        });
+
+        thread.Start();
+        thread.Join();
+
+        if (failure is not null)
+            throw new InvalidOperationException($"loading under {cultureName} threw", failure);
+
+        return loaded ?? throw new InvalidOperationException("the load thread produced nothing");
     }
 
     [Theory]

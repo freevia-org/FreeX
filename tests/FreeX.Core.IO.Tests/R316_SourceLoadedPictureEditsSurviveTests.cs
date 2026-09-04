@@ -100,11 +100,14 @@ public sealed class R316_SourceLoadedPictureEditsSurviveTests
         [nameof(PictureModel.Name)] =
             "Name is the IDENTITY key: XlsxSourceDrawingGeometryRewriter pairs a model with its "
             + "xdr:pic element by matching cNvPr@name, so a rename cannot also be written through it",
-        [nameof(PictureModel.Title)] = "no save-time rewriter patches cNvPr@title (AltText/descr is patched)",
-        [nameof(PictureModel.IsDecorative)] = "decorative marking is not written back onto replayed XML",
-        [nameof(PictureModel.IsVisible)] = "cNvPr@hidden is not written back onto replayed XML",
-        [nameof(PictureModel.LockAspectRatio)] = "the picture's lock flags are not written back onto replayed XML",
-        [nameof(PictureModel.Locked)] = "the picture's lock flags are not written back onto replayed XML",
+        // r317 corrects r316's reasons for these three. "Not written back onto replayed XML" implied
+        // a source-loaded gap, i.e. that a freshly authored picture keeps them. It does not: the
+        // drawing writer emits no cNvPr@hidden and no a:picLocks at all, so these three are model
+        // state the .xlsx format layer never records by ANY path. That is a wider gap than this test
+        // is about, and naming it accurately is the difference between a lead and a wrong lead.
+        [nameof(PictureModel.IsVisible)] = "no write path emits cNvPr@hidden, for source-loaded or authored pictures",
+        [nameof(PictureModel.LockAspectRatio)] = "no write path emits a:picLocks@noChangeAspect",
+        [nameof(PictureModel.Locked)] = "no write path emits a:picLocks",
     };
 
     private static Workbook RoundTrip(Workbook workbook)

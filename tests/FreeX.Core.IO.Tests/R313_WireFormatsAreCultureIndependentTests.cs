@@ -58,11 +58,21 @@ public sealed class R313_WireFormatsAreCultureIndependentTests
         sheet.SetCell(new CellAddress(sheet.Id, row, col), cell);
     }
 
+    /// <summary>
+    /// Runs the save on a DEDICATED thread carrying the culture.
+    ///
+    /// <para>The first version set <c>CultureInfo.CurrentCulture</c> on the calling thread and
+    /// restored it in a finally. That made this test intermittently fail in a full-lane run while
+    /// passing in isolation: the culture is thread-scoped, xUnit runs other tests in parallel and
+    /// resumes async work on pooled threads, so the setting could be observed by -- or restored on --
+    /// a thread other than the one that saved. A guard that fails at random is worse than no guard,
+    /// and a flaky one in THIS position is especially bad: it would have taught the next reader to
+    /// disbelieve a real culture regression.</para>
+    /// </summary>
     private static byte[] SaveUnder(IFileAdapter adapter, string cultureName)
     {
-        var previousCulture = CultureInfo.CurrentCulture;
-        var previousUiCulture = CultureInfo.CurrentUICulture;
-        try
+        byte[]? saved = null;
+        var thread = new Thread(() =>
         {
             var culture = new CultureInfo(cultureName);
             CultureInfo.CurrentCulture = culture;
@@ -70,13 +80,12 @@ public sealed class R313_WireFormatsAreCultureIndependentTests
 
             using var stream = new MemoryStream();
             adapter.Save(NumericWorkbook(), stream);
-            return stream.ToArray();
-        }
-        finally
-        {
-            CultureInfo.CurrentCulture = previousCulture;
-            CultureInfo.CurrentUICulture = previousUiCulture;
-        }
+            saved = stream.ToArray();
+        });
+
+        thread.Start();
+        thread.Join();
+        return saved ?? throw new InvalidOperationException("the save thread produced nothing");
     }
 
     public static TheoryData<string, string> AdaptersAndCultures()
