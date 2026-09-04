@@ -7219,7 +7219,16 @@ public static class DocxWriter
         var layout = XDocument.Load(stream);
         var root = layout.Root ?? throw new InvalidOperationException("SmartArt layout template has no root: " + resourceName);
         root.SetAttributeValue("uniqueId", layoutUrn);
-        root.Element(Dgm + "catLst")?.Element(Dgm + "cat")?.SetAttributeValue("type", category);
+
+        // r351 class: applying the category through `?.Element(cat)?.SetAttributeValue(...)` made a
+        // template authored without a catLst silently keep the stock category -- Word would file the
+        // diagram under the wrong gallery with nothing to show for it. Every template this path
+        // loads has one today; the guard is here so adding one that does not fails at the point of
+        // use instead of shipping a mislabelled diagram.
+        var cat = root.Element(Dgm + "catLst")?.Element(Dgm + "cat")
+            ?? throw new InvalidOperationException(
+                "SmartArt layout template has no dgm:catLst/dgm:cat to carry its category: " + resourceName);
+        cat.SetAttributeValue("type", category);
         return layout;
     }
 
