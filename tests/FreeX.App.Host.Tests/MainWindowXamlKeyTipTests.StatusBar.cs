@@ -145,18 +145,30 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Grid")
             .Single(panel => panel.Attribute(x + "Name")?.Value == "StatusZoomControls");
 
-        // r353: kept as ?. -- these four are ABSENT from StatusZoomControls in MainWindow.xaml, so
-        // hardening them fails. Its sibling StatusStatsViewport does carry Grid.Column, so this is a
-        // real inconsistency, not a redesign. Whether the XAML or this expectation is right is a
-        // behaviour question to settle against Excel; see docs/review/region-coverage.md r353.
-        zoomControls.Attribute("Grid.Column")?.Value.Should().Be("2");
-        zoomControls.Attribute("MinWidth")?.Value.Should().NotBeNullOrWhiteSpace();
+        zoomControls.Attribute("MinWidth")!.Value.Should().NotBeNullOrWhiteSpace();
         zoomControls.Attribute("Height")!.Value.Should().Be("24");
         // WS-G round 4: converted to DynamicResource so the status bar tracks the active theme.
         zoomControls.Attribute("Background")!.Value.Should().Be("{DynamicResource FreeXStatusSurfaceBrush}");
-        zoomControls.Attribute("Panel.ZIndex")?.Value.Should().Be("1");
-        zoomControls.Attribute("KeyboardNavigation.TabNavigation")?.Value.Should().Be("Cycle");
-        zoomControls.Attribute("KeyboardNavigation.ControlTabNavigation")?.Value.Should().Be("Cycle");
+
+        // r358: column placement, stacking and tab-cycling are asserted on the CONTAINER, which is
+        // where they live. They used to sit on StatusZoomControls itself, back when it was a direct
+        // child of StatusBarGrid; it was later wrapped in StatusInteractiveControls, which took the
+        // whole responsibility over. The old assertions kept naming the inner element and passed
+        // anyway, because a `?.` on a missing attribute skips the assertion -- so a refactor that
+        // moved a keyboard-accessibility contract off the element under test went unnoticed.
+        var interactiveControls = statusBarGrid
+            .Descendants(presentation + "StackPanel")
+            .Single(panel => panel.Attribute(x + "Name")?.Value == "StatusInteractiveControls");
+
+        interactiveControls.Attribute("Grid.Column")!.Value.Should().Be("2");
+        interactiveControls.Attribute("Panel.ZIndex")!.Value.Should().Be("1");
+        interactiveControls.Attribute("KeyboardNavigation.TabNavigation")!.Value.Should().Be("Cycle");
+        interactiveControls.Attribute("KeyboardNavigation.ControlTabNavigation")!.Value.Should().Be("Cycle");
+
+        // The zoom cluster must actually be inside that container, or the four assertions above say
+        // nothing about it.
+        interactiveControls.Descendants(presentation + "Grid")
+            .Should().Contain(zoomControls);
     }
 
     [Theory]
