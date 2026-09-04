@@ -152,6 +152,9 @@ public sealed partial class XlsxFileAdapter
                     IsDecorative = picturePart.IsDecorative,
                     // r318: the Selection Pane's hide is stored as cNvPr@hidden.
                     IsVisible = !picturePart.IsHidden,
+                    // r378: Format Picture lock flags, previously session-only.
+                    LockAspectRatio = picturePart.LockAspectRatio,
+                    Locked = picturePart.IsLocked,
                     RotationDegrees = picturePart.RotationDegrees,
                     FlipHorizontal = picturePart.FlipHorizontal,
                     FlipVertical = picturePart.FlipVertical,

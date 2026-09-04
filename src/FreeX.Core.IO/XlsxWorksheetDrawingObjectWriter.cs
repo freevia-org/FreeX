@@ -749,7 +749,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         // extLst below.
                         hlinkClick,
                         ToDecorativeExtLst(drawingNs, picture.IsDecorative)),
-                    new XElement(spreadsheetDrawingNs + "cNvPicPr")),
+                    new XElement(spreadsheetDrawingNs + "cNvPicPr",
+                        ToPictureLocks(drawingNs, picture))),
                 new XElement(spreadsheetDrawingNs + "blipFill",
                     new XElement(drawingNs + "blip",
                         new XAttribute(relNs + "embed", imageRelId),
@@ -814,7 +815,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         // R95/R97-io-drawing-hyperlink: see ToOneCellPictureAnchor's matching comment.
                         hlinkClick,
                         ToDecorativeExtLst(drawingNs, picture.IsDecorative)),
-                    new XElement(spreadsheetDrawingNs + "cNvPicPr")),
+                    new XElement(spreadsheetDrawingNs + "cNvPicPr",
+                        ToPictureLocks(drawingNs, picture))),
                 new XElement(spreadsheetDrawingNs + "blipFill",
                     new XElement(drawingNs + "blip", new XAttribute(relNs + "link", linkRelId)),
                     HasPictureCrop(picture)
@@ -1012,6 +1014,39 @@ internal static class XlsxWorksheetDrawingObjectWriter
     /// so a decorative picture stays exempt from the Accessibility Checker's Missing Alt Text rule
     /// after opening and resaving.
     /// </summary>
+    /// <summary>
+    /// r378: persists Format Picture &gt; Size &gt; "Lock aspect ratio" and Properties &gt; "Locked"
+    /// as <c>a:picLocks</c>.
+    ///
+    /// <para>Both flags were session-only: unchecking either, saving and reopening brought the lock
+    /// straight back, because nothing ever wrote the element. Excel persists them, so it is the
+    /// authority here.</para>
+    ///
+    /// <para>Emitted only when a flag departs from the default. Both model properties default to
+    /// TRUE, matching Excel's authored default for a picture, and the OOXML attributes default to
+    /// FALSE when omitted -- so writing nothing means "locked" on the way back in (see the reader's
+    /// matching rule), and the element appears only for a picture the author actually unlocked. That
+    /// keeps an ordinary save byte-identical to what it produced before this change.</para>
+    /// </summary>
+    private static XElement? ToPictureLocks(XNamespace drawingNs, PictureModel picture)
+    {
+        if (picture.LockAspectRatio && picture.Locked)
+            return null;
+
+        // Every flag is written explicitly once the element exists. Writing only the flag that
+        // changed loses the other one: the reader treats an attribute that is absent from a PRESENT
+        // element as false, per the OOXML defaults, so emitting just noChangeAspect="0" would report
+        // an otherwise-locked picture as unlocked on the way back in. The asymmetry is between
+        // "absent element means locked" (this codebase's documented default, and Excel's authored
+        // one) and "absent attribute means false" (the schema), and it is resolved by making a
+        // written element fully self-describing.
+        return new XElement(
+            drawingNs + "picLocks",
+            new XAttribute("noChangeAspect", picture.LockAspectRatio ? "1" : "0"),
+            new XAttribute("noMove", picture.Locked ? "1" : "0"),
+            new XAttribute("noResize", picture.Locked ? "1" : "0"));
+    }
+
     private static XElement? ToDecorativeExtLst(XNamespace drawingNs, bool isDecorative)
     {
         if (!isDecorative)

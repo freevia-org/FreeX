@@ -69,6 +69,12 @@ internal sealed record XlsxPicturePackagePart(
     // (SelectionPaneCommands) sets PictureModel.IsVisible, and without this the hide was lost on
     // save -- the picture came back visible the next time the file was opened.
     bool IsHidden = false,
+    // r378: Format Picture > Size > "Lock aspect ratio" and Properties > "Locked", from a:picLocks.
+    // Both were session-only before: unchecking either and saving brought the lock back on reload.
+    // Absent picLocks means LOCKED here, matching PictureModel's documented default and Excel's
+    // authored default for a picture; a present element is read per the OOXML attribute defaults.
+    bool LockAspectRatio = true,
+    bool IsLocked = true,
     // R97-model-drawing-hyperlink-2-2: the picture's object-level hyperlink (<a:hlinkClick> on its
     // cNvPr), resolved via the drawing part's own relationships. Populated for EVERY loaded picture
     // (not just ones that stay source-loaded) so DuplicateSheetDrawingCloner/PastePicturesCommand
@@ -515,6 +521,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             // decorative picture stays exempt from the Missing-Alt-Text rule after a round-trip.
             var isDecorative = ReadNonVisualDecorative(pictureElement);
             var isHidden = ReadNonVisualHidden(pictureElement);
+            var (lockAspectRatio, isLocked) = ReadPictureLocks(pictureElement);
             var anchorElement = FindNearestAnchorElement(pictureElement, spreadsheetDrawingNs);
             var pictureTransform = pictureElement.Element(spreadsheetDrawingNs + "spPr")?.Element(drawingNs + "xfrm");
 
@@ -561,6 +568,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 svgImageBytes,
                 isDecorative,
                 isHidden,
+                lockAspectRatio,
+                isLocked,
                 ReadObjectHyperlink(pictureElement, spreadsheetDrawingNs, drawingNs, relNs, hyperlinkRelsById)));
         }
 
@@ -1464,6 +1473,25 @@ internal static partial class XlsxWorksheetDrawingPartReader
     /// <summary>
     /// r318: whether the object is hidden (Selection Pane eye off), from cNvPr@hidden.
     /// </summary>
+    /// <summary>r378: reads a:picLocks. Absent element = locked (see the record field comment).</summary>
+    private static (bool LockAspectRatio, bool IsLocked) ReadPictureLocks(XElement pictureElement)
+    {
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+        var locks = pictureElement
+            .Element(spreadsheetDrawingNs + "nvPicPr")?
+            .Element(spreadsheetDrawingNs + "cNvPicPr")?
+            .Element(drawingNs + "picLocks");
+        if (locks is null)
+            return (true, true);
+
+        static bool Flag(XElement element, string name) =>
+            element.Attribute(name)?.Value is "1" or "true";
+
+        return (Flag(locks, "noChangeAspect"), Flag(locks, "noMove") || Flag(locks, "noResize"));
+    }
+
     private static bool ReadNonVisualHidden(XElement element)
     {
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
