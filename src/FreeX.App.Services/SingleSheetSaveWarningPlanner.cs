@@ -17,7 +17,7 @@ namespace FreeX.App.Services;
 public static class SingleSheetSaveWarningPlanner
 {
     /// <summary>
-    /// The warning for a save that will keep only the first sheet, or <see langword="null"/> when
+    /// The warning for a save that will keep only the active sheet, or <see langword="null"/> when
     /// nothing is lost -- the adapter can hold every sheet, or there is only one to hold.
     /// </summary>
     public static string? DescribeDiscardedSheets(IFileAdapter adapter, Workbook workbook)
@@ -32,8 +32,15 @@ public static class SingleSheetSaveWarningPlanner
         if (sheets.Count <= 1)
             return null;
 
-        var kept = sheets[0].Name;
-        var discarded = sheets.Skip(1).Select(sheet => sheet.Name).ToArray();
+        // r310: the retained sheet is the ACTIVE one, matching what the writers actually do. r292
+        // wrote sheets[0] here, so a user who had switched tabs was told the wrong sheet had been
+        // saved -- a warning that misnames what survived is worse than none, because it is the one
+        // thing the user acts on before closing the file.
+        var keptIndex = workbook.ActiveSheetIndex is { } index && index >= 0 && index < sheets.Count
+            ? index
+            : 0;
+        var kept = sheets[keptIndex].Name;
+        var discarded = sheets.Where((_, i) => i != keptIndex).Select(sheet => sheet.Name).ToArray();
 
         // Named rather than counted: "2 sheets were not saved" leaves the user to work out WHICH,
         // and the whole point of the warning is that they can still act on it before closing.
