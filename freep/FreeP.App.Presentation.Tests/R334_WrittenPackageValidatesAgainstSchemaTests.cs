@@ -286,4 +286,45 @@ public sealed class R334_WrittenPackageValidatesAgainstSchemaTests
             "an empty slide is still a slide; dropping it renumbers everything after it");
     }
 
+    /// <summary>
+    /// r342: the fixes r334/r337/r338 added an empty <c>a:p</c> where a body had none. That is a
+    /// writer that ADDS an element, which is the shape that accumulates: if the reader turns that
+    /// paragraph back into a real one, the next save adds another. Three generations catch it; one
+    /// round trip cannot.
+    /// </summary>
+    [Fact]
+    public void AnEmptyTextBodyDoesNotGrowParagraphsAcrossGenerations()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Name = "Body",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 500_000,
+            OffsetYEmu = 500_000,
+            ExtentCxEmu = 3_000_000,
+            ExtentCyEmu = 1_000_000,
+            TextBody = new TextBody(),
+        });
+        presentation.Slides.Add(slide);
+
+        var counts = new List<int>();
+        var current = presentation;
+        for (var generation = 0; generation < 3; generation++)
+        {
+            using var stream = new MemoryStream();
+            PptxPackageWriter.Write(current, stream);
+            stream.Position = 0;
+            current = PptxPackageReader.Read(stream);
+            counts.Add(current.Slides[0].Shapes[0].TextBody?.Paragraphs.Count ?? 0);
+        }
+
+        counts[1].Should().Be(counts[0], "the second save must not add a paragraph the first did not");
+        counts[2].Should().Be(counts[0], "nor the third -- an added element that round-trips as real "
+            + "content grows once per save");
+    }
+
 }

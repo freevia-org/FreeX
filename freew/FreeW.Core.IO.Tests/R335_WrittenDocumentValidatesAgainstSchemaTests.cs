@@ -243,4 +243,36 @@ public sealed class R335_WrittenDocumentValidatesAgainstSchemaTests
             "the blank lines between the two paragraphs are content the user typed");
     }
 
+    /// <summary>
+    /// r342: surviving ONE round trip is not stability. A writer that normalises by adding an element
+    /// -- the empty a:p and w:p this sequence has been adding since r334 are exactly that shape --
+    /// can accumulate one per generation, so the second and third saves drift while the first looks
+    /// perfect. Three generations, compared against the first.
+    /// </summary>
+    [Fact]
+    public void EmptyParagraphsDoNotMultiplyAcrossGenerations()
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("first"));
+        document.Blocks.Add(new Paragraph());
+        document.Blocks.Add(new Paragraph("last"));
+
+        var generations = new List<string[]>();
+        var current = document;
+        for (var generation = 0; generation < 3; generation++)
+        {
+            using var stream = new MemoryStream();
+            new DocxFileAdapter().Save(current, stream);
+            stream.Position = 0;
+            current = new DocxFileAdapter().Load(stream);
+            generations.Add(current.Blocks.OfType<Paragraph>().Select(p => p.PlainText).ToArray());
+        }
+
+        generations[1].Should().Equal(generations[0],
+            "the second save must not add or drop a paragraph the first did not");
+        generations[2].Should().Equal(generations[0],
+            "nor the third; drift that appears only after several saves is what a single round trip "
+            + "cannot see");
+    }
+
 }
