@@ -130,6 +130,18 @@ public sealed class R313_WireFormatsAreCultureIndependentTests
         var parts = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var entry in archive.Entries)
         {
+            // r326: core.xml/meta.xml carry dcterms:created and dcterms:modified, so two saves that
+            // straddle a second boundary differ there for reasons that have nothing to do with
+            // culture. An earlier version of this method excluded them; the exclusion was lost when
+            // it was refactored to report part NAMES, and the summary above -- which still promised
+            // it -- was left saying so. The result was an intermittent failure that took three
+            // hypotheses to run down, all because the code and its own doc comment disagreed.
+            if (entry.FullName.Contains("core.xml", StringComparison.OrdinalIgnoreCase)
+                || entry.FullName.Contains("meta.xml", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             using var partStream = entry.Open();
             using var buffer = new MemoryStream();
             partStream.CopyTo(buffer);

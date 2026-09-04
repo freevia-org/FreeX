@@ -256,4 +256,50 @@ public sealed class R320_SourceLoadedShapeAndTextBoxEditsSurviveTests
             .Should().ContainSingle().Which.Should().Be("Renamed");
     }
 
+    /// <summary>
+    /// r326: the other commands that clear <c>IsSourceLoaded</c>.
+    ///
+    /// <para>r320 fixed the RENAME path, where clearing the flag regenerated the object under a new
+    /// name while the merger -- which supersedes originals by matching the model's CURRENT name --
+    /// failed to drop the original, leaving a duplicate. Format and text edits clear the same flag
+    /// (<c>DrawingShapeFormatCommands</c>, <c>TextBoxCommands</c>) but do NOT change the name, so the
+    /// merger should still match and supersede correctly.</para>
+    ///
+    /// <para>"Should" is a prediction, and r320 exists because a prediction about this exact merge
+    /// was wrong once already. These check it.</para>
+    /// </summary>
+    [Fact]
+    public void ChangingASourceLoadedShapesFillDoesNotDuplicateIt()
+    {
+        var loaded = RoundTrip(WithOneOfEachIncludingPicture());
+        var sheet = loaded.Sheets[0];
+        var shape = sheet.DrawingShapes.Single();
+        shape.IsSourceLoaded.Should().BeTrue("otherwise the replay path is not under test");
+
+        new SetDrawingShapeColorsCommand(
+                sheet.Id, shape.Id, new CellColor(0x33, 0x66, 0x99), outlineColor: null,
+                updateFill: true, updateOutline: false)
+            .Apply(new TestCommandContext(loaded)).Success.Should().BeTrue();
+
+        var after = RoundTrip(loaded).Sheets[0].DrawingShapes;
+        after.Should().ContainSingle("a fill edit must not leave a second copy of the shape")
+            .Which.Name.Should().Be("Shape 1");
+    }
+
+    [Fact]
+    public void EditingASourceLoadedTextBoxsTextDoesNotDuplicateIt()
+    {
+        var loaded = RoundTrip(WithOneOfEachIncludingPicture());
+        var sheet = loaded.Sheets[0];
+        var textBox = sheet.TextBoxes.Single();
+        textBox.IsSourceLoaded.Should().BeTrue();
+
+        new SetTextBoxTextCommand(sheet.Id, textBox.Id, "r326 edited")
+            .Apply(new TestCommandContext(loaded)).Success.Should().BeTrue();
+
+        var after = RoundTrip(loaded).Sheets[0].TextBoxes;
+        after.Should().ContainSingle("a text edit must not leave a second copy of the text box")
+            .Which.Text.Should().Be("r326 edited");
+    }
+
 }
