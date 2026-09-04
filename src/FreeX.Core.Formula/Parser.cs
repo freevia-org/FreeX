@@ -296,18 +296,34 @@ public sealed class Parser
         return left;
     }
 
-    // Power -> Unary ( '^' Power )? - right-associative: 2^3^2 = 2^(3^2) = 512
+    // Power -> Unary ( '^' Unary )* - LEFT-associative: 2^3^2 = (2^3)^2 = 64.
     // Excel gives unary signs higher precedence than exponentiation: -2^2 = (-2)^2.
+    //
+    // r371: this was right-associative, which is the mathematical convention and what most
+    // programming languages do -- but Excel evaluates equal-precedence operators left to right, `^`
+    // included, so it answers 64 where this answered 512. A chained exponent is rare enough that
+    // nothing noticed, and wrong enough that nothing would: it produces a plausible number, silently.
+    // Excel is the authority for this product's formula semantics, not the convention.
     private FormulaNode ParsePower()
     {
         using var frame = EnterParseFrame();
         var left = ParseUnary();
 
-        if (Current.Type == TokenType.Power)
+        // The old right-associative parse charged each link of a chain one recursive parse frame, so
+        // an absurd chain was rejected by MaxParseDepth. A loop parses at depth 1 and would accept
+        // any length -- but it still BUILDS a tree one node deeper per link, and evaluation walks
+        // that tree recursively, so the stack risk moves rather than disappears. Charge the chain
+        // against the same limit explicitly.
+        var chainedPowers = 0;
+        while (Current.Type == TokenType.Power)
         {
+            if (++chainedPowers >= FormulaSafetyLimits.MaxParseDepth)
+                throw new FormulaParseException(
+                    $"Formula nesting is too deep; maximum parse depth is {FormulaSafetyLimits.MaxParseDepth}");
+
             Advance();
-            var right = ParsePower();
-            return new BinaryOpNode(left, BinaryOperator.Power, right);
+            var right = ParseUnary();
+            left = new BinaryOpNode(left, BinaryOperator.Power, right);
         }
 
         return left;
