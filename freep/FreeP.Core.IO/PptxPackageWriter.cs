@@ -5226,10 +5226,21 @@ public static class PptxPackageWriter
 
         // In PresentationML, the text body inside p:sp is p:txBody (not a:txBody).
         // Body-level elements use a: namespace, paragraphs/runs use a: namespace.
+        // r334: CT_TextBody requires at least one a:p. An empty paragraph list is a legitimate model
+        // state -- TextBody's own doc says "may be empty for a shape with no text", and two product
+        // paths reach it: SlideShape.Text = "" clears the paragraphs but keeps the body, and
+        // HeaderFooterCommandPlanner creates placeholders with an empty one. Emitting a txBody with
+        // no a:p produced a schema-invalid package ("The element has incomplete content ... expected
+        // <a:p>"), which is the shape of defect PowerPoint reports as a file needing repair. An empty
+        // a:p carrying only endParaRPr is what Office itself writes for an empty text box.
+        var paragraphs = body.Paragraphs.Count > 0
+            ? body.Paragraphs.Select(p => BuildParaEl(p, hlinkRelIds, allSlides, bulletImageRelIds))
+            : [new XElement(A + "p", new XElement(A + "endParaRPr", new XAttribute("lang", "en-US")))];
+
         return new XElement(P + "txBody",
             bodyPr,
             BuildLstStyleEl(body.LstStyle, body.DefaultParaRightToLeft),
-            body.Paragraphs.Select(p => BuildParaEl(p, hlinkRelIds, allSlides, bulletImageRelIds)));
+            paragraphs);
     }
 
     /// <summary>
