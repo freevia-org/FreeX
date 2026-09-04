@@ -37,7 +37,7 @@ public static class PivotFieldItemsReader
         ArgumentNullException.ThrowIfNull(formatValue);
 
         var sourceColumn = pivotTable.SourceRange.Start.Col + (uint)sourceFieldIndex;
-        var values = new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
+        var values = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (var row = pivotTable.SourceRange.Start.Row + 1; row <= pivotTable.SourceRange.End.Row; row++)
         {
             var text = formatValue(sheet.GetValue(row, sourceColumn));

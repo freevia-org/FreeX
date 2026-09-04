@@ -456,7 +456,7 @@ public static class PivotFieldFilterPlanner
         var allowed = currentSelection
             .Where(item => !string.IsNullOrWhiteSpace(item) &&
                            !string.Equals(item, "(All)", StringComparison.OrdinalIgnoreCase))
-            .ToHashSet(StringComparer.CurrentCultureIgnoreCase);
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         return allowed.Count == 0 ? null : allowed;
     }

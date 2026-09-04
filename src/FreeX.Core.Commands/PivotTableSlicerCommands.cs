@@ -193,7 +193,7 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
         _mergedRegionsSnapshot = PivotTableSlicerTimelineCommandHelpers.SnapshotMergedRegions(resolvedTargets.Select(t => t.Sheet));
 
         slicer.SelectedItems.Clear();
-        slicer.SelectedItems.AddRange(_selectedItems.Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.CurrentCultureIgnoreCase));
+        slicer.SelectedItems.AddRange(_selectedItems.Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.OrdinalIgnoreCase));
         // This command is the ONLY place a user selection change (including a Clear-Filter, which
         // passes an empty list) reaches the model, so mark the selection as explicitly captured — an
         // empty SelectedItems from here on means "user cleared to select-all", not "never touched".
@@ -287,7 +287,7 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
 
         var normalizedSelection = _selectedItems
             .Where(item => !string.IsNullOrWhiteSpace(item))
-            .Distinct(StringComparer.CurrentCultureIgnoreCase)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         _tableSnapshot = TableSlicerSelectionSnapshot.Capture(slicer, table, columnOffset);

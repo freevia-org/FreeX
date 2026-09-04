@@ -34,16 +34,28 @@ public static class SlicerTimelinePanePlanner
 
     public static IReadOnlyList<SlicerTileItem> BuildSlicerTiles(SlicerModel slicer, IEnumerable<string> sourceItems)
     {
-        var selected = slicer.SelectedItems.ToHashSet(StringComparer.CurrentCultureIgnoreCase);
-        var items = new SortedSet<string>(StringComparer.CurrentCultureIgnoreCase);
+        // r311: identity is ordinal -- the file decides which items exist and which are selected --
+        // while display ORDER belongs to the user's locale. One culture-aware set was doing both, so
+        // two source values the IO layer keeps distinct could collapse into a single tile.
+        var selected = slicer.SelectedItems.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var items = new List<string>();
         foreach (var item in sourceItems)
-            items.Add(item);
+        {
+            if (seen.Add(item))
+                items.Add(item);
+        }
 
         if (items.Count == 0)
         {
             foreach (var item in slicer.SelectedItems)
-                items.Add(item);
+            {
+                if (seen.Add(item))
+                    items.Add(item);
+            }
         }
+
+        items.Sort(StringComparer.CurrentCultureIgnoreCase);
 
         var tiles = new List<SlicerTileItem>(items.Count);
         foreach (var item in items)
@@ -58,8 +70,8 @@ public static class SlicerTimelinePanePlanner
         string caption)
     {
         var selected = selectedItems.Count == 0
-            ? allItems.ToHashSet(StringComparer.CurrentCultureIgnoreCase)
-            : selectedItems.ToHashSet(StringComparer.CurrentCultureIgnoreCase);
+            ? allItems.ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : selectedItems.ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (!selected.Remove(caption))
             selected.Add(caption);
         if (selected.Count == allItems.Count)
@@ -81,7 +93,7 @@ public static class SlicerTimelinePanePlanner
         string caption)
     {
         var isSoleSelection = selectedItems.Count == 1 &&
-            selectedItems.Contains(caption, StringComparer.CurrentCultureIgnoreCase);
+            selectedItems.Contains(caption, StringComparer.OrdinalIgnoreCase);
         return isSoleSelection ? [] : [caption];
     }
 
@@ -100,14 +112,14 @@ public static class SlicerTimelinePanePlanner
         if (selectedItems.Count == 0)
             return [caption];
 
-        var selectedSet = selectedItems.ToHashSet(StringComparer.CurrentCultureIgnoreCase);
+        var selectedSet = selectedItems.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var anchorIndex = -1;
         var targetIndex = -1;
         for (var index = 0; index < allItems.Count; index++)
         {
             if (anchorIndex < 0 && selectedSet.Contains(allItems[index]))
                 anchorIndex = index;
-            if (string.Equals(allItems[index], caption, StringComparison.CurrentCultureIgnoreCase))
+            if (string.Equals(allItems[index], caption, StringComparison.OrdinalIgnoreCase))
                 targetIndex = index;
         }
 

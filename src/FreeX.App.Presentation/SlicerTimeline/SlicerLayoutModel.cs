@@ -108,7 +108,7 @@ public static class SlicerLayoutBuilder
         ArgumentNullException.ThrowIfNull(availableItems);
 
         var items = OrderAvailableItems(slicer, availableItems);
-        var selected = new HashSet<string>(slicer.SelectedItems, StringComparer.CurrentCultureIgnoreCase);
+        var selected = new HashSet<string>(slicer.SelectedItems, StringComparer.OrdinalIgnoreCase);
         var hasActiveFilter = slicer.SelectedItems.Count > 0;
 
         var headerRect = new LayoutRect(
@@ -158,7 +158,7 @@ public static class SlicerLayoutBuilder
         ArgumentNullException.ThrowIfNull(availableItems);
 
         var items = OrderAvailableItems(slicer, availableItems);
-        var selected = new HashSet<string>(slicer.SelectedItems, StringComparer.CurrentCultureIgnoreCase);
+        var selected = new HashSet<string>(slicer.SelectedItems, StringComparer.OrdinalIgnoreCase);
         var hasActiveFilter = slicer.SelectedItems.Count > 0;
         var showCaption = slicer.ShowCaption;
 
@@ -306,14 +306,14 @@ public static class SlicerLayoutBuilder
             // Plain click: replace the selection with just this item, unless it is already the lone
             // selected item — in which case Excel treats a second plain click as clearing the filter.
             var isSoleSelection = slicer.SelectedItems.Count == 1 &&
-                string.Equals(slicer.SelectedItems[0], caption, StringComparison.CurrentCultureIgnoreCase);
+                string.Equals(slicer.SelectedItems[0], caption, StringComparison.OrdinalIgnoreCase);
             return new SlicerToggleResult(slicer.Name, isSoleSelection ? [] : [caption]);
         }
 
         var allItems = OrderAvailableItems(slicer, availableItems);
         var selected = slicer.SelectedItems.Count == 0
-            ? new HashSet<string>(allItems, StringComparer.CurrentCultureIgnoreCase)
-            : new HashSet<string>(slicer.SelectedItems, StringComparer.CurrentCultureIgnoreCase);
+            ? new HashSet<string>(allItems, StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(slicer.SelectedItems, StringComparer.OrdinalIgnoreCase);
 
         if (!selected.Remove(caption))
             selected.Add(caption);
@@ -377,24 +377,37 @@ public static class SlicerLayoutBuilder
 
     private static IReadOnlyList<string> OrderAvailableItems(SlicerModel slicer, IEnumerable<string> availableItems)
     {
-        var items = new SortedSet<string>(StringComparer.CurrentCultureIgnoreCase);
+        // r311: two jobs that need different comparers. WHICH items exist is identity, and the file
+        // decides that ordinally -- a SortedSet with a culture comparer merged values the IO layer
+        // keeps apart, so an item could vanish from the slicer entirely. The ORDER they appear in is
+        // presentation, where the user's locale is the right answer. Deduplicate ordinally, then sort
+        // by culture.
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var items = new List<string>();
         foreach (var item in availableItems)
-            items.Add(item);
+        {
+            if (seen.Add(item))
+                items.Add(item);
+        }
 
         if (items.Count == 0)
         {
             foreach (var item in slicer.SelectedItems)
-                items.Add(item);
+            {
+                if (seen.Add(item))
+                    items.Add(item);
+            }
         }
 
-        return items.ToList();
+        items.Sort(StringComparer.CurrentCultureIgnoreCase);
+        return items;
     }
 
     private static int IndexOf(IReadOnlyList<string> items, string caption)
     {
         for (var index = 0; index < items.Count; index++)
         {
-            if (string.Equals(items[index], caption, StringComparison.CurrentCultureIgnoreCase))
+            if (string.Equals(items[index], caption, StringComparison.OrdinalIgnoreCase))
                 return index;
         }
 
