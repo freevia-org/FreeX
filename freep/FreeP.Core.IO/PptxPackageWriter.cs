@@ -1828,10 +1828,21 @@ public static class PptxPackageWriter
     private static XElement BuildNotesTxBodyEl(TextBody notes)
     {
         var bodyPr = new XElement(A + "bodyPr");
+
+        // r338: the third site of r334's defect, completed rather than left. CT_TextBody requires an
+        // a:p, and this wrote none when the notes body had no paragraphs. Unlike the shape and
+        // table-cell sites this one has no demonstrated product path -- clearing notes text sets
+        // Slide.Notes to null rather than to an empty body -- but a loaded .pptx whose notes body
+        // carries no paragraph reaches it, and leaving one of three identical sites unfixed is how
+        // r334 came to need r337.
+        var paragraphs = notes.Paragraphs.Count > 0
+            ? notes.Paragraphs.Select(p => BuildParaEl(p))
+            : [new XElement(A + "p")];
+
         return new XElement(P + "txBody",
             bodyPr,
             new XElement(A + "lstStyle"),
-            notes.Paragraphs.Select(p => BuildParaEl(p)));
+            paragraphs);
     }
 
     /// <summary>

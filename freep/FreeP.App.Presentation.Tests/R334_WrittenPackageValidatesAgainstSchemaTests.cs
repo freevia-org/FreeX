@@ -176,4 +176,35 @@ public sealed class R334_WrittenPackageValidatesAgainstSchemaTests
             + "cover this writer too");
     }
 
+    /// <summary>
+    /// r338: the third and last <c>txBody</c> site in this writer. A slide whose notes body exists
+    /// with no paragraphs -- reachable by loading a .pptx whose notes slide carries an empty body --
+    /// wrote a <c>txBody</c> with no <c>a:p</c>, the same defect as r334 and r337.
+    /// </summary>
+    [Fact]
+    public void ASlideWithAnEmptyNotesBodyValidates()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Name = "Body",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 500_000,
+            OffsetYEmu = 500_000,
+            ExtentCxEmu = 3_000_000,
+            ExtentCyEmu = 1_000_000,
+        });
+        slide.Notes = new TextBody();   // exists, carries nothing
+        presentation.Slides.Add(slide);
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+
+        ValidateSchema(stream.ToArray()).Should().BeEmpty(
+            "a notes body with no paragraphs must still write a schema-valid notes slide");
+    }
+
 }
