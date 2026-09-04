@@ -763,6 +763,25 @@ public static class PptxPackageWriter
         uint sldIdCounter = 256;
         var usedSldIds = new HashSet<uint>();
 
+        // A slide id is the deck's persistent slide identity: p:sldZmObj zoom targets, custom shows
+        // and section membership all reference slides by it. The counter therefore has to clear every
+        // id the deck ALREADY uses before it hands one out, not just the ids seen so far -- the loop
+        // below walks slides in document order, so a slide with no id yet (a freshly inserted one)
+        // used to take the next counter value, and when a LATER slide already owned that value the
+        // collision path renumbered the later slide and wrote the new id back onto the model. Insert
+        // a slide at index 1 of a 3-slide deck and saving moved slide 1 from 257 to 258 and slide 2
+        // from 258 to 259, permanently. PowerPoint never renumbers an existing slide when one is
+        // inserted, so neither do we; only a genuine duplicate is reassigned.
+        foreach (var existingSlide in presentation.Slides)
+        {
+            var existingId = existingSlide.NumericId.GetValueOrDefault();
+
+            // int.MaxValue is the schema's ceiling for ST_SlideId; a deck sitting on it must not push
+            // the counter past the range, so leave it and let the loop below find a free id instead.
+            if (existingId >= sldIdCounter && existingId < int.MaxValue)
+                sldIdCounter = existingId + 1;
+        }
+
         // Build the GLOBAL author map once before the slide loop so that every per-slide
         // BuildCommentsXml call uses consistent (globally-assigned) author ids.
         // Keys are (author-name, initials); ids are 0-based in first-encounter order across
