@@ -164,9 +164,40 @@ internal static class XlsxClosedXmlCellMapper
             static match => ((char)Convert.ToInt32(match.Groups[1].Value, 16)).ToString());
     }
 
+    /// <summary>
+    /// r381: false when writing this number would produce a file FreeX cannot reopen.
+    ///
+    /// <para>ClosedXML serialises with Excel's 15 significant digits. For a magnitude within a few
+    /// ulps of <see cref="double.MaxValue"/> that rounds UP past it -- <c>1.7976931348623157E+308</c>
+    /// is written as <c>1.79769313486232E+308</c> -- and reading that back yields Infinity, which
+    /// ClosedXML rejects. The save SUCCEEDED and the reload threw, so the failure reached the user
+    /// after they believed the work was stored.</para>
+    ///
+    /// <para>Deliberately narrower than the <see cref="MaxExcelRepresentableNumber"/> bound the date
+    /// arm uses: this asks only whether the value actually survives, so magnitudes above Excel's own
+    /// limit that DO round-trip keep writing as numbers exactly as they did before. The point is to
+    /// fix the unopenable file, not to reclassify everything near the top of the range.</para>
+    /// </summary>
+    private static bool SurvivesExcelPrecisionRoundTrip(double value) =>
+        double.TryParse(
+            value.ToString("G15", System.Globalization.CultureInfo.InvariantCulture),
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var roundTripped) &&
+        double.IsFinite(roundTripped);
+
     public static XLCellValue MapValueInverse(ScalarValue value, bool uses1904DateSystem = false) => value switch
     {
-        NumberValue n when double.IsFinite(n.Value) => n.Value,
+        // r381: the same MaxExcelRepresentableNumber bound the DateTimeValue arm below already
+        // applies, extended to plain numbers -- where it was missing, and where it matters more.
+        // ClosedXML serialises with Excel's 15 significant digits, and for a magnitude within a few
+        // ulps of double.MaxValue that rounds UP past MaxValue: double.MaxValue
+        // (1.7976931348623157E+308) is written as 1.79769313486232E+308, which re-parses as
+        // Infinity. The SAVE SUCCEEDED and the reload threw, so FreeX produced a file it could not
+        // reopen -- worse than refusing to save, because the failure arrives after the user believes
+        // the work is stored. Such a value is outside what Excel can hold at all, so the safe form is
+        // the string, exactly as the date arm does.
+        NumberValue n when double.IsFinite(n.Value) && SurvivesExcelPrecisionRoundTrip(n.Value) => n.Value,
         NumberValue n => n.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
         TextValue t => t.Value,
         BoolValue b => b.Value,
