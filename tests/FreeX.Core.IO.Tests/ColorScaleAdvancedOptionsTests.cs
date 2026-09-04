@@ -150,13 +150,9 @@ public sealed class ColorScaleAdvancedOptionsTests
         rule.MaxColor.Should().Be(new RgbColor(69, 131, 193));
     }
 
-    [Fact]
-    public void RoundTrip_ColorScaleIndexedColors_WritesTintedResolvedRgbColors()
+    private static XElement[] SavedColorScaleColors(Workbook workbook)
     {
-        using var source = CreateXlsxWithIndexedColorScaleColors();
-        var workbook = new XlsxFileAdapter().Load(source);
         using var saved = new MemoryStream();
-
         new XlsxFileAdapter().Save(workbook, saved);
 
         var colors = XlsxPackageTestHelper.ReadWorksheetXml(saved)
@@ -167,12 +163,58 @@ public sealed class ColorScaleAdvancedOptionsTests
             .Elements(MainNs + "color")
             .ToArray();
         colors.Should().HaveCount(3);
-        // r353: kept as ?. deliberately. Hardening this to ! makes the test FAIL, because the
-        // attribute really is absent -- a live defect this vacuous assertion has been hiding. See
-        // docs/review/region-coverage.md r353; hardened with the fix.
-        colors[0].Attribute("rgb")?.Value.Should().Be(ToArgb(new RgbColor(19, 120, 221)));
-        colors[1].Attribute("rgb")?.Value.Should().Be(ToArgb(new RgbColor(10, 20, 30)));
-        colors[2].Attribute("rgb")?.Value.Should().Be(ToArgb(new RgbColor(91, 131, 171)));
+        return colors;
+    }
+
+    /// <summary>
+    /// r357: replaces RoundTrip_ColorScaleIndexedColors_WritesTintedResolvedRgbColors, which asserted
+    /// through a <c>?.</c> chain and so never ran. It was wrong in both directions: it expected an
+    /// UNEDITED rule's indexed colors to be flattened to rgb, and the value it expected for the max
+    /// stop (91,131,171) is not what the palette resolves to (69,131,193) -- as the sibling load test
+    /// asserts and passes. Nothing caught either, because the assertion could not execute.
+    ///
+    /// <para>Preserving the source's own indexed/tint spelling for an untouched rule is the correct
+    /// behaviour: it is what Excel leaves on disk, and it is the source-preservation rule this
+    /// codebase applies everywhere else. So both real contracts are pinned here instead.</para>
+    /// </summary>
+    [Fact]
+    public void RoundTrip_UneditedColorScaleIndexedColors_KeepsTheSourceSpelling()
+    {
+        using var source = CreateXlsxWithIndexedColorScaleColors();
+        var workbook = new XlsxFileAdapter().Load(source);
+
+        var colors = SavedColorScaleColors(workbook);
+
+        colors[0].Attribute("indexed")!.Value.Should().Be("12");
+        colors[0].Attribute("tint")!.Value.Should().Be("-0.25");
+        colors[1].Attribute("indexed")!.Value.Should().Be("13");
+        colors[2].Attribute("indexed")!.Value.Should().Be("14");
+        colors[2].Attribute("tint")!.Value.Should().Be("0.2");
+
+        colors.Should().AllSatisfy(color =>
+            color.Attribute("rgb").Should().BeNull(
+                "an untouched indexed color keeps its own spelling rather than being flattened"));
+    }
+
+    [Fact]
+    public void RoundTrip_EditedColorScaleColor_WritesResolvedRgbForEveryStop()
+    {
+        using var source = CreateXlsxWithIndexedColorScaleColors();
+        var workbook = new XlsxFileAdapter().Load(source);
+        workbook.GetSheetAt(0).ConditionalFormats[0].MinColor = new RgbColor(200, 100, 50);
+
+        var colors = SavedColorScaleColors(workbook);
+
+        // The edited stop carries the new value, and the two untouched stops are written as the
+        // palette actually resolves them -- the max being 69,131,193, which is the number the old
+        // assertion got wrong.
+        colors[0].Attribute("rgb")!.Value.Should().Be(ToArgb(new RgbColor(200, 100, 50)));
+        colors[1].Attribute("rgb")!.Value.Should().Be(ToArgb(new RgbColor(10, 20, 30)));
+        colors[2].Attribute("rgb")!.Value.Should().Be(ToArgb(new RgbColor(69, 131, 193)));
+
+        colors.Should().AllSatisfy(color =>
+            color.Attribute("indexed").Should().BeNull(
+                "an edited rule is written from the model, so no stop keeps a stale indexed spelling"));
     }
 
     private static MemoryStream CreateXlsxWithColorScaleGteThresholds()
@@ -308,4 +350,5 @@ public sealed class ColorScaleAdvancedOptionsTests
         $"FF{color.R:X2}{color.G:X2}{color.B:X2}";
 
     private static readonly XNamespace MainNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
 }
