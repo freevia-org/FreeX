@@ -107,7 +107,12 @@ public sealed class R270_FireAndForgetIsObservedContractTests
             }
         }
 
-        examined.Should().BeGreaterThan(12,
+        // r282 lowered this from 12 to 8. Four discards disappeared legitimately: the FreeW dialogs
+        // that each ran `_ = ObserveUiTaskAsync(...)` through their own private funnel now call the
+        // shared AvaloniaUiTaskGuard instead. The floor keeps the same headroom under the real count
+        // as before, and it earned its keep here -- it noticed the population change immediately
+        // rather than letting the scan quietly shrink.
+        examined.Should().BeGreaterThan(8,
             "the scan must find the discarded tasks; a collapsed count means the layer paths or the "
             + "discard pattern stopped matching and this passed while checking nothing");
 
@@ -145,6 +150,31 @@ public sealed class R270_FireAndForgetIsObservedContractTests
                 body.Any(l => Regex.IsMatch(l, @"^\s*catch\b")).Should().BeTrue(
                     $"{Relative(root, file)}:{i + 1} is a UI task guard that discards rely on; "
                     + "without a catch every discard routed through it becomes unobserved at once");
+
+                // r282: having a catch is not the same as observing. Three FreeW dialog funnels
+                // caught the general exception into an EMPTY body and this contract passed, so a
+                // failing OK button did nothing with no message. A guard's general catch must do
+                // something with the exception it binds -- the r277 lesson applied to my own fence:
+                // the check tested the shape and not the substance.
+                var generalCatch = body.FindIndex(l =>
+                    Regex.IsMatch(l, @"^\s*catch\s*\(\s*Exception\s+(\w+)"));
+                if (generalCatch < 0)
+                    continue;
+
+                var caught = Regex.Match(body[generalCatch], @"^\s*catch\s*\(\s*Exception\s+(\w+)")
+                    .Groups[1].Value;
+                var handler = string.Join("\n", body.Skip(generalCatch + 1).Take(12));
+                // No lookahead here: the catch FILTER (`when (ex is not ...)`) already sits on the
+                // catch line, which this scan starts after. An earlier draft excluded a trailing
+                // `)` to skip that filter and thereby rejected `onFailure?.Invoke(ex)` -- reporting
+                // the shared guard, which is correct, as a swallower. Fifth false positive of this
+                // kind in the program, and the code was right every time.
+                var usesIt = Regex.IsMatch(handler, @"\b" + Regex.Escape(caught) + @"\b");
+
+                usesIt.Should().BeTrue(
+                    $"{Relative(root, file)}:{generalCatch + i + 1} binds '{caught}' and never uses it, "
+                    + "so every failure routed through this guard vanishes with no message, no log and "
+                    + "no crash -- the silent-failure shape this whole contract exists to prevent");
             }
         }
 
