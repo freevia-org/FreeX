@@ -22,7 +22,15 @@ internal static class HeadlessUiThread
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreePHeadlessApp).Assembly);
 
-    private static readonly Lazy<bool> BackendAvailable = new(() =>
+    /// <summary>
+    /// r360: the probe's failure is KEPT, not discarded -- see the FreeW helper of the same name for
+    /// the reasoning. It catches everything, so a real regression in window creation is
+    /// indistinguishable from "this machine has no drawing backend", and every
+    /// <c>if (!ran) return;</c> in this assembly then returns before asserting.
+    /// <c>R360_HeadlessBackendIsAvailableTests</c> turns that into one loud failure carrying the real
+    /// cause.
+    /// </summary>
+    private static readonly Lazy<Exception?> BackendProbeFailure = new(() =>
     {
         try
         {
@@ -34,13 +42,18 @@ internal static class HeadlessUiThread
                     window.Close();
                 },
                 CancellationToken.None).GetAwaiter().GetResult();
-            return true;
+            return null;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            return false;
+            return ex;
         }
     });
+
+    /// <summary>The probe's exception, or <see langword="null"/> when the backend came up.</summary>
+    internal static Exception? BackendFailure => BackendProbeFailure.Value;
+
+    private static bool BackendAvailableValue => BackendProbeFailure.Value is null;
 
     /// <summary>
     /// Dispatches <paramref name="action"/> to the headless UI thread. Returns false — without running it
@@ -49,7 +62,7 @@ internal static class HeadlessUiThread
     /// </summary>
     internal static async Task<bool> Run(Action action)
     {
-        if (!BackendAvailable.Value)
+        if (!BackendAvailableValue)
             return false;
 
         await Session.Dispatch(action, CancellationToken.None);
@@ -64,7 +77,7 @@ internal static class HeadlessUiThread
     /// </summary>
     internal static async Task<bool> RunAsync(Func<Task> action)
     {
-        if (!BackendAvailable.Value)
+        if (!BackendAvailableValue)
             return false;
 
         await Session.Dispatch(
