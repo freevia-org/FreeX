@@ -197,4 +197,63 @@ public sealed class R320_SourceLoadedShapeAndTextBoxEditsSurviveTests
         return workbook;
     }
 
-}
+    /// <summary>
+    /// r321: sequences through the rename fix. r320 added state to a SHEET-level list from inside a
+    /// command, which is where a fix of that shape goes wrong -- so the orderings that touch it twice
+    /// are worth more than another single-rename case.
+    /// </summary>
+    [Fact]
+    public void RenamingTwiceLeavesOneObjectUnderTheFinalName()
+    {
+        var loaded = RoundTrip(WithOneOfEachIncludingPicture());
+        var sheet = loaded.Sheets[0];
+        var id = sheet.Pictures.Single().Id;
+        var context = new TestCommandContext(loaded);
+
+        new RenameSelectionPaneObjectCommand(sheet.Id, SelectionPaneObjectKind.Picture, id, "Second")
+            .Apply(context).Success.Should().BeTrue();
+        new RenameSelectionPaneObjectCommand(sheet.Id, SelectionPaneObjectKind.Picture, id, "Third")
+            .Apply(context).Success.Should().BeTrue();
+
+        RoundTrip(loaded).Sheets[0].Pictures.Select(p => p.Name)
+            .Should().ContainSingle().Which.Should().Be("Third");
+    }
+
+    [Fact]
+    public void RenamingThenDeletingLeavesNothingBehind()
+    {
+        var loaded = RoundTrip(WithOneOfEachIncludingPicture());
+        var sheet = loaded.Sheets[0];
+        var id = sheet.Pictures.Single().Id;
+        var context = new TestCommandContext(loaded);
+
+        new RenameSelectionPaneObjectCommand(sheet.Id, SelectionPaneObjectKind.Picture, id, "Renamed")
+            .Apply(context).Success.Should().BeTrue();
+        new DeleteDrawingObjectCommand(sheet.Id, SelectionPaneObjectKind.Picture, id)
+            .Apply(context).Success.Should().BeTrue();
+
+        RoundTrip(loaded).Sheets[0].Pictures.Should().BeEmpty(
+            "the object was deleted; neither the regenerated copy nor the original anchor may return");
+    }
+
+    [Fact]
+    public void UndoingThenRedoingARenameStillLeavesOneObject()
+    {
+        var loaded = RoundTrip(WithOneOfEachIncludingPicture());
+        var sheet = loaded.Sheets[0];
+        var id = sheet.Pictures.Single().Id;
+        var context = new TestCommandContext(loaded);
+        var command = new RenameSelectionPaneObjectCommand(
+            sheet.Id, SelectionPaneObjectKind.Picture, id, "Renamed");
+
+        command.Apply(context).Success.Should().BeTrue();
+        command.Revert(context);
+        command.Apply(context).Success.Should().BeTrue();   // redo replays Apply
+
+        sheet.DeletedSourceDrawingObjectNames.Count(name => name == "Picture 1")
+            .Should().Be(1, "a redo must not stack a second tombstone for the same anchor");
+        RoundTrip(loaded).Sheets[0].Pictures.Select(p => p.Name)
+            .Should().ContainSingle().Which.Should().Be("Renamed");
+    }
+
+}
