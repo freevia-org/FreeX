@@ -63,14 +63,6 @@ public sealed class AppStoragePathPlannerTests
     }
 
     [Fact]
-    public void GetOptionsFilePathLabelOrFallback_UsesFallbackWhenPlatformProviderFails()
-    {
-        var path = AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(new ThrowingApplicationDataPathProvider());
-
-        path.Should().Be(@"%APPDATA%\FreeX");
-    }
-
-    [Fact]
     public void GetRecentColorsFilePath_UsesApplicationDataPathProvider()
     {
         using var temp = new TestTemporaryDirectory();

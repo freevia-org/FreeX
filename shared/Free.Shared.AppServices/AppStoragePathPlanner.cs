@@ -76,21 +76,6 @@ public static class AppStoragePathPlanner
         return GetApplicationDataDirectoryLabelOrFallback(pathProvider);
     }
 
-    public static string GetOptionsFilePathLabelOrFallback(IApplicationDataPathProvider pathProvider)
-    {
-        ArgumentNullException.ThrowIfNull(pathProvider);
-
-        try
-        {
-            return GetOptionsFilePath(pathProvider);
-        }
-        catch
-        {
-            // See the sibling fallback above: %APPDATA% is where these apps actually store data.
-            return $"%APPDATA%\\{ProductDirectoryName}";
-        }
-    }
-
     public static string ResolveOptionsFilePath(
         IApplicationDataPathProvider pathProvider,
         string? overridePath)
