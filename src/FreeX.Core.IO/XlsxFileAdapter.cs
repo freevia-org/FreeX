@@ -80,7 +80,26 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
         XlsxFeatureReport? featureReport;
         lock (ClosedXmlGate)
         {
-            workbook = LoadCore(stream, warnings, inspectFeatures, out featureReport);
+            try
+            {
+                workbook = LoadCore(stream, warnings, inspectFeatures, out featureReport);
+            }
+            catch (Exception ex) when (IsMissingPackagePartFailure(ex))
+            {
+                // r382: a package missing a required part surfaced the packaging layer's own words --
+                // "Specified part does not exist in the package", or a bare NullReferenceException
+                // when [Content_Types].xml is gone. The shell shows exception.Message verbatim
+                // (MainWindow.ReportAsyncCommandFailure), so that text is what the user reads, while
+                // this adapter already owns an accurate sentence for exactly this situation and used
+                // it only for the not-a-zip case. Package corruption already surfaces as
+                // WorkbookInvalidException elsewhere -- see the duplicate-zip-entry contract test --
+                // so this aligns the missing-part case with a contract that exists rather than
+                // inventing one. The original is kept as InnerException; nothing is swallowed.
+                throw new WorkbookInvalidException(
+                    "The workbook could not be read because the file is not a valid .xlsx package " +
+                    "(it may be corrupted, truncated, or missing required parts).",
+                    ex);
+            }
         }
 
         return new XlsxLoadResult(workbook, warnings.AsReadOnly(), featureReport);
@@ -88,6 +107,23 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
 
     /// <inheritdoc/>
     public Workbook Load(Stream stream) => LoadWithWarnings(stream).Workbook;
+
+    /// <summary>
+    /// r382: recognises a package that is missing a part the reader needs. Deliberately narrow --
+    /// the packaging layer's own sentence, and the NullReferenceException that a missing
+    /// [Content_Types].xml produces inside the OOXML reader. Anything else keeps its own type and
+    /// message, including WorkbookPasswordProtectedException and cancellation, so this cannot
+    /// flatten an informative failure into a generic one.
+    /// </summary>
+    private static bool IsMissingPackagePartFailure(Exception exception) =>
+        exception is not WorkbookInvalidException and not OperationCanceledException &&
+        (
+            (exception is InvalidOperationException && exception.Message.Contains(
+                "does not exist in the package", StringComparison.OrdinalIgnoreCase)) ||
+            (exception is NullReferenceException &&
+             (exception.StackTrace?.Contains("DocumentFormat.OpenXml", StringComparison.Ordinal) == true ||
+              exception.StackTrace?.Contains("ClosedXML", StringComparison.Ordinal) == true))
+        );
 
     private Workbook LoadCore(
         Stream stream,
