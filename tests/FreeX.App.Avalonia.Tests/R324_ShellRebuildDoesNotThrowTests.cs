@@ -1,3 +1,4 @@
+using FreeX.Core.Model;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -74,4 +75,66 @@ public sealed class R324_ShellRebuildDoesNotThrowTests
             "a rebuild that re-parents a control Avalonia still considers attached throws at "
             + "runtime, and only a second pass over the same region can reach that");
     }
+    /// <summary>
+    /// r325: the slicer/timeline pane's rebuild, which the test above does NOT reach.
+    ///
+    /// <para>Probing r324 showed that removing the pane's detach guard did not fail it: the pane only
+    /// builds its header when the active sheet actually has a slicer, and <c>RefreshFromSharedWorkbook</c>
+    /// returns early while the window is not visible. Both conditions are met here -- the window is
+    /// shown and a slicer anchored to the active sheet is added -- so the second refresh meets a close
+    /// button the first refresh already parented. That is the exact sequence the pane's own comment
+    /// describes: "a plain window resize is enough ... the second refresh with the pane open would
+    /// take the shell down".</para>
+    /// </summary>
+    [Fact]
+    public async Task RebuildingTheSlicerPaneTwiceDoesNotThrow()
+    {
+        Exception? thrown = null;
+        var refreshes = 0;
+
+        await Session.Dispatch(() =>
+        {
+            try
+            {
+                var window = new MainWindow([]);
+                window.Show();
+                window.Measure(new Size(1120, 720));
+                window.Arrange(new Rect(0, 0, 1120, 720));
+                window.UpdateLayout();
+
+                var sheet = window.Session.ActiveSheet;
+                window.Session.Workbook.Slicers.Add(new SlicerModel
+                {
+                    Name = "r325 Slicer",
+                    CacheName = "Slicer_r325",
+                    SourceFieldName = "Region",
+                    DrawingAnchor = new DrawingAnchorRange(
+                        new DrawingAnchorPoint(6, 0, 1, 0),
+                        new DrawingAnchorPoint(9, 0, 8, 0)),
+                    SourceSheetName = sheet.Name,
+                });
+
+                for (var pass = 0; pass < 2; pass++)
+                {
+                    window.RefreshFromSharedWorkbook();
+                    window.Measure(new Size(1120, 720));
+                    window.Arrange(new Rect(0, 0, 1120, 720));
+                    window.UpdateLayout();
+                    refreshes++;
+                }
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+                window.Close();
+            }
+            catch (Exception ex)
+            {
+                thrown = ex;
+            }
+        }, CancellationToken.None);
+
+        refreshes.Should().Be(2, "the second refresh is the one that meets an already-parented button");
+        thrown.Should().BeNull(
+            "rebuilding the pane must detach its reused close button from the previous header first");
+    }
+
 }
