@@ -180,16 +180,22 @@ public sealed class R82_CellMetadataRichValueDeleteShiftTests
         var savedCells = LoadSavedCellsByAddress(savedBytes);
 
         savedCells.Should().ContainKey("B2");
-        // r355: kept as ?. -- CONFIRMED DEFECT, root cause known, fix pending. Hardening this to !
-        // fails: B2's vm really is dropped. Cause is the signature-count guard in
-        // CellValueMatchesCapturedNativeMetadata. Rich-value placeholders all serialize identically
-        // (t="e", no formula, <v>#VALUE!</v>), so a same-address hit cannot by itself prove the
-        // target is the same cell rather than a same-signature sibling shifted up by a delete. The
-        // guard therefore refuses the whole group whenever the group's count changed -- which a
-        // delete always does -- so B2 loses its binding even though B2 never moved. The safety goal
-        // is met (B3 correctly refuses MSFT's stale vm="11", asserted below) but the blast radius is
-        // every cell in the group, not just the ambiguous ones. Excel keeps a rich value bound
-        // across a row delete, so the assertion below is the correct target.
+        // Deliberately left as `?.`, and r390 CORRECTS r355's reading of why.
+        //
+        // r355 called B2's dropped vm a defect whose fix was pending, on the grounds that "B2 never
+        // moved". That is the narrative the fixture was written to tell, but it is not something the
+        // data supports: every row here holds ONLY the identical placeholder (t="e", no formula,
+        // <v>#VALUE!</v>), so deleting row 2, 3, 4 or 5 all produce byte-identical output. Nothing
+        // distinguishes "B2 kept its own entity" from "B2 now holds what B3 used to hold", and
+        // binding vm="10" here on the assumption that B2 stayed put would be exactly the silent
+        // cross-binding this guard exists to prevent. Refusing is the correct answer for THIS sheet.
+        //
+        // Excel does not face the question because it knows a delete happened; FreeX reconstructs
+        // intent by diffing the source XML against the saved model, and this sheet carries no
+        // evidence of where the delete was. When the sheet does carry that evidence the binding is
+        // recoverable and IS now kept -- see
+        // FullSave_RowDeleteWithDistinguishingContent_KeepsTheBindingOfCellsAboveTheShift, whose
+        // assertion is hardened to `!` precisely because there the answer is knowable.
         savedCells["B2"].Attribute("vm")?.Value.Should().Be(
             "10",
             "AAPL's cell (B2) never shifted, so its own vm binding must survive unchanged");
@@ -207,6 +213,76 @@ public sealed class R82_CellMetadataRichValueDeleteShiftTests
             "12",
             "B4 now holds AMZN's shifted-up data, not GOOG's -- reattaching GOOG's vm='12' here would " +
             "silently cross-bind the wrong rich-value entity (R82-io-cell-rich-metadata-5-1)");
+    }
+
+    /// <summary>
+    /// The realistic shape of the same edit: the rich-value column sits beside a column that
+    /// identifies each row, which is how Stocks/Geography sheets are actually built.
+    /// </summary>
+    /// <remarks>
+    /// With that neighbour present the delete point IS recoverable -- row 3's content changed, rows
+    /// above it did not -- so a cell above the shift keeps its binding, matching Excel. Before r390
+    /// the signature-count guard refused the whole group the moment the count changed, which a
+    /// delete always does, so B2 lost vm="10" even though nothing about B2 moved. B3 and B4 must
+    /// still refuse the stale bindings of the rows that used to sit there.
+    /// </remarks>
+    [Fact]
+    public void FullSave_RowDeleteWithDistinguishingContent_KeepsTheBindingOfCellsAboveTheShift()
+    {
+        var sourceBytes = CreateSourcePackage("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <dimension ref="A2:B5"/>
+              <sheetData>
+                <row r="2"><c r="A2"><v>1</v></c><c r="B2" t="e" vm="10"><v>#VALUE!</v></c></row>
+                <row r="3"><c r="A3"><v>2</v></c><c r="B3" t="e" vm="11"><v>#VALUE!</v></c></row>
+                <row r="4"><c r="A4"><v>3</v></c><c r="B4" t="e" vm="12"><v>#VALUE!</v></c></row>
+                <row r="5"><c r="A5"><v>4</v></c><c r="B5" t="e" vm="13"><v>#VALUE!</v></c></row>
+              </sheetData>
+            </worksheet>
+            """);
+
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+        var sheet = workbook.GetSheetAt(0);
+
+        // Delete row 3: rows 4 and 5 shift up, carrying their identifiers (3 and 4) with them.
+        for (uint row = 3; row <= 4; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new ErrorValue("#VALUE!"));
+        }
+
+        sheet.ClearCell(new CellAddress(sheet.Id, 5, 1));
+        sheet.ClearCell(new CellAddress(sheet.Id, 5, 2));
+
+        // Force a full rewrite so the metadata preserver runs rather than the byte-patch path.
+        sheet.SetCell(new CellAddress(sheet.Id, 20, 1), new TextValue("freex-richvalue-localised-shift"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+
+        var savedCells = LoadSavedCellsByAddress(saved.ToArray());
+
+        savedCells.Should().ContainKey("B2");
+        savedCells["B2"].Attribute("vm")!.Value.Should().Be(
+            "10",
+            "row 2 is above the first row whose content changed, so B2 provably did not move and " +
+            "must keep its own rich-value binding -- Excel keeps it across a row delete");
+
+        savedCells.Should().ContainKey("B3");
+        savedCells["B3"].Attribute("vm")?.Value.Should().NotBe(
+            "11",
+            "B3 now holds the row that was at 4, so keeping the old row 3's vm would cross-bind");
+
+        savedCells.Should().ContainKey("B4");
+        savedCells["B4"].Attribute("vm")?.Value.Should().NotBe(
+            "12",
+            "B4 now holds the row that was at 5, so keeping the old row 4's vm would cross-bind");
     }
 
     [Fact]
