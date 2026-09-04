@@ -43,6 +43,13 @@ public sealed partial class OdsFileAdapter : IFileAdapter
     internal static readonly XNamespace SvgNs = "urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0";
 
     /// <summary>
+    /// r293: XLink, which is where ODF puts a hyperlink target -- <c>text:a/@xlink:href</c> inside the
+    /// cell's paragraph. The adapter previously had no hyperlink handling on either side, so a
+    /// workbook saved to .ods lost every hyperlink silently, in a format that can represent them.
+    /// </summary>
+    internal static readonly XNamespace XlinkNs = "http://www.w3.org/1999/xlink";
+
+    /// <summary>
     /// The OpenFormula namespace. Every formula this adapter writes is prefixed "of:=" per ODF 1.2's
     /// table:formula grammar, where "of" is a NAMESPACE PREFIX that the document must declare -- and
     /// content.xml did not declare it, so the prefix was unresolvable. LibreOffice consequently failed

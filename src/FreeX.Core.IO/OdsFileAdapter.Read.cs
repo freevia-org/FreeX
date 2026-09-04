@@ -273,6 +273,15 @@ public sealed partial class OdsFileAdapter
                     sheet.SetStyleOnly(row, col, styleId);
                 }
 
+                // r293: ODF puts a hyperlink on text:a inside the cell's paragraph, and this adapter
+                // read neither side of it -- so every link was lost, while its visible TEXT survived
+                // because the reader flattens the paragraph. Placed AFTER the value/formula/style
+                // branches above rather than inside one of them: a link can sit on a formula cell or
+                // a plain text cell, and a first attempt that hooked only the formula branch left
+                // ordinary linked text still losing its target.
+                if (HyperlinkTarget(cellElement) is { } href)
+                    sheet.Hyperlinks[new CellAddress(sheet.Id, row, col)] = href;
+
                 if (isMerge && isFirstRepeat)
                 {
                     // Widen to a 64-bit accumulator before clamping: rowsSpanned/colsSpanned come
@@ -485,6 +494,23 @@ public sealed partial class OdsFileAdapter
     }
 
     // ---- value helpers ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// r293: the first hyperlink target in the cell, or null. ODF nests it as
+    /// <c>text:p/text:a/@xlink:href</c>; <c>Descendants</c> rather than a fixed path because a link
+    /// can sit inside a styled span, which is what LibreOffice writes for a formatted link.
+    /// </summary>
+    private static string? HyperlinkTarget(XElement cellElement)
+    {
+        foreach (var anchor in cellElement.Descendants(TextNs + "a"))
+        {
+            var href = anchor.Attribute(XlinkNs + "href")?.Value;
+            if (!string.IsNullOrWhiteSpace(href))
+                return href;
+        }
+
+        return null;
+    }
 
     private static string TextContent(XElement cellElement)
     {

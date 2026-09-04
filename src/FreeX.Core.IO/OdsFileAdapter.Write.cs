@@ -38,6 +38,7 @@ public sealed partial class OdsFileAdapter
             new XAttribute(XNamespace.Xmlns + "fo", FoNs.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "number", NumberNs.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "svg", SvgNs.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "xlink", XlinkNs.NamespaceName),
             // Required: table:formula values are written as "of:=..." and "of" is a namespace prefix,
             // not literal text. See OdsFileAdapter.OfNs -- without this declaration LibreOffice cannot
             // resolve the prefix and every formula in the document evaluates to #VALUE!.
@@ -304,13 +305,21 @@ public sealed partial class OdsFileAdapter
             }
         }
 
-        WriteCellValue(cellElement, cell.Value, styleId, workbook);
+        // r293: the cell's hyperlink target, so a text cell can be written as text:a rather than a
+        // bare paragraph. ODF carries hyperlinks and this adapter dropped them on both sides.
+        sheet.Hyperlinks.TryGetValue(addr, out var hyperlinkTarget);
+        WriteCellValue(cellElement, cell.Value, styleId, workbook, hyperlinkTarget);
         // A value/formula cell can never collapse into an empty run.
         styleSignature = "\x01" + styleSignature;
         return cellElement;
     }
 
-    private void WriteCellValue(XElement cellElement, ScalarValue value, StyleId styleId, Workbook workbook)
+    private void WriteCellValue(
+        XElement cellElement,
+        ScalarValue value,
+        StyleId styleId,
+        Workbook workbook,
+        string? hyperlinkTarget = null)
     {
         switch (value)
         {
@@ -370,7 +379,7 @@ public sealed partial class OdsFileAdapter
                 break;
             case TextValue t:
                 cellElement.SetAttributeValue(OfficeNs + "value-type", "string");
-                cellElement.Add(TextParagraph(t.Value));
+                cellElement.Add(TextParagraph(t.Value, hyperlinkTarget));
                 break;
             case BlankValue:
             default:
@@ -378,8 +387,17 @@ public sealed partial class OdsFileAdapter
         }
     }
 
-    private static XElement TextParagraph(string text) =>
-        new(TextNs + "p", text);
+    /// <summary>
+    /// r293: a cell paragraph. With a hyperlink target the text is wrapped in ODF's text:a, which
+    /// is how ODF carries a link; without one the shape is unchanged, so every existing cell writes
+    /// byte-identically to before.
+    /// </summary>
+    private static XElement TextParagraph(string text, string? hyperlinkTarget = null) =>
+        string.IsNullOrEmpty(hyperlinkTarget)
+            ? new XElement(TextNs + "p", text)
+            : new XElement(
+                TextNs + "p",
+                new XElement(TextNs + "a", new XAttribute(XlinkNs + "href", hyperlinkTarget), text));
 
     /// <summary>
     /// Workbook-scoped named ranges and named formulas become table:named-expressions on the
