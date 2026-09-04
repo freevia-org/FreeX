@@ -21,6 +21,8 @@ public sealed class R308_FreeXCloneCompletenessTests
         typeof(CellStyle),
         typeof(DataValidation),
         typeof(ChartDataTableModel),
+        // r309: the last FreeX entry from r307's survey, so the list matches the survey exactly.
+        typeof(CellGradientFill),
     };
 
     [Theory]
@@ -35,7 +37,8 @@ public sealed class R308_FreeXCloneCompletenessTests
     [Fact]
     public void EveryNamedTypeStillExposesAParameterlessClone()
     {
-        Type[] guarded = [typeof(CellStyle), typeof(DataValidation), typeof(ChartDataTableModel)];
+        Type[] guarded =
+            [typeof(CellStyle), typeof(DataValidation), typeof(ChartDataTableModel), typeof(CellGradientFill)];
         foreach (var type in guarded)
         {
             type.GetMethod("Clone", System.Reflection.BindingFlags.Public

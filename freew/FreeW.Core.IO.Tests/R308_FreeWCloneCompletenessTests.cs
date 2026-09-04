@@ -23,6 +23,9 @@ public sealed class R308_FreeWCloneCompletenessTests
         typeof(PageSettings),
         typeof(WordArt),
         typeof(Chart),
+        // r309: the last FreeW entries from r307's survey, so the list matches the survey exactly.
+        typeof(FloatingPlacement),
+        typeof(Source),
     };
 
     [Theory]
@@ -33,7 +36,11 @@ public sealed class R308_FreeWCloneCompletenessTests
     [Fact]
     public void EveryNamedTypeStillExposesAParameterlessClone()
     {
-        Type[] guarded = [typeof(ShapeEffectLst), typeof(PageSettings), typeof(WordArt), typeof(Chart)];
+        Type[] guarded =
+        [
+            typeof(ShapeEffectLst), typeof(PageSettings), typeof(WordArt), typeof(Chart),
+            typeof(FloatingPlacement), typeof(Source),
+        ];
         foreach (var type in guarded)
         {
             type.GetMethod("Clone", System.Reflection.BindingFlags.Public
