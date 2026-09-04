@@ -434,6 +434,15 @@ public sealed partial class XlsxFileAdapter
             packageStream.Position = 0;
             CreateCorePropertiesForFreshWorkbook(packageStream, DateTimeOffset.UtcNow);
             NormalizeDocumentPropertiesPackageGraph();
+
+            // r313: this path returns early, so the normalizer at the end of the method never runs
+            // for a brand-new workbook -- which is precisely the case that gets a randomly-generated
+            // root relationship id and so saves differently every time. It sits before
+            // NormalizeWorkbookForSchema (which rewrites xl/workbook.xml, not the root rels, so the
+            // order does not matter here) to keep that call adjacent to the return, which
+            // SavePostProcessing_UsesSourcePackageReplayOnlyForLoadedWorkbooks anchors on.
+            packageStream.Position = 0;
+            XlsxRootRelationshipIdNormalizer.Normalize(packageStream);
             NormalizeWorkbookForSchema();
             return;
         }
@@ -608,6 +617,12 @@ public sealed partial class XlsxFileAdapter
         NormalizeSourcePackageForExcelCompatibility();
         NormalizeDocumentPropertiesPackageGraph();
         NormalizeWorkbookForSchema();
+
+        // r313: last, and on every path, so the captured source package below sees the same bytes the
+        // user gets. The packaging layer gives the root officeDocument relationship a RANDOM id, so
+        // without this two saves of an unchanged workbook differ.
+        packageStream.Position = 0;
+        XlsxRootRelationshipIdNormalizer.Normalize(packageStream);
 
         packageStream.Position = 0;
         SourcePackages.Remove(workbook);
