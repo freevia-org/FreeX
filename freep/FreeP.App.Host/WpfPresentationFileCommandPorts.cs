@@ -163,7 +163,8 @@ internal sealed class WpfPresentationFileRenderPort : IPresentationFileRenderPor
     public PresentationSlideImageRendererWithPrintMarkup RenderSlideToPngWithPrintMarkup =>
         WpfPresentationSlideImageRenderer.RenderSlideToPngWithPrintMarkup;
     public PresentationRasterPdfWriter WriteRasterPdf => WpfRasterPdfWriter.WriteToBytes;
-    public PresentationPdfContentWriter WriteVectorPdf => SkiaPdfWriter.WriteToBytesWithPortableFallback;
+    public PresentationPdfContentWriter WriteVectorPdf =>
+            document => SkiaPdfWriter.WriteToBytesWithPortableFallback(document, FreePApplicationFrameDescriptor.PdfHeaderComment);
 
     public byte[] WriteRasterPdfWithDiagnostics(
         PdfRasterDocument document,
@@ -173,7 +174,7 @@ internal sealed class WpfPresentationFileRenderPort : IPresentationFileRenderPor
     public byte[] WriteVectorPdfWithDiagnostics(
         PdfContentDocument document,
         ICollection<string> imageDiagnostics) =>
-        SkiaPdfWriter.WriteToBytesWithPortableFallback(document, imageDiagnostics);
+        SkiaPdfWriter.WriteToBytesWithPortableFallback(document, imageDiagnostics, FreePApplicationFrameDescriptor.PdfHeaderComment);
 }
 
 internal sealed class WpfPresentationPrintPort : IPresentationPrintPort

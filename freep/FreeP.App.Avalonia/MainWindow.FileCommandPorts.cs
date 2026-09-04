@@ -138,7 +138,8 @@ public sealed partial class MainWindow
         public PresentationSlideImageRendererWithPrintMarkup RenderSlideToPngWithPrintMarkup =>
             SlideRenderer.RenderToBytesWithPrintMarkup;
         public PresentationRasterPdfWriter WriteRasterPdf => SkiaRasterPdfWriter.WriteToBytes;
-        public PresentationPdfContentWriter WriteVectorPdf => SkiaPdfWriter.WriteToBytesWithPortableFallback;
+        public PresentationPdfContentWriter WriteVectorPdf =>
+            document => SkiaPdfWriter.WriteToBytesWithPortableFallback(document, FreePApplicationFrameDescriptor.PdfHeaderComment);
 
         public byte[] WriteRasterPdfWithDiagnostics(
             PdfRasterDocument document,
@@ -148,7 +149,7 @@ public sealed partial class MainWindow
         public byte[] WriteVectorPdfWithDiagnostics(
             PdfContentDocument document,
             ICollection<string> imageDiagnostics) =>
-            SkiaPdfWriter.WriteToBytesWithPortableFallback(document, imageDiagnostics);
+            SkiaPdfWriter.WriteToBytesWithPortableFallback(document, imageDiagnostics, FreePApplicationFrameDescriptor.PdfHeaderComment);
     }
 
     private sealed class AvaloniaPresentationPrintPort : IPresentationPrintPort

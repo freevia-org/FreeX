@@ -5,6 +5,12 @@ namespace FreeP.App.Compositor;
 /// <summary>Portable product-specific values consumed by the WPF and Avalonia application frames.</summary>
 public static class FreePApplicationFrameDescriptor
 {
+    /// <summary>
+    /// r280: the header comment FreeP stamps into exported PDFs. The shared writer default named
+    /// FreeX, and FreeP took it on every vector export through the Skia portable fallback.
+    /// </summary>
+    public const string PdfHeaderComment = "FreeP portable PDF";
+
     private static ApplicationFrameDescriptor Descriptor { get; } =
         ApplicationFrameDescriptor.Create(
             "FreeP",

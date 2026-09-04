@@ -41,8 +41,13 @@ public static class PortablePdfWriter
     private const string DeferredUnicodePdfPathRequirements =
         PdfWinAnsiTextCapability.DeferredUnicodePdfPathRequirements;
 
-    /// <summary>Header comment written after the <c>%PDF-1.7</c> marker.</summary>
-    public const string DefaultHeaderComment = "FreeX portable PDF";
+    /// <summary>
+    /// Header comment written after the <c>%PDF-1.7</c> marker. r280: this is the SHARED default,
+    /// so it names no single app -- it used to read "FreeX portable PDF" and stamped that into every
+    /// PDF produced by FreeW and FreeP through the Skia fallback. Apps that want their own name pass
+    /// it explicitly, as FreeX and FreeW already do on their direct paths.
+    /// </summary>
+    public const string DefaultHeaderComment = "Free portable PDF";
 
     /// <summary>
     /// Serializes <paramref name="document"/> to <paramref name="stream"/>. Each page is rendered to
