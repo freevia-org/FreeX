@@ -129,9 +129,16 @@ internal static class ParityCapture
         // in the output directory to be promoted as if it were fresh.
         if (!string.IsNullOrWhiteSpace(targetSurfaceId) && captured == 0)
         {
+            // r330: the tool already explains itself -- AddMissing records a note naming every id the
+            // targeted route supports -- but only in the manifest, which nobody reads when the run
+            // appeared to succeed. Print it, so the failure carries its own answer instead of sending
+            // the reader to the JSON to find out the id was never targetable in the first place.
+            var explanation = results
+                .FirstOrDefault(r => !r.Captured && !string.IsNullOrWhiteSpace(r.Note))?.Note;
+
             Console.Error.WriteLine(
                 $"[parity-capture] ERROR: target '{targetSurfaceId}' captured no surface. "
-                + "The id may be unknown, or its surface may no longer be reachable from this route.");
+                + (explanation ?? "The id may be unknown, or its surface may no longer be reachable from this route."));
             Environment.ExitCode = 2;
         }
     }
