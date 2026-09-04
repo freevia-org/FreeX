@@ -120,6 +120,20 @@ internal static class ParityCapture
         var captured = results.Count(r => r.Captured);
         Console.WriteLine(
             $"[parity-capture] wrote {captured}/{results.Count} surfaces + manifest.json to {outDir}");
+
+        // r329: an explicitly requested surface that captured NOTHING is a failed run, and it used to
+        // report success. `--parity-capture-target=dialog.AdvancedFilter` printed "wrote 0/1" on a
+        // line that scrolls past and exited 0. The documented way to refresh a promoted baseline is
+        // exactly this per-surface route (see the avalonia-parity-wave notes), so a mistyped or
+        // no-longer-supported id produced no file, no error and a green exit -- leaving whatever was
+        // in the output directory to be promoted as if it were fresh.
+        if (!string.IsNullOrWhiteSpace(targetSurfaceId) && captured == 0)
+        {
+            Console.Error.WriteLine(
+                $"[parity-capture] ERROR: target '{targetSurfaceId}' captured no surface. "
+                + "The id may be unknown, or its surface may no longer be reachable from this route.");
+            Environment.ExitCode = 2;
+        }
     }
 
     // ----- Ribbon tabs + grid + backstage: driven from one live, offscreen MainWindow -----
