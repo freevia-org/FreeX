@@ -36,11 +36,11 @@ public sealed class R40_SheetVisibilityActiveTabTests
 
         var primaryView = ReadPrimaryWorkbookView(saved);
 
-        primaryView.Attribute("activeTab")?.Value.Should().Be(
+        primaryView.Attribute("activeTab")!.Value.Should().Be(
             "0",
             "Sheet2 (index 1) is hidden, so Excel would flag the file for repair if activeTab kept " +
             "pointing at it - the writer must redirect to the first visible sheet (Sheet1, index 0)");
-        primaryView.Attribute("firstSheet")?.Value.Should().Be(
+        primaryView.Attribute("firstSheet")!.Value.Should().Be(
             "0",
             "firstSheet must be redirected the same way as activeTab when it points at a hidden sheet");
     }
@@ -59,7 +59,7 @@ public sealed class R40_SheetVisibilityActiveTabTests
 
         var primaryView = ReadPrimaryWorkbookView(saved);
 
-        primaryView.Attribute("activeTab")?.Value.Should().Be(
+        primaryView.Attribute("activeTab")!.Value.Should().Be(
             "1",
             "Sheet2 is visible, so a normal active-tab selection must be written verbatim and not " +
             "redirected");
@@ -79,7 +79,7 @@ public sealed class R40_SheetVisibilityActiveTabTests
 
         var primaryView = ReadPrimaryWorkbookView(saved);
 
-        primaryView.Attribute("activeTab")?.Value.Should().Be(
+        primaryView.Attribute("activeTab")!.Value.Should().Be(
             "0",
             "a veryHidden sheet must be treated the same as a hidden one - redirect to the first " +
             "visible sheet rather than leaving an invalid activeTab");
@@ -103,7 +103,7 @@ public sealed class R40_SheetVisibilityActiveTabTests
 
         var primaryView = ReadPrimaryWorkbookView(saved);
 
-        primaryView.Attribute("activeTab")?.Value.Should().Be(
+        primaryView.Attribute("activeTab")!.Value.Should().Be(
             "1",
             "Sheet2 (index 1) is the first visible sheet in document order and must be the redirect " +
             "target, not merely 'any' visible sheet");

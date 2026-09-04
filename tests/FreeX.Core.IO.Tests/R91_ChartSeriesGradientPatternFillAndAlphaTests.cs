@@ -180,7 +180,7 @@ public sealed class R91_ChartSeriesGradientPatternFillAndAlphaTests
         var srgbClr = savedSeries.Element(ChartNs + "spPr")?.Element(DrawingNs + "solidFill")?.Element(DrawingNs + "srgbClr");
         srgbClr.Should().NotBeNull();
         srgbClr!.Attribute("val")!.Value.Should().Be("4472C4");
-        srgbClr.Element(DrawingNs + "alpha")?.Attribute("val")?.Value.Should().Be("50000",
+        srgbClr.Element(DrawingNs + "alpha")?.Attribute("val")!.Value.Should().Be("50000",
             "the 50% transparency must be re-emitted, not silently dropped, on the next FreeX save");
     }
 

@@ -88,9 +88,9 @@ public sealed class LinkedDrawingPictureRoundTripTests
             var relationships = LoadXml(zip, "word/_rels/document.xml.rels");
             var relationship = relationships.Root!.Elements(Rel + "Relationship")
                 .Single(element => element.Attribute("Id")?.Value == linkId);
-            relationship.Attribute("Type")?.Value.Should().EndWith("/image");
-            relationship.Attribute("Target")?.Value.Should().Be(LinkedTarget);
-            relationship.Attribute("TargetMode")?.Value.Should().Be("External");
+            relationship.Attribute("Type")!.Value.Should().EndWith("/image");
+            relationship.Attribute("Target")!.Value.Should().Be(LinkedTarget);
+            relationship.Attribute("TargetMode")!.Value.Should().Be("External");
             zip.Entries.Should().NotContain(entry => entry.FullName.StartsWith("word/media/", StringComparison.Ordinal));
         }
 
@@ -120,8 +120,8 @@ public sealed class LinkedDrawingPictureRoundTripTests
             .Where(element => element.Attribute("Type")?.Value.EndsWith("/image", StringComparison.Ordinal) == true)
             .ToDictionary(element => element.Attribute("Id")!.Value);
         imageRelationships[embedId!].Attribute("TargetMode").Should().BeNull();
-        imageRelationships[linkId!].Attribute("TargetMode")?.Value.Should().Be("External");
-        imageRelationships[linkId!].Attribute("Target")?.Value.Should().Be(LinkedTarget);
+        imageRelationships[linkId!].Attribute("TargetMode")!.Value.Should().Be("External");
+        imageRelationships[linkId!].Attribute("Target")!.Value.Should().Be(LinkedTarget);
         zip.GetEntry("word/media/image1.png").Should().NotBeNull();
     }
 
@@ -147,8 +147,8 @@ public sealed class LinkedDrawingPictureRoundTripTests
             var headerRelationships = LoadXml(zip, "word/_rels/header1.xml.rels");
             var relationship = headerRelationships.Root!.Elements(Rel + "Relationship")
                 .Single(element => element.Attribute("Id")?.Value == linkId);
-            relationship.Attribute("Target")?.Value.Should().Be(LinkedTarget);
-            relationship.Attribute("TargetMode")?.Value.Should().Be("External");
+            relationship.Attribute("Target")!.Value.Should().Be(LinkedTarget);
+            relationship.Attribute("TargetMode")!.Value.Should().Be("External");
         }
 
         var reopened = DocxReader.Read(new MemoryStream(saved));
@@ -227,8 +227,8 @@ public sealed class LinkedDrawingPictureRoundTripTests
     {
         var relationship = LoadXml(zip, path).Root!.Elements(Rel + "Relationship")
             .Single(element => element.Attribute("Type")?.Value.EndsWith("/image", StringComparison.Ordinal) == true);
-        relationship.Attribute("Target")?.Value.Should().Be(LinkedTarget);
-        relationship.Attribute("TargetMode")?.Value.Should().Be("External");
+        relationship.Attribute("Target")!.Value.Should().Be(LinkedTarget);
+        relationship.Attribute("TargetMode")!.Value.Should().Be("External");
     }
 
     private static byte[] BuildSourcePackage(bool includeEmbeddedPreview, string linkedTarget = LinkedTarget)

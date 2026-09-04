@@ -137,17 +137,17 @@ public sealed class TableStyleThemeColorRoundTripTests
 
         var fontColor = dxf.Element(MainNs + "font")?.Element(MainNs + "color");
         fontColor.Should().NotBeNull();
-        fontColor!.Attribute("theme")?.Value.Should().Be("4");
+        fontColor!.Attribute("theme")!.Value.Should().Be("4");
         fontColor.Attribute("rgb").Should().BeNull("a themed colour must not be flattened to rgb");
 
         var bottomColor = dxf.Element(MainNs + "border")?.Element(MainNs + "bottom")?.Element(MainNs + "color");
         bottomColor.Should().NotBeNull();
-        bottomColor!.Attribute("theme")?.Value.Should().Be("4");
+        bottomColor!.Attribute("theme")!.Value.Should().Be("4");
         bottomColor.Attribute("rgb").Should().BeNull();
 
         var fgColor = dxf.Element(MainNs + "fill")?.Element(MainNs + "patternFill")?.Element(MainNs + "fgColor");
         fgColor.Should().NotBeNull();
-        fgColor!.Attribute("theme")?.Value.Should().Be("4");
+        fgColor!.Attribute("theme")!.Value.Should().Be("4");
         fgColor.Attribute("rgb").Should().BeNull();
     }
 
@@ -166,6 +166,6 @@ public sealed class TableStyleThemeColorRoundTripTests
         dxf.Element(MainNs + "font")?.Element(MainNs + "color")?.Attribute("rgb")?.Value
             .Should().Be("FF0000FF");
         dxf.Element(MainNs + "border")?.Element(MainNs + "bottom")?.Element(MainNs + "color")?
-            .Attribute("rgb")?.Value.Should().Be("FF112233");
+            .Attribute("rgb")!.Value.Should().Be("FF112233");
     }
 }

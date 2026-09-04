@@ -43,7 +43,7 @@ public sealed class R72_ChartPageSetupPrintSettingsRoundTripTests
         var chartXml = ReadChartXml(saved);
 
         var pageSetup = chartXml.Descendants(ChartNs + "pageSetup").Should().ContainSingle().Subject;
-        pageSetup.Attribute("usePrinterDefaults")?.Value.Should().Be(
+        pageSetup.Attribute("usePrinterDefaults")!.Value.Should().Be(
             "0", "an explicit usePrinterDefaults=\"0\" (custom paper size/orientation) must not "
             + "silently flip back to the printer-defaults-true OOXML default on save");
 
@@ -97,8 +97,8 @@ public sealed class R72_ChartPageSetupPrintSettingsRoundTripTests
         var chartXml = ReadChartXml(saved);
 
         var pageSetup = chartXml.Descendants(ChartNs + "pageSetup").Should().ContainSingle().Subject;
-        pageSetup.Attribute("firstPageNumber")?.Value.Should().Be("10");
-        pageSetup.Attribute("useFirstPageNumber")?.Value.Should().Be(
+        pageSetup.Attribute("firstPageNumber")!.Value.Should().Be("10");
+        pageSetup.Attribute("useFirstPageNumber")!.Value.Should().Be(
             "1", "an explicit useFirstPageNumber=true flag must be preserved so Excel actually "
             + "honors the custom firstPageNumber instead of treating it as inert leftover data");
 
@@ -128,7 +128,7 @@ public sealed class R72_ChartPageSetupPrintSettingsRoundTripTests
         var chartXml = ReadChartXml(saved);
 
         var pageSetup = chartXml.Descendants(ChartNs + "pageSetup").Should().ContainSingle().Subject;
-        pageSetup.Attribute("firstPageNumber")?.Value.Should().Be("10");
+        pageSetup.Attribute("firstPageNumber")!.Value.Should().Be("10");
         pageSetup.Attribute("useFirstPageNumber").Should().BeNull(
             "firstPageNumber with no explicit UseFirstPageNumber flag must not spuriously activate it");
 

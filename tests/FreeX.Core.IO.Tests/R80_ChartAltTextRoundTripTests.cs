@@ -67,9 +67,9 @@ public sealed class R80_ChartAltTextRoundTripTests
                 .Descendants(SpreadsheetDrawingNs + "cNvPr")
                 .Should().ContainSingle().Subject;
 
-            cNvPr.Attribute("title")?.Value.Should().Be("Quarterly sales chart",
+            cNvPr.Attribute("title")!.Value.Should().Be("Quarterly sales chart",
                 "the chart's Alt Text title must be written to the graphicFrame's cNvPr title attribute");
-            cNvPr.Attribute("descr")?.Value.Should().Be(
+            cNvPr.Attribute("descr")!.Value.Should().Be(
                 "Bar chart showing sales figures for each quarter of the year.",
                 "the chart's Alt Text description must be written to the graphicFrame's cNvPr descr attribute");
         }

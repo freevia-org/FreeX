@@ -110,7 +110,7 @@ public sealed class R118_PivotValueFieldNumberFormatSentinelCollisionTests
             // numFmtId (whichever field's code happened to "win" the catalog-dictionary collision).
             amount1Field.Attribute("numFmtId")!.Value.Should().Be(kgId, "Amount1 was given the \"kg\" format");
             amount2Field.Attribute("numFmtId")!.Value.Should().Be(lbId, "Amount2 was given the \"lb\" format");
-            amount1Field.Attribute("numFmtId")!.Value.Should().NotBe(amount2Field.Attribute("numFmtId")!.Value);
+            amount1Field.Attribute("numFmtId")?.Value.Should().NotBe(amount2Field.Attribute("numFmtId")!.Value);
         }
 
         saved.Position = 0;

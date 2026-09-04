@@ -44,9 +44,9 @@ public sealed class DataBarNegativeSameAsPositiveTests
         new XlsxFileAdapter().Save(workbook, saved);
 
         var x14DataBar = XlsxPackageTestHelper.ReadWorksheetXml(saved).Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
-        x14DataBar.Attribute("negativeBarColorSameAsPositive")?.Value.Should().Be("1",
+        x14DataBar.Attribute("negativeBarColorSameAsPositive")!.Value.Should().Be("1",
             "the toggle must be re-emitted on save, not silently dropped");
-        x14DataBar.Attribute("negativeBarBorderColorSameAsPositive")?.Value.Should().Be("1",
+        x14DataBar.Attribute("negativeBarBorderColorSameAsPositive")!.Value.Should().Be("1",
             "the toggle must be re-emitted on save, not silently dropped");
         x14DataBar.Element(X14Ns + "negativeFillColor").Should().BeNull(
             "the color child is redundant once same-as-positive is set");
@@ -75,8 +75,8 @@ public sealed class DataBarNegativeSameAsPositiveTests
         new XlsxFileAdapter().Save(workbook, stream);
 
         var x14DataBar = XlsxPackageTestHelper.ReadWorksheetXml(stream).Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
-        x14DataBar.Element(X14Ns + "negativeFillColor")?.Attribute("rgb")?.Value.Should().Be("FF040506");
-        x14DataBar.Element(X14Ns + "negativeBorderColor")?.Attribute("rgb")?.Value.Should().Be("FF070809");
+        x14DataBar.Element(X14Ns + "negativeFillColor")?.Attribute("rgb")!.Value.Should().Be("FF040506");
+        x14DataBar.Element(X14Ns + "negativeBorderColor")?.Attribute("rgb")!.Value.Should().Be("FF070809");
         x14DataBar.Attribute("negativeBarColorSameAsPositive").Should().BeNull();
         x14DataBar.Attribute("negativeBarBorderColorSameAsPositive").Should().BeNull();
     }

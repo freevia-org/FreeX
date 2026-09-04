@@ -65,7 +65,7 @@ public sealed class R93_NamedStyleXfIdRealAdapterTests
         var customStyle = cellStyles.SingleOrDefault(s => s.Attribute("name")?.Value == "MyReportHeader");
 
         goodStyle.Should().NotBeNull("the built-in 'Good' named style definition must survive the rebuild");
-        goodStyle!.Attribute("builtinId")?.Value.Should().Be("26");
+        goodStyle!.Attribute("builtinId")!.Value.Should().Be("26");
         customStyle.Should().NotBeNull("the user-defined 'MyReportHeader' named style definition must survive the rebuild");
 
         var cellStyleXfs = root.Element(MainNs + "cellStyleXfs")!.Elements(MainNs + "xf").ToList();
@@ -81,14 +81,14 @@ public sealed class R93_NamedStyleXfIdRealAdapterTests
         // B2: bound to "Good" with no direct-formatting overlay -- its rebuilt cellXfs xf must link
         // back via xfId to the recovered "Good" cellStyleXfs record.
         var plainGoodCellXf = FindCellXfForCell(worksheetXml, cellXfs, "B2");
-        plainGoodCellXf.Attribute("xfId")?.Value.Should().Be(goodXfId.ToString(),
+        plainGoodCellXf.Attribute("xfId")!.Value.Should().Be(goodXfId.ToString(),
             "a cell styled with the plain named style 'Good' must reconnect to the recovered cellStyleXfs record");
 
         // C3: bound to "Good" too, but with a DIRECT fill override on top -- must ALSO reconnect to
         // "Good" via xfId (the named-style link is independent of direct formatting layered on it),
         // while its OWN direct fill must still render as the overridden color, not "Good"'s own fill.
         var overlaidCellXf = FindCellXfForCell(worksheetXml, cellXfs, "C3");
-        overlaidCellXf.Attribute("xfId")?.Value.Should().Be(goodXfId.ToString(),
+        overlaidCellXf.Attribute("xfId")!.Value.Should().Be(goodXfId.ToString(),
             "direct formatting layered on top of a named style must not break the cell's own xfId link back to that named style");
 
         var fills = root.Element(MainNs + "fills")!.Elements(MainNs + "fill").ToList();
@@ -98,7 +98,7 @@ public sealed class R93_NamedStyleXfIdRealAdapterTests
 
         // D4: bound to the user-defined "MyReportHeader" style, no overlay.
         var customCellXf = FindCellXfForCell(worksheetXml, cellXfs, "D4");
-        customCellXf.Attribute("xfId")?.Value.Should().Be(customXfId.ToString(),
+        customCellXf.Attribute("xfId")!.Value.Should().Be(customXfId.ToString(),
             "a cell styled with the user-defined named style must reconnect to its recovered cellStyleXfs record");
 
         // Sibling/no-regression: a genuinely plain cell (no named style at all) must stay at xfId 0

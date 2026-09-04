@@ -116,8 +116,8 @@ public sealed class FreeXDeferSlicerTests
             .Should()
             .ContainSingle(element => element.Name.LocalName == "tableSlicerCache")
             .Subject;
-        tableSlicerCache.Attribute("tableId")?.Value.Should().Be("3");
-        tableSlicerCache.Attribute("column")?.Value.Should().Be("5");
+        tableSlicerCache.Attribute("tableId")!.Value.Should().Be("3");
+        tableSlicerCache.Attribute("column")!.Value.Should().Be("5");
         tableSlicerCache.Ancestors()
             .Should()
             .Contain(element =>

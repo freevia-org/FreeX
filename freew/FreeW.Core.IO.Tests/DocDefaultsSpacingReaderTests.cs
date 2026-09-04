@@ -169,8 +169,8 @@ public class DocDefaultsSpacingReaderTests
         var bytes = Write(source);
         var spacing = EntryXml(bytes, "word/document.xml").Descendants(W + "spacing").Single();
 
-        spacing.Attribute(W + "beforeAutospacing")?.Value.Should().Be("1");
-        spacing.Attribute(W + "afterAutospacing")?.Value.Should().Be("1");
+        spacing.Attribute(W + "beforeAutospacing")!.Value.Should().Be("1");
+        spacing.Attribute(W + "afterAutospacing")!.Value.Should().Be("1");
         spacing.Attribute(W + "before").Should().BeNull();
         spacing.Attribute(W + "after").Should().BeNull();
 
@@ -201,8 +201,8 @@ public class DocDefaultsSpacingReaderTests
 
         var spacing = EntryXml(Write(document), "word/document.xml").Descendants(W + "spacing").Single();
 
-        spacing.Attribute(W + "before")?.Value.Should().Be("120");
-        spacing.Attribute(W + "after")?.Value.Should().Be("200");
+        spacing.Attribute(W + "before")!.Value.Should().Be("120");
+        spacing.Attribute(W + "after")!.Value.Should().Be("200");
         spacing.Attribute(W + "beforeAutospacing").Should().BeNull();
         spacing.Attribute(W + "afterAutospacing").Should().BeNull();
     }
@@ -241,11 +241,11 @@ public class DocDefaultsSpacingReaderTests
         var styleSpacing = styles.Descendants(W + "style").Single(style => style.Attribute(W + "styleId")?.Value == "AutoBody")
             .Descendants(W + "spacing").Single();
 
-        defaultSpacing.Attribute(W + "beforeAutospacing")?.Value.Should().Be("1");
-        defaultSpacing.Attribute(W + "afterAutospacing")?.Value.Should().Be("1");
+        defaultSpacing.Attribute(W + "beforeAutospacing")!.Value.Should().Be("1");
+        defaultSpacing.Attribute(W + "afterAutospacing")!.Value.Should().Be("1");
         defaultSpacing.Attribute(W + "before").Should().BeNull();
         defaultSpacing.Attribute(W + "after").Should().BeNull();
-        styleSpacing.Attribute(W + "afterAutospacing")?.Value.Should().Be("1");
+        styleSpacing.Attribute(W + "afterAutospacing")!.Value.Should().Be("1");
         styleSpacing.Attribute(W + "after").Should().BeNull();
 
         var reread = DocxReader.Read(new MemoryStream(bytes));
@@ -304,7 +304,7 @@ public class DocDefaultsSpacingReaderTests
             .Descendants(W + "contextualSpacing").Single();
 
         defaultContextual.Attribute(W + "val").Should().BeNull();
-        styleContextual.Attribute(W + "val")?.Value.Should().Be("0");
+        styleContextual.Attribute(W + "val")!.Value.Should().Be("0");
 
         var reread = DocxReader.Read(new MemoryStream(bytes));
         reread.DefaultParagraph.ContextualSpacing.Should().BeTrue();

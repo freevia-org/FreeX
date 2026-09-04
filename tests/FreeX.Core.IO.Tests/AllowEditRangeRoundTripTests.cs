@@ -67,8 +67,8 @@ public partial class FileAdapterSmokeTests
 
         // Sibling no-regression: native-only metadata that genuinely has no modeled equivalent
         // (securityDescriptor, the custom "name") must still round-trip via the same merge step.
-        protectedRange.Attribute("securityDescriptor")?.Value.Should().Be("D:PAI");
-        protectedRange.Attribute("name")?.Value.Should().Be("NativeEditableRange");
+        protectedRange.Attribute("securityDescriptor")!.Value.Should().Be("D:PAI");
+        protectedRange.Attribute("name")!.Value.Should().Be("NativeEditableRange");
     }
 
     [Fact]

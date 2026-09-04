@@ -105,12 +105,12 @@ public class ProtectionPasswordTests
         var W = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
         var protection = xml!.Root!.Element(W + "documentProtection");
         protection.Should().NotBeNull();
-        protection!.Attribute(W + "enforcement")?.Value.Should().Be("1");
-        protection.Attribute(W + "edit")?.Value.Should().Be("readOnly");
+        protection!.Attribute(W + "enforcement")!.Value.Should().Be("1");
+        protection.Attribute(W + "edit")!.Value.Should().Be("readOnly");
         protection.Attribute(W + "hash").Should().NotBeNull();
         protection.Attribute(W + "salt").Should().NotBeNull();
         protection.Attribute(W + "cryptSpinCount").Should().NotBeNull();
-        protection.Attribute(W + "cryptAlgorithmSid")?.Value.Should().Be("4"); // SHA-1
+        protection.Attribute(W + "cryptAlgorithmSid")!.Value.Should().Be("4"); // SHA-1
     }
 
     [Fact]

@@ -180,6 +180,9 @@ public sealed class R82_CellMetadataRichValueDeleteShiftTests
         var savedCells = LoadSavedCellsByAddress(savedBytes);
 
         savedCells.Should().ContainKey("B2");
+        // r353: kept as ?. deliberately. Hardening this to ! makes the test FAIL, because the
+        // attribute really is absent -- a live defect this vacuous assertion has been hiding. See
+        // docs/review/region-coverage.md r353; hardened with the fix.
         savedCells["B2"].Attribute("vm")?.Value.Should().Be(
             "10",
             "AAPL's cell (B2) never shifted, so its own vm binding must survive unchanged");
@@ -225,9 +228,9 @@ public sealed class R82_CellMetadataRichValueDeleteShiftTests
 
         var savedCells = LoadSavedCellsByAddress(savedBytes);
 
-        savedCells["B2"].Attribute("vm")?.Value.Should().Be("10");
-        savedCells["B3"].Attribute("vm")?.Value.Should().Be("11");
-        savedCells["B4"].Attribute("vm")?.Value.Should().Be("12");
-        savedCells["B5"].Attribute("vm")?.Value.Should().Be("13");
+        savedCells["B2"].Attribute("vm")!.Value.Should().Be("10");
+        savedCells["B3"].Attribute("vm")!.Value.Should().Be("11");
+        savedCells["B4"].Attribute("vm")!.Value.Should().Be("12");
+        savedCells["B5"].Attribute("vm")!.Value.Should().Be("13");
     }
 }

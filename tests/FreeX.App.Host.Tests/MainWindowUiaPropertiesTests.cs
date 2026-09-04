@@ -45,9 +45,9 @@ public sealed class MainWindowUiaPropertiesTests
             .Descendants(presentation + "Button")
             .Single(element => element.Attribute(x + "Name")?.Value == "FormulaBarExpandBtn");
 
-        expandButton.Attribute("AutomationProperties.Name")?.Value.Should().Be(UiText.Get("MainWindow_AutomationName_ExpandFormulaBar"));
-        expandButton.Attribute("AutomationProperties.HelpText")?.Value.Should().Be(UiText.Get("MainWindow_AutomationHelpText_ExpandTheFormulaBarToAMultiLineEditor"));
-        expandButton.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("FormulaBarExpandBtn");
+        expandButton.Attribute("AutomationProperties.Name")!.Value.Should().Be(UiText.Get("MainWindow_AutomationName_ExpandFormulaBar"));
+        expandButton.Attribute("AutomationProperties.HelpText")!.Value.Should().Be(UiText.Get("MainWindow_AutomationHelpText_ExpandTheFormulaBarToAMultiLineEditor"));
+        expandButton.Attribute("AutomationProperties.AutomationId")!.Value.Should().Be("FormulaBarExpandBtn");
     }
 
     [Fact]
@@ -173,12 +173,12 @@ public sealed class MainWindowUiaPropertiesTests
             .ToDictionary(element => element.Attribute(x + "Name")!.Value);
 
         buttons.Should().ContainKeys("StatusZoomOutButton", "StatusZoomInButton");
-        buttons["StatusZoomOutButton"].Attribute("AutomationProperties.Name")?.Value.Should().Be(UiText.Get("MainWindow_AutomationName_ZoomOut"));
+        buttons["StatusZoomOutButton"].Attribute("AutomationProperties.Name")!.Value.Should().Be(UiText.Get("MainWindow_AutomationName_ZoomOut"));
         buttons["StatusZoomOutButton"].Attribute("AutomationProperties.HelpText")?.Value.Should().NotBeNullOrWhiteSpace();
-        buttons["StatusZoomOutButton"].Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("StatusZoomOutButton");
-        buttons["StatusZoomInButton"].Attribute("AutomationProperties.Name")?.Value.Should().Be(UiText.Get("MainWindow_AutomationName_ZoomIn"));
+        buttons["StatusZoomOutButton"].Attribute("AutomationProperties.AutomationId")!.Value.Should().Be("StatusZoomOutButton");
+        buttons["StatusZoomInButton"].Attribute("AutomationProperties.Name")!.Value.Should().Be(UiText.Get("MainWindow_AutomationName_ZoomIn"));
         buttons["StatusZoomInButton"].Attribute("AutomationProperties.HelpText")?.Value.Should().NotBeNullOrWhiteSpace();
-        buttons["StatusZoomInButton"].Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("StatusZoomInButton");
+        buttons["StatusZoomInButton"].Attribute("AutomationProperties.AutomationId")!.Value.Should().Be("StatusZoomInButton");
     }
 
     [Fact]

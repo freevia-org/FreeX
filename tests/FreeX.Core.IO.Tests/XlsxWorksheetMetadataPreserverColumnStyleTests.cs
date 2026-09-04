@@ -54,8 +54,8 @@ public sealed class XlsxWorksheetMetadataPreserverColumnStyleTests
             "out of range against the rebuilt cellXfs, crashing FreeX's own reload");
 
         // Native-only, non-stylesheet-index attributes still round-trip.
-        targetColumn.Attribute("width")?.Value.Should().Be("20");
-        targetColumn.Attribute("customWidth")?.Value.Should().Be("1");
+        targetColumn.Attribute("width")!.Value.Should().Be("20");
+        targetColumn.Attribute("customWidth")!.Value.Should().Be("1");
     }
 
     [Fact]
@@ -84,6 +84,6 @@ public sealed class XlsxWorksheetMetadataPreserverColumnStyleTests
 
         changed.Should().BeTrue();
         var targetColumn = targetRoot.Element(Ns + "cols")!.Element(Ns + "col")!;
-        targetColumn.Attribute("bestFit")?.Value.Should().Be("1");
+        targetColumn.Attribute("bestFit")!.Value.Should().Be("1");
     }
 }

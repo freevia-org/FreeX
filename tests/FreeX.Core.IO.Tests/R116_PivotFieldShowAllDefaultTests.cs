@@ -111,7 +111,7 @@ public sealed class R116_PivotFieldShowAllDefaultTests
 
         var rowFieldXml = SaveAndReadRowPivotFieldXml(workbook);
 
-        rowFieldXml.Attribute("showAll")?.Value.Should().Be("0",
+        rowFieldXml.Attribute("showAll")!.Value.Should().Be("0",
             "an explicit ShowAll=false in the model must still be written as showAll=\"0\", not omitted");
     }
 
@@ -124,6 +124,6 @@ public sealed class R116_PivotFieldShowAllDefaultTests
 
         var rowFieldXml = SaveAndReadRowPivotFieldXml(workbook);
 
-        rowFieldXml.Attribute("showAll")?.Value.Should().Be("1");
+        rowFieldXml.Attribute("showAll")!.Value.Should().Be("1");
     }
 }

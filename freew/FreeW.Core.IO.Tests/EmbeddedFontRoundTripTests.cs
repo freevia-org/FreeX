@@ -109,8 +109,8 @@ public class EmbeddedFontRoundTripTests
         var font = EntryXml(docx, "word/fontTable.xml").Root!.Element(W + "font")!;
         font.Attribute(W + "name")!.Value.Should().Be("Demo Sans");
         var embedRegular = font.Element(W + "embedRegular")!;
-        embedRegular.Attribute(R + "id")!.Value.Should().NotBeNullOrEmpty();
-        embedRegular.Attribute(W + "fontKey")!.Value.Should().NotBeNullOrEmpty();
+        embedRegular.Attribute(R + "id")?.Value.Should().NotBeNullOrEmpty();
+        embedRegular.Attribute(W + "fontKey")?.Value.Should().NotBeNullOrEmpty();
         font.Element(W + "embedBold").Should().NotBeNull();
     }
 

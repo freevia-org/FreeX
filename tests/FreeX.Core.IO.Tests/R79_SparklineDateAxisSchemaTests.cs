@@ -169,7 +169,7 @@ public sealed class R79_SparklineDateAxisSchemaTests
         var wsXml = ReadWorksheetXml(packageStream, "xl/worksheets/sheet1.xml");
         var group = SparklineGroup(wsXml);
 
-        group.Attribute("dateAxis")?.Value.Should().Be("1",
+        group.Attribute("dateAxis")!.Value.Should().Be("1",
             "real Excel gates the date-axis range with a dateAxis=\"1\" attribute on the group itself");
 
         group.Elements().Should().NotContain(e =>

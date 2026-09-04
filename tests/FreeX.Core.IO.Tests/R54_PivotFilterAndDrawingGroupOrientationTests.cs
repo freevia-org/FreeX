@@ -140,11 +140,11 @@ public sealed class R54_PivotFilterAndDrawingGroupOrientationTests
 
         var itemsXml = ReadPivotFieldItems(saved, fieldIndex: 0);
         itemsXml.Should().HaveCount(3, "one <item> per shared item (East, West) plus the trailing default marker");
-        itemsXml[0].Attribute("x")?.Value.Should().Be("0");
+        itemsXml[0].Attribute("x")!.Value.Should().Be("0");
         itemsXml[0].Attribute("hidden").Should().BeNull("East is selected/visible");
-        itemsXml[1].Attribute("x")?.Value.Should().Be("1");
-        itemsXml[1].Attribute("hidden")?.Value.Should().Be("1", "West was unchecked, so it must be hidden");
-        itemsXml[2].Attribute("t")?.Value.Should().Be("default");
+        itemsXml[1].Attribute("x")!.Value.Should().Be("1");
+        itemsXml[1].Attribute("hidden")!.Value.Should().Be("1", "West was unchecked, so it must be hidden");
+        itemsXml[2].Attribute("t")!.Value.Should().Be("default");
 
         saved.Position = 0;
         var reloaded = new XlsxFileAdapter().Load(saved);
@@ -161,7 +161,7 @@ public sealed class R54_PivotFilterAndDrawingGroupOrientationTests
 
         var itemsXml = ReadPivotFieldItems(saved, fieldIndex: 0);
         itemsXml.Should().ContainSingle();
-        itemsXml[0].Attribute("t")?.Value.Should().Be("default");
+        itemsXml[0].Attribute("t")!.Value.Should().Be("default");
         itemsXml[0].Attribute("x").Should().BeNull();
     }
 

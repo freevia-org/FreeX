@@ -20,7 +20,7 @@ public sealed class NamedRangeDialogXamlTests
 
         document.Descendants(presentation + "GroupBox")
             .Single()
-            .Attribute("Header")?.Value.Should().Be("_Defined Names");
+            .Attribute("Header")!.Value.Should().Be("_Defined Names");
 
         AssertLabelTargets(document, presentation, "_Refers to:", "RefersToBox");
 
@@ -32,10 +32,10 @@ public sealed class NamedRangeDialogXamlTests
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
         document.Descendants(presentation + "Button")
             .Single(element => element.Attribute(x + "Name")?.Value == "EditButton")
-            .Attribute("IsEnabled")?.Value.Should().Be("False");
+            .Attribute("IsEnabled")!.Value.Should().Be("False");
         document.Descendants(presentation + "Button")
             .Single(element => element.Attribute(x + "Name")?.Value == "DeleteButton")
-            .Attribute("IsEnabled")?.Value.Should().Be("False");
+            .Attribute("IsEnabled")!.Value.Should().Be("False");
 
         static void AssertLabelTargets(XDocument document, XNamespace presentation, string content, string target)
         {
@@ -43,7 +43,7 @@ public sealed class NamedRangeDialogXamlTests
                 .Descendants(presentation + "Label")
                 .Single(element => element.Attribute("Content")?.Value == content);
 
-            label.Attribute("Target")?.Value.Should().Be($"{{Binding ElementName={target}}}");
+            label.Attribute("Target")!.Value.Should().Be($"{{Binding ElementName={target}}}");
         }
     }
 
@@ -69,7 +69,7 @@ public sealed class NamedRangeDialogXamlTests
 
         document.Descendants(presentation + "ListView")
             .Single(element => element.Attribute(x + "Name")?.Value == "NamesList")
-            .Attribute("MouseDoubleClick")?.Value.Should().Be("NamesList_MouseDoubleClick");
+            .Attribute("MouseDoubleClick")!.Value.Should().Be("NamesList_MouseDoubleClick");
         source.Should().Contain("private void NamesList_MouseDoubleClick(object sender, MouseButtonEventArgs e)");
         source.Should().Contain("if (NamesList.SelectedItem is not DefinedNameRow)");
         source.Should().Contain("EditButton_Click(sender, e);");
@@ -120,14 +120,14 @@ public sealed class NamedRangeDialogXamlTests
 
         document.Descendants(presentation + "ComboBox")
             .Single(element => element.Attribute(x + "Name")?.Value == "FilterBox")
-            .Attribute("SelectionChanged")?.Value.Should().Be("FilterBox_SelectionChanged");
+            .Attribute("SelectionChanged")!.Value.Should().Be("FilterBox_SelectionChanged");
 
         var picker = document.Descendants(presentation + "Button")
             .Single(element => element.Attribute(x + "Name")?.Value == "RefersToPickerButton");
-        picker.Attribute("Click")?.Value.Should().Be("RefersToPickerButton_Click");
+        picker.Attribute("Click")!.Value.Should().Be("RefersToPickerButton_Click");
         picker.Attribute("IsEnabled").Should().BeNull("the picker state is managed from the selected name");
-        picker.Attribute("ToolTip")?.Value.Should().Be("Collapse dialog and select the referenced range");
-        picker.Attribute("AutomationProperties.Name")?.Value.Should().Be("Select referenced range");
+        picker.Attribute("ToolTip")!.Value.Should().Be("Collapse dialog and select the referenced range");
+        picker.Attribute("AutomationProperties.Name")!.Value.Should().Be("Select referenced range");
     }
 
     [Fact]
@@ -170,7 +170,7 @@ public sealed class NamedRangeDialogXamlTests
 
         document.Descendants(presentation + "TextBox")
             .Single(element => element.Attribute(x + "Name")?.Value == "RefersToBox")
-            .Attribute("IsReadOnly")?.Value.Should().Be("True");
+            .Attribute("IsReadOnly")!.Value.Should().Be("True");
     }
 
     [Fact]

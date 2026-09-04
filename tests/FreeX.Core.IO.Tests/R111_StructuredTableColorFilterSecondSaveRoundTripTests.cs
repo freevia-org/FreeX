@@ -124,7 +124,7 @@ public sealed class R111_StructuredTableColorFilterSecondSaveRoundTripTests
         var colorFilterXmlAfterSecondSave = filterColumnXmlAfterSecondSave!.Element(WorkbookNs + "colorFilter");
         colorFilterXmlAfterSecondSave.Should().NotBeNull(
             "BUG: the Table's own <colorFilter> criterion (and the dxfId naming its colour) must NOT vanish on a second save of a file that was merely loaded and re-saved");
-        colorFilterXmlAfterSecondSave!.Attribute("dxfId")?.Value.Should().Be(
+        colorFilterXmlAfterSecondSave!.Attribute("dxfId")!.Value.Should().Be(
             dxfIdBeforeSecondSave!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
             "the second save must keep pointing at the exact same dxf (colour) as the first save, not renumber or drop it");
 

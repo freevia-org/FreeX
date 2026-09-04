@@ -134,13 +134,13 @@ public sealed class AvaloniaProjectPortabilityGuardTests
             .ContainSingle("default builds and the current hosted bundle lane must stay on plain net10.0")
             .Subject;
         targetFramework.Value.Trim().Should().Be("net10.0");
-        targetFramework.Attribute("Condition")?.Value.Should().Be("'$(EnableMacOsTargetFramework)' != 'true'");
+        targetFramework.Attribute("Condition")!.Value.Should().Be("'$(EnableMacOsTargetFramework)' != 'true'");
 
         var macOsTargetFrameworks = PortableBoundaryGuard.ProjectPropertyElements(project, "TargetFrameworks")
             .Should()
             .ContainSingle("the macOS TFM must be reachable only through an explicit opt-in property")
             .Subject;
-        macOsTargetFrameworks.Attribute("Condition")?.Value.Should().Be("'$(EnableMacOsTargetFramework)' == 'true'");
+        macOsTargetFrameworks.Attribute("Condition")!.Value.Should().Be("'$(EnableMacOsTargetFramework)' == 'true'");
         macOsTargetFrameworks.Value
             .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Should()
@@ -150,7 +150,7 @@ public sealed class AvaloniaProjectPortabilityGuardTests
             .Should()
             .ContainSingle("the macOS TFM should match the bundle minimum system version")
             .Subject;
-        supportedOsVersion.Attribute("Condition")?.Value.Should().Be("'$(TargetFramework)' == 'net10.0-macos'");
+        supportedOsVersion.Attribute("Condition")!.Value.Should().Be("'$(TargetFramework)' == 'net10.0-macos'");
         supportedOsVersion.Value.Trim().Should().Be("12.0");
 
         var macOsCompileRemove = PortableBoundaryGuard.ProjectItemElements(project, "Compile")

@@ -307,7 +307,7 @@ public sealed class XlsxStructuredTableRoundTripTests
             .FirstOrDefault();
 
         formulaElement.Should().NotBeNull($"<{elementName}> must be present in the table XML");
-        formulaElement!.Attribute("array")?.Value.Should().Be(expectedValue, because);
+        formulaElement!.Attribute("array")!.Value.Should().Be(expectedValue, because);
     }
 
     private static void AssertFormulaArrayAttributeAbsent(

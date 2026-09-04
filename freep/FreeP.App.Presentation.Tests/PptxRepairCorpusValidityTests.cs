@@ -265,10 +265,10 @@ public sealed class PptxRepairCorpusValidityTests
             .Element(presentationNamespace + "par")!
             .Element(presentationNamespace + "cTn")!;
 
-        rootTimingNode.Attribute("dur")?.Value.Should().Be("indefinite");
-        rootTimingNode.Attribute("restart")?.Value.Should().Be("never");
-        rootTimingNode.Attribute("fill")?.Value.Should().Be("hold");
-        rootTimingNode.Attribute("nodeType")?.Value.Should().Be("tmRoot");
+        rootTimingNode.Attribute("dur")!.Value.Should().Be("indefinite");
+        rootTimingNode.Attribute("restart")!.Value.Should().Be("never");
+        rootTimingNode.Attribute("fill")!.Value.Should().Be("hold");
+        rootTimingNode.Attribute("nodeType")!.Value.Should().Be("tmRoot");
     }
 
     [Fact]

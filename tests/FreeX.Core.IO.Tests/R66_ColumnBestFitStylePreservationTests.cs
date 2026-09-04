@@ -126,7 +126,7 @@ public sealed class R66_ColumnBestFitStylePreservationTests
 
         changed.Should().BeTrue();
         var targetColumn = targetRoot.Element(ns + "cols")!.Element(ns + "col")!;
-        targetColumn.Attribute("bestFit")?.Value.Should().Be("1");
+        targetColumn.Attribute("bestFit")!.Value.Should().Be("1");
         targetColumn.Attribute("style").Should().BeNull(
             "the source column's style index points into the stale source stylesheet and would be " +
             "out of range against the rebuilt cellXfs");

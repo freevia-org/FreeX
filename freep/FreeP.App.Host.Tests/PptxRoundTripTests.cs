@@ -1515,8 +1515,8 @@ public sealed class PptxRoundTripTests : IDisposable
                 .ToHashSet();
 
             var customShowEl = presXml.Descendants(P + "custShow").Single();
-            customShowEl.Attribute("name")?.Value.Should().Be("Executive review");
-            customShowEl.Attribute("id")?.Value.Should().Be("7");
+            customShowEl.Attribute("name")!.Value.Should().Be("Executive review");
+            customShowEl.Attribute("id")!.Value.Should().Be("7");
 
             var customShowSlideRelIds = customShowEl.Descendants(P + "sld")
                 .Select(el => el.Attribute(R + "id")?.Value)
@@ -1913,23 +1913,23 @@ public sealed class PptxRoundTripTests : IDisposable
         var unitShape = doc.Descendants(p + "sp")
             .Single(sp => sp.Descendants(p + "cNvPr").Any(c => c.Attribute("name")?.Value == "UnitShape"));
         var bodyPr = unitShape.Descendants(a + "bodyPr").Single();
-        bodyPr.Attribute("lIns")?.Value.Should().Be(EmuText(1.25));
-        bodyPr.Attribute("rIns")?.Value.Should().Be(EmuText(2.5));
-        bodyPr.Attribute("tIns")?.Value.Should().Be(EmuText(3.75));
-        bodyPr.Attribute("bIns")?.Value.Should().Be(EmuText(4.5));
-        unitShape.Element(p + "spPr")!.Element(a + "ln")!.Attribute("w")?.Value.Should().Be(EmuText(1.75));
-        unitShape.Descendants(a + "rPr").Single().Element(a + "ln")!.Attribute("w")?.Value.Should().Be(EmuText(1.25));
+        bodyPr.Attribute("lIns")!.Value.Should().Be(EmuText(1.25));
+        bodyPr.Attribute("rIns")!.Value.Should().Be(EmuText(2.5));
+        bodyPr.Attribute("tIns")!.Value.Should().Be(EmuText(3.75));
+        bodyPr.Attribute("bIns")!.Value.Should().Be(EmuText(4.5));
+        unitShape.Element(p + "spPr")!.Element(a + "ln")!.Attribute("w")!.Value.Should().Be(EmuText(1.75));
+        unitShape.Descendants(a + "rPr").Single().Element(a + "ln")!.Attribute("w")!.Value.Should().Be(EmuText(1.25));
         var outerShadow = unitShape.Descendants(a + "outerShdw").Single();
-        outerShadow.Attribute("blurRad")?.Value.Should().Be(EmuText(1.5));
-        outerShadow.Attribute("dist")?.Value.Should().Be(EmuText(2.25));
+        outerShadow.Attribute("blurRad")!.Value.Should().Be(EmuText(1.5));
+        outerShadow.Attribute("dist")!.Value.Should().Be(EmuText(2.25));
 
         var tcPr = doc.Descendants(a + "tcPr").Single();
-        tcPr.Attribute("marL")?.Value.Should().Be(EmuText(5.5));
-        tcPr.Attribute("marR")?.Value.Should().Be(EmuText(6.25));
-        tcPr.Attribute("marT")?.Value.Should().Be(EmuText(7.0));
-        tcPr.Attribute("marB")?.Value.Should().Be(EmuText(8.75));
-        tcPr.Element(a + "lnL")!.Attribute("w")?.Value.Should().Be(EmuText(0.5));
-        tcPr.Element(a + "lnT")!.Attribute("w")?.Value.Should().Be(EmuText(1.25));
+        tcPr.Attribute("marL")!.Value.Should().Be(EmuText(5.5));
+        tcPr.Attribute("marR")!.Value.Should().Be(EmuText(6.25));
+        tcPr.Attribute("marT")!.Value.Should().Be(EmuText(7.0));
+        tcPr.Attribute("marB")!.Value.Should().Be(EmuText(8.75));
+        tcPr.Element(a + "lnL")!.Attribute("w")!.Value.Should().Be(EmuText(0.5));
+        tcPr.Element(a + "lnT")!.Attribute("w")!.Value.Should().Be(EmuText(1.25));
 
         var reloaded = PptxPackageReader.Read(path);
         var reloadedShape = reloaded.Slides[0].Shapes.Single(s => s.Name == "UnitShape");
@@ -2031,7 +2031,7 @@ public sealed class PptxRoundTripTests : IDisposable
             .FirstOrDefault(e => (string?)e.Attribute("Extension") == "gif");
 
         gifDefault.Should().NotBeNull("a Default entry for 'gif' must exist (Q2)");
-        gifDefault!.Attribute("ContentType")?.Value.Should().Be("image/gif");
+        gifDefault!.Attribute("ContentType")!.Value.Should().Be("image/gif");
 
         // Also verify there is no Override pointing at the wrong /ppt/media/media_{id}.gif path.
         var wrongOverride = doc.Root!
@@ -2556,7 +2556,7 @@ public sealed class Shape3dAndMotionRegressionTests
 
         var camera = scene3d.Element(a + "camera");
         camera.Should().NotBeNull("CT_Scene3D requires <a:camera> minOccurs=1 (U7)");
-        camera!.Attribute("prst")?.Value.Should().Be("orthographicFront",
+        camera!.Attribute("prst")!.Value.Should().Be("orthographicFront",
             "default preset must be emitted when CameraPreset is empty");
     }
 

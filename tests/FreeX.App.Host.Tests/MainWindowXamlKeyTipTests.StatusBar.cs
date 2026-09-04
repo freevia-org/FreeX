@@ -97,9 +97,9 @@ public sealed partial class MainWindowXamlKeyTipTests
             "StatusNormalViewButton",
             "StatusPageLayoutViewButton",
             "StatusPageBreakPreviewButton");
-        buttons["StatusNormalViewButton"].Attribute("Click")?.Value.Should().Be("NormalViewBtn_Click");
-        buttons["StatusPageLayoutViewButton"].Attribute("Click")?.Value.Should().Be("PageLayoutViewBtn_Click");
-        buttons["StatusPageBreakPreviewButton"].Attribute("Click")?.Value.Should().Be("PageBreakPreviewBtn_Click");
+        buttons["StatusNormalViewButton"].Attribute("Click")!.Value.Should().Be("NormalViewBtn_Click");
+        buttons["StatusPageLayoutViewButton"].Attribute("Click")!.Value.Should().Be("PageLayoutViewBtn_Click");
+        buttons["StatusPageBreakPreviewButton"].Attribute("Click")!.Value.Should().Be("PageBreakPreviewBtn_Click");
         buttons.Values.All(button =>
             string.Equals(button.Attribute("Style")?.Value, "{StaticResource StatusBarViewToggleButtonStyle}", StringComparison.Ordinal) &&
             button.Attribute("AutomationProperties.AutomationId") != null &&
@@ -130,26 +130,30 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Border")
             .Single(border => border.Attribute(x + "Name")?.Value == "StatusStatsViewport");
 
-        statsViewport.Attribute("Grid.Column")?.Value.Should().Be("1");
-        statsViewport.Attribute("ClipToBounds")?.Value.Should().Be("True");
+        statsViewport.Attribute("Grid.Column")!.Value.Should().Be("1");
+        statsViewport.Attribute("ClipToBounds")!.Value.Should().Be("True");
         statsViewport.Attribute("Margin")?.Value.Should().NotContain("180");
 
         var statsPanel = statsViewport
             .Descendants(presentation + "StackPanel")
             .Single(panel => panel.Attribute(x + "Name")?.Value == "StatusStatsPanel");
 
-        statsPanel.Attribute("HorizontalAlignment")?.Value.Should().Be("Right");
-        statsPanel.Attribute("ClipToBounds")?.Value.Should().Be("True");
+        statsPanel.Attribute("HorizontalAlignment")!.Value.Should().Be("Right");
+        statsPanel.Attribute("ClipToBounds")!.Value.Should().Be("True");
 
         var zoomControls = statusBarGrid
             .Descendants(presentation + "Grid")
             .Single(panel => panel.Attribute(x + "Name")?.Value == "StatusZoomControls");
 
+        // r353: kept as ?. -- these four are ABSENT from StatusZoomControls in MainWindow.xaml, so
+        // hardening them fails. Its sibling StatusStatsViewport does carry Grid.Column, so this is a
+        // real inconsistency, not a redesign. Whether the XAML or this expectation is right is a
+        // behaviour question to settle against Excel; see docs/review/region-coverage.md r353.
         zoomControls.Attribute("Grid.Column")?.Value.Should().Be("2");
         zoomControls.Attribute("MinWidth")?.Value.Should().NotBeNullOrWhiteSpace();
-        zoomControls.Attribute("Height")?.Value.Should().Be("24");
+        zoomControls.Attribute("Height")!.Value.Should().Be("24");
         // WS-G round 4: converted to DynamicResource so the status bar tracks the active theme.
-        zoomControls.Attribute("Background")?.Value.Should().Be("{DynamicResource FreeXStatusSurfaceBrush}");
+        zoomControls.Attribute("Background")!.Value.Should().Be("{DynamicResource FreeXStatusSurfaceBrush}");
         zoomControls.Attribute("Panel.ZIndex")?.Value.Should().Be("1");
         zoomControls.Attribute("KeyboardNavigation.TabNavigation")?.Value.Should().Be("Cycle");
         zoomControls.Attribute("KeyboardNavigation.ControlTabNavigation")?.Value.Should().Be("Cycle");
@@ -168,9 +172,9 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Single(element => element.Attribute(x + "Name")?.Value == buttonName);
 
-        button.Attribute("Width")?.Value.Should().Be("22");
-        button.Attribute("Height")?.Value.Should().Be("22");
-        button.Attribute("FontSize")?.Value.Should().Be("18");
+        button.Attribute("Width")!.Value.Should().Be("22");
+        button.Attribute("Height")!.Value.Should().Be("22");
+        button.Attribute("FontSize")!.Value.Should().Be("18");
         var strokeDimensions = button
             .Descendants(presentation + "Rectangle")
             .Select(rectangle => (Width: rectangle.Attribute("Width")?.Value, Height: rectangle.Attribute("Height")?.Value))

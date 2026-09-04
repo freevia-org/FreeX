@@ -1778,9 +1778,9 @@ public partial class FileAdapterSmokeTests
                 .Should()
                 .ContainSingle()
                 .Which;
-            transform.Attribute("rot")?.Value.Should().Be("1980000");
-            transform.Attribute("flipH")?.Value.Should().Be("1");
-            transform.Attribute("flipV")?.Value.Should().Be("1");
+            transform.Attribute("rot")!.Value.Should().Be("1980000");
+            transform.Attribute("flipH")!.Value.Should().Be("1");
+            transform.Attribute("flipV")!.Value.Should().Be("1");
         }
 
         ms.Position = 0;
@@ -1829,10 +1829,10 @@ public partial class FileAdapterSmokeTests
             var drawingXml = LoadPackageXml(archive.GetEntry("xl/drawings/drawing1.xml")!);
             XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
             var srcRect = drawingXml.Descendants(drawingNs + "srcRect").Should().ContainSingle().Subject;
-            srcRect.Attribute("l")?.Value.Should().Be("10000");
-            srcRect.Attribute("t")?.Value.Should().Be("20000");
-            srcRect.Attribute("r")?.Value.Should().Be("15000");
-            srcRect.Attribute("b")?.Value.Should().Be("5000");
+            srcRect.Attribute("l")!.Value.Should().Be("10000");
+            srcRect.Attribute("t")!.Value.Should().Be("20000");
+            srcRect.Attribute("r")!.Value.Should().Be("15000");
+            srcRect.Attribute("b")!.Value.Should().Be("5000");
         }
 
         ms.Position = 0;
@@ -2977,7 +2977,7 @@ public partial class FileAdapterSmokeTests
             .Should().OnlyContain(row => row.Attribute("ht") == null);
         sheetXml.Descendants(sheetNs + "col")
             .Single(col => col.Attribute("min")!.Value == "1" && col.Attribute("max")!.Value == "1")
-            .Attribute("width")!.Value.Should().NotBeNullOrWhiteSpace();
+            .Attribute("width")?.Value.Should().NotBeNullOrWhiteSpace();
         sheetXml.Descendants(sheetNs + "col")
             .Where(col => col.Attribute("min")!.Value == "2" ||
                 col.Attribute("min")!.Value == "3" ||
@@ -4115,7 +4115,7 @@ public partial class FileAdapterSmokeTests
             protection.Should().NotBeNull();
             protection!.Attribute("lockStructure")!.Value.Should().Be("1");
             protection.Attribute("workbookPassword")!.Value.Should().Be("83AF");
-            protection.Attribute("workbookPassword")!.Value.Should().NotBe("password");
+            protection.Attribute("workbookPassword")?.Value.Should().NotBe("password");
         }
 
         ms.Position = 0;
@@ -4701,8 +4701,8 @@ public partial class FileAdapterSmokeTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var iconSet = worksheetXml.Descendants(worksheetNs + "iconSet").Should().ContainSingle().Subject;
 
-        iconSet.Attribute("iconSet")?.Value.Should().Be("3TrafficLights1");
-        iconSet.Element(worksheetNs + "cfIcon")?.Attribute("iconSet")?.Value.Should().Be("3Arrows");
+        iconSet.Attribute("iconSet")!.Value.Should().Be("3TrafficLights1");
+        iconSet.Element(worksheetNs + "cfIcon")?.Attribute("iconSet")!.Value.Should().Be("3Arrows");
     }
 
     [Fact]
@@ -4735,8 +4735,8 @@ public partial class FileAdapterSmokeTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var icon = worksheetXml.Descendants(worksheetNs + "cfIcon").Should().ContainSingle().Subject;
 
-        icon.Attribute("iconSet")?.Value.Should().Be("3Arrows");
-        icon.Attribute("iconId")?.Value.Should().Be("2");
+        icon.Attribute("iconSet")!.Value.Should().Be("3Arrows");
+        icon.Attribute("iconId")!.Value.Should().Be("2");
     }
 
     [Fact]
@@ -5001,7 +5001,7 @@ public partial class FileAdapterSmokeTests
             .ContainSingle(element => (string?)element.Attribute("type") == "timePeriod")
             .Subject;
 
-        rule.Attribute("timePeriod")?.Value.Should().Be("last7Days");
+        rule.Attribute("timePeriod")!.Value.Should().Be("last7Days");
     }
 
     [Fact]
@@ -5030,7 +5030,7 @@ public partial class FileAdapterSmokeTests
             .ContainSingle(element => (string?)element.Attribute("type") == "timePeriod")
             .Subject;
 
-        rule.Attribute("timePeriod")?.Value.Should().Be("today");
+        rule.Attribute("timePeriod")!.Value.Should().Be("today");
     }
 
     [Fact]
@@ -8668,7 +8668,7 @@ public partial class FileAdapterSmokeTests
             XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
             var plotChart = chartXml.Descendants(chartNs + expectedElementName).Should().ContainSingle().Subject;
             if (expectedBarDirection is not null)
-                plotChart.Element(chartNs + "barDir")?.Attribute("val")?.Value.Should().Be(expectedBarDirection);
+                plotChart.Element(chartNs + "barDir")?.Attribute("val")!.Value.Should().Be(expectedBarDirection);
             if (chartType is ChartType.Surface or ChartType.ThreeDSurface)
             {
                 plotChart.Elements(chartNs + "axId").Should().HaveCount(3);
@@ -10111,19 +10111,19 @@ public partial class FileAdapterSmokeTests
             chartXml.Descendants(chartNs + "showPercent")
                 .Should()
                 .ContainSingle()
-                .Which.Attribute("val")?.Value.Should().Be("0");
+                .Which.Attribute("val")!.Value.Should().Be("0");
             chartXml.Descendants(chartNs + "showVal")
                 .Should()
                 .ContainSingle()
-                .Which.Attribute("val")?.Value.Should().Be("0");
+                .Which.Attribute("val")!.Value.Should().Be("0");
             chartXml.Descendants(chartNs + "showLegendKey")
                 .Should()
                 .ContainSingle()
-                .Which.Attribute("val")?.Value.Should().Be("1");
+                .Which.Attribute("val")!.Value.Should().Be("1");
             chartXml.Descendants(chartNs + "showBubbleSize")
                 .Should()
                 .ContainSingle()
-                .Which.Attribute("val")?.Value.Should().Be("1");
+                .Which.Attribute("val")!.Value.Should().Be("1");
         }
 
         saved.Position = 0;
@@ -10274,11 +10274,11 @@ public partial class FileAdapterSmokeTests
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
         var leaderLine = chartXml.Descendants(chartNs + "leaderLines").Should().ContainSingle().Subject;
         var line = leaderLine.Descendants(drawingNs + "ln").Should().ContainSingle().Subject;
-        line.Attribute("w")?.Value.Should().Be("25400");
+        line.Attribute("w")!.Value.Should().Be("25400");
         line.Descendants(drawingNs + "srgbClr").Should().ContainSingle()
-            .Which.Attribute("val")?.Value.Should().Be("C00000");
+            .Which.Attribute("val")!.Value.Should().Be("C00000");
         line.Descendants(drawingNs + "prstDash").Should().ContainSingle()
-            .Which.Attribute("val")?.Value.Should().Be("dash");
+            .Which.Attribute("val")!.Value.Should().Be("dash");
     }
 
     [Fact]
@@ -18567,7 +18567,7 @@ public partial class FileAdapterSmokeTests
             .Should().ContainSingle().Subject;
         customProperty.Attribute("name")!.Value.Should().Be("FreeXNativeProperty");
         customProperty.Attribute("id").Should().BeNull();
-        customProperty.Attribute(relNs + "id")!.Value.Should().NotBeNullOrWhiteSpace();
+        customProperty.Attribute(relNs + "id")?.Value.Should().NotBeNullOrWhiteSpace();
         customProperty.Attribute("unsupportedAttr").Should().BeNull();
         AssertWorksheetCustomPropertyRelationship(archive, customProperty, "sheet1-1-FreeXNativeProperty.bin");
     }
@@ -18681,7 +18681,7 @@ public partial class FileAdapterSmokeTests
 
         customProperty.Attribute("name")!.Value.Should().Be("FreeXModeledProperty");
         customProperty.Attribute("id").Should().BeNull();
-        customProperty.Attribute(relNs + "id")!.Value.Should().NotBeNullOrWhiteSpace();
+        customProperty.Attribute(relNs + "id")?.Value.Should().NotBeNullOrWhiteSpace();
         customProperty.Attribute("unsupportedAttr").Should().BeNull();
         customProperty.Elements(XName.Get("customPrChild", "urn:freex:test")).Should().BeEmpty();
         AssertWorksheetCustomPropertyRelationship(archive, customProperty, "sheet1-7-FreeXModeledProperty.bin");

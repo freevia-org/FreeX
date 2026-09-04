@@ -887,15 +887,15 @@ public sealed class ArrangeGroupAlignTests
         chExt.Should().NotBeNull("chExt must be present in grpSpPr");
 
         // FF1: chOff must equal off (identity mapping for absolute child coords).
-        chOff!.Attribute("x")?.Value.Should().Be(off!.Attribute("x")?.Value,
+        chOff!.Attribute("x")!.Value.Should().Be(off!.Attribute("x")?.Value,
             "chOff.x must equal off.x so PowerPoint renders children at absolute positions");
-        chOff.Attribute("y")?.Value.Should().Be(off.Attribute("y")?.Value,
+        chOff.Attribute("y")!.Value.Should().Be(off.Attribute("y")?.Value,
             "chOff.y must equal off.y so PowerPoint renders children at absolute positions");
 
         // FF1: chExt must equal ext.
-        chExt!.Attribute("cx")?.Value.Should().Be(ext!.Attribute("cx")?.Value,
+        chExt!.Attribute("cx")!.Value.Should().Be(ext!.Attribute("cx")?.Value,
             "chExt.cx must equal ext.cx for identity child scale");
-        chExt.Attribute("cy")?.Value.Should().Be(ext.Attribute("cy")?.Value,
+        chExt.Attribute("cy")!.Value.Should().Be(ext.Attribute("cy")?.Value,
             "chExt.cy must equal ext.cy for identity child scale");
     }
 

@@ -118,7 +118,7 @@ public sealed partial class MainWindowXamlKeyTipTests
                 .Descendants(presentation + "Button")
                 .Single(element => element.Attribute(x + "Name")?.Value == buttonName);
 
-            button.Attribute("Style")?.Value.Should().Be("{StaticResource StatusBarZoomButtonStyle}");
+            button.Attribute("Style")!.Value.Should().Be("{StaticResource StatusBarZoomButtonStyle}");
         }
 
         static XElement ResourceStyle(XDocument document, XNamespace presentation, XNamespace x, string key) =>
@@ -142,7 +142,7 @@ public sealed partial class MainWindowXamlKeyTipTests
         }
 
         var closeStyle = ResourceStyle(resources, presentation, x, "CloseSysBtnStyle");
-        closeStyle.Attribute("BasedOn")?.Value.Should().Be("{StaticResource SysBtnStyle}");
+        closeStyle.Attribute("BasedOn")!.Value.Should().Be("{StaticResource SysBtnStyle}");
         closeStyle
             .Descendants(presentation + "Trigger")
             .Where(trigger => trigger.Attribute("Property")?.Value == "IsMouseOver")

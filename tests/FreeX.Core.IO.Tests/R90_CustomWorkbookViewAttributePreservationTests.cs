@@ -185,11 +185,11 @@ public sealed class R90_CustomWorkbookViewAttributePreservationTests
         }
 
         var customWorkbookView = ReadCustomWorkbookView(targetPkg);
-        customWorkbookView.Attribute("autoUpdate")?.Value.Should().Be("1",
+        customWorkbookView.Attribute("autoUpdate")!.Value.Should().Be("1",
             "the source file's autoUpdate value must survive a save that never touched the custom view");
-        customWorkbookView.Attribute("mergeInterval")?.Value.Should().Be("120",
+        customWorkbookView.Attribute("mergeInterval")!.Value.Should().Be("120",
             "the source file's mergeInterval value must survive a save that never touched the custom view");
-        customWorkbookView.Attribute("personalView")?.Value.Should().Be("1",
+        customWorkbookView.Attribute("personalView")!.Value.Should().Be("1",
             "the source file's personalView value must survive a save that never touched the custom view");
     }
 

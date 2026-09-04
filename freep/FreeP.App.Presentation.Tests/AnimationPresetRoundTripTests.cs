@@ -1006,7 +1006,7 @@ public sealed class AnimationPresetRoundTripTests
             .Attribute("presetID")!.Value.Should().Be(expectedPresetId.ToString());
         colorBehavior.Element(p + "clrFrom")!.Element(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main") + "srgbClr")!
             .Attribute("val")!.Value.Should().Be("FF0000");
-        colorBehavior.Descendants(p + "cTn").Single().Attribute("id")!.Value.Should().NotBe("77");
+        colorBehavior.Descendants(p + "cTn").Single().Attribute("id")?.Value.Should().NotBe("77");
     }
 
     [Theory]

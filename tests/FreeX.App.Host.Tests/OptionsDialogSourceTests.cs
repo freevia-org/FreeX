@@ -257,7 +257,7 @@ public sealed partial class OptionsDialogSourceTests
 
 
 
-        checkBox.Attribute("IsEnabled")?.Value.Should().Be("False");
+        checkBox.Attribute("IsEnabled")!.Value.Should().Be("False");
 
     }
 

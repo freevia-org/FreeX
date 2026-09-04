@@ -137,9 +137,9 @@ public sealed class LinkedOleObjectRoundTripTests : IDisposable
             $"p:oleObj/@r:id=\"{emittedRid}\" must resolve to a Relationship element in slide1.xml.rels " +
             "— an unresolved r:id is an invalid OOXML package (PowerPoint 'repair' prompt)");
 
-        matching!.Attribute("TargetMode")?.Value.Should().Be("External",
+        matching!.Attribute("TargetMode")!.Value.Should().Be("External",
             "a linked OLE object's relationship must be External, not an internal package part");
-        matching.Attribute("Target")?.Value.Should().Be(linkTarget,
+        matching.Attribute("Target")!.Value.Should().Be(linkTarget,
             "the link target must be preserved verbatim, not dropped");
 
         // No embeddings/ zip entry should have been written for a linked (non-embedded) object —

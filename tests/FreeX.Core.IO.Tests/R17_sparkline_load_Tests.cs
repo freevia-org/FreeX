@@ -55,7 +55,7 @@ public sealed class R17_sparkline_load_Tests
             using var entryStream = entry.Open();
             var wsXml = XDocument.Load(entryStream);
             var grp = SparklineGroups(wsXml).Single();
-            grp.Attribute("dateAxis")?.Value.Should().Be("1");
+            grp.Attribute("dateAxis")!.Value.Should().Be("1");
             grp.Elements().Should().Contain(e =>
                 string.Equals(e.Name.LocalName, "f", StringComparison.OrdinalIgnoreCase));
         }
@@ -86,7 +86,7 @@ public sealed class R17_sparkline_load_Tests
             using var entryStream = entry.Open();
             var wsXml = XDocument.Load(entryStream);
             var grp = SparklineGroups(wsXml).Single();
-            grp.Attribute("dateAxis")?.Value.Should().Be("1",
+            grp.Attribute("dateAxis")!.Value.Should().Be("1",
                 "resaving a reloaded workbook must not silently drop the date-axis setting");
             grp.Elements().Should().Contain(e =>
                 string.Equals(e.Name.LocalName, "f", StringComparison.OrdinalIgnoreCase),

@@ -38,10 +38,10 @@ public sealed class R309_PreservedPartsCopyFromCompletenessTests
         var copy = new PreservedParts();
         copy.CopyFrom(source);
 
-        copy.OriginalCoreProperties?.Attribute("id")?.Value.Should().Be("r309-core");
-        copy.OriginalSettings?.Attribute("id")?.Value.Should().Be("r309-settings");
-        copy.OriginalNumbering?.Attribute("id")?.Value.Should().Be("r309-numbering");
-        copy.OriginalCustomProperties?.Attribute("id")?.Value.Should().Be("r309-custom");
+        copy.OriginalCoreProperties?.Attribute("id")!.Value.Should().Be("r309-core");
+        copy.OriginalSettings?.Attribute("id")!.Value.Should().Be("r309-settings");
+        copy.OriginalNumbering?.Attribute("id")!.Value.Should().Be("r309-numbering");
+        copy.OriginalCustomProperties?.Attribute("id")!.Value.Should().Be("r309-custom");
         copy.WebExtensions.Should().NotBeNull();
         copy.WebExtensions!.Xml.Should().Be("<we id=\"r309-we\" />");
         copy.WebExtensions.References.Should().ContainSingle()

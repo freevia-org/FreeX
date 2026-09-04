@@ -54,7 +54,7 @@ public sealed class R36_PivotCacheDataFieldAndFilterTests
         var pivotXml = XlsxPackageTestHelper.ReadPackageXml(saved, "xl/pivotTables/pivotTable1.xml");
         var dataFieldXml = pivotXml.Root!.Element(WorkbookNs + "dataFields")!.Element(WorkbookNs + "dataField")!;
 
-        dataFieldXml.Attribute("showDataAs")?.Value.Should().Be("runTotal");
+        dataFieldXml.Attribute("showDataAs")!.Value.Should().Be("runTotal");
         dataFieldXml.Attribute("showValuesAs").Should().BeNull();
 
         saved.Position = 0;
@@ -117,8 +117,8 @@ public sealed class R36_PivotCacheDataFieldAndFilterTests
             .First(field => string.Equals(field.Attribute("name")?.Value, "Region", StringComparison.Ordinal))
             .Element(WorkbookNs + "fieldGroup")!
             .Element(WorkbookNs + "rangePr")!;
-        rangePr.Attribute("startDate")?.Value.Should().Be("2024-03-01T00:00:00");
-        rangePr.Attribute("endDate")?.Value.Should().Be("2025-02-28T00:00:00");
+        rangePr.Attribute("startDate")!.Value.Should().Be("2024-03-01T00:00:00");
+        rangePr.Attribute("endDate")!.Value.Should().Be("2025-02-28T00:00:00");
         rangePr.Attribute("startNum").Should().BeNull();
         rangePr.Attribute("endNum").Should().BeNull();
 
@@ -152,8 +152,8 @@ public sealed class R36_PivotCacheDataFieldAndFilterTests
             .First(field => string.Equals(field.Attribute("name")?.Value, "Region", StringComparison.Ordinal))
             .Element(WorkbookNs + "fieldGroup")!
             .Element(WorkbookNs + "rangePr")!;
-        rangePr.Attribute("startNum")?.Value.Should().Be("0");
-        rangePr.Attribute("endNum")?.Value.Should().Be("100");
+        rangePr.Attribute("startNum")!.Value.Should().Be("0");
+        rangePr.Attribute("endNum")!.Value.Should().Be("100");
         rangePr.Attribute("startDate").Should().BeNull();
         rangePr.Attribute("endDate").Should().BeNull();
 

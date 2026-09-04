@@ -57,7 +57,7 @@ public sealed class R25_IconSetX14Tests
         // The legacy (base-schema) cfRule must NOT carry the x14-only style value: "3Stars" is not a
         // member of ST_IconSetType, and writing it there is schema-invalid OOXML.
         var legacyIconSet = worksheetXml.Descendants(worksheetNs + "iconSet").Should().ContainSingle().Subject;
-        legacyIconSet.Attribute("iconSet")!.Value.Should().NotBe("3Stars");
+        legacyIconSet.Attribute("iconSet")?.Value.Should().NotBe("3Stars");
 
         // It must instead carry an extLst/x14:id link so a real x14 reader can find the extended rule.
         var legacyCfRule = legacyIconSet.Parent!;
@@ -120,7 +120,7 @@ public sealed class R25_IconSetX14Tests
 
         var legacyIconSet = worksheetXml.Descendants(worksheetNs + "iconSet").Should().ContainSingle().Subject;
         legacyIconSet.Attribute("iconSet")!.Value.Should().Be("3TrafficLights1");
-        legacyIconSet.Element(worksheetNs + "cfIcon")?.Attribute("iconSet")?.Value.Should().Be("3Arrows");
+        legacyIconSet.Element(worksheetNs + "cfIcon")?.Attribute("iconSet")!.Value.Should().Be("3Arrows");
 
         // No x14 machinery should be involved for an ordinary base style.
         legacyIconSet.Parent!.Element(worksheetNs + "extLst").Should().BeNull(

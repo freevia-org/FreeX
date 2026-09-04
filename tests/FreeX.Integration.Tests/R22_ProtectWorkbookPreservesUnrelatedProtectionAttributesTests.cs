@@ -74,7 +74,7 @@ public sealed class R22_ProtectWorkbookPreservesUnrelatedProtectionAttributesTes
         savedProtection.Attribute("lockStructure")!.Value.Should().Be("1");
         savedProtection.Attribute("workbookPassword").Should().NotBeNull(
             "the new password must still be written");
-        savedProtection.Attribute("workbookPassword")!.Value.Should().NotBe("CACA",
+        savedProtection.Attribute("workbookPassword")?.Value.Should().NotBe("CACA",
             "the old password's legacy hash must be replaced by the new one, not left stale");
 
         // And the new password actually unlocks the reloaded workbook.

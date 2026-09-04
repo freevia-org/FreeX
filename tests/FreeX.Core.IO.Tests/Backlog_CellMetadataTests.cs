@@ -106,7 +106,7 @@ public sealed class Backlog_cellmetadata_Tests
         hyperlink.Should().NotBeNull(
             "a bounded-range hyperlink stripped at load time because it exceeds the per-cell materialization " +
             "cap must still be re-emitted verbatim on a full (non-patch) save");
-        hyperlink!.Attribute("location")?.Value.Should().Be("Sheet1!A1");
+        hyperlink!.Attribute("location")!.Value.Should().Be("Sheet1!A1");
     }
 
     [Fact]
@@ -181,6 +181,9 @@ public sealed class Backlog_cellmetadata_Tests
         var savedCells = LoadSavedCellsByAddress(saved);
 
         savedCells.Should().ContainKey("A2");
+        // r353: kept as ?. deliberately. Hardening this to ! makes the test FAIL, because the
+        // attribute really is absent -- a live defect this vacuous assertion has been hiding. See
+        // docs/review/region-coverage.md r353; hardened with the fix.
         savedCells["A2"].Attribute("vm")?.Value.Should().Be(
             "1",
             "an unedited rich-value cell's t/formula/<v> still match what the vm metadata was captured " +
@@ -219,7 +222,7 @@ public sealed class Backlog_cellmetadata_Tests
         var savedCells = LoadSavedCellsByAddress(saved);
 
         savedCells.Should().ContainKey("A2");
-        savedCells["A2"].Attribute("ph")?.Value.Should().Be(
+        savedCells["A2"].Attribute("ph")!.Value.Should().Be(
             "1",
             "non-rich-value native cell attributes (e.g. ph) are unaffected by the vm/cm value-equality guard");
     }

@@ -47,7 +47,7 @@ public sealed class R53_CellStyleNumFmtAndAlignmentTests
 
         var targetCellXfs = targetRoot.Element(WorkbookNs + "cellXfs")!.Elements(WorkbookNs + "xf").ToList();
         targetCellXfs.Should().HaveCount(2);
-        targetCellXfs[1].Attribute("xfId")?.Value.Should().Be(recoveredXfId,
+        targetCellXfs[1].Attribute("xfId")!.Value.Should().Be(recoveredXfId,
             "the source's custom numFmtId=164 (\"0%\") and the rebuilt target's canonicalized builtin " +
             "numFmtId=9 render the IDENTICAL format, so the cell's rebuilt xf must still be reconnected " +
             "to the recovered 'PercentReport' named style instead of being left at xfId=\"0\"");
@@ -70,7 +70,7 @@ public sealed class R53_CellStyleNumFmtAndAlignmentTests
         var recoveredXfId = goodStyle.Attribute("xfId")!.Value;
 
         var targetCellXfs = targetRoot.Element(WorkbookNs + "cellXfs")!.Elements(WorkbookNs + "xf").ToList();
-        targetCellXfs[1].Attribute("xfId")?.Value.Should().Be(recoveredXfId,
+        targetCellXfs[1].Attribute("xfId")!.Value.Should().Be(recoveredXfId,
             "two builtin-numFmtId xfs that render identically must still reconnect as before this fix");
     }
 
@@ -95,10 +95,10 @@ public sealed class R53_CellStyleNumFmtAndAlignmentTests
 
         var targetCellXfs = targetRoot.Element(WorkbookNs + "cellXfs")!.Elements(WorkbookNs + "xf").ToList();
         targetCellXfs.Should().HaveCount(3);
-        targetCellXfs[1].Attribute("xfId")?.Value.Should().Be(leftStyleXfId,
+        targetCellXfs[1].Attribute("xfId")!.Value.Should().Be(leftStyleXfId,
             "the two named styles differ only by alignment, which the signature must now include, so " +
             "each cell's rebuilt xf must reconnect to its own recovered named style");
-        targetCellXfs[2].Attribute("xfId")?.Value.Should().Be(centerStyleXfId,
+        targetCellXfs[2].Attribute("xfId")!.Value.Should().Be(centerStyleXfId,
             "the two named styles differ only by alignment, which the signature must now include, so " +
             "each cell's rebuilt xf must reconnect to its own recovered named style");
     }
@@ -118,7 +118,7 @@ public sealed class R53_CellStyleNumFmtAndAlignmentTests
         var targetRoot = LoadStylesheet(targetPackage).Root!;
         var targetCellXfs = targetRoot.Element(WorkbookNs + "cellXfs")!.Elements(WorkbookNs + "xf").ToList();
         targetCellXfs.Should().HaveCount(2);
-        targetCellXfs[1].Attribute("xfId")?.Value.Should().Match(value => value == null || value == "0",
+        targetCellXfs[1].Attribute("xfId")!.Value.Should().Match(value => value == null || value == "0",
             "two named styles that render byte-identically (including alignment) must remain an " +
             "unresolvable collision, not be arbitrarily reconnected to one of them");
     }

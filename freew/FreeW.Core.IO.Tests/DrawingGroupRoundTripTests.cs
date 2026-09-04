@@ -459,7 +459,7 @@ public sealed class DrawingGroupRoundTripTests
         children[0].Descendants(Wps + "txbx").Should().NotBeEmpty();
 
         children[1].Descendants(A + "glow").Should().NotBeEmpty();
-        children[1].Descendants(A + "prstTxWarp").Single().Attribute("prst")?.Value.Should().Be("textWave1");
+        children[1].Descendants(A + "prstTxWarp").Single().Attribute("prst")!.Value.Should().Be("textWave1");
     }
 
     [Fact]

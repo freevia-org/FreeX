@@ -71,7 +71,7 @@ public sealed class HeaderFooterDialogXamlTests
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
-        document.Root!.Attribute("ResizeMode")?.Value.Should().Be("CanResize");
+        document.Root!.Attribute("ResizeMode")!.Value.Should().Be("CanResize");
         document.Root!.Attribute("MinWidth")?.Value.Should().NotBeNullOrWhiteSpace();
         document.Root!.Attribute("MinHeight")?.Value.Should().NotBeNullOrWhiteSpace();
 

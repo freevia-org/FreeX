@@ -4510,7 +4510,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Subject;
         customProperty.Attribute("name")!.Value.Should().Be("FreeXModeledProperty");
         customProperty.Attribute("id").Should().BeNull();
-        customProperty.Attribute(relNs + "id")!.Value.Should().NotBeNullOrWhiteSpace();
+        customProperty.Attribute(relNs + "id")?.Value.Should().NotBeNullOrWhiteSpace();
         customProperty.Attribute("unsupportedAttr").Should().BeNull();
         customProperty.Elements().Should().BeEmpty();
     }
@@ -5822,7 +5822,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         printOptions.HasElements.Should().BeFalse();
 
         var pageMargins = ReadWorksheetChildElement(stream, "pageMargins");
-        pageMargins.Attribute("left")!.Value.Should().NotBe("not-a-number");
+        pageMargins.Attribute("left")?.Value.Should().NotBe("not-a-number");
         pageMargins.Attribute("customAttr").Should().BeNull();
         pageMargins.HasElements.Should().BeFalse();
 

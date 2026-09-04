@@ -1058,7 +1058,7 @@ public class DocxRoundTripTests
 
         var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
         var tableProperties = WriteDocumentXml(doc).Descendants(ns + "tblPr").Single();
-        tableProperties.Element(ns + "tblLayout")?.Attribute(ns + "type")?.Value.Should().Be("fixed");
+        tableProperties.Element(ns + "tblLayout")?.Attribute(ns + "type")!.Value.Should().Be("fixed");
         tableProperties.Elements().ToList().IndexOf(tableProperties.Element(ns + "tblLayout")!)
             .Should().BeLessThan(tableProperties.Elements().ToList().IndexOf(tableProperties.Element(ns + "tblCellMar")!));
 
@@ -1075,7 +1075,7 @@ public class DocxRoundTripTests
         doc.Blocks.Add(table);
 
         var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
-        WriteDocumentXml(doc).Descendants(ns + "tblLayout").Single().Attribute(ns + "type")?.Value.Should().Be("autofit");
+        WriteDocumentXml(doc).Descendants(ns + "tblLayout").Single().Attribute(ns + "type")!.Value.Should().Be("autofit");
 
         var result = RoundTrip(doc);
         result.Blocks.OfType<Table>().Single().AutoFit.Should().Be(AutoFitMode.Contents);
@@ -1100,9 +1100,9 @@ public class DocxRoundTripTests
 
         var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
         var tableProperties = WriteDocumentXml(doc).Descendants(ns + "tblPr").Single();
-        tableProperties.Element(ns + "tblLayout")?.Attribute(ns + "type")?.Value.Should().Be("autofit");
+        tableProperties.Element(ns + "tblLayout")?.Attribute(ns + "type")!.Value.Should().Be("autofit");
         var tblW = tableProperties.Element(ns + "tblW");
-        tblW?.Attribute(ns + "type")?.Value.Should().Be("pct", "Window autofit must be distinguishable from Contents");
+        tblW?.Attribute(ns + "type")!.Value.Should().Be("pct", "Window autofit must be distinguishable from Contents");
 
         var result = RoundTrip(doc);
         var readTable = result.Blocks.OfType<Table>().Single();
@@ -1473,12 +1473,12 @@ public class DocxRoundTripTests
         var xml = WriteDocumentXml(document);
         var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
         var look = xml.Descendants(ns + "tblLook").Single();
-        look.Attribute(ns + "firstRow")?.Value.Should().Be("1");
-        look.Attribute(ns + "lastRow")?.Value.Should().Be("1");
-        look.Attribute(ns + "firstColumn")?.Value.Should().Be("1");
-        look.Attribute(ns + "lastColumn")?.Value.Should().Be("1");
-        look.Attribute(ns + "noHBand")?.Value.Should().Be("0");
-        look.Attribute(ns + "noVBand")?.Value.Should().Be("0");
+        look.Attribute(ns + "firstRow")!.Value.Should().Be("1");
+        look.Attribute(ns + "lastRow")!.Value.Should().Be("1");
+        look.Attribute(ns + "firstColumn")!.Value.Should().Be("1");
+        look.Attribute(ns + "lastColumn")!.Value.Should().Be("1");
+        look.Attribute(ns + "noHBand")!.Value.Should().Be("0");
+        look.Attribute(ns + "noVBand")!.Value.Should().Be("0");
 
         RoundTrip(document).Blocks.OfType<Table>().Single().Formatting.Should().Be(formatting);
     }
@@ -4494,7 +4494,7 @@ public class DocxRoundTripTests
         var suppressTokens = xml.Descendants(w + "suppressAutoHyphens").ToList();
         suppressTokens.Should().HaveCount(2);
         suppressTokens[0].Attribute(w + "val").Should().BeNull();
-        suppressTokens[1].Attribute(w + "val")?.Value.Should().Be("0");
+        suppressTokens[1].Attribute(w + "val")!.Value.Should().Be("0");
 
         var result = RoundTrip(doc).Paragraphs.ToList();
         result[0].Formatting.SuppressAutoHyphens.Should().BeFalse();

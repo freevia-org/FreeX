@@ -208,7 +208,7 @@ public sealed partial class XsltWorkbookTransformTests
         var document = XDocument.Parse(xml);
         document.Root?.Name.Should().Be(XName.Get("rows", "urn:freex:test"));
         document.Root?.Elements().Single().Name.Should().Be(XName.Get("row", "urn:freex:test"));
-        document.Root?.Elements().Single().Attribute(XName.Get("name", "urn:freex:test"))?.Value.Should().Be("Golf");
+        document.Root?.Elements().Single().Attribute(XName.Get("name", "urn:freex:test"))!.Value.Should().Be("Golf");
         xml.Should().Contain("xmlns:fx=\"urn:freex:test\"");
     }
 
@@ -225,7 +225,7 @@ public sealed partial class XsltWorkbookTransformTests
         var document = XDocument.Parse(xml);
         document.Root?.Name.Should().Be(XName.Get("rows", "urn:freex:test"));
         document.Root?.Elements().Single().Name.Should().Be(XName.Get("row", "urn:freex:test"));
-        document.Root?.Elements().Single().Attribute("name")?.Value.Should().Be("Hotel");
+        document.Root?.Elements().Single().Attribute("name")!.Value.Should().Be("Hotel");
         xml.Should().Contain("xmlns=\"urn:freex:test\"");
     }
 

@@ -173,15 +173,15 @@ public sealed class R76_PhoneticGuidePreservationTests
         var savedRPh = savedIs!.Elements(ns + "rPh").ToList();
         savedRPh.Should().ContainSingle(
             "the phonetic guide's <rPh> run must survive an edit to the cell's own run formatting");
-        savedRPh[0].Attribute("sb")?.Value.Should().Be("0");
-        savedRPh[0].Attribute("eb")?.Value.Should().Be("4");
+        savedRPh[0].Attribute("sb")!.Value.Should().Be("0");
+        savedRPh[0].Attribute("eb")!.Value.Should().Be("4");
         savedRPh[0].Element(ns + "t")?.Value.Should().Be("ri-chi");
 
         var savedPhoneticPr = savedIs.Element(ns + "phoneticPr");
         savedPhoneticPr.Should().NotBeNull(
             "the <phoneticPr> element must survive an edit to the cell's own run formatting");
-        savedPhoneticPr!.Attribute("fontId")?.Value.Should().Be("1");
-        savedPhoneticPr.Attribute("type")?.Value.Should().Be("noConversion");
+        savedPhoneticPr!.Attribute("fontId")!.Value.Should().Be("1");
+        savedPhoneticPr.Attribute("type")!.Value.Should().Be("noConversion");
 
         // The runs themselves must also carry the edit (Bold=true) and their text.
         saved.Position = 0;

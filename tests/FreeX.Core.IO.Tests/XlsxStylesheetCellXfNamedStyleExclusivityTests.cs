@@ -41,7 +41,7 @@ public sealed class XlsxStylesheetCellXfNamedStyleExclusivityTests
             .ToList();
 
         targetCellXfs.Should().HaveCount(2);
-        targetCellXfs[1].Attribute("xfId")?.Value.Should().Match(value => value == null || value == "0",
+        targetCellXfs[1].Attribute("xfId")!.Value.Should().Match(value => value == null || value == "0",
             "the shared rebuilt xf also renders like a plain (non-named-style) source cell, so it must not " +
             "be reconnected to the recovered 'Good' named style — doing so would wrongly enroll the plain " +
             "cell in the style gallery too");
@@ -65,7 +65,7 @@ public sealed class XlsxStylesheetCellXfNamedStyleExclusivityTests
 
         var targetCellXfs = targetRoot.Element(WorkbookNs + "cellXfs")!.Elements(WorkbookNs + "xf").ToList();
         targetCellXfs.Should().HaveCount(2);
-        targetCellXfs[1].Attribute("xfId")?.Value.Should().Be(recoveredXfId,
+        targetCellXfs[1].Attribute("xfId")!.Value.Should().Be(recoveredXfId,
             "with no colliding plain cell in the source, the rebuilt xf must still be reconnected to the " +
             "recovered 'Good' named style as before");
     }

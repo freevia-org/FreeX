@@ -154,12 +154,12 @@ public sealed class XlsxLegacyCommentVmlBugsTests
         a6Shape.Should().NotBeNull("the note that was at A5 must have a shape at its new address A6");
         a11Shape.Should().NotBeNull("the note that was at A10 must have a shape at its new address A11");
 
-        a6Shape!.Attribute("style")?.Value.Should().Contain("width:200pt")
+        a6Shape!.Attribute("style")!.Value.Should().Contain("width:200pt")
             .And.Contain("height:120pt",
                 "A6 (originally A5's shape) must keep its OWN custom geometry, not A10's default " +
                 "box (R37-io-comments-legacy-vml-2-2)");
 
-        a11Shape!.Attribute("style")?.Value.Should().Contain("width:108pt")
+        a11Shape!.Attribute("style")!.Value.Should().Contain("width:108pt")
             .And.Contain("height:59.25pt",
                 "A11 (originally A10's shape) must keep its OWN default geometry, not A5's custom " +
                 "200x120 box (R37-io-comments-legacy-vml-2-2)");
@@ -188,8 +188,8 @@ public sealed class XlsxLegacyCommentVmlBugsTests
         a5Shape.Should().NotBeNull();
         a10Shape.Should().NotBeNull();
 
-        a5Shape!.Attribute("style")?.Value.Should().Contain("width:200pt").And.Contain("height:120pt");
-        a10Shape!.Attribute("style")?.Value.Should().Contain("width:108pt").And.Contain("height:59.25pt");
+        a5Shape!.Attribute("style")!.Value.Should().Contain("width:200pt").And.Contain("height:120pt");
+        a10Shape!.Attribute("style")!.Value.Should().Contain("width:108pt").And.Contain("height:59.25pt");
     }
 
     // ─────────────────────────────────────────────────────────────────────────

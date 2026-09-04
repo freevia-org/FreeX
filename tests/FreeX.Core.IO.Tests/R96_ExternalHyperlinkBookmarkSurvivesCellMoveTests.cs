@@ -153,9 +153,9 @@ public sealed class R96_ExternalHyperlinkBookmarkSurvivesCellMoveTests
         var hyperlinks = ReadHyperlinkElements(package);
         hyperlinks.Select(element => element.Attribute("ref")?.Value)
             .Should().Equal("A1", "a1", "B1");
-        hyperlinks[0].Attribute("location")?.Value.Should().Be("first-location");
-        hyperlinks[1].Attribute("location")?.Value.Should().Be("duplicate-location");
-        hyperlinks[2].Attribute("location")?.Value.Should().Be("existing-location");
+        hyperlinks[0].Attribute("location")!.Value.Should().Be("first-location");
+        hyperlinks[1].Attribute("location")!.Value.Should().Be("duplicate-location");
+        hyperlinks[2].Attribute("location")!.Value.Should().Be("existing-location");
         hyperlinks.Should().NotContain(element =>
             string.Equals((string?)element.Attribute("ref"), "C1", StringComparison.OrdinalIgnoreCase));
     }

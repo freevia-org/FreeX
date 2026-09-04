@@ -188,7 +188,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
             .Element(X14Ns + "dataValidations")?
             .Element(X14Ns + "dataValidation");
         x14Dv.Should().NotBeNull("x14:dataValidation element must exist");
-        x14Dv!.Attribute("type")?.Value.Should().Be("list");
+        x14Dv!.Attribute("type")!.Value.Should().Be("list");
 
         var formula = x14Dv
             .Element(X14Ns + "formula1")?

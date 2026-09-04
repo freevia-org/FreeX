@@ -82,13 +82,13 @@ public sealed class R35_CollapsedGroupAnchorRoundTripTests
         var row3 = GetRow(worksheetXml, 3);
 
         // Hidden detail rows: hidden="1", but no spurious collapsed="1".
-        row1.Attribute("hidden")?.Value.Should().Be("1");
+        row1.Attribute("hidden")!.Value.Should().Be("1");
         row1.Attribute("collapsed").Should().BeNull();
-        row2.Attribute("hidden")?.Value.Should().Be("1");
+        row2.Attribute("hidden")!.Value.Should().Be("1");
         row2.Attribute("collapsed").Should().BeNull();
 
         // Visible anchor row: collapsed="1", but NOT hidden.
-        row3.Attribute("collapsed")?.Value.Should().Be("1");
+        row3.Attribute("collapsed")!.Value.Should().Be("1");
         row3.Attribute("hidden").Should().BeNull();
     }
 
@@ -118,12 +118,12 @@ public sealed class R35_CollapsedGroupAnchorRoundTripTests
         var col2 = GetCol(worksheetXml, 2);
         var col3 = GetCol(worksheetXml, 3);
 
-        col1.Attribute("hidden")?.Value.Should().Be("1");
+        col1.Attribute("hidden")!.Value.Should().Be("1");
         col1.Attribute("collapsed").Should().BeNull();
-        col2.Attribute("hidden")?.Value.Should().Be("1");
+        col2.Attribute("hidden")!.Value.Should().Be("1");
         col2.Attribute("collapsed").Should().BeNull();
 
-        col3.Attribute("collapsed")?.Value.Should().Be("1");
+        col3.Attribute("collapsed")!.Value.Should().Be("1");
         col3.Attribute("hidden").Should().BeNull();
     }
 
@@ -150,8 +150,8 @@ public sealed class R35_CollapsedGroupAnchorRoundTripTests
         var worksheetXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var row4 = GetRow(worksheetXml, 4);
 
-        row4.Attribute("hidden")?.Value.Should().Be("1");
-        row4.Attribute("collapsed")?.Value.Should().Be("1");
+        row4.Attribute("hidden")!.Value.Should().Be("1");
+        row4.Attribute("collapsed")!.Value.Should().Be("1");
     }
 
     [Fact]
@@ -181,9 +181,9 @@ public sealed class R35_CollapsedGroupAnchorRoundTripTests
         var row1 = GetRow(worksheetXml, 1);
         var row2 = GetRow(worksheetXml, 2);
 
-        row1.Attribute("hidden")?.Value.Should().Be("1");
+        row1.Attribute("hidden")!.Value.Should().Be("1");
         row1.Attribute("collapsed").Should().BeNull();
-        row2.Attribute("hidden")?.Value.Should().Be("1");
+        row2.Attribute("hidden")!.Value.Should().Be("1");
         row2.Attribute("collapsed").Should().BeNull();
     }
 
@@ -366,11 +366,11 @@ public sealed class R35_CollapsedGroupAnchorRoundTripTests
         var row2 = GetRow(worksheetXml, 2);
         var row3 = GetRow(worksheetXml, 3);
 
-        row1.Attribute("hidden")?.Value.Should().Be("1");
+        row1.Attribute("hidden")!.Value.Should().Be("1");
         row1.Attribute("collapsed").Should().BeNull();
-        row2.Attribute("hidden")?.Value.Should().Be("1");
+        row2.Attribute("hidden")!.Value.Should().Be("1");
         row2.Attribute("collapsed").Should().BeNull();
-        row3.Attribute("collapsed")?.Value.Should().Be("1");
+        row3.Attribute("collapsed")!.Value.Should().Be("1");
         row3.Attribute("hidden").Should().BeNull();
     }
 }

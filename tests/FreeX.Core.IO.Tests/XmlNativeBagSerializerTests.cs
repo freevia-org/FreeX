@@ -45,10 +45,10 @@ public sealed class XmlNativeBagSerializerTests
         var second = XElement.Parse(roundTripChildren[1], LoadOptions.PreserveWhitespace);
 
         first.Name.Should().Be(XName.Get("first", "urn:freex:test"));
-        first.Attribute("id")?.Value.Should().Be("1");
+        first.Attribute("id")!.Value.Should().Be("1");
         first.Elements().Single().Name.Should().Be(XName.Get("leaf", "urn:freex:test"));
         second.Name.Should().Be(XName.Get("second", "urn:freex:test-default"));
-        second.Attribute("id")?.Value.Should().Be("2");
+        second.Attribute("id")!.Value.Should().Be("2");
     }
 
     [Fact]
@@ -88,8 +88,8 @@ public sealed class XmlNativeBagSerializerTests
         roundTripAttrs.Should().ContainKey(namespacedAttribute).WhoseValue.Should().Be("namespaced");
         roundTripChildren.Should().BeEmpty();
         changed.Should().BeTrue();
-        target.Attribute("plainFlag")?.Value.Should().Be("plain");
-        target.Attribute(XName.Get("flag", "urn:freex:test"))?.Value.Should().Be("namespaced");
+        target.Attribute("plainFlag")!.Value.Should().Be("plain");
+        target.Attribute(XName.Get("flag", "urn:freex:test"))!.Value.Should().Be("namespaced");
     }
 
     [Fact]
@@ -125,14 +125,14 @@ public sealed class XmlNativeBagSerializerTests
         roundTripAttrs.Should().BeEmpty();
         roundTripChildren.Should().ContainSingle();
         var child = XElement.Parse(roundTripChildren.Single(), LoadOptions.PreserveWhitespace);
-        child.Attribute("formula")?.Value.Should().Be("A1<B1 && \"quoted\"");
-        child.Attribute("apostrophe")?.Value.Should().Be("O'Brien");
-        child.Attribute("newline")?.Value.Should().Be("Line\nBreak");
+        child.Attribute("formula")!.Value.Should().Be("A1<B1 && \"quoted\"");
+        child.Attribute("apostrophe")!.Value.Should().Be("O'Brien");
+        child.Attribute("newline")!.Value.Should().Be("Line\nBreak");
         changed.Should().BeTrue();
         target.Elements().Should().ContainSingle();
-        target.Element("ext")?.Attribute("formula")?.Value.Should().Be("A1<B1 && \"quoted\"");
-        target.Element("ext")?.Attribute("apostrophe")?.Value.Should().Be("O'Brien");
-        target.Element("ext")?.Attribute("newline")?.Value.Should().Be("Line\nBreak");
+        target.Element("ext")?.Attribute("formula")!.Value.Should().Be("A1<B1 && \"quoted\"");
+        target.Element("ext")?.Attribute("apostrophe")!.Value.Should().Be("O'Brien");
+        target.Element("ext")?.Attribute("newline")!.Value.Should().Be("Line\nBreak");
     }
 
     [Fact]
@@ -176,8 +176,8 @@ public sealed class XmlNativeBagSerializerTests
         var changed = XmlNativeBagSerializer.ApplyToElement(target, bagValue, ["modeled"]);
 
         changed.Should().BeTrue();
-        target.Attribute("modeled")?.Value.Should().Be("model-value");
-        target.Attribute("nativeOnly")?.Value.Should().Be("preserved");
+        target.Attribute("modeled")!.Value.Should().Be("model-value");
+        target.Attribute("nativeOnly")!.Value.Should().Be("preserved");
     }
 
     [Fact]
@@ -197,8 +197,8 @@ public sealed class XmlNativeBagSerializerTests
         var changed = XmlNativeBagSerializer.ApplyToElement(target, bagValue, [modeledKey]);
 
         changed.Should().BeTrue();
-        target.Attribute(modeledName)?.Value.Should().Be("model-value");
-        target.Attribute(nativeName)?.Value.Should().Be("preserved");
+        target.Attribute(modeledName)!.Value.Should().Be("model-value");
+        target.Attribute(nativeName)!.Value.Should().Be("preserved");
     }
 
     [Fact]

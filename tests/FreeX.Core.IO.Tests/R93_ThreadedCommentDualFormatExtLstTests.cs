@@ -96,7 +96,7 @@ public sealed class R93_ThreadedCommentDualFormatExtLstTests
             elements.Should().HaveCount(2, "exactly one root + one reply, no duplication");
 
             var root = elements.Single(e => e.Attribute("parentId") is null);
-            root.Attribute("done")?.Value.Should().Be("1", "a resolved thread must stay resolved after a lossless save");
+            root.Attribute("done")!.Value.Should().Be("1", "a resolved thread must stay resolved after a lossless save");
             root.Element(ThreadedCommentNs + "extLst").Should().NotBeNull("the @mention extLst must round-trip verbatim");
 
             var reply = elements.Single(e => e.Attribute("parentId") is not null);

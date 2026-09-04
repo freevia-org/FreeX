@@ -81,11 +81,11 @@ public sealed class R36Meta1_CollapsedAnchorLoadWiringTests
         var row2 = GetRow(worksheetXml, 2);
         var row3 = GetRow(worksheetXml, 3);
 
-        row1.Attribute("hidden")?.Value.Should().Be("1");
+        row1.Attribute("hidden")!.Value.Should().Be("1");
         row1.Attribute("collapsed").Should().BeNull();
-        row2.Attribute("hidden")?.Value.Should().Be("1");
+        row2.Attribute("hidden")!.Value.Should().Be("1");
         row2.Attribute("collapsed").Should().BeNull();
-        row3.Attribute("collapsed")?.Value.Should().Be("1");
+        row3.Attribute("collapsed")!.Value.Should().Be("1");
         row3.Attribute("hidden").Should().BeNull();
     }
 
@@ -125,11 +125,11 @@ public sealed class R36Meta1_CollapsedAnchorLoadWiringTests
         var col2 = GetCol(worksheetXml, 2);
         var col3 = GetCol(worksheetXml, 3);
 
-        col1.Attribute("hidden")?.Value.Should().Be("1");
+        col1.Attribute("hidden")!.Value.Should().Be("1");
         col1.Attribute("collapsed").Should().BeNull();
-        col2.Attribute("hidden")?.Value.Should().Be("1");
+        col2.Attribute("hidden")!.Value.Should().Be("1");
         col2.Attribute("collapsed").Should().BeNull();
-        col3.Attribute("collapsed")?.Value.Should().Be("1");
+        col3.Attribute("collapsed")!.Value.Should().Be("1");
         col3.Attribute("hidden").Should().BeNull();
     }
 

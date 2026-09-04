@@ -68,7 +68,7 @@ public sealed partial class WorkbookThemeDialogXamlTests
                 .Descendants(presentation + "Label")
                 .Single(element => element.Attribute("Content")?.Value == content);
 
-            label.Attribute("Target")?.Value.Should().Be($"{{Binding ElementName={target}}}");
+            label.Attribute("Target")!.Value.Should().Be($"{{Binding ElementName={target}}}");
         }
     }
 }

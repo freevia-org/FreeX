@@ -34,7 +34,7 @@ public sealed class DataBarDirectionRoundTripTests
 
         var x14DataBar = XlsxPackageTestHelper.ReadWorksheetXml(saved)
             .Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
-        x14DataBar.Attribute("direction")?.Value.Should().Be("rightToLeft");
+        x14DataBar.Attribute("direction")!.Value.Should().Be("rightToLeft");
     }
 
     [Fact]
@@ -49,7 +49,7 @@ public sealed class DataBarDirectionRoundTripTests
 
         var x14DataBar = XlsxPackageTestHelper.ReadWorksheetXml(saved)
             .Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
-        x14DataBar.Attribute("direction")?.Value.Should().Be("context");
+        x14DataBar.Attribute("direction")!.Value.Should().Be("context");
     }
 
     [Fact]
@@ -70,8 +70,8 @@ public sealed class DataBarDirectionRoundTripTests
             .Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
         x14DataBar.Attribute("direction").Should().BeNull();
         // Other existing x14 attributes on this same sibling rule still round-trip correctly.
-        x14DataBar.Attribute("border")?.Value.Should().Be("1");
-        x14DataBar.Attribute("axisPosition")?.Value.Should().Be("middle");
+        x14DataBar.Attribute("border")!.Value.Should().Be("1");
+        x14DataBar.Attribute("axisPosition")!.Value.Should().Be("middle");
     }
 
     [Fact]

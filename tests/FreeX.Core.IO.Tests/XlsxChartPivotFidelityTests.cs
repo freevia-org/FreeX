@@ -108,7 +108,7 @@ public sealed class XlsxChartPivotFidelityTests
 
         // Verify the XML actually carries the attribute
         var cacheXml = ReadPivotCacheDefinitionXml(saved);
-        cacheXml.Root!.Attribute("refreshOnLoad")?.Value.Should().Be("1",
+        cacheXml.Root!.Attribute("refreshOnLoad")!.Value.Should().Be("1",
             "refreshOnLoad=true must write refreshOnLoad=\"1\" in the XML");
 
         // Also verify reload
@@ -251,9 +251,9 @@ public sealed class XlsxChartPivotFidelityTests
         valAxis.Should().NotBeNull("Histogram must have a value axis with <cx:valScaling>");
 
         var scaling = valAxis!.Element(cx + "valScaling")!;
-        scaling.Attribute("min")?.Value.Should().Be("0");
-        scaling.Attribute("max")?.Value.Should().Be("100");
-        scaling.Attribute("majorUnit")?.Value.Should().Be("20");
+        scaling.Attribute("min")!.Value.Should().Be("0");
+        scaling.Attribute("max")!.Value.Should().Be("100");
+        scaling.Attribute("majorUnit")!.Value.Should().Be("20");
     }
 
     // ─────────────────────────────────────────────────────────────────────────

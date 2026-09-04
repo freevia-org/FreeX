@@ -43,7 +43,7 @@ public sealed class R67_ChartPointDataLabelDeleteRoundTripTests
             .Elements(ChartNs + "dLbl").Should().ContainSingle(
                 "only the one deleted point should get its own <c:dLbl> override").Subject;
         label.Element(ChartNs + "idx")!.Attribute("val")!.Value.Should().Be("1");
-        label.Element(ChartNs + "delete")?.Attribute("val")?.Value.Should().Be(
+        label.Element(ChartNs + "delete")?.Attribute("val")!.Value.Should().Be(
             "1", "the point's \"hide this label\" flag must round-trip as <c:delete val=\"1\"/>");
         label.Element(ChartNs + "showVal").Should().BeNull(
             "CT_DLbl's trailing content is delete XOR the Group_DLbl defaults -- a delete-only "
@@ -88,7 +88,7 @@ public sealed class R67_ChartPointDataLabelDeleteRoundTripTests
         var chartXml = ReadChartXml(saved);
 
         var label = chartXml.Descendants(ChartNs + "dLbl").Should().ContainSingle().Subject;
-        label.Element(ChartNs + "delete")?.Attribute("val")?.Value.Should().Be("1");
+        label.Element(ChartNs + "delete")?.Attribute("val")!.Value.Should().Be("1");
         label.Element(ChartNs + "showVal").Should().BeNull();
         label.Element(ChartNs + "dLblPos").Should().BeNull();
         label.Elements().Should().HaveCount(2);
@@ -115,7 +115,7 @@ public sealed class R67_ChartPointDataLabelDeleteRoundTripTests
         var label = chartXml.Descendants(ChartNs + "dLbl").Should().ContainSingle().Subject;
         label.Element(ChartNs + "delete").Should().BeNull(
             "a non-deleted point format must not emit <c:delete>");
-        label.Element(ChartNs + "showVal")?.Attribute("val")?.Value.Should().Be("1");
+        label.Element(ChartNs + "showVal")?.Attribute("val")!.Value.Should().Be("1");
 
         saved.Position = 0;
         var loadedChart = new XlsxFileAdapter().Load(saved).GetSheetAt(0).Charts.Should().ContainSingle().Subject;

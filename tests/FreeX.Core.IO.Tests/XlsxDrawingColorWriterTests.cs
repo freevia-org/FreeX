@@ -113,7 +113,7 @@ public sealed class XlsxDrawingColorWriterTests
         XlsxDrawingColorTint.ApplyTo(color, tint, DrawingNs);
 
         color.Element(DrawingNs + "lumMod")!.Attribute("val")!.Value.Should().Be(expectedLumMod);
-        color.Element(DrawingNs + "lumOff")?.Attribute("val")?.Value.Should().Be(expectedLumOff);
+        color.Element(DrawingNs + "lumOff")?.Attribute("val")!.Value.Should().Be(expectedLumOff);
     }
 
     [Theory]

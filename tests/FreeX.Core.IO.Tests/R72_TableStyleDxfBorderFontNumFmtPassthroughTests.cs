@@ -99,14 +99,14 @@ public sealed class R72_TableStyleDxfBorderFontNumFmtPassthroughTests
         var dxf = resultStylesXml.Root.Element(MainNs + "dxfs")!.Elements(MainNs + "dxf").ElementAt(dxfId);
 
         dxf.Element(MainNs + "font")?.Element(MainNs + "b").Should().NotBeNull("bold must survive the round trip");
-        dxf.Element(MainNs + "font")?.Element(MainNs + "color")?.Attribute("rgb")?.Value.Should().Be("FF0000FF");
+        dxf.Element(MainNs + "font")?.Element(MainNs + "color")?.Attribute("rgb")!.Value.Should().Be("FF0000FF");
 
         var bottomBorder = dxf.Element(MainNs + "border")?.Element(MainNs + "bottom");
         bottomBorder.Should().NotBeNull("the border must survive the round trip, not just fill/bold/color");
-        bottomBorder!.Attribute("style")?.Value.Should().Be("medium");
-        bottomBorder.Element(MainNs + "color")?.Attribute("rgb")?.Value.Should().Be("FF000000");
+        bottomBorder!.Attribute("style")!.Value.Should().Be("medium");
+        bottomBorder.Element(MainNs + "color")?.Attribute("rgb")!.Value.Should().Be("FF000000");
 
-        dxf.Element(MainNs + "numFmt")?.Attribute("formatCode")?.Value.Should().Be("0.00%",
+        dxf.Element(MainNs + "numFmt")?.Attribute("formatCode")!.Value.Should().Be("0.00%",
             "the numFmt must survive the round trip alongside the border and font");
     }
 
@@ -152,7 +152,7 @@ public sealed class R72_TableStyleDxfBorderFontNumFmtPassthroughTests
         dxf.Element(MainNs + "fill")?
             .Element(MainNs + "patternFill")?
             .Element(MainNs + "fgColor")?
-            .Attribute("rgb")?.Value.Should().Be("FFCCFFCC", "a fill-only dxf must still round-trip its fill color");
+            .Attribute("rgb")!.Value.Should().Be("FFCCFFCC", "a fill-only dxf must still round-trip its fill color");
         dxf.Element(MainNs + "border").Should().BeNull("no border must be fabricated for a fill-only dxf");
         dxf.Element(MainNs + "numFmt").Should().BeNull("no numFmt must be fabricated for a fill-only dxf");
     }

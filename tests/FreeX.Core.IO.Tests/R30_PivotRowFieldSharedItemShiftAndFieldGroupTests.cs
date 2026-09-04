@@ -85,9 +85,9 @@ public sealed class R30_PivotRowFieldSharedItemShiftAndFieldGroupTests
             .First(field => string.Equals(field.Attribute("name")?.Value, "Region", StringComparison.Ordinal));
         var rangePr = cacheField.Element(WorkbookNs + "fieldGroup")?.Element(WorkbookNs + "rangePr");
         rangePr.Should().NotBeNull("the native fieldGroup/rangePr must be emitted, not just the FreeX extLst");
-        rangePr!.Attribute("groupBy")?.Value.Should().Be("months");
-        rangePr.Attribute("startNum")?.Value.Should().Be("1");
-        rangePr.Attribute("endNum")?.Value.Should().Be("12");
+        rangePr!.Attribute("groupBy")!.Value.Should().Be("months");
+        rangePr.Attribute("startNum")!.Value.Should().Be("1");
+        rangePr.Attribute("endNum")!.Value.Should().Be("12");
 
         saved.Position = 0;
         var loaded = adapter.Load(saved);

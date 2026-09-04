@@ -47,7 +47,7 @@ public sealed class XlsxStylesheetNamedStyleNamespacePrefixTests
 
         var targetCellXfs = targetRoot.Element(WorkbookNs + "cellXfs")!.Elements(WorkbookNs + "xf").ToList();
         targetCellXfs.Should().HaveCount(2);
-        targetCellXfs[1].Attribute("xfId")?.Value.Should().Be(recoveredXfId,
+        targetCellXfs[1].Attribute("xfId")!.Value.Should().Be(recoveredXfId,
             "the cell's rebuilt xf must be reconnected to the recovered 'Good' named style even though " +
             "the realistic ClosedXML target uses an 'x:' namespace prefix the source doesn't");
     }
@@ -67,7 +67,7 @@ public sealed class XlsxStylesheetNamedStyleNamespacePrefixTests
             .Elements(WorkbookNs + "xf")
             .ToList();
 
-        targetCellXfs[0].Attribute("xfId")?.Value.Should().Match(value => value == null || value == "0",
+        targetCellXfs[0].Attribute("xfId")!.Value.Should().Match(value => value == null || value == "0",
             "the unrelated default cell must not be spuriously bound to the recovered named style");
     }
 
@@ -103,9 +103,9 @@ public sealed class XlsxStylesheetNamedStyleNamespacePrefixTests
         var recoveredCellStyleXf = targetRoot.Element(WorkbookNs + "cellStyleXfs")!
             .Elements(WorkbookNs + "xf")
             .Last();
-        recoveredCellStyleXf.Attribute("fontId")?.Value.Should().Be("1",
+        recoveredCellStyleXf.Attribute("fontId")!.Value.Should().Be("1",
             "the recovered cellStyleXfs entry's fontId must be remapped to the existing equivalent target font");
-        recoveredCellStyleXf.Attribute("fillId")?.Value.Should().Be("1",
+        recoveredCellStyleXf.Attribute("fillId")!.Value.Should().Be("1",
             "the recovered cellStyleXfs entry's fillId must be remapped to the existing equivalent target fill");
     }
 

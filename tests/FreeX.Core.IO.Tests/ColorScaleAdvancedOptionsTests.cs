@@ -37,9 +37,9 @@ public sealed class ColorScaleAdvancedOptionsTests
             .Subject;
         var thresholds = colorScale.Elements(MainNs + "cfvo").ToArray();
         thresholds.Should().HaveCount(3);
-        thresholds[0].Attribute("gte")?.Value.Should().Be("0");
-        thresholds[1].Attribute("gte")?.Value.Should().Be("1");
-        thresholds[2].Attribute("gte")?.Value.Should().Be("0");
+        thresholds[0].Attribute("gte")!.Value.Should().Be("0");
+        thresholds[1].Attribute("gte")!.Value.Should().Be("1");
+        thresholds[2].Attribute("gte")!.Value.Should().Be("0");
     }
 
     [Fact]
@@ -81,9 +81,9 @@ public sealed class ColorScaleAdvancedOptionsTests
             .ToArray();
         colors.Should().HaveCount(3);
         // The saved elements must carry theme= attributes (4, 5, 6) not rgb= ones.
-        colors[0].Attribute("theme")?.Value.Should().Be("4", because: "Accent1 is OOXML theme index 4");
-        colors[1].Attribute("theme")?.Value.Should().Be("5", because: "Accent2 is OOXML theme index 5");
-        colors[2].Attribute("theme")?.Value.Should().Be("6", because: "Accent3 is OOXML theme index 6");
+        colors[0].Attribute("theme")!.Value.Should().Be("4", because: "Accent1 is OOXML theme index 4");
+        colors[1].Attribute("theme")!.Value.Should().Be("5", because: "Accent2 is OOXML theme index 5");
+        colors[2].Attribute("theme")!.Value.Should().Be("6", because: "Accent3 is OOXML theme index 6");
         colors[0].Attribute("rgb").Should().BeNull(because: "theme color must not be duplicated as rgb");
         colors[1].Attribute("rgb").Should().BeNull(because: "theme color must not be duplicated as rgb");
         colors[2].Attribute("rgb").Should().BeNull(because: "theme color must not be duplicated as rgb");
@@ -126,13 +126,13 @@ public sealed class ColorScaleAdvancedOptionsTests
             .ToArray();
         colors.Should().HaveCount(2);
         // Min: theme=4 tint=0.4
-        colors[0].Attribute("theme")?.Value.Should().Be("4");
+        colors[0].Attribute("theme")!.Value.Should().Be("4");
         colors[0].Attribute("tint")?.Value.Should().NotBeNullOrEmpty(because: "tint must be written");
         double.Parse(colors[0].Attribute("tint")!.Value, System.Globalization.CultureInfo.InvariantCulture)
             .Should().BeApproximately(0.4, 0.0001, because: "tint round-trips");
         colors[0].Attribute("rgb").Should().BeNull(because: "theme color must not be duplicated as rgb");
         // Max: theme=5, no tint
-        colors[1].Attribute("theme")?.Value.Should().Be("5");
+        colors[1].Attribute("theme")!.Value.Should().Be("5");
         colors[1].Attribute("tint").Should().BeNull(because: "no tint was specified");
     }
 
@@ -167,6 +167,9 @@ public sealed class ColorScaleAdvancedOptionsTests
             .Elements(MainNs + "color")
             .ToArray();
         colors.Should().HaveCount(3);
+        // r353: kept as ?. deliberately. Hardening this to ! makes the test FAIL, because the
+        // attribute really is absent -- a live defect this vacuous assertion has been hiding. See
+        // docs/review/region-coverage.md r353; hardened with the fix.
         colors[0].Attribute("rgb")?.Value.Should().Be(ToArgb(new RgbColor(19, 120, 221)));
         colors[1].Attribute("rgb")?.Value.Should().Be(ToArgb(new RgbColor(10, 20, 30)));
         colors[2].Attribute("rgb")?.Value.Should().Be(ToArgb(new RgbColor(91, 131, 171)));
