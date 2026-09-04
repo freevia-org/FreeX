@@ -87,4 +87,53 @@ public sealed class R336_WrittenWorkbookValidatesAgainstSchemaTests
         using var reader = new StreamReader(entryStream);
         return reader.ReadToEnd();
     }
+    /// <summary>
+    /// r340: r339's enumeration applied to the third writer. r336 validated a feature-RICH workbook;
+    /// these are the states at the other end, which a fixture built to demonstrate features never
+    /// contains and a user reaches by deleting things.
+    /// </summary>
+    [Fact]
+    public void AWorkbookWithAnEmptySheetValidates()
+    {
+        var workbook = new Workbook("Book1");
+        workbook.AddSheet("Empty");
+
+        using var stream = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, stream);
+
+        ValidateSchema(stream.ToArray()).Should().BeEmpty(
+            "a workbook whose only sheet has no cells must still be a valid .xlsx");
+    }
+
+    [Fact]
+    public void AWorkbookWhoseCellsWereAllClearedValidates()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("temporary"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), BlankValue.Instance);
+
+        using var stream = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, stream);
+
+        ValidateSchema(stream.ToArray()).Should().BeEmpty(
+            "clearing the last cell must not leave a malformed sheet part");
+    }
+
+    [Fact]
+    public void AMergedRegionOverEmptyCellsValidates()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Data");
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 3, 4)));
+
+        using var stream = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, stream);
+
+        ValidateSchema(stream.ToArray()).Should().BeEmpty(
+            "a merge over cells that carry no values is ordinary and must validate");
+    }
+
 }

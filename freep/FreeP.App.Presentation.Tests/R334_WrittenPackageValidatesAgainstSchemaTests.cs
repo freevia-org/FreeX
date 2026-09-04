@@ -207,4 +207,49 @@ public sealed class R334_WrittenPackageValidatesAgainstSchemaTests
             "a notes body with no paragraphs must still write a schema-valid notes slide");
     }
 
+    /// <summary>
+    /// r340: the degenerate end for this writer too, completing the enumeration across all three.
+    /// A deck with a slide carrying nothing, and a slide whose only shape has no text body at all --
+    /// the states left when a user deletes content rather than adds it.
+    /// </summary>
+    [Fact]
+    public void ADeckWithAnEmptySlideValidates()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide());
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+
+        ValidateSchema(stream.ToArray()).Should().BeEmpty(
+            "a slide with no shapes must still write a valid slide part");
+    }
+
+    [Fact]
+    public void AShapeWithNoTextBodyAtAllValidates()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Name = "Bare",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 100_000,
+            OffsetYEmu = 100_000,
+            ExtentCxEmu = 1_000_000,
+            ExtentCyEmu = 500_000,
+            TextBody = null,
+        });
+        presentation.Slides.Add(slide);
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+
+        ValidateSchema(stream.ToArray()).Should().BeEmpty(
+            "a shape with no text body is distinct from one with an empty body, and both must write "
+            + "valid XML -- r334 fixed the second, this pins the first");
+    }
+
 }
