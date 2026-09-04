@@ -1112,8 +1112,17 @@ public partial class MainWindow
             // and reports kept being sent. The checkbox carries no restart notice, and this is the
             // one direction that must not lag. Applied alongside every other side effect this
             // handler already drives immediately.
-            if (App.Services.GetService(typeof(ICrashAnalytics)) is ICrashAnalytics crashAnalytics)
+            // r354: TryGetServices, not Services. This line already tolerates ICrashAnalytics being
+            // unregistered (the `is` test), but `App.Services` THROWS when the container itself is
+            // absent, and it sits in the middle of the commit -- so the whole Options commit aborted
+            // after some settings had been applied and before RebuildQuickAccessToolbar, the
+            // sibling-window broadcast and the view settings ran. An absent container now behaves
+            // like an absent service, which is the case the code was already written to handle.
+            if (App.TryGetServices(out var services) &&
+                services.GetService(typeof(ICrashAnalytics)) is ICrashAnalytics crashAnalytics)
+            {
                 crashAnalytics.ApplyOptIn(_options.CrashAnalyticsEnabled);
+            }
 
             RebuildQuickAccessToolbar();
 

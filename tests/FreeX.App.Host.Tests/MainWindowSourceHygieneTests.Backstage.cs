@@ -124,7 +124,12 @@ public sealed partial class MainWindowSourceHygieneTests
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
         backstageSource.Should().Contain("private void SaveAsButton_Click(object sender, RoutedEventArgs e)");
-        backstageSource.Should().Contain("RunGuardedUiCommand(\"Backstage Save As\", SaveAsFromBackstageAsync)");
+        // r354: matched by CALLBACK, not by the guard's label. This pinned the literal
+        // RunGuardedUiCommand("Backstage Save As", ...) and went red when the label was renamed to
+        // "Save Workbook As" -- a rename that changes user-facing error text and nothing this test is
+        // about, which is that Save As runs through the guard rather than being invoked bare.
+        backstageSource.Should().MatchRegex(
+            @"RunGuardedUiCommand\(\s*""[^""]+""\s*,\s*SaveAsFromBackstageAsync\s*\)");
         // Save As forces the Save-As dialog directly (it does NOT route through the shared
         // SaveResolvedAsync existing-path resolution that Save uses), then closes the backstage.
         var saveAsMethod = ExtractMethodSource(backstageSource, "private async Task SaveAsFromBackstageAsync(");
