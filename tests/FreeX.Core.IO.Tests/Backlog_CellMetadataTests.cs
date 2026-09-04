@@ -23,7 +23,7 @@ public sealed class Backlog_cellmetadata_Tests
     // package part -- content types, workbook.xml, styles, etc. -- is already correct) and then swaps in
     // hand-authored worksheet XML for xl/worksheets/sheet1.xml. This mirrors the technique
     // XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage uses, without touching that file.
-    private static MemoryStream CreateSourcePackage(string worksheetXml)
+    private static MemoryStream CreateSourcePackage(string worksheetXml, int valueMetadataCount = 0)
     {
         var workbook = new Workbook("Backlog-CellMetadata");
         workbook.AddSheet("Sheet1");
@@ -39,12 +39,88 @@ public sealed class Backlog_cellmetadata_Tests
             existingEntry!.Delete();
 
             var replacementEntry = archive.CreateEntry("xl/worksheets/sheet1.xml");
-            using var writer = new StreamWriter(replacementEntry.Open());
-            writer.Write(worksheetXml);
+            using (var writer = new StreamWriter(replacementEntry.Open()))
+                writer.Write(worksheetXml);
+
+            if (valueMetadataCount > 0)
+                AddValueMetadataPart(archive, valueMetadataCount);
         }
 
         stream.Position = 0;
         return stream;
+    }
+
+    // r355: a cell's vm is an index into xl/metadata.xml's <valueMetadata>. Without that part the
+    // index is DANGLING, and XlsxWorksheetGridXmlNormalizer.NormalizeMetadataIndex drops such an
+    // attribute on purpose -- so a fixture that omits the part cannot be used to test that vm
+    // survives a save, because the correct behaviour is to remove it. Mirrors the part R49 and R82
+    // build for the same reason.
+    private static void AddValueMetadataPart(ZipArchive archive, int valueMetadataCount)
+    {
+        var blocks = string.Concat(Enumerable.Repeat("<bk><rc t=\"1\" v=\"0\"/></bk>", valueMetadataCount));
+        WriteEntry(
+            archive,
+            "xl/metadata.xml",
+            $"""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <metadata xmlns="{WorkbookNs}">
+              <metadataTypes count="1">
+                <metadataType name="XLRICHVALUE" minSupportedVersion="120000" copy="1" pasteAll="1" pasteValues="1" merge="1" splitFirst="1" rowColShift="1" clearFormats="1" clearComments="1" assign="1" coerce="1" cellMeta="1"/>
+              </metadataTypes>
+              <futureMetadata name="XLRICHVALUE" count="1"><bk/></futureMetadata>
+              <valueMetadata count="{valueMetadataCount}">{blocks}</valueMetadata>
+            </metadata>
+            """);
+
+        PatchXmlEntry(archive, "[Content_Types].xml", document =>
+        {
+            var ns = document.Root!.Name.Namespace;
+            document.Root.Add(new XElement(
+                ns + "Override",
+                new XAttribute("PartName", "/xl/metadata.xml"),
+                new XAttribute(
+                    "ContentType",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml")));
+        });
+
+        PatchXmlEntry(archive, "xl/_rels/workbook.xml.rels", document =>
+        {
+            var ns = document.Root!.Name.Namespace;
+            var used = document.Root.Elements(ns + "Relationship")
+                .Select(relationship => relationship.Attribute("Id")?.Value)
+                .ToHashSet(StringComparer.Ordinal);
+            var next = 1;
+            while (!used.Add($"rId{next}"))
+                next++;
+
+            document.Root.Add(new XElement(
+                ns + "Relationship",
+                new XAttribute("Id", $"rId{next}"),
+                new XAttribute(
+                    "Type",
+                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata"),
+                new XAttribute("Target", "metadata.xml")));
+        });
+    }
+
+    private static void PatchXmlEntry(ZipArchive archive, string path, Action<XDocument> patch)
+    {
+        var entry = archive.GetEntry(path);
+        entry.Should().NotBeNull(path);
+
+        XDocument document;
+        using (var readStream = entry!.Open())
+            document = XDocument.Load(readStream);
+
+        patch(document);
+        entry.Delete();
+        WriteEntry(archive, path, document.ToString());
+    }
+
+    private static void WriteEntry(ZipArchive archive, string path, string content)
+    {
+        using var writer = new StreamWriter(archive.CreateEntry(path).Open());
+        writer.Write(content);
     }
 
     private static Dictionary<string, XElement> LoadSavedCellsByAddress(MemoryStream saved)
@@ -163,7 +239,7 @@ public sealed class Backlog_cellmetadata_Tests
                 <row r="3"><c r="A3" vm="2"><v>100</v></c></row>
               </sheetData>
             </worksheet>
-            """);
+            """, valueMetadataCount: 2);
 
         var adapter = new XlsxFileAdapter();
         var workbook = adapter.Load(source);
@@ -181,10 +257,7 @@ public sealed class Backlog_cellmetadata_Tests
         var savedCells = LoadSavedCellsByAddress(saved);
 
         savedCells.Should().ContainKey("A2");
-        // r353: kept as ?. deliberately. Hardening this to ! makes the test FAIL, because the
-        // attribute really is absent -- a live defect this vacuous assertion has been hiding. See
-        // docs/review/region-coverage.md r353; hardened with the fix.
-        savedCells["A2"].Attribute("vm")?.Value.Should().Be(
+        savedCells["A2"].Attribute("vm")!.Value.Should().Be(
             "1",
             "an unedited rich-value cell's t/formula/<v> still match what the vm metadata was captured " +
             "against, so vm must be reattached on a full save");

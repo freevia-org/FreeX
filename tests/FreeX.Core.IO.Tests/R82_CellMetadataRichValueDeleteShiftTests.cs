@@ -180,9 +180,16 @@ public sealed class R82_CellMetadataRichValueDeleteShiftTests
         var savedCells = LoadSavedCellsByAddress(savedBytes);
 
         savedCells.Should().ContainKey("B2");
-        // r353: kept as ?. deliberately. Hardening this to ! makes the test FAIL, because the
-        // attribute really is absent -- a live defect this vacuous assertion has been hiding. See
-        // docs/review/region-coverage.md r353; hardened with the fix.
+        // r355: kept as ?. -- CONFIRMED DEFECT, root cause known, fix pending. Hardening this to !
+        // fails: B2's vm really is dropped. Cause is the signature-count guard in
+        // CellValueMatchesCapturedNativeMetadata. Rich-value placeholders all serialize identically
+        // (t="e", no formula, <v>#VALUE!</v>), so a same-address hit cannot by itself prove the
+        // target is the same cell rather than a same-signature sibling shifted up by a delete. The
+        // guard therefore refuses the whole group whenever the group's count changed -- which a
+        // delete always does -- so B2 loses its binding even though B2 never moved. The safety goal
+        // is met (B3 correctly refuses MSFT's stale vm="11", asserted below) but the blast radius is
+        // every cell in the group, not just the ambiguous ones. Excel keeps a rich value bound
+        // across a row delete, so the assertion below is the correct target.
         savedCells["B2"].Attribute("vm")?.Value.Should().Be(
             "10",
             "AAPL's cell (B2) never shifted, so its own vm binding must survive unchanged");
