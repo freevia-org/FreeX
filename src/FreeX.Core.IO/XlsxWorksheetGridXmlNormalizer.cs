@@ -599,11 +599,28 @@ internal static class XlsxWorksheetGridXmlNormalizer
         uint.TryParse(value.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var index) &&
         (index < 1 || index > 1048576);
 
+    /// <summary>Excel's grid is 1..16384 columns, and a span must run forwards.</summary>
+    private static bool IsColumnSpanWithinTheGrid(string minimum, string maximum) =>
+        uint.TryParse(minimum, NumberStyles.None, CultureInfo.InvariantCulture, out var min) &&
+        uint.TryParse(maximum, NumberStyles.None, CultureInfo.InvariantCulture, out var max) &&
+        min >= 1 && max <= 16384 && min <= max;
+
     private static bool NormalizeColumnElement(XElement column)
     {
         var normalizedMin = NormalizeUnsignedIntOrNull(column.Attribute("min")?.Value);
         var normalizedMax = NormalizeUnsignedIntOrNull(column.Attribute("max")?.Value);
         if (normalizedMin is null || normalizedMax is null)
+        {
+            column.Remove();
+            return true;
+        }
+
+        // r369: the same gap the row index had (r365) -- this rejected a min/max that is not an
+        // unsigned integer, but 0 and 99999 are perfectly good unsigned integers that name no column,
+        // and ClosedXML answers one with ArgumentOutOfRangeException, which aborts the whole load. A
+        // reversed span (min > max) describes nothing either. Excel repairs such a file; drop the
+        // column definition and keep the sheet.
+        if (!IsColumnSpanWithinTheGrid(normalizedMin, normalizedMax))
         {
             column.Remove();
             return true;

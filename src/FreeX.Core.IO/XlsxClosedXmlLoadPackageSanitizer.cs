@@ -139,6 +139,10 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 // r366: an out-of-range style index aborts the ClosedXML load outright.
                 if (requirements.HasOutOfRangeCellStyleIndexes)
                     XlsxWorksheetCellStyleIndexNormalizer.RemoveOutOfRangeStyleIndexes(archive);
+                // r369: a mergeCell ref or dataValidation sqref that names nothing makes ClosedXML
+                // throw during load rather than ignore it.
+                if (requirements.HasMalformedWorksheetReferences)
+                    XlsxWorksheetMalformedReferenceNormalizer.RemoveMalformedReferences(archive);
                 if (requirements.HasWorksheetPageLayoutSchemaIssues)
                     NormalizeWorksheetPageLayout(archive);
                 if (requirements.HasWorksheetPageBreakSchemaIssues)
@@ -305,11 +309,12 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 ResolveKnownOrScan(knownHints.HasWorksheetNativeMetadataSchemaIssues, archive, HasWorksheetNativeMetadataSchemaIssues),
                 knownHints.MergeCellWorksheetPathsToStrip,
                 ResolveKnownOrScan(knownHints.HasCalculationChainPackagePart, archive, HasCalculationChainPackagePart),
-                HasOutOfRangeCellStyleIndexes(archive));
+                HasOutOfRangeCellStyleIndexes(archive),
+                XlsxWorksheetMalformedReferenceNormalizer.HasMalformedReferences(archive));
         }
         catch
         {
-            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, null, true, true);
+            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, null, true, true, true);
         }
         finally
         {
@@ -395,7 +400,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             hasWorksheetNativeMetadataSchemaIssues,
             hints.MergeCellWorksheetPathsToStrip,
             hasCalculationChainPackagePart,
-            HasOutOfRangeCellStyleIndexes: false);
+            HasOutOfRangeCellStyleIndexes: false,
+            HasMalformedWorksheetReferences: false);
         return true;
     }
 
@@ -600,11 +606,13 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         bool HasWorksheetNativeMetadataSchemaIssues,
         IReadOnlySet<string>? MergeCellWorksheetPathsToStrip,
         bool HasCalculationChainPackagePart,
-        bool HasOutOfRangeCellStyleIndexes)
+        bool HasOutOfRangeCellStyleIndexes,
+        bool HasMalformedWorksheetReferences)
     {
         public bool RequiresAny =>
             HasPivotPackageMetadata ||
             HasOutOfRangeCellStyleIndexes ||
+            HasMalformedWorksheetReferences ||
             HasCalculationChainPackagePart ||
             HasChartExChartParts ||
             HasDrawingPackageParts ||
