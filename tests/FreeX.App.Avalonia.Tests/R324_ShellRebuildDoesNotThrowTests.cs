@@ -137,4 +137,4 @@ public sealed class R324_ShellRebuildDoesNotThrowTests
             "rebuilding the pane must detach its reused close button from the previous header first");
     }
 
-}
+}
