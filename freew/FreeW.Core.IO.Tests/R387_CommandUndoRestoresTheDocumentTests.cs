@@ -29,6 +29,19 @@ public sealed class R387_CommandUndoRestoresTheDocumentTests
         table.Rows[1].Cells[1] = new TableCell("B2");
         document.Blocks.Add(table);
 
+        // r388: a run carrying an image, so the image/shape command family is covered too -- those
+        // have the most fields for a Revert to miss.
+        var withImage = new Paragraph("caption");
+        withImage.Runs[0].Image = new InlineImage(
+            Convert.FromBase64String(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="),
+            48,
+            24)
+        {
+            AltText = "original alt",
+        };
+        document.Blocks.Add(withImage);
+
         return document;
     }
 
@@ -79,6 +92,14 @@ public sealed class R387_CommandUndoRestoresTheDocumentTests
         Check("DeleteTableColumn", () => new DeleteTableColumnCommand(2, 1));
         Check("MergeCellsHorizontal", () => new MergeCellsHorizontalCommand(2, 0, 0, 1));
         Check("MergeCellsVertical", () => new MergeCellsVerticalCommand(2, 0, 0, 1));
+        // r388: image and shape commands, against the image-bearing paragraph at index 3.
+        Check("SetImageSize", () => new SetImageSizeCommand(3, 0, 96, 48));
+        Check("SetImageAltText", () => new SetImageAltTextCommand(3, 0, "changed alt"));
+        Check("SetImageRotation", () => new SetImageRotationCommand(3, 0, 90, true, false));
+        Check("SetImageCrop", () => new SetImageCropCommand(3, 0, 0.1, 0.2, 0.05, 0.15));
+        Check("SetImageBorder", () => new SetImageBorderCommand(3, 0, "FF0000", 2.5, "dash"));
+        Check("ResetImageSize", () => new ResetImageSizeCommand(3, 0, 120, 60));
+
         Check("ReorderBlocks", () =>
         {
             var document = BuildDocument();
