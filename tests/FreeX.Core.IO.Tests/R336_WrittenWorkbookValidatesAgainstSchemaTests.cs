@@ -202,4 +202,106 @@ public sealed class R336_WrittenWorkbookValidatesAgainstSchemaTests
         shapes[2].Should().Be(shapes[0], "and compounds by the third");
     }
 
+    /// <summary>
+    /// r344: closes the limitation r343 stated about itself. r343 compared a SHAPE -- counts and two
+    /// cells -- so drift in a part nothing it read would have been invisible. This compares every
+    /// part of the package, generation over generation.
+    ///
+    /// <para>Stronger than r313's control, which saved the same in-memory model twice: here the model
+    /// goes back through the READER between saves, so a part that survives writing but is re-read
+    /// slightly differently shows up on the next write. That is the loop
+    /// <c>ApplyPackagePostProcessing</c> creates by re-capturing each saved package as the next
+    /// save's source.</para>
+    /// </summary>
+    [Fact]
+    public void EveryPackagePartIsStableAcrossGenerations()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Data");
+        workbook.AddSheet("Empty");
+        var money = workbook.RegisterStyle(new CellStyle { NumberFormat = "$#,##0.00" });
+        var styled = Cell.FromValue(new NumberValue(12.5));
+        styled.StyleId = money;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("keep"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), styled);
+        sheet.SetFormula(new CellAddress(sheet.Id, 3, 1), "LEN(A1)");
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 5, 1),
+            new CellAddress(sheet.Id, 5, 3)));
+        sheet.Hyperlinks[new CellAddress(sheet.Id, 1, 1)] = "https://example.invalid/r344";
+
+        var parts = new List<Dictionary<string, string>>();
+        byte[] firstBytes = [];
+        var current = workbook;
+        for (var generation = 0; generation < 3; generation++)
+        {
+            using var stream = new MemoryStream();
+            new XlsxFileAdapter().Save(current, stream);
+            var bytes = stream.ToArray();
+            if (generation == 0)
+                firstBytes = bytes;
+            parts.Add(PackageParts(bytes));
+
+            stream.Position = 0;
+            current = new XlsxFileAdapter().Load(stream);
+        }
+
+        parts[0].Should().NotBeEmpty("an empty package would make this vacuous");
+
+        // Sensitivity check. Two attempts to prove this comparison has teeth by breaking the product
+        // BOTH passed -- reverting r313's relationship-id normalizer, and making it emit a random id
+        // -- for a reason worth recording: those only affect the FRESH-workbook save path, and
+        // generations two and three take the source-package path, which REPLAYS the root rels
+        // verbatim. So that part is frozen at generation one by design and cannot drift here. Rather
+        // than leave the comparator's power unproven, this shows directly that it reports a real
+        // difference when one exists.
+        using (var altered = new MemoryStream())
+        {
+            var changed = new XlsxFileAdapter().Load(new MemoryStream(firstBytes));
+            var changedSheet = changed.Sheets[0];
+            changedSheet.SetCell(new CellAddress(changedSheet.Id, 9, 9), new TextValue("different"));
+            new XlsxFileAdapter().Save(changed, altered);
+
+            DescribeDifferences(parts[0], PackageParts(altered.ToArray())).Should().NotBeEmpty(
+                "a workbook with an extra cell must compare as different, or this comparison would "
+                + "report stability it cannot actually see");
+        }
+
+        DescribeDifferences(parts[0], parts[1]).Should().BeEmpty(
+            "the second generation must write the same parts as the first");
+        DescribeDifferences(parts[0], parts[2]).Should().BeEmpty(
+            "and the third; drift that needs two cycles to appear is what a single round trip hides");
+    }
+
+    /// <summary>Part name to content, minus the parts that legitimately carry a timestamp.</summary>
+    private static Dictionary<string, string> PackageParts(byte[] bytes)
+    {
+        using var stream = new MemoryStream(bytes);
+        using var archive = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Read);
+
+        var parts = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var entry in archive.Entries)
+        {
+            if (entry.FullName.Contains("core.xml", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            using var entryStream = entry.Open();
+            using var buffer = new MemoryStream();
+            entryStream.CopyTo(buffer);
+            parts[entry.FullName] = Convert.ToBase64String(buffer.ToArray());
+        }
+
+        return parts;
+    }
+
+    private static IReadOnlyList<string> DescribeDifferences(
+        Dictionary<string, string> first,
+        Dictionary<string, string> later) =>
+        first.Keys.Union(later.Keys, StringComparer.Ordinal)
+            .Where(name => !first.TryGetValue(name, out var a)
+                || !later.TryGetValue(name, out var b)
+                || a != b)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToList();
+
 }
