@@ -159,4 +159,47 @@ public sealed class R336_WrittenWorkbookValidatesAgainstSchemaTests
             "an empty sheet is a sheet; dropping it silently loses the user's structure");
     }
 
+    /// <summary>
+    /// r343: generation stability for this writer, completing r342. FreeX has a wrinkle the other two
+    /// do not -- a saved package becomes the SOURCE package for the next save
+    /// (<c>ApplyPackagePostProcessing</c> re-captures it), so anything a save adds is replayed by the
+    /// following one. That is the accumulation mechanism, built in by design, which makes three
+    /// generations worth measuring rather than assuming.
+    /// </summary>
+    [Fact]
+    public void AWorkbookDoesNotDriftAcrossGenerations()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Data");
+        workbook.AddSheet("Empty");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("keep"));
+        sheet.SetFormula(new CellAddress(sheet.Id, 2, 1), "LEN(A1)");
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 4, 1),
+            new CellAddress(sheet.Id, 4, 3)));
+
+        var shapes = new List<string>();
+        var current = workbook;
+        for (var generation = 0; generation < 3; generation++)
+        {
+            using var stream = new MemoryStream();
+            new XlsxFileAdapter().Save(current, stream);
+            stream.Position = 0;
+            current = new XlsxFileAdapter().Load(stream);
+
+            var loaded = current.Sheets[0];
+            shapes.Add(string.Join(
+                "|",
+                current.Sheets.Count,
+                loaded.MergedRegions.Count,
+                loaded.GetCell(new CellAddress(loaded.Id, 1, 1))?.Value?.ToString() ?? "<none>",
+                loaded.GetCell(new CellAddress(loaded.Id, 2, 1))?.FormulaText ?? "<none>"));
+        }
+
+        shapes[1].Should().Be(shapes[0],
+            "the second save re-reads the first as its source package, so anything the first added "
+            + "is replayed here");
+        shapes[2].Should().Be(shapes[0], "and compounds by the third");
+    }
+
 }
