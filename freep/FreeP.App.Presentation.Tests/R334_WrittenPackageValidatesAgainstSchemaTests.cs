@@ -130,4 +130,50 @@ public sealed class R334_WrittenPackageValidatesAgainstSchemaTests
             "a shape whose text was cleared must still produce a schema-valid package");
     }
 
+    /// <summary>
+    /// r337: testing r336's hypothesis on the other hand-built writer. Adds a table shape -- whose
+    /// grid, rows and per-cell text bodies each carry required children -- and a table cell with an
+    /// EMPTY text body, the exact state r334 fixed for ordinary shapes. If the fix was applied to one
+    /// text-body writer and not the other, this is where that shows.
+    /// </summary>
+    [Fact]
+    public void ADeckWithATableAndAnEmptyCellValidates()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(914400);
+        table.ColumnWidthsEmu.Add(914400);
+        table.Rows.Add(new TableRow
+        {
+            HeightEmu = 457200,
+            Cells =
+            {
+                new TableCell { TextBody = new TextBody() },   // empty on purpose
+                new TableCell { TextBody = new TextBody() },
+            },
+        });
+
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Name = "Table",
+            Kind = SlideShapeKind.Table,
+            OffsetXEmu = 500_000,
+            OffsetYEmu = 500_000,
+            ExtentCxEmu = 1_828_800,
+            ExtentCyEmu = 457_200,
+            Table = table,
+        });
+        presentation.Slides.Add(slide);
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+
+        ValidateSchema(stream.ToArray()).Should().BeEmpty(
+            "a table cell's text body has the same mandatory a:p as a shape's, so the r334 fix must "
+            + "cover this writer too");
+    }
+
 }

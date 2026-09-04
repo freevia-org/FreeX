@@ -118,4 +118,49 @@ public sealed class R335_WrittenDocumentValidatesAgainstSchemaTests
             "inserting a table and saving must produce a schema-valid document");
     }
 
+    /// <summary>
+    /// r337: r336 left a hypothesis -- the two hand-built writers emit MANDATORY elements
+    /// conditionally, so more features in one package should surface more of them. This adds the
+    /// features r335's document did not carry: a header, a footnote, an endnote and a bookmark,
+    /// each of which brings its own part or required child.
+    /// </summary>
+    [Fact]
+    public void ADocumentWithNotesHeaderAndBookmarkValidates()
+    {
+        var document = new TextDocument();
+
+        var body = new Paragraph("Body with notes") { BookmarkName = "r337_mark" };
+        body.Runs.Add(Run.FootnoteReference(1));
+        body.Runs.Add(Run.EndnoteReference(1));
+        document.Blocks.Add(body);
+
+        var header = new HeaderFooter();
+        header.Paragraphs.Add(new Paragraph("Header text"));
+        document.FinalSectionHeadersFooters.Header = header;
+
+        var footer = new HeaderFooter();
+        footer.Paragraphs.Add(new Paragraph());   // deliberately empty, per r334's finding
+        document.FinalSectionHeadersFooters.Footer = footer;
+
+        var footnote = new Footnote(1);
+        footnote.Content.Add(new Paragraph("Footnote text"));
+        document.Footnotes[1] = footnote;
+
+        var endnote = new Endnote(1);
+        endnote.Content.Add(new Paragraph("Endnote text"));
+        document.Endnotes[1] = endnote;
+
+        using var stream = new MemoryStream();
+        new DocxFileAdapter().Save(document, stream);
+        var bytes = stream.ToArray();
+
+        var documentXml = ReadDocumentXml(bytes);
+        documentXml.Should().Contain("bookmarkStart", "the bookmark must reach the package");
+        documentXml.Should().Contain("footnoteReference", "and the footnote reference");
+
+        ValidateSchema(bytes).Should().BeEmpty(
+            "notes, headers and bookmarks each add required children of their own, which is exactly "
+            + "where conditional emission of a mandatory element hides");
+    }
+
 }

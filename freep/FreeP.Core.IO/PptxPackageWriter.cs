@@ -4839,12 +4839,20 @@ public static class PptxPackageWriter
                     _ => "t"
                 }));
 
+            // r337: same rule as the else branch below, which the author already knew ("Empty txBody
+            // is required by spec") -- but that branch only covers a cell with NO body. A cell whose
+            // body exists and has no paragraphs took this path and wrote a txBody with no a:p, which
+            // is the r334 defect at a second site: the shape writer was fixed, this one was not.
+            var cellParagraphs = cell.TextBody.Paragraphs.Count > 0
+                ? cell.TextBody.Paragraphs.Select(p => BuildParaEl(p, bulletImageRelIds: bulletImageRelIds))
+                : [new XElement(A + "p")];
+
             txBody = new XElement(A + "txBody",
                 bodyPr,
                 BuildLstStyleEl(
                     cell.TextBody.LstStyle,
                     cell.TextBody.DefaultParaRightToLeft),
-                cell.TextBody.Paragraphs.Select(p => BuildParaEl(p, bulletImageRelIds: bulletImageRelIds)));
+                cellParagraphs);
         }
         else
         {
