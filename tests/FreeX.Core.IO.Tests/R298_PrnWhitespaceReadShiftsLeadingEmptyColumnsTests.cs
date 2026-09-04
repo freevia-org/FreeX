@@ -36,12 +36,13 @@ public sealed class R298_PrnWhitespaceReadShiftsLeadingEmptyColumnsTests
     }
 
     /// <summary>
-    /// The declared limitation, pinned. If this ever starts failing, the reader has gained
-    /// position awareness -- which is an improvement, and the test should be inverted rather than
-    /// deleted.
+    /// INVERTED by r319, as this test's original summary instructed: the reader has gained position
+    /// awareness, so a value after an empty leading column now comes back in its own column instead
+    /// of shifted left. The test is kept rather than deleted because the shift is what would return
+    /// if the column inference were removed or bypassed, and this is the assertion that would notice.
     /// </summary>
     [Fact]
-    public void AValueAfterAnEmptyLeadingColumnComesBackShiftedLeft()
+    public void AValueAfterAnEmptyLeadingColumnKeepsItsColumn()
     {
         var workbook = new Workbook("Book1");
         var sheet = workbook.AddSheet("Sheet1");
@@ -51,11 +52,11 @@ public sealed class R298_PrnWhitespaceReadShiftsLeadingEmptyColumnsTests
 
         var loaded = RoundTrip(workbook);
 
-        loaded.GetValue(new CellAddress(loaded.Id, 2, 1)).Should().Be(new NumberValue(9.5),
-            "the reader splits on whitespace runs, so the empty leading column leaves no token and "
-            + "everything after it moves one column left -- the documented parse strategy's "
-            + "undocumented cost");
-        loaded.GetValue(new CellAddress(loaded.Id, 2, 2)).Should().Be(BlankValue.Instance);
+        loaded.GetValue(new CellAddress(loaded.Id, 2, 1)).Should().Be(BlankValue.Instance,
+            "A2 was empty when this was saved and must still be empty");
+        loaded.GetValue(new CellAddress(loaded.Id, 2, 2)).Should().Be(new NumberValue(9.5),
+            "r319: a .prn is fixed-width, so the reader takes the column from the value's position "
+            + "rather than from how many whitespace-separated tokens preceded it");
     }
 
     /// <summary>
