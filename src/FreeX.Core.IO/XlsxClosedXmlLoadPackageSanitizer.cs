@@ -135,6 +135,10 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                     RemoveWorksheetDynamicFilters(archive);
                 if (requirements.HasWorksheetGridXmlSchemaIssues)
                     NormalizeWorksheetGridXml(archive);
+
+                // r366: an out-of-range style index aborts the ClosedXML load outright.
+                if (requirements.HasOutOfRangeCellStyleIndexes)
+                    XlsxWorksheetCellStyleIndexNormalizer.RemoveOutOfRangeStyleIndexes(archive);
                 if (requirements.HasWorksheetPageLayoutSchemaIssues)
                     NormalizeWorksheetPageLayout(archive);
                 if (requirements.HasWorksheetPageBreakSchemaIssues)
@@ -300,11 +304,12 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 ResolveKnownOrScan(knownHints.HasWorksheetRelationshipMarkerSchemaIssues, archive, HasWorksheetRelationshipMarkerSchemaIssues),
                 ResolveKnownOrScan(knownHints.HasWorksheetNativeMetadataSchemaIssues, archive, HasWorksheetNativeMetadataSchemaIssues),
                 knownHints.MergeCellWorksheetPathsToStrip,
-                ResolveKnownOrScan(knownHints.HasCalculationChainPackagePart, archive, HasCalculationChainPackagePart));
+                ResolveKnownOrScan(knownHints.HasCalculationChainPackagePart, archive, HasCalculationChainPackagePart),
+                HasOutOfRangeCellStyleIndexes(archive));
         }
         catch
         {
-            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, null, true);
+            return new SanitizationRequirements(true, true, true, scanAllConditionalFormatting, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, null, true, true);
         }
         finally
         {
@@ -389,7 +394,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             hasWorksheetRelationshipMarkerSchemaIssues,
             hasWorksheetNativeMetadataSchemaIssues,
             hints.MergeCellWorksheetPathsToStrip,
-            hasCalculationChainPackagePart);
+            hasCalculationChainPackagePart,
+            HasOutOfRangeCellStyleIndexes: false);
         return true;
     }
 
@@ -593,10 +599,12 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         bool HasWorksheetRelationshipMarkerSchemaIssues,
         bool HasWorksheetNativeMetadataSchemaIssues,
         IReadOnlySet<string>? MergeCellWorksheetPathsToStrip,
-        bool HasCalculationChainPackagePart)
+        bool HasCalculationChainPackagePart,
+        bool HasOutOfRangeCellStyleIndexes)
     {
         public bool RequiresAny =>
             HasPivotPackageMetadata ||
+            HasOutOfRangeCellStyleIndexes ||
             HasCalculationChainPackagePart ||
             HasChartExChartParts ||
             HasDrawingPackageParts ||
@@ -2152,6 +2160,12 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 XlsxPackageXmlEditor.ReplaceXml(archive, tableEntry.FullName, tableXml);
         }
     }
+
+    // r366: a cell or row s attribute naming a cellXfs entry that does not exist. ClosedXML throws
+    // ArgumentOutOfRangeException on one, which aborts the load, so it has to be found before the
+    // package is handed over.
+    private static bool HasOutOfRangeCellStyleIndexes(ZipArchive archive)
+        => XlsxWorksheetCellStyleIndexNormalizer.HasOutOfRangeStyleIndexes(archive);
 
     private static bool HasWorksheetGridXmlSchemaIssues(ZipArchive archive)
         // Streaming canonical scan instead of a full per-worksheet XDocument load: the previous
