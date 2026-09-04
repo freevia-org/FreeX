@@ -91,8 +91,12 @@ if (!opts.SkipCapture)
 
 var engine = new ParityComparisonEngine();
 var comparison = engine.Compare(winManifest, linManifest, winDir, linDir, imagesDir, opts.Threshold);
+// r380: a single-side run cannot evaluate a PAIR contract. It used to report PASS, which is a gate
+// claiming success for work it never did; it now reports NOT EVALUATED. The run's own pass/fail is
+// unchanged -- --win-only and --linux-only are legitimate modes and must not start failing -- but the
+// output no longer implies the name-box pair was checked.
 var nameBoxContract = opts.WinOnly || opts.LinuxOnly
-    ? new NameBoxDropdownPairContractResult(true, [])
+    ? new NameBoxDropdownPairContractResult(true, [], WasEvaluated: false)
     : NameBoxDropdownPairContract.Validate(winManifest, linManifest, winDir, linDir);
 
 // -------------------------------------------------------------------
@@ -118,7 +122,7 @@ if (comparison.LargeChromeDiffs.Count > 0)
         Console.WriteLine($"   chrome-diff {r.Id}  diff={r.DiffPercent:0.00}%");
 }
 Console.WriteLine($"report        : {htmlPath}");
-Console.WriteLine($"name-box pair : {(nameBoxContract.IsValid ? "PASS" : "FAIL")}");
+Console.WriteLine($"name-box pair : {(!nameBoxContract.WasEvaluated ? "NOT EVALUATED (single-side run)" : nameBoxContract.IsValid ? "PASS" : "FAIL")}");
 foreach (var failure in nameBoxContract.Failures)
     Console.WriteLine($"   NAME-BOX CONTRACT {failure}");
 Console.WriteLine(comparison.Passed && nameBoxContract.IsValid ? "RESULT: PASS" : "RESULT: FAIL");
