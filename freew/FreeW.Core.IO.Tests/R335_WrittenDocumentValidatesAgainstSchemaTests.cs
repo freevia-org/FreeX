@@ -163,4 +163,60 @@ public sealed class R335_WrittenDocumentValidatesAgainstSchemaTests
             + "where conditional emission of a mandatory element hides");
     }
 
+    /// <summary>
+    /// r339: the same enumeration r338 applied to FreeP, applied here. <c>CT_Tc</c> requires at least
+    /// one block-level child (a <c>w:p</c>), exactly as <c>CT_TextBody</c> required an <c>a:p</c> --
+    /// so an EMPTY table cell is the direct analogue of the defect fixed three times in FreeP.
+    /// r335's fixture put text in every cell and could not have found it.
+    /// </summary>
+    [Fact]
+    public void ATableWithEmptyCellsValidates()
+    {
+        var document = new TextDocument();
+        var table = Table.Create(2, 2);
+        table.Rows[0].Cells[0] = new TableCell("only this one has text");
+        document.Blocks.Add(table);
+
+        using var stream = new MemoryStream();
+        new DocxFileAdapter().Save(document, stream);
+        var bytes = stream.ToArray();
+
+        ValidateSchema(bytes).Should().BeEmpty(
+            "a table cell with no text still needs its mandatory w:p, the same rule that produced "
+            + "three fixes in FreeP's writer");
+    }
+
+    /// <summary>
+    /// r339: degenerate shapes, enumerated rather than waited for. A document with no content at all,
+    /// and a table whose row has no cells -- the states a user reaches by deleting everything, and
+    /// the ones a fixture built to demonstrate a feature never contains.
+    /// </summary>
+    [Fact]
+    public void AnEmptyDocumentValidates()
+    {
+        var document = new TextDocument();
+        document.Blocks.Clear();
+
+        using var stream = new MemoryStream();
+        new DocxFileAdapter().Save(document, stream);
+
+        ValidateSchema(stream.ToArray()).Should().BeEmpty(
+            "a document with everything deleted must still be a valid .docx");
+    }
+
+    [Fact]
+    public void ATableRowWithNoCellsValidates()
+    {
+        var document = new TextDocument();
+        var table = new Table();
+        table.Rows.Add(new TableRow());
+        document.Blocks.Add(table);
+
+        using var stream = new MemoryStream();
+        new DocxFileAdapter().Save(document, stream);
+
+        ValidateSchema(stream.ToArray()).Should().BeEmpty(
+            "a row that lost its last cell must not produce an invalid package");
+    }
+
 }
