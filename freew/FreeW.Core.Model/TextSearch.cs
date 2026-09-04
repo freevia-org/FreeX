@@ -130,7 +130,7 @@ public static class TextSearch
                     {
                         // We found the closing ']': emit the class verbatim, translating '[!' to '[^'.
                         var inner = pattern.Substring(i + 1, j - i - 1);
-                        if (inner.StartsWith("!"))
+                        if (inner.StartsWith("!", StringComparison.Ordinal))
                             sb.Append("[^").Append(inner.Substring(1)).Append(']');
                         else
                             sb.Append('[').Append(inner).Append(']');

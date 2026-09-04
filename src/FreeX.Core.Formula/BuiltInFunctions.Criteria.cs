@@ -257,42 +257,42 @@ public static partial class BuiltInFunctions
 
     private static bool TrySplitCriteriaComparison(string criteria, out CriteriaComparisonOp op, out string rhs)
     {
-        if (criteria.StartsWith(">="))
+        if (criteria.StartsWith(">=", StringComparison.Ordinal))
         {
             op = CriteriaComparisonOp.GreaterThanOrEqual;
             rhs = criteria[2..];
             return true;
         }
 
-        if (criteria.StartsWith("<="))
+        if (criteria.StartsWith("<=", StringComparison.Ordinal))
         {
             op = CriteriaComparisonOp.LessThanOrEqual;
             rhs = criteria[2..];
             return true;
         }
 
-        if (criteria.StartsWith("<>"))
+        if (criteria.StartsWith("<>", StringComparison.Ordinal))
         {
             op = CriteriaComparisonOp.NotEqual;
             rhs = criteria[2..];
             return true;
         }
 
-        if (criteria.StartsWith(">"))
+        if (criteria.StartsWith(">", StringComparison.Ordinal))
         {
             op = CriteriaComparisonOp.GreaterThan;
             rhs = criteria[1..];
             return true;
         }
 
-        if (criteria.StartsWith("<"))
+        if (criteria.StartsWith("<", StringComparison.Ordinal))
         {
             op = CriteriaComparisonOp.LessThan;
             rhs = criteria[1..];
             return true;
         }
 
-        if (criteria.StartsWith("="))
+        if (criteria.StartsWith("=", StringComparison.Ordinal))
         {
             op = CriteriaComparisonOp.Equal;
             rhs = criteria[1..];
