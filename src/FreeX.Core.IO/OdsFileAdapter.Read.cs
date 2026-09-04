@@ -198,7 +198,16 @@ public sealed partial class OdsFileAdapter
                 formula = ReadFormula(cellElement, row, col);
             }
 
-            var hasInfo = formula is not null || value is not BlankValue || styleId != StyleId.Default;
+            // r293/r294: a note or a link is information too. Without them here, a cell carrying only
+            // a comment (or only a hyperlink) looked "fully blank" to the skip below and was dropped
+            // before it could be read -- so the writer emitted the annotation and the reader threw it
+            // away. The skip itself is a DoS guard against a huge repeat count on a blank cell and is
+            // deliberately left intact; only the definition of "blank" is corrected.
+            var hasInfo = formula is not null
+                || value is not BlankValue
+                || styleId != StyleId.Default
+                || cellElement.Element(OfficeNs + "annotation") is not null
+                || cellElement.Descendants(TextNs + "a").Any();
             if (!hasInfo && !isMerge)
             {
                 // A covered-merge interior, or a fully blank/style-less cell, carries no information
@@ -281,6 +290,12 @@ public sealed partial class OdsFileAdapter
                 // ordinary linked text still losing its target.
                 if (HyperlinkTarget(cellElement) is { } href)
                     sheet.Hyperlinks[new CellAddress(sheet.Id, row, col)] = href;
+
+                // r294: the cell's note. Same placement reasoning as the hyperlink above -- a comment
+                // can sit on a formula, value or style-only cell, so it is read after the branches
+                // rather than inside one of them.
+                if (AnnotationText(cellElement) is { } note)
+                    sheet.Comments[new CellAddress(sheet.Id, row, col)] = note;
 
                 if (isMerge && isFirstRepeat)
                 {
@@ -512,11 +527,41 @@ public sealed partial class OdsFileAdapter
         return null;
     }
 
+    /// <summary>
+    /// r294: the cell's note text, or null. ODF holds it as <c>office:annotation</c> containing one
+    /// <c>text:p</c> per line; the creator/date children it may also carry are metadata this model
+    /// does not keep, so only the paragraphs are joined.
+    /// </summary>
+    private static string? AnnotationText(XElement cellElement)
+    {
+        var annotation = cellElement.Element(OfficeNs + "annotation");
+        if (annotation is null)
+            return null;
+
+        var lines = annotation.Elements(TextNs + "p").Select(paragraph => paragraph.Value).ToList();
+        if (lines.Count == 0)
+            return null;
+
+        var text = string.Join("\n", lines);
+        return string.IsNullOrEmpty(text) ? null : text;
+    }
+
     private static string TextContent(XElement cellElement)
     {
         var paragraphs = cellElement.Elements(TextNs + "p").ToList();
         if (paragraphs.Count == 0)
-            return cellElement.Value;
+        {
+            // r294: the fallback reads the whole subtree, which now includes office:annotation --
+            // so a cell carrying ONLY a note and no value would have taken the note's text as its
+            // VALUE, inventing content the user never typed. Exclude the annotation explicitly
+            // rather than relying on there always being a value paragraph beside it.
+            return cellElement.Elements(OfficeNs + "annotation").Any()
+                ? string.Concat(cellElement.Nodes()
+                    .Where(node => node is not XElement element || element.Name != OfficeNs + "annotation")
+                    .Select(node => node is XElement element ? element.Value : node.ToString()))
+                : cellElement.Value;
+        }
+
         return string.Join("\n", paragraphs.Select(p => p.Value));
     }
 

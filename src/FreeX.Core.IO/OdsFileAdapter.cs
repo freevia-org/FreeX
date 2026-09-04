@@ -23,7 +23,13 @@ namespace FreeX.Core.IO;
 /// <para><b>Round-trips faithfully (Full in the ODS capability profile):</b> cell values + types
 /// (number/text/bool/date/percentage/currency), A1↔OpenFormula formulas, number formats, fonts
 /// (name/size/bold/italic/underline/strike/color), fills (background), borders, alignment
-/// (h/v/wrap/rotation/indent), merged cells, multiple sheets + names, column widths, row heights.</para>
+/// (h/v/wrap/rotation/indent), merged cells, multiple sheets + names, column widths, row heights,
+/// cell hyperlinks (r293), cell comments/notes (r294).</para>
+///
+/// <para><b>Why those last two carry round numbers:</b> both were absent from BOTH lists below --
+/// neither promised nor deferred -- and both were silently dropped. A feature missing from this
+/// profile cannot be judged as loss-or-bug at all, which is what the profile exists to decide, so
+/// anything added to the adapter belongs in one of these two lists.</para>
 ///
 /// <para><b>Deferred (None/Lossy in the profile):</b> charts, images, data validation, conditional
 /// formatting, pivot tables, freeze panes — ODF can hold these but they are not yet mapped; their loss

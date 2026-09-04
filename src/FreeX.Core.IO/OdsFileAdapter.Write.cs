@@ -73,6 +73,22 @@ public sealed partial class OdsFileAdapter
             maxCol = Math.Max(maxCol, region.End.Col);
         }
 
+        // r293/r294: a comment or a hyperlink can sit on a cell with no value and no style, and such
+        // an address appears in none of the bounds above -- so the cell was never emitted and the
+        // note or link was lost even though the writer knew how to serialise it. Mirrors the
+        // style-only extension directly above, for the same reason.
+        foreach (var address in sheet.Comments.Keys)
+        {
+            maxRow = Math.Max(maxRow, address.Row);
+            maxCol = Math.Max(maxCol, address.Col);
+        }
+
+        foreach (var address in sheet.Hyperlinks.Keys)
+        {
+            maxRow = Math.Max(maxRow, address.Row);
+            maxCol = Math.Max(maxCol, address.Col);
+        }
+
         WriteColumns(sheet, table, maxCol, styleRegistry);
 
         if (maxRow == 0 || maxCol == 0)
@@ -273,6 +289,23 @@ public sealed partial class OdsFileAdapter
 
         styleSignature = cellStyleName ?? "";
 
+        // r294: the note is attached before the early return below, because a comment can sit on a
+        // cell with NO value and no style -- and that cell takes the early return. Attaching it
+        // after the return (the first attempt) meant an empty commented cell wrote no annotation at
+        // all. AddFirst keeps it ahead of the value paragraph the writer may append later, which is
+        // the order the ODF schema requires.
+        if (sheet.Comments.TryGetValue(addr, out var comment) && !string.IsNullOrEmpty(comment))
+        {
+            cellElement.AddFirst(new XElement(
+                OfficeNs + "annotation",
+                comment.Split('\n').Select(line => new XElement(TextNs + "p", line))));
+
+            // Same reasoning as the value/formula case below: a cell carrying a note is not an empty
+            // cell, so it must never be folded into a number-columns-repeated run with its blank
+            // neighbours -- that would move the note to the wrong address or drop it entirely.
+            styleSignature = "\x02" + styleSignature;
+        }
+
         if (cell is null)
             return cellElement;
 
@@ -309,6 +342,7 @@ public sealed partial class OdsFileAdapter
         // bare paragraph. ODF carries hyperlinks and this adapter dropped them on both sides.
         sheet.Hyperlinks.TryGetValue(addr, out var hyperlinkTarget);
         WriteCellValue(cellElement, cell.Value, styleId, workbook, hyperlinkTarget);
+
         // A value/formula cell can never collapse into an empty run.
         styleSignature = "\x01" + styleSignature;
         return cellElement;
