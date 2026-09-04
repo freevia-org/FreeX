@@ -58,7 +58,7 @@ namespace FreeX.Core.IO;
 /// back to the same current-culture ANSI resolution on decode failure.
 /// </para>
 /// </remarks>
-public sealed class PrnFileAdapter : IFileAdapter
+public sealed class PrnFileAdapter : IFileAdapter, ISingleSheetFileAdapter
 {
     public string Extension => ".prn";
     public string FormatName => "Formatted Text (Space delimited)";

@@ -17,7 +17,7 @@ namespace FreeX.Core.IO;
 /// </list>
 /// Single sheet, values only (numbers, text, booleans, errors). No formulas, formats, or structure.
 /// </summary>
-public sealed class DifFileAdapter : IFileAdapter
+public sealed class DifFileAdapter : IFileAdapter, ISingleSheetFileAdapter
 {
     private const int BeginningOfTuple = -1; // "-1,0" with a BOT/EOD indicator
     private const int NumericTypeId = 0;     // "0,<value>" numeric data

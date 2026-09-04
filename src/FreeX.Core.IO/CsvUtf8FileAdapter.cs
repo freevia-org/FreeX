@@ -9,7 +9,7 @@ namespace FreeX.Core.IO;
 /// non-ASCII text survives a round-trip through tools that key off the BOM (notably Excel itself).
 /// Reading reuses the shared delimited reader, whose BOM detection already strips the UTF-8 BOM.
 /// </summary>
-public sealed class CsvUtf8FileAdapter : IFileAdapter
+public sealed class CsvUtf8FileAdapter : IFileAdapter, ISingleSheetFileAdapter
 {
     public string Extension => ".csv";
     public string FormatName => "CSV UTF-8 (Comma delimited)";

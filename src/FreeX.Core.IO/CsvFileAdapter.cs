@@ -6,7 +6,7 @@ namespace FreeX.Core.IO;
 /// <summary>
 /// CSV file adapter with RFC 4180 quoting support.
 /// </summary>
-public sealed class CsvFileAdapter : IFileAdapter, IWarningCollectingFileAdapter
+public sealed class CsvFileAdapter : IFileAdapter, IWarningCollectingFileAdapter, ISingleSheetFileAdapter
 {
     public string Extension => ".csv";
     public string FormatName => "CSV (Comma-separated values)";

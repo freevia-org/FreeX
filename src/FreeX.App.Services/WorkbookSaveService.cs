@@ -112,6 +112,15 @@ public sealed class WorkbookSaveService
                         writtenWarnings = [];
                     }
 
+                    // r292: a single-sheet format keeps the first worksheet and drops the rest.
+                    // That is inherent to the format, not a bug -- but Excel warns before doing it
+                    // and FreeX did not, so the other sheets were simply missing the next time the
+                    // file was opened. Reported at the SAME chokepoint, and through the same
+                    // warnings channel, that the per-item XLSX warnings above already use, so no
+                    // call site needs to learn about it (see IWarningCollectingFileAdapter's note).
+                    if (SingleSheetSaveWarningPlanner.DescribeDiscardedSheets(adapter, workbook) is { } sheetLoss)
+                        writtenWarnings = [sheetLoss, .. writtenWarnings];
+
                     // r137-appservices-save-flush-to-disk: the plain (parameterless) Flush() above
                     // -- and the implicit flush that FileStream.Dispose performs via the `using` when
                     // this lambda returns -- only pushes OUR .NET-buffered bytes into the OS's page

@@ -21,7 +21,7 @@ namespace FreeX.Core.IO;
 /// inside a value is escaped by doubling. Formulas are R1C1 and reuse the shared
 /// <see cref="R1C1FormulaConverter"/>.
 /// </summary>
-public sealed class SlkFileAdapter : IFileAdapter
+public sealed class SlkFileAdapter : IFileAdapter, ISingleSheetFileAdapter
 {
     public string Extension => ".slk";
     public string FormatName => "SYLK (Symbolic Link)";
