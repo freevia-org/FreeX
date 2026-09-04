@@ -2232,6 +2232,27 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
                     styleOnlyWorksheetPathsToStrip,
                     sanitizationHints,
                     removeUnsupportedConditionalFormatting: false);
+                // r368: strip on a stream we know we may write to. The sanitizer returns the CALLER'S
+                // package stream unchanged when nothing needed sanitizing, and that stream may be
+                // read-only or already closed by an earlier open attempt -- a closed MemoryStream
+                // reports CanWrite false -- at which point opening it in ZipArchiveMode.Update threw
+                // ArgumentException("Update mode requires a stream with read, write, and seek
+                // capabilities") straight out of the load. This is the LAST-CHANCE path for a
+                // workbook whose orphaned shared formulas already stopped it opening, so the throw
+                // replaced a recoverable file with an unopenable one. Copying also stops the strip
+                // mutating a stream the caller still owns. ToArray is deliberate: it is documented to
+                // work on a disposed MemoryStream, which is precisely the case being recovered from.
+                // The copy must be EXPANDABLE: new MemoryStream(byte[]) wraps the array at fixed
+                // capacity, so the strip's rewrite throws NotSupportedException instead -- trading one
+                // unopenable file for another.
+                if (!basePackageStream.CanWrite || !basePackageStream.CanSeek || !basePackageStream.CanRead)
+                {
+                    var writablePackageStream = new MemoryStream();
+                    writablePackageStream.Write(basePackageStream.ToArray());
+                    writablePackageStream.Position = 0;
+                    basePackageStream = writablePackageStream;
+                }
+
                 StripOrphanedSharedFormulaSlaves(basePackageStream);
                 return basePackageStream;
             });
