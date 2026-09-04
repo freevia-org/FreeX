@@ -914,6 +914,7 @@ internal static class XlsxSourceDrawingGeometryRewriter
             // (RewriteShapeAltTextAndTitle) has always patched title; this is the picture path
             // catching up with both it and the fresh writer.
             changed |= SetOrRemoveAttribute(cNvPr, "title", string.IsNullOrWhiteSpace(picture.Title) ? null : picture.Title);
+            changed |= SetOrRemoveAttribute(cNvPr, "hidden", picture.IsVisible ? null : "1");
             changed |= SetDecorative(cNvPr, drawingNs, picture.IsDecorative);
         }
 

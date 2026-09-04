@@ -65,6 +65,10 @@ internal sealed record XlsxPicturePackagePart(
     // round-trip on save (XlsxWorksheetDrawingObjectWriter) or a decorative picture would incorrectly
     // become a real Missing-Alt-Text finding (in FreeX and in real Excel) after opening and resaving.
     bool IsDecorative = false,
+    // r318: true when this picture carries cNvPr@hidden. The Selection Pane's eye toggle
+    // (SelectionPaneCommands) sets PictureModel.IsVisible, and without this the hide was lost on
+    // save -- the picture came back visible the next time the file was opened.
+    bool IsHidden = false,
     // R97-model-drawing-hyperlink-2-2: the picture's object-level hyperlink (<a:hlinkClick> on its
     // cNvPr), resolved via the drawing part's own relationships. Populated for EVERY loaded picture
     // (not just ones that stay source-loaded) so DuplicateSheetDrawingCloner/PastePicturesCommand
@@ -510,6 +514,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             // R90-app-accessibility-checker-5-2: preserve Excel's "Mark as decorative" flag so a
             // decorative picture stays exempt from the Missing-Alt-Text rule after a round-trip.
             var isDecorative = ReadNonVisualDecorative(pictureElement);
+            var isHidden = ReadNonVisualHidden(pictureElement);
             var anchorElement = FindNearestAnchorElement(pictureElement, spreadsheetDrawingNs);
             var pictureTransform = pictureElement.Element(spreadsheetDrawingNs + "spPr")?.Element(drawingNs + "xfrm");
 
@@ -555,6 +560,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 linkTarget,
                 svgImageBytes,
                 isDecorative,
+                isHidden,
                 ReadObjectHyperlink(pictureElement, spreadsheetDrawingNs, drawingNs, relNs, hyperlinkRelsById)));
         }
 
@@ -1453,6 +1459,16 @@ internal static partial class XlsxWorksheetDrawingPartReader
     {
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
         return ReadFirstNonVisualAttribute(element, spreadsheetDrawingNs, "descr");
+    }
+
+    /// <summary>
+    /// r318: whether the object is hidden (Selection Pane eye off), from cNvPr@hidden.
+    /// </summary>
+    private static bool ReadNonVisualHidden(XElement element)
+    {
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        var raw = ReadFirstNonVisualAttribute(element, spreadsheetDrawingNs, "hidden");
+        return raw is "1" or "true";
     }
 
     private static string? ReadNonVisualTitle(XElement element)

@@ -739,6 +739,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     new XElement(spreadsheetDrawingNs + "cNvPr",
                         new XAttribute("id", pictureIndex + 1),
                         new XAttribute("name", DrawingName(picture.Name, $"Picture {pictureIndex}")),
+                        picture.IsVisible ? null : new XAttribute("hidden", "1"),
                         string.IsNullOrWhiteSpace(picture.Title) ? null : new XAttribute("title", picture.Title),
                         string.IsNullOrWhiteSpace(picture.AltText) ? null : new XAttribute("descr", picture.AltText),
                         // R95/R97-io-drawing-hyperlink: re-attach the object-level hyperlink (from the
@@ -807,6 +808,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     new XElement(spreadsheetDrawingNs + "cNvPr",
                         new XAttribute("id", pictureIndex + 1),
                         new XAttribute("name", DrawingName(picture.Name, $"Picture {pictureIndex}")),
+                        picture.IsVisible ? null : new XAttribute("hidden", "1"),
                         string.IsNullOrWhiteSpace(picture.Title) ? null : new XAttribute("title", picture.Title),
                         string.IsNullOrWhiteSpace(picture.AltText) ? null : new XAttribute("descr", picture.AltText),
                         // R95/R97-io-drawing-hyperlink: see ToOneCellPictureAnchor's matching comment.
@@ -897,6 +899,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     new XElement(spreadsheetDrawingNs + "cNvPr",
                         new XAttribute("id", groupId),
                         new XAttribute("name", DrawingName(picture.Name, $"Picture {pictureIndex}")),
+                        picture.IsVisible ? null : new XAttribute("hidden", "1"),
                         string.IsNullOrWhiteSpace(picture.Title) ? null : new XAttribute("title", picture.Title),
                         string.IsNullOrWhiteSpace(picture.AltText) ? null : new XAttribute("descr", picture.AltText),
                         // R119-io-camera-linked-picture-identity: replaces the plain
