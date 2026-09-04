@@ -3714,24 +3714,53 @@ public static class PptxPackageWriter
     // 3-slot placeholder fmtScheme, which silently discarded real effect styles on every save.
     private static XElement BuildThemeFormatSchemeXml(PresentationTheme theme)
     {
-        var fillStyleLst = theme.FillStyles.Count > 0
-            ? new XElement(A + "fillStyleLst", theme.FillStyles.Select(el => new XElement(el)))
-            : new XElement(A + "fillStyleLst", SolidPhClr(), SolidPhClr(), SolidPhClr());
+        var fillStyleLst = new XElement(A + "fillStyleLst",
+            StyleListEntries(theme.FillStyles, [SolidPhClr(), SolidPhClr(), SolidPhClr()]));
 
-        var lnStyleLst = theme.LineStyles.Count > 0
-            ? new XElement(A + "lnStyleLst", theme.LineStyles.Select(el => new XElement(el)))
-            : new XElement(A + "lnStyleLst", LnStyle(0.5), LnStyle(1.0), LnStyle(1.5));
+        var lnStyleLst = new XElement(A + "lnStyleLst",
+            StyleListEntries(theme.LineStyles, [LnStyle(0.5), LnStyle(1.0), LnStyle(1.5)]));
 
-        var effectStyleLst = theme.EffectStyles.Count > 0
-            ? new XElement(A + "effectStyleLst", theme.EffectStyles.Select(el => new XElement(el)))
-            : new XElement(A + "effectStyleLst", EffectStyle(), EffectStyle(), EffectStyle());
+        var effectStyleLst = new XElement(A + "effectStyleLst",
+            StyleListEntries(theme.EffectStyles, [EffectStyle(), EffectStyle(), EffectStyle()]));
 
-        var bgFillStyleLst = theme.BackgroundFillStyles.Count > 0
-            ? new XElement(A + "bgFillStyleLst", theme.BackgroundFillStyles.Select(el => new XElement(el)))
-            : new XElement(A + "bgFillStyleLst", SolidPhClr(), SolidPhClr(), SolidPhClr());
+        var bgFillStyleLst = new XElement(A + "bgFillStyleLst",
+            StyleListEntries(theme.BackgroundFillStyles, [SolidPhClr(), SolidPhClr(), SolidPhClr()]));
 
         return new XElement(A + "fmtScheme", new XAttribute("name", "Office"),
             fillStyleLst, lnStyleLst, effectStyleLst, bgFillStyleLst);
+    }
+
+    /// <summary>
+    /// r350: yields the entries for one <c>a:fmtScheme</c> style list, never fewer than the three
+    /// DrawingML requires.
+    ///
+    /// <para>Each of the four lists is <c>minOccurs="3"</c> in the schema. Reusing a read theme's
+    /// entries verbatim was therefore only safe for a source that already had three: a theme read
+    /// from a minimal .pptx with one or two entries was written straight back out, and
+    /// <c>OpenXmlValidator</c> rejects the result with "The element has incomplete content" on
+    /// <c>fillStyleLst</c> / <c>lnStyleLst</c>. The empty case was already handled; 1 and 2 were the
+    /// gap between the two branches.</para>
+    ///
+    /// <para>Short lists are padded by repeating their own LAST entry rather than appending a
+    /// generic placeholder. A <c>fillRef</c>/<c>lnRef</c> <c>idx</c> is a 1-based index into this
+    /// list, so entries 1..N must keep their positions -- which cloning preserves either way -- and a
+    /// reference past N is already outside the source's contract, where the theme's own final style
+    /// is a closer answer than a stock phClr fill.</para>
+    /// </summary>
+    private static IEnumerable<XElement> StyleListEntries(
+        IReadOnlyList<XElement> source,
+        IReadOnlyList<XElement> defaults)
+    {
+        if (source.Count == 0)
+            return defaults;
+
+        // Cloned: the same theme instance can back several masters/theme parts in one save, and an
+        // XElement can only be parented once.
+        var entries = source.Select(element => new XElement(element)).ToList();
+        while (entries.Count < defaults.Count)
+            entries.Add(new XElement(entries[^1]));
+
+        return entries;
     }
 
     private static XElement SolidPhClr() =>
