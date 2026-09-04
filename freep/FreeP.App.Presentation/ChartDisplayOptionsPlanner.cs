@@ -303,6 +303,15 @@ public sealed class ChartDisplayOptionsPlanner
     public string Title => _title;
     public bool TitleOverlay => _titleOverlay;
     public bool SupportsChartExTitleLayout => _supportsChartExTitleLayout;
+
+    /// <summary>
+    /// r379: false for a chartEx chart, where "Plot visible cells only" and "Rounded corners" cannot
+    /// be stored -- the cx part has no equivalent of c:plotVisOnly or c:roundedCorners, which
+    /// PptxChartWriter emits only in the classic namespace. PowerPoint does not offer either control
+    /// for those chart types, so offering them meant a user could tick a box that silently did
+    /// nothing and was gone by the next open.
+    /// </summary>
+    public bool SupportsClassicChartAreaOptions => !_supportsChartExTitleLayout;
     public ChartExTitlePosition TitlePosition => _titlePosition;
     public ChartExTitleAlignment TitleAlignment => _titleAlignment;
     public bool PlotVisibleOnly => _plotVisibleOnly;
