@@ -51,6 +51,21 @@ namespace FreeX.Core.IO;
 /// re-separating on whitespace is how Excel re-imports one.
 /// </para>
 /// <para>
+/// <b>What that costs (r298):</b> the WRITE side is fixed-width, so a cell's column is encoded in
+/// its position; the read side discards position. A row whose leading columns are empty therefore
+/// comes back SHIFTED LEFT -- a value written in B2 with A2 empty loads into A2. Consequently .prn
+/// is the one adapter here whose save-load-save is not byte-stable, and a workbook opened from .prn
+/// can differ in shape from the one that was saved. Rows with no empty leading column are
+/// unaffected, which is why this is easy to miss.
+/// </para>
+/// <para>
+/// Recovering the columns would mean inferring fixed-width boundaries from whitespace runs across
+/// lines (Excel's Text Import Wizard heuristic). That changes how every real .prn imports, not just
+/// files FreeX wrote, so it is a deliberate open question rather than an oversight --
+/// <c>R298_PrnWhitespaceReadShiftsLeadingEmptyColumnsTests</c> pins the current behaviour and says
+/// to invert those assertions rather than delete them if the reader ever gains position awareness.
+/// </para>
+/// <para>
 /// Encoding: the OS's current-culture ANSI code page, no byte-order mark (matching Excel's plain
 /// "Text" Save-As types, which predate Unicode -- see
 /// <see cref="DelimitedTextWorkbookWriter.ResolveAnsiEncoding"/>). Loading mirrors this: a strict
