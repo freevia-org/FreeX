@@ -249,7 +249,10 @@ public sealed class ChartRenderingTests
         var view = ViewWithChart(ChartKind.Column);
         view.InsertChart(new Chart { Kind = ChartKind.Column, Title = "t", StyleId = 1 });
         var chart = view.SelectedChart();
-        if (chart is null) return; // no chart selected in test environment — acceptable
+        // r361: was `if (chart is null) return;` -- a silent pass the day chart selection breaks.
+        // The probe that replaced it with a failure showed the chart IS selected today, so this asserts
+        // the precondition instead of quietly skipping the test that depends on it.
+        chart.Should().NotBeNull("ViewWithChart inserts and selects a chart, so the rest of this test is only meaningful if one is selected");
         var originalStyleId = chart.StyleId;
         view.ApplySelectedChartStyle(ChartStyle.Catalog[1]); // Style 2
         chart.StyleId.Should().NotBe(originalStyleId);
@@ -260,7 +263,7 @@ public sealed class ChartRenderingTests
     {
         var view = ViewWithChart(ChartKind.Column);
         var chart = view.SelectedChart();
-        if (chart is null) return;
+        chart.Should().NotBeNull("ViewWithChart inserts and selects a chart; a null selection would silently skip this test");
         view.ApplySelectedChartColorScheme(ChartColorScheme.Catalog.First(s => s.Id == "mono-grey"));
         chart.ColorSchemeId.Should().Be("mono-grey");
     }
@@ -270,7 +273,7 @@ public sealed class ChartRenderingTests
     {
         var view = ViewWithChart(ChartKind.Column);
         var chart = view.SelectedChart();
-        if (chart is null) return;
+        chart.Should().NotBeNull("ViewWithChart inserts and selects a chart; a null selection would silently skip this test");
         view.ApplySelectedChartQuickLayout(ChartQuickLayout.Catalog[2]); // Layout 3
         chart.QuickLayoutId.Should().Be(3);
     }
