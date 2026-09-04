@@ -118,8 +118,21 @@ public sealed class WorkbookSaveService
                     // file was opened. Reported at the SAME chokepoint, and through the same
                     // warnings channel, that the per-item XLSX warnings above already use, so no
                     // call site needs to learn about it (see IWarningCollectingFileAdapter's note).
-                    if (SingleSheetSaveWarningPlanner.DescribeDiscardedSheets(adapter, workbook) is { } sheetLoss)
+                    //
+                    // r394: but only when the user has not ALREADY been asked about exactly this.
+                    // LossyFormatFeatureLossPlanner gates the plain/single-sheet targets on a
+                    // pre-save "Possible Data Loss ... only the current worksheet's data will be
+                    // saved ... Keep this format?" confirmation, on the same Sheets.Count > 1
+                    // condition this warning reports, and BOTH shells call it. Reporting it again
+                    // afterwards told the user their sheets were dropped immediately after they
+                    // agreed to drop them -- Excel asks once and then saves silently. The warning
+                    // still fires for the formats that planner documents as NOT gated (.xml,
+                    // .html/.mht, .pdf), where it remains the only notice the user gets.
+                    if (!LossyFormatFeatureLossPlanner.RequiresFeatureLossConfirmation(workbook, Path.GetExtension(path)) &&
+                        SingleSheetSaveWarningPlanner.DescribeDiscardedSheets(adapter, workbook) is { } sheetLoss)
+                    {
                         writtenWarnings = [sheetLoss, .. writtenWarnings];
+                    }
 
                     // r137-appservices-save-flush-to-disk: the plain (parameterless) Flush() above
                     // -- and the implicit flush that FileStream.Dispose performs via the `using` when

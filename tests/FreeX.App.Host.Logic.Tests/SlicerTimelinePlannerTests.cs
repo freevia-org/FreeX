@@ -489,7 +489,22 @@ public sealed class SlicerTimelinePlannerTests
 
         File.Exists(Path.Combine(hostRoot, "SlicerTimelinePlanner.cs"))
             .Should().BeFalse("the shared planner should be the only implementation");
-        buildSlicerTiles.Should().Contain("new SortedSet<string>(StringComparer.CurrentCultureIgnoreCase)");
+        // r394: this line used to pin `new SortedSet<string>(StringComparer.CurrentCultureIgnoreCase)`
+        // and had been RED since r311 removed it. r311 was a real fix -- one culture-aware set was
+        // deciding both which items exist and how they are ordered, so two source values the IO layer
+        // keeps distinct could collapse into a single tile. Identity is ordinal (the file decides),
+        // ordering is the user's locale. A guard pinning the implementation r311 deleted is worse
+        // than no guard: it pressures the next person to revert the fix to get green. Pin r311's
+        // invariant instead, which is what this test actually cares about.
+        buildSlicerTiles.Should().Contain(
+            "new HashSet<string>(StringComparer.OrdinalIgnoreCase)",
+            "identity must be ordinal so two items the file keeps distinct cannot collapse into one tile");
+        buildSlicerTiles.Should().Contain(
+            "items.Sort(StringComparer.CurrentCultureIgnoreCase)",
+            "display order belongs to the user's locale");
+        buildSlicerTiles.Should().NotContain(
+            "new SortedSet<string>(StringComparer.CurrentCultureIgnoreCase)",
+            "one culture-aware set doing both identity and ordering is exactly the r311 defect");
         buildSlicerTiles.Should().Contain("new List<SlicerTileItem>(items.Count)");
         buildSlicerTiles.Should().NotContain(".ToList()");
         buildSlicerTiles.Should().NotContain(".Distinct(");
