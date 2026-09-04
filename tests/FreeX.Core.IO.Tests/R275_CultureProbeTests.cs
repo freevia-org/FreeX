@@ -10,9 +10,20 @@ public sealed class R275_CultureProbeTests
 {
     // Text-based formats whose payload is inspectable as characters. Excludes DBF (read-only by
     // design) and the binary/zip formats, which the round-trip theory covers instead.
+    // Formats whose decimal separator is fixed by the format itself, so it must never follow the
+    // operator's locale.
+    //
+    // r393 removed "csv" from this list, narrowing r275's rule rather than discarding it. The
+    // reasoning below is right for every format still here -- SLK, DIF, SpreadsheetML, JSON and HTML
+    // all specify their number syntax, and csvutf8/delimited/prn write a FIXED delimiter, so a
+    // decimal comma beside a comma would split one number into two fields. Plain CSV is the
+    // exception: it specifies nothing, and FreeX already takes its delimiter from the OS list
+    // separator because Excel does (';' on de-DE, precisely because ',' is the decimal mark there).
+    // Writing "1234.5678;" was a combination no locale produces, and Excel on such a machine imports
+    // it as text. See R393_CsvNumbersFollowTheLocaleTests.
     public static TheoryData<string> TextFormats() => new()
     {
-        "csv", "csvutf8", "delimited", "prn", "slk", "dif", "xml", "json", "html",
+        "csvutf8", "delimited", "prn", "slk", "dif", "xml", "json", "html",
     };
 
     public static TheoryData<string> RoundTripFormats() => new()
