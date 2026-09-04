@@ -177,6 +177,8 @@ public sealed class RenameSelectionPaneObjectCommand : IWorkbookCommand
     private readonly string _newName;
     private string? _previousName;
     private bool _previousIsSourceLoaded;
+    // r320: the source anchor name this rename superseded, so Revert can un-supersede it.
+    private string? _supersededSourceName;
     private bool _applied;
 
     public string Label => "Rename Object";
@@ -228,6 +230,21 @@ public sealed class RenameSelectionPaneObjectCommand : IWorkbookCommand
         // format edits. Chart's IsSourceLoaded is a permanent no-op (see the property doc), so this
         // is scoped to Picture/TextBox/Shape exactly as the defect requires.
         target.IsSourceLoaded = false;
+
+        // r320: clearing the gate above makes the writer emit a fresh anchor under the NEW name, but
+        // it does not tell the merger to drop the original anchor, which still bears the OLD one.
+        // GetRewrittenSourceObjectNames supersedes a source anchor by matching the model's CURRENT
+        // name, so after a rename nothing matches the original and it is copied through beside the
+        // regenerated object: renaming a loaded picture, text box or shape DUPLICATED it, and again
+        // on every subsequent rename. R124 fixed the rename being discarded and turned it into this.
+        // DeletedSourceDrawingObjectNames is exactly the channel for "keep this original anchor out
+        // of the merge", so the old name goes there.
+        if (_previousIsSourceLoaded && !string.IsNullOrWhiteSpace(_previousName))
+        {
+            sheet.DeletedSourceDrawingObjectNames.Add(_previousName);
+            _supersededSourceName = _previousName;
+        }
+
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [target.Anchor]);
     }
@@ -237,9 +254,18 @@ public sealed class RenameSelectionPaneObjectCommand : IWorkbookCommand
         if (!_applied)
             return;
 
-        var target = SelectionPaneObjectAccess.Find(ctx.GetSheet(_sheetId), _kind, _objectId);
+        var sheet = ctx.GetSheet(_sheetId);
+        var target = SelectionPaneObjectAccess.Find(sheet, _kind, _objectId);
         if (target is null)
             return;
+
+        // Undo restores the original name, so the original anchor must stop being superseded --
+        // otherwise undoing a rename would delete the object's source XML instead of restoring it.
+        if (_supersededSourceName is { } supersededName)
+        {
+            sheet.DeletedSourceDrawingObjectNames.Remove(supersededName);
+            _supersededSourceName = null;
+        }
 
         target.Name = _previousName;
         target.IsSourceLoaded = _previousIsSourceLoaded;
