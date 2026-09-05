@@ -18,8 +18,35 @@ internal static class XlsxConditionalFormatClosedXmlMapper
         // 1..N counter keeps CellIs/Expression rules on the SAME priority sequence as the advanced
         // (ColorScale/DataBar/IconSet/long-tail) rules the caller already added to sheet.ConditionalFormats,
         // preserving the file's true relative evaluation order between the two rule families.
-        var priorityQueue = classicRulePriorities is { Count: > 0 }
-            ? new Queue<int>(classicRulePriorities)
+        // r421: sorted ASCENDING, not left in document order. These queues are drained positionally
+        // against `xlSheet.ConditionalFormats`, and ClosedXML enumerates that collection in
+        // priority-ascending order rather than document order. Measured: writing rules in document
+        // order with priorities 5, 1, 9 and reading them back gave the rule that owned 1 a priority
+        // of 5, the one that owned 5 a priority of 1, and only the third correct -- each rule
+        // keeping its own operator and value, but wearing a neighbour's priority.
+        //
+        // The rules themselves were fine on disk (verified in the written sheet XML), so this was
+        // purely a read-side pairing bug -- and a quiet one: priority decides which rule wins where
+        // two overlap, so a file whose document order differs from its priority order came back with
+        // its precedence INVERTED. Nothing looks broken; the wrong rule's colour simply wins.
+        //
+        // Sorting ascending restores the pairing, because position N of a priority-ascending
+        // enumeration is by definition the rule holding the Nth smallest priority. Ordering by
+        // priority is also what the format means, so this is not a workaround for one library's
+        // iteration order -- but it is pinned by test in case that order ever changes.
+        var sortedClassicMetadata = classicRulePriorities is { Count: > 0 }
+            ? classicRulePriorities
+                .Select((priority, index) => (
+                    Priority: priority,
+                    Container: classicContainerAttributes is not null && index < classicContainerAttributes.Count
+                        ? classicContainerAttributes[index]
+                        : null))
+                .OrderBy(entry => entry.Priority)
+                .ToList()
+            : null;
+
+        var priorityQueue = sortedClassicMetadata is { Count: > 0 }
+            ? new Queue<int>(sortedClassicMetadata.Select(entry => entry.Priority))
             : null;
         int fallbackPriority = 1;
         int NextPriority() => priorityQueue is { Count: > 0 } ? priorityQueue.Dequeue() : fallbackPriority++;
@@ -29,9 +56,14 @@ internal static class XlsxConditionalFormatClosedXmlMapper
         // own object model (IXLConditionalFormat/IXLConditionalFormats) exposes no such attribute at
         // all, so a caller wanting these preserved must capture them straight from the raw worksheet
         // XML (mirroring how classicRulePriorities itself is captured) and pass them here.
-        var containerAttributesQueue = classicContainerAttributes is { Count: > 0 }
-            ? new Queue<IReadOnlyDictionary<string, string>?>(classicContainerAttributes)
-            : null;
+        // Sorted with the priorities above, as PAIRS. The two queues are advanced together on the
+        // documented assumption that entry N of one belongs with entry N of the other; reordering
+        // only the priorities would have fixed their pairing by breaking this one.
+        var containerAttributesQueue = sortedClassicMetadata is { Count: > 0 }
+            ? new Queue<IReadOnlyDictionary<string, string>?>(sortedClassicMetadata.Select(entry => entry.Container))
+            : classicContainerAttributes is { Count: > 0 }
+                ? new Queue<IReadOnlyDictionary<string, string>?>(classicContainerAttributes)
+                : null;
         IReadOnlyDictionary<string, string>? NextContainerAttributes() =>
             containerAttributesQueue is { Count: > 0 } ? containerAttributesQueue.Dequeue() : null;
 

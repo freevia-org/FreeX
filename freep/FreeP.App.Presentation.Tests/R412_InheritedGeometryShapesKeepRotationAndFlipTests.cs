@@ -74,7 +74,7 @@ public sealed class R412_InheritedGeometryShapesKeepRotationAndFlipTests
         var transform = FirstShapeTransform(DeckWithInheritedGeometryShape(shape => shape.FlipH = true));
 
         transform.Should().NotBeNull("the flip has to reach the file or it is lost on reopen");
-        transform!.Attribute("flipH")?.Value.Should().Be("1");
+        transform!.Attribute("flipH")!.Value.Should().Be("1", "the flip attribute itself must be present, not merely the transform");
         transform.Element(A + "ext").Should().BeNull(
             "an inherited extent must not be baked in as an explicit zero -- that is the trap this " +
             "guard was protecting against, and the fix must not reintroduce it");
@@ -86,7 +86,7 @@ public sealed class R412_InheritedGeometryShapesKeepRotationAndFlipTests
         var transform = FirstShapeTransform(DeckWithInheritedGeometryShape(shape => shape.RotationDeg = 45));
 
         transform.Should().NotBeNull("the rotation has to reach the file or it is lost on reopen");
-        transform!.Attribute("rot")?.Value.Should().Be(
+        transform!.Attribute("rot")!.Value.Should().Be(
             (45 * 60000).ToString(System.Globalization.CultureInfo.InvariantCulture),
             "DrawingML stores rotation in 60000ths of a degree");
         transform.Element(A + "off").Should().BeNull("the shape still inherits its position");
