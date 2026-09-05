@@ -49,6 +49,13 @@ public sealed class R405_WorkbookCommandUndoRestoresTests
         sheet.ColumnWidths[3] = 17.25;
         sheet.AddMergedRegion(GridRange.Parse("C5:D5", sheet.Id));
 
+        // r407: annotation layers, so the clear-* commands have something to clear. Without these
+        // their Apply is a no-op and the change-gate rejects them -- correctly, since a test that
+        // clears nothing proves nothing about restoring it.
+        sheet.Comments[new CellAddress(sheet.Id, 1, 1)] = "first note";
+        sheet.Comments[new CellAddress(sheet.Id, 2, 2)] = "second note";
+        sheet.Hyperlinks[new CellAddress(sheet.Id, 1, 2)] = "https://example.invalid/a";
+
         return (workbook, sheet, new TestCommandContext(workbook));
     }
 
@@ -74,6 +81,24 @@ public sealed class R405_WorkbookCommandUndoRestoresTests
 
             foreach (var region in sheet.MergedRegions.OrderBy(r => r.ToString(), StringComparer.Ordinal))
                 builder.Append("  merge ").Append(region).AppendLine();
+
+            // r407: the annotation layers. A command that clears comments, validations, hyperlinks
+            // or conditional formats and reverts imperfectly would be invisible to a snapshot of
+            // cells and geometry alone -- the state lives beside the grid, not in it.
+            foreach (var (address, comment) in sheet.Comments.OrderBy(pair => pair.Key.Row).ThenBy(pair => pair.Key.Col))
+                builder.Append("  comment ").Append(address.Row).Append(',').Append(address.Col).Append('=').Append(comment).AppendLine();
+
+            foreach (var (address, target) in sheet.Hyperlinks.OrderBy(pair => pair.Key.Row).ThenBy(pair => pair.Key.Col))
+                builder.Append("  link ").Append(address.Row).Append(',').Append(address.Col).Append('=').Append(target).AppendLine();
+
+            builder.Append("  validations=").Append(sheet.DataValidations.Count).AppendLine();
+            builder.Append("  conditionalFormats=").Append(sheet.ConditionalFormats.Count).AppendLine();
+
+            // Added because the change-gate rejected ToggleWorksheetAutoFilter: the command changes
+            // only this field, so with it missing the snapshot could not see the command work at
+            // all. The gate refusing to let that test through is the whole reason it exists.
+            builder.Append("  autoFilter=").Append(sheet.AutoFilter?.Reference ?? "none")
+                .Append(" cols=").Append(sheet.AutoFilter?.FilterColumns.Count ?? 0).AppendLine();
 
             foreach (var (address, cell) in sheet.EnumerateCells().OrderBy(pair => pair.Address.Row).ThenBy(pair => pair.Address.Col))
             {
@@ -121,6 +146,10 @@ public sealed class R405_WorkbookCommandUndoRestoresTests
         snapshot.Should().Contain("colW 3=17.25", "column widths must be part of the comparison");
         snapshot.Should().Contain("merge ", "merged regions must be part of the comparison");
         snapshot.Should().Contain("1,1 = ", "cell values must be part of the comparison");
+        snapshot.Should().Contain("comment 1,1=first note", "comments must be part of the comparison");
+        snapshot.Should().Contain("link 1,2=", "hyperlinks must be part of the comparison");
+        snapshot.Should().Contain("validations=", "data validations must be part of the comparison");
+        snapshot.Should().Contain("conditionalFormats=", "conditional formats must be part of the comparison");
     }
 
     [Fact]
@@ -154,6 +183,16 @@ public sealed class R405_WorkbookCommandUndoRestoresTests
         Check("AddSheet", _ => new AddSheetCommand("Added"));
 
         Check("RenameSheet", sheet => new RenameSheetCommand(sheet.Id, "Renamed"));
+
+        // r407: the annotation layers the snapshot was just deepened for.
+        Check("ClearComments", sheet => new ClearCommentsCommand(
+            sheet.Id, GridRange.Parse("A1:B2", sheet.Id)));
+
+        Check("ClearHyperlinks", sheet => new ClearHyperlinksCommand(
+            sheet.Id, GridRange.Parse("A1:B2", sheet.Id)));
+
+        Check("ToggleWorksheetAutoFilter", sheet => new ToggleWorksheetAutoFilterCommand(
+            sheet.Id, GridRange.Parse("A1:D6", sheet.Id)));
     }
 
     /// <summary>
