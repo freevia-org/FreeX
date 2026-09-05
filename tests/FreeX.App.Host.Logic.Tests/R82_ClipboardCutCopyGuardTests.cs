@@ -323,14 +323,8 @@ public sealed class R82_ClipboardCutCopyGuardTests
         }
     }
 
-    private static void PumpDispatcher()
-    {
-        var frame = new System.Windows.Threading.DispatcherFrame();
-        System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
-            System.Windows.Threading.DispatcherPriority.Background,
-            new Action(() => frame.Continue = false));
-        System.Windows.Threading.Dispatcher.PushFrame(frame);
-    }
+    // r446: delegates to the one fixed implementation -- see R49MainWindowTestHarness.
+    private static void PumpDispatcher() => R49MainWindowTestHarness.PumpDispatcher();
 
     /// <summary>Records every <see cref="ShowWarning"/> call so tests can assert a rejected
     /// command actually surfaced the expected error, instead of silently no-op'ing.</summary>

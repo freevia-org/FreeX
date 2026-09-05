@@ -76,14 +76,8 @@ public sealed class R120_NewWindowSeedsActiveCellAndSelectionTests
         };
     }
 
-    private static void PumpDispatcher()
-    {
-        var frame = new System.Windows.Threading.DispatcherFrame();
-        System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
-            System.Windows.Threading.DispatcherPriority.Background,
-            new Action(() => frame.Continue = false));
-        System.Windows.Threading.Dispatcher.PushFrame(frame);
-    }
+    // r446: delegates to the one fixed implementation -- see DispatcherTestPump.
+    private static void PumpDispatcher() => DispatcherTestPump.PumpDispatcher();
 
     /// <summary>Drives the same private selection setter the real grid/Name Box/Go To use.</summary>
     private static void SetSelectionRange(MainWindow window, GridRange range, CellAddress activeCell)

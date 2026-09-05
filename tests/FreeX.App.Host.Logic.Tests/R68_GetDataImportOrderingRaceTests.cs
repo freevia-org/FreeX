@@ -233,14 +233,8 @@ public sealed class R68_GetDataImportOrderingRaceTests
         }
     }
 
-    private static void PumpDispatcher()
-    {
-        var frame = new DispatcherFrame();
-        Dispatcher.CurrentDispatcher.BeginInvoke(
-            DispatcherPriority.Background,
-            new Action(() => frame.Continue = false));
-        Dispatcher.PushFrame(frame);
-    }
+    // r446: delegates to the one fixed implementation -- see R49MainWindowTestHarness.
+    private static void PumpDispatcher() => R49MainWindowTestHarness.PumpDispatcher();
 
     /// <summary>
     /// No-op <see cref="IUserMessageService"/> for tests that construct <see cref="MainWindow"/> directly

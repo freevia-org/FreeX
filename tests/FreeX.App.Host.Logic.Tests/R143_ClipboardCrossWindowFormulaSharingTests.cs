@@ -172,14 +172,8 @@ public sealed class R143_ClipboardCrossWindowFormulaSharingTests
         }
     }
 
-    private static void PumpDispatcher()
-    {
-        var frame = new DispatcherFrame();
-        Dispatcher.CurrentDispatcher.BeginInvoke(
-            DispatcherPriority.Background,
-            new Action(() => frame.Continue = false));
-        Dispatcher.PushFrame(frame);
-    }
+    // r446: delegates to the one fixed implementation -- see R49MainWindowTestHarness.
+    private static void PumpDispatcher() => R49MainWindowTestHarness.PumpDispatcher();
 
     /// <summary>No-op message recorder -- these tests don't assert on user-facing messages.</summary>
     private sealed class RecordingUserMessageService : IUserMessageService

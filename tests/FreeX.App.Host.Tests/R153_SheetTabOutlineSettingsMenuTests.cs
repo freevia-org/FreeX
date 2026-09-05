@@ -266,12 +266,6 @@ public sealed class R153_SheetTabOutlineSettingsMenuTests
         }
     }
 
-    private static void PumpDispatcher()
-    {
-        var frame = new DispatcherFrame();
-        Dispatcher.CurrentDispatcher.BeginInvoke(
-            DispatcherPriority.Background,
-            new Action(() => frame.Continue = false));
-        Dispatcher.PushFrame(frame);
-    }
+    // r446: delegates to the one fixed implementation -- see DispatcherTestPump.
+    private static void PumpDispatcher() => DispatcherTestPump.PumpDispatcher();
 }
