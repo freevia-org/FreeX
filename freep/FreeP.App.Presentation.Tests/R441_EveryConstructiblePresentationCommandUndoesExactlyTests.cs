@@ -48,8 +48,20 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
             presentation.Slides.Add(slide);
         }
 
+        // r447: a master and a layout, because MasterEditTarget was the second most common thing
+        // blocking construction (6 constructors) and every one of those commands addresses a master
+        // or layout BY ID. Seeding them is only half of it -- the factory below answers with these
+        // exact ids, since state the invented arguments cannot reach changes nothing (r442's lesson).
+        var master = new SlideMaster { Id = MasterId };
+        var layout = new SlideLayout { Id = LayoutId };
+        presentation.Masters.Add(master);
+        presentation.Layouts.Add(layout);
+
         return presentation;
     }
+
+    private const string MasterId = "master1";
+    private const string LayoutId = "layout1";
 
     private static object? ValueFor(Type type)
     {
@@ -66,6 +78,39 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
             return Enum.GetValues(type).Cast<object>().Skip(1).FirstOrDefault()
                 ?? Enum.GetValues(type).Cast<object>().FirstOrDefault();
         }
+
+        // r447: the domain types that actually blocked construction, measured across every command
+        // this factory could NOT build rather than guessed: MasterEditTarget (6 constructors),
+        // ShapeFill (5), SlideShape / ShapeOutline / TextBody (3 each), Slide (2). FreeP has no
+        // single dominant blocker the way FreeX had Nullable and IReadOnlyList, so this is a short
+        // tail rather than one sweeping addition.
+        if (type == typeof(MasterEditTarget)) return MasterEditTarget.Master(MasterId);
+        if (type == typeof(ShapeFill)) return new ShapeFill.Solid(SrgbColor.FromRgb(0x33AA66));
+        if (type == typeof(ShapeOutline))
+            return new ShapeOutline.Visible(new ThemeAwareColor(SrgbColor.FromRgb(0xFF0000)), widthPt: 1.5);
+        if (type == typeof(TextBody))
+        {
+            var body = new TextBody();
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run { Text = "probe" });
+            body.Paragraphs.Add(paragraph);
+            return body;
+        }
+
+        if (type == typeof(SlideShape))
+        {
+            return new SlideShape
+            {
+                Id = 99,
+                Name = "Probe",
+                OffsetXEmu = 100000,
+                OffsetYEmu = 200000,
+                ExtentCxEmu = 500000,
+                ExtentCyEmu = 400000,
+            };
+        }
+
+        if (type == typeof(Slide)) return new Slide();
 
         var underlying = Nullable.GetUnderlyingType(type);
         if (underlying is not null)
@@ -281,7 +326,7 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
             "command in the census ever reports no effect, that assertion is vacuous. " + census);
 
         exercised.Should().BeGreaterThanOrEqualTo(
-            5,
+            10,
             "the driver must still be exercising commands -- if this falls, the sweep has quietly " +
             "stopped testing rather than the commands having improved. Only 6 today, against 71 in " +
             "the FreeX sibling: most FreeP commands need domain objects this factory cannot invent. " +

@@ -84,6 +84,22 @@ public sealed class R442_EveryConstructibleDocumentCommandUndoesExactlyTests
                 ?? Enum.GetValues(type).Cast<object>().FirstOrDefault();
         }
 
+        // r447: measured across every command this factory could NOT build, rather than guessed.
+        // IReadOnlyList<T> led at 13 -- but of DOMAIN element types, so supplying Run, Paragraph and
+        // Block unlocks the lists as well as the bare parameters. Action<T> was next at 7: those are
+        // callbacks the command invokes (a redraw signal, a progress report), for which a no-op
+        // delegate is the correct double rather than a stub that records.
+        if (type == typeof(Run)) return new Run("probe");
+        if (type == typeof(Paragraph) || type == typeof(Block)) return new Paragraph("probe");
+
+        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Action<>))
+        {
+            var parameter = System.Linq.Expressions.Expression.Parameter(type.GetGenericArguments()[0]);
+            return System.Linq.Expressions.Expression
+                .Lambda(type, System.Linq.Expressions.Expression.Empty(), parameter)
+                .Compile();
+        }
+
         var underlying = Nullable.GetUnderlyingType(type);
         if (underlying is not null)
             return ValueFor(underlying);
@@ -313,7 +329,7 @@ public sealed class R442_EveryConstructibleDocumentCommandUndoesExactlyTests
             "command in the census ever reports no effect, that assertion is vacuous. " + census);
 
         exercised.Should().BeGreaterThanOrEqualTo(
-            10,
+            15,
             "the driver must still be exercising commands -- if this falls, the sweep has quietly " +
             "stopped testing rather than the commands having improved. 12 today out of 129: most " +
             "FreeW commands need a selection or a dialog-values object this factory cannot invent, " +
