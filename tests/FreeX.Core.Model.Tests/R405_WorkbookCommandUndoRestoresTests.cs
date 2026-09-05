@@ -136,5 +136,44 @@ public sealed class R405_WorkbookCommandUndoRestoresTests
         Check("InsertColumns", sheet => new InsertColumnsCommand(sheet.Id, 2, 1));
 
         Check("DeleteColumns", sheet => new DeleteColumnsCommand(sheet.Id, 2, 1));
+
+        // r406: extending the sample, which the previous entry called "a line per command". These
+        // reach state the first six did not: merges as their own operation, style ids, the row and
+        // column sizing the snapshot was widened for, and workbook-level sheet identity and order.
+        Check("MergeCells", sheet => new MergeCellsCommand(sheet.Id, GridRange.Parse("A1:B1", sheet.Id)));
+
+        Check("UnmergeCells", sheet => new UnmergeCellsCommand(sheet.Id, GridRange.Parse("C5:D5", sheet.Id)));
+
+        Check("ApplyStyle", sheet => new ApplyStyleCommand(
+            sheet.Id, GridRange.Parse("A1:B2", sheet.Id), new StyleDiff { Bold = true }));
+
+        Check("SetRowHeight", sheet => new SetRowHeightCommand(sheet.Id, 2, 4, 33.5));
+
+        Check("SetColumnWidth", sheet => new SetColumnWidthCommand(sheet.Id, 2, 4, 21.75));
+
+        Check("AddSheet", _ => new AddSheetCommand("Added"));
+
+        Check("RenameSheet", sheet => new RenameSheetCommand(sheet.Id, "Renamed"));
+    }
+
+    /// <summary>
+    /// Sheet ORDER is workbook-level state that a per-sheet snapshot would miss, so it gets its own
+    /// fixture with a second sheet to move.
+    /// </summary>
+    [Fact]
+    public void MovingASheetUndoesExactly()
+    {
+        var (workbook, _, context) = Setup();
+        workbook.AddSheet("Second");
+
+        var before = Snapshot(workbook);
+        var command = new MoveSheetCommand(0, 1);
+        command.Apply(context);
+
+        Snapshot(workbook).Should().NotBe(before, "moving a sheet must reorder the workbook");
+
+        command.Revert(context);
+
+        Snapshot(workbook).Should().Be(before, "MoveSheet: undo must restore the original order");
     }
 }
