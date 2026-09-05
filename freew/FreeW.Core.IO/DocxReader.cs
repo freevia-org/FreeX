@@ -159,7 +159,26 @@ public static class DocxReader
         MarkDuplicateDrawingIdentities(documentXml.Root);
 
         var body = documentXml.Root?.Element(W + "body");
-        if (body is not null)
+
+        // r449: a document part with no w:body at all is not a document this reader understands, and
+        // must be reported rather than opened. The lookup above is null-tolerant, so a word/document.xml
+        // whose root is unrecognised -- a partially written save, or an unexpected namespace -- read
+        // no blocks; the "no blocks, add an empty paragraph" fallback below then manufactured a
+        // convincing blank page out of it. The user opens their document, sees one empty paragraph,
+        // and saving overwrites the original with that. Sibling of the same defect in FreeP's reader
+        // (r448), found by the same probe.
+        //
+        // Narrow on purpose: a genuinely empty Word document still carries <w:body> (Word always
+        // writes one, with at least a sectPr), so this rejects only the contradiction -- a document
+        // part that exists and parses, yet has no body to read.
+        if (body is null)
+        {
+            throw new InvalidDataException(
+                "This document appears to be damaged: its main document part could not be read. " +
+                "Opening it would show an empty document and saving would discard the content it " +
+                "still holds.");
+        }
+
         {
             // Word suppresses automatic paragraph spacing (w:before/afterAutospacing) BETWEEN two
             // consecutive auto-spaced paragraphs — a block (e.g. an HTML-paste list) reads as tight, with
