@@ -163,7 +163,7 @@ public sealed class R421_ConditionalFormatRulesReachTheFileTests
     }
 
     [Fact]
-    public void AColourScaleKeepsItsColoursAndThresholds()
+    public void AColourScaleKeepsItsColours()
     {
         var reloaded = RoundTrip(new ConditionalFormat
         {
@@ -178,6 +178,49 @@ public sealed class R421_ConditionalFormatRulesReachTheFileTests
         reloaded.MinColor.Should().Be(new RgbColor(10, 20, 30));
         reloaded.MidColor.Should().Be(new RgbColor(40, 50, 60));
         reloaded.MaxColor.Should().Be(new RgbColor(70, 80, 90));
+    }
+
+    /// <summary>
+    /// A colour scale's THRESHOLDS decide which value gets which colour.
+    /// </summary>
+    /// <remarks>
+    /// r433: this exists because the test above was originally called
+    /// "AColourScaleKeepsItsColoursAndThresholds" and asserted only the colours -- it never set a
+    /// threshold at all. A test whose name claims more than its body checks is the quietest way a
+    /// suite lies: anyone auditing coverage by name would have ticked thresholds off and moved on.
+    /// The name was corrected and the missing half written here.
+    /// <para>Thresholds matter as much as the colours: the same three colours anchored to percentile
+    /// 50 rather than to a number of 42 paint an entirely different sheet, and both look like a
+    /// working colour scale.</para>
+    /// <para>Probe values differ from the model's defaults, which are Min / Percentile-50 / Max --
+    /// a probe equal to a default round-trips through a writer that emits nothing (the r424 rule).</para>
+    /// </remarks>
+    [Fact]
+    public void AColourScaleKeepsItsThresholds()
+    {
+        var reloaded = RoundTrip(new ConditionalFormat
+        {
+            RuleType = CfRuleType.ColorScale,
+            UseThreeColorScale = true,
+            MinThresholdType = CfThresholdType.Number,
+            MinThresholdValue = "10",
+            MidThresholdType = CfThresholdType.Percent,
+            MidThresholdValue = "60",
+            MaxThresholdType = CfThresholdType.Number,
+            MaxThresholdValue = "90",
+        });
+
+        reloaded.Should().NotBeNull("the rule must survive before its thresholds can be compared");
+
+        reloaded!.MinThresholdType.Should().Be(
+            CfThresholdType.Number, "Min is the default, so a lost type silently reverts to auto-scaling");
+        reloaded.MinThresholdValue.Should().Be("10");
+
+        reloaded.MidThresholdType.Should().Be(CfThresholdType.Percent, "the midpoint anchors the middle colour");
+        reloaded.MidThresholdValue.Should().Be("60", "60 differs from the model default of 50");
+
+        reloaded.MaxThresholdType.Should().Be(CfThresholdType.Number);
+        reloaded.MaxThresholdValue.Should().Be("90");
     }
 
     [Fact]
