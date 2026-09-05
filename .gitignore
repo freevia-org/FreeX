@@ -80,3 +80,6 @@ tools/_old_mainwindow.xaml
 .metrics-data/*.tmp
 .metrics-data/*.partial
 build.binlog
+
+# Written by CI to record which commit the cached obj/ tree was built from.
+obj-build-cache-commit.txt

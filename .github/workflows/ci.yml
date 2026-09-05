@@ -61,6 +61,30 @@ jobs:
           path: ~/.nuget/packages
           key: nuget-v2-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets') }}
           restore-keys: nuget-v2-${{ runner.os }}-
+      # Compilation is the largest slice of a gate job (measured: 169s of a 300s gate, against 34s
+      # of restore and ~97s of actual tests), so the intermediate output is cached between runs.
+      # Only obj/ is cached, never bin/: obj/ is ~0.1 GB per gate where bin/ is ~2 GB, and 22 jobs
+      # of bin/ would exceed the 10 GB repository cache budget. bin/ is cheap to reconstitute by
+      # copying out of obj/.
+      - name: Cache build intermediates
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            **/obj
+            obj-build-cache-commit.txt
+          key: buildcache-v1-${{ runner.os }}-${{ matrix.displayGateId }}-${{ github.sha }}
+          restore-keys: buildcache-v1-${{ runner.os }}-${{ matrix.displayGateId }}-
+      # Reusing that cache is ONLY safe after this runs. A checkout stamps every source file with
+      # the checkout time and the cache is unpacked afterwards, so left alone every restored output
+      # looks newer than every source and MSBuild silently skips compiling changed code -- a green
+      # build of the previous commit. This rewrites timestamps so they encode what git says actually
+      # changed; see the script for the full argument and the fallback to a clean build.
+      - name: Make build-cache timestamps honest
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/Set-BuildCacheTimestamps.ps1
+      - name: Record the commit this cache will hold
+        shell: pwsh
+        run: '"${{ github.sha }}" | Set-Content -LiteralPath obj-build-cache-commit.txt -Encoding ascii'
       - name: Run repository-static preflight
         if: matrix.runStaticPreflight
         shell: pwsh
