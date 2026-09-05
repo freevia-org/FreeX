@@ -13,8 +13,11 @@ public static class LossyFormatFeatureLossPlanner
 {
     // The single-sheet/plain-text Save-As targets this codebase registers adapters for. The .xlsx
     // family has its own dedicated ConfirmUnsupportedXlsxFeatureSave gate (driven by the loaded
-    // XlsxFeatureReport) and is intentionally excluded here. .xml, .html/.mht, and .pdf are not
-    // (yet) checked at all and are a known gap, not something this planner already covers.
+    // XlsxFeatureReport) and is intentionally excluded here. .html/.mht (r409) and .xml (r410) are
+    // now covered, each by its own rule, because they lose DIFFERENT things -- see those predicates.
+    // .pdf stays uncovered deliberately: it is export-only (its adapter refuses to import at all), so
+    // there is no round trip to lose anything through, and the user choosing "PDF" has already said
+    // they want a rendering rather than a workbook. Excel does not prompt on PDF export either.
     private static readonly HashSet<string> LossyPlainTextExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".csv", ".txt", ".prn", ".slk", ".dif", ".dbf", ".tab", ".tsv"
@@ -54,6 +57,13 @@ public static class LossyFormatFeatureLossPlanner
         if (WebPageExtensions.Contains(normalizedExtension))
             return workbook.Sheets.Count > 1 || workbook.Sheets.Any(HasWebPageUnrepresentableContent);
 
+        // r410: .xml keeps every worksheet AND comments/hyperlinks/merges, so it is not lossy in the
+        // ways above -- but it drops data validations and conditional formats, measured. It gets the
+        // narrowest rule of the three, which is the point: the prompt should describe this format's
+        // actual loss and stay silent otherwise.
+        if (normalizedExtension.Equals(".xml", StringComparison.OrdinalIgnoreCase))
+            return workbook.Sheets.Any(HasSpreadsheetXmlUnrepresentableContent);
+
         if (!LossyPlainTextExtensions.Contains(normalizedExtension))
             return false;
 
@@ -79,7 +89,19 @@ public static class LossyFormatFeatureLossPlanner
         HasUnrepresentableDrawingObject(sheet)
         || sheet.Comments.Count > 0
         || sheet.ThreadedComments.Count > 0
-        || sheet.Hyperlinks.Count > 0;
+        || sheet.Hyperlinks.Count > 0
+        || sheet.DataValidations.Count > 0
+        || sheet.ConditionalFormats.Count > 0;
+
+    /// <summary>
+    /// SpreadsheetML 2003 (.xml). r410 measured it as PARTIALLY lossy, which is why it cannot share
+    /// either rule above: comments, hyperlinks and merged regions all survive its round trip, while
+    /// data validations and conditional formats come back empty. It also holds multiple worksheets,
+    /// so sheet count is not a trigger here either.
+    /// </summary>
+    private static bool HasSpreadsheetXmlUnrepresentableContent(Sheet sheet) =>
+        sheet.DataValidations.Count > 0
+        || sheet.ConditionalFormats.Count > 0;
 
     private static bool HasUnrepresentableContent(Sheet sheet) =>
         HasUnrepresentableDrawingObject(sheet) || HasUnrepresentableAnnotation(sheet);
