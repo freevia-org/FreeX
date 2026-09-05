@@ -187,8 +187,12 @@ public sealed class R417_EveryConstructibleCommandUndoesExactlyTests
             foreach (var (address, cell) in sheet.EnumerateCells()
                          .OrderBy(pair => pair.Address.Row).ThenBy(pair => pair.Address.Col))
             {
-                builder.Append(address.Row).Append(',').Append(address.Col).Append('=')
-                    .Append(cell.Value?.ToString() ?? "-").Append(" s=").Append(cell.StyleId).AppendLine();
+                // r439: the CELL is reflected too, for the same reason the sheet is. Dumping only
+                // Value and StyleId made every other per-cell field invisible -- rich text, phonetic
+                // guide, array mode, the formula-error-ignored flag -- so a command that changed one
+                // and failed to restore it read as a clean undo. Found while checking why
+                // SetFormulaErrorIgnoredCommand appeared to succeed while changing nothing.
+                Reflect(builder, address.Row + "," + address.Col + ".", cell);
             }
         }
 
