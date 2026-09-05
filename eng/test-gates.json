@@ -37,12 +37,11 @@
     },
     {
       "id": "freex-portable-unix",
-      "costHintMinutes": 5.8,
+      "costHintMinutes": 5.0,
       "app": "FreeX",
       "gate": "commit",
       "platforms": ["linux", "macos"],
       "partitions": 2,
-      "platformPartitions": { "macos": 1 },
       "projects": [
         "tests/Free.Shared.AppServices.Tests/Free.Shared.AppServices.Tests.csproj",
         "tests/FreeX.Core.Formula.Tests/FreeX.Core.Formula.Tests.csproj",
