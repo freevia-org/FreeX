@@ -142,6 +142,65 @@ public sealed class R423_TableStructureReachesTheFileTests
         table.Rows[1].Cells[2].VMerge.Should().BeTrue("the continuation cell must still be marked merged");
     }
 
+    /// <summary>
+    /// r424: the banding flags decide which rows and columns a table style paints differently. They
+    /// are booleans with MIXED defaults -- <c>BandRow</c> starts true and the rest false -- so each is
+    /// set to the opposite of its own default; a probe of "all true" would let a writer that emits
+    /// nothing pass on BandRow alone.
+    /// </summary>
+    [Fact]
+    public void TheBandingFlagsSurvive()
+    {
+        var table = RoundTrip(DeckWithTable(configured => configured.Flags = new TableStyleFlags
+        {
+            FirstRow = true,
+            LastRow = true,
+            FirstCol = true,
+            LastCol = true,
+            BandRow = false,
+            BandCol = true,
+        }));
+
+        table.Flags.FirstRow.Should().BeTrue("a header row that stops being styled changes the table's meaning");
+        table.Flags.LastRow.Should().BeTrue();
+        table.Flags.FirstCol.Should().BeTrue();
+        table.Flags.LastCol.Should().BeTrue();
+        table.Flags.BandRow.Should().BeFalse("this one defaults to true, so losing it looks like nothing happened");
+        table.Flags.BandCol.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TheTableStyleIdSurvives()
+    {
+        // The style id is what binds the table to a theme's table style. Losing it does not empty the
+        // table; it silently falls back to unstyled, which reads as a formatting choice.
+        var styleId = "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}";
+        var table = RoundTrip(DeckWithTable(configured => configured.TableStyleId = styleId));
+
+        table.TableStyleId.Should().Be(styleId, "a table that loses its style id renders unstyled");
+    }
+
+    [Fact]
+    public void CellInsetsSurvive()
+    {
+        // Four independent insets, each a different value, so a writer that emitted one for all four
+        // -- or transposed left and right -- fails here rather than passing on symmetry.
+        var table = RoundTrip(DeckWithTable(configured =>
+        {
+            var cell = configured.Rows[0].Cells[0];
+            cell.InsetLeftPt = 1.5;
+            cell.InsetRightPt = 2.5;
+            cell.InsetTopPt = 3.5;
+            cell.InsetBottomPt = 4.5;
+        }));
+
+        var reloaded = table.Rows[0].Cells[0];
+        reloaded.InsetLeftPt.Should().Be(1.5);
+        reloaded.InsetRightPt.Should().Be(2.5);
+        reloaded.InsetTopPt.Should().Be(3.5);
+        reloaded.InsetBottomPt.Should().Be(4.5);
+    }
+
     [Fact]
     public void AnUnmergedTableGainsNoSpans()
     {
