@@ -4379,10 +4379,28 @@ public static class PptxPackageWriter
     /// geometry from the layout/master placeholder chain — distinct from a source shape that
     /// explicitly declared a zero-size xfrm (flag true), which PowerPoint treats as hidden.
     /// </summary>
+    /// <summary>
+    /// Whether the shape needs an <c>&lt;a:xfrm&gt;</c> of its own at all.
+    /// </summary>
+    /// <remarks>
+    /// r412: rotation and flip count, not just position and size. This guards the ENTIRE xfrm
+    /// element, so while it tested offset/extent alone, a shape that inherited its geometry lost its
+    /// rotation and both flips on save -- rotate an untouched placeholder, save, reopen, and the
+    /// rotation is gone, silently. Measured through the FreeP undo harness: flipping a shape with no
+    /// explicit transform produced a byte-identical package, while flipping one with a transform
+    /// round-tripped correctly.
+    /// <para>Emitting the element for these is safe and does not reintroduce the zero-extent
+    /// placeholder trap the comment at the call site describes: <c>&lt;a:off&gt;</c> and
+    /// <c>&lt;a:ext&gt;</c> are added there only when the shape has its own values, and both are
+    /// independently optional in CT_Transform2D (ECMA-376 20.1.7.6), so the result is an xfrm
+    /// carrying just <c>rot</c>/<c>flipH</c>/<c>flipV</c> -- which is exactly what PowerPoint writes
+    /// for a rotated placeholder that inherits its position.</para>
+    /// </remarks>
     private static bool ShapeHasExplicitTransform(SlideShape shape) =>
         shape.HasExplicitZeroExtentTransform ||
         shape.OffsetXEmu != 0 || shape.OffsetYEmu != 0 ||
-        shape.ExtentCxEmu != 0 || shape.ExtentCyEmu != 0;
+        shape.ExtentCxEmu != 0 || shape.ExtentCyEmu != 0 ||
+        shape.RotationDeg != 0 || shape.FlipH || shape.FlipV;
 
     private static XElement BuildSpPrEl(
         SlideShape shape,

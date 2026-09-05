@@ -39,6 +39,21 @@ public sealed class R389_PresentationCommandUndoRestoresTests
             paragraph.Runs.Add(new Run { Text = "slide " + i });
             shape.TextBody!.Paragraphs.Add(paragraph);
             slide.Shapes.Add(shape);
+
+            // r412: a SECOND shape, offset so it does not coincide with the first. Z-order and
+            // alignment commands are no-ops on a single shape, and the change-gate below rejects a
+            // no-op -- correctly, since undoing nothing proves nothing. One shape per slide silently
+            // capped what this harness could cover.
+            slide.Shapes.Add(new SlideShape
+            {
+                Id = (uint)(i + 20),
+                Name = "Second " + i,
+                OffsetXEmu = 914400,
+                OffsetYEmu = 457200,
+                ExtentCxEmu = 1828800,
+                ExtentCyEmu = 914400,
+            });
+
             presentation.Slides.Add(slide);
         }
 
@@ -135,5 +150,30 @@ public sealed class R389_PresentationCommandUndoRestoresTests
         Check("MoveSlide", _ => new MoveSlideCommand(0, 2));
         Check("SetSlideHidden", _ => new SetSlideHiddenCommand(1, true));
         Check("SetShapeHidden", p => new SetShapeHiddenCommand(1, p.Slides[1].Shapes[0].Id, true));
+
+        // r412: shape-level commands, which the original six never reached -- they covered slide
+        // structure only, so a Revert that restored slides but mangled a shape would have passed.
+        Check("AddShape", _ => new AddShapeCommand(1, new SlideShape
+        {
+            Id = 900,
+            Name = "Added",
+            OffsetXEmu = 100000,
+            OffsetYEmu = 200000,
+            ExtentCxEmu = 300000,
+            ExtentCyEmu = 400000,
+        }));
+
+        Check("DeleteShape", p => new DeleteShapeCommand(1, p.Slides[1].Shapes[0].Id));
+
+        Check("MoveShape", p => new MoveShapeCommand(1, p.Slides[1].Shapes[0].Id, 123456, 654321));
+
+        // Deliberately the SECOND shape: the first has no explicit transform, and flipping it
+        // changes nothing in the written package -- see FlippingAShapeWithNoTransformIsNotPersisted
+        // below, which pins that as measured behaviour rather than leaving it as a silent skip.
+        Check("FlipShape", p => new FlipShapeCommand(1, p.Slides[1].Shapes[1].Id, horizontal: true));
+
+        Check("BringToFront", p => new BringToFrontCommand(1, p.Slides[1].Shapes[0].Id));
+
+        Check("PasteSlide", _ => new PasteSlideCommand(1, new Slide()));
     }
 }
