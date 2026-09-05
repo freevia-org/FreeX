@@ -3,6 +3,7 @@
   "gates": [
     {
       "id": "freex-core-portable",
+      "costHintMinutes": 4.3,
       "app": "FreeX",
       "gate": "commit",
       "platforms": ["windows"],
@@ -17,6 +18,7 @@
     },
     {
       "id": "freex-contract",
+      "costHintMinutes": 4,
       "app": "FreeX",
       "gate": "commit",
       "platforms": ["windows"],
@@ -35,6 +37,7 @@
     },
     {
       "id": "freex-portable-unix",
+      "costHintMinutes": 5.8,
       "app": "FreeX",
       "gate": "commit",
       "platforms": ["linux", "macos"],
@@ -62,6 +65,7 @@
     },
     {
       "id": "freex-avalonia",
+      "costHintMinutes": 6.9,
       "app": "FreeX",
       "gate": "commit",
       "requiresFullHistory": true,
@@ -153,6 +157,7 @@
     },
     {
       "id": "freew-core-portable",
+      "costHintMinutes": 2.9,
       "app": "FreeW",
       "gate": "commit",
       "platforms": ["windows", "linux", "macos"],
@@ -179,6 +184,7 @@
     },
     {
       "id": "freew-desktop",
+      "costHintMinutes": 6.8,
       "app": "FreeW",
       "gate": "commit",
       "platforms": ["windows"],
@@ -197,6 +203,7 @@
     },
     {
       "id": "freep-core-portable",
+      "costHintMinutes": 4.2,
       "app": "FreeP",
       "gate": "commit",
       "platforms": ["windows", "linux", "macos"],
@@ -225,6 +232,7 @@
     },
     {
       "id": "freep-wpf-desktop",
+      "costHintMinutes": 4.8,
       "app": "FreeP",
       "gate": "commit",
       "platforms": ["windows"],
@@ -243,6 +251,7 @@
     },
     {
       "id": "freep-avalonia-desktop",
+      "costHintMinutes": 7.3,
       "app": "FreeP",
       "gate": "commit",
       "requiresFullHistory": true,

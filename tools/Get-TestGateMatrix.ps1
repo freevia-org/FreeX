@@ -57,6 +57,15 @@ $entries = @(
                 }
             }
 
+            # Approximate minutes for ONE job of this gate as currently partitioned. It exists
+            # only to order the matrix (below), never to change what runs.
+            $costHintMinutes = if ($testGate.PSObject.Properties.Name -contains 'costHintMinutes') {
+                [double]$testGate.costHintMinutes
+            }
+            else {
+                0.0
+            }
+
             $preflightModes = @()
             if ($testGate.PSObject.Properties.Name -contains 'preflightModes') {
                 $platformPreflightProperty = $testGate.preflightModes.PSObject.Properties |
@@ -76,6 +85,7 @@ $entries = @(
                 }
 
                 [ordered]@{
+                    costHintMinutes = $costHintMinutes
                     gateId = [string]$testGate.id
                     displayGateId = $displayGateId
                     gate = [string]$testGate.gate
@@ -95,6 +105,17 @@ $entries = @(
 
 if ($entries.Count -eq 0) {
     throw "No '$Gate' test-gate matrix entries were selected."
+}
+
+# Dispatch the longest jobs first. GitHub starts matrix entries in array order, and the runner
+# pool saturates (measured: 19 concurrent, and the commit matrix already fills it), so whichever
+# jobs are dispatched last are the ones that queue. Emitting them longest-first means only SHORT
+# jobs absorb the queueing delay instead of a long one landing on the critical path -- in run
+# 33969021055 the 6.3m macOS avalonia job queued 2.6m and set the whole wall-clock. Ties break on
+# the display id so the matrix stays deterministic.
+$entries = @($entries | Sort-Object @{ Expression = { [double]$_.costHintMinutes }; Descending = $true }, @{ Expression = { [string]$_.displayGateId }; Descending = $false })
+foreach ($entry in $entries) {
+    $entry.Remove('costHintMinutes')
 }
 
 $matrixJson = @{ include = $entries } | ConvertTo-Json -Depth 4 -Compress

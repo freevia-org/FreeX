@@ -83,6 +83,23 @@ foreach ($gate in @($manifest.gates)) {
         $errors.Add("Gate '$($gate.id)' must declare between 1 and 64 partitions.")
     }
 
+    # "costHintMinutes" orders the generated CI matrix longest-job-first so that only short jobs
+    # absorb the queueing delay once the runner pool saturates. A commit gate that omits it would
+    # silently sort last, so require it rather than defaulting it.
+    if ([string]$gate.gate -eq "commit") {
+        if ($gate.PSObject.Properties.Name -notcontains "costHintMinutes") {
+            $errors.Add("Gate '$($gate.id)' is a commit gate and must declare costHintMinutes (approximate minutes for one job of the gate as partitioned).")
+        }
+        else {
+            $costHint = $gate.costHintMinutes
+            $isPositiveNumber = ($costHint -is [int] -or $costHint -is [long] -or $costHint -is [double]) -and
+                [double]$costHint -gt 0 -and [double]$costHint -le 120
+            if (-not $isPositiveNumber) {
+                $errors.Add("Gate '$($gate.id)' has an invalid costHintMinutes; it must be a number greater than 0 and at most 120.")
+            }
+        }
+    }
+
     # "platformPartitions" is an optional sibling of "partitions" that overrides the partition
     # count for individual platforms (e.g. running fewer jobs on scarce macOS capacity). It must
     # only reference platforms the gate actually targets, and every value must be a positive
