@@ -1762,12 +1762,33 @@ internal static class PptxChartReader
         var numLit = valEl.Element(C + "numLit");
         if (numLit is not null)
         {
+            // r429: placed by idx and pre-sized from ptCount, exactly as the numRef branch above
+            // does. This branch used to APPEND each point in document order and ignore idx, which
+            // silently collapsed gaps: a series of {1.5, null, 3.5} is written -- correctly -- as
+            // ptCount=3 with points at idx 0 and idx 2, and came back as {1.5, 3.5}, shifting every
+            // later point one category to the LEFT. The chart still drew, with its remaining bars
+            // relabelled against the wrong categories.
+            //
+            // numLit is the branch used whenever a series has no formula behind it, which is the
+            // ordinary case for a chart authored in FreeP rather than linked to a worksheet range,
+            // so the correct numRef handling was masking a real defect in the common path.
+            int litPtCount = Math.Clamp(
+                ParseInt(numLit.Element(C + "ptCount")?.Attribute("val")?.Value),
+                0,
+                MaxChartSeriesPoints);
+
+            for (int i = 0; i < litPtCount; i++) values.Add(null);
+
             foreach (var pt in numLit.Elements(C + "pt"))
             {
+                int idx = ParseInt(pt.Attribute("idx")?.Value);
+                if (idx < 0 || idx >= MaxChartSeriesPoints) continue;
+                while (values.Count <= idx) values.Add(null);
+
                 var v = pt.Element(C + "v")?.Value;
-                values.Add(v is not null &&
-                    double.TryParse(v, NumberStyles.Any, CultureInfo.InvariantCulture, out var dv)
-                    ? dv : null);
+                if (v is not null &&
+                    double.TryParse(v, NumberStyles.Any, CultureInfo.InvariantCulture, out var dv))
+                    values[idx] = dv;
             }
         }
     }
