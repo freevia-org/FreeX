@@ -73,14 +73,45 @@ public static class PptxPackageReader
     // ── Public API ───────────────────────────────────────────────────────────────
 
     /// <summary>Opens a .pptx file from disk and returns a populated <see cref="Presentation"/>.</summary>
-    public static Presentation Read(string path)
+    public static Presentation Read(string path) => ReadWithWarnings(path).Presentation;
+
+    /// <summary>
+    /// r454: opens a .pptx and also reports the parts that could not be read.
+    /// </summary>
+    /// <remarks>
+    /// r448 fixed the case where NOTHING could be read -- the deck opened empty and silently -- but
+    /// deliberately left the per-slide recovery alone, because absorbing one bad slide rather than
+    /// losing the whole deck is right and matches PowerPoint. What was still wrong is that PowerPoint
+    /// TELLS you it repaired the file, while this reader replaced a damaged slide with a blank one
+    /// and said nothing: the user sees an empty slide, assumes it was always empty, and saving
+    /// discards whatever it held.
+    ///
+    /// That was recorded as needing a channel the reader did not have. This is that channel, shaped
+    /// after FreeX's <c>XlsxLoadResult</c> so the two apps report load damage the same way rather
+    /// than each inventing something. <see cref="Read(Stream)"/> still exists and still returns just
+    /// the presentation, so every caller that has no way to show a warning is unaffected.
+    /// </remarks>
+    public static PptxReadResult ReadWithWarnings(string path)
     {
         using var stream = File.OpenRead(path);
-        return Read(stream);
+        return ReadWithWarnings(stream);
     }
 
     /// <summary>Reads a .pptx from any stream and returns a populated <see cref="Presentation"/>.</summary>
-    public static Presentation Read(Stream stream)
+    public static Presentation Read(Stream stream) => ReadWithWarnings(stream).Presentation;
+
+    /// <summary>
+    /// r454: reads a .pptx from any stream, also reporting the parts that could not be read. See
+    /// <see cref="ReadWithWarnings(string)"/> for why this exists.
+    /// </summary>
+    public static PptxReadResult ReadWithWarnings(Stream stream)
+    {
+        var warnings = new List<string>();
+        var presentation = ReadCore(stream, warnings);
+        return new PptxReadResult(presentation, warnings.AsReadOnly());
+    }
+
+    private static Presentation ReadCore(Stream stream, List<string> warnings)
     {
         // Reject an oversized file before buffering it, the same way the xlsx loader does: check the
         // declared length up front for a seekable stream, then bound the copy itself so a non-seekable
@@ -115,7 +146,7 @@ public static class PptxPackageReader
         // Reject zip-bomb / oversized packages before any decompression-heavy reads (same guard xlsx uses).
         WorkbookOpenSizeGuard.EnsureArchiveWithinLimits(archive);
         var snapshot = CapturePackageSnapshot(archive);
-        var presentation = ReadArchive(archive);
+        var presentation = ReadArchive(archive, warnings);
         presentation.PackageSnapshot = snapshot;
         presentation.PackageKind = DetectPackageKind(snapshot);
         return presentation;
@@ -185,7 +216,7 @@ public static class PptxPackageReader
 
     // ── Core archive reading ──────────────────────────────────────────────────────
 
-    private static Presentation ReadArchive(ZipArchive archive)
+    private static Presentation ReadArchive(ZipArchive archive, List<string> warnings)
     {
         var presentation = new Presentation();
 
@@ -492,10 +523,14 @@ public static class PptxPackageReader
         for (int si = 0; si < slideInfos.Count; si++)
         {
             var (rId, slidePath) = slideInfos[si];
+
             Slide slide;
             try
             {
-                slide = ReadSlide(archive, slidePath, rId, presentation.Theme.ColorScheme, presentation.Layouts, tableStyles, allSlides, slidePartPathToId, presentation.Theme, mastersByPath);
+                slide = ReadSlide(archive, slidePath, rId, presentation.Theme.ColorScheme, presentation.Layouts, tableStyles, allSlides, slidePartPathToId, presentation.Theme, mastersByPath,
+                    _ => warnings.Add(
+                        $"Slide {si + 1} is damaged and was opened blank. Saving over the original " +
+                        "would discard whatever it still contains."));
                 slide.NumericId = allSlides[si].NumericId;
             }
             catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
@@ -504,6 +539,13 @@ public static class PptxPackageReader
                 // placeholder built in phase 1 (correct id, position and numeric id) so the deck
                 // still opens with the remaining slides intact and slide-jump hyperlinks resolve.
                 slide = allSlides[si];
+
+                // r454: but SAY SO. Recovering silently means the user sees a blank slide, assumes
+                // it was always blank, and destroys whatever it held on the next save. PowerPoint
+                // recovers too and tells you it did.
+                warnings.Add(
+                    $"Slide {si + 1} is damaged and was opened blank. Saving over the original would " +
+                    "discard whatever it still contains.");
             }
 
             // Replace the placeholder so hyperlinks referencing this slide still get the same object.
@@ -1407,12 +1449,25 @@ public static class PptxPackageReader
         List<Slide>? allSlides = null,
         IReadOnlyDictionary<string, string>? slidePartPathToId = null,
         PresentationTheme? theme = null,
-        IReadOnlyDictionary<string, SlideMaster>? mastersByPath = null)
+        IReadOnlyDictionary<string, SlideMaster>? mastersByPath = null,
+        // r454: where a damaged slide is REPORTED. Passed in rather than detected by the caller,
+        // because the caller would have to parse the part a second time to learn what this method
+        // already knows -- and these decks reach hundreds of slides, so paying a double parse on
+        // every healthy open to describe a rare damaged one is the wrong trade.
+        Action<string>? reportUnreadablePart = null)
     {
         var slide = new Slide { Id = slideId };
 
         var xml = TryLoadXmlPart(archive, slidePath);
-        if (xml?.Root is null) return slide;
+        if (xml?.Root is null)
+        {
+            // The quiet path: a slide part that will not parse yields a BLANK slide and never throws,
+            // so the per-slide catch in the caller is not even reached. Once this has returned, a
+            // slide blank because it was damaged is indistinguishable from one the author left blank
+            // -- which is precisely what made the loss invisible.
+            reportUnreadablePart?.Invoke(slidePath);
+            return slide;
+        }
 
         slide.IsHidden = xml.Root.Attribute("show")?.Value is { } show &&
             (show == "0" || string.Equals(show, "false", StringComparison.OrdinalIgnoreCase));

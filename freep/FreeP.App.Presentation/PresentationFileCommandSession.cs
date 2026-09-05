@@ -1278,13 +1278,23 @@ public sealed class PresentationFileCommandSession
             _currentFileSourceLastWriteTimeUtc = result.SourceLastWriteTimeUtc;
             _readOnlySourcePath = result.IsFileSystemReadOnly ? result.SavedPath : null;
             SetSaved(result.SavedPath, suppressRecentFiles || result.SuppressRecentFiles);
+            // r454: a damaged slide is recovered as a blank one rather than costing the whole deck,
+            // which is right -- but the recovery has to be visible, or the user assumes the slide was
+            // always blank and destroys what it held on the next save. Appended to the opened-message
+            // because that is the feedback channel this session has; FreeX shows the equivalent in a
+            // dialog, and matching that here needs a message service this class does not carry.
+            var openedMessage = SisterAppFileTextPlanner.FormatOpened(
+                PresentationFileTextResources.Presentation,
+                Path.GetFileName(path));
+
+            if (result.LoadWarnings is { Count: > 0 } warnings)
+                openedMessage = openedMessage + " " + string.Join(" ", warnings);
+
             return await CompleteAsync(
                 PresentationFileCommandResult.Success(
                     PresentationFileCommand.Open,
                     result.SavedPath,
-                    SisterAppFileTextPlanner.FormatOpened(
-                        PresentationFileTextResources.Presentation,
-                        Path.GetFileName(path))),
+                    openedMessage),
                 cancellationToken,
                 reportFeedback);
         }
