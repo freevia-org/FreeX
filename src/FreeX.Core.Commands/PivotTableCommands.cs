@@ -13,6 +13,15 @@ public sealed class AddPivotTableCommand : IWorkbookCommand
     private PivotCacheModel? _addedCache;
     private PivotTableModel? _addedPivotTable;
     private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
+    // r438: merged regions the user already had inside the target rectangle. The first render strips
+    // them (PivotTableRefreshService.ClearTargetRange unconditionally drops every merge overlapping
+    // the range it clears) and Restore below replays cell VALUES only, so Undo left the rectangle
+    // permanently un-merged. RefreshPivotTableCommand (meta-F2/round154) and MovePivotTableCommand
+    // (sweep92-F1) each fixed this for their own path; CREATION -- the one command that necessarily
+    // lands a pivot on top of the user's existing layout, and so the one most likely to meet a
+    // merged heading -- was left with the same hole. Scoped to the rectangle the render clears, so
+    // an unrelated merge elsewhere on the sheet is never touched.
+    private List<GridRange>? _targetMergedRegions;
 
     public string Label => "Insert PivotTable";
 
@@ -53,6 +62,8 @@ public sealed class AddPivotTableCommand : IWorkbookCommand
 
         var sourceSheet = ctx.GetSheet(_sourceRange.Start.Sheet);
         _targetSnapshot = Snapshot(sheet, _targetRange);
+        // r438: captured BEFORE the render below strips them. See the field's comment.
+        _targetMergedRegions = sheet.MergedRegions.Where(region => region.Overlaps(_targetRange)).ToList();
         var headers = ReadHeaders(sourceSheet, fieldCount);
         var cacheId = NextCacheId(ctx.Workbook);
         var cache = new PivotCacheModel
@@ -111,6 +122,9 @@ public sealed class AddPivotTableCommand : IWorkbookCommand
             _addedCache = null;
             _addedPivotTable = null;
             _targetSnapshot = null;
+            // The guard's own rollback restored MergedRegionsBefore wholesale, so there is nothing
+            // for Revert to put back and holding the list would only risk re-adding a live merge.
+            _targetMergedRegions = null;
             return failure;
         }
 
@@ -128,9 +142,19 @@ public sealed class AddPivotTableCommand : IWorkbookCommand
         if (_addedCache is not null)
             ctx.Workbook.PivotCaches.Remove(_addedCache);
         Restore(sheet, _targetSnapshot);
+        // r438: put back the merges the first render stripped. ClearRenderedRange above has already
+        // removed any merge the pivot itself created (merged row labels), so the sheet is clear of
+        // the render's own merges by the time these go back and nothing can overlap or clobber.
+        if (_targetMergedRegions is { Count: > 0 })
+        {
+            foreach (var region in _targetMergedRegions)
+                sheet.AddMergedRegion(region);
+        }
+
         _addedPivotTable = null;
         _addedCache = null;
         _targetSnapshot = null;
+        _targetMergedRegions = null;
     }
 
     private List<string> ReadHeaders(Sheet sheet, int fieldCount)

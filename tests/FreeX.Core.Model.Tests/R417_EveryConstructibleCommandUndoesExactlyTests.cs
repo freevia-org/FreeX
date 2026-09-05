@@ -66,10 +66,44 @@ public sealed class R417_EveryConstructibleCommandUndoesExactlyTests
         if (type == typeof(bool)) return true;
         if (type == typeof(double)) return 2.0;
         if (type == typeof(string)) return "probe";
+        if (type == typeof(Guid)) return Guid.NewGuid();
+        if (type == typeof(CellColor)) return new CellColor(0x33, 0x66, 0x99);
+
         if (type.IsEnum)
         {
             return Enum.GetValues(type).Cast<object>().Skip(1).FirstOrDefault()
                 ?? Enum.GetValues(type).Cast<object>().FirstOrDefault();
+        }
+
+        // r438: the three shapes that blocked most of the census. Measured across the commands this
+        // driver could NOT build: Nullable (111 parameters), IReadOnlyList (49) and Guid (45)
+        // dominated everything else by an order of magnitude, so supplying them is what moves the
+        // number rather than hand-adding types one at a time.
+        var underlying = Nullable.GetUnderlyingType(type);
+        if (underlying is not null)
+            return ValueFor(underlying, sheet);
+
+        if (type.IsGenericType)
+        {
+            var definition = type.GetGenericTypeDefinition();
+            if (definition == typeof(IReadOnlyList<>) ||
+                definition == typeof(IReadOnlyCollection<>) ||
+                definition == typeof(IEnumerable<>) ||
+                definition == typeof(List<>))
+            {
+                var elementType = type.GetGenericArguments()[0];
+                var element = ValueFor(elementType, sheet);
+                if (element is null)
+                    return null;
+
+                // A ONE-element list, deliberately. An empty list would construct just as well and
+                // then make every such command a no-op, inflating "constructible" while exercising
+                // nothing -- the same false-coverage trap the census exists to expose.
+                var list = (System.Collections.IList)Activator.CreateInstance(
+                    typeof(List<>).MakeGenericType(elementType))!;
+                list.Add(element);
+                return list;
+            }
         }
 
         return null;
