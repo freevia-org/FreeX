@@ -65,6 +65,8 @@ function Assert-ToolSourceCentralization {
             'NormalizationForm]::FormD',
             'Test-StaticRepositoryPathCase',
             "@('python3','python')",
+            "Resolve-WorkingInterpreter -Names @('bash') -ProbeArgs @('-c','exit 0')",
+            'bashCommand.Source -n',
             'nodeCommand.Source --check',
             'linuxOnlyShellPrefixes',
             'GNU readlink -f',

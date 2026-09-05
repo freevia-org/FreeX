@@ -30,17 +30,23 @@ function Add-PortabilityToolingGap([string]$Message) {
 # Resolving an interpreter is not the same as having one. Windows ships App Execution Alias stubs
 # for python/python3 that exist on PATH, satisfy Get-Command, and then fail every invocation with
 # exit 9009 ("Python was not found; run without arguments to install from the Microsoft Store").
-# Without this probe the gate reports one bogus "syntax validation failed" per tracked .py file on
-# a stock Windows box, which is noise that trains people to ignore the gate entirely.
+# bash has the same trap: C:\WINDOWS\system32\bash.exe is the WSL launcher, and with no distro
+# installed every call dies with "execvpe(/bin/bash) failed" and exit 1 even though Git Bash may be
+# installed further down PATH. Without this probe the gate reports one bogus "syntax validation
+# failed" per tracked .py/.sh file on a stock Windows box, which is noise that trains people to
+# ignore the gate entirely. Probe every PATH hit for a name, not just the first, so a working
+# interpreter behind a broken stub still wins.
 function Resolve-WorkingInterpreter([string[]]$Names, [string[]]$ProbeArgs) {
     foreach ($name in $Names) {
-        $candidate = Get-Command $name -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($null -eq $candidate) { continue }
-        try {
-            & $candidate.Source @ProbeArgs *> $null
-            if ($LASTEXITCODE -eq 0) { return $candidate }
+        $candidates = @(Get-Command $name -All -ErrorAction SilentlyContinue |
+            Where-Object { -not [string]::IsNullOrEmpty($_.Source) })
+        foreach ($candidate in $candidates) {
+            try {
+                & $candidate.Source @ProbeArgs *> $null
+                if ($LASTEXITCODE -eq 0) { return $candidate }
+            }
+            catch { }
         }
-        catch { }
     }
     return $null
 }
@@ -208,11 +214,18 @@ foreach ($relativePath in $portableTextPaths) {
 Write-PortabilityPhase 'tracked path and text hygiene'
 
 $shellScripts = @($trackedPaths | Where-Object { $_.EndsWith('.sh', [System.StringComparison]::OrdinalIgnoreCase) })
-foreach ($relativePath in $shellScripts) {
-    $path = Join-Path $repoRoot $relativePath
-    & bash -n $path
-    if ($LASTEXITCODE -ne 0) {
-        Add-PortabilityError "Bash syntax validation failed: $relativePath"
+if ($shellScripts.Count -gt 0) {
+    $bashCommand = Resolve-WorkingInterpreter -Names @('bash') -ProbeArgs @('-c','exit 0')
+    if ($null -eq $bashCommand) {
+        Add-PortabilityToolingGap 'Shell scripts are tracked, but no working bash is available for syntax validation.'
+    }
+    else {
+        foreach ($relativePath in $shellScripts) {
+            & $bashCommand.Source -n (Join-Path $repoRoot $relativePath)
+            if ($LASTEXITCODE -ne 0) {
+                Add-PortabilityError "Bash syntax validation failed: $relativePath"
+            }
+        }
     }
 }
 
