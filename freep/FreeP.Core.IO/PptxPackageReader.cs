@@ -448,6 +448,27 @@ public static class PptxPackageReader
             slideInfos.Add((rId, ResolveRelationshipTargetZipPath(archive, presDir, slideRel.Target)));
         }
 
+        // r448: a package that CARRIES slide parts but resolves none of them is damaged, and must say
+        // so instead of opening as an empty deck.
+        //
+        // Everything above is deliberately tolerant -- missing elements read as absent, and the
+        // per-slide catch below keeps one bad slide from costing the whole deck. That tolerance has
+        // one intolerable end state: sldIdLst is read with a null-conditional, so a presentation.xml
+        // the reader does not recognise (a partially written save, or simply an unexpected namespace)
+        // yields ZERO slides and no error at all. The user opens their deck, sees an empty document,
+        // and the moment they save, the original is overwritten with nothing.
+        //
+        // The condition is deliberately narrow. A genuinely slide-less package -- which this writer
+        // can produce for an empty Presentation -- has no slide parts either, so it still opens
+        // silently. Only the contradiction is rejected: slides on disk, none reachable.
+        if (slideInfos.Count == 0 && PackageContainsSlideParts(archive))
+        {
+            throw new InvalidDataException(
+                "This presentation appears to be damaged: it contains slides, but none of them could " +
+                "be read. Opening it would show an empty presentation and saving would discard the " +
+                "slides it still holds.");
+        }
+
         // Create placeholder slides (with Id set) for the allSlides reference list.
         var allSlides = new List<Slide>(slideInfos.Count);
         foreach (var (rId, _) in slideInfos)
@@ -695,6 +716,16 @@ public static class PptxPackageReader
 
         return new PptxPackageSnapshot(entries);
     }
+
+    /// <summary>
+    /// r448: whether the package physically carries slide parts, independent of whether
+    /// presentation.xml manages to reference any. Matched on the conventional path rather than
+    /// through relationships, precisely because the relationship graph is what may be damaged.
+    /// </summary>
+    private static bool PackageContainsSlideParts(ZipArchive archive) =>
+        archive.Entries.Any(entry =>
+            entry.FullName.StartsWith("ppt/slides/slide", StringComparison.OrdinalIgnoreCase) &&
+            entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
 
     private static bool TryReadPackageEntry(ZipArchive archive, string path, out byte[] bytes)
     {
