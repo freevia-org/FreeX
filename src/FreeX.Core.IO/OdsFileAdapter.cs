@@ -98,6 +98,22 @@ public sealed partial class OdsFileAdapter : IFileAdapter
         using (var contentStream = contentEntry.Open())
             contentDoc = LoadXml(contentStream);
 
+        // r451: a content.xml whose root the reader does not recognise produced an EMPTY workbook --
+        // one default sheet, no cells -- with no error at all, and the next save wrote that over the
+        // user's file. Fourth instance of the class found by the same mutation probe (r448 FreeP,
+        // r449 FreeW, r450 FreeX/xlsx); FreeW's own ODT adapter already guards its equivalent with
+        // the same sentence, so this aligns the sibling rather than inventing a new contract.
+        //
+        // Deliberately checks only for the office:body wrapper, not for tables inside it: a document
+        // with a body and no sheets is a question for the reader below, whereas no body at all means
+        // the part was never a spreadsheet this reader can read.
+        if (contentDoc.Root?.Element(OfficeNs + "body") is null)
+        {
+            throw new InvalidDataException(
+                "The ODS package appears to be damaged: content.xml has no <office:body>. Opening " +
+                "it would show an empty workbook and saving would discard whatever it still holds.");
+        }
+
         // styles.xml may carry additional named styles; load it best-effort so styles referenced from
         // content (but defined in styles.xml) still resolve. Most LibreOffice files put per-cell automatic
         // styles in content.xml, which we read directly.
