@@ -6,19 +6,22 @@ using FreeW.Core.Model;
 namespace FreeW.Core.Model.Tests;
 
 /// <summary>
-/// r287: FreeW compiles the user's Find pattern into a <see cref="Regex"/> with no match timeout, so
-/// the only thing standing between a typed pattern and a frozen window is that wildcard syntax cannot
-/// express a catastrophically backtracking expression.
+/// r287: wildcard syntax must not let a typed needle smuggle regex syntax through.
 ///
-/// <para>It cannot, and that is a structural property rather than luck: every character outside a
-/// bracket class goes through <c>Regex.Escape</c>, and the syntax has no grouping construct, so a
-/// nested quantifier -- the <c>(a+)+</c> shape that makes backtracking explode -- has no way to be
-/// written. Measured as well as read: ten consecutive <c>*</c> against a 400-character
-/// non-matching string completes in single-digit milliseconds.</para>
+/// <para>Every character outside a bracket class goes through <c>Regex.Escape</c>, and the syntax has
+/// no grouping construct, so a nested quantifier -- the <c>(a+)+</c> shape -- cannot be written.
+/// These tests pin that property, and it still holds. The risk they guard is a future "richer
+/// wildcards" change that passes more syntax through.</para>
 ///
-/// <para>These tests pin the property, not the implementation. The risk they guard is a future
-/// "richer wildcards" change that passes more syntax through and quietly removes the reason the
-/// missing timeout is survivable.</para>
+/// <para><b>r397 corrects this class's original conclusion.</b> It said the absence of a nested
+/// quantifier was why the missing match timeout was survivable. That does not follow: the classic
+/// exponential case needs no group at all. <c>*a*a*a*a*a*a*a*a*b</c> translates to
+/// <c>.*?a.*?a...b</c>, where each wildcard can split the text many ways and the failures multiply.
+/// The original measurement used ten CONSECUTIVE stars, which collapses immediately -- stars
+/// SEPARATED by literals are the dangerous shape, and eight of them did not finish in five seconds
+/// against a 40-character string. TextSearch now passes an explicit match timeout; see
+/// R397_WildcardSearchCannotFreezeTheWindowTests. The lesson worth keeping is that "this syntax
+/// cannot express the textbook bad pattern" is not the same claim as "this syntax cannot be slow".</para>
 /// </summary>
 public sealed class R287_WildcardPatternsCannotBacktrackCatastrophicallyTests
 {

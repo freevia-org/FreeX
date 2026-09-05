@@ -42,7 +42,7 @@ public static class TextSearch
             try
             {
                 var regexOptions = matchCase ? RegexOptions.None : RegexOptions.IgnoreCase;
-                regex = new Regex(WildcardToRegex(needle), regexOptions);
+                regex = new Regex(WildcardToRegex(needle), regexOptions, WildcardMatchTimeout);
             }
             catch (ArgumentException)
             {
@@ -53,8 +53,8 @@ public static class TextSearch
             var from = 0;
             while (from <= haystack.Length)
             {
-                var m = regex.Match(haystack, from);
-                if (!m.Success)
+                var m = MatchWithinTimeout(regex, haystack, from);
+                if (m is null || !m.Success)
                     yield break;
 
                 yield return (m.Index, m.Length);
@@ -80,6 +80,41 @@ public static class TextSearch
     /// <item>All other regex metacharacters are escaped so they are treated as literals.</item>
     /// </list>
     /// </summary>
+    /// <summary>
+    /// Ceiling on a single wildcard match, mirroring the sibling app's formula-regex limit.
+    /// </summary>
+    /// <remarks>
+    /// r287 judged a timeout unnecessary, reasoning that wildcard syntax cannot express a
+    /// catastrophically backtracking expression because it has no grouping and no counted quantifier,
+    /// so the <c>(a+)+</c> shape cannot be written. That much is true, but the classic exponential
+    /// case needs no group at all: <c>.*?a.*?a.*?a...b</c>, which the user writes as
+    /// <c>*a*a*a...*b</c>. Each wildcard can split the text in many ways and the failures multiply.
+    /// r287's measurement used TEN CONSECUTIVE stars, which collapses immediately; stars SEPARATED by
+    /// literals are the dangerous shape. Measured on the fixed build's own test: six of them take
+    /// ~370ms and eight do not finish in five seconds, on a 40-character string.
+    /// <para>Find runs on the UI thread, so without this the window simply stops responding, with no
+    /// error and nothing to cancel -- the user has to kill the process and loses unsaved work. A
+    /// timeout turns the pathological pattern into "no more matches", which is what the malformed
+    /// pattern path above already does.</para>
+    /// </remarks>
+    public static readonly TimeSpan WildcardMatchTimeout = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// Runs one match, converting a timeout into "no match". Separate because a <c>yield return</c>
+    /// cannot live inside a try/catch, and the loop above needs both.
+    /// </summary>
+    private static Match? MatchWithinTimeout(Regex regex, string haystack, int startAt)
+    {
+        try
+        {
+            return regex.Match(haystack, startAt);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return null;
+        }
+    }
+
     public static string WildcardToRegex(string pattern)
     {
         ArgumentNullException.ThrowIfNull(pattern);
