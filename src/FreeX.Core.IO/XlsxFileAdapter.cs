@@ -5,6 +5,7 @@ using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Xml;
 using System.Xml.Linq;
 using ClosedXML.Excel;
 using ClosedXML.Parser;
@@ -76,6 +77,27 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
     public XlsxLoadResult LoadWithWarnings(Stream stream, bool inspectFeatures)
     {
         var warnings = new List<string>();
+
+        // r450: a worksheet part whose root element is not <worksheet> is loaded as an EMPTY sheet,
+        // with every other sheet intact and nothing said. Found by the same malformed-input probe as
+        // r448 (FreeP) and r449 (FreeW): a workbook of 13 cells came back with 1, silently, and the
+        // next save would have written that loss to disk permanently.
+        //
+        // Unlike its siblings this is reported rather than refused, because one damaged sheet must
+        // not cost the user the eleven that are fine -- and unlike FreeP's reader, this adapter
+        // already owns a warning channel to say so with.
+        var unreadableSheetParts = FindUnreadableWorksheetParts(stream);
+        if (unreadableSheetParts.Count > 0)
+        {
+            warnings.Add(
+                unreadableSheetParts.Count == 1
+                    ? $"A worksheet in this file is damaged and was opened empty ({unreadableSheetParts[0]}). " +
+                      "Saving over the original would discard whatever it still contains."
+                    : $"{unreadableSheetParts.Count} worksheets in this file are damaged and were opened " +
+                      $"empty ({string.Join(", ", unreadableSheetParts)}). Saving over the original would " +
+                      "discard whatever they still contain.");
+        }
+
         Workbook workbook;
         XlsxFeatureReport? featureReport;
         lock (ClosedXmlGate)
@@ -107,6 +129,75 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
 
     /// <inheritdoc/>
     public Workbook Load(Stream stream) => LoadWithWarnings(stream).Workbook;
+
+    /// <summary>
+    /// r450: worksheet parts whose root element is not <c>worksheet</c>, which ClosedXML loads as an
+    /// empty sheet without complaint.
+    /// </summary>
+    /// <remarks>
+    /// Only the ROOT element is read, via <see cref="XmlReader"/>, so this costs a few bytes per
+    /// sheet rather than parsing every worksheet twice -- these files reach hundreds of megabytes and
+    /// the load path has been tuned for exactly that (see the patch-save work in the IO notes).
+    ///
+    /// A non-seekable stream is skipped rather than buffered: the check is a courtesy warning, and
+    /// copying an arbitrarily large workbook into memory to produce one would cost more than it is
+    /// worth. Everything here is best-effort -- any failure to inspect leaves the load exactly as it
+    /// was before, because a diagnostic must never be the thing that stops a file opening.
+    /// </remarks>
+    private static IReadOnlyList<string> FindUnreadableWorksheetParts(Stream stream)
+    {
+        if (!stream.CanSeek)
+            return [];
+
+        var originalPosition = stream.Position;
+        var damaged = new List<string>();
+
+        try
+        {
+            stream.Position = 0;
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+
+            foreach (var entry in archive.Entries
+                         .Where(candidate =>
+                             candidate.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                             candidate.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+                         .OrderBy(candidate => candidate.FullName, StringComparer.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    using var entryStream = entry.Open();
+                    // The package layer's shared settings, not hand-rolled ones: they carry the
+                    // character cap as well as the DTD and resolver protections, and R276's contract
+                    // test enforces exactly that -- it caught this scan writing its own pair.
+                    var settings = Free.Shared.Opc.SecureXmlReaderSettings.Create();
+                    settings.CloseInput = false;
+                    using var reader = XmlReader.Create(entryStream, settings);
+
+                    if (reader.MoveToContent() != XmlNodeType.Element ||
+                        !string.Equals(reader.LocalName, "worksheet", StringComparison.Ordinal))
+                    {
+                        damaged.Add(entry.FullName);
+                    }
+                }
+                catch
+                {
+                    // Malformed XML in a sheet part is a different failure, already surfaced by the
+                    // load itself as an XmlException; this scan only reports the case that loads
+                    // SILENTLY, so it must not claim the noisy ones too.
+                }
+            }
+        }
+        catch
+        {
+            return [];
+        }
+        finally
+        {
+            stream.Position = originalPosition;
+        }
+
+        return damaged;
+    }
 
     /// <summary>
     /// r382: recognises a package that is missing a part the reader needs. Deliberately narrow --
