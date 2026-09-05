@@ -76,21 +76,20 @@ public partial class CellAddressTests
     {
         CellAddress.ColumnNameToNumber("xfd").Should().Be(CellAddress.MaxCol);
 
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
-
         const int repetitions = 100_000;
-        var before = GC.GetAllocatedBytesForCurrentThread();
         uint result = 0;
-        for (var i = 0; i < repetitions; i++)
-            result = CellAddress.ColumnNameToNumber("xfd");
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        var reading = AllocationProbe.ShouldNotAllocate(
+            () =>
+            {
+                for (var i = 0; i < repetitions; i++)
+                    result = CellAddress.ColumnNameToNumber("xfd");
+            },
+            operations: repetitions,
+            "lowercase column names must be upper-cased in place rather than via a new string");
 
         result.Should().Be(CellAddress.MaxCol);
         Console.WriteLine(
-            $"ColumnNameToNumber lowercase repeated {repetitions:N0}x: {allocated:N0} bytes allocated.");
-        allocated.Should().BeLessThan(1_000);
+            $"ColumnNameToNumber lowercase repeated {repetitions:N0}x: {reading.Bytes:N0} bytes allocated.");
     }
 
     [Fact]
@@ -197,26 +196,26 @@ public partial class CellAddressTests
         CellAddress.TryParse("XFD1048576", sheet, out var warmup).Should().BeTrue();
         warmup.Should().Be(new CellAddress(sheet, CellAddress.MaxRow, CellAddress.MaxCol));
 
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
-
         const int repetitions = 100_000;
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        var stopwatch = Stopwatch.StartNew();
+        var stopwatch = new Stopwatch();
         CellAddress result = default;
-        for (var i = 0; i < repetitions; i++)
-        {
-            if (!CellAddress.TryParse("XFD1048576", sheet, out result))
-                throw new InvalidOperationException("Expected XFD1048576 to parse.");
-        }
-        stopwatch.Stop();
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        var reading = AllocationProbe.ShouldNotAllocate(
+            () =>
+            {
+                stopwatch.Restart();
+                for (var i = 0; i < repetitions; i++)
+                {
+                    if (!CellAddress.TryParse("XFD1048576", sheet, out result))
+                        throw new InvalidOperationException("Expected XFD1048576 to parse.");
+                }
+                stopwatch.Stop();
+            },
+            operations: repetitions,
+            "address parsing must run over spans instead of allocating per-call substrings");
 
         result.Should().Be(new CellAddress(sheet, CellAddress.MaxRow, CellAddress.MaxCol));
         Console.WriteLine(
-            $"TryParse repeated {repetitions:N0}x: {stopwatch.Elapsed.TotalMilliseconds:F2} ms, {allocated:N0} bytes allocated.");
-        allocated.Should().BeLessThan(1_000);
+            $"TryParse repeated {repetitions:N0}x: {stopwatch.Elapsed.TotalMilliseconds:F2} ms, {reading.Bytes:N0} bytes allocated.");
         stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(500));
     }
 
