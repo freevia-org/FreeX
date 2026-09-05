@@ -223,8 +223,9 @@ public sealed class R442_EveryConstructibleDocumentCommandUndoesExactlyTests
         commandTypes.Should().HaveCountGreaterThanOrEqualTo(
             100, "the reflection query must still reach the FreeW command assembly");
 
-        int notConstructible = 0, threw = 0, noChange = 0, exercised = 0;
+        int notConstructible = 0, threw = 0, noChange = 0, exercised = 0, claimedNoEffect = 0;
         var failures = new List<string>();
+        var falseNoEffect = new List<string>();
 
         foreach (var type in commandTypes)
         {
@@ -251,10 +252,22 @@ public sealed class R442_EveryConstructibleDocumentCommandUndoesExactlyTests
                 var command = (IDocumentCommand)constructor.Invoke(
                     constructor.GetParameters().Select(parameter => ValueFor(parameter.ParameterType)).ToArray());
 
-                // Honour the bus's own contract: a command reporting no effect is never applied, so
-                // driving it anyway would test a path production never takes.
+                // r443: the bus skips a command reporting no effect ENTIRELY -- no Apply, no undo
+                // entry. So a command that says false and would in fact have changed the document
+                // makes the user's action vanish: they click, nothing happens, and there is no
+                // error and nothing to undo. Check the claim rather than trusting it.
                 if (!command.HasEffect(context))
                 {
+                    claimedNoEffect++;
+                    var unchangedBefore = Describe(document);
+                    command.Apply(context);
+
+                    if (Describe(document) != unchangedBefore)
+                    {
+                        falseNoEffect.Add(
+                            type.Name + " [" + FirstDifference(unchangedBefore, Describe(document)) + "]");
+                    }
+
                     noChange++;
                     continue;
                 }
@@ -286,8 +299,18 @@ public sealed class R442_EveryConstructibleDocumentCommandUndoesExactlyTests
 
         var census =
             "types=" + commandTypes.Count + " notConstructible=" + notConstructible +
-            " threw=" + threw + " noChange=" + noChange + " exercised=" + exercised +
-            " failed=" + failures.Count;
+            " threw=" + threw + " noChange=" + noChange + " claimedNoEffect=" + claimedNoEffect +
+            " exercised=" + exercised + " failed=" + failures.Count;
+
+        falseNoEffect.Should().BeEmpty(
+            "the bus skips a command reporting HasEffect false entirely, so one that would in fact " +
+            "have changed the document makes the user's action vanish: they click, nothing happens, " +
+            "there is no error and nothing to undo. " + census + "\n" + string.Join("\n", falseNoEffect));
+
+        claimedNoEffect.Should().BeGreaterThan(
+            0,
+            "the HasEffect check above is only worth having if commands actually reach it -- if no " +
+            "command in the census ever reports no effect, that assertion is vacuous. " + census);
 
         exercised.Should().BeGreaterThanOrEqualTo(
             10,
