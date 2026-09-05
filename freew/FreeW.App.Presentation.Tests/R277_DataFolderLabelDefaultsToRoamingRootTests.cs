@@ -1,6 +1,5 @@
 using Free.Shared.AppServices;
 using FreeW.App.Presentation.Shell;
-using Xunit.Sdk;
 
 namespace FreeW.App.Presentation.Tests;
 
@@ -23,6 +22,32 @@ namespace FreeW.App.Presentation.Tests;
 /// <para>The defaults now name <c>Instance</c>. These tests pin the BEHAVIOUR, so the class is
 /// closed at the hazard rather than at the list of places that touch it.</para>
 /// </summary>
+/// <summary>
+/// Skips <see cref="R277_DataFolderLabelDefaultsToRoamingRootTests.TheParameterlessOverloadDoesNotResolveTheLocalRoot"/>
+/// on platforms where the roaming and local application-data roots are the same directory.
+/// .NET maps <c>ApplicationData</c> and <c>LocalApplicationData</c> to one path on macOS/Linux, so
+/// the r169 roaming-vs-local distinction this test pins simply does not exist there and the test
+/// cannot discriminate. Skipping via the attribute (the same mechanism as <c>UiE2eFactAttribute</c>)
+/// keeps the non-discriminating platform visible in the run instead of failing it or, worse,
+/// passing vacuously. On Windows the roots differ, so the test still runs and asserts for real.
+/// </summary>
+internal sealed class RoamingAndLocalRootsDistinctFactAttribute : FactAttribute
+{
+    public RoamingAndLocalRootsDistinctFactAttribute()
+    {
+        var local = AppStoragePathPlanner.GetApplicationDataDirectoryLabelOrFallback(
+            PlatformApplicationDataPathProvider.LocalInstance);
+        var roaming = AppStoragePathPlanner.GetApplicationDataDirectoryLabelOrFallback(
+            PlatformApplicationDataPathProvider.Instance);
+
+        if (string.Equals(local, roaming, StringComparison.Ordinal))
+        {
+            Skip = "ApplicationData and LocalApplicationData resolve to the same root on this "
+                + "platform, so the roaming/local distinction this test pins does not exist here.";
+        }
+    }
+}
+
 public sealed class R277_DataFolderLabelDefaultsToRoamingRootTests
 {
     [Fact]
@@ -36,7 +61,7 @@ public sealed class R277_DataFolderLabelDefaultsToRoamingRootTests
                 + "stores its options under the roaming root");
     }
 
-    [Fact]
+    [RoamingAndLocalRootsDistinctFact]
     public void TheParameterlessOverloadDoesNotResolveTheLocalRoot()
     {
         var local = AppStoragePathPlanner.GetApplicationDataDirectoryLabelOrFallback(
@@ -45,17 +70,9 @@ public sealed class R277_DataFolderLabelDefaultsToRoamingRootTests
             PlatformApplicationDataPathProvider.Instance);
 
         // Guard the guard: if the two roots coincide the assertion below would pass without
-        // meaning anything, which is the vacuous-green shape earlier rounds hit. On macOS/Linux
-        // .NET maps ApplicationData and LocalApplicationData to the SAME directory, so the roots
-        // legitimately coincide there and this test cannot discriminate at all. Skip explicitly
-        // rather than fail (the r169 behaviour under test is a Windows-only roaming/local
-        // distinction) -- a skip keeps the non-discriminating run visible instead of silently green.
-        if (string.Equals(local, roaming, StringComparison.Ordinal))
-        {
-            throw SkipException.ForSkip(
-                "ApplicationData and LocalApplicationData resolve to the same root on this platform, "
-                + "so the roaming/local distinction this test pins does not exist here.");
-        }
+        // meaning anything, which is the vacuous-green shape earlier rounds hit. The attribute
+        // above skips the test outright when they coincide, so reaching this point means the
+        // platform really does distinguish them and the assertion is meaningful.
 
         FreeWApplicationFrameDescriptor.ResolveDataFolderLabel().Should().NotBe(local,
             "reporting %LOCALAPPDATA% sends the user to a folder their options are not in -- the r169 "
