@@ -109,12 +109,80 @@ public sealed class R417_EveryConstructibleCommandUndoesExactlyTests
         return null;
     }
 
+    /// <summary>
+    /// Bookkeeping that undo is RIGHT not to rewind, so comparing it would assert something false.
+    /// Deliberately two names rather than a pattern: an exclusion rule broad enough to be convenient
+    /// is broad enough to hide the next real defect, and every future addition has to earn its line.
+    /// <list type="bullet">
+    /// <item><c>ContentVersion</c> is documented as a monotonic counter that caches key on. Winding
+    /// it back on undo would leave every such cache believing stale results are current -- the undo
+    /// path bumping it FORWARD is the correct behaviour.</item>
+    /// <item><c>StyleCount</c> counts the workbook's interned style pool. Styles are appended and
+    /// shared, never reference-counted, so a command that registers one leaves it registered after
+    /// undo; Excel's own style table accumulates the same way.</item>
+    /// </list>
+    /// </summary>
+    private static readonly HashSet<string> MonotonicBookkeeping =
+        new(StringComparer.Ordinal) { "ContentVersion", "StyleCount" };
+
+    /// <summary>
+    /// r439: reflective, not hand-listed. A fixed list of properties only sees the state somebody
+    /// thought to add a line for -- the same blind spot the hand-written per-command sample had --
+    /// and it silently rots as the model grows. Reading every public property means a field added
+    /// tomorrow is watched the day it appears. Measured: this cut the commands that applied
+    /// successfully while appearing to change NOTHING from 61 to 23, and took the number of commands
+    /// whose Revert is actually checked from 31 to 69.
+    /// </summary>
+    private static void Reflect(StringBuilder builder, string prefix, object target)
+    {
+        foreach (var property in target.GetType().GetProperties()
+                     .Where(candidate => candidate.CanRead && candidate.GetIndexParameters().Length == 0)
+                     .Where(candidate => !MonotonicBookkeeping.Contains(candidate.Name))
+                     .OrderBy(candidate => candidate.Name, StringComparer.Ordinal))
+        {
+            object? value;
+            try
+            {
+                value = property.GetValue(target);
+            }
+            catch
+            {
+                // A property that throws on this fixture describes nothing either way; skipping it
+                // loses no coverage, whereas letting it escape would fail every command alike.
+                continue;
+            }
+
+            var text = value switch
+            {
+                null => "-",
+                string text_ => text_,
+                // r439: CONTENTS, not just a count. A count alone cannot see a command that edits a
+                // comment's text or a validation's operator in place and fails to put it back -- the
+                // collection is the same size either way. This is safe from spurious diffs because
+                // the default object.ToString returns the type NAME, which is stable across calls,
+                // rather than anything identity- or hash-based. Sorted, since dictionary order is
+                // not a promise the model makes.
+                System.Collections.IEnumerable sequence =>
+                    "[" + string.Join(
+                        "; ",
+                        sequence.Cast<object?>()
+                            .Select(item => item?.ToString() ?? "-")
+                            .OrderBy(item => item, StringComparer.Ordinal)) + "]",
+                _ => value.ToString(),
+            };
+
+            builder.Append(prefix).Append(property.Name).Append('=').Append(text).AppendLine();
+        }
+    }
+
     private static string Describe(Workbook workbook)
     {
         var builder = new StringBuilder();
+        Reflect(builder, "wb.", workbook);
+
         foreach (var sheet in workbook.Sheets)
         {
-            builder.Append("sheet:").Append(sheet.Name).Append('|').Append(sheet.Id).AppendLine();
+            Reflect(builder, "sh." + sheet.Id + ".", sheet);
 
             foreach (var (address, cell) in sheet.EnumerateCells()
                          .OrderBy(pair => pair.Address.Row).ThenBy(pair => pair.Address.Col))
@@ -122,20 +190,25 @@ public sealed class R417_EveryConstructibleCommandUndoesExactlyTests
                 builder.Append(address.Row).Append(',').Append(address.Col).Append('=')
                     .Append(cell.Value?.ToString() ?? "-").Append(" s=").Append(cell.StyleId).AppendLine();
             }
-
-            builder.Append("rowH=").Append(sheet.RowHeights.Count)
-                .Append(" colW=").Append(sheet.ColumnWidths.Count)
-                .Append(" merges=").Append(sheet.MergedRegions.Count)
-                .Append(" comments=").Append(sheet.Comments.Count)
-                .Append(" links=").Append(sheet.Hyperlinks.Count)
-                .Append(" dv=").Append(sheet.DataValidations.Count)
-                .Append(" cf=").Append(sheet.ConditionalFormats.Count)
-                .Append(" allowEdit=").Append(sheet.AllowEditRanges.Count)
-                .Append(" af=").Append(sheet.AutoFilter?.Reference ?? "-")
-                .AppendLine();
         }
 
         return builder.ToString();
+    }
+
+    private static string FirstDifference(string before, string after)
+    {
+        var beforeLines = before.Split('\n');
+        var afterLines = after.Split('\n');
+
+        for (var index = 0; index < Math.Max(beforeLines.Length, afterLines.Length); index++)
+        {
+            var left = index < beforeLines.Length ? beforeLines[index].TrimEnd('\r') : "(absent)";
+            var right = index < afterLines.Length ? afterLines[index].TrimEnd('\r') : "(absent)";
+            if (left != right)
+                return left + " -> " + right;
+        }
+
+        return "(no line differs)";
     }
 
     [Fact]
@@ -185,8 +258,13 @@ public sealed class R417_EveryConstructibleCommandUndoesExactlyTests
                 exercised++;
                 command.Revert(context);
 
-                if (Describe(workbook) != before)
-                    failures.Add(type.Name);
+                var after = Describe(workbook);
+                if (after != before)
+                {
+                    // r439: name the field, not just the command. A bare command name sends the next
+                    // reader back to re-derive the diff by hand, and the diff is the whole finding.
+                    failures.Add(type.Name + " [" + FirstDifference(before, after) + "]");
+                }
             }
             catch (Exception exception)
             {
@@ -208,9 +286,17 @@ public sealed class R417_EveryConstructibleCommandUndoesExactlyTests
             "undo. " + census + "\n" + string.Join("\n", failures));
 
         exercised.Should().BeGreaterThanOrEqualTo(
-            20,
+            65,
             "the driver must still be exercising commands -- if this falls, the sweep has quietly " +
-            "stopped testing rather than the commands having improved. " + census);
+            "stopped testing rather than the commands having improved. Pinned just under the 69 " +
+            "r439 measured, so narrowing Describe or the value factory shows up here instead of " +
+            "turning into a comfortable green. " + census);
+
+        notConstructible.Should().BeLessThanOrEqualTo(
+            55,
+            "r438 took this from 124 to 49 by supplying the argument shapes that actually blocked " +
+            "construction. A rise means new commands are landing that the factory cannot build, and " +
+            "unbuildable commands are entirely untested here. " + census);
 
         threw.Should().BeLessThan(
             30, "a sharp rise here means the value factory stopped matching the constructors. " + census);
