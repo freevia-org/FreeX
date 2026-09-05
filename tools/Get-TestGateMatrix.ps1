@@ -33,7 +33,7 @@ $entries = @(
         $requiresFullHistory =
             $testGate.PSObject.Properties.Name -contains 'requiresFullHistory' -and
             [bool]$testGate.requiresFullHistory
-        $partitionCount = if ($testGate.PSObject.Properties.Name -contains 'partitions') {
+        $defaultPartitionCount = if ($testGate.PSObject.Properties.Name -contains 'partitions') {
             [int]$testGate.partitions
         }
         else {
@@ -42,6 +42,19 @@ $entries = @(
         foreach ($platform in @($testGate.platforms)) {
             if (-not $runnerByPlatform.ContainsKey([string]$platform)) {
                 throw "Gate '$($testGate.id)' uses unsupported platform '$platform'."
+            }
+
+            # "platformPartitions" is an optional per-platform override of "partitions" — it
+            # exists so a gate can run fewer parallel jobs on scarce-capacity runners (e.g.
+            # macOS) than it does on other platforms, without splitting into a separate gate.
+            $partitionCount = $defaultPartitionCount
+            if ($testGate.PSObject.Properties.Name -contains 'platformPartitions') {
+                $platformPartitionProperty = $testGate.platformPartitions.PSObject.Properties |
+                    Where-Object Name -EQ ([string]$platform) |
+                    Select-Object -First 1
+                if ($null -ne $platformPartitionProperty) {
+                    $partitionCount = [int]$platformPartitionProperty.Value
+                }
             }
 
             $preflightModes = @()

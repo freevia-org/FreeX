@@ -131,8 +131,18 @@ foreach ($testGate in $gates) {
     else {
         1
     }
+    # "platformPartitions" optionally overrides "partitions" for a single platform (e.g. running
+    # fewer parallel jobs on scarce macOS capacity); resolve it for the platform actually being run.
+    if ($testGate.PSObject.Properties.Name -contains "platformPartitions") {
+        $platformPartitionProperty = $testGate.platformPartitions.PSObject.Properties |
+            Where-Object Name -EQ $Platform |
+            Select-Object -First 1
+        if ($null -ne $platformPartitionProperty) {
+            $declaredPartitionCount = [int]$platformPartitionProperty.Value
+        }
+    }
     if ($PartitionCount -gt 1 -and $PartitionCount -ne $declaredPartitionCount) {
-        throw "Gate '$($testGate.id)' declares $declaredPartitionCount partition(s), but the runner requested $PartitionCount."
+        throw "Gate '$($testGate.id)' declares $declaredPartitionCount partition(s) on '$Platform', but the runner requested $PartitionCount."
     }
 
     $partitionProjects = if ($testGate.PSObject.Properties.Name -contains "partitionProjects") {
