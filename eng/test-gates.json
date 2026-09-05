@@ -6,6 +6,7 @@
       "app": "FreeX",
       "gate": "commit",
       "platforms": ["windows"],
+      "partitions": 3,
       "impactPaths": ["src/FreeX.Core.*/**"],
       "projects": [
         "tests/Free.Shared.AppServices.Tests/Free.Shared.AppServices.Tests.csproj",
@@ -37,6 +38,7 @@
       "app": "FreeX",
       "gate": "commit",
       "platforms": ["linux", "macos"],
+      "partitions": 3,
       "projects": [
         "tests/Free.Shared.AppServices.Tests/Free.Shared.AppServices.Tests.csproj",
         "tests/FreeX.Core.Formula.Tests/FreeX.Core.Formula.Tests.csproj",
@@ -62,7 +64,7 @@
       "app": "FreeX",
       "gate": "commit",
       "requiresFullHistory": true,
-      "partitions": 2,
+      "partitions": 3,
       "partitionProjects": [
         "tests/FreeX.App.Avalonia.Tests/FreeX.App.Avalonia.Tests.csproj"
       ],
@@ -179,6 +181,10 @@
       "app": "FreeW",
       "gate": "commit",
       "platforms": ["windows"],
+      "partitions": 3,
+      "partitionProjects": [
+        "freew/FreeW.App.Avalonia.Tests/FreeW.App.Avalonia.Tests.csproj"
+      ],
       "impactPaths": [
         "freew/FreeW.App.Host/**",
         "freew/FreeW.App.Avalonia/**"
@@ -244,6 +250,7 @@
       "gate": "commit",
       "requiresFullHistory": true,
       "platforms": ["windows"],
+      "partitions": 2,
       "impactPaths": [
         "freep/FreeP.App.Avalonia/**",
         "freep/FreeP.App.Rendering.Avalonia/**"

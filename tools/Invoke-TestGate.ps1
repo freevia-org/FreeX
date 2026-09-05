@@ -36,6 +36,71 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
+# Whole-project partitioning: used by gates that declare "partitions" without a
+# "partitionProjects" class-filter list (i.e. no single project dominates the gate's
+# runtime). Each project is assigned to exactly one partition — via deterministic
+# largest-first bin packing on a statically discovered [Fact]/[Theory] weight — so every
+# project still builds and runs exactly once overall, just spread across parallel runners,
+# rather than being rebuilt/retested (partially) in every partition like the class-filter
+# strategy does.
+function Get-TestProjectWeight {
+    param([Parameter(Mandatory = $true)][string]$ProjectFullPath)
+
+    $projectDirectory = Split-Path -Parent $ProjectFullPath
+    # Match custom xUnit attributes ([StaFact], [UiE2eFact], ...) as well as the bare spelling: a
+    # project whose tests ALL use a custom attribute would otherwise weigh 1 and wreck the bin
+    # packing. Same reasoning as Get-TestProjectPartitionFilter.ps1; requiring "(" or "]" straight
+    # after the suffix still rejects unrelated names like [Factory].
+    $factPattern = '\[[A-Za-z0-9_]*Fact(?:Attribute)?(?:\(|\])'
+    $theoryPattern = '\[[A-Za-z0-9_]*Theory(?:Attribute)?(?:\(|\])'
+    $inlineDataPattern = '\[InlineData(?:Attribute)?(?:\(|\])'
+
+    $weight = 0
+    foreach ($sourceFile in @(Get-ChildItem -LiteralPath $projectDirectory -Recurse -File -Filter '*.cs' |
+        Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj)[\\/]' })) {
+        $source = Get-Content -LiteralPath $sourceFile.FullName -Raw
+        $factCount = [regex]::Matches($source, $factPattern).Count
+        $theoryCount = [regex]::Matches($source, $theoryPattern).Count
+        $inlineDataCount = [regex]::Matches($source, $inlineDataPattern).Count
+        $weight += $factCount + [Math]::Max($theoryCount, $inlineDataCount)
+    }
+
+    return [Math]::Max($weight, 1)
+}
+
+function Get-WholeProjectPartitionAssignment {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$ProjectPaths,
+        [Parameter(Mandatory = $true)][int]$PartitionCount,
+        [Parameter(Mandatory = $true)][string]$RepoRoot
+    )
+
+    $weighted = @(
+        foreach ($projectPath in $ProjectPaths) {
+            $projectFullPath = Join-Path $RepoRoot $projectPath
+            [pscustomobject]@{
+                Path = $projectPath
+                Weight = Get-TestProjectWeight -ProjectFullPath $projectFullPath
+            }
+        }
+    )
+
+    $partitionWeights = [int[]]::new($PartitionCount)
+    $assignment = @{}
+    foreach ($item in @($weighted | Sort-Object @{ Expression = 'Weight'; Descending = $true }, @{ Expression = 'Path'; Descending = $false })) {
+        $target = 0
+        for ($index = 1; $index -lt $PartitionCount; $index++) {
+            if ($partitionWeights[$index] -lt $partitionWeights[$target]) {
+                $target = $index
+            }
+        }
+        $assignment[$item.Path] = $target
+        $partitionWeights[$target] += $item.Weight
+    }
+
+    return $assignment
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $manifestPath = Join-Path $repoRoot "eng/test-gates.json"
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
@@ -115,9 +180,24 @@ foreach ($testGate in $gates) {
     else {
         @()
     }
-    foreach ($projectPath in @($testGate.projects) + $platformProjects) {
+
+    $allGateProjects = @($testGate.projects) + $platformProjects
+    $useWholeProjectPartitioning = $PartitionCount -gt 1 -and @($partitionProjects).Count -eq 0
+    $wholeProjectAssignment = if ($useWholeProjectPartitioning) {
+        Get-WholeProjectPartitionAssignment -ProjectPaths $allGateProjects -PartitionCount $PartitionCount -RepoRoot $repoRoot
+    }
+    else {
+        $null
+    }
+
+    foreach ($projectPath in $allGateProjects) {
         $isPartitioned = $PartitionCount -gt 1 -and $partitionProjects -contains $projectPath
-        if ($PartitionCount -gt 1 -and -not $isPartitioned -and $PartitionIndex -gt 0) {
+        if ($useWholeProjectPartitioning) {
+            if ($wholeProjectAssignment[$projectPath] -ne $PartitionIndex) {
+                continue
+            }
+        }
+        elseif ($PartitionCount -gt 1 -and -not $isPartitioned -and $PartitionIndex -gt 0) {
             continue
         }
         if (-not $seenProjects.Add($projectPath)) {

@@ -82,8 +82,23 @@ foreach ($gate in @($manifest.gates)) {
     if ($partitionCount -lt 1 -or $partitionCount -gt 64) {
         $errors.Add("Gate '$($gate.id)' must declare between 1 and 64 partitions.")
     }
+    # A gate with multiple partitions and no partitionProjects uses whole-project partitioning
+    # (tools/Invoke-TestGate.ps1 assigns each of the gate's test projects to exactly one
+    # partition via weighted bin packing) rather than class-level filtering of one named
+    # project. That strategy needs at least one project per partition on every targeted
+    # platform, or a partition would run nothing.
     if ($partitionCount -gt 1 -and $partitionProjects.Count -eq 0) {
-        $errors.Add("Gate '$($gate.id)' must name partitionProjects when it declares multiple partitions.")
+        foreach ($platform in @($gate.platforms)) {
+            $platformSpecificProjects = @(if (
+                $gate.PSObject.Properties.Name -contains "platformProjects" -and
+                $gate.platformProjects.PSObject.Properties.Name -contains $platform) {
+                @($gate.platformProjects.$platform)
+            })
+            $totalForPlatform = @($gate.projects).Count + $platformSpecificProjects.Count
+            if ($totalForPlatform -lt $partitionCount) {
+                $errors.Add("Gate '$($gate.id)' declares $partitionCount partitions for platform '$platform' but has only $totalForPlatform project(s); name partitionProjects to split within a project instead, or reduce the partition count.")
+            }
+        }
     }
     if ($partitionCount -eq 1 -and $partitionProjects.Count -gt 0) {
         $errors.Add("Gate '$($gate.id)' names partitionProjects without declaring multiple partitions.")
