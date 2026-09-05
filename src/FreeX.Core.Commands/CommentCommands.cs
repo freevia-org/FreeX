@@ -157,6 +157,15 @@ public sealed class ShowHideCommentCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+
+        // r455: a note's pinned state is PERSISTED -- ShownComments is written to the xlsx VML and to
+        // the native JSON, and read back on load -- so showing or hiding one durably changes the
+        // document. Its siblings in this file (SetCommentCommand, DeleteCommentCommand) already
+        // refuse when "Edit objects" is withheld; these two did not, which let a protected sheet be
+        // permanently altered through the one comment command that skipped the guard.
+        if (CommentCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
         if (!sheet.Comments.ContainsKey(_address))
             return new CommandOutcome(false, "No note exists at the selected cell.");
 
@@ -198,6 +207,12 @@ public sealed class ShowAllNotesCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+
+        // r455: same reasoning as ShowHideCommentCommand above -- pinned state is persisted, so this
+        // durably changes the document and must honour "Edit objects" like its siblings. Guarded
+        // BEFORE the snapshot, so a refused command leaves no undo state behind either.
+        if (CommentCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
+            return protectedOutcome;
 
         // Snapshot current state for undo.
         _snapshot = new HashSet<CellAddress>(sheet.ShownComments);
