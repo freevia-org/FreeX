@@ -61,13 +61,46 @@ internal static class R49MainWindowTestHarness
         PumpDispatcher();
     }
 
+    /// <summary>
+    /// Runs pending dispatcher work and returns once the window has settled.
+    /// </summary>
+    /// <remarks>
+    /// r444: the sentinel is posted at <c>SystemIdle</c>, the LOWEST priority, not <c>Background</c>.
+    /// A Background sentinel drains only Background and above, so anything the window posted at
+    /// ContextIdle, ApplicationIdle or SystemIdle survived the pump -- and so did work posted BY
+    /// work the pump had just run, which is how a UI actually settles, one stage handing off to the
+    /// next. Every UI test in this lane treats this call as "the window has settled" and then
+    /// asserts, so those gaps turned such assertions into timing races: they passed or failed by
+    /// machine load rather than by behaviour. Both gaps are pinned by
+    /// R444_PumpDispatcherDrainsIdleWorkTests, which fails against the old Background sentinel.
+    ///
+    /// The deadline exists so that a component re-posting work forever fails its test slowly
+    /// instead of hanging the whole lane with no output to diagnose.
+    /// </remarks>
     public static void PumpDispatcher()
     {
+        var dispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
         var frame = new System.Windows.Threading.DispatcherFrame();
-        System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
-            System.Windows.Threading.DispatcherPriority.Background,
+
+        dispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.SystemIdle,
             new Action(() => frame.Continue = false));
-        System.Windows.Threading.Dispatcher.PushFrame(frame);
+
+        var deadline = new System.Windows.Threading.DispatcherTimer(
+            TimeSpan.FromSeconds(10),
+            System.Windows.Threading.DispatcherPriority.Send,
+            (_, _) => frame.Continue = false,
+            dispatcher);
+        deadline.Start();
+
+        try
+        {
+            System.Windows.Threading.Dispatcher.PushFrame(frame);
+        }
+        finally
+        {
+            deadline.Stop();
+        }
     }
 
     /// <summary>Invokes a private/internal instance method on MainWindow by name via reflection.</summary>
