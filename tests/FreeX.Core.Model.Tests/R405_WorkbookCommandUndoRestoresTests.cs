@@ -56,6 +56,21 @@ public sealed class R405_WorkbookCommandUndoRestoresTests
         sheet.Comments[new CellAddress(sheet.Id, 2, 2)] = "second note";
         sheet.Hyperlinks[new CellAddress(sheet.Id, 1, 2)] = "https://example.invalid/a";
 
+        // r416: validation and conditional-format rules, so the commands that clear them have
+        // something to clear. The change-gate rejects a no-op Apply, which is how the earlier
+        // annotation commands were caught needing this in r407.
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = GridRange.Parse("A1:A5", sheet.Id),
+            Type = DvType.WholeNumber,
+            Operator = DvOperator.Between,
+        });
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = GridRange.Parse("A1:A5", sheet.Id),
+        });
+
         return (workbook, sheet, new TestCommandContext(workbook));
     }
 
@@ -97,6 +112,12 @@ public sealed class R405_WorkbookCommandUndoRestoresTests
             // Added because the change-gate rejected ToggleWorksheetAutoFilter: the command changes
             // only this field, so with it missing the snapshot could not see the command work at
             // all. The gate refusing to let that test through is the whole reason it exists.
+            // r416: added for the same reason the autofilter line was -- AllowEditRange changes only
+            // this collection, so without it the change-gate correctly refused to let that command
+            // be tested against a snapshot that could not see it work.
+            foreach (var range in sheet.AllowEditRanges.OrderBy(r => r.ToString(), StringComparer.Ordinal))
+                builder.Append("  allowEdit ").Append(range).AppendLine();
+
             builder.Append("  autoFilter=").Append(sheet.AutoFilter?.Reference ?? "none")
                 .Append(" cols=").Append(sheet.AutoFilter?.FilterColumns.Count ?? 0).AppendLine();
 
@@ -150,6 +171,8 @@ public sealed class R405_WorkbookCommandUndoRestoresTests
         snapshot.Should().Contain("link 1,2=", "hyperlinks must be part of the comparison");
         snapshot.Should().Contain("validations=", "data validations must be part of the comparison");
         snapshot.Should().Contain("conditionalFormats=", "conditional formats must be part of the comparison");
+        snapshot.Should().Contain("autoFilter=", "the autofilter must be part of the comparison");
+        snapshot.Should().Contain("validations=1", "the seeded validation rule must be visible to the comparison");
     }
 
     [Fact]
@@ -193,6 +216,73 @@ public sealed class R405_WorkbookCommandUndoRestoresTests
 
         Check("ToggleWorksheetAutoFilter", sheet => new ToggleWorksheetAutoFilterCommand(
             sheet.Id, GridRange.Parse("A1:D6", sheet.Id)));
+
+        // r416: the cell-shifting family, which moves data rather than editing it in place. These
+        // are the ones where a partial Revert is hardest to notice -- the grid still looks
+        // plausible, just with a row of values one column left of where it belongs.
+        Check("InsertCells (shift down)", sheet => new InsertCellsCommand(
+            sheet.Id, GridRange.Parse("A2:B3", sheet.Id), InsertCellsShiftDirection.Down));
+
+        Check("InsertCells (shift right)", sheet => new InsertCellsCommand(
+            sheet.Id, GridRange.Parse("A2:B3", sheet.Id), InsertCellsShiftDirection.Right));
+
+        Check("DeleteCells (shift up)", sheet => new DeleteCellsCommand(
+            sheet.Id, GridRange.Parse("A2:B3", sheet.Id), DeleteCellsShiftDirection.Up));
+
+        Check("DeleteCells (shift left)", sheet => new DeleteCellsCommand(
+            sheet.Id, GridRange.Parse("A2:B3", sheet.Id), DeleteCellsShiftDirection.Left));
+
+        Check("CopyRange", sheet => new CopyRangeCommand(
+            sheet.Id, GridRange.Parse("A1:B2", sheet.Id), new CellAddress(sheet.Id, 10, 1)));
+
+        Check("MoveRange", sheet => new MoveRangeCommand(
+            sheet.Id, GridRange.Parse("A1:B2", sheet.Id), new CellAddress(sheet.Id, 10, 1)));
+
+        Check("FillCells", sheet => new FillCellsCommand(
+            sheet.Id, GridRange.Parse("A1:A4", sheet.Id), FillCellsDirection.Down));
+
+        Check("AllowEditRange", sheet => new AllowEditRangeCommand(
+            sheet.Id, GridRange.Parse("A1:B2", sheet.Id)));
+
+        Check("ClearConditionalFormats", sheet => new ClearConditionalFormatsCommand(
+            sheet.Id, GridRange.Parse("A1:A5", sheet.Id)));
+
+        Check("ClearDataValidation", sheet => new ClearDataValidationCommand(
+            sheet.Id, GridRange.Parse("A1:A5", sheet.Id)));
+    }
+
+    /// <summary>
+    /// r416: needs duplicate rows to remove, which the shared fixture deliberately does not have --
+    /// every cell there is distinct so the other commands operate on unambiguous data. Adding
+    /// duplicates to the shared fixture to accommodate one command would change what every other
+    /// command is tested against, so it gets its own.
+    /// </summary>
+    [Fact]
+    public void RemovingDuplicateRowsUndoesExactly()
+    {
+        var workbook = new Workbook("dupes");
+        var sheet = workbook.AddSheet("Sheet1");
+
+        for (uint row = 1; row <= 4; row++)
+        {
+            // Rows 1 and 3 identical, 2 and 4 identical: two removals, not one, so a Revert that
+            // restores only the last removed row fails here.
+            var value = row % 2 == 1 ? "odd" : "even";
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue(value));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(value + "-b"));
+        }
+
+        var context = new TestCommandContext(workbook);
+        var before = Snapshot(workbook);
+
+        var command = new RemoveDuplicateRowsCommand(sheet.Id, GridRange.Parse("A1:B4", sheet.Id));
+        command.Apply(context);
+
+        Snapshot(workbook).Should().NotBe(before, "the fixture has duplicate rows, so some must go");
+
+        command.Revert(context);
+
+        Snapshot(workbook).Should().Be(before, "RemoveDuplicateRows: undo must restore every removed row");
     }
 
     /// <summary>
