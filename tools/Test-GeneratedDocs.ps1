@@ -39,7 +39,19 @@ $resolvedScriptPath = Resolve-ToolRepoPath -Path $ScriptPath -RepoRoot $repoRoot
     }
 
     Write-Host "Checking $Label generated docs..."
-    & pwsh -NoProfile -File $resolvedScriptPath -Check
+    # These generators must run under PowerShell 7. Windows PowerShell 5.1 serializes JSON
+    # differently (2-space vs 4-space indent, ": " vs ":  ", and local vs UTC timestamp offsets),
+    # so running them under 5.1 reports every generated doc as "out of date" and, if regenerated,
+    # rewrites the whole file in a shape CI then rejects. Fail with an actionable message rather
+    # than silently falling back to a host that produces different bytes.
+    $pwshPath = Get-Command pwsh -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -eq $pwshPath) {
+        throw "PowerShell 7 (pwsh) is required for the generated-docs checks but was not found. " +
+            "Windows PowerShell 5.1 produces different JSON formatting and would report false " +
+            "staleness. Install it with: winget install --id Microsoft.PowerShell"
+    }
+
+    & $pwshPath.Source -NoProfile -File $resolvedScriptPath -Check
     if ($LASTEXITCODE -ne 0) {
         throw "$Label generated-docs check failed with exit code $LASTEXITCODE."
     }

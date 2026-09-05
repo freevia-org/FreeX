@@ -64,7 +64,7 @@ function Assert-ToolSourceCentralization {
     foreach ($requiredPortabilityContract in @(
             'NormalizationForm]::FormD',
             'Test-StaticRepositoryPathCase',
-            'python3, python',
+            "@('python3','python')",
             'nodeCommand.Source --check',
             'linuxOnlyShellPrefixes',
             'GNU readlink -f',

@@ -13,6 +13,38 @@ function Add-PortabilityError([string]$Message) {
     $errors.Add($Message)
 }
 
+# CI must have every validator installed; a developer box often does not. Absent tooling therefore
+# fails the gate in CI but only warns locally, so the REST of the gate (generated-docs staleness,
+# LF/BOM hygiene, workflow guards) still runs on a dev machine instead of the whole run aborting.
+$script:RequireAllValidators = -not [string]::IsNullOrEmpty($env:CI)
+
+function Add-PortabilityToolingGap([string]$Message) {
+    if ($script:RequireAllValidators) {
+        Add-PortabilityError $Message
+    }
+    else {
+        Write-Host "WARNING (local run, not enforced): $Message"
+    }
+}
+
+# Resolving an interpreter is not the same as having one. Windows ships App Execution Alias stubs
+# for python/python3 that exist on PATH, satisfy Get-Command, and then fail every invocation with
+# exit 9009 ("Python was not found; run without arguments to install from the Microsoft Store").
+# Without this probe the gate reports one bogus "syntax validation failed" per tracked .py file on
+# a stock Windows box, which is noise that trains people to ignore the gate entirely.
+function Resolve-WorkingInterpreter([string[]]$Names, [string[]]$ProbeArgs) {
+    foreach ($name in $Names) {
+        $candidate = Get-Command $name -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($null -eq $candidate) { continue }
+        try {
+            & $candidate.Source @ProbeArgs *> $null
+            if ($LASTEXITCODE -eq 0) { return $candidate }
+        }
+        catch { }
+    }
+    return $null
+}
+
 function Write-PortabilityPhase([string]$Name) {
     $elapsed = $phaseTimer.Elapsed
     $duration = $elapsed - $lastPhaseElapsed
@@ -186,9 +218,9 @@ foreach ($relativePath in $shellScripts) {
 
 $pythonScripts = @($trackedPaths | Where-Object { $_.EndsWith('.py', [System.StringComparison]::OrdinalIgnoreCase) })
 if ($pythonScripts.Count -gt 0) {
-    $pythonCommand = Get-Command python3, python -ErrorAction SilentlyContinue | Select-Object -First 1
+    $pythonCommand = Resolve-WorkingInterpreter -Names @('python3','python') -ProbeArgs @('-c','pass')
     if ($null -eq $pythonCommand) {
-        Add-PortabilityError 'Python scripts are tracked, but no python3/python interpreter is available for syntax validation.'
+        Add-PortabilityToolingGap 'Python scripts are tracked, but no python3/python interpreter is available for syntax validation.'
     }
     else {
         foreach ($relativePath in $pythonScripts) {
@@ -202,9 +234,9 @@ if ($pythonScripts.Count -gt 0) {
 
 $nodeScripts = @($trackedPaths | Where-Object { $_.EndsWith('.mjs', [System.StringComparison]::OrdinalIgnoreCase) })
 if ($nodeScripts.Count -gt 0) {
-    $nodeCommand = Get-Command node -ErrorAction SilentlyContinue | Select-Object -First 1
+    $nodeCommand = Resolve-WorkingInterpreter -Names @('node') -ProbeArgs @('--version')
     if ($null -eq $nodeCommand) {
-        Add-PortabilityError 'Node scripts are tracked, but node is unavailable for syntax validation.'
+        Add-PortabilityToolingGap 'Node scripts are tracked, but node is unavailable for syntax validation.'
     }
     else {
         foreach ($relativePath in $nodeScripts) {
