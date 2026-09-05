@@ -6065,7 +6065,14 @@ public static class PptxPackageReader
         // Look for a:alpha child directly on the color element
         var alphaEl = colorEl.Element(A + "alpha");
         if (alphaEl is not null && long.TryParse(alphaEl.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var alpha100k))
-            return (byte)(alpha100k * 255 / 100000);
+        {
+            // r428: ROUNDED, not truncated. Alpha is a byte here and a percentage in the file, and
+            // both conversions used integer division, so every save-and-reload lost one step: 0x40
+            // was written as 25098 (truncated from 25098.04) and read back as 63.99 -> 0x3F. Adding
+            // half the divisor before dividing recovers the original for all 256 values, which the
+            // accompanying test checks exhaustively rather than at a sample.
+            return (byte)Math.Min(255L, (alpha100k * 255 + 50000) / 100000);
+        }
         return 0x80; // default ~50% opacity
     }
 
