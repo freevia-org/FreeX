@@ -2829,6 +2829,11 @@ public sealed class SetSlideTitleCommand : IPresentationCommand
     private readonly int _slideIndex;
     private readonly string _newTitle;
     private string? _oldTitle;
+    // r441: Slide.Title's setter CREATES a title placeholder (inserted at index 0) when the slide
+    // has none, and writing the text back to empty cannot remove it again -- so undo used to leave
+    // behind a placeholder the user never added, saved into the .pptx and shifting the index of
+    // every other shape on the slide. Recording that the shape was ours lets Revert take it away.
+    private bool _createdTitleShape;
 
     public SetSlideTitleCommand(int slideIndex, string title)
     {
@@ -2837,6 +2842,10 @@ public sealed class SetSlideTitleCommand : IPresentationCommand
     }
 
     public string Label => "Set Slide Title";
+
+    private static SlideShape? FindTitleShape(Slide slide) =>
+        slide.Shapes.FirstOrDefault(shape =>
+            shape.Placeholder?.Type is PlaceholderType.Title or PlaceholderType.CenteredTitle);
 
     public bool HasEffect(Presentation p) =>
         _slideIndex >= 0 &&
@@ -2852,6 +2861,7 @@ public sealed class SetSlideTitleCommand : IPresentationCommand
 
         var slide = p.Slides[_slideIndex];
         _oldTitle = slide.Title;
+        _createdTitleShape = FindTitleShape(slide) is null;
         slide.Title = _newTitle;
     }
 
@@ -2862,7 +2872,21 @@ public sealed class SetSlideTitleCommand : IPresentationCommand
             return;
         }
 
-        p.Slides[_slideIndex].Title = _oldTitle ?? string.Empty;
+        var slide = p.Slides[_slideIndex];
+        if (_createdTitleShape)
+        {
+            // Remove only the placeholder this command's own Apply caused to be created; a slide
+            // that already had one takes the ordinary text restore below.
+            if (FindTitleShape(slide) is { } created)
+            {
+                slide.Shapes.Remove(created);
+            }
+
+            _createdTitleShape = false;
+            return;
+        }
+
+        slide.Title = _oldTitle ?? string.Empty;
     }
 }
 
