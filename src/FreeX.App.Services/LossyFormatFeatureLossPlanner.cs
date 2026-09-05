@@ -45,11 +45,41 @@ public static class LossyFormatFeatureLossPlanner
         if (normalizedExtension.Equals(".ods", StringComparison.OrdinalIgnoreCase))
             return workbook.HasVbaProjectPackage;
 
+        // r409: the web-page formats are single-sheet too, and MEASURED they drop comments and
+        // hyperlinks on a round trip while KEEPING merged regions. They therefore need their own
+        // predicate rather than joining the plain-text set: warning about merges that survive would
+        // make the prompt describe a loss that does not happen, and a prompt the user learns to
+        // dismiss protects nothing. Their remaining gap (validations and conditional formats were
+        // not measured) is deliberately not claimed here.
+        if (WebPageExtensions.Contains(normalizedExtension))
+            return workbook.Sheets.Count > 1 || workbook.Sheets.Any(HasWebPageUnrepresentableContent);
+
         if (!LossyPlainTextExtensions.Contains(normalizedExtension))
             return false;
 
         return workbook.Sheets.Count > 1 || workbook.Sheets.Any(HasUnrepresentableContent);
     }
+
+    /// <summary>
+    /// The web-page save targets. Single-sheet like the plain-text formats, but they preserve merged
+    /// regions, so they get their own loss profile rather than sharing one.
+    /// </summary>
+    private static readonly HashSet<string> WebPageExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".html", ".htm", ".mht", ".mhtml"
+    };
+
+    /// <summary>
+    /// What a web-page save actually discards, measured by round-tripping a workbook through
+    /// <c>HtmlFileAdapter</c> and <c>MhtFileAdapter</c>: comments and hyperlinks come back empty,
+    /// merged regions come back intact. Drawing objects are unrepresentable here for the same reason
+    /// as everywhere else.
+    /// </summary>
+    private static bool HasWebPageUnrepresentableContent(Sheet sheet) =>
+        HasUnrepresentableDrawingObject(sheet)
+        || sheet.Comments.Count > 0
+        || sheet.ThreadedComments.Count > 0
+        || sheet.Hyperlinks.Count > 0;
 
     private static bool HasUnrepresentableContent(Sheet sheet) =>
         HasUnrepresentableDrawingObject(sheet) || HasUnrepresentableAnnotation(sheet);

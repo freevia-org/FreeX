@@ -54,20 +54,38 @@ public sealed class R394_SheetLossIsReportedOnceTests
     }
 
     [Fact]
-    public void ANonGatedSingleSheetFormatStillNeedsTheWarningBecauseNothingElseTellsTheUser()
+    public void NoSingleSheetFormatCanDiscardASheetWithoutTellingTheUserSomehow()
     {
+        // r409 UPDATED this case. It used to assert that .html is NOT gated, and therefore that the
+        // post-save warning had to survive for it -- true when written, because the gate documented
+        // .html as uncovered. r409 gated the web-page formats after measuring that they discard
+        // comments and hyperlinks, so that premise is now false BY DESIGN and the old assertion
+        // would have pinned the gap it closed.
+        //
+        // What r394 actually cared about is unchanged and is what this now pins: a sheet must never
+        // be dropped silently. Either the pre-save gate asks, or the post-save planner describes it
+        // -- never neither. WorkbookSaveService is what stops it being both.
         var workbook = MultiSheetWorkbook();
-        var adapter = new HtmlFileAdapter();
 
-        LossyFormatFeatureLossPlanner.RequiresFeatureLossConfirmation(workbook, ".html")
-            .Should().BeFalse(
-                "the lossy-format gate documents .html as one of the formats it does NOT cover");
+        var singleSheetFormats = new (IFileAdapter Adapter, string Extension)[]
+        {
+            (new CsvFileAdapter(), ".csv"),
+            (new CsvUtf8FileAdapter(), ".csv"),
+            (new DifFileAdapter(), ".dif"),
+            (new SlkFileAdapter(), ".slk"),
+            (new PrnFileAdapter(), ".prn"),
+            (new HtmlFileAdapter(), ".html"),
+        };
 
-        SingleSheetSaveWarningPlanner.DescribeDiscardedSheets(adapter, workbook)
-            .Should().NotBeNull(
-                "with no pre-save confirmation for this format, the post-save warning is the only " +
-                "thing that tells the user Beta was dropped -- suppressing it here would lose the " +
-                "notice entirely rather than de-duplicate it");
+        foreach (var (adapter, extension) in singleSheetFormats)
+        {
+            var gated = LossyFormatFeatureLossPlanner.RequiresFeatureLossConfirmation(workbook, extension);
+            var described = SingleSheetSaveWarningPlanner.DescribeDiscardedSheets(adapter, workbook) is not null;
+
+            (gated || described).Should().BeTrue(
+                "{0} keeps one worksheet, so dropping the others must reach the user either as the " +
+                "pre-save confirmation or as the post-save warning", extension);
+        }
     }
 
     [Fact]
