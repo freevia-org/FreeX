@@ -61,6 +61,11 @@ try {
         foreach ($directory in $directories) {
             Remove-Item -LiteralPath $directory.FullName -Recurse -Force -ErrorAction SilentlyContinue
         }
+        # A clean build has no assets to reuse, so restore is mandatory. Stated explicitly rather
+        # than relying on the variable being unset.
+        if (-not [string]::IsNullOrEmpty($env:GITHUB_ENV)) {
+            "BUILDCACHE_RESTORE_SAFE=0" | Add-Content -LiteralPath $env:GITHUB_ENV -Encoding utf8
+        }
         Write-Host "Build cache: clean build ($Reason); removed $($directories.Count) obj directory/directories."
     }
 
@@ -165,8 +170,29 @@ try {
         }
     }
 
-    Write-Host ("Build cache: reusing obj from {0} (HEAD {1}); {2} tracked file(s) marked old, {3} cached file(s) kept, {4} changed file(s) marked for rebuild, {5} deletion(s) forced {6} project rebuild(s)." -f `
-        $cachedCommit.Substring(0, 9), $headCommit.Substring(0, 9), $stampedOld, $stampedMid, $changedPaths.Count, $deletedPaths.Count, $touchedProjects.Count)
+    # NuGet restore is the single largest remaining cost now that compilation is cached. Measured on
+    # a cache-hit job: 21s for the first test project and 41s for the second, against 44s of actual
+    # compile/copy -- and it is repeated for every `dotnet test` the gate runs. project.assets.json
+    # lives in the cached obj/, so that work is redundant whenever nothing restore-affecting changed
+    # since the cache was built. Decide it here, where the diff is already known, rather than
+    # guessing in the workflow.
+    #
+    # Conservative on purpose: it requires that the cache was actually reused, and any touch to a
+    # project file, MSBuild props/targets, the SDK pin or NuGet configuration disqualifies the whole
+    # run. Getting it wrong fails loudly with NETSDK1004 ("Assets file not found"), never silently.
+    $restoreAffectingPattern = '(?i)(\.csproj|\.props|\.targets|\.slnx|\.sln|global\.json|nuget\.config|packages\.lock\.json)$'
+    $restoreAffectingChanges = @(
+        @($changedPaths) + @($deletedPaths) | Where-Object { $_ -match $restoreAffectingPattern }
+    )
+    $restoreSafe = $stampedMid -gt 0 -and $restoreAffectingChanges.Count -eq 0
+    if (-not [string]::IsNullOrEmpty($env:GITHUB_ENV)) {
+        "BUILDCACHE_RESTORE_SAFE=$(if ($restoreSafe) { '1' } else { '0' })" |
+            Add-Content -LiteralPath $env:GITHUB_ENV -Encoding utf8
+    }
+
+    Write-Host ("Build cache: reusing obj from {0} (HEAD {1}); {2} tracked file(s) marked old, {3} cached file(s) kept, {4} changed file(s) marked for rebuild, {5} deletion(s) forced {6} project rebuild(s); restore {7}." -f `
+        $cachedCommit.Substring(0, 9), $headCommit.Substring(0, 9), $stampedOld, $stampedMid, $changedPaths.Count, $deletedPaths.Count, $touchedProjects.Count,
+        $(if ($restoreSafe) { "can be skipped" } else { "required ($($restoreAffectingChanges.Count) restore-affecting change(s))" }))
 }
 finally {
     Pop-Location

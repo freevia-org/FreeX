@@ -117,7 +117,7 @@ jobs:
             -PartitionIndex ${{ matrix.partitionIndex }} `
             -PartitionCount ${{ matrix.partitionCount }} `
             -HangTimeout 15m `
-            -ResultsDirectory TestResults
+            -ResultsDirectory TestResults ${{ env.BUILDCACHE_RESTORE_SAFE == '1' && '-NoRestore' || '' }}
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
