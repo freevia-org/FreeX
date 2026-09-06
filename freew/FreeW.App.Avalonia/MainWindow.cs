@@ -3682,8 +3682,6 @@ public sealed partial class MainWindow : Window
 
     private async Task OpenAsync() => await _fileCommands.OpenAsync();
 
-    private Task<bool> OpenRecentPathAsync(string path) =>
-/*
     /// <summary>
     /// Backstage "Open Recent". Must run the dirty-gate through the async workflow: the shared
     /// workflow's synchronous Open overload prompts for unsaved changes via a helper that blocks
@@ -3691,8 +3689,7 @@ public sealed partial class MainWindow : Window
     /// while that same UI thread is blocked — a guaranteed deadlock when the current document is
     /// dirty.
     /// </summary>
-    private Task<bool> OpenRecentAsync(string path) =>
-*/
+    private Task<bool> OpenRecentPathAsync(string path) =>
         _fileCommands.OpenSelectedPathAsync(path);
 
     private async Task<string?> PromptOpenPathAsync(FreeWDocumentOpenPickerRequest request)
