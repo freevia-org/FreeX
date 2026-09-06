@@ -2199,8 +2199,33 @@ public static class PortablePdfWriter
             $"characters outside the built-in Helvetica/WinAnsi set require the deferred embedded-font Unicode PDF path. {DeferredUnicodePdfPathRequirements}");
     }
 
-    private static string FormatNumber(double value) =>
-        (Math.Abs(value) < 0.0005 ? 0d : value).ToString("0.###", CultureInfo.InvariantCulture);
+    /// <summary>
+    /// r468: every number written into the file passes through here, which is why the finite check
+    /// lives here rather than at the call sites -- there are dozens, and one missed call site would
+    /// leave the hole open.
+    /// </summary>
+    /// <remarks>
+    /// A NaN or Infinity used to be formatted straight into the content stream, producing operators
+    /// like <c>NaN NaN 10 10 re f</c>. Neither is a PDF number, so the page cannot be parsed -- while
+    /// the file still carries a correct <c>%PDF-</c> header and <c>%%EOF</c> trailer and therefore
+    /// looks perfectly healthy. That is the worst shape of failure: an export that reports success
+    /// and produces a file no reader will open.
+    ///
+    /// Throwing matches how this writer already handles its other preconditions (a writable stream,
+    /// at least one page). A non-finite coordinate means a real layout bug upstream, and a clear
+    /// error naming it is worth far more to whoever has to diagnose it than a silently corrupt file.
+    /// </remarks>
+    private static string FormatNumber(double value)
+    {
+        if (!double.IsFinite(value))
+        {
+            throw new InvalidOperationException(
+                $"Portable PDF export received a non-finite coordinate ({value}). Writing it would " +
+                "produce a file that looks valid but cannot be opened, so the export is refused.");
+        }
+
+        return (Math.Abs(value) < 0.0005 ? 0d : value).ToString("0.###", CultureInfo.InvariantCulture);
+    }
 
     private static string FormatColorComponent(byte value) =>
         FormatNumber(value / 255d);
