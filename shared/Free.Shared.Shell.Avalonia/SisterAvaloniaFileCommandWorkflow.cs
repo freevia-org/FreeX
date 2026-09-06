@@ -225,6 +225,19 @@ public sealed class SisterAvaloniaFileCommandWorkflow
             groupSuffix: _groupSuffixProvider?.Invoke() ?? _titleSpec.GroupSuffix,
             isDefaultDocument: _workflow.CurrentPath is null);
 
+    /// <summary>
+    /// r489: MUST NOT run on the UI thread. Blocking on <see cref="AvaloniaSaveChangesDialog"/>
+    /// waits for a result only the UI thread can produce, so calling this from that thread is a
+    /// guaranteed deadlock -- Avalonia has no nested message pump, which is what makes the same
+    /// shape safe in the WPF sister (ShowDialog pumps) and fatal here. Use
+    /// <see cref="PromptSaveChangesAsync"/> instead.
+    ///
+    /// <para>It exists because <see cref="FileCommandWorkflow"/> requires a synchronous dirty-gate
+    /// delegate. No Avalonia path reaches it today: every shell routes through the async workflow,
+    /// and FreeW's MainWindow carries a comment explaining why its Open Recent had to. That is a
+    /// fact about today's CALLERS, so the warning belongs here on the API rather than only in the
+    /// caller that happened to learn it.</para>
+    /// </summary>
     private SaveChangesPrompt PromptSaveChangesSync(string action) =>
         AvaloniaSaveChangesDialog.ShowAsync(
                 _owner,

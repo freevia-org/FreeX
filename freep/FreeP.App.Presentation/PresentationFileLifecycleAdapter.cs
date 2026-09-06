@@ -22,6 +22,14 @@ public sealed class PresentationFileLifecycleAdapter : IPresentationFileLifecycl
         _workflow = workflow ?? throw new ArgumentNullException(nameof(workflow));
         _newAsync = newAsync ?? ((action, load) => _workflow.NewAsync(action, load));
         _openAsync = openAsync ?? _workflow.OpenAsync;
+        // r489: this fallback is an async-SHAPED wrapper around a SYNCHRONOUS dirty gate, which
+        // prompts by blocking until a dialog returns. That is safe only on a toolkit whose modal
+        // dialog pumps a nested message loop; on one that does not, blocking the UI thread waits
+        // for a result only that thread can produce, which is a deadlock. A renderer that cannot
+        // guarantee the nested pump must pass confirmCloseAllowedAsync rather than take this
+        // default. (Deliberately toolkit-neutral wording: this file is the portable tier and a
+        // source contract keeps toolkit names out of it -- the named warning lives beside the
+        // implementation that actually blocks.)
         _confirmCloseAllowedAsync = confirmCloseAllowedAsync ??
             (action => Task.FromResult(_workflow.ConfirmCloseAllowed(action)));
     }
