@@ -420,8 +420,26 @@ internal static class PptxChartWriter
         var lineElement = BuildChartAreaOutlineEl(outline);
         if (fillElement is not null)
             spPr.AddFirst(fillElement);
+
+        // r498: a:ln precedes the effect and 3-D elements in CT_ShapeProperties, so appending it
+        // lands AFTER an a:effectLst this method never removes -- r483's defect, which made the
+        // saved package schema-invalid and PowerPoint offer to repair it.
+        //
+        // DEFENSIVE, and recorded as such: unlike r483 no end-to-end reproduction was achieved. A
+        // probe that gave a chartEx an spPr carrying an effectLst and asked for an outline produced
+        // no a:ln at all, so the path from ChartAreaOutline to this line is not one I established.
+        // The change is still worth making because it is provably identical when no effect element
+        // is present, and correct when one is.
         if (lineElement is not null)
-            spPr.Add(lineElement);
+        {
+            var successor = spPr.Elements().FirstOrDefault(element =>
+                element.Name.LocalName is "effectLst" or "effectDag" or "scene3d" or "sp3d" or "extLst");
+
+            if (successor is null)
+                spPr.Add(lineElement);
+            else
+                successor.AddBeforeSelf(lineElement);
+        }
 
         if (spPr.IsEmpty && !spPr.HasAttributes)
             spPr.Remove();
