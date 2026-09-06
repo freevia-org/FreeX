@@ -143,6 +143,10 @@ internal static class XlsxRichRunReader
                 var szVal = szEl?.Attribute("val")?.Value;
                 if (!string.IsNullOrWhiteSpace(szVal) &&
                     double.TryParse(szVal, NumberStyles.Float, CultureInfo.InvariantCulture, out var pts) &&
+                    // r486: an upper-bounded guard would exclude infinity on its own (see
+                    // XlsxWorksheetXmlValueParser); a bare "> 0" does not, and this size comes from
+                    // the file and goes into text layout.
+                    double.IsFinite(pts) &&
                     pts > 0)
                 {
                     fontSize = pts;

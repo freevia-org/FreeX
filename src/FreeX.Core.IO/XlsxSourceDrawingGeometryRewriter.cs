@@ -282,6 +282,7 @@ internal static class XlsxSourceDrawingGeometryRewriter
     private static bool ParsesPositive(XAttribute? attribute) =>
         attribute is not null &&
         double.TryParse(attribute.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) &&
+        double.IsFinite(value) &&
         value > 0;
 
     /// <summary>

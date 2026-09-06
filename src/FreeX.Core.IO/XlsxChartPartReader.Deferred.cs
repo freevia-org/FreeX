@@ -341,7 +341,8 @@ public static partial class XlsxChartPartReader
         var overflow = ParseChartExThreshold(binning.Attribute("overflow")?.Value);
 
         if (!string.IsNullOrWhiteSpace(binSize) &&
-            double.TryParse(binSize, NumberStyles.Float, CultureInfo.InvariantCulture, out var width) && width > 0)
+            double.TryParse(binSize, NumberStyles.Float, CultureInfo.InvariantCulture, out var width) &&
+            double.IsFinite(width) && width > 0)
             return new HistogramBinningModel(HistogramBinningMode.BinWidth, BinWidth: width, OverflowThreshold: overflow, UnderflowThreshold: underflow);
 
         if (!string.IsNullOrWhiteSpace(binCount) &&

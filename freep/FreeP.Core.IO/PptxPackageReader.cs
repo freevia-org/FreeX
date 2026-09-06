@@ -7606,7 +7606,14 @@ public static class PptxPackageReader
             var numericTo = buildPar.Descendants(P + "anim")
                 .FirstOrDefault(element => element.Attribute("valueType")?.Value == "num")
                 ?.Attribute("to")?.Value;
+            // r486: `scale >= 0` alone admits POSITIVE infinity -- .NET parses "Infinity" and
+            // overflows "1e999" to it -- and this value comes straight off the file. An infinite
+            // scale is then stored as the literal "Infinity" by AnimationScaleBehavior.Format and
+            // written back out verbatim as x="Infinity", which is not a number in ST_Percentage: the
+            // deck we SAVE is the one PowerPoint refuses. Sibling of r485, which guarded the string
+            // parser; this site parses the double itself and so needed its own check.
             if (double.TryParse(numericTo, NumberStyles.Float, CultureInfo.InvariantCulture, out var scale)
+                && double.IsFinite(scale)
                 && scale >= 0)
             {
                 scaleBehavior = AnimationScaleBehavior.FromTo(scale);

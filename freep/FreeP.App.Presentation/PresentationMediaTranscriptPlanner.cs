@@ -1949,6 +1949,8 @@ public static class PresentationMediaTranscriptPlanner
             if (multiplier.Length == 2
                 && double.TryParse(multiplier[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var numerator)
                 && double.TryParse(multiplier[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var denominator)
+                && double.IsFinite(numerator)
+                && double.IsFinite(denominator)
                 && numerator > 0
                 && denominator > 0)
             {
@@ -2539,6 +2541,7 @@ public static class PresentationMediaTranscriptPlanner
     {
         var token = GetTtmlAttribute(root, localName);
         return double.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+            && double.IsFinite(value)
             && value > 0
             ? value
             : null;
@@ -2589,6 +2592,7 @@ public static class PresentationMediaTranscriptPlanner
                 NumberStyles.Float,
                 CultureInfo.InvariantCulture,
                 out var frames)
+            && double.IsFinite(frames)
             && frames >= 0
             && frameRate > 0)
         {
@@ -2601,6 +2605,7 @@ public static class PresentationMediaTranscriptPlanner
                 NumberStyles.Float,
                 CultureInfo.InvariantCulture,
                 out var ticks)
+            && double.IsFinite(ticks)
             && ticks >= 0
             && tickRate > 0)
         {
@@ -2616,6 +2621,7 @@ public static class PresentationMediaTranscriptPlanner
             && clockHours >= 0
             && clockMinutes >= 0
             && clockSeconds >= 0
+            && double.IsFinite(clockFrames)
             && clockFrames >= 0
             && frameRate > 0)
         {
