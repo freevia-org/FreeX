@@ -6658,12 +6658,31 @@ public static class DocxReader
         if (kind is SmartArtKind.List or SmartArtKind.Process)
         {
             var flattened = new List<SmartArtNode>();
+
+            // r502: the graph above is linked from the file's parOf connections with no check that
+            // they form a tree, so a document could describe a cycle -- and this walk would then
+            // never terminate, dying with an uncatchable StackOverflowException while OPENING the
+            // document. FreeP's equivalent reader already refuses a cycle exactly this way, with a
+            // set of the ids on the current path; this is the same guard in the sibling that lacked
+            // it. Path-based rather than a global visited set, so a point legitimately reachable
+            // twice is still flattened twice.
+            //
+            // DEFENSIVE, and recorded as such: no package that actually produces a cyclic graph
+            // through this reader was constructed, so reachability is unproven. r501 is the reason
+            // to spend three lines on it anyway -- there, the same shape in FreeP was reachable and
+            // killed the process outright.
+            var onPath = new HashSet<SmartArtNode>();
+
             void Flatten(IEnumerable<SmartArtNode> nodes)
             {
                 foreach (var node in nodes)
                 {
+                    if (!onPath.Add(node))
+                        continue;
+
                     flattened.Add(new SmartArtNode(node.Text));
                     Flatten(node.Children);
+                    onPath.Remove(node);
                 }
             }
 
