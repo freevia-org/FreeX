@@ -2146,6 +2146,11 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void RefreshTableOfContents()
     {
+        // r471: InsertTableOfContents above already refuses under Restrict Editing; refreshing
+        // rewrites the same body content, so it has to refuse on the same terms.
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         ReferenceEdits.RefreshTableOfContents(
             BuildGeneratedPageTextResolver,
@@ -2241,6 +2246,10 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertPageNumberAtCaret()
     {
+        // r471: inserts a paragraph into the body, so it is gated like every other insertion.
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         var para = new FreeW.Core.Model.Paragraph();
         para.Runs.Add(new FreeW.Core.Model.Run(
@@ -17136,6 +17145,10 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void RefreshBibliography()
     {
+        // r471: InsertBibliography already refuses under Restrict Editing; so must the refresh.
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         RealizeGeneratedReferenceEdit(ReferenceEdits.RefreshBibliography(GeneratedReferenceCaret()));
     }
@@ -17300,6 +17313,10 @@ public sealed partial class DocumentView : RichTextBox
 
     private void RefreshTableOfAuthoritiesCore(ToaOptions? options)
     {
+        // r471: guarded in the core so both public overloads refuse on the same terms.
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         RealizeGeneratedReferenceEdit(ReferenceEdits.RefreshTableOfAuthorities(
             GeneratedReferenceCaret(),

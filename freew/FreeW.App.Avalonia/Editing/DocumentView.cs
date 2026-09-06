@@ -22566,6 +22566,11 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void InsertTableOfContents()
     {
+        // r471: reference fields are body content; Word blocks inserting and refreshing them
+        // under Restrict Editing, exactly as it blocks InsertPageBreak just above.
+        if (IsEditingLocked)
+            return;
+
         var at = Math.Clamp(_caret.Block, 0, _doc.Blocks.Count);
         ReferenceEdits.InsertTableOfContents(at, BuildGeneratedPageTextResolver);
     }
@@ -22577,7 +22582,14 @@ public sealed partial class DocumentView : Control
     /// <see cref="InsertTableOfContents"/>, inserting at the document start. Grouped into one undo.
     /// </summary>
     public void UpdateTableOfContents()
-        => ReferenceEdits.RefreshTableOfContents(BuildGeneratedPageTextResolver);
+    {
+        // r471: reference fields are body content; Word blocks inserting and refreshing them
+        // under Restrict Editing, exactly as it blocks InsertPageBreak.
+        if (IsEditingLocked)
+            return;
+
+        ReferenceEdits.RefreshTableOfContents(BuildGeneratedPageTextResolver);
+    }
 
     // Build + insert the TOC paragraphs starting at block `at`, grouped into one undo.
     private void InsertTocAt(int at, string label)
@@ -23188,11 +23200,21 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void InsertBibliography()
     {
+        // r471: reference fields are body content; Word blocks inserting and refreshing them
+        // under Restrict Editing, exactly as it blocks InsertPageBreak just above.
+        if (IsEditingLocked)
+            return;
+
         RealizeGeneratedReferenceEdit(ReferenceEdits.InsertBibliography(GeneratedReferenceCaret()));
     }
 
     public void RefreshBibliography()
     {
+        // r471: reference fields are body content; Word blocks inserting and refreshing them
+        // under Restrict Editing, exactly as it blocks InsertPageBreak just above.
+        if (IsEditingLocked)
+            return;
+
         RealizeGeneratedReferenceEdit(ReferenceEdits.RefreshBibliography(GeneratedReferenceCaret()));
     }
 
@@ -23358,6 +23380,11 @@ public sealed partial class DocumentView : Control
     public void InsertTableOfAuthorities(ToaOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+
+        // r471: guarded on the options overload so the parameterless entry point above is covered
+        // by the same check rather than needing its own.
+        if (IsEditingLocked)
+            return;
         RealizeGeneratedReferenceEdit(ReferenceEdits.InsertTableOfAuthorities(
             GeneratedReferenceCaret(),
             options,
@@ -23374,6 +23401,10 @@ public sealed partial class DocumentView : Control
 
     private void RefreshTableOfAuthoritiesCore(ToaOptions? options)
     {
+        // r471: guarded in the core so both public overloads are covered by one check.
+        if (IsEditingLocked)
+            return;
+
         RealizeGeneratedReferenceEdit(ReferenceEdits.RefreshTableOfAuthorities(
             GeneratedReferenceCaret(),
             options,
