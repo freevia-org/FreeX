@@ -4294,9 +4294,21 @@ public sealed partial class MainWindow : Window,
         var loaded = window._fileSession.RestoreAutosaveSnapshot(
             candidate.SnapshotPath,
             candidate.Sidecar.OriginalFilePath);
+
+        // r474: only present the window when the snapshot actually loaded. Showing it regardless
+        // meant a failed recovery still put a blank presentation on screen -- unexplained on the
+        // startup path (best-effort, silent on failure) and, on the manual "Recover Unsaved
+        // Presentations" command, alongside the failure message that command exists to surface.
+        // FreeW's OpenNewWindowWithRecoveredSnapshotAsync already returns without showing anything.
+        if (!loaded)
+        {
+            window.Close();
+            return false;
+        }
+
         window.Show();
         window.Activate();
-        return loaded;
+        return true;
     }
 
     private void OpenAdditionalStartupPresentations(IReadOnlyList<StartupFileOpenEntry> entries)

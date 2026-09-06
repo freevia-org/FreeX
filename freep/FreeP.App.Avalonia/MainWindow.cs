@@ -982,9 +982,18 @@ public sealed partial class MainWindow : Window,
         var loaded = window._fileSession.RestoreAutosaveSnapshot(
             candidate.SnapshotPath,
             candidate.Sidecar.OriginalFilePath);
+
+        // r474: see the WPF host's OpenNewWindowWithRecoveredSnapshot -- a failed recovery must not
+        // leave a blank presentation window on screen while the caller reports the failure.
+        if (!loaded)
+        {
+            window.Close();
+            return Task.FromResult(false);
+        }
+
         window.Show();
         window.Activate();
-        return Task.FromResult(loaded);
+        return Task.FromResult(true);
     }
 
     private void RestoreOwnerFocus()
