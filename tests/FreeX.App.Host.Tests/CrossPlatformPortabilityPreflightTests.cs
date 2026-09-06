@@ -11,7 +11,12 @@ public sealed class CrossPlatformPortabilityPreflightTests
 
         script.Should().Contain("Case-insensitive tracked-path collision");
         script.Should().Contain("Windows-incompatible tracked path");
-        script.Should().Contain("bash -n");
+        // Shell scripts are still syntax-checked with bash -n, but the interpreter is now resolved
+        // and probed first so a Windows/WSL stub that satisfies Get-Command and then fails every
+        // invocation cannot fail the gate. That moved the executable into a variable, so the literal
+        // "bash -n" no longer appears; pin the two halves of the behaviour instead.
+        script.Should().Contain("Resolve-WorkingInterpreter -Names @('bash')");
+        script.Should().Contain("$bashCommand.Source -n ");
         script.Should().Contain("passes a Windows-separated child path to Join-Path");
         script.Should().Contain("Path.GetRelativePath, which is unavailable in Windows PowerShell 5.1");
         script.Should().Contain("full-release.yml");
