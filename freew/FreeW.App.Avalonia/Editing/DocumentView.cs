@@ -27313,10 +27313,14 @@ public sealed partial class DocumentView : Control
     private static ImmutableSolidColorBrush CommentTintBrush { get; } = new ImmutableSolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xC1, 0x07));
     private static ImmutableSolidColorBrush ResolvedCommentTintBrush { get; } = new ImmutableSolidColorBrush(Color.FromArgb(0x1F, 0x9E, 0x9E, 0x9E));
     // Amber underline drawn under commented glyphs — the in-text anchor mark.
-    private static readonly Pen CommentUnderlinePen =
-        new(new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B)), 1.5);
-    private static readonly Pen ResolvedCommentUnderlinePen =
-        new(new SolidColorBrush(Color.FromRgb(0x9E, 0x9E, 0x9E)), 1.0);
+    // r495: ImmutablePen over an ImmutableSolidColorBrush. A plain Pen wrapping a mutable brush in a
+    // STATIC field is the documented Avalonia crash class -- the first render thread to touch it takes
+    // ownership, and a later one throws "a different thread owns it" intermittently. The brushes in
+    // this same block were already immutable; the pens beside them were not.
+    private static readonly ImmutablePen CommentUnderlinePen =
+        new(new ImmutableSolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B)), 1.5);
+    private static readonly ImmutablePen ResolvedCommentUnderlinePen =
+        new(new ImmutableSolidColorBrush(Color.FromRgb(0x9E, 0x9E, 0x9E)), 1.0);
     // Right-margin comment marker fill (balloon) — amber bracket aligned to the anchor line.
     private static ImmutableSolidColorBrush CommentMarkerBrush { get; } = new ImmutableSolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B));
     private static ImmutableSolidColorBrush ResolvedCommentMarkerBrush { get; } = new ImmutableSolidColorBrush(Color.FromRgb(0xBD, 0xBD, 0xBD));
@@ -27326,8 +27330,8 @@ public sealed partial class DocumentView : Control
 
     // ── AV-TRACKEDIT: tracked-change render assets ────────────────────────────────────────────────
     private static ImmutableSolidColorBrush RevisionFallbackBrush { get; } = new ImmutableSolidColorBrush(Color.FromRgb(0xC0, 0x00, 0x40));
-    private static readonly Pen SimpleMarkupChangeBarPen = new(RevisionFallbackBrush, 2.0);
-    private static readonly Pen ProofingSquigglePen = new(new SolidColorBrush(Color.FromRgb(0xD1, 0x34, 0x38)), 1.15);
+    private static readonly ImmutablePen SimpleMarkupChangeBarPen = new(RevisionFallbackBrush, 2.0);
+    private static readonly ImmutablePen ProofingSquigglePen = new(new ImmutableSolidColorBrush(Color.FromRgb(0xD1, 0x34, 0x38)), 1.15);
 
     // ── AV-LINK: hyperlink render colour ──────────────────────────────────────────────────────────
     // Word's default hyperlink character-style colour (a medium blue). A hyperlinked run with no explicit
