@@ -1757,6 +1757,14 @@ public static class PptxPackageReader
     /// </summary>
     private const int MaxShapeGroupNestingDepth = 64;
 
+    /// <summary>
+    /// r501: the same ceiling for a SmartArt point chain. A diagram's hierarchy is rebuilt by
+    /// recursion over parent-of connections, so its depth is chosen by the file. Real diagrams are
+    /// a handful of levels deep -- an organisation chart that reached 64 would be unreadable -- so
+    /// stopping here costs nothing real and removes an unrecoverable failure.
+    /// </summary>
+    private const int MaxSmartArtNodeDepth = 64;
+
     private static IEnumerable<SlideShape> ReadShapesFromTree(
         XElement spTree, ZipArchive archive, string partPath, PresentationColorScheme scheme,
         Dictionary<string, TableStyleData>? tableStyles = null,
@@ -3381,6 +3389,15 @@ public static class PptxPackageReader
                 Level      = level,
                 IsAssistant = isAsst
             };
+            // r501: buildPath already stops a CYCLE, but nothing stopped DEPTH. A diagram whose
+            // points form a long parent-of chain recursed once per link, and a 5,000-node chain --
+            // a small file, since each point is a few dozen bytes -- overflowed the stack while
+            // OPENING the deck. StackOverflowException cannot be caught, so the process dies with
+            // no error and no recovery. Same bound and same reasoning as MaxShapeGroupNestingDepth
+            // above, which guards the shape tree in this very reader; SmartArt was simply missed.
+            if (level > MaxSmartArtNodeDepth)
+                return node;
+
             if (!buildPath.Add(id))
                 return node;
 
