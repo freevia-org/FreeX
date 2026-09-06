@@ -225,6 +225,7 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
         int notConstructible = 0, threw = 0, noChange = 0, exercised = 0, claimedNoEffect = 0;
         var failures = new List<string>();
         var falseNoEffect = new List<string>();
+        var redoFailures = new List<string>();
 
         foreach (var type in commandTypes)
         {
@@ -282,7 +283,8 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
                 var before = Describe(presentation);
                 command.Apply(presentation);
 
-                if (Describe(presentation) == before)
+                var applied = Describe(presentation);
+                if (applied == before)
                 {
                     noChange++;
                     continue;
@@ -293,7 +295,20 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
 
                 var after = Describe(presentation);
                 if (after != before)
+                {
                     failures.Add(type.Name + " [" + FirstDifference(before, after) + "]");
+                    continue;
+                }
+
+                // r458: REDO, the other half of the contract. Ctrl+Y after Ctrl+Z must put back
+                // exactly what Ctrl+Z removed; a command whose Revert does not reset the state its
+                // Apply captured produces a third state the user never made. r441's own fix in this
+                // app had to clear an "I created this placeholder" flag on Revert precisely so a
+                // second Apply would work, and r457 then found a real defect of this shape in FreeX.
+                command.Apply(presentation);
+                var redone = Describe(presentation);
+                if (redone != applied)
+                    redoFailures.Add(type.Name + " [" + FirstDifference(applied, redone) + "]");
             }
             catch (Exception exception)
             {
@@ -319,6 +334,11 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
             "have changed the presentation makes the user's action vanish: they click, nothing " +
             "happens, there is no error and nothing to undo. " + census + "\n" +
             string.Join("\n", falseNoEffect));
+
+        redoFailures.Should().BeEmpty(
+            "r458: redo is the other half of the contract -- a command whose Revert does not reset " +
+            "the state its Apply captured redoes something DIFFERENT from what undo removed. " +
+            census + "\n" + string.Join("\n", redoFailures));
 
         claimedNoEffect.Should().BeGreaterThan(
             0,

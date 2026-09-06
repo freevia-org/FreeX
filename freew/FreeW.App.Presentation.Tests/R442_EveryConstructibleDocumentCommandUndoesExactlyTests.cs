@@ -242,6 +242,7 @@ public sealed class R442_EveryConstructibleDocumentCommandUndoesExactlyTests
         int notConstructible = 0, threw = 0, noChange = 0, exercised = 0, claimedNoEffect = 0;
         var failures = new List<string>();
         var falseNoEffect = new List<string>();
+        var redoFailures = new List<string>();
 
         foreach (var type in commandTypes)
         {
@@ -291,7 +292,8 @@ public sealed class R442_EveryConstructibleDocumentCommandUndoesExactlyTests
                 var before = Describe(document);
                 command.Apply(context);
 
-                if (Describe(document) == before)
+                var applied = Describe(document);
+                if (applied == before)
                 {
                     noChange++;
                     continue;
@@ -302,7 +304,17 @@ public sealed class R442_EveryConstructibleDocumentCommandUndoesExactlyTests
 
                 var after = Describe(document);
                 if (after != before)
+                {
                     failures.Add(type.Name + " [" + FirstDifference(before, after) + "]");
+                    continue;
+                }
+
+                // r458: REDO -- see the FreeP and FreeX siblings. Ctrl+Y after Ctrl+Z must put back
+                // exactly what Ctrl+Z removed; this check found a real defect in both other apps.
+                command.Apply(context);
+                var redone = Describe(document);
+                if (redone != applied)
+                    redoFailures.Add(type.Name + " [" + FirstDifference(applied, redone) + "]");
             }
             catch (Exception exception)
             {
@@ -322,6 +334,11 @@ public sealed class R442_EveryConstructibleDocumentCommandUndoesExactlyTests
             "the bus skips a command reporting HasEffect false entirely, so one that would in fact " +
             "have changed the document makes the user's action vanish: they click, nothing happens, " +
             "there is no error and nothing to undo. " + census + "\n" + string.Join("\n", falseNoEffect));
+
+        redoFailures.Should().BeEmpty(
+            "r458: redo is the other half of the contract -- a command whose Revert does not reset " +
+            "the state its Apply captured redoes something DIFFERENT from what undo removed. " +
+            census + "\n" + string.Join("\n", redoFailures));
 
         claimedNoEffect.Should().BeGreaterThan(
             0,

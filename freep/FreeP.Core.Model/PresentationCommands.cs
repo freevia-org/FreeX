@@ -786,7 +786,19 @@ public sealed class DuplicateSlideCommand : IPresentationCommand
         var source = p.Slides[_sourceIndex];
         _beforeSections ??= PresentationSectionMembershipSnapshot.Capture(p);
 
-        _duplicate = SlideCloner.CloneSlide(source);
+        // r458: redo must give the duplicate back its ORIGINAL id. CloneSlide mints a new Slide.Id
+        // every call, so undo-then-redo used to produce a slide with a different identity than the
+        // first Apply created -- and slide ids are what slide-jump hyperlinks resolve against, so a
+        // link pointing at the duplicate silently stopped finding it. Same defect r457 fixed in
+        // FreeX's AddPivotTableToNewWorksheetCommand, found by porting the same redo check here.
+        //
+        // CloneSlidePreservingIdentity already exists for exactly this need (Revert's own comment
+        // above names it), so redo re-clones from the retained duplicate rather than re-inserting
+        // that object: a fresh instance each Apply, with the identity held stable.
+        _duplicate = _duplicate is null
+            ? SlideCloner.CloneSlide(source)
+            : SlideCloner.CloneSlidePreservingIdentity(_duplicate);
+
         p.Slides.Insert(_sourceIndex + 1, _duplicate);
         PresentationSectionMembershipSnapshot.AddInsertedSlide(
             p,
