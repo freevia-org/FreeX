@@ -318,6 +318,15 @@ foreach ($workflow in $workflows) {
         $errors.Add("$($workflow.Name): non-canonical workflow must use workflow_dispatch only; automatic triggers are reserved for CI and CodeQL.")
     }
 
+    # The commit gate runs `dotnet test` once per project, so MSBuild starts many times inside one
+    # job. With node reuse left on, a worker process from one invocation can still hold a handle to
+    # an intermediate assembly when the next invocation compiles it, failing the gate with
+    # "CSC : error CS2012 ... being used by another process" (observed on main, run 33994120035).
+    # Pin the mitigation so it cannot be dropped silently.
+    if ($workflow.Name -eq "ci.yml" -and $content -notmatch "(?m)^\s*MSBUILDDISABLENODEREUSE\s*:") {
+        $errors.Add("$($workflow.Name): must set the MSBUILDDISABLENODEREUSE environment variable so repeated MSBuild invocations in one job cannot lock each other's intermediate assemblies.")
+    }
+
     foreach ($match in [regex]::Matches($content, "(?ms)^\s*runs-on\s*:\s*(?<runner>[^\r\n]*(?:\r?\n\s+-\s+[^\r\n]+)*)")) {
         $runnerBlock = (($match.Value -split "\r?\n") | ForEach-Object { $_ -replace "#.*$", "" }) -join "`n"
         if ($runnerBlock -match "(?i)(^|[\[\s,'`"-])self-hosted($|[\]\s,'`"])") {

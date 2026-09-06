@@ -18,6 +18,19 @@ env:
   DOTNET_NOLOGO: "1"
   LANG: en_US.UTF-8
   LC_ALL: en_US.UTF-8
+  # A gate runs `dotnet test` once per project, so a single job starts MSBuild many times over. With
+  # node reuse on, worker processes from one invocation outlive it and can still hold a handle to an
+  # intermediate assembly when the next invocation compiles it, which fails the whole gate with
+  # "CSC : error CS2012 ... because it is being used by another process". That took main red on run
+  # 33994120035 (FreeP windows freep-wpf-desktop). The sibling workflows freep-ci, freew-ci and
+  # tester-release already avoid this by passing -p:NodeReuse=false /nr:false explicitly; this gate
+  # sets it as an environment variable instead so it reaches the MSBuild instances that
+  # Invoke-TestGate.ps1 spawns without threading flags through the script.
+  #
+  # Deliberately NOT also setting UseSharedCompilation=false or -m:1 the way those workflows do:
+  # both cost real build time (no compiler server, no parallel projects) and the lock observed here
+  # is between separate MSBuild invocations, which disabling node reuse alone addresses.
+  MSBUILDDISABLENODEREUSE: "1"
 
 jobs:
   prepare:
