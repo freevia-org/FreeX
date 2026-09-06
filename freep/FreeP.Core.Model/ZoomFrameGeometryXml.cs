@@ -26,7 +26,17 @@ internal static class ZoomFrameGeometryXml
         if (preset is null)
         {
             preset = new XElement(Drawing + "prstGeom", new XElement(Drawing + "avLst"));
-            shapeProperties.AddFirst(preset);
+
+            // r484: in CT_ShapeProperties the geometry follows a:xfrm and precedes everything else,
+            // so it can be neither appended nor put unconditionally first. AddFirst placed prstGeom
+            // BEFORE an existing xfrm -- which any zoom frame that has been moved or resized carries
+            // -- leaving a well-formed but schema-invalid package that PowerPoint offers to repair.
+            // This is r483's defect mirrored: the same file family, the opposite end of the sequence.
+            var transform = shapeProperties.Elements(Drawing + "xfrm").FirstOrDefault();
+            if (transform is null)
+                shapeProperties.AddFirst(preset);
+            else
+                transform.AddAfterSelf(preset);
         }
 
         preset.SetAttributeValue("prst", normalized);
