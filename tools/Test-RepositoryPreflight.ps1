@@ -27,6 +27,15 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
+# The static checks below run through ForEach-Object -Parallel, which does not exist in Windows
+# PowerShell 5.1 and fails there with "Parameter set cannot be resolved using the specified named
+# parameters". Callers do reach this from 5.1 (RepositoryPreflightTests runs it through the default
+# host), so re-launch under the canonical pwsh rather than failing. Returns immediately under pwsh.
+Invoke-ToolCanonicalPwshHost -ScriptPath $PSCommandPath -ForwardedArguments $PSBoundParameters.Keys.ForEach({
+    $value = $PSBoundParameters[$_]
+    if ($value -is [switch]) { "-$_" } else { "-$_"; [string]$value }
+})
+
 function Invoke-RepositoryPreflight {
     param(
         [Parameter(Mandatory = $true)][string]$ScriptPath,
