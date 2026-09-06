@@ -2574,12 +2574,32 @@ public sealed partial class SlideCanvas : Control
             GradientStops  = BuildGradientStops(g)
         };
 
-    private static IBrush MakePictureBrush(ResolvedFill.Picture p)
+    /// <summary>
+    /// r494: decoded picture fills, keyed by the image byte array's IDENTITY.
+    ///
+    /// <para>Every caller of <see cref="MakeBrush"/> is a Render method taking a DrawingContext, so
+    /// this ran once per PAINT. Each paint decoded a fresh <see cref="Bitmap"/> and handed it to an
+    /// ImageBrush, which does not own or dispose it, so a slide holding a picture-filled shape grew
+    /// native memory on every scroll, resize, animation tick and slide-show frame.</para>
+    ///
+    /// <para>Keying on the array instance rather than its contents keeps this honest: there is no
+    /// hashing cost, no staleness question (a different image is a different array), and the entry
+    /// dies with the image data it belongs to, so the table cannot outlive the deck. The bound moves
+    /// from one bitmap per paint to one per distinct image.</para>
+    /// </summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<byte[], Bitmap> DecodedPictureFills = new();
+
+    internal static IBrush MakePictureBrush(ResolvedFill.Picture p)
     {
         try
         {
-            using var ms = new MemoryStream(p.ImageBytes);
-            var bmp = new Bitmap(ms);
+            if (!DecodedPictureFills.TryGetValue(p.ImageBytes, out var bmp))
+            {
+                using var ms = new MemoryStream(p.ImageBytes);
+                bmp = new Bitmap(ms);
+                DecodedPictureFills.AddOrUpdate(p.ImageBytes, bmp);
+            }
+
             return new ImageBrush(bmp)
             {
                 Stretch  = p.Tile ? Stretch.None  : Stretch.Fill,
