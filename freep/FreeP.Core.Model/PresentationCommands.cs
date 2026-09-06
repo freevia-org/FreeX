@@ -4908,6 +4908,48 @@ public sealed class SetShapeFillCommand : IPresentationCommand
         PresentationCommandSizeEstimator.EstimateBytes(_oldFill),
     });
 
+    // r479: same reasoning as r202's guard -- without this the bus pushes an undo entry for a
+    // command that changed nothing, and that push CLEARS REDO. Re-picking a shape's current colour
+    // in the fill dialog is the ordinary way to reach it: the dialog pre-selects what is already
+    // there, so pressing OK without editing silently discarded the user's redo history.
+    //
+    // Deliberately conservative: only fills that can be compared EXACTLY are treated as equivalent.
+    // Gradients and pictures report an effect rather than risk suppressing a real edit, which is the
+    // safe direction to be wrong in -- a redundant undo entry is a nuisance, a swallowed edit is not.
+    public bool HasEffect(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        if (shape is null) return false;
+
+        return !FillsAreEquivalent(shape.Fill, _newFill);
+    }
+
+    private static bool FillsAreEquivalent(ShapeFill? current, ShapeFill? candidate)
+    {
+        if (ReferenceEquals(current, candidate)) return true;
+        if (current is null || candidate is null) return false;
+        if (current is ShapeFill.None && candidate is ShapeFill.None) return true;
+
+        return current is ShapeFill.Solid a
+            && candidate is ShapeFill.Solid b
+            && ColorsAreEquivalent(a.Color, b.Color);
+    }
+
+    private static bool ColorsAreEquivalent(ThemeAwareColor a, ThemeAwareColor b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a.Resolved != b.Resolved || a.Alpha != b.Alpha) return false;
+
+        // A theme reference and a literal colour that currently resolve alike are NOT the same fill:
+        // re-theming moves one and not the other, so only compare two references to each other.
+        if (a.SchemeColor is null || b.SchemeColor is null)
+            return a.SchemeColor is null && b.SchemeColor is null;
+
+        return a.SchemeColor.Slot == b.SchemeColor.Slot
+            && string.Equals(a.SchemeColor.RoleName, b.SchemeColor.RoleName, StringComparison.Ordinal)
+            && a.SchemeColor.LumMod.Equals(b.SchemeColor.LumMod);
+    }
+
     public void Apply(Presentation p)
     {
         var s = ShapeHelper.Find(p, _slideIndex, _shapeId);

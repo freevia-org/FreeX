@@ -70,8 +70,13 @@ public class R202_CommandDeclaresHasEffectContractTests
         ["DeleteTableColumnCommand"] = "as DeleteTableRowCommand",
         ["UpdateConnectorBoundsCommand"] =
             "never bus-executed: it is built by ConnectorRouter inside MoveShapeCommand's reroute",
-        ["SetShapeFillCommand"] = "callers supply a freshly built fill, never the shape's own",
-        ["SetShapeOutlineCommand"] = "as SetShapeFillCommand",
+        // r479 removed SetShapeFillCommand from this list by giving it an override instead. The
+        // reason recorded here was accurate -- it has no production caller at all today, so no user
+        // can reach an equal-value fill -- but the census's premise is about CALLERS, and it expires
+        // silently the moment the fill UI is wired to a picker that pre-selects the current colour.
+        // The override costs one comparison and cannot expire, so it was preferred to a reason that
+        // has to be re-checked whenever the caller set changes.
+        ["SetShapeOutlineCommand"] = "callers supply a freshly built outline, never the shape's own",
         ["SetTableCellTextCommand"] = "the caller commits only when the edited text differs",
         ["SetCustomGeometryPointCommand"] = "issued from a drag that has already moved the point",
         ["SetShapeAnimationCommand"] = "issued only from a dialog commit that changed a field",
