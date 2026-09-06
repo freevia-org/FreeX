@@ -54,6 +54,26 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
         // exact ids, since state the invented arguments cannot reach changes nothing (r442's lesson).
         var master = new SlideMaster { Id = MasterId };
         var layout = new SlideLayout { Id = LayoutId };
+
+        // r481: seed a placeholder the invented arguments can actually ADDRESS. Add/Delete/Move/
+        // Resize/Rotate/SetFill in Slide Master view all name a shape by id, and the factory below
+        // answers uint with 2, so an empty master left every one of them with nothing to act on --
+        // they applied nothing, matched their own before-state, and were filed as noChange. Same
+        // lesson as r447 and r442 one level in: seeding the container is only half of it, the ids
+        // have to line up too.
+        foreach (var placeholders in new[] { master.Placeholders, layout.Placeholders })
+        {
+            placeholders.Add(new SlideShape
+            {
+                Id = 2,
+                Name = "MasterBody",
+                OffsetXEmu = 300000,
+                OffsetYEmu = 400000,
+                ExtentCxEmu = 800000,
+                ExtentCyEmu = 600000,
+            });
+        }
+
         presentation.Masters.Add(master);
         presentation.Layouts.Add(layout);
 
@@ -189,6 +209,32 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
 
             for (var shapeIndex = 0; shapeIndex < slide.Shapes.Count; shapeIndex++)
                 Reflect(builder, "sl" + slideIndex + ".sh" + shapeIndex + ".", slide.Shapes[shapeIndex]);
+        }
+
+        // r481: masters and layouts need the SAME explicit walk the slides get above. Reflect renders
+        // a collection element as its ToString(), which for a model object is the constant type name,
+        // so `pr.Masters` read as "[...SlideMaster]" no matter what happened inside it. Every command
+        // authored in Slide Master view therefore applied a real change, produced an identical
+        // fingerprint, and was filed as noChange -- counted by the census while nothing about its
+        // undo or redo was ever checked. The contents-not-counts comment above defends against an
+        // edit hiding behind an unchanged collection SIZE; this is the same defect one level down,
+        // an edit hiding behind an unchanged element RENDERING.
+        for (var masterIndex = 0; masterIndex < presentation.Masters.Count; masterIndex++)
+        {
+            var master = presentation.Masters[masterIndex];
+            Reflect(builder, "ma" + masterIndex + ".", master);
+
+            for (var shapeIndex = 0; shapeIndex < master.Placeholders.Count; shapeIndex++)
+                Reflect(builder, "ma" + masterIndex + ".ph" + shapeIndex + ".", master.Placeholders[shapeIndex]);
+        }
+
+        for (var layoutIndex = 0; layoutIndex < presentation.Layouts.Count; layoutIndex++)
+        {
+            var layout = presentation.Layouts[layoutIndex];
+            Reflect(builder, "la" + layoutIndex + ".", layout);
+
+            for (var shapeIndex = 0; shapeIndex < layout.Placeholders.Count; shapeIndex++)
+                Reflect(builder, "la" + layoutIndex + ".ph" + shapeIndex + ".", layout.Placeholders[shapeIndex]);
         }
 
         return builder.ToString();
@@ -346,11 +392,15 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
             "command in the census ever reports no effect, that assertion is vacuous. " + census);
 
         exercised.Should().BeGreaterThanOrEqualTo(
-            10,
+            16,
             "the driver must still be exercising commands -- if this falls, the sweep has quietly " +
-            "stopped testing rather than the commands having improved. Only 6 today, against 71 in " +
-            "the FreeX sibling: most FreeP commands need domain objects this factory cannot invent. " +
-            "Six was still enough to find a real undo defect on the first run, which is the argument " +
-            "for widening the factory rather than for trusting the green. " + census);
+            "stopped testing rather than the commands having improved. 18 today (6 at first writing, " +
+            "12 before r481) against 71 in the FreeX sibling: most FreeP commands still need domain " +
+            "objects this factory cannot invent. r481 took the last step this message argued for, " +
+            "widening the fixture rather than trusting the green -- and found that the six Slide " +
+            "Master commands had been applying REAL changes the whole time while landing in noChange, " +
+            "because Describe never walked masters or layouts. Widening the factory keeps paying; " +
+            "the floor is deliberately below the current count so a genuine gain is not required to " +
+            "keep the suite green, but a regression is caught. " + census);
     }
 }
