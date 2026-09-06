@@ -125,13 +125,13 @@ public static class AnimationAmountSemantics
             if (!double.TryParse(text[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent))
                 return false;
             scale = percent / 100d;
-            return scale >= 0;
+            return IsUsableScale(scale);
         }
 
         if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var fixedPercent))
             return false;
         scale = fixedPercent / 100000d;
-        return scale >= 0;
+        return IsUsableScale(scale);
     }
 
     private static string DescribeValue(AnimationScaleBehavior behavior, string? to, string? by)
@@ -141,6 +141,14 @@ public static class AnimationAmountSemantics
             ? $"{scale * 100:0.##}%"
             : raw ?? "?";
     }
+
+    // r485: these values come straight off the animation XML, so the file decides them. `scale >= 0`
+    // rejected NaN and negatives only as a side effect of the comparison, and let POSITIVE infinity
+    // through: .NET parses "Infinity" and overflows "1e999" to it, so a deck carrying either handed
+    // an infinite scale to ResolveScaleAxes and on into the slide-show frame planner, which builds
+    // the per-frame transform for a live presentation. Reject what cannot be a scale explicitly
+    // rather than by accident, and say which cases that covers.
+    private static bool IsUsableScale(double scale) => double.IsFinite(scale) && scale >= 0;
 
     private static bool NearlyEqual(double left, double right) =>
         Math.Abs(left - right) < 0.000001;
