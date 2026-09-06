@@ -1385,13 +1385,22 @@ public sealed class PresentationFileCommandSession
             // normal way out of the read-only state).
             _readOnlySourcePath = null;
             _lifecycle.MarkSavedWithPath(result.SavedPath, result.SuppressRecentFiles);
+
+            // r461: content the format could not carry is reported with the save. The file is
+            // written either way -- this is what stands between "your picture is gone" and the user
+            // discovering it after the session that still holds the original has closed.
+            var savedMessage = SisterAppFileTextPlanner.FormatSaved(
+                PresentationFileTextResources.Presentation,
+                Path.GetFileName(result.SavedPath));
+
+            if (result.SaveWarnings is { Count: > 0 } saveWarnings)
+                savedMessage = savedMessage + " " + string.Join(" ", saveWarnings);
+
             return await CompleteAsync(
                 PresentationFileCommandResult.Success(
                     command,
                     result.SavedPath,
-                    SisterAppFileTextPlanner.FormatSaved(
-                        PresentationFileTextResources.Presentation,
-                        Path.GetFileName(result.SavedPath))),
+                    savedMessage),
                 cancellationToken);
         }
         catch (PresentationExternallyModifiedException)

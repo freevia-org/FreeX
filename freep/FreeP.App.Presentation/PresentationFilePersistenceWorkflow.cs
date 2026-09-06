@@ -35,7 +35,11 @@ public sealed record PresentationFileOpenResult(
 
 public sealed record PresentationFileSaveResult(
     string SavedPath,
-    bool SuppressRecentFiles);
+    bool SuppressRecentFiles,
+    // r461: content the chosen format could not carry. Empty for the ordinary save. The file is
+    // always written -- this reports what did not survive, so the user knows before they close the
+    // document that the original content now exists only in this session.
+    IReadOnlyList<string>? SaveWarnings = null);
 
 /// <summary>
 /// Thrown by <see cref="PresentationFilePersistenceWorkflow.Save"/> when the caller passed the
@@ -156,12 +160,20 @@ public static class PresentationFilePersistenceWorkflow
         using var saveStamp = DocumentPropertiesSaveStampTransaction.Begin(
             presentation.Properties,
             "FreeP User");
+        // r461: what this save cannot carry, described BEFORE writing so the message reflects the
+        // document the user asked to save. Only the PowerPoint path can lose anything -- the legacy
+        // .fxp serialiser round-trips the whole model -- so the format decides whether to ask.
+        var saveWarnings = ResolveFormat(path) == PresentationFilePersistenceFormat.LegacyFxp
+            ? []
+            : PptxSaveWarnings.Describe(presentation);
+
         AtomicFileWriter.WriteAllBytes(path, SerializePresentation(path, presentation));
         saveStamp.Commit();
 
         return new PresentationFileSaveResult(
             SavedPath: path,
-            SuppressRecentFiles: false);
+            SuppressRecentFiles: false,
+            SaveWarnings: saveWarnings);
     }
 
     private static byte[] SerializePresentation(string path, Presentation presentation)
