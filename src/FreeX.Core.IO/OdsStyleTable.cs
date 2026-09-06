@@ -13,6 +13,9 @@ namespace FreeX.Core.IO;
 /// </summary>
 internal sealed class OdsStyleTable
 {
+    /// <summary>Excel's maximum decimal places in a number format (r492).</summary>
+    private const int MaxDecimalPlaces = 30;
+
     private static readonly XNamespace Style = OdsFileAdapter.StyleNs;
     private static readonly XNamespace Fo = OdsFileAdapter.FoNs;
     private static readonly XNamespace Number = OdsFileAdapter.NumberNs;
@@ -315,8 +318,14 @@ internal sealed class OdsStyleTable
         if (numberElement is not null)
         {
             var decimals = (string?)numberElement.Attribute(Number + "decimal-places");
+
+            // r492: `d > 0` is a lower bound only, and this value is chosen by the FILE, so
+            // decimal-places="2000000000" asked for a two-billion-character string -- 4 GB, thrown
+            // as an OutOfMemoryException while merely opening the document. Clamp to the 30 places
+            // Excel's number formats allow, which is the same bound FormatCellsNumberFormatPlanner
+            // already applies to the value coming from the Format Cells dialog.
             if (decimals is not null && int.TryParse(decimals, out var d) && d > 0)
-                return "0." + new string('0', d);
+                return "0." + new string('0', Math.Min(d, MaxDecimalPlaces));
             return "0";
         }
         return null;
