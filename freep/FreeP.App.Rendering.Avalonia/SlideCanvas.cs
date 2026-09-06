@@ -1144,8 +1144,13 @@ public sealed partial class SlideCanvas : Control
         Bitmap? bitmap = null;
         try
         {
-            using var ms = new MemoryStream(pic.Bytes);
-            bitmap = new Bitmap(ms);
+            // r512: the sibling of r494. That round cached the decode behind picture FILLS; this is
+            // the path for picture SHAPES, which is both the commoner case and the one that was
+            // still decoding a fresh Bitmap on every paint and never disposing it -- the three
+            // Dispose calls further down are on the clip, alpha and transform scopes, not on this.
+            // Same table on purpose: both paths decode the same bytes, so a picture used as a shape
+            // and as a fill now shares one decode rather than holding two.
+            bitmap = DecodePicture(pic.Bytes);
         }
         catch (Exception ex)
         {
@@ -2589,16 +2594,28 @@ public sealed partial class SlideCanvas : Control
     /// </summary>
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<byte[], Bitmap> DecodedPictureFills = new();
 
+    /// <summary>
+    /// r512: the one decode both picture paths share. Keyed on the byte array's IDENTITY, so a
+    /// different image is a different key and the entry dies with the image data rather than
+    /// outliving the deck. Internal so the caching behaviour can be asserted directly rather than
+    /// inferred from a rendered frame.
+    /// </summary>
+    internal static Bitmap DecodePicture(byte[] imageBytes)
+    {
+        if (DecodedPictureFills.TryGetValue(imageBytes, out var cached))
+            return cached;
+
+        using var stream = new MemoryStream(imageBytes);
+        var decoded = new Bitmap(stream);
+        DecodedPictureFills.AddOrUpdate(imageBytes, decoded);
+        return decoded;
+    }
+
     internal static IBrush MakePictureBrush(ResolvedFill.Picture p)
     {
         try
         {
-            if (!DecodedPictureFills.TryGetValue(p.ImageBytes, out var bmp))
-            {
-                using var ms = new MemoryStream(p.ImageBytes);
-                bmp = new Bitmap(ms);
-                DecodedPictureFills.AddOrUpdate(p.ImageBytes, bmp);
-            }
+            var bmp = DecodePicture(p.ImageBytes);
 
             return new ImageBrush(bmp)
             {

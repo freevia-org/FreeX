@@ -103,4 +103,31 @@ public sealed class R494_PictureFillIsDecodedOncePerImageTests
 
         shareSource.Should().BeFalse("distinct image arrays are distinct pictures");
     }
+
+    [Fact]
+    public async Task ThePictureShapePathSharesTheSameDecodeAsTheFillPath()
+    {
+        // r512: RenderPicture (picture SHAPES) decoded a fresh Bitmap on every paint and never
+        // disposed it -- the three Dispose calls in that method are on the clip, alpha and
+        // transform scopes. It now goes through the same seam as MakePictureBrush, so a picture
+        // used both ways holds one decode rather than two, and neither path decodes per frame.
+        var sharesDecode = false;
+        var distinctStayDistinct = false;
+
+        await Session.Dispatch(() =>
+        {
+            var bytes = Png();
+
+            var viaShape = SlideCanvas.DecodePicture(bytes);
+            var viaFill = ((ImageBrush)SlideCanvas.MakePictureBrush(
+                new ResolvedFill.Picture(bytes, "image/png"))).Source;
+
+            sharesDecode = ReferenceEquals(viaShape, viaFill);
+            distinctStayDistinct = !ReferenceEquals(viaShape, SlideCanvas.DecodePicture(Png()));
+        }, default);
+
+        sharesDecode.Should().BeTrue(
+            "both paths decode the same bytes, so they must share one bitmap rather than hold two");
+        distinctStayDistinct.Should().BeTrue("a different image array is a different picture");
+    }
 }
