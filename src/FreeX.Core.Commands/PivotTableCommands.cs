@@ -248,7 +248,22 @@ public sealed class AddPivotTableToNewWorksheetCommand : IWorkbookCommand
         if (CommandGuards.RejectIfWorkbookStructureProtected(ctx.Workbook) is { } protectedOutcome)
             return protectedOutcome;
 
-        var sheet = ctx.Workbook.AddSheet(GetUniquePivotSheetName(ctx.Workbook));
+        // r457: redo must recreate the sheet with the SAME id. Workbook.AddSheet always mints a
+        // brand-new SheetId, so undo-then-redo used to give the pivot's worksheet a different
+        // identity than the first Apply produced -- breaking anything that captured the original id,
+        // exactly as R16 documents for AddSheetCommand. That command already keeps its id across
+        // redo; this one creates a worksheet the same way and never got the same treatment.
+        Sheet sheet;
+        if (_createdSheetId is { } existingSheetId)
+        {
+            sheet = new Sheet(existingSheetId, GetUniquePivotSheetName(ctx.Workbook));
+            ctx.Workbook.InsertSheet(ctx.Workbook.Sheets.Count, sheet);
+        }
+        else
+        {
+            sheet = ctx.Workbook.AddSheet(GetUniquePivotSheetName(ctx.Workbook));
+        }
+
         sheet.ResetViewStateToA1();
         _createdSheetId = sheet.Id;
         var targetRange = CreateInitialTargetRange(sheet.Id, _sourceRange, _rowFieldIndexes.Count, _dataFieldIndexes.Count);
@@ -277,7 +292,10 @@ public sealed class AddPivotTableToNewWorksheetCommand : IWorkbookCommand
 
         _innerCommand?.Revert(ctx);
         ctx.Workbook.RemoveSheet(_createdSheetId.Value);
-        _createdSheetId = null;
+
+        // r457: _createdSheetId is deliberately KEPT so a redo recreates the same sheet identity --
+        // see Apply. Only the inner command is dropped, since Apply rebuilds it against the
+        // recreated sheet. (Apply's own failure path still clears both: nothing was created there.)
         _innerCommand = null;
     }
 

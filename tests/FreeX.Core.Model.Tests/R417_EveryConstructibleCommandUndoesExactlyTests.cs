@@ -229,6 +229,7 @@ public sealed class R417_EveryConstructibleCommandUndoesExactlyTests
         var (_, probeSheet) = Setup();
         int notConstructible = 0, threw = 0, noChange = 0, exercised = 0;
         var failures = new List<string>();
+        var redoFailures = new List<string>();
 
         foreach (var type in commandTypes)
         {
@@ -253,7 +254,8 @@ public sealed class R417_EveryConstructibleCommandUndoesExactlyTests
                 var before = Describe(workbook);
                 command.Apply(context);
 
-                if (Describe(workbook) == before)
+                var applied = Describe(workbook);
+                if (applied == before)
                 {
                     noChange++;
                     continue;
@@ -268,7 +270,18 @@ public sealed class R417_EveryConstructibleCommandUndoesExactlyTests
                     // r439: name the field, not just the command. A bare command name sends the next
                     // reader back to re-derive the diff by hand, and the diff is the whole finding.
                     failures.Add(type.Name + " [" + FirstDifference(before, after) + "]");
+                    continue;
                 }
+
+                // r457: REDO. Undo is only half the contract a user relies on -- pressing Ctrl+Y
+                // after Ctrl+Z must put back exactly what Ctrl+Z removed. Nothing tested that, and
+                // r441 showed how it breaks: the fix there had to clear an "I created this" flag on
+                // Revert precisely so a second Apply could work. A command that captures its undo
+                // state in Apply and does not reset it on Revert silently redoes something different.
+                command.Apply(context);
+                var redone = Describe(workbook);
+                if (redone != applied)
+                    redoFailures.Add(type.Name + " [" + FirstDifference(applied, redone) + "]");
             }
             catch (Exception exception)
             {
@@ -288,6 +301,12 @@ public sealed class R417_EveryConstructibleCommandUndoesExactlyTests
         failures.Should().BeEmpty(
             "a command that changes the workbook and cannot put it back loses the user's work on " +
             "undo. " + census + "\n" + string.Join("\n", failures));
+
+        redoFailures.Should().BeEmpty(
+            "r457: redo is the other half of the contract. A command whose Revert does not reset " +
+            "the state its Apply captured redoes something DIFFERENT from what undo removed, so " +
+            "Ctrl+Y after Ctrl+Z silently produces a third state the user never made. " + census +
+            "\n" + string.Join("\n", redoFailures));
 
         exercised.Should().BeGreaterThanOrEqualTo(
             65,
