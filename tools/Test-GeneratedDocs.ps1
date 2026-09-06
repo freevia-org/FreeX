@@ -43,6 +43,16 @@ if ($null -eq $pwshCommand) {
 }
 $pwshSource = $pwshCommand.Source
 
+# THIS script must also run under pwsh, not just the generators it invokes: the checks below use
+# ForEach-Object -Parallel, which does not exist in Windows PowerShell 5.1 and fails there with
+# "Parameter set cannot be resolved using the specified named parameters". Callers do reach this
+# from 5.1 (GeneratedDocsPreflightTests runs it through the default host), so re-launch under the
+# canonical host instead of failing. Returns immediately when already running under pwsh.
+Invoke-ToolCanonicalPwshHost -ScriptPath $PSCommandPath -ForwardedArguments $PSBoundParameters.Keys.ForEach({
+    $value = $PSBoundParameters[$_]
+    if ($value -is [switch]) { "-$_" } else { "-$_"; [string]$value }
+})
+
 function Resolve-GeneratedDocsCheckEntry {
     param(
         [Parameter(Mandatory = $true)][string]$Label,
