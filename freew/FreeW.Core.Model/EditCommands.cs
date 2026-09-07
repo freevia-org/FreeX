@@ -33,13 +33,19 @@ public sealed class DeleteParagraphCommand(int index) : IDocumentCommand
 
     public void Apply(IDocumentCommandContext context)
     {
+        // r525: the index was captured when this command was constructed; the document can have
+        // changed before Apply runs, and both the read and the RemoveAt throw on a stale one.
+        if (index < 0 || index >= context.Document.Blocks.Count)
+            return;
         _removed = context.Document.Blocks[index];
         context.Document.Blocks.RemoveAt(index);
     }
 
     public void Revert(IDocumentCommandContext context)
     {
-        if (_removed is not null)
+        // Insert accepts index == Count (append) but throws beyond it, so the upper bound is
+        // inclusive here rather than exclusive.
+        if (_removed is not null && index >= 0 && index <= context.Document.Blocks.Count)
             context.Document.Blocks.Insert(index, _removed);
     }
 }
@@ -3608,7 +3614,11 @@ public sealed class GroupFloatingObjectsCommand : IDocumentCommand
 
         foreach (var (bi, ri) in _members)
         {
-            if (doc.Blocks[bi] is not Paragraph p || ri >= p.Runs.Count) continue;
+            // r525: _members holds coordinates captured when the group was formed, so both indices
+            // can be stale by the time this runs. ri had an upper bound only.
+            if (bi < 0 || bi >= doc.Blocks.Count
+                || doc.Blocks[bi] is not Paragraph p
+                || ri < 0 || ri >= p.Runs.Count) continue;
             var (obj, widthPt, heightPt, placement) = ExtractFloatingInfo(p.Runs[ri]);
             if (obj is null || placement is null) continue;
 
@@ -3639,9 +3649,14 @@ public sealed class GroupFloatingObjectsCommand : IDocumentCommand
             group.ChildOffsets[i] = (ox - minH, oy - minV);
         }
 
+        // r525: _members can be empty, and its coordinates are captured rather than live.
+        if (_members.Length == 0)
+            return;
         var (firstBi, firstRi) = _members[0];
         FloatingPlacement? firstPlacement = null;
-        if (doc.Blocks[firstBi] is Paragraph fp && firstRi < fp.Runs.Count)
+        if (firstBi >= 0 && firstBi < doc.Blocks.Count
+            && doc.Blocks[firstBi] is Paragraph fp
+            && firstRi >= 0 && firstRi < fp.Runs.Count)
             firstPlacement = ExtractFloatingInfo(fp.Runs[firstRi]).Placement;
 
         group.Placement = new FloatingPlacement
@@ -3657,12 +3672,17 @@ public sealed class GroupFloatingObjectsCommand : IDocumentCommand
         _snapshot = [];
         foreach (var (bi, ri) in _members.Reverse())
         {
-            if (doc.Blocks[bi] is not Paragraph p || ri >= p.Runs.Count) continue;
+            // r525: _members holds coordinates captured when the group was formed, so both indices
+            // can be stale by the time this runs. ri had an upper bound only.
+            if (bi < 0 || bi >= doc.Blocks.Count
+                || doc.Blocks[bi] is not Paragraph p
+                || ri < 0 || ri >= p.Runs.Count) continue;
             _snapshot.Add((bi, ri, p.Runs[ri]));
             p.Runs.RemoveAt(ri);
         }
 
-        if (doc.Blocks[firstBi] is not Paragraph insertPara) return;
+        if (firstBi < 0 || firstBi >= doc.Blocks.Count
+            || doc.Blocks[firstBi] is not Paragraph insertPara) return;
         var insertRi = Math.Min(firstRi, insertPara.Runs.Count);
         insertPara.Runs.Insert(insertRi, Run.FromDrawingGroup(group));
         _groupLocation = (firstBi, insertRi);
@@ -3673,11 +3693,15 @@ public sealed class GroupFloatingObjectsCommand : IDocumentCommand
         if (_snapshot is null || _groupLocation is null) return;
         var doc = context.Document;
         var (gBi, gRi) = _groupLocation.Value;
-        if (doc.Blocks[gBi] is Paragraph gPara && gRi < gPara.Runs.Count)
+        // r525: _groupLocation and _snapshot were captured during Apply; the document can have
+        // changed before Revert runs. ri was clamped below, bi never checked.
+        if (gBi >= 0 && gBi < doc.Blocks.Count
+            && doc.Blocks[gBi] is Paragraph gPara
+            && gRi >= 0 && gRi < gPara.Runs.Count)
             gPara.Runs.RemoveAt(gRi);
         foreach (var (bi, ri, run) in ((IEnumerable<(int, int, Run)>)_snapshot).Reverse())
         {
-            if (doc.Blocks[bi] is not Paragraph p) continue;
+            if (bi < 0 || bi >= doc.Blocks.Count || doc.Blocks[bi] is not Paragraph p) continue;
             p.Runs.Insert(Math.Min(ri, p.Runs.Count), run);
         }
         _snapshot = null;

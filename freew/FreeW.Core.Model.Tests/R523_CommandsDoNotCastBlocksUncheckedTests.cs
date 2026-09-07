@@ -58,6 +58,60 @@ public class R523_CommandsDoNotCastBlocksUncheckedTests
             + "TryGetParagraph do (see r520-r522)");
     }
 
+
+    /// <summary>
+    /// r525: the r523 guard above only sees CASTS. r524 found 38 defects written as pattern matches
+    /// instead -- <c>Blocks[i] is Paragraph p</c> indexes before it type-tests -- so this second test
+    /// covers the shape that actually produced the bugs: a block index dereferenced with no bounds
+    /// check anywhere near it.
+    ///
+    /// <para>A loop variable counts as guarded, because <c>for (var i = 0; i &lt; Blocks.Count; i++)</c>
+    /// bounds it by construction. That exemption is why this can be strict without being noisy: when
+    /// the same scan ran with no loop rule it reported four sites, all correct, and loosening the
+    /// pattern would have been the wrong fix -- reading the four was.</para>
+    /// </summary>
+    [Fact]
+    public void CommandFilesBoundsCheckEveryBlockIndexTheyDereference()
+    {
+        var root = RepoRoot();
+        var offenders = new List<string>();
+
+        foreach (var file in CommandSources(root))
+        {
+            var lines = File.ReadAllLines(file);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var match = Regex.Match(lines[i], @"Blocks\[([a-z]\w*)\]");
+                if (!match.Success)
+                    continue;
+
+                var trimmed = lines[i].TrimStart();
+                if (trimmed.StartsWith("//") || trimmed.StartsWith("///") || trimmed.StartsWith("*"))
+                    continue;
+
+                var name = match.Groups[1].Value;
+                var guarded = false;
+                for (var j = i; j >= 0 && j > i - 8 && !guarded; j--)
+                {
+                    var line = lines[j];
+                    guarded =
+                        Regex.IsMatch(line, Regex.Escape(name) + @"\s*<\s*0")
+                        || Regex.IsMatch(line, Regex.Escape(name) + @"\s*>=\s*")
+                        || Regex.IsMatch(line, Regex.Escape(name) + @"\s*<\s*[\w.]*Count")
+                        || Regex.IsMatch(line, @"for\s*\(.*" + Regex.Escape(name))
+                        || line.Contains("TryGet");
+                }
+
+                if (!guarded)
+                    offenders.Add($"{Path.GetFileName(file)}:{i + 1}: {trimmed}");
+            }
+        }
+
+        offenders.Should().BeEmpty(
+            "a command dereferences a block index it captured earlier, so bounds-check it or route "
+            + "it through a TryGet accessor; a pattern match does NOT help, because the indexer runs "
+            + "before the type test (see r524)");
+    }
     private static IEnumerable<string> CommandSources(string root) =>
         new[]
         {
