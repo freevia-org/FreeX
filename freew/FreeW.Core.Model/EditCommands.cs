@@ -429,7 +429,7 @@ public sealed class InsertTableRowCommand(int blockIndex, int rowIndex) : IDocum
 
     public void Apply(IDocumentCommandContext context)
     {
-        var table = TableAt(context, blockIndex);
+        if (!TryGetTable(context, blockIndex, out var table)) return;
         var at = Math.Clamp(rowIndex, 0, table.Rows.Count);
 
         // Compute the total grid width from the first row (or ColumnCount fallback).
@@ -476,12 +476,27 @@ public sealed class InsertTableRowCommand(int blockIndex, int rowIndex) : IDocum
     {
         if (_appliedAt < 0)
             return;
-        TableAt(context, blockIndex).Rows.RemoveAt(_appliedAt);
+        if (!TryGetTable(context, blockIndex, out var revertTable)) return;
+        revertTable.Rows.RemoveAt(_appliedAt);
         _appliedAt = -1;
     }
 
-    internal static Table TableAt(IDocumentCommandContext context, int index) =>
-        (Table)context.Document.Blocks[index];
+    /// <summary>
+    /// r520: the validating counterpart of TryGetCell, which the cell commands in this file have
+    /// always used. The row commands reached the same blocks through an unchecked cast --
+    /// (Table)context.Document.Blocks[index] -- which throws ArgumentOutOfRangeException on a
+    /// stale index and InvalidCastException when the block is no longer a table. FreeW's bus does
+    /// NOT wrap Apply (FreeX and FreeP both do), so such a throw escapes the command layer
+    /// entirely. Same family, same exposure, opposite defensiveness; this closes that gap.
+    /// </summary>
+    internal static bool TryGetTable(IDocumentCommandContext context, int index, out Table table)
+    {
+        table = null!;
+        if (index < 0 || index >= context.Document.Blocks.Count) return false;
+        if (context.Document.Blocks[index] is not Table found) return false;
+        table = found;
+        return true;
+    }
 }
 
 /// <summary>
@@ -519,7 +534,7 @@ public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocum
 
     public void Apply(IDocumentCommandContext context)
     {
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         if (table.Rows.Count <= 1 || rowIndex < 0 || rowIndex >= table.Rows.Count)
             return;
 
@@ -591,7 +606,7 @@ public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocum
 
         if (_removed is null || _removedAt < 0)
             return;
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
 
         // Re-insert the removed row first so that the row indices in _promoted are valid.
         table.Rows.Insert(_removedAt, _removed);
@@ -634,7 +649,7 @@ public sealed class InsertTableColumnCommand(int blockIndex, int columnIndex) : 
 
     public void Apply(IDocumentCommandContext context)
     {
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         _appliedAt = Math.Max(columnIndex, 0);
         var actions = new List<(TableRow, TableCell, bool)>(table.Rows.Count);
         foreach (var row in table.Rows)
@@ -696,7 +711,7 @@ public sealed class InsertTableColumnCommand(int blockIndex, int columnIndex) : 
                 row.Cells.Remove(cell);  // remove the inserted cell by reference
         }
         _actions = null;
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         if (table.ColumnWidthsPt.Count > 0)
         {
             var removeAt = Math.Clamp(_appliedAt, 0, table.ColumnWidthsPt.Count - 1);
@@ -723,7 +738,7 @@ public sealed class DeleteTableColumnCommand(int blockIndex, int columnIndex) : 
 
     public void Apply(IDocumentCommandContext context)
     {
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         // Guard: need at least one grid column to delete, and columnIndex must be valid.
         if (columnIndex < 0)
             return;
@@ -776,7 +791,7 @@ public sealed class DeleteTableColumnCommand(int blockIndex, int columnIndex) : 
     {
         if (_removed is null)
             return;
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         foreach (var (rowIndex, cell, wasSpanDecrement) in _removed)
         {
             var cells = table.Rows[rowIndex].Cells;
@@ -854,7 +869,7 @@ public sealed class CarryMergedCellContentCommand(
 
     public void Apply(IDocumentCommandContext context)
     {
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         if (rowIndex < 0 || rowIndex >= table.Rows.Count)
             return;
 
@@ -903,7 +918,7 @@ public sealed class CarryMergedCellContentCommand(
         if (_survivorColumn < 0)
             return;
 
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         if (rowIndex < 0 || rowIndex >= table.Rows.Count)
             return;
 
@@ -933,7 +948,7 @@ public sealed class MergeCellsHorizontalCommand(int blockIndex, int rowIndex, in
 
     public void Apply(IDocumentCommandContext context)
     {
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         if (rowIndex < 0 || rowIndex >= table.Rows.Count)
             return;
         var cells = table.Rows[rowIndex].Cells;
@@ -962,7 +977,9 @@ public sealed class MergeCellsHorizontalCommand(int blockIndex, int rowIndex, in
     {
         if (_removedRow is null)
             return;
-        var cells = InsertTableRowCommand.TableAt(context, blockIndex).Rows[rowIndex].Cells;
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var cellsTable)) return;
+        if (rowIndex < 0 || rowIndex >= cellsTable.Rows.Count) return;
+        var cells = cellsTable.Rows[rowIndex].Cells;
         if (_survivorColumn >= 0 && _survivorColumn < _removedRow.Length)
             _removedRow[_survivorColumn].GridSpan = _survivorSpan;
         cells.Clear();
@@ -990,7 +1007,7 @@ public sealed class MergeCellsVerticalCommand(int blockIndex, int columnIndex, i
 
     public void Apply(IDocumentCommandContext context)
     {
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         var first = Math.Min(firstRow, lastRow);
         var last = Math.Max(firstRow, lastRow);
         if (first < 0 || last >= table.Rows.Count || first >= last)
@@ -1017,7 +1034,7 @@ public sealed class MergeCellsVerticalCommand(int blockIndex, int columnIndex, i
     {
         if (_previous is null)
             return;
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         foreach (var (row, cellIdx, state) in _previous)
         {
             if (row < table.Rows.Count && cellIdx < table.Rows[row].Cells.Count)
@@ -1059,7 +1076,7 @@ public sealed class SplitCellCommand(
 
     public void Apply(IDocumentCommandContext context)
     {
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         if (rowIndex < 0 || rowIndex >= table.Rows.Count)
             return;
         var cells = table.Rows[rowIndex].Cells;
@@ -1118,7 +1135,7 @@ public sealed class SplitCellCommand(
 
     public void Revert(IDocumentCommandContext context)
     {
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
 
         if (_appliedSubdivision)
         {
@@ -1330,7 +1347,7 @@ public sealed class SetTableCellContentCommand(
 
     public void Apply(IDocumentCommandContext context)
     {
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         if (rowIndex < 0 || rowIndex >= table.Rows.Count)
             return;
         var cells = table.Rows[rowIndex].Cells;
@@ -1358,7 +1375,7 @@ public sealed class SetTableCellContentCommand(
     {
         if (_previous is null)
             return;
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         if (rowIndex < 0 || rowIndex >= table.Rows.Count)
             return;
         var cells = table.Rows[rowIndex].Cells;
