@@ -4408,7 +4408,8 @@ public sealed class SetDrawingGroupChildRotationCommand : IDocumentCommand
     {
         if (context.Document.Blocks.Count <= _paragraphIndex || _paragraphIndex < 0)
             return false;
-        if (context.Document.Blocks[_paragraphIndex] is not Paragraph paragraph
+        if (_paragraphIndex < 0 || _paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[_paragraphIndex] is not Paragraph paragraph
             || _runIndex < 0 || _runIndex >= paragraph.Runs.Count
             || paragraph.Runs[_runIndex].DrawingGroup is not { } rootGroup
             || !DrawingGroupChildPathResolver.TryGetChild(rootGroup, _childPath, out _, out var child))
@@ -4460,7 +4461,8 @@ public sealed class SetDrawingGroupChildRotationCommand : IDocumentCommand
         previousFlipH = false;
         previousFlipV = false;
 
-        if (context.Document.Blocks[_paragraphIndex] is not Paragraph paragraph
+        if (_paragraphIndex < 0 || _paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[_paragraphIndex] is not Paragraph paragraph
             || _runIndex < 0
             || _runIndex >= paragraph.Runs.Count
             || paragraph.Runs[_runIndex].DrawingGroup is not { } rootGroup
@@ -4637,7 +4639,8 @@ public sealed class SetDrawingGroupChildPositionCommand : IDocumentCommand
     {
         owningGroup = null!;
         child = null!;
-        if (context.Document.Blocks[_paragraphIndex] is not Paragraph paragraph
+        if (_paragraphIndex < 0 || _paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[_paragraphIndex] is not Paragraph paragraph
             || _runIndex < 0
             || _runIndex >= paragraph.Runs.Count
             || paragraph.Runs[_runIndex].DrawingGroup is not { } candidate)
@@ -4913,7 +4916,8 @@ public sealed class SetDrawingGroupChildSizeCommand : IDocumentCommand
     {
         group = null!;
         child = null!;
-        if (context.Document.Blocks[_paragraphIndex] is not Paragraph paragraph
+        if (_paragraphIndex < 0 || _paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[_paragraphIndex] is not Paragraph paragraph
             || _runIndex < 0
             || _runIndex >= paragraph.Runs.Count
             || paragraph.Runs[_runIndex].DrawingGroup is not { } candidate)
