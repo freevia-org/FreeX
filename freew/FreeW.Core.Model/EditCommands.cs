@@ -130,11 +130,11 @@ public sealed class SetParagraphFormattingCommand(int index, ParagraphFormatting
 
     // r205 census, fixed r206: an equal-value setter -- see SetCellShadingCommand.HasEffect.
     public bool HasEffect(IDocumentCommandContext context) =>
-        ParagraphAt(context, index).Formatting != formatting;
+        TryGetParagraph(context, index, out var target) && target.Formatting != formatting;
 
     public void Apply(IDocumentCommandContext context)
     {
-        var paragraph = ParagraphAt(context, index);
+        if (!TryGetParagraph(context, index, out var paragraph)) return;
         _previous = paragraph.Formatting;
         _previousRevision = paragraph.ParagraphFormatRevision;
         _previousPreservedNumbering = paragraph.PreservedNumbering;
@@ -166,7 +166,7 @@ public sealed class SetParagraphFormattingCommand(int index, ParagraphFormatting
     {
         if (_previous is not null)
         {
-            var paragraph = ParagraphAt(context, index);
+            if (!TryGetParagraph(context, index, out var paragraph)) return;
             paragraph.Formatting = _previous;
             paragraph.ParagraphFormatRevision = _previousRevision;
             if (_clearedPreservedNumbering)
@@ -174,8 +174,17 @@ public sealed class SetParagraphFormattingCommand(int index, ParagraphFormatting
         }
     }
 
-    private static Paragraph ParagraphAt(IDocumentCommandContext context, int index) =>
-        (Paragraph)context.Document.Blocks[index];
+    // r521: sibling of r520's TryGetTable. Same unchecked cast, and worse placed -- HasEffect
+    // called it, so the gate the bus consults BEFORE Apply threw on a stale index instead of
+    // reporting "nothing to do".
+    private static bool TryGetParagraph(IDocumentCommandContext context, int index, out Paragraph paragraph)
+    {
+        paragraph = null!;
+        if (index < 0 || index >= context.Document.Blocks.Count) return false;
+        if (context.Document.Blocks[index] is not Paragraph found) return false;
+        paragraph = found;
+        return true;
+    }
 }
 
 /// <summary>
@@ -192,11 +201,11 @@ public sealed class SetParagraphStyleCommand(int index, string? styleId) : IDocu
 
     // r205 census, fixed r206: an equal-value setter -- see SetCellShadingCommand.HasEffect.
     public bool HasEffect(IDocumentCommandContext context) =>
-        ParagraphAt(context, index).StyleId != styleId;
+        TryGetParagraph(context, index, out var target) && target.StyleId != styleId;
 
     public void Apply(IDocumentCommandContext context)
     {
-        var paragraph = ParagraphAt(context, index);
+        if (!TryGetParagraph(context, index, out var paragraph)) return;
         _previous = paragraph.StyleId;
         paragraph.StyleId = styleId;
         _applied = true;
@@ -204,12 +213,21 @@ public sealed class SetParagraphStyleCommand(int index, string? styleId) : IDocu
 
     public void Revert(IDocumentCommandContext context)
     {
-        if (_applied)
-            ParagraphAt(context, index).StyleId = _previous;
+        if (_applied && TryGetParagraph(context, index, out var styleTarget))
+            styleTarget.StyleId = _previous;
     }
 
-    private static Paragraph ParagraphAt(IDocumentCommandContext context, int index) =>
-        (Paragraph)context.Document.Blocks[index];
+    // r521: sibling of r520's TryGetTable. Same unchecked cast, and worse placed -- HasEffect
+    // called it, so the gate the bus consults BEFORE Apply threw on a stale index instead of
+    // reporting "nothing to do".
+    private static bool TryGetParagraph(IDocumentCommandContext context, int index, out Paragraph paragraph)
+    {
+        paragraph = null!;
+        if (index < 0 || index >= context.Document.Blocks.Count) return false;
+        if (context.Document.Blocks[index] is not Paragraph found) return false;
+        paragraph = found;
+        return true;
+    }
 }
 
 /// <summary>
