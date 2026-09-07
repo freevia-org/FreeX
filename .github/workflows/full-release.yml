@@ -552,7 +552,7 @@ jobs:
             -Apps FreeX,FreeW,FreeP `
             -Version "${{ inputs.release_version }}" `
             -Runtime "${{ matrix.runtime }}" `
-            -InputRoot artifacts\suite
+            -InputRoot artifacts\suite ${{ inputs.macos_unsigned && '-AllowUnsigned' || '' }}
 
       - name: Generate suite SBOM and validate inventory
         shell: pwsh
