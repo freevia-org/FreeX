@@ -177,7 +177,7 @@ public sealed class SetParagraphFormattingCommand(int index, ParagraphFormatting
     // r521: sibling of r520's TryGetTable. Same unchecked cast, and worse placed -- HasEffect
     // called it, so the gate the bus consults BEFORE Apply threw on a stale index instead of
     // reporting "nothing to do".
-    private static bool TryGetParagraph(IDocumentCommandContext context, int index, out Paragraph paragraph)
+    internal static bool TryGetParagraph(IDocumentCommandContext context, int index, out Paragraph paragraph)
     {
         paragraph = null!;
         if (index < 0 || index >= context.Document.Blocks.Count) return false;
@@ -285,7 +285,10 @@ public sealed class SetRunFormattingCommand(int paragraphIndex, int runIndex, Ru
 
     public void Apply(IDocumentCommandContext context)
     {
-        var run = ((Paragraph)context.Document.Blocks[paragraphIndex]).Runs[runIndex];
+        if (!SetParagraphFormattingCommand.TryGetParagraph(context, paragraphIndex, out var runOwner)
+            || runIndex < 0 || runIndex >= runOwner.Runs.Count)
+            return;
+        var run = runOwner.Runs[runIndex];
         _previous = run.Formatting;
         _previousRevision = run.FormatRevision;
         run.Formatting = formatting;
@@ -301,7 +304,10 @@ public sealed class SetRunFormattingCommand(int paragraphIndex, int runIndex, Ru
     {
         if (_previous is not null)
         {
-            var run = ((Paragraph)context.Document.Blocks[paragraphIndex]).Runs[runIndex];
+            if (!SetParagraphFormattingCommand.TryGetParagraph(context, paragraphIndex, out var runOwner)
+            || runIndex < 0 || runIndex >= runOwner.Runs.Count)
+            return;
+        var run = runOwner.Runs[runIndex];
             run.Formatting = _previous;
             run.FormatRevision = _previousRevision;
         }
@@ -324,7 +330,7 @@ public sealed class ReplaceParagraphRunsCommand(int paragraphIndex, Action<Parag
 
     public void Apply(IDocumentCommandContext context)
     {
-        var paragraph = (Paragraph)context.Document.Blocks[paragraphIndex];
+        if (!SetParagraphFormattingCommand.TryGetParagraph(context, paragraphIndex, out var paragraph)) return;
         _previous = [.. paragraph.Runs];
         _previousDropCap = paragraph.DropCap;
         rebuild(paragraph);
@@ -334,7 +340,7 @@ public sealed class ReplaceParagraphRunsCommand(int paragraphIndex, Action<Parag
     {
         if (_previous is null)
             return;
-        var paragraph = (Paragraph)context.Document.Blocks[paragraphIndex];
+        if (!SetParagraphFormattingCommand.TryGetParagraph(context, paragraphIndex, out var paragraph)) return;
         var runs = paragraph.Runs;
         runs.Clear();
         runs.AddRange(_previous);
@@ -2558,7 +2564,8 @@ public sealed class FormatParagraphRunsCommand(int paragraphIndex, Func<RunForma
 
     public void Apply(IDocumentCommandContext context)
     {
-        var runs = ((Paragraph)context.Document.Blocks[paragraphIndex]).Runs;
+        if (!SetParagraphFormattingCommand.TryGetParagraph(context, paragraphIndex, out var runsOwner)) return;
+        var runs = runsOwner.Runs;
         _previous = runs.Select(r => r.Formatting).ToArray();
         _previousRevisions = runs.Select(r => r.FormatRevision).ToArray();
         for (var i = 0; i < runs.Count; i++)
@@ -2579,7 +2586,8 @@ public sealed class FormatParagraphRunsCommand(int paragraphIndex, Func<RunForma
     {
         if (_previous is null)
             return;
-        var runs = ((Paragraph)context.Document.Blocks[paragraphIndex]).Runs;
+        if (!SetParagraphFormattingCommand.TryGetParagraph(context, paragraphIndex, out var runsOwner)) return;
+        var runs = runsOwner.Runs;
         for (var i = 0; i < runs.Count && i < _previous.Length; i++)
         {
             runs[i].Formatting = _previous[i];
