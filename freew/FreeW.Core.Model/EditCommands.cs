@@ -638,6 +638,13 @@ public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocum
             return;
         if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
 
+        // r526: _removedAt was captured during Apply. Only its lower bound was checked, and
+        // List.Insert throws once it exceeds Count -- so a table that lost rows between Apply and
+        // Revert turned undo into an exception. The sibling reverts in this file and in both other
+        // apps already clamp (Math.Clamp/Math.Min); this one did not.
+        if (_removedAt > table.Rows.Count)
+            return;
+
         // Re-insert the removed row first so that the row indices in _promoted are valid.
         table.Rows.Insert(_removedAt, _removed);
 
