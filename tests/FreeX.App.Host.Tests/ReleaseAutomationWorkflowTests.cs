@@ -345,7 +345,16 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("### Windows x64");
         workflow.Should().Contain("### Linux x64 and ARM64");
         workflow.Should().Contain("### macOS Intel and Apple silicon");
-        workflow.Should().Contain("signed/notarized/stapled `.app` bundle on macOS");
+        // The macOS signing claim is conditional on the macos_unsigned input, because an unsigned
+        // build must not be published describing itself as signed. Pin both arms: the signed
+        // wording for a normal release, and the explicit NOT-signed wording for an unsigned one.
+        workflow.Should().Contain("inputs.macos_unsigned");
+        workflow.Should().Contain("'signed, notarized, and stapled'");
+        workflow.Should().Contain("'NOT signed or notarized'");
+        // -AllowUnsigned must never be passed unconditionally: every occurrence is gated on the
+        // input, so a normal release still fails closed when a signing secret is missing.
+        Regex.Matches(workflow, @"-AllowUnsigned").Count
+            .Should().Be(Regex.Matches(workflow, @"inputs\.macos_unsigned && '-AllowUnsigned'").Count);
         workflow.Should().Contain("$notes = @'");
         workflow.Should().Contain("sha256sum -c {{APP}}-v{{VERSION}}-linux-<architecture>.zip.sha256");
         workflow.Should().Contain("shasum -a 256 -c {{APP}}-v{{VERSION}}-osx-<architecture>.zip.sha256");

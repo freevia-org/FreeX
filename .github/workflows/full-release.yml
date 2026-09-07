@@ -35,6 +35,13 @@ on:
         required: true
         default: true
         type: boolean
+      macos_unsigned:
+        description: >-
+          Build UNSIGNED macOS packages when no Developer ID secrets are configured. Gatekeeper
+          refuses to open unsigned bundles by double-click, and the release notes say so.
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -361,7 +368,7 @@ jobs:
               -Version $version `
               -Runtime "${{ matrix.runtime }}" `
               -InputRoot artifacts/release `
-              -OutputDir artifacts/release
+              -OutputDir artifacts/release ${{ inputs.macos_unsigned && '-AllowUnsigned' || '' }}
           }
 
           tools/Test-ReleasePackageContents.ps1 `
@@ -537,7 +544,7 @@ jobs:
               -Version $version `
               -Runtime "${{ matrix.runtime }}" `
               -InputRoot downloaded-artifacts `
-              -OutputDir artifacts/suite
+              -OutputDir artifacts/suite ${{ inputs.macos_unsigned && '-AllowUnsigned' || '' }}
           }
 
           tools/Test-ReleasePackageContents.ps1 `
@@ -744,9 +751,9 @@ jobs:
 
           1. Choose `osx-x64` for Intel Macs or `osx-arm64` for Apple silicon. Download the matching `.zip` and `.sha256` file.
           2. Verify it with `shasum -a 256 -c {{APP}}-v{{VERSION}}-osx-<architecture>.zip.sha256`.
-          3. Prefer the matching `-apps.zip`; it contains a Developer ID signed, notarized, and stapled `.app` bundle plus an install helper.
+          3. Prefer the matching `-apps.zip`; it contains an `.app` bundle that is ${{ inputs.macos_unsigned && 'NOT signed or notarized -- macOS Gatekeeper refuses to open it by double-click; see the bundled README to clear the quarantine attribute' || 'Developer ID signed, notarized, and stapled' }}, plus an install helper.
 
-          Each platform includes a portable artifact and an installable package: signed Velopack `-setup.exe` on Windows, `-installer.zip` on Linux, and `-apps.zip` containing a signed/notarized/stapled `.app` bundle on macOS. Linux integrity is covered by SHA-256 checksums, manifests, and SPDX SBOMs.
+          Each platform includes a portable artifact and an installable package: signed Velopack `-setup.exe` on Windows, `-installer.zip` on Linux, and `-apps.zip` containing an `.app` bundle on macOS that is ${{ inputs.macos_unsigned && 'NOT signed or notarized' || 'signed, notarized, and stapled' }}. Linux integrity is covered by SHA-256 checksums, manifests, and SPDX SBOMs.
           '@
           $notes = $notes.
             Replace("{{APP}}", $app).
@@ -833,7 +840,7 @@ jobs:
 
           This release installs FreeX, FreeW, and FreeP together by invoking the same per-app installers shipped on each app's release page. It does not create separate suite-owned copies, so suite-to-individual upgrades and individual-to-suite upgrades keep the same installation and uninstaller identities. Portable artifacts remain available on the individual release pages.
 
-          Windows uses a Freevia Authenticode-signed .NET bootstrapper containing the three signed Velopack installers; it has no Inno dependency. Linux uses an installer bundle whose `install.sh` defaults to `~/.local`, protected by SHA-256 checksums, manifests, and an SPDX SBOM. macOS uses a Developer ID Installer-signed, notarized, and stapled `.pkg` containing all three signed/notarized/stapled `.app` bundles.
+          Windows uses a Freevia Authenticode-signed .NET bootstrapper containing the three signed Velopack installers; it has no Inno dependency. Linux uses an installer bundle whose `install.sh` defaults to `~/.local`, protected by SHA-256 checksums, manifests, and an SPDX SBOM. macOS uses a `.pkg` containing all three `.app` bundles; it is ${{ inputs.macos_unsigned && 'NOT signed or notarized, so Gatekeeper refuses to open it by double-click' || 'Developer ID Installer-signed, notarized, and stapled' }}.
           '@.Replace("{{VERSION}}", $version)
 
           gh release view $tag *> $null

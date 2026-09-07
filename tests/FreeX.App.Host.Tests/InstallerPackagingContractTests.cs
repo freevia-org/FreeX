@@ -26,7 +26,9 @@ public sealed class InstallerPackagingContractTests
         workflow.Should().Contain("-Apps FreeX,FreeW,FreeP");
         workflow.Should().Contain("-Suite");
         workflow.Should().Contain("free-suite-v$version");
-        workflow.Should().Contain("signed/notarized/stapled `.app` bundle");
+        // The macOS bundle description is conditional on the macos_unsigned input so an unsigned
+        // build is never published claiming to be signed; assert the signed arm still exists.
+        workflow.Should().Contain("'signed, notarized, and stapled'");
         workflow.Should().Contain("FreeFamilySentryDsn: ${{ secrets.FREE_FAMILY_SENTRY_DSN }}");
     }
 
