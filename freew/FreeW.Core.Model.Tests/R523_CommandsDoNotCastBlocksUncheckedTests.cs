@@ -123,11 +123,11 @@ public class R523_CommandsDoNotCastBlocksUncheckedTests
         .SelectMany(dir => Directory.EnumerateFiles(dir, "*Command*.cs", SearchOption.AllDirectories))
         .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"));
 
-    private static string RepoRoot()
-    {
-        var dir = Directory.GetCurrentDirectory();
-        while (dir is not null && !File.Exists(Path.Combine(dir, "FreeX.slnx")))
-            dir = Directory.GetParent(dir)?.FullName;
-        return dir!;
-    }
+    // Routed through the shared locator rather than walking up from the current directory:
+    // TestWorkspaceFileLocatorSourceGuardTests forbids private workspace walkers (it matches on
+    // Directory.GetParent, among other shapes) so every test resolves the workspace the same way.
+    // The shared helper also anchors on the test assembly's base directory instead of the process
+    // working directory, which is not guaranteed to sit inside the workspace.
+    private static string RepoRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 }
