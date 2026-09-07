@@ -1777,7 +1777,8 @@ public sealed class SetImageSizeCommand(int paragraphIndex, int runIndex, double
 
     private InlineImage? ImageAt(IDocumentCommandContext context)
     {
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph paragraph
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph paragraph
             || runIndex < 0 || runIndex >= paragraph.Runs.Count)
             return null;
         return paragraph.Runs[runIndex].Image;
@@ -1817,7 +1818,8 @@ public sealed class SetImageAltTextCommand(int paragraphIndex, int runIndex, str
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -1855,7 +1857,8 @@ public sealed class SetImageRotationCommand(int paragraphIndex, int runIndex, do
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -1892,7 +1895,8 @@ public sealed class SetImageCropCommand(int paragraphIndex, int runIndex, double
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -1931,7 +1935,8 @@ public sealed class SetImageBorderCommand(int paragraphIndex, int runIndex, stri
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -2020,7 +2025,8 @@ public sealed class ResetImageSizeCommand(int paragraphIndex, int runIndex, doub
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -2072,7 +2078,8 @@ public sealed class SetImageAdjustCommand(
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -2137,7 +2144,8 @@ public sealed class SetImageEffectCommand(
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -2180,7 +2188,8 @@ public sealed class SetImageRecolorCommand(
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -2266,7 +2275,8 @@ public sealed class SetImageStyleCommand(
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -2311,7 +2321,8 @@ public sealed class SetImagePositionCommand(int paragraphIndex, int runIndex,
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -2515,7 +2526,8 @@ public sealed class ToggleObjectWrappingCommand(
 
     private void ApplyTo(IDocumentCommandContext context, ImageWrapping targetWrapping)
     {
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return;
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph p) return;
         if (runIndex < 0 || runIndex >= p.Runs.Count) return;
         var run = p.Runs[runIndex];
 
@@ -2796,7 +2808,8 @@ public sealed class SetShapeSizeCommand(int paragraphIndex, int runIndex, double
     }
 
     private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Shape : null;
 }
 
@@ -2961,6 +2974,7 @@ public sealed class SetShapeTextRunCommand(
     private void SyncShapeRunText(IDocumentCommandContext context, Shape shape)
     {
         if (childPath is null
+            && paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
             && context.Document.Blocks[paragraphIndex] is Paragraph paragraph
             && runIndex >= 0 && runIndex < paragraph.Runs.Count
             && ReferenceEquals(paragraph.Runs[runIndex].Shape, shape))
@@ -3021,7 +3035,8 @@ public sealed class ReplaceShapeTextParagraphsCommand(
                 context, paragraphIndex, runIndex, childPath, out var found))
             return false;
 
-        owner = context.Document.Blocks[paragraphIndex] is Paragraph paragraph
+        owner = paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph paragraph
             && runIndex >= 0 && runIndex < paragraph.Runs.Count
             ? paragraph.Runs[runIndex]
             : null!;
@@ -3086,7 +3101,8 @@ public sealed class InsertShapeTextParagraphBreakCommand(
                 context, paragraphIndex, runIndex, childPath, out var found))
             return false;
 
-        owner = context.Document.Blocks[paragraphIndex] is Paragraph paragraph
+        owner = paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph paragraph
             && runIndex >= 0 && runIndex < paragraph.Runs.Count
             ? paragraph.Runs[runIndex]
             : null!;
@@ -3225,7 +3241,8 @@ public sealed class SetShapeRotationCommand(int paragraphIndex, int runIndex, do
     }
 
     private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Shape : null;
 }
 
@@ -3259,7 +3276,8 @@ public sealed class SetShapeWrappingCommand(int paragraphIndex, int runIndex, Im
     }
 
     private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Shape : null;
 }
 
@@ -3310,7 +3328,8 @@ public sealed class SetShapePositionCommand(int paragraphIndex, int runIndex,
     }
 
     private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Shape : null;
 }
 
@@ -3345,7 +3364,8 @@ public sealed class SetWordArtAltTextCommand(int paragraphIndex, int runIndex, s
     }
 
     private WordArt? WordArtAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].WordArt : null;
 }
 
@@ -3379,7 +3399,8 @@ public sealed class SetWordArtStyleCommand(int paragraphIndex, int runIndex, Wor
     }
 
     private WordArt? WordArtAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].WordArt : null;
 }
 
@@ -3551,7 +3572,8 @@ public sealed class SetWordArtWarpCommand(int paragraphIndex, int runIndex, Word
     }
 
     private WordArt? WordArtAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].WordArt : null;
 }
 
@@ -3700,6 +3722,7 @@ public sealed class UngroupFloatingObjectsCommand(int paragraphIndex, int runInd
     public void Apply(IDocumentCommandContext context)
     {
         var doc = context.Document;
+        if (paragraphIndex < 0 || paragraphIndex >= doc.Blocks.Count) return;
         if (doc.Blocks[paragraphIndex] is not Paragraph p) return;
         if (runIndex < 0 || runIndex >= p.Runs.Count) return;
         if (p.Runs[runIndex].DrawingGroup is not { } group || !group.IsValid) return;
@@ -3742,6 +3765,7 @@ public sealed class UngroupFloatingObjectsCommand(int paragraphIndex, int runInd
     {
         if (!_applied || _group is null) return;
         var doc = context.Document;
+        if (paragraphIndex < 0 || paragraphIndex >= doc.Blocks.Count) return;
         if (doc.Blocks[paragraphIndex] is not Paragraph p) return;
         var count = Math.Min(_group.Children.Count, p.Runs.Count - runIndex);
         for (var i = 0; i < count; i++) p.Runs.RemoveAt(runIndex);
@@ -3860,7 +3884,8 @@ public sealed class SetImageArtisticEffectCommand(
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -3898,7 +3923,8 @@ public sealed class SetShapeCustomGeometryCommand(
 
     private Shape? ShapeAt(IDocumentCommandContext context)
     {
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph p
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph p
             || runIndex < 0 || runIndex >= p.Runs.Count)
             return null;
 
@@ -3948,7 +3974,8 @@ public sealed class MoveShapeEditPointCommand(
 
     private Shape? ShapeAt(IDocumentCommandContext context)
     {
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph p
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph p
             || runIndex < 0 || runIndex >= p.Runs.Count)
             return null;
 
@@ -4019,7 +4046,8 @@ public sealed class SetFloatingPositionCommand(
     private bool TryGetPlacement(IDocumentCommandContext context, out FloatingPlacement pl)
     {
         pl = null!;
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
         if (runIndex < 0 || runIndex >= p.Runs.Count) return false;
         pl = GetFloatingPlacement(p.Runs[runIndex])!;
         return pl is not null;
@@ -4031,7 +4059,8 @@ public sealed class SetFloatingPositionCommand(
     {
         run = null!;
         if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count) return false;
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
         if (runIndex < 0 || runIndex >= p.Runs.Count) return false;
         run = p.Runs[runIndex];
         return true;
@@ -4118,7 +4147,8 @@ public sealed class SetFloatingSizeCommand(
         out double prevW, out double prevH)
     {
         prevW = 0; prevH = 0;
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
         if (runIndex < 0 || runIndex >= p.Runs.Count) return false;
         var run = p.Runs[runIndex];
         if (run.Image is { IsFloating: true } img)
@@ -4185,7 +4215,8 @@ public sealed class SetFloatingWrapCommand(
     private bool TryMutate(IDocumentCommandContext context, ImageWrapping w, out ImageWrapping prev)
     {
         prev = ImageWrapping.Inline;
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
         if (runIndex < 0 || runIndex >= p.Runs.Count) return false;
         var run = p.Runs[runIndex];
         if (run.Image is { } img)
@@ -4256,7 +4287,8 @@ public sealed class SetFloatingRotationCommand(
         out double pAngle, out bool pFH, out bool pFV)
     {
         pAngle = 0; pFH = false; pFV = false;
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
         if (runIndex < 0 || runIndex >= p.Runs.Count) return false;
         var run = p.Runs[runIndex];
         if (run.Image is { } img)
@@ -4891,7 +4923,8 @@ public sealed class NudgeImagePositionCommand(
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -4909,7 +4942,8 @@ public sealed class RemoveFloatingRunCommand(int paragraphIndex, int runIndex) :
 
     public void Apply(IDocumentCommandContext context)
     {
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return;
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph p) return;
         if (runIndex < 0 || runIndex >= p.Runs.Count) return;
         _removed = p.Runs[runIndex];
         p.Runs.RemoveAt(runIndex);
@@ -4919,7 +4953,8 @@ public sealed class RemoveFloatingRunCommand(int paragraphIndex, int runIndex) :
     public void Revert(IDocumentCommandContext context)
     {
         if (!_applied || _removed is null) return;
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return;
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph p) return;
         var at = Math.Clamp(runIndex, 0, p.Runs.Count);
         p.Runs.Insert(at, _removed);
         _applied = false;
@@ -5164,13 +5199,15 @@ internal static class ChartSmartArtCommandHelpers
 {
     public static Chart? ChartAt(IDocumentCommandContext context, int paragraphIndex, int runIndex)
         => context.Document.Blocks.Count > paragraphIndex && paragraphIndex >= 0
-           && context.Document.Blocks[paragraphIndex] is Paragraph p
+           && paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p
            && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Chart : null;
 
     public static SmartArt? SmartArtAt(IDocumentCommandContext context, int paragraphIndex, int runIndex)
         => context.Document.Blocks.Count > paragraphIndex && paragraphIndex >= 0
-           && context.Document.Blocks[paragraphIndex] is Paragraph p
+           && paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p
            && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].SmartArt : null;
 }
