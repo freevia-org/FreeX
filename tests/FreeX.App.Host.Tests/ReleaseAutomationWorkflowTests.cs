@@ -305,7 +305,12 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().NotContain("codex/full-release-");
         workflow.Should().Contain("name: Verify immutable release candidate");
         workflow.Should().Contain("actions: read");
-        workflow.Should().Contain("tools/Test-GitHubReleaseCandidate.ps1");
+        // The workflow invokes the resolver, which applies the unchanged attestation to the newest
+        // attested ancestor of the dispatch head. Assert the invocation and the delegation
+        // separately, so this cannot pass on a mere mention of the old path in a comment.
+        workflow.Should().Contain("pwsh -NoProfile -File tools/Resolve-GitHubReleaseCandidate.ps1");
+        var resolver = WorkspaceFileLocator.ReadAllText("tools", "Resolve-GitHubReleaseCandidate.ps1");
+        resolver.Should().Contain("Test-GitHubReleaseCandidate.ps1");
         workflow.Should().NotContain("preflight_matrix");
         workflow.Should().NotContain("verify_matrix");
         workflow.Should().NotContain("name: Preflight ${{ matrix.platform }}");

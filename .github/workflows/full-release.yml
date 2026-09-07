@@ -166,12 +166,22 @@ jobs:
             }
           }
 
-      - name: Require successful exact-SHA CI and CodeQL attestations
+      # Requiring CI and CodeQL attestations on the EXACT dispatch head is unsatisfiable here: main
+      # takes ~a commit a minute from parallel sessions and codeql.yml (cancel-in-progress, ~10min)
+      # is usually cancelled by the next push, so the head a release dispatches from is almost never
+      # attested. Three consecutive release attempts were rejected for that reason alone.
+      #
+      # Resolve-GitHubReleaseCandidate.ps1 keeps the attestation itself unchanged -- it still calls
+      # tools/Test-GitHubReleaseCandidate.ps1, which demands a completed successful run of every
+      # required workflow -- but applies it to the newest ANCESTOR of the head that qualifies, and
+      # reports how many commits ship without a green run of their own.
+      - name: Require successful CI and CodeQL attestations
+        id: attestation
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          pwsh -NoProfile -File tools/Test-GitHubReleaseCandidate.ps1 `
+          pwsh -NoProfile -File tools/Resolve-GitHubReleaseCandidate.ps1 `
             -Repository $env:GITHUB_REPOSITORY `
             -CommitSha $env:GITHUB_SHA
 
