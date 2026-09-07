@@ -45,8 +45,6 @@ $items = foreach ($route in $routes) {
         status = $status
         shellWired = [bool]$route.wired
         followUp = $route.followUp
-        wpfSha256 = if ($wpfExists) { Get-ToolNormalizedTextSha256 -Path $wpfPath } else { $null }
-        avaloniaSha256 = if ($avaloniaExists) { Get-ToolNormalizedTextSha256 -Path $avaloniaPath } else { $null }
     }
 }
 
@@ -67,7 +65,7 @@ if ($Check) {
     if ($existing.schema -ne $inventory.schema -or $existing.routeCount -ne $inventory.routeCount) { throw 'Media parity evidence schema or route count is stale.' }
     foreach ($item in $existing.routes) {
         $current = $items | Where-Object id -eq $item.id
-        if ($null -eq $current -or $current.wpfSha256 -ne $item.wpfSha256 -or $current.avaloniaSha256 -ne $item.avaloniaSha256) { throw "Media parity evidence is stale for route $($item.id)." }
+        if ($null -eq $current -or $current.status -ne $item.status -or $current.shellWired -ne $item.shellWired -or $current.wpfPresent -ne $item.wpfPresent -or $current.avaloniaPresent -ne $item.avaloniaPresent) { throw "Media parity evidence is stale for route $($item.id)." }
     }
     if (-not (Select-String -LiteralPath $markdownPath -Pattern 'FreeW Media Dialog Parity Inventory' -Quiet)) { throw 'Generated Markdown evidence heading is missing.' }
     Write-Output "Fresh: $($existing.routeCount) routes; $($existing.wiredCount) wired; $($existing.shellFollowUpCount) shell follow-ups."
@@ -81,6 +79,6 @@ foreach ($item in $items) {
     $followUp = if ([string]::IsNullOrWhiteSpace($item.followUp)) { '' } else { $item.followUp }
     $md += "| $($item.name) | ``$($item.wpfAuthority)`` | ``$($item.avaloniaSurface)`` | $($item.status) | $followUp |"
 }
-$md += @('', 'Ownership boundary: MainWindow, ribbon, Backstage, page-layout, and shared-shell routes are included in the completed integration.', '', 'Run ``powershell -File tools/Generate-FreeWMediaDialogParityEvidence.ps1 -Check`` to verify source fingerprints are fresh.')
+$md += @('', 'Ownership boundary: MainWindow, ribbon, Backstage, page-layout, and shared-shell routes are included in the completed integration.', '', 'This inventory records hand-authored parity findings for the WPF authority and Avalonia surface files named above. Run ``powershell -File tools/Generate-FreeWMediaDialogParityEvidence.ps1 -Check`` to verify the generator still reproduces those declared findings; it does not detect edits to the contents of those files. When a listed source changes, the routes above must be re-verified by hand and this artifact regenerated.')
 $md -join "`n" | Set-Content -Encoding utf8 -LiteralPath $markdownPath
 Write-Output "Generated $($inventory.routeCount) routes at $jsonPath and $markdownPath."

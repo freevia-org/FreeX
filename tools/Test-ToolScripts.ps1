@@ -480,16 +480,25 @@ function Assert-ToolSourceCentralization {
         }
     }
 
+    # These four generators intentionally record hand-authored parity findings for a declared
+    # covered-input list rather than pinning source-file hashes: with dozens of parallel sessions
+    # editing the hot files they cover (e.g. DocumentView.cs, MainWindow.cs), byte-for-byte source
+    # hashing made an unrelated source edit turn main red on every commit. Regenerating only
+    # reproduces the declared findings, so callers must re-verify by hand when a listed source
+    # changes; see each generator's `freshnessCheck`/"## Freshness" prose.
     foreach ($sourceEvidenceGeneratorName in @(
             "Generate-FreeWDesignDialogParityEvidence.ps1",
             "Generate-FreeWMailMergeDialogParityEvidence.ps1",
             "Generate-FreeWMediaDialogParityEvidence.ps1",
             "Generate-FreeWShellPlatformParityEvidence.ps1")) {
         $sourceEvidenceGenerator = Get-Content -LiteralPath (Join-Path $ToolRoot $sourceEvidenceGeneratorName) -Raw
-        if (-not $sourceEvidenceGenerator.Contains("ToolScriptSupport.ps1") -or
-            -not $sourceEvidenceGenerator.Contains("Get-ToolNormalizedTextSha256") -or
-            $sourceEvidenceGenerator.Contains("Get-FileHash")) {
-            throw "$sourceEvidenceGeneratorName must use shared newline-independent source hashing."
+        if ($sourceEvidenceGenerator.Contains("sourceSha256") -or
+            $sourceEvidenceGenerator.Contains("SourceHashes") -or
+            $sourceEvidenceGenerator.Contains("wpfSha256") -or
+            $sourceEvidenceGenerator.Contains("avaloniaSha256") -or
+            $sourceEvidenceGenerator.Contains("Get-FileHash") -or
+            $sourceEvidenceGenerator.Contains("Get-ToolNormalizedTextSha256")) {
+            throw "$sourceEvidenceGeneratorName must not pin source-file hashes; it must only assert its declared covered-input list still resolves to real files."
         }
     }
 
