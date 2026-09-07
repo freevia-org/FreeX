@@ -104,7 +104,10 @@ public sealed partial class NativeJsonAdapter
             WindowArrangement = NativeJsonValueSanitizer.ValidEnumOrDefault(workbook.WindowArrangement, WorkbookWindowArrangement.Tiled),
             DisabledFormulaErrorCodes = workbook.DisabledFormulaErrorCodes
                 .Where(IsSupportedFormulaErrorCode)
-                .OrderBy(code => code)
+                // r515: ordinal, not the default culture comparer. This set is written to the saved file,
+                // so a culture-sensitive sort would make the same workbook serialise in a different
+                // order under a different locale.
+                .OrderBy(code => code, StringComparer.Ordinal)
                 .ToList(),
             NamedRanges = ToNamedRangeDtos(workbook),
             CustomViews = workbook.CustomViews

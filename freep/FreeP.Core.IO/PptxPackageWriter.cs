@@ -1223,7 +1223,10 @@ public static class PptxPackageWriter
         };
 
         // Emit a Default entry for every media extension actually written (covers all paths correctly).
-        foreach (var ext in mediaExtensions.OrderBy(e => e))
+        // r515: ordinal, not the default culture comparer -- this order lands in the saved package,
+        // and the set itself is OrdinalIgnoreCase, so culture-ordering it was inconsistent as well
+        // as locale-dependent.
+        foreach (var ext in mediaExtensions.OrderBy(e => e, StringComparer.Ordinal))
         {
             if (TryGetPackageDefaultContentType(ext, out var contentType))
                 defaults.Add(new XElement(CT + "Default",
