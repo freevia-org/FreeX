@@ -29,6 +29,13 @@ if ($workflows.Count -eq 0) {
 $allowedActionPins = @{
     "actions/checkout" = "3d3c42e5aac5ba805825da76410c181273ba90b1"
     "actions/cache" = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+    # Sub-actions of actions/cache above, pinned to the same reviewed commit. They exist as separate
+    # entry points so a workflow can restore a cache early and save it only after the gate passed:
+    # a job that dies midway would otherwise save a PARTIAL obj/, and restoring one of those does
+    # not merely rebuild, it fails outright with "CSC : error CS2012 ... Could not find a part of
+    # the path".
+    "actions/cache/restore" = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+    "actions/cache/save" = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
     "actions/download-artifact" = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
     "actions/setup-dotnet" = "a98b56852c35b8e3190ac28c8c2271da59106c68"
     "actions/upload-artifact" = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
@@ -298,16 +305,32 @@ foreach ($workflow in $workflows) {
     $triggerNames = @($inlineTriggerNames + $blockTriggerNames)
     $hasWorkflowDispatch = $triggerNames -contains "workflow_dispatch"
     $nonManualTriggerNames = @($triggerNames | Where-Object { $_ -ne "workflow_dispatch" })
-    $automaticQualityWorkflows = @("ci.yml", "codeql.yml")
+    # release-readiness.yml is scheduled on purpose. The 11 release-only gates in eng/test-gates.json
+    # never run on push, so between releases they rot invisibly on a green main and the next release
+    # pays the accumulated debt (releasing 0.8.187 surfaced four such regressions). They cannot join
+    # the commit gate -- runner concurrency is capped and the commit matrix already saturates it --
+    # so they run on a schedule instead. It reports; it is not a merge gate.
+    $automaticQualityWorkflows = @("ci.yml", "codeql.yml", "release-readiness.yml")
     if ($automaticQualityWorkflows -contains $workflow.Name) {
-        foreach ($requiredTrigger in @("workflow_dispatch", "push")) {
+        # Each canonical workflow has its own trigger contract. ci.yml and codeql.yml gate every
+        # push; release-readiness.yml deliberately does NOT run per push (it would double the
+        # already-saturated runner demand) and is scheduled instead, so requiring 'push' of it would
+        # force exactly the design this workflow exists to avoid.
+        $requiredTriggers = if ($workflow.Name -eq "release-readiness.yml") {
+            @("workflow_dispatch", "schedule")
+        }
+        else {
+            @("workflow_dispatch", "push")
+        }
+        foreach ($requiredTrigger in $requiredTriggers) {
             if ($triggerNames -notcontains $requiredTrigger) {
                 $errors.Add("$($workflow.Name): canonical quality workflow must declare '$requiredTrigger'.")
             }
         }
-        $allowedAutomaticTriggers = @("push")
-        if ($workflow.Name -eq "codeql.yml") {
-            $allowedAutomaticTriggers += "schedule"
+        $allowedAutomaticTriggers = switch ($workflow.Name) {
+            "codeql.yml" { @("push", "schedule") }
+            "release-readiness.yml" { @("schedule") }
+            default { @("push") }
         }
         $unexpectedTriggers = @($nonManualTriggerNames | Where-Object { $allowedAutomaticTriggers -notcontains $_ })
         if ($unexpectedTriggers.Count -gt 0) {

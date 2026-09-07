@@ -152,6 +152,62 @@ jobs:
           }
           Write-Host "Pinned immutable release candidate $env:GITHUB_SHA from $env:GITHUB_REF. Later main commits do not invalidate this run."
 
+      # Fail in seconds on a missing prerequisite rather than ~30 minutes in. Releasing 0.8.187 ran
+      # the entire release test matrix and every package build before the macOS lanes died on an
+      # absent MACOS_CODESIGN_CERTIFICATE_P12 -- and that had silently cost every earlier macOS
+      # release too, which is why 0.8.186 shipped with no macOS assets at all.
+      - name: Verify signing prerequisites for the requested platforms
+        shell: pwsh
+        env:
+          MACOS_CODESIGN_CERTIFICATE_P12: ${{ secrets.MACOS_CODESIGN_CERTIFICATE_P12 }}
+          MACOS_CODESIGN_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CODESIGN_CERTIFICATE_PASSWORD }}
+          MACOS_DEVELOPER_ID_APPLICATION: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION }}
+          MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+          MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+        run: |
+          $platform = "${{ inputs.platform }}"
+          if ($platform -ne "all" -and $platform -ne "macos") {
+            Write-Host "macOS lanes are not part of this release; skipping the Developer ID check."
+            return
+          }
+
+          $required = @(
+            "MACOS_CODESIGN_CERTIFICATE_P12",
+            "MACOS_CODESIGN_CERTIFICATE_PASSWORD",
+            "MACOS_DEVELOPER_ID_APPLICATION",
+            "MACOS_NOTARY_APPLE_ID",
+            "MACOS_NOTARY_TEAM_ID",
+            "MACOS_NOTARY_PASSWORD"
+          )
+          $missing = @($required | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) })
+          $unsigned = "${{ inputs.macos_unsigned }}" -eq "true"
+
+          if ($missing.Count -eq 0) {
+            Write-Host "All six Developer ID secrets are present; macOS packages will be signed and notarized."
+            if ($unsigned) {
+              throw ("macos_unsigned was requested but every Developer ID secret is configured. Refusing " +
+                "to publish deliberately unsigned macOS artifacts when they could be signed; re-run " +
+                "with macos_unsigned disabled.")
+            }
+            return
+          }
+
+          if (-not $unsigned) {
+            throw ("macOS packaging cannot be signed: $($missing.Count) of $($required.Count) Developer ID " +
+              "secret(s) are not configured ($($missing -join ', ')). Add them to the repository secrets, " +
+              "or re-run with macos_unsigned enabled to publish unsigned macOS builds that Gatekeeper " +
+              "will refuse to open by double-click.")
+          }
+
+          if ($missing.Count -ne $required.Count) {
+            throw ("Refusing to build unsigned macOS packages from a partial signing configuration. " +
+              "Missing: $($missing -join ', '). Supply all six Developer ID secrets, or none of them.")
+          }
+
+          Write-Warning ("No Developer ID secrets are configured and macos_unsigned was requested, so this " +
+            "release will publish UNSIGNED macOS packages.")
+
       - name: Validate version and reject conflicting immutable tags
         shell: pwsh
         run: |

@@ -1,0 +1,151 @@
+name: Release Readiness
+
+# Why this exists.
+#
+# eng/test-gates.json declares 11 release-only gates -- the seven WPF host batches, the WPF shell
+# lane, and three render-evidence lanes. None of them run on push, so between releases they rot
+# invisibly on a green main, and every release attempt then has to pay off however much debt has
+# accumulated. That is not hypothetical: releasing 0.8.187 surfaced a stale `bash -n` source pin, a
+# stale generated-docs pin, and two scripts that had been broken under Windows PowerShell 5.1 for
+# days. Each had been sitting on a green main because only a release would have run the test that
+# covered it.
+#
+# The commit gate cannot simply absorb these lanes. Runner concurrency is capped (linux 5, macos 5,
+# ~19 aggregate) and the commit matrix already saturates it, so adding ~15 more jobs per push would
+# make every push slower without making main safer.
+#
+# So the release lanes run on a schedule instead. Rot is then discovered within hours, against the
+# commit that caused it, rather than by whoever next tries to ship. This workflow is deliberately
+# NOT a merge gate: it reports, it does not block.
+on:
+  workflow_dispatch:
+  schedule:
+    # Every six hours. Frequent enough that a regression is attributed to a small range of commits,
+    # infrequent enough not to compete with the commit gate for the runner pool.
+    - cron: "17 */6 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never queue readiness runs behind each other; the newest main is the only interesting one.
+  group: release-readiness
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  LANG: en_US.UTF-8
+  LC_ALL: en_US.UTF-8
+  # Same reason as ci.yml: a gate starts MSBuild once per project, and node reuse lets a worker from
+  # one invocation hold an intermediate assembly while the next compiles it.
+  MSBUILDDISABLENODEREUSE: "1"
+
+jobs:
+  prepare:
+    name: Select release gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: Checkout gate manifest
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Build the release matrix from the repository contract
+        id: matrix
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/Get-TestGateMatrix.ps1 -Gate release -GitHubOutputPath $env:GITHUB_OUTPUT
+
+  gates:
+    name: ${{ matrix.app }} ${{ matrix.platform }} ${{ matrix.displayGateId }}
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: ${{ matrix.fetchDepth }}
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.400
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: nuget-v2-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets') }}
+          restore-keys: nuget-v2-${{ runner.os }}-
+      # Separate cache namespace from ci.yml: these are different gate ids building different
+      # projects, and sharing a key would make each lane evict the other's entries.
+      - name: Restore build output cache
+        id: buildcache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            **/obj
+            obj-build-cache-commit.txt
+          key: readiness-v1-${{ runner.os }}-${{ matrix.displayGateId }}-${{ github.sha }}
+          restore-keys: readiness-v1-${{ runner.os }}-${{ matrix.displayGateId }}-
+      - name: Make build-cache timestamps honest
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/Set-BuildCacheTimestamps.ps1
+      - name: Record the commit this cache will hold
+        shell: pwsh
+        run: '"${{ github.sha }}" | Set-Content -LiteralPath obj-build-cache-commit.txt -Encoding ascii'
+      - name: Run release gate
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File tools/Invoke-TestGate.ps1 `
+            -Gate release `
+            -App "${{ matrix.app }}" `
+            -Platform "${{ matrix.platform }}" `
+            -GateId "${{ matrix.gateId }}" `
+            -PartitionIndex ${{ matrix.partitionIndex }} `
+            -PartitionCount ${{ matrix.partitionCount }} `
+            -HangTimeout 15m `
+            -ResultsDirectory TestResults
+      # Only cache a coherent tree: a job that died midway leaves a partial obj/, and restoring one
+      # fails outright with "CSC : error CS2012 ... Could not find a part of the path".
+      - name: Save build output cache
+        if: steps.buildcache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            **/obj
+            obj-build-cache-commit.txt
+          key: readiness-v1-${{ runner.os }}-${{ matrix.displayGateId }}-${{ github.sha }}
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: readiness-${{ matrix.platform }}-${{ matrix.displayGateId }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: "**/TestResults/**"
+          if-no-files-found: warn
+          retention-days: 7
+
+  summary:
+    name: Release readiness summary
+    needs: [prepare, gates]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Report which release lanes are rotting
+        shell: pwsh
+        run: |
+          $prepareResult = "${{ needs.prepare.result }}"
+          $gatesResult = "${{ needs.gates.result }}"
+          if ($prepareResult -ne 'success' -or $gatesResult -ne 'success') {
+            throw ("Release lanes are not currently releasable (matrix: $prepareResult; gates: " +
+              "$gatesResult). Fix this now rather than at the next release: these gates do not run " +
+              "on push, so whatever broke has been invisible on a green main.")
+          }
+          Write-Host "All release-only gates pass on this commit; a release started now would not fail on them."
