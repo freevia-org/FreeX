@@ -184,8 +184,18 @@ public sealed partial class DocumentView : Control
         string FunctionName, string FunctionArgument)>
         _equationVisualElements = new();
     private readonly Dictionary<InlineImage, AvaloniaRenderedImage?> _bitmapCache = new();
-    private byte[]? _watermarkBitmapCacheBytes;
-    private Bitmap? _watermarkBitmapCache;
+    // r513: identity-keyed so a watermark image keeps ONE decoded bitmap for as long as its
+    // bytes live. The single-slot cache this replaced abandoned its previous bitmap on every
+    // watermark change, and Avalonia's Bitmap declares no finalizer (verified by reflection:
+    // Finalize is declared on System.Object alone), so each abandoned one leaked its native
+    // memory permanently. Never evicting is what makes that safe -- eager Dispose would risk a
+    // draw operation replaying a freed bitmap on the render thread.
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<byte[], Bitmap> _watermarkBitmaps = new();
+
+    // A ConditionalWeakTable cannot store null, so undecodable bytes are remembered separately.
+    // Without this an image that fails to decode would be retried on every paint -- the same
+    // per-render decode this round removes, just on the failing path.
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<byte[], object> _watermarkUndecodable = new();
     private readonly List<(Rect Rect, int Block, int Row, int Col)> _cellHits = new();
     // AV-SHAPETEXT2: caret stops emitted alongside floating text-box layout. Keeping the stops in
     // page space lets pointer placement resolve the same paragraph/run/offset tuple that keyboard
@@ -11840,10 +11850,12 @@ public sealed partial class DocumentView : Control
         context.DrawImage(bitmap, rect);
     }
 
-    private Bitmap? DecodeWatermarkBitmap(byte[] imageBytes)
+    internal Bitmap? DecodeWatermarkBitmap(byte[] imageBytes)
     {
-        if (ReferenceEquals(_watermarkBitmapCacheBytes, imageBytes))
-            return _watermarkBitmapCache;
+        if (_watermarkUndecodable.TryGetValue(imageBytes, out _))
+            return null;
+        if (_watermarkBitmaps.TryGetValue(imageBytes, out var cachedWatermark))
+            return cachedWatermark;
 
         Bitmap? bitmap = null;
         try
@@ -11856,8 +11868,10 @@ public sealed partial class DocumentView : Control
             bitmap = null;
         }
 
-        _watermarkBitmapCacheBytes = imageBytes;
-        _watermarkBitmapCache = bitmap;
+        if (bitmap is null)
+            _watermarkUndecodable.AddOrUpdate(imageBytes, new object());
+        else
+            _watermarkBitmaps.AddOrUpdate(imageBytes, bitmap);
         return bitmap;
     }
 
