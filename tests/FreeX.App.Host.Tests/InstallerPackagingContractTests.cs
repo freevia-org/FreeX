@@ -16,8 +16,16 @@ public sealed class InstallerPackagingContractTests
         workflow.Should().Contain("tools/packaging/New-AppInstallers.ps1");
         workflow.Should().Contain("tools/New-ReleaseArtifactManifest.ps1");
         workflow.Should().Contain("tools/New-ReleaseSbom.ps1");
-        workflow.Should().Contain("artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}.spdx.json");
-        workflow.Should().Contain("artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}.spdx.json.sha256");
+        // The suite upload glob must NOT have a hyphen after the runtime. Linux and Windows name
+        // their installer ...-<runtime>-installer.zip and -setup.exe, but macOS produces
+        // FreeSuite-v<version>-<runtime>.pkg. Releasing 0.8.187 built, validated and installed that
+        // .pkg and then uploaded an artifact without it, because the glob ended in "-*"; publishing
+        // failed half an hour later looking for a file nothing had uploaded.
+        workflow.Should().Contain("artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}*");
+        workflow.Should().NotContain("artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}-*");
+        // if-no-files-found cannot catch that: the manifests and SBOM always match the glob, so a
+        // missing payload uploads a healthy-looking metadata-only artifact.
+        workflow.Should().Contain("Require a suite installer payload before uploading");
         workflow.Should().Contain("tools/Test-ReleaseInstallation.ps1");
         workflow.Should().Contain("Microsoft.Sbom.DotNetTool --version 4.1.5");
         workflow.Should().Contain("tools/Test-ReleasePackageContents.ps1");

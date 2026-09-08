@@ -26,7 +26,12 @@ public sealed class GeneratedDocsPreflightTests
     [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
     public void GeneratedDocsPreflight_PassesFromOutsideRepositoryWorkingDirectory()
     {
-        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory("Test-GeneratedDocs.ps1");
+        // Not the default bound: this script builds the documentation generators before it can
+        // compare their output. 71s on a warm developer machine, and the 0.8.188 release hit the
+        // shared five-minute bound on a cold CI runner.
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-GeneratedDocs.ps1",
+            TimeSpan.FromMinutes(20));
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Checking command inventory generated docs...");
