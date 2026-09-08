@@ -246,12 +246,85 @@ function Test-CSharpTestClassExists {
     return $false
 }
 
+function Get-WorkflowDuplicateKeys {
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string[]]$Lines)
+
+    # GitHub refuses a workflow whose mapping defines the same key twice -- "'if' is already
+    # defined" -- and it refuses it at DISPATCH time, for the whole file. So a duplicate introduced
+    # by an edit does not fail a push or a test; it fails the next release, which is the most
+    # expensive moment to discover it. That happened here: adding a dry_run gate to publish-suite,
+    # which already had an `if:`, blocked every release until it was noticed.
+    #
+    # This is a scoped check, not a YAML parser: it tracks sibling keys per indentation level within
+    # the current mapping, and a list item ("- ") starts a fresh mapping at its own level. That is
+    # enough for workflow files, which are plain nested mappings and sequences.
+    $duplicates = @()
+    $siblingsByIndent = @{}
+    $inBlockScalar = $false
+    $blockScalarIndent = 0
+
+    for ($i = 0; $i -lt $Lines.Length; $i++) {
+        $line = $Lines[$i]
+        if ($line.Trim().Length -eq 0) { continue }
+
+        $indent = $line.Length - $line.TrimStart(' ').Length
+
+        # Inside a run: | or description: >- payload, "key: value" text is data, not YAML keys.
+        if ($inBlockScalar) {
+            if ($indent -gt $blockScalarIndent) { continue }
+            $inBlockScalar = $false
+        }
+
+        if ($line -match '^\s*#') { continue }
+
+        $trimmed = $line.TrimStart(' ')
+        if ($trimmed.StartsWith('- ')) {
+            # A new sequence entry begins a new mapping: forget the previous entry's keys.
+            foreach ($key in @($siblingsByIndent.Keys | Where-Object { $_ -ge $indent })) {
+                $siblingsByIndent.Remove($key)
+            }
+
+            $trimmed = $trimmed.Substring(2)
+            $indent += 2
+        }
+
+        $match = [regex]::Match($trimmed, '^(?<key>[A-Za-z_][A-Za-z0-9_.-]*):(?:\s|$)')
+        if (-not $match.Success) { continue }
+
+        # Anything deeper than this key belongs to it, so its siblings are no longer in scope.
+        foreach ($key in @($siblingsByIndent.Keys | Where-Object { $_ -gt $indent })) {
+            $siblingsByIndent.Remove($key)
+        }
+
+        if (-not $siblingsByIndent.ContainsKey($indent)) {
+            $siblingsByIndent[$indent] = [System.Collections.Generic.HashSet[string]]::new()
+        }
+
+        $keyName = $match.Groups['key'].Value
+        if (-not $siblingsByIndent[$indent].Add($keyName)) {
+            $duplicates += ("line {0}: '{1}' is already defined in this mapping" -f ($i + 1), $keyName)
+        }
+
+        $value = $trimmed.Substring($match.Length).Trim()
+        if ($value -match '^[|>][+-]?\d*$') {
+            $inBlockScalar = $true
+            $blockScalarIndent = $indent
+        }
+    }
+
+    return $duplicates
+}
+
 $errors = [System.Collections.Generic.List[string]]::new()
 foreach ($workflow in $workflows) {
     $content = Get-Content -LiteralPath $workflow.FullName -Raw
     $lines = $content -split "\r?\n"
     if ($content -match "`t") {
         $errors.Add("$($workflow.Name): workflow YAML must use spaces for indentation, not tabs.")
+    }
+
+    foreach ($duplicate in @(Get-WorkflowDuplicateKeys -Lines $lines)) {
+        $errors.Add("$($workflow.Name): $duplicate.")
     }
 
     $inlineOnPullRequestTarget = $false
