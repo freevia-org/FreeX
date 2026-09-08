@@ -11,13 +11,13 @@ FreeX is a free spreadsheet app for local workbook files. It opens and saves sta
 
 ## Downloads
 
-Tester builds are published on the [FreeX releases page](https://github.com/tony-xmelon/FreeX/releases). The current tester release is **v0.8.187** (2026-09-08), published for all three apps on Windows, Linux, and macOS.
+Tester builds are published on the [FreeX releases page](https://github.com/tony-xmelon/FreeX/releases). The current tester release is **v0.8.188** (2026-09-08), published for all three apps on Windows, Linux, and macOS.
 
-FreeX v0.8.187 downloads (each asset has a matching `.sha256`):
+FreeX v0.8.188 downloads (each asset has a matching `.sha256`):
 
-- [FreeX-v0.8.187-win-x64.exe](https://github.com/tony-xmelon/FreeX/releases/download/freex-v0.8.187/FreeX-v0.8.187-win-x64.exe)
-- [FreeX-v0.8.187-linux-x64.zip](https://github.com/tony-xmelon/FreeX/releases/download/freex-v0.8.187/FreeX-v0.8.187-linux-x64.zip) / [linux-arm64](https://github.com/tony-xmelon/FreeX/releases/download/freex-v0.8.187/FreeX-v0.8.187-linux-arm64.zip)
-- [FreeX-v0.8.187-osx-arm64.zip](https://github.com/tony-xmelon/FreeX/releases/download/freex-v0.8.187/FreeX-v0.8.187-osx-arm64.zip) / [osx-x64](https://github.com/tony-xmelon/FreeX/releases/download/freex-v0.8.187/FreeX-v0.8.187-osx-x64.zip)
+- [FreeX-v0.8.188-win-x64.exe](https://github.com/tony-xmelon/FreeX/releases/download/freex-v0.8.188/FreeX-v0.8.188-win-x64.exe)
+- [FreeX-v0.8.188-linux-x64.zip](https://github.com/tony-xmelon/FreeX/releases/download/freex-v0.8.188/FreeX-v0.8.188-linux-x64.zip) / [linux-arm64](https://github.com/tony-xmelon/FreeX/releases/download/freex-v0.8.188/FreeX-v0.8.188-linux-arm64.zip)
+- [FreeX-v0.8.188-osx-arm64.zip](https://github.com/tony-xmelon/FreeX/releases/download/freex-v0.8.188/FreeX-v0.8.188-osx-arm64.zip) / [osx-x64](https://github.com/tony-xmelon/FreeX/releases/download/freex-v0.8.188/FreeX-v0.8.188-osx-x64.zip)
 
 The macOS builds are **unsigned and unnotarized** -- no Apple Developer ID is configured for this project yet -- so Gatekeeper refuses to open them by double-click. Either right-click the app and choose Open, or clear the quarantine attribute first:
 
@@ -27,9 +27,10 @@ xattr -dr com.apple.quarantine /Applications/FreeX.app
 
 Per-app release tags, all non-prerelease:
 
-- [FreeX v0.8.187](https://github.com/tony-xmelon/FreeX/releases/tag/freex-v0.8.187)
-- [FreeW v0.8.187](https://github.com/tony-xmelon/FreeX/releases/tag/freew-v0.8.187)
-- [FreeP v0.8.187](https://github.com/tony-xmelon/FreeX/releases/tag/freep-v0.8.187)
+- [FreeX v0.8.188](https://github.com/tony-xmelon/FreeX/releases/tag/freex-v0.8.188)
+- [FreeW v0.8.188](https://github.com/tony-xmelon/FreeX/releases/tag/freew-v0.8.188)
+- [FreeP v0.8.188](https://github.com/tony-xmelon/FreeX/releases/tag/freep-v0.8.188)
+- [Free Suite v0.8.188](https://github.com/tony-xmelon/FreeX/releases/tag/free-suite-v0.8.188) - all three apps in one installer per platform
 
 Note: link to the versioned assets above rather than `releases/latest/download/...`. Releases are now published per app (`freex-`/`freew-`/`freep-` tags), so GitHub's repo-wide `releases/latest` redirect resolves to whichever app published most recently and is not FreeX-specific.
 
