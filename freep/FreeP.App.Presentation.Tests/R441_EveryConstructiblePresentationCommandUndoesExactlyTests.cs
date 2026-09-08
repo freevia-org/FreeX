@@ -137,7 +137,7 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
     private const string MasterId = "master1";
     private const string LayoutId = "layout1";
 
-    private static object? ValueFor(Type type)
+    private static object? ValueFor(Type type, int depth = 0)
     {
         if (type == typeof(int)) return 1;
         if (type == typeof(uint)) return 2u;
@@ -188,7 +188,7 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
 
         var underlying = Nullable.GetUnderlyingType(type);
         if (underlying is not null)
-            return ValueFor(underlying);
+            return ValueFor(underlying, depth);
 
         if (type.IsGenericType)
         {
@@ -199,7 +199,7 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
                 definition == typeof(List<>))
             {
                 var elementType = type.GetGenericArguments()[0];
-                var element = ValueFor(elementType);
+                var element = ValueFor(elementType, depth + 1);
                 if (element is null)
                     return null;
 
@@ -209,6 +209,43 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
                     typeof(List<>).MakeGenericType(elementType))!;
                 list.Add(element);
                 return list;
+            }
+        }
+
+        // r534: the blocker census showed 39 command types with no usable constructor, and after
+        // the first few the tail was all POSITIONAL RECORDS -- ChartAreaOptions, ChartAxisOptions,
+        // ChartPieOptions and six more, one blocked constructor each. Hand-writing nine cases would
+        // have unblocked nine commands and left the tenth for the next round, so build any record or
+        // class the same way the commands themselves are built: from a constructor whose parameters
+        // this factory can already supply, recursively.
+        //
+        // This stays inside r528's honest-arguments rule. It composes a real value out of real
+        // parts; it never passes null to satisfy a signature, so a NullReferenceException from here
+        // would still be the command's fault and not the driver's.
+        if (depth < 4 && type is { IsClass: true, IsAbstract: false } && type != typeof(string))
+        {
+            foreach (var candidate in type.GetConstructors()
+                         .OrderByDescending(constructor => constructor.GetParameters().Length))
+            {
+                var parameters = candidate.GetParameters();
+                if (parameters.Length == 0)
+                    continue;
+
+                var arguments = parameters
+                    .Select(parameter => ValueFor(parameter.ParameterType, depth + 1))
+                    .ToArray();
+                if (arguments.Any(argument => argument is null))
+                    continue;
+
+                try
+                {
+                    return candidate.Invoke(arguments);
+                }
+                catch
+                {
+                    // A record that validates its arguments is entitled to reject invented ones.
+                    // Try the next constructor rather than treating the throw as a finding.
+                }
             }
         }
 
