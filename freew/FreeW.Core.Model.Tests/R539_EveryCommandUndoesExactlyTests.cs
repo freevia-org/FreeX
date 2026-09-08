@@ -30,10 +30,15 @@ public class R539_EveryCommandUndoesExactlyTests
         public TextDocument Document => document;
     }
 
-    private static object? ValueFor(Type type)
+    // r541: the index is a SEED the census sweeps, not a constant. Three rounds running (r481,
+    // r535, r539) the fixture had to be contorted so the ONE invented index -- 0 -- happened to
+    // address the thing under test, and those contortions conflict: chart commands need Blocks[0]
+    // to be a Paragraph carrying a chart run, while table commands need Blocks[0] to be a Table.
+    // No single fixture satisfies both. Sweeping the seed lets each command find its own target.
+    private static object? ValueFor(Type type, int indexSeed)
     {
-        if (type == typeof(int)) return 0;
-        if (type == typeof(uint)) return 0u;
+        if (type == typeof(int)) return indexSeed;
+        if (type == typeof(uint)) return (uint)indexSeed;
         if (type == typeof(double)) return 1.0;
         if (type == typeof(bool)) return true;
         if (type == typeof(string)) return "probe";
@@ -46,7 +51,7 @@ public class R539_EveryCommandUndoesExactlyTests
             var values = Enum.GetValues(type);
             return values.Length > 1 ? values.GetValue(values.Length - 1) : values.GetValue(0);
         }
-        if (Nullable.GetUnderlyingType(type) is { } inner) return ValueFor(inner);
+        if (Nullable.GetUnderlyingType(type) is { } inner) return ValueFor(inner, indexSeed);
         if (type == typeof(Action<Paragraph>)) return new Action<Paragraph>(_ => { });
         if (type == typeof(Func<RunFormatting, RunFormatting>))
             return new Func<RunFormatting, RunFormatting>(formatting => formatting);
@@ -236,7 +241,7 @@ public class R539_EveryCommandUndoesExactlyTests
                 .OrderBy(candidate => candidate.GetParameters().Length)
                 .FirstOrDefault(candidate => !TakesABeforeAfterPair(candidate)
                     && candidate.GetParameters()
-                        .All(parameter => ValueFor(parameter.ParameterType) is not null));
+                        .All(parameter => ValueFor(parameter.ParameterType, 0) is not null));
 
             if (constructor is null)
             {
@@ -246,21 +251,39 @@ public class R539_EveryCommandUndoesExactlyTests
 
             try
             {
-                var command = (IDocumentCommand)constructor.Invoke(
-                    constructor.GetParameters().Select(p => ValueFor(p.ParameterType)).ToArray());
+                // Sweep the index seed and take the FIRST that actually changes the document. A
+                // command whose target sits at block 1 is not a command with no effect; it is a
+                // command the driver was pointing at the wrong block.
+                IDocumentCommand? command = null;
+                TextDocument? document = null;
+                Context? context = null;
+                var before = string.Empty;
 
-                var document = Setup();
-                var context = new Context(document);
+                for (var seed = 0; seed <= 2 && command is null; seed++)
+                {
+                    var candidate = (IDocumentCommand)constructor.Invoke(
+                        constructor.GetParameters().Select(p => ValueFor(p.ParameterType, seed)).ToArray());
 
-                var before = Describe(document);
-                command.Apply(context);
-                var applied = Describe(document);
+                    var candidateDocument = Setup();
+                    var candidateContext = new Context(candidateDocument);
+                    var candidateBefore = Describe(candidateDocument);
+                    candidate.Apply(candidateContext);
 
-                if (applied == before)
+                    if (Describe(candidateDocument) == candidateBefore)
+                        continue;
+
+                    command = candidate;
+                    document = candidateDocument;
+                    context = candidateContext;
+                    before = candidateBefore;
+                }
+
+                if (command is null || document is null || context is null)
                 {
                     noChange++;
                     continue;
                 }
+
 
                 exercised++;
                 command.Revert(context);
@@ -287,12 +310,13 @@ public class R539_EveryCommandUndoesExactlyTests
             + "undo. " + census);
 
         exercised.Should().BeGreaterThanOrEqualTo(
-            12,
+            17,
             "the driver must still be exercising commands -- if this falls, the sweep has quietly "
-            + "stopped testing rather than the commands having improved. 14 today (7 before the "
+            + "stopped testing rather than the commands having improved. 19 today (7 before the "
             + "table moved to block index 0, the only index the factory invents; 10 before enums stopped "
-            + "being answered with their DEFAULT value). The 51 "
-            + "unbuildable need live model objects this factory will not fake, and the 60 noChange "
+            + "being answered with their DEFAULT value; 14 before the index became a swept SEED rather "
+            + "than the constant 0). The 51 "
+            + "unbuildable need live model objects this factory will not fake, and the 55 noChange "
             + "construct but find nothing their arguments can reach. " + census);
     }
 }
