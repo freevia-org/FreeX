@@ -86,8 +86,12 @@ public sealed class ZoomPercentPolicy
         if (normalized is null)
             return false;
 
-        if (!double.TryParse(normalized, NumberStyles.Number, CultureInfo.CurrentCulture, out var parsed) &&
-            !double.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out parsed))
+        // r550: IsFinite as well -- NumberStyles.Number forbids an exponent, so "1e400" cannot reach
+        // here, but a several-hundred-digit paste still overflows to Infinity. The sibling policy in
+        // this same tier (PageMarginTextPolicy) already rejects with an explicit IsNaN/IsInfinity.
+        if ((!double.TryParse(normalized, NumberStyles.Number, CultureInfo.CurrentCulture, out var parsed) &&
+             !double.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out parsed))
+            || !double.IsFinite(parsed))
         {
             return false;
         }
@@ -145,8 +149,12 @@ public sealed class ZoomPercentPolicy
             return false;
         }
 
-        if (!double.TryParse(normalized, NumberStyles.Number, CultureInfo.CurrentCulture, out var parsed) &&
-            !double.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out parsed))
+        // r550: IsFinite as well -- NumberStyles.Number forbids an exponent, so "1e400" cannot reach
+        // here, but a several-hundred-digit paste still overflows to Infinity. The sibling policy in
+        // this same tier (PageMarginTextPolicy) already rejects with an explicit IsNaN/IsInfinity.
+        if ((!double.TryParse(normalized, NumberStyles.Number, CultureInfo.CurrentCulture, out var parsed) &&
+             !double.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out parsed))
+            || !double.IsFinite(parsed))
         {
             error = ZoomPercentInputError.NotNumeric;
             return false;
