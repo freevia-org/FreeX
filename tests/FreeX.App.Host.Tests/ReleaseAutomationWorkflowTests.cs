@@ -255,21 +255,21 @@ public sealed class ReleaseAutomationWorkflowTests
         var publisher = WorkspaceFileLocator.ReadAllText("tools", "Publish-SisterAppTesterPackages.ps1");
         var expectedLanes = new[]
         {
-            """@{ app = "FreeX"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest" }""",
-            """@{ app = "FreeX"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest" }""",
-            """@{ app = "FreeX"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm" }""",
-            """@{ app = "FreeX"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel" }""",
-            """@{ app = "FreeX"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15" }""",
-            """@{ app = "FreeW"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest" }""",
-            """@{ app = "FreeW"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest" }""",
-            """@{ app = "FreeW"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm" }""",
-            """@{ app = "FreeW"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel" }""",
-            """@{ app = "FreeW"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15" }""",
-            """@{ app = "FreeP"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest" }""",
-            """@{ app = "FreeP"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest" }""",
-            """@{ app = "FreeP"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm" }""",
-            """@{ app = "FreeP"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel" }""",
-            """@{ app = "FreeP"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15" }"""
+            """@{ app = "FreeX"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest""",
+            """@{ app = "FreeX"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest""",
+            """@{ app = "FreeX"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm""",
+            """@{ app = "FreeX"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel""",
+            """@{ app = "FreeX"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15""",
+            """@{ app = "FreeW"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest""",
+            """@{ app = "FreeW"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest""",
+            """@{ app = "FreeW"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm""",
+            """@{ app = "FreeW"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel""",
+            """@{ app = "FreeW"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15""",
+            """@{ app = "FreeP"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest""",
+            """@{ app = "FreeP"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest""",
+            """@{ app = "FreeP"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm""",
+            """@{ app = "FreeP"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel""",
+            """@{ app = "FreeP"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15"""
         };
 
         workflow.Should().Contain("name: Full Signed Release");

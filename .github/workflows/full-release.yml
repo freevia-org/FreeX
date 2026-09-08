@@ -94,22 +94,29 @@ jobs:
           $platformInput = "${{ inputs.platform }}"
           $apps = if ($appInput -eq "all") { @("FreeX", "FreeW", "FreeP") } else { @($appInput) }
           $platforms = if ($platformInput -eq "all") { @("windows", "linux", "macos") } else { @($platformInput) }
+          # costHintMinutes is the longest observed run of that lane across releases 34211267805 and
+          # 34218491134. It only decides DISPATCH ORDER, never behaviour: GitHub starts matrix jobs
+          # roughly in the order given, and the runner pools are small (macOS peaked at 4 concurrent
+          # in the last release, for ten macOS jobs). Listing the lanes app-major, as they were,
+          # dispatched the single longest macOS job -- FreeP osx-x64 at 8.5 minutes -- LAST, so it
+          # queued 12.5 minutes, finished at 21.9, and every suite job waits on the slowest package.
+          # Longest-first is the same rule Get-TestGateMatrix.ps1 already applies to the test matrix.
           $lanes = @(
-            @{ app = "FreeX"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest" },
-            @{ app = "FreeX"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest" },
-            @{ app = "FreeX"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm" },
-            @{ app = "FreeX"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel" },
-            @{ app = "FreeX"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15" },
-            @{ app = "FreeW"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest" },
-            @{ app = "FreeW"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest" },
-            @{ app = "FreeW"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm" },
-            @{ app = "FreeW"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel" },
-            @{ app = "FreeW"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15" },
-            @{ app = "FreeP"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest" },
-            @{ app = "FreeP"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest" },
-            @{ app = "FreeP"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm" },
-            @{ app = "FreeP"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel" },
-            @{ app = "FreeP"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15" }
+            @{ app = "FreeX"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest"; costHintMinutes = 19 },
+            @{ app = "FreeP"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest"; costHintMinutes = 10 },
+            @{ app = "FreeW"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest"; costHintMinutes = 9 },
+            @{ app = "FreeP"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel"; costHintMinutes = 9 },
+            @{ app = "FreeX"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel"; costHintMinutes = 7 },
+            @{ app = "FreeW"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel"; costHintMinutes = 6 },
+            @{ app = "FreeX"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15"; costHintMinutes = 4 },
+            @{ app = "FreeX"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest"; costHintMinutes = 3 },
+            @{ app = "FreeW"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15"; costHintMinutes = 3 },
+            @{ app = "FreeX"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm"; costHintMinutes = 3 },
+            @{ app = "FreeP"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15"; costHintMinutes = 3 },
+            @{ app = "FreeP"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest"; costHintMinutes = 3 },
+            @{ app = "FreeW"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm"; costHintMinutes = 3 },
+            @{ app = "FreeW"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest"; costHintMinutes = 3 },
+            @{ app = "FreeP"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm"; costHintMinutes = 2 }
           )
           $selectedLanes = @($lanes | Where-Object { $_.app -in $apps -and $_.platform -in $platforms })
           if ($selectedLanes.Count -eq 0) { throw "No release lanes were selected." }
@@ -123,7 +130,12 @@ jobs:
               }
           )
 
-          $packageMatrix = @{ include = $selectedLanes } | ConvertTo-Json -Compress
+          # The hint has done its job once the order is fixed; it must not reach the matrix, where
+          # every key becomes a job variable.
+          $orderedLanes = @($selectedLanes | ForEach-Object {
+            @{ app = $_.app; platform = $_.platform; runtime = $_.runtime; runner = $_.runner }
+          })
+          $packageMatrix = @{ include = $orderedLanes } | ConvertTo-Json -Compress
           $suiteMatrix = @{ include = $suiteLanes } | ConvertTo-Json -Compress
           $publishMatrix = @{ app = $apps } | ConvertTo-Json -Compress
           "package_matrix=$packageMatrix" >> $env:GITHUB_OUTPUT
