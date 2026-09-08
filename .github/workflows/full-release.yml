@@ -915,8 +915,7 @@ jobs:
   publish-suite:
     name: Publish Free Suite release
     needs: [suite-package, publication-gate]
-    if: ${{ !inputs.dry_run }}
-    if: inputs.app == 'all'
+    if: ${{ !inputs.dry_run && inputs.app == 'all' }}
     runs-on: ubuntu-latest
     environment: public-preview
     timeout-minutes: 20
