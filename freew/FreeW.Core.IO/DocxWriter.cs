@@ -37,6 +37,35 @@ public static class DocxWriter
     private const string BibliographyRelationshipId = "rIdBibliography";
     private const string ThemeRelationshipId = "rIdTheme1";
     private const string FreeWChartDesignExtensionUri = "urn:freew:chart-design:2026";
+
+    /// <summary>
+    /// r546: scales a model double into a DrawingML attribute that the schema declares as a
+    /// BOUNDED INTEGER -- ST_Angle for a:xfrm/@rot, the percentage types for a:lum/@bright,
+    /// a:lum/@contrast, a:satMod/@val, a:alphaModFix/@amt and a:srcRect's edges, ST_LineWidth
+    /// for a:ln/@w. All of them are xsd:int.
+    ///
+    /// <para>Casting the scaled double straight to long let .NET's SATURATING conversion emit
+    /// long.MaxValue, and a large finite value overflowed the same way; neither can be
+    /// represented in the declared type at all, so Word rejects the document. Nothing upstream
+    /// defends -- RotationAngle, BrightnessPct, ContrastPct, SaturationPct, TransparencyPct,
+    /// ColorTemperature, the crop edges and BorderWidthPt are plain auto-properties with no
+    /// clamping -- so the writer is the last place the invariant can hold, and the right place,
+    /// because the constraint belongs to the FILE FORMAT rather than to any command.</para>
+    ///
+    /// <para>The clamp is to what the format can hold, not to a semantic range: int is a fact
+    /// about these attribute types, whereas "a rotation cannot exceed 360 degrees" would be a
+    /// guess about intent the schema does not make. Non-finite becomes 0, which is what .NET
+    /// already produced for NaN and is a valid value for every attribute above. Coordinates are
+    /// deliberately NOT routed through here: a:ext/@cx and friends are ST_PositiveCoordinate,
+    /// an xsd:long, so clamping them to int would corrupt legitimately large geometry.</para>
+    /// </summary>
+    private static long BoundedInt(double scaledValue)
+    {
+        if (!double.IsFinite(scaledValue))
+            return 0;
+
+        return (long)Math.Clamp(Math.Round(scaledValue), int.MinValue, int.MaxValue);
+    }
     private static readonly XNamespace Mc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
     private static readonly XNamespace A14 = "http://schemas.microsoft.com/office/drawing/2010/main";
     private static readonly DateTimeOffset DeterministicZipTimestamp =
@@ -4701,7 +4730,7 @@ public static class DocxWriter
         // a:xfrm: always present; carry @rot/@flipH/@flipV only when non-default.
         var xfrm = new XElement(A + "xfrm");
         if (image.RotationAngle != 0)
-            xfrm.Add(new XAttribute("rot", (long)Math.Round(image.RotationAngle * 60000)));
+            xfrm.Add(new XAttribute("rot", BoundedInt(image.RotationAngle * 60000)));
         if (image.FlipH)
             xfrm.Add(new XAttribute("flipH", 1));
         if (image.FlipV)
@@ -4741,20 +4770,20 @@ public static class DocxWriter
             case ImageRecolorMode.Washout:
                 // Washout: high brightness + semi-transparency. Combine with existing adjustments below.
                 blip.Add(new XElement(A + "lum",
-                    new XAttribute("bright", 40000 + (long)Math.Round(image.BrightnessPct * 1000)),
-                    new XAttribute("contrast", (long)Math.Round(image.ContrastPct * 1000))));
+                    new XAttribute("bright", 40000 + BoundedInt(image.BrightnessPct * 1000)),
+                    new XAttribute("contrast", BoundedInt(image.ContrastPct * 1000))));
                 blip.Add(new XElement(A + "alphaModFix", new XAttribute("amt", 50000)));
                 break;
             case ImageRecolorMode.BlackWhite:
                 blip.Add(new XElement(A + "grayscl"));
                 blip.Add(new XElement(A + "lum",
-                    new XAttribute("bright", (long)Math.Round(image.BrightnessPct * 1000)),
-                    new XAttribute("contrast", 100000 + (long)Math.Round(image.ContrastPct * 1000))));
+                    new XAttribute("bright", BoundedInt(image.BrightnessPct * 1000)),
+                    new XAttribute("contrast", 100000 + BoundedInt(image.ContrastPct * 1000))));
                 break;
         }
 
         var colorTemperature = image.ColorTemperature != 0 && image.RecolorMode == ImageRecolorMode.None
-            ? (long?)Math.Round(image.ColorTemperature * 1000)
+            ? (long?)BoundedInt(image.ColorTemperature * 1000)
             : null;
         var artisticEffect = image.ArtisticEffect != ImageArtisticEffect.None
             ? (ImageArtisticEffect?)image.ArtisticEffect
@@ -4766,19 +4795,19 @@ public static class DocxWriter
             if (image.BrightnessPct != 0 || image.ContrastPct != 0)
             {
                 blip.Add(new XElement(A + "lum",
-                    new XAttribute("bright", (long)Math.Round(image.BrightnessPct * 1000)),
-                    new XAttribute("contrast", (long)Math.Round(image.ContrastPct * 1000))));
+                    new XAttribute("bright", BoundedInt(image.BrightnessPct * 1000)),
+                    new XAttribute("contrast", BoundedInt(image.ContrastPct * 1000))));
             }
         }
         if (image.SaturationPct != 100)
         {
             blip.Add(new XElement(A + "satMod",
-                new XAttribute("val", (long)Math.Round(image.SaturationPct * 1000))));
+                new XAttribute("val", BoundedInt(image.SaturationPct * 1000))));
         }
         if (image.TransparencyPct != 0 && image.RecolorMode != ImageRecolorMode.Washout)
         {
             // alphaModFix amt = opacity per-mille = (100 - transparencyPct) × 1000.
-            var opacityPermille = (long)Math.Round((100 - image.TransparencyPct) * 1000);
+            var opacityPermille = BoundedInt((100 - image.TransparencyPct) * 1000);
             blip.Add(new XElement(A + "alphaModFix",
                 new XAttribute("amt", opacityPermille)));
         }
@@ -4795,7 +4824,7 @@ public static class DocxWriter
         if (image.HasCrop)
         {
             // DrawingML srcRect uses per-mille (×100000) integer percentages for each edge.
-            static long ToPerMille(double fraction) => (long)Math.Round(fraction * 100000);
+            static long ToPerMille(double fraction) => BoundedInt(fraction * 100000);
             blipFill.Add(new XElement(A + "srcRect",
                 new XAttribute("l", ToPerMille(image.CropLeft)),
                 new XAttribute("r", ToPerMille(image.CropRight)),
@@ -4809,7 +4838,7 @@ public static class DocxWriter
             new XElement(A + "prstGeom", new XAttribute("prst", "rect"), new XElement(A + "avLst")));
         if (image.HasBorder)
         {
-            var widthEmu = (long)Math.Round(Math.Max(image.BorderWidthPt, 0.75) * 12700); // 1 pt = 12700 EMU
+            var widthEmu = BoundedInt(Math.Max(image.BorderWidthPt, 0.75) * 12700); // 1 pt = 12700 EMU
             var ln = new XElement(A + "ln", new XAttribute("w", widthEmu),
                 new XElement(A + "solidFill",
                     new XElement(A + "srgbClr",
@@ -5083,7 +5112,7 @@ public static class DocxWriter
         // a:xfrm: carry @rot/@flipH/@flipV only when non-default (mirrors picture xfrm handling).
         var shapeXfrm = new XElement(A + "xfrm");
         if (shape.RotationAngle != 0)
-            shapeXfrm.Add(new XAttribute("rot", (long)Math.Round(shape.RotationAngle * 60000)));
+            shapeXfrm.Add(new XAttribute("rot", BoundedInt(shape.RotationAngle * 60000)));
         if (shape.FlipH)
             shapeXfrm.Add(new XAttribute("flipH", 1));
         if (shape.FlipV)
@@ -5305,7 +5334,7 @@ public static class DocxWriter
                 new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)),
                 new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy)));
         if (wordArt.RotationAngle != 0)
-            wordArtXfrm.Add(new XAttribute("rot", (long)Math.Round(wordArt.RotationAngle * 60000)));
+            wordArtXfrm.Add(new XAttribute("rot", BoundedInt(wordArt.RotationAngle * 60000)));
         if (wordArt.FlipH)
             wordArtXfrm.Add(new XAttribute("flipH", "1"));
         if (wordArt.FlipV)
@@ -5877,7 +5906,7 @@ public static class DocxWriter
                 new XElement(A + "chExt",
                     new XAttribute("cx", cx), new XAttribute("cy", cy)));
         if (group.RotationAngle != 0)
-            groupXfrm.Add(new XAttribute("rot", (long)Math.Round(group.RotationAngle * 60000)));
+            groupXfrm.Add(new XAttribute("rot", BoundedInt(group.RotationAngle * 60000)));
         if (group.FlipH)
             groupXfrm.Add(new XAttribute("flipH", "1"));
         if (group.FlipV)
@@ -5950,7 +5979,7 @@ public static class DocxWriter
         };
 
         if (rotation != 0)
-            xfrm.SetAttributeValue("rot", (long)Math.Round(rotation * 60000));
+            xfrm.SetAttributeValue("rot", BoundedInt(rotation * 60000));
         if (flipH)
             xfrm.SetAttributeValue("flipH", "1");
         if (flipV)
