@@ -720,6 +720,38 @@ function Assert-CommandInventoryGeneratedProjectCentralization {
     Write-Host "Validated command inventory generated-project orchestration centralization."
 }
 
+function Assert-GitHubApiQueryPortability {
+    param([Parameter(Mandatory = $true)][string]$ToolRoot)
+
+    # A "gh api" call that spells its query inline -- repos/x/y?a=1&b=2 -- works on the Linux
+    # runners and breaks on Windows, where gh resolves through a .cmd shim: cmd.exe reads the
+    # unquoted ampersand as a command separator and tries to run the tail as a second command.
+    # Both release-candidate scripts carried exactly this bug, and because CI only ever runs them
+    # on ubuntu it stayed invisible until someone ran one locally to diagnose a failed release.
+    #
+    # Query fields belong in -f/--raw-field instead; gh appends them to the URL itself.
+    $offenders = @()
+    $urlQueryWithAmpersand = 'gh\s+api[^#]*\?[^\s"'']*&'
+    foreach ($script in @(Get-ChildItem -LiteralPath $ToolRoot -Filter '*.ps1' -File -Recurse)) {
+        $lines = [System.IO.File]::ReadAllLines($script.FullName)
+        for ($i = 0; $i -lt $lines.Length; $i++) {
+            $line = $lines[$i]
+            # A commented-out call never runs, and this very check has to describe the pattern.
+            if ($line -match '^\s*#') { continue }
+            if ($line -notmatch $urlQueryWithAmpersand) { continue }
+            $offenders += ('{0}:{1}: {2}' -f $script.Name, ($i + 1), $line.Trim())
+        }
+    }
+
+    if ($offenders.Count -gt 0) {
+        throw ("gh api query fields must be passed with -f, not spelled inline after a '?', or the " +
+            "call breaks on Windows where gh runs through a cmd.exe shim. Offending lines: " +
+            ($offenders -join '; '))
+    }
+
+    Write-Host "Validated that every gh api call passes its query fields portably."
+}
+
 function Assert-CommandInventoryGeneratorEncoding {
     param([Parameter(Mandatory = $true)][string]$ToolRoot)
 
@@ -1798,6 +1830,7 @@ if ($resolvedDirectory.Equals($toolsRoot, [System.StringComparison]::OrdinalIgno
     Assert-CommandInventoryMenuTraversalCentralization -ToolRoot $resolvedDirectory
     Assert-CommandInventoryGeneratedProjectCentralization -ToolRoot $resolvedDirectory
     Assert-CommandInventoryGeneratorEncoding -ToolRoot $resolvedDirectory
+    Assert-GitHubApiQueryPortability -ToolRoot $resolvedDirectory
     Assert-GeneratedFileComparisonEncoding
     Assert-CommandInventoryMenuTraversalBehavior -ToolRoot $resolvedDirectory
     Assert-GeneratedProjectOrchestrationBehavior -ToolRoot $resolvedDirectory

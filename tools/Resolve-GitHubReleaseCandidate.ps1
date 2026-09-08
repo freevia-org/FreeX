@@ -52,7 +52,11 @@ function Get-AncestorShas {
     else {
         # The candidate job checks out at depth 1, so local git cannot enumerate history. Ask the
         # API instead; it returns the commit and its ancestors, newest first.
-        $text = & gh api "repos/$Repository/commits?sha=$normalizedSha&per_page=$MaxAncestors"
+        # Pass the query as separate -F fields instead of inline in the URL. On Windows gh
+        # resolves through a .cmd shim, so an unquoted "&" reaches cmd.exe, which splits the
+        # URL into a second command ("per_page is not recognized"). CI runs this on Linux where
+        # that does not happen, which is why it stayed hidden until someone ran it locally.
+        $text = & gh api --method GET "repos/$Repository/commits" -f "sha=$normalizedSha" -f "per_page=$MaxAncestors"
         if ($LASTEXITCODE -ne 0) {
             throw "Could not list ancestors of $normalizedSha in $Repository."
         }
