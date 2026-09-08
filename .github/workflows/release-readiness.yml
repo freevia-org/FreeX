@@ -153,11 +153,20 @@ jobs:
 
   summary:
     name: Release readiness summary
+    permissions:
+      contents: read
+      # Reads this run own job durations to check the dispatch cost hints below.
+      actions: read
     needs: [prepare, gates, readme-freshness]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
       - name: Report which release lanes are rotting
         shell: pwsh
         run: |
@@ -175,3 +184,13 @@ jobs:
               "links still resolve, which is why nothing else catches this.")
           }
           Write-Host "All release-only gates pass on this commit, and the README points at the current release."
+      - name: Check the dispatch cost hints against this run
+        # After the report above, so a real gate failure is the message people see first.
+        if: needs.gates.result == 'success'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          pwsh -NoProfile -File tools/Test-TestGateCostHints.ps1
+          -Repository "${{ github.repository }}"
+          -RunId "${{ github.run_id }}"
