@@ -1,6 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <Import Project="HostTests.Shared.props" />
+  <!--
+    Batches are balanced by MEASURED test duration, not by alphabet. They used to be contiguous
+    letter ranges (A-C, D-F, ...), which made each batch cost whatever its letters happened to cost:
+    M alone was 8.9 minutes of the 21.9 total while four other batches were under a minute each, so
+    the slowest host batch ran ~3x the fastest and set the release critical path.
+
+    The prefixes below come from per-class timings in run 34187405461 (5,400 tests, 21.9 min).
+    Groups were split until none exceeded one seventh of the total, then packed longest-first; every
+    batch now holds about 3.13 minutes of tests.
+
+    Two invariants keep this safe, both enforced by HostTestBatchPartitionTests:
+      - no prefix here is a prefix of another, so no class can match two batches;
+      - Batch7 is the exact complement of batches 1-6, so a class matching none of them still runs.
+    A newly added class therefore lands in Batch7 automatically. Nothing is ever silently skipped;
+    only the balance drifts, and re-running the measurement above re-tunes it.
+  -->
   <PropertyGroup>
-    <VSTestTestCaseFilter>FullyQualifiedName~FreeX.App.Host.Tests.N|FullyQualifiedName~FreeX.App.Host.Tests.O|FullyQualifiedName~FreeX.App.Host.Tests.P|FullyQualifiedName~FreeX.App.Host.Tests.Q</VSTestTestCaseFilter>
+    <VSTestTestCaseFilter>FullyQualifiedName~FreeX.App.Host.Tests.B|FullyQualifiedName~FreeX.App.Host.Tests.D|FullyQualifiedName~FreeX.App.Host.Tests.MainWindowM|FullyQualifiedName~FreeX.App.Host.Tests.R12|FullyQualifiedName~FreeX.App.Host.Tests.R13|FullyQualifiedName~FreeX.App.Host.Tests.R16|FullyQualifiedName~FreeX.App.Host.Tests.R7</VSTestTestCaseFilter>
   </PropertyGroup>
 </Project>
