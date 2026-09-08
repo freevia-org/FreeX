@@ -341,8 +341,10 @@ public sealed class PageSetupDialogSession
         string? heightText,
         int currentPaperSizeIndex)
     {
+        // r551: a page dimension that is not finite is not a dimension.
         if (!double.TryParse(widthText, NumberStyles.Float, _culture, out var width) ||
-            !double.TryParse(heightText, NumberStyles.Float, _culture, out var height))
+            !double.TryParse(heightText, NumberStyles.Float, _culture, out var height) ||
+            !double.IsFinite(width) || !double.IsFinite(height))
         {
             return new PageSetupDimensionEditPlan(
                 currentPaperSizeIndex,

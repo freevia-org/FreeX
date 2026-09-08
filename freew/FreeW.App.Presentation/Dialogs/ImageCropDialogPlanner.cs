@@ -128,7 +128,9 @@ public static class ImageCropDialogPlanner
     {
         fraction = 0;
         var trimmed = (text ?? string.Empty).Trim();
-        if (!double.TryParse(trimmed, NumberStyles.Float, culture, out var percent))
+        // r551: the range test below is the reject form, which NaN slips through.
+        if (!double.TryParse(trimmed, NumberStyles.Float, culture, out var percent)
+            || !double.IsFinite(percent))
             return false;
 
         if (percent < 0 || percent >= 100)

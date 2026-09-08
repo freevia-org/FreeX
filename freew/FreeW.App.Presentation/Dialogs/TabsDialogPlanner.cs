@@ -324,7 +324,8 @@ public static class TabsDialogPlanner
         TryParseDouble(text, culture, out value) && value > 0;
 
     private static bool TryParseDouble(string? text, CultureInfo culture, out double value) =>
-        double.TryParse((text ?? string.Empty).Trim(), NumberStyles.Float, culture, out value);
+        // r551: a tab stop that is not finite is not a position.
+        double.TryParse((text ?? string.Empty).Trim(), NumberStyles.Float, culture, out value) && double.IsFinite(value);
 
     private static int FindPositionIndex(IReadOnlyList<TabStop> stops, double position)
     {

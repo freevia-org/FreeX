@@ -773,7 +773,13 @@ public static class FontDialogPlanner
         var fontSizeText = (input.FontSizeText ?? string.Empty).Trim();
         if (fontSizeText.Length > 0)
         {
-            if (!double.TryParse(fontSizeText, NumberStyles.Float, culture, out var parsedSize) || parsedSize <= 0)
+            // r551: !IsFinite as well. "parsedSize <= 0" is the REJECT form of a lower bound, and NaN
+            // fails every comparison, so NaN was not rejected by it; +Infinity is not rejected either
+            // because there is no upper bound. The accept form used elsewhere in this layer
+            // ("width > 0 && width <= 12") happens to exclude both -- same intent, opposite polarity,
+            // opposite result -- so the finite test is what makes the intent explicit.
+            if (!double.TryParse(fontSizeText, NumberStyles.Float, culture, out var parsedSize)
+                || !double.IsFinite(parsedSize) || parsedSize <= 0)
             {
                 errorMessage = FontSizeValidationMessage;
                 return false;
@@ -792,7 +798,8 @@ public static class FontDialogPlanner
         var kerningText = (input.KerningMinSizeText ?? string.Empty).Trim();
         if (kerningText.Length > 0)
         {
-            if (!double.TryParse(kerningText, NumberStyles.Float, culture, out var parsedKerning) || parsedKerning < 0)
+            if (!double.TryParse(kerningText, NumberStyles.Float, culture, out var parsedKerning)
+                || !double.IsFinite(parsedKerning) || parsedKerning < 0)
             {
                 errorMessage = KerningValidationMessage;
                 return false;

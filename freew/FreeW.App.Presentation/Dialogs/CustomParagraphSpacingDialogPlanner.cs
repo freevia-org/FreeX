@@ -113,6 +113,7 @@ public static class CustomParagraphSpacingDialogPlanner
     private static bool TryParseDouble(string? text, CultureInfo culture, out double value)
     {
         var trimmed = (text ?? string.Empty).Trim();
-        return double.TryParse(trimmed, NumberStyles.Float, culture, out value);
+        // r551: a value that is not finite is not a measurement.
+        return double.TryParse(trimmed, NumberStyles.Float, culture, out value) && double.IsFinite(value);
     }
 }
