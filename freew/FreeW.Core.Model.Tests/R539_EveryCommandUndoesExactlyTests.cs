@@ -37,7 +37,15 @@ public class R539_EveryCommandUndoesExactlyTests
         if (type == typeof(double)) return 1.0;
         if (type == typeof(bool)) return true;
         if (type == typeof(string)) return "probe";
-        if (type.IsEnum) return Enum.GetValues(type).GetValue(0);
+        // r540: the LAST enum value, not the first. Value 0 is almost always the type's default
+        // (Top, None, Horizontal), so a command that sets an enum property to it changes nothing
+        // and is filed noChange -- which is what hid every cell-alignment, text-direction and
+        // border command in this census behind a fixture that already contained a table.
+        if (type.IsEnum)
+        {
+            var values = Enum.GetValues(type);
+            return values.Length > 1 ? values.GetValue(values.Length - 1) : values.GetValue(0);
+        }
         if (Nullable.GetUnderlyingType(type) is { } inner) return ValueFor(inner);
         if (type == typeof(Action<Paragraph>)) return new Action<Paragraph>(_ => { });
         if (type == typeof(Func<RunFormatting, RunFormatting>))
@@ -279,11 +287,12 @@ public class R539_EveryCommandUndoesExactlyTests
             + "undo. " + census);
 
         exercised.Should().BeGreaterThanOrEqualTo(
-            8,
+            12,
             "the driver must still be exercising commands -- if this falls, the sweep has quietly "
-            + "stopped testing rather than the commands having improved. 10 today (7 before the "
-            + "table moved to block index 0, which is the only index the factory invents). The 51 "
-            + "unbuildable need live model objects this factory will not fake, and the 64 noChange "
+            + "stopped testing rather than the commands having improved. 14 today (7 before the "
+            + "table moved to block index 0, the only index the factory invents; 10 before enums stopped "
+            + "being answered with their DEFAULT value). The 51 "
+            + "unbuildable need live model objects this factory will not fake, and the 60 noChange "
             + "construct but find nothing their arguments can reach. " + census);
     }
 }
