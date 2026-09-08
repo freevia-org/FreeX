@@ -705,14 +705,41 @@ jobs:
             -Runtime "${{ matrix.runtime }}" `
             -InputRoot .
 
+      - name: Require a suite installer payload before uploading
+        shell: pwsh
+        run: |
+          # if-no-files-found: error cannot catch a missing installer here, because the manifests and
+          # the SBOM always match the upload glob. That is how 0.8.187 uploaded a metadata-only macOS
+          # suite artifact that looked healthy for another thirty minutes and then failed at publish.
+          $root = "artifacts/suite"
+          $prefix = "FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}"
+          $payloadExtensions = @(".pkg", ".zip", ".exe", ".deb", ".rpm")
+          $installers = @(Get-ChildItem -LiteralPath $root -File |
+            Where-Object {
+              $_.Name.StartsWith($prefix) -and
+              ($payloadExtensions -contains $_.Extension) -and
+              -not $_.Name.EndsWith(".sha256")
+            })
+          if ($installers.Count -eq 0) {
+            $present = @(Get-ChildItem -LiteralPath $root -File | ForEach-Object { $_.Name })
+            throw ("No Free Suite installer payload was produced for ${{ matrix.runtime }}. Uploading " +
+              "now would publish a metadata-only artifact that only fails at the publish step. " +
+              "Found in ${root}: " + ($present -join ", "))
+          }
+          Write-Host "Suite payload present: $($installers.Name -join ', ')"
+
+      # The glob deliberately has no hyphen after the runtime. Linux and Windows name their
+      # installer ...-<runtime>-installer.zip / -setup.exe, but macOS produces
+      # FreeSuite-v<version>-<runtime>.pkg, which a ...-<runtime>-* glob does not match. The
+      # suite .pkg was therefore built, validated and even installed, then silently left out of
+      # the artifact -- if-no-files-found stayed quiet because the manifests still matched -- so
+      # publishing 0.8.187 failed at the very end looking for a file nothing had uploaded.
       - name: Upload suite installer
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: tester-FreeSuite-${{ inputs.release_version }}-${{ matrix.runtime }}
           path: |
-            artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}-*
-            artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}.spdx.json
-            artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}.spdx.json.sha256
+            artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}*
             artifacts/suite/FreeX-v${{ inputs.release_version }}-${{ matrix.runtime }}-manifest.json
             artifacts/suite/FreeW-v${{ inputs.release_version }}-${{ matrix.runtime }}-manifest.json
             artifacts/suite/FreeP-v${{ inputs.release_version }}-${{ matrix.runtime }}-manifest.json
