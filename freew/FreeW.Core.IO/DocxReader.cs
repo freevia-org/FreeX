@@ -5952,7 +5952,9 @@ public static class DocxReader
             var value = part[(colon + 1)..].Trim();
             if (value.EndsWith("pt", StringComparison.OrdinalIgnoreCase))
                 value = value[..^2].Trim();
-            if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var pt))
+            // r547: an overflowing literal parses as true with Infinity; skip it as unusable.
+            if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var pt)
+                || !double.IsFinite(pt))
                 continue;
             if (key.Equals("width", StringComparison.OrdinalIgnoreCase))
                 width = pt;
@@ -6854,8 +6856,10 @@ public static class DocxReader
     {
         var cache = parent?.Descendants(C + "numCache").FirstOrDefault();
         return ReadCachePoints(cache)
+            // r547: IsFinite -- an overflowing cached value parses as true with Infinity, and the
+            // chart planners treat a missing point as 0 already.
             .Select(p => double.TryParse(p.Value, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : 0)
+                System.Globalization.CultureInfo.InvariantCulture, out var d) && double.IsFinite(d) ? d : 0)
             .ToList();
     }
 
@@ -8326,12 +8330,14 @@ public static class DocxReader
         return null;
     }
 
+    // r547: IsFinite because an overflowing literal parses as true with Infinity, and a VML
+    // style number that cannot be represented is absent, not infinite.
     private static double? ParseVmlStyleNumber(string? style, string name) =>
         double.TryParse(
             ParseVmlStyleValue(style, name),
             System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture,
-            out var value)
+            out var value) && double.IsFinite(value)
                 ? value
                 : null;
 
@@ -8349,7 +8355,9 @@ public static class DocxReader
             System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture,
             out var opacity)
-                ? Math.Clamp(isPercent ? opacity / 100 : opacity, 0, 1)
+                // r547: Math.Clamp bounds Infinity but PASSES NaN THROUGH, so the finite test is what
+                // keeps a NaN opacity out of the model; the clamp alone was not enough.
+                ? (double.IsFinite(opacity) ? Math.Clamp(isPercent ? opacity / 100 : opacity, 0, 1) : 1)
                 : 1;
     }
 

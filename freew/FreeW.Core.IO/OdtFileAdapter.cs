@@ -1170,7 +1170,10 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
         var numberPart = value[..unitStart];
         var unit = value[unitStart..].ToLowerInvariant();
 
-        if (!double.TryParse(numberPart, NumberStyles.Float, CultureInfo.InvariantCulture, out var number))
+        // r547: TryParse returns true with +/-Infinity for an overflowing literal, and Infinity is
+        // not a length -- report it as unparseable, which is this method's existing contract.
+        if (!double.TryParse(numberPart, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+            || !double.IsFinite(number))
             return null;
 
         return unit switch

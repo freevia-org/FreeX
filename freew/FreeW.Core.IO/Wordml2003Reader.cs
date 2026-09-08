@@ -340,8 +340,10 @@ public static class Wordml2003Reader
         var attr = localName is null ? element.Attribute(W + "val") : element.Attribute(W + localName);
         if (attr is null)
             return null;
+        // r547: an overflowing literal parses as true with Infinity; treat it as absent, which is
+        // what this reader already does for anything it cannot turn into a number.
         return double.TryParse(attr.Value, NumberStyles.Float | NumberStyles.AllowThousands,
-            CultureInfo.InvariantCulture, out var value)
+            CultureInfo.InvariantCulture, out var value) && double.IsFinite(value)
             ? value
             : null;
     }
