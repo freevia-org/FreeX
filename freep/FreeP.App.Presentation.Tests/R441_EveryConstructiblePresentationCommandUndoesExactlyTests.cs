@@ -45,6 +45,60 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
             shape.TextBody!.Paragraphs.Add(paragraph);
 
             slide.Shapes.Add(shape);
+            // r533: seed the three containers the extended Describe can now see into. Same lesson
+            // as r442, r447 and r481 one level further in -- walking a collection is only half of
+            // it, something has to BE there and the invented arguments have to REACH it. The
+            // factory answers uint with 2 and int with 1, so every slide gets these and each list
+            // gets TWO entries: a single entry sits at index 0, which an invented index of 1 can
+            // never address. Seeding slide 0 alone had exactly that effect and moved nothing.
+            {
+                var group = new SlideShape
+                {
+                    Id = 3,
+                    Name = "Group0",
+                    Kind = SlideShapeKind.Group,
+                    OffsetXEmu = 500000,
+                    OffsetYEmu = 600000,
+                    ExtentCxEmu = 900000,
+                    ExtentCyEmu = 700000,
+                };
+                group.Children.Add(new SlideShape { Id = 5, Name = "GroupChild1", ExtentCxEmu = 100000, ExtentCyEmu = 100000 });
+                group.Children.Add(new SlideShape
+                {
+                    Id = 4,
+                    Name = "GroupChild0",
+                    OffsetXEmu = 510000,
+                    OffsetYEmu = 610000,
+                    ExtentCxEmu = 100000,
+                    ExtentCyEmu = 100000,
+                });
+                slide.Shapes.Add(group);
+
+                for (var animationSeed = 0; animationSeed < 2; animationSeed++)
+                {
+                    slide.Animations.Add(new ShapeAnimation
+                    {
+                        ShapeId = 2,
+                        Motion = new MotionPath(),
+                    });
+                }
+
+                var comment = new SlideComment
+                {
+                    AuthorId = 2,
+                    Author = "Author",
+                    Text = "seeded comment",
+                };
+                comment.Replies.Add(new SlideCommentReply
+                {
+                    AuthorId = 2,
+                    Author = "Author",
+                    Text = "seeded reply",
+                });
+                slide.Comments.Add(comment);
+                slide.Comments.Add(new SlideComment { AuthorId = 2, Author = "Author", Text = "second" });
+            }
+
             presentation.Slides.Add(slide);
         }
 
@@ -161,6 +215,61 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
         return null;
     }
 
+    /// <summary>
+    /// r533: a shape is not a leaf. A GROUP holds its members in Children, and a shape carries
+    /// several other model-object collections -- custom geometry, connection sites, media bookmarks
+    /// and caption tracks -- every one of which Reflect renders as a row of bare type names. Walking
+    /// them is what makes an edit inside a group, or to a shape's geometry, visible to the census at
+    /// all; without it such a command applies a real change, fingerprints identically, and is filed
+    /// as noChange with its undo never checked.
+    /// </summary>
+    private static void ReflectShape(StringBuilder builder, string prefix, object shape, int depth)
+    {
+        Reflect(builder, prefix, shape);
+
+        // A group that (through a malformed file or a bad command) contains itself would otherwise
+        // recurse forever and take the test host down with it -- an uncatchable StackOverflow, as
+        // r501 established. The cap is far above any real nesting depth.
+        if (depth >= 16)
+            return;
+
+        foreach (var (name, items) in ShapeChildCollections(shape))
+        {
+            var index = 0;
+            foreach (var item in items)
+            {
+                if (item is null)
+                    continue;
+
+                var childPrefix = prefix + name + index + ".";
+                if (string.Equals(name, "ch", StringComparison.Ordinal))
+                    ReflectShape(builder, childPrefix, item, depth + 1);
+                else
+                    Reflect(builder, childPrefix, item);
+                index++;
+            }
+        }
+    }
+
+    private static IEnumerable<(string Name, System.Collections.IEnumerable Items)> ShapeChildCollections(object shape)
+    {
+        foreach (var (property, name) in new[]
+                 {
+                     ("Children", "ch"),
+                     ("CustomGeometry", "cg"),
+                     ("CustomConnectionSites", "cs"),
+                     ("Bookmarks", "bk"),
+                     ("CaptionTracks", "ct"),
+                 })
+        {
+            if (shape.GetType().GetProperty(property)?.GetValue(shape) is System.Collections.IEnumerable items
+                and not string)
+            {
+                yield return (name, items);
+            }
+        }
+    }
+
     private static void Reflect(StringBuilder builder, string prefix, object target)
     {
         foreach (var property in target.GetType().GetProperties()
@@ -208,7 +317,39 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
             Reflect(builder, "sl" + slideIndex + ".", slide);
 
             for (var shapeIndex = 0; shapeIndex < slide.Shapes.Count; shapeIndex++)
-                Reflect(builder, "sl" + slideIndex + ".sh" + shapeIndex + ".", slide.Shapes[shapeIndex]);
+                ReflectShape(builder, "sl" + slideIndex + ".sh" + shapeIndex + ".", slide.Shapes[shapeIndex], depth: 0);
+
+            // r533: the same blind spot r481 fixed for masters and layouts, one level further in.
+            // Reflect renders a collection element as its ToString(), which for a model object is
+            // the bare type name, so a slide's ANIMATIONS and COMMENTS read as "[...ShapeAnimation]"
+            // however they were edited. Any command that retimes an animation, or edits a comment or
+            // one of its replies, produced an identical fingerprint, was filed as noChange, and had
+            // its undo and redo checked by nothing at all.
+            for (var animationIndex = 0; animationIndex < slide.Animations.Count; animationIndex++)
+            {
+                var animation = slide.Animations[animationIndex];
+                var animationPrefix = "sl" + slideIndex + ".an" + animationIndex + ".";
+                Reflect(builder, animationPrefix, animation);
+
+                // A motion path is reached through Animation.Motion, and its Segments are the shape of
+                // the path -- edit them and the animation object itself is unchanged.
+                if (animation.Motion is { } motion)
+                {
+                    Reflect(builder, animationPrefix + "mp.", motion);
+                    for (var segmentIndex = 0; segmentIndex < motion.Segments.Count; segmentIndex++)
+                        Reflect(builder, animationPrefix + "mp.seg" + segmentIndex + ".", motion.Segments[segmentIndex]);
+                }
+            }
+
+            for (var commentIndex = 0; commentIndex < slide.Comments.Count; commentIndex++)
+            {
+                var comment = slide.Comments[commentIndex];
+                var commentPrefix = "sl" + slideIndex + ".co" + commentIndex + ".";
+                Reflect(builder, commentPrefix, comment);
+
+                for (var replyIndex = 0; replyIndex < comment.Replies.Count; replyIndex++)
+                    Reflect(builder, commentPrefix + "re" + replyIndex + ".", comment.Replies[replyIndex]);
+            }
         }
 
         // r481: masters and layouts need the SAME explicit walk the slides get above. Reflect renders
@@ -225,7 +366,7 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
             Reflect(builder, "ma" + masterIndex + ".", master);
 
             for (var shapeIndex = 0; shapeIndex < master.Placeholders.Count; shapeIndex++)
-                Reflect(builder, "ma" + masterIndex + ".ph" + shapeIndex + ".", master.Placeholders[shapeIndex]);
+                ReflectShape(builder, "ma" + masterIndex + ".ph" + shapeIndex + ".", master.Placeholders[shapeIndex], depth: 0);
         }
 
         for (var layoutIndex = 0; layoutIndex < presentation.Layouts.Count; layoutIndex++)
@@ -234,7 +375,7 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
             Reflect(builder, "la" + layoutIndex + ".", layout);
 
             for (var shapeIndex = 0; shapeIndex < layout.Placeholders.Count; shapeIndex++)
-                Reflect(builder, "la" + layoutIndex + ".ph" + shapeIndex + ".", layout.Placeholders[shapeIndex]);
+                ReflectShape(builder, "la" + layoutIndex + ".ph" + shapeIndex + ".", layout.Placeholders[shapeIndex], depth: 0);
         }
 
         return builder.ToString();
@@ -392,10 +533,10 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
             "command in the census ever reports no effect, that assertion is vacuous. " + census);
 
         exercised.Should().BeGreaterThanOrEqualTo(
-            16,
+            17,
             "the driver must still be exercising commands -- if this falls, the sweep has quietly " +
-            "stopped testing rather than the commands having improved. 18 today (6 at first writing, " +
-            "12 before r481) against 71 in the FreeX sibling: most FreeP commands still need domain " +
+            "stopped testing rather than the commands having improved. 19 today (6 at first writing, " +
+            "12 before r481, 18 before r533) against 71 in the FreeX sibling: most FreeP commands still need domain " +
             "objects this factory cannot invent. r481 took the last step this message argued for, " +
             "widening the fixture rather than trusting the green -- and found that the six Slide " +
             "Master commands had been applying REAL changes the whole time while landing in noChange, " +
