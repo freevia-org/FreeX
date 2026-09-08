@@ -2180,11 +2180,13 @@ public static class PresentationPdfExporter
 
     private static double ParseInkDouble(string? value, double fallback) =>
         double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            && double.IsFinite(parsed)
             ? parsed
             : fallback;
 
     private static double? ParseOptionalInkDouble(string? value) =>
         double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            && double.IsFinite(parsed)
             ? parsed
             : null;
 

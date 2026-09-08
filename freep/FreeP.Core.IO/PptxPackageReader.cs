@@ -3222,7 +3222,10 @@ public static class PptxPackageReader
     private static double? ReadDiagramColorPercentage(XElement colorEl, string localName)
     {
         var raw = colorEl.Elements().FirstOrDefault(e => e.Name.LocalName == localName)?.Attribute("val")?.Value;
-        if (!double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+        // r548: IsFinite as well as TryParse -- Math.Clamp bounds Infinity but PASSES NaN THROUGH,
+        // so the clamp below is not the guard it looks like. Same trap as FreeW's ParseVmlOpacity.
+        if (!double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+            || !double.IsFinite(value))
             return null;
         return Math.Clamp(value / 100000.0, 0.0, 1.0);
     }
@@ -6045,7 +6048,7 @@ public static class PptxPackageReader
                     valueText,
                     NumberStyles.Float,
                     CultureInfo.InvariantCulture,
-                    out var value))
+                    out var value) && double.IsFinite(value))
             {
                 shape.PresetGeometryAdjustments[name] = value;
             }
@@ -6183,7 +6186,7 @@ public static class PptxPackageReader
     {
         if (string.IsNullOrWhiteSpace(value)) return 0;
         return double.TryParse(value, NumberStyles.Float,
-            CultureInfo.InvariantCulture, out var v) ? v : 0;
+            CultureInfo.InvariantCulture, out var v) && double.IsFinite(v) ? v : 0;
     }
 
     // ── TextBody ─────────────────────────────────────────────────────────────────
@@ -7993,8 +7996,9 @@ public static class PptxPackageReader
 
     private static double ParsePathDouble(string s)
     {
+        // r548: a non-finite path coordinate would propagate into custom-geometry rendering.
         if (double.TryParse(s.TrimEnd('f'), System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var v))
+                System.Globalization.CultureInfo.InvariantCulture, out var v) && double.IsFinite(v))
             return v;
         return 0;
     }

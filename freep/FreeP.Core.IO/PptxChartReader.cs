@@ -383,11 +383,11 @@ internal static class PptxChartReader
             return new ChartValueColorPosition { IsExtreme = true };
 
         var number = element.Element(Cx + "number")?.Attribute("val")?.Value;
-        if (double.TryParse(number, NumberStyles.Float, CultureInfo.InvariantCulture, out var numberValue))
+        if (double.TryParse(number, NumberStyles.Float, CultureInfo.InvariantCulture, out var numberValue) && double.IsFinite(numberValue))
             return new ChartValueColorPosition { Number = numberValue };
 
         var percent = element.Element(Cx + "percent")?.Attribute("val")?.Value;
-        if (double.TryParse(percent, NumberStyles.Float, CultureInfo.InvariantCulture, out var percentValue))
+        if (double.TryParse(percent, NumberStyles.Float, CultureInfo.InvariantCulture, out var percentValue) && double.IsFinite(percentValue))
             return new ChartValueColorPosition { Percent = percentValue };
 
         return null;
@@ -623,7 +623,7 @@ internal static class PptxChartReader
                     point.Value,
                     NumberStyles.Float,
                     CultureInfo.InvariantCulture,
-                    out var parsed)
+                    out var parsed) && double.IsFinite(parsed)
                     ? (double?)parsed
                     : null;
                 return (Index: index, Value: value);
@@ -1529,7 +1529,7 @@ internal static class PptxChartReader
         if (symbol.HasValue)
             style.Symbol = symbol.Value;
 
-        if (double.TryParse(markerEl.Element(C + "size")?.Attribute("val")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var sizePt))
+        if (double.TryParse(markerEl.Element(C + "size")?.Attribute("val")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var sizePt) && double.IsFinite(sizePt))
             style.SizePt = sizePt;
 
         var spPr = markerEl.Element(C + "spPr");
@@ -1752,7 +1752,7 @@ internal static class PptxChartReader
                 while (values.Count <= idx) values.Add(null);
                 var v = pt.Element(C + "v")?.Value;
                 if (v is not null &&
-                    double.TryParse(v, NumberStyles.Any, CultureInfo.InvariantCulture, out var dv))
+                    double.TryParse(v, NumberStyles.Any, CultureInfo.InvariantCulture, out var dv) && double.IsFinite(dv))
                     values[idx] = dv;
             }
             return;
@@ -1787,7 +1787,7 @@ internal static class PptxChartReader
 
                 var v = pt.Element(C + "v")?.Value;
                 if (v is not null &&
-                    double.TryParse(v, NumberStyles.Any, CultureInfo.InvariantCulture, out var dv))
+                    double.TryParse(v, NumberStyles.Any, CultureInfo.InvariantCulture, out var dv) && double.IsFinite(dv))
                     values[idx] = dv;
             }
         }
@@ -1861,10 +1861,10 @@ internal static class PptxChartReader
             var minStr = scaling.Element(C + "min")?.Attribute("val")?.Value;
             var maxStr = scaling.Element(C + "max")?.Attribute("val")?.Value;
             if (minStr is not null &&
-                double.TryParse(minStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var minV))
+                double.TryParse(minStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var minV) && double.IsFinite(minV))
                 axis.Min = minV;
             if (maxStr is not null &&
-                double.TryParse(maxStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var maxV))
+                double.TryParse(maxStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var maxV) && double.IsFinite(maxV))
                 axis.Max = maxV;
         }
 
@@ -2324,8 +2324,11 @@ internal static class PptxChartReader
     private static int? ParseNullableInt(string? s) =>
         int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : null;
 
+    // r548: IsFinite because double.TryParse returns TRUE with Infinity for an overflowing
+    // literal like 1e400 -- no hostile token required. A value that cannot be represented is
+    // absent, which is what this helper already reports for anything unparseable.
     private static double? ParseDouble(string? s) =>
-        double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ? value : null;
+        double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && double.IsFinite(value) ? value : null;
 
     private static string? EmptyToNull(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value;
