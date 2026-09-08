@@ -1803,7 +1803,7 @@ public static class PptxPackageWriter
 
         var xfrm = new XElement(A + "xfrm");
         if (o.RotationDeg != 0)
-            xfrm.Add(new XAttribute("rot", (long)Math.Round(o.RotationDeg * 60000)));
+            xfrm.Add(new XAttribute("rot", FormatAngleUnits(o.RotationDeg)));
         xfrm.Add(new XElement(A + "off", new XAttribute("x", o.OffsetXEmu), new XAttribute("y", o.OffsetYEmu)));
         xfrm.Add(new XElement(A + "ext", new XAttribute("cx", o.ExtentCxEmu), new XAttribute("cy", o.ExtentCyEmu)));
 
@@ -4144,6 +4144,31 @@ public static class PptxPackageWriter
     /// r544: ST_Percentage is an xsd:int, so the scaled value has to FIT one. These formatters cast
     /// straight to long, and .NET's saturating conversions then wrote an infinite crop as
     /// l="9223372036854775807" -- a number the format cannot represent, in a file PowerPoint
+    /// <summary>
+    /// r545: ST_Coordinate is an xsd:long, so casting a coordinate to long is the right WIDTH -- but
+    /// a non-finite value still saturates to long.MaxValue, which the schema's range does not admit.
+    /// Only the non-finite case needs correcting here; clamping the magnitude further would be
+    /// guessing at ST_Coordinate's semantic bounds rather than honouring its type, which is the
+    /// distinction r544 settled.
+    /// </summary>
+    private static long FormatCoordinate(double value) =>
+        double.IsFinite(value) ? (long)value : 0L;
+
+    /// <summary>
+    /// r545: ST_Angle is an xsd:int in 60000ths of a degree, and the three rot sites cast straight
+    /// to long, so an infinite RotationDeg wrote rot="9223372036854775807" -- the same defect r544
+    /// fixed for percentages, at a different attribute. r544 fixed the formatters it found and left
+    /// these, which is the sibling pattern this review keeps meeting; the sweep after that fix is
+    /// what caught it.
+    /// </summary>
+    private static long FormatAngleUnits(double degrees)
+    {
+        if (!double.IsFinite(degrees))
+            return 0;
+
+        return (long)Math.Clamp(Math.Round(degrees * 60000.0), int.MinValue, int.MaxValue);
+    }
+
     /// rejects. The model does not clamp: CropLeft, Brightness, Contrast, BiLevelThreshold and
     /// AlphaModPct are plain auto-properties.
     ///
@@ -4362,7 +4387,7 @@ public static class PptxPackageWriter
     {
         var xfrm = new XElement(A + "xfrm");
         if (shape.RotationDeg != 0)
-            xfrm.Add(new XAttribute("rot", (long)Math.Round(shape.RotationDeg * 60000)));
+            xfrm.Add(new XAttribute("rot", FormatAngleUnits(shape.RotationDeg)));
         if (shape.FlipH) xfrm.Add(new XAttribute("flipH", "1"));
         if (shape.FlipV) xfrm.Add(new XAttribute("flipV", "1"));
 
@@ -4440,7 +4465,7 @@ public static class PptxPackageWriter
         {
             xfrm = new XElement(A + "xfrm");
             if (shape.RotationDeg != 0)
-                xfrm.Add(new XAttribute("rot", (long)Math.Round(shape.RotationDeg * 60000)));
+                xfrm.Add(new XAttribute("rot", FormatAngleUnits(shape.RotationDeg)));
             if (shape.FlipH) xfrm.Add(new XAttribute("flipH", "1"));
             if (shape.FlipV) xfrm.Add(new XAttribute("flipV", "1"));
 
@@ -4528,29 +4553,29 @@ public static class PptxPackageWriter
                 {
                     case CustomSegmentKind.MoveTo:
                         pathEl.Add(new XElement(A + "moveTo",
-                            new XElement(A + "pt", new XAttribute("x", (long)seg.X), new XAttribute("y", (long)seg.Y))));
+                            new XElement(A + "pt", new XAttribute("x", FormatCoordinate(seg.X)), new XAttribute("y", FormatCoordinate(seg.Y)))));
                         break;
                     case CustomSegmentKind.LineTo:
                         pathEl.Add(new XElement(A + "lnTo",
-                            new XElement(A + "pt", new XAttribute("x", (long)seg.X), new XAttribute("y", (long)seg.Y))));
+                            new XElement(A + "pt", new XAttribute("x", FormatCoordinate(seg.X)), new XAttribute("y", FormatCoordinate(seg.Y)))));
                         break;
                     case CustomSegmentKind.CubicBezTo:
                         pathEl.Add(new XElement(A + "cubicBezTo",
-                            new XElement(A + "pt", new XAttribute("x", (long)seg.X),  new XAttribute("y", (long)seg.Y)),
-                            new XElement(A + "pt", new XAttribute("x", (long)seg.X1), new XAttribute("y", (long)seg.Y1)),
-                            new XElement(A + "pt", new XAttribute("x", (long)seg.X2), new XAttribute("y", (long)seg.Y2))));
+                            new XElement(A + "pt", new XAttribute("x", FormatCoordinate(seg.X)),  new XAttribute("y", FormatCoordinate(seg.Y))),
+                            new XElement(A + "pt", new XAttribute("x", FormatCoordinate(seg.X1)), new XAttribute("y", FormatCoordinate(seg.Y1))),
+                            new XElement(A + "pt", new XAttribute("x", FormatCoordinate(seg.X2)), new XAttribute("y", FormatCoordinate(seg.Y2)))));
                         break;
                     case CustomSegmentKind.QuadBezTo:
                         pathEl.Add(new XElement(A + "quadBezTo",
-                            new XElement(A + "pt", new XAttribute("x", (long)seg.X),  new XAttribute("y", (long)seg.Y)),
-                            new XElement(A + "pt", new XAttribute("x", (long)seg.X1), new XAttribute("y", (long)seg.Y1))));
+                            new XElement(A + "pt", new XAttribute("x", FormatCoordinate(seg.X)),  new XAttribute("y", FormatCoordinate(seg.Y))),
+                            new XElement(A + "pt", new XAttribute("x", FormatCoordinate(seg.X1)), new XAttribute("y", FormatCoordinate(seg.Y1)))));
                         break;
                     case CustomSegmentKind.ArcTo:
                         pathEl.Add(new XElement(A + "arcTo",
-                            new XAttribute("wR",    (long)seg.WR),
-                            new XAttribute("hR",    (long)seg.HR),
-                            new XAttribute("stAng", (long)Math.Round(seg.StAng * 60000)),
-                            new XAttribute("swAng", (long)Math.Round(seg.SwAng * 60000))));
+                            new XAttribute("wR",    FormatCoordinate(seg.WR)),
+                            new XAttribute("hR",    FormatCoordinate(seg.HR)),
+                            new XAttribute("stAng", FormatAngleUnits(seg.StAng)),
+                            new XAttribute("swAng", FormatAngleUnits(seg.SwAng))));
                         break;
                     case CustomSegmentKind.Close:
                         pathEl.Add(new XElement(A + "close"));
@@ -4749,7 +4774,7 @@ public static class PptxPackageWriter
                 new XAttribute("cx", shape.ExtentCxEmu),
                 new XAttribute("cy", shape.ExtentCyEmu)));
         if (shape.RotationDeg != 0)
-            xfrm.SetAttributeValue("rot", (long)Math.Round(shape.RotationDeg * 60000));
+            xfrm.SetAttributeValue("rot", FormatAngleUnits(shape.RotationDeg));
         if (shape.FlipH) xfrm.SetAttributeValue("flipH", "1");
         if (shape.FlipV) xfrm.SetAttributeValue("flipV", "1");
 
@@ -6993,7 +7018,7 @@ public static class PptxPackageWriter
             return;
 
         if (Math.Abs(shape.RotationDeg) > 0.0001)
-            xfrm.SetAttributeValue("rot", (long)Math.Round(shape.RotationDeg * 60000));
+            xfrm.SetAttributeValue("rot", FormatAngleUnits(shape.RotationDeg));
         else
             xfrm.Attribute("rot")?.Remove();
 

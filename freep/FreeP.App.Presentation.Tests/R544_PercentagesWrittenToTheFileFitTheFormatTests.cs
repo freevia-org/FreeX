@@ -86,4 +86,60 @@ public sealed class R544_PercentagesWrittenToTheFileFitTheFormatTests
         // pass through rather than be clamped -- the boundary is inclusive.
         CropLeftAttribute(21474.0).Should().Be("2147400000");
     }
+
+    private static string RotAttribute(double degrees)
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 2,
+            Name = "Rot",
+            RotationDeg = degrees,
+            ExtentCxEmu = 100000,
+            ExtentCyEmu = 100000,
+        });
+        presentation.Slides.Add(slide);
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var entry = archive.Entries.First(e => e.FullName.Contains("slide1.xml", StringComparison.Ordinal));
+        using var reader = new StreamReader(entry.Open());
+
+        // The slide has more than one xfrm -- the group transform carries none -- so select the one
+        // that actually declares a rotation rather than the first in document order.
+        var xfrm = XDocument.Parse(reader.ReadToEnd())
+            .Descendants()
+            .First(element => element.Name.LocalName == "xfrm" && element.Attribute("rot") is not null);
+
+        return xfrm.Attribute("rot")!.Value;
+    }
+
+    [Theory]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    [InlineData(double.NaN)]
+    [InlineData(1e15)]
+    [InlineData(-1e15)]
+    public void An_angle_the_format_cannot_represent_is_never_written(double degrees)
+    {
+        // r545: ST_Angle is an xsd:int too, and the rot sites cast straight to long -- the same
+        // defect r544 fixed for percentages, at an attribute r544 did not touch. Found by sweeping
+        // r544's own fix, which is the check this review keeps needing.
+        var written = RotAttribute(degrees);
+
+        int.TryParse(written, out _)
+            .Should().BeTrue("xfrm/@rot is an xsd:int, and " + written + " is not one");
+    }
+
+    [Fact]
+    public void An_ordinary_rotation_is_untouched()
+    {
+        // 45 degrees in 60000ths. Non-vacuity for the angle path: a clamp that mangled real values
+        // would satisfy every boundary case above while rotating every shape in the product wrongly.
+        RotAttribute(45.0).Should().Be("2700000");
+    }
 }
