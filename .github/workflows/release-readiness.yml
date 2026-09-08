@@ -131,9 +131,29 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  readme-freshness:
+    # The README's download links are what a new tester follows, and no release updates them: they
+    # had drifted seventeen releases behind while every link still resolved, to a stale build. This
+    # needs the network and compares against state outside the repository, so it belongs here on the
+    # schedule rather than in the commit gate.
+    name: README download links
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Compare advertised downloads against the newest published release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: pwsh -NoProfile -File tools/Test-ReadmeDownloadFreshness.ps1 -Repository "${{ github.repository }}"
+
   summary:
     name: Release readiness summary
-    needs: [prepare, gates]
+    needs: [prepare, gates, readme-freshness]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -143,9 +163,15 @@ jobs:
         run: |
           $prepareResult = "${{ needs.prepare.result }}"
           $gatesResult = "${{ needs.gates.result }}"
+          $readmeResult = "${{ needs['readme-freshness'].result }}"
           if ($prepareResult -ne 'success' -or $gatesResult -ne 'success') {
             throw ("Release lanes are not currently releasable (matrix: $prepareResult; gates: " +
               "$gatesResult). Fix this now rather than at the next release: these gates do not run " +
               "on push, so whatever broke has been invisible on a green main.")
           }
-          Write-Host "All release-only gates pass on this commit; a release started now would not fail on them."
+          if ($readmeResult -ne 'success') {
+            throw ("Release lanes pass, but the README download links are stale ($readmeResult). " +
+              "Testers following the repository front page are being sent to an older build; the " +
+              "links still resolve, which is why nothing else catches this.")
+          }
+          Write-Host "All release-only gates pass on this commit, and the README points at the current release."
