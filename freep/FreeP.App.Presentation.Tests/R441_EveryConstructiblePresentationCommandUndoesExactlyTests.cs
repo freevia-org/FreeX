@@ -248,6 +248,14 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
             foreach (var candidate in type.GetConstructors()
                          .OrderByDescending(constructor => constructor.GetParameters().Length))
             {
+                // r536: a parameterless constructor is SKIPPED, and the reason is a limit on what this
+                // census can check at all. Allowing it unblocked 13 more commands and turned the
+                // run red on two that are not defects: CommentMutationCommand and
+                // ReplaceCustomShowsCommand both take the PREVIOUS STATE as a constructor
+                // argument, so Revert restoring it is correct by construction. Invent that
+                // argument and the driver fabricates a before-state inconsistent with the model,
+                // then reports the command for honouring it. A default-constructed model object is
+                // exactly the shape that goes wrong, so it stays out.
                 var parameters = candidate.GetParameters();
                 if (parameters.Length == 0)
                     continue;
