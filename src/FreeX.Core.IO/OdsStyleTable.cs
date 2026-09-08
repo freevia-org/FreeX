@@ -233,7 +233,7 @@ internal sealed class OdsStyleTable
     {
         width = 0;
         var hint = (string?)colProps.Attribute(Style + "freex-width-chars");
-        if (hint is not null && double.TryParse(hint, NumberStyles.Float, CultureInfo.InvariantCulture, out width))
+        if (hint is not null && double.TryParse(hint, NumberStyles.Float, CultureInfo.InvariantCulture, out width) && double.IsFinite(width))
             return true;
         var cm = (string?)colProps.Attribute(Style + "column-width");
         if (cm is not null && TryParseCm(cm, out var px))
@@ -248,7 +248,7 @@ internal sealed class OdsStyleTable
     {
         height = 0;
         var hint = (string?)rowProps.Attribute(Style + "freex-height-px");
-        if (hint is not null && double.TryParse(hint, NumberStyles.Float, CultureInfo.InvariantCulture, out height))
+        if (hint is not null && double.TryParse(hint, NumberStyles.Float, CultureInfo.InvariantCulture, out height) && double.IsFinite(height))
             return true;
         var cm = (string?)rowProps.Attribute(Style + "row-height");
         if (cm is not null && TryParseCm(cm, out var px))
@@ -262,9 +262,12 @@ internal sealed class OdsStyleTable
     private static bool TryParsePt(string value, out double pt)
     {
         pt = 0;
+        // r549: IsFinite -- see TryParseCm; an unrepresentable length is reported as unparseable.
         if (value.EndsWith("pt", StringComparison.Ordinal))
-            return double.TryParse(value.AsSpan(0, value.Length - 2), NumberStyles.Float, CultureInfo.InvariantCulture, out pt);
-        return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out pt);
+            return double.TryParse(value.AsSpan(0, value.Length - 2), NumberStyles.Float, CultureInfo.InvariantCulture, out pt)
+                && double.IsFinite(pt);
+        return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out pt)
+            && double.IsFinite(pt);
     }
 
     private static bool TryParseCm(string value, out double px)
@@ -293,7 +296,11 @@ internal sealed class OdsStyleTable
             return false;
         }
         px = cm * 37.795275591;
-        return true;
+
+        // r549: an overflowing literal (column-width="1e400cm") parses as TRUE with Infinity, so the
+        // unit conversion above yields a non-finite pixel width. Report it the way every unsupported
+        // unit here already is, so the column keeps its default rather than an infinite size.
+        return double.IsFinite(px);
     }
 
     private static bool IsDataStyle(XName name) =>

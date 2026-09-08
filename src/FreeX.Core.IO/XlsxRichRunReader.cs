@@ -241,7 +241,8 @@ internal static class XlsxRichRunReader
         {
             var tintText = element.Attribute("tint")?.Value;
             var tint = !string.IsNullOrWhiteSpace(tintText) &&
-                       double.TryParse(tintText, NumberStyles.Float, CultureInfo.InvariantCulture, out var t)
+                       // r549: a non-finite tint falls back to 0 (no tint), as an absent attribute does.
+                       double.TryParse(tintText, NumberStyles.Float, CultureInfo.InvariantCulture, out var t) && double.IsFinite(t)
                            ? t : 0d;
             color = CellRunColor.FromTheme(themeIndex, tint);
             return true;

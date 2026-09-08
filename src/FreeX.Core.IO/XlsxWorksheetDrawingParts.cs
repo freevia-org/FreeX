@@ -1552,7 +1552,13 @@ internal static partial class XlsxWorksheetDrawingPartReader
 
     private static double ReadDrawingRotation(XElement? transform)
     {
-        if (!double.TryParse(transform?.Attribute("rot")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var rotation))
+        // r549: IsFinite as well as TryParse. An overflowing literal parses as true with Infinity,
+        // and the normalisation below TURNS THAT INTO NaN -- Infinity / 60000 is Infinity, and
+        // Infinity % 360 is NaN, which then passes the "< 0" test and reaches the model as a NaN
+        // rotation. The writer already refuses non-finite (see NormalizeRotation), so without this
+        // the reader was the only way to get one into a picture.
+        if (!double.TryParse(transform?.Attribute("rot")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var rotation)
+            || !double.IsFinite(rotation))
             return 0;
         var degrees = rotation / 60000d;
         degrees %= 360;
@@ -1586,7 +1592,9 @@ internal static partial class XlsxWorksheetDrawingPartReader
             !double.TryParse(cyStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var cyEmu))
             return (null, null);
 
-        if (cxEmu < 0 || cyEmu < 0)
+        // r549: !IsFinite as well as the negative test -- NaN fails EVERY comparison, so "cxEmu < 0"
+        // let both NaN and Infinity through as a picture extent.
+        if (!double.IsFinite(cxEmu) || !double.IsFinite(cyEmu) || cxEmu < 0 || cyEmu < 0)
             return (null, null);
 
         // Return the values even when one axis is zero (e.g. a perfectly horizontal line has cy=0).
@@ -1909,7 +1917,9 @@ internal static partial class XlsxWorksheetDrawingPartReader
     }
 
     private static bool TryParseEmuAttribute(XElement element, string attributeName, out double value) =>
-        double.TryParse(element.Attribute(attributeName)?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+        // r549: an EMU coordinate that is not finite is not a coordinate.
+        double.TryParse(element.Attribute(attributeName)?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out value)
+        && double.IsFinite(value);
 
     /// <summary>
     /// Reads the nearest enclosing worksheet anchor for <paramref name="element"/> and, when the
@@ -1951,7 +1961,9 @@ internal static partial class XlsxWorksheetDrawingPartReader
     }
 
     private static double ReadEmuAttributeOrZero(XElement? element, string attributeName) =>
+        // r549: a non-finite EMU value falls back to 0, the same as an absent attribute.
         double.TryParse(element?.Attribute(attributeName)?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+        && double.IsFinite(value)
             ? value
             : 0;
 
@@ -1962,7 +1974,9 @@ internal static partial class XlsxWorksheetDrawingPartReader
     private static double ReadDrawingOutlineWidthPoints(XElement? lnElement)
     {
         var wValue = lnElement?.Attribute("w")?.Value;
-        if (!double.TryParse(wValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var emu) || emu <= 0)
+        // r549: NaN <= 0 is FALSE, so the width test alone passed NaN straight through.
+        if (!double.TryParse(wValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var emu)
+            || !double.IsFinite(emu) || emu <= 0)
             return 0;
         return emu / DrawingMlCoordinateUnits.EmuPerPoint;
     }

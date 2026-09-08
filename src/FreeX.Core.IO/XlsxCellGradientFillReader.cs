@@ -123,8 +123,10 @@ internal static class XlsxCellGradientFillReader
                 stop.Attribute("position")?.Value,
                 NumberStyles.Float,
                 CultureInfo.InvariantCulture,
-                out var position))
+                out var position)
+            || !double.IsFinite(position))
         {
+            // r549: a non-finite stop position is not a position.
             return null;
         }
 
@@ -139,7 +141,8 @@ internal static class XlsxCellGradientFillReader
     {
         if (string.IsNullOrWhiteSpace(text))
             return defaultValue;
-        return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var v)
+        // r549: a non-finite gradient stop is not a position; fall back to the default.
+        return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && double.IsFinite(v)
             ? v
             : defaultValue;
     }
