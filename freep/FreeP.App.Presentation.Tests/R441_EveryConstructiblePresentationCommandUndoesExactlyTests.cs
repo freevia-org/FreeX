@@ -590,6 +590,18 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
             {
                 // A generic argument can be invalid for a particular command; that is a limit of the
                 // factory, not a defect. Counted, and the count is asserted below.
+                //
+                // r538 CHECKED that claim rather than leaving it an assumption, because a catch that
+                // files failures as acceptable is how 21 real ones stayed hidden in FreeW. All six
+                // split cleanly. FIVE throw TargetInvocationException -- the CONSTRUCTOR rejecting an
+                // invented argument (SetPictureCrop, SetSummaryZoomTargets, SetSummaryZoomTileProperties,
+                // SetZoomCoverImage, SetZoomObjectProperties) -- which is exactly the factory limit
+                // claimed above. The sixth, SetChartDataTableOptionsCommand, throws a bare
+                // ArgumentException at EXECUTION: ParseColor rejects the invented "probe" string as
+                // not #RRGGBB. That one is safe for a structural reason worth keeping: Apply builds a
+                // NEW settings object, styles it, and only then assigns chart.DataTable, so a throw
+                // leaves the chart untouched rather than half-updated -- build-then-commit, not
+                // mutate-then-validate, which is what makes r510's torn-state class impossible here.
                 threw++;
                 _ = exception;
             }
