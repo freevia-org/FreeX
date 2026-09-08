@@ -63,6 +63,12 @@ concurrency:
 env:
   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
   DOTNET_NOLOGO: "1"
+  # This workflow runs the same per-project test gates as ci.yml through Invoke-TestGate.ps1, so it
+  # needs the same mitigation. Without it the generated-docs preflight -- which shells out and
+  # builds the documentation generators -- hung to its timeout on the FIRST attempt of every
+  # release and only passed on the gate retry: 15.8, 14.6 and 29.6 minutes for that one job across
+  # three consecutive releases, against 8.0 minutes in release-readiness.yml, which sets this.
+  MSBUILDDISABLENODEREUSE: "1"
 
 jobs:
   prepare:

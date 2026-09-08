@@ -44,30 +44,6 @@ internal static class PowerShellScriptRunner
         return RunToolScript(scriptName, workingDirectory.Path);
     }
 
-    /// <summary>
-    /// Runs a tool script from a temporary working directory with an explicit time bound.
-    /// </summary>
-    /// <remarks>
-    /// The default bound assumes what the remark on <see cref="TestProcessRunner.ScriptTimeout"/>
-    /// says: that these scripts run in seconds. That is true of almost all of them, and not true of
-    /// the ones that build projects. Test-GeneratedDocs.ps1 measures 71s on a warm developer machine
-    /// and regenerates documentation by building the generators first, so on a cold, shared CI
-    /// runner -- no obj tree, a NuGet restore, and other jobs competing for the box -- it can pass
-    /// five minutes. It did, and it failed the 0.8.188 release.
-    ///
-    /// Raising the shared bound would weaken the stall detection that protects every other script,
-    /// so the slow ones say so individually instead.
-    /// </remarks>
-    public static PowerShellResult RunToolScriptFromTemporaryWorkingDirectory(string scriptName, TimeSpan timeout)
-    {
-        using var workingDirectory = new TestTemporaryDirectory();
-        return TestProcessRunner.Run(
-            "powershell.exe",
-            $"-NoProfile -ExecutionPolicy Bypass -File \"{WorkspaceFileLocator.FindToolScript(scriptName)}\"",
-            workingDirectory.Path,
-            timeout);
-    }
-
     public static PowerShellResult RunToolScriptFromTemporaryWorkingDirectory(string scriptName, string arguments)
     {
         using var workingDirectory = new TestTemporaryDirectory();

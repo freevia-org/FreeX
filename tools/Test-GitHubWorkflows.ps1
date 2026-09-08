@@ -425,7 +425,13 @@ foreach ($workflow in $workflows) {
     # an intermediate assembly when the next invocation compiles it, failing the gate with
     # "CSC : error CS2012 ... being used by another process" (observed on main, run 33994120035).
     # Pin the mitigation so it cannot be dropped silently.
-    if ($workflow.Name -eq "ci.yml" -and $content -notmatch "(?m)^\s*MSBUILDDISABLENODEREUSE\s*:") {
+    #
+    # Pinned to ci.yml by name, this missed full-release.yml, which runs the SAME gates through
+    # the same script. The generated-docs preflight there hung to its timeout on the first
+    # attempt of every release and passed only on the gate retry, costing 15-30 minutes a run on
+    # the critical path. So the rule now follows the behaviour rather than the filename: any
+    # workflow that invokes Invoke-TestGate.ps1 needs the mitigation.
+    if ($content -match "Invoke-TestGate\.ps1" -and $content -notmatch "(?m)^\s*MSBUILDDISABLENODEREUSE\s*:") {
         $errors.Add("$($workflow.Name): must set the MSBUILDDISABLENODEREUSE environment variable so repeated MSBuild invocations in one job cannot lock each other's intermediate assemblies.")
     }
 

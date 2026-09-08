@@ -12,6 +12,12 @@ concurrency:
 permissions:
   contents: read
 
+# Same reason as ci.yml: these gates start MSBuild once per project, and a worker left alive by
+# node reuse can hold an intermediate assembly -- or a whole shelled-out build -- while the next
+# invocation needs it. In full-release.yml that cost 15-30 minutes of hung critical path per run.
+env:
+  MSBUILDDISABLENODEREUSE: "1"
+
 jobs:
   freep-tests:
     name: FreeP ${{ matrix.platform }} commit gate
