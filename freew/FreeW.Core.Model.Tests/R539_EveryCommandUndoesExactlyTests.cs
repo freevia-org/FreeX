@@ -233,6 +233,7 @@ public class R539_EveryCommandUndoesExactlyTests
             60, "the reflection query must still reach FreeW's command assembly");
 
         var failures = new List<string>();
+        var redoFailures = new List<string>();
         int exercised = 0, unbuildable = 0, threw = 0, noChange = 0;
 
         foreach (var type in commandTypes)
@@ -258,6 +259,7 @@ public class R539_EveryCommandUndoesExactlyTests
                 TextDocument? document = null;
                 Context? context = null;
                 var before = string.Empty;
+                var applied = string.Empty;
 
                 for (var seed = 0; seed <= 2 && command is null; seed++)
                 {
@@ -269,13 +271,15 @@ public class R539_EveryCommandUndoesExactlyTests
                     var candidateBefore = Describe(candidateDocument);
                     candidate.Apply(candidateContext);
 
-                    if (Describe(candidateDocument) == candidateBefore)
+                    var candidateApplied = Describe(candidateDocument);
+                    if (candidateApplied == candidateBefore)
                         continue;
 
                     command = candidate;
                     document = candidateDocument;
                     context = candidateContext;
                     before = candidateBefore;
+                    applied = candidateApplied;
                 }
 
                 if (command is null || document is null || context is null)
@@ -291,6 +295,17 @@ public class R539_EveryCommandUndoesExactlyTests
                 var after = Describe(document);
                 if (after != before)
                     failures.Add(type.Name + " [" + FirstDifference(before, after) + "]");
+
+                // r543: REDO. FreeP's census has checked this since it was written; the one I built
+                // for FreeW in r539 did not, which is this program's own recurring finding turning
+                // up in my instrument one round after I wrote it. Redo is a distinct class here --
+                // r457 and r458 both found a command that reapplied correctly EXCEPT for minting a
+                // fresh id, so the document looked right and the identity underneath had changed.
+                command.Apply(context);
+
+                var redone = Describe(document);
+                if (redone != applied)
+                    redoFailures.Add(type.Name + " [" + FirstDifference(applied, redone) + "]");
             }
             catch (Exception)
             {
@@ -308,6 +323,10 @@ public class R539_EveryCommandUndoesExactlyTests
         failures.Should().BeEmpty(
             "a command that changes the document and cannot put it back loses the user's work on "
             + "undo. " + census);
+
+        redoFailures.Should().BeEmpty(
+            "a command that cannot REAPPLY what it just undid breaks redo, and the document looks "
+            + "right while the state underneath diverges. " + census);
 
         exercised.Should().BeGreaterThanOrEqualTo(
             17,
