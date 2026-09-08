@@ -531,6 +531,8 @@ jobs:
     environment: public-preview
     timeout-minutes: 120
     permissions:
+      # The artifact-download fallback lists this run's artifacts through gh.
+      actions: read
       contents: read
       id-token: write
     strategy:
@@ -543,11 +545,29 @@ jobs:
           persist-credentials: false
 
       - name: Download portable app packages
+        id: download_portable
+        continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: tester-*-${{ inputs.release_version }}-${{ matrix.runtime }}
           path: downloaded-artifacts
           merge-multiple: false
+
+      # actions/download-artifact retries only inside its own step, over a few seconds,
+      # against the same service. Release 0.8.187 lost three Free Suite jobs to
+      # "Artifact download failed after 5 retries" during a GitHub artifact-service blip and
+      # threw away forty minutes of completed packaging. This is the outer loop it lacks.
+      - name: Recover from a transient artifact-service failure
+        if: steps.download_portable.outcome == 'failure'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          pwsh -NoProfile -File tools/Get-GitHubRunArtifact.ps1
+          -Repository "${{ github.repository }}"
+          -RunId "${{ github.run_id }}"
+          -Pattern "tester-*-${{ inputs.release_version }}-${{ matrix.runtime }}"
+          -Destination downloaded-artifacts
 
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -759,6 +779,8 @@ jobs:
     environment: public-preview
     timeout-minutes: 20
     permissions:
+      # The artifact-download fallback lists this run's artifacts through gh.
+      actions: read
       contents: write
     strategy:
       fail-fast: false
@@ -770,11 +792,29 @@ jobs:
           persist-credentials: false
 
       - name: Download selected app packages
+        id: download_app
+        continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: tester-${{ matrix.app }}-${{ inputs.release_version }}-*
           path: downloaded-artifacts
           merge-multiple: false
+
+      # actions/download-artifact retries only inside its own step, over a few seconds,
+      # against the same service. Release 0.8.187 lost three Free Suite jobs to
+      # "Artifact download failed after 5 retries" during a GitHub artifact-service blip and
+      # threw away forty minutes of completed packaging. This is the outer loop it lacks.
+      - name: Recover from a transient artifact-service failure
+        if: steps.download_app.outcome == 'failure'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          pwsh -NoProfile -File tools/Get-GitHubRunArtifact.ps1
+          -Repository "${{ github.repository }}"
+          -RunId "${{ github.run_id }}"
+          -Pattern "tester-${{ matrix.app }}-${{ inputs.release_version }}-*"
+          -Destination downloaded-artifacts
 
       - name: Create or update signed release
         shell: pwsh
@@ -881,6 +921,8 @@ jobs:
     environment: public-preview
     timeout-minutes: 20
     permissions:
+      # The artifact-download fallback lists this run's artifacts through gh.
+      actions: read
       contents: write
     steps:
       - name: Checkout release context
@@ -890,11 +932,29 @@ jobs:
           persist-credentials: false
 
       - name: Download suite packages
+        id: download_suite
+        continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: tester-FreeSuite-${{ inputs.release_version }}-*
           path: downloaded-artifacts
           merge-multiple: true
+
+      # actions/download-artifact retries only inside its own step, over a few seconds,
+      # against the same service. Release 0.8.187 lost three Free Suite jobs to
+      # "Artifact download failed after 5 retries" during a GitHub artifact-service blip and
+      # threw away forty minutes of completed packaging. This is the outer loop it lacks.
+      - name: Recover from a transient artifact-service failure
+        if: steps.download_suite.outcome == 'failure'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          pwsh -NoProfile -File tools/Get-GitHubRunArtifact.ps1
+          -Repository "${{ github.repository }}"
+          -RunId "${{ github.run_id }}"
+          -Pattern "tester-FreeSuite-${{ inputs.release_version }}-*"
+          -Destination downloaded-artifacts -Flatten
 
       - name: Create or update suite release
         shell: pwsh
