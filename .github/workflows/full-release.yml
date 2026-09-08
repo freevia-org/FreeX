@@ -122,9 +122,33 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -File tools/Get-TestGateMatrix.ps1 -Gate release -GitHubOutputPath $env:GITHUB_OUTPUT
 
+  publish-permission:
+    # Deliberately first and deliberately cheap. Every other job in this workflow runs happily
+    # without write access, so without this the run learns it cannot publish only after packaging
+    # everything -- which is how 0.8.187 burned forty minutes and twelve approvals before failing
+    # four times on POST /releases with "Resource not accessible by integration".
+    name: Verify this run can publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # Must match the publish jobs: a job's permissions can only reduce what the repository grants,
+      # so asking for write HERE is what makes the probe representative of what publish will get.
+      contents: write
+    steps:
+      - name: Checkout release contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Create and delete a draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: pwsh -NoProfile -File tools/Test-GitHubReleasePublishPermission.ps1 -Repository "${{ github.repository }}"
+
   candidate:
     name: Verify immutable release candidate
-    needs: prepare
+    needs: [prepare, publish-permission]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
