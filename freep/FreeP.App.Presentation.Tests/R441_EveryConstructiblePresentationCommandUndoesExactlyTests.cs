@@ -45,6 +45,27 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
             shape.TextBody!.Paragraphs.Add(paragraph);
 
             slide.Shapes.Add(shape);
+
+            // r535: a CHART the invented arguments can actually FIND. r534 seeded one and measured
+            // no change, and concluded the theory was unsupported; the theory was fine and the ID
+            // was wrong -- that seed used 6 while every chart command looks up shapeId 2 on slide
+            // index 1, because that is what the factory invents for uint and int. Slide 0 already
+            // owns id 2 for its body shape, so the chart takes id 2 on the later slides, which is
+            // where slideIndex 1 actually lands.
+            if (index > 0)
+            {
+                slide.Shapes.Add(new SlideShape
+                {
+                    Id = 2,
+                    Name = "Chart" + index,
+                    Kind = SlideShapeKind.Chart,
+                    OffsetXEmu = 700000,
+                    OffsetYEmu = 800000,
+                    ExtentCxEmu = 900000,
+                    ExtentCyEmu = 700000,
+                    Chart = new ChartShape(),
+                });
+            }
             // r533: seed the three containers the extended Describe can now see into. Same lesson
             // as r442, r447 and r481 one level further in -- walking a collection is only half of
             // it, something has to BE there and the invented arguments have to REACH it. The
@@ -570,10 +591,10 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
             "command in the census ever reports no effect, that assertion is vacuous. " + census);
 
         exercised.Should().BeGreaterThanOrEqualTo(
-            17,
+            32,
             "the driver must still be exercising commands -- if this falls, the sweep has quietly " +
-            "stopped testing rather than the commands having improved. 19 today (6 at first writing, " +
-            "12 before r481, 18 before r533) against 71 in the FreeX sibling: most FreeP commands still need domain " +
+            "stopped testing rather than the commands having improved. 34 today (6 at first writing, " +
+            "12 before r481, 18 before r533, 19 before r535) against 71 in the FreeX sibling: the rest still need domain " +
             "objects this factory cannot invent. r481 took the last step this message argued for, " +
             "widening the fixture rather than trusting the green -- and found that the six Slide " +
             "Master commands had been applying REAL changes the whole time while landing in noChange, " +

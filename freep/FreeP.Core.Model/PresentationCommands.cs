@@ -3574,6 +3574,14 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
         if (_index < 0)
             return;
 
+        // r535: HasEffect requires this shape to BE SmartArt; Apply only required that some shape
+        // carry the id. Applied where that id is anything else, it deleted that shape, replaced it
+        // with the stored conversion, and dropped the animations pointing at it -- destroying a
+        // shape it was never asked to convert. Apply now enforces the same precondition it
+        // advertises.
+        if (shapes[_index].Kind != SlideShapeKind.SmartArt)
+            return;
+
         _capturedConnectorAttachments = ShapeHelper.All(presentation, _slideIndex)
             .Where(shape => shape.Kind == SlideShapeKind.Connector &&
                 (shape.ConnectionStart?.ShapeId == _smartArtId ||
