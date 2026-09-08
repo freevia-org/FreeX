@@ -310,13 +310,18 @@ foreach ($workflow in $workflows) {
     # pays the accumulated debt (releasing 0.8.187 surfaced four such regressions). They cannot join
     # the commit gate -- runner concurrency is capped and the commit matrix already saturates it --
     # so they run on a schedule instead. It reports; it is not a merge gate.
-    $automaticQualityWorkflows = @("ci.yml", "codeql.yml", "release-readiness.yml")
+    # release-packaging-rehearsal.yml is scheduled for the same reason one level further out:
+    # release-readiness covers the release-only TEST gates, but packaging is where the last several
+    # releases actually broke, and no test gate reaches it. It dispatches the real release workflow
+    # in dry-run mode weekly.
+    $automaticQualityWorkflows = @("ci.yml", "codeql.yml", "release-readiness.yml", "release-packaging-rehearsal.yml")
     if ($automaticQualityWorkflows -contains $workflow.Name) {
         # Each canonical workflow has its own trigger contract. ci.yml and codeql.yml gate every
         # push; release-readiness.yml deliberately does NOT run per push (it would double the
         # already-saturated runner demand) and is scheduled instead, so requiring 'push' of it would
         # force exactly the design this workflow exists to avoid.
-        $requiredTriggers = if ($workflow.Name -eq "release-readiness.yml") {
+        $scheduledOnlyWorkflows = @("release-readiness.yml", "release-packaging-rehearsal.yml")
+        $requiredTriggers = if ($scheduledOnlyWorkflows -contains $workflow.Name) {
             @("workflow_dispatch", "schedule")
         }
         else {
@@ -330,6 +335,7 @@ foreach ($workflow in $workflows) {
         $allowedAutomaticTriggers = switch ($workflow.Name) {
             "codeql.yml" { @("push", "schedule") }
             "release-readiness.yml" { @("schedule") }
+            "release-packaging-rehearsal.yml" { @("schedule") }
             default { @("push") }
         }
         $unexpectedTriggers = @($nonManualTriggerNames | Where-Object { $allowedAutomaticTriggers -notcontains $_ })

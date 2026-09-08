@@ -42,6 +42,13 @@ on:
         required: false
         default: false
         type: boolean
+      dry_run:
+        description: >-
+          Build and validate every package but publish nothing. The weekly packaging rehearsal uses
+          this so the packaging path cannot rot unnoticed between releases.
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -746,6 +753,8 @@ jobs:
   publish:
     name: Publish ${{ matrix.app }} release
     needs: [prepare, publication-gate]
+    # A dry run rehearses packaging only; nothing is tagged or published.
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
     environment: public-preview
     timeout-minutes: 20
@@ -866,6 +875,7 @@ jobs:
   publish-suite:
     name: Publish Free Suite release
     needs: [suite-package, publication-gate]
+    if: ${{ !inputs.dry_run }}
     if: inputs.app == 'all'
     runs-on: ubuntu-latest
     environment: public-preview
@@ -949,7 +959,7 @@ jobs:
   verify-publication:
     name: Verify published release inventory
     needs: [publish, publish-suite]
-    if: ${{ always() && needs.publish.result == 'success' && (inputs.app != 'all' || needs.publish-suite.result == 'success') }}
+    if: ${{ always() && !inputs.dry_run && needs.publish.result == 'success' && (inputs.app != 'all' || needs.publish-suite.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

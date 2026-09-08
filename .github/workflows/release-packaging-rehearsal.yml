@@ -1,0 +1,76 @@
+name: Release Packaging Rehearsal
+
+# Why this exists.
+#
+# release-readiness.yml covers the release-only TEST gates, which stopped them rotting between
+# releases. It does not cover packaging, and packaging is where the last several releases actually
+# broke: absent Developer ID secrets that had silently cost every earlier macOS release, a
+# pkgutil signature check that ignored the unsigned switch, and a suite inventory validation that
+# only a complete run exercises. None of that is reachable from a test gate, and none of it runs on
+# push, so it is discovered by whoever next tries to ship.
+#
+# This dispatches the real release workflow with dry_run, so packaging is rehearsed through exactly
+# the path a release takes -- same scripts, same runners, same validation -- rather than a
+# reimplementation that would drift from it. dry_run skips the publish and verify jobs, so nothing
+# is tagged, no release is created, and no deployment approval is needed.
+#
+# Weekly rather than daily on purpose: this builds nine app bundles across three operating systems
+# plus both suite installers, and the runner pool (linux 5, macos 5, ~19 aggregate) is already
+# saturated by the commit gate. Weekly keeps the rehearsal from competing with everyday pushes while
+# still catching packaging rot in days rather than at the next release.
+on:
+  workflow_dispatch:
+  schedule:
+    # Sunday 03:41 UTC -- a quiet window, deliberately offset from the release-readiness cron.
+    - cron: "41 3 * * 0"
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: release-packaging-rehearsal
+  cancel-in-progress: true
+
+jobs:
+  rehearse:
+    name: Dispatch a non-publishing release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Dispatch full-release in dry-run mode
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MACOS_CERT: ${{ secrets.MACOS_CODESIGN_CERTIFICATE_P12 }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          # A version that can never collide with a real tag, so the tag-conflict check in the
+          # candidate job stays meaningful for real releases and this rehearsal never reserves a
+          # version number someone was about to use.
+          $version = "0.0.0-rehearsal.$($env:GITHUB_RUN_ID)"
+
+          # macos_unsigned tracks reality: with no Developer ID secrets configured the signed path
+          # cannot be rehearsed, and the candidate job refuses macos_unsigned when the secrets ARE
+          # present. Reading the secret here keeps the rehearsal correct either way.
+          $unsigned = [string]::IsNullOrWhiteSpace($env:MACOS_CERT)
+
+          gh workflow run full-release.yml --repo "${{ github.repository }}" --ref main `
+            -f app=all `
+            -f platform=all `
+            -f release_version=$version `
+            -f prerelease=true `
+            -f macos_unsigned=$($unsigned.ToString().ToLowerInvariant()) `
+            -f dry_run=true
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not dispatch the packaging rehearsal."
+          }
+
+          Write-Host "Dispatched a dry-run release as $version; it packages everything and publishes nothing."
+          Write-Host "Watch it at https://github.com/${{ github.repository }}/actions/workflows/full-release.yml"
