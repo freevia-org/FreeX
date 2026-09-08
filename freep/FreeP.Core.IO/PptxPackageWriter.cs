@@ -4135,12 +4135,30 @@ public static class PptxPackageWriter
     }
 
     // Converts a 0..1 fraction to OOXML 1/1000-of-a-percent integer (e.g. 0.125 → 12500).
-    private static string FormatPercentFraction(double v) =>
-        ((long)Math.Round(v * 100_000.0)).ToString(CultureInfo.InvariantCulture);
+    private static string FormatPercentFraction(double v) => FormatPercentUnits(v);
 
     // Converts a -1..1 fraction to OOXML 1/1000-of-a-percent signed integer (e.g. -0.1 → -10000).
-    private static string FormatSignedPercentFraction(double v) =>
-        ((long)Math.Round(v * 100_000.0)).ToString(CultureInfo.InvariantCulture);
+    private static string FormatSignedPercentFraction(double v) => FormatPercentUnits(v);
+
+    /// <summary>
+    /// r544: ST_Percentage is an xsd:int, so the scaled value has to FIT one. These formatters cast
+    /// straight to long, and .NET's saturating conversions then wrote an infinite crop as
+    /// l="9223372036854775807" -- a number the format cannot represent, in a file PowerPoint
+    /// rejects. The model does not clamp: CropLeft, Brightness, Contrast, BiLevelThreshold and
+    /// AlphaModPct are plain auto-properties.
+    ///
+    /// <para>The clamp is to what the FORMAT can hold rather than to a semantic range, because
+    /// int is a fact about ST_Percentage while "a crop cannot exceed 100%" is a guess about
+    /// intent. Non-finite becomes 0, which is what .NET already produced for NaN.</para>
+    /// </summary>
+    private static string FormatPercentUnits(double v)
+    {
+        if (!double.IsFinite(v))
+            return "0";
+
+        var scaled = Math.Clamp(Math.Round(v * 100_000.0), int.MinValue, int.MaxValue);
+        return ((long)scaled).ToString(CultureInfo.InvariantCulture);
+    }
 
     private static XElement BuildMediaPicEl(
         SlideShape shape,
