@@ -310,6 +310,27 @@ jobs:
           key: nuget-v2-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets') }}
           restore-keys: nuget-v2-${{ runner.os }}-
 
+      # ci.yml and release-readiness.yml both cache obj across runs; this workflow never did, so every
+      # release test job rebuilt the world from scratch. Caching is confined to the TEST lane on
+      # purpose: the package jobs produce the artifacts we ship, and those keep building clean.
+      #
+      # Its own key namespace, because these are different gate ids building different project sets;
+      # sharing ci.yml's keys would make each lane evict the other's entries.
+      - name: Restore build output cache
+        id: buildcache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            **/obj
+            obj-build-cache-commit.txt
+          key: release-v1-${{ runner.os }}-${{ matrix.displayGateId }}-${{ github.sha }}
+          restore-keys: release-v1-${{ runner.os }}-${{ matrix.displayGateId }}-
+      - name: Make build-cache timestamps honest
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/Set-BuildCacheTimestamps.ps1
+      - name: Record the commit this cache will hold
+        shell: pwsh
+        run: '"${{ github.sha }}" | Set-Content -LiteralPath obj-build-cache-commit.txt -Encoding ascii'
       - name: Run isolated release test gate
         shell: pwsh
         run: |
@@ -323,6 +344,16 @@ jobs:
             -RetryFailedProjectCount 1 `
             -HangTimeout 30m `
             -ResultsDirectory TestResults
+      # Only save a coherent tree: a job that died midway leaves a partial obj/, and restoring one
+      # fails outright with "CSC : error CS2012 ... Could not find a part of the path".
+      - name: Save build output cache
+        if: success() && steps.buildcache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            **/obj
+            obj-build-cache-commit.txt
+          key: release-v1-${{ runner.os }}-${{ matrix.displayGateId }}-${{ github.sha }}
       - name: Upload release test diagnostics
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
