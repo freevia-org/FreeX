@@ -184,10 +184,21 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
         return modelParameters.Length != modelParameters.Distinct().Count();
     }
 
-    private static object? ValueFor(Type type, int depth = 0)
+    // r542: the index pair is a SEED the census sweeps, ported from r541. FreeP invented int=1
+    // and uint=2 as CONSTANTS, and r535 had to move a chart onto slide 1 with shape id 2 to meet
+    // them -- contorting the fixture to fit the driver, which is the thing r541 retired. The pair
+    // is swept rather than a single value because the two are not independent here: a chart
+    // command needs slideIndex 1 AND shapeId 2 together, so one shared number cannot express it.
+    // Seed 0 is the historical pair, so every command exercised before this change still is.
+    private static readonly (int Int, uint UInt)[] IndexSeeds =
+    [
+        (1, 2u), (0, 2u), (2, 2u), (1, 3u),
+    ];
+
+    private static object? ValueFor(Type type, int depth = 0, int seed = 0)
     {
-        if (type == typeof(int)) return 1;
-        if (type == typeof(uint)) return 2u;
+        if (type == typeof(int)) return IndexSeeds[seed].Int;
+        if (type == typeof(uint)) return IndexSeeds[seed].UInt;
         if (type == typeof(long)) return 100000L;
         if (type == typeof(bool)) return true;
         if (type == typeof(double)) return 2.0;
@@ -235,7 +246,7 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
 
         var underlying = Nullable.GetUnderlyingType(type);
         if (underlying is not null)
-            return ValueFor(underlying, depth);
+            return ValueFor(underlying, depth, seed);
 
         if (type.IsGenericType)
         {
@@ -246,7 +257,7 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
                 definition == typeof(List<>))
             {
                 var elementType = type.GetGenericArguments()[0];
-                var element = ValueFor(elementType, depth + 1);
+                var element = ValueFor(elementType, depth + 1, seed);
                 if (element is null)
                     return null;
 
@@ -283,7 +294,7 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
                 var parameters = candidate.GetParameters();
 
                 var arguments = parameters
-                    .Select(parameter => ValueFor(parameter.ParameterType, depth + 1))
+                    .Select(parameter => ValueFor(parameter.ParameterType, depth + 1, seed))
                     .ToArray();
                 if (arguments.Any(argument => argument is null))
                     continue;
@@ -532,9 +543,44 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
 
             try
             {
+                // r542: sweep the seed pairs and keep the first that this command reports an effect
+                // for. A command whose target sits at another slide or shape id is not a command
+                // with no effect; it is one the driver was pointing at the wrong object. Seed 0 is
+                // the historical pair, so anything exercised before this change still is, and the
+                // fallback below keeps the false-no-effect check running on that same pair when no
+                // seed produces an effect.
                 var presentation = Setup();
                 var command = (IPresentationCommand)constructor.Invoke(
                     constructor.GetParameters().Select(parameter => ValueFor(parameter.ParameterType)).ToArray());
+
+                for (var seed = 1; seed < IndexSeeds.Length && !command.HasEffect(presentation); seed++)
+                {
+                    var seedIndex = seed;
+                    IPresentationCommand candidate;
+                    try
+                    {
+                        candidate = (IPresentationCommand)constructor.Invoke(
+                            constructor.GetParameters()
+                                .Select(parameter => ValueFor(parameter.ParameterType, 0, seedIndex))
+                                .ToArray());
+                    }
+                    catch (Exception)
+                    {
+                        // A constructor that validates its arguments may reject THIS seed while
+                        // accepting seed 0. Without this catch the throw escaped to the outer
+                        // handler and the whole command was filed as threw -- losing a command
+                        // that was being exercised perfectly well before the sweep existed. The
+                        // threw count going 6 -> 8 is what exposed it.
+                        continue;
+                    }
+
+                    var candidatePresentation = Setup();
+                    if (!candidate.HasEffect(candidatePresentation))
+                        continue;
+
+                    command = candidate;
+                    presentation = candidatePresentation;
+                }
 
                 // r443: the bus skips a command reporting no effect ENTIRELY -- no Apply, no undo
                 // entry. So a command that says false and would in fact have changed something
@@ -634,10 +680,10 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
             "command in the census ever reports no effect, that assertion is vacuous. " + census);
 
         exercised.Should().BeGreaterThanOrEqualTo(
-            37,
+            38,
             "the driver must still be exercising commands -- if this falls, the sweep has quietly " +
-            "stopped testing rather than the commands having improved. 39 today (6 at first writing, " +
-            "12 before r481, 18 before r533, 19 before r535, 34 before r537) against 71 in the FreeX sibling: the rest still need domain " +
+            "stopped testing rather than the commands having improved. 40 today (6 at first writing, " +
+            "12 before r481, 18 before r533, 19 before r535, 34 before r537, 39 before the r542 seed sweep) against 71 in the FreeX sibling: the rest still need domain " +
             "objects this factory cannot invent. r481 took the last step this message argued for, " +
             "widening the fixture rather than trusting the green -- and found that the six Slide " +
             "Master commands had been applying REAL changes the whole time while landing in noChange, " +
