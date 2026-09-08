@@ -158,6 +158,32 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
     private const string MasterId = "master1";
     private const string LayoutId = "layout1";
 
+    /// <summary>
+    /// r537: identifies the commands r536 established this census CANNOT check. A command that takes
+    /// the previous state as an argument restores that argument on Revert, so an invented one makes
+    /// the driver fabricate a before-state inconsistent with the model and then report the command
+    /// for honouring it faithfully.
+    ///
+    /// <para>The tell is two parameters of the SAME non-primitive type - the before/after pair, as in
+    /// <c>CommentMutationCommand(label, slideIndex, index, SlideComment? before, SlideComment? after)</c>
+    /// and <c>ReplaceCustomShowsCommand(IEnumerable&lt;PresentationCustomShow&gt; before, after)</c>.
+    /// The non-primitive restriction is load-bearing: plenty of legitimate commands take two ints
+    /// (a slide index and a shape index), and excluding those would gut the census.</para>
+    ///
+    /// <para>This is deliberately a coverage trade, not a proof. A command taking two shapes for an
+    /// honest reason - a connector's two endpoints, say - is skipped too. That costs coverage, which
+    /// is visible in notConstructible, rather than manufacturing a finding, which is not.</para>
+    /// </summary>
+    private static bool TakesABeforeAfterPair(System.Reflection.ConstructorInfo constructor)
+    {
+        var modelParameters = constructor.GetParameters()
+            .Select(parameter => Nullable.GetUnderlyingType(parameter.ParameterType) ?? parameter.ParameterType)
+            .Where(type => !type.IsPrimitive && type != typeof(string) && !type.IsEnum)
+            .ToArray();
+
+        return modelParameters.Length != modelParameters.Distinct().Count();
+    }
+
     private static object? ValueFor(Type type, int depth = 0)
     {
         if (type == typeof(int)) return 1;
@@ -248,17 +274,13 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
             foreach (var candidate in type.GetConstructors()
                          .OrderByDescending(constructor => constructor.GetParameters().Length))
             {
-                // r536: a parameterless constructor is SKIPPED, and the reason is a limit on what this
-                // census can check at all. Allowing it unblocked 13 more commands and turned the
-                // run red on two that are not defects: CommentMutationCommand and
-                // ReplaceCustomShowsCommand both take the PREVIOUS STATE as a constructor
-                // argument, so Revert restoring it is correct by construction. Invent that
-                // argument and the driver fabricates a before-state inconsistent with the model,
-                // then reports the command for honouring it. A default-constructed model object is
-                // exactly the shape that goes wrong, so it stays out.
+                // r537: a parameterless constructor is allowed again, LAST, now that the commands it
+                // would fabricate evidence about can be identified mechanically. See r536: a
+                // command taking the PREVIOUS STATE as an argument cannot be censused for undo,
+                // because Revert restoring an invented before-state is correct by construction.
+                // Those commands have a tell -- two parameters of the SAME non-primitive type,
+                // the before/after pair -- and TakesABeforeAfterPair below skips exactly them.
                 var parameters = candidate.GetParameters();
-                if (parameters.Length == 0)
-                    continue;
 
                 var arguments = parameters
                     .Select(parameter => ValueFor(parameter.ParameterType, depth + 1))
@@ -484,8 +506,9 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
         {
             var constructor = type.GetConstructors()
                 .OrderBy(candidate => candidate.GetParameters().Length)
-                .FirstOrDefault(candidate => candidate.GetParameters()
-                    .All(parameter => ValueFor(parameter.ParameterType) is not null));
+                .FirstOrDefault(candidate => !TakesABeforeAfterPair(candidate)
+                    && candidate.GetParameters()
+                        .All(parameter => ValueFor(parameter.ParameterType) is not null));
 
             // A command whose constructor takes the PRIOR value ("oldLoopUntilStopped") is told what
             // to restore rather than capturing it, so a factory that invents that argument makes
@@ -599,10 +622,10 @@ public sealed class R441_EveryConstructiblePresentationCommandUndoesExactlyTests
             "command in the census ever reports no effect, that assertion is vacuous. " + census);
 
         exercised.Should().BeGreaterThanOrEqualTo(
-            32,
+            37,
             "the driver must still be exercising commands -- if this falls, the sweep has quietly " +
-            "stopped testing rather than the commands having improved. 34 today (6 at first writing, " +
-            "12 before r481, 18 before r533, 19 before r535) against 71 in the FreeX sibling: the rest still need domain " +
+            "stopped testing rather than the commands having improved. 39 today (6 at first writing, " +
+            "12 before r481, 18 before r533, 19 before r535, 34 before r537) against 71 in the FreeX sibling: the rest still need domain " +
             "objects this factory cannot invent. r481 took the last step this message argued for, " +
             "widening the fixture rather than trusting the green -- and found that the six Slide " +
             "Master commands had been applying REAL changes the whole time while landing in noChange, " +
