@@ -858,10 +858,18 @@ public static class FontDialogPlanner
         return true;
     }
 
+    /// <summary>
+    /// r572: IsFinite as well. Character spacing and position both come through here, and unlike
+    /// the KERNING path twenty lines below - which r551 guarded with an explicit IsFinite - neither
+    /// carries a range check of its own, so "NaN" or "1e400" typed into either box reached
+    /// RunFormatting and then text layout. One guarded path in a method says nothing about its
+    /// neighbours.
+    /// </summary>
     private static bool TryParseRequiredDouble(string? text, CultureInfo culture, out double value)
     {
         var trimmed = (text ?? string.Empty).Trim();
-        return double.TryParse(trimmed, NumberStyles.Float, culture, out value);
+        return double.TryParse(trimmed, NumberStyles.Float, culture, out value)
+            && double.IsFinite(value);
     }
 
     private static string FormatPoints(double value, CultureInfo culture) => value.ToString("0.##", culture);
