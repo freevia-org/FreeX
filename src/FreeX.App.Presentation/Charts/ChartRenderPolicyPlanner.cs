@@ -546,7 +546,13 @@ public static class ChartRenderPolicyPlanner
                 if (indexAttribute is null || valueElement is null)
                     continue;
                 if (int.TryParse(indexAttribute.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var pointIndex) &&
-                    double.TryParse(valueElement.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+                    double.TryParse(valueElement.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+                    // r554: this <c:v> comes from the chart part, so it is file-controlled. "1e400"
+                    // parses SUCCESSFULLY to Infinity and NumberStyles.Float accepts the literal
+                    // "NaN", and these values feed error-bar geometry and axis range. A point that
+                    // cannot be used is simply not collected, which is what this loop already did
+                    // for text that failed to parse at all.
+                    && double.IsFinite(value))
                 {
                     points[pointIndex] = value;
                 }
