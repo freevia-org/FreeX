@@ -70,6 +70,11 @@ internal static class XlsxMalformedTypedAttributeNormalizer
         [("cellStyle", "xfId")] = AttributeValueKind.UnsignedInteger,
         [("cellStyle", "builtinId")] = AttributeValueKind.UnsignedInteger,
 
+        // r585: reached only once the probe fixture grew a chart, a conditional format, comments and
+        // a hyperlink. Both abort a load on any malformed value, exactly as the r584 set does.
+        [("color", "theme")] = AttributeValueKind.UnsignedInteger,
+        [("comment", "authorId")] = AttributeValueKind.UnsignedInteger,
+
         // xl/styles.xml -- boolean
         [("alignment", "wrapText")] = AttributeValueKind.Boolean,
         [("alignment", "justifyLastLine")] = AttributeValueKind.Boolean,
@@ -91,6 +96,24 @@ internal static class XlsxMalformedTypedAttributeNormalizer
 
         // theme
         [("srgbClr", "val")] = AttributeValueKind.HexColor,
+    };
+
+    /// <summary>
+    /// r585: attributes the schema REQUIRES, where deleting is not a repair -- the loader then fails
+    /// on the absence instead of on the value, and the user is no better off. For these the malformed
+    /// value is REPLACED by the schema's own safe default, which is what Excel's repair does.
+    /// <para>
+    /// Both are indexes whose zero entry always exists when the part exists at all: a comment's
+    /// author index (a comments part cannot have zero authors) and a cellStyle's xf index (a
+    /// stylesheet always has a first xf). sheet/@sheetId is deliberately NOT here: it must be
+    /// UNIQUE across the workbook, so there is no constant that is safe to substitute, and it stays
+    /// a drop with the typed error r583 recorded for it.
+    /// </para>
+    /// </summary>
+    internal static readonly Dictionary<(string Element, string Attribute), string> RequiredDefaults = new()
+    {
+        [("comment", "authorId")] = "0",
+        [("cellStyle", "xfId")] = "0",
     };
 
     /// <summary>True when any XML part carries a typed attribute the loader cannot parse.</summary>
@@ -136,7 +159,11 @@ internal static class XlsxMalformedTypedAttributeNormalizer
                     continue;
                 }
 
-                attribute.Remove();
+                if (TryGetRequiredDefault(element.Name.LocalName, attribute.Name.LocalName, out var fallback))
+                    attribute.Value = fallback;
+                else
+                    attribute.Remove();
+
                 removed = true;
             }
 
@@ -184,6 +211,15 @@ internal static class XlsxMalformedTypedAttributeNormalizer
 
         return false;
     }
+
+    /// <summary>
+    /// r585: shared with XlsxOutOfRangeIntegerAttributeNormalizer, which runs FIRST. Without this the
+    /// two disagree on the same attribute: the universal rule would DELETE an oversized required
+    /// attribute before this one could repair it, so cellStyle/@xfId="4294967296" stayed unopenable
+    /// while cellStyle/@xfId="yes" opened. The full lane caught exactly that.
+    /// </summary>
+    internal static bool TryGetRequiredDefault(string elementName, string attributeName, out string fallback) =>
+        RequiredDefaults.TryGetValue((elementName, attributeName), out fallback!);
 
     private static bool IsMalformed(string elementName, string attributeName, string value) =>
         Typed.TryGetValue((elementName, attributeName), out var kind) && !IsValid(kind, value);

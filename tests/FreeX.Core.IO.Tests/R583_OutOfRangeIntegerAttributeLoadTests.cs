@@ -44,7 +44,8 @@ public sealed class R583_OutOfRangeIntegerAttributeLoadTests
     /// </summary>
     private static readonly HashSet<string> KnownUnrepairableIdentityAttributes =
     [
-        "xl/styles.xml|cellStyle|xfId",
+        // r585 removed cellStyle/@xfId: a REQUIRED attribute is now repaired to the schema default
+        // rather than deleted, so it opens. An over-broad tolerance here would hide a regression.
         "xl/workbook.xml|sheet|sheetId",
     ];
 

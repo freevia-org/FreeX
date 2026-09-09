@@ -35,7 +35,9 @@ public sealed class R584_MalformedTypedAttributeLoadTests
     /// </summary>
     private static readonly HashSet<string> KnownUnrepairableIdentityAttributes =
     [
-        "xl/styles.xml|cellStyle|xfId",
+        // r585 removed cellStyle/@xfId from this list: a REQUIRED attribute is now repaired to the
+        // schema default rather than deleted, so it opens. sheetId cannot be, because it must be
+        // UNIQUE across the workbook and no constant is safe to substitute.
         "xl/workbook.xml|sheet|sheetId",
     ];
 
@@ -58,6 +60,29 @@ public sealed class R584_MalformedTypedAttributeLoadTests
         for (var i = 1; i <= 4; i++)
             table.Columns.Add(new StructuredTableColumnModel(i, $"H{i}"));
         sheet.StructuredTables.Add(table);
+
+        // r585: the fixture must be RICH, because the tripwire can only mutate attributes that a
+        // saved workbook actually contains. Growing it by a chart, a conditional format, comments,
+        // a hyperlink and a merge took the surface from 384 mutants to 455 and immediately exposed
+        // two more attributes that abort a load -- color/@theme and comment/@authorId. Anything
+        // added to this fixture is covered from that moment on; anything absent from it is not
+        // covered at all, which is the honest limit of this test.
+        sheet.AddMergedRegion(new GridRange(new CellAddress(sheet.Id, 8, 1), new CellAddress(sheet.Id, 8, 2)));
+        sheet.Comments[new CellAddress(sheet.Id, 3, 3)] = "a note";
+        sheet.CommentAuthors[new CellAddress(sheet.Id, 3, 3)] = "Author";
+        sheet.Hyperlinks[new CellAddress(sheet.Id, 4, 4)] = "https://example.invalid/";
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 6, 4)),
+            ShowLegend = true,
+        });
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 6, 2)),
+            RuleType = CfRuleType.DataBar,
+            DataBarGradient = true,
+        });
 
         sheet.DataValidations.Add(new DataValidation
         {
@@ -171,7 +196,7 @@ public sealed class R584_MalformedTypedAttributeLoadTests
             }
         }
 
-        mutants.Should().BeGreaterThan(200,
+        mutants.Should().BeGreaterThan(400,
             "the probe must actually be mutating the package across every mutation kind");
 
         failures.Should().BeEmpty(

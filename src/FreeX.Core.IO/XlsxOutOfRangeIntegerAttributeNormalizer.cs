@@ -83,7 +83,21 @@ internal static class XlsxOutOfRangeIntegerAttributeNormalizer
                 if (attribute.IsNamespaceDeclaration || !IsOutOfRange(attribute.Value))
                     continue;
 
-                attribute.Remove();
+                // r585: a REQUIRED attribute is repaired to the schema default rather than deleted --
+                // deleting one only moves the failure from the value to the absence. This normalizer
+                // runs BEFORE the typed one, so it must honour the same policy or the two disagree on
+                // the same attribute and an oversized value stays unopenable while a misspelled one
+                // opens.
+                if (XlsxMalformedTypedAttributeNormalizer.TryGetRequiredDefault(
+                        element.Name.LocalName, attribute.Name.LocalName, out var fallback))
+                {
+                    attribute.Value = fallback;
+                }
+                else
+                {
+                    attribute.Remove();
+                }
+
                 removed = true;
             }
 
