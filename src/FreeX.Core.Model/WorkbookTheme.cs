@@ -486,6 +486,13 @@ public sealed record WorkbookTheme(
                 NumberStyles.Float,
                 CultureInfo.InvariantCulture,
                 out var coordinate) ||
+            // r558: IsFinite as well. "coordinate <= 0" is the REJECT form r551 showed cannot stop
+            // a non-finite value -- Infinity fails the comparison and NaN fails every comparison --
+            // and this text comes from the theme part. EmuToPixels(double) is a bare division
+            // (r550 guarded only the string overload), so an infinite EMU became infinite pixels
+            // of shadow offset or glow radius. Returning 0 is what this reader already does for an
+            // absent or unparseable attribute.
+            !double.IsFinite(coordinate) ||
             coordinate <= 0)
         {
             return 0;
@@ -500,7 +507,10 @@ public sealed record WorkbookTheme(
                 angleText,
                 NumberStyles.Float,
                 CultureInfo.InvariantCulture,
-                out var angle))
+                out var angle)
+            // r558: an angle had no range check at all, and it feeds sin/cos, so a non-finite one
+            // poisons BOTH shadow offsets even when the distance is perfectly ordinary.
+            || !double.IsFinite(angle))
         {
             return 0;
         }
