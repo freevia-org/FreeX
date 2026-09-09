@@ -256,10 +256,17 @@ public static class WordArtWarpPlanner
         if (parts.Length != 2 || !parts[0].Equals("val", StringComparison.OrdinalIgnoreCase))
             return false;
 
+        // r567: IsFinite as well. This token comes from a custom-geometry adjust guide
+        // (<a:gd name="adj" fmla="val 12500"/>) read verbatim from the file. The caller looks
+        // defended -- Math.Clamp(guideValue / 50000.0, 0.1, 2.0) -- and it does bound Infinity,
+        // but Math.Clamp PASSES NaN THROUGH, so fmla="val NaN" reached warp geometry as a NaN
+        // amplitude. Fourth appearance of that trap after r547, r548 and r555. Answering false is
+        // what this method already does for a formula it cannot read.
         return double.TryParse(
             parts[1],
             System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture,
-            out value);
+            out value)
+            && double.IsFinite(value);
     }
 }
