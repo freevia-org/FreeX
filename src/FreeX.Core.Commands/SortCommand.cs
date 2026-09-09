@@ -1807,13 +1807,20 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
             switch (threshold.Type)
             {
                 case CfThresholdType.Number:
-                    if (!double.TryParse(threshold.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out thresholdValue))
+                    // r566: IsFinite as well. Icon-set thresholds are TEXT in the xlsx, and this path
+                    // does not go through ConditionalFormatEvaluationMath.TryParseInvariant, which
+                    // r564 guarded -- so the cell-value rules were fixed and the icon-set rules
+                    // left open. A non-finite threshold collapses the scale silently: every
+                    // comparison against NaN is false so every cell takes the LOWEST icon, and a
+                    // -Infinity threshold matches every cell so they all take the HIGHEST.
+                    if (!double.TryParse(threshold.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out thresholdValue)
+                        || !double.IsFinite(thresholdValue))
                         return false;
                     break;
                 case CfThresholdType.Percent:
                 {
                     rangeValues ??= CollectIconSetRangeNumbers(sheet, rule);
-                    if (rangeValues.Count == 0 || !double.TryParse(threshold.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var pct))
+                    if (rangeValues.Count == 0 || !double.TryParse(threshold.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var pct) || !double.IsFinite(pct))
                         return false;
                     var min = rangeValues.Min();
                     var max = rangeValues.Max();
@@ -1823,7 +1830,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
                 case CfThresholdType.Percentile:
                 {
                     rangeValues ??= CollectIconSetRangeNumbers(sheet, rule);
-                    if (rangeValues.Count == 0 || !double.TryParse(threshold.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var pctile))
+                    if (rangeValues.Count == 0 || !double.TryParse(threshold.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var pctile) || !double.IsFinite(pctile))
                         return false;
                     thresholdValue = Percentile(rangeValues, pctile / 100.0);
                     break;
