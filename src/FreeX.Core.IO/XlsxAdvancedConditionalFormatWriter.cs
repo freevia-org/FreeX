@@ -850,7 +850,9 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
     /// legacy copy looks fixed. Do not format a threshold value inline at a new call site -- route it
     /// through here instead.
     /// </summary>
-    private static string NormalizeNumericCfvoValueForSave(CfThresholdType type, string value)
+    // r581: internal rather than private so R581_CfvoNonFiniteThresholdTests can drive the save
+    // normalizer directly; the comment above already names it the single write choke point.
+    internal static string NormalizeNumericCfvoValueForSave(CfThresholdType type, string value)
     {
         if (type != CfThresholdType.Number && type != CfThresholdType.Percent && type != CfThresholdType.Percentile)
             return value;
@@ -858,13 +860,24 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         var trimmed = value.Trim();
         const NumberStyles style = NumberStyles.Float;
 
+        // r581: double.IsFinite on BOTH parses. TryParse has not thrown on magnitude overflow since
+        // .NET Core -- it returns true with +/-Infinity -- and NumberStyles.Float also accepts the
+        // literal "NaN"/"Infinity" spellings. Without this, a threshold of "1E+400" was re-emitted
+        // through ToString as the literal text "Infinity" and written into the cfvo, which the
+        // schema cannot express, from a file that was readable before FreeX saved it. That is the
+        // same save-side round-trip r577 fixed in DataValidationNumericBoundText -- two features,
+        // one shape. Falling through to the write-through below is what this method already does
+        // with "unexpected/malformed input ... rather than risk corrupting a value we don't
+        // understand", and a non-finite value is exactly that.
         if (!Equals(CultureInfo.CurrentCulture, CultureInfo.InvariantCulture) &&
-            double.TryParse(trimmed, style, CultureInfo.CurrentCulture, out var currentCultureValue))
+            double.TryParse(trimmed, style, CultureInfo.CurrentCulture, out var currentCultureValue) &&
+            double.IsFinite(currentCultureValue))
         {
             return currentCultureValue.ToString(CultureInfo.InvariantCulture);
         }
 
-        if (double.TryParse(trimmed, style, CultureInfo.InvariantCulture, out var invariantValue))
+        if (double.TryParse(trimmed, style, CultureInfo.InvariantCulture, out var invariantValue) &&
+            double.IsFinite(invariantValue))
             return invariantValue.ToString(CultureInfo.InvariantCulture);
 
         // Not a plain number we recognize (unexpected/malformed input) -- write through untouched
