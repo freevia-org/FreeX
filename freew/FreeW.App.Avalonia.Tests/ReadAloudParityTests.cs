@@ -382,8 +382,18 @@ public sealed class ReadAloudParityTests
 
         try
         {
+            // Both waits report the child's state on failure. This test went red once on a Windows CI
+            // runner with only "found False", which says nothing about whether powershell.exe never
+            // started, started and died, or was merely slow -- and it does not reproduce locally (18
+            // runs, including 6 with every core saturated). Widening the timeout would have been a
+            // guess; capturing the state means the next occurrence can be diagnosed instead.
             (await WaitForFileLengthAsync(outputPath, length => length >= 5, TimeSpan.FromSeconds(30)))
-                .Should().BeTrue("the owned PowerShell child must begin producing output");
+                .Should().BeTrue(
+                    "the owned PowerShell child must begin producing output (pid {0}, hasExited {1}, output file exists {2}, {3} bytes)",
+                    process.ProcessId,
+                    process.HasExited,
+                    File.Exists(outputPath),
+                    FileLength(outputPath));
 
             process.TryPause().Should().BeTrue();
             var pausedLength = FileLength(outputPath);
@@ -393,7 +403,12 @@ public sealed class ReadAloudParityTests
 
             process.TryResume().Should().BeTrue();
             (await WaitForFileLengthAsync(outputPath, length => length > pausedLength, TimeSpan.FromSeconds(30)))
-                .Should().BeTrue("resuming the exact owned process must allow work to continue");
+                .Should().BeTrue(
+                    "resuming the exact owned process must allow work to continue (pid {0}, hasExited {1}, paused at {2} bytes, now {3} bytes)",
+                    process.ProcessId,
+                    process.HasExited,
+                    pausedLength,
+                    FileLength(outputPath));
         }
         finally
         {
