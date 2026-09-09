@@ -11,6 +11,7 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
     private readonly bool _firstRowHasHeaders;
     private int? _createdTableId;
     private WorksheetAutoFilterModel? _replacedAutoFilter;
+    private string? _createdTableName;
 
     public string Label => "Create Table";
     public int? CreatedTableId => _createdTableId;
@@ -55,8 +56,16 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
         if (CommandGuards.RejectIfStructuredTableRangeOverlapsSpill(sheet, _range) is { } spillOutcome)
             return spillOutcome;
 
-        var id = NextTableId(ctx.Workbook);
-        var name = NextTableName(ctx.Workbook);
+        // r591: reuse the id and name minted on the FIRST apply when this command is re-applied after
+        // an undo. Minting fresh ones makes redo produce a DIFFERENT workbook that still looks right:
+        // a slicer or pivot cache pinned to the table's id (see the watermark note below, and
+        // CommandGuards.PinOrphanedPivotCacheSourceTableIds) is left dangling by the redo, and a
+        // structured reference like Table2[Col] stops resolving if the name moved too.
+        // AddSheetCommand established exactly this for sheets (its R16 redo-stability fix, and R83
+        // for the code name); it was never carried to the create-table family. Found by the r591
+        // redo audit, not by reading.
+        var id = _createdTableId ?? NextTableId(ctx.Workbook);
+        var name = _createdTableName ?? NextTableName(ctx.Workbook);
         var table = new StructuredTableModel
         {
             Id = id,
@@ -91,6 +100,7 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
 
         sheet.StructuredTables.Add(table);
         _createdTableId = id;
+        _createdTableName = name;
         return new CommandOutcome(true);
     }
 
@@ -832,7 +842,13 @@ public sealed class CreateStyledStructuredTableCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         _applyStyleCommand = null;
-        _createTableCommand = new CreateStructuredTableCommand(_sheetId, _range, _styleName, _firstRowHasHeaders);
+        // r591: REUSE the inner command across a re-apply instead of building a fresh one. The
+        // delegation is only partial: Revert calls RevertAppliedCommands, which reverts the RETAINED
+        // instance, so undo was always covered by the inner command's fix -- but Apply used to mint a
+        // brand-new inner command on every call, throwing away the id it had cached and handing the
+        // redone table a different one. Holding the instance is what makes the inner r591 id reuse
+        // reach this path, which is the user-facing "Format as Table".
+        _createTableCommand ??= new CreateStructuredTableCommand(_sheetId, _range, _styleName, _firstRowHasHeaders);
         var createOutcome = _createTableCommand.Apply(ctx);
         if (!createOutcome.Success)
             return createOutcome;
