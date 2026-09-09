@@ -43,6 +43,104 @@ public sealed class FailureOutcomeMutationAuditTests(ITestOutputHelper output)
     /// argument bank is applied against each fixture; whenever Apply returns a failure outcome, the
     /// workbook must be byte-for-byte the state it was in before the call.
     /// </summary>
+
+    /// <summary>
+    /// r589: the undo sibling of the audit above. Every command that SUCCEEDS is reverted, and the
+    /// workbook must fingerprint back to exactly what it was.
+    /// <para>
+    /// Motivated by r586, where CreateStructuredTableCommand.Apply CLEARED a worksheet AutoFilter its
+    /// snapshot never captured -- undo removed the table and left the filter gone. Nothing in the
+    /// suite would have caught that: the per-command undo tests assert what their author thought to
+    /// check, and a fingerprint comparison asserts everything.
+    /// </para>
+    /// <para>
+    /// Three fields are excluded because they are monotonic BY DESIGN and undo deliberately does not
+    /// wind them back: ContentVersion (a change counter -- an undo is itself a change),
+    /// NextStructuredTableIdWatermark (whose own doc comment says "never decremented, including on
+    /// Undo", so a freed id is never handed out twice), and StyleCount (the style registry grows and
+    /// is not garbage-collected). Without those exclusions the audit reports 40 violations that are
+    /// all by design, which is worse than no audit at all.
+    /// </para>
+    /// <para>
+    /// The "filtered range" fixture exists for this test specifically: CreateStructuredTableCommand
+    /// only clears a filter when one is there to clear, so the other fixtures exercise the path that
+    /// needs no undo at all. Reverting r586's restore makes this audit report BOTH that command and
+    /// CreateStyledStructuredTableCommand -- the user-facing "Format as Table", which delegates to it
+    /// -- so the fix's reach is demonstrated rather than assumed.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void CommandsThatSucceed_AreFullyUndoneByRevert()
+    {
+        var violations = new List<string>();
+        var covered = new SortedSet<string>(StringComparer.Ordinal);
+        var reverted = 0;
+
+        var commandTypes = typeof(EditCellsCommand).Assembly
+            .GetTypes()
+            .Where(t => t is { IsAbstract: false, IsInterface: false, IsGenericTypeDefinition: false })
+            .Where(t => typeof(IWorkbookCommand).IsAssignableFrom(t))
+            .Where(t => t != typeof(CompositeWorkbookCommand))
+            .OrderBy(t => t.FullName, StringComparer.Ordinal)
+            .ToList();
+
+        foreach (var scenario in Scenarios())
+        {
+            foreach (var type in commandTypes)
+            {
+                var (workbook, bank) = scenario.Build();
+                if (!TryConstruct(type, bank, out var command, out _))
+                    continue;
+
+                var ctx = new TestCommandContext(workbook);
+                var before = WorkbookFingerprint.Capture(workbook);
+
+                CommandOutcome outcome;
+                try { outcome = command!.Apply(ctx); }
+                catch { continue; }
+
+                if (!outcome.Success || outcome.IsNoOp)
+                    continue;
+
+                covered.Add(type.Name);
+
+                try { command.Revert(ctx); }
+                catch (Exception ex)
+                {
+                    violations.Add($"{type.Name} [{scenario.Name}] REVERT THREW {ex.GetType().Name}");
+                    continue;
+                }
+
+                reverted++;
+                var after = WorkbookFingerprint.Capture(workbook);
+                if (after == before)
+                    continue;
+
+                var diff = WorkbookFingerprint.Diff(before, after)
+                    .Where(path =>
+                        !path.Contains("ContentVersion", StringComparison.Ordinal) &&
+                        !path.Contains("NextStructuredTableIdWatermark", StringComparison.Ordinal) &&
+                        !path.Contains("StyleCount", StringComparison.Ordinal))
+                    .ToList();
+                if (diff.Count == 0)
+                    continue;
+
+                violations.Add($"{type.Name} [{scenario.Name}] {diff.Count} paths: "
+                    + string.Join(" | ", diff.Take(4)));
+            }
+        }
+
+        output.WriteLine($"covered={covered.Count} reverted={reverted}");
+
+        reverted.Should().BeGreaterThan(100,
+            "the audit is worthless if almost nothing actually applied and reverted");
+        covered.Should().HaveCountGreaterThan(50,
+            "type discovery plus argument synthesis must keep reaching most of the command surface");
+
+        violations.Should().BeEmpty(
+            "undo must restore everything a successful command changed, not only the state its own " +
+            "snapshot happened to capture");
+    }
     [Fact]
     public void CommandsThatReturnFailureOutcomes_DoNotMutateTheWorkbook()
     {
@@ -238,6 +336,7 @@ public sealed class FailureOutcomeMutationAuditTests(ITestOutputHelper output)
         yield return ProtectedSheetScenario();
         yield return PlainScenario();
         yield return MissingTargetScenario();
+        yield return FilteredRangeScenario();
     }
 
     /// <summary>Protection is by far the largest failure family (the CommandGuards.Reject* sites),
@@ -261,6 +360,22 @@ public sealed class FailureOutcomeMutationAuditTests(ITestOutputHelper output)
     {
         var (workbook, bank) = BuildFixture();
         bank.OverrideGuid(Guid.NewGuid());
+        return (workbook, bank);
+    });
+
+    /// <summary>
+    /// r589: a sheet that already carries a worksheet AutoFilter over the range the table commands
+    /// operate on. Without it the undo audit is blind to the whole class r586 found: a command whose
+    /// Apply clears state its snapshot never captured. CreateStructuredTableCommand only clears the
+    /// filter when one is THERE to clear, so a fixture with no filter exercises the code path that
+    /// needs no undo. A harness covers only what its fixtures contain (r585 learned the same of the
+    /// mutation probe), and a green audit over fixtures that cannot reach the defect says nothing
+    /// about it.
+    /// </summary>
+    private static Scenario FilteredRangeScenario() => new("filtered range", () =>
+    {
+        var (workbook, bank) = BuildFixture();
+        workbook.Sheets[0].AutoFilter = new WorksheetAutoFilterModel("A1:D6", null);
         return (workbook, bank);
     });
 
