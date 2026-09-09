@@ -708,7 +708,16 @@ internal static class XlsxChartSeriesRangeReader
                 continue;
 
             var raw = pt.Elements().FirstOrDefault(e => e.Name.LocalName == "v")?.Value;
-            values[idx] = double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : null;
+            // r565: IsFinite as well. These are cached PLOTTED VALUES from the chart part, so they
+            // are file-controlled, and "1e400" parses successfully to Infinity. Direct sibling of
+            // r554, which guarded the ERROR BAR cache in ChartRenderPolicyPlanner and left this
+            // one -- the series values themselves -- open in a different reader under a different
+            // name. A point that cannot be used becomes null, which this sparse array already
+            // does for text that fails to parse at all, so the rest of the series survives.
+            values[idx] = double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var d)
+                && double.IsFinite(d)
+                ? d
+                : null;
         }
 
         return values;
