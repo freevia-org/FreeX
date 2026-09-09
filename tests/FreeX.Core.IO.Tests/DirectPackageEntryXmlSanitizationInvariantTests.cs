@@ -33,6 +33,9 @@ public sealed class DirectPackageEntryXmlSanitizationInvariantTests
         // from a part it just parsed out of the archive. Purely subtractive and purely structural:
         // it introduces no model text at all, so there is nothing for a sanitize to act on.
         ("XlsxOutOfRangeIntegerAttributeNormalizer.cs", "document"),
+        // r584: same shape as r583 above -- REMOVES typed attributes the loader cannot parse from a
+        // part it just parsed out of the archive. Subtractive and structural; no model text.
+        ("XlsxMalformedTypedAttributeNormalizer.cs", "document"),
     ];
 
     // The writers this tripwire exists for. Asserted by name every run so that a refactor which changes
