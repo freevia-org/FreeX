@@ -323,10 +323,17 @@ public sealed partial class OdsFileAdapter
             case "currency":
             {
                 var raw = (string?)cellElement.Attribute(OfficeNs + "value");
-                if (raw is not null && double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var d))
+                // r569: IsFinite as well. This builds a NumberValue DIRECTLY from a file -- a third
+                // door into a cell value that bypasses the evaluator, after r562's external-link cache
+                // and the typed/paste doors r563 censused. r562's correction to r552 is the rule
+                // applied: an invariant asserted about the MODEL must be defended at EVERY writer.
+                if (raw is not null && double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) && double.IsFinite(d))
                     return new NumberValue(d);
                 return TextContent(cellElement) is { Length: > 0 } txt &&
+                       // The text-content fallback feeds the same construction, so guarding one
+                       // parse and not the other would leave the door open.
                        double.TryParse(txt, NumberStyles.Float, CultureInfo.InvariantCulture, out var d2)
+                       && double.IsFinite(d2)
                     ? new NumberValue(d2)
                     : BlankValue.Instance;
             }
