@@ -330,7 +330,14 @@ public static class ChartLayoutRequestBuilder
                 for (var i = 0; i < xs.Length; i++)
                 {
                     var text = i < embedded.Categories.Count ? embedded.Categories[i] : null;
+                    // r552: IsFinite as well. This path parses the chart part's CACHED TEXT, which is
+                    // file-controlled, unlike the live-cell path beside it (cell values cannot be
+                    // non-finite -- the evaluator returns #NUM! instead). An overflowing cached
+                    // value parses successfully, so it did NOT take the fallback the comment above
+                    // describes; a point that cannot be used falls back to its index, which is what
+                    // this line already does for text that fails to parse at all.
                     xs[i] = double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+                        && double.IsFinite(x)
                         ? x
                         : i;
                 }
