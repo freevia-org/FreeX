@@ -192,8 +192,15 @@ public static class TableFormulaEvaluator
             // Skip currency symbols, thousands separators, spaces, percent signs etc.
         }
         var cleaned = sb.ToString();
+        // r559: IsFinite as well. The strip above removes every letter, so "NaN" and "Infinity"
+        // cannot reach this parser -- they reduce to an empty string. What DOES survive is a long
+        // run of digits, which overflows to Infinity on parse (the route r550 found where
+        // NumberStyles forbade an exponent and a long paste overflowed anyway). An infinite
+        // operand propagates through =SUM(ABOVE) into the field result the document displays;
+        // answering false is what this method already does for text it cannot read as a number.
         return cleaned.Length > 0
-            && double.TryParse(cleaned, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+            && double.TryParse(cleaned, NumberStyles.Float, CultureInfo.InvariantCulture, out value)
+            && double.IsFinite(value);
     }
 
     /// <summary>
