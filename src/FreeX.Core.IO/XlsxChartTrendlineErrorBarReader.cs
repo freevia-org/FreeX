@@ -93,7 +93,12 @@ internal static class XlsxChartTrendlineErrorBarReader
             chart.ErrorBarPlusRangeCacheXml = ReadErrorBarRangeCacheXml(errorBars.Element(ChartNs + "plus"));
             chart.ErrorBarMinusRangeCacheXml = ReadErrorBarRangeCacheXml(errorBars.Element(ChartNs + "minus"));
 
-            if (double.TryParse(errorBars.Element(ChartNs + "val")?.Attribute("val")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            // r577: IsFinite before the clamp. Math.Clamp bounds Infinity but PROPAGATES NaN, so the
+            // clamp alone let an errorBars/val/@val of "NaN" into ChartModel.ErrorBarValue. (r554
+            // guarded this feature's error-bar range CACHE, in another file; the fixed VALUE read here
+            // was a sibling that sweep never reached.)
+            if (double.TryParse(errorBars.Element(ChartNs + "val")?.Attribute("val")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) &&
+                double.IsFinite(value))
                 chart.ErrorBarValue = Math.Clamp(value, 0, 1000);
 
             ApplyErrorBarShapeProperties(errorBars.Element(ChartNs + "spPr"), chart);

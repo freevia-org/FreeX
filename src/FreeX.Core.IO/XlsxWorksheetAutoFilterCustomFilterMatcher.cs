@@ -48,11 +48,18 @@ internal static class XlsxWorksheetAutoFilterCustomFilterMatcher
             return false;
         }
 
+        // r577: IsFinite -- pattern is a customFilters/@val read out of the file, and
+        // NumberStyles.Float accepts "NaN"/"Infinity" and an overflowing magnitude. A NaN threshold
+        // makes every ordering Compare false (the filter hides every row) and makes notEqual true
+        // for every row. This is the IO-side twin of PersistedCustomFilterCriterion.Matches in
+        // FreeX.Core.Commands, fixed in the same round: two implementations of one rule, so the
+        // defect had to be fixed in both. Falling back to the wildcard/text matcher is what an
+        // unparseable pattern already does.
         var hasNumericThreshold = double.TryParse(
             pattern,
             NumberStyles.Float,
             CultureInfo.InvariantCulture,
-            out var threshold);
+            out var threshold) && double.IsFinite(threshold);
         var textMatcher = CreateWildcardMatcher(pattern);
         predicate = value =>
         {

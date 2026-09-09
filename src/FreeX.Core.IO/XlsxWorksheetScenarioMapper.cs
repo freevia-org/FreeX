@@ -122,7 +122,9 @@ internal static class XlsxWorksheetScenarioMapper
         _ => false
     };
 
-    private static ScalarValue ParseValue(string rawValue)
+    // r577: internal rather than private so R577_IoNonFiniteParseTests can drive it directly -- it
+    // is the one door a scenario's raw value takes into a typed ScalarValue.
+    internal static ScalarValue ParseValue(string rawValue)
     {
         if (rawValue.Length == 0)
             return BlankValue.Instance;
@@ -142,7 +144,12 @@ internal static class XlsxWorksheetScenarioMapper
                 "#NUM!" => ErrorValue.Num,
                 _ => new ErrorValue(rawValue)
             };
-        if (double.TryParse(rawValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var number))
+        // r577: IsFinite -- rawValue is a scenario input value read out of the file, and a scenario
+        // is APPLIED to cells, so this line could mint a cell value that is not a number. The model
+        // invariant is defended at every other writer (r562, r563, r569, r576); an unreadable value
+        // stays the text it was, which is this mapper's existing fallback.
+        if (double.TryParse(rawValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) &&
+            double.IsFinite(number))
             return new NumberValue(number);
 
         return new TextValue(rawValue);

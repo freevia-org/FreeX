@@ -15,7 +15,11 @@ internal static class XlsxSourceRectangleRatioCodec
                 value,
                 NumberStyles.Float,
                 CultureInfo.InvariantCulture,
-                out var parsed))
+                out var parsed) ||
+            // r577: Math.Clamp below bounds Infinity but PROPAGATES NaN, so the clamp alone let a
+            // srcRect percentage of "NaN" become a NaN crop ratio on the picture. 0 is this
+            // method's existing "unreadable" result: no crop.
+            !double.IsFinite(parsed))
         {
             return 0;
         }

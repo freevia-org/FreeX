@@ -509,7 +509,14 @@ internal sealed record PersistedCustomFilterCriterion(string? Operator, string V
     {
         var isNotEqual = string.Equals(Operator, "notEqual", StringComparison.OrdinalIgnoreCase);
 
-        if (double.TryParse(Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var threshold))
+        // r577: IsFinite -- Value is a persisted customFilters/@val read out of the file, and
+        // NumberStyles.Float accepts "NaN"/"Infinity" and an overflowing magnitude. A NaN threshold
+        // makes every ordering comparison false (the filter hides every row) and makes notEqual
+        // true for every row -- r564's conditional-format threshold defect, in the autofilter. A
+        // criterion that is not a usable number falls through to the text comparison below, which
+        // is what an unparseable one already does.
+        if (double.TryParse(Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var threshold) &&
+            double.IsFinite(threshold))
         {
             switch (value)
             {

@@ -107,4 +107,55 @@ public sealed class R486_ParsedDoubleGuardsRejectInfinityTests
             "overflowing literal like \"1e999\" to it -- add double.IsFinite, or bound the value from " +
             "above as XlsxWorksheetXmlValueParser does");
     }
+
+    /// <summary>
+    /// r577: the second shape this scan can see cheaply. <see cref="Math.Clamp(double, double, double)"/>
+    /// reads as "this value is now in range", and for Infinity it is -- but it PROPAGATES NaN, so a
+    /// clamped parse still admits NaN. That has cost five separate rounds (r547, r548, r555, r567 and
+    /// r577's two SVG gradient-offset spellings), which is enough repetitions to keep as a tripwire
+    /// rather than to keep rediscovering.
+    /// <para>
+    /// This rule is deliberately narrow: it fires only where the parsed name is itself clamped
+    /// nearby. A parse with NO guard at all is not reported -- most such sites are legitimate, so a
+    /// blanket rule would be noise rather than a signal.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void NoParsedDoubleIsBoundedOnlyByAClamp()
+    {
+        var offenders = new List<string>();
+        var scanned = 0;
+
+        foreach (var file in ProductionSources())
+        {
+            scanned++;
+            var text = File.ReadAllText(file);
+
+            foreach (Match match in Regex.Matches(
+                        text, @"(?:double|float)\.TryParse\s*\([^;]{0,300}?out\s+(?:var\s+|double\s+|float\s+)?(\w+)\s*\)"))
+            {
+                var name = match.Groups[1].Value;
+                var window = text.Substring(
+                    match.Index + match.Length,
+                    Math.Min(400, text.Length - (match.Index + match.Length)));
+
+                if (!Regex.IsMatch(window, $@"Math\.Clamp\s*\([^;]{{0,80}}\b{Regex.Escape(name)}\b"))
+                    continue;
+
+                if (window.Contains("IsFinite", StringComparison.Ordinal)
+                    || window.Contains("IsInfinity", StringComparison.Ordinal)
+                    || window.Contains("IsNaN", StringComparison.Ordinal))
+                    continue;
+
+                var line = text[..match.Index].Count(c => c == '\n') + 1;
+                offenders.Add($"{Path.GetFileName(file)}:{line} (parsed '{name}')");
+            }
+        }
+
+        scanned.Should().BeGreaterThan(1000, "the scan must actually be reading the three apps' sources");
+
+        offenders.Should().BeEmpty(
+            "Math.Clamp bounds infinity but passes NaN straight through, and .NET parses the literal " +
+            "\"NaN\" happily -- a clamped parse still needs double.IsFinite before the clamp");
+    }
 }

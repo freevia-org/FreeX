@@ -77,6 +77,12 @@ public static class CalculationOptionsInputParser
                 NumberStyles.Float,
                 CultureInfo.InvariantCulture,
                 out var parsed) ||
+            // r577: the REJECT form "parsed < 0" rejects NEITHER Infinity nor NaN (every comparison
+            // with NaN is false), and NumberStyles.Float accepts both the literal spellings and an
+            // overflowing magnitude. A convergence threshold of Infinity declares every iteration
+            // converged; one of NaN declares none converged. Excel rejects non-numeric input in
+            // this box, so this parser does too.
+            !double.IsFinite(parsed) ||
             parsed < 0)
         {
             return false;

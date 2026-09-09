@@ -2021,7 +2021,11 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         if (string.IsNullOrEmpty(text))
             return false;
 
-        if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+        // r577: IsFinite -- a non-finite literal is a threshold this resolver cannot support, the
+        // same answer it already gives a formula-shaped one. r566 guarded TryResolveIconSetBucket
+        // in this very file; this literal resolver was its unguarded sibling.
+        if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) &&
+            double.IsFinite(parsed))
         {
             number = parsed;
             return true;

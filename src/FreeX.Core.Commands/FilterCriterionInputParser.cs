@@ -262,7 +262,11 @@ internal static class FilterCriterionInputParser
                 text.Trim(),
                 System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.CurrentCulture,
-                out threshold))
+                out threshold) ||
+            // r577: IsFinite -- TryParse accepts "NaN" and overflows "1e400" to Infinity, and a
+            // non-finite threshold makes every ordering comparison false, so the filter would hide
+            // every row while reporting no error at all.
+            !double.IsFinite(threshold))
         {
             error = "Enter a valid number after the comparison operator.";
             return false;

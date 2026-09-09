@@ -166,7 +166,13 @@ internal static class PivotCalculatedExpressionEvaluator
             var start = _position;
             while (_position < _text.Length && (char.IsDigit(_text[_position]) || _text[_position] == '.'))
                 _position++;
+            // r577: IsFinite -- the scan admits only digits and '.', so no exponent or "NaN"
+            // spelling reaches here, but a long enough run of digits still overflows double and
+            // TryParse returns TRUE with Infinity. A pivot calculated field feeds cell values, and
+            // a cell value may not be non-finite (r562, r563, r569, r576); 0 is this reader's
+            // existing result for a number it cannot read.
             return double.TryParse(_text[start.._position], NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+                && double.IsFinite(value)
                 ? value
                 : 0;
         }

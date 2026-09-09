@@ -7916,8 +7916,18 @@ public static class DocxWriter
 
         var xValues = new List<double>(chart.Categories.Count);
         for (var i = 0; i < chart.Categories.Count; i++)
+            // r577: IsFinite -- a category whose text overflows double (e.g. "1e400") parses as TRUE
+            // with Infinity since .NET Core stopped throwing, and BuildNumCache below writes each
+            // value with double.ToString, so the scatter X cache would carry the literal text
+            // <c:v>Infinity</c:v> -- not a number in the ST_Xstring/double the chart schema expects,
+            // from a document FreeW itself just wrote. A non-finite category is no more a numeric X
+            // than a non-numeric one, so it takes the same ordinal fallback this line already uses.
+            // (The sibling READ path, ReadNumberCache in DocxReader, was guarded in r547;
+            // this write-side parse of category TEXT was missed because it is not a cache parse.)
             xValues.Add(double.TryParse(chart.Categories[i], System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var x) ? x : i + 1);
+                System.Globalization.CultureInfo.InvariantCulture, out var x) && double.IsFinite(x)
+                ? x
+                : i + 1);
 
         ser.Add(new XElement(C + "xVal",
             new XElement(C + "numRef",
