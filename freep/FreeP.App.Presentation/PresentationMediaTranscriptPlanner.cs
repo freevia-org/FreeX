@@ -1892,6 +1892,9 @@ public static class PresentationMediaTranscriptPlanner
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         if (!match.Success
             || !double.TryParse(match.Groups["size"].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var size)
+            // r553: the regex above forbids an exponent but allows UNLIMITED DIGITS, so a long
+            // run still overflows to Infinity, which "size <= 0" does not reject.
+            || !double.IsFinite(size)
             || size <= 0)
         {
             return null;
@@ -2745,6 +2748,13 @@ public static class PresentationMediaTranscriptPlanner
     {
         if (!value.EndsWith('%')
             || !double.TryParse(value[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent)
+            // r553: IsFinite as well. "percent is < 0 or > 100" is the REJECT form r551 showed
+            // cannot stop a non-finite value: NaN fails BOTH comparisons and passes. This value
+            // comes from a WebVTT cue-settings line in the file, and NumberStyles.Float parses
+            // the literal "NaN"; a several-hundred-digit run overflows to Infinity even without
+            // an exponent. Dropping the setting is what this function already does for text it
+            // cannot use.
+            || !double.IsFinite(percent)
             || percent is < 0 or > 100)
         {
             return null;
