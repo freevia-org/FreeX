@@ -588,7 +588,14 @@ internal static class XlsxSparklineMapper
     {
         var val = el.Attribute(name)?.Value;
         if (val is null) return null;
+        // r568: IsFinite as well. manualMin/manualMax are the sparkline's AXIS BOUNDS and
+        // lineWeight its stroke width, all read from x14:sparklineGroup attributes in the
+        // worksheet part, so all three are file-controlled. An infinite bound is r485's
+        // unbounded-scale class (r548 named chart axis min/max as its worst-consequence member)
+        // and a non-finite weight is r555's ink-thickness shape. Returning null is what this
+        // helper already does for a missing or unparseable attribute.
         return double.TryParse(val, NumberStyles.Any, CultureInfo.InvariantCulture, out var d)
+            && double.IsFinite(d)
             ? d : null;
     }
 
