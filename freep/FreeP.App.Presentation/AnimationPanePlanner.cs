@@ -982,6 +982,7 @@ public static class AnimationPanePlanner
         // culture whose group separator is "." -- it simply fails there and falls through.
         if ((double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out double seconds)
                 || double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out seconds))
+            && double.IsFinite(seconds)
             && (allowZero ? seconds >= 0 : seconds > 0))
         {
             // r192: ROUND, not truncate. seconds * 1000.0 is not exact in binary floating point --
