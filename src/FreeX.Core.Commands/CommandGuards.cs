@@ -463,4 +463,32 @@ public static class CommandGuards
 
         return null;
     }
+
+    /// <summary>
+    /// r586: a worksheet AutoFilter must not overlap a structured table, because FreeX cannot RELOAD
+    /// the file it would save. ClosedXML refuses the combination on load
+    /// ("The range ... overlaps with the worksheet's autofilter"), so allowing the command to set one
+    /// let a user produce a workbook this application cannot open -- the worst outcome an edit can
+    /// have.
+    /// <para>
+    /// Excel has no such state either: clicking Filter inside a table toggles the TABLE's own filter
+    /// rather than creating a worksheet AutoFilter over it. Rejecting is therefore the aligned
+    /// minimum, and it leaves the table's own filter -- the thing the user was reaching for --
+    /// untouched and still available.
+    /// </para>
+    /// </summary>
+    public static CommandOutcome? RejectFilterRangeOverlappingStructuredTable(Sheet sheet, GridRange range)
+    {
+        foreach (var table in sheet.StructuredTables)
+        {
+            if (table.Range.Overlaps(range))
+            {
+                return new CommandOutcome(
+                    false,
+                    "That range is part of table '" + table.Name + "', which has its own filter.");
+            }
+        }
+
+        return null;
+    }
 }

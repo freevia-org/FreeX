@@ -10,6 +10,7 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
     private readonly string? _styleName;
     private readonly bool _firstRowHasHeaders;
     private int? _createdTableId;
+    private WorksheetAutoFilterModel? _replacedAutoFilter;
 
     public string Label => "Create Table";
     public int? CreatedTableId => _createdTableId;
@@ -70,6 +71,24 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
         foreach (var column in BuildColumns(sheet, _range, _firstRowHasHeaders))
             table.Columns.Add(column);
 
+        // r586: a worksheet AutoFilter overlapping the new table makes the SAVED file unloadable --
+        // ClosedXML refuses the combination on read ("The range ... overlaps with the worksheet's
+        // autofilter"), so leaving it in place lets a user produce a workbook FreeX cannot reopen.
+        // This is the same defect ToggleWorksheetAutoFilterCommand had, reached from the other
+        // direction: filter first, table second. The guards above already reason that way for merged
+        // regions ("just enforced from the other direction"), and this was the missing half.
+        //
+        // CLEARING rather than rejecting is what Excel does: creating a table over a filtered range
+        // replaces the worksheet filter with the table's own, and the new table carries
+        // HasAutoFilter = true, so the user keeps a filter either way. Undo restores it below.
+        if (sheet.AutoFilter is not null &&
+            AutoFilterRangeResolver.TryGetWorksheetAutoFilterRange(sheet, out var existingFilterRange) &&
+            existingFilterRange.Overlaps(_range))
+        {
+            _replacedAutoFilter = WorksheetAutoFilterCloner.Clone(sheet.AutoFilter);
+            sheet.AutoFilter = null;
+        }
+
         sheet.StructuredTables.Add(table);
         _createdTableId = id;
         return new CommandOutcome(true);
@@ -82,6 +101,15 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
 
         var sheet = ctx.GetSheet(_sheetId);
         sheet.StructuredTables.RemoveAll(table => table.Id == _createdTableId.Value);
+
+        // r586: undo must put back the worksheet AutoFilter Apply cleared, not merely remove the
+        // table. Restoring the value without unwinding the structure the setter changed is a defect
+        // class this review has hit before.
+        if (_replacedAutoFilter is not null)
+        {
+            sheet.AutoFilter = _replacedAutoFilter;
+            _replacedAutoFilter = null;
+        }
     }
 
     // Table ids and names are OOXML workbook-wide identifiers (not per-sheet) — Excel requires every

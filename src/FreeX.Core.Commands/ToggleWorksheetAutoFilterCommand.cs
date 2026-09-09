@@ -41,6 +41,9 @@ public sealed class ToggleWorksheetAutoFilterCommand : IWorkbookCommand, IEstima
             return invalidRange;
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UseAutoFilter) is { } protectedOutcome)
             return protectedOutcome;
+        // r586: without this the command produced a workbook FreeX could not reload.
+        if (CommandGuards.RejectFilterRangeOverlappingStructuredTable(sheet, _range) is { } tableOverlap)
+            return tableOverlap;
 
         _previousAutoFilter = WorksheetAutoFilterCloner.Clone(sheet.AutoFilter);
         _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
