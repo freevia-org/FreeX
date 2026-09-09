@@ -394,6 +394,51 @@ public sealed class FailureOutcomeMutationAuditTests(ITestOutputHelper output)
         var picture = new PictureModel { Anchor = new CellAddress(sheet.Id, 2, 3), Width = 100, Height = 80 };
         sheet.Pictures.Add(picture);
 
+        // r590: structures the row/column-shift commands must MOVE, and that the scanning commands
+        // must find. They sit at row 10 and below, clear of the A1:C3 range the argument bank
+        // synthesizes, so they enrich what commands encounter without changing which range they act
+        // on -- in particular without colliding with the "filtered range" fixture, whose whole
+        // purpose is to let CreateStructuredTableCommand reach its clear-the-filter branch.
+        for (uint row = 10; row <= 18; row++)
+        {
+            for (uint col = 1; col <= 4; col++)
+                sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(row * col));
+        }
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "AuditTable",
+            DisplayName = "AuditTable",
+            Range = new GridRange(new CellAddress(sheet.Id, 10, 1), new CellAddress(sheet.Id, 13, 3)),
+        };
+        for (var i = 1; i <= 3; i++)
+            table.Columns.Add(new StructuredTableColumnModel(i, $"C{i}"));
+        sheet.StructuredTables.Add(table);
+
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 15, 1), new CellAddress(sheet.Id, 15, 2)));
+
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 16, 1), new CellAddress(sheet.Id, 18, 1)),
+            Type = DvType.Decimal,
+            Operator = DvOperator.Between,
+            Formula1 = "1",
+            Formula2 = "100",
+        });
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 16, 2), new CellAddress(sheet.Id, 18, 2)),
+            RuleType = CfRuleType.DataBar,
+            DataBarGradient = true,
+        });
+
+        sheet.Comments[new CellAddress(sheet.Id, 10, 4)] = "audit note";
+        sheet.CommentAuthors[new CellAddress(sheet.Id, 10, 4)] = "Auditor";
+        sheet.Hyperlinks[new CellAddress(sheet.Id, 11, 4)] = "https://example.invalid/";
+
         var bank = new ArgumentBank(workbook, sheet, picture.Id);
         return (workbook, bank);
     }
