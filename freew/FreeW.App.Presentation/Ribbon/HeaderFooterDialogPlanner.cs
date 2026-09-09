@@ -311,8 +311,10 @@ public static class HeaderFooterDialogPlanner
         return headerFooter;
     }
 
+    // r574: IsFinite as well -- "points >= 0" admits Infinity (r571).
     public static bool TryParseDistance(string? value, out double points) =>
         double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out points)
+        && double.IsFinite(points)
         && points >= 0;
 
     public static string FormatDistance(double points) =>

@@ -216,12 +216,15 @@ public static class ObjectFormatCommandPlanner
 
     public static bool TryParseSizePoints(string? text, out double points)
     {
+        // r574: IsFinite as well -- "points > 0" admits Infinity (r571).
         var trimmed = (text ?? string.Empty).Trim();
         return double.TryParse(
             trimmed,
             NumberStyles.Float,
             CultureInfo.InvariantCulture,
-            out points) && points > 0;
+            out points)
+            && double.IsFinite(points)
+            && points > 0;
     }
 
     private static ObjectFormatShapeOutlinePlan BuildShapeOutlinePlan(

@@ -62,7 +62,12 @@ public sealed class R486_ParsedDoubleGuardsRejectInfinityTests
             var text = File.ReadAllText(file);
 
             foreach (Match match in Regex.Matches(
-                         text, @"(?:double|float)\.TryParse\s*\([^;]{0,300}?out\s+var\s+(\w+)\s*\)"))
+                        // r574: this matched "out var name" ONLY, so every site declaring the target
+                        // another way was invisible to it: "out value" (a pre-declared out parameter),
+                        // "out double seconds", "out int ms". r571, r572 and r573 each fixed a defect
+                        // of exactly this shape that THIS TRIPWIRE was built to catch -- it had been
+                        // watching one spelling of the thing it was watching for.
+                        text, @"(?:double|float)\.TryParse\s*\([^;]{0,300}?out\s+(?:var\s+|double\s+|float\s+)?(\w+)\s*\)"))
             {
                 var name = match.Groups[1].Value;
                 var window = text.Substring(
@@ -71,6 +76,14 @@ public sealed class R486_ParsedDoubleGuardsRejectInfinityTests
 
                 var guardedAgainstZeroOnly = Regex.IsMatch(window, $@"\b{Regex.Escape(name)}\s*(?:>=|>)\s*0\b");
                 if (!guardedAgainstZeroOnly)
+                    continue;
+
+                // r574: an UPPER bound excludes infinity on its own, which is this test's own
+                // documented rule ("where a natural bound exists, prefer it to an IsFinite call").
+                // The original scan expressed that as a one-file allow-list; widening the parse
+                // pattern surfaced more correctly-guarded two-sided sites, so the rule is encoded
+                // here instead. "width > 0 && width <= 12" is right and must not be reported.
+                if (Regex.IsMatch(window, $@"\b{Regex.Escape(name)}\s*(?:<=|<)\s*[\w.]"))
                     continue;
 
                 if (window.Contains("IsFinite", StringComparison.Ordinal)

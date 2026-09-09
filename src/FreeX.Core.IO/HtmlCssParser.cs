@@ -130,7 +130,13 @@ internal static class HtmlCssParser
         var v = value.Trim();
         if (v.EndsWith("pt", StringComparison.OrdinalIgnoreCase))
             v = v[..^2];
-        return double.TryParse(v.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out size) && size > 0;
+        // r574: IsFinite as well. This reads a CSS font-size out of PASTED OR IMPORTED HTML, so it
+        // is external input, and "size > 0" is the one-sided accept form r571 corrected: Infinity
+        // satisfies it. Same defect r547 fixed in FreeW's HtmlCssFormatting -- the cross-app
+        // sibling, found by widening the r486 tripwire rather than by following that fix.
+        return double.TryParse(v.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out size)
+            && double.IsFinite(size)
+            && size > 0;
     }
 
     private static bool TryParseColor(string value, out CellColor color)

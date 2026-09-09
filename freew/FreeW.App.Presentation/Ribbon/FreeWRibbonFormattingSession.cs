@@ -95,8 +95,11 @@ public sealed class FreeWRibbonFormattingSession
 
     public string? CurrentStyleSetName() => DocumentStyleSet.FindMatching(_ports.GetDocument())?.Name;
 
+    // r574: IsFinite as well. "points >= 0" is the one-sided accept form r571 corrected --
+    // Infinity satisfies it. Found by the widened r486 tripwire rather than by inspection.
     public static bool TryParseNonNegativePoints(string? rawValue, out double points) =>
         double.TryParse(rawValue, NumberStyles.Any, CultureInfo.InvariantCulture, out points)
+        && double.IsFinite(points)
         && points >= 0;
 
     public static string FormatPoints(double points) =>
