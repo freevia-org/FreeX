@@ -1633,6 +1633,14 @@ public static class AnimationPanePlanner
         // as the fallback for values typed or pasted in "12.345" form.
         if ((!double.TryParse(normalized, NumberStyles.Float, CultureInfo.CurrentCulture, out var percent)
                 && !double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out percent))
+            // r579: the two-sided REJECT range excludes both infinities (Infinity > 100 is true) but NOT
+            // NaN, because BOTH of its comparisons are false -- and the literal "NaN" parses under
+            // NumberStyles.Float. A NaN percent then reached (int)Math.Round(percent * 1000), whose
+            // saturating conversion is 0, so typing "NaN" into Smooth Start/End was silently
+            // accepted as 0 instead of being reported invalid the way any other unusable text is.
+            // (An ACCEPT form with an upper bound would have excluded NaN on its own; a REJECT form
+            // does not. The two read alike and are not alike.)
+            || double.IsNaN(percent)
             || percent is < 0 or > 100)
         {
             value = null;

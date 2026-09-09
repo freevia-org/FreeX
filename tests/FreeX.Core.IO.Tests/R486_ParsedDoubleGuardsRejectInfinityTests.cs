@@ -28,6 +28,22 @@ public sealed class R486_ParsedDoubleGuardsRejectInfinityTests
     // Files whose guard bounds the value from ABOVE, which already excludes infinity.
     private static readonly string[] BoundedElsewhere = ["XlsxWorksheetXmlValueParser.cs"];
 
+    /// <summary>
+    /// r579: strips // and /* */ comments before scanning. Every rule here works in a fixed
+    /// character window after the parse, and a multi-line explanatory comment between the parse
+    /// and its guard pushes the guard out of that window. r577 catalogued that as a FALSE POSITIVE
+    /// mode of an ad-hoc scan; r579 found it working in the other direction against THIS FILE --
+    /// the new reject-range rule passed with its fix reverted, because the comment explaining the
+    /// fix was longer than the window. A tripwire that a comment can silence is not a tripwire, and
+    /// the r512 rule applies to the tripwire itself: it was only trustworthy once reverting a fix
+    /// was shown to make it fail. String literals are left alone -- they cannot contain a guard.
+    /// </summary>
+    private static string StripComments(string text)
+    {
+        var blockFree = Regex.Replace(text, @"/\*.*?\*/", "", RegexOptions.Singleline);
+        return Regex.Replace(blockFree, @"^[^\S\n]*//.*$", "", RegexOptions.Multiline);
+    }
+
     private static IEnumerable<string> ProductionSources()
     {
         var root = TestWorkspaceFileLocator.FindContainingDirectory("FreeX.slnx");
@@ -59,7 +75,7 @@ public sealed class R486_ParsedDoubleGuardsRejectInfinityTests
         foreach (var file in ProductionSources())
         {
             scanned++;
-            var text = File.ReadAllText(file);
+            var text = StripComments(File.ReadAllText(file));
 
             foreach (Match match in Regex.Matches(
                         // r574: this matched "out var name" ONLY, so every site declaring the target
@@ -129,7 +145,7 @@ public sealed class R486_ParsedDoubleGuardsRejectInfinityTests
         foreach (var file in ProductionSources())
         {
             scanned++;
-            var text = File.ReadAllText(file);
+            var text = StripComments(File.ReadAllText(file));
 
             foreach (Match match in Regex.Matches(
                         text, @"(?:double|float)\.TryParse\s*\([^;]{0,300}?out\s+(?:var\s+|double\s+|float\s+)?(\w+)\s*\)"))
@@ -157,5 +173,69 @@ public sealed class R486_ParsedDoubleGuardsRejectInfinityTests
         offenders.Should().BeEmpty(
             "Math.Clamp bounds infinity but passes NaN straight through, and .NET parses the literal " +
             "\"NaN\" happily -- a clamped parse still needs double.IsFinite before the clamp");
+    }
+
+    /// <summary>
+    /// r579: the third rule, and the one that corrects a reading of this file's own doc comment.
+    /// The summary above says "where a natural bound exists, prefer it to an IsFinite call" -- true
+    /// for an ACCEPT form, where <c>x &gt; 0 &amp;&amp; x &lt;= 12</c> excludes Infinity AND NaN,
+    /// since NaN fails an accept. It is NOT true for a two-sided REJECT form: <c>x is &lt; 0 or
+    /// &gt; 100</c> (returning false) excludes Infinity, because <c>Infinity &gt; 100</c> is true,
+    /// but admits NaN, because BOTH of its comparisons are false. The two shapes read alike and are
+    /// not alike.
+    /// <para>
+    /// Two files had it: NumberFormatColorMapper's theme tint and AnimationPanePlanner's Smooth
+    /// Start/End percentage. Both are reported by this rule, which fires only where a parse's ONLY
+    /// screen is a two-sided reject range.
+    /// </para>
+    /// <para>
+    /// Note also that "NaN" parses regardless of how narrow the NumberStyles are -- .NET checks the
+    /// NaN/Infinity symbols independently of the style flags -- so a style set without
+    /// AllowExponent or any special-value flag is not a screen either.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void NoParsedDoubleIsScreenedOnlyByATwoSidedRejectRange()
+    {
+        var offenders = new List<string>();
+        var scanned = 0;
+
+        foreach (var file in ProductionSources())
+        {
+            scanned++;
+            var text = StripComments(File.ReadAllText(file));
+
+            foreach (Match match in Regex.Matches(
+                        text, @"(?:double|float)\.TryParse\s*\([^;]{0,300}?out\s+(?:var\s+|double\s+|float\s+)?(\w+)\s*\)"))
+            {
+                var name = match.Groups[1].Value;
+                var window = text.Substring(
+                    match.Index + match.Length,
+                    Math.Min(400, text.Length - (match.Index + match.Length)));
+
+                var escaped = Regex.Escape(name);
+                var isRejectRange =
+                    Regex.IsMatch(window, $@"\b{escaped}\s+is\s*<[^;]{{0,40}}\bor\b[^;]{{0,40}}>")
+                    || Regex.IsMatch(window, $@"\b{escaped}\s*<\s*[-\w.]+\s*\|\|\s*{escaped}\s*>")
+                    || Regex.IsMatch(window, $@"\b{escaped}\s*>\s*[-\w.]+\s*\|\|\s*{escaped}\s*<");
+                if (!isRejectRange)
+                    continue;
+
+                if (window.Contains("IsFinite", StringComparison.Ordinal)
+                    || window.Contains("IsInfinity", StringComparison.Ordinal)
+                    || window.Contains("IsNaN", StringComparison.Ordinal))
+                    continue;
+
+                var line = text[..match.Index].Count(c => c == '\n') + 1;
+                offenders.Add($"{Path.GetFileName(file)}:{line} (parsed '{name}')");
+            }
+        }
+
+        scanned.Should().BeGreaterThan(1000, "the scan must actually be reading the three apps' sources");
+
+        offenders.Should().BeEmpty(
+            "a two-sided REJECT range excludes infinity but admits NaN, since every comparison with " +
+            "NaN is false -- add double.IsNaN to the reject, or express the screen as an ACCEPT " +
+            "range, which excludes both");
     }
 }

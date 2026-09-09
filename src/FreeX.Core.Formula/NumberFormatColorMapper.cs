@@ -109,7 +109,9 @@ internal static class NumberFormatColorMapper
         return true;
     }
 
-    private static bool TryGetThemeColorReference(
+    // r579: internal rather than private so R579_NumberFormatThemeTintTests can drive the tint
+    // parse directly; it is the one place a format string's theme tint is read.
+    internal static bool TryGetThemeColorReference(
         string token,
         out WorkbookThemeColorSlot slot,
         out double tint)
@@ -176,6 +178,14 @@ internal static class NumberFormatColorMapper
                 NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint,
                 CultureInfo.InvariantCulture,
                 out var tintPercent) ||
+            // r579: the two-sided REJECT range excludes both infinities -- Infinity > 100 is true, and
+            // so is the overflow of a long digit run even without AllowExponent -- but it does NOT
+            // exclude NaN, because BOTH of its comparisons are false. And the literal "NaN" parses
+            // here despite the narrow styles: .NET checks the NaN/Infinity symbols independently of
+            // NumberStyles (verified by probe, not assumed). A NaN tint then reaches
+            // theme.ResolveColor and the HSL luminance maths, the same way r578's XlsxColorReader
+            // tint did. Rejecting is what this method already does with a tint it cannot read.
+            double.IsNaN(tintPercent) ||
             tintPercent is < -100d or > 100d)
         {
             return false;
