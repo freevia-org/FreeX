@@ -355,9 +355,16 @@ public static partial class XlsxChartPartReader
         return null;
     }
 
+    /// <summary>
+    /// r570: IsFinite as well. A histogram's underflow/overflow bin boundaries come from the
+    /// chartEx part, so they are file-controlled. Note the bin SIZE parse in ParseChartExBinning
+    /// above already carries "double.IsFinite(width) && width > 0" -- one guarded parse and two
+    /// unguarded ones in the same area, the per-path pattern r554, r555 and r560 each recorded.
+    /// </summary>
     private static double? ParseChartExThreshold(string? text) =>
         !string.IsNullOrWhiteSpace(text) &&
-        double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+        double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) &&
+        double.IsFinite(value)
             ? value
             : null;
 
@@ -528,7 +535,13 @@ public static partial class XlsxChartPartReader
         {
             if (!TryReadChartExPointIndex(pt, ref values, out var idx))
                 continue;
-            values[idx] = double.TryParse(pt.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : null;
+            // r570: IsFinite as well -- the FOURTH cached-plot-value site after r554's error-bar
+            // cache, r565's series cache and the classic reader. Same one-line contract: a point
+            // that cannot be used becomes null and the rest of the series survives.
+            values[idx] = double.TryParse(pt.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var d)
+                && double.IsFinite(d)
+                ? d
+                : null;
         }
 
         return values;
