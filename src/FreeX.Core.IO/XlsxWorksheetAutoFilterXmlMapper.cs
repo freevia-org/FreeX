@@ -52,17 +52,52 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
             if (!session.TryGetWorksheet(sheet, out var worksheetEdit))
                 continue;
 
+            // r587: defence in depth at the WRITE chokepoint. A worksheet autoFilter overlapping a
+            // structured table produces a file FreeX cannot reload -- ClosedXML refuses the
+            // combination on read. r586 guarded the two COMMANDS that could create that state, but a
+            // model can reach it by other roads (an .fxl load, a paste, a command not yet written),
+            // and a pairwise probe over every entity pair confirmed this is the ONLY pair with that
+            // property. Refusing to emit the element makes the bad file unwritable rather than merely
+            // unreachable by the paths known today: the table keeps its own filter, which is what the
+            // overlap was expressing anyway.
+            var suppressedByTable = sheet.AutoFilter is not null && OverlapsStructuredTable(sheet);
+            var effectiveAutoFilter = suppressedByTable ? null : sheet.AutoFilter;
+
             var root = worksheetEdit.Root;
             var existingAutoFilter = root.Element(worksheetNs + "autoFilter");
-            if (existingAutoFilter is null && sheet.AutoFilter is null)
+            if (existingAutoFilter is null && effectiveAutoFilter is null)
                 continue;
 
             existingAutoFilter?.Remove();
-            if (ToAutoFilterXml(sheet.AutoFilter, worksheetNs, sheet.Id, colorFilterDxfIds) is { } autoFilter)
+            if (ToAutoFilterXml(effectiveAutoFilter, worksheetNs, sheet.Id, colorFilterDxfIds) is { } autoFilter)
                 XlsxWorksheetElementOrder.Insert(root, autoFilter);
 
             session.MarkDirty(worksheetEdit);
         }
+    }
+
+    /// <summary>
+    /// r587: true when the sheet's worksheet AutoFilter overlaps one of its structured tables. Both
+    /// the filter reference and the table range are compared as GridRanges rather than as text, so a
+    /// PARTIAL overlap ("A1:B3" inside a table at "A1:D6") is caught as well as an exact match --
+    /// ClosedXML refuses any overlap, not only an identical range.
+    /// </summary>
+    private static bool OverlapsStructuredTable(Sheet sheet)
+    {
+        if (sheet.StructuredTables.Count == 0)
+            return false;
+
+        var reference = GetEffectiveReference(sheet.AutoFilter);
+        if (!WorkbookNamedRangeReferenceParser.TryParseBareRange(reference, sheet.Id, out var filterRange))
+            return false;
+
+        foreach (var table in sheet.StructuredTables)
+        {
+            if (table.Range.Overlaps(filterRange))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>
