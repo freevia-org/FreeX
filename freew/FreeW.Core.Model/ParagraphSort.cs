@@ -198,12 +198,20 @@ public static class ParagraphSort
         private delegate bool ParseKey(string text, out double value);
 
         // Parse a leading numeric value (currency/grouping tolerated), invariant culture.
+        //
+        // r557: IsFinite as well. double.TryParse accepts the literal "NaN" and "Infinity"
+        // whatever NumberStyles it is given, and a long run of digits overflows to Infinity even
+        // though NumberStyles.Number forbids an exponent. Those tokens are not numbers to Word,
+        // which extracts a leading NUMBER when sorting numerically, and treating them as one put
+        // "NaN" ahead of every real value because NaN.CompareTo sorts below everything. Reporting
+        // them as unparseable is this comparer's own contract for a key it cannot read.
         private static bool TryParseNumber(string text, out double value) =>
             double.TryParse(
                 text.Trim(),
                 NumberStyles.Number | NumberStyles.AllowLeadingSign | NumberStyles.AllowCurrencySymbol,
                 CultureInfo.InvariantCulture,
-                out value);
+                out value)
+            && double.IsFinite(value);
 
         // Parse a date/time, invariant culture; the comparable value is the tick count as a double.
         private static bool TryParseDate(string text, out double value)
