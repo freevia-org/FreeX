@@ -519,6 +519,20 @@ public static partial class BuiltInFunctions
 
         var totalDays = (hours * 3600 + minutes * 60 + seconds) / 86400.0;
         fraction = totalDays - Math.Floor(totalDays);
+        // r580: the arithmetic above MANUFACTURES a NaN that was never parsed. The regex constrains
+        // which CHARACTERS may appear (digits only, so no "NaN" or "1e400" literal can get here) but
+        // not HOW MANY: a long enough run of digits overflows double, making hours -- and so
+        // totalDays -- Infinity, and the line above is then Infinity - Math.Floor(Infinity), which is
+        // NaN. r549 found the same manufacture in Infinity % 360. The caller returns this straight
+        // out as new NumberValue(fraction), and a cell value may not be non-finite.
+        // Excel cannot represent such a time and answers #VALUE!, which is what the caller already
+        // produces for text no parser here can read -- so report exactly that.
+        if (!double.IsFinite(fraction))
+        {
+            fraction = 0;
+            return false;
+        }
+
         return true;
     }
 
