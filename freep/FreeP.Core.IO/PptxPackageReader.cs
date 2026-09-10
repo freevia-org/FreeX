@@ -107,7 +107,26 @@ public static class PptxPackageReader
     public static PptxReadResult ReadWithWarnings(Stream stream)
     {
         var warnings = new List<string>();
-        var presentation = ReadCore(stream, warnings);
+        Presentation presentation;
+        try
+        {
+            presentation = ReadCore(stream, warnings);
+        }
+        catch (System.Xml.XmlException ex)
+        {
+            // r599: an XmlException anywhere in the read means the package being OPENED is malformed,
+            // and this reader already owns actionable sentences for that -- see the "missing from the
+            // package. The file may be corrupt or truncated" throw below. A truncated docProps/core.xml
+            // reached the XML parser instead and threw framework text at the caller, so the same
+            // damage produced two different errors depending on which part happened to be cut.
+            // Nothing here parses FreeP's own output, so the type alone is sufficient evidence --
+            // the same reasoning r596 and r598 applied to the xlsx and docx readers.
+            throw new InvalidDataException(
+                "This presentation could not be read because the file is not a valid .pptx package " +
+                "(it may be corrupt or truncated).",
+                ex);
+        }
+
         return new PptxReadResult(presentation, warnings.AsReadOnly());
     }
 
@@ -271,7 +290,36 @@ public static class PptxPackageReader
 
         // Parse presentation.xml
         var presXml = TryLoadXmlPart(archive, presPath);
-        if (presXml?.Root is null) return presentation;
+        if (presXml?.Root is null)
+        {
+            // r599: the r448 contradiction check, applied on THIS path too -- but REPORTED rather than
+            // thrown, which is the form that satisfies both contracts at once. That guard -- "slides on
+            // disk, none reachable" -- lives after sldIdLst is read, and a presentation.xml that will
+            // not PARSE returns here long before reaching it. So the exact end state r448 calls
+            // intolerable, and describes in its own words as "a partially written save ... yields
+            // ZERO slides and no error at all", was still reachable: truncating ppt/presentation.xml
+            // opened the deck as slides=0 with no warning, and saving over it would discard every
+            // slide the package still holds.
+            //
+            // The narrowness that makes r448 safe is preserved exactly: a genuinely slide-less
+            // package has no slide parts either, so it still opens silently.
+            //
+            // Throwing here was the first attempt and it was WRONG: Read_PresentationXmlPartPresent
+            // ButFailsHardenedXmlLoad_StillDegradesToEmpty_NotThrow exists precisely to stop the
+            // missing-part check being widened into the XML-parse-failure case, because a DTD-poisoned
+            // presentation.xml must be QUARANTINED rather than crash the open. That test caught it.
+            // A warning satisfies both: the malicious payload still degrades to an empty deck without
+            // throwing, and the user is still told that slides on disk went unread before they save
+            // over them.
+            if (PackageContainsSlideParts(archive))
+            {
+                warnings.Add(
+                    "This presentation appears to be damaged: it contains slides, but none of them " +
+                    "could be read. Saving over the original would discard the slides it still holds.");
+            }
+
+            return presentation;
+        }
 
         var presRoot = presXml.Root;
         var presDir = GetDirectoryName(presPath);
