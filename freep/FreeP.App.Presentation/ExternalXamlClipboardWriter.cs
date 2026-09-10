@@ -265,9 +265,9 @@ internal static class ExternalXamlClipboardWriter
         if (run.Hyperlink?.Url is { Length: > 0 } url)
         {
             writer.WriteStartElement("Hyperlink", XamlNamespace);
-            writer.WriteAttributeString("NavigateUri", url);
+            writer.WriteAttributeString("NavigateUri", XmlTextSanitizer.Sanitize(url));
             if (run.Hyperlink.Tooltip is { Length: > 0 } tooltip)
-                writer.WriteAttributeString("ToolTip", tooltip);
+                writer.WriteAttributeString("ToolTip", XmlTextSanitizer.Sanitize(tooltip));
             WriteRunCore(writer, run, images);
             writer.WriteEndElement();
             return;
@@ -312,7 +312,11 @@ internal static class ExternalXamlClipboardWriter
             writer.WriteAttributeString("BaselineAlignment", "Superscript");
         else if (run.BaselineOffset is < 0)
             writer.WriteAttributeString("BaselineAlignment", "Subscript");
-        writer.WriteString(run.Text);
+        // r611: the one place model text reaches the wire. XmlWriter has CheckCharacters on by
+        // default, so a control character or lone surrogate in a shape's text threw out of Copy
+        // rather than being cleaned -- the same class XmlTextSanitizer already handles at the OPC
+        // and ODF boundaries, which this writer bypasses by creating its own zip entry.
+        writer.WriteString(XmlTextSanitizer.Sanitize(run.Text));
         writer.WriteEndElement();
     }
 
