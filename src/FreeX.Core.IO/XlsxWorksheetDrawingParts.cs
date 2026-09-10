@@ -255,10 +255,16 @@ internal sealed record XlsxDrawingAnchor(
 
 internal static partial class XlsxWorksheetDrawingPartReader
 {
+    /// <summary>
+    /// r593: <paramref name="warnings"/> is optional so the many existing call sites are unchanged,
+    /// and is supplied by the worksheet load path, which already owns one. Without it a chart the
+    /// drawing DECLARES but the package cannot resolve was dropped in silence (r592).
+    /// </summary>
     public static XlsxWorksheetDrawingPackageParts ReadParts(
         ZipArchive archive,
         string worksheetPath,
-        XDocument worksheetXml)
+        XDocument worksheetXml,
+        List<string>? warnings = null)
     {
         var drawingContext = ReadDrawingContext(archive, worksheetPath, worksheetXml);
         if (drawingContext is null)
@@ -269,7 +275,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             ? XlsxPackageXmlEditor.LoadXml(drawingRelsEntry)
             : null;
 
-        var charts = ReadChartParts(archive, drawingPath, drawingXml, drawingRelsXml);
+        var charts = ReadChartParts(archive, drawingPath, drawingXml, drawingRelsXml, warnings);
         // R119-io-camera-linked-picture-identity: a reconstructed camera/linked-picture group (see
         // ReadPictureSnapshotGroupParts) is an <xdr:grpSp>, not an <xdr:pic>, so ReadPictureParts'
         // Descendants(pic) walk never finds it -- it must be read as its own pass and merged in here.
@@ -339,14 +345,32 @@ internal static partial class XlsxWorksheetDrawingPartReader
         ZipArchive archive,
         string drawingPath,
         XDocument drawingXml,
-        XDocument? drawingRelsXml)
+        XDocument? drawingRelsXml,
+        List<string>? warnings)
     {
         var charts = new List<XlsxChartPackagePart>();
-        if (drawingRelsXml?.Root is null)
-            return charts;
-
         XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
         XNamespace chartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+
+        if (drawingRelsXml?.Root is null)
+        {
+            // r593: a drawing with no rels part is ORDINARY -- one holding only shapes or text boxes
+            // has nothing to relate to -- so this exit must stay silent in the common case. It is a
+            // loss only when the drawing DECLARES charts, whose relationship ids can now never be
+            // resolved. Warning unconditionally here would put a line in front of the user on every
+            // ordinary shape-only drawing, which is how a warnings channel stops being read.
+            var declaredChartCount = drawingXml
+                .Descendants()
+                .Count(element => element.Name == chartNs + "chart" || element.Name == chartExNs + "chart");
+            if (declaredChartCount > 0)
+            {
+                warnings?.Add(
+                    $"[chart] Drawing '{drawingPath}' declares {declaredChartCount} chart(s) but its " +
+                    "relationship part is missing from the package; they were not loaded.");
+            }
+
+            return charts;
+        }
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
@@ -370,14 +394,27 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 continue;
 
             if (!relationshipTargets.TryGetValue(chartRelId, out var chartTarget))
+            {
+                // r593: the drawing DECLARES a chart and the package cannot resolve it. Dropping it
+                // silently means the user opens a damaged file, sees no chart, saves, and the
+                // declaration is gone for good without anything ever having said so.
+                warnings?.Add(
+                    $"[chart] Drawing '{drawingPath}': relationship '{chartRelId}' names a chart part " +
+                    "that is not in the package; the chart was not loaded.");
                 continue;
+            }
 
             var chartPath = XlsxPackagePath.ResolveRelationshipTarget(drawingPath, chartTarget);
             if (!seenChartPaths.Add(chartPath))
                 continue;
             var chartEntry = archive.GetEntry(chartPath);
             if (chartEntry is null)
+            {
+                warnings?.Add(
+                    $"[chart] Drawing '{drawingPath}': chart part '{chartPath}' is missing from the " +
+                    "package; the chart was not loaded.");
                 continue;
+            }
             var chartRelationships = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(chartPath)) is { } chartRelsEntry
                 ? XlsxPackageXmlEditor.LoadXml(chartRelsEntry)
                 : null;

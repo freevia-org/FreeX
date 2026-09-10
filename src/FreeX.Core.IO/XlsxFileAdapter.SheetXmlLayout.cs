@@ -187,7 +187,7 @@ public sealed partial class XlsxFileAdapter
                 // merge) for every one of those later sheets.
                 try
                 {
-                    var layout = ReadHiddenSheetLayout(archive, worksheetPath, worksheetEntry, stylesXml, differentialStyles, workbookTheme, indexedColors);
+                    var layout = ReadHiddenSheetLayout(warnings, archive, worksheetPath, worksheetEntry, stylesXml, differentialStyles, workbookTheme, indexedColors);
                     result[name] = layout;
                     if (loadStructuredTableMetadata)
                     {
@@ -248,6 +248,7 @@ public sealed partial class XlsxFileAdapter
         => XlsxPackageXmlEditor.EnsureSpecificContentType(archive, partName, contentType);
 
     private static SheetXmlLayout ReadHiddenSheetLayout(
+        List<string>? warnings,
         ZipArchive archive,
         string worksheetPath,
         ZipArchiveEntry worksheetEntry,
@@ -341,7 +342,7 @@ public sealed partial class XlsxFileAdapter
         var activeCell = ReadActiveSelectionCell(sheetView, pane, worksheetNs);
         var background = XlsxWorksheetBackgroundReaderWriter.Read(archive, worksheetPath, worksheetXml);
         var headerFooterPictures = XlsxHeaderFooterPictureReaderWriter.Read(archive, worksheetPath, worksheetXml);
-        var drawingParts = XlsxWorksheetDrawingPartReader.ReadParts(archive, worksheetPath, worksheetXml);
+        var drawingParts = XlsxWorksheetDrawingPartReader.ReadParts(archive, worksheetPath, worksheetXml, warnings);
         var sparklines = XlsxSparklineMapper.Read(worksheetXml, workbookTheme, indexedColors);
         var formControls = XlsxFormControlMapper.ReadWorksheet(archive, worksheetPath, worksheetXml);
         var advancedConditionalFormats = ReadAdvancedConditionalFormats(

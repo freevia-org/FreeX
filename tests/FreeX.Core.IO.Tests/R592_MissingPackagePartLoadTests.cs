@@ -32,16 +32,6 @@ namespace FreeX.Core.IO.Tests;
 /// </summary>
 public sealed class R592_MissingPackagePartLoadTests
 {
-    /// <summary>
-    /// The parts whose removal currently loses content silently. Pinned exactly so the silence
-    /// cannot spread: any OTHER part that starts dropping content fails this test.
-    /// </summary>
-    private static readonly HashSet<string> KnownSilentContentLoss =
-    [
-        "xl/charts/chart1.xml",
-        "xl/drawings/_rels/drawing1.xml.rels",
-    ];
-
     private static byte[] RichWorkbookBytes()
     {
         var workbook = new Workbook("PartLoss");
@@ -143,9 +133,15 @@ public sealed class R592_MissingPackagePartLoadTests
             try
             {
                 using var ms = new MemoryStream(mutated);
-                var result = DescribeContent(new XlsxFileAdapter().Load(ms));
-                if (result != baseline && !KnownSilentContentLoss.Contains(part))
-                    silentlyLost.Add($"{part} -> {result} (baseline {baseline})");
+                var loaded = new XlsxFileAdapter().LoadWithWarnings(ms);
+                var result = DescribeContent(loaded.Workbook);
+                if (result == baseline)
+                    continue;
+
+                // r593: content missing from a damaged package is acceptable -- it is already gone
+                // from the FILE -- but only if the load SAYS so. Silence is the defect.
+                if (loaded.Warnings.Count == 0)
+                    silentlyLost.Add($"{part} -> {result} (baseline {baseline}) with NO warning");
             }
             catch (WorkbookInvalidException)
             {
@@ -164,5 +160,21 @@ public sealed class R592_MissingPackagePartLoadTests
         silentlyLost.Should().BeEmpty(
             "content may not disappear from a loaded workbook without the load either refusing or " +
             "reporting it");
+    }
+
+    [Fact]
+    public void AnUndamagedWorkbookLoadsWithNoWarningsAtAll()
+    {
+        // r593 non-vacuity, and the thing that keeps a warnings channel worth reading: the chart
+        // warnings must fire ONLY on damage. A drawing that holds just shapes or text boxes has no
+        // relationship part at all and is entirely ordinary, so warning on every missing rels part
+        // would put a line in front of the user on healthy files -- which is how a warnings channel
+        // stops being read at all.
+        using var ms = new MemoryStream(RichWorkbookBytes());
+
+        var loaded = new XlsxFileAdapter().LoadWithWarnings(ms);
+
+        loaded.Warnings.Should().BeEmpty("a healthy package must load silently");
+        loaded.Workbook.Sheets.Should().HaveCount(2);
     }
 }
