@@ -213,7 +213,20 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
                 "does not exist in the package", StringComparison.OrdinalIgnoreCase)) ||
             (exception is NullReferenceException &&
              (exception.StackTrace?.Contains("DocumentFormat.OpenXml", StringComparison.Ordinal) == true ||
-              exception.StackTrace?.Contains("ClosedXML", StringComparison.Ordinal) == true))
+              exception.StackTrace?.Contains("ClosedXML", StringComparison.Ordinal) == true)) ||
+            // r592: two more shapes the same damage takes, found by deleting each package part in turn
+            // and reloading. A missing xl/_rels/workbook.xml.rels makes DocumentFormat.OpenXml's
+            // OpenXmlPartContainer.GetPartById throw ArgumentOutOfRangeException, and a missing
+            // worksheet .rels reaches a bare Dictionary indexer and throws KeyNotFoundException.
+            // Neither is a NullReferenceException and neither carries r382's message, so both escaped
+            // the predicate and reached the shell as a raw framework exception -- and the shell shows
+            // exception.Message verbatim, so the user read "Index was out of range" for a damaged
+            // file. Same damage, same sentence: the type test is kept narrow, and the stack-frame
+            // test keeps it to failures that actually came from the packaging layer.
+            ((exception is ArgumentOutOfRangeException or KeyNotFoundException) &&
+             (exception.StackTrace?.Contains("DocumentFormat.OpenXml", StringComparison.Ordinal) == true ||
+              exception.StackTrace?.Contains("ClosedXML", StringComparison.Ordinal) == true ||
+              exception.StackTrace?.Contains("FreeX.Core.IO", StringComparison.Ordinal) == true))
         );
 
     private Workbook LoadCore(
