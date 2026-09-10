@@ -95,6 +95,30 @@ internal sealed class AvaloniaWorkbookWindowRegistry
         _core.RefreshWindowNumbering();
     }
 
+    /// <summary>
+    /// r607: tells every OTHER window viewing this same document that a save is running here.
+    ///
+    /// <para>A "New Window" sibling shares this window's <c>WorkbookSession</c> -- <c>NewWindow()</c>
+    /// builds it from <c>_session.CreateSiblingView(...)</c> -- so both views enumerate the SAME
+    /// <c>Workbook</c>. <c>WorkbookSaveService</c> hands that live workbook to the adapter on a
+    /// background thread, and the shell's reentrancy guard is the per-window <c>_isSaving</c> field:
+    /// while this window saves, the sibling's copy stays false, every one of its guards passes, and a
+    /// keystroke there tears the shared cell dictionaries mid-enumeration.</para>
+    ///
+    /// <para>The WPF host fixed exactly this (R115-app-host-save-race) with
+    /// <c>BroadcastSaveInProgress</c>; the Avalonia host had the same sharing and no broadcast. Same
+    /// audience, same shape.</para>
+    /// </summary>
+    internal void NotifySaveInProgress(MainWindow origin, bool inProgress)
+    {
+        ArgumentNullException.ThrowIfNull(origin);
+
+        _core.Notify(
+            origin,
+            WorkbookWindowNotificationAudience.SameDocumentExceptOrigin,
+            window => window.ApplySaveInProgress(inProgress));
+    }
+
     internal void RefreshWindowNumbering() => _core.RefreshWindowNumbering();
 
     internal void NotifyVisibilityChanged(MainWindow origin)

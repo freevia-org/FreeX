@@ -54,6 +54,13 @@ public partial class MainWindow
 
     private void ApplyPageLayoutScale(PageLayoutScaleField field, string? text)
     {
+        // r607: the shell stays interactive during an open or a save, and the save
+        // hands the LIVE workbook to the adapter on a background thread -- so a mutation
+        // from here races the serializer over the same object graph. 243 sibling handlers
+        // carry this guard; these did not.
+        if (_isOpening || _isSaving)
+            return;
+
         var session = CreatePageLayoutCommandSession();
         ApplyPageLayoutScaleCommit(
             session,

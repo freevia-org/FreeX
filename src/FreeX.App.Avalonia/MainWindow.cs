@@ -27860,14 +27860,33 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_isOpening || _isSaving)
             return false;
 
-        _isSaving = true;
-        UpdateSaveButton();
+        SetSavingAndTellSiblings(true);
         return true;
     }
 
-    private void EndFileOperation()
+    private void EndFileOperation() => SetSavingAndTellSiblings(false);
+
+    /// <summary>
+    /// r607: <c>_isSaving</c> is a PER-WINDOW field, and a "New Window" sibling shares this window's
+    /// <c>WorkbookSession</c> and therefore the same live <c>Workbook</c>. Setting the flag only here
+    /// left every one of the sibling's reentrancy guards passing while this window's background
+    /// thread enumerated the shared cell dictionaries. Mirrors the WPF host's
+    /// R115-app-host-save-race fix.
+    /// </summary>
+    private void SetSavingAndTellSiblings(bool saving)
     {
-        _isSaving = false;
+        _isSaving = saving;
+        UpdateSaveButton();
+        WindowRegistry.NotifySaveInProgress(this, saving);
+    }
+
+    /// <summary>
+    /// r607: applied to a SIBLING window while another window saves the document they share, so the
+    /// sibling's own guards decline edits for the duration.
+    /// </summary>
+    internal void ApplySaveInProgress(bool inProgress)
+    {
+        _isSaving = inProgress;
         UpdateSaveButton();
     }
 
@@ -28258,19 +28277,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 },
                 ExecutionStarting: () =>
                 {
-                    _isSaving = true;
                     _statusText.Text = WorkbookProgressTextFormatter
                         .FormatSave("preparing", TimeSpan.Zero, percent: null, UiText.Get)
                         .Detail;
                     _statusText.Foreground = Brush(67, 113, 83);
                     ApplyFileOperationProgress(null);
-                    UpdateSaveButton();
+                    // r607: also tells sibling windows sharing this workbook, so their own
+                    // guards decline edits while the adapter enumerates it on a background thread.
+                    SetSavingAndTellSiblings(true);
                 },
-                ExecutionCompleted: () =>
-                {
-                    _isSaving = false;
-                    UpdateSaveButton();
-                }));
+                ExecutionCompleted: () => SetSavingAndTellSiblings(false)));
 
             if (workflowResult.Outcome == WorkbookFileOperationOutcome.ExternalWriteConflict)
             {

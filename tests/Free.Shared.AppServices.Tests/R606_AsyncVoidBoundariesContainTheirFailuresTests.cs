@@ -10,8 +10,11 @@ namespace Free.Shared.AppServices.Tests;
 ///
 /// <para>An async lambda or method that returns void has no caller to observe its Task. When it
 /// throws, the exception surfaces on the dispatcher with nothing to catch it: WPF and Avalonia both
-/// terminate the process. This repo has been bitten by it before -- <c>Dispatch(async () =&gt; {})</c>
-/// binds to <c>Action</c>, so 154 tests silently passed while doing nothing.</para>
+/// terminate the process. This repo has been bitten by it before: a valueless async lambda handed to
+/// the headless <c>Dispatch</c> helper bound to its <c>Action</c> overload, making it async void, and
+/// 154 tests silently passed while doing nothing. (Spelled out in prose on purpose --
+/// <c>HeadlessDispatchOverloadContractTests</c> scans test sources for that literal lambda and would
+/// flag this comment as if it were a real call site.)</para>
 ///
 /// <para><c>FreeP.App.Avalonia.Tests.AsyncUiBoundarySourceTests</c> fences this, and three gaps in it
 /// are what this test exists for:</para>
