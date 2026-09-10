@@ -118,7 +118,34 @@ public static class DocxReader
         }
     }
 
+    /// <summary>
+    /// r598: an XmlException anywhere in the read means the package being OPENED is malformed, and
+    /// this reader already owns the sentence for that -- OpenZipArchive above says "it may be
+    /// corrupted or truncated" when the ZIP itself will not parse. A valid zip holding a TRUNCATED
+    /// xml part slipped straight past that and threw a raw XmlException instead, so the same damage
+    /// produced two different errors depending on which layer noticed, one of them framework text
+    /// ("Unexpected end of file has occurred. The following elements are not closed").
+    /// <para>
+    /// Nothing here parses FreeW's own output, so the exception type alone is sufficient evidence of
+    /// a damaged input -- the same reasoning r596 applied to the xlsx reader, and the reason this
+    /// needs no stack-frame test to go with it. The original is kept as InnerException.
+    /// </para>
+    /// </summary>
     public static TextDocument Read(Stream stream)
+    {
+        try
+        {
+            return ReadCore(stream);
+        }
+        catch (System.Xml.XmlException ex)
+        {
+            throw new InvalidDataException(
+                "Could not read this as a Word document (.docx/.docm/.dotx/.dotm). The file is not a valid " +
+                "OOXML package -- it may be corrupted or truncated.", ex);
+        }
+    }
+
+    private static TextDocument ReadCore(Stream stream)
     {
         using var archive = OpenZipArchive(stream);
         // Reject zip-bomb / oversized packages before any decompression-heavy reads (same guard xlsx uses).
