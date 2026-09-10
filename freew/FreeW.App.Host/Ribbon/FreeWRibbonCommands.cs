@@ -309,20 +309,16 @@ internal static class FreeWRibbonCommands
 
         var fontSize = new SelectionValueCommand(editor, (selection, value) =>
         {
-            if (FreeWRibbonNumericValueParser.TryParseFontSize(
+            if (FreeWRibbonNumericValueParser.TryParseTypedFontSize(
                     value,
-                    CultureInfo.CurrentCulture,
-                    NumberStyles.Float | NumberStyles.AllowThousands,
                     out var points))
             {
                 selection.ApplyPropertyValue(TextElement.FontSizeProperty, points * 96.0 / 72.0);
             }
         }, value =>
         {
-            if (!FreeWRibbonNumericValueParser.TryParseFontSize(
+            if (!FreeWRibbonNumericValueParser.TryParseTypedFontSize(
                     value,
-                    CultureInfo.CurrentCulture,
-                    NumberStyles.Float | NumberStyles.AllowThousands,
                     out var points))
             {
                 return false;
@@ -963,8 +959,6 @@ internal static class FreeWRibbonCommands
             editor.SetLineSpacing,
             () => editor.CurrentParagraphFormatting.LineSpacing,
             minimumExclusive: 0,
-            numberStyles: System.Globalization.NumberStyles.Float |
-                System.Globalization.NumberStyles.AllowThousands,
             prepareExecution: () => { editor.Focus(); });
         registry.Bind(FreeWRibbonCommandAction.LineSpacing, lineSpacing);
         stateful.Add(("freew.line-spacing", lineSpacing));

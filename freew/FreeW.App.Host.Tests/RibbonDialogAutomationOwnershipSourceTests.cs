@@ -22,7 +22,7 @@ public sealed class RibbonDialogAutomationOwnershipSourceTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("FreeWRibbonNumericValueParser.TryParseFontSize(");
+            source.Should().Contain("FreeWRibbonNumericValueParser.TryParseTypedFontSize(");
             source.Should().NotContain("FreeWRibbonNumericValueParser.TryParseObjectPosition(");
             source.Should().NotContain("FreeWRibbonNumericValueParser.TryParseObjectSize(");
             source.Should().NotContain("FreeWRibbonNumericValueParser.TryParseChartSize(");
@@ -35,8 +35,30 @@ public sealed class RibbonDialogAutomationOwnershipSourceTests
         floatingObjectFactory.Should().Contain("FreeWRibbonNumericValueParser.TryParseObjectSize(");
         profile.Should().Contain("FreeWRibbonNumericValueParser.TryParseChartSize(");
 
-        wpf.Should().Contain("CultureInfo.CurrentCulture");
-        avalonia.Should().Contain("CultureInfo.InvariantCulture");
+        // r604: these two lines used to assert that the WPF host parses with CurrentCulture and the
+        // Avalonia host with InvariantCulture. That pinned a defect rather than a decision -- it
+        // arrived in a refactor that shared the parsers, recording what the code did.
+        //
+        // What it froze: BOTH hosts DISPLAY the value through FormatInvariant, so the font-size box
+        // always shows "10.5". WPF then re-read that text under the user's culture with
+        // AllowThousands, and on a de-DE machine "10.5" parses as 105 -- opening the box and
+        // pressing Enter without editing anything multiplied the font size by ten. Avalonia's
+        // invariant parse had the opposite failure: a user typing "10,5" was silently ignored.
+        //
+        // The rule now is that neither host chooses. They call the shared typed-entry parser, which
+        // reads the current culture first and falls back to the invariant spelling, with
+        // NumberStyles.Float so a group separator cannot turn 10.5 into 105.
+        //
+        // The rule itself is enforced by R604_BothHostsReadTypedNumbersTheSameWayTests, which looks
+        // at TryParse CALLS specifically. A blanket "these files must not mention CultureInfo" was
+        // the first attempt and it was wrong: both hosts legitimately pass CurrentCulture to
+        // string.Format for user-facing text, which is exactly where the current culture belongs.
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().NotContain(
+                "TryParseFontSize(",
+                "the culture-taking overload is not for typed input -- use TryParseTypedFontSize");
+        }
     }
 
     [Fact]

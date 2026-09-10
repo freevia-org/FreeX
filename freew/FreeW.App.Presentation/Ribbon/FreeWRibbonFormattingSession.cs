@@ -97,8 +97,14 @@ public sealed class FreeWRibbonFormattingSession
 
     // r574: IsFinite as well. "points >= 0" is the one-sided accept form r571 corrected --
     // Infinity satisfies it. Found by the widened r486 tripwire rather than by inspection.
+    //
+    // r604: and it is TYPED input, so it must be read in the user's locale. Parsing it as invariant
+    // only meant a user on any comma-decimal machine who typed "1,5" got nothing at all -- the
+    // command returned false and silently declined. LocalizedNumberEntry keeps the invariant
+    // spelling working as a guarded fallback, so this widens what is accepted without dropping
+    // anything, and IsFinite stays here because r571/r574 are about the VALUE, not its spelling.
     public static bool TryParseNonNegativePoints(string? rawValue, out double points) =>
-        double.TryParse(rawValue, NumberStyles.Any, CultureInfo.InvariantCulture, out points)
+        LocalizedNumberEntry.TryParse(rawValue, NumberStyles.Float, out points)
         && double.IsFinite(points)
         && points >= 0;
 

@@ -25028,9 +25028,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_isOpening || _isSaving)
             return;
 
-        if (!double.TryParse(sizeText, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var size)
-            || !double.IsFinite(size) || size <= 0)
+        // r604: was an InvariantCulture-only parse, so this box silently ignored "10,5" for every
+        // comma-decimal user -- while the WPF host parsed the SAME box with the current culture and
+        // rejected the invariant spelling instead. Neither host should be deciding; both now go
+        // through WorksheetSizeInputParser, which tries the current culture then the invariant one.
+        if (!FreeX.App.Presentation.SheetUI.WorksheetSizeInputParser.TryParsePositiveSize(
+                sizeText ?? string.Empty,
+                out var size))
+        {
             return;
+        }
 
         if (!TryCommitPendingFormulaEdit())
             return;

@@ -218,10 +218,9 @@ public static class ObjectFormatCommandPlanner
     {
         // r574: IsFinite as well -- "points > 0" admits Infinity (r571).
         var trimmed = (text ?? string.Empty).Trim();
-        return double.TryParse(
+        return LocalizedNumberEntry.TryParse(
             trimmed,
             NumberStyles.Float,
-            CultureInfo.InvariantCulture,
             out points)
             && double.IsFinite(points)
             && points > 0;
