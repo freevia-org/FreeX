@@ -69,6 +69,71 @@ public sealed class FailureOutcomeMutationAuditTests(ITestOutputHelper output)
     /// -- so the fix's reach is demonstrated rather than assumed.
     /// </para>
     /// </summary>
+
+    /// <summary>
+    /// r602: FreeX's missing third of a census the other two apps already have. FreeW's r527 and
+    /// FreeP's r528 both build every command with an index that cannot be valid, run the whole
+    /// HasEffect/Apply/Revert cycle, and require that none THROWS. FreeX had no equivalent, and the
+    /// failure-outcome audit above deliberately skips the throw path ("a different contract"), so
+    /// nothing in this repository asked the question of FreeX's commands at all.
+    /// <para>
+    /// As in r528, the stakes are a quality bar rather than a crash guard: CommandBus.Execute
+    /// TryReverts on a throw, so a raising command degrades to a failed one rather than escaping the
+    /// command layer. A command handed a stale address should DECLINE, not raise.
+    /// </para>
+    /// <para>
+    /// The hostile address is inside the grid's bounds but far past anything the fixture holds, which
+    /// is deliberate: an out-of-bounds address would be turned away by a bounds guard before the
+    /// command reached its own lookup, and the census would pass without exercising anything.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void EveryCommandSurvivesAHostileAddress()
+    {
+        var raised = new List<string>();
+        var exercised = new SortedSet<string>(StringComparer.Ordinal);
+        var succeeded = 0;
+        var declined = 0;
+
+        var commandTypes = typeof(EditCellsCommand).Assembly
+            .GetTypes()
+            .Where(t => t is { IsAbstract: false, IsInterface: false, IsGenericTypeDefinition: false })
+            .Where(t => typeof(IWorkbookCommand).IsAssignableFrom(t))
+            .Where(t => t != typeof(CompositeWorkbookCommand))
+            .OrderBy(t => t.FullName, StringComparer.Ordinal)
+            .ToList();
+
+        foreach (var type in commandTypes)
+        {
+            var (workbook, bank) = BuildFixture();
+            bank.MakeHostile();
+
+            if (!TryConstruct(type, bank, out var command, out _))
+                continue;
+
+            exercised.Add(type.Name);
+            var ctx = new TestCommandContext(workbook);
+
+            try
+            {
+                var outcome = command!.Apply(ctx);
+                if (outcome.Success) { succeeded++; command.Revert(ctx); } else { declined++; }
+            }
+            catch (Exception ex)
+            {
+                raised.Add($"{type.Name} -> {ex.GetType().Name}: {ex.Message.Split('\n')[0]}");
+            }
+        }
+
+        output.WriteLine($"exercised={exercised.Count} succeeded={succeeded} declined={declined} raised={raised.Count}");
+
+        exercised.Should().HaveCountGreaterThan(50,
+            "the census is worthless if argument synthesis stopped reaching the command surface");
+
+        raised.Should().BeEmpty(
+            "a command handed an address the workbook does not contain must decline, not raise -- " +
+            "the same bar FreeW's r527 and FreeP's r528 hold their commands to");
+    }
     [Fact]
     public void CommandsThatSucceed_AreFullyUndoneByRevert()
     {
@@ -522,6 +587,18 @@ public sealed class FailureOutcomeMutationAuditTests(ITestOutputHelper output)
     /// </summary>
     private sealed class ArgumentBank(Workbook workbook, Sheet sheet, Guid objectId)
     {
+        /// <summary>
+        /// r602: an address inside the grid's bounds but far past anything the fixture contains, so a
+        /// command reaches its own lookup rather than being turned away by a bounds guard first.
+        /// That is the case FreeW's r527 and FreeP's r528 census: a STALE index, not an impossible one.
+        /// </summary>
+        private const uint HostileRow = 900_000;
+        private const uint HostileCol = 15_000;
+
+        private bool _hostile;
+
+        public void MakeHostile() => _hostile = true;
+
         private Guid _guid = objectId;
 
         public void OverrideGuid(Guid value) => _guid = value;
@@ -545,10 +622,21 @@ public sealed class FailureOutcomeMutationAuditTests(ITestOutputHelper output)
 
             if (type == typeof(SheetId)) { value = sheet.Id; return true; }
             if (type == typeof(WorkbookId)) { value = workbook.Id; return true; }
-            if (type == typeof(CellAddress)) { value = new CellAddress(sheet.Id, 2, 2); return true; }
+            if (type == typeof(CellAddress))
+            {
+                value = _hostile
+                    ? new CellAddress(sheet.Id, HostileRow, HostileCol)
+                    : new CellAddress(sheet.Id, 2, 2);
+                return true;
+            }
+
             if (type == typeof(GridRange))
             {
-                value = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 3));
+                value = _hostile
+                    ? new GridRange(
+                        new CellAddress(sheet.Id, HostileRow, HostileCol),
+                        new CellAddress(sheet.Id, HostileRow, HostileCol))
+                    : new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 3));
                 return true;
             }
 
