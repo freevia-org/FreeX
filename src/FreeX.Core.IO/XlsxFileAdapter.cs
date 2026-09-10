@@ -238,6 +238,21 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
             // file. Same damage, same sentence: the type test is kept narrow, and the stack-frame
             // test keeps it to failures that actually came from the packaging layer.
             exception is System.Xml.XmlException ||
+            // r600: DocumentFormat.OpenXml's OpenXmlPart.LoadDomTree throws InvalidDataException
+            // ("Cannot load the root element from the part. The part contains invalid data.") when a
+            // part is well-formed XML of the WRONG SCHEMA -- the shape a buggy third-party writer or
+            // a bad merge produces, which neither attribute mutation, part deletion nor truncation
+            // reaches. That sentence is library text and the shell shows it verbatim.
+            //
+            // The test here is deliberately STRONGER than the stack-frame test r592 used for its two
+            // ambiguous types: FreeX.Core.IO itself throws InvalidDataException in eighteen places,
+            // each with its own actionable sentence, and several of them run inside a ClosedXML call
+            // chain -- so a StackTrace.Contains test would swallow FreeX's own errors and replace
+            // good messages with the generic one. TargetSite names where the exception was THROWN
+            // rather than merely what is on the stack, which is exactly the distinction needed.
+            (exception is InvalidDataException &&
+             exception.TargetSite?.DeclaringType?.Namespace?.StartsWith(
+                 "DocumentFormat.OpenXml", StringComparison.Ordinal) == true) ||
             ((exception is ArgumentOutOfRangeException or KeyNotFoundException) &&
              (exception.StackTrace?.Contains("DocumentFormat.OpenXml", StringComparison.Ordinal) == true ||
               exception.StackTrace?.Contains("ClosedXML", StringComparison.Ordinal) == true ||
