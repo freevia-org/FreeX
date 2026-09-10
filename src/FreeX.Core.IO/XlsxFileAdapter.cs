@@ -106,7 +106,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
             {
                 workbook = LoadCore(stream, warnings, inspectFeatures, out featureReport);
             }
-            catch (Exception ex) when (IsMissingPackagePartFailure(ex))
+            catch (Exception ex) when (IsDamagedPackageFailure(ex))
             {
                 // r382: a package missing a required part surfaced the packaging layer's own words --
                 // "Specified part does not exist in the package", or a bare NullReferenceException
@@ -206,7 +206,21 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
     /// message, including WorkbookPasswordProtectedException and cancellation, so this cannot
     /// flatten an informative failure into a generic one.
     /// </summary>
-    private static bool IsMissingPackagePartFailure(Exception exception) =>
+    /// <summary>
+    /// r596: renamed from IsMissingPackagePartFailure, because it no longer covers only a MISSING
+    /// part. Truncating a part -- the interrupted-download and zip-repair damage shape, distinct
+    /// from deleting one -- leaves well-formed zip entries holding malformed XML, and every reader
+    /// in the package layer then throws a raw XmlException whose Message the shell shows verbatim.
+    /// The user read "Unexpected end of file has occurred. The following elements are not closed"
+    /// for a file this adapter already owns an accurate sentence about.
+    /// <para>
+    /// An XmlException on the LOAD path can only mean the file being opened is malformed: nothing
+    /// here parses FreeX's own output. So the type alone is sufficient evidence, unlike the
+    /// ArgumentOutOfRange/KeyNotFound shapes r592 added, which are ambiguous enough to need a
+    /// stack-frame test as well.
+    /// </para>
+    /// </summary>
+    private static bool IsDamagedPackageFailure(Exception exception) =>
         exception is not WorkbookInvalidException and not OperationCanceledException &&
         (
             (exception is InvalidOperationException && exception.Message.Contains(
@@ -223,6 +237,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
             // exception.Message verbatim, so the user read "Index was out of range" for a damaged
             // file. Same damage, same sentence: the type test is kept narrow, and the stack-frame
             // test keeps it to failures that actually came from the packaging layer.
+            exception is System.Xml.XmlException ||
             ((exception is ArgumentOutOfRangeException or KeyNotFoundException) &&
              (exception.StackTrace?.Contains("DocumentFormat.OpenXml", StringComparison.Ordinal) == true ||
               exception.StackTrace?.Contains("ClosedXML", StringComparison.Ordinal) == true ||
