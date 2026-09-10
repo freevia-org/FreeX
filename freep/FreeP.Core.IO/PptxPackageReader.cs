@@ -1517,6 +1517,23 @@ public static class PptxPackageReader
             return slide;
         }
 
+        // r601: the part parsed, but it is not a SLIDE. Found by giving a slide part another part's
+        // XML -- valid zip, well-formed XML, wrong schema, the shape a buggy writer or a bad merge
+        // produces. TryLoadXmlPart returns a document, so the check above cannot see it, and every
+        // p:sld-relative lookup below then finds nothing: the slide reads BLANK and silently.
+        //
+        // r454 built the reporting for exactly this harm and said so -- "a slide blank because it was
+        // damaged is indistinguishable from one the author left blank, which is precisely what made
+        // the loss invisible" -- but it fires only when the part will not parse at all. The root
+        // element name is a decisive test with no false positives: a slide part whose root is not
+        // p:sld is wrong whatever else it contains, unlike "declares nothing", which is legitimate
+        // for many parts.
+        if (xml.Root.Name != P + "sld")
+        {
+            reportUnreadablePart?.Invoke(slidePath);
+            return slide;
+        }
+
         slide.IsHidden = xml.Root.Attribute("show")?.Value is { } show &&
             (show == "0" || string.Equals(show, "false", StringComparison.OrdinalIgnoreCase));
 
