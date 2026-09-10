@@ -1546,6 +1546,11 @@ public static class PasteCommandFactory
 
     internal static ScalarValue ParseClipboardValue(string text)
     {
+        // r609: every numeric branch below caps to Excel's 15 significant digits, the same rule
+        // CellEntryParser applies to typed entry. Without it the SAME characters produced a
+        // different stored double depending on whether they were typed or pasted -- and the pasted
+        // one was a value Excel cannot hold, so "=A1=B1" over a typed and a pasted copy of one
+        // number answered FALSE. The comments on each branch already claimed to mirror typed entry.
         // Excel's text-escape convention: a leading apostrophe forces the pasted field to be kept
         // as text (apostrophe stripped), exactly like typing '123 into a cell. This must be checked
         // before any numeric/boolean coercion below.
@@ -1563,7 +1568,7 @@ public static class PasteCommandFactory
                 out var cultureNumber) &&
             double.IsFinite(cultureNumber))
         {
-            return new NumberValue(cultureNumber);
+            return new NumberValue(ExcelNumericPrecision.CapSignificantDigits(cultureNumber));
         }
 
         // Locale-aware thousands-grouping parse, matching CellEntryParser's NumberEntryStyles
@@ -1576,7 +1581,7 @@ public static class PasteCommandFactory
         // ValidGroupingRegex gate below) so a malformed grouping like "1.23,4" is still rejected.
         if (TryParseCultureGroupedNumber(text, System.Globalization.CultureInfo.CurrentCulture, out var groupedCultureNumber))
         {
-            return new NumberValue(groupedCultureNumber);
+            return new NumberValue(ExcelNumericPrecision.CapSignificantDigits(groupedCultureNumber));
         }
 
         // Excel-parity coercion for the accounting/thousands/parenthesized forms Excel recognizes on
@@ -1585,7 +1590,7 @@ public static class PasteCommandFactory
         // groupings like "1,2345" are correctly rejected as text rather than silently misparsed.
         if (TryParseExcelPasteNumber(text, out var excelNumber) && double.IsFinite(excelNumber))
         {
-            return new NumberValue(excelNumber);
+            return new NumberValue(ExcelNumericPrecision.CapSignificantDigits(excelNumber));
         }
 
         if (text.Equals("TRUE", StringComparison.OrdinalIgnoreCase) ||
@@ -1601,7 +1606,7 @@ public static class PasteCommandFactory
         // text instead of the number/date Excel would store.
         if (TryParsePastePercent(text, out var percentValue))
         {
-            return new NumberValue(percentValue);
+            return new NumberValue(ExcelNumericPrecision.CapSignificantDigits(percentValue));
         }
 
         if (TryParsePasteDate(text, out var pasteDate))
