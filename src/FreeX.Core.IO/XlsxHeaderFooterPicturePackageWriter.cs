@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
+using System.Globalization;
 
 namespace FreeX.Core.IO;
 
@@ -166,7 +167,7 @@ internal static class XlsxHeaderFooterPicturePackageWriter
         }
 
         var digits = vmlPath.Substring(prefix.Length, vmlPath.Length - prefix.Length - suffix.Length);
-        return int.TryParse(digits, out var value) ? value : null;
+        return int.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : null;
     }
 
     public static void Save(

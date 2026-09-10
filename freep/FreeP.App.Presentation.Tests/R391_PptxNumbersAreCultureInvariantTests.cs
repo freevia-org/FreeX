@@ -27,13 +27,25 @@ public sealed class R391_PptxNumbersAreCultureInvariantTests
     [InlineData("de-DE")]
     [InlineData("fr-FR")]
     [InlineData("tr-TR")]
+    // r603: a SEPARATOR culture cannot see a SIGN defect. Negative integers reach the wire
+    // through ToString/interpolation, and 42 cultures spell the minus as U+2212 (sv-SE) or
+    // prefix a direction mark (fa-IR is U+200E U+2212, ar-SA is U+061C '-'). None of those is
+    // legal in an xsd numeric attribute, and none matches a comma-decimal scan.
+    [InlineData("fa-IR")]
+    [InlineData("ar-SA")]
+    [InlineData("sv-SE")]
     public void WrittenPackageHasNoCultureFormattedNumbers(string culture)
     {
         var previous = CultureInfo.CurrentCulture;
         CultureInfo.CurrentCulture = new CultureInfo(culture);
         try
         {
-            Assert.Equal("3,14", 3.14.ToString());
+            // r603: the old self-check was Assert.Equal("3,14", 3.14.ToString()), which is true for
+            // the three separator cultures and FALSE for the sign cultures added below -- fa-IR and
+            // ar-SA render the digits themselves in Arabic-Indic. Assert the culture took effect
+            // instead of asserting one culture's rendering of it.
+            Assert.Equal(new CultureInfo(culture).Name, CultureInfo.CurrentCulture.Name);
+            Assert.NotEqual("3.14", 3.14.ToString());
 
             var presentation = new Presentation();
             var slide = new Slide();
@@ -49,7 +61,15 @@ public sealed class R391_PptxNumbersAreCultureInvariantTests
                 TextBody = new TextBody(),
             };
             var paragraph = new Paragraph();
-            paragraph.Runs.Add(new Run { Text = "probe" });
+            // r603: negative on purpose. Without one the sign half of this scan is vacuous -- every
+            // other number in this fixture is positive, and a positive integer renders identically
+            // in every culture that uses ASCII digits.
+            paragraph.Runs.Add(new Run
+            {
+                Text = "probe",
+                CharacterSpacingHundredthsPt = -150,
+                BaselineOffset = -25000,
+            });
             shape.TextBody!.Paragraphs.Add(paragraph);
             slide.Shapes.Add(shape);
             presentation.Slides.Add(slide);
@@ -61,6 +81,12 @@ public sealed class R391_PptxNumbersAreCultureInvariantTests
             using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
             var report = new System.Text.StringBuilder();
             var commaDecimal = new Regex(@"^-?\d{1,15},\d+$");
+            // Any of these in an attribute value means a number was formatted for a human:
+            // U+2212 minus, U+200E LRM, U+200F RLM, U+061C ALM, and the Arabic-Indic digit
+            // blocks. All are illegal in an xsd numeric type; none can appear by accident.
+            // Spelled as escapes, not literal characters: four of these are invisible or bidi
+            // controls, so a literal character class would be unreadable and unreviewable.
+            var cultureFormatted = new Regex("[\u2212\u200E\u200F\u061C\u0660-\u0669\u06F0-\u06F9]");
 
             foreach (var entry in archive.Entries)
             {
@@ -79,7 +105,7 @@ public sealed class R391_PptxNumbersAreCultureInvariantTests
                 {
                     foreach (var attribute in element.Attributes())
                     {
-                        if (commaDecimal.IsMatch(attribute.Value))
+                        if (commaDecimal.IsMatch(attribute.Value) || cultureFormatted.IsMatch(attribute.Value))
                             report.AppendLine($"{entry.FullName}: {element.Name.LocalName}/@{attribute.Name.LocalName} = {attribute.Value}");
                     }
                 }

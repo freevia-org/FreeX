@@ -328,18 +328,18 @@ public static class PptxPackageReader
         var sldSz = presRoot.Element(P + "sldSz");
         if (sldSz is not null)
         {
-            if (long.TryParse(sldSz.Attribute("cx")?.Value, out var cx) && cx > 0)
+            if (long.TryParse(sldSz.Attribute("cx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cx) && cx > 0)
                 presentation.SlideSizeCxEmu = cx;
-            if (long.TryParse(sldSz.Attribute("cy")?.Value, out var cy) && cy > 0)
+            if (long.TryParse(sldSz.Attribute("cy")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cy) && cy > 0)
                 presentation.SlideSizeCyEmu = cy;
         }
 
         var notesSz = presRoot.Element(P + "notesSz");
         if (notesSz is not null)
         {
-            if (long.TryParse(notesSz.Attribute("cx")?.Value, out var cx) && cx > 0)
+            if (long.TryParse(notesSz.Attribute("cx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cx) && cx > 0)
                 presentation.NotesPageSizeCxEmu = cx;
-            if (long.TryParse(notesSz.Attribute("cy")?.Value, out var cy) && cy > 0)
+            if (long.TryParse(notesSz.Attribute("cy")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cy) && cy > 0)
                 presentation.NotesPageSizeCyEmu = cy;
         }
 
@@ -556,7 +556,7 @@ public static class PptxPackageReader
             allSlides.Add(new Slide
             {
                 Id = rId,
-                NumericId = uint.TryParse(numericId, out var parsedId) ? parsedId : null,
+                NumericId = uint.TryParse(numericId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedId) ? parsedId : null,
             });
         }
 
@@ -961,7 +961,7 @@ public static class PptxPackageReader
 
         foreach (var cmAuthorEl in xml.Root.Elements(P + "cmAuthor"))
         {
-            if (!int.TryParse(cmAuthorEl.Attribute("id")?.Value, out var id)) continue;
+            if (!int.TryParse(cmAuthorEl.Attribute("id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id)) continue;
             var name     = cmAuthorEl.Attribute("name")?.Value     ?? string.Empty;
             var initials = cmAuthorEl.Attribute("initials")?.Value ?? string.Empty;
             result[id] = (name, initials);
@@ -1010,8 +1010,8 @@ public static class PptxPackageReader
 
         foreach (var cmEl in xml.Root.Elements(P + "cm"))
         {
-            if (!int.TryParse(cmEl.Attribute("authorId")?.Value, out var authorId)) authorId = 0;
-            if (!int.TryParse(cmEl.Attribute("idx")?.Value, out var idx)) idx = 0;
+            if (!int.TryParse(cmEl.Attribute("authorId")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var authorId)) authorId = 0;
+            if (!int.TryParse(cmEl.Attribute("idx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx)) idx = 0;
 
             // BB6: don't silently fabricate an empty author when authorId is not in the map.
             // Preserve the numeric id as a placeholder so identity is not destroyed on round-trip.
@@ -1383,14 +1383,14 @@ public static class PptxPackageReader
             level.BulletSizePct = null;
         }
         else if (lvlEl.Element(A + "buSzPts") is { } buSzPtsL &&
-                 int.TryParse(buSzPtsL.Attribute("val")?.Value, out var szPtsL) &&
+                 int.TryParse(buSzPtsL.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var szPtsL) &&
                  szPtsL > 0)
         {
             level.BulletSizePt = szPtsL / 100.0;
             level.BulletSizePct = null;
         }
         else if (lvlEl.Element(A + "buSzPct") is { } buSzPctL &&
-                 int.TryParse(buSzPctL.Attribute("val")?.Value, out var szPctL))
+                 int.TryParse(buSzPctL.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var szPctL))
         {
             level.BulletSizePct = szPctL;
         }
@@ -1969,7 +1969,7 @@ public static class PptxPackageReader
                     var targetSeg = rel.Target.Split('/').Last(); // e.g. "slide2.xml"
                     var numStr = System.Text.RegularExpressions.Regex
                         .Match(targetSeg, @"\d+").Value;
-                    if (int.TryParse(numStr, out var num) && num >= 1 && num <= allSlides.Count)
+                    if (int.TryParse(numStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var num) && num >= 1 && num <= allSlides.Count)
                     {
                         var targetSlide = allSlides[num - 1];
                         return new Hyperlink { TargetSlideId = targetSlide.Id, Tooltip = tooltip };
@@ -2437,7 +2437,7 @@ public static class PptxPackageReader
         var target = graphicFrame.Descendants()
             .FirstOrDefault(element => string.Equals(element.Name.LocalName, "sldZmObj", StringComparison.OrdinalIgnoreCase))
             ?.Attribute("sldId")?.Value;
-        return uint.TryParse(target, out var slideId) ? slideId : null;
+        return uint.TryParse(target, NumberStyles.Integer, CultureInfo.InvariantCulture, out var slideId) ? slideId : null;
     }
 
     /// <summary>
@@ -3423,7 +3423,7 @@ public static class PptxPackageReader
 
                 if (!childrenOf.TryGetValue(srcId, out var kids))
                     childrenOf[srcId] = kids = new List<(string Id, int Order, int Sequence)>();
-                var srcOrd = int.TryParse(cxn.Attribute("srcOrd")?.Value, out var parsedSrcOrd)
+                var srcOrd = int.TryParse(cxn.Attribute("srcOrd")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedSrcOrd)
                     ? parsedSrcOrd
                     : int.MaxValue;
                 kids.Add((destId, srcOrd, connectionSequence++));
@@ -4866,8 +4866,8 @@ public static class PptxPackageReader
     private static ConnectorAttachment? ReadDspConnectorAttachment(XElement? element)
     {
         if (element is null ||
-            !uint.TryParse(element.Attribute("id")?.Value, out var shapeId) ||
-            !int.TryParse(element.Attribute("idx")?.Value, out var siteIndex))
+            !uint.TryParse(element.Attribute("id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shapeId) ||
+            !int.TryParse(element.Attribute("idx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var siteIndex))
         {
             return null;
         }
@@ -5019,9 +5019,9 @@ public static class PptxPackageReader
         var cell = new TableCell();
 
         // Merge attributes.
-        if (int.TryParse(tcEl.Attribute("gridSpan")?.Value, out var gs) && gs > 1)
+        if (int.TryParse(tcEl.Attribute("gridSpan")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var gs) && gs > 1)
             cell.GridSpan = gs;
-        if (int.TryParse(tcEl.Attribute("rowSpan")?.Value, out var rs) && rs > 1)
+        if (int.TryParse(tcEl.Attribute("rowSpan")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rs) && rs > 1)
             cell.RowSpan = rs;
         cell.HMerge = tcEl.Attribute("hMerge")?.Value is "1" or "true";
         cell.VMerge = tcEl.Attribute("vMerge")?.Value is "1" or "true";
@@ -5560,16 +5560,16 @@ public static class PptxPackageReader
         {
             var stCxnEl = cNvCxnSpPr.Element(A + "stCxn");
             if (stCxnEl is not null &&
-                uint.TryParse(stCxnEl.Attribute("id")?.Value, out var stId) &&
-                int.TryParse(stCxnEl.Attribute("idx")?.Value, out var stIdx))
+                uint.TryParse(stCxnEl.Attribute("id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var stId) &&
+                int.TryParse(stCxnEl.Attribute("idx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var stIdx))
             {
                 shape.ConnectionStart = new ConnectorAttachment { ShapeId = stId, SiteIndex = stIdx };
             }
 
             var endCxnEl = cNvCxnSpPr.Element(A + "endCxn");
             if (endCxnEl is not null &&
-                uint.TryParse(endCxnEl.Attribute("id")?.Value, out var endId) &&
-                int.TryParse(endCxnEl.Attribute("idx")?.Value, out var endIdx))
+                uint.TryParse(endCxnEl.Attribute("id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var endId) &&
+                int.TryParse(endCxnEl.Attribute("idx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var endIdx))
             {
                 shape.ConnectionEnd = new ConnectorAttachment { ShapeId = endId, SiteIndex = endIdx };
             }
@@ -6294,9 +6294,9 @@ public static class PptxPackageReader
             // Wave 19A: parse cached normAutofit scaling values
             if (normAf is not null)
             {
-                if (int.TryParse(normAf.Attribute("fontScale")?.Value, out var fs) && fs > 0)
+                if (int.TryParse(normAf.Attribute("fontScale")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fs) && fs > 0)
                     body.FontScalePPT = fs;
-                if (int.TryParse(normAf.Attribute("lnSpcReduction")?.Value, out var lsr) && lsr > 0)
+                if (int.TryParse(normAf.Attribute("lnSpcReduction")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var lsr) && lsr > 0)
                     body.LnSpcReductionPPT = lsr;
             }
 
@@ -6340,7 +6340,7 @@ public static class PptxPackageReader
             }
 
             // Wave 22B: text columns (a:bodyPr numCol= spcCol=)
-            if (int.TryParse(bodyPr.Attribute("numCol")?.Value, out var numCol) && numCol > 1)
+            if (int.TryParse(bodyPr.Attribute("numCol")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var numCol) && numCol > 1)
                 body.ColumnCount = numCol;
             if (ParseLongNullable(bodyPr.Attribute("spcCol")?.Value) is { } spcColEmu)
                 body.ColumnSpacingEmu = spcColEmu;
@@ -6406,7 +6406,7 @@ public static class PptxPackageReader
             };
             para.RightToLeft = ParseNullableBoolean(pPr.Attribute("rtl")?.Value);
 
-            if (int.TryParse(pPr.Attribute("lvl")?.Value, out var lvl)) para.Level = Math.Clamp(lvl, 0, 8); // BU3: clamp to valid array range [0,8]
+            if (int.TryParse(pPr.Attribute("lvl")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var lvl)) para.Level = Math.Clamp(lvl, 0, 8); // BU3: clamp to valid array range [0,8]
 
             if (pPr.Element(A + "buNone") is not null)
             {
@@ -6422,7 +6422,7 @@ public static class PptxPackageReader
             {
                 para.BulletKind = BulletKind.Auto;
                 para.AutoNumType = PptxAutoNumberTypeCodec.Parse(buAutoNum.Attribute("type")?.Value);
-                if (int.TryParse(buAutoNum.Attribute("startAt")?.Value, out var startAt) && startAt >= 1)
+                if (int.TryParse(buAutoNum.Attribute("startAt")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var startAt) && startAt >= 1)
                 {
                     para.AutoNumStartAt = startAt;
                     para.AutoNumStartAtSpecified = true;
@@ -6462,14 +6462,14 @@ public static class PptxPackageReader
                 para.BulletSizePct = null;
             }
             else if (pPr.Element(A + "buSzPts") is { } buSzPts &&
-                     int.TryParse(buSzPts.Attribute("val")?.Value, out var szPts) &&
+                     int.TryParse(buSzPts.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var szPts) &&
                      szPts > 0)
             {
                 para.BulletSizePt = szPts / 100.0;
                 para.BulletSizePct = null;
             }
             else if (pPr.Element(A + "buSzPct") is { } buSzPct &&
-                     int.TryParse(buSzPct.Attribute("val")?.Value, out var szPct))
+                     int.TryParse(buSzPct.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var szPct))
             {
                 para.BulletSizePct = szPct;
             }
@@ -6498,7 +6498,7 @@ public static class PptxPackageReader
             {
                 foreach (var tabEl in tabLst.Elements(A + "tab"))
                 {
-                    if (!long.TryParse(tabEl.Attribute("pos")?.Value, out var tabPos)) continue;
+                    if (!long.TryParse(tabEl.Attribute("pos")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var tabPos)) continue;
                     var tabAlgn = tabEl.Attribute("algn")?.Value switch
                     {
                         "ctr"  => TabStopAlignment.Center,
@@ -6797,7 +6797,7 @@ public static class PptxPackageReader
         var rPr = fldEl.Element(A + "rPr");
         if (rPr is not null)
         {
-            if (int.TryParse(rPr.Attribute("sz")?.Value, out var sz) && sz > 0)
+            if (int.TryParse(rPr.Attribute("sz")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sz) && sz > 0)
                 fld.FontSizePt = sz / 100.0;
             fld.FontFamily = rPr.Element(A + "latin")?.Attribute("typeface")?.Value;
             fld.EastAsiaFontFamily = rPr.Element(A + "ea")?.Attribute("typeface")?.Value;
@@ -6810,11 +6810,11 @@ public static class PptxPackageReader
             fld.Kumimoji = ParseNullableBoolean(rPr.Attribute("kumimoji")?.Value);
             fld.SmartTagClean = ParseNullableBoolean(rPr.Attribute("smtClean")?.Value);
             fld.NormalizeHeight = ParseNullableBoolean(rPr.Attribute("normalizeH")?.Value);
-            if (int.TryParse(rPr.Attribute("spc")?.Value, out var characterSpacing))
+            if (int.TryParse(rPr.Attribute("spc")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var characterSpacing))
                 fld.CharacterSpacingHundredthsPt = characterSpacing;
-            if (int.TryParse(rPr.Attribute("kern")?.Value, out var kerningThreshold))
+            if (int.TryParse(rPr.Attribute("kern")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var kerningThreshold))
                 fld.KerningThresholdHundredthsPt = kerningThreshold;
-            if (int.TryParse(rPr.Attribute("baseline")?.Value, out var baseline))
+            if (int.TryParse(rPr.Attribute("baseline")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var baseline))
                 fld.BaselineOffset = baseline;
             fld.RightToLeft = ParseNullableBoolean(rPr.Attribute("rtl")?.Value);
             fld.Caps = rPr.Attribute("cap")?.Value.ToLowerInvariant() switch
@@ -6882,9 +6882,9 @@ public static class PptxPackageReader
             run.Kumimoji = ParseNullableBoolean(rPr.Attribute("kumimoji")?.Value);
             run.SmartTagClean = ParseNullableBoolean(rPr.Attribute("smtClean")?.Value);
             run.NormalizeHeight = ParseNullableBoolean(rPr.Attribute("normalizeH")?.Value);
-            if (int.TryParse(rPr.Attribute("spc")?.Value, out var characterSpacing))
+            if (int.TryParse(rPr.Attribute("spc")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var characterSpacing))
                 run.CharacterSpacingHundredthsPt = characterSpacing;
-            if (int.TryParse(rPr.Attribute("kern")?.Value, out var kerningThreshold))
+            if (int.TryParse(rPr.Attribute("kern")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var kerningThreshold))
                 run.KerningThresholdHundredthsPt = kerningThreshold;
             run.UnderlineStyleToken = rPr.Attribute("u")?.Value;
             run.StrikeStyleToken = rPr.Attribute("strike")?.Value;
@@ -6904,9 +6904,9 @@ public static class PptxPackageReader
                 "small" => RunTextCaps.Small,
                 _ => RunTextCaps.None,
             };
-            if (int.TryParse(rPr.Attribute("sz")?.Value, out var sz) && sz > 0)
+            if (int.TryParse(rPr.Attribute("sz")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sz) && sz > 0)
                 run.FontSizePt = sz / 100.0;
-            if (int.TryParse(rPr.Attribute("baseline")?.Value, out var baseline))
+            if (int.TryParse(rPr.Attribute("baseline")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var baseline))
                 run.BaselineOffset = baseline;
             run.FontFamily = rPr.Element(A + "latin")?.Attribute("typeface")?.Value;
             run.EastAsiaFontFamily = rPr.Element(A + "ea")?.Attribute("typeface")?.Value;
@@ -6952,9 +6952,9 @@ public static class PptxPackageReader
                         alpha = (byte)Math.Clamp((int)Math.Round(av / 100000.0 * 255), 0, 255);
                 }
                 double blurPt = 2.0, distPt = 2.0, dirDeg = 45.0;
-                if (long.TryParse(outerShdw.Attribute("blurRad")?.Value, out var blurEmu)) blurPt = DrawingMlCoordinateUnits.EmuToPoints(blurEmu);
-                if (long.TryParse(outerShdw.Attribute("dist")?.Value,    out var distEmu)) distPt = DrawingMlCoordinateUnits.EmuToPoints(distEmu);
-                if (long.TryParse(outerShdw.Attribute("dir")?.Value,     out var dirRaw))  dirDeg = dirRaw  / 60000.0;
+                if (long.TryParse(outerShdw.Attribute("blurRad")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var blurEmu)) blurPt = DrawingMlCoordinateUnits.EmuToPoints(blurEmu);
+                if (long.TryParse(outerShdw.Attribute("dist")?.Value,    NumberStyles.Integer, CultureInfo.InvariantCulture, out var distEmu)) distPt = DrawingMlCoordinateUnits.EmuToPoints(distEmu);
+                if (long.TryParse(outerShdw.Attribute("dir")?.Value,     NumberStyles.Integer, CultureInfo.InvariantCulture, out var dirRaw))  dirDeg = dirRaw  / 60000.0;
                 run.TextShadow = new RunTextShadow
                 {
                     Color  = shdwColor ?? new ThemeAwareColor(new SrgbColor(0, 0, 0)),
@@ -6978,11 +6978,11 @@ public static class PptxPackageReader
                     alpha = (byte)Math.Clamp((int)Math.Round(stA / 100000.0 * 255), 0, 255);
 
                 double blurPt = 0, distPt = 0, dirDeg = 90.0, scaleY = -1.0, endPos = 1.0;
-                if (long.TryParse(reflection.Attribute("blurRad")?.Value, out var blurEmu)) blurPt = DrawingMlCoordinateUnits.EmuToPoints(blurEmu);
-                if (long.TryParse(reflection.Attribute("dist")?.Value, out var distEmu)) distPt = DrawingMlCoordinateUnits.EmuToPoints(distEmu);
-                if (long.TryParse(reflection.Attribute("dir")?.Value, out var dirRaw)) dirDeg = dirRaw / 60000.0;
-                if (long.TryParse(reflection.Attribute("sy")?.Value, out var syRaw) && syRaw != 0) scaleY = syRaw / 100000.0;
-                if (long.TryParse(reflection.Attribute("endPos")?.Value, out var endPosRaw)) endPos = Math.Clamp(endPosRaw / 100000.0, 0.0, 1.0);
+                if (long.TryParse(reflection.Attribute("blurRad")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var blurEmu)) blurPt = DrawingMlCoordinateUnits.EmuToPoints(blurEmu);
+                if (long.TryParse(reflection.Attribute("dist")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var distEmu)) distPt = DrawingMlCoordinateUnits.EmuToPoints(distEmu);
+                if (long.TryParse(reflection.Attribute("dir")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dirRaw)) dirDeg = dirRaw / 60000.0;
+                if (long.TryParse(reflection.Attribute("sy")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var syRaw) && syRaw != 0) scaleY = syRaw / 100000.0;
+                if (long.TryParse(reflection.Attribute("endPos")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var endPosRaw)) endPos = Math.Clamp(endPosRaw / 100000.0, 0.0, 1.0);
 
                 run.TextReflection = new RunTextReflection
                 {
@@ -7000,7 +7000,7 @@ public static class PptxPackageReader
             if (glow is not null)
             {
                 double radiusPt = 0;
-                if (long.TryParse(glow.Attribute("rad")?.Value, out var radEmu))
+                if (long.TryParse(glow.Attribute("rad")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var radEmu))
                     radiusPt = DrawingMlCoordinateUnits.EmuToPoints(radEmu);
 
                 byte alpha = 0xA0;
@@ -7022,7 +7022,7 @@ public static class PptxPackageReader
             if (softEdge is not null)
             {
                 double radiusPt = 0;
-                if (long.TryParse(softEdge.Attribute("rad")?.Value, out var radEmu))
+                if (long.TryParse(softEdge.Attribute("rad")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var radEmu))
                     radiusPt = DrawingMlCoordinateUnits.EmuToPoints(radEmu);
 
                 run.TextSoftEdge = new RunTextSoftEdge
@@ -7119,7 +7119,7 @@ public static class PptxPackageReader
         if (preferP14Dur)
         {
             // p14:dur is the namespaced attribute on p:transition inside mc:Choice
-            if (int.TryParse(transEl.Attribute(P14 + "dur")?.Value, out var p14Dur) && p14Dur > 0)
+            if (int.TryParse(transEl.Attribute(P14 + "dur")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var p14Dur) && p14Dur > 0)
                 t.DurationMs = p14Dur;
         }
         // (No bare "dur" fallback — bare dur on p:transition is invalid and was the bug we're fixing.)
@@ -7128,7 +7128,7 @@ public static class PptxPackageReader
         t.AdvanceOnClick = transEl.Attribute("advClick")?.Value != "0";
 
         // advTm (auto-advance)
-        if (int.TryParse(transEl.Attribute("advTm")?.Value, out var advTm) && advTm > 0)
+        if (int.TryParse(transEl.Attribute("advTm")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var advTm) && advTm > 0)
             t.AdvanceAfterMs = advTm;
 
         // EB2: Find the effect child element across P, P14, and P159 namespaces.
@@ -7422,7 +7422,7 @@ public static class PptxPackageReader
             if (cond.Attribute("evt")?.Value == "onClick")
             {
                 var spTgt = cond.Descendants(P + "spTgt").FirstOrDefault();
-                if (spTgt is not null && uint.TryParse(spTgt.Attribute("spid")?.Value, out var spid))
+                if (spTgt is not null && uint.TryParse(spTgt.Attribute("spid")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var spid))
                     return spid;
             }
         }
@@ -7513,7 +7513,7 @@ public static class PptxPackageReader
         // bounded descendant search within innerChildTnLst, excluding any p:cTn that has a p:set
         // ancestor (which would be the sentinel dur="1" on the p:set behavior element).
         int durationMs = 500;
-        if (int.TryParse(cTn.Attribute("dur")?.Value, out var d) && d > 0)
+        if (int.TryParse(cTn.Attribute("dur")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var d) && d > 0)
         {
             durationMs = d;
         }
@@ -7528,7 +7528,7 @@ public static class PptxPackageReader
                 // Primary: animCTn is a direct p:cTn child of innerChildTnLst (FreeP's own form).
                 var animCTn = innerChildTnLst.Elements(P + "cTn").FirstOrDefault();
                 if (animCTn is not null &&
-                    int.TryParse(animCTn.Attribute("dur")?.Value, out var animDur) && animDur >= 1)
+                    int.TryParse(animCTn.Attribute("dur")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var animDur) && animDur >= 1)
                 {
                     durationMs = animDur;
                 }
@@ -7543,7 +7543,7 @@ public static class PptxPackageReader
                             c.Attribute("dur") != null &&
                             !c.Ancestors(P + "set").Any());
                     if (fallbackCTn is not null &&
-                        int.TryParse(fallbackCTn.Attribute("dur")?.Value, out var fbDur) && fbDur >= 1)
+                        int.TryParse(fallbackCTn.Attribute("dur")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fbDur) && fbDur >= 1)
                         durationMs = fbDur;
                 }
             }
@@ -7559,7 +7559,7 @@ public static class PptxPackageReader
             var delay = cond?.Attribute("delay")?.Value;
             if (delay == "indefinite")
                 innerTrigger = AnimationTrigger.OnClick;
-            else if (delay != null && int.TryParse(delay, out var delayVal))
+            else if (delay != null && int.TryParse(delay, NumberStyles.Integer, CultureInfo.InvariantCulture, out var delayVal))
             {
                 delayMs = delayVal;
                 innerTrigger = delayVal == 0 ? AnimationTrigger.WithPrevious : AnimationTrigger.AfterPrevious;
@@ -7589,7 +7589,7 @@ public static class PptxPackageReader
         var presetClass = cTn.Attribute("presetClass")?.Value;
         var presetIdStr = cTn.Attribute("presetID")?.Value;
         if (string.IsNullOrEmpty(presetClass)) return null;
-        if (!int.TryParse(presetIdStr, out var presetId)) return null;
+        if (!int.TryParse(presetIdStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var presetId)) return null;
 
         var presetSubtype = cTn.Attribute("presetSubtype")?.Value;
         var scaleBehavior = ReadScaleBehavior(
@@ -7672,7 +7672,7 @@ public static class PptxPackageReader
 
         var spTgt = FindSpTgt(buildPar);
         if (spTgt is null) return null;
-        if (!uint.TryParse(spTgt.Attribute("spid")?.Value, out var shapeId)) return null;
+        if (!uint.TryParse(spTgt.Attribute("spid")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shapeId)) return null;
         var (paragraphRangeStart, paragraphRangeEnd) = ReadParagraphRange(spTgt);
 
         var (kind, preset) = PptxAnimationMap.OoxmlToAnimationPreset(presetClass, presetId);
@@ -7768,9 +7768,9 @@ public static class PptxPackageReader
     {
         var pRg = spTgt.Element(P + "txEl")?.Element(P + "pRg");
         if (pRg is null) return (null, null);
-        if (!int.TryParse(pRg.Attribute("st")?.Value, out var start) || start < 0)
+        if (!int.TryParse(pRg.Attribute("st")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var start) || start < 0)
             return (null, null);
-        var end = int.TryParse(pRg.Attribute("end")?.Value, out var e) && e >= start ? e : start;
+        var end = int.TryParse(pRg.Attribute("end")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var e) && e >= start ? e : start;
         return (start, end);
     }
 
@@ -7901,11 +7901,11 @@ public static class PptxPackageReader
         var spTgt = cBhvr?.Element(P + "tgtEl")?.Element(P + "spTgt")
                  ?? FindSpTgt(buildPar);
         if (spTgt is null) return null;
-        if (!uint.TryParse(spTgt.Attribute("spid")?.Value, out var shapeId)) return null;
+        if (!uint.TryParse(spTgt.Attribute("spid")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shapeId)) return null;
 
         // Duration from animMotion/cBhvr/cTn
         var cTnDur = cBhvr?.Element(P + "cTn")?.Attribute("dur")?.Value;
-        if (cTnDur != null && int.TryParse(cTnDur, out var d) && d > 0)
+        if (cTnDur != null && int.TryParse(cTnDur, NumberStyles.Integer, CultureInfo.InvariantCulture, out var d) && d > 0)
             durationMs = d;
 
         // Delay: read from the outer buildPar cTn/stCondLst/cond/@delay, mirroring
@@ -7916,7 +7916,7 @@ public static class PptxPackageReader
         {
             var delayCond = outerStCondLst.Element(P + "cond");
             var delayVal = delayCond?.Attribute("delay")?.Value;
-            if (delayVal != null && delayVal != "indefinite" && int.TryParse(delayVal, out var delayParsed))
+            if (delayVal != null && delayVal != "indefinite" && int.TryParse(delayVal, NumberStyles.Integer, CultureInfo.InvariantCulture, out var delayParsed))
             {
                 delayMs = delayParsed;
                 if (trigger != AnimationTrigger.OnClick)
@@ -8107,7 +8107,7 @@ public static class PptxPackageReader
             var tac = PptxColorReader.TryReadColor(bgRef, scheme);
             if (tac is not null)
                 return new ShapeFill.Solid(tac);
-            if (int.TryParse(bgRef.Attribute("idx")?.Value, out var idx))
+            if (int.TryParse(bgRef.Attribute("idx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx))
             {
                 // Approximate: use the theme background color (dk1 for odd indices, lt1 otherwise).
                 var approxColor = (idx % 2 == 0)
@@ -8147,7 +8147,7 @@ public static class PptxPackageReader
             _ => PlaceholderType.Body
         };
 
-        int.TryParse(ph.Attribute("idx")?.Value, out var idx);
+        int.TryParse(ph.Attribute("idx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx);
         return new Placeholder { Type = type, Idx = idx };
     }
 

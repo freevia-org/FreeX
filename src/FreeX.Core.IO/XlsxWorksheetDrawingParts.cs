@@ -1232,7 +1232,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
 
         // sz is in hundredths of a point.
         var szAttr = rPr.Attribute("sz")?.Value;
-        var fontSizePt = szAttr is not null && int.TryParse(szAttr, out var szHundredths)
+        var fontSizePt = szAttr is not null && int.TryParse(szAttr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var szHundredths)
             ? szHundredths / 100.0
             : 0.0;
 

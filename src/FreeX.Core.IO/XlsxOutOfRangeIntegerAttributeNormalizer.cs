@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Xml;
 using System.Xml.Linq;
 using Free.Shared.Opc;
+using System.Globalization;
 
 namespace FreeX.Core.IO;
 
@@ -66,8 +67,15 @@ internal static class XlsxOutOfRangeIntegerAttributeNormalizer
             XDocument document;
             try
             {
+                // r603: this load used to be XDocument.Load(stream, ...), which builds its own
+                // default settings and so carries no character cap -- the exact R276 contract this
+                // file was corrected for in r583. That correction landed on the SCAN below and not
+                // on the load beside it, and R276's contract test could not say so because it only
+                // inspects hand-rolled XmlReaderSettings initializers and this spelling never
+                // constructs one.
                 using var stream = entry.Open();
-                document = XDocument.Load(stream, LoadOptions.PreserveWhitespace);
+                using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
+                document = XDocument.Load(reader, LoadOptions.PreserveWhitespace);
             }
             catch (XmlException)
             {
@@ -162,6 +170,6 @@ internal static class XlsxOutOfRangeIntegerAttributeNormalizer
                 return false;
         }
 
-        return !uint.TryParse(value, out _);
+        return !uint.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _);
     }
 }

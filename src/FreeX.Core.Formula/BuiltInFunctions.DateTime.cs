@@ -27,7 +27,7 @@ public static partial class BuiltInFunctions
     private static CultureInfo CreateExcelTwoDigitYearCulture()
     {
         var culture = (CultureInfo)CultureInfo.CurrentCulture.Clone();
-        culture.DateTimeFormat.Calendar.TwoDigitYearMax = 2029;
+        ExcelTwoDigitYearWindow.ApplyTo(culture);
         return culture;
     }
 
@@ -41,7 +41,7 @@ public static partial class BuiltInFunctions
     private static CultureInfo CreateInvariantExcelTwoDigitYearCulture()
     {
         var culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
-        culture.DateTimeFormat.Calendar.TwoDigitYearMax = 2029;
+        ExcelTwoDigitYearWindow.ApplyTo(culture);
         return culture;
     }
 

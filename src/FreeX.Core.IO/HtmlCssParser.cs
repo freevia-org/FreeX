@@ -185,7 +185,7 @@ internal static class HtmlCssParser
             return false;
 
         int widthPx = 1;
-        if (widthTok is not null && int.TryParse(widthTok.AsSpan(0, widthTok.Length - 2), out var w))
+        if (widthTok is not null && int.TryParse(widthTok.AsSpan(0, widthTok.Length - 2), NumberStyles.Integer, CultureInfo.InvariantCulture, out var w))
             widthPx = w;
 
         var bstyle = line switch

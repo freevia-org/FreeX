@@ -139,8 +139,12 @@ internal static class XlsxMalformedTypedAttributeNormalizer
             XDocument document;
             try
             {
+                // r603: was XDocument.Load(stream, ...), which carries no character cap. Same hole
+                // as the sibling normalizer, from the same r583/r584 correction landing on the scan
+                // path only.
                 using var stream = entry.Open();
-                document = XDocument.Load(stream, LoadOptions.PreserveWhitespace);
+                using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
+                document = XDocument.Load(reader, LoadOptions.PreserveWhitespace);
             }
             catch (XmlException)
             {

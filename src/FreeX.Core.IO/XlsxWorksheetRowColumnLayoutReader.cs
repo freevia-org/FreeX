@@ -71,7 +71,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
             var inlineStringName = worksheetNs + "is";
             foreach (var row in root.Element(worksheetNs + "sheetData")?.Elements(rowName) ?? [])
             {
-                if (uint.TryParse(row.Attribute("r")?.Value, out var rowNumber))
+                if (uint.TryParse(row.Attribute("r")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rowNumber))
                     ReadRowLayout(RowLayoutAttributes.From(row), rowNumber, hiddenRows, rowOutlineLevels, collapsedAnchorRows, rowHeights, styledRows);
 
                 foreach (var cell in row.Elements(cellName))

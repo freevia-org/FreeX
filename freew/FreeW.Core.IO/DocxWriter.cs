@@ -1,10 +1,12 @@
 using System.IO;
 using System.IO.Compression;
 using System.Text;
+using System.Xml;
 using System.Xml.Linq;
 using Free.Shared.Opc;
 using FreeW.Core.Model;
 using static FreeW.Core.IO.Ooxml;
+using System.Globalization;
 
 namespace FreeW.Core.IO;
 
@@ -3799,7 +3801,10 @@ public static class DocxWriter
         // Negative FirstLineIndentPt models a hanging indent; emit w:hanging (unsigned) in that case.
         // w:hanging and w:firstLine are mutually exclusive in OOXML; w:firstLine is unsigned, so a
         // negative value (as Word would see it) is clamped/ignored — we must use w:hanging instead.
-        if (f.IndentLeftPt > 0 || f.IndentRightPt > 0 || f.FirstLineIndentPt != 0)
+        // r603: the gate is != 0, not > 0. w:left/w:right are ST_SignedTwipsMeasure and Word
+        // writes a negative one for an outdent into the margin, so a > 0 gate dropped such an
+        // indent entirely on save -- in every locale, not only a foreign one.
+        if (f.IndentLeftPt != 0 || f.IndentRightPt != 0 || f.FirstLineIndentPt != 0)
         {
             var indEl = new XElement(W + "ind",
                 new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)),
@@ -9421,8 +9426,11 @@ public static class DocxWriter
 
         try
         {
+            // r603: part.Bytes is a preserved part from the LOADED document, so this is file input.
+            // XDocument.Load(Stream) builds default settings and carries no character cap.
             using var stream = new MemoryStream(part.Bytes, writable: false);
-            return XDocument.Load(stream).Root?.Name == B + "Sources";
+            using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
+            return XDocument.Load(reader).Root?.Name == B + "Sources";
         }
         catch (System.Xml.XmlException)
         {
@@ -9447,7 +9455,7 @@ public static class DocxWriter
         }
 
         var digits = fileName["item".Length..^".xml".Length];
-        return int.TryParse(digits, out var number) && number > 0 ? number : null;
+        return int.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number) && number > 0 ? number : null;
     }
 
     private static bool BelongsToCustomXmlItem(PreservedPart part, IReadOnlySet<int> itemNumbers)
@@ -10223,7 +10231,10 @@ public static class DocxWriter
 
         // w:ind (indents) — CT_PPrBase order: after spacing, before contextualSpacing/jc.
         // Negative FirstLineIndentPt is a hanging indent → emit w:hanging (unsigned).
-        if (f.IndentLeftPt > 0 || f.IndentRightPt > 0 || f.FirstLineIndentPt != 0)
+        // r603: the gate is != 0, not > 0. w:left/w:right are ST_SignedTwipsMeasure and Word
+        // writes a negative one for an outdent into the margin, so a > 0 gate dropped such an
+        // indent entirely on save -- in every locale, not only a foreign one.
+        if (f.IndentLeftPt != 0 || f.IndentRightPt != 0 || f.FirstLineIndentPt != 0)
         {
             var indEl = new XElement(W + "ind",
                 new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)),

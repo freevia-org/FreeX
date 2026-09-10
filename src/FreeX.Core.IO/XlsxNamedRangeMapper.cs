@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using ClosedXML.Excel;
 using FreeX.Core.Model;
+using System.Globalization;
 
 namespace FreeX.Core.IO;
 
@@ -94,7 +95,7 @@ internal static class XlsxNamedRangeMapper
                     continue;
 
                 var localSheetIdText = definedName.Attribute("localSheetId")?.Value;
-                if (int.TryParse(localSheetIdText, out var localSheetId))
+                if (int.TryParse(localSheetIdText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var localSheetId))
                 {
                     if (localSheetId < 0 || localSheetId >= workbook.Sheets.Count)
                         continue;
@@ -784,7 +785,7 @@ internal static class XlsxNamedRangeMapper
     private static string DefinedNameKey(XElement element) =>
         DefinedNameKey(
             element.Attribute("name")?.Value ?? string.Empty,
-            int.TryParse(element.Attribute("localSheetId")?.Value, out var localSheetId) ? (int?)localSheetId : null);
+            int.TryParse(element.Attribute("localSheetId")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var localSheetId) ? (int?)localSheetId : null);
 
     private static string DefinedNameKey(string name, int? localSheetId) =>
         $"{name}\u001f{localSheetId?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty}";

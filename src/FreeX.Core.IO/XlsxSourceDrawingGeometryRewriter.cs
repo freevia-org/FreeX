@@ -779,8 +779,8 @@ internal static class XlsxSourceDrawingGeometryRewriter
             if (to is null)
                 return changed;
 
-            if (!uint.TryParse(from.Element(SpreadsheetDrawingNs + "col")?.Value, out var fromCol) ||
-                !uint.TryParse(from.Element(SpreadsheetDrawingNs + "row")?.Value, out var fromRow))
+            if (!uint.TryParse(from.Element(SpreadsheetDrawingNs + "col")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fromCol) ||
+                !uint.TryParse(from.Element(SpreadsheetDrawingNs + "row")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fromRow))
             {
                 return changed;
             }

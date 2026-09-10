@@ -162,7 +162,7 @@ public static class PptxZoomObjectPropertiesXmlReader
     }
 
     private static int? ReadFrameBorderWidth(XElement properties) =>
-        int.TryParse(Line(properties)?.Attribute("w")?.Value, out var width) && width > 0
+        int.TryParse(Line(properties)?.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var width) && width > 0
                 ? width
                 : null;
 
@@ -192,7 +192,7 @@ public static class PptxZoomObjectPropertiesXmlReader
             ?.Attribute("ang")?.Value;
         var angle = string.IsNullOrWhiteSpace(angleText)
             ? 0
-            : int.TryParse(angleText, out var parsedAngle)
+            : int.TryParse(angleText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedAngle)
                 ? parsedAngle
                 : -1;
         return start is not null && end is not null && angle is >= 0 and <= 21600000

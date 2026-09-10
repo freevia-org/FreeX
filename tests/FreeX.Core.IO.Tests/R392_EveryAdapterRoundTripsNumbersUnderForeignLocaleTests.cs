@@ -25,12 +25,21 @@ namespace FreeX.Core.IO.Tests;
 /// </summary>
 public sealed class R392_EveryAdapterRoundTripsNumbersUnderForeignLocaleTests
 {
-    private const double Fractional = 3.14;
+    // r603: NEGATIVE on purpose. The original 3.14 exercised the decimal separator only, which is
+    // why three green cultures never revealed that the sign is culture-dependent too: 42 cultures
+    // render minus as U+2212 (sv-SE) or prefix a direction mark (fa-IR is U+200E U+2212, ar-SA is
+    // U+061C '-'), and 57 cannot parse a plain ASCII '-' back. A positive value cannot see either.
+    private const double Fractional = -3.14;
 
     [Theory]
     [InlineData("de-DE")]
     [InlineData("fr-FR")]
     [InlineData("tr-TR")]
+    // r603: separator cultures above, sign cultures below. Both axes are needed -- the two sets
+    // fail on disjoint defects, as the FreeP neuter in that round demonstrated.
+    [InlineData("fa-IR")]
+    [InlineData("ar-SA")]
+    [InlineData("sv-SE")]
     public void EveryAdapterPreservesAFractionalNumber(string culture)
     {
         var previous = CultureInfo.CurrentCulture;
@@ -38,8 +47,14 @@ public sealed class R392_EveryAdapterRoundTripsNumbersUnderForeignLocaleTests
 
         try
         {
-            Fractional.ToString().Should().Be(
-                "3,14", "the culture must actually be in effect or a pass below means nothing");
+            // r603: was Be("3,14"), which is only true for the separator cultures -- fa-IR and ar-SA
+            // render the digits themselves in Arabic-Indic. Assert that the culture took effect and
+            // that it formats DIFFERENTLY from the invariant one, rather than asserting one
+            // culture's particular rendering.
+            CultureInfo.CurrentCulture.Name.Should().Be(new CultureInfo(culture).Name);
+            Fractional.ToString().Should().NotBe(
+                Fractional.ToString(CultureInfo.InvariantCulture),
+                "the culture must actually be in effect or a pass below means nothing");
 
             var adapters = typeof(IFileAdapter).Assembly
                 .GetTypes()

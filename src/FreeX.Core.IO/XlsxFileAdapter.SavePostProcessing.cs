@@ -1805,7 +1805,7 @@ public sealed partial class XlsxFileAdapter
 
                 var afterPrefix = name.AsSpan(picturePrefix.Length);
                 var dotIndex = afterPrefix.IndexOf('.');
-                if (dotIndex > 0 && int.TryParse(afterPrefix[..dotIndex], out var index) && index > max)
+                if (dotIndex > 0 && int.TryParse(afterPrefix[..dotIndex], NumberStyles.Integer, CultureInfo.InvariantCulture, out var index) && index > max)
                     max = index;
             }
 

@@ -199,7 +199,7 @@ internal static class XlsxWorksheetFormControlPreserver
         var newRelIdByShapeId = new Dictionary<uint, string>();
         foreach (var element in EnumerateControlElements(sourceRoot, context.WorkbookNs + "control"))
         {
-            if (!uint.TryParse(element.Attribute("shapeId")?.Value, out var shapeId) ||
+            if (!uint.TryParse(element.Attribute("shapeId")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shapeId) ||
                 newRelIdByShapeId.ContainsKey(shapeId))
             {
                 continue;
@@ -252,7 +252,7 @@ internal static class XlsxWorksheetFormControlPreserver
         var clonedControls = CloneControlsBlock(sourceRoot, context.WorkbookNs, newSheet);
         foreach (var element in EnumerateControlElements(clonedControls, context.WorkbookNs + "control"))
         {
-            if (uint.TryParse(element.Attribute("shapeId")?.Value, out var shapeId) &&
+            if (uint.TryParse(element.Attribute("shapeId")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shapeId) &&
                 newRelIdByShapeId.TryGetValue(shapeId, out var newRelId))
             {
                 element.SetAttributeValue(context.RelNs + "id", newRelId);
@@ -372,7 +372,7 @@ internal static class XlsxWorksheetFormControlPreserver
             .Where(name =>
                 name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
                 name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-            .Select(name => int.TryParse(name[prefix.Length..^suffix.Length], out var number) ? number : 0)
+            .Select(name => int.TryParse(name[prefix.Length..^suffix.Length], NumberStyles.Integer, CultureInfo.InvariantCulture, out var number) ? number : 0)
             .DefaultIfEmpty(0)
             .Max();
 
@@ -389,7 +389,7 @@ internal static class XlsxWorksheetFormControlPreserver
             .Where(name =>
                 name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
                 name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-            .Select(name => int.TryParse(name[prefix.Length..^suffix.Length], out var number) ? number : 0)
+            .Select(name => int.TryParse(name[prefix.Length..^suffix.Length], NumberStyles.Integer, CultureInfo.InvariantCulture, out var number) ? number : 0)
             .DefaultIfEmpty(0)
             .Max();
 
@@ -540,7 +540,7 @@ internal static class XlsxWorksheetFormControlPreserver
         for (var i = 0; i < controlElements.Count; i++)
         {
             var element = controlElements[i];
-            var hasShapeId = uint.TryParse(element.Attribute("shapeId")?.Value, out var shapeId);
+            var hasShapeId = uint.TryParse(element.Attribute("shapeId")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shapeId);
             FormControlModel? control;
             if (hasShapeId)
             {
@@ -948,7 +948,7 @@ internal static class XlsxWorksheetFormControlPreserver
         for (var i = 0; i < controlElements.Count; i++)
         {
             var element = controlElements[i];
-            var hasShapeId = uint.TryParse(element.Attribute("shapeId")?.Value, out var shapeId);
+            var hasShapeId = uint.TryParse(element.Attribute("shapeId")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shapeId);
             FormControlModel? control;
             if (hasShapeId)
             {
@@ -1025,7 +1025,7 @@ internal static class XlsxWorksheetFormControlPreserver
         List<OrphanedControl>? orphaned = null;
         foreach (var element in EnumerateControlElements(container, worksheetNs + "control"))
         {
-            if (!uint.TryParse(element.Attribute("shapeId")?.Value, out var shapeId) ||
+            if (!uint.TryParse(element.Attribute("shapeId")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shapeId) ||
                 liveShapeIds.Contains(shapeId))
             {
                 continue;

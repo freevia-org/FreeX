@@ -134,7 +134,7 @@ internal sealed class OdsStyleTable
 
         // Vertical alignment hint (exact enum) preferred.
         var valignHint = (string?)cellProps.Attribute(Style + "freex-valign");
-        if (valignHint is not null && int.TryParse(valignHint, out var vi))
+        if (valignHint is not null && int.TryParse(valignHint, NumberStyles.Integer, CultureInfo.InvariantCulture, out var vi))
             style.VerticalAlignment = (VerticalAlignment)vi;
         else
         {
@@ -158,7 +158,7 @@ internal sealed class OdsStyleTable
     private void ApplyParagraphProperties(CellStyle style, XElement paraProps)
     {
         var halignHint = (string?)paraProps.Attribute(Style + "freex-halign");
-        if (halignHint is not null && int.TryParse(halignHint, out var hi))
+        if (halignHint is not null && int.TryParse(halignHint, NumberStyles.Integer, CultureInfo.InvariantCulture, out var hi))
             style.HorizontalAlignment = (HorizontalAlignment)hi;
         else
         {
@@ -174,7 +174,7 @@ internal sealed class OdsStyleTable
         }
 
         var indentHint = (string?)paraProps.Attribute(Style + "freex-indent");
-        if (indentHint is not null && int.TryParse(indentHint, out var indent))
+        if (indentHint is not null && int.TryParse(indentHint, NumberStyles.Integer, CultureInfo.InvariantCulture, out var indent))
             style.IndentLevel = Math.Clamp(indent, 0, 15);
     }
 
@@ -331,7 +331,7 @@ internal sealed class OdsStyleTable
             // as an OutOfMemoryException while merely opening the document. Clamp to the 30 places
             // Excel's number formats allow, which is the same bound FormatCellsNumberFormatPlanner
             // already applies to the value coming from the Format Cells dialog.
-            if (decimals is not null && int.TryParse(decimals, out var d) && d > 0)
+            if (decimals is not null && int.TryParse(decimals, NumberStyles.Integer, CultureInfo.InvariantCulture, out var d) && d > 0)
                 return "0." + new string('0', Math.Min(d, MaxDecimalPlaces));
             return "0";
         }

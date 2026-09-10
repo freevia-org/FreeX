@@ -33,6 +33,9 @@ public sealed class R396_DocumentFormatsAreCultureInvariantTests
             {
                 SpaceBeforePt = 10.5,
                 SpaceAfterPt = 7.25,
+                // r603: negative on purpose. Every other number in this fixture is positive, and a
+                // positive value cannot expose a culture-specific SIGN.
+                IndentLeftPt = -18,
             },
         };
 
@@ -85,7 +88,12 @@ public sealed class R396_DocumentFormatsAreCultureInvariantTests
         // declaration ("font-size:10.5pt"), so neither is ever an attribute whose entire value is a
         // number. The fixture's only text is "culture probe", which has no digits, so a digit-comma-
         // digit sequence cannot arise from prose.
-        var commaDecimal = new Regex(@"\d,\d");
+        // r603: the separator is only half of it. A number formatted for a human also carries a
+        // culture-specific SIGN or DIGITS -- U+2212 minus, a U+200E/U+200F/U+061C direction mark,
+        // or Arabic-Indic digits -- none of which is legal in an xsd numeric type or an RTF control
+        // word, and none of which a comma scan can see. The fixture's prose is ASCII, so any of
+        // these in the payload came from a formatter.
+        var commaDecimal = new Regex("\\d,\\d|[\u2212\u200E\u200F\u061C\u0660-\u0669\u06F0-\u06F9]");
         var offenders = new List<string>();
 
         void ScanXml(Stream stream, string label)
@@ -134,6 +142,11 @@ public sealed class R396_DocumentFormatsAreCultureInvariantTests
     [InlineData("de-DE")]
     [InlineData("fr-FR")]
     [InlineData("tr-TR")]
+    // r603: separator cultures above; sign cultures below. The two sets fail on disjoint defects,
+    // so neither half alone is a culture census.
+    [InlineData("fa-IR")]
+    [InlineData("ar-SA")]
+    [InlineData("sv-SE")]
     public void NoAdapterWritesACultureFormattedNumber(string culture)
     {
         var previous = CultureInfo.CurrentCulture;
@@ -141,8 +154,13 @@ public sealed class R396_DocumentFormatsAreCultureInvariantTests
 
         try
         {
-            10.5.ToString().Should().Be(
-                "10,5", "the culture must be in effect or a pass below means nothing");
+            // r603: was Be("10,5"), true only for the separator cultures -- fa-IR and ar-SA render
+            // the digits themselves in Arabic-Indic. Assert the culture took effect and that it
+            // formats differently from invariant, not one culture's particular rendering.
+            CultureInfo.CurrentCulture.Name.Should().Be(new CultureInfo(culture).Name);
+            10.5.ToString().Should().NotBe(
+                10.5.ToString(CultureInfo.InvariantCulture),
+                "the culture must be in effect or a pass below means nothing");
 
             var adapters = typeof(IDocumentFileAdapter).Assembly
                 .GetTypes()

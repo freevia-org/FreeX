@@ -2597,8 +2597,11 @@ public static class SmartArtEditingPlanner
 
     private static XDocument ParseXml(byte[] bytes)
     {
+        // r603: these bytes are a SmartArt part from the loaded .pptx, so this is file input.
+        // XDocument.Load(Stream) builds default settings and carries no character cap.
         using var stream = new MemoryStream(bytes, writable: false);
-        return XDocument.Load(stream, LoadOptions.PreserveWhitespace);
+        using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
+        return XDocument.Load(reader, LoadOptions.PreserveWhitespace);
     }
 
     private readonly record struct SmartArtNodeLocation(SmartArtNode? Node, SmartArtNode? Parent, int Index)

@@ -655,7 +655,7 @@ internal static class PptxChartReader
         // misread as the compatibility style 102.
         var style = chartSpace.Element(C + "style")
             ?? chartSpace.Descendants(C + "style").FirstOrDefault();
-        return int.TryParse(style?.Attribute("val")?.Value, out var value) ? value : null;
+        return int.TryParse(style?.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : null;
     }
 
     // ── Title ─────────────────────────────────────────────────────────────────
@@ -937,7 +937,7 @@ internal static class PptxChartReader
             return null;
 
         return ext.Elements().Where(element => element.Name.LocalName == "idx")
-            .Select(element => int.TryParse(element.Attribute("val")?.Value, out var index) ? index : -1)
+            .Select(element => int.TryParse(element.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index) ? index : -1)
             .Where(index => index >= 0)
             .Distinct()
             .OrderBy(index => index)

@@ -172,7 +172,7 @@ internal static class XlsxWorksheetThreadedCommentMapper
                 name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
             {
                 var stem = name["xl/threadedComments/threadedComment".Length..^".xml".Length];
-                if (int.TryParse(stem, out var index))
+                if (int.TryParse(stem, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index))
                     used.Add(index);
             }
         }

@@ -9,12 +9,12 @@ internal static class XlsxChartSeriesRangeReader
     private static readonly XNamespace ChartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 
     public static int ReadSeriesIndex(XElement series, int fallback) =>
-        int.TryParse(ElementByLocalName(series, "idx")?.Attribute("val")?.Value, out var index)
+        int.TryParse(ElementByLocalName(series, "idx")?.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index)
             ? index
             : fallback;
 
     public static int ReadSeriesOrder(XElement series, int fallback) =>
-        int.TryParse(ElementByLocalName(series, "order")?.Attribute("val")?.Value, out var order)
+        int.TryParse(ElementByLocalName(series, "order")?.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var order)
             ? order
             : fallback;
 

@@ -1362,7 +1362,7 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
 
             var fmt = RunFormatting.Default;
             if ((string?)tp.Attribute(Fo + "font-weight") is { } weight)
-                fmt = fmt with { Bold = weight is "bold" or "bolder" || (int.TryParse(weight, out var w) && w >= 600) };
+                fmt = fmt with { Bold = weight is "bold" or "bolder" || (int.TryParse(weight, NumberStyles.Integer, CultureInfo.InvariantCulture, out var w) && w >= 600) };
             if ((string?)tp.Attribute(Fo + "font-style") is { } style)
                 fmt = fmt with { Italic = style is "italic" or "oblique" };
             if ((string?)tp.Attribute(Style + "text-underline-style") is { } ul)

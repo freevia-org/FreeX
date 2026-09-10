@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Xml.Linq;
+using System.Globalization;
 
 namespace FreeX.Core.IO;
 
@@ -110,7 +111,7 @@ internal static class XlsxWorksheetCommentVisibilityReader
 
                 var rowText = clientData.Element(ExcelVmlNs + "Row")?.Value;
                 var colText = clientData.Element(ExcelVmlNs + "Column")?.Value;
-                if (!uint.TryParse(rowText, out var row0) || !uint.TryParse(colText, out var col0))
+                if (!uint.TryParse(rowText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var row0) || !uint.TryParse(colText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var col0))
                     continue;
 
                 // VML uses 0-based; CellAddress uses 1-based.

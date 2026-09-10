@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Xml.Linq;
+using System.Globalization;
 
 using Free.Shared.Opc;
 using FreeX.Core.Model;
@@ -1027,7 +1028,7 @@ public sealed partial class XlsxFileAdapter
             .Where(name =>
                 name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
                 name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-            .Select(name => int.TryParse(name[prefix.Length..^suffix.Length], out var number) ? number : 0)
+            .Select(name => int.TryParse(name[prefix.Length..^suffix.Length], NumberStyles.Integer, CultureInfo.InvariantCulture, out var number) ? number : 0)
             .DefaultIfEmpty(0)
             .Max();
 

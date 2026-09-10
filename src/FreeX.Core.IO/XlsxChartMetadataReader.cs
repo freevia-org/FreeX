@@ -256,7 +256,7 @@ internal static class XlsxChartMetadataReader
         if (runProperties is null)
             return;
 
-        if (int.TryParse(runProperties.Attribute("sz")?.Value, out var size))
+        if (int.TryParse(runProperties.Attribute("sz")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var size))
             chart.ChartDefaultFontSize = Math.Clamp(size / 100.0, 6, 72);
 
         var solidFill = runProperties.Element(DrawingNs + "solidFill");

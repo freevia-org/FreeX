@@ -39,9 +39,9 @@ internal static class XlsxChartTrendlineErrorBarReader
             chart.TrendlineSeriesIndex = seriesIndex;
             chart.TrendlineName = trendline.Element(ChartNs + "name")?.Value;
             chart.TrendlineType = FromXlsxTrendlineType(trendline.Element(ChartNs + "trendlineType")?.Attribute("val")?.Value);
-            if (int.TryParse(trendline.Element(ChartNs + "period")?.Attribute("val")?.Value, out var period))
+            if (int.TryParse(trendline.Element(ChartNs + "period")?.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var period))
                 chart.TrendlinePeriod = Math.Max(2, period);
-            if (int.TryParse(trendline.Element(ChartNs + "order")?.Attribute("val")?.Value, out var order))
+            if (int.TryParse(trendline.Element(ChartNs + "order")?.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var order))
                 chart.TrendlineOrder = Math.Clamp(order, 2, 6);
             chart.TrendlineForward = ReadOptionalDouble(trendline.Element(ChartNs + "forward")?.Attribute("val")?.Value);
             chart.TrendlineBackward = ReadOptionalDouble(trendline.Element(ChartNs + "backward")?.Attribute("val")?.Value);
@@ -149,7 +149,7 @@ internal static class XlsxChartTrendlineErrorBarReader
         if (plotChart.Element(ChartNs + "upDownBars") is { } upDownBars)
         {
             chart.ShowUpDownBars = true;
-            if (int.TryParse(upDownBars.Element(ChartNs + "gapWidth")?.Attribute("val")?.Value, out var gapWidth))
+            if (int.TryParse(upDownBars.Element(ChartNs + "gapWidth")?.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var gapWidth))
                 chart.UpDownBarGapWidth = Math.Clamp(gapWidth, 0, 500);
             ApplyBarShapeProperties(
                 upDownBars.Element(ChartNs + "upBars")?.Element(ChartNs + "spPr"),
@@ -190,7 +190,7 @@ internal static class XlsxChartTrendlineErrorBarReader
         if (line is null)
             return;
 
-        if (int.TryParse(line.Attribute("w")?.Value, out var emus))
+        if (int.TryParse(line.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var emus))
             chart.TrendlineThickness = Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0.5, 10);
 
         chart.TrendlineDashStyle = FromXlsxPresetDash(line.Element(DrawingNs + "prstDash")?.Attribute("val")?.Value);
@@ -242,7 +242,7 @@ internal static class XlsxChartTrendlineErrorBarReader
         if (line is null)
             return;
 
-        if (int.TryParse(line.Attribute("w")?.Value, out var emus))
+        if (int.TryParse(line.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var emus))
             chart.TrendlineLabelBorderThickness = Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0, 10);
 
         var lineFill = line.Element(DrawingNs + "solidFill");
@@ -264,14 +264,14 @@ internal static class XlsxChartTrendlineErrorBarReader
     private static void ApplyTrendlineLabelTextProperties(XElement? textPropertiesRoot, ChartModel chart)
     {
         var bodyProperties = textPropertiesRoot?.Element(DrawingNs + "bodyPr");
-        if (int.TryParse(bodyProperties?.Attribute("rot")?.Value, out var rotation))
+        if (int.TryParse(bodyProperties?.Attribute("rot")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotation))
             chart.TrendlineLabelAngle = Math.Clamp(rotation / 60000.0, -90, 90);
 
         var textProperties = FirstDescendant(textPropertiesRoot, DrawingNs + "defRPr");
         if (textProperties is null)
             return;
 
-        if (int.TryParse(textProperties.Attribute("sz")?.Value, out var size))
+        if (int.TryParse(textProperties.Attribute("sz")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var size))
             chart.TrendlineLabelFontSize = Math.Clamp(size / 100.0, 6, 72);
 
         var textFill = textProperties.Element(DrawingNs + "solidFill");
@@ -312,7 +312,7 @@ internal static class XlsxChartTrendlineErrorBarReader
         if (line is null)
             return;
 
-        if (int.TryParse(line.Attribute("w")?.Value, out var emus))
+        if (int.TryParse(line.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var emus))
             setThickness(Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0.5, 10));
 
         setDashStyle(FromXlsxPresetDash(line.Element(DrawingNs + "prstDash")?.Attribute("val")?.Value));
@@ -366,7 +366,7 @@ internal static class XlsxChartTrendlineErrorBarReader
         if (line is null)
             return;
 
-        if (int.TryParse(line.Attribute("w")?.Value, out var emus))
+        if (int.TryParse(line.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var emus))
             setBorderThickness(Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0, 10));
 
         var lineFill = line.Element(DrawingNs + "solidFill");

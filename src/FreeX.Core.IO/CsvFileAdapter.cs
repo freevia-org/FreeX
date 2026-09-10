@@ -49,14 +49,48 @@ public sealed class CsvFileAdapter : IFileAdapter, IWarningCollectingFileAdapter
     // Guarded: if a culture's list separator IS its decimal separator, locale numbers would produce
     // ambiguous fields, so that culture keeps invariant numbers. Cells carrying an explicit number
     // format are unaffected -- those already render through NumberFormatter.
+    // r603: a second collision of the same shape, and a far more damaging one. Plain CSV is written
+    // in the culture's ANSI code page (DelimitedTextWorkbookWriter.ResolveAnsiEncoding), and on
+    // Arabic and Persian machines the characters that culture's own number formatter produces are
+    // not IN that code page: fa-IR renders -3.14 as U+200E U+2212 3 U+066B 14, and CP1256 holds
+    // none of U+200E, U+2212 or U+066B. Every one became a literal '?', so the file read back as
+    // "?3?14" -- text, not a number. Measured, not inferred: R392 fails for fa-IR and ar-SA on
+    // CsvFileAdapter alone, with "no numeric cell".
+    //
+    // Excel does not hit this because Windows NLS gives those locales an ASCII '-' and '.', while
+    // .NET on ICU gives the typographic forms; aligning with Excel therefore means writing numbers
+    // the target encoding can actually carry, not reproducing ICU's typography. Same remedy as the
+    // delimiter collision above -- fall back to invariant numbers for that culture only.
     private static IFormatProvider ResolveNumberProvider()
     {
         var culture = CultureInfo.CurrentCulture;
         var decimalSeparator = culture.NumberFormat.NumberDecimalSeparator;
 
-        return decimalSeparator.Length == 1 && decimalSeparator[0] == ResolveLocaleDelimiter()
-            ? CultureInfo.InvariantCulture
-            : culture;
+        if (decimalSeparator.Length == 1 && decimalSeparator[0] == ResolveLocaleDelimiter())
+            return CultureInfo.InvariantCulture;
+
+        return AnsiEncodingCanCarryNumbersOf(culture) ? culture : CultureInfo.InvariantCulture;
+    }
+
+    /// <summary>
+    /// True when every character this culture's number formatter can emit survives a round trip
+    /// through the ANSI code page the plain-CSV writer uses. Probes an actual formatted value rather
+    /// than enumerating NumberFormatInfo fields, so a sign, separator or native digit added by a
+    /// future ICU version is covered without this list being updated.
+    /// </summary>
+    private static bool AnsiEncodingCanCarryNumbersOf(CultureInfo culture)
+    {
+        var encoding = DelimitedTextWorkbookWriter.ResolveAnsiEncoding();
+
+        // Negative and positive, fractional and grouped: between them these reach the negative sign,
+        // the positive sign, the decimal separator, the group separator and the digits themselves.
+        foreach (var probe in new[] { (-1234567.89).ToString(culture), 1234567.89.ToString(culture) })
+        {
+            if (!string.Equals(encoding.GetString(encoding.GetBytes(probe)), probe, StringComparison.Ordinal))
+                return false;
+        }
+
+        return true;
     }
 
     private static char ResolveLocaleDelimiter()
