@@ -1,7 +1,7 @@
 # Third-Party Notices
 
 This file summarizes third-party NuGet packages referenced by the FreeX
-solution after restore on 2026-08-25. Each package remains governed by its own
+solution after restore on 2026-10-26. Each package remains governed by its own
 license. This notice does not change those license terms.
 
 See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for bundled common
@@ -10,8 +10,8 @@ license text and package-provided license text found in the restored packages.
 ## Audit Status
 
 - Audit command: `dotnet restore FreeX.slnx --disable-parallel -v:minimal`.
-- Restored package inventory: 98 unique package names (101 name/version
-  identities) across 119 `project.assets.json` files.
+- Restored package inventory: 95 unique package names (97 name/version
+  identities) across 138 `project.assets.json` files.
 - Coverage: every restored package is listed below.
 - Runtime package posture: the publishable app dependency set is covered by
   MIT, Apache-2.0, BSD-3-Clause, BSD-style package licenses, package license
@@ -22,8 +22,11 @@ license text and package-provided license text found in the restored packages.
   System.Security.Cryptography.Xml `THIRD-PARTY-NOTICES.TXT`.
 - Package-provided license files found: Avalonia.Angle.Windows.Natives
   `LICENSE`, BouncyCastle.Cryptography `LICENSE.md`, FluentAssertions
-  `LICENSE`, Newtonsoft.Json `LICENSE.md`, NPOI `LICENSE`, SharpVectors.Wpf
+  `LICENSE`, Newtonsoft.Json `LICENSE.md`, SharpVectors.Wpf
   `lib/License.txt`, and System.IO.Packaging `LICENSE.TXT`.
+- The source-built NPOI.Core assembly retains the upstream Apache-2.0 license at
+  `third_party/npoi/2.8.1/LICENSE`; its exact source and deterministic hash are
+  recorded in `third_party/npoi/README.md`.
 
 ## Commercial-Use Note
 
@@ -74,8 +77,10 @@ obtained.
 | LibVLCSharp.Avalonia | 3.10.0 | LGPL-2.1-or-later | https://code.videolan.org/videolan/LibVLCSharp |
 | MathNet.Numerics.Signed | 5.0.0 | MIT | https://numerics.mathdotnet.com/ |
 | Microsoft.Extensions.DependencyInjection | 10.0.7 | MIT | https://dot.net/ |
+| Microsoft.Extensions.DependencyInjection.Abstractions | 8.0.2 | MIT | https://dot.net/ |
 | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.7 | MIT | https://dot.net/ |
 | Microsoft.Extensions.Logging | 10.0.7 | MIT | https://dot.net/ |
+| Microsoft.Extensions.Logging.Abstractions | 8.0.3 | MIT | https://dot.net/ |
 | Microsoft.Extensions.Logging.Abstractions | 10.0.7 | MIT | https://dot.net/ |
 | Microsoft.Extensions.Options | 10.0.7 | MIT | https://dot.net/ |
 | Microsoft.Extensions.Primitives | 10.0.7 | MIT | https://dot.net/ |
@@ -83,7 +88,7 @@ obtained.
 | Microsoft.Win32.SystemEvents | 10.0.0 | MIT | https://dot.net/ |
 | MicroCom.Runtime | 0.11.4 | MIT |  |
 | MimeKit | 4.17.0 | MIT | https://github.com/jstedfast/MimeKit |
-| NPOI | 2.7.6 | Apache-2.0 | https://github.com/nissl-lab/npoi |
+| NPOI.Core (source build) | 2.8.1 | Apache-2.0 | https://github.com/nissl-lab/npoi |
 | NSax | 1.0.2 | LGPL-3.0-only | https://github.com/antony-liu/NSax |
 | OxyPlot.Core | 2.2.0 | MIT | https://oxyplot.github.io/ |
 | OxyPlot.Wpf | 2.2.0 | MIT | https://oxyplot.github.io/ |
@@ -97,8 +102,8 @@ obtained.
 | Serilog.Sinks.File | 7.0.0 | Apache-2.0 | https://github.com/serilog/serilog-sinks-file |
 | SharpVectors.Wpf | 1.8.5 | BSD-3-Clause | https://github.com/ElinamLLC/SharpVectors |
 | SharpZipLib | 1.4.2 | MIT | https://github.com/icsharpcode/SharpZipLib |
+| SixLabors.Fonts | 1.0.0 | Apache-2.0 | https://github.com/SixLabors/Fonts |
 | SixLabors.Fonts | 1.0.1 | Apache-2.0 | https://github.com/SixLabors/Fonts |
-| SixLabors.ImageSharp | 2.1.11 | Apache-2.0 | https://github.com/SixLabors/ImageSharp |
 | SkiaSharp | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | SkiaSharp.NativeAssets.Linux | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | SkiaSharp.NativeAssets.Linux.NoDependencies | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
@@ -107,8 +112,8 @@ obtained.
 | SkiaSharp.NativeAssets.Win32 | 3.119.4 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | System.IO.Packaging | 8.0.1 | MIT | https://dot.net/ |
 | System.Drawing.Common | 10.0.0 | MIT | https://dot.net/ |
-| System.Security.Cryptography.Pkcs | 10.0.10 | MIT | https://dot.net/ |
-| System.Security.Cryptography.Xml | 10.0.10 | MIT | https://dot.net/ |
+| System.Security.Cryptography.Pkcs | 10.0.14 | MIT | https://dot.net/ |
+| System.Security.Cryptography.Xml | 10.0.14 | MIT | https://dot.net/ |
 | System.Speech | 10.0.0 | MIT | https://dot.net/ |
 | Tmds.DBus.Protocol | 0.92.0 | MIT |  |
 | UglyToad.PdfPig | 1.7.0-custom-5 | Apache-2.0 | https://github.com/UglyToad/PdfPig |

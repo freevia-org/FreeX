@@ -41,4 +41,5 @@
   <ItemGroup>
     <Using Include="Free.Shared.AppServices" />
   </ItemGroup>
+  <Import Project="../../third_party/npoi/NPOI.Core.props" />
 </Project>
