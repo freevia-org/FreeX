@@ -32,4 +32,6 @@
     <ProjectReference Include="../FreeW.Core.IO/FreeW.Core.IO.csproj" />
   </ItemGroup>
 
+  <Import Project="../../third_party/npoi/NPOI.Core.props" />
+
 </Project>

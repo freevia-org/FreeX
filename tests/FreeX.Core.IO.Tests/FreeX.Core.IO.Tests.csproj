@@ -49,4 +49,5 @@
     <Using Include="Free.Shared.Opc" />
     <Using Include="FreeX.XlsxPackageDiagnostics" />
   </ItemGroup>
+  <Import Project="../../third_party/npoi/NPOI.Core.props" />
 </Project>
