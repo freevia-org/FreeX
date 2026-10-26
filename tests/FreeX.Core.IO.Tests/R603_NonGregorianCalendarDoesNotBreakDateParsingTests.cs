@@ -25,10 +25,23 @@ public sealed class R603_NonGregorianCalendarDoesNotBreakDateParsingTests
 {
     private static readonly string[] NonGregorianCultures = ["ar-SA", "th-TH"];
 
+    private static CultureInfo CreateNonGregorianCulture(string culture)
+    {
+        var result = (CultureInfo)new CultureInfo(culture).Clone();
+        result.DateTimeFormat.Calendar = culture switch
+        {
+            "ar-SA" => new UmAlQuraCalendar(),
+            "th-TH" => new ThaiBuddhistCalendar(),
+            _ => throw new ArgumentOutOfRangeException(nameof(culture), culture, "Unsupported probe culture."),
+        };
+
+        return result;
+    }
+
     private static void UnderCulture(string culture, Action body)
     {
         var previous = CultureInfo.CurrentCulture;
-        CultureInfo.CurrentCulture = new CultureInfo(culture);
+        CultureInfo.CurrentCulture = CreateNonGregorianCulture(culture);
         try
         {
             body();
@@ -42,11 +55,11 @@ public sealed class R603_NonGregorianCalendarDoesNotBreakDateParsingTests
     [Fact]
     public void TheProbeCulturesReallyDoUseANonGregorianCalendar()
     {
-        // Without this the three cases below would pass on a machine where ICU had changed these
-        // cultures to a Gregorian default -- a green over the condition they exist to test.
+        // Explicit calendars keep the fixture independent of the OS ICU culture defaults. Without
+        // this guard, a future fixture change could silently stop exercising non-Gregorian input.
         foreach (var culture in NonGregorianCultures)
         {
-            new CultureInfo(culture).DateTimeFormat.Calendar
+            CreateNonGregorianCulture(culture).DateTimeFormat.Calendar
                 .Should().NotBeOfType<GregorianCalendar>(
                     $"{culture} is here because its calendar cannot express the year 2029");
         }
