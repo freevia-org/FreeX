@@ -1,10 +1,12 @@
 using System.IO;
 using System.IO.Compression;
 using System.Text;
+using System.Xml;
 using System.Xml.Linq;
 using Free.Shared.Opc;
 using FreeW.Core.Model;
 using static FreeW.Core.IO.Ooxml;
+using System.Globalization;
 
 namespace FreeW.Core.IO;
 
@@ -37,6 +39,35 @@ public static class DocxWriter
     private const string BibliographyRelationshipId = "rIdBibliography";
     private const string ThemeRelationshipId = "rIdTheme1";
     private const string FreeWChartDesignExtensionUri = "urn:freew:chart-design:2026";
+
+    /// <summary>
+    /// r546: scales a model double into a DrawingML attribute that the schema declares as a
+    /// BOUNDED INTEGER -- ST_Angle for a:xfrm/@rot, the percentage types for a:lum/@bright,
+    /// a:lum/@contrast, a:satMod/@val, a:alphaModFix/@amt and a:srcRect's edges, ST_LineWidth
+    /// for a:ln/@w. All of them are xsd:int.
+    ///
+    /// <para>Casting the scaled double straight to long let .NET's SATURATING conversion emit
+    /// long.MaxValue, and a large finite value overflowed the same way; neither can be
+    /// represented in the declared type at all, so Word rejects the document. Nothing upstream
+    /// defends -- RotationAngle, BrightnessPct, ContrastPct, SaturationPct, TransparencyPct,
+    /// ColorTemperature, the crop edges and BorderWidthPt are plain auto-properties with no
+    /// clamping -- so the writer is the last place the invariant can hold, and the right place,
+    /// because the constraint belongs to the FILE FORMAT rather than to any command.</para>
+    ///
+    /// <para>The clamp is to what the format can hold, not to a semantic range: int is a fact
+    /// about these attribute types, whereas "a rotation cannot exceed 360 degrees" would be a
+    /// guess about intent the schema does not make. Non-finite becomes 0, which is what .NET
+    /// already produced for NaN and is a valid value for every attribute above. Coordinates are
+    /// deliberately NOT routed through here: a:ext/@cx and friends are ST_PositiveCoordinate,
+    /// an xsd:long, so clamping them to int would corrupt legitimately large geometry.</para>
+    /// </summary>
+    private static long BoundedInt(double scaledValue)
+    {
+        if (!double.IsFinite(scaledValue))
+            return 0;
+
+        return (long)Math.Clamp(Math.Round(scaledValue), int.MinValue, int.MaxValue);
+    }
     private static readonly XNamespace Mc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
     private static readonly XNamespace A14 = "http://schemas.microsoft.com/office/drawing/2010/main";
     private static readonly DateTimeOffset DeterministicZipTimestamp =
@@ -2460,21 +2491,33 @@ public static class DocxWriter
         // Reconcile against the actual grid-column total (max over rows of summed GridSpans) to keep the
         // file valid even when ColumnWidthsPt has drifted out of sync with the row contents (H4 fix):
         // pad with the last known width when the model has fewer entries, truncate when it has more.
-        if (table.ColumnWidthsPt.Count > 0)
+        // r335: w:tblGrid is MANDATORY in CT_Tbl (tblPr, tblGrid, then rows), not conditional on
+        // knowing widths. Emitting it only when ColumnWidthsPt was populated meant any table without
+        // stored widths wrote w:tr straight after w:tblPr, which the schema rejects -- and
+        // Table.Create(rows, columns), the model's own factory for a uniform table, produces exactly
+        // that. So inserting a table and saving wrote an invalid .docx. w:w on w:gridCol is optional,
+        // so when widths are unknown the grid is emitted without them and Word autofits, rather than
+        // inventing measurements the model never had.
+        var widths = table.ColumnWidthsPt;
+        var actualGridCols = table.Rows.Count == 0
+            ? Math.Max(widths.Count, 1)
+            : Math.Max(1, table.Rows.Max(r => r.Cells.Sum(c => Math.Max(1, c.GridSpan))));
+        var grid = new XElement(W + "tblGrid");
+        for (var col = 0; col < actualGridCols; col++)
         {
-            var actualGridCols = table.Rows.Count == 0 ? table.ColumnWidthsPt.Count
-                : table.Rows.Max(r => r.Cells.Sum(c => Math.Max(1, c.GridSpan)));
-            var widths = table.ColumnWidthsPt;
-            var grid = new XElement(W + "tblGrid");
-            for (var col = 0; col < actualGridCols; col++)
+            if (widths.Count == 0)
             {
-                // Use the stored width for this column; if widths are shorter, repeat the last entry
-                // so Word at least has a plausible grid rather than zero-width phantom columns.
-                var w = col < widths.Count ? widths[col] : widths[^1];
-                grid.Add(new XElement(W + "gridCol", new XAttribute(W + "w", PointsToDxa(w))));
+                grid.Add(new XElement(W + "gridCol"));
+                continue;
             }
-            tbl.Add(grid);
+
+            // Use the stored width for this column; if widths are shorter, repeat the last entry
+            // so Word at least has a plausible grid rather than zero-width phantom columns.
+            var w = col < widths.Count ? widths[col] : widths[^1];
+            grid.Add(new XElement(W + "gridCol", new XAttribute(W + "w", PointsToDxa(w))));
         }
+
+        tbl.Add(grid);
 
         var fmt = table.Formatting;
         for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
@@ -3758,7 +3801,10 @@ public static class DocxWriter
         // Negative FirstLineIndentPt models a hanging indent; emit w:hanging (unsigned) in that case.
         // w:hanging and w:firstLine are mutually exclusive in OOXML; w:firstLine is unsigned, so a
         // negative value (as Word would see it) is clamped/ignored — we must use w:hanging instead.
-        if (f.IndentLeftPt > 0 || f.IndentRightPt > 0 || f.FirstLineIndentPt != 0)
+        // r603: the gate is != 0, not > 0. w:left/w:right are ST_SignedTwipsMeasure and Word
+        // writes a negative one for an outdent into the margin, so a > 0 gate dropped such an
+        // indent entirely on save -- in every locale, not only a foreign one.
+        if (f.IndentLeftPt != 0 || f.IndentRightPt != 0 || f.FirstLineIndentPt != 0)
         {
             var indEl = new XElement(W + "ind",
                 new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)),
@@ -4689,7 +4735,7 @@ public static class DocxWriter
         // a:xfrm: always present; carry @rot/@flipH/@flipV only when non-default.
         var xfrm = new XElement(A + "xfrm");
         if (image.RotationAngle != 0)
-            xfrm.Add(new XAttribute("rot", (long)Math.Round(image.RotationAngle * 60000)));
+            xfrm.Add(new XAttribute("rot", BoundedInt(image.RotationAngle * 60000)));
         if (image.FlipH)
             xfrm.Add(new XAttribute("flipH", 1));
         if (image.FlipV)
@@ -4729,20 +4775,20 @@ public static class DocxWriter
             case ImageRecolorMode.Washout:
                 // Washout: high brightness + semi-transparency. Combine with existing adjustments below.
                 blip.Add(new XElement(A + "lum",
-                    new XAttribute("bright", 40000 + (long)Math.Round(image.BrightnessPct * 1000)),
-                    new XAttribute("contrast", (long)Math.Round(image.ContrastPct * 1000))));
+                    new XAttribute("bright", 40000 + BoundedInt(image.BrightnessPct * 1000)),
+                    new XAttribute("contrast", BoundedInt(image.ContrastPct * 1000))));
                 blip.Add(new XElement(A + "alphaModFix", new XAttribute("amt", 50000)));
                 break;
             case ImageRecolorMode.BlackWhite:
                 blip.Add(new XElement(A + "grayscl"));
                 blip.Add(new XElement(A + "lum",
-                    new XAttribute("bright", (long)Math.Round(image.BrightnessPct * 1000)),
-                    new XAttribute("contrast", 100000 + (long)Math.Round(image.ContrastPct * 1000))));
+                    new XAttribute("bright", BoundedInt(image.BrightnessPct * 1000)),
+                    new XAttribute("contrast", 100000 + BoundedInt(image.ContrastPct * 1000))));
                 break;
         }
 
         var colorTemperature = image.ColorTemperature != 0 && image.RecolorMode == ImageRecolorMode.None
-            ? (long?)Math.Round(image.ColorTemperature * 1000)
+            ? (long?)BoundedInt(image.ColorTemperature * 1000)
             : null;
         var artisticEffect = image.ArtisticEffect != ImageArtisticEffect.None
             ? (ImageArtisticEffect?)image.ArtisticEffect
@@ -4754,19 +4800,19 @@ public static class DocxWriter
             if (image.BrightnessPct != 0 || image.ContrastPct != 0)
             {
                 blip.Add(new XElement(A + "lum",
-                    new XAttribute("bright", (long)Math.Round(image.BrightnessPct * 1000)),
-                    new XAttribute("contrast", (long)Math.Round(image.ContrastPct * 1000))));
+                    new XAttribute("bright", BoundedInt(image.BrightnessPct * 1000)),
+                    new XAttribute("contrast", BoundedInt(image.ContrastPct * 1000))));
             }
         }
         if (image.SaturationPct != 100)
         {
             blip.Add(new XElement(A + "satMod",
-                new XAttribute("val", (long)Math.Round(image.SaturationPct * 1000))));
+                new XAttribute("val", BoundedInt(image.SaturationPct * 1000))));
         }
         if (image.TransparencyPct != 0 && image.RecolorMode != ImageRecolorMode.Washout)
         {
             // alphaModFix amt = opacity per-mille = (100 - transparencyPct) × 1000.
-            var opacityPermille = (long)Math.Round((100 - image.TransparencyPct) * 1000);
+            var opacityPermille = BoundedInt((100 - image.TransparencyPct) * 1000);
             blip.Add(new XElement(A + "alphaModFix",
                 new XAttribute("amt", opacityPermille)));
         }
@@ -4783,7 +4829,7 @@ public static class DocxWriter
         if (image.HasCrop)
         {
             // DrawingML srcRect uses per-mille (×100000) integer percentages for each edge.
-            static long ToPerMille(double fraction) => (long)Math.Round(fraction * 100000);
+            static long ToPerMille(double fraction) => BoundedInt(fraction * 100000);
             blipFill.Add(new XElement(A + "srcRect",
                 new XAttribute("l", ToPerMille(image.CropLeft)),
                 new XAttribute("r", ToPerMille(image.CropRight)),
@@ -4797,7 +4843,7 @@ public static class DocxWriter
             new XElement(A + "prstGeom", new XAttribute("prst", "rect"), new XElement(A + "avLst")));
         if (image.HasBorder)
         {
-            var widthEmu = (long)Math.Round(Math.Max(image.BorderWidthPt, 0.75) * 12700); // 1 pt = 12700 EMU
+            var widthEmu = BoundedInt(Math.Max(image.BorderWidthPt, 0.75) * 12700); // 1 pt = 12700 EMU
             var ln = new XElement(A + "ln", new XAttribute("w", widthEmu),
                 new XElement(A + "solidFill",
                     new XElement(A + "srgbClr",
@@ -5058,7 +5104,7 @@ public static class DocxWriter
                 new XElement(A + "cxnLst"),
                 new XElement(A + "rect",
                     new XAttribute("l", "0"), new XAttribute("t", "0"),
-                    new XAttribute("r", cg.Width.ToString()), new XAttribute("b", cg.Height.ToString())),
+                    new XAttribute("r", cg.Width.ToString(System.Globalization.CultureInfo.InvariantCulture)), new XAttribute("b", cg.Height.ToString(System.Globalization.CultureInfo.InvariantCulture))),
                 new XElement(A + "pathLst", path));
         }
         else
@@ -5071,7 +5117,7 @@ public static class DocxWriter
         // a:xfrm: carry @rot/@flipH/@flipV only when non-default (mirrors picture xfrm handling).
         var shapeXfrm = new XElement(A + "xfrm");
         if (shape.RotationAngle != 0)
-            shapeXfrm.Add(new XAttribute("rot", (long)Math.Round(shape.RotationAngle * 60000)));
+            shapeXfrm.Add(new XAttribute("rot", BoundedInt(shape.RotationAngle * 60000)));
         if (shape.FlipH)
             shapeXfrm.Add(new XAttribute("flipH", 1));
         if (shape.FlipV)
@@ -5293,7 +5339,7 @@ public static class DocxWriter
                 new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)),
                 new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy)));
         if (wordArt.RotationAngle != 0)
-            wordArtXfrm.Add(new XAttribute("rot", (long)Math.Round(wordArt.RotationAngle * 60000)));
+            wordArtXfrm.Add(new XAttribute("rot", BoundedInt(wordArt.RotationAngle * 60000)));
         if (wordArt.FlipH)
             wordArtXfrm.Add(new XAttribute("flipH", "1"));
         if (wordArt.FlipV)
@@ -5865,7 +5911,7 @@ public static class DocxWriter
                 new XElement(A + "chExt",
                     new XAttribute("cx", cx), new XAttribute("cy", cy)));
         if (group.RotationAngle != 0)
-            groupXfrm.Add(new XAttribute("rot", (long)Math.Round(group.RotationAngle * 60000)));
+            groupXfrm.Add(new XAttribute("rot", BoundedInt(group.RotationAngle * 60000)));
         if (group.FlipH)
             groupXfrm.Add(new XAttribute("flipH", "1"));
         if (group.FlipV)
@@ -5938,7 +5984,7 @@ public static class DocxWriter
         };
 
         if (rotation != 0)
-            xfrm.SetAttributeValue("rot", (long)Math.Round(rotation * 60000));
+            xfrm.SetAttributeValue("rot", BoundedInt(rotation * 60000));
         if (flipH)
             xfrm.SetAttributeValue("flipH", "1");
         if (flipV)
@@ -7207,7 +7253,16 @@ public static class DocxWriter
         var layout = XDocument.Load(stream);
         var root = layout.Root ?? throw new InvalidOperationException("SmartArt layout template has no root: " + resourceName);
         root.SetAttributeValue("uniqueId", layoutUrn);
-        root.Element(Dgm + "catLst")?.Element(Dgm + "cat")?.SetAttributeValue("type", category);
+
+        // r351 class: applying the category through `?.Element(cat)?.SetAttributeValue(...)` made a
+        // template authored without a catLst silently keep the stock category -- Word would file the
+        // diagram under the wrong gallery with nothing to show for it. Every template this path
+        // loads has one today; the guard is here so adding one that does not fails at the point of
+        // use instead of shipping a mislabelled diagram.
+        var cat = root.Element(Dgm + "catLst")?.Element(Dgm + "cat")
+            ?? throw new InvalidOperationException(
+                "SmartArt layout template has no dgm:catLst/dgm:cat to carry its category: " + resourceName);
+        cat.SetAttributeValue("type", category);
         return layout;
     }
 
@@ -7866,8 +7921,18 @@ public static class DocxWriter
 
         var xValues = new List<double>(chart.Categories.Count);
         for (var i = 0; i < chart.Categories.Count; i++)
+            // r577: IsFinite -- a category whose text overflows double (e.g. "1e400") parses as TRUE
+            // with Infinity since .NET Core stopped throwing, and BuildNumCache below writes each
+            // value with double.ToString, so the scatter X cache would carry the literal text
+            // <c:v>Infinity</c:v> -- not a number in the ST_Xstring/double the chart schema expects,
+            // from a document FreeW itself just wrote. A non-finite category is no more a numeric X
+            // than a non-numeric one, so it takes the same ordinal fallback this line already uses.
+            // (The sibling READ path, ReadNumberCache in DocxReader, was guarded in r547;
+            // this write-side parse of category TEXT was missed because it is not a cache parse.)
             xValues.Add(double.TryParse(chart.Categories[i], System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var x) ? x : i + 1);
+                System.Globalization.CultureInfo.InvariantCulture, out var x) && double.IsFinite(x)
+                ? x
+                : i + 1);
 
         ser.Add(new XElement(C + "xVal",
             new XElement(C + "numRef",
@@ -9361,8 +9426,11 @@ public static class DocxWriter
 
         try
         {
+            // r603: part.Bytes is a preserved part from the LOADED document, so this is file input.
+            // XDocument.Load(Stream) builds default settings and carries no character cap.
             using var stream = new MemoryStream(part.Bytes, writable: false);
-            return XDocument.Load(stream).Root?.Name == B + "Sources";
+            using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
+            return XDocument.Load(reader).Root?.Name == B + "Sources";
         }
         catch (System.Xml.XmlException)
         {
@@ -9387,7 +9455,7 @@ public static class DocxWriter
         }
 
         var digits = fileName["item".Length..^".xml".Length];
-        return int.TryParse(digits, out var number) && number > 0 ? number : null;
+        return int.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number) && number > 0 ? number : null;
     }
 
     private static bool BelongsToCustomXmlItem(PreservedPart part, IReadOnlySet<int> itemNumbers)
@@ -10163,7 +10231,10 @@ public static class DocxWriter
 
         // w:ind (indents) — CT_PPrBase order: after spacing, before contextualSpacing/jc.
         // Negative FirstLineIndentPt is a hanging indent → emit w:hanging (unsigned).
-        if (f.IndentLeftPt > 0 || f.IndentRightPt > 0 || f.FirstLineIndentPt != 0)
+        // r603: the gate is != 0, not > 0. w:left/w:right are ST_SignedTwipsMeasure and Word
+        // writes a negative one for an outdent into the margin, so a > 0 gate dropped such an
+        // indent entirely on save -- in every locale, not only a foreign one.
+        if (f.IndentLeftPt != 0 || f.IndentRightPt != 0 || f.FirstLineIndentPt != 0)
         {
             var indEl = new XElement(W + "ind",
                 new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)),

@@ -85,7 +85,10 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand, IEstimatesMem
         // trimmed: _columnOffsets are OFFSETS from _range.Start.Col and the first row is the
         // header, so moving the start would re-point them at different columns.
         if (SheetRangeScope.ClampEndToPopulated(sheet, _range) is not { } populated)
-            return new CommandOutcome(true); // nothing populated, so no duplicates to remove
+            // r198: IsNoOp so the bus does not push an undo entry for a command that changed
+            // nothing -- a phantom entry also CLEARS REDO, silently discarding the user's
+            // redo stack because they ran Remove Duplicates on an empty range.
+            return new CommandOutcome(true, IsNoOp: true); // nothing populated, so no duplicates
 
         _range = populated;
 
@@ -146,7 +149,9 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand, IEstimatesMem
             // Revert's `sheet.ReplaceMergedRegions(_mergeSnapshot)` wipe every merge on the entire
             // sheet, not just the operated range (see R48-commands-undo-redo-inverse-3-1).
             _mergeSnapshot = null;
-            return new CommandOutcome(true);
+            // r198: see the empty-range branch above -- nothing changed, so no undo entry and no
+            // redo-stack clear.
+            return new CommandOutcome(true, IsNoOp: true);
         }
 
         // ── 2. Snapshot the entire in-range area ───────────────────────────

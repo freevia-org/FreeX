@@ -113,7 +113,15 @@ public sealed class PivotFieldFilterSourceTests
         captureSource.Should().Contain("exposeActiveFilterActions: false");
         filterSource.Should().Contain("ResolveSelectAllState(");
         filterSource.Should().Contain("PivotApplication.ReadSourceItems(");
-        itemReaderSource.Should().Contain("new HashSet<string>(StringComparer.CurrentCultureIgnoreCase)");
+        // r311 changed the DEDUPE comparer here from CurrentCulture to Ordinal, and r324 updated this
+        // pin to match. The two halves of this reader answer different questions and now say so:
+        // WHICH items exist is identity, decided ordinally because that is how the file layer decides
+        // it (XlsxPivotSlicerCacheData and the filter engine both key selections with
+        // OrdinalIgnoreCase); the ORDER they are shown in is presentation and stays in the user's
+        // locale. Both shells use this same reader, so the parity this test exists to protect is
+        // unaffected -- what changed is that a culture-aware set no longer merges two source values
+        // the file keeps distinct.
+        itemReaderSource.Should().Contain("new HashSet<string>(StringComparer.OrdinalIgnoreCase)");
         itemReaderSource.Should().Contain("values.OrderBy(value => value, StringComparer.CurrentCultureIgnoreCase)");
     }
 

@@ -43,7 +43,9 @@ public static class SkiaPdfWriter
     /// The one-parameter overload remains available for method-group bindings. Callers that collect
     /// non-fatal image warnings can use the required two-parameter overload below.
     /// </remarks>
-    public static byte[] WriteToBytesWithPortableFallback(PdfContentDocument document)
+    public static byte[] WriteToBytesWithPortableFallback(
+        PdfContentDocument document,
+        string headerComment = PortablePdfWriter.DefaultHeaderComment)
     {
         ArgumentNullException.ThrowIfNull(document);
         using var stream = new MemoryStream();
@@ -52,7 +54,9 @@ public static class SkiaPdfWriter
             target => Write(document, target),
             target =>
             {
-                PortablePdfWriter.Write(document, target);
+                // r280: the fallback used to drop the caller's header and take the shared default,
+                // which named FreeX.
+                PortablePdfWriter.Write(document, target, headerComment);
                 return document.Pages.Count;
             });
         return stream.ToArray();
@@ -64,7 +68,8 @@ public static class SkiaPdfWriter
     /// </summary>
     public static byte[] WriteToBytesWithPortableFallback(
         PdfContentDocument document,
-        ICollection<string> imageDiagnostics)
+        ICollection<string> imageDiagnostics,
+        string headerComment = PortablePdfWriter.DefaultHeaderComment)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(imageDiagnostics);
@@ -76,7 +81,7 @@ public static class SkiaPdfWriter
         catch (Exception ex) when (SkiaPdfAvailabilityHelper.IsSkiaUnavailable(ex))
         {
             imageDiagnostics.Clear();
-            return PortablePdfWriter.WriteToBytes(document, imageDiagnostics: imageDiagnostics);
+            return PortablePdfWriter.WriteToBytes(document, headerComment, imageDiagnostics);
         }
     }
 

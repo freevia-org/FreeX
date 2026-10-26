@@ -74,6 +74,9 @@ public sealed record ViewportRequest(
     // Null (the default) preserves the pre-existing behavior of ViewportService.GetDisplayText
     // reading the shared Sheet.ShowFormulas field directly.
     bool? ShowFormulasOverride = null,
+    // r199: the same, for Show Outline Symbols (Ctrl+8) -- the one member of this View-tab group
+    // that had no per-view override, so hiding the outline in one window hid it in every sibling.
+    bool? ShowOutlineSymbolsOverride = null,
     // Some hosts render drawing objects directly from Sheet models but still need chart data
     // projection. Let them skip the defensive drawing-object payload copies independently.
     bool IncludeDrawingObjectBounds = true);

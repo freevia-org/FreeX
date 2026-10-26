@@ -443,11 +443,12 @@ public sealed partial class MainWindow
             return;
 
         var target = _session.ActiveCell;
-        var value = insertTime
-            ? DateTimeEntryService.CurrentTime(DateTime.Now)
-            : DateTimeEntryService.CurrentDate(DateTime.Now);
+        var now = DateTime.Now;
+        var cell = insertTime
+            ? Cell.FromValue(DateTimeEntryService.CurrentTime(now))
+            : DateTimeEntryService.CreateCurrentDateShortcutCell(_session.Workbook, target, now);
         var result = _session.ExecuteReviewCommand(
-            EditCellsCommand.ForValue(_session.ActiveSheet.Id, target, value),
+            new EditCellsCommand(_session.ActiveSheet.Id, [(target, cell)]),
             target);
         RefreshShell(result.Success
             ? UiText.Get(insertTime ? "KeyboardLoc_InsertedCurrentTime" : "KeyboardLoc_InsertedCurrentDate")
@@ -459,7 +460,8 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var next = !(_session.ActiveSheet.ShowOutlineSymbols ?? true);
+        // r199: this view's own state, not the shared field a sibling window may have just changed.
+        var next = !_session.IsShowingOutlineSymbols;
         var result = _session.SetShowOutlineSymbols(next);
         RefreshShell(result.Success
             ? UiText.Get(next ? "KeyboardLoc_ShowingOutlineSymbols" : "KeyboardLoc_HidingOutlineSymbols")

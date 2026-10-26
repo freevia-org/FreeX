@@ -45,7 +45,7 @@ public sealed partial class ColorPickerDialogTests
             .Descendants(presentation + "Label")
             .Single(element => element.Attribute("Content")?.Value == "Custom _color");
 
-        label.Attribute("Target")?.Value.Should().Be("{Binding ElementName=CustomColorTextBox}");
+        label.Attribute("Target")!.Value.Should().Be("{Binding ElementName=CustomColorTextBox}");
 
         document.Descendants(presentation + "Button")
             .Select(element => element.Attribute("Content")?.Value)

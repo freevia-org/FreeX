@@ -165,7 +165,7 @@ internal static class XlsxStructuredTableWriter
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var columns = table.Columns.Count > 0
-            ? table.Columns.ToList()
+            ? AssignMissingColumnIds(table.Columns)
             : Enumerable.Range(1, (int)(table.Range.End.Col - table.Range.Start.Col + 1))
                 .Select(index => new StructuredTableColumnModel(index, $"Column{index}"))
                 .ToList();
@@ -229,6 +229,45 @@ internal static class XlsxStructuredTableWriter
             // Ignore malformed native table sort payloads from older saves.
             return null;
         }
+    }
+
+    /// <summary>
+    /// r582: a table column id is a positive number -- the table-id write two dozen lines below says
+    /// so (`table.Id > 0 ? table.Id : ...`), the synthesizer above says so (`Enumerable.Range(1,`),
+    /// and the reader's table-level check says so (`if (id <= 0 ...) return false`). Only the column
+    /// write had no such rule, so a column whose id attribute was absent -- or PRESENT but
+    /// unreadable, which ReadIntAttribute cannot distinguish, since int.TryParse returns FALSE on
+    /// overflow -- arrived as 0 and was written back as id="0", twice over if more than one column
+    /// was affected. Duplicate ids inside one table are self-contradictory whatever the schema says
+    /// about the minimum.
+    /// <para>
+    /// Ids that are already valid are left EXACTLY as they are: autoFilter, sortState and
+    /// calculated-column formulas all reference them, so renumbering a good id would break the
+    /// references the id exists to serve. Only non-positive ids are assigned, and each gets the
+    /// smallest positive integer not already spoken for -- a positional index + 1 would collide
+    /// with a valid id that happens to sit later in the list.
+    /// </para>
+    /// </summary>
+    private static List<StructuredTableColumnModel> AssignMissingColumnIds(
+        IReadOnlyList<StructuredTableColumnModel> columns)
+    {
+        var used = new HashSet<int>(columns.Where(column => column.Id > 0).Select(column => column.Id));
+        var next = 1;
+        var result = new List<StructuredTableColumnModel>(columns.Count);
+        foreach (var column in columns)
+        {
+            if (column.Id > 0)
+            {
+                result.Add(column);
+                continue;
+            }
+
+            while (!used.Add(next))
+                next++;
+            result.Add(column with { Id = next });
+        }
+
+        return result;
     }
 
     private static XElement ToColumnXml(

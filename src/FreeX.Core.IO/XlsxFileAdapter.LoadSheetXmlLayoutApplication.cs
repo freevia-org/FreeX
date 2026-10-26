@@ -150,6 +150,11 @@ public sealed partial class XlsxFileAdapter
                     AltText = picturePart.AltText,
                     // R90-app-accessibility-checker-5-2: preserve Excel's "Mark as decorative" flag.
                     IsDecorative = picturePart.IsDecorative,
+                    // r318: the Selection Pane's hide is stored as cNvPr@hidden.
+                    IsVisible = !picturePart.IsHidden,
+                    // r378: Format Picture lock flags, previously session-only.
+                    LockAspectRatio = picturePart.LockAspectRatio,
+                    Locked = picturePart.IsLocked,
                     RotationDegrees = picturePart.RotationDegrees,
                     FlipHorizontal = picturePart.FlipHorizontal,
                     FlipVertical = picturePart.FlipVertical,
@@ -484,6 +489,7 @@ public sealed partial class XlsxFileAdapter
             Title = picturePart.Title,
             AltText = picturePart.AltText,
             IsDecorative = picturePart.IsDecorative,
+            IsVisible = !picturePart.IsHidden,
             RotationDegrees = picturePart.RotationDegrees,
             FlipHorizontal = picturePart.FlipHorizontal,
             FlipVertical = picturePart.FlipVertical,

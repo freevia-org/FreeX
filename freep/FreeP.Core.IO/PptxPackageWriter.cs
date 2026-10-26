@@ -772,6 +772,25 @@ public static class PptxPackageWriter
         uint sldIdCounter = 256;
         var usedSldIds = new HashSet<uint>();
 
+        // A slide id is the deck's persistent slide identity: p:sldZmObj zoom targets, custom shows
+        // and section membership all reference slides by it. The counter therefore has to clear every
+        // id the deck ALREADY uses before it hands one out, not just the ids seen so far -- the loop
+        // below walks slides in document order, so a slide with no id yet (a freshly inserted one)
+        // used to take the next counter value, and when a LATER slide already owned that value the
+        // collision path renumbered the later slide and wrote the new id back onto the model. Insert
+        // a slide at index 1 of a 3-slide deck and saving moved slide 1 from 257 to 258 and slide 2
+        // from 258 to 259, permanently. PowerPoint never renumbers an existing slide when one is
+        // inserted, so neither do we; only a genuine duplicate is reassigned.
+        foreach (var existingSlide in presentation.Slides)
+        {
+            var existingId = existingSlide.NumericId.GetValueOrDefault();
+
+            // int.MaxValue is the schema's ceiling for ST_SlideId; a deck sitting on it must not push
+            // the counter past the range, so leave it and let the loop below find a free id instead.
+            if (existingId >= sldIdCounter && existingId < int.MaxValue)
+                sldIdCounter = existingId + 1;
+        }
+
         // Build the GLOBAL author map once before the slide loop so that every per-slide
         // BuildCommentsXml call uses consistent (globally-assigned) author ids.
         // Keys are (author-name, initials); ids are 0-based in first-encounter order across
@@ -1213,7 +1232,10 @@ public static class PptxPackageWriter
         };
 
         // Emit a Default entry for every media extension actually written (covers all paths correctly).
-        foreach (var ext in mediaExtensions.OrderBy(e => e))
+        // r515: ordinal, not the default culture comparer -- this order lands in the saved package,
+        // and the set itself is OrdinalIgnoreCase, so culture-ordering it was inconsistent as well
+        // as locale-dependent.
+        foreach (var ext in mediaExtensions.OrderBy(e => e, StringComparer.Ordinal))
         {
             if (TryGetPackageDefaultContentType(ext, out var contentType))
                 defaults.Add(new XElement(CT + "Default",
@@ -1790,7 +1812,7 @@ public static class PptxPackageWriter
 
         var xfrm = new XElement(A + "xfrm");
         if (o.RotationDeg != 0)
-            xfrm.Add(new XAttribute("rot", (long)Math.Round(o.RotationDeg * 60000)));
+            xfrm.Add(new XAttribute("rot", FormatAngleUnits(o.RotationDeg)));
         xfrm.Add(new XElement(A + "off", new XAttribute("x", o.OffsetXEmu), new XAttribute("y", o.OffsetYEmu)));
         xfrm.Add(new XElement(A + "ext", new XAttribute("cx", o.ExtentCxEmu), new XAttribute("cy", o.ExtentCyEmu)));
 
@@ -1837,10 +1859,21 @@ public static class PptxPackageWriter
     private static XElement BuildNotesTxBodyEl(TextBody notes)
     {
         var bodyPr = new XElement(A + "bodyPr");
+
+        // r338: the third site of r334's defect, completed rather than left. CT_TextBody requires an
+        // a:p, and this wrote none when the notes body had no paragraphs. Unlike the shape and
+        // table-cell sites this one has no demonstrated product path -- clearing notes text sets
+        // Slide.Notes to null rather than to an empty body -- but a loaded .pptx whose notes body
+        // carries no paragraph reaches it, and leaving one of three identical sites unfixed is how
+        // r334 came to need r337.
+        var paragraphs = notes.Paragraphs.Count > 0
+            ? notes.Paragraphs.Select(p => BuildParaEl(p))
+            : [new XElement(A + "p")];
+
         return new XElement(P + "txBody",
             bodyPr,
             new XElement(A + "lstStyle"),
-            notes.Paragraphs.Select(p => BuildParaEl(p)));
+            paragraphs);
     }
 
     /// <summary>
@@ -3712,24 +3745,53 @@ public static class PptxPackageWriter
     // 3-slot placeholder fmtScheme, which silently discarded real effect styles on every save.
     private static XElement BuildThemeFormatSchemeXml(PresentationTheme theme)
     {
-        var fillStyleLst = theme.FillStyles.Count > 0
-            ? new XElement(A + "fillStyleLst", theme.FillStyles.Select(el => new XElement(el)))
-            : new XElement(A + "fillStyleLst", SolidPhClr(), SolidPhClr(), SolidPhClr());
+        var fillStyleLst = new XElement(A + "fillStyleLst",
+            StyleListEntries(theme.FillStyles, [SolidPhClr(), SolidPhClr(), SolidPhClr()]));
 
-        var lnStyleLst = theme.LineStyles.Count > 0
-            ? new XElement(A + "lnStyleLst", theme.LineStyles.Select(el => new XElement(el)))
-            : new XElement(A + "lnStyleLst", LnStyle(0.5), LnStyle(1.0), LnStyle(1.5));
+        var lnStyleLst = new XElement(A + "lnStyleLst",
+            StyleListEntries(theme.LineStyles, [LnStyle(0.5), LnStyle(1.0), LnStyle(1.5)]));
 
-        var effectStyleLst = theme.EffectStyles.Count > 0
-            ? new XElement(A + "effectStyleLst", theme.EffectStyles.Select(el => new XElement(el)))
-            : new XElement(A + "effectStyleLst", EffectStyle(), EffectStyle(), EffectStyle());
+        var effectStyleLst = new XElement(A + "effectStyleLst",
+            StyleListEntries(theme.EffectStyles, [EffectStyle(), EffectStyle(), EffectStyle()]));
 
-        var bgFillStyleLst = theme.BackgroundFillStyles.Count > 0
-            ? new XElement(A + "bgFillStyleLst", theme.BackgroundFillStyles.Select(el => new XElement(el)))
-            : new XElement(A + "bgFillStyleLst", SolidPhClr(), SolidPhClr(), SolidPhClr());
+        var bgFillStyleLst = new XElement(A + "bgFillStyleLst",
+            StyleListEntries(theme.BackgroundFillStyles, [SolidPhClr(), SolidPhClr(), SolidPhClr()]));
 
         return new XElement(A + "fmtScheme", new XAttribute("name", "Office"),
             fillStyleLst, lnStyleLst, effectStyleLst, bgFillStyleLst);
+    }
+
+    /// <summary>
+    /// r350: yields the entries for one <c>a:fmtScheme</c> style list, never fewer than the three
+    /// DrawingML requires.
+    ///
+    /// <para>Each of the four lists is <c>minOccurs="3"</c> in the schema. Reusing a read theme's
+    /// entries verbatim was therefore only safe for a source that already had three: a theme read
+    /// from a minimal .pptx with one or two entries was written straight back out, and
+    /// <c>OpenXmlValidator</c> rejects the result with "The element has incomplete content" on
+    /// <c>fillStyleLst</c> / <c>lnStyleLst</c>. The empty case was already handled; 1 and 2 were the
+    /// gap between the two branches.</para>
+    ///
+    /// <para>Short lists are padded by repeating their own LAST entry rather than appending a
+    /// generic placeholder. A <c>fillRef</c>/<c>lnRef</c> <c>idx</c> is a 1-based index into this
+    /// list, so entries 1..N must keep their positions -- which cloning preserves either way -- and a
+    /// reference past N is already outside the source's contract, where the theme's own final style
+    /// is a closer answer than a stock phClr fill.</para>
+    /// </summary>
+    private static IEnumerable<XElement> StyleListEntries(
+        IReadOnlyList<XElement> source,
+        IReadOnlyList<XElement> defaults)
+    {
+        if (source.Count == 0)
+            return defaults;
+
+        // Cloned: the same theme instance can back several masters/theme parts in one save, and an
+        // XElement can only be parented once.
+        var entries = source.Select(element => new XElement(element)).ToList();
+        while (entries.Count < defaults.Count)
+            entries.Add(new XElement(entries[^1]));
+
+        return entries;
     }
 
     private static XElement SolidPhClr() =>
@@ -4082,12 +4144,55 @@ public static class PptxPackageWriter
     }
 
     // Converts a 0..1 fraction to OOXML 1/1000-of-a-percent integer (e.g. 0.125 → 12500).
-    private static string FormatPercentFraction(double v) =>
-        ((long)Math.Round(v * 100_000.0)).ToString(CultureInfo.InvariantCulture);
+    private static string FormatPercentFraction(double v) => FormatPercentUnits(v);
 
     // Converts a -1..1 fraction to OOXML 1/1000-of-a-percent signed integer (e.g. -0.1 → -10000).
-    private static string FormatSignedPercentFraction(double v) =>
-        ((long)Math.Round(v * 100_000.0)).ToString(CultureInfo.InvariantCulture);
+    private static string FormatSignedPercentFraction(double v) => FormatPercentUnits(v);
+
+    /// <summary>
+    /// r544: ST_Percentage is an xsd:int, so the scaled value has to FIT one. These formatters cast
+    /// straight to long, and .NET's saturating conversions then wrote an infinite crop as
+    /// l="9223372036854775807" -- a number the format cannot represent, in a file PowerPoint
+    /// <summary>
+    /// r545: ST_Coordinate is an xsd:long, so casting a coordinate to long is the right WIDTH -- but
+    /// a non-finite value still saturates to long.MaxValue, which the schema's range does not admit.
+    /// Only the non-finite case needs correcting here; clamping the magnitude further would be
+    /// guessing at ST_Coordinate's semantic bounds rather than honouring its type, which is the
+    /// distinction r544 settled.
+    /// </summary>
+    private static long FormatCoordinate(double value) =>
+        double.IsFinite(value) ? (long)value : 0L;
+
+    /// <summary>
+    /// r545: ST_Angle is an xsd:int in 60000ths of a degree, and the three rot sites cast straight
+    /// to long, so an infinite RotationDeg wrote rot="9223372036854775807" -- the same defect r544
+    /// fixed for percentages, at a different attribute. r544 fixed the formatters it found and left
+    /// these, which is the sibling pattern this review keeps meeting; the sweep after that fix is
+    /// what caught it.
+    /// </summary>
+    private static long FormatAngleUnits(double degrees)
+    {
+        if (!double.IsFinite(degrees))
+            return 0;
+
+        return (long)Math.Clamp(Math.Round(degrees * 60000.0), int.MinValue, int.MaxValue);
+    }
+
+    /// rejects. The model does not clamp: CropLeft, Brightness, Contrast, BiLevelThreshold and
+    /// AlphaModPct are plain auto-properties.
+    ///
+    /// <para>The clamp is to what the FORMAT can hold rather than to a semantic range, because
+    /// int is a fact about ST_Percentage while "a crop cannot exceed 100%" is a guess about
+    /// intent. Non-finite becomes 0, which is what .NET already produced for NaN.</para>
+    /// </summary>
+    private static string FormatPercentUnits(double v)
+    {
+        if (!double.IsFinite(v))
+            return "0";
+
+        var scaled = Math.Clamp(Math.Round(v * 100_000.0), int.MinValue, int.MaxValue);
+        return ((long)scaled).ToString(CultureInfo.InvariantCulture);
+    }
 
     private static XElement BuildMediaPicEl(
         SlideShape shape,
@@ -4291,7 +4396,7 @@ public static class PptxPackageWriter
     {
         var xfrm = new XElement(A + "xfrm");
         if (shape.RotationDeg != 0)
-            xfrm.Add(new XAttribute("rot", (long)Math.Round(shape.RotationDeg * 60000)));
+            xfrm.Add(new XAttribute("rot", FormatAngleUnits(shape.RotationDeg)));
         if (shape.FlipH) xfrm.Add(new XAttribute("flipH", "1"));
         if (shape.FlipV) xfrm.Add(new XAttribute("flipV", "1"));
 
@@ -4329,10 +4434,28 @@ public static class PptxPackageWriter
     /// geometry from the layout/master placeholder chain — distinct from a source shape that
     /// explicitly declared a zero-size xfrm (flag true), which PowerPoint treats as hidden.
     /// </summary>
+    /// <summary>
+    /// Whether the shape needs an <c>&lt;a:xfrm&gt;</c> of its own at all.
+    /// </summary>
+    /// <remarks>
+    /// r412: rotation and flip count, not just position and size. This guards the ENTIRE xfrm
+    /// element, so while it tested offset/extent alone, a shape that inherited its geometry lost its
+    /// rotation and both flips on save -- rotate an untouched placeholder, save, reopen, and the
+    /// rotation is gone, silently. Measured through the FreeP undo harness: flipping a shape with no
+    /// explicit transform produced a byte-identical package, while flipping one with a transform
+    /// round-tripped correctly.
+    /// <para>Emitting the element for these is safe and does not reintroduce the zero-extent
+    /// placeholder trap the comment at the call site describes: <c>&lt;a:off&gt;</c> and
+    /// <c>&lt;a:ext&gt;</c> are added there only when the shape has its own values, and both are
+    /// independently optional in CT_Transform2D (ECMA-376 20.1.7.6), so the result is an xfrm
+    /// carrying just <c>rot</c>/<c>flipH</c>/<c>flipV</c> -- which is exactly what PowerPoint writes
+    /// for a rotated placeholder that inherits its position.</para>
+    /// </remarks>
     private static bool ShapeHasExplicitTransform(SlideShape shape) =>
         shape.HasExplicitZeroExtentTransform ||
         shape.OffsetXEmu != 0 || shape.OffsetYEmu != 0 ||
-        shape.ExtentCxEmu != 0 || shape.ExtentCyEmu != 0;
+        shape.ExtentCxEmu != 0 || shape.ExtentCyEmu != 0 ||
+        shape.RotationDeg != 0 || shape.FlipH || shape.FlipV;
 
     private static XElement BuildSpPrEl(
         SlideShape shape,
@@ -4351,7 +4474,7 @@ public static class PptxPackageWriter
         {
             xfrm = new XElement(A + "xfrm");
             if (shape.RotationDeg != 0)
-                xfrm.Add(new XAttribute("rot", (long)Math.Round(shape.RotationDeg * 60000)));
+                xfrm.Add(new XAttribute("rot", FormatAngleUnits(shape.RotationDeg)));
             if (shape.FlipH) xfrm.Add(new XAttribute("flipH", "1"));
             if (shape.FlipV) xfrm.Add(new XAttribute("flipV", "1"));
 
@@ -4439,29 +4562,29 @@ public static class PptxPackageWriter
                 {
                     case CustomSegmentKind.MoveTo:
                         pathEl.Add(new XElement(A + "moveTo",
-                            new XElement(A + "pt", new XAttribute("x", (long)seg.X), new XAttribute("y", (long)seg.Y))));
+                            new XElement(A + "pt", new XAttribute("x", FormatCoordinate(seg.X)), new XAttribute("y", FormatCoordinate(seg.Y)))));
                         break;
                     case CustomSegmentKind.LineTo:
                         pathEl.Add(new XElement(A + "lnTo",
-                            new XElement(A + "pt", new XAttribute("x", (long)seg.X), new XAttribute("y", (long)seg.Y))));
+                            new XElement(A + "pt", new XAttribute("x", FormatCoordinate(seg.X)), new XAttribute("y", FormatCoordinate(seg.Y)))));
                         break;
                     case CustomSegmentKind.CubicBezTo:
                         pathEl.Add(new XElement(A + "cubicBezTo",
-                            new XElement(A + "pt", new XAttribute("x", (long)seg.X),  new XAttribute("y", (long)seg.Y)),
-                            new XElement(A + "pt", new XAttribute("x", (long)seg.X1), new XAttribute("y", (long)seg.Y1)),
-                            new XElement(A + "pt", new XAttribute("x", (long)seg.X2), new XAttribute("y", (long)seg.Y2))));
+                            new XElement(A + "pt", new XAttribute("x", FormatCoordinate(seg.X)),  new XAttribute("y", FormatCoordinate(seg.Y))),
+                            new XElement(A + "pt", new XAttribute("x", FormatCoordinate(seg.X1)), new XAttribute("y", FormatCoordinate(seg.Y1))),
+                            new XElement(A + "pt", new XAttribute("x", FormatCoordinate(seg.X2)), new XAttribute("y", FormatCoordinate(seg.Y2)))));
                         break;
                     case CustomSegmentKind.QuadBezTo:
                         pathEl.Add(new XElement(A + "quadBezTo",
-                            new XElement(A + "pt", new XAttribute("x", (long)seg.X),  new XAttribute("y", (long)seg.Y)),
-                            new XElement(A + "pt", new XAttribute("x", (long)seg.X1), new XAttribute("y", (long)seg.Y1))));
+                            new XElement(A + "pt", new XAttribute("x", FormatCoordinate(seg.X)),  new XAttribute("y", FormatCoordinate(seg.Y))),
+                            new XElement(A + "pt", new XAttribute("x", FormatCoordinate(seg.X1)), new XAttribute("y", FormatCoordinate(seg.Y1)))));
                         break;
                     case CustomSegmentKind.ArcTo:
                         pathEl.Add(new XElement(A + "arcTo",
-                            new XAttribute("wR",    (long)seg.WR),
-                            new XAttribute("hR",    (long)seg.HR),
-                            new XAttribute("stAng", (long)Math.Round(seg.StAng * 60000)),
-                            new XAttribute("swAng", (long)Math.Round(seg.SwAng * 60000))));
+                            new XAttribute("wR",    FormatCoordinate(seg.WR)),
+                            new XAttribute("hR",    FormatCoordinate(seg.HR)),
+                            new XAttribute("stAng", FormatAngleUnits(seg.StAng)),
+                            new XAttribute("swAng", FormatAngleUnits(seg.SwAng))));
                         break;
                     case CustomSegmentKind.Close:
                         pathEl.Add(new XElement(A + "close"));
@@ -4660,7 +4783,7 @@ public static class PptxPackageWriter
                 new XAttribute("cx", shape.ExtentCxEmu),
                 new XAttribute("cy", shape.ExtentCyEmu)));
         if (shape.RotationDeg != 0)
-            xfrm.SetAttributeValue("rot", (long)Math.Round(shape.RotationDeg * 60000));
+            xfrm.SetAttributeValue("rot", FormatAngleUnits(shape.RotationDeg));
         if (shape.FlipH) xfrm.SetAttributeValue("flipH", "1");
         if (shape.FlipV) xfrm.SetAttributeValue("flipV", "1");
 
@@ -4848,12 +4971,20 @@ public static class PptxPackageWriter
                     _ => "t"
                 }));
 
+            // r337: same rule as the else branch below, which the author already knew ("Empty txBody
+            // is required by spec") -- but that branch only covers a cell with NO body. A cell whose
+            // body exists and has no paragraphs took this path and wrote a txBody with no a:p, which
+            // is the r334 defect at a second site: the shape writer was fixed, this one was not.
+            var cellParagraphs = cell.TextBody.Paragraphs.Count > 0
+                ? cell.TextBody.Paragraphs.Select(p => BuildParaEl(p, bulletImageRelIds: bulletImageRelIds))
+                : [new XElement(A + "p")];
+
             txBody = new XElement(A + "txBody",
                 bodyPr,
                 BuildLstStyleEl(
                     cell.TextBody.LstStyle,
                     cell.TextBody.DefaultParaRightToLeft),
-                cell.TextBody.Paragraphs.Select(p => BuildParaEl(p, bulletImageRelIds: bulletImageRelIds)));
+                cellParagraphs);
         }
         else
         {
@@ -5075,6 +5206,24 @@ public static class PptxPackageWriter
     private static XElement BuildLineEndEl(string localName, ShapeLineEnd lineEnd) =>
         new(A + localName, new XAttribute("type", ToLineEndType(lineEnd.Kind)));
 
+    /// <summary>
+    /// r192: DrawingML a:rPr/@sz is ST_TextFontSize -- an int in hundredths of a point bounded to
+    /// [100, 400000] (1pt to 4000pt). The raw `(int)Math.Round(pt * 100)` this replaces produced a
+    /// schema-invalid value for anything outside that range, and for a large enough size the cast
+    /// itself overflowed, writing a negative sz that PowerPoint refuses to open. The ribbon entry
+    /// point clamps too (FreePRibbonCommandWorkflow); this is the last line of defence for a size
+    /// that reached the model some other way, such as a value read from a file another producer
+    /// wrote.
+    /// </summary>
+    private static int ToTextFontSize(double fontSizePt)
+    {
+        if (double.IsNaN(fontSizePt))
+            return 100;
+
+        var hundredths = Math.Round(Math.Clamp(fontSizePt, 1, 4000) * 100);
+        return (int)hundredths;
+    }
+
     private static string ToLineEndType(ShapeLineEndKind kind) =>
         kind switch
         {
@@ -5217,10 +5366,21 @@ public static class PptxPackageWriter
 
         // In PresentationML, the text body inside p:sp is p:txBody (not a:txBody).
         // Body-level elements use a: namespace, paragraphs/runs use a: namespace.
+        // r334: CT_TextBody requires at least one a:p. An empty paragraph list is a legitimate model
+        // state -- TextBody's own doc says "may be empty for a shape with no text", and two product
+        // paths reach it: SlideShape.Text = "" clears the paragraphs but keeps the body, and
+        // HeaderFooterCommandPlanner creates placeholders with an empty one. Emitting a txBody with
+        // no a:p produced a schema-invalid package ("The element has incomplete content ... expected
+        // <a:p>"), which is the shape of defect PowerPoint reports as a file needing repair. An empty
+        // a:p carrying only endParaRPr is what Office itself writes for an empty text box.
+        var paragraphs = body.Paragraphs.Count > 0
+            ? body.Paragraphs.Select(p => BuildParaEl(p, hlinkRelIds, allSlides, bulletImageRelIds))
+            : [new XElement(A + "p", new XElement(A + "endParaRPr", new XAttribute("lang", "en-US")))];
+
         return new XElement(P + "txBody",
             bodyPr,
             BuildLstStyleEl(body.LstStyle, body.DefaultParaRightToLeft),
-            body.Paragraphs.Select(p => BuildParaEl(p, hlinkRelIds, allSlides, bulletImageRelIds)));
+            paragraphs);
     }
 
     /// <summary>
@@ -5561,7 +5721,7 @@ public static class PptxPackageWriter
         if (run.Caps != RunTextCaps.None)
             rPr.Add(new XAttribute("cap", run.Caps == RunTextCaps.All ? "all" : "small"));
         if (run.FontSizePt.HasValue)
-            rPr.Add(new XAttribute("sz", (int)Math.Round(run.FontSizePt.Value * 100)));
+            rPr.Add(new XAttribute("sz", ToTextFontSize(run.FontSizePt.Value)));
         if (run.BaselineOffset.HasValue)
             rPr.Add(new XAttribute("baseline", run.BaselineOffset.Value));
 
@@ -6867,7 +7027,7 @@ public static class PptxPackageWriter
             return;
 
         if (Math.Abs(shape.RotationDeg) > 0.0001)
-            xfrm.SetAttributeValue("rot", (long)Math.Round(shape.RotationDeg * 60000));
+            xfrm.SetAttributeValue("rot", FormatAngleUnits(shape.RotationDeg));
         else
             xfrm.Attribute("rot")?.Remove();
 

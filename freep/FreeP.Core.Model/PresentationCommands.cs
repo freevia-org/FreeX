@@ -382,6 +382,12 @@ public sealed class ReplaceSmartArtCommand : IPresentationCommand
         PresentationCommandSizeEstimator.EstimateBytes(_after),
     });
 
+    // r202: mirrors the guard CopyState opens with -- otherwise the bus pushes an undo entry for
+    // a command that changed nothing, and that push clears redo.
+    public bool HasEffect(Presentation presentation) =>
+        _slideIndex >= 0 && _slideIndex < presentation.Slides.Count
+        && ShapeHelper.Find(presentation, _slideIndex, _shapeId)?.SmartArt is not null;
+
     public void Apply(Presentation presentation) => CopyState(presentation, _after);
 
     public void Revert(Presentation presentation) => CopyState(presentation, _before);
@@ -780,7 +786,19 @@ public sealed class DuplicateSlideCommand : IPresentationCommand
         var source = p.Slides[_sourceIndex];
         _beforeSections ??= PresentationSectionMembershipSnapshot.Capture(p);
 
-        _duplicate = SlideCloner.CloneSlide(source);
+        // r458: redo must give the duplicate back its ORIGINAL id. CloneSlide mints a new Slide.Id
+        // every call, so undo-then-redo used to produce a slide with a different identity than the
+        // first Apply created -- and slide ids are what slide-jump hyperlinks resolve against, so a
+        // link pointing at the duplicate silently stopped finding it. Same defect r457 fixed in
+        // FreeX's AddPivotTableToNewWorksheetCommand, found by porting the same redo check here.
+        //
+        // CloneSlidePreservingIdentity already exists for exactly this need (Revert's own comment
+        // above names it), so redo re-clones from the retained duplicate rather than re-inserting
+        // that object: a fresh instance each Apply, with the identity held stable.
+        _duplicate = _duplicate is null
+            ? SlideCloner.CloneSlide(source)
+            : SlideCloner.CloneSlidePreservingIdentity(_duplicate);
+
         p.Slides.Insert(_sourceIndex + 1, _duplicate);
         PresentationSectionMembershipSnapshot.AddInsertedSlide(
             p,
@@ -2823,6 +2841,11 @@ public sealed class SetSlideTitleCommand : IPresentationCommand
     private readonly int _slideIndex;
     private readonly string _newTitle;
     private string? _oldTitle;
+    // r441: Slide.Title's setter CREATES a title placeholder (inserted at index 0) when the slide
+    // has none, and writing the text back to empty cannot remove it again -- so undo used to leave
+    // behind a placeholder the user never added, saved into the .pptx and shifting the index of
+    // every other shape on the slide. Recording that the shape was ours lets Revert take it away.
+    private bool _createdTitleShape;
 
     public SetSlideTitleCommand(int slideIndex, string title)
     {
@@ -2831,6 +2854,10 @@ public sealed class SetSlideTitleCommand : IPresentationCommand
     }
 
     public string Label => "Set Slide Title";
+
+    private static SlideShape? FindTitleShape(Slide slide) =>
+        slide.Shapes.FirstOrDefault(shape =>
+            shape.Placeholder?.Type is PlaceholderType.Title or PlaceholderType.CenteredTitle);
 
     public bool HasEffect(Presentation p) =>
         _slideIndex >= 0 &&
@@ -2846,6 +2873,7 @@ public sealed class SetSlideTitleCommand : IPresentationCommand
 
         var slide = p.Slides[_slideIndex];
         _oldTitle = slide.Title;
+        _createdTitleShape = FindTitleShape(slide) is null;
         slide.Title = _newTitle;
     }
 
@@ -2856,7 +2884,21 @@ public sealed class SetSlideTitleCommand : IPresentationCommand
             return;
         }
 
-        p.Slides[_slideIndex].Title = _oldTitle ?? string.Empty;
+        var slide = p.Slides[_slideIndex];
+        if (_createdTitleShape)
+        {
+            // Remove only the placeholder this command's own Apply caused to be created; a slide
+            // that already had one takes the ordinary text restore below.
+            if (FindTitleShape(slide) is { } created)
+            {
+                slide.Shapes.Remove(created);
+            }
+
+            _createdTitleShape = false;
+            return;
+        }
+
+        slide.Title = _oldTitle ?? string.Empty;
     }
 }
 
@@ -3532,6 +3574,14 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
         if (_index < 0)
             return;
 
+        // r535: HasEffect requires this shape to BE SmartArt; Apply only required that some shape
+        // carry the id. Applied where that id is anything else, it deleted that shape, replaced it
+        // with the stored conversion, and dropped the animations pointing at it -- destroying a
+        // shape it was never asked to convert. Apply now enforces the same precondition it
+        // advertises.
+        if (shapes[_index].Kind != SlideShapeKind.SmartArt)
+            return;
+
         _capturedConnectorAttachments = ShapeHelper.All(presentation, _slideIndex)
             .Where(shape => shape.Kind == SlideShapeKind.Connector &&
                 (shape.ConnectionStart?.ShapeId == _smartArtId ||
@@ -3663,6 +3713,11 @@ public sealed class DeleteShapeCommand : IPresentationCommand
     }
 
     public string Label => "Delete Shape";
+
+    // r200: see MoveShapeCommand.HasEffect -- pressing Delete on a protection-locked chart deleted
+    // nothing but still pushed an undo entry, which clears redo.
+    public bool HasEffect(Presentation p) =>
+        ShapeHelper.Find(p, _slideIndex, _shapeId) is { } shape && ChartHelper.IsObjectEditable(shape);
 
     public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_captured);
 
@@ -3961,6 +4016,11 @@ public sealed class MoveShapeCommand : IPresentationCommand
 
     public string Label => "Move Shape";
 
+    // r200: a chart with ChartObjectProtected still selects and drags, so this guard fires on an
+    // ordinary gesture. FlipShapeCommand got the matching HasEffect; its four siblings did not.
+    public bool HasEffect(Presentation p) =>
+        ShapeHelper.Find(p, _slideIndex, _shapeId) is { } shape && ChartHelper.IsObjectEditable(shape);
+
     public void Apply(Presentation p)
     {
         var s = ShapeHelper.Find(p, _slideIndex, _shapeId);
@@ -4062,6 +4122,11 @@ public sealed class ResizeShapeCommand : IPresentationCommand
     }
 
     public string Label => "Resize Shape";
+
+    // r200: a chart with ChartObjectProtected still selects and drags, so this guard fires on an
+    // ordinary gesture. FlipShapeCommand got the matching HasEffect; its four siblings did not.
+    public bool HasEffect(Presentation p) =>
+        ShapeHelper.Find(p, _slideIndex, _shapeId) is { } shape && ChartHelper.IsObjectEditable(shape);
 
     public void Apply(Presentation p)
     {
@@ -4380,6 +4445,11 @@ public sealed class SetShapeGeometryAdjustmentCommand : IPresentationCommand
     }
 
     public string Label => "Edit Shape Geometry";
+
+    // r202: mirrors the guard Apply opens with -- the bus would otherwise push an undo entry for
+    // a command that changed nothing, and that push clears redo.
+    public bool HasEffect(Presentation p) =>
+        ShapeHelper.Find(p, _slideIndex, _shapeId) is not null;
 
     public void Apply(Presentation p)
     {
@@ -4736,6 +4806,11 @@ public sealed class RotateShapeCommand : IPresentationCommand
 
     public string Label => "Rotate Shape";
 
+    // r200: a chart with ChartObjectProtected still selects and drags, so this guard fires on an
+    // ordinary gesture. FlipShapeCommand got the matching HasEffect; its four siblings did not.
+    public bool HasEffect(Presentation p) =>
+        ShapeHelper.Find(p, _slideIndex, _shapeId) is { } shape && ChartHelper.IsObjectEditable(shape);
+
     public void Apply(Presentation p)
     {
         var s = ShapeHelper.Find(p, _slideIndex, _shapeId);
@@ -4840,6 +4915,48 @@ public sealed class SetShapeFillCommand : IPresentationCommand
         PresentationCommandSizeEstimator.EstimateBytes(_newFill),
         PresentationCommandSizeEstimator.EstimateBytes(_oldFill),
     });
+
+    // r479: same reasoning as r202's guard -- without this the bus pushes an undo entry for a
+    // command that changed nothing, and that push CLEARS REDO. Re-picking a shape's current colour
+    // in the fill dialog is the ordinary way to reach it: the dialog pre-selects what is already
+    // there, so pressing OK without editing silently discarded the user's redo history.
+    //
+    // Deliberately conservative: only fills that can be compared EXACTLY are treated as equivalent.
+    // Gradients and pictures report an effect rather than risk suppressing a real edit, which is the
+    // safe direction to be wrong in -- a redundant undo entry is a nuisance, a swallowed edit is not.
+    public bool HasEffect(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        if (shape is null) return false;
+
+        return !FillsAreEquivalent(shape.Fill, _newFill);
+    }
+
+    private static bool FillsAreEquivalent(ShapeFill? current, ShapeFill? candidate)
+    {
+        if (ReferenceEquals(current, candidate)) return true;
+        if (current is null || candidate is null) return false;
+        if (current is ShapeFill.None && candidate is ShapeFill.None) return true;
+
+        return current is ShapeFill.Solid a
+            && candidate is ShapeFill.Solid b
+            && ColorsAreEquivalent(a.Color, b.Color);
+    }
+
+    private static bool ColorsAreEquivalent(ThemeAwareColor a, ThemeAwareColor b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a.Resolved != b.Resolved || a.Alpha != b.Alpha) return false;
+
+        // A theme reference and a literal colour that currently resolve alike are NOT the same fill:
+        // re-theming moves one and not the other, so only compare two references to each other.
+        if (a.SchemeColor is null || b.SchemeColor is null)
+            return a.SchemeColor is null && b.SchemeColor is null;
+
+        return a.SchemeColor.Slot == b.SchemeColor.Slot
+            && string.Equals(a.SchemeColor.RoleName, b.SchemeColor.RoleName, StringComparison.Ordinal)
+            && a.SchemeColor.LumMod.Equals(b.SchemeColor.LumMod);
+    }
 
     public void Apply(Presentation p)
     {
@@ -4966,6 +5083,11 @@ public sealed class SetShapeTextCommand : IPresentationCommand
         PresentationCommandSizeEstimator.EstimateBytes(_newBody),
         PresentationCommandSizeEstimator.EstimateBytes(_oldBody),
     });
+
+    // r202: mirrors the guard Apply opens with -- the bus would otherwise push an undo entry for
+    // a command that changed nothing, and that push clears redo.
+    public bool HasEffect(Presentation p) =>
+        ShapeHelper.Find(p, _slideIndex, _shapeId) is not null;
 
     public void Apply(Presentation p)
     {
@@ -5363,6 +5485,11 @@ public sealed class SetRunFontCommand : IPresentationCommand
 
     public string Label => "Set Font";
 
+    // r200: re-confirming the value the ribbon combo already shows is an ordinary action, and it
+    // used to push one inert undo entry per selected run -- each of which clears redo.
+    public bool HasEffect(Presentation p) =>
+        GetRun(p) is { } run && !string.Equals(run.FontFamily, _newFont, StringComparison.Ordinal);
+
     public void Apply(Presentation p)
     {
         var run = GetRun(p);
@@ -5409,6 +5536,10 @@ public sealed class SetRunFontSizeCommand : IPresentationCommand
     }
 
     public string Label => "Set Font Size";
+
+    // r200: see SetRunFontCommand.HasEffect.
+    public bool HasEffect(Presentation p) =>
+        GetRun(p) is { } run && run.FontSizePt != _newSize;
 
     public void Apply(Presentation p)
     {
@@ -5457,6 +5588,11 @@ public sealed class SetSlideTransitionCommand : IPresentationCommand
     }
 
     public string Label => "Set Transition";
+
+    // r202: mirrors the guard Apply opens with -- the bus would otherwise push an undo entry for
+    // a command that changed nothing, and that push clears redo.
+    public bool HasEffect(Presentation p) =>
+        _slideIndex >= 0 && _slideIndex < p.Slides.Count && !Equals(p.Slides[_slideIndex].Transition, _newTransition);
 
     public void Apply(Presentation p)
     {
@@ -5730,6 +5866,11 @@ public sealed class SetSlideNotesCommand : IPresentationCommand
         PresentationCommandSizeEstimator.EstimateBytes(_oldNotes),
     });
 
+    // r202: mirrors the guard Apply opens with -- the bus would otherwise push an undo entry for
+    // a command that changed nothing, and that push clears redo.
+    public bool HasEffect(Presentation p) =>
+        _slideIndex >= 0 && _slideIndex < p.Slides.Count;
+
     public void Apply(Presentation p)
     {
         if (_slideIndex < 0 || _slideIndex >= p.Slides.Count) return;
@@ -5765,6 +5906,10 @@ public sealed class SetRunColorCommand : IPresentationCommand
     }
 
     public string Label => "Set Color";
+
+    // r200: see SetRunFontCommand.HasEffect.
+    public bool HasEffect(Presentation p) =>
+        GetRun(p) is { } run && !Equals(run.Color, _newColor);
 
     public void Apply(Presentation p)
     {

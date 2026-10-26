@@ -37,7 +37,17 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$OutputDir,
 
-    [switch]$Suite
+    [switch]$Suite,
+
+    # Produce UNSIGNED macOS packages when the Developer ID secrets are absent, instead of failing.
+    # Opt-in only, and never a silent downgrade: when the secrets ARE present this script still
+    # signs and notarizes exactly as before, so a broken or missing secret in a normally-signed
+    # release still fails loudly rather than quietly shipping unsigned bundles.
+    #
+    # Unsigned bundles are not merely "less verified" -- macOS Gatekeeper refuses to launch them
+    # from a normal double-click, so the packaged README explains the override, and the caller is
+    # responsible for not advertising these artifacts as signed.
+    [switch]$AllowUnsigned
 )
 
 $ErrorActionPreference = "Stop"
@@ -64,20 +74,48 @@ $requiredEnvironmentVariables = @(
     "MACOS_NOTARY_TEAM_ID",
     "MACOS_NOTARY_PASSWORD"
 )
-foreach ($variableName in $requiredEnvironmentVariables) {
-    $value = [Environment]::GetEnvironmentVariable($variableName)
-    if ([string]::IsNullOrWhiteSpace($value)) {
-        throw "Signed macOS release packaging requires environment variable '$variableName'."
+$missingEnvironmentVariables = @(
+    $requiredEnvironmentVariables |
+        Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) }
+)
+
+# Signing is all-or-nothing: a partially supplied secret set is a configuration error, not a reason
+# to fall back, because it would ship unsigned bundles from a release that clearly meant to sign.
+$signPackages = $missingEnvironmentVariables.Count -eq 0
+if (-not $signPackages) {
+    if (-not $AllowUnsigned) {
+        throw "Signed macOS release packaging requires environment variable '$($missingEnvironmentVariables[0])'."
     }
+    if ($missingEnvironmentVariables.Count -ne $requiredEnvironmentVariables.Count) {
+        throw ("Refusing to build unsigned macOS packages from a partial signing configuration. " +
+            "Present: $(($requiredEnvironmentVariables | Where-Object { $missingEnvironmentVariables -notcontains $_ }) -join ', '). " +
+            "Supply all six Developer ID secrets, or none of them.")
+    }
+    Write-Warning ("No Developer ID secrets are configured and -AllowUnsigned was passed, so the macOS " +
+        "packages for $($Apps -join ', ') ($Runtime) will be UNSIGNED and UNNOTARIZED. Gatekeeper will " +
+        "refuse to open them by double-click; users must clear the quarantine attribute or use Finder's " +
+        "right-click Open. Do not describe these artifacts as signed.")
 }
 
-$applicationIdentity = $env:MACOS_DEVELOPER_ID_APPLICATION.Trim()
-if ($applicationIdentity -notmatch '^Developer ID Application:\s*(?<subject>.+)$') {
-    throw "MACOS_DEVELOPER_ID_APPLICATION must be an exact 'Developer ID Application: ...' identity."
+$applicationIdentity = $null
+$installerIdentity = $null
+if ($signPackages) {
+    $applicationIdentity = $env:MACOS_DEVELOPER_ID_APPLICATION.Trim()
+    if ($applicationIdentity -notmatch '^Developer ID Application:\s*(?<subject>.+)$') {
+        throw "MACOS_DEVELOPER_ID_APPLICATION must be an exact 'Developer ID Application: ...' identity."
+    }
+    $installerIdentity = "Developer ID Installer: $($Matches.subject)"
 }
-$installerIdentity = "Developer ID Installer: $($Matches.subject)"
 
-foreach ($commandName in @("security", "codesign", "ditto", "xcrun", "pkgbuild", "pkgutil", "spctl")) {
+$requiredCommands = if ($signPackages) {
+    @("security", "codesign", "ditto", "xcrun", "pkgbuild", "pkgutil", "spctl")
+}
+else {
+    # Unsigned packaging still expands and rebuilds the bundle archives, and still builds the suite
+    # PKG; it just never reaches the keychain, notary or Gatekeeper tools.
+    @("ditto", "pkgbuild")
+}
+foreach ($commandName in $requiredCommands) {
     if (-not (Get-Command $commandName -ErrorAction SilentlyContinue)) {
         throw "Required macOS release tool '$commandName' was not found."
     }
@@ -187,41 +225,68 @@ function New-SignedAppPackage {
         throw "The generated $App package does not contain '$App.app'."
     }
 
-    Invoke-CheckedNativeCommand -Command "codesign" -Arguments @(
-        "--force", "--deep", "--options", "runtime", "--timestamp",
-        "--keychain", $keychainPath, "--sign", $applicationIdentity, $appPath
-    ) -FailureMessage "Developer ID signing failed for $App."
-    Invoke-CheckedNativeCommand -Command "codesign" -Arguments @(
-        "--verify", "--deep", "--strict", "--verbose=2", $appPath
-    ) -FailureMessage "Strict code-signature verification failed for $App."
+    $notaryLogPath = $null
+    if ($signPackages) {
+        Invoke-CheckedNativeCommand -Command "codesign" -Arguments @(
+            "--force", "--deep", "--options", "runtime", "--timestamp",
+            "--keychain", $keychainPath, "--sign", $applicationIdentity, $appPath
+        ) -FailureMessage "Developer ID signing failed for $App."
+        Invoke-CheckedNativeCommand -Command "codesign" -Arguments @(
+            "--verify", "--deep", "--strict", "--verbose=2", $appPath
+        ) -FailureMessage "Strict code-signature verification failed for $App."
 
-    $submissionPath = Join-Path $workRoot "$App-v$Version-$Runtime-notary.zip"
-    if (Test-Path -LiteralPath $submissionPath) {
-        Remove-Item -LiteralPath $submissionPath -Force
+        $submissionPath = Join-Path $workRoot "$App-v$Version-$Runtime-notary.zip"
+        if (Test-Path -LiteralPath $submissionPath) {
+            Remove-Item -LiteralPath $submissionPath -Force
+        }
+        Invoke-CheckedNativeCommand -Command "ditto" -Arguments @(
+            "-c", "-k", "--sequesterRsrc", "--keepParent", $appPath, $submissionPath
+        ) -FailureMessage "Could not prepare the $App notarization submission."
+
+        $notaryLogPath = Join-Path $OutputDir "$App-v$Version-$Runtime-notarization.json"
+        Submit-Notarization -Path $submissionPath -LogPath $notaryLogPath
+        Invoke-CheckedNativeCommand -Command "xcrun" -Arguments @(
+            "stapler", "staple", $appPath
+        ) -FailureMessage "Could not staple the notarization ticket to $App."
+        Invoke-CheckedNativeCommand -Command "xcrun" -Arguments @(
+            "stapler", "validate", $appPath
+        ) -FailureMessage "Stapler validation failed for $App."
+        Invoke-CheckedNativeCommand -Command "codesign" -Arguments @(
+            "--verify", "--deep", "--strict", "--verbose=2", $appPath
+        ) -FailureMessage "Post-notarization signature verification failed for $App."
+        Test-GatekeeperApp -AppPath $appPath
     }
-    Invoke-CheckedNativeCommand -Command "ditto" -Arguments @(
-        "-c", "-k", "--sequesterRsrc", "--keepParent", $appPath, $submissionPath
-    ) -FailureMessage "Could not prepare the $App notarization submission."
 
-    $notaryLogPath = Join-Path $OutputDir "$App-v$Version-$Runtime-notarization.json"
-    Submit-Notarization -Path $submissionPath -LogPath $notaryLogPath
-    Invoke-CheckedNativeCommand -Command "xcrun" -Arguments @(
-        "stapler", "staple", $appPath
-    ) -FailureMessage "Could not staple the notarization ticket to $App."
-    Invoke-CheckedNativeCommand -Command "xcrun" -Arguments @(
-        "stapler", "validate", $appPath
-    ) -FailureMessage "Stapler validation failed for $App."
-    Invoke-CheckedNativeCommand -Command "codesign" -Arguments @(
-        "--verify", "--deep", "--strict", "--verbose=2", $appPath
-    ) -FailureMessage "Post-notarization signature verification failed for $App."
-    Test-GatekeeperApp -AppPath $appPath
-
-    @(
-        "# $App macOS bundle",
-        "",
-        "The included $App.app is Developer ID signed, notarized, and stapled.",
-        "Run ``./install.sh`` to copy it to ``~/Applications``, or drag the app there manually."
-    ) | Set-Content -LiteralPath (Join-Path $stagePath "README.md") -Encoding utf8NoBOM
+    $readmeLines = if ($signPackages) {
+        @(
+            "# $App macOS bundle",
+            "",
+            "The included $App.app is Developer ID signed, notarized, and stapled.",
+            "Run ``./install.sh`` to copy it to ``~/Applications``, or drag the app there manually."
+        )
+    }
+    else {
+        @(
+            "# $App macOS bundle (UNSIGNED)",
+            "",
+            "This build is **not** code signed or notarized, because no Apple Developer ID was",
+            "available when it was produced. macOS Gatekeeper will refuse to open it from a normal",
+            "double-click, and may report it as damaged.",
+            "",
+            "Run ``./install.sh`` to copy it to ``~/Applications``, or drag the app there manually,",
+            "then clear the quarantine attribute once:",
+            "",
+            "``````",
+            "xattr -dr com.apple.quarantine ~/Applications/$App.app",
+            "``````",
+            "",
+            "Alternatively, right-click the app in Finder and choose Open, which offers a one-time",
+            "override. Only do this because you trust where you obtained the build.",
+            "",
+            "Signed and notarized macOS builds will replace these once a Developer ID is configured."
+        )
+    }
+    $readmeLines | Set-Content -LiteralPath (Join-Path $stagePath "README.md") -Encoding utf8NoBOM
 
     Remove-Item -LiteralPath $packagePath -Force
     Remove-Item -LiteralPath "$packagePath.sha256" -Force -ErrorAction SilentlyContinue
@@ -253,33 +318,44 @@ function New-SignedSuitePackage {
 
     $packagePath = Join-Path $OutputDir "FreeSuite-v$Version-$Runtime.pkg"
     Remove-Item -LiteralPath $packagePath -Force -ErrorAction SilentlyContinue
-    Invoke-CheckedNativeCommand -Command "pkgbuild" -Arguments @(
+    $pkgbuildArguments = @(
         "--root", $packageRoot,
         "--identifier", "io.github.tony-xmelon.freesuite",
         "--version", $Version,
-        "--install-location", "/",
-        "--sign", $installerIdentity,
-        "--keychain", $keychainPath,
-        $packagePath
-    ) -FailureMessage "Could not create a Developer ID signed Free Suite PKG. Ensure the P12 contains '$installerIdentity'."
-    Invoke-CheckedNativeCommand -Command "pkgutil" -Arguments @(
-        "--check-signature", $packagePath
-    ) -FailureMessage "Free Suite PKG signature verification failed."
+        "--install-location", "/"
+    )
+    if ($signPackages) {
+        $pkgbuildArguments += @("--sign", $installerIdentity, "--keychain", $keychainPath)
+    }
+    $pkgbuildArguments += $packagePath
+    $pkgbuildFailure = if ($signPackages) {
+        "Could not create a Developer ID signed Free Suite PKG. Ensure the P12 contains '$installerIdentity'."
+    }
+    else {
+        "Could not create the unsigned Free Suite PKG."
+    }
+    Invoke-CheckedNativeCommand -Command "pkgbuild" -Arguments $pkgbuildArguments -FailureMessage $pkgbuildFailure
 
-    $notaryLogPath = Join-Path $OutputDir "FreeSuite-v$Version-$Runtime-notarization.json"
-    Submit-Notarization -Path $packagePath -LogPath $notaryLogPath
-    Invoke-CheckedNativeCommand -Command "xcrun" -Arguments @(
-        "stapler", "staple", $packagePath
-    ) -FailureMessage "Could not staple the notarization ticket to the Free Suite PKG."
-    Invoke-CheckedNativeCommand -Command "xcrun" -Arguments @(
-        "stapler", "validate", $packagePath
-    ) -FailureMessage "Stapler validation failed for the Free Suite PKG."
-    Invoke-CheckedNativeCommand -Command "pkgutil" -Arguments @(
-        "--check-signature", $packagePath
-    ) -FailureMessage "Post-notarization Free Suite PKG signature verification failed."
-    Invoke-CheckedNativeCommand -Command "spctl" -Arguments @(
-        "--assess", "--type", "install", "--verbose=4", $packagePath
-    ) -FailureMessage "Gatekeeper rejected the Free Suite PKG."
+    if ($signPackages) {
+        Invoke-CheckedNativeCommand -Command "pkgutil" -Arguments @(
+            "--check-signature", $packagePath
+        ) -FailureMessage "Free Suite PKG signature verification failed."
+
+        $notaryLogPath = Join-Path $OutputDir "FreeSuite-v$Version-$Runtime-notarization.json"
+        Submit-Notarization -Path $packagePath -LogPath $notaryLogPath
+        Invoke-CheckedNativeCommand -Command "xcrun" -Arguments @(
+            "stapler", "staple", $packagePath
+        ) -FailureMessage "Could not staple the notarization ticket to the Free Suite PKG."
+        Invoke-CheckedNativeCommand -Command "xcrun" -Arguments @(
+            "stapler", "validate", $packagePath
+        ) -FailureMessage "Stapler validation failed for the Free Suite PKG."
+        Invoke-CheckedNativeCommand -Command "pkgutil" -Arguments @(
+            "--check-signature", $packagePath
+        ) -FailureMessage "Post-notarization Free Suite PKG signature verification failed."
+        Invoke-CheckedNativeCommand -Command "spctl" -Arguments @(
+            "--assess", "--type", "install", "--verbose=4", $packagePath
+        ) -FailureMessage "Gatekeeper rejected the Free Suite PKG."
+    }
     Write-Sha256 -Path $packagePath
 }
 
@@ -288,6 +364,17 @@ try {
         Remove-Item -LiteralPath $workRoot -Recurse -Force
     }
     New-Item -ItemType Directory -Force -Path $workRoot | Out-Null
+
+    if (-not $signPackages) {
+        # No certificate, no keychain, no identities to verify: go straight to bundle construction.
+        $unsignedApps = @($Apps | ForEach-Object { New-SignedAppPackage -App $_ })
+        if ($Suite) {
+            New-SignedSuitePackage -SignedApps $unsignedApps
+        }
+        Write-Warning ("Produced UNSIGNED, UNNOTARIZED macOS release packages for $($Apps -join ', ') " +
+            "($Runtime). They must not be published as signed builds.")
+        return
+    }
 
     try {
         $certificateBytes = [Convert]::FromBase64String($env:MACOS_CODESIGN_CERTIFICATE_P12.Trim())

@@ -264,13 +264,20 @@ public static class SlideShowInkRenderPlanner
     private static byte OpacityToAlpha(double opacity) =>
         (byte)Math.Clamp(Math.Round(Math.Clamp(opacity, 0, 1) * 255), 0, 255);
 
+    // r555: IsFinite as well. These read InkML attributes out of a stored ink part, so they are
+    // file-controlled, and "1e400" parses SUCCESSFULLY to Infinity. The trace COORDINATES were
+    // already filtered for non-finite values; the brush width was not, and Math.Max(0.1, width)
+    // is not a guard -- it returns Infinity for Infinity and NaN for NaN. Falling back is what
+    // both helpers already do for an absent or unparseable attribute.
     private static double ParseDouble(string? value, double fallback) =>
         double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+        && double.IsFinite(parsed)
             ? parsed
             : fallback;
 
     private static double? ParseOptionalDouble(string? value) =>
         double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+        && double.IsFinite(parsed)
             ? parsed
             : null;
 

@@ -88,10 +88,10 @@ public sealed class Round133PptxParityTests
         // (or, with an embedded sibling present, silently aliases someone else's rId).
         relationship.Should().NotBeNull(
             "the relationship id referenced by a:videoFile/@r:link must actually exist in the .rels part");
-        relationship!.Attribute("TargetMode")?.Value.Should().Be("External");
-        relationship.Attribute("Target")?.Value.Should().Be("http://example.com/clip.mp4",
+        relationship!.Attribute("TargetMode")!.Value.Should().Be("External");
+        relationship.Attribute("Target")!.Value.Should().Be("http://example.com/clip.mp4",
             "the authored MediaInfo.LinkUrl must survive into the relationship target, not be dropped");
-        relationship.Attribute("Type")?.Value.Should().EndWith("/video");
+        relationship.Attribute("Type")!.Value.Should().EndWith("/video");
     }
 
     [Fact]
@@ -145,8 +145,8 @@ public sealed class Round133PptxParityTests
         audioRelId.Should().NotBe(videoRelId, "the linked audio must get its own relationship id, not alias the embedded video's");
 
         var audioRel = relsXml.Root!.Elements(Rel + "Relationship").Single(e => e.Attribute("Id")?.Value == audioRelId);
-        audioRel.Attribute("Target")?.Value.Should().Be("http://example.com/track.mp3");
-        audioRel.Attribute("TargetMode")?.Value.Should().Be("External");
+        audioRel.Attribute("Target")!.Value.Should().Be("http://example.com/track.mp3");
+        audioRel.Attribute("TargetMode")!.Value.Should().Be("External");
 
         var videoRel = relsXml.Root!.Elements(Rel + "Relationship").Single(e => e.Attribute("Id")?.Value == videoRelId);
         (videoRel.Attribute("TargetMode")?.Value).Should().NotBe("External", "the embedded video must remain a package-internal relationship");
@@ -339,7 +339,7 @@ public sealed class Round133PptxParityTests
         // Assert: the custom style definition must survive the round trip, not be discarded in
         // favor of the hard-coded empty stub.
         var tableStylesXml = ReadZipEntryXml(resaved, "ppt/tableStyles.xml");
-        tableStylesXml.Root!.Attribute("def")?.Value.Should().Be(customGuid,
+        tableStylesXml.Root!.Attribute("def")!.Value.Should().Be(customGuid,
             "a custom table style definition present in the source package must be preserved on save");
         tableStylesXml.Root.Elements(A + "tblStyle").Should().ContainSingle(
             e => e.Attribute("styleName") != null && e.Attribute("styleName")!.Value == "My Custom Style",
@@ -360,7 +360,7 @@ public sealed class Round133PptxParityTests
         var tableStylesXml = ReadZipEntryXml(bytes, "ppt/tableStyles.xml");
 
         tableStylesXml.Root!.Name.Should().Be(A + "tblStyleLst");
-        tableStylesXml.Root.Attribute("def")?.Value.Should().Be("{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}");
+        tableStylesXml.Root.Attribute("def")!.Value.Should().Be("{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}");
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -400,7 +400,7 @@ public sealed class Round133PptxParityTests
         var slideXml = ReadZipEntryXml(bytes, "ppt/slides/slide1.xml");
         var lnSpc = slideXml.Descendants(A + "lnSpc").SingleOrDefault();
         lnSpc.Should().NotBeNull("a:lnSpc must be written for a paragraph with LineSpacingPercent set");
-        lnSpc!.Element(A + "spcPct")?.Attribute("val")?.Value.Should().Be("150000");
+        lnSpc!.Element(A + "spcPct")?.Attribute("val")!.Value.Should().Be("150000");
 
         using var ms = new MemoryStream(bytes);
         var reloaded = PptxPackageReader.Read(ms);
@@ -424,7 +424,7 @@ public sealed class Round133PptxParityTests
         var slideXml = ReadZipEntryXml(bytes, "ppt/slides/slide1.xml");
         var lnSpc = slideXml.Descendants(A + "lnSpc").SingleOrDefault();
         lnSpc.Should().NotBeNull();
-        lnSpc!.Element(A + "spcPts")?.Attribute("val")?.Value.Should().Be("2400");
+        lnSpc!.Element(A + "spcPts")?.Attribute("val")!.Value.Should().Be("2400");
 
         using var ms = new MemoryStream(bytes);
         var reloaded = PptxPackageReader.Read(ms);
@@ -493,8 +493,8 @@ public sealed class Round133PptxParityTests
         var spcAft = slideXml.Descendants(A + "spcAft").SingleOrDefault();
         spcBef.Should().NotBeNull("spcBef must be written for SpaceBeforePercent");
         spcAft.Should().NotBeNull("spcAft must be written for SpaceAfterPercent");
-        spcBef!.Element(A + "spcPct")?.Attribute("val")?.Value.Should().Be("50000");
-        spcAft!.Element(A + "spcPct")?.Attribute("val")?.Value.Should().Be("200000");
+        spcBef!.Element(A + "spcPct")?.Attribute("val")!.Value.Should().Be("50000");
+        spcAft!.Element(A + "spcPct")?.Attribute("val")!.Value.Should().Be("200000");
         spcBef.Element(A + "spcPts").Should().BeNull("spcPts and spcPct are mutually exclusive per ECMA-376");
         spcAft.Element(A + "spcPts").Should().BeNull();
 
@@ -524,8 +524,8 @@ public sealed class Round133PptxParityTests
         var slideXml = ReadZipEntryXml(bytes, "ppt/slides/slide1.xml");
         var spcBef = slideXml.Descendants(A + "spcBef").Single();
         var spcAft = slideXml.Descendants(A + "spcAft").Single();
-        spcBef.Element(A + "spcPts")?.Attribute("val")?.Value.Should().Be("1200");
-        spcAft.Element(A + "spcPts")?.Attribute("val")?.Value.Should().Be("600");
+        spcBef.Element(A + "spcPts")?.Attribute("val")!.Value.Should().Be("1200");
+        spcAft.Element(A + "spcPts")?.Attribute("val")!.Value.Should().Be("600");
         spcBef.Element(A + "spcPct").Should().BeNull();
 
         using var ms = new MemoryStream(bytes);

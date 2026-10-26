@@ -53,7 +53,7 @@ public sealed class R62_AutoFilterOnlyFilterDatabaseGateTests
             "applied, even when it is the only defined-name-worthy content in the workbook " +
             "(R62-io-defined-name-print-6-2)");
         filterDatabase!.Value.Should().Be("Sheet1!$A$1:$A$2");
-        filterDatabase.Attribute("hidden")?.Value.Should().Be("1");
+        filterDatabase.Attribute("hidden")!.Value.Should().Be("1");
     }
 
     [Fact]

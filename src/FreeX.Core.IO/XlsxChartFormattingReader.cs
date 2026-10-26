@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using FreeX.Core.Model;
+using System.Globalization;
 
 namespace FreeX.Core.IO;
 
@@ -19,7 +20,7 @@ internal static class XlsxChartFormattingReader
         if (runProperties is null)
             return;
 
-        if (int.TryParse(runProperties.Attribute("sz")?.Value, out var size))
+        if (int.TryParse(runProperties.Attribute("sz")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var size))
             chart.ChartTitleFontSize = Math.Clamp(size / 100.0, 6, 72);
 
         var solidFill = runProperties.Element(DrawingNs + "solidFill");
@@ -73,7 +74,7 @@ internal static class XlsxChartFormattingReader
         if (line is null)
             return;
 
-        if (int.TryParse(line.Attribute("w")?.Value, out var emus))
+        if (int.TryParse(line.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var emus))
             chart.ChartAreaBorderThickness = Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0, 10);
 
         // Same noFill-vs-absent distinction as above, but for the border/line ("No Line").
@@ -142,7 +143,7 @@ internal static class XlsxChartFormattingReader
         if (line is null)
             return;
 
-        if (int.TryParse(line.Attribute("w")?.Value, out var emus))
+        if (int.TryParse(line.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var emus))
             chart.PlotAreaBorderThickness = Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0, 10);
 
         // Same noFill-vs-absent distinction as above, but for the border/line ("No Line").
@@ -213,7 +214,7 @@ internal static class XlsxChartFormattingReader
         if (line is null)
             return;
 
-        if (int.TryParse(line.Attribute("w")?.Value, out var emus))
+        if (int.TryParse(line.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var emus))
             result.BorderThickness = Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0, 10);
 
         var lineFill = line.Element(DrawingNs + "solidFill");

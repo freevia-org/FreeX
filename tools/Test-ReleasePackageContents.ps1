@@ -5,7 +5,13 @@ param(
     [Parameter(Mandatory)][ValidateSet('FreeX','FreeW','FreeP')][string[]]$Apps,
     [Parameter(Mandatory)][string]$Version,
     [Parameter(Mandatory)][ValidatePattern('^(win|linux|osx)-(x64|arm64)$')][string]$Runtime,
-    [Parameter(Mandatory)][string]$InputRoot
+    [Parameter(Mandatory)][string]$InputRoot,
+
+    # Matches New-SignedMacOsReleasePackages.ps1 -AllowUnsigned: when the release was built without
+    # a Developer ID, the macOS suite .pkg carries no signature and pkgutil --check-signature would
+    # fail on an artifact that is unsigned by design. Everything else about the package is still
+    # verified. Opt-in only, so a normally-signed release still fails when its signature is missing.
+    [switch]$AllowUnsigned
 )
 
 $ErrorActionPreference = "Stop"
@@ -65,8 +71,14 @@ if ($Runtime -like 'win-*') {
 } else {
     $installer = Find-One "$prefix.pkg"
     if ($installer.Length -eq 0) { throw "macOS suite package missing or empty: $($installer.Name)" }
-    & pkgutil --check-signature $installer.FullName
-    if ($LASTEXITCODE -ne 0) { throw "macOS suite package signature validation failed: $($installer.Name)" }
+    if ($AllowUnsigned) {
+        Write-Warning ("Skipping the macOS suite package signature check for $($installer.Name): this " +
+            "release was built without a Developer ID, so the .pkg is unsigned by design.")
+    }
+    else {
+        & pkgutil --check-signature $installer.FullName
+        if ($LASTEXITCODE -ne 0) { throw "macOS suite package signature validation failed: $($installer.Name)" }
+    }
 }
 
 Write-Host "Release package content gate passed for $Scope $Runtime."

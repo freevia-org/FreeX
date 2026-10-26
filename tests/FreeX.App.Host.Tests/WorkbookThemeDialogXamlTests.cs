@@ -32,7 +32,7 @@ public sealed partial class WorkbookThemeDialogXamlTests
             .Descendants(presentation + "UniformGrid")
             .Single(element => element.Attribute(xamlNs + "Name")?.Value == "ThemeColorsPanel");
 
-        colorsPanel.Attribute("Columns")?.Value.Should().Be("3");
+        colorsPanel.Attribute("Columns")!.Value.Should().Be("3");
     }
 
     [Fact]
@@ -81,6 +81,6 @@ public sealed partial class WorkbookThemeDialogXamlTests
             .Descendants(presentation + "Button")
             .Single(element => element.Attribute(xaml + "Name")?.Value == "SaveButton");
 
-        saveButton.Attribute("IsDefault")?.Value.Should().Be("True");
+        saveButton.Attribute("IsDefault")!.Value.Should().Be("True");
     }
 }

@@ -384,9 +384,9 @@ public sealed class XlsxLegacyNoteRoundTripTests
         // C2 shape (row=1,col=2 in 0-based): custom geometry and <x:Visible/> must survive.
         var c2Shape = FindNoteShape(vmlXml!, row0: 1, col0: 2);
         c2Shape.Should().NotBeNull("shape for C2 must be in the reconciled VML");
-        c2Shape!.Attribute("style")?.Value.Should().Contain("width:200pt",
+        c2Shape!.Attribute("style")!.Value.Should().Contain("width:200pt",
             "custom width of C2 shape must be preserved after adding a note (GAP 4)");
-        c2Shape.Attribute("style")?.Value.Should().Contain("height:120pt",
+        c2Shape.Attribute("style")!.Value.Should().Contain("height:120pt",
             "custom height of C2 shape must be preserved after adding a note (GAP 4)");
         HasVisible(c2Shape).Should().BeTrue(
             "<x:Visible/> of C2 shape must be preserved after adding a note (GAP 4)");
@@ -426,9 +426,9 @@ public sealed class XlsxLegacyNoteRoundTripTests
 
         var c2Shape = FindNoteShape(vmlXml!, row0: 1, col0: 2);
         c2Shape.Should().NotBeNull("shape for C2 must be preserved after deleting D4 (GAP 4)");
-        c2Shape!.Attribute("style")?.Value.Should().Contain("width:200pt",
+        c2Shape!.Attribute("style")!.Value.Should().Contain("width:200pt",
             "custom width must survive deletion of another note (GAP 4)");
-        c2Shape.Attribute("style")?.Value.Should().Contain("height:120pt",
+        c2Shape.Attribute("style")!.Value.Should().Contain("height:120pt",
             "custom height must survive deletion of another note (GAP 4)");
         HasVisible(c2Shape).Should().BeTrue(
             "<x:Visible/> must survive deletion of another note (GAP 4)");
@@ -458,8 +458,8 @@ public sealed class XlsxLegacyNoteRoundTripTests
 
         var c2Shape = FindNoteShape(vmlXml!, row0: 1, col0: 2);
         c2Shape.Should().NotBeNull("C2 shape must survive a pure round-trip (regression guard)");
-        c2Shape!.Attribute("style")?.Value.Should().Contain("width:200pt");
-        c2Shape.Attribute("style")?.Value.Should().Contain("height:120pt");
+        c2Shape!.Attribute("style")!.Value.Should().Contain("width:200pt");
+        c2Shape.Attribute("style")!.Value.Should().Contain("height:120pt");
         HasVisible(c2Shape).Should().BeTrue(
             "<x:Visible/> must survive a pure round-trip (regression guard)");
 

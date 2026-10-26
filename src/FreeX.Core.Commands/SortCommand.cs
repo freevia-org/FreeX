@@ -187,7 +187,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
 
         // Guard against inverted ranges — uint subtraction would wrap to ~4B
         if (_range.End.Row < _range.Start.Row || _range.End.Col < _range.Start.Col)
-            return new CommandOutcome(true); // nothing to sort
+            return new CommandOutcome(true, IsNoOp: true); // nothing to sort
 
         // r164 remediation, dense whole-sheet enumeration: the protection scan just below, the
         // snapshot builders and the row/column swaps all walk every address of _range, so Ctrl+A
@@ -198,7 +198,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         // trimmed: the sort key is an OFFSET from _range.Start.Col and the header is _range.Start.Row,
         // so moving the start would re-point the key at a different column.
         if (SheetRangeScope.ClampEndToPopulated(sheet, _range) is not { } populated)
-            return new CommandOutcome(true); // nothing populated to sort
+            return new CommandOutcome(true, IsNoOp: true); // nothing populated to sort
 
         _range = populated;
 
@@ -1807,13 +1807,20 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
             switch (threshold.Type)
             {
                 case CfThresholdType.Number:
-                    if (!double.TryParse(threshold.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out thresholdValue))
+                    // r566: IsFinite as well. Icon-set thresholds are TEXT in the xlsx, and this path
+                    // does not go through ConditionalFormatEvaluationMath.TryParseInvariant, which
+                    // r564 guarded -- so the cell-value rules were fixed and the icon-set rules
+                    // left open. A non-finite threshold collapses the scale silently: every
+                    // comparison against NaN is false so every cell takes the LOWEST icon, and a
+                    // -Infinity threshold matches every cell so they all take the HIGHEST.
+                    if (!double.TryParse(threshold.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out thresholdValue)
+                        || !double.IsFinite(thresholdValue))
                         return false;
                     break;
                 case CfThresholdType.Percent:
                 {
                     rangeValues ??= CollectIconSetRangeNumbers(sheet, rule);
-                    if (rangeValues.Count == 0 || !double.TryParse(threshold.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var pct))
+                    if (rangeValues.Count == 0 || !double.TryParse(threshold.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var pct) || !double.IsFinite(pct))
                         return false;
                     var min = rangeValues.Min();
                     var max = rangeValues.Max();
@@ -1823,7 +1830,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
                 case CfThresholdType.Percentile:
                 {
                     rangeValues ??= CollectIconSetRangeNumbers(sheet, rule);
-                    if (rangeValues.Count == 0 || !double.TryParse(threshold.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var pctile))
+                    if (rangeValues.Count == 0 || !double.TryParse(threshold.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var pctile) || !double.IsFinite(pctile))
                         return false;
                     thresholdValue = Percentile(rangeValues, pctile / 100.0);
                     break;
@@ -2014,7 +2021,11 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         if (string.IsNullOrEmpty(text))
             return false;
 
-        if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+        // r577: IsFinite -- a non-finite literal is a threshold this resolver cannot support, the
+        // same answer it already gives a formula-shaped one. r566 guarded TryResolveIconSetBucket
+        // in this very file; this literal resolver was its unguarded sibling.
+        if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) &&
+            double.IsFinite(parsed))
         {
             number = parsed;
             return true;

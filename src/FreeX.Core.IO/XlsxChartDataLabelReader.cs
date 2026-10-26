@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using FreeX.Core.Model;
+using System.Globalization;
 
 namespace FreeX.Core.IO;
 
@@ -33,7 +34,7 @@ internal static class XlsxChartDataLabelReader
         var rangeCache = dataLabelsRange.Element(Chart2012Ns + "dlblRangeCache");
 
         int? pointCount = null;
-        if (int.TryParse(rangeCache?.Element(Chart2012Ns + "ptCount")?.Attribute("val")?.Value, out var parsedCount)
+        if (int.TryParse(rangeCache?.Element(Chart2012Ns + "ptCount")?.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedCount)
             && parsedCount >= 0)
         {
             pointCount = parsedCount;
@@ -46,7 +47,7 @@ internal static class XlsxChartDataLabelReader
             // namespace too, which some producers (and the legacy reader) used.
             foreach (var point in rangeCache.Elements(Chart2012Ns + "pt").Concat(rangeCache.Elements(ChartNs + "pt")))
             {
-                if (!int.TryParse(point.Attribute("idx")?.Value, out var pointIndex) || pointIndex < 0)
+                if (!int.TryParse(point.Attribute("idx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var pointIndex) || pointIndex < 0)
                     continue;
 
                 var text = (point.Element(Chart2012Ns + "v") ?? point.Element(ChartNs + "v"))?.Value;
@@ -155,7 +156,7 @@ internal static class XlsxChartDataLabelReader
 
         foreach (var label in dataLabels.Elements(ChartNs + "dLbl"))
         {
-            if (!int.TryParse(label.Element(ChartNs + "idx")?.Attribute("val")?.Value, out var pointIndex) ||
+            if (!int.TryParse(label.Element(ChartNs + "idx")?.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var pointIndex) ||
                 pointIndex < 0)
             {
                 continue;
@@ -240,7 +241,7 @@ internal static class XlsxChartDataLabelReader
         if (line is null)
             return;
 
-        if (int.TryParse(line.Attribute("w")?.Value, out var emus))
+        if (int.TryParse(line.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var emus))
             chart.DataLabelBorderThickness = Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0, 10);
 
         var lineFill = line.Element(DrawingNs + "solidFill");
@@ -262,14 +263,14 @@ internal static class XlsxChartDataLabelReader
     private static void ApplyDataLabelTextProperties(XElement? textPropertiesRoot, ChartModel chart)
     {
         var bodyProperties = textPropertiesRoot?.Element(DrawingNs + "bodyPr");
-        if (int.TryParse(bodyProperties?.Attribute("rot")?.Value, out var rotation))
+        if (int.TryParse(bodyProperties?.Attribute("rot")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotation))
             chart.DataLabelAngle = Math.Clamp(rotation / 60000.0, -90, 90);
 
         var textProperties = FirstDescendant(textPropertiesRoot, DrawingNs + "defRPr");
         if (textProperties is null)
             return;
 
-        if (int.TryParse(textProperties.Attribute("sz")?.Value, out var size))
+        if (int.TryParse(textProperties.Attribute("sz")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var size))
             chart.DataLabelFontSize = Math.Clamp(size / 100.0, 6, 72);
 
         var textFill = textProperties.Element(DrawingNs + "solidFill");
@@ -328,7 +329,7 @@ internal static class XlsxChartDataLabelReader
         if (line is null)
             return;
 
-        if (int.TryParse(line.Attribute("w")?.Value, out var emus))
+        if (int.TryParse(line.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var emus))
             chart.DataLabelLeaderLineThickness = Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0.5, 10);
 
         chart.DataLabelLeaderLineDashStyle = XlsxChartTrendlineErrorBarReader.FromXlsxPresetDash(
@@ -412,7 +413,7 @@ internal static class XlsxChartDataLabelReader
         var line = shapeProperties?.Element(DrawingNs + "ln");
         if (line is not null)
         {
-            if (int.TryParse(line.Attribute("w")?.Value, out var emus))
+            if (int.TryParse(line.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var emus))
                 borderThickness = Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0, 10);
 
             var lineFill = line.Element(DrawingNs + "solidFill");
@@ -428,7 +429,7 @@ internal static class XlsxChartDataLabelReader
         var textProperties = FirstDescendant(label.Element(ChartNs + "txPr"), DrawingNs + "defRPr");
         if (textProperties is not null)
         {
-            if (int.TryParse(textProperties.Attribute("sz")?.Value, out var size))
+            if (int.TryParse(textProperties.Attribute("sz")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var size))
                 fontSize = Math.Clamp(size / 100.0, 6, 72);
 
             var textFill = textProperties.Element(DrawingNs + "solidFill");

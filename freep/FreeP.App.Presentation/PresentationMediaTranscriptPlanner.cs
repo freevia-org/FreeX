@@ -1892,6 +1892,9 @@ public static class PresentationMediaTranscriptPlanner
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         if (!match.Success
             || !double.TryParse(match.Groups["size"].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var size)
+            // r553: the regex above forbids an exponent but allows UNLIMITED DIGITS, so a long
+            // run still overflows to Infinity, which "size <= 0" does not reject.
+            || !double.IsFinite(size)
             || size <= 0)
         {
             return null;
@@ -1949,6 +1952,8 @@ public static class PresentationMediaTranscriptPlanner
             if (multiplier.Length == 2
                 && double.TryParse(multiplier[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var numerator)
                 && double.TryParse(multiplier[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var denominator)
+                && double.IsFinite(numerator)
+                && double.IsFinite(denominator)
                 && numerator > 0
                 && denominator > 0)
             {
@@ -2539,6 +2544,7 @@ public static class PresentationMediaTranscriptPlanner
     {
         var token = GetTtmlAttribute(root, localName);
         return double.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+            && double.IsFinite(value)
             && value > 0
             ? value
             : null;
@@ -2589,6 +2595,7 @@ public static class PresentationMediaTranscriptPlanner
                 NumberStyles.Float,
                 CultureInfo.InvariantCulture,
                 out var frames)
+            && double.IsFinite(frames)
             && frames >= 0
             && frameRate > 0)
         {
@@ -2601,6 +2608,7 @@ public static class PresentationMediaTranscriptPlanner
                 NumberStyles.Float,
                 CultureInfo.InvariantCulture,
                 out var ticks)
+            && double.IsFinite(ticks)
             && ticks >= 0
             && tickRate > 0)
         {
@@ -2616,6 +2624,7 @@ public static class PresentationMediaTranscriptPlanner
             && clockHours >= 0
             && clockMinutes >= 0
             && clockSeconds >= 0
+            && double.IsFinite(clockFrames)
             && clockFrames >= 0
             && frameRate > 0)
         {
@@ -2739,6 +2748,13 @@ public static class PresentationMediaTranscriptPlanner
     {
         if (!value.EndsWith('%')
             || !double.TryParse(value[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent)
+            // r553: IsFinite as well. "percent is < 0 or > 100" is the REJECT form r551 showed
+            // cannot stop a non-finite value: NaN fails BOTH comparisons and passes. This value
+            // comes from a WebVTT cue-settings line in the file, and NumberStyles.Float parses
+            // the literal "NaN"; a several-hundred-digit run overflows to Infinity even without
+            // an exponent. Dropping the setting is what this function already does for text it
+            // cannot use.
+            || !double.IsFinite(percent)
             || percent is < 0 or > 100)
         {
             return null;

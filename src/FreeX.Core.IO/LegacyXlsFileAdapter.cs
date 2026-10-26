@@ -2429,7 +2429,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
     }
 
     private static bool TryParseRowReference(string text, out uint row) =>
-        uint.TryParse(text.Trim().Replace("$", "", StringComparison.Ordinal), out row);
+        uint.TryParse(text.Trim().Replace("$", "", StringComparison.Ordinal), NumberStyles.Integer, CultureInfo.InvariantCulture, out row);
 
     private static bool TryParseColumnReference(string text, out uint column)
     {

@@ -42,8 +42,12 @@ public sealed class MoveChartCommand : IWorkbookCommand
 
         if (chart.IsPivotChart)
             return ChartCommandGuards.SelectedChartIsPivotChart();
+        // r225: the RenamePivotTable shape again -- the check was already here and already right,
+        // and only the signal was missing. Move Chart's dialog pre-selects the sheet the chart is
+        // already on, so OK-without-changing-the-dropdown lands here, and the bus pushed an undo
+        // entry for a move that moved nothing. AffectedCells stays so the view still repaints.
         if (_sourceSheetId == _targetSheetId)
-            return new CommandOutcome(true, AffectedCells: [chart.DataRange.Start]);
+            return new CommandOutcome(true, AffectedCells: [chart.DataRange.Start], IsNoOp: true);
 
         source.Charts.Remove(chart);
         target.Charts.Add(chart);

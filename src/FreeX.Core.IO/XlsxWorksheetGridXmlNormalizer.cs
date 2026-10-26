@@ -572,16 +572,55 @@ internal static class XlsxWorksheetGridXmlNormalizer
         changed |= RemoveChildElementsExcept(sheetData, WorksheetNs + "row");
 
         foreach (var row in sheetData.Elements(WorksheetNs + "row").ToList())
+        {
+            // r365: a row index outside the grid is dropped rather than handed on. `r` is already
+            // normalized to an unsigned integer or nothing, which catches a negative index and one
+            // too large to parse -- but 0 and 99999999 are perfectly good unsigned integers that
+            // simply cannot exist, and ClosedXML answers them with
+            // "Row number must be between 1 and 1048576", which aborts the whole LOAD. One bad
+            // attribute anywhere in the sheet therefore made the entire workbook unopenable. Excel
+            // repairs such a file and opens it, so the row goes and the rest of the sheet survives.
+            if (IsRowIndexOutsideTheGrid(row))
+            {
+                row.Remove();
+                changed = true;
+                continue;
+            }
+
             changed |= NormalizeRowElement(row, cellMetadataCount, valueMetadataCount);
+        }
 
         return changed;
     }
+
+    /// <summary>Excel's grid is 1..1048576 rows; anything else cannot be represented.</summary>
+    private static bool IsRowIndexOutsideTheGrid(XElement row) =>
+        row.Attribute("r")?.Value is { } value &&
+        uint.TryParse(value.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var index) &&
+        (index < 1 || index > 1048576);
+
+    /// <summary>Excel's grid is 1..16384 columns, and a span must run forwards.</summary>
+    private static bool IsColumnSpanWithinTheGrid(string minimum, string maximum) =>
+        uint.TryParse(minimum, NumberStyles.None, CultureInfo.InvariantCulture, out var min) &&
+        uint.TryParse(maximum, NumberStyles.None, CultureInfo.InvariantCulture, out var max) &&
+        min >= 1 && max <= 16384 && min <= max;
 
     private static bool NormalizeColumnElement(XElement column)
     {
         var normalizedMin = NormalizeUnsignedIntOrNull(column.Attribute("min")?.Value);
         var normalizedMax = NormalizeUnsignedIntOrNull(column.Attribute("max")?.Value);
         if (normalizedMin is null || normalizedMax is null)
+        {
+            column.Remove();
+            return true;
+        }
+
+        // r369: the same gap the row index had (r365) -- this rejected a min/max that is not an
+        // unsigned integer, but 0 and 99999 are perfectly good unsigned integers that name no column,
+        // and ClosedXML answers one with ArgumentOutOfRangeException, which aborts the whole load. A
+        // reversed span (min > max) describes nothing either. Excel repairs such a file; drop the
+        // column definition and keep the sheet.
+        if (!IsColumnSpanWithinTheGrid(normalizedMin, normalizedMax))
         {
             column.Remove();
             return true;

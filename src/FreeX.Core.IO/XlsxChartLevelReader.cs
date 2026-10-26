@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using FreeX.Core.Model;
+using System.Globalization;
 
 namespace FreeX.Core.IO;
 
@@ -101,7 +102,7 @@ internal static class XlsxChartLevelReader
 
         var bold = XlsxChartScalarReader.ReadOptionalBool(textProperties.Attribute("b")?.Value);
         var italic = XlsxChartScalarReader.ReadOptionalBool(textProperties.Attribute("i")?.Value);
-        double? fontSize = int.TryParse(textProperties.Attribute("sz")?.Value, out var size)
+        double? fontSize = int.TryParse(textProperties.Attribute("sz")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var size)
             ? Math.Clamp(size / 100.0, 6, 72)
             : null;
 
@@ -158,7 +159,7 @@ internal static class XlsxChartLevelReader
         if (line is null)
             return;
 
-        if (int.TryParse(line.Attribute("w")?.Value, out var emus))
+        if (int.TryParse(line.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var emus))
             dataTable.BorderThickness = Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0, 10);
 
         var lineFill = line.Element(DrawingNs + "solidFill");
@@ -183,7 +184,7 @@ internal static class XlsxChartLevelReader
         if (textProperties is null)
             return;
 
-        if (int.TryParse(textProperties.Attribute("sz")?.Value, out var size))
+        if (int.TryParse(textProperties.Attribute("sz")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var size))
             dataTable.FontSize = Math.Clamp(size / 100.0, 6, 72);
 
         var textFill = textProperties.Element(DrawingNs + "solidFill");
@@ -245,7 +246,7 @@ internal static class XlsxChartLevelReader
         var line = shapeProperties?.Element(DrawingNs + "ln");
         if (line is not null)
         {
-            if (int.TryParse(line.Attribute("w")?.Value, out var emus))
+            if (int.TryParse(line.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var emus))
                 chart.LegendBorderThickness = Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0, 10);
 
             var lineFill = line.Element(DrawingNs + "solidFill");
@@ -268,7 +269,7 @@ internal static class XlsxChartLevelReader
         if (textProperties is null)
             return;
 
-        if (int.TryParse(textProperties.Attribute("sz")?.Value, out var size))
+        if (int.TryParse(textProperties.Attribute("sz")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var size))
             chart.LegendFontSize = Math.Clamp(size / 100.0, 6, 72);
 
         // R45-io-chart-datatable-legend-3-3: legend-wide Bold/Italic from the defRPr attributes.

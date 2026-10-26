@@ -378,6 +378,8 @@ public sealed record ChartDisplayOptionsDialogState(
     int TitlePositionIndex,
     int TitleAlignmentIndex,
     bool SupportsChartExTitleLayout,
+    // r379: false for a chartEx chart, whose cx part cannot store plotVisOnly/roundedCorners.
+    bool SupportsClassicChartAreaOptions,
     bool PlotVisibleOnly,
     bool RoundedCorners,
     int StyleIndex,
@@ -537,10 +539,17 @@ public sealed class ChartDisplayOptionsDialogSession
                     _planner.TitleAlignment));
             }
         }
-        if (input.PlotVisibleOnly != _state.PlotVisibleOnly)
-            _planner.SetPlotVisibleOnly(input.PlotVisibleOnly);
-        if (input.RoundedCorners != _state.RoundedCorners)
-            _planner.SetRoundedCorners(input.RoundedCorners);
+        // r379: the capability is enforced on COMMIT, not only by greying the control. A disabled
+        // field still round-trips a value through the dialog input, and a caller can build an input
+        // directly, so gating only the UI would leave the setting writable on a chart that cannot
+        // store it -- the same defect in a quieter place.
+        if (_planner.SupportsClassicChartAreaOptions)
+        {
+            if (input.PlotVisibleOnly != _state.PlotVisibleOnly)
+                _planner.SetPlotVisibleOnly(input.PlotVisibleOnly);
+            if (input.RoundedCorners != _state.RoundedCorners)
+                _planner.SetRoundedCorners(input.RoundedCorners);
+        }
         _planner.SetStyleId(ValueAt(
             _planner.AvailableStyleOptions,
             input.StyleIndex,
@@ -646,6 +655,7 @@ public sealed class ChartDisplayOptionsDialogSession
         FindTitlePositionIndex(_planner.TitlePosition),
         FindTitleAlignmentIndex(_planner.TitleAlignment),
         _planner.SupportsChartExTitleLayout,
+        _planner.SupportsClassicChartAreaOptions,
         _planner.PlotVisibleOnly,
         _planner.RoundedCorners,
         FindStyleIndex(_planner.StyleId),

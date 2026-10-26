@@ -2712,7 +2712,7 @@ public sealed class SmartArtTests : IDisposable
             lineTransforms[0].Attribute("flipH")?.Value.Should().BeNull();
             lineTransforms[0].Attribute("flipV")?.Value.Should().BeNull();
             lineTransforms[1].Attribute("flipH")?.Value.Should().BeNull();
-            lineTransforms[1].Attribute("flipV")?.Value.Should().Be("1");
+            lineTransforms[1].Attribute("flipV")!.Value.Should().Be("1");
         }
 
         var reread = PptxPackageReader.Read(savedPath)
@@ -2759,9 +2759,9 @@ public sealed class SmartArtTests : IDisposable
 
         using var rewrittenStream = new MemoryStream(dataPart.Bytes, writable: false);
         var rewritten = XDocument.Load(rewrittenStream);
-        rewritten.Root!.Attribute("modelId")?.Value.Should().Be("authored-model-id");
+        rewritten.Root!.Attribute("modelId")!.Value.Should().Be("authored-model-id");
         rewritten.Descendants(extension + "authoredState")
-            .Single().Attribute("value")?.Value.Should().Be("keep");
+            .Single().Attribute("value")!.Value.Should().Be("keep");
         rewritten.Descendants(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main") + "t")
             .Select(element => element.Value)
             .Should().Contain("Delivery Lead");
@@ -2773,9 +2773,9 @@ public sealed class SmartArtTests : IDisposable
             .Single(part => part.ContentType.Contains("diagramData", StringComparison.OrdinalIgnoreCase));
         using var rereadStream = new MemoryStream(rereadPart.Bytes, writable: false);
         var reread = XDocument.Load(rereadStream);
-        reread.Root!.Attribute("modelId")?.Value.Should().Be("authored-model-id");
+        reread.Root!.Attribute("modelId")!.Value.Should().Be("authored-model-id");
         reread.Descendants(extension + "authoredState")
-            .Single().Attribute("value")?.Value.Should().Be("keep");
+            .Single().Attribute("value")!.Value.Should().Be("keep");
     }
 
     [Fact]
@@ -2820,18 +2820,18 @@ public sealed class SmartArtTests : IDisposable
         var rewritten = XDocument.Parse(Encoding.UTF8.GetString(dataPart.Bytes));
         var rewrittenManager = rewritten.Descendants(dgm + "pt")
             .Single(point => (string?)point.Attribute("modelId") == "manager");
-        rewrittenManager.Attribute("phldr")?.Value.Should().Be("1");
+        rewrittenManager.Attribute("phldr")!.Value.Should().Be("1");
         rewrittenManager.Element(dgm + "prSet")
             ?.Element(dgm + "extLst")
             ?.Descendants(extension + "nodeState")
-            .Single().Attribute("value")?.Value.Should().Be("keep");
+            .Single().Attribute("value")!.Value.Should().Be("keep");
         rewrittenManager.Descendants(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main") + "t")
             .Single().Value.Should().Be("Delivery Lead");
         var rewrittenConnection = rewritten.Descendants(dgm + "cxn")
             .Single(connection => (string?)connection.Attribute("destId") == "manager");
-        rewrittenConnection.Attribute("modelId")?.Value.Should().Be("authored-connection-id");
+        rewrittenConnection.Attribute("modelId")!.Value.Should().Be("authored-connection-id");
         rewrittenConnection.Descendants(extension + "connectionState")
-            .Single().Attribute("value")?.Value.Should().Be("keep");
+            .Single().Attribute("value")!.Value.Should().Be("keep");
 
         var savedPath = Path.Combine(_tempDir, "smartart-node-payload-roundtrip.pptx");
         PptxPackageWriter.Write(presentation, savedPath);
@@ -2841,14 +2841,14 @@ public sealed class SmartArtTests : IDisposable
         var reread = XDocument.Parse(Encoding.UTF8.GetString(rereadPart.Bytes));
         var rereadManager = reread.Descendants(dgm + "pt")
             .Single(point => (string?)point.Attribute("modelId") == "manager");
-        rereadManager.Attribute("phldr")?.Value.Should().Be("1");
+        rereadManager.Attribute("phldr")!.Value.Should().Be("1");
         rereadManager.Descendants(extension + "nodeState")
-            .Single().Attribute("value")?.Value.Should().Be("keep");
+            .Single().Attribute("value")!.Value.Should().Be("keep");
         var rereadConnection = reread.Descendants(dgm + "cxn")
             .Single(connection => (string?)connection.Attribute("destId") == "manager");
-        rereadConnection.Attribute("modelId")?.Value.Should().Be("authored-connection-id");
+        rereadConnection.Attribute("modelId")!.Value.Should().Be("authored-connection-id");
         rereadConnection.Descendants(extension + "connectionState")
-            .Single().Attribute("value")?.Value.Should().Be("keep");
+            .Single().Attribute("value")!.Value.Should().Be("keep");
     }
 
     [Fact]
@@ -2898,12 +2898,12 @@ public sealed class SmartArtTests : IDisposable
         var rewrittenText = rewritten.Descendants(dgm + "pt")
             .Single(point => (string?)point.Attribute("modelId") == "manager")
             .Element(dgm + "t")!;
-        rewrittenText.Element(a + "bodyPr")!.Attribute("wrap")?.Value.Should().Be("square");
-        rewrittenText.Element(a + "p")!.Element(a + "pPr")!.Attribute("lvl")?.Value.Should().Be("2");
+        rewrittenText.Element(a + "bodyPr")!.Attribute("wrap")!.Value.Should().Be("square");
+        rewrittenText.Element(a + "p")!.Element(a + "pPr")!.Attribute("lvl")!.Value.Should().Be("2");
         rewrittenText.Element(a + "p")!.Element(a + "r")!.Element(a + "rPr")!
-            .Attribute("lang")?.Value.Should().Be("fr-FR");
+            .Attribute("lang")!.Value.Should().Be("fr-FR");
         rewrittenText.Element(a + "p")!.Element(a + "r")!.Element(a + "rPr")!
-            .Attribute("sz")?.Value.Should().Be("2400");
+            .Attribute("sz")!.Value.Should().Be("2400");
         rewrittenText.Descendants(a + "t").Single().Value.Should().Be("Delivery Lead");
     }
 
@@ -2957,8 +2957,8 @@ public sealed class SmartArtTests : IDisposable
             .ToArray();
 
         rewrittenRuns.Should().HaveCount(2);
-        rewrittenRuns[0].Element(a + "rPr")!.Attribute("b")?.Value.Should().Be("1");
-        rewrittenRuns[1].Element(a + "rPr")!.Attribute("i")?.Value.Should().Be("1");
+        rewrittenRuns[0].Element(a + "rPr")!.Attribute("b")!.Value.Should().Be("1");
+        rewrittenRuns[1].Element(a + "rPr")!.Attribute("i")!.Value.Should().Be("1");
         rewrittenRuns.Select(run => run.Element(a + "t")!.Value)
             .Should().Equal("Lead", "er");
     }
@@ -3013,9 +3013,9 @@ public sealed class SmartArtTests : IDisposable
             part.ContentType.Contains("diagramDrawing", StringComparison.OrdinalIgnoreCase));
         using var rereadStream = new MemoryStream(rereadDrawing.Bytes, writable: false);
         var rereadDocument = XDocument.Load(rereadStream);
-        rereadDocument.Root!.Attribute("cacheId")?.Value.Should().Be("authored-cache-id");
+        rereadDocument.Root!.Attribute("cacheId")!.Value.Should().Be("authored-cache-id");
         rereadDocument.Descendants(extension + "cacheHint")
-            .Single().Attribute("value")?.Value.Should().Be("keep");
+            .Single().Attribute("value")!.Value.Should().Be("keep");
         rereadDocument.Descendants(XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram") + "sp")
             .SelectMany(shape => shape.Descendants(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main") + "t"))
             .Select(text => text.Value)

@@ -391,7 +391,7 @@ public sealed class PptxPackageReaderRound173Tests
             phEl.Should().NotBeNull(
                 "the writer must emit p:nvGraphicFramePr/p:nvPr/p:ph for a placeholder-bound table, " +
                 "the same way it does for a placeholder-bound shape/picture");
-            phEl!.Attribute("idx")?.Value.Should().Be("1");
+            phEl!.Attribute("idx")!.Value.Should().Be("1");
         }
 
         buffer.Position = 0;

@@ -24,6 +24,7 @@ public sealed class R52_NumberFormatBuiltInWritePathTests
         { "0%", 9 },                    // Percentage ribbon button / Ctrl+Shift+%
         { "# ?/?", 12 },                // Fraction
         { "0.00E+00", 11 },             // Scientific
+        { "m/d/yy", 14 },                // Ctrl+; current date
         { "@", 49 },                    // Text
         { "_(* #,##0.00_);_(* (#,##0.00);_(* \"-\"??_);_(@_)", 43 }, // Comma Style
         { "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)", 44 } // Accounting
@@ -61,9 +62,7 @@ public sealed class R52_NumberFormatBuiltInWritePathTests
         style.NumberFormat.Format.Should().BeEmpty(
             "the builtin id alone should govern the format -- no redundant explicit formatCode should be stored");
 
-        // Round-trip through FreeX's own reader must still recover the exact original format string
-        // (the read-side fallback already resolves an empty Format + builtin NumberFormatId back to
-        // the canonical code).
+        // Round-trip through FreeX's own reader must still recover the exact original format string.
         using var reloadStream = new MemoryStream(savedBytes, writable: false);
         var reloaded = new XlsxFileAdapter().Load(reloadStream);
         var reloadedSheet = reloaded.GetSheetAt(0);

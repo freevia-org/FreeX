@@ -149,6 +149,15 @@ public sealed class R119_UndoByteBudgetRealCommandsTests
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 300, 300));
+
+        // r198: the corners must be populated. This test used to run against a blank sheet, where
+        // SortCommand bailed out at its ClampEndToPopulated guard and the bus pushed an undo entry
+        // for a command that had done nothing -- the phantom-undo bug r198 fixed. Populating the
+        // extremes keeps the clamp at the full 300x300 range, so the byte budget this test is
+        // actually about still sees the same ~34 MB estimate.
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("b"));
+        sheet.SetCell(new CellAddress(sheet.Id, 300, 300), new TextValue("a"));
+
         var bus = MakeBus(wb);
 
         bus.Execute(WbId, new SortCommand(sheet.Id, range, sortByColOffset: 0, ascending: true)).Success.Should().BeTrue();

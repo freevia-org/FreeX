@@ -29,6 +29,13 @@ if ($workflows.Count -eq 0) {
 $allowedActionPins = @{
     "actions/checkout" = "3d3c42e5aac5ba805825da76410c181273ba90b1"
     "actions/cache" = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+    # Sub-actions of actions/cache above, pinned to the same reviewed commit. They exist as separate
+    # entry points so a workflow can restore a cache early and save it only after the gate passed:
+    # a job that dies midway would otherwise save a PARTIAL obj/, and restoring one of those does
+    # not merely rebuild, it fails outright with "CSC : error CS2012 ... Could not find a part of
+    # the path".
+    "actions/cache/restore" = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+    "actions/cache/save" = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
     "actions/download-artifact" = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
     "actions/setup-dotnet" = "a98b56852c35b8e3190ac28c8c2271da59106c68"
     "actions/upload-artifact" = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
@@ -239,12 +246,85 @@ function Test-CSharpTestClassExists {
     return $false
 }
 
+function Get-WorkflowDuplicateKeys {
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string[]]$Lines)
+
+    # GitHub refuses a workflow whose mapping defines the same key twice -- "'if' is already
+    # defined" -- and it refuses it at DISPATCH time, for the whole file. So a duplicate introduced
+    # by an edit does not fail a push or a test; it fails the next release, which is the most
+    # expensive moment to discover it. That happened here: adding a dry_run gate to publish-suite,
+    # which already had an `if:`, blocked every release until it was noticed.
+    #
+    # This is a scoped check, not a YAML parser: it tracks sibling keys per indentation level within
+    # the current mapping, and a list item ("- ") starts a fresh mapping at its own level. That is
+    # enough for workflow files, which are plain nested mappings and sequences.
+    $duplicates = @()
+    $siblingsByIndent = @{}
+    $inBlockScalar = $false
+    $blockScalarIndent = 0
+
+    for ($i = 0; $i -lt $Lines.Length; $i++) {
+        $line = $Lines[$i]
+        if ($line.Trim().Length -eq 0) { continue }
+
+        $indent = $line.Length - $line.TrimStart(' ').Length
+
+        # Inside a run: | or description: >- payload, "key: value" text is data, not YAML keys.
+        if ($inBlockScalar) {
+            if ($indent -gt $blockScalarIndent) { continue }
+            $inBlockScalar = $false
+        }
+
+        if ($line -match '^\s*#') { continue }
+
+        $trimmed = $line.TrimStart(' ')
+        if ($trimmed.StartsWith('- ')) {
+            # A new sequence entry begins a new mapping: forget the previous entry's keys.
+            foreach ($key in @($siblingsByIndent.Keys | Where-Object { $_ -ge $indent })) {
+                $siblingsByIndent.Remove($key)
+            }
+
+            $trimmed = $trimmed.Substring(2)
+            $indent += 2
+        }
+
+        $match = [regex]::Match($trimmed, '^(?<key>[A-Za-z_][A-Za-z0-9_.-]*):(?:\s|$)')
+        if (-not $match.Success) { continue }
+
+        # Anything deeper than this key belongs to it, so its siblings are no longer in scope.
+        foreach ($key in @($siblingsByIndent.Keys | Where-Object { $_ -gt $indent })) {
+            $siblingsByIndent.Remove($key)
+        }
+
+        if (-not $siblingsByIndent.ContainsKey($indent)) {
+            $siblingsByIndent[$indent] = [System.Collections.Generic.HashSet[string]]::new()
+        }
+
+        $keyName = $match.Groups['key'].Value
+        if (-not $siblingsByIndent[$indent].Add($keyName)) {
+            $duplicates += ("line {0}: '{1}' is already defined in this mapping" -f ($i + 1), $keyName)
+        }
+
+        $value = $trimmed.Substring($match.Length).Trim()
+        if ($value -match '^[|>][+-]?\d*$') {
+            $inBlockScalar = $true
+            $blockScalarIndent = $indent
+        }
+    }
+
+    return $duplicates
+}
+
 $errors = [System.Collections.Generic.List[string]]::new()
 foreach ($workflow in $workflows) {
     $content = Get-Content -LiteralPath $workflow.FullName -Raw
     $lines = $content -split "\r?\n"
     if ($content -match "`t") {
         $errors.Add("$($workflow.Name): workflow YAML must use spaces for indentation, not tabs.")
+    }
+
+    foreach ($duplicate in @(Get-WorkflowDuplicateKeys -Lines $lines)) {
+        $errors.Add("$($workflow.Name): $duplicate.")
     }
 
     $inlineOnPullRequestTarget = $false
@@ -298,16 +378,38 @@ foreach ($workflow in $workflows) {
     $triggerNames = @($inlineTriggerNames + $blockTriggerNames)
     $hasWorkflowDispatch = $triggerNames -contains "workflow_dispatch"
     $nonManualTriggerNames = @($triggerNames | Where-Object { $_ -ne "workflow_dispatch" })
-    $automaticQualityWorkflows = @("ci.yml", "codeql.yml")
+    # release-readiness.yml is scheduled on purpose. The 11 release-only gates in eng/test-gates.json
+    # never run on push, so between releases they rot invisibly on a green main and the next release
+    # pays the accumulated debt (releasing 0.8.187 surfaced four such regressions). They cannot join
+    # the commit gate -- runner concurrency is capped and the commit matrix already saturates it --
+    # so they run on a schedule instead. It reports; it is not a merge gate.
+    # release-packaging-rehearsal.yml is scheduled for the same reason one level further out:
+    # release-readiness covers the release-only TEST gates, but packaging is where the last several
+    # releases actually broke, and no test gate reaches it. It dispatches the real release workflow
+    # in dry-run mode weekly.
+    $automaticQualityWorkflows = @("ci.yml", "codeql.yml", "release-readiness.yml", "release-packaging-rehearsal.yml")
     if ($automaticQualityWorkflows -contains $workflow.Name) {
-        foreach ($requiredTrigger in @("workflow_dispatch", "push")) {
+        # Each canonical workflow has its own trigger contract. ci.yml and codeql.yml gate every
+        # push; release-readiness.yml deliberately does NOT run per push (it would double the
+        # already-saturated runner demand) and is scheduled instead, so requiring 'push' of it would
+        # force exactly the design this workflow exists to avoid.
+        $scheduledOnlyWorkflows = @("release-readiness.yml", "release-packaging-rehearsal.yml")
+        $requiredTriggers = if ($scheduledOnlyWorkflows -contains $workflow.Name) {
+            @("workflow_dispatch", "schedule")
+        }
+        else {
+            @("workflow_dispatch", "push")
+        }
+        foreach ($requiredTrigger in $requiredTriggers) {
             if ($triggerNames -notcontains $requiredTrigger) {
                 $errors.Add("$($workflow.Name): canonical quality workflow must declare '$requiredTrigger'.")
             }
         }
-        $allowedAutomaticTriggers = @("push")
-        if ($workflow.Name -eq "codeql.yml") {
-            $allowedAutomaticTriggers += "schedule"
+        $allowedAutomaticTriggers = switch ($workflow.Name) {
+            "codeql.yml" { @("push", "schedule") }
+            "release-readiness.yml" { @("schedule") }
+            "release-packaging-rehearsal.yml" { @("schedule") }
+            default { @("push") }
         }
         $unexpectedTriggers = @($nonManualTriggerNames | Where-Object { $allowedAutomaticTriggers -notcontains $_ })
         if ($unexpectedTriggers.Count -gt 0) {
@@ -316,6 +418,21 @@ foreach ($workflow in $workflows) {
     }
     elseif (-not $hasWorkflowDispatch -or $nonManualTriggerNames.Count -gt 0) {
         $errors.Add("$($workflow.Name): non-canonical workflow must use workflow_dispatch only; automatic triggers are reserved for CI and CodeQL.")
+    }
+
+    # The commit gate runs `dotnet test` once per project, so MSBuild starts many times inside one
+    # job. With node reuse left on, a worker process from one invocation can still hold a handle to
+    # an intermediate assembly when the next invocation compiles it, failing the gate with
+    # "CSC : error CS2012 ... being used by another process" (observed on main, run 33994120035).
+    # Pin the mitigation so it cannot be dropped silently.
+    #
+    # Pinned to ci.yml by name, this missed full-release.yml, which runs the SAME gates through
+    # the same script. The generated-docs preflight there hung to its timeout on the first
+    # attempt of every release and passed only on the gate retry, costing 15-30 minutes a run on
+    # the critical path. So the rule now follows the behaviour rather than the filename: any
+    # workflow that invokes Invoke-TestGate.ps1 needs the mitigation.
+    if ($content -match "Invoke-TestGate\.ps1" -and $content -notmatch "(?m)^\s*MSBUILDDISABLENODEREUSE\s*:") {
+        $errors.Add("$($workflow.Name): must set the MSBUILDDISABLENODEREUSE environment variable so repeated MSBuild invocations in one job cannot lock each other's intermediate assemblies.")
     }
 
     foreach ($match in [regex]::Matches($content, "(?ms)^\s*runs-on\s*:\s*(?<runner>[^\r\n]*(?:\r?\n\s+-\s+[^\r\n]+)*)")) {

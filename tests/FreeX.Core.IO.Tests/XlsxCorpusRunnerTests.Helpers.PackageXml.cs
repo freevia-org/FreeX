@@ -149,8 +149,8 @@ public partial class XlsxCorpusRunnerTests
                     string.Equals(AttributeValue(rel, "Id"), relationshipId, StringComparison.Ordinal));
                 relationship.Should().NotBeNull(because);
                 relationship!.Attribute("Target")?.Value.Should().NotBeNullOrWhiteSpace(because);
-                relationship.Attribute("TargetMode")?.Value.Should().Be("External", because);
-                relationship.Attribute("Type")?.Value.Should().Be(hyperlinkRelationshipType, because);
+                relationship.Attribute("TargetMode")!.Value.Should().Be("External", because);
+                relationship.Attribute("Type")!.Value.Should().Be(hyperlinkRelationshipType, because);
                 inspectedExternalHyperlinks++;
             }
         }
@@ -266,7 +266,7 @@ public partial class XlsxCorpusRunnerTests
         var firstCell = PublicWorksheetCells(archive)
             .SingleOrDefault(cell => string.Equals(cell.Attribute("r")?.Value, "A1", StringComparison.Ordinal));
         firstCell.Should().NotBeNull(because);
-        firstCell!.Attribute("t")?.Value.Should().Be("s", because);
+        firstCell!.Attribute("t")!.Value.Should().Be("s", because);
 
         int.TryParse(firstCell.Element(WorksheetNs + "v")?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var sharedStringIndex)
             .Should().BeTrue(because);

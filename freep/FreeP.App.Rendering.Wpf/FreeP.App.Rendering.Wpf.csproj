@@ -19,6 +19,24 @@
     <IntermediateOutputPath>obj/TestSupport/$(Configuration)/$(TargetFramework)/</IntermediateOutputPath>
   </PropertyGroup>
 
+  <!-- FreePRendererTestSupport arrives as a GLOBAL property (the test projects set it through
+       AdditionalProperties on their ProjectReference to this project), and global properties
+       propagate transitively. Only this project reads it; every dependency below just inherits it,
+       which makes MSBuild treat "Free.Shared.Shell.Wpf with the property" and "Free.Shared.Shell.Wpf
+       without it" as two different projects. Both instances then compile to the SAME
+       obj/ path, because those projects do not redirect IntermediateOutputPath, and when the two
+       builds overlap one loses the race:
+
+         CSC : error CS2012: Cannot open '...\Free.Shared.Shell.Wpf.dll' for writing
+         error MSB3061: Unable to delete file '...obj\Release\...'
+
+       Undefining it for our references collapses each dependency back to a single instance. -->
+  <ItemDefinitionGroup>
+    <ProjectReference>
+      <UndefineProperties>FreePRendererTestSupport</UndefineProperties>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+
   <ItemGroup Condition="'$(FreePRendererTestSupport)' == 'true'">
     <Compile Include="../TestSupport/Rendering.Wpf/CanvasGestureHandler.TestAccess.cs"
              Link="CanvasGestureHandler.TestAccess.cs" />

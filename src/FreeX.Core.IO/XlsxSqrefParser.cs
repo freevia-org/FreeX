@@ -1,4 +1,5 @@
 using FreeX.Core.Model;
+using System.Globalization;
 
 namespace FreeX.Core.IO;
 
@@ -179,7 +180,7 @@ internal static class XlsxSqrefParser
         }
 
         if (IsAsciiDigitsOnly(startToken) && IsAsciiDigitsOnly(endToken) &&
-            uint.TryParse(startToken, out var startRow) && uint.TryParse(endToken, out var endRow) &&
+            uint.TryParse(startToken, NumberStyles.Integer, CultureInfo.InvariantCulture, out var startRow) && uint.TryParse(endToken, NumberStyles.Integer, CultureInfo.InvariantCulture, out var endRow) &&
             startRow is > 0 and <= CellAddress.MaxRow && endRow is > 0 and <= CellAddress.MaxRow)
         {
             range = new GridRange(

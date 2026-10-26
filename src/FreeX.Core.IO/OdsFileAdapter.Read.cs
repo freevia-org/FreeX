@@ -198,7 +198,16 @@ public sealed partial class OdsFileAdapter
                 formula = ReadFormula(cellElement, row, col);
             }
 
-            var hasInfo = formula is not null || value is not BlankValue || styleId != StyleId.Default;
+            // r293/r294: a note or a link is information too. Without them here, a cell carrying only
+            // a comment (or only a hyperlink) looked "fully blank" to the skip below and was dropped
+            // before it could be read -- so the writer emitted the annotation and the reader threw it
+            // away. The skip itself is a DoS guard against a huge repeat count on a blank cell and is
+            // deliberately left intact; only the definition of "blank" is corrected.
+            var hasInfo = formula is not null
+                || value is not BlankValue
+                || styleId != StyleId.Default
+                || cellElement.Element(OfficeNs + "annotation") is not null
+                || cellElement.Descendants(TextNs + "a").Any();
             if (!hasInfo && !isMerge)
             {
                 // A covered-merge interior, or a fully blank/style-less cell, carries no information
@@ -273,6 +282,21 @@ public sealed partial class OdsFileAdapter
                     sheet.SetStyleOnly(row, col, styleId);
                 }
 
+                // r293: ODF puts a hyperlink on text:a inside the cell's paragraph, and this adapter
+                // read neither side of it -- so every link was lost, while its visible TEXT survived
+                // because the reader flattens the paragraph. Placed AFTER the value/formula/style
+                // branches above rather than inside one of them: a link can sit on a formula cell or
+                // a plain text cell, and a first attempt that hooked only the formula branch left
+                // ordinary linked text still losing its target.
+                if (HyperlinkTarget(cellElement) is { } href)
+                    sheet.Hyperlinks[new CellAddress(sheet.Id, row, col)] = href;
+
+                // r294: the cell's note. Same placement reasoning as the hyperlink above -- a comment
+                // can sit on a formula, value or style-only cell, so it is read after the branches
+                // rather than inside one of them.
+                if (AnnotationText(cellElement) is { } note)
+                    sheet.Comments[new CellAddress(sheet.Id, row, col)] = note;
+
                 if (isMerge && isFirstRepeat)
                 {
                     // Widen to a 64-bit accumulator before clamping: rowsSpanned/colsSpanned come
@@ -299,10 +323,17 @@ public sealed partial class OdsFileAdapter
             case "currency":
             {
                 var raw = (string?)cellElement.Attribute(OfficeNs + "value");
-                if (raw is not null && double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var d))
+                // r569: IsFinite as well. This builds a NumberValue DIRECTLY from a file -- a third
+                // door into a cell value that bypasses the evaluator, after r562's external-link cache
+                // and the typed/paste doors r563 censused. r562's correction to r552 is the rule
+                // applied: an invariant asserted about the MODEL must be defended at EVERY writer.
+                if (raw is not null && double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) && double.IsFinite(d))
                     return new NumberValue(d);
                 return TextContent(cellElement) is { Length: > 0 } txt &&
+                       // The text-content fallback feeds the same construction, so guarding one
+                       // parse and not the other would leave the door open.
                        double.TryParse(txt, NumberStyles.Float, CultureInfo.InvariantCulture, out var d2)
+                       && double.IsFinite(d2)
                     ? new NumberValue(d2)
                     : BlankValue.Instance;
             }
@@ -486,11 +517,58 @@ public sealed partial class OdsFileAdapter
 
     // ---- value helpers ---------------------------------------------------------------------------
 
+    /// <summary>
+    /// r293: the first hyperlink target in the cell, or null. ODF nests it as
+    /// <c>text:p/text:a/@xlink:href</c>; <c>Descendants</c> rather than a fixed path because a link
+    /// can sit inside a styled span, which is what LibreOffice writes for a formatted link.
+    /// </summary>
+    private static string? HyperlinkTarget(XElement cellElement)
+    {
+        foreach (var anchor in cellElement.Descendants(TextNs + "a"))
+        {
+            var href = anchor.Attribute(XlinkNs + "href")?.Value;
+            if (!string.IsNullOrWhiteSpace(href))
+                return href;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// r294: the cell's note text, or null. ODF holds it as <c>office:annotation</c> containing one
+    /// <c>text:p</c> per line; the creator/date children it may also carry are metadata this model
+    /// does not keep, so only the paragraphs are joined.
+    /// </summary>
+    private static string? AnnotationText(XElement cellElement)
+    {
+        var annotation = cellElement.Element(OfficeNs + "annotation");
+        if (annotation is null)
+            return null;
+
+        var lines = annotation.Elements(TextNs + "p").Select(paragraph => paragraph.Value).ToList();
+        if (lines.Count == 0)
+            return null;
+
+        var text = string.Join("\n", lines);
+        return string.IsNullOrEmpty(text) ? null : text;
+    }
+
     private static string TextContent(XElement cellElement)
     {
         var paragraphs = cellElement.Elements(TextNs + "p").ToList();
         if (paragraphs.Count == 0)
-            return cellElement.Value;
+        {
+            // r294: the fallback reads the whole subtree, which now includes office:annotation --
+            // so a cell carrying ONLY a note and no value would have taken the note's text as its
+            // VALUE, inventing content the user never typed. Exclude the annotation explicitly
+            // rather than relying on there always being a value paragraph beside it.
+            return cellElement.Elements(OfficeNs + "annotation").Any()
+                ? string.Concat(cellElement.Nodes()
+                    .Where(node => node is not XElement element || element.Name != OfficeNs + "annotation")
+                    .Select(node => node is XElement element ? element.Value : node.ToString()))
+                : cellElement.Value;
+        }
+
         return string.Join("\n", paragraphs.Select(p => p.Value));
     }
 
@@ -535,7 +613,8 @@ public sealed partial class OdsFileAdapter
                 name = name.Replace(bad, '_');
         }
         if (name.Length > 31)
-            name = name[..31];
+            // r194: see SurrogateSafeTruncation.
+            name = SurrogateSafeTruncation.LimitToTextElements(name, 31);
         if (name.StartsWith('\'')) name = name.TrimStart('\'');
         if (name.EndsWith('\'')) name = name.TrimEnd('\'');
         if (string.IsNullOrWhiteSpace(name))
@@ -546,7 +625,10 @@ public sealed partial class OdsFileAdapter
         while (workbook.GetSheet(name) is not null)
         {
             var tail = $" ({suffix++})";
-            name = baseName.Length + tail.Length > 31 ? baseName[..(31 - tail.Length)] + tail : baseName + tail;
+            // r195: see SurrogateSafeTruncation.
+            name = baseName.Length + tail.Length > 31
+                ? SurrogateSafeTruncation.LimitToTextElements(baseName, 31 - tail.Length) + tail
+                : baseName + tail;
         }
         return name;
     }

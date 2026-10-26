@@ -1,6 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <Import Project="HostTests.Shared.props" />
+  <!--
+    Batches are balanced by MEASURED test duration, not by alphabet. They used to be contiguous
+    letter ranges (A-C, D-F, ...), which made each batch cost whatever its letters happened to cost:
+    M alone was 8.9 minutes of the 21.9 total while four other batches were under a minute each, so
+    the slowest host batch ran ~3x the fastest and set the release critical path.
+
+    The prefixes below come from per-class timings in run 34187405461 (5,400 tests, 21.9 min).
+    Groups were split until none exceeded one seventh of the total, then packed longest-first; every
+    batch now holds about 3.13 minutes of tests.
+
+    Two invariants keep this safe, both enforced by HostTestBatchPartitionTests:
+      - no prefix here is a prefix of another, so no class can match two batches;
+      - Batch7 is the exact complement of batches 1-6, so a class matching none of them still runs.
+    A newly added class therefore lands in Batch7 automatically. Nothing is ever silently skipped;
+    only the balance drifts, and re-running the measurement above re-tunes it.
+  -->
   <PropertyGroup>
-    <VSTestTestCaseFilter>FullyQualifiedName!~FreeX.App.Host.Tests.A&amp;FullyQualifiedName!~FreeX.App.Host.Tests.B&amp;FullyQualifiedName!~FreeX.App.Host.Tests.C&amp;FullyQualifiedName!~FreeX.App.Host.Tests.D&amp;FullyQualifiedName!~FreeX.App.Host.Tests.E&amp;FullyQualifiedName!~FreeX.App.Host.Tests.F&amp;FullyQualifiedName!~FreeX.App.Host.Tests.G&amp;FullyQualifiedName!~FreeX.App.Host.Tests.H&amp;FullyQualifiedName!~FreeX.App.Host.Tests.I&amp;FullyQualifiedName!~FreeX.App.Host.Tests.J&amp;FullyQualifiedName!~FreeX.App.Host.Tests.K&amp;FullyQualifiedName!~FreeX.App.Host.Tests.L&amp;FullyQualifiedName!~FreeX.App.Host.Tests.M&amp;FullyQualifiedName!~FreeX.App.Host.Tests.N&amp;FullyQualifiedName!~FreeX.App.Host.Tests.O&amp;FullyQualifiedName!~FreeX.App.Host.Tests.P&amp;FullyQualifiedName!~FreeX.App.Host.Tests.Q&amp;FullyQualifiedName!~FreeX.App.Host.Tests.R</VSTestTestCaseFilter>
+    <VSTestTestCaseFilter>FullyQualifiedName!~FreeX.App.Host.Tests.B&amp;FullyQualifiedName!~FreeX.App.Host.Tests.D&amp;FullyQualifiedName!~FreeX.App.Host.Tests.E&amp;FullyQualifiedName!~FreeX.App.Host.Tests.F&amp;FullyQualifiedName!~FreeX.App.Host.Tests.G&amp;FullyQualifiedName!~FreeX.App.Host.Tests.H&amp;FullyQualifiedName!~FreeX.App.Host.Tests.I&amp;FullyQualifiedName!~FreeX.App.Host.Tests.J&amp;FullyQualifiedName!~FreeX.App.Host.Tests.K&amp;FullyQualifiedName!~FreeX.App.Host.Tests.L&amp;FullyQualifiedName!~FreeX.App.Host.Tests.Mac&amp;FullyQualifiedName!~FreeX.App.Host.Tests.MainWindowA&amp;FullyQualifiedName!~FreeX.App.Host.Tests.MainWindowC&amp;FullyQualifiedName!~FreeX.App.Host.Tests.MainWindowF&amp;FullyQualifiedName!~FreeX.App.Host.Tests.MainWindowH&amp;FullyQualifiedName!~FreeX.App.Host.Tests.MainWindowI&amp;FullyQualifiedName!~FreeX.App.Host.Tests.MainWindowM&amp;FullyQualifiedName!~FreeX.App.Host.Tests.MainWindowO&amp;FullyQualifiedName!~FreeX.App.Host.Tests.MainWindowP&amp;FullyQualifiedName!~FreeX.App.Host.Tests.MainWindowR&amp;FullyQualifiedName!~FreeX.App.Host.Tests.MainWindowS&amp;FullyQualifiedName!~FreeX.App.Host.Tests.MainWindowT&amp;FullyQualifiedName!~FreeX.App.Host.Tests.MainWindowU&amp;FullyQualifiedName!~FreeX.App.Host.Tests.MainWindowW&amp;FullyQualifiedName!~FreeX.App.Host.Tests.MainWindowX&amp;FullyQualifiedName!~FreeX.App.Host.Tests.Man&amp;FullyQualifiedName!~FreeX.App.Host.Tests.Me&amp;FullyQualifiedName!~FreeX.App.Host.Tests.Mu&amp;FullyQualifiedName!~FreeX.App.Host.Tests.N&amp;FullyQualifiedName!~FreeX.App.Host.Tests.O&amp;FullyQualifiedName!~FreeX.App.Host.Tests.P&amp;FullyQualifiedName!~FreeX.App.Host.Tests.Q&amp;FullyQualifiedName!~FreeX.App.Host.Tests.R10&amp;FullyQualifiedName!~FreeX.App.Host.Tests.R11&amp;FullyQualifiedName!~FreeX.App.Host.Tests.R12&amp;FullyQualifiedName!~FreeX.App.Host.Tests.R13&amp;FullyQualifiedName!~FreeX.App.Host.Tests.R15&amp;FullyQualifiedName!~FreeX.App.Host.Tests.R16&amp;FullyQualifiedName!~FreeX.App.Host.Tests.R17&amp;FullyQualifiedName!~FreeX.App.Host.Tests.R19&amp;FullyQualifiedName!~FreeX.App.Host.Tests.R3&amp;FullyQualifiedName!~FreeX.App.Host.Tests.R4&amp;FullyQualifiedName!~FreeX.App.Host.Tests.R5&amp;FullyQualifiedName!~FreeX.App.Host.Tests.R7&amp;FullyQualifiedName!~FreeX.App.Host.Tests.R8&amp;FullyQualifiedName!~FreeX.App.Host.Tests.Re&amp;FullyQualifiedName!~FreeX.App.Host.Tests.S&amp;FullyQualifiedName!~FreeX.App.Host.Tests.T&amp;FullyQualifiedName!~FreeX.App.Host.Tests.V&amp;FullyQualifiedName!~FreeX.App.Host.Tests.W</VSTestTestCaseFilter>
   </PropertyGroup>
 </Project>

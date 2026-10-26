@@ -106,14 +106,8 @@ public sealed class R116_ChartsheetDpiChangeRefreshTests
         return (window, workbook, dataSheet, chartsheet);
     }
 
-    private static void PumpDispatcher()
-    {
-        var frame = new System.Windows.Threading.DispatcherFrame();
-        System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
-            System.Windows.Threading.DispatcherPriority.Background,
-            new Action(() => frame.Continue = false));
-        System.Windows.Threading.Dispatcher.PushFrame(frame);
-    }
+    // r446: delegates to the one fixed implementation -- see DispatcherTestPump.
+    private static void PumpDispatcher() => DispatcherTestPump.PumpDispatcher();
 
     /// <summary>Switches the window's active sheet to the chartsheet through the same
     /// _currentSheetId + UpdateViewport pair every real sheet-tab click drives, via reflection since

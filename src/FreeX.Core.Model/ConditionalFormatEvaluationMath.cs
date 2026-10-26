@@ -163,8 +163,21 @@ public static class ConditionalFormatEvaluationMath
         return Math.Clamp((int)Math.Floor(position * iconCount), 0, iconCount - 1);
     }
 
+    /// <summary>
+    /// r564: a rule threshold is stored as TEXT in the xlsx, and NumberStyles.Any accepts the
+    /// literal "NaN" and "Infinity" while an overlong literal overflows to Infinity. A non-finite
+    /// threshold does not merely mis-colour: every ordering comparison against NaN is false so the
+    /// rule matches NOTHING, NotEqual against NaN is true for every cell so it matches EVERYTHING,
+    /// and "LessThan Infinity" matches every finite cell in the sheet.
+    ///
+    /// <para>Answering false is the contract the callers already implement -- a threshold that is
+    /// not a number means the rule does not apply, pinned by
+    /// MatchesCellValueNumeric_NonNumericThreshold_ReturnsFalse -- and SetFinite below already
+    /// expresses this exact check one method away.</para>
+    /// </summary>
     public static bool TryParseInvariant(string? text, out double value) =>
-        double.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out value);
+        double.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out value)
+        && double.IsFinite(value);
 
     private static bool SetFinite(double input, out double output)
     {

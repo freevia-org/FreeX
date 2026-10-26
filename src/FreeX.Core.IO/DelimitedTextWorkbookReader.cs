@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using FreeX.Core.Formula;
 using Free.Shared.IO;
 using FreeX.Core.Model;
 
@@ -34,10 +35,11 @@ internal static partial class DelimitedTextWorkbookReader
     // truncates on open -- silent data loss the user believes was imported intact. Real Excel's own
     // CSV import truncates an oversized field to this limit rather than rejecting the whole row, so
     // mirror that here.
-    private const int ExcelCellTextLimit = 32767;
+    private const int ExcelCellTextLimit = Free.Shared.IO.SurrogateSafeTruncation.SpreadsheetCellTextLimit;
 
+    // r200: one implementation, in the shared tier -- this cap had three, all cutting mid-surrogate.
     private static string TruncateToExcelCellTextLimit(string text) =>
-        text.Length > ExcelCellTextLimit ? text[..ExcelCellTextLimit] : text;
+        Free.Shared.IO.SurrogateSafeTruncation.LimitToCellText(text);
 
     public static Workbook Load(
         Stream stream,
@@ -597,8 +599,10 @@ internal static partial class DelimitedTextWorkbookReader
         // Clone so the two-digit-year window can be overridden to Excel's documented 1930-2029
         // rule (30-99 -> 19xx, 00-29 -> 20xx). .NET's default Calendar.TwoDigitYearMax is 2049,
         // which would misdate e.g. "6/15/45" to 2045 instead of Excel's 1945.
-        var culture = (CultureInfo)CultureInfo.CurrentCulture.Clone();
-        culture.DateTimeFormat.Calendar.TwoDigitYearMax = 2029;
+        //
+        // r603: the bare assignment threw on a non-Gregorian era -- see ExcelTwoDigitYearWindow,
+        // which is now the single place that knows the rule does not apply to every calendar.
+        var culture = ExcelTwoDigitYearWindow.ApplyTo((CultureInfo)CultureInfo.CurrentCulture.Clone());
 
         return DateTime.TryParse(
             field,

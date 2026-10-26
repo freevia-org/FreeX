@@ -46,7 +46,7 @@ internal static class ZoomFrameBorderXml
         if (line is null && (widthEmu is not null || dash is not null || gradient is not null || noFill == true))
         {
             line = new XElement(Drawing + "ln");
-            shapeProperties.Add(line);
+            AttachLine(shapeProperties, line);
         }
         if (line is not null && widthEmu is not null)
             line.SetAttributeValue("w", widthEmu.Value);
@@ -78,7 +78,7 @@ internal static class ZoomFrameBorderXml
             RemoveAllFills(line);
             line.AddFirst(new XElement(Drawing + "noFill"));
             if (line.Parent is null)
-                shapeProperties.Add(line);
+                AttachLine(shapeProperties, line);
             return;
         }
 
@@ -100,7 +100,7 @@ internal static class ZoomFrameBorderXml
                     new XAttribute("ang", gradient.Angle),
                     new XAttribute("scaled", 1))));
             if (line.Parent is null)
-                shapeProperties.Add(line);
+                AttachLine(shapeProperties, line);
             return;
         }
 
@@ -117,7 +117,7 @@ internal static class ZoomFrameBorderXml
                     new XElement(Drawing + "srgbClr",
                         new XAttribute("val", pattern.BackgroundColor)))));
             if (line.Parent is null)
-                shapeProperties.Add(line);
+                AttachLine(shapeProperties, line);
             return;
         }
 
@@ -129,7 +129,7 @@ internal static class ZoomFrameBorderXml
                 new XElement(Drawing + "schemeClr",
                     new XAttribute("val", ThemeColorSlotMapper.ToSchemeColorString(themeSlot)))));
             if (line.Parent is null)
-                shapeProperties.Add(line);
+                AttachLine(shapeProperties, line);
             return;
         }
 
@@ -154,7 +154,7 @@ internal static class ZoomFrameBorderXml
         line.AddFirst(new XElement(Drawing + "solidFill",
             new XElement(Drawing + "srgbClr", new XAttribute("val", color))));
         if (line.Parent is null)
-            shapeProperties.Add(line);
+            AttachLine(shapeProperties, line);
     }
 
     private static void RemoveRecognizedFills(
@@ -370,4 +370,24 @@ internal static class ZoomFrameBorderXml
         OutlineDash.SystemDashDot => "sysDashDot",
         _ => "solid",
     };
+
+    // r483: DrawingML CT_ShapeProperties is a SEQUENCE -- xfrm?, geometry?, fill?, ln?, effects?,
+    // scene3d?, sp3d?, extLst? -- so a:ln has to sit BEFORE the effect and 3-D elements. Appending
+    // it put a:ln after an existing a:effectLst whenever the zoom frame already carried a shadow,
+    // glow, soft edge or reflection (all of which this same class writes, and which any imported
+    // deck may already have). The package stayed well-formed and became schema-invalid, which
+    // PowerPoint reports as a file needing repair and "repairs" by discarding content.
+    private static readonly string[] ElementsThatFollowLine =
+        ["effectLst", "effectDag", "scene3d", "sp3d", "extLst"];
+
+    private static void AttachLine(XElement shapeProperties, XElement line)
+    {
+        var successor = shapeProperties.Elements().FirstOrDefault(element =>
+            Array.IndexOf(ElementsThatFollowLine, element.Name.LocalName) >= 0);
+
+        if (successor is null)
+            shapeProperties.Add(line);
+        else
+            successor.AddBeforeSelf(line);
+    }
 }

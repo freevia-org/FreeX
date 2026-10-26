@@ -29,8 +29,13 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
         if (filters is null)
             return new CommandOutcome(false, "Table filter refers to a missing column.");
 
+        // r226: this command has had a method called FilterHiddenRowsAlreadyMatch all along, and it
+        // returned a plain success when it fired. The r208 census recorded this command as sound on
+        // the grounds that "the caller only issues a changed filter set" -- but a command that
+        // carries its own already-matches check is telling you the caller gate is not relied on, and
+        // the check fires whether or not the gate holds.
         if (FilterHiddenRowsAlreadyMatch(sheet, table.Range, table.TotalsRowShown, filters))
-            return new CommandOutcome(true);
+            return new CommandOutcome(true, IsNoOp: true);
 
         _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
 

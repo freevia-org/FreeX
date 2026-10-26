@@ -36,8 +36,8 @@ public sealed class XlsxNativeXmlMergerTests
         XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(source, target).Should().BeTrue();
 
         var item = target.Elements("item").Should().ContainSingle().Subject;
-        item.Attribute("first")?.Value.Should().Be("kept");
-        item.Attribute("second")?.Value.Should().Be("merged");
+        item.Attribute("first")!.Value.Should().Be("kept");
+        item.Attribute("second")!.Value.Should().Be("merged");
     }
 
     [Fact]

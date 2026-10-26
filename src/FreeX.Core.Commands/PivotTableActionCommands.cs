@@ -36,8 +36,11 @@ public sealed class RenamePivotTableCommand : IWorkbookCommand
             return new CommandOutcome(false, "PivotTable name is already in use.");
 
         _oldName = pivotTable.Name;
+        // r217: the same-name check was already here and already correct -- only the signal was
+        // missing, so the bus still pushed an undo entry for a rename that renamed nothing and the
+        // push cleared the user's pending redo. AffectedCells stays so the view still repaints.
         if (string.Equals(_oldName, _newName, StringComparison.Ordinal))
-            return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
+            return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start], IsNoOp: true);
 
         _updatedCharts.Clear();
         _updatedSlicers.Clear();
@@ -207,8 +210,27 @@ public sealed class ClearPivotTableViewCommand : IWorkbookCommand
             _targetSnapshot = null;
             return failure;
         }
-        return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
+        return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start], IsNoOp: NothingChanged(sheet, pivotTable));
     }
+
+    /// <summary>
+    /// r256: re-applying the pivot configuration already in effect writes exactly what is already
+    /// there -- the dialogs hand back the pivot's own current state as their default, so
+    /// re-confirming one reaches Apply with every argument equal to current state. Without this the
+    /// command still pushed an undo entry, and UndoRedoStack.Push clears the redo stack, destroying
+    /// a real edit the user could have redone.
+    ///
+    /// <para>r219 left this family unfixed because deciding "no change" meant also proving the
+    /// re-render was unnecessary, and guessing at that is how a guard suppresses a real edit. The
+    /// POST-HOC form does not have to prove it: <c>_targetSnapshot</c> IS the block the re-render
+    /// overwrote, so comparing it against the sheet afterwards observes what the re-render actually
+    /// produced instead of predicting it. Together with the model comparison that is the whole of
+    /// what Revert restores.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet sheet, PivotTableModel pivotTable) =>
+        _snapshot is not null
+        && _snapshot.Matches(pivotTable)
+        && PivotSnapshotComparison.RenderedCellsUnchanged(sheet, _targetSnapshot);
 
     public void Revert(ICommandContext ctx)
     {
@@ -317,8 +339,33 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
             PivotTableRefreshService.UpdateBoundPivotCharts(ctx.Workbook, sheet, pivotTable);
         }
 
-        return new CommandOutcome(true, AffectedCells: [_newTargetRange.Value.Start]);
+        return new CommandOutcome(
+            true,
+            AffectedCells: [_newTargetRange.Value.Start],
+            IsNoOp: NothingChanged(sheet, pivotTable));
     }
+
+    /// <summary>
+    /// r257: dragging a PivotTable and dropping it where it started leaves
+    /// <c>_oldTargetRange == _newTargetRange</c>, and the entire move block below is skipped -- the
+    /// command does nothing at all. r225 recorded that as reachable and ordinary and left it on the
+    /// debt because the fix needed a real before/after comparison rather than a guard on the
+    /// arguments. This is that comparison.
+    ///
+    /// <para>POST-HOC over the command's whole undo record: Revert restores the target range, the
+    /// last-rendered range, the captured cell block and the old footprint's merged regions, and
+    /// nothing else. The merged-region half is compared over the same two-footprint filter the
+    /// capture used, passed in rather than restated.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet sheet, PivotTableModel pivotTable) =>
+        _oldTargetRange == pivotTable.TargetRange
+        && _oldLastRenderedRange == pivotTable.LastRenderedRange
+        && PivotSnapshotComparison.RenderedCellsUnchanged(sheet, _rangeSnapshot)
+        && PivotSnapshotComparison.MergedRegionsUnchanged(
+            sheet,
+            _oldMergedRegions,
+            region => region.Overlaps(_oldTargetRange!.Value)
+                || (_oldLastRenderedRange is { } renderedRange && region.Overlaps(renderedRange)));
 
     public void Revert(ICommandContext ctx)
     {

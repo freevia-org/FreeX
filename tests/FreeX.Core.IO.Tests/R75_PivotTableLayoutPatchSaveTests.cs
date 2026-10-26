@@ -34,7 +34,7 @@ public sealed class R75_PivotTableLayoutPatchSaveTests
         adapter.Save(loaded, saved);
 
         var pivotRoot = ReadPivotXml(saved).Root!;
-        pivotRoot.Attribute("rowGrandTotals")?.Value.Should().Be("0",
+        pivotRoot.Attribute("rowGrandTotals")!.Value.Should().Be("0",
             "clearing ShowRowGrandTotals in the model must be reflected on the preserved pivotTableDefinition, not silently dropped");
         pivotRoot.Attribute("colGrandTotals")?.Value.Should().NotBe("0",
             "only the row grand-total flag was toggled -- the column grand-total flag must be untouched");
@@ -63,9 +63,9 @@ public sealed class R75_PivotTableLayoutPatchSaveTests
         adapter.Save(loaded, saved);
 
         var pivotRoot = ReadPivotXml(saved).Root!;
-        pivotRoot.Attribute("compact")?.Value.Should().Be("0");
-        pivotRoot.Attribute("outline")?.Value.Should().Be("1");
-        pivotRoot.Attribute("outlineData")?.Value.Should().Be("1");
+        pivotRoot.Attribute("compact")!.Value.Should().Be("0");
+        pivotRoot.Attribute("outline")!.Value.Should().Be("1");
+        pivotRoot.Attribute("outlineData")!.Value.Should().Be("1");
 
         var pivotFields = pivotRoot.Element(WorkbookNs + "pivotFields")!.Elements(WorkbookNs + "pivotField").ToList();
         var axisFields = pivotFields.Where(f => f.Attribute("axis")?.Value is "axisRow" or "axisCol").ToList();
@@ -98,7 +98,7 @@ public sealed class R75_PivotTableLayoutPatchSaveTests
         var dataFieldXml = ReadPivotXml(saved).Root!
             .Element(WorkbookNs + "dataFields")!
             .Element(WorkbookNs + "dataField")!;
-        dataFieldXml.Attribute("subtotal")?.Value.Should().Be("count",
+        dataFieldXml.Attribute("subtotal")!.Value.Should().Be("count",
             "changing the data field's summary function in the model must survive a source-preserved save");
 
         saved.Position = 0;

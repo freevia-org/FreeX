@@ -128,11 +128,21 @@ internal static partial class XlsxPivotTableReader
         return null;
     }
 
-    private static double? ReadNativePivotFilterDoubleValue(XElement filter, params string[] attributeNames)
+    // r578: internal rather than private so R578_XmlAttributeDoubleGuardTests can drive it -- it is
+    // the x14/native twin of the ReadDoubleAttribute path that fills the same model field.
+    internal static double? ReadNativePivotFilterDoubleValue(XElement filter, params string[] attributeNames)
     {
         foreach (var attributeName in attributeNames)
         {
-            if (double.TryParse(filter.Attribute(attributeName)?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            // r578: IsFinite. This bespoke reader fills the SAME PivotValueFilterModel.ComparisonValue
+            // that ReadPivotValueFilters above fills via XlsxXmlAttributeReader.ReadDoubleAttribute
+            // -- two readers for one field, differing only in which attribute names the x14/native
+            // shape uses. Guarding the shared door in r578 would otherwise have left this one as the
+            // single remaining way in, which is how a fix creates the asymmetry it was meant to end.
+            // A non-finite comparison value makes every ordering test false, so the filter hides
+            // every row; null is this method's existing "no such attribute" result.
+            if (double.TryParse(filter.Attribute(attributeName)?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) &&
+                double.IsFinite(value))
                 return value;
         }
 

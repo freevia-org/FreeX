@@ -297,11 +297,19 @@ public static class XlsxColorReader
         return true;
     }
 
-    private static double ReadTint(XElement element)
+    // r578: internal rather than private so R578_ColorTintGuardTests can drive it directly; it is
+    // the one place a colour's tint enters, feeding all four of this reader's colour paths.
+    internal static double ReadTint(XElement element)
     {
         var tintText = element.Attribute("tint")?.Value;
+        // r578: IsFinite. A tint is a bounded modulation (-1..1 in the schema), but TryParse accepts
+        // "NaN" and overflows "1e400" to Infinity. WorkbookThemeTint.Apply short-circuits only on
+        // Math.Abs(tint) < threshold, which is FALSE for NaN, so a non-finite tint went into the HSL
+        // luminance maths and came back out as saturated-cast channels -- the colour silently
+        // changed. 0 is this method's existing "no tint" result for a missing or unreadable value.
         return !string.IsNullOrWhiteSpace(tintText) &&
-            double.TryParse(tintText, NumberStyles.Float, CultureInfo.InvariantCulture, out var tint)
+            double.TryParse(tintText, NumberStyles.Float, CultureInfo.InvariantCulture, out var tint) &&
+            double.IsFinite(tint)
             ? tint
             : 0d;
     }

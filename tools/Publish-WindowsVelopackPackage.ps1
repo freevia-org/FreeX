@@ -182,11 +182,14 @@ $vpkArguments = @(
 
 if (-not [string]::IsNullOrWhiteSpace($ArtifactSigningMetadataPath)) {
     $metadataPath = (Resolve-Path -LiteralPath $ArtifactSigningMetadataPath -ErrorAction Stop).Path
+    # Velopack's sign template signs the generated Setup bundle only. Sign the
+    # app host before packing so the executable embedded in the nupkg/portable
+    # archive is also trusted.
     & (Join-Path $PSScriptRoot "Invoke-WindowsArtifactSigning.ps1") `
-        -Files $standalonePath `
+        -Files $standalonePath,$mainExecutable `
         -MetadataPath $metadataPath
     if ($LASTEXITCODE -ne 0) {
-        throw "Artifact Signing failed for $App standalone executable."
+        throw "Artifact Signing failed for $App standalone or Velopack application executable."
     }
 
     $powerShellPath = Get-ToolPowerShellPath

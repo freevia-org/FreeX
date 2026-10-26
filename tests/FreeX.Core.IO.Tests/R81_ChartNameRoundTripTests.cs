@@ -64,7 +64,7 @@ public sealed class R81_ChartNameRoundTripTests
                 .Descendants(SpreadsheetDrawingNs + "cNvPr")
                 .Should().ContainSingle().Subject;
 
-            cNvPr.Attribute("name")?.Value.Should().Be("My Chart",
+            cNvPr.Attribute("name")!.Value.Should().Be("My Chart",
                 "the chart's Name must be written to the graphicFrame's cNvPr name attribute");
         }
 

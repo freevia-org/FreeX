@@ -109,11 +109,9 @@ public sealed class RibbonResizeCoordinatorTests
         public void PumpDispatcher()
         {
             _window.UpdateLayout();
-            var frame = new DispatcherFrame();
-            Dispatcher.CurrentDispatcher.BeginInvoke(
-                DispatcherPriority.Background,
-                new Action(() => frame.Continue = false));
-            Dispatcher.PushFrame(frame);
+            // r446: only the pump is delegated -- the layout pass above is this helper's own extra
+            // step and must stay.
+            DispatcherTestPump.PumpDispatcher();
         }
 
         public void PumpUntil(Func<bool> condition, int timeoutMilliseconds = 2000)

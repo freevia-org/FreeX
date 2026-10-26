@@ -28,6 +28,12 @@ public sealed class RepositionShapeCommand : IWorkbookCommand
             return new CommandOutcome(false, "Shape was not found.");
         if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet, shape) is { } protectedOutcome)
             return protectedOutcome;
+        // r218: the offset-snapping block below is already gated on the anchor having changed, so an
+        // equal anchor means every write in this method is either a self-assignment or skipped --
+        // the command's own logic proves the no-op, it just never said so.
+        if (shape.Anchor == _anchor)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousAnchor = shape.Anchor;
         _previousAnchorOffsetX = shape.AnchorOffsetX;
         _previousAnchorOffsetY = shape.AnchorOffsetY;

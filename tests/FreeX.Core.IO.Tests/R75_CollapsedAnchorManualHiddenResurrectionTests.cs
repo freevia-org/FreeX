@@ -64,8 +64,8 @@ public sealed class R75_CollapsedAnchorManualHiddenResurrectionTests
         var worksheetXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var row10 = GetRow(worksheetXml, 10);
 
-        row10.Attribute("collapsed")?.Value.Should().Be("1");
-        row10.Attribute("hidden")?.Value.Should().Be("1",
+        row10.Attribute("collapsed")!.Value.Should().Be("1");
+        row10.Attribute("hidden")!.Value.Should().Be("1",
             "the anchor row is ALSO manually hidden, so it must stay hidden -- not be wrongly " +
             "resurrected because the guard only checked GroupHiddenRows");
     }
@@ -92,7 +92,7 @@ public sealed class R75_CollapsedAnchorManualHiddenResurrectionTests
         var worksheetXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var row3 = GetRow(worksheetXml, 3);
 
-        row3.Attribute("collapsed")?.Value.Should().Be("1");
+        row3.Attribute("collapsed")!.Value.Should().Be("1");
         row3.Attribute("hidden").Should().BeNull(
             "a collapsed anchor row that is not otherwise hidden must remain visible");
     }
@@ -121,8 +121,8 @@ public sealed class R75_CollapsedAnchorManualHiddenResurrectionTests
         var worksheetXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var col10 = GetCol(worksheetXml, 10);
 
-        col10.Attribute("collapsed")?.Value.Should().Be("1");
-        col10.Attribute("hidden")?.Value.Should().Be("1",
+        col10.Attribute("collapsed")!.Value.Should().Be("1");
+        col10.Attribute("hidden")!.Value.Should().Be("1",
             "the anchor column is ALSO manually hidden, so it must stay hidden -- not be wrongly " +
             "resurrected because the guard only checked GroupHiddenCols");
     }
@@ -147,7 +147,7 @@ public sealed class R75_CollapsedAnchorManualHiddenResurrectionTests
         var worksheetXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
         var col2 = GetCol(worksheetXml, 2);
 
-        col2.Attribute("collapsed")?.Value.Should().Be("1");
+        col2.Attribute("collapsed")!.Value.Should().Be("1");
         col2.Attribute("hidden").Should().BeNull(
             "a collapsed anchor column that is not otherwise hidden must remain visible");
     }

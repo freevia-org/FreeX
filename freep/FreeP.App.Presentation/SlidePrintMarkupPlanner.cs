@@ -98,6 +98,12 @@ public static class SlidePrintMarkupPlanner
     private static string Trim(string? value, int maxLength)
     {
         var normalized = (value ?? string.Empty).Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' ').Trim();
-        return normalized.Length <= maxLength ? normalized : normalized[..Math.Max(0, maxLength - 3)] + "...";
+        // r200: cut on a text-element boundary. This helper and PresentationPdfExporter.TrimMarkupText
+        // are the same code in two files, and the print path -- unlike the portable-PDF one, which
+        // throws on non-WinAnsi text before writing -- hands its result straight to each toolkit's
+        // text drawing, so a lone surrogate reaches the printed page.
+        return normalized.Length <= maxLength
+            ? normalized
+            : Free.Shared.IO.SurrogateSafeTruncation.LimitToTextElements(normalized, Math.Max(0, maxLength - 3)) + "...";
     }
 }

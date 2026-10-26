@@ -23,18 +23,20 @@ public static class CreateTableDialogPlanner
     public const string RangeBoxAutomationId = "CreateTableRangeBox";
     public const string HeadersBoxAutomationId = "CreateTableHeadersBox";
 
-    public const double Width = 360;
-    public const double Height = 190;
-    public const double ButtonWidth = 76;
+    // Excel's Create Table prompt is deliberately a small confirmation surface: it needs one
+    // range editor, one option, and a compact action row rather than the roomier data-tool chrome.
+    public const double Width = 224;
+    public const double Height = 144;
+    public const double ButtonWidth = 56;
     public const bool DefaultFirstRowHasHeaders = true;
-    public const double ContentMargin = 16;
-    public const double RangeLabelBottomMargin = 4;
-    public const double RangeEditorBottomMargin = 12;
-    public const double HeadersBottomMargin = 16;
-    public const double RangeBoxMinimumWidth = 248;
-    public const double RangePickerWidth = 28;
-    public const double RangePickerGap = 6;
-    public const double ActionRowTopMargin = 12;
+    public const double ContentMargin = 8;
+    public const double RangeLabelBottomMargin = 2;
+    public const double RangeEditorBottomMargin = 6;
+    public const double HeadersBottomMargin = 8;
+    public const double RangeBoxMinimumWidth = 168;
+    public const double RangePickerWidth = 20;
+    public const double RangePickerGap = 2;
+    public const double ActionRowTopMargin = 8;
 
     public static bool TryParse(
         SheetId sheetId,

@@ -230,7 +230,96 @@ public sealed class MergeCellsCommand : IWorkbookCommand, IAffectedCellsCommand,
         _affectedCells = affected;
 
         sheet.AddMergedRegion(_range);
-        return new CommandOutcome(true, AffectedCells: affected);
+        return new CommandOutcome(true, AffectedCells: affected, IsNoOp: NothingChanged(sheet));
+    }
+
+    /// <summary>
+    /// r261: merging a range that is already merged exactly that way absorbs the existing region and
+    /// re-adds it, blanks cells that are already blank, and puts each comment back where it was.
+    /// r232 recorded that the net effect is nil but "establishing that means reasoning through five
+    /// loops rather than adding a guard". The post-hoc form does not reason through them: it compares
+    /// the record of what they did.
+    ///
+    /// <para>Revert restores six things -- the merged region and the absorbed ones, the covered
+    /// cells, and the four per-address comment collections -- and all six are compared here. The
+    /// comment half matters on its own: Apply MIGRATES a covered cell's comment onto the anchor, so a
+    /// merge that moved a note changed something even when every cell value already matched.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet sheet)
+    {
+        if (_snapshot is null)
+            return false;
+
+        if (!MergedRegionsUnchanged(sheet, _absorbedRegions))
+            return false;
+
+        foreach (var (address, oldCell) in _snapshot)
+        {
+            if (!CellEditCompanionSnapshot.SameCellOrAbsent(sheet, address, oldCell))
+                return false;
+        }
+
+        return CommentsUnchanged(
+            sheet, _commentSnapshot, _commentAuthorSnapshot, _shownCommentSnapshot, _threadedCommentSnapshot);
+    }
+
+    /// <summary>
+    /// The merge this command adds is a change unless the sheet already carried exactly it: the
+    /// regions overlapping the range afterwards must be the same set Apply absorbed.
+    /// </summary>
+    private bool MergedRegionsUnchanged(Sheet sheet, List<GridRange>? absorbedRegions)
+    {
+        var captured = absorbedRegions ?? [];
+        var current = sheet.MergedRegions.Where(region => region.Overlaps(_range)).ToList();
+        if (current.Count != captured.Count)
+            return false;
+
+        foreach (var region in captured)
+        {
+            if (!current.Contains(region))
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Each of the four collections, per address across the merged range -- the same addresses Revert
+    /// walks, so the comparison covers exactly what the restore covers.
+    /// </summary>
+    private bool CommentsUnchanged(
+        Sheet sheet,
+        Dictionary<CellAddress, string>? comments,
+        Dictionary<CellAddress, string>? authors,
+        HashSet<CellAddress>? shown,
+        Dictionary<CellAddress, ThreadedComment>? threaded)
+    {
+        foreach (var address in _range.AllCells())
+        {
+            if (!SameEntry(sheet.Comments, comments, address, string.Equals))
+                return false;
+            if (!SameEntry(sheet.CommentAuthors, authors, address, string.Equals))
+                return false;
+            if (sheet.ShownComments.Contains(address) != (shown?.Contains(address) ?? false))
+                return false;
+            if (!SameEntry(sheet.ThreadedComments, threaded, address, ReferenceEquals))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool SameEntry<T>(
+        IDictionary<CellAddress, T> current,
+        Dictionary<CellAddress, T>? captured,
+        CellAddress address,
+        Func<T?, T?, bool> same)
+    {
+        var presentNow = current.TryGetValue(address, out var now);
+        T? before = default;
+        var presentBefore = captured is not null && captured.TryGetValue(address, out before);
+
+        return presentNow == presentBefore && (!presentNow || same(now, before));
     }
 
     public void Revert(ICommandContext ctx)

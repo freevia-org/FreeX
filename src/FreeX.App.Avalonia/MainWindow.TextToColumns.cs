@@ -251,7 +251,7 @@ public sealed partial class MainWindow
                 Comma: commaBox.IsChecked == true,
                 Space: spaceBox.IsChecked == true,
                 Other: otherBox.IsChecked == true,
-                OtherDelimiter: string.IsNullOrEmpty(otherCharBox.Text) ? null : otherCharBox.Text[0],
+                OtherDelimiter: string.IsNullOrEmpty(otherCharBox.Text) ? null : otherCharBox.Text,
                 TreatConsecutiveDelimitersAsOne: treatConsecutiveBox.IsChecked == true,
                 TextQualifier: qualifierBox.SelectedIndex switch
                 {

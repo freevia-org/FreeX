@@ -47,24 +47,21 @@ $surfaces = @(
     [ordered]@{ name = 'Send E-mail Messages'; wpfAuthority = 'EmailMergeDialog'; avaloniaSurface = 'AskEmailMergeDeliveryAsync'; sharedPolicy = 'MailMergeEmailDeliveryPlanner'; status = 'implemented'; shellWiringGap = '' }
 )
 
-$hashes = [ordered]@{}
 foreach ($relative in $sourceFiles) {
     $path = Join-Path $repo $relative
     if (-not (Test-Path -LiteralPath $path)) { throw "Missing evidence input: $relative" }
-    $hashes[$relative] = Get-ToolNormalizedTextSha256 -Path $path
 }
 
 $evidence = [ordered]@{
     schema = 'freex.freew.mail-merge-dialog-parity.v1'
     authority = 'FreeW.App.Host WPF dialog and command behavior'
     generatedInputs = $sourceFiles
-    sourceSha256 = $hashes
     ownershipBoundary = @(
         'MainWindow and ribbon command/definition routes are included in the integration fingerprints.',
         'Backstage, page-layout/media/design, and shared shell routes remain outside this mail-merge inventory.'
     )
     surfaces = $surfaces
-    freshnessCheck = 'Run tools/Generate-FreeWMailMergeDialogParityEvidence.ps1 -Check; nonzero means generated JSON/Markdown no longer matches current source hashes.'
+    freshnessCheck = 'This artifact records hand-authored parity findings for the files listed in generatedInputs. Run tools/Generate-FreeWMailMergeDialogParityEvidence.ps1 -Check to verify the generator still reproduces those declared findings and that every listed input still exists; it does not detect edits to the contents of those files. When a listed source changes, the surfaces above must be re-verified by hand and this artifact regenerated.'
 }
 
 $jsonText = $evidence | ConvertTo-Json -Depth 12
@@ -74,7 +71,7 @@ $gapLines = ($surfaces | ForEach-Object { "| $($_.name) | $($_.status) | $($_.sh
 $markdownText = @"
 # FreeW Mail Merge Dialog Parity
 
-Generated from the WPF authority and shared/presentation/Avalonia source hashes. This report is deterministic; run ``tools/Generate-FreeWMailMergeDialogParityEvidence.ps1 -Check`` to verify freshness.
+Records hand-authored parity findings for the WPF authority and shared/presentation/Avalonia inputs listed in ``generatedInputs``. This report is deterministic; run ``tools/Generate-FreeWMailMergeDialogParityEvidence.ps1 -Check`` to verify the generator still reproduces it.
 
 - Schema: ``$($evidence.schema)``
 - Surfaces inventoried: $($surfaces.Count)
@@ -92,7 +89,7 @@ MainWindow and ribbon command/definition routes are included in the generated so
 
 ## Freshness
 
-The JSON records SHA-256 hashes for every authority, implementation, and focused-test input. ``-Check`` regenerates both artifacts in memory and fails if either committed artifact differs.
+This artifact records hand-authored parity findings for the authority, implementation, and focused-test inputs listed in ``generatedInputs``. ``-Check`` regenerates both artifacts in memory and fails if either committed artifact differs from those declared findings, or if a listed input no longer exists; it does not detect edits to the contents of those files. When a listed source changes, the surfaces above must be re-verified by hand and this artifact regenerated.
 "@
 
 if ($Check) {

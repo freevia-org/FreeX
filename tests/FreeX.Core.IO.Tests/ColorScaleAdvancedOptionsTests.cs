@@ -37,9 +37,9 @@ public sealed class ColorScaleAdvancedOptionsTests
             .Subject;
         var thresholds = colorScale.Elements(MainNs + "cfvo").ToArray();
         thresholds.Should().HaveCount(3);
-        thresholds[0].Attribute("gte")?.Value.Should().Be("0");
-        thresholds[1].Attribute("gte")?.Value.Should().Be("1");
-        thresholds[2].Attribute("gte")?.Value.Should().Be("0");
+        thresholds[0].Attribute("gte")!.Value.Should().Be("0");
+        thresholds[1].Attribute("gte")!.Value.Should().Be("1");
+        thresholds[2].Attribute("gte")!.Value.Should().Be("0");
     }
 
     [Fact]
@@ -81,9 +81,9 @@ public sealed class ColorScaleAdvancedOptionsTests
             .ToArray();
         colors.Should().HaveCount(3);
         // The saved elements must carry theme= attributes (4, 5, 6) not rgb= ones.
-        colors[0].Attribute("theme")?.Value.Should().Be("4", because: "Accent1 is OOXML theme index 4");
-        colors[1].Attribute("theme")?.Value.Should().Be("5", because: "Accent2 is OOXML theme index 5");
-        colors[2].Attribute("theme")?.Value.Should().Be("6", because: "Accent3 is OOXML theme index 6");
+        colors[0].Attribute("theme")!.Value.Should().Be("4", because: "Accent1 is OOXML theme index 4");
+        colors[1].Attribute("theme")!.Value.Should().Be("5", because: "Accent2 is OOXML theme index 5");
+        colors[2].Attribute("theme")!.Value.Should().Be("6", because: "Accent3 is OOXML theme index 6");
         colors[0].Attribute("rgb").Should().BeNull(because: "theme color must not be duplicated as rgb");
         colors[1].Attribute("rgb").Should().BeNull(because: "theme color must not be duplicated as rgb");
         colors[2].Attribute("rgb").Should().BeNull(because: "theme color must not be duplicated as rgb");
@@ -126,13 +126,13 @@ public sealed class ColorScaleAdvancedOptionsTests
             .ToArray();
         colors.Should().HaveCount(2);
         // Min: theme=4 tint=0.4
-        colors[0].Attribute("theme")?.Value.Should().Be("4");
+        colors[0].Attribute("theme")!.Value.Should().Be("4");
         colors[0].Attribute("tint")?.Value.Should().NotBeNullOrEmpty(because: "tint must be written");
         double.Parse(colors[0].Attribute("tint")!.Value, System.Globalization.CultureInfo.InvariantCulture)
             .Should().BeApproximately(0.4, 0.0001, because: "tint round-trips");
         colors[0].Attribute("rgb").Should().BeNull(because: "theme color must not be duplicated as rgb");
         // Max: theme=5, no tint
-        colors[1].Attribute("theme")?.Value.Should().Be("5");
+        colors[1].Attribute("theme")!.Value.Should().Be("5");
         colors[1].Attribute("tint").Should().BeNull(because: "no tint was specified");
     }
 
@@ -150,13 +150,9 @@ public sealed class ColorScaleAdvancedOptionsTests
         rule.MaxColor.Should().Be(new RgbColor(69, 131, 193));
     }
 
-    [Fact]
-    public void RoundTrip_ColorScaleIndexedColors_WritesTintedResolvedRgbColors()
+    private static XElement[] SavedColorScaleColors(Workbook workbook)
     {
-        using var source = CreateXlsxWithIndexedColorScaleColors();
-        var workbook = new XlsxFileAdapter().Load(source);
         using var saved = new MemoryStream();
-
         new XlsxFileAdapter().Save(workbook, saved);
 
         var colors = XlsxPackageTestHelper.ReadWorksheetXml(saved)
@@ -167,9 +163,58 @@ public sealed class ColorScaleAdvancedOptionsTests
             .Elements(MainNs + "color")
             .ToArray();
         colors.Should().HaveCount(3);
-        colors[0].Attribute("rgb")?.Value.Should().Be(ToArgb(new RgbColor(19, 120, 221)));
-        colors[1].Attribute("rgb")?.Value.Should().Be(ToArgb(new RgbColor(10, 20, 30)));
-        colors[2].Attribute("rgb")?.Value.Should().Be(ToArgb(new RgbColor(91, 131, 171)));
+        return colors;
+    }
+
+    /// <summary>
+    /// r357: replaces RoundTrip_ColorScaleIndexedColors_WritesTintedResolvedRgbColors, which asserted
+    /// through a <c>?.</c> chain and so never ran. It was wrong in both directions: it expected an
+    /// UNEDITED rule's indexed colors to be flattened to rgb, and the value it expected for the max
+    /// stop (91,131,171) is not what the palette resolves to (69,131,193) -- as the sibling load test
+    /// asserts and passes. Nothing caught either, because the assertion could not execute.
+    ///
+    /// <para>Preserving the source's own indexed/tint spelling for an untouched rule is the correct
+    /// behaviour: it is what Excel leaves on disk, and it is the source-preservation rule this
+    /// codebase applies everywhere else. So both real contracts are pinned here instead.</para>
+    /// </summary>
+    [Fact]
+    public void RoundTrip_UneditedColorScaleIndexedColors_KeepsTheSourceSpelling()
+    {
+        using var source = CreateXlsxWithIndexedColorScaleColors();
+        var workbook = new XlsxFileAdapter().Load(source);
+
+        var colors = SavedColorScaleColors(workbook);
+
+        colors[0].Attribute("indexed")!.Value.Should().Be("12");
+        colors[0].Attribute("tint")!.Value.Should().Be("-0.25");
+        colors[1].Attribute("indexed")!.Value.Should().Be("13");
+        colors[2].Attribute("indexed")!.Value.Should().Be("14");
+        colors[2].Attribute("tint")!.Value.Should().Be("0.2");
+
+        colors.Should().AllSatisfy(color =>
+            color.Attribute("rgb").Should().BeNull(
+                "an untouched indexed color keeps its own spelling rather than being flattened"));
+    }
+
+    [Fact]
+    public void RoundTrip_EditedColorScaleColor_WritesResolvedRgbForEveryStop()
+    {
+        using var source = CreateXlsxWithIndexedColorScaleColors();
+        var workbook = new XlsxFileAdapter().Load(source);
+        workbook.GetSheetAt(0).ConditionalFormats[0].MinColor = new RgbColor(200, 100, 50);
+
+        var colors = SavedColorScaleColors(workbook);
+
+        // The edited stop carries the new value, and the two untouched stops are written as the
+        // palette actually resolves them -- the max being 69,131,193, which is the number the old
+        // assertion got wrong.
+        colors[0].Attribute("rgb")!.Value.Should().Be(ToArgb(new RgbColor(200, 100, 50)));
+        colors[1].Attribute("rgb")!.Value.Should().Be(ToArgb(new RgbColor(10, 20, 30)));
+        colors[2].Attribute("rgb")!.Value.Should().Be(ToArgb(new RgbColor(69, 131, 193)));
+
+        colors.Should().AllSatisfy(color =>
+            color.Attribute("indexed").Should().BeNull(
+                "an edited rule is written from the model, so no stop keeps a stale indexed spelling"));
     }
 
     private static MemoryStream CreateXlsxWithColorScaleGteThresholds()
@@ -305,4 +350,5 @@ public sealed class ColorScaleAdvancedOptionsTests
         $"FF{color.R:X2}{color.G:X2}{color.B:X2}";
 
     private static readonly XNamespace MainNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
 }

@@ -17,7 +17,7 @@ namespace FreeX.Core.IO;
 /// </list>
 /// Single sheet, values only (numbers, text, booleans, errors). No formulas, formats, or structure.
 /// </summary>
-public sealed class DifFileAdapter : IFileAdapter
+public sealed class DifFileAdapter : IFileAdapter, ISingleSheetFileAdapter
 {
     private const int BeginningOfTuple = -1; // "-1,0" with a BOT/EOD indicator
     private const int NumericTypeId = 0;     // "0,<value>" numeric data
@@ -43,7 +43,17 @@ public sealed class DifFileAdapter : IFileAdapter
         // Skip the header: advance to the line after the "DATA" topic's 3-line chunk.
         var i = SkipToDataSection(lines);
         if (i < 0)
-            return workbook;
+        {
+            // r452: no DATA topic at all. Every DIF file has one -- the header (TABLE, VECTORS,
+            // TUPLES) is followed by DATA even when the table holds zero rows -- so its absence means
+            // this is not a DIF file, or was truncated before its contents began. Returning an empty
+            // workbook here meant any text file whatsoever "opened" as a blank sheet, and a save then
+            // wrote that over the original. Sibling of the SYLK guard in the same round.
+            throw new InvalidDataException(
+                "This file is not a Data Interchange Format (.dif) document: it has no DATA section. " +
+                "Opening it would show an empty workbook and saving would overwrite the original " +
+                "with that.");
+        }
 
         uint row = 0;
         uint col = 0;

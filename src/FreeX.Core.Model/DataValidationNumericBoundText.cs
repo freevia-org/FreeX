@@ -71,7 +71,17 @@ public static class DataValidationNumericBoundText
 
     private static bool TryParseCore(string? text, CultureInfo culture, out double value)
     {
+        // double.TryParse has not thrown on magnitude overflow since .NET Core: it returns true
+        // with +/-Infinity, and it also accepts the culture's literal NaN/Infinity symbols. Styles
+        // constrains a bound's SPELLING, never its SIZE, and HasValidGroupingShape says in its own
+        // summary that "finite-value policy remain the caller's responsibility" (it returns true
+        // outright for any text carrying no grouping separator, which "1E+400" does not). Excel has
+        // no non-finite number and rejects such a bound outright, so a bound that is not finite is
+        // not a bound -- failing here leaves NormalizeNumericFormulaForSave's untouched-passthrough
+        // branch to keep the original text, instead of persisting the literal "Infinity"/"NaN" that
+        // ToInvariantString would otherwise round-trip into formula1/formula2 on disk (r577).
         if (double.TryParse(text, Styles, culture, out value) &&
+            double.IsFinite(value) &&
             NumericTextGroupingValidator.HasValidGroupingShape(text, culture))
             return true;
 

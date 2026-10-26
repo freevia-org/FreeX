@@ -32,7 +32,7 @@ public sealed class R176_OdsOpenFormulaNamespaceTests
         });
 
         var root = content.Root!;
-        // NOT `Attribute(...)?.Value.Should()` -- the null-conditional makes the whole assertion a
+        // NOT `Attribute(...)!.Value.Should()` -- the null-conditional makes the whole assertion a
         // no-op precisely when the attribute is missing, which is the case under test.
         var declaration = root.Attribute(XNamespace.Xmlns + "of");
         declaration.Should().NotBeNull(

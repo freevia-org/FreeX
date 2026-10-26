@@ -14,17 +14,16 @@ public sealed partial class MainWindowXamlKeyTipTests
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-        XNamespace keyboardNavigation = "clr-namespace:System.Windows.Input;assembly=PresentationFramework";
 
         var ribbonTabs = document
             .Descendants(presentation + "TabControl")
             .Single(element => element.Attribute(x + "Name")?.Value == "RibbonTabs");
 
-        ribbonTabs.Attribute("Focusable")?.Value.Should().Be("True");
-        ribbonTabs.Attribute("IsTabStop")?.Value.Should().Be("True");
-        ribbonTabs.Attribute(keyboardNavigation + "KeyboardNavigation.TabNavigation")?.Value.Should().Be("Continue");
-        ribbonTabs.Attribute(keyboardNavigation + "KeyboardNavigation.ControlTabNavigation")?.Value.Should().Be("Continue");
-        ribbonTabs.Attribute(keyboardNavigation + "KeyboardNavigation.DirectionalNavigation")?.Value.Should().Be("Contained");
+        ribbonTabs.Attribute("Focusable")!.Value.Should().Be("True");
+        ribbonTabs.Attribute("IsTabStop")!.Value.Should().Be("True");
+        ribbonTabs.Attribute("KeyboardNavigation.TabNavigation")!.Value.Should().Be("Continue");
+        ribbonTabs.Attribute("KeyboardNavigation.ControlTabNavigation")!.Value.Should().Be("Continue");
+        ribbonTabs.Attribute("KeyboardNavigation.DirectionalNavigation")!.Value.Should().Be("Contained");
     }
 
     [Fact]

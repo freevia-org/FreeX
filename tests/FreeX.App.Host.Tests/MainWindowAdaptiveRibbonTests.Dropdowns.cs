@@ -8,6 +8,7 @@ using FreeX.Core.Commands;
 using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using Free.Shared.Ribbon.Wpf;
 using Microsoft.Extensions.Logging.Abstractions;
 using FluentAssertions;
 
@@ -15,14 +16,13 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class MainWindowAdaptiveRibbonTests
 {
-    // Commands that own a dropdown menu in the declarative ribbon (Paste, Orientation) get the split-button
+    // Commands that own a dropdown menu in the declarative ribbon get the split-button
     // treatment: exactly one actionable chevron, a routed dropdown zone, and the split hover highlight.
-    // (Live-ribbon note: AutoSum and Sort & Filter render as plain commands here -- they do not own an
-    // inline dropdown menu, so they correctly carry no split chevron and are covered by the negative case
-    // below and by RibbonMenuButtons_AllTabsUseSplitDropdownTreatment.)
     [Theory]
     [InlineData("Paste")]
     [InlineData("Orientation")]
+    [InlineData("AutoSum")]
+    [InlineData("Sort & Filter")]
     public void RibbonMenuButtons_ShowActionableDropdownGlyph(string title)
     {
         StaTestRunner.Run(() =>
@@ -38,16 +38,16 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 $"{title} should not keep the old decorative glyph after it receives a real dropdown target");
             harness.VisibleRibbonButtonHasDropdownChevron(title).Should().BeTrue(
                 $"{title} should expose a real dropdown hit target when it owns a menu");
-            harness.VisibleRibbonButtonHasDropdownZoneHandler(title).Should().BeTrue(
-                $"{title} should route clicks on the chevron zone to its menu");
-            harness.VisibleRibbonButtonHasDropdownZoneHighlight(title).Should().BeTrue(
-                $"{title} should show a split-button hover affordance for its main and menu zones");
+            harness.VisibleRibbonButtonHasDropdownZoneHandlerOrDedicatedCompanion(title).Should().BeTrue(
+                $"{title} should route its dropdown affordance to its menu");
+            harness.VisibleRibbonButtonHasDropdownZoneHighlightOrDedicatedCompanion(title).Should().BeTrue(
+                $"{title} should show either a split-zone hover affordance or a dedicated dropdown companion");
         });
     }
 
     [Theory]
-    [InlineData("AutoSum")]
-    [InlineData("Sort & Filter")]
+    [InlineData("Percent Style")]
+    [InlineData("Wrap Text")]
     public void RibbonPlainCommands_DoNotShowSplitDropdownGlyph(string title)
     {
         StaTestRunner.Run(() =>
@@ -93,6 +93,41 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             harness.HorizontalDropdownZoneClearsCommandLabel("Paste")
                 .Should()
                 .BeTrue("the split-button separator should sit below the visible label instead of slicing through it");
+        });
+    }
+
+    [Fact]
+    public void RibbonSplitButtonDropdownCompanion_UsesWholeButtonAsDropdownZone()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Home", 1465);
+            if (!harness.CanUseRequestedWidth(1465))
+                return;
+
+            var dropdown = harness.ActiveRibbonButtonByCommandName("Paste.Dropdown");
+            dropdown.Should().NotBeNull();
+            dropdown!.ContextMenu.Should().NotBeNull();
+            RibbonMetadata.GetDropdownZoneHandlerAttached(dropdown).Should().BeFalse(
+                "the dedicated dropdown companion already routes its whole surface to the menu");
+            RibbonMetadata.GetDropdownZoneHighlightAttached(dropdown).Should().BeFalse(
+                "the companion must not split its 20px menu strip into primary and dropdown sub-zones");
+
+            var dropdownBounds = GetRibbonDropdownZoneBounds(dropdown);
+            dropdownBounds.X.Should().Be(0);
+            dropdownBounds.Y.Should().Be(0);
+            dropdownBounds.Width.Should().Be(dropdown.ActualWidth);
+            dropdownBounds.Height.Should().Be(dropdown.ActualHeight);
+
+            WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(dropdown)
+                .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(dropdown))
+                .OfType<TextBlock>()
+                .Distinct()
+                .Where(RibbonMetadata.IsCommandLabel)
+                .Should()
+                .BeEmpty("the Paste label belongs only to the primary half of the split button");
         });
     }
 

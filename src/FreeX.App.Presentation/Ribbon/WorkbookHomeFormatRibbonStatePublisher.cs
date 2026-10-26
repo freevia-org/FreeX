@@ -29,5 +29,6 @@ public static class WorkbookHomeFormatRibbonStatePublisher
         stateStore.SetChecked("Wrap Text", state.WrapText);
         stateStore.SetValue("Font", state.FontName);
         stateStore.SetValue("Font Size", state.FontSizeText);
+        stateStore.SetValue("Number Format", state.NumberFormatText);
     }
 }

@@ -15,6 +15,7 @@ public partial class MainWindow
     private const string RibbonDropdownMainHoverPartName = "PART_RibbonDropdownMainHover";
     private const string RibbonDropdownMenuHoverPartName = "PART_RibbonDropdownMenuHover";
     private const string RibbonDropdownContentPartName = "PART_RibbonDropdownContent";
+    private const string RibbonSplitDropdownCommandSuffix = ".Dropdown";
     private const double RibbonSplitButtonIconColumnWidth = 24;
     private const double RibbonSplitButtonDropdownColumnWidth = 14;
     private const double RibbonSplitButtonLabeledDropdownColumnWidth = 20;
@@ -35,10 +36,17 @@ public partial class MainWindow
             }
 
             EnsureRibbonDropdownChevron(button);
+            if (IsDedicatedRibbonSplitDropdownButton(button))
+                continue;
+
             EnsureRibbonDropdownZoneHandler(button);
             EnsureRibbonDropdownZoneHighlight(button);
         }
     }
+
+    private static bool IsDedicatedRibbonSplitDropdownButton(ButtonBase button) =>
+        RibbonMetadata.TryGetCommandName(button, out var commandName) &&
+        commandName.EndsWith(RibbonSplitDropdownCommandSuffix, StringComparison.Ordinal);
 
     internal static void EnsureRibbonDropdownChevron(ButtonBase button)
     {
@@ -515,6 +523,12 @@ public partial class MainWindow
         var height = button.ActualHeight;
         if (width <= 0 || height <= 0)
             return false;
+
+        if (IsDedicatedRibbonSplitDropdownButton(button))
+        {
+            bounds = new Rect(0, 0, width, height);
+            return true;
+        }
 
         var layout = GetRibbonDropdownZoneLayout(button);
         if (layout is not (RibbonCommandContentLayout.Large or RibbonCommandContentLayout.Medium) &&

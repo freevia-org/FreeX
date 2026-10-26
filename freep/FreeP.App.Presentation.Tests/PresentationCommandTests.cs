@@ -476,7 +476,23 @@ public sealed class PresentationCommandTests
         bus.Redo();
 
         var redoDuplicateId = p.Slides[1].Id;
-        redoDuplicateId.Should().NotBe(firstDuplicateId);
+
+        // r458: this line previously asserted the redone duplicate got a DIFFERENT id. That was an
+        // observation written down while fixing section membership (commit "Preserve section
+        // membership when duplicating slides"), not a decision about identity -- it carries no
+        // rationale, and the sibling app documents the opposite choice with one.
+        //
+        // Slide identity is load-bearing here: hyperlinks store TargetSlideId, and this very file's
+        // delete path snapshots and restores links whose target id disappears. So duplicate -> link
+        // to the duplicate -> undo twice -> redo twice left the link pointing at an id that no
+        // longer existed, while the slide sat visibly in the deck. FreeX's AddSheetCommand keeps its
+        // sheet id across redo for exactly this reason (R16), and r457 brought the same fix to its
+        // pivot sibling.
+        redoDuplicateId.Should().Be(
+            firstDuplicateId,
+            "a redone duplicate must be the same slide, or every hyperlink that targeted it dangles");
+
+        // The test's actual subject, unchanged: section membership follows the duplicate.
         p.Sections[0].SlideIds.Should().Equal(sourceId, redoDuplicateId, followingId);
     }
 

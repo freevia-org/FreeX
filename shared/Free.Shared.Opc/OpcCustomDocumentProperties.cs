@@ -71,11 +71,14 @@ public sealed class OpcCustomDocumentProperties
             ?? property?.Element(VariantTypesNamespace + "lpwstr")?.Value
             ?? property?.Element(VariantTypesNamespace + "lpstr")?.Value;
 
+        // r550: a custom document property is file-controlled, and an overflowing literal parses as
+        // true with Infinity. Report it as absent, which is this method's existing contract.
         return double.TryParse(
             value,
             NumberStyles.Float,
             CultureInfo.InvariantCulture,
             out var parsed)
+            && double.IsFinite(parsed)
             ? parsed
             : null;
     }

@@ -37,7 +37,7 @@ public sealed class R63_ChartSeriesDataLabelDeleteRoundTripTests
 
         var seriesDLbls = chartXml.Descendants(ChartNs + "ser").Single().Element(ChartNs + "dLbls");
         seriesDLbls.Should().NotBeNull("the series-level delete-all override must be written back out");
-        seriesDLbls!.Element(ChartNs + "delete")?.Attribute("val")?.Value.Should().Be(
+        seriesDLbls!.Element(ChartNs + "delete")?.Attribute("val")!.Value.Should().Be(
             "1", "the series' \"hide all data labels\" flag must round-trip as <c:delete val=\"1\"/>");
         seriesDLbls.Element(ChartNs + "showVal").Should().BeNull(
             "CT_DLbls' trailing content is delete XOR the Group_DLbls defaults -- a delete-only "
@@ -72,7 +72,7 @@ public sealed class R63_ChartSeriesDataLabelDeleteRoundTripTests
         seriesDLbls.Should().NotBeNull();
         seriesDLbls!.Element(ChartNs + "delete").Should().BeNull(
             "a non-deleted series format must not emit <c:delete>");
-        seriesDLbls.Element(ChartNs + "showVal")?.Attribute("val")?.Value.Should().Be("1");
+        seriesDLbls.Element(ChartNs + "showVal")?.Attribute("val")!.Value.Should().Be("1");
 
         saved.Position = 0;
         var loadedChart = new XlsxFileAdapter().Load(saved).GetSheetAt(0).Charts.Should().ContainSingle().Subject;

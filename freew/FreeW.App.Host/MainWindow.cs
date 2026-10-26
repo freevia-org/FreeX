@@ -166,6 +166,9 @@ public sealed partial class MainWindow : Window
     // The grey "desk" the Print-Layout page floats on. Frozen so it can back the editor cheaply.
     private static readonly Brush WorkspaceBrush = CreateWorkspaceBrush();
     private Border _workspace = null!;
+    // The workspace owns document scrolling. Keeping it outside DocumentView lets the grey desk and
+    // every visual page move as one surface instead of leaving a scrollbar inside the white page.
+    private ScrollViewer _workspaceScroller = null!;
 
     private static Brush CreateWorkspaceBrush()
     {
@@ -673,9 +676,18 @@ public sealed partial class MainWindow : Window
         editorOverlayHost.Children.Add(floatingCanvas);
         editor.SetFloatingCanvas(floatingCanvas);
 
-        Grid.SetRow(editorOverlayHost, 1);
-        Grid.SetColumn(editorOverlayHost, 1);
-        workspaceGrid.Children.Add(editorOverlayHost);
+        _workspaceScroller = new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            CanContentScroll = false,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            VerticalContentAlignment = VerticalAlignment.Top,
+            Content = editorOverlayHost
+        };
+        Grid.SetRow(_workspaceScroller, 1);
+        Grid.SetColumn(_workspaceScroller, 1);
+        workspaceGrid.Children.Add(_workspaceScroller);
 
         // Balloon strip (col 2, rows 0+1): hosts the BalloonOverlay canvas. Width=0 when disabled;
         // opens to 200px when Show Markup > Show Revisions in Balloons is toggled on.

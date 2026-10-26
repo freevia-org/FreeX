@@ -21,7 +21,7 @@ namespace FreeX.Core.IO;
 /// inside a value is escaped by doubling. Formulas are R1C1 and reuse the shared
 /// <see cref="R1C1FormulaConverter"/>.
 /// </summary>
-public sealed class SlkFileAdapter : IFileAdapter
+public sealed class SlkFileAdapter : IFileAdapter, ISingleSheetFileAdapter
 {
     public string Extension => ".slk";
     public string FormatName => "SYLK (Symbolic Link)";
@@ -57,6 +57,7 @@ public sealed class SlkFileAdapter : IFileAdapter
         uint curRow = 1, curCol = 1;
         var rowLimitExceeded = false;
         var colLimitExceeded = false;
+        var sawSylkRecord = false;
 
         string? line;
         while ((line = ReadLogicalLine(reader)) is not null)
@@ -67,6 +68,15 @@ public sealed class SlkFileAdapter : IFileAdapter
             var fields = SplitFields(line);
             if (fields.Count == 0)
                 continue;
+
+            // r452: SYLK is a record format -- every line begins with a record letter. Any text file
+            // whatsoever previously "loaded" as an empty workbook, because unrecognised lines are
+            // skipped and nothing ever asked whether ANY line was a SYLK record. The user opened a
+            // file that is not SYLK, saw an empty grid, and a save wrote an empty .slk over it.
+            // Tracked rather than requiring the ID header specifically: the spec puts ID first, but
+            // real writers vary, and rejecting a file that plainly IS SYLK would be the worse error.
+            if (RecognisedRecordIds.Contains(fields[0]))
+                sawSylkRecord = true;
 
             switch (fields[0])
             {
@@ -94,7 +104,27 @@ public sealed class SlkFileAdapter : IFileAdapter
             }
         }
 
+        EnsureSylkRecordsWereSeen(sawSylkRecord);
         return new XlsxLoadResult(workbook, BuildGridLimitWarnings(sheet, rowLimitExceeded, colLimitExceeded));
+    }
+
+    /// <summary>
+    /// r452: the record ids a SYLK file can legitimately open with. Deliberately generous -- anything
+    /// this reader skips as "carries no cell data we model" still counts as evidence the file IS
+    /// SYLK, because the guard exists to reject files that are not SYLK at all, not to police which
+    /// records a writer chose to emit.
+    /// </summary>
+    private static readonly HashSet<string> RecognisedRecordIds =
+        new(StringComparer.Ordinal) { "ID", "B", "O", "P", "F", "C", "E", "NU", "NE", "NN", "W" };
+
+    private static void EnsureSylkRecordsWereSeen(bool sawSylkRecord)
+    {
+        if (sawSylkRecord)
+            return;
+
+        throw new InvalidDataException(
+            "This file is not a SYLK (.slk) document: it contains no SYLK records. Opening it would " +
+            "show an empty workbook and saving would overwrite the original with that.");
     }
 
     /// <summary>

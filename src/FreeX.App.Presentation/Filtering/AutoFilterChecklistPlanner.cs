@@ -224,8 +224,15 @@ public static class AutoFilterChecklistPlanner
         if (dateSortOverrides.TryGetValue(value, out var overrideTicks))
             return new SortKey(1, overrideTicks);
 
-        if (double.TryParse(value, NumberStyles.Float, CultureInfo.CurrentCulture, out var number) ||
-            double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out number))
+        // r556: IsFinite as well. NumberStyles.Float accepts the literal "NaN" and "Infinity",
+        // and an overflowing literal parses successfully, so a TEXT cell reading "NaN" landed in
+        // this numeric bucket and sorted among the numbers -- NaN and -Infinity ahead of every
+        // real one. Excel does not parse those tokens as numbers at all: typing NaN yields text,
+        // and its filter list sorts it with the other text. Falling through to the text bucket
+        // below is what this method already does for anything it cannot read as a number.
+        if ((double.TryParse(value, NumberStyles.Float, CultureInfo.CurrentCulture, out var number)
+                || double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out number))
+            && double.IsFinite(number))
         {
             return new SortKey(0, number);
         }

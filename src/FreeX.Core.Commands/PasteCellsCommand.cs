@@ -138,6 +138,14 @@ public sealed class PasteCellsCommand : IWorkbookCommand, IEstimatesMemory
             affected.Add(addr);
         }
 
+        // r221 decided this AFTER the loop, on the record of what it did, and stated the limit it
+        // could not cover: it caught "there was nothing to paste", not "the pasted values equalled
+        // what was already there". r234 built the missing half -- MatchesCurrent re-checks each
+        // undo snapshot against the live sheet -- so the limit is now closed and pasting a range
+        // over an identical one is reported for what it is.
+        if (affected.Count == 0 || _snapshot.TrueForAll(entry => entry.MatchesCurrent(sheet)))
+            return new CommandOutcome(true, IsNoOp: true);
+
         return new CommandOutcome(true, AffectedCells: affected);
     }
 
@@ -206,6 +214,12 @@ public sealed class PasteMergedRegionsCommand : IWorkbookCommand
             targetSheet.AddMergedRegion(mapped);
             _addedRegions.Add(mapped);
         }
+
+        // r221: the code above already documents the gesture -- "a destination that already overlaps an
+        // existing merge is left alone" -- so pasting merges onto an already-merged destination adds
+        // nothing. _addedRegions is the exact record of what was added, so an empty one is proof.
+        if (_addedRegions.Count == 0)
+            return new CommandOutcome(true, IsNoOp: true);
 
         return new CommandOutcome(true, AffectedCells: _addedRegions.SelectMany(r => r.AllCells()).Distinct().ToList());
     }

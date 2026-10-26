@@ -33,6 +33,7 @@ public sealed partial class MainWindow
     internal bool IsSideToSidePreviewActive => _viewSession.CurrentDepth.IsSideToSideActive;
     internal string? ViewDepthLimitation => _viewSession.CurrentDepth.Limitation;
     internal bool IsWorkspaceShowingLiveEditor => ReferenceEquals(_workspace.Child, _liveWorkspaceContent);
+    internal ScrollViewer? WorkspaceScrollerForTests => _scroller;
 
     /// <summary>
     /// Whether the live editor is on screen at all — directly under the workspace, or nested inside a

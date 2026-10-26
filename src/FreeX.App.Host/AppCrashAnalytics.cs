@@ -51,6 +51,21 @@ public interface ICrashAnalytics : IDisposable
     void CaptureCrash(Exception exception, string source);
 
     bool SendTestReport();
+
+    /// <summary>
+    /// Applies the Trust Center's "send opt-in crash reports" choice for the REST OF THIS SESSION.
+    ///
+    /// r196: the opt-in used to be read once, at Initialize, and the Options checkbox carried no
+    /// restart notice. Unticking it therefore changed nothing until the app was restarted -- the
+    /// user withdrew consent and reports kept being sent, which is the one direction that must
+    /// never lag. Every other side effect the Options commit handler drives (gridlines, headings,
+    /// the QAT, calculation mode) already takes effect immediately; this now does too.
+    ///
+    /// Turning it back ON mid-session re-enables reporting only if the SDK was initialised at
+    /// startup. It is not re-initialised here, because that would need the DSN and environment
+    /// again and the failure mode of getting it wrong is sending data the user did not ask to send.
+    /// </summary>
+    void ApplyOptIn(bool enabled);
 }
 
 public sealed class DisabledCrashAnalytics : ICrashAnalytics
@@ -68,6 +83,11 @@ public sealed class DisabledCrashAnalytics : ICrashAnalytics
     }
 
     public bool SendTestReport() => false;
+
+    // r196: nothing to apply -- this implementation never sends anything either way.
+    public void ApplyOptIn(bool enabled)
+    {
+    }
 
     public void Dispose()
     {

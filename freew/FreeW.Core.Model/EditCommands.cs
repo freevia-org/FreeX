@@ -33,13 +33,19 @@ public sealed class DeleteParagraphCommand(int index) : IDocumentCommand
 
     public void Apply(IDocumentCommandContext context)
     {
+        // r525: the index was captured when this command was constructed; the document can have
+        // changed before Apply runs, and both the read and the RemoveAt throw on a stale one.
+        if (index < 0 || index >= context.Document.Blocks.Count)
+            return;
         _removed = context.Document.Blocks[index];
         context.Document.Blocks.RemoveAt(index);
     }
 
     public void Revert(IDocumentCommandContext context)
     {
-        if (_removed is not null)
+        // Insert accepts index == Count (append) but throws beyond it, so the upper bound is
+        // inclusive here rather than exclusive.
+        if (_removed is not null && index >= 0 && index <= context.Document.Blocks.Count)
             context.Document.Blocks.Insert(index, _removed);
     }
 }
@@ -128,9 +134,13 @@ public sealed class SetParagraphFormattingCommand(int index, ParagraphFormatting
 
     public string Label => "Paragraph Formatting";
 
+    // r205 census, fixed r206: an equal-value setter -- see SetCellShadingCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        TryGetParagraph(context, index, out var target) && target.Formatting != formatting;
+
     public void Apply(IDocumentCommandContext context)
     {
-        var paragraph = ParagraphAt(context, index);
+        if (!TryGetParagraph(context, index, out var paragraph)) return;
         _previous = paragraph.Formatting;
         _previousRevision = paragraph.ParagraphFormatRevision;
         _previousPreservedNumbering = paragraph.PreservedNumbering;
@@ -162,7 +172,7 @@ public sealed class SetParagraphFormattingCommand(int index, ParagraphFormatting
     {
         if (_previous is not null)
         {
-            var paragraph = ParagraphAt(context, index);
+            if (!TryGetParagraph(context, index, out var paragraph)) return;
             paragraph.Formatting = _previous;
             paragraph.ParagraphFormatRevision = _previousRevision;
             if (_clearedPreservedNumbering)
@@ -170,8 +180,17 @@ public sealed class SetParagraphFormattingCommand(int index, ParagraphFormatting
         }
     }
 
-    private static Paragraph ParagraphAt(IDocumentCommandContext context, int index) =>
-        (Paragraph)context.Document.Blocks[index];
+    // r521: sibling of r520's TryGetTable. Same unchecked cast, and worse placed -- HasEffect
+    // called it, so the gate the bus consults BEFORE Apply threw on a stale index instead of
+    // reporting "nothing to do".
+    internal static bool TryGetParagraph(IDocumentCommandContext context, int index, out Paragraph paragraph)
+    {
+        paragraph = null!;
+        if (index < 0 || index >= context.Document.Blocks.Count) return false;
+        if (context.Document.Blocks[index] is not Paragraph found) return false;
+        paragraph = found;
+        return true;
+    }
 }
 
 /// <summary>
@@ -186,9 +205,13 @@ public sealed class SetParagraphStyleCommand(int index, string? styleId) : IDocu
 
     public string Label => "Apply Style";
 
+    // r205 census, fixed r206: an equal-value setter -- see SetCellShadingCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        TryGetParagraph(context, index, out var target) && target.StyleId != styleId;
+
     public void Apply(IDocumentCommandContext context)
     {
-        var paragraph = ParagraphAt(context, index);
+        if (!TryGetParagraph(context, index, out var paragraph)) return;
         _previous = paragraph.StyleId;
         paragraph.StyleId = styleId;
         _applied = true;
@@ -196,12 +219,21 @@ public sealed class SetParagraphStyleCommand(int index, string? styleId) : IDocu
 
     public void Revert(IDocumentCommandContext context)
     {
-        if (_applied)
-            ParagraphAt(context, index).StyleId = _previous;
+        if (_applied && TryGetParagraph(context, index, out var styleTarget))
+            styleTarget.StyleId = _previous;
     }
 
-    private static Paragraph ParagraphAt(IDocumentCommandContext context, int index) =>
-        (Paragraph)context.Document.Blocks[index];
+    // r521: sibling of r520's TryGetTable. Same unchecked cast, and worse placed -- HasEffect
+    // called it, so the gate the bus consults BEFORE Apply threw on a stale index instead of
+    // reporting "nothing to do".
+    private static bool TryGetParagraph(IDocumentCommandContext context, int index, out Paragraph paragraph)
+    {
+        paragraph = null!;
+        if (index < 0 || index >= context.Document.Blocks.Count) return false;
+        if (context.Document.Blocks[index] is not Paragraph found) return false;
+        paragraph = found;
+        return true;
+    }
 }
 
 /// <summary>
@@ -259,7 +291,10 @@ public sealed class SetRunFormattingCommand(int paragraphIndex, int runIndex, Ru
 
     public void Apply(IDocumentCommandContext context)
     {
-        var run = ((Paragraph)context.Document.Blocks[paragraphIndex]).Runs[runIndex];
+        if (!SetParagraphFormattingCommand.TryGetParagraph(context, paragraphIndex, out var runOwner)
+            || runIndex < 0 || runIndex >= runOwner.Runs.Count)
+            return;
+        var run = runOwner.Runs[runIndex];
         _previous = run.Formatting;
         _previousRevision = run.FormatRevision;
         run.Formatting = formatting;
@@ -275,7 +310,10 @@ public sealed class SetRunFormattingCommand(int paragraphIndex, int runIndex, Ru
     {
         if (_previous is not null)
         {
-            var run = ((Paragraph)context.Document.Blocks[paragraphIndex]).Runs[runIndex];
+            if (!SetParagraphFormattingCommand.TryGetParagraph(context, paragraphIndex, out var runOwner)
+            || runIndex < 0 || runIndex >= runOwner.Runs.Count)
+            return;
+        var run = runOwner.Runs[runIndex];
             run.Formatting = _previous;
             run.FormatRevision = _previousRevision;
         }
@@ -298,7 +336,7 @@ public sealed class ReplaceParagraphRunsCommand(int paragraphIndex, Action<Parag
 
     public void Apply(IDocumentCommandContext context)
     {
-        var paragraph = (Paragraph)context.Document.Blocks[paragraphIndex];
+        if (!SetParagraphFormattingCommand.TryGetParagraph(context, paragraphIndex, out var paragraph)) return;
         _previous = [.. paragraph.Runs];
         _previousDropCap = paragraph.DropCap;
         rebuild(paragraph);
@@ -308,7 +346,7 @@ public sealed class ReplaceParagraphRunsCommand(int paragraphIndex, Action<Parag
     {
         if (_previous is null)
             return;
-        var paragraph = (Paragraph)context.Document.Blocks[paragraphIndex];
+        if (!SetParagraphFormattingCommand.TryGetParagraph(context, paragraphIndex, out var paragraph)) return;
         var runs = paragraph.Runs;
         runs.Clear();
         runs.AddRange(_previous);
@@ -421,7 +459,7 @@ public sealed class InsertTableRowCommand(int blockIndex, int rowIndex) : IDocum
 
     public void Apply(IDocumentCommandContext context)
     {
-        var table = TableAt(context, blockIndex);
+        if (!TryGetTable(context, blockIndex, out var table)) return;
         var at = Math.Clamp(rowIndex, 0, table.Rows.Count);
 
         // Compute the total grid width from the first row (or ColumnCount fallback).
@@ -468,12 +506,27 @@ public sealed class InsertTableRowCommand(int blockIndex, int rowIndex) : IDocum
     {
         if (_appliedAt < 0)
             return;
-        TableAt(context, blockIndex).Rows.RemoveAt(_appliedAt);
+        if (!TryGetTable(context, blockIndex, out var revertTable)) return;
+        revertTable.Rows.RemoveAt(_appliedAt);
         _appliedAt = -1;
     }
 
-    internal static Table TableAt(IDocumentCommandContext context, int index) =>
-        (Table)context.Document.Blocks[index];
+    /// <summary>
+    /// r520: the validating counterpart of TryGetCell, which the cell commands in this file have
+    /// always used. The row commands reached the same blocks through an unchecked cast --
+    /// (Table)context.Document.Blocks[index] -- which throws ArgumentOutOfRangeException on a
+    /// stale index and InvalidCastException when the block is no longer a table. FreeW's bus does
+    /// NOT wrap Apply (FreeX and FreeP both do), so such a throw escapes the command layer
+    /// entirely. Same family, same exposure, opposite defensiveness; this closes that gap.
+    /// </summary>
+    internal static bool TryGetTable(IDocumentCommandContext context, int index, out Table table)
+    {
+        table = null!;
+        if (index < 0 || index >= context.Document.Blocks.Count) return false;
+        if (context.Document.Blocks[index] is not Table found) return false;
+        table = found;
+        return true;
+    }
 }
 
 /// <summary>
@@ -511,7 +564,7 @@ public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocum
 
     public void Apply(IDocumentCommandContext context)
     {
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         if (table.Rows.Count <= 1 || rowIndex < 0 || rowIndex >= table.Rows.Count)
             return;
 
@@ -583,7 +636,14 @@ public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocum
 
         if (_removed is null || _removedAt < 0)
             return;
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
+
+        // r526: _removedAt was captured during Apply. Only its lower bound was checked, and
+        // List.Insert throws once it exceeds Count -- so a table that lost rows between Apply and
+        // Revert turned undo into an exception. The sibling reverts in this file and in both other
+        // apps already clamp (Math.Clamp/Math.Min); this one did not.
+        if (_removedAt > table.Rows.Count)
+            return;
 
         // Re-insert the removed row first so that the row indices in _promoted are valid.
         table.Rows.Insert(_removedAt, _removed);
@@ -626,7 +686,7 @@ public sealed class InsertTableColumnCommand(int blockIndex, int columnIndex) : 
 
     public void Apply(IDocumentCommandContext context)
     {
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         _appliedAt = Math.Max(columnIndex, 0);
         var actions = new List<(TableRow, TableCell, bool)>(table.Rows.Count);
         foreach (var row in table.Rows)
@@ -688,7 +748,7 @@ public sealed class InsertTableColumnCommand(int blockIndex, int columnIndex) : 
                 row.Cells.Remove(cell);  // remove the inserted cell by reference
         }
         _actions = null;
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         if (table.ColumnWidthsPt.Count > 0)
         {
             var removeAt = Math.Clamp(_appliedAt, 0, table.ColumnWidthsPt.Count - 1);
@@ -715,7 +775,7 @@ public sealed class DeleteTableColumnCommand(int blockIndex, int columnIndex) : 
 
     public void Apply(IDocumentCommandContext context)
     {
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         // Guard: need at least one grid column to delete, and columnIndex must be valid.
         if (columnIndex < 0)
             return;
@@ -768,7 +828,7 @@ public sealed class DeleteTableColumnCommand(int blockIndex, int columnIndex) : 
     {
         if (_removed is null)
             return;
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         foreach (var (rowIndex, cell, wasSpanDecrement) in _removed)
         {
             var cells = table.Rows[rowIndex].Cells;
@@ -846,7 +906,7 @@ public sealed class CarryMergedCellContentCommand(
 
     public void Apply(IDocumentCommandContext context)
     {
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         if (rowIndex < 0 || rowIndex >= table.Rows.Count)
             return;
 
@@ -895,7 +955,7 @@ public sealed class CarryMergedCellContentCommand(
         if (_survivorColumn < 0)
             return;
 
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         if (rowIndex < 0 || rowIndex >= table.Rows.Count)
             return;
 
@@ -925,7 +985,7 @@ public sealed class MergeCellsHorizontalCommand(int blockIndex, int rowIndex, in
 
     public void Apply(IDocumentCommandContext context)
     {
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         if (rowIndex < 0 || rowIndex >= table.Rows.Count)
             return;
         var cells = table.Rows[rowIndex].Cells;
@@ -954,7 +1014,9 @@ public sealed class MergeCellsHorizontalCommand(int blockIndex, int rowIndex, in
     {
         if (_removedRow is null)
             return;
-        var cells = InsertTableRowCommand.TableAt(context, blockIndex).Rows[rowIndex].Cells;
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var cellsTable)) return;
+        if (rowIndex < 0 || rowIndex >= cellsTable.Rows.Count) return;
+        var cells = cellsTable.Rows[rowIndex].Cells;
         if (_survivorColumn >= 0 && _survivorColumn < _removedRow.Length)
             _removedRow[_survivorColumn].GridSpan = _survivorSpan;
         cells.Clear();
@@ -982,7 +1044,7 @@ public sealed class MergeCellsVerticalCommand(int blockIndex, int columnIndex, i
 
     public void Apply(IDocumentCommandContext context)
     {
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         var first = Math.Min(firstRow, lastRow);
         var last = Math.Max(firstRow, lastRow);
         if (first < 0 || last >= table.Rows.Count || first >= last)
@@ -1009,7 +1071,7 @@ public sealed class MergeCellsVerticalCommand(int blockIndex, int columnIndex, i
     {
         if (_previous is null)
             return;
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         foreach (var (row, cellIdx, state) in _previous)
         {
             if (row < table.Rows.Count && cellIdx < table.Rows[row].Cells.Count)
@@ -1051,7 +1113,7 @@ public sealed class SplitCellCommand(
 
     public void Apply(IDocumentCommandContext context)
     {
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         if (rowIndex < 0 || rowIndex >= table.Rows.Count)
             return;
         var cells = table.Rows[rowIndex].Cells;
@@ -1110,7 +1172,7 @@ public sealed class SplitCellCommand(
 
     public void Revert(IDocumentCommandContext context)
     {
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
 
         if (_appliedSubdivision)
         {
@@ -1322,7 +1384,7 @@ public sealed class SetTableCellContentCommand(
 
     public void Apply(IDocumentCommandContext context)
     {
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         if (rowIndex < 0 || rowIndex >= table.Rows.Count)
             return;
         var cells = table.Rows[rowIndex].Cells;
@@ -1350,7 +1412,7 @@ public sealed class SetTableCellContentCommand(
     {
         if (_previous is null)
             return;
-        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (!InsertTableRowCommand.TryGetTable(context, blockIndex, out var table)) return;
         if (rowIndex < 0 || rowIndex >= table.Rows.Count)
             return;
         var cells = table.Rows[rowIndex].Cells;
@@ -1385,6 +1447,12 @@ public sealed class SetCellShadingCommand(
     private bool _applied;
 
     public string Label => "Set Cell Shading";
+
+    // r205 census, fixed r206: an equal-value setter -- re-confirming what the ribbon already shows
+    // pushed an undo entry that changed nothing, and that push clears redo.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        TryGetCell(context, out var cell)
+        && cell.ShadingColorHex != (string.IsNullOrEmpty(colorHex) ? null : colorHex);
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -1428,6 +1496,8 @@ public sealed class SetCellBorderPayloadCommand(
 
     public string Label => "Set Cell Borders";
 
+    // r205 census: this is SetCellBorderPayloadCommand, whose no-op claim two verifiers REFUTED --
+    // no caller supplies the payload the cell already has. Judged, not overridden.
     public void Apply(IDocumentCommandContext context)
     {
         if (!TryGetCell(context, out var cell))
@@ -1475,6 +1545,11 @@ public sealed class SetCellTextDirectionCommand(
     private bool _applied;
 
     public string Label => "Set Cell Text Direction";
+
+    // r205 census, fixed r206: an equal-value setter -- re-confirming what the ribbon already shows
+    // pushed an undo entry that changed nothing, and that push clears redo.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        TryGetCell(context, out var cell) && cell.TextDirection != direction;
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -1531,6 +1606,12 @@ public sealed class SetCellAlignmentCommand(
     private bool _applied;
 
     public string Label => "Set Cell Alignment";
+
+    // r205 census, fixed r206: an equal-value setter -- see SetCellShadingCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        TryGetCell(context, out var cell)
+        && (cell.VerticalAlignment != verticalAlignment
+            || cell.Paragraphs.Any(p => p.Formatting.Alignment != horizontalAlignment));
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -1594,6 +1675,12 @@ public sealed class SetCellBordersCommand(
     private bool _applied;
 
     public string Label => clearEdges ? "Clear Cell Border" : "Set Cell Border";
+
+    // r205 census, fixed r206: an equal-value setter -- see SetCellShadingCommand.HasEffect.
+    // ApplyEdges is pure, so computing the would-be result here is safe.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        TryGetCell(context, out var cell)
+        && !Equals(cell.Borders, ApplyEdges(cell.Borders, edges, style, colorHex, widthPt, clearEdges));
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -1676,6 +1763,11 @@ public sealed class SetImageSizeCommand(int paragraphIndex, int runIndex, double
 
     public string Label => "Resize Image";
 
+    // r203 census, fixed r204: an equal-value setter. Re-confirming what the ribbon control already
+    // shows pushed an undo entry that changed nothing -- and that push clears redo.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image && (image.WidthPt != widthPt || image.HeightPt != heightPt);
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ImageAt(context) is not { } image)
@@ -1698,7 +1790,8 @@ public sealed class SetImageSizeCommand(int paragraphIndex, int runIndex, double
 
     private InlineImage? ImageAt(IDocumentCommandContext context)
     {
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph paragraph
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph paragraph
             || runIndex < 0 || runIndex >= paragraph.Runs.Count)
             return null;
         return paragraph.Runs[runIndex].Image;
@@ -1716,6 +1809,12 @@ public sealed class SetImageAltTextCommand(int paragraphIndex, int runIndex, str
 
     public string Label => "Image Alt Text";
 
+    // r203 census, fixed r204: an equal-value setter. Re-confirming what the ribbon control already
+    // shows pushed an undo entry that changed nothing -- and that push clears redo.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image
+        && image.AltText != (string.IsNullOrWhiteSpace(altText) ? null : altText.Trim());
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ImageAt(context) is not { } image) return;
@@ -1732,7 +1831,8 @@ public sealed class SetImageAltTextCommand(int paragraphIndex, int runIndex, str
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -1747,6 +1847,12 @@ public sealed class SetImageRotationCommand(int paragraphIndex, int runIndex, do
     private bool _applied;
 
     public string Label => "Rotate/Flip Image";
+
+    // r203 census, fixed r204: an equal-value setter. Re-confirming what the ribbon control already
+    // shows pushed an undo entry that changed nothing -- and that push clears redo.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image
+        && (image.RotationAngle != angleDeg || image.FlipH != flipH || image.FlipV != flipV);
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -1764,7 +1870,8 @@ public sealed class SetImageRotationCommand(int paragraphIndex, int runIndex, do
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -1778,6 +1885,12 @@ public sealed class SetImageCropCommand(int paragraphIndex, int runIndex, double
     private bool _applied;
 
     public string Label => "Crop Image";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image
+        && (image.CropLeft != left || image.CropRight != right
+            || image.CropTop != top || image.CropBottom != bottom);
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -1795,7 +1908,8 @@ public sealed class SetImageCropCommand(int paragraphIndex, int runIndex, double
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -1811,6 +1925,12 @@ public sealed class SetImageBorderCommand(int paragraphIndex, int runIndex, stri
     private bool _applied;
 
     public string Label => "Picture Border";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image
+        && (image.BorderColorHex != colorHex || image.BorderWidthPt != widthPt
+            || image.BorderDash != dash);
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -1828,7 +1948,8 @@ public sealed class SetImageBorderCommand(int paragraphIndex, int runIndex, stri
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -1917,7 +2038,8 @@ public sealed class ResetImageSizeCommand(int paragraphIndex, int runIndex, doub
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -1937,6 +2059,12 @@ public sealed class SetImageAdjustCommand(
     private bool _applied;
 
     public string Label => "Picture Adjust";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image
+        && (image.BrightnessPct != brightnessPct || image.ContrastPct != contrastPct
+            || image.SaturationPct != saturationPct || image.TransparencyPct != transparencyPct);
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -1963,7 +2091,8 @@ public sealed class SetImageAdjustCommand(
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -1984,6 +2113,15 @@ public sealed class SetImageEffectCommand(
     private bool _applied;
 
     public string Label => "Picture Effect";
+
+    // r203 census, fixed r204: an equal-value setter. Note ImportedEffects is CLEARED
+    // unconditionally, so a non-null one makes this a real change even when every preset matches.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image
+        && (image.ImportedEffects is not null
+            || image.ShadowPreset != shadowPreset || image.GlowSizePt != glowSizePt
+            || image.GlowColorHex != glowColorHex || image.ReflectionPreset != reflectionPreset
+            || image.SoftEdgePt != softEdgePt || image.BevelPreset != bevelPreset);
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -2019,7 +2157,8 @@ public sealed class SetImageEffectCommand(
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -2037,6 +2176,11 @@ public sealed class SetImageRecolorCommand(
     private bool _applied;
 
     public string Label => "Picture Recolor";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image
+        && (image.RecolorMode != recolorMode || image.ColorTemperature != colorTemperature);
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -2057,7 +2201,8 @@ public sealed class SetImageRecolorCommand(
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -2096,6 +2241,16 @@ public sealed class SetImageStyleCommand(
 
     public string Label => "Apply Picture Style";
 
+    // r203 census, fixed r204: an equal-value setter. Note ImportedEffects is CLEARED
+    // unconditionally, so a non-null one makes this a real change even when every preset matches.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image
+        && (image.ImportedEffects is not null
+            || image.BorderColorHex != borderColorHex || image.BorderWidthPt != borderWidthPt
+            || image.BorderDash != borderDash || image.ShadowPreset != shadowPreset
+            || image.ReflectionPreset != reflectionPreset || image.SoftEdgePt != softEdgePt
+            || image.PictureStylePreset != stylePreset);
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ImageAt(context) is not { } image) return;
@@ -2133,7 +2288,8 @@ public sealed class SetImageStyleCommand(
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -2150,6 +2306,14 @@ public sealed class SetImagePositionCommand(int paragraphIndex, int runIndex,
     private bool _applied;
 
     public string Label => "Set Image Position";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image
+        && (image.HorizontalOffsetPt != horizontalOffsetPt
+            || image.VerticalOffsetPt != verticalOffsetPt
+            || image.HorizontalAnchor != horizontalAnchor
+            || image.VerticalAnchor != verticalAnchor);
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -2170,7 +2334,8 @@ public sealed class SetImagePositionCommand(int paragraphIndex, int runIndex,
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -2374,7 +2539,8 @@ public sealed class ToggleObjectWrappingCommand(
 
     private void ApplyTo(IDocumentCommandContext context, ImageWrapping targetWrapping)
     {
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return;
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph p) return;
         if (runIndex < 0 || runIndex >= p.Runs.Count) return;
         var run = p.Runs[runIndex];
 
@@ -2423,7 +2589,8 @@ public sealed class FormatParagraphRunsCommand(int paragraphIndex, Func<RunForma
 
     public void Apply(IDocumentCommandContext context)
     {
-        var runs = ((Paragraph)context.Document.Blocks[paragraphIndex]).Runs;
+        if (!SetParagraphFormattingCommand.TryGetParagraph(context, paragraphIndex, out var runsOwner)) return;
+        var runs = runsOwner.Runs;
         _previous = runs.Select(r => r.Formatting).ToArray();
         _previousRevisions = runs.Select(r => r.FormatRevision).ToArray();
         for (var i = 0; i < runs.Count; i++)
@@ -2444,7 +2611,8 @@ public sealed class FormatParagraphRunsCommand(int paragraphIndex, Func<RunForma
     {
         if (_previous is null)
             return;
-        var runs = ((Paragraph)context.Document.Blocks[paragraphIndex]).Runs;
+        if (!SetParagraphFormattingCommand.TryGetParagraph(context, paragraphIndex, out var runsOwner)) return;
+        var runs = runsOwner.Runs;
         for (var i = 0; i < runs.Count && i < _previous.Length; i++)
         {
             runs[i].Formatting = _previous[i];
@@ -2518,6 +2686,10 @@ public sealed class SetShapeKindCommand(
 
     public string Label => "Change Shape";
 
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ShapeAt(context) is { } shape && shape.Kind != kind;
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ShapeAt(context) is not { } shape) return;
@@ -2553,6 +2725,10 @@ public sealed class SetShapeFillCommand(
 
     public string Label => "Shape Fill";
 
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ShapeAt(context) is { } shape && shape.FillColorHex != colorHex;
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ShapeAt(context) is not { } shape) return;
@@ -2587,6 +2763,12 @@ public sealed class SetShapeOutlineCommand(int paragraphIndex, int runIndex,
 
     public string Label => "Shape Outline";
 
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ShapeAt(context) is { } shape
+        && (shape.OutlineColorHex != colorHex || shape.OutlineWidthPt != widthPt
+            || shape.OutlineDash != dash);
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ShapeAt(context) is not { } shape) return;
@@ -2619,6 +2801,10 @@ public sealed class SetShapeSizeCommand(int paragraphIndex, int runIndex, double
 
     public string Label => "Resize Shape";
 
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ShapeAt(context) is { } shape && (shape.WidthPt != widthPt || shape.HeightPt != heightPt);
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ShapeAt(context) is not { } shape) return;
@@ -2635,7 +2821,8 @@ public sealed class SetShapeSizeCommand(int paragraphIndex, int runIndex, double
     }
 
     private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Shape : null;
 }
 
@@ -2653,6 +2840,10 @@ public sealed class SetShapeAltTextCommand(
     private bool _applied;
 
     public string Label => "Shape Alt Text";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ShapeAt(context) is { } shape && shape.AltText != altText;
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -2688,6 +2879,11 @@ public sealed class SetShapeTextDirectionCommand(
     private bool _applied;
 
     public string Label => "Text Direction";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ShapeTextTargetResolver.TryGetShape(context, paragraphIndex, runIndex, childPath, out var shape)
+        && shape.TextDirection != direction;
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -2791,6 +2987,7 @@ public sealed class SetShapeTextRunCommand(
     private void SyncShapeRunText(IDocumentCommandContext context, Shape shape)
     {
         if (childPath is null
+            && paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
             && context.Document.Blocks[paragraphIndex] is Paragraph paragraph
             && runIndex >= 0 && runIndex < paragraph.Runs.Count
             && ReferenceEquals(paragraph.Runs[runIndex].Shape, shape))
@@ -2851,7 +3048,8 @@ public sealed class ReplaceShapeTextParagraphsCommand(
                 context, paragraphIndex, runIndex, childPath, out var found))
             return false;
 
-        owner = context.Document.Blocks[paragraphIndex] is Paragraph paragraph
+        owner = paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph paragraph
             && runIndex >= 0 && runIndex < paragraph.Runs.Count
             ? paragraph.Runs[runIndex]
             : null!;
@@ -2916,7 +3114,8 @@ public sealed class InsertShapeTextParagraphBreakCommand(
                 context, paragraphIndex, runIndex, childPath, out var found))
             return false;
 
-        owner = context.Document.Blocks[paragraphIndex] is Paragraph paragraph
+        owner = paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph paragraph
             && runIndex >= 0 && runIndex < paragraph.Runs.Count
             ? paragraph.Runs[runIndex]
             : null!;
@@ -3055,7 +3254,8 @@ public sealed class SetShapeRotationCommand(int paragraphIndex, int runIndex, do
     }
 
     private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Shape : null;
 }
 
@@ -3089,7 +3289,8 @@ public sealed class SetShapeWrappingCommand(int paragraphIndex, int runIndex, Im
     }
 
     private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Shape : null;
 }
 
@@ -3107,6 +3308,18 @@ public sealed class SetShapePositionCommand(int paragraphIndex, int runIndex,
     private bool _applied;
 
     public string Label => "Set Shape Position";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    // Applying CREATES the placement when absent, so an absent one is itself a change. HasEffect
+    // must not create it -- see SetFloatingPositionCommand.HasEffect for the same trap.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ShapeAt(context) is not { } shape
+            ? false
+            : shape.Placement is not { } placement
+              || placement.HorizontalOffsetPt != horizontalOffsetPt
+              || placement.VerticalOffsetPt != verticalOffsetPt
+              || placement.HorizontalAnchor != horizontalAnchor
+              || placement.VerticalAnchor != verticalAnchor;
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -3128,7 +3341,8 @@ public sealed class SetShapePositionCommand(int paragraphIndex, int runIndex,
     }
 
     private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Shape : null;
 }
 
@@ -3142,6 +3356,10 @@ public sealed class SetWordArtAltTextCommand(int paragraphIndex, int runIndex, s
     private bool _applied;
 
     public string Label => "WordArt Alt Text";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        WordArtAt(context) is { } wordArt && wordArt.AltText != altText;
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -3159,7 +3377,8 @@ public sealed class SetWordArtAltTextCommand(int paragraphIndex, int runIndex, s
     }
 
     private WordArt? WordArtAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].WordArt : null;
 }
 
@@ -3172,6 +3391,10 @@ public sealed class SetWordArtStyleCommand(int paragraphIndex, int runIndex, Wor
     private bool _applied;
 
     public string Label => "WordArt Style";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        WordArtAt(context) is { } wordArt && wordArt.Style != style;
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -3189,7 +3412,8 @@ public sealed class SetWordArtStyleCommand(int paragraphIndex, int runIndex, Wor
     }
 
     private WordArt? WordArtAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].WordArt : null;
 }
 
@@ -3266,6 +3490,14 @@ public sealed class SetShapeExtendedFillCommand(
 
     public string Label => "Shape Fill";
 
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    // Setting an extended fill also CLEARS the solid colour, so a non-null FillColorHex makes this
+    // a real change even when the extended fill matches.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ShapeAt(context) is { } shape
+        && (!Equals(shape.ExtendedFill, fill)
+            || (fill is not null && shape.FillColorHex is not null));
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ShapeAt(context) is not { } shape) return;
@@ -3301,6 +3533,10 @@ public sealed class SetShapeEffectsCommand(
 
     public string Label => "Shape Effects";
 
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ShapeAt(context) is { } shape && !Equals(shape.Effects, effects);
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ShapeAt(context) is not { } shape) return;
@@ -3329,6 +3565,10 @@ public sealed class SetWordArtWarpCommand(int paragraphIndex, int runIndex, Word
 
     public string Label => "WordArt Transform";
 
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        WordArtAt(context) is { } wordArt && wordArt.Warp != warp;
+
     public void Apply(IDocumentCommandContext context)
     {
         if (WordArtAt(context) is not { } wordArt) return;
@@ -3345,7 +3585,8 @@ public sealed class SetWordArtWarpCommand(int paragraphIndex, int runIndex, Word
     }
 
     private WordArt? WordArtAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].WordArt : null;
 }
 
@@ -3380,7 +3621,11 @@ public sealed class GroupFloatingObjectsCommand : IDocumentCommand
 
         foreach (var (bi, ri) in _members)
         {
-            if (doc.Blocks[bi] is not Paragraph p || ri >= p.Runs.Count) continue;
+            // r525: _members holds coordinates captured when the group was formed, so both indices
+            // can be stale by the time this runs. ri had an upper bound only.
+            if (bi < 0 || bi >= doc.Blocks.Count
+                || doc.Blocks[bi] is not Paragraph p
+                || ri < 0 || ri >= p.Runs.Count) continue;
             var (obj, widthPt, heightPt, placement) = ExtractFloatingInfo(p.Runs[ri]);
             if (obj is null || placement is null) continue;
 
@@ -3411,9 +3656,14 @@ public sealed class GroupFloatingObjectsCommand : IDocumentCommand
             group.ChildOffsets[i] = (ox - minH, oy - minV);
         }
 
+        // r525: _members can be empty, and its coordinates are captured rather than live.
+        if (_members.Length == 0)
+            return;
         var (firstBi, firstRi) = _members[0];
         FloatingPlacement? firstPlacement = null;
-        if (doc.Blocks[firstBi] is Paragraph fp && firstRi < fp.Runs.Count)
+        if (firstBi >= 0 && firstBi < doc.Blocks.Count
+            && doc.Blocks[firstBi] is Paragraph fp
+            && firstRi >= 0 && firstRi < fp.Runs.Count)
             firstPlacement = ExtractFloatingInfo(fp.Runs[firstRi]).Placement;
 
         group.Placement = new FloatingPlacement
@@ -3429,12 +3679,17 @@ public sealed class GroupFloatingObjectsCommand : IDocumentCommand
         _snapshot = [];
         foreach (var (bi, ri) in _members.Reverse())
         {
-            if (doc.Blocks[bi] is not Paragraph p || ri >= p.Runs.Count) continue;
+            // r525: _members holds coordinates captured when the group was formed, so both indices
+            // can be stale by the time this runs. ri had an upper bound only.
+            if (bi < 0 || bi >= doc.Blocks.Count
+                || doc.Blocks[bi] is not Paragraph p
+                || ri < 0 || ri >= p.Runs.Count) continue;
             _snapshot.Add((bi, ri, p.Runs[ri]));
             p.Runs.RemoveAt(ri);
         }
 
-        if (doc.Blocks[firstBi] is not Paragraph insertPara) return;
+        if (firstBi < 0 || firstBi >= doc.Blocks.Count
+            || doc.Blocks[firstBi] is not Paragraph insertPara) return;
         var insertRi = Math.Min(firstRi, insertPara.Runs.Count);
         insertPara.Runs.Insert(insertRi, Run.FromDrawingGroup(group));
         _groupLocation = (firstBi, insertRi);
@@ -3445,11 +3700,15 @@ public sealed class GroupFloatingObjectsCommand : IDocumentCommand
         if (_snapshot is null || _groupLocation is null) return;
         var doc = context.Document;
         var (gBi, gRi) = _groupLocation.Value;
-        if (doc.Blocks[gBi] is Paragraph gPara && gRi < gPara.Runs.Count)
+        // r525: _groupLocation and _snapshot were captured during Apply; the document can have
+        // changed before Revert runs. ri was clamped below, bi never checked.
+        if (gBi >= 0 && gBi < doc.Blocks.Count
+            && doc.Blocks[gBi] is Paragraph gPara
+            && gRi >= 0 && gRi < gPara.Runs.Count)
             gPara.Runs.RemoveAt(gRi);
         foreach (var (bi, ri, run) in ((IEnumerable<(int, int, Run)>)_snapshot).Reverse())
         {
-            if (doc.Blocks[bi] is not Paragraph p) continue;
+            if (bi < 0 || bi >= doc.Blocks.Count || doc.Blocks[bi] is not Paragraph p) continue;
             p.Runs.Insert(Math.Min(ri, p.Runs.Count), run);
         }
         _snapshot = null;
@@ -3494,6 +3753,7 @@ public sealed class UngroupFloatingObjectsCommand(int paragraphIndex, int runInd
     public void Apply(IDocumentCommandContext context)
     {
         var doc = context.Document;
+        if (paragraphIndex < 0 || paragraphIndex >= doc.Blocks.Count) return;
         if (doc.Blocks[paragraphIndex] is not Paragraph p) return;
         if (runIndex < 0 || runIndex >= p.Runs.Count) return;
         if (p.Runs[runIndex].DrawingGroup is not { } group || !group.IsValid) return;
@@ -3536,6 +3796,7 @@ public sealed class UngroupFloatingObjectsCommand(int paragraphIndex, int runInd
     {
         if (!_applied || _group is null) return;
         var doc = context.Document;
+        if (paragraphIndex < 0 || paragraphIndex >= doc.Blocks.Count) return;
         if (doc.Blocks[paragraphIndex] is not Paragraph p) return;
         var count = Math.Min(_group.Children.Count, p.Runs.Count - runIndex);
         for (var i = 0; i < count; i++) p.Runs.RemoveAt(runIndex);
@@ -3625,6 +3886,10 @@ public sealed class SetImageArtisticEffectCommand(
 
     public string Label => "Artistic Effect";
 
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ImageAt(context) is { } image && image.ArtisticEffect != effect;
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ImageAt(context) is not { } image) return;
@@ -3650,7 +3915,8 @@ public sealed class SetImageArtisticEffectCommand(
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -3688,7 +3954,8 @@ public sealed class SetShapeCustomGeometryCommand(
 
     private Shape? ShapeAt(IDocumentCommandContext context)
     {
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph p
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph p
             || runIndex < 0 || runIndex >= p.Runs.Count)
             return null;
 
@@ -3738,7 +4005,8 @@ public sealed class MoveShapeEditPointCommand(
 
     private Shape? ShapeAt(IDocumentCommandContext context)
     {
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph p
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph p
             || runIndex < 0 || runIndex >= p.Runs.Count)
             return null;
 
@@ -3771,6 +4039,23 @@ public sealed class SetFloatingPositionCommand(
 
     public string Label => "Set Position";
 
+    // r203: mirrors what Apply would write. NOTE it must NOT call GetFloatingPlacement, whose ??=
+    // CREATES the placement -- a HasEffect that mutates would be worse than the bug it fixes.
+    public bool HasEffect(IDocumentCommandContext context)
+    {
+        if (!TryPeekRun(context, paragraphIndex, runIndex, out var run))
+            return false;
+        if (!CarriesFloatingPlacement(run))
+            return false;
+        if (PeekFloatingPlacement(run) is not { } existing)
+            return true; // applying would create the placement, which is a change
+
+        return existing.HorizontalOffsetPt != horizontalOffsetPt
+            || existing.VerticalOffsetPt != verticalOffsetPt
+            || existing.HorizontalAnchor != horizontalAnchor
+            || existing.VerticalAnchor != verticalAnchor;
+    }
+
     public void Apply(IDocumentCommandContext context)
     {
         if (!TryGetPlacement(context, out var pl)) return;
@@ -3792,11 +4077,35 @@ public sealed class SetFloatingPositionCommand(
     private bool TryGetPlacement(IDocumentCommandContext context, out FloatingPlacement pl)
     {
         pl = null!;
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
         if (runIndex < 0 || runIndex >= p.Runs.Count) return false;
         pl = GetFloatingPlacement(p.Runs[runIndex])!;
         return pl is not null;
     }
+
+    /// <summary>The run at (paragraphIndex, runIndex), or false when the address does not resolve.</summary>
+    internal static bool TryPeekRun(
+        IDocumentCommandContext context, int paragraphIndex, int runIndex, out Run run)
+    {
+        run = null!;
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count) return false;
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
+        if (runIndex < 0 || runIndex >= p.Runs.Count) return false;
+        run = p.Runs[runIndex];
+        return true;
+    }
+
+    /// <summary>Whether this run is a floating object whose position lives in a placement.</summary>
+    internal static bool CarriesFloatingPlacement(Run run) =>
+        run.Shape is not null || run.Chart is not null || run.SmartArt is not null
+        || run.WordArt is not null || run.DrawingGroup is not null;
+
+    /// <summary>The existing placement, WITHOUT creating one. See HasEffect.</summary>
+    internal static FloatingPlacement? PeekFloatingPlacement(Run run) =>
+        run.Shape?.Placement ?? run.Chart?.Placement ?? run.SmartArt?.Placement
+        ?? run.WordArt?.Placement ?? run.DrawingGroup?.Placement;
 
     public static FloatingPlacement? GetFloatingPlacement(Run run)
     {
@@ -3829,6 +4138,29 @@ public sealed class SetFloatingSizeCommand(
 
     public string Label => "Resize";
 
+    // r203: mirrors what TryMutate would write, without writing it.
+    public bool HasEffect(IDocumentCommandContext context)
+    {
+        if (!SetFloatingPositionCommand.TryPeekRun(context, paragraphIndex, runIndex, out var run))
+            return false;
+
+        return CurrentSize(run) is not { } size
+            ? false
+            : size.Width != widthPt || size.Height != heightPt;
+    }
+
+    /// <summary>The floating object's current size, in the same order TryMutate resolves it.</summary>
+    private static (double Width, double Height)? CurrentSize(Run run)
+    {
+        if (run.Image is { IsFloating: true } img) return (img.WidthPt, img.HeightPt);
+        if (run.Shape is { } shape) return (shape.WidthPt, shape.HeightPt);
+        if (run.Chart is { } chart) return (chart.WidthPt, chart.HeightPt);
+        if (run.SmartArt is { } sa) return (sa.WidthPt, sa.HeightPt);
+        if (run.DrawingGroup is { } grp) return (grp.WidthPt, grp.HeightPt);
+        if (run.EmbeddedObject is { } embedded) return (embedded.WidthPt, embedded.HeightPt);
+        return null;
+    }
+
     public void Apply(IDocumentCommandContext context)
     {
         if (!TryMutate(context, widthPt, heightPt, out _prevW, out _prevH)) return;
@@ -3846,7 +4178,8 @@ public sealed class SetFloatingSizeCommand(
         out double prevW, out double prevH)
     {
         prevW = 0; prevH = 0;
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
         if (runIndex < 0 || runIndex >= p.Runs.Count) return false;
         var run = p.Runs[runIndex];
         if (run.Image is { IsFloating: true } img)
@@ -3880,6 +4213,23 @@ public sealed class SetFloatingWrapCommand(
 
     public string Label => "Wrap Text";
 
+    // r203: the coordinator that builds this command already carried a comment naming this exact
+    // risk -- "SetFloatingWrapCommand would apply as a genuine no-op but still push an inert entry
+    // (it doesn't override IDocumentCommand.HasEffect)". It does now.
+    public bool HasEffect(IDocumentCommandContext context)
+    {
+        if (!SetFloatingPositionCommand.TryPeekRun(context, paragraphIndex, runIndex, out var run))
+            return false;
+        if (run.Image is { } img)
+            return img.Wrapping != wrapping;
+        if (!SetFloatingPositionCommand.CarriesFloatingPlacement(run))
+            return false;
+
+        // No placement yet: applying creates one, which is a change.
+        return SetFloatingPositionCommand.PeekFloatingPlacement(run) is not { } pl
+            || pl.Wrapping != wrapping;
+    }
+
     public void Apply(IDocumentCommandContext context)
     {
         if (!TryMutate(context, wrapping, out _previous)) return;
@@ -3896,7 +4246,8 @@ public sealed class SetFloatingWrapCommand(
     private bool TryMutate(IDocumentCommandContext context, ImageWrapping w, out ImageWrapping prev)
     {
         prev = ImageWrapping.Inline;
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
         if (runIndex < 0 || runIndex >= p.Runs.Count) return false;
         var run = p.Runs[runIndex];
         if (run.Image is { } img)
@@ -3932,6 +4283,24 @@ public sealed class SetFloatingRotationCommand(
 
     public string Label => "Rotate/Flip";
 
+    // r203 census, fixed r204: an equal-value setter. The peek must not call TryMutate, which writes.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        SetFloatingPositionCommand.TryPeekRun(context, paragraphIndex, runIndex, out var run)
+        && CurrentRotation(run) is { } current
+        && (current.Angle != angleDeg || current.FlipH != flipH || current.FlipV != flipV);
+
+    /// <summary>The object's current rotation, in the same order TryMutate resolves it.</summary>
+    private static (double Angle, bool FlipH, bool FlipV)? CurrentRotation(Run run)
+    {
+        if (run.Image is { } img) return (img.RotationAngle, img.FlipH, img.FlipV);
+        if (run.Shape is { } shape) return (shape.RotationAngle, shape.FlipH, shape.FlipV);
+        if (run.Chart is { } chart) return (chart.RotationAngle, chart.FlipH, chart.FlipV);
+        if (run.SmartArt is { } sa) return (sa.RotationAngle, sa.FlipH, sa.FlipV);
+        if (run.WordArt is { } wa) return (wa.RotationAngle, wa.FlipH, wa.FlipV);
+        if (run.DrawingGroup is { } grp) return (grp.RotationAngle, grp.FlipH, grp.FlipV);
+        return null;
+    }
+
     public void Apply(IDocumentCommandContext context)
     {
         if (!TryMutate(context, angleDeg, flipH, flipV, out _prevAngle, out _prevFlipH, out _prevFlipV)) return;
@@ -3949,7 +4318,8 @@ public sealed class SetFloatingRotationCommand(
         out double pAngle, out bool pFH, out bool pFV)
     {
         pAngle = 0; pFH = false; pFV = false;
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
         if (runIndex < 0 || runIndex >= p.Runs.Count) return false;
         var run = p.Runs[runIndex];
         if (run.Image is { } img)
@@ -4033,6 +4403,32 @@ public sealed class SetDrawingGroupChildRotationCommand : IDocumentCommand
 
     public string Label => "Rotate Group Child";
 
+    // r203 census, fixed r204: an equal-value setter. The peek must not call TryMutate, which writes.
+    public bool HasEffect(IDocumentCommandContext context)
+    {
+        if (context.Document.Blocks.Count <= _paragraphIndex || _paragraphIndex < 0)
+            return false;
+        if (_paragraphIndex < 0 || _paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[_paragraphIndex] is not Paragraph paragraph
+            || _runIndex < 0 || _runIndex >= paragraph.Runs.Count
+            || paragraph.Runs[_runIndex].DrawingGroup is not { } rootGroup
+            || !DrawingGroupChildPathResolver.TryGetChild(rootGroup, _childPath, out _, out var child))
+        {
+            return false;
+        }
+
+        return child switch
+        {
+            InlineImage image => image.RotationAngle != _angleDeg || image.FlipH != _flipH || image.FlipV != _flipV,
+            Shape shape => shape.RotationAngle != _angleDeg || shape.FlipH != _flipH || shape.FlipV != _flipV,
+            WordArt wordArt => wordArt.RotationAngle != _angleDeg || wordArt.FlipH != _flipH || wordArt.FlipV != _flipV,
+            Chart chart => chart.RotationAngle != _angleDeg || chart.FlipH != _flipH || chart.FlipV != _flipV,
+            SmartArt smartArt => smartArt.RotationAngle != _angleDeg || smartArt.FlipH != _flipH || smartArt.FlipV != _flipV,
+            DrawingGroup group => group.RotationAngle != _angleDeg || group.FlipH != _flipH || group.FlipV != _flipV,
+            _ => false,
+        };
+    }
+
     public void Apply(IDocumentCommandContext context)
     {
         if (!TryMutate(context, _angleDeg, _flipH, _flipV,
@@ -4065,7 +4461,8 @@ public sealed class SetDrawingGroupChildRotationCommand : IDocumentCommand
         previousFlipH = false;
         previousFlipV = false;
 
-        if (context.Document.Blocks[_paragraphIndex] is not Paragraph paragraph
+        if (_paragraphIndex < 0 || _paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[_paragraphIndex] is not Paragraph paragraph
             || _runIndex < 0
             || _runIndex >= paragraph.Runs.Count
             || paragraph.Runs[_runIndex].DrawingGroup is not { } rootGroup
@@ -4179,6 +4576,22 @@ public sealed class SetDrawingGroupChildPositionCommand : IDocumentCommand
 
     public string Label => "Move Group Child";
 
+    // r203 census, fixed r204: an equal-value setter. The peek must not call TryMutate, which
+    // writes -- nor EnsureOffsetSlot, which grows the offsets list.
+    public bool HasEffect(IDocumentCommandContext context)
+    {
+        if (!TryGetChild(context, out var group, out _))
+            return false;
+
+        var childIndex = _childPath[^1];
+        // No slot yet: applying creates one, which is a change.
+        if (childIndex < 0 || childIndex >= group.ChildOffsets.Count)
+            return true;
+
+        var current = group.ChildOffsets[childIndex];
+        return current.X != _horizontalOffsetPt || current.Y != _verticalOffsetPt;
+    }
+
     public void Apply(IDocumentCommandContext context)
     {
         if (!TryMutate(context, _horizontalOffsetPt, _verticalOffsetPt,
@@ -4226,7 +4639,8 @@ public sealed class SetDrawingGroupChildPositionCommand : IDocumentCommand
     {
         owningGroup = null!;
         child = null!;
-        if (context.Document.Blocks[_paragraphIndex] is not Paragraph paragraph
+        if (_paragraphIndex < 0 || _paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[_paragraphIndex] is not Paragraph paragraph
             || _runIndex < 0
             || _runIndex >= paragraph.Runs.Count
             || paragraph.Runs[_runIndex].DrawingGroup is not { } candidate)
@@ -4278,6 +4692,19 @@ public sealed class ChangeDrawingGroupChildZOrderCommand : IDocumentCommand
         ZOrderOperation.SendBackward => "Send Group Child Backward",
         _ => "Reorder Group Child"
     };
+
+    // r199: mirrors Apply's two early exits below. Without this the bus pushed an undo entry for a
+    // Bring Forward on a child that is already frontmost within its group -- a step that does nothing
+    // when undone, and whose push clears the redo stack. The sibling ChangeZOrderCommand (line ~2208)
+    // has had this override all along; this command was written without it.
+    public bool HasEffect(IDocumentCommandContext context)
+    {
+        if (!TryGetOwningGroup(context, out var owningGroup) || _childPath.Count == 0)
+            return false;
+
+        var sourceIndex = _childPath[^1];
+        return ResolveTargetIndex(sourceIndex, owningGroup.Children.Count, _operation) != sourceIndex;
+    }
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -4398,6 +4825,18 @@ public sealed class SetDrawingGroupChildSizeCommand : IDocumentCommand
 
     public string Label => "Resize Group Child";
 
+    // r203 census, fixed r204: an equal-value setter. The peek must not call TryMutate, which
+    // writes -- nor EnsureOffsetSlot, which grows the offsets list.
+    public bool HasEffect(IDocumentCommandContext context)
+    {
+        if (_widthPt <= 0 || _heightPt <= 0 || !TryGetChild(context, out var group, out _))
+            return false;
+
+        var childIndex = _childPath[^1];
+        return group.ChildWidthPt(childIndex) != _widthPt
+            || group.ChildHeightPt(childIndex) != _heightPt;
+    }
+
     public void Apply(IDocumentCommandContext context)
     {
         if (_widthPt <= 0 || _heightPt <= 0
@@ -4477,7 +4916,8 @@ public sealed class SetDrawingGroupChildSizeCommand : IDocumentCommand
     {
         group = null!;
         child = null!;
-        if (context.Document.Blocks[_paragraphIndex] is not Paragraph paragraph
+        if (_paragraphIndex < 0 || _paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[_paragraphIndex] is not Paragraph paragraph
             || _runIndex < 0
             || _runIndex >= paragraph.Runs.Count
             || paragraph.Runs[_runIndex].DrawingGroup is not { } candidate)
@@ -4518,7 +4958,8 @@ public sealed class NudgeImagePositionCommand(
     }
 
     private InlineImage? ImageAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+        paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Image : null;
 }
 
@@ -4536,7 +4977,8 @@ public sealed class RemoveFloatingRunCommand(int paragraphIndex, int runIndex) :
 
     public void Apply(IDocumentCommandContext context)
     {
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return;
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph p) return;
         if (runIndex < 0 || runIndex >= p.Runs.Count) return;
         _removed = p.Runs[runIndex];
         p.Runs.RemoveAt(runIndex);
@@ -4546,7 +4988,8 @@ public sealed class RemoveFloatingRunCommand(int paragraphIndex, int runIndex) :
     public void Revert(IDocumentCommandContext context)
     {
         if (!_applied || _removed is null) return;
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return;
+        if (paragraphIndex < 0 || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph p) return;
         var at = Math.Clamp(runIndex, 0, p.Runs.Count);
         p.Runs.Insert(at, _removed);
         _applied = false;
@@ -4561,6 +5004,19 @@ public sealed class DistributeTableRowsCommand(int blockIndex) : IDocumentComman
 {
     private (double? HeightPt, TableRowHeightRule HeightRule)[]? _previous;
     private bool _applied;
+
+    /// <summary>
+    /// r227: mirrors Apply completely -- the table must resolve, it must have rows, and the
+    /// distributed heights must not already be in place. The third clause is the one this
+    /// command was missing: Distribute Rows twice in a row writes the same heights the
+    /// second time, and DistributeRows' own bool says only that the operation APPLIED, not
+    /// that it changed anything. WouldDistributeRows shares the target-height calculation
+    /// with the mutation so the two cannot disagree.
+    /// </summary>
+    public bool HasEffect(IDocumentCommandContext context) =>
+        TryGetTable(context, out var table)
+        && table.Rows.Count > 0
+        && TableLayoutOperations.WouldDistributeRows(table);
 
     public string Label => "Distribute Rows";
 
@@ -4604,6 +5060,12 @@ public sealed class DistributeTableColumnsCommand(int blockIndex) : IDocumentCom
     private double[]? _previousGridWidths;
     private double?[][]? _previousCellWidths;
     private bool _applied;
+    /// <summary>r227: the column twin of the Distribute Rows mirror above.</summary>
+    public bool HasEffect(IDocumentCommandContext context) =>
+        TryGetTable(context, out var table)
+        && table.ColumnCount > 0
+        && TableLayoutOperations.WouldDistributeColumns(table);
+
 
     public string Label => "Distribute Columns";
 
@@ -4772,13 +5234,15 @@ internal static class ChartSmartArtCommandHelpers
 {
     public static Chart? ChartAt(IDocumentCommandContext context, int paragraphIndex, int runIndex)
         => context.Document.Blocks.Count > paragraphIndex && paragraphIndex >= 0
-           && context.Document.Blocks[paragraphIndex] is Paragraph p
+           && paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p
            && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Chart : null;
 
     public static SmartArt? SmartArtAt(IDocumentCommandContext context, int paragraphIndex, int runIndex)
         => context.Document.Blocks.Count > paragraphIndex && paragraphIndex >= 0
-           && context.Document.Blocks[paragraphIndex] is Paragraph p
+           && paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[paragraphIndex] is Paragraph p
            && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].SmartArt : null;
 }
@@ -4793,6 +5257,12 @@ public sealed class SetChartKindCommand(int paragraphIndex, int runIndex, ChartK
     private bool _applied;
 
     public string Label => "Change Chart Type";
+
+    // r205 census, fixed r206: an equal-value setter -- re-confirming what the ribbon already shows
+    // pushed an undo entry that changed nothing, and that push clears redo.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is { } chart
+        && chart.Kind != kind;
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -4821,6 +5291,12 @@ public sealed class SetChartStyleCommand(int paragraphIndex, int runIndex, int s
 
     public string Label => "Change Chart Style";
 
+    // r205 census, fixed r206: an equal-value setter -- re-confirming what the ribbon already shows
+    // pushed an undo entry that changed nothing, and that push clears redo.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is { } chart
+        && chart.StyleId != styleId;
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart) return;
@@ -4847,6 +5323,11 @@ public sealed class SetChartColorSchemeCommand(int paragraphIndex, int runIndex,
     private bool _applied;
 
     public string Label => "Change Chart Colors";
+
+    // r205 census, fixed r206: an equal-value setter -- see SetCellShadingCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is { } chart
+        && chart.ColorSchemeId != colorSchemeId;
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -4879,6 +5360,11 @@ public sealed class SetChartQuickLayoutCommand(
     private bool _applied;
 
     public string Label => "Change Chart Layout";
+
+    // r205 census, fixed r206: an equal-value setter -- see SetCellShadingCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is { } chart
+        && chart.QuickLayoutId != layout.Id;
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -4943,6 +5429,12 @@ public sealed class SetChartTitleCommand(int paragraphIndex, int runIndex, strin
 
     public string Label => "Set Chart Title";
 
+    // r205 census, fixed r206: an equal-value setter -- see SetCellShadingCommand.HasEffect.
+    // Setting a title also CLEARS QuickLayoutId, so a non-zero one is itself a change.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is { } chart
+        && (chart.Title != Normalize(title) || chart.QuickLayoutId != 0);
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart)
@@ -4985,6 +5477,15 @@ public sealed class SetChartAxisTitlesCommand(
     private bool _applied;
 
     public string Label => "Set Chart Axis Titles";
+
+    // r205 census, fixed r206: an equal-value setter -- see SetCellShadingCommand.HasEffect.
+    // Mirrors BOTH guards, including the pie/doughnut one, and the QuickLayoutId clear.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is { } chart
+        && chart.Kind is not (ChartKind.Pie or ChartKind.Doughnut)
+        && (chart.CategoryAxisTitle != Normalize(categoryAxisTitle)
+            || chart.ValueAxisTitle != Normalize(valueAxisTitle)
+            || chart.QuickLayoutId != 0);
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -5080,6 +5581,11 @@ public sealed class SetSmartArtLayoutCommand(
 
     public string Label => "Change SmartArt Layout";
 
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ChartSmartArtCommandHelpers.SmartArtAt(context, paragraphIndex, runIndex) is { } sa
+        && (sa.Kind != kind || (layoutId is not null && sa.LayoutId != layoutId));
+
     public void Apply(IDocumentCommandContext context)
     {
         if (ChartSmartArtCommandHelpers.SmartArtAt(context, paragraphIndex, runIndex) is not { } sa) return;
@@ -5110,6 +5616,11 @@ public sealed class SetSmartArtColorCommand(int paragraphIndex, int runIndex, st
     private bool _applied;
 
     public string Label => "Change SmartArt Colors";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ChartSmartArtCommandHelpers.SmartArtAt(context, paragraphIndex, runIndex) is { } sa
+        && sa.ColorSchemeId != colorSchemeId;
 
     public void Apply(IDocumentCommandContext context)
     {
@@ -5283,6 +5794,11 @@ public sealed class SetSmartArtStyleCommand(int paragraphIndex, int runIndex, st
     private bool _applied;
 
     public string Label => "Change SmartArt Style";
+
+    // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ChartSmartArtCommandHelpers.SmartArtAt(context, paragraphIndex, runIndex) is { } smartArt
+        && smartArt.StyleId != styleId;
 
     public void Apply(IDocumentCommandContext context)
     {

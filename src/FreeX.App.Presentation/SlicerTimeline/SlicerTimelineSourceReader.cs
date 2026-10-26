@@ -47,7 +47,7 @@ public static class SlicerTimelineSourceReader
         for (var col = pivotTable.SourceRange.Start.Col; col <= pivotTable.SourceRange.End.Col; col++, index++)
         {
             var header = FormatValue(sourceSheet.GetValue(pivotTable.SourceRange.Start.Row, col));
-            if (string.Equals(header, sourceFieldName.Trim(), StringComparison.CurrentCultureIgnoreCase))
+            if (string.Equals(header, sourceFieldName.Trim(), StringComparison.OrdinalIgnoreCase))
                 return index;
         }
 

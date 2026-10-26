@@ -67,9 +67,9 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Descendants(presentation + "ComboBox")
             .Single(element => element.Attribute(x + "Name")?.Value == "CellAddressBox");
 
-        nameBox.Attribute("IsEditable")?.Value.Should().Be("True");
-        nameBox.Attribute("StaysOpenOnEdit")?.Value.Should().Be("True");
-        nameBox.Attribute("KeyDown")?.Value.Should().Be("CellAddressBox_KeyDown");
+        nameBox.Attribute("IsEditable")!.Value.Should().Be("True");
+        nameBox.Attribute("StaysOpenOnEdit")!.Value.Should().Be("True");
+        nameBox.Attribute("KeyDown")!.Value.Should().Be("CellAddressBox_KeyDown");
         source.Should().Contain("internal void CellAddressBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)");
         // K24/K48: whole-column (A:A) / whole-row (5:5) reference parsing moved from
         // GoToDialog's own parser into the shared WorkbookReferenceNavigator so the Name Box,
@@ -110,12 +110,12 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Descendants(presentation + "TextBlock")
             .Single(element => element.Attribute(x + "Name")?.Value == "FormulaBarReferenceOverlay");
 
-        formulaBar.Attribute("FontSize")?.Value.Should().Be("18");
-        formulaBar.Attribute("MinHeight")?.Value.Should().Be("30");
-        formulaBar.Attribute("Padding")?.Value.Should().Be("6,3");
-        nameBox.Attribute("FontSize")?.Value.Should().Be("15");
-        nameBox.Attribute("MinHeight")?.Value.Should().Be("30");
-        overlay.Attribute("FontSize")?.Value.Should().Be("18");
+        formulaBar.Attribute("FontSize")!.Value.Should().Be("18");
+        formulaBar.Attribute("MinHeight")!.Value.Should().Be("30");
+        formulaBar.Attribute("Padding")!.Value.Should().Be("6,3");
+        nameBox.Attribute("FontSize")!.Value.Should().Be("15");
+        nameBox.Attribute("MinHeight")!.Value.Should().Be("30");
+        overlay.Attribute("FontSize")!.Value.Should().Be("18");
     }
 
     [Theory]

@@ -178,6 +178,14 @@ public sealed class GroupedApplyStyleCommand : IWorkbookCommand, IEstimatesMemor
         // CommandOutcome.AffectedCells contract) knows which sheet(s) and range this grouped style
         // command touched -- without this, undoing it while a different sheet is active had
         // nothing to switch back to or restore a selection for.
+        // r239: the third and last of the trio r236 named. Two undo snapshots here rather
+        // than five -- cells with their style-only entry and its provenance tag, and the
+        // rich-text runs this command rewrites when the style diff touches run fonts -- and
+        // both are consulted, which is what makes the answer complete. Applying a style a
+        // range already carries is the gesture: the gallery highlights the current style.
+        if (NothingChanged(ctx))
+            return new CommandOutcome(true, IsNoOp: true);
+
         return new CommandOutcome(true, AffectedCells: _snapshot.ConvertAll(s => s.Address));
     }
 
@@ -217,5 +225,43 @@ public sealed class GroupedApplyStyleCommand : IWorkbookCommand, IEstimatesMemor
             foreach (var (sheetId, address, oldRuns) in _richTextSnapshot)
                 ctx.GetSheet(sheetId).RichTextRuns[address] = oldRuns;
         }
+    }
+
+    /// <summary>
+    /// r239: whether this command's writes left every grouped sheet as it found it. Both snapshots
+    /// participate, per the r237 invariant -- they are the record of everything written, so a
+    /// comparison that skipped the rich-text list would report "nothing changed" for a style whose
+    /// only effect was clearing an overridden run font.
+    /// </summary>
+    private bool NothingChanged(ICommandContext ctx)
+    {
+        if (_snapshot is not null)
+        {
+            foreach (var (sheetId, address, oldCell, oldStyleOnly, oldStyleOnlySource) in _snapshot)
+            {
+                var sheet = ctx.GetSheet(sheetId);
+                if (!CellEditCompanionSnapshot.SameCellOrAbsent(sheet, address, oldCell))
+                    return false;
+
+                if (oldCell is null
+                    && (!Nullable.Equals(oldStyleOnly, sheet.GetStyleOnly(address.Row, address.Col))
+                        || !Nullable.Equals(oldStyleOnlySource, sheet.GetStyleOnlySource(address.Row, address.Col))))
+                {
+                    return false;
+                }
+            }
+        }
+
+        if (_richTextSnapshot is null)
+            return true;
+
+        foreach (var (sheetId, address, oldRuns) in _richTextSnapshot)
+        {
+            var runs = ctx.GetSheet(sheetId).RichTextRuns;
+            if (!runs.TryGetValue(address, out var live) || !oldRuns.SequenceEqual(live))
+                return false;
+        }
+
+        return true;
     }
 }

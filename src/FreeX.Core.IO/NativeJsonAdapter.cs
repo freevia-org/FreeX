@@ -112,6 +112,12 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.IsVeryHidden = sDto.IsVeryHidden;
             sheet.Kind = NativeJsonValueSanitizer.ValidEnumOrDefault(sDto.Kind, SheetKind.Worksheet);
             sheet.TabColor = sDto.TabColor is { } tabColor ? ParseColor(tabColor) : null;
+            sheet.CodeName = sDto.CodeName;
+            sheet.TabThemeColor = NativeJsonColorMapper.ToThemeColorReference(sDto.TabThemeColor);
+            if (sDto.DefaultColumnWidth is { } defaultColumnWidth)
+                sheet.DefaultColumnWidth = defaultColumnWidth;
+            if (sDto.DefaultRowHeight is { } defaultRowHeight)
+                sheet.DefaultRowHeight = defaultRowHeight;
             sheet.IsProtected = sDto.IsProtected;
             sheet.ProtectionPassword = sDto.IsProtected ? sDto.ProtectionPassword : null;
             sheet.ProtectionMetadata = ToWorksheetProtectionMetadata(sDto.ProtectionMetadata);
@@ -472,6 +478,12 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                     if (cDto.Formula != null && value is not BlankValue)
                         cell.Value = value;
                     cell.IgnoreFormulaError = cDto.IgnoreFormulaError;
+                    cell.QuotePrefix = cDto.QuotePrefix;
+                    // r201: AFTER the formula is set. Cell.FormulaText's setter zeroes ArrayMode and
+                    // both Legacy* fields on every assignment (a fresh edit is always a modern
+                    // formula), so assigning these first would silently restore nothing.
+                    cell.LegacyArrayRows = cDto.LegacyArrayRows;
+                    cell.LegacyArrayCols = cDto.LegacyArrayCols;
                     if (ResolveCellStyleId(workbook, cellStyleTable, ref styleIdCache, cDto.StyleId, cDto.Style) is { } styleId)
                         cell.StyleId = styleId;
                     sheet.SetCell(addr, cell);
@@ -769,7 +781,9 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         while (workbook.ValidateSheetName(candidate) is not null)
         {
             var marker = $" ({suffix++})";
-            candidate = string.Concat(baseName.AsSpan(0, Math.Min(baseName.Length, 31 - marker.Length)), marker);
+            // r195: see SurrogateSafeTruncation -- this loop re-slices at a different cut point than
+            // the initial truncation, so it needs the same guard.
+            candidate = SurrogateSafeTruncation.LimitToTextElements(baseName, 31 - marker.Length) + marker;
         }
 
         return candidate;
@@ -786,7 +800,11 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         if (string.IsNullOrWhiteSpace(sanitized))
             return "Sheet";
 
-        return sanitized.Length <= 31 ? sanitized : sanitized[..31];
+        // r194: see SurrogateSafeTruncation -- a raw [..31] can leave a lone surrogate that makes
+        // every later .xlsx save throw.
+        return sanitized.Length <= 31
+            ? sanitized
+            : SurrogateSafeTruncation.LimitToTextElements(sanitized, 31);
     }
 
     private static string FormatColor(CellColor color) => NativeJsonColorMapper.FormatColor(color);

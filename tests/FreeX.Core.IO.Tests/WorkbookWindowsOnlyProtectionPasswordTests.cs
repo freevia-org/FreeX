@@ -60,8 +60,8 @@ public sealed class WorkbookWindowsOnlyProtectionPasswordTests
             var workbookXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/workbook.xml");
             var savedProtection = workbookXml.Root!.Element(WorkbookNs + "workbookProtection");
             savedProtection.Should().NotBeNull("lockWindows was set, so the element must still be written");
-            savedProtection!.Attribute("lockWindows")?.Value.Should().Be("1", "Windows protection must round-trip");
-            savedProtection.Attribute("workbookPassword")?.Value.Should().Be("CC81",
+            savedProtection!.Attribute("lockWindows")!.Value.Should().Be("1", "Windows protection must round-trip");
+            savedProtection.Attribute("workbookPassword")!.Value.Should().Be("CC81",
                 "the password must be re-emitted, not silently dropped, on a full rebuild save");
             savedProtection.Attribute("lockStructure").Should().BeNull(
                 "structure was never locked -- lockStructure must not be fabricated");
@@ -107,8 +107,8 @@ public sealed class WorkbookWindowsOnlyProtectionPasswordTests
         var workbookXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/workbook.xml");
         var savedProtection = workbookXml.Root!.Element(WorkbookNs + "workbookProtection");
         savedProtection.Should().NotBeNull();
-        savedProtection!.Attribute("lockStructure")?.Value.Should().Be("1");
-        savedProtection.Attribute("workbookPassword")?.Value.Should().Be("83AF");
+        savedProtection!.Attribute("lockStructure")!.Value.Should().Be("1");
+        savedProtection.Attribute("workbookPassword")!.Value.Should().Be("83AF");
     }
 
     // ── Test helper (mirrors WorkbookUnprotectMetadataPreservationTests/PProtectionFixesTests) ──

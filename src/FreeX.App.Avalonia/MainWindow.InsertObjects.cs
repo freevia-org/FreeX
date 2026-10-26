@@ -12,6 +12,7 @@ using Avalonia.Platform.Storage;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.DrawingUI;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.App.Presentation.TableUI;
 using FreeX.App.Services;
@@ -140,6 +141,13 @@ public sealed partial class MainWindow
     /// </summary>
     private void InsertShapeAtActiveCell(DrawingShapeKind kind)
     {
+        // r607: the shell stays interactive during an open or a save, and the save
+        // hands the LIVE workbook to the adapter on a background thread -- so a mutation
+        // from here races the serializer over the same object graph. 243 sibling handlers
+        // carry this guard; these did not.
+        if (_isOpening || _isSaving)
+            return;
+
         if (!TryCommitPendingFormulaEdit())
             return;
 
@@ -166,6 +174,13 @@ public sealed partial class MainWindow
     /// </summary>
     private void InsertTextBoxAtActiveCell()
     {
+        // r607: the shell stays interactive during an open or a save, and the save
+        // hands the LIVE workbook to the adapter on a background thread -- so a mutation
+        // from here races the serializer over the same object graph. 243 sibling handlers
+        // carry this guard; these did not.
+        if (_isOpening || _isSaving)
+            return;
+
         if (!TryCommitPendingFormulaEdit())
             return;
 
@@ -187,6 +202,13 @@ public sealed partial class MainWindow
     /// <summary>Inserts a supported legacy Form Control at the active cell through the shared undoable command path.</summary>
     private void InsertFormControlAtActiveCell(FreeX.Core.Model.FormControlKind kind)
     {
+        // r607: the shell stays interactive during an open or a save, and the save
+        // hands the LIVE workbook to the adapter on a background thread -- so a mutation
+        // from here races the serializer over the same object graph. 243 sibling handlers
+        // carry this guard; these did not.
+        if (_isOpening || _isSaving)
+            return;
+
         if (!TryCommitPendingFormulaEdit())
             return;
 
@@ -256,7 +278,10 @@ public sealed partial class MainWindow
             return;
 
         var sourceRange = TableCreationPlanner.PlanSourceRange(_session.ActiveSheet, _session.SelectedRange);
-        var defaultRangeText = FormatRangeReference(sourceRange);
+        var defaultRangeText = DialogRangeSelectionFormatter.Format(
+            sourceRange,
+            DialogRangeSelectionFormat.AbsoluteRange,
+            new DialogRangeSelectionFormatContext(null, null, UseR1C1ReferenceStyle: false));
         var defaultStyle = TableStyleGalleryPlanner.GetOption(0, _session.Workbook.Theme);
         var plan = await ShowCreateTableDialogAsync(defaultRangeText, defaultStyle.StyleName);
         if (plan is null)

@@ -98,7 +98,7 @@ public static class RibbonWpfRenderer
 
         return new Border
         {
-            Background = Brush(resourceHost, "FreeXRibbonSurfaceBrush", Brushes.White),
+            Background = RibbonThemeBrushes.Resolve(resourceHost, "RibbonSurface", Brushes.White),
             Padding = new Thickness(0, RibbonVisualMetrics.TabContentTopPadding, 0, 0),
             Child = panel
         };
@@ -1249,7 +1249,7 @@ public static class RibbonWpfRenderer
         var divider = new Rectangle
         {
             Width = 1,
-            Fill = Brush(resourceHost, "FreeXBorderBrush", new SolidColorBrush(Color.FromRgb(0xDA, 0xDC, 0xE0))),
+            Fill = RibbonThemeBrushes.Resolve(resourceHost, "Border", new SolidColorBrush(Color.FromRgb(0xDA, 0xDC, 0xE0))),
             Margin = new Thickness(2, 5, 3, 18),
             VerticalAlignment = VerticalAlignment.Stretch,
             SnapsToDevicePixels = true

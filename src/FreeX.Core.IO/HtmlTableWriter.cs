@@ -34,7 +34,16 @@ internal static class HtmlTableWriter
             return;
         }
 
-        var sheet = workbook.Sheets[0];
+        // r310: HTML holds one sheet, so which one it keeps is the whole question. Every other
+        // single-sheet writer here exports the ACTIVE sheet — DelimitedTextWorkbookWriter states the
+        // rule outright, and DIF, PRN and SLK follow it — because that is what Excel's Save-As does
+        // and what the user means by "save this". This one took Sheets[0], so a user who switched
+        // tabs and exported got a different sheet than the one on screen, with no warning naming the
+        // one they were looking at.
+        var activeSheetIndex = workbook.ActiveSheetIndex is { } index && index >= 0 && index < workbook.Sheets.Count
+            ? index
+            : 0;
+        var sheet = workbook.Sheets[activeSheetIndex];
         var used = sheet.GetUsedRange();
         writer.WriteLine("<table border=\"1\" style=\"border-collapse:collapse\">");
 

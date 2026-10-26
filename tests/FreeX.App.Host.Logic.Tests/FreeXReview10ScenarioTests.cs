@@ -228,14 +228,8 @@ public sealed class FreeXReview10ScenarioTests
         window.SaveScenarioFromDialog(scenarioName, changingCellsText, comment, hidden, locked, replaceScenarioName);
     }
 
-    private static void PumpDispatcher()
-    {
-        var frame = new System.Windows.Threading.DispatcherFrame();
-        System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
-            System.Windows.Threading.DispatcherPriority.Background,
-            new Action(() => frame.Continue = false));
-        System.Windows.Threading.Dispatcher.PushFrame(frame);
-    }
+    // r446: delegates to the one fixed implementation -- see R49MainWindowTestHarness.
+    private static void PumpDispatcher() => R49MainWindowTestHarness.PumpDispatcher();
 
     /// <summary>
     /// No-op <see cref="IUserMessageService"/> for tests that construct <see cref="MainWindow"/>

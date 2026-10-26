@@ -32,6 +32,14 @@ public sealed class ApplyConditionalFormatCommand : IWorkbookCommand
         var idx = FindConditionalFormatIndex(sheet, _format.Id);
         if (idx >= 0)
         {
+            // r249: the Conditional Formatting rules dialog pre-fills the rule being edited,
+            // so pressing OK without changing anything replaces a rule with an equal one.
+            // ConditionalFormat.SameAs compares content, because the type is a class with
+            // reference equality and sixty members -- and its coverage contract derives that
+            // member list from Clone, which the type has to keep correct anyway.
+            if (sheet.ConditionalFormats[idx].SameAs(_format))
+                return new CommandOutcome(true, IsNoOp: true);
+
             _previous = sheet.ConditionalFormats[idx];
             sheet.ConditionalFormats[idx] = _format;
         }
@@ -139,6 +147,17 @@ public sealed class ClearConditionalFormatsCommand : IWorkbookCommand
             newRules.Add(shrunk);
         }
 
+        // r220: reference equality is exactly the right test here, and that is not a shortcut. A
+        // rule the loop left alone is added to newRules BY REFERENCE; a rule it shrank is a fresh
+        // Clone; a rule it dropped is missing. So "same count and every element the same object"
+        // means the loop changed nothing -- Clear Rules over a selection no rule covers.
+        if (newRules.Count == sheet.ConditionalFormats.Count
+            && !newRules.Where((rule, index) => !ReferenceEquals(rule, sheet.ConditionalFormats[index])).Any())
+        {
+            _previousRules = null;
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         sheet.ConditionalFormats.Clear();
         sheet.ConditionalFormats.AddRange(newRules);
         return new CommandOutcome(true);
@@ -182,6 +201,16 @@ public sealed class ReplaceAllConditionalFormatsCommand : IWorkbookCommand
         foreach (var rule in _newRules)
             if (ConditionalFormatValidator.Validate(_sheetId, rule) is { } validationOutcome)
                 return validationOutcome;
+
+        // r200: the Manage Rules dialog rebuilds this list and commits whether or not the user
+        // changed anything, so closing it with OK after only looking pushed an undo entry -- which
+        // clears redo. Reference equality is the right test: an untouched rule is the very instance
+        // the dialog was handed, and an edited one is a rebuilt object.
+        if (_newRules.Count == sheet.ConditionalFormats.Count &&
+            !_newRules.Where((rule, index) => !ReferenceEquals(rule, sheet.ConditionalFormats[index])).Any())
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
 
         _previousRules = [.. sheet.ConditionalFormats];
         sheet.ConditionalFormats.Clear();

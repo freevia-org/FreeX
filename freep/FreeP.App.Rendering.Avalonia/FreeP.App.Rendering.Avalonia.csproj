@@ -19,6 +19,16 @@
     <IntermediateOutputPath>obj/TestSupport/$(Configuration)/$(TargetFramework)/</IntermediateOutputPath>
   </PropertyGroup>
 
+  <!-- Same reasoning as FreeP.App.Rendering.Wpf: FreePRendererTestSupport arrives as a GLOBAL
+       property from the test projects' ProjectReference and would otherwise propagate to every
+       dependency, building each one a second time under a different global-property set while
+       writing the same obj/ path. Undefine it for our references so each dependency is built once. -->
+  <ItemDefinitionGroup>
+    <ProjectReference>
+      <UndefineProperties>FreePRendererTestSupport</UndefineProperties>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+
   <ItemGroup Condition="'$(FreePRendererTestSupport)' == 'true'">
     <Compile Include="../TestSupport/Rendering.Avalonia/AvaloniaCanvasGestureHandler.TestAccess.cs"
              Link="AvaloniaCanvasGestureHandler.TestAccess.cs" />

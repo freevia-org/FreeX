@@ -760,7 +760,7 @@ public sealed class WordArtRoundTripTests
             var linEl = xml.Descendants(DrawingNs + "lin").FirstOrDefault(
                 e => e.Parent?.Name.LocalName == "gradFill" && e.Parent?.Parent?.Name.LocalName == "rPr");
             linEl.Should().NotBeNull("<a:lin> under rPr/gradFill must be present");
-            linEl!.Attribute("ang")?.Value.Should().Be("0", "authored angle 0 must be written as-is");
+            linEl!.Attribute("ang")!.Value.Should().Be("0", "authored angle 0 must be written as-is");
         }
 
         // Reload: angle must come back as 0.

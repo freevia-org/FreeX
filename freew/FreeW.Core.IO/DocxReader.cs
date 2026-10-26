@@ -6,6 +6,7 @@ using Free.Shared.Drawing;
 using Free.Shared.Opc;
 using FreeW.Core.Model;
 using static FreeW.Core.IO.Ooxml;
+using System.Globalization;
 
 namespace FreeW.Core.IO;
 
@@ -118,7 +119,34 @@ public static class DocxReader
         }
     }
 
+    /// <summary>
+    /// r598: an XmlException anywhere in the read means the package being OPENED is malformed, and
+    /// this reader already owns the sentence for that -- OpenZipArchive above says "it may be
+    /// corrupted or truncated" when the ZIP itself will not parse. A valid zip holding a TRUNCATED
+    /// xml part slipped straight past that and threw a raw XmlException instead, so the same damage
+    /// produced two different errors depending on which layer noticed, one of them framework text
+    /// ("Unexpected end of file has occurred. The following elements are not closed").
+    /// <para>
+    /// Nothing here parses FreeW's own output, so the exception type alone is sufficient evidence of
+    /// a damaged input -- the same reasoning r596 applied to the xlsx reader, and the reason this
+    /// needs no stack-frame test to go with it. The original is kept as InnerException.
+    /// </para>
+    /// </summary>
     public static TextDocument Read(Stream stream)
+    {
+        try
+        {
+            return ReadCore(stream);
+        }
+        catch (System.Xml.XmlException ex)
+        {
+            throw new InvalidDataException(
+                "Could not read this as a Word document (.docx/.docm/.dotx/.dotm). The file is not a valid " +
+                "OOXML package -- it may be corrupted or truncated.", ex);
+        }
+    }
+
+    private static TextDocument ReadCore(Stream stream)
     {
         using var archive = OpenZipArchive(stream);
         // Reject zip-bomb / oversized packages before any decompression-heavy reads (same guard xlsx uses).
@@ -159,7 +187,26 @@ public static class DocxReader
         MarkDuplicateDrawingIdentities(documentXml.Root);
 
         var body = documentXml.Root?.Element(W + "body");
-        if (body is not null)
+
+        // r449: a document part with no w:body at all is not a document this reader understands, and
+        // must be reported rather than opened. The lookup above is null-tolerant, so a word/document.xml
+        // whose root is unrecognised -- a partially written save, or an unexpected namespace -- read
+        // no blocks; the "no blocks, add an empty paragraph" fallback below then manufactured a
+        // convincing blank page out of it. The user opens their document, sees one empty paragraph,
+        // and saving overwrites the original with that. Sibling of the same defect in FreeP's reader
+        // (r448), found by the same probe.
+        //
+        // Narrow on purpose: a genuinely empty Word document still carries <w:body> (Word always
+        // writes one, with at least a sectPr), so this rejects only the contradiction -- a document
+        // part that exists and parses, yet has no body to read.
+        if (body is null)
+        {
+            throw new InvalidDataException(
+                "This document appears to be damaged: its main document part could not be read. " +
+                "Opening it would show an empty document and saving would discard the content it " +
+                "still holds.");
+        }
+
         {
             // Word suppresses automatic paragraph spacing (w:before/afterAutospacing) BETWEEN two
             // consecutive auto-spaced paragraphs — a block (e.g. an HTML-paste list) reads as tight, with
@@ -1055,7 +1102,7 @@ public static class DocxReader
         var flat = new List<(Comment Comment, string? ParaId)>();
         foreach (var element in root.Elements(W + "comment"))
         {
-            if (!int.TryParse(element.Attribute(W + "id")?.Value, out var id))
+            if (!int.TryParse(element.Attribute(W + "id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
                 continue;
 
             var comment = new Comment(id)
@@ -1159,7 +1206,7 @@ public static class DocxReader
             var type = element.Attribute(W + "type")?.Value;
             if (type is "separator" or "continuationSeparator")
                 continue;
-            if (!int.TryParse(element.Attribute(W + "id")?.Value, out var id))
+            if (!int.TryParse(element.Attribute(W + "id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
                 continue;
 
             var footnote = new Footnote(id)
@@ -1207,7 +1254,7 @@ public static class DocxReader
             var type = element.Attribute(W + "type")?.Value;
             if (type is "separator" or "continuationSeparator")
                 continue;
-            if (!int.TryParse(element.Attribute(W + "id")?.Value, out var id))
+            if (!int.TryParse(element.Attribute(W + "id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
                 continue;
 
             var endnote = new Endnote(id)
@@ -1346,7 +1393,7 @@ public static class DocxReader
         var cols = sectPr.Element(W + "cols");
         if (cols is not null)
         {
-            if (int.TryParse(cols.Attribute(W + "num")?.Value, out var num) && num >= 1)
+            if (int.TryParse(cols.Attribute(W + "num")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var num) && num >= 1)
                 page.ColumnCount = num;
             if (cols.Attribute(W + "space") is { } space)
                 page.ColumnSpacingPt = DxaToPoints(space.Value);
@@ -1817,7 +1864,7 @@ public static class DocxReader
         {
             if (child.Name == W + "commentRangeStart")
             {
-                if (int.TryParse(child.Attribute(W + "id")?.Value, out var startId))
+                if (int.TryParse(child.Attribute(W + "id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var startId))
                     activeCommentId = startId;
             }
             else if (child.Name == W + "commentRangeEnd")
@@ -2750,7 +2797,7 @@ public static class DocxReader
         {
             // A run carrying a w:commentReference is the textless comment anchor; recover it.
             var commentRef = child.Element(W + "commentReference");
-            if (commentRef is not null && int.TryParse(commentRef.Attribute(W + "id")?.Value, out var refId))
+            if (commentRef is not null && int.TryParse(commentRef.Attribute(W + "id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var refId))
             {
                 var referenceRun = Run.CommentReference(refId);
                 if (revision.Kind != RevisionKind.None)
@@ -2826,7 +2873,7 @@ public static class DocxReader
                 kind,
                 child.Attribute(W + "author")?.Value,
                 child.Attribute(W + "date")?.Value,
-                isMove && int.TryParse(child.Attribute(W + "id")?.Value, out var moveId) ? moveId : null,
+                isMove && int.TryParse(child.Attribute(W + "id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var moveId) ? moveId : null,
                 childNested);
             AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, childRevision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets, subDocumentRelationships);
         }
@@ -2962,7 +3009,7 @@ public static class DocxReader
     }
 
     private static int? ParseNullableInt(string? value) =>
-        int.TryParse(value, out var result) ? result : null;
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result) ? result : null;
 
     /// <summary>
     /// Reads a Word phonetic guide (<c>w:ruby</c>). The base characters remain the run's fallback text so
@@ -3033,7 +3080,7 @@ public static class DocxReader
     };
 
     private static int? ReadRubyHalfPoints(string? value) =>
-        int.TryParse(value, out var halfPoints) ? halfPoints : null;
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var halfPoints) ? halfPoints : null;
 
     /// <summary>
     /// Reads a w:fldSimple. A recognised field (PAGE, DATE, TIME, FILENAME, AUTHOR, NUMPAGES) becomes a
@@ -3638,7 +3685,7 @@ public static class DocxReader
         var shortForm = SwitchValue(trimmed, 's');
         var category = CitationCategory.Cases;
         if (SwitchValue(trimmed, 'c') is { } categoryText
-            && int.TryParse(categoryText, out var categoryNumber)
+            && int.TryParse(categoryText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var categoryNumber)
             && Enum.IsDefined(typeof(CitationCategory), categoryNumber))
         {
             category = (CitationCategory)categoryNumber;
@@ -4188,7 +4235,7 @@ public static class DocxReader
 
         // A run wrapping a w:footnoteReference is a footnote marker; recover its id into the model.
         var footnoteRef = r.Element(W + "footnoteReference");
-        if (footnoteRef is not null && int.TryParse(footnoteRef.Attribute(W + "id")?.Value, out var footnoteId))
+        if (footnoteRef is not null && int.TryParse(footnoteRef.Attribute(W + "id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var footnoteId))
         {
             var footnoteRun = Run.FootnoteReference(footnoteId, ReadRunFormatting(r.Element(W + "rPr")));
             footnoteRun.StyleId = ReadRunStyleId(r.Element(W + "rPr"));
@@ -4199,7 +4246,7 @@ public static class DocxReader
 
         // A run wrapping a w:endnoteReference is an endnote marker; recover its id into the model.
         var endnoteRef = r.Element(W + "endnoteReference");
-        if (endnoteRef is not null && int.TryParse(endnoteRef.Attribute(W + "id")?.Value, out var endnoteId))
+        if (endnoteRef is not null && int.TryParse(endnoteRef.Attribute(W + "id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var endnoteId))
         {
             var endnoteRun = Run.EndnoteReference(endnoteId, ReadRunFormatting(r.Element(W + "rPr")));
             endnoteRun.StyleId = ReadRunStyleId(r.Element(W + "rPr"));
@@ -4488,8 +4535,19 @@ public static class DocxReader
         var grid = tbl.Element(W + "tblGrid");
         if (grid is not null)
         {
-            foreach (var gridCol in grid.Elements(W + "gridCol"))
-                table.ColumnWidthsPt.Add(DxaToPoints(gridCol.Attribute(W + "w")?.Value));
+            // r335: w:w is OPTIONAL on w:gridCol -- a grid may declare the column COUNT while leaving
+            // the widths to the layout engine, which is what the writer now emits for a table whose
+            // model carries no widths (tblGrid itself is mandatory, so it can no longer be omitted).
+            // Reading a width from an attribute that is not there invented one, so a width-less table
+            // came back carrying widths. If any column lacks an explicit width the grid does not
+            // describe a usable set, so none are taken: partial widths would misalign the columns
+            // they do describe.
+            var columns = grid.Elements(W + "gridCol").ToList();
+            if (columns.Count > 0 && columns.All(c => c.Attribute(W + "w") is not null))
+            {
+                foreach (var gridCol in columns)
+                    table.ColumnWidthsPt.Add(DxaToPoints(gridCol.Attribute(W + "w")?.Value));
+            }
         }
 
         var rowIndex = 0;
@@ -4567,7 +4625,7 @@ public static class DocxReader
 
                     // Horizontal merge: w:gridSpan w:val="N". Absent (or <2) means no span.
                     var gridSpan = tcPr.Element(W + "gridSpan")?.Attribute(W + "val")?.Value;
-                    if (gridSpan is not null && int.TryParse(gridSpan, out var span) && span > 1)
+                    if (gridSpan is not null && int.TryParse(gridSpan, NumberStyles.Integer, CultureInfo.InvariantCulture, out var span) && span > 1)
                         cell.GridSpan = span;
 
                     // Vertical merge: w:vMerge with w:val="restart" starts a run; a w:vMerge with no
@@ -4710,7 +4768,7 @@ public static class DocxReader
             var colorRaw = el.Attribute(W + "color")?.Value;
             var colorHex = colorRaw is null or "auto" ? "#000000" : "#" + colorRaw.TrimStart('#');
             var szRaw = el.Attribute(W + "sz")?.Value;
-            var widthPt = szRaw is not null && int.TryParse(szRaw, out var sz) ? sz / 8.0 : 0.5;
+            var widthPt = szRaw is not null && int.TryParse(szRaw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sz) ? sz / 8.0 : 0.5;
             return new CellBorderEdge(style, colorHex, widthPt);
         }
         var top = ReadEdge("top");
@@ -4737,7 +4795,7 @@ public static class DocxReader
         {
             var el = tblBorders.Element(W + name);
             if (el is null || el.Attribute(W + "val")?.Value is "none" or "nil") return null;
-            var widthPt = int.TryParse(el.Attribute(W + "sz")?.Value, out var sz) ? sz / 8.0 : 0.5;
+            var widthPt = int.TryParse(el.Attribute(W + "sz")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sz) ? sz / 8.0 : 0.5;
             return new TableBorderEdge(
                 BorderLineStyles.FromToken(el.Attribute(W + "val")?.Value),
                 el.Attribute(W + "color")?.Value ?? "auto",
@@ -4918,7 +4976,7 @@ public static class DocxReader
         placement.WrapTextSide = ReadWrapTextSide(anchor);
 
         if (anchor.Attribute("relativeHeight")?.Value is { } relH
-            && int.TryParse(relH, out var zOrder))
+            && int.TryParse(relH, NumberStyles.Integer, CultureInfo.InvariantCulture, out var zOrder))
             placement.ZOrderIndex = zOrder;
 
         var positionH = anchor.Element(Wp + "positionH");
@@ -4937,7 +4995,7 @@ public static class DocxReader
 
         // Z-order: relativeHeight is an integer on wp:anchor; default 0 when absent or unparseable.
         if (anchor.Attribute("relativeHeight")?.Value is { } relH
-            && int.TryParse(relH, out var zOrder))
+            && int.TryParse(relH, NumberStyles.Integer, CultureInfo.InvariantCulture, out var zOrder))
             image.ZOrderIndex = zOrder;
 
         var positionH = anchor.Element(Wp + "positionH");
@@ -4959,7 +5017,7 @@ public static class DocxReader
         var xfrm = picPic.Descendants(A + "xfrm").FirstOrDefault();
         if (xfrm is not null)
         {
-            if (xfrm.Attribute("rot")?.Value is { } rotStr && long.TryParse(rotStr, out var rotEmu))
+            if (xfrm.Attribute("rot")?.Value is { } rotStr && long.TryParse(rotStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotEmu))
                 image.RotationAngle = rotEmu / 60000.0;
             image.FlipH = xfrm.Attribute("flipH")?.Value is "1" or "true";
             image.FlipV = xfrm.Attribute("flipV")?.Value is "1" or "true";
@@ -4970,7 +5028,7 @@ public static class DocxReader
         if (srcRect is not null)
         {
             static double PerMille(string? val) =>
-                long.TryParse(val, out var v) ? v / 100000.0 : 0;
+                long.TryParse(val, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v / 100000.0 : 0;
             image.CropLeft   = PerMille(srcRect.Attribute("l")?.Value);
             image.CropRight  = PerMille(srcRect.Attribute("r")?.Value);
             image.CropTop    = PerMille(srcRect.Attribute("t")?.Value);
@@ -4993,12 +5051,12 @@ public static class DocxReader
                 // BlackWhite: grayscl + lum with large positive contrast.
                 var lumEl = blip.Element(A + "lum");
                 if (lumEl is not null
-                    && long.TryParse(lumEl.Attribute("contrast")?.Value, out var bwContrast)
+                    && long.TryParse(lumEl.Attribute("contrast")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var bwContrast)
                     && bwContrast >= 90000)
                 {
                     image.RecolorMode = ImageRecolorMode.BlackWhite;
                     // BrightnessPct from the lum @bright attr.
-                    if (long.TryParse(lumEl.Attribute("bright")?.Value, out var bwBright))
+                    if (long.TryParse(lumEl.Attribute("bright")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var bwBright))
                         image.BrightnessPct = bwBright / 1000.0;
                 }
                 else
@@ -5017,13 +5075,13 @@ public static class DocxReader
                 var alphaFixEl = blip.Element(A + "alphaModFix");
                 var lumWashEl  = blip.Element(A + "lum");
                 if (alphaFixEl is not null
-                    && long.TryParse(alphaFixEl.Attribute("amt")?.Value, out var washAmt) && washAmt == 50000
+                    && long.TryParse(alphaFixEl.Attribute("amt")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var washAmt) && washAmt == 50000
                     && lumWashEl is not null
-                    && long.TryParse(lumWashEl.Attribute("bright")?.Value, out var washBright) && washBright >= 40000)
+                    && long.TryParse(lumWashEl.Attribute("bright")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var washBright) && washBright >= 40000)
                 {
                     image.RecolorMode = ImageRecolorMode.Washout;
                     image.BrightnessPct = (washBright - 40000) / 1000.0;
-                    long.TryParse(lumWashEl.Attribute("contrast")?.Value, out var washContrast);
+                    long.TryParse(lumWashEl.Attribute("contrast")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var washContrast);
                     image.ContrastPct = washContrast / 1000.0;
                 }
             }
@@ -5039,12 +5097,12 @@ public static class DocxReader
             // current packages use a:extLst so Word's schema validator accepts the document.
             var tempRaw = blip.Attribute(FreeWExt + "colorTemp")?.Value
                 ?? ReadFreeWBlipExtensionValue(blip, "colorTemp");
-            if (tempRaw is not null && long.TryParse(tempRaw, out var tempVal))
+            if (tempRaw is not null && long.TryParse(tempRaw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var tempVal))
                 image.ColorTemperature = tempVal / 1000.0;
 
             var artisticRaw = blip.Attribute(FreeWExt + "artisticEffect")?.Value
                 ?? ReadFreeWBlipExtensionValue(blip, "artisticEffect");
-            if (artisticRaw is not null && int.TryParse(artisticRaw, out var artisticId)
+            if (artisticRaw is not null && int.TryParse(artisticRaw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var artisticId)
                 && Enum.IsDefined(typeof(ImageArtisticEffect), artisticId))
                 image.ArtisticEffect = (ImageArtisticEffect)artisticId;
             var artisticBakedRaw = ReadFreeWBlipExtensionValue(blip, "artisticEffectBaked");
@@ -5058,20 +5116,20 @@ public static class DocxReader
                 if (lum is not null)
                 {
                     static double PerMillePct(string? val) =>
-                        long.TryParse(val, out var v) ? v / 1000.0 : 0;
+                        long.TryParse(val, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v / 1000.0 : 0;
                     image.BrightnessPct = PerMillePct(lum.Attribute("bright")?.Value);
                     image.ContrastPct   = PerMillePct(lum.Attribute("contrast")?.Value);
                 }
 
                 // a:alphaModFix: opacity per-mille = (100 - transparencyPct) × 1000.
                 var alphaFix = blip.Element(A + "alphaModFix");
-                if (alphaFix is not null && long.TryParse(alphaFix.Attribute("amt")?.Value, out var amt))
+                if (alphaFix is not null && long.TryParse(alphaFix.Attribute("amt")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var amt))
                     image.TransparencyPct = 100.0 - amt / 1000.0;
             }
 
             // a:satMod: saturation modifier per-mille (100 % = 100000; neutral = omitted).
             var satMod = blip.Element(A + "satMod");
-            if (satMod is not null && long.TryParse(satMod.Attribute("val")?.Value, out var satVal))
+            if (satMod is not null && long.TryParse(satMod.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var satVal))
                 image.SaturationPct = satVal / 1000.0;
         }
 
@@ -5084,10 +5142,10 @@ public static class DocxReader
             var outerShdw = effectLst.Element(A + "outerShdw");
             if (outerShdw is not null)
             {
-                if (long.TryParse(outerShdw.Attribute("dir")?.Value, out var shdwDir)
+                if (long.TryParse(outerShdw.Attribute("dir")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shdwDir)
                     && shdwDir == 270 * 60000)
                     image.ShadowPreset = 4;
-                else if (long.TryParse(outerShdw.Attribute("blurRad")?.Value, out var shdwBlur))
+                else if (long.TryParse(outerShdw.Attribute("blurRad")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shdwBlur))
                     image.ShadowPreset = shdwBlur <= 4 * 12700 ? 1
                                         : shdwBlur <= 6 * 12700 ? 2
                                         : shdwBlur <= 8 * 12700 ? 3 : 5;
@@ -5099,7 +5157,7 @@ public static class DocxReader
             var glow = effectLst.Element(A + "glow");
             if (glow is not null)
             {
-                if (long.TryParse(glow.Attribute("rad")?.Value, out var glowRad))
+                if (long.TryParse(glow.Attribute("rad")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var glowRad))
                     image.GlowSizePt = glowRad / 12700.0;
                 image.GlowColorHex = glow.Descendants(A + "srgbClr").FirstOrDefault()?.Attribute("val")?.Value;
             }
@@ -5108,8 +5166,8 @@ public static class DocxReader
             var reflection = effectLst.Element(A + "reflection");
             if (reflection is not null)
             {
-                long.TryParse(reflection.Attribute("dist")?.Value, out var refDist);
-                long.TryParse(reflection.Attribute("stA")?.Value,  out var refStA);
+                long.TryParse(reflection.Attribute("dist")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var refDist);
+                long.TryParse(reflection.Attribute("stA")?.Value,  NumberStyles.Integer, CultureInfo.InvariantCulture, out var refStA);
                 image.ReflectionPreset =
                     refStA < 60000 && refDist < 1000 ? 1   // tight, touching
                     : refStA < 60000 && refDist < 6 * 12700 ? 2  // tight, 4pt
@@ -5120,12 +5178,12 @@ public static class DocxReader
 
             // a:softEdge → SoftEdgePt.
             var softEdge = effectLst.Element(A + "softEdge");
-            if (softEdge is not null && long.TryParse(softEdge.Attribute("rad")?.Value, out var seRad))
+            if (softEdge is not null && long.TryParse(softEdge.Attribute("rad")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var seRad))
                 image.SoftEdgePt = seRad / 12700.0;
 
             // a:innerShdw → BevelPreset (approximation; @dir encodes preset 1-4).
             var innerShdw = effectLst.Element(A + "innerShdw");
-            if (innerShdw is not null && long.TryParse(innerShdw.Attribute("dir")?.Value, out var bevelDir))
+            if (innerShdw is not null && long.TryParse(innerShdw.Attribute("dir")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var bevelDir))
                 image.BevelPreset = (int)(bevelDir / (90 * 60000)) + 1;
 
             // DrawingML color transforms default to fully opaque when a:alpha is absent.
@@ -5137,40 +5195,40 @@ public static class DocxReader
             if (outerShdw is not null)
             {
                 importedEffects.HasShadow = true;
-                if (int.TryParse(outerShdw.Attribute("blurRad")?.Value, out var blurRad)) importedEffects.ShadowBlurRad = blurRad;
-                if (int.TryParse(outerShdw.Attribute("dist")?.Value, out var distance)) importedEffects.ShadowDist = distance;
-                if (int.TryParse(outerShdw.Attribute("dir")?.Value, out var direction)) importedEffects.ShadowDir = direction;
+                if (int.TryParse(outerShdw.Attribute("blurRad")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var blurRad)) importedEffects.ShadowBlurRad = blurRad;
+                if (int.TryParse(outerShdw.Attribute("dist")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var distance)) importedEffects.ShadowDist = distance;
+                if (int.TryParse(outerShdw.Attribute("dir")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var direction)) importedEffects.ShadowDir = direction;
                 var color = outerShdw.Descendants(A + "srgbClr").FirstOrDefault()?.Attribute("val")?.Value;
                 if (!string.IsNullOrWhiteSpace(color)) importedEffects.ShadowColorHex = color;
-                if (int.TryParse(outerShdw.Descendants(A + "alpha").FirstOrDefault()?.Attribute("val")?.Value, out var alpha)) importedEffects.ShadowAlpha = alpha;
+                if (int.TryParse(outerShdw.Descendants(A + "alpha").FirstOrDefault()?.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var alpha)) importedEffects.ShadowAlpha = alpha;
             }
             if (glow is not null)
             {
                 importedEffects.HasGlow = true;
-                if (int.TryParse(glow.Attribute("rad")?.Value, out var radius)) importedEffects.GlowRad = radius;
+                if (int.TryParse(glow.Attribute("rad")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var radius)) importedEffects.GlowRad = radius;
                 var color = glow.Descendants(A + "srgbClr").FirstOrDefault()?.Attribute("val")?.Value;
                 if (!string.IsNullOrWhiteSpace(color)) importedEffects.GlowColorHex = color;
-                if (int.TryParse(glow.Descendants(A + "alpha").FirstOrDefault()?.Attribute("val")?.Value, out var alpha)) importedEffects.GlowAlpha = alpha;
+                if (int.TryParse(glow.Descendants(A + "alpha").FirstOrDefault()?.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var alpha)) importedEffects.GlowAlpha = alpha;
             }
             if (reflection is not null)
             {
                 importedEffects.HasReflection = true;
-                if (int.TryParse(reflection.Attribute("blurRad")?.Value, out var blurRad)) importedEffects.ReflectionBlurRad = blurRad;
-                if (int.TryParse(reflection.Attribute("stA")?.Value ?? reflection.Attribute("alpha")?.Value, out var startAlpha)) importedEffects.ReflectionStartAlpha = startAlpha;
-                if (int.TryParse(reflection.Attribute("stPos")?.Value, out var startPosition)) importedEffects.ReflectionStartPosition = startPosition;
-                if (int.TryParse(reflection.Attribute("endA")?.Value, out var endAlpha)) importedEffects.ReflectionEndAlpha = endAlpha;
-                if (int.TryParse(reflection.Attribute("endPos")?.Value, out var endPosition)) importedEffects.ReflectionEndPosition = endPosition;
-                if (int.TryParse(reflection.Attribute("dist")?.Value, out var distance)) importedEffects.ReflectionDist = distance;
-                if (int.TryParse(reflection.Attribute("dir")?.Value, out var direction)) importedEffects.ReflectionDir = direction;
-                if (int.TryParse(reflection.Attribute("fadeDir")?.Value, out var fadeDirection)) importedEffects.ReflectionFadeDir = fadeDirection;
-                if (int.TryParse(reflection.Attribute("sx")?.Value, out var scaleX)) importedEffects.ReflectionScaleX = scaleX;
-                if (int.TryParse(reflection.Attribute("sy")?.Value, out var scaleY)) importedEffects.ReflectionScaleY = scaleY;
-                if (int.TryParse(reflection.Attribute("kx")?.Value, out var skewX)) importedEffects.ReflectionSkewX = skewX;
-                if (int.TryParse(reflection.Attribute("ky")?.Value, out var skewY)) importedEffects.ReflectionSkewY = skewY;
+                if (int.TryParse(reflection.Attribute("blurRad")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var blurRad)) importedEffects.ReflectionBlurRad = blurRad;
+                if (int.TryParse(reflection.Attribute("stA")?.Value ?? reflection.Attribute("alpha")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var startAlpha)) importedEffects.ReflectionStartAlpha = startAlpha;
+                if (int.TryParse(reflection.Attribute("stPos")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var startPosition)) importedEffects.ReflectionStartPosition = startPosition;
+                if (int.TryParse(reflection.Attribute("endA")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var endAlpha)) importedEffects.ReflectionEndAlpha = endAlpha;
+                if (int.TryParse(reflection.Attribute("endPos")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var endPosition)) importedEffects.ReflectionEndPosition = endPosition;
+                if (int.TryParse(reflection.Attribute("dist")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var distance)) importedEffects.ReflectionDist = distance;
+                if (int.TryParse(reflection.Attribute("dir")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var direction)) importedEffects.ReflectionDir = direction;
+                if (int.TryParse(reflection.Attribute("fadeDir")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fadeDirection)) importedEffects.ReflectionFadeDir = fadeDirection;
+                if (int.TryParse(reflection.Attribute("sx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var scaleX)) importedEffects.ReflectionScaleX = scaleX;
+                if (int.TryParse(reflection.Attribute("sy")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var scaleY)) importedEffects.ReflectionScaleY = scaleY;
+                if (int.TryParse(reflection.Attribute("kx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var skewX)) importedEffects.ReflectionSkewX = skewX;
+                if (int.TryParse(reflection.Attribute("ky")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var skewY)) importedEffects.ReflectionSkewY = skewY;
                 importedEffects.ReflectionAlignment = reflection.Attribute("algn")?.Value ?? importedEffects.ReflectionAlignment;
-                if (int.TryParse(reflection.Attribute("rotWithShape")?.Value, out var rotateWithShape)) importedEffects.ReflectionRotWithShape = rotateWithShape != 0;
+                if (int.TryParse(reflection.Attribute("rotWithShape")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotateWithShape)) importedEffects.ReflectionRotWithShape = rotateWithShape != 0;
             }
-            if (softEdge is not null && int.TryParse(softEdge.Attribute("rad")?.Value, out var softEdgeRadius))
+            if (softEdge is not null && int.TryParse(softEdge.Attribute("rad")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var softEdgeRadius))
             {
                 importedEffects.HasSoftEdge = true;
                 importedEffects.SoftEdgeRad = softEdgeRadius;
@@ -5184,7 +5242,7 @@ public static class DocxReader
         if (ln is not null)
         {
             // Width: @w in EMU (1 pt = 12700 EMU).
-            if (ln.Attribute("w")?.Value is { } wStr && long.TryParse(wStr, out var wEmu))
+            if (ln.Attribute("w")?.Value is { } wStr && long.TryParse(wStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var wEmu))
                 image.BorderWidthPt = wEmu / 12700.0;
 
             // Color: a:solidFill/a:srgbClr/@val.
@@ -5361,7 +5419,7 @@ public static class DocxReader
         var wordArtXfrm = wsp!.Element(Wps + "spPr")?.Element(A + "xfrm");
         if (wordArtXfrm is not null)
         {
-            if (wordArtXfrm.Attribute("rot")?.Value is { } rotStr && long.TryParse(rotStr, out var rotEmu))
+            if (wordArtXfrm.Attribute("rot")?.Value is { } rotStr && long.TryParse(rotStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotEmu))
                 wordArt.RotationAngle = rotEmu / 60000.0;
             wordArt.FlipH = wordArtXfrm.Attribute("flipH")?.Value is "1" or "true";
             wordArt.FlipV = wordArtXfrm.Attribute("flipV")?.Value is "1" or "true";
@@ -5376,9 +5434,9 @@ public static class DocxReader
         wordArt.Warp = WarpFromToken(warpToken);
         wordArt.TextFitMode = WordArtTextFitModeFromBodyPr(bodyPrEl);
         var normalAutoFit = bodyPrEl?.Element(A + "normAutofit");
-        if (int.TryParse(normalAutoFit?.Attribute("fontScale")?.Value, out var fontScale))
+        if (int.TryParse(normalAutoFit?.Attribute("fontScale")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fontScale))
             wordArt.NormalAutoFitFontScale = fontScale;
-        if (int.TryParse(normalAutoFit?.Attribute("lnSpcReduction")?.Value, out var lineSpacingReduction))
+        if (int.TryParse(normalAutoFit?.Attribute("lnSpcReduction")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var lineSpacingReduction))
             wordArt.NormalAutoFitLineSpacingReduction = lineSpacingReduction;
 
         if (anchor is not null)
@@ -5543,7 +5601,7 @@ public static class DocxReader
         var shapeXfrm = spPr?.Element(A + "xfrm");
         if (shapeXfrm is not null)
         {
-            if (shapeXfrm.Attribute("rot")?.Value is { } rotStr && long.TryParse(rotStr, out var rotEmu))
+            if (shapeXfrm.Attribute("rot")?.Value is { } rotStr && long.TryParse(rotStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotEmu))
                 shape.RotationAngle = rotEmu / 60000.0;
             shape.FlipH = shapeXfrm.Attribute("flipH")?.Value is "1" or "true";
             shape.FlipV = shapeXfrm.Attribute("flipV")?.Value is "1" or "true";
@@ -5556,24 +5614,24 @@ public static class DocxReader
             var pathEl = custGeomEl.Descendants(A + "path").FirstOrDefault();
             if (pathEl is not null)
             {
-                if (long.TryParse(pathEl.Attribute("w")?.Value, out var cgW) && cgW > 0) custGeo.Width = cgW;
-                if (long.TryParse(pathEl.Attribute("h")?.Value, out var cgH) && cgH > 0) custGeo.Height = cgH;
+                if (long.TryParse(pathEl.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cgW) && cgW > 0) custGeo.Width = cgW;
+                if (long.TryParse(pathEl.Attribute("h")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cgH) && cgH > 0) custGeo.Height = cgH;
                 foreach (var seg in pathEl.Elements())
                 {
                     if (seg.Name == A + "moveTo")
                     {
                         var pt = seg.Element(A + "pt");
                         if (pt is not null
-                            && long.TryParse(pt.Attribute("x")?.Value, out var mx)
-                            && long.TryParse(pt.Attribute("y")?.Value, out var my))
+                            && long.TryParse(pt.Attribute("x")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var mx)
+                            && long.TryParse(pt.Attribute("y")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var my))
                             custGeo.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, new CustomPoint(mx, my)));
                     }
                     else if (seg.Name == A + "lnTo")
                     {
                         var pt = seg.Element(A + "pt");
                         if (pt is not null
-                            && long.TryParse(pt.Attribute("x")?.Value, out var lx)
-                            && long.TryParse(pt.Attribute("y")?.Value, out var ly))
+                            && long.TryParse(pt.Attribute("x")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var lx)
+                            && long.TryParse(pt.Attribute("y")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ly))
                             custGeo.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, new CustomPoint(lx, ly)));
                     }
                     else if (seg.Name == A + "cubicBezTo")
@@ -5581,8 +5639,8 @@ public static class DocxReader
                         var points = seg.Elements(A + "pt")
                             .Select(pt =>
                             {
-                                if (long.TryParse(pt.Attribute("x")?.Value, out var x)
-                                    && long.TryParse(pt.Attribute("y")?.Value, out var y))
+                                if (long.TryParse(pt.Attribute("x")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var x)
+                                    && long.TryParse(pt.Attribute("y")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var y))
                                 {
                                     return new CustomPoint(x, y);
                                 }
@@ -5641,10 +5699,10 @@ public static class DocxReader
         {
             var gradFill = new ShapeFill { Kind = ShapeFillKind.Gradient };
             var angAttr = gradFillEl.Element(A + "lin")?.Attribute("ang")?.Value;
-            if (int.TryParse(angAttr, out var ang)) gradFill.GradientAngle = ang;
+            if (int.TryParse(angAttr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ang)) gradFill.GradientAngle = ang;
             foreach (var gs in gradFillEl.Descendants(A + "gs"))
             {
-                var pos = int.TryParse(gs.Attribute("pos")?.Value, out var p) ? p : 0;
+                var pos = int.TryParse(gs.Attribute("pos")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var p) ? p : 0;
                 var c   = gs.Descendants(A + "srgbClr").FirstOrDefault()?.Attribute("val")?.Value ?? "000000";
                 gradFill.GradientStops.Add(new GradientStop(pos, "#" + c.TrimStart('#')));
             }
@@ -5675,7 +5733,7 @@ public static class DocxReader
             if (!string.IsNullOrEmpty(outlineFill))
             {
                 shape.OutlineColorHex = "#" + outlineFill.TrimStart('#');
-                if (long.TryParse(ln.Attribute("w")?.Value, out var widthEmu) && widthEmu > 0)
+                if (long.TryParse(ln.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var widthEmu) && widthEmu > 0)
                     shape.OutlineWidthPt = widthEmu / 12700.0;
                 shape.OutlineDash = ln.Element(A + "prstDash")?.Attribute("val")?.Value;
             }
@@ -5690,51 +5748,51 @@ public static class DocxReader
             if (effectLstEl?.Element(A + "outerShdw") is { } shdw)
             {
                 fx.HasShadow = true;
-                if (int.TryParse(shdw.Attribute("blurRad")?.Value, out var br)) fx.ShadowBlurRad = br;
-                if (int.TryParse(shdw.Attribute("dist")?.Value, out var dist)) fx.ShadowDist = dist;
-                if (int.TryParse(shdw.Attribute("dir")?.Value, out var dir)) fx.ShadowDir = dir;
+                if (int.TryParse(shdw.Attribute("blurRad")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var br)) fx.ShadowBlurRad = br;
+                if (int.TryParse(shdw.Attribute("dist")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dist)) fx.ShadowDist = dist;
+                if (int.TryParse(shdw.Attribute("dir")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dir)) fx.ShadowDir = dir;
                 var sc = shdw.Descendants(A + "srgbClr").FirstOrDefault()?.Attribute("val")?.Value;
                 if (!string.IsNullOrEmpty(sc)) fx.ShadowColorHex = sc;
                 var sa = shdw.Descendants(A + "alpha").FirstOrDefault()?.Attribute("val")?.Value;
-                if (int.TryParse(sa, out var salpha)) fx.ShadowAlpha = salpha;
+                if (int.TryParse(sa, NumberStyles.Integer, CultureInfo.InvariantCulture, out var salpha)) fx.ShadowAlpha = salpha;
             }
             if (effectLstEl?.Element(A + "glow") is { } glow)
             {
                 fx.HasGlow = true;
-                if (int.TryParse(glow.Attribute("rad")?.Value, out var gr)) fx.GlowRad = gr;
+                if (int.TryParse(glow.Attribute("rad")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var gr)) fx.GlowRad = gr;
                 var gc = glow.Descendants(A + "srgbClr").FirstOrDefault()?.Attribute("val")?.Value;
                 if (!string.IsNullOrEmpty(gc)) fx.GlowColorHex = gc;
                 var ga = glow.Descendants(A + "alpha").FirstOrDefault()?.Attribute("val")?.Value;
-                if (int.TryParse(ga, out var galpha)) fx.GlowAlpha = galpha;
+                if (int.TryParse(ga, NumberStyles.Integer, CultureInfo.InvariantCulture, out var galpha)) fx.GlowAlpha = galpha;
             }
             if (effectLstEl?.Element(A + "softEdge") is { } softEdge)
             {
                 fx.HasSoftEdge = true;
-                if (int.TryParse(softEdge.Attribute("rad")?.Value, out var ser)) fx.SoftEdgeRad = ser;
+                if (int.TryParse(softEdge.Attribute("rad")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ser)) fx.SoftEdgeRad = ser;
             }
             if (effectLstEl?.Element(A + "reflection") is { } refl)
             {
                 fx.HasReflection = true;
-                if (int.TryParse(refl.Attribute("blurRad")?.Value, out var rbr)) fx.ReflectionBlurRad = rbr;
-                if (int.TryParse(refl.Attribute("stA")?.Value ?? refl.Attribute("alpha")?.Value, out var ra)) fx.ReflectionStartAlpha = ra;
-                if (int.TryParse(refl.Attribute("stPos")?.Value, out var rsp)) fx.ReflectionStartPosition = rsp;
-                if (int.TryParse(refl.Attribute("endA")?.Value, out var rea)) fx.ReflectionEndAlpha = rea;
-                if (int.TryParse(refl.Attribute("endPos")?.Value, out var rep)) fx.ReflectionEndPosition = rep;
-                if (int.TryParse(refl.Attribute("dir")?.Value, out var rd)) fx.ReflectionDir = rd;
-                if (int.TryParse(refl.Attribute("fadeDir")?.Value, out var rfd)) fx.ReflectionFadeDir = rfd;
-                if (int.TryParse(refl.Attribute("sx")?.Value, out var rsx)) fx.ReflectionScaleX = rsx;
-                if (int.TryParse(refl.Attribute("sy")?.Value, out var rsy)) fx.ReflectionScaleY = rsy;
-                if (int.TryParse(refl.Attribute("kx")?.Value, out var rkx)) fx.ReflectionSkewX = rkx;
-                if (int.TryParse(refl.Attribute("ky")?.Value, out var rky)) fx.ReflectionSkewY = rky;
+                if (int.TryParse(refl.Attribute("blurRad")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rbr)) fx.ReflectionBlurRad = rbr;
+                if (int.TryParse(refl.Attribute("stA")?.Value ?? refl.Attribute("alpha")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ra)) fx.ReflectionStartAlpha = ra;
+                if (int.TryParse(refl.Attribute("stPos")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rsp)) fx.ReflectionStartPosition = rsp;
+                if (int.TryParse(refl.Attribute("endA")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rea)) fx.ReflectionEndAlpha = rea;
+                if (int.TryParse(refl.Attribute("endPos")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rep)) fx.ReflectionEndPosition = rep;
+                if (int.TryParse(refl.Attribute("dir")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rd)) fx.ReflectionDir = rd;
+                if (int.TryParse(refl.Attribute("fadeDir")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rfd)) fx.ReflectionFadeDir = rfd;
+                if (int.TryParse(refl.Attribute("sx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rsx)) fx.ReflectionScaleX = rsx;
+                if (int.TryParse(refl.Attribute("sy")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rsy)) fx.ReflectionScaleY = rsy;
+                if (int.TryParse(refl.Attribute("kx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rkx)) fx.ReflectionSkewX = rkx;
+                if (int.TryParse(refl.Attribute("ky")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rky)) fx.ReflectionSkewY = rky;
                 fx.ReflectionAlignment = refl.Attribute("algn")?.Value ?? fx.ReflectionAlignment;
-                if (int.TryParse(refl.Attribute("rotWithShape")?.Value, out var rrws)) fx.ReflectionRotWithShape = rrws != 0;
-                if (int.TryParse(refl.Attribute("dist")?.Value, out var rdist)) fx.ReflectionDist = rdist;
+                if (int.TryParse(refl.Attribute("rotWithShape")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rrws)) fx.ReflectionRotWithShape = rrws != 0;
+                if (int.TryParse(refl.Attribute("dist")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rdist)) fx.ReflectionDist = rdist;
             }
             if (sp3dEl?.Element(A + "bevelT") is { } bevel)
             {
                 fx.HasBevel = true;
-                if (int.TryParse(bevel.Attribute("w")?.Value, out var bw)) fx.BevelW = bw;
-                if (int.TryParse(bevel.Attribute("h")?.Value, out var bh)) fx.BevelH = bh;
+                if (int.TryParse(bevel.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var bw)) fx.BevelW = bw;
+                if (int.TryParse(bevel.Attribute("h")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var bh)) fx.BevelH = bh;
                 fx.BevelPresetType = bevel.Attribute("prst")?.Value ?? "circle";
             }
             if (fx.HasShadow || fx.HasGlow || fx.HasSoftEdge || fx.HasReflection || fx.HasBevel)
@@ -5765,7 +5823,7 @@ public static class DocxReader
         var bodyPr = wsp.Element(Wps + "bodyPr");
         var vert = bodyPr?.Attribute("vert")?.Value;
         if (string.Equals(vert, "eaVert", StringComparison.OrdinalIgnoreCase)
-            && int.TryParse(bodyPr?.Attribute("rot")?.Value, out var rotVal))
+            && int.TryParse(bodyPr?.Attribute("rot")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotVal))
         {
             shape.TextDirection = rotVal > 0 ? ShapeTextDirection.Rotate90 : ShapeTextDirection.Rotate270;
         }
@@ -5922,7 +5980,9 @@ public static class DocxReader
             var value = part[(colon + 1)..].Trim();
             if (value.EndsWith("pt", StringComparison.OrdinalIgnoreCase))
                 value = value[..^2].Trim();
-            if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var pt))
+            // r547: an overflowing literal parses as true with Infinity; skip it as unusable.
+            if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var pt)
+                || !double.IsFinite(pt))
                 continue;
             if (key.Equals("width", StringComparison.OrdinalIgnoreCase))
                 width = pt;
@@ -6021,7 +6081,7 @@ public static class DocxReader
         // c:style — chart style id (persisted by BuildChartSpace; default 0 = unset).
         // chartXml is non-null here because chartElement (derived from chartXml.Root) passed the null guard above.
         var chartSpace = chartXml!.Root!;
-        if (int.TryParse(chartSpace.Element(C + "style")?.Attribute("val")?.Value, out var styleId) && styleId > 0)
+        if (int.TryParse(chartSpace.Element(C + "style")?.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var styleId) && styleId > 0)
             chart.StyleId = styleId;
 
         // Native c:style ids are family-specific themes. Preserve the concrete visual elements so
@@ -6059,7 +6119,7 @@ public static class DocxReader
                 var colorSchemeId = freewExt.Element(freew + "colorScheme")?.Attribute("id")?.Value;
                 if (!string.IsNullOrEmpty(colorSchemeId))
                     chart.ColorSchemeId = colorSchemeId;
-                if (int.TryParse(freewExt.Element(freew + "quickLayout")?.Attribute("id")?.Value, out var qlId) && qlId > 0)
+                if (int.TryParse(freewExt.Element(freew + "quickLayout")?.Attribute("id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var qlId) && qlId > 0)
                     chart.QuickLayoutId = qlId;
             }
         }
@@ -6084,7 +6144,7 @@ public static class DocxReader
             if (key.Equals("colorScheme", StringComparison.OrdinalIgnoreCase))
                 chart.ColorSchemeId = value;
             else if (key.Equals("quickLayout", StringComparison.OrdinalIgnoreCase)
-                && int.TryParse(value, out var quickLayoutId)
+                && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var quickLayoutId)
                 && quickLayoutId > 0)
                 chart.QuickLayoutId = quickLayoutId;
         }
@@ -6628,12 +6688,31 @@ public static class DocxReader
         if (kind is SmartArtKind.List or SmartArtKind.Process)
         {
             var flattened = new List<SmartArtNode>();
+
+            // r502: the graph above is linked from the file's parOf connections with no check that
+            // they form a tree, so a document could describe a cycle -- and this walk would then
+            // never terminate, dying with an uncatchable StackOverflowException while OPENING the
+            // document. FreeP's equivalent reader already refuses a cycle exactly this way, with a
+            // set of the ids on the current path; this is the same guard in the sibling that lacked
+            // it. Path-based rather than a global visited set, so a point legitimately reachable
+            // twice is still flattened twice.
+            //
+            // DEFENSIVE, and recorded as such: no package that actually produces a cyclic graph
+            // through this reader was constructed, so reachability is unproven. r501 is the reason
+            // to spend three lines on it anyway -- there, the same shape in FreeP was reachable and
+            // killed the process outright.
+            var onPath = new HashSet<SmartArtNode>();
+
             void Flatten(IEnumerable<SmartArtNode> nodes)
             {
                 foreach (var node in nodes)
                 {
+                    if (!onPath.Add(node))
+                        continue;
+
                     flattened.Add(new SmartArtNode(node.Text));
                     Flatten(node.Children);
+                    onPath.Remove(node);
                 }
             }
 
@@ -6805,8 +6884,10 @@ public static class DocxReader
     {
         var cache = parent?.Descendants(C + "numCache").FirstOrDefault();
         return ReadCachePoints(cache)
+            // r547: IsFinite -- an overflowing cached value parses as true with Infinity, and the
+            // chart planners treat a missing point as 0 already.
             .Select(p => double.TryParse(p.Value, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : 0)
+                System.Globalization.CultureInfo.InvariantCulture, out var d) && double.IsFinite(d) ? d : 0)
             .ToList();
     }
 
@@ -6820,7 +6901,7 @@ public static class DocxReader
             return [];
         return cache.Elements(C + "pt")
             .Select(pt => (
-                Idx: int.TryParse(pt.Attribute("idx")?.Value, out var idx) ? idx : 0,
+                Idx: int.TryParse(pt.Attribute("idx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx) ? idx : 0,
                 Value: pt.Element(C + "v")?.Value ?? string.Empty))
             .OrderBy(p => p.Idx);
     }
@@ -7274,10 +7355,10 @@ public static class DocxReader
             _ => LineNumberMode.Continuous,
         };
 
-        if (int.TryParse(lnNumType.Attribute(W + "countBy")?.Value, out var countBy) && countBy >= 1)
+        if (int.TryParse(lnNumType.Attribute(W + "countBy")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var countBy) && countBy >= 1)
             page.LineNumberCountBy = countBy;
 
-        if (int.TryParse(lnNumType.Attribute(W + "start")?.Value, out var startAt) && startAt >= 1)
+        if (int.TryParse(lnNumType.Attribute(W + "start")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var startAt) && startAt >= 1)
             page.LineNumberStartAt = startAt;
     }
 
@@ -7287,11 +7368,11 @@ public static class DocxReader
             return;
 
         page.PageNumberFormat = PageNumberFormatFromToken(pgNumType.Attribute(W + "fmt")?.Value);
-        page.PageNumberStartAt = int.TryParse(pgNumType.Attribute(W + "start")?.Value, out var startAt)
+        page.PageNumberStartAt = int.TryParse(pgNumType.Attribute(W + "start")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var startAt)
             && startAt >= 1
                 ? startAt
                 : null;
-        page.PageNumberChapterStyleLevel = int.TryParse(pgNumType.Attribute(W + "chapStyle")?.Value, out var chapterStyle)
+        page.PageNumberChapterStyleLevel = int.TryParse(pgNumType.Attribute(W + "chapStyle")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var chapterStyle)
             && chapterStyle is >= 1 and <= 9
                 ? chapterStyle
                 : null;
@@ -8277,12 +8358,14 @@ public static class DocxReader
         return null;
     }
 
+    // r547: IsFinite because an overflowing literal parses as true with Infinity, and a VML
+    // style number that cannot be represented is absent, not infinite.
     private static double? ParseVmlStyleNumber(string? style, string name) =>
         double.TryParse(
             ParseVmlStyleValue(style, name),
             System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture,
-            out var value)
+            out var value) && double.IsFinite(value)
                 ? value
                 : null;
 
@@ -8300,7 +8383,9 @@ public static class DocxReader
             System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture,
             out var opacity)
-                ? Math.Clamp(isPercent ? opacity / 100 : opacity, 0, 1)
+                // r547: Math.Clamp bounds Infinity but PASSES NaN THROUGH, so the finite test is what
+                // keeps a NaN opacity out of the model; the clamp alone was not enough.
+                ? (double.IsFinite(opacity) ? Math.Clamp(isPercent ? opacity / 100 : opacity, 0, 1) : 1)
                 : 1;
     }
 
@@ -8529,7 +8614,7 @@ public static class DocxReader
         var groupXfrm = wgp.Element(Wpg + "grpSpPr")?.Element(A + "xfrm");
         if (groupXfrm is not null)
         {
-            if (groupXfrm.Attribute("rot")?.Value is { } rotStr && long.TryParse(rotStr, out var rotEmu))
+            if (groupXfrm.Attribute("rot")?.Value is { } rotStr && long.TryParse(rotStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotEmu))
                 group.RotationAngle = rotEmu / 60000.0;
             group.FlipH = groupXfrm.Attribute("flipH")?.Value is "1" or "true";
             group.FlipV = groupXfrm.Attribute("flipV")?.Value is "1" or "true";
@@ -8625,7 +8710,7 @@ public static class DocxReader
 
             if (child is not null && !isNestedGroup)
             {
-                var angle = long.TryParse(xfrm?.Attribute("rot")?.Value, out var rotEmu)
+                var angle = long.TryParse(xfrm?.Attribute("rot")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotEmu)
                     ? rotEmu / 60000.0 : 0;
                 var flipH = xfrm?.Attribute("flipH")?.Value is "1" or "true";
                 var flipV = xfrm?.Attribute("flipV")?.Value is "1" or "true";

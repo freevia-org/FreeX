@@ -982,9 +982,18 @@ public sealed partial class MainWindow : Window,
         var loaded = window._fileSession.RestoreAutosaveSnapshot(
             candidate.SnapshotPath,
             candidate.Sidecar.OriginalFilePath);
+
+        // r474: see the WPF host's OpenNewWindowWithRecoveredSnapshot -- a failed recovery must not
+        // leave a blank presentation window on screen while the caller reports the failure.
+        if (!loaded)
+        {
+            window.Close();
+            return Task.FromResult(false);
+        }
+
         window.Show();
         window.Activate();
-        return Task.FromResult(loaded);
+        return Task.FromResult(true);
     }
 
     private void RestoreOwnerFocus()
@@ -3618,12 +3627,25 @@ public sealed partial class MainWindow : Window,
             () => _optionsStore.Load());
     }
 
+    // r193: mirrors the WPF shell RecordSavePointIfSucceeded -- a successful save is the moment
+    // the undo save point is captured (PresentationWorkareaSession.NotifySaved).
+    private bool RecordSavePointIfSucceeded(bool succeeded)
+    {
+        if (succeeded)
+            _workareaSession.NotifySaved();
+        return succeeded;
+    }
+
     private async Task<bool> FileSaveAsync()
     {
         var opensSaveAsPicker = _fileSession.CurrentPath is null;
         try
         {
-            return (await _fileSession.SaveAsync()).Succeeded;
+            // r193: recording the save point is what lets a later undo back to this state clear the
+            // dirty flag. The WPF shell routes every save through RecordSavePointIfSucceeded for
+            // exactly this; without it the endpoint callbacks wired alongside have nothing to
+            // compare against.
+            return RecordSavePointIfSucceeded((await _fileSession.SaveAsync()).Succeeded);
         }
         finally
         {
@@ -3636,7 +3658,7 @@ public sealed partial class MainWindow : Window,
     {
         try
         {
-            return (await _fileSession.SaveAsAsync()).Succeeded;
+            return RecordSavePointIfSucceeded((await _fileSession.SaveAsAsync()).Succeeded);
         }
         finally
         {

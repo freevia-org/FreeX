@@ -605,6 +605,8 @@ internal static partial class XlsxWorksheetMetadataPreserver
         // sharing that signature (computed lazily below, only once an ambiguous signature is seen).
         Dictionary<CellSignature, int>? sourceRichValueSignatureCounts = null;
         Dictionary<CellSignature, int>? targetSignatureCounts = null;
+        int? stableRowFrontier = null;
+        var stableRowFrontierComputed = false;
 
         foreach (var sourceCell in sourceSheetData.Descendants(workbookNs + "c"))
         {
@@ -632,6 +634,23 @@ internal static partial class XlsxWorksheetMetadataPreserver
             if (sourceRichValueSignatureCounts.Count > 0)
                 targetSignatureCounts ??= BuildCellSignatureCounts(targetCellsByAddress, workbookNs);
 
+            // The ambiguity guard below refuses a whole signature group whenever its count changed,
+            // because a same-address hit cannot prove identity when every member serializes alike.
+            // A delete always changes that count, so cells that never moved were losing their
+            // bindings too. Localise the shift instead: a cell strictly above the first row whose
+            // content actually changed provably did not move, so it keeps its binding. Cells at or
+            // below the frontier -- and every cell when the frontier cannot be localised -- stay
+            // refused exactly as before.
+            if (!stableRowFrontierComputed)
+            {
+                stableRowFrontier = ComputeStableRowFrontier(sourceSheetData, targetCellsByAddress, workbookNs);
+                stableRowFrontierComputed = true;
+            }
+
+            var provablyUnmoved = stableRowFrontier is { } frontier &&
+                                  TryGetRowIndex(address, out var sourceRow) &&
+                                  sourceRow < frontier;
+
             if (MergeCellNativeMetadataPair(
                     sourceCell,
                     targetCell,
@@ -639,8 +658,8 @@ internal static partial class XlsxWorksheetMetadataPreserver
                     targetArchive,
                     workbookNs,
                     ref targetSharedStrings,
-                    sourceRichValueSignatureCounts,
-                    targetSignatureCounts))
+                    provablyUnmoved ? null : sourceRichValueSignatureCounts,
+                    provablyUnmoved ? null : targetSignatureCounts))
             {
                 changed = true;
             }
@@ -888,6 +907,115 @@ internal static partial class XlsxWorksheetMetadataPreserver
             cell.Attribute("t")?.Value,
             formula is null ? null : NormalizeFormulaXmlText(formula),
             cell.Element(workbookNs + "v")?.Value);
+    }
+
+    private static bool TryGetRowIndex(string address, out int row)
+    {
+        row = 0;
+        var digits = 0;
+        for (var i = 0; i < address.Length; i++)
+        {
+            var c = address[i];
+            if (c is >= '0' and <= '9')
+            {
+                if (++digits > 9)
+                    return false;
+                row = (row * 10) + (c - '0');
+            }
+            else if (digits > 0)
+            {
+                return false; // letters after digits: not a plain A1 address
+            }
+        }
+
+        return digits > 0 && row > 0;
+    }
+
+    /// <summary>
+    /// Finds the first row that exists in BOTH the source and target sheets yet whose content
+    /// differs -- the point at or below which a row insert/delete may have shifted cells around.
+    /// Returns null when no such row exists.
+    /// </summary>
+    /// <remarks>
+    /// <para>This is what lets the rich-value ambiguity guard stop refusing an entire signature
+    /// group. Rich-value placeholders all serialize identically (<c>t="e"</c>, no formula,
+    /// <c>&lt;v&gt;#VALUE!&lt;/v&gt;</c>) whatever entity their <c>vm</c> points at, so a same-address
+    /// hit cannot by itself prove the target is the same cell rather than a same-signature sibling
+    /// shifted up by a delete. The guard's answer was to refuse the whole group whenever its count
+    /// changed -- but a delete ALWAYS changes the count, so a cell that never moved lost its binding
+    /// too. Excel keeps a rich value bound across a row delete.</para>
+    /// <para>A cell strictly above this frontier provably did not move: were a row inserted or
+    /// deleted above it, that edit would itself have changed a row's content at a smaller index,
+    /// contradicting the frontier being the FIRST such row.</para>
+    /// <para>Rows present on only one side deliberately do not establish a frontier. A column of
+    /// placeholders with no other distinguishing content differs nowhere except at the row that
+    /// vanished, and the delete could equally have removed any of them -- undecidable, so the caller
+    /// keeps refusing the group, which is the safe answer and the one this guard was added for.</para>
+    /// </remarks>
+    private static int? ComputeStableRowFrontier(
+        XElement sourceSheetData,
+        IReadOnlyDictionary<string, XElement> targetCellsByAddress,
+        XNamespace workbookNs)
+    {
+        var sourceRows = GroupCellSignaturesByRow(sourceSheetData.Descendants(workbookNs + "c"), workbookNs);
+        var targetRows = GroupCellSignaturesByRow(targetCellsByAddress.Values, workbookNs);
+
+        int? frontier = null;
+        foreach (var (row, sourceCells) in sourceRows)
+        {
+            if (frontier is { } found && row >= found)
+                continue;
+
+            if (!targetRows.TryGetValue(row, out var targetCells))
+                continue; // present on one side only -- proves nothing about where the shift began
+
+            if (!RowContentsMatch(sourceCells, targetCells))
+                frontier = row;
+        }
+
+        return frontier;
+    }
+
+    private static Dictionary<int, List<KeyValuePair<string, CellSignature>>> GroupCellSignaturesByRow(
+        IEnumerable<XElement> cells,
+        XNamespace workbookNs)
+    {
+        var rows = new Dictionary<int, List<KeyValuePair<string, CellSignature>>>();
+        foreach (var cell in cells)
+        {
+            var address = cell.Attribute("r")?.Value;
+            if (string.IsNullOrWhiteSpace(address) || !TryGetRowIndex(address, out var row))
+                continue;
+
+            if (!rows.TryGetValue(row, out var list))
+                rows[row] = list = [];
+
+            list.Add(new KeyValuePair<string, CellSignature>(address, GetCellSignature(cell, workbookNs)));
+        }
+
+        return rows;
+    }
+
+    private static bool RowContentsMatch(
+        List<KeyValuePair<string, CellSignature>> left,
+        List<KeyValuePair<string, CellSignature>> right)
+    {
+        if (left.Count != right.Count)
+            return false;
+
+        left.Sort(static (a, b) => string.CompareOrdinal(a.Key, b.Key));
+        right.Sort(static (a, b) => string.CompareOrdinal(a.Key, b.Key));
+
+        for (var i = 0; i < left.Count; i++)
+        {
+            if (!string.Equals(left[i].Key, right[i].Key, StringComparison.OrdinalIgnoreCase) ||
+                !left[i].Value.Equals(right[i].Value))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool IsRichValueMetadataAttribute(XAttribute attribute) =>

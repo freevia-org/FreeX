@@ -123,7 +123,7 @@ public partial class MainWindow
         {
             _inlineEditorChrome = new System.Windows.Controls.Border
             {
-                Background = System.Windows.Media.Brushes.White,
+                Background = System.Windows.Media.Brushes.Transparent,
                 BorderThickness = new System.Windows.Thickness(2),
                 BorderBrush = new System.Windows.Media.SolidColorBrush(
                     System.Windows.Media.Color.FromRgb(15, 109, 140)),
@@ -179,6 +179,9 @@ public partial class MainWindow
             TextOptions.SetTextFormattingMode(_inlineFormulaReferenceOverlay, TextFormattingMode.Display);
             TextOptions.SetTextRenderingMode(_inlineFormulaReferenceOverlay, TextRenderingMode.ClearType);
             TextOptions.SetTextHintingMode(_inlineFormulaReferenceOverlay, TextHintingMode.Fixed);
+            System.Windows.Controls.Panel.SetZIndex(_inlineEditor, 0);
+            System.Windows.Controls.Panel.SetZIndex(_inlineFormulaReferenceOverlay, 1);
+            System.Windows.Controls.Panel.SetZIndex(_inlineEditorChrome, 2);
             EditOverlay.Children.Add(_inlineEditorChrome);
             EditOverlay.Children.Add(_inlineEditor);
             EditOverlay.Children.Add(_inlineFormulaReferenceOverlay);

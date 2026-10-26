@@ -184,8 +184,18 @@ public sealed partial class DocumentView : Control
         string FunctionName, string FunctionArgument)>
         _equationVisualElements = new();
     private readonly Dictionary<InlineImage, AvaloniaRenderedImage?> _bitmapCache = new();
-    private byte[]? _watermarkBitmapCacheBytes;
-    private Bitmap? _watermarkBitmapCache;
+    // r513: identity-keyed so a watermark image keeps ONE decoded bitmap for as long as its
+    // bytes live. The single-slot cache this replaced abandoned its previous bitmap on every
+    // watermark change, and Avalonia's Bitmap declares no finalizer (verified by reflection:
+    // Finalize is declared on System.Object alone), so each abandoned one leaked its native
+    // memory permanently. Never evicting is what makes that safe -- eager Dispose would risk a
+    // draw operation replaying a freed bitmap on the render thread.
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<byte[], Bitmap> _watermarkBitmaps = new();
+
+    // A ConditionalWeakTable cannot store null, so undecodable bytes are remembered separately.
+    // Without this an image that fails to decode would be retried on every paint -- the same
+    // per-render decode this round removes, just on the failing path.
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<byte[], object> _watermarkUndecodable = new();
     private readonly List<(Rect Rect, int Block, int Row, int Col)> _cellHits = new();
     // AV-SHAPETEXT2: caret stops emitted alongside floating text-box layout. Keeping the stops in
     // page space lets pointer placement resolve the same paragraph/run/offset tuple that keyboard
@@ -11840,10 +11850,12 @@ public sealed partial class DocumentView : Control
         context.DrawImage(bitmap, rect);
     }
 
-    private Bitmap? DecodeWatermarkBitmap(byte[] imageBytes)
+    internal Bitmap? DecodeWatermarkBitmap(byte[] imageBytes)
     {
-        if (ReferenceEquals(_watermarkBitmapCacheBytes, imageBytes))
-            return _watermarkBitmapCache;
+        if (_watermarkUndecodable.TryGetValue(imageBytes, out _))
+            return null;
+        if (_watermarkBitmaps.TryGetValue(imageBytes, out var cachedWatermark))
+            return cachedWatermark;
 
         Bitmap? bitmap = null;
         try
@@ -11856,8 +11868,10 @@ public sealed partial class DocumentView : Control
             bitmap = null;
         }
 
-        _watermarkBitmapCacheBytes = imageBytes;
-        _watermarkBitmapCache = bitmap;
+        if (bitmap is null)
+            _watermarkUndecodable.AddOrUpdate(imageBytes, new object());
+        else
+            _watermarkBitmaps.AddOrUpdate(imageBytes, bitmap);
         return bitmap;
     }
 
@@ -22566,6 +22580,11 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void InsertTableOfContents()
     {
+        // r471: reference fields are body content; Word blocks inserting and refreshing them
+        // under Restrict Editing, exactly as it blocks InsertPageBreak just above.
+        if (IsEditingLocked)
+            return;
+
         var at = Math.Clamp(_caret.Block, 0, _doc.Blocks.Count);
         ReferenceEdits.InsertTableOfContents(at, BuildGeneratedPageTextResolver);
     }
@@ -22577,7 +22596,14 @@ public sealed partial class DocumentView : Control
     /// <see cref="InsertTableOfContents"/>, inserting at the document start. Grouped into one undo.
     /// </summary>
     public void UpdateTableOfContents()
-        => ReferenceEdits.RefreshTableOfContents(BuildGeneratedPageTextResolver);
+    {
+        // r471: reference fields are body content; Word blocks inserting and refreshing them
+        // under Restrict Editing, exactly as it blocks InsertPageBreak.
+        if (IsEditingLocked)
+            return;
+
+        ReferenceEdits.RefreshTableOfContents(BuildGeneratedPageTextResolver);
+    }
 
     // Build + insert the TOC paragraphs starting at block `at`, grouped into one undo.
     private void InsertTocAt(int at, string label)
@@ -23188,11 +23214,21 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void InsertBibliography()
     {
+        // r471: reference fields are body content; Word blocks inserting and refreshing them
+        // under Restrict Editing, exactly as it blocks InsertPageBreak just above.
+        if (IsEditingLocked)
+            return;
+
         RealizeGeneratedReferenceEdit(ReferenceEdits.InsertBibliography(GeneratedReferenceCaret()));
     }
 
     public void RefreshBibliography()
     {
+        // r471: reference fields are body content; Word blocks inserting and refreshing them
+        // under Restrict Editing, exactly as it blocks InsertPageBreak just above.
+        if (IsEditingLocked)
+            return;
+
         RealizeGeneratedReferenceEdit(ReferenceEdits.RefreshBibliography(GeneratedReferenceCaret()));
     }
 
@@ -23358,6 +23394,11 @@ public sealed partial class DocumentView : Control
     public void InsertTableOfAuthorities(ToaOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+
+        // r471: guarded on the options overload so the parameterless entry point above is covered
+        // by the same check rather than needing its own.
+        if (IsEditingLocked)
+            return;
         RealizeGeneratedReferenceEdit(ReferenceEdits.InsertTableOfAuthorities(
             GeneratedReferenceCaret(),
             options,
@@ -23374,6 +23415,10 @@ public sealed partial class DocumentView : Control
 
     private void RefreshTableOfAuthoritiesCore(ToaOptions? options)
     {
+        // r471: guarded in the core so both public overloads are covered by one check.
+        if (IsEditingLocked)
+            return;
+
         RealizeGeneratedReferenceEdit(ReferenceEdits.RefreshTableOfAuthorities(
             GeneratedReferenceCaret(),
             options,
@@ -27282,10 +27327,14 @@ public sealed partial class DocumentView : Control
     private static ImmutableSolidColorBrush CommentTintBrush { get; } = new ImmutableSolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xC1, 0x07));
     private static ImmutableSolidColorBrush ResolvedCommentTintBrush { get; } = new ImmutableSolidColorBrush(Color.FromArgb(0x1F, 0x9E, 0x9E, 0x9E));
     // Amber underline drawn under commented glyphs — the in-text anchor mark.
-    private static readonly Pen CommentUnderlinePen =
-        new(new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B)), 1.5);
-    private static readonly Pen ResolvedCommentUnderlinePen =
-        new(new SolidColorBrush(Color.FromRgb(0x9E, 0x9E, 0x9E)), 1.0);
+    // r495: ImmutablePen over an ImmutableSolidColorBrush. A plain Pen wrapping a mutable brush in a
+    // STATIC field is the documented Avalonia crash class -- the first render thread to touch it takes
+    // ownership, and a later one throws "a different thread owns it" intermittently. The brushes in
+    // this same block were already immutable; the pens beside them were not.
+    private static readonly ImmutablePen CommentUnderlinePen =
+        new(new ImmutableSolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B)), 1.5);
+    private static readonly ImmutablePen ResolvedCommentUnderlinePen =
+        new(new ImmutableSolidColorBrush(Color.FromRgb(0x9E, 0x9E, 0x9E)), 1.0);
     // Right-margin comment marker fill (balloon) — amber bracket aligned to the anchor line.
     private static ImmutableSolidColorBrush CommentMarkerBrush { get; } = new ImmutableSolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B));
     private static ImmutableSolidColorBrush ResolvedCommentMarkerBrush { get; } = new ImmutableSolidColorBrush(Color.FromRgb(0xBD, 0xBD, 0xBD));
@@ -27295,8 +27344,8 @@ public sealed partial class DocumentView : Control
 
     // ── AV-TRACKEDIT: tracked-change render assets ────────────────────────────────────────────────
     private static ImmutableSolidColorBrush RevisionFallbackBrush { get; } = new ImmutableSolidColorBrush(Color.FromRgb(0xC0, 0x00, 0x40));
-    private static readonly Pen SimpleMarkupChangeBarPen = new(RevisionFallbackBrush, 2.0);
-    private static readonly Pen ProofingSquigglePen = new(new SolidColorBrush(Color.FromRgb(0xD1, 0x34, 0x38)), 1.15);
+    private static readonly ImmutablePen SimpleMarkupChangeBarPen = new(RevisionFallbackBrush, 2.0);
+    private static readonly ImmutablePen ProofingSquigglePen = new(new ImmutableSolidColorBrush(Color.FromRgb(0xD1, 0x34, 0x38)), 1.15);
 
     // ── AV-LINK: hyperlink render colour ──────────────────────────────────────────────────────────
     // Word's default hyperlink character-style colour (a medium blue). A hyperlinked run with no explicit

@@ -17,6 +17,11 @@ public sealed class SetChartPlotStyleOptionsCommand : IPresentationCommand
 
     public string Label => "Set Chart Plot Style";
 
+    // r202: mirrors the guard Apply opens with -- otherwise the bus pushes an undo entry for a
+    // command that changed nothing, and that push clears the redo stack.
+    public bool HasEffect(Presentation p) =>
+        Supports(ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId));
+
     public void Apply(Presentation p)
     {
         var chart = ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId);

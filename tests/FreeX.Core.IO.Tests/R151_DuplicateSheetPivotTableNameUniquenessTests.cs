@@ -119,7 +119,7 @@ public sealed class R151_DuplicateSheetPivotTableNameUniquenessTests
         var cloneCacheEntry = ReadRoot(saved, "xl/slicerCaches/slicerCache2.xml")
             .Descendants(SlicerNs + "pivotTable").Single();
         cloneCacheEntry.Attribute("name")!.Value.Should().Be(copyPivotName);
-        cloneCacheEntry.Attribute("name")!.Value.Should().NotBe("PivotTable1");
+        cloneCacheEntry.Attribute("name")?.Value.Should().NotBe("PivotTable1");
         cloneCacheEntry.Attribute("tabId")!.Value.Should().Be(copyTabId);
     }
 

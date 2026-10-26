@@ -68,6 +68,14 @@ public sealed class SetPageBreaksCommand : IWorkbookCommand
         }
 
         var sheet = ctx.GetSheet(_sheetId);
+        // r216: compared against the SORTED input, because that is what Apply writes -- the same
+        // breaks supplied in a different order are genuinely no change.
+        if (sheet.RowPageBreaks.SequenceEqual(_rowBreaks.Order())
+            && sheet.ColumnPageBreaks.SequenceEqual(_columnBreaks.Order()))
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         _previousRowBreaks = sheet.RowPageBreaks.ToList();
         _previousColumnBreaks = sheet.ColumnPageBreaks.ToList();
         sheet.RowPageBreaks.Clear();

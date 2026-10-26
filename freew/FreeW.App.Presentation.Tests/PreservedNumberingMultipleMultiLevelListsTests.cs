@@ -214,7 +214,7 @@ public sealed class PreservedNumberingMultipleMultiLevelListsTests
         listBAbstract.Should().NotBeNull("list B's lowerLetter/lowerRoman definition must survive the round trip");
         listCAbstract.Should().NotBeNull("list C's upperRoman/upperLetter definition must survive the round trip");
         // List B and list C are DISTINCT preserved definitions, not merged with each other.
-        listBAbstract!.Attribute(W + "abstractNumId")!.Value.Should().NotBe(listCAbstract!.Attribute(W + "abstractNumId")!.Value);
+        listBAbstract!.Attribute(W + "abstractNumId")?.Value.Should().NotBe(listCAbstract!.Attribute(W + "abstractNumId")!.Value);
 
         var reread = ReadDoc(rewritten);
         var rereadParas = reread.Blocks.OfType<Paragraph>().ToList();

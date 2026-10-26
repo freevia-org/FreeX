@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 using FreeX.Core.Formula;
@@ -27,7 +28,7 @@ public sealed partial class ViewportService : IViewportService
             request.AvailableHeight,
             request.FrozenRowsOverride ?? sheet.FrozenRows);
         var lastVisibleRow = rowMetrics.Count > 0 ? rowMetrics[^1].Row : 0u;
-        var rowOutlineGroups = sheet.ShowOutlineSymbols == false
+        var rowOutlineGroups = (request.ShowOutlineSymbolsOverride ?? sheet.ShowOutlineSymbols) == false
             ? (IReadOnlyList<OutlineGroupRange>)[]
             : BuildRowOutlineGroups(sheet);
         return (lastVisibleRow, rowOutlineGroups);
@@ -190,10 +191,12 @@ public sealed partial class ViewportService : IViewportService
         var drawingObjects = request.IncludeObjects && request.IncludeDrawingObjectBounds
             ? BuildDrawingObjectBounds(sheet, workbook.Theme, rowMetrics, colMetrics)
             : [];
-        var rowOutlineGroups = sheet.ShowOutlineSymbols == false
+        // r199: this view's own Ctrl+8 state when the caller supplies one, else the shared field.
+        var showOutlineSymbols = request.ShowOutlineSymbolsOverride ?? sheet.ShowOutlineSymbols;
+        var rowOutlineGroups = showOutlineSymbols == false
             ? []
             : BuildRowOutlineGroups(sheet);
-        var columnOutlineGroups = sheet.ShowOutlineSymbols == false
+        var columnOutlineGroups = showOutlineSymbols == false
             ? []
             : BuildColumnOutlineGroups(sheet);
         var borderFringe = BuildBorderFringe(workbook, sheet, rowMetrics, colMetrics, ref styleCache);
@@ -1481,6 +1484,12 @@ public sealed partial class ViewportService : IViewportService
             return string.Empty;
         }
 
+        // numFmtId 14 is Excel's built-in, locale-sensitive short-date format.  The model keeps
+        // its canonical OOXML code (m/d/yy), but the grid must render the user's Windows short
+        // date pattern rather than treating that code as an invariant custom date format.
+        if (TryFormatBuiltInShortDate(cell.Value, style.NumberFormat, workbook.Uses1904DateSystem, out var shortDate))
+            return shortDate;
+
         // Excel never shows the width-based '#' overflow indicator when ShrinkToFit is on --
         // the real value shrinks (font-wise, in GridView's render pass) to fit the column
         // instead. Suppressing the indicator here lets the real formatted text reach that
@@ -1503,6 +1512,32 @@ public sealed partial class ViewportService : IViewportService
         }
 
         return result.Text;
+    }
+
+    private static bool TryFormatBuiltInShortDate(
+        ScalarValue value,
+        string numberFormat,
+        bool uses1904DateSystem,
+        out string text)
+    {
+        text = string.Empty;
+        var serial = value switch
+        {
+            NumberValue number => number.Value,
+            DateTimeValue dateTime => dateTime.Value,
+            _ => double.NaN
+        };
+
+        if (!BuiltInNumberFormatCatalog.TryResolveNumberFormatIdForCode(numberFormat, out var numberFormatId) ||
+            numberFormatId != 14 ||
+            (!uses1904DateSystem && ExcelDateSystem.IsPhantomLeapDaySerial(serial)) ||
+            !ExcelDateSystem.TrySerialToDate(serial, uses1904DateSystem, out var date))
+        {
+            return false;
+        }
+
+        text = date.ToString("d", CultureInfo.CurrentCulture);
+        return true;
     }
 
     /// <summary>

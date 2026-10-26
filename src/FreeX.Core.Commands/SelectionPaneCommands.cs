@@ -35,6 +35,13 @@ public sealed class SetSelectionPaneObjectVisibilityCommand : IWorkbookCommand
         if (SelectionPaneObjectAccess.RejectIfEditObjectsBlocked(sheet, target) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r228: an equal-value setter with an eye icon on top of it. The Selection pane shows each
+        // object's current visibility, and the shells also drive this from a Show All / Hide All
+        // sweep that sets every object to the same value -- so the objects already in that state
+        // reach here unchanged, one wasted undo entry each.
+        if (target.IsVisible == _isVisible)
+            return new CommandOutcome(true, AffectedCells: [target.Anchor], IsNoOp: true);
+
         _previous = target.IsVisible;
         target.IsVisible = _isVisible;
         _applied = true;
@@ -61,8 +68,6 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
     private readonly SelectionPaneObjectKind _kind;
     private readonly Guid _objectId;
     private readonly bool _forward;
-    private int _fromIndex = -1;
-    private int _toIndex = -1;
     private List<DrawingObjectZOrderEntry>? _previousDrawingOrder;
     private bool _hadExplicitDrawingOrder;
 
@@ -80,11 +85,12 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
     {
         var sheet = ctx.GetSheet(_sheetId);
 
-        // R62-meta-1: a Chart now moves through the same DrawingObjectZOrder-backed path as every
-        // other supported kind. Routing it through Move(sheet.Charts, ...) instead (the old
-        // behaviour) only ever reordered the Charts list -- it never touched DrawingObjectZOrder,
-        // so a chart's Bring Forward/Send Backward had zero effect on its position relative to
-        // shapes/pictures/text boxes in the same drawing stack.
+        // R62-meta-1: every supported kind moves through the same DrawingObjectZOrder-backed path.
+        // The old behaviour swapped the object inside its own per-kind list (sheet.Charts,
+        // sheet.Pictures, ...) and never touched DrawingObjectZOrder, so Bring Forward/Send
+        // Backward had zero effect on an object's position relative to the other kinds sharing the
+        // same drawing stack. That per-list routing has no callers left and is gone (r227); the
+        // per-kind Revert that undid those list swaps went with it.
         return _kind switch
         {
             SelectionPaneObjectKind.Chart or
@@ -111,44 +117,6 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
             _hadExplicitDrawingOrder = false;
             return;
         }
-
-        if (_fromIndex < 0 || _toIndex < 0)
-            return;
-
-        var sheet = ctx.GetSheet(_sheetId);
-        switch (_kind)
-        {
-            case SelectionPaneObjectKind.Chart:
-                Swap(sheet.Charts);
-                break;
-            case SelectionPaneObjectKind.Picture:
-                Swap(sheet.Pictures);
-                break;
-            case SelectionPaneObjectKind.TextBox:
-                Swap(sheet.TextBoxes);
-                break;
-            case SelectionPaneObjectKind.Shape:
-                Swap(sheet.DrawingShapes);
-                break;
-        }
-        _fromIndex = -1;
-        _toIndex = -1;
-    }
-
-    private CommandOutcome Move<T>(List<T> list, Func<T, Guid> getId, Func<T, CellAddress> getAnchor)
-    {
-        var index = FindObjectIndex(list, getId, _objectId);
-        if (index < 0)
-            return SelectionPaneObjectAccess.ObjectNotFound();
-
-        var toIndex = _forward ? index + 1 : index - 1;
-        if (toIndex < 0 || toIndex >= list.Count)
-            return new CommandOutcome(true);
-
-        _fromIndex = index;
-        _toIndex = toIndex;
-        (list[_fromIndex], list[_toIndex]) = (list[_toIndex], list[_fromIndex]);
-        return new CommandOutcome(true, AffectedCells: [getAnchor(list[_toIndex])]);
     }
 
     private CommandOutcome MoveDrawingObject(Sheet sheet)
@@ -171,7 +139,7 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
 
         var toIndex = _forward ? index + 1 : index - 1;
         if (toIndex < 0 || toIndex >= normalizedOrder.Count)
-            return new CommandOutcome(true);
+            return new CommandOutcome(true, IsNoOp: true); // already at the front/back: no undo entry, so redo survives
 
         _hadExplicitDrawingOrder = sheet.DrawingObjectZOrder.Count > 0;
         _previousDrawingOrder = sheet.DrawingObjectZOrder.ToList();
@@ -199,20 +167,6 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
         SelectionPaneObjectAccess.Find(sheet, _kind, _objectId) is { } target
             ? [target.Anchor]
             : [];
-
-    private void Swap<T>(List<T> list) =>
-        (list[_fromIndex], list[_toIndex]) = (list[_toIndex], list[_fromIndex]);
-
-    private static int FindObjectIndex<T>(IReadOnlyList<T> list, Func<T, Guid> getId, Guid objectId)
-    {
-        for (var index = 0; index < list.Count; index++)
-        {
-            if (getId(list[index]) == objectId)
-                return index;
-        }
-
-        return -1;
-    }
 }
 
 public sealed class RenameSelectionPaneObjectCommand : IWorkbookCommand
@@ -223,6 +177,8 @@ public sealed class RenameSelectionPaneObjectCommand : IWorkbookCommand
     private readonly string _newName;
     private string? _previousName;
     private bool _previousIsSourceLoaded;
+    // r320: the source anchor name this rename superseded, so Revert can un-supersede it.
+    private string? _supersededSourceName;
     private bool _applied;
 
     public string Label => "Rename Object";
@@ -252,6 +208,15 @@ public sealed class RenameSelectionPaneObjectCommand : IWorkbookCommand
         if (SelectionPaneObjectAccess.RejectIfEditObjectsBlocked(sheet, target) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r217: this one is worse than a phantom undo entry. The R124 comment below deliberately
+        // clears IsSourceLoaded so the writer regenerates the anchor under the new name -- correct
+        // for a real rename, but on a rename to the SAME name (the pane edits in place, so pressing
+        // Enter on an unchanged label lands here) it throws away a loaded object's original anchor
+        // XML and re-synthesises it for no reason. Compared ordinal against the already-trimmed
+        // _newName; a case-only rename is a real rename and still takes the path below.
+        if (string.Equals(target.Name, _newName, StringComparison.Ordinal))
+            return new CommandOutcome(true, AffectedCells: [target.Anchor], IsNoOp: true);
+
         _previousName = target.Name;
         _previousIsSourceLoaded = target.IsSourceLoaded;
         target.Name = _newName;
@@ -265,6 +230,21 @@ public sealed class RenameSelectionPaneObjectCommand : IWorkbookCommand
         // format edits. Chart's IsSourceLoaded is a permanent no-op (see the property doc), so this
         // is scoped to Picture/TextBox/Shape exactly as the defect requires.
         target.IsSourceLoaded = false;
+
+        // r320: clearing the gate above makes the writer emit a fresh anchor under the NEW name, but
+        // it does not tell the merger to drop the original anchor, which still bears the OLD one.
+        // GetRewrittenSourceObjectNames supersedes a source anchor by matching the model's CURRENT
+        // name, so after a rename nothing matches the original and it is copied through beside the
+        // regenerated object: renaming a loaded picture, text box or shape DUPLICATED it, and again
+        // on every subsequent rename. R124 fixed the rename being discarded and turned it into this.
+        // DeletedSourceDrawingObjectNames is exactly the channel for "keep this original anchor out
+        // of the merge", so the old name goes there.
+        if (_previousIsSourceLoaded && !string.IsNullOrWhiteSpace(_previousName))
+        {
+            sheet.DeletedSourceDrawingObjectNames.Add(_previousName);
+            _supersededSourceName = _previousName;
+        }
+
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [target.Anchor]);
     }
@@ -274,9 +254,18 @@ public sealed class RenameSelectionPaneObjectCommand : IWorkbookCommand
         if (!_applied)
             return;
 
-        var target = SelectionPaneObjectAccess.Find(ctx.GetSheet(_sheetId), _kind, _objectId);
+        var sheet = ctx.GetSheet(_sheetId);
+        var target = SelectionPaneObjectAccess.Find(sheet, _kind, _objectId);
         if (target is null)
             return;
+
+        // Undo restores the original name, so the original anchor must stop being superseded --
+        // otherwise undoing a rename would delete the object's source XML instead of restoring it.
+        if (_supersededSourceName is { } supersededName)
+        {
+            sheet.DeletedSourceDrawingObjectNames.Remove(supersededName);
+            _supersededSourceName = null;
+        }
 
         target.Name = _previousName;
         target.IsSourceLoaded = _previousIsSourceLoaded;

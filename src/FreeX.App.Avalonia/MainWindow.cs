@@ -4105,7 +4105,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!_cellAddressBoxHasPendingEdit)
             _cellAddressText.Text =
                 ResolveSelectedDrawingObjectNameBoxText() ??
-                FormatCellReference(_session.ActiveCell);
+                FormatSelectionNameBoxText();
         _isApplyingFormulaBoxText = true;
         try
         {
@@ -25028,9 +25028,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_isOpening || _isSaving)
             return;
 
-        if (!double.TryParse(sizeText, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var size)
-            || !double.IsFinite(size) || size <= 0)
+        // r604: was an InvariantCulture-only parse, so this box silently ignored "10,5" for every
+        // comma-decimal user -- while the WPF host parsed the SAME box with the current culture and
+        // rejected the invariant spelling instead. Neither host should be deciding; both now go
+        // through WorksheetSizeInputParser, which tries the current culture then the invariant one.
+        if (!FreeX.App.Presentation.SheetUI.WorksheetSizeInputParser.TryParsePositiveSize(
+                sizeText ?? string.Empty,
+                out var size))
+        {
             return;
+        }
 
         if (!TryCommitPendingFormulaEdit())
             return;
@@ -27853,14 +27860,33 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_isOpening || _isSaving)
             return false;
 
-        _isSaving = true;
-        UpdateSaveButton();
+        SetSavingAndTellSiblings(true);
         return true;
     }
 
-    private void EndFileOperation()
+    private void EndFileOperation() => SetSavingAndTellSiblings(false);
+
+    /// <summary>
+    /// r607: <c>_isSaving</c> is a PER-WINDOW field, and a "New Window" sibling shares this window's
+    /// <c>WorkbookSession</c> and therefore the same live <c>Workbook</c>. Setting the flag only here
+    /// left every one of the sibling's reentrancy guards passing while this window's background
+    /// thread enumerated the shared cell dictionaries. Mirrors the WPF host's
+    /// R115-app-host-save-race fix.
+    /// </summary>
+    private void SetSavingAndTellSiblings(bool saving)
     {
-        _isSaving = false;
+        _isSaving = saving;
+        UpdateSaveButton();
+        WindowRegistry.NotifySaveInProgress(this, saving);
+    }
+
+    /// <summary>
+    /// r607: applied to a SIBLING window while another window saves the document they share, so the
+    /// sibling's own guards decline edits for the duration.
+    /// </summary>
+    internal void ApplySaveInProgress(bool inProgress)
+    {
+        _isSaving = inProgress;
         UpdateSaveButton();
     }
 
@@ -28251,19 +28277,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 },
                 ExecutionStarting: () =>
                 {
-                    _isSaving = true;
                     _statusText.Text = WorkbookProgressTextFormatter
                         .FormatSave("preparing", TimeSpan.Zero, percent: null, UiText.Get)
                         .Detail;
                     _statusText.Foreground = Brush(67, 113, 83);
                     ApplyFileOperationProgress(null);
-                    UpdateSaveButton();
+                    // r607: also tells sibling windows sharing this workbook, so their own
+                    // guards decline edits while the adapter enumerates it on a background thread.
+                    SetSavingAndTellSiblings(true);
                 },
-                ExecutionCompleted: () =>
-                {
-                    _isSaving = false;
-                    UpdateSaveButton();
-                }));
+                ExecutionCompleted: () => SetSavingAndTellSiblings(false)));
 
             if (workflowResult.Outcome == WorkbookFileOperationOutcome.ExternalWriteConflict)
             {
@@ -28870,6 +28893,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private static string FormatCellReference(CellAddress address) =>
         SpreadsheetDisplayFormatter.FormatCellReference(address, useR1C1ReferenceStyle: false);
+
+    // A row-header selection is stored as the complete grid span so editing, rendering, and
+    // commands can operate on every cell. The Name Box, however, uses Excel's compact whole-row
+    // notation instead of exposing that implementation geometry.
+    private string FormatSelectionNameBoxText()
+    {
+        var range = _session.SelectedRange;
+        if (range.Start.Col == 1 && range.End.Col == CellAddress.MaxCol)
+            return range.Start.Row == range.End.Row
+                ? $"{range.Start.Row}:{range.Start.Row}"
+                : $"{range.Start.Row}:{range.End.Row}";
+
+        return FormatCellReference(_session.ActiveCell);
+    }
 
     private static string FormatRangeReference(GridRange range) =>
         SpreadsheetDisplayFormatter.FormatRangeReference(

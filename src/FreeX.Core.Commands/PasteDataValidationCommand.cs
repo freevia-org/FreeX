@@ -53,7 +53,8 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
             return protectedOutcome;
 
         var sourceRules = sourceSheet.DataValidations.Select(DataValidationCopySupport.CloneValidation).ToList();
-        _previous = targetSheet.DataValidations.Select(DataValidationCopySupport.CloneValidation).ToList();
+        var originals = targetSheet.DataValidations.ToList();
+        _previous = DataValidationListSnapshot.Capture(targetSheet);
         // When a full destination selection was supplied, clear overlapping rules across the
         // whole selection (matching the tiled-paste footprint below); otherwise fall back to the
         // single-anchor footprint sized to the copied source range, as before.
@@ -108,6 +109,18 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
             }
         }
 
+        // r256: pasting the same copied validation onto the same destination twice rebuilds an
+        // identical rule list. This command's only mutation is that list -- Revert restores exactly
+        // it -- so the whole-list comparison decides the no-op completely, which is what r221 said
+        // was missing for want of an `_added` list. It ignores Id because every clone above is
+        // minted with a fresh one by design (DataValidation.CloneWithNewIdentity).
+        if (DataValidationListSnapshot.Unchanged(originals, targetSheet.DataValidations))
+        {
+            DataValidationListSnapshot.Restore(targetSheet, originals);
+            _previous = null;
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         return new CommandOutcome(true);
     }
 
@@ -116,10 +129,12 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
         if (_previous is null)
             return;
 
+        // r256: identity-preserving (Clone, not CloneValidation) -- undo must put the rules back
+        // under the Ids they had, since rules are resolved by Id elsewhere.
         var sheet = ctx.GetSheet(_sheetId);
         sheet.DataValidations.Clear();
         foreach (var rule in _previous)
-            sheet.DataValidations.Add(DataValidationCopySupport.CloneValidation(rule));
+            sheet.DataValidations.Add(rule.Clone());
     }
 
     private static GridRange? Intersect(GridRange first, GridRange second) =>

@@ -126,6 +126,10 @@ public sealed class SetThemeCommand : IPresentationCommand
 
     public string Label => "Set Theme";
 
+    // r202: re-applying the value the presentation already has changes nothing, and the undo
+    // entry the bus would push for it clears the redo stack.
+    public bool HasEffect(Presentation p) => !ReferenceEquals(p.Theme, _newTheme);
+
     public void Apply(Presentation p)
     {
         _oldTheme = p.Theme;
@@ -233,6 +237,11 @@ public sealed class SetSlideSizeCommand : IPresentationCommand
     }
 
     public string Label => "Set Slide Size";
+
+    // r202: setting the size the deck already has changes nothing, and the undo entry the bus
+    // would push for it clears the redo stack.
+    public bool HasEffect(Presentation p) =>
+        p.SlideSizeCxEmu != _newCx || p.SlideSizeCyEmu != _newCy;
 
     public void Apply(Presentation p)
     {
@@ -451,6 +460,22 @@ public sealed class ApplyFormatPainterCommand : IPresentationCommand
                     PresentationCommandSizeEstimator.EstimateBytes(snap.Fill),
                     PresentationCommandSizeEstimator.EstimateBytes(snap.OldBody),
                 }))));
+
+    // r202: CopyFormatting captures Fill and Outline BY REFERENCE, so painting a shape's own
+    // captured format back onto itself assigns the identical instances -- a literal no-op whose
+    // undo entry still clears redo.
+    public bool HasEffect(Presentation p)
+    {
+        if (SlideOrNull(p) is not { } slide)
+            return false;
+
+        return _targetIds
+            .Select(id => FindShape(slide.Shapes, id))
+            .Any(shape => shape is not null &&
+                (_runFormat is not null
+                 || (_fill is not null && !ReferenceEquals(shape.Fill, _fill))
+                 || (_outline is not null && !ReferenceEquals(shape.Outline, _outline))));
+    }
 
     public void Apply(Presentation p)
     {

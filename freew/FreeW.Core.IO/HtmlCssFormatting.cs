@@ -206,7 +206,12 @@ internal static class HtmlCssFormatting
         if (!double.TryParse(number.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var raw))
             return false;
         pt = raw * factor;
-        return true;
+
+        // r547: an overflowing literal (font-size:1e400pt) parses as TRUE with an INFINITE value
+        // since .NET Core stopped throwing on overflow. Infinity is not a length, so report it the
+        // way this method already reports anything it cannot represent -- the declaration is then
+        // ignored and the run keeps its inherited size.
+        return double.IsFinite(pt);
     }
 
     /// <summary>

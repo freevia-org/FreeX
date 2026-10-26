@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using FreeX.Core.Model;
+using System.Globalization;
 
 namespace FreeX.Core.IO;
 
@@ -23,12 +24,12 @@ public static partial class XlsxChartPartReader
         };
 
         if (chartType == ChartType.Doughnut &&
-            int.TryParse(pieFamilyChart.Element(ChartNs + "holeSize")?.Attribute("val")?.Value, out var holeSize))
+            int.TryParse(pieFamilyChart.Element(ChartNs + "holeSize")?.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var holeSize))
         {
             result.DoughnutHoleSize = Math.Clamp(holeSize, 10, 90) / 100.0;
         }
 
-        if (int.TryParse(pieFamilyChart.Element(ChartNs + "firstSliceAng")?.Attribute("val")?.Value, out var firstSliceAngle))
+        if (int.TryParse(pieFamilyChart.Element(ChartNs + "firstSliceAng")?.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var firstSliceAngle))
             result.FirstSliceAngle = Math.Clamp(firstSliceAngle, 0, 360);
 
         var seriesIndex = 0;
@@ -119,9 +120,9 @@ public static partial class XlsxChartPartReader
         var sawFirst = false;
         foreach (var point in series.Elements(ChartNs + "dPt"))
         {
-            if (!int.TryParse(point.Element(ChartNs + "explosion")?.Attribute("val")?.Value, out var explosion) || explosion <= 0)
+            if (!int.TryParse(point.Element(ChartNs + "explosion")?.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var explosion) || explosion <= 0)
                 continue;
-            if (!int.TryParse(point.Element(ChartNs + "idx")?.Attribute("val")?.Value, out var index))
+            if (!int.TryParse(point.Element(ChartNs + "idx")?.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index))
                 continue;
 
             index = Math.Max(0, index);
@@ -238,7 +239,7 @@ public static partial class XlsxChartPartReader
 
     private static int ReadBubbleScale(XElement bubbleChart)
     {
-        return int.TryParse(bubbleChart.Element(ChartNs + "bubbleScale")?.Attribute("val")?.Value, out var scale)
+        return int.TryParse(bubbleChart.Element(ChartNs + "bubbleScale")?.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var scale)
             ? Math.Clamp(scale, 0, 300)
             : 100;
     }

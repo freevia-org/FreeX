@@ -3,7 +3,10 @@ namespace FreeW.Core.Model.Tests;
 public sealed class ShapeTextParagraphAlignmentCommandTests
 {
     [Theory]
-    [InlineData(TextAlignment.Left)]
+    // r204: Left was here too, but the fixture's leaf is ALREADY Left (see the Undo assertion
+    // below), so that case was asserting that a command which changes nothing still round-trips
+    // through undo -- the phantom entry the r203 census identified, which also cleared redo.
+    // It now has its own test, immediately after this one.
     [InlineData(TextAlignment.Center)]
     [InlineData(TextAlignment.Right)]
     [InlineData(TextAlignment.Justify)]
@@ -29,6 +32,27 @@ public sealed class ShapeTextParagraphAlignmentCommandTests
         leaf.TextParagraphs.Should().OnlyContain(paragraph => paragraph.Formatting.Alignment == TextAlignment.Left);
         bus.Redo().Should().BeTrue();
         leaf.TextParagraphs.Should().OnlyContain(paragraph => paragraph.Formatting.Alignment == alignment);
+    }
+
+    [Fact]
+    public void Applying_the_alignment_the_leaf_already_has_pushes_no_undo_entry()
+    {
+        // r204: the leaf starts Left. Re-applying Left is what a user does by clicking the ribbon's
+        // already-highlighted alignment button, and it must not push an entry -- pushing one clears
+        // the redo stack, discarding a real edit the user could still have redone.
+        var document = BuildNestedDocument(out _, out _, out var leaf, out _);
+        var bus = new DocumentCommandBus(new Context(document));
+        leaf.TextParagraphs.Should().OnlyContain(p => p.Formatting.Alignment == TextAlignment.Left);
+
+        // A real edit first, undone, so there is a redo to lose.
+        bus.Execute(new SetShapeTextParagraphAlignmentCommand(0, 0, TextAlignment.Center, [0, 1]));
+        bus.Undo().Should().BeTrue();
+        bus.CanRedo.Should().BeTrue();
+
+        bus.Execute(new SetShapeTextParagraphAlignmentCommand(0, 0, TextAlignment.Left, [0, 1]));
+
+        bus.CanRedo.Should().BeTrue("a command that changed nothing must not discard the redo");
+        leaf.TextParagraphs.Should().OnlyContain(p => p.Formatting.Alignment == TextAlignment.Left);
     }
 
     [Fact]

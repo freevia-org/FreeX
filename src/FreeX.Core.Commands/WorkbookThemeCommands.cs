@@ -19,6 +19,10 @@ public sealed class SetWorkbookThemeCommand : IWorkbookCommand
         if (_theme is null)
             return new CommandOutcome(false, "Theme is required.");
 
+        // r209: an equal-value setter -- see SetPageOrientationCommand.
+        if (ReferenceEquals(ctx.Workbook.Theme, _theme))
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousTheme = ctx.Workbook.Theme;
         ctx.Workbook.Theme = _theme;
         return new CommandOutcome(true);

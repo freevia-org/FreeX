@@ -713,8 +713,16 @@ public static class MergeRuleEvaluator
         // InvariantCulture share the same comma-group/dot-decimal convention, so "1,234" still parses as
         // one thousand two hundred thirty-four under either — only the separator ROLES shift with the
         // culture, not whether grouping is honoured.
+        // r561: IsFinite as well. Merge data comes from an EXTERNAL source, and NumberStyles.Any
+        // accepts the literal "NaN" and "Infinity" while a long digit run overflows to Infinity.
+        // Comparing those numerically is wrong twice over: NaN == NaN is false by IEEE rule, so an
+        // equality test on IDENTICAL TEXT answered "no match", and two DIFFERENT overlong numbers
+        // both became Infinity and compared equal. Word compares numerically only when both sides
+        // really are numbers; falling through to the case-insensitive text comparison below is
+        // what this method already does whenever either side fails to parse.
         if (double.TryParse(fieldValue, NumberStyles.Any, culture, out var fNum) &&
-            double.TryParse(ruleValue, NumberStyles.Any, culture, out var rNum))
+            double.TryParse(ruleValue, NumberStyles.Any, culture, out var rNum) &&
+            double.IsFinite(fNum) && double.IsFinite(rNum))
         {
             return op switch
             {

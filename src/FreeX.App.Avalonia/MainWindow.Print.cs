@@ -239,8 +239,9 @@ public sealed partial class MainWindow
             PrintExportNativePrintRouteKind.PlatformPrinter;
         if (platformPrinterRoute)
         {
-            _isSaving = true;
-            UpdateSaveButton();
+            // r607: spooling renders the live workbook to PDF, so sibling windows sharing it must
+            // decline edits for the duration too -- same race as a save.
+            SetSavingAndTellSiblings(true);
             _statusText.Text = UiText.Get("Print_Spooling");
             _statusText.Foreground = Brush(67, 113, 83);
         }
@@ -260,8 +261,7 @@ public sealed partial class MainWindow
         {
             if (platformPrinterRoute)
             {
-                _isSaving = false;
-                UpdateSaveButton();
+                SetSavingAndTellSiblings(false);
             }
         }
 

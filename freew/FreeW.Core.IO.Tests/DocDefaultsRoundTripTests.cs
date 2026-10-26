@@ -93,11 +93,11 @@ public class DocDefaultsRoundTripTests
         // Font family
         var rFonts = rPr!.Element(W + "rFonts");
         rFonts.Should().NotBeNull("w:rFonts must be emitted for the default font");
-        rFonts!.Attribute(W + "ascii")?.Value.Should().Be("Calibri");
-        rFonts.Attribute(W + "hAnsi")?.Value.Should().Be("Calibri");
+        rFonts!.Attribute(W + "ascii")!.Value.Should().Be("Calibri");
+        rFonts.Attribute(W + "hAnsi")!.Value.Should().Be("Calibri");
 
         // Size — w:sz val should be 22 (half-points for 11pt)
-        rPr.Element(W + "sz")?.Attribute(W + "val")?.Value.Should().Be("22",
+        rPr.Element(W + "sz")?.Attribute(W + "val")!.Value.Should().Be("22",
             "11pt = 22 half-points in w:sz/@w:val");
     }
 
@@ -151,7 +151,7 @@ public class DocDefaultsRoundTripTests
         var rFonts = docDefaults!
             .Element(W + "rPrDefault")?.Element(W + "rPr")?.Element(W + "rFonts");
         rFonts.Should().NotBeNull();
-        rFonts!.Attribute(W + "ascii")?.Value.Should().Be("Calibri");
+        rFonts!.Attribute(W + "ascii")!.Value.Should().Be("Calibri");
     }
 
     /// <summary>
@@ -179,12 +179,12 @@ public class DocDefaultsRoundTripTests
         var highlight = rPr!.Element(W + "highlight");
         highlight.Should().NotBeNull(
             "docDefaults must not drop HighlightColorHex just because CharacterShadingHex also owns the w:shd slot");
-        highlight!.Attribute(W + "val")?.Value.Should().Be("yellow");
+        highlight!.Attribute(W + "val")!.Value.Should().Be("yellow");
 
         var shd = rPr.Element(W + "shd");
         shd.Should().NotBeNull();
-        shd!.Attribute(W + "val")?.Value.Should().Be("pct10", "CharacterShadingHex still owns the w:shd slot");
-        shd.Attribute(W + "fill")?.Value.Should().Be("FFC000");
+        shd!.Attribute(W + "val")!.Value.Should().Be("pct10", "CharacterShadingHex still owns the w:shd slot");
+        shd.Attribute(W + "fill")!.Value.Should().Be("FFC000");
     }
 
     /// <summary>

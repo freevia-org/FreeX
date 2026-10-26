@@ -24,6 +24,15 @@ public sealed class WorkbookInvalidException : Exception
     public WorkbookInvalidException(string message) : base(message)
     {
     }
+
+    /// <summary>
+    /// r382: keeps the underlying packaging failure attached when a low-level fault is translated
+    /// into this message, so the readable sentence reaches the user without the diagnosable cause
+    /// being discarded.
+    /// </summary>
+    public WorkbookInvalidException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
 }
 
 /// <summary>

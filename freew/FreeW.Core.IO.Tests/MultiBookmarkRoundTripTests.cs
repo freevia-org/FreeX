@@ -204,11 +204,11 @@ public class MultiBookmarkRoundTripTests
         children.Select(ElementToken).Should().Equal("run:A", "start:Middle", "run:B", "end", "run:C");
         var start = children[1];
         var end = children[3];
-        start.Attribute(W + "id")?.Value.Should().Be(end.Attribute(W + "id")?.Value);
-        start.Attribute(W + "colFirst")?.Value.Should().Be("1");
-        start.Attribute(W + "colLast")?.Value.Should().Be("2");
-        start.Attribute(W + "displacedByCustomXml")?.Value.Should().Be("next");
-        end.Attribute(W + "displacedByCustomXml")?.Value.Should().Be("prev");
+        start.Attribute(W + "id")!.Value.Should().Be(end.Attribute(W + "id")?.Value);
+        start.Attribute(W + "colFirst")!.Value.Should().Be("1");
+        start.Attribute(W + "colLast")!.Value.Should().Be("2");
+        start.Attribute(W + "displacedByCustomXml")!.Value.Should().Be("next");
+        end.Attribute(W + "displacedByCustomXml")!.Value.Should().Be("prev");
 
         var reopened = RoundTrip(document).Paragraphs.Single();
         reopened.BookmarkBoundaries.Select(boundary => boundary.RunIndex).Should().Equal(1, 2);
@@ -238,8 +238,8 @@ public class MultiBookmarkRoundTripTests
         var firstEnd = paragraphs[0].Elements(W + "bookmarkEnd").Single();
         var secondEnd = paragraphs[1].Elements(W + "bookmarkEnd").Single();
 
-        firstEnd.Attribute(W + "id")?.Value.Should().Be(startsByName["Outer"].Attribute(W + "id")?.Value);
-        secondEnd.Attribute(W + "id")?.Value.Should().Be(startsByName["Inner"].Attribute(W + "id")?.Value);
+        firstEnd.Attribute(W + "id")!.Value.Should().Be(startsByName["Outer"].Attribute(W + "id")?.Value);
+        secondEnd.Attribute(W + "id")!.Value.Should().Be(startsByName["Inner"].Attribute(W + "id")?.Value);
         paragraphs[0].Elements().Select(ElementToken)
             .Should().Equal("start:Outer", "run:A", "start:Inner", "run:B", "end");
         paragraphs[1].Elements().Select(ElementToken)
@@ -298,7 +298,7 @@ public class MultiBookmarkRoundTripTests
         output.Descendants(W + "p").Single().Elements().Select(ElementToken)
             .Should().Equal("run:A", "start:Renamed", "run:B", "end", "run:C");
         output.Descendants(W + "bookmarkStart").Should().ContainSingle()
-            .Which.Attribute(W + "name")?.Value.Should().Be("Renamed");
+            .Which.Attribute(W + "name")!.Value.Should().Be("Renamed");
     }
 
     [Fact]

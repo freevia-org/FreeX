@@ -114,7 +114,7 @@ public sealed class XlsxSparklineCrossSheetTests
 
         // Per the real CT_SparklineGroup schema there is no wrapper element -- the date-axis range
         // is a bare <xm:f> direct child of the group, gated by the group's own dateAxis="1" attribute.
-        group.Attribute("dateAxis")?.Value.Should().Be("1");
+        group.Attribute("dateAxis")!.Value.Should().Be("1");
         var dateAxisFormula = group.Elements()
             .Single(e => string.Equals(e.Name.LocalName, "f", StringComparison.OrdinalIgnoreCase)).Value;
 

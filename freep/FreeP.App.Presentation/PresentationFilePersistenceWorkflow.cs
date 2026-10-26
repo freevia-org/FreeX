@@ -26,11 +26,20 @@ public sealed record PresentationFileOpenResult(
     // attribute, a read-only share/volume, or a denied ACL). Matches FreeW's
     // DocumentOpenResult.IsFileSystemReadOnly and FreeX's WorkbookReadOnlyOpenPlan flag so callers
     // can indicate the state up front instead of letting the user edit and only then fail the save.
-    bool IsFileSystemReadOnly = false);
+    bool IsFileSystemReadOnly = false,
+    // r454: parts that could not be read and were opened blank. Empty for an undamaged file. The
+    // reader recovers one bad slide rather than refusing the deck (deliberately -- see its per-slide
+    // catch), so this is the only thing standing between a repaired deck and silent data loss the
+    // user saves over.
+    IReadOnlyList<string>? LoadWarnings = null);
 
 public sealed record PresentationFileSaveResult(
     string SavedPath,
-    bool SuppressRecentFiles);
+    bool SuppressRecentFiles,
+    // r461: content the chosen format could not carry. Empty for the ordinary save. The file is
+    // always written -- this reports what did not survive, so the user knows before they close the
+    // document that the original content now exists only in this session.
+    IReadOnlyList<string>? SaveWarnings = null);
 
 /// <summary>
 /// Thrown by <see cref="PresentationFilePersistenceWorkflow.Save"/> when the caller passed the
@@ -99,11 +108,21 @@ public static class PresentationFilePersistenceWorkflow
         // probe deliberately reports as "not restricted".
         var isFileSystemReadOnly = FileWriteRestrictionProbe.IsWriteRestricted(path);
 
-        var presentation = ResolveFormat(path) switch
+        // r454: the .pptx path reads through ReadWithWarnings so a slide that could not be read is
+        // reported instead of quietly arriving blank. FxpFormat has no such recovery -- it either
+        // reads the whole document or throws -- so it has nothing to report.
+        IReadOnlyList<string> loadWarnings = [];
+        Presentation presentation;
+        if (ResolveFormat(path) == PresentationFilePersistenceFormat.LegacyFxp)
         {
-            PresentationFilePersistenceFormat.LegacyFxp => FxpFormat.Read(path),
-            _ => PptxPackageReader.Read(path),
-        };
+            presentation = FxpFormat.Read(path);
+        }
+        else
+        {
+            var read = PptxPackageReader.ReadWithWarnings(path);
+            presentation = read.Presentation;
+            loadWarnings = read.Warnings;
+        }
 
         // r154: opening a .potx/.potm template must behave like FreeW's DocumentPersistenceWorkflow
         // (opensAsTemplate ? null : path) and FreeX's XltxFileAdapter -- the template file on disk is
@@ -121,7 +140,8 @@ public static class PresentationFilePersistenceWorkflow
             SourceLastWriteTimeUtc: savedPath is null ? null : File.GetLastWriteTimeUtc(path),
             // A template open never targets this file for a future save (savedPath is null above for
             // the same reason), so its write-restriction state is irrelevant there.
-            IsFileSystemReadOnly: savedPath is not null && isFileSystemReadOnly);
+            IsFileSystemReadOnly: savedPath is not null && isFileSystemReadOnly,
+            LoadWarnings: loadWarnings);
     }
 
     public static PresentationFileSaveResult Save(
@@ -140,12 +160,20 @@ public static class PresentationFilePersistenceWorkflow
         using var saveStamp = DocumentPropertiesSaveStampTransaction.Begin(
             presentation.Properties,
             "FreeP User");
+        // r461: what this save cannot carry, described BEFORE writing so the message reflects the
+        // document the user asked to save. Only the PowerPoint path can lose anything -- the legacy
+        // .fxp serialiser round-trips the whole model -- so the format decides whether to ask.
+        var saveWarnings = ResolveFormat(path) == PresentationFilePersistenceFormat.LegacyFxp
+            ? []
+            : PptxSaveWarnings.Describe(presentation);
+
         AtomicFileWriter.WriteAllBytes(path, SerializePresentation(path, presentation));
         saveStamp.Commit();
 
         return new PresentationFileSaveResult(
             SavedPath: path,
-            SuppressRecentFiles: false);
+            SuppressRecentFiles: false,
+            SaveWarnings: saveWarnings);
     }
 
     private static byte[] SerializePresentation(string path, Presentation presentation)

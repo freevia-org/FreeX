@@ -27,6 +27,10 @@ public sealed class SetChartAreaOptionsCommand : IPresentationCommand
         PresentationCommandSizeEstimator.EstimateBytes(_oldOptions?.Fill),
     });
 
+    // r202: mirrors the guard Apply opens with -- otherwise the bus pushes an undo entry for a
+    // command that changed nothing, and that push clears the redo stack.
+    public bool HasEffect(Presentation presentation) => TryGetChart(presentation, out _);
+
     public void Apply(Presentation presentation)
     {
         if (!TryGetChart(presentation, out var chart)) return;

@@ -10,6 +10,41 @@ namespace FreeX.App.Presentation.Tests;
 /// </summary>
 public sealed class PProtectionFixesTests
 {
+    [Fact]
+    public void FormatFormulaBarText_FormatsPercentageValuesWithoutChangingStoredNumber()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var percentageStyle = workbook.RegisterStyle(new CellStyle { NumberFormat = "0%" });
+        var cell = Cell.FromValue(new NumberValue(0.1234));
+        cell.StyleId = percentageStyle;
+        sheet.SetCell(address, cell);
+
+        SpreadsheetDisplayFormatter.FormatFormulaBarText(cell, address, false, sheet, workbook)
+            .Should().Be("12.34%");
+        cell.Value.Should().Be(new NumberValue(0.1234));
+        cell.FormulaText.Should().BeNull();
+    }
+
+    [Fact]
+    public void FormatFormulaBarText_PreservesGeneralAndDateReadback()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var generalAddress = new CellAddress(sheet.Id, 1, 1);
+        var dateAddress = new CellAddress(sheet.Id, 2, 1);
+        var general = Cell.FromValue(new NumberValue(0.1234));
+        var date = Cell.FromValue(new DateTimeValue(45292));
+        sheet.SetCell(generalAddress, general);
+        sheet.SetCell(dateAddress, date);
+
+        SpreadsheetDisplayFormatter.FormatFormulaBarText(general, generalAddress, false, sheet, workbook)
+            .Should().Be("0.1234");
+        SpreadsheetDisplayFormatter.FormatFormulaBarText(date, dateAddress, false, sheet, workbook)
+            .Should().Be("2024-01-01");
+    }
+
     private static (Workbook Workbook, Sheet Sheet, CellAddress Address) CreateWorkbookWithFormulaCell(
         string formulaText, ScalarValue computedValue, bool hidden, bool locked = true)
     {

@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
+using System.Globalization;
 
 namespace FreeX.Core.IO;
 
@@ -399,7 +400,7 @@ internal static class XlsxLegacyCommentPreserver
                     // Re-map the target element's authorId into the reconciled authors list.
                     var clonedEntry = new XElement(targetElement);
                     var targetAuthorIdStr = clonedEntry.Attribute("authorId")?.Value;
-                    if (int.TryParse(targetAuthorIdStr, out var targetAuthorIdx) &&
+                    if (int.TryParse(targetAuthorIdStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var targetAuthorIdx) &&
                         targetAuthorIdx >= 0 && targetAuthorIdx < targetAuthors.Count)
                     {
                         var targetAuthorName = targetAuthors[targetAuthorIdx];
@@ -476,7 +477,7 @@ internal static class XlsxLegacyCommentPreserver
         var modelAuthor = sheet.CommentAuthors.TryGetValue(address, out var ma) ? ma : string.Empty;
         var sourceAuthorIdStr = entryToAdd.Attribute("authorId")?.Value;
         var sourceAuthorName = string.Empty;
-        if (int.TryParse(sourceAuthorIdStr, out var sourceAuthorIdx) &&
+        if (int.TryParse(sourceAuthorIdStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sourceAuthorIdx) &&
             sourceAuthorIdx >= 0 && sourceAuthorIdx < sourceAuthors.Count)
         {
             sourceAuthorName = sourceAuthors[sourceAuthorIdx];
@@ -511,7 +512,7 @@ internal static class XlsxLegacyCommentPreserver
     {
         var text = ReadCommentPlainText(commentElement, workbookNs);
         var author = "";
-        if (int.TryParse(commentElement.Attribute("authorId")?.Value, out var authorIdx) &&
+        if (int.TryParse(commentElement.Attribute("authorId")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var authorIdx) &&
             authorIdx >= 0 && authorIdx < authors.Count)
         {
             author = authors[authorIdx];
@@ -689,7 +690,7 @@ internal static class XlsxLegacyCommentPreserver
         {
             var text = ReadCommentPlainText(comment, workbookNs);
             var author = "";
-            if (int.TryParse(comment.Attribute("authorId")?.Value, out var authorIdx) &&
+            if (int.TryParse(comment.Attribute("authorId")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var authorIdx) &&
                 authorIdx >= 0 && authorIdx < authors.Count)
             {
                 author = authors[authorIdx];
@@ -820,7 +821,7 @@ internal static class XlsxLegacyCommentPreserver
                 entryToAdd.SetAttributeValue("ref", shimAddress.ToA1());
 
             var sourceAuthorName = "";
-            if (int.TryParse(entryToAdd.Attribute("authorId")?.Value, out var sourceAuthorIdx) &&
+            if (int.TryParse(entryToAdd.Attribute("authorId")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sourceAuthorIdx) &&
                 sourceAuthorIdx >= 0 && sourceAuthorIdx < sourceAuthors.Count)
             {
                 sourceAuthorName = sourceAuthors[sourceAuthorIdx];
@@ -856,7 +857,7 @@ internal static class XlsxLegacyCommentPreserver
 
                 var clonedEntry = new XElement(targetElement); // deep-clone
                 var targetAuthorIdStr = clonedEntry.Attribute("authorId")?.Value;
-                if (int.TryParse(targetAuthorIdStr, out var targetAuthorIdx) &&
+                if (int.TryParse(targetAuthorIdStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var targetAuthorIdx) &&
                     targetAuthorIdx >= 0 && targetAuthorIdx < targetAuthors.Count)
                 {
                     var targetAuthorName = targetAuthors[targetAuthorIdx];
@@ -1458,7 +1459,7 @@ internal static class XlsxLegacyCommentPreserver
 
             var rowText = clientData.Element(ExcelVmlNs + "Row")?.Value;
             var colText = clientData.Element(ExcelVmlNs + "Column")?.Value;
-            if (!uint.TryParse(rowText, out var row0) || !uint.TryParse(colText, out var col0))
+            if (!uint.TryParse(rowText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var row0) || !uint.TryParse(colText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var col0))
                 continue;
 
             result[(row0, col0)] = shape;
@@ -1510,8 +1511,8 @@ internal static class XlsxLegacyCommentPreserver
         var rowElement = clientData.Element(ExcelVmlNs + "Row");
         var colElement = clientData.Element(ExcelVmlNs + "Column");
         if (rowElement is null || colElement is null ||
-            !uint.TryParse(rowElement.Value, out var oldRow0) ||
-            !uint.TryParse(colElement.Value, out var oldCol0))
+            !uint.TryParse(rowElement.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var oldRow0) ||
+            !uint.TryParse(colElement.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var oldCol0))
         {
             return;
         }
@@ -1525,8 +1526,8 @@ internal static class XlsxLegacyCommentPreserver
         var anchorElement = clientData.Element(ExcelVmlNs + "Anchor");
         var anchorParts = anchorElement?.Value.Split(',').Select(part => part.Trim()).ToArray();
         if (anchorParts is not { Length: 8 } ||
-            !int.TryParse(anchorParts[0], out var col1) || !int.TryParse(anchorParts[2], out var row1) ||
-            !int.TryParse(anchorParts[4], out var col2) || !int.TryParse(anchorParts[6], out var row2))
+            !int.TryParse(anchorParts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var col1) || !int.TryParse(anchorParts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out var row1) ||
+            !int.TryParse(anchorParts[4], NumberStyles.Integer, CultureInfo.InvariantCulture, out var col2) || !int.TryParse(anchorParts[6], NumberStyles.Integer, CultureInfo.InvariantCulture, out var row2))
         {
             return;
         }

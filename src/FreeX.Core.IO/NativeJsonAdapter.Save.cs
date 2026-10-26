@@ -104,7 +104,10 @@ public sealed partial class NativeJsonAdapter
             WindowArrangement = NativeJsonValueSanitizer.ValidEnumOrDefault(workbook.WindowArrangement, WorkbookWindowArrangement.Tiled),
             DisabledFormulaErrorCodes = workbook.DisabledFormulaErrorCodes
                 .Where(IsSupportedFormulaErrorCode)
-                .OrderBy(code => code)
+                // r515: ordinal, not the default culture comparer. This set is written to the saved file,
+                // so a culture-sensitive sort would make the same workbook serialise in a different
+                // order under a different locale.
+                .OrderBy(code => code, StringComparer.Ordinal)
                 .ToList(),
             NamedRanges = ToNamedRangeDtos(workbook),
             CustomViews = workbook.CustomViews
@@ -141,6 +144,10 @@ public sealed partial class NativeJsonAdapter
                 IsHidden = s.IsHidden,
                 IsVeryHidden = s.IsVeryHidden,
                 TabColor = s.TabColor is { } color ? FormatColor(color) : null,
+                CodeName = s.CodeName,
+                TabThemeColor = NativeJsonColorMapper.FromThemeColorReference(s.TabThemeColor),
+                DefaultColumnWidth = s.DefaultColumnWidth,
+                DefaultRowHeight = s.DefaultRowHeight,
                 IsProtected = s.IsProtected,
                 ProtectionPassword = s.IsProtected && s.ProtectionPassword is { } shp
                     ? StoreProtectionPassword(shp)
@@ -570,6 +577,9 @@ public sealed partial class NativeJsonAdapter
                 cell.HasFormula ? NormalizeNativeFormulaText(cell.FormulaText!) : null,
                 cell.HasFormula ? cell.ArrayMode : FormulaArrayMode.Dynamic,
                 cell.IgnoreFormulaError,
+                cell.QuotePrefix,
+                cell.LegacyArrayRows,
+                cell.LegacyArrayCols,
                 GetNativeStyleId(cell.StyleId),
                 style: null,
                 options,

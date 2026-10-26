@@ -86,12 +86,6 @@ public sealed class FreeXCleanupMED14Tests
         });
     }
 
-    private static void PumpDispatcher()
-    {
-        var frame = new System.Windows.Threading.DispatcherFrame();
-        System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
-            System.Windows.Threading.DispatcherPriority.Background,
-            new System.Action(() => frame.Continue = false));
-        System.Windows.Threading.Dispatcher.PushFrame(frame);
-    }
+    // r446: delegates to the one fixed implementation -- see DispatcherTestPump.
+    private static void PumpDispatcher() => DispatcherTestPump.PumpDispatcher();
 }

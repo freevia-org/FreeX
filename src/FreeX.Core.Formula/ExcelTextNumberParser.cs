@@ -114,7 +114,7 @@ internal static class ExcelTextNumberParser
     private static CultureInfo CreateCurrentCultureWithExcelTwoDigitYearCutoff()
     {
         var culture = (CultureInfo)ExcelCulture.Current.Clone();
-        culture.DateTimeFormat.Calendar.TwoDigitYearMax = 2029;
+        ExcelTwoDigitYearWindow.ApplyTo(culture);
         return culture;
     }
 

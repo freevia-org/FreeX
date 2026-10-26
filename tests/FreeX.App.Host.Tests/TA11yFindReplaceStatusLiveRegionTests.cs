@@ -29,7 +29,7 @@ public sealed class TA11yFindReplaceStatusLiveRegionTests
 
         // AutomationProperties.LiveSetting is declared as a plain (default-namespace) attribute in
         // this project's XAML -- see MainWindow.xaml's status bar TextBlocks for the same convention.
-        statusLabel.Attribute("AutomationProperties.LiveSetting")?.Value.Should().Be("Polite");
+        statusLabel.Attribute("AutomationProperties.LiveSetting")!.Value.Should().Be("Polite");
     }
 
     [Fact]

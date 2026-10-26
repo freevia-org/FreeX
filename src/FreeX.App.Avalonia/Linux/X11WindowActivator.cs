@@ -14,6 +14,14 @@ internal static class X11WindowActivator
 
     internal static void Activate(Window window)
     {
+        // The XEvent layout below is hardcoded LP64: explicit field offsets and a 192-byte union
+        // size that hold on linux-x64 and linux-arm64 and NOWHERE else. On an ILP32 process the
+        // union is half that and every offset past Type is wrong, which would corrupt the event
+        // rather than fail visibly. The assumption used to live only in a comment; this makes it
+        // a condition, so a 32-bit RID degrades to "no activation" instead of scribbling memory.
+        if (IntPtr.Size != 8)
+            return;
+
         if (!OperatingSystem.IsLinux())
             return;
 

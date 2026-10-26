@@ -14,17 +14,22 @@ public partial class MainWindow
     private void InsertCurrentDateOrTime(bool insertTime)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var value = insertTime
-            ? DateTimeEntryService.CurrentTime(DateTime.Now)
-            : DateTimeEntryService.CurrentDate(DateTime.Now);
+        var now = DateTime.Now;
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 insertTime ? "Insert Time" : "Insert Date",
                 range,
-                currentRange => CreateSingleCellEditCommand(currentRange.Start, Cell.FromValue(value)),
+                currentRange => CreateSingleCellEditCommand(
+                    currentRange.Start,
+                    insertTime
+                        ? Cell.FromValue(DateTimeEntryService.CurrentTime(now))
+                        : DateTimeEntryService.CreateCurrentDateShortcutCell(_workbook, currentRange.Start, now)),
                 out var outcome))
             return;
 
         UpdateViewport();
+        var activeAddress = SheetGrid.SelectedRange?.Start ?? range.Start;
+        var activeSheet = _workbook.GetSheet(activeAddress.Sheet);
+        SetFormulaBarSelectionText(FormatFormulaBarText(activeSheet?.GetCell(activeAddress), activeAddress));
         RefreshToolbar();
         RefreshStatusBar();
     }
@@ -164,7 +169,7 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } selectedRange) return;
         var prefill = HyperlinkDialogPrefill.FromCell(_workbook.GetSheet(_currentSheetId), selectedRange.Start);
-        var dialog = new HyperlinkDialog(prefill.Target, prefill.DisplayText) { Owner = this };
+        var dialog = new HyperlinkDialog(prefill.Target, prefill.DisplayText, _currentFilePath) { Owner = this };
         if (dialog.ShowDialog() != true) return;
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Insert Link",

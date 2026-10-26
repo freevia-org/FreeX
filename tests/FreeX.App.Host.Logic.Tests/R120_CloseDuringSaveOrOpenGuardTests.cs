@@ -170,14 +170,8 @@ public sealed class R120_CloseDuringSaveOrOpenGuardTests
             PumpDispatcher();
         }
 
-        private static void PumpDispatcher()
-        {
-            var frame = new DispatcherFrame();
-            Dispatcher.CurrentDispatcher.BeginInvoke(
-                DispatcherPriority.Background,
-                new Action(() => frame.Continue = false));
-            Dispatcher.PushFrame(frame);
-        }
+        // r446: delegates to the one fixed implementation -- see R49MainWindowTestHarness.
+        private static void PumpDispatcher() => R49MainWindowTestHarness.PumpDispatcher();
     }
 
     /// <summary>A no-op message service -- the guard's own warning dialog must not block the test.</summary>

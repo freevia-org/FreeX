@@ -33,7 +33,7 @@ $entries = @(
         $requiresFullHistory =
             $testGate.PSObject.Properties.Name -contains 'requiresFullHistory' -and
             [bool]$testGate.requiresFullHistory
-        $partitionCount = if ($testGate.PSObject.Properties.Name -contains 'partitions') {
+        $defaultPartitionCount = if ($testGate.PSObject.Properties.Name -contains 'partitions') {
             [int]$testGate.partitions
         }
         else {
@@ -42,6 +42,28 @@ $entries = @(
         foreach ($platform in @($testGate.platforms)) {
             if (-not $runnerByPlatform.ContainsKey([string]$platform)) {
                 throw "Gate '$($testGate.id)' uses unsupported platform '$platform'."
+            }
+
+            # "platformPartitions" is an optional per-platform override of "partitions" — it
+            # exists so a gate can run fewer parallel jobs on scarce-capacity runners (e.g.
+            # macOS) than it does on other platforms, without splitting into a separate gate.
+            $partitionCount = $defaultPartitionCount
+            if ($testGate.PSObject.Properties.Name -contains 'platformPartitions') {
+                $platformPartitionProperty = $testGate.platformPartitions.PSObject.Properties |
+                    Where-Object Name -EQ ([string]$platform) |
+                    Select-Object -First 1
+                if ($null -ne $platformPartitionProperty) {
+                    $partitionCount = [int]$platformPartitionProperty.Value
+                }
+            }
+
+            # Approximate minutes for ONE job of this gate as currently partitioned. It exists
+            # only to order the matrix (below), never to change what runs.
+            $costHintMinutes = if ($testGate.PSObject.Properties.Name -contains 'costHintMinutes') {
+                [double]$testGate.costHintMinutes
+            }
+            else {
+                0.0
             }
 
             $preflightModes = @()
@@ -63,6 +85,7 @@ $entries = @(
                 }
 
                 [ordered]@{
+                    costHintMinutes = $costHintMinutes
                     gateId = [string]$testGate.id
                     displayGateId = $displayGateId
                     gate = [string]$testGate.gate
@@ -82,6 +105,17 @@ $entries = @(
 
 if ($entries.Count -eq 0) {
     throw "No '$Gate' test-gate matrix entries were selected."
+}
+
+# Dispatch the longest jobs first. GitHub starts matrix entries in array order, and the runner
+# pool saturates (measured: 19 concurrent, and the commit matrix already fills it), so whichever
+# jobs are dispatched last are the ones that queue. Emitting them longest-first means only SHORT
+# jobs absorb the queueing delay instead of a long one landing on the critical path -- in run
+# 33969021055 the 6.3m macOS avalonia job queued 2.6m and set the whole wall-clock. Ties break on
+# the display id so the matrix stays deterministic.
+$entries = @($entries | Sort-Object @{ Expression = { [double]$_.costHintMinutes }; Descending = $true }, @{ Expression = { [string]$_.displayGateId }; Descending = $false })
+foreach ($entry in $entries) {
+    $entry.Remove('costHintMinutes')
 }
 
 $matrixJson = @{ include = $entries } | ConvertTo-Json -Depth 4 -Compress

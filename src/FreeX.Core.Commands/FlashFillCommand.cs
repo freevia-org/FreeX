@@ -86,6 +86,14 @@ public sealed class FlashFillCommand : IWorkbookCommand, IEstimatesMemory
             affected.Add(addr);
         }
 
+        // r229: decided on the record, as r221 established. DetectFill can succeed and still have
+        // no rows left to fill -- every candidate row already holding the value the pattern would
+        // produce -- and nothing above this loop mutates, so an empty list is proof the command was
+        // inert. The limit is the same one r221 stated: this catches "there was nothing to fill",
+        // not "the filled values equalled what was there", which would need a comparison per cell.
+        if (affected.Count == 0)
+            return new CommandOutcome(true, IsNoOp: true);
+
         return new CommandOutcome(true, AffectedCells: affected);
     }
 

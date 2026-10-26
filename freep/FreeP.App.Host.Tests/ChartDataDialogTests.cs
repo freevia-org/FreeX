@@ -150,8 +150,19 @@ public sealed class ChartDataDialogTests : IDisposable
         options.TitleOverlay.Should().BeTrue();
         options.ChartExTitlePosition.Should().Be(ChartExTitlePosition.Right);
         options.ChartExTitleAlignment.Should().Be(ChartExTitleAlignment.Far);
-        options.PlotVisibleOnly.Should().BeFalse();
-        options.RoundedCorners.Should().BeTrue();
+        // r394: this chart is flagged IsChartEx, and r379 made the classic chart-area capability
+        // enforced on COMMIT rather than only by greying the control -- a chartEx chart has nowhere
+        // to store "plot visible cells only" or rounded corners, and a disabled field still
+        // round-trips a value through the dialog input. So the planner must report these as
+        // untouched, not write them. The assertions below said BeFalse()/BeTrue() because they were
+        // written before that gate existed; they had been failing ever since, and I twice
+        // misattributed the failure to this machine's disconnected-session WPF issue instead of
+        // reading the message. The classic-chart case is covered by the test below, which proves
+        // the gate is not simply swallowing both options everywhere.
+        options.PlotVisibleOnly.Should().BeNull(
+            "a chartEx chart cannot store the classic 'plot visible cells only' option");
+        options.RoundedCorners.Should().BeNull(
+            "a chartEx chart cannot store classic rounded corners");
         options.Legend.Should().Be(LegendPosition.Right);
         options.DisplayBlanksAs.Should().BeNull();
         options.VaryColors.Should().BeTrue();
@@ -165,6 +176,34 @@ public sealed class ChartDataDialogTests : IDisposable
         options.LabelTextStyle.Bold.Should().BeTrue();
         options.LabelTextStyle.Italic.Should().BeFalse();
         options.LabelTextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
+    }
+
+    /// <summary>
+    /// r394: the other side of r379's capability gate. Refusing the classic chart-area options on a
+    /// chartEx chart is only correct if a CLASSIC chart still commits them -- otherwise the gate
+    /// would be silently swallowing the setting everywhere, which looks identical from the chartEx
+    /// test alone.
+    /// </summary>
+    [StaFact]
+    public void ChartDisplayOptionsDialog_OnAClassicChart_CommitsTheChartAreaOptions()
+    {
+        var (sess, _) = MakeSession();
+        sess.SelectedChart!.IsChartEx = false;
+        sess.SelectedChart.ChartType = ChartType.Stock;
+
+        var dialog = new ChartDisplayOptionsDialog(sess);
+        dialog.SetOptionsForTests(new ChartDisplayOptionsDialogTestSettings
+        {
+            PlotVisibleOnly = false,
+            RoundedCorners = true,
+        });
+
+        var options = dialog.BuildCommitPlanForTests();
+
+        options.PlotVisibleOnly.Should().BeFalse(
+            "a classic chart stores this option, so unchecking it must reach the commit plan");
+        options.RoundedCorners.Should().BeTrue(
+            "a classic chart stores rounded corners");
     }
 
     [StaFact]

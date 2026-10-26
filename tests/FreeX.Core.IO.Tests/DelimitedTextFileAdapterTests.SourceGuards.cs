@@ -47,7 +47,7 @@ public sealed partial class DelimitedTextFileAdapterTests
         var source = TestWorkspaceFiles.ReadCoreIoSource("DelimitedTextWorkbookWriter.cs");
 
         source.Should().Contain("Array.Sort(cells, static (left, right) =>");
-        source.Should().Contain("WriteRow(writer, delimiter, cells, rowStart, rowEnd, endCol, workbook);");
+        source.Should().Contain("WriteRow(writer, delimiter, cells, rowStart, rowEnd, endCol, workbook, numberProvider);");
         source.Should().NotContain("EstimateRowCapacity");
         source.Should().NotContain("rowLookup");
         source.Should().NotContain("DelimitedTextRowBucket");
@@ -58,8 +58,14 @@ public sealed partial class DelimitedTextFileAdapterTests
     {
         var source = TestWorkspaceFiles.ReadCoreIoSource("DelimitedTextWorkbookWriter.cs");
 
-        source.Should().Contain("WriteNumberValue(writer, delimiter, cell, number.Value, workbook);");
-        source.Should().Contain("value.TryFormat(buffer, out var charsWritten, provider: CultureInfo.InvariantCulture)");
+        // r393 added the number provider parameter (plain CSV writes the locale decimal mark, as
+        // Excel does). The guard's subject is unchanged: the dense path must format into a stack
+        // buffer and write it straight to the TextWriter, with no per-cell string and no trip
+        // through WriteField's quoting.
+        source.Should().Contain("WriteNumberValue(writer, delimiter, cell, number.Value, workbook, numberProvider);");
+        source.Should().Contain("value.TryFormat(buffer, out var charsWritten, provider: numberProvider)");
+        source.Should().Contain("writer.Write(buffer[..charsWritten]);");
+        source.Should().NotContain("WriteField(writer, delimiter, new string(buffer");
         source.Should().NotContain("NumberValue n => n.Value.ToString(CultureInfo.InvariantCulture)");
     }
 

@@ -92,7 +92,9 @@ internal static class XlsxStructuredTableStyleMetadataReader
         return result;
     }
 
-    private static StyleDiff? ReadDifferentialStyleDiff(
+    // r577: internal rather than private so R577_IoNonFiniteParseTests can drive the sz/@val read
+    // directly; it is the one door a table style's dxf font size takes into the model.
+    internal static StyleDiff? ReadDifferentialStyleDiff(
         XElement dxf,
         XNamespace workbookNs,
         WorkbookTheme theme,
@@ -139,7 +141,8 @@ internal static class XlsxStructuredTableStyleMetadataReader
                     font.Element(workbookNs + "sz")?.Attribute("val")?.Value,
                     System.Globalization.NumberStyles.Float,
                     System.Globalization.CultureInfo.InvariantCulture,
-                    out var readFontSize))
+                    out var readFontSize) &&
+                IsSupportedFontSize(readFontSize))
             {
                 fontSize = readFontSize;
             }
@@ -263,4 +266,14 @@ internal static class XlsxStructuredTableStyleMetadataReader
         return new CellBorder(style, hasColor ? color : CellColor.Black, hasColor ? themeColor : null);
     }
 
+    /// <summary>
+    /// r577: Excel's own font-size range. This reader took a `sz/@val` straight out of the file with
+    /// no bound at all, so an overflowing literal entered the model as an Infinite point size; the
+    /// rest of the codebase already carries this exact rule under this exact name (ApplyStyleCommand,
+    /// XlsxDifferentialStyleReader, XlsxClosedXmlCellMapper, XlsxFileAdapter.SheetXmlLayout,
+    /// XlsxAdvancedConditionalFormatWriter), so the fix is to apply the written-down rule rather than
+    /// invent one. The `<= 409` upper bound is what excludes Infinity; NaN fails both comparisons.
+    /// </summary>
+    private static bool IsSupportedFontSize(double fontSize) =>
+        fontSize >= 1 && fontSize <= 409;
 }

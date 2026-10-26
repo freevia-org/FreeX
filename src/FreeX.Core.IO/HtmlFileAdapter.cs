@@ -22,7 +22,7 @@ namespace FreeX.Core.IO;
 /// Single table ⇒ single sheet. Formulas, number-format strings, multi-sheet structure, charts, etc.
 /// are not representable and are dropped (the format ceiling, not a bug).
 /// </summary>
-public sealed class HtmlFileAdapter : IFileAdapter
+public sealed class HtmlFileAdapter : IFileAdapter, ISingleSheetFileAdapter
 {
     public string Extension => ".html";
     public string FormatName => "Web Page (HTML)";

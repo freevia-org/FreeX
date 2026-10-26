@@ -37,7 +37,7 @@ public sealed class R49_AutoFilterFilterDatabaseDefinedNameTests
         var created = ReadFilterDatabase(package, localSheetId: 0);
         created.Should().NotBeNull("applying AutoFilter must create the built-in _FilterDatabase name");
         created!.Value.Should().Be("Sheet1!$A$1:$C$10");
-        created.Attribute("hidden")?.Value.Should().Be("1", "Excel always writes _FilterDatabase as hidden");
+        created.Attribute("hidden")!.Value.Should().Be("1", "Excel always writes _FilterDatabase as hidden");
 
         // Act 2: widen the filtered range and save again -- the name must track the new range, not
         // the stale original one.
@@ -92,7 +92,7 @@ public sealed class R49_AutoFilterFilterDatabaseDefinedNameTests
         filterDatabase.Should().NotBeNull(
             "an unrelated named-range-only save must not remove an untouched, still-valid _FilterDatabase name");
         filterDatabase!.Value.Should().Be("Sheet1!$A$1:$C$10");
-        filterDatabase.Attribute("hidden")?.Value.Should().Be("1");
+        filterDatabase.Attribute("hidden")!.Value.Should().Be("1");
     }
 
     private static XElement? ReadFilterDatabase(MemoryStream package, int localSheetId)

@@ -13,10 +13,11 @@ internal static class DialogReferencePicker
         string automationName,
         Thickness? pickerMargin = null,
         Dock? pickerDock = null,
-        Action<DialogReferencePickerRequest>? requestSelection = null)
+        Action<DialogReferencePickerRequest>? requestSelection = null,
+        double? pickerWidth = null)
     {
         var panel = new DockPanel();
-        var pickerButton = CreateButton(textBox, automationName, pickerMargin, requestSelection);
+        var pickerButton = CreateButton(textBox, automationName, pickerMargin, requestSelection, pickerWidth);
         if (pickerDock is { } dock)
             DockPanel.SetDock(pickerButton, dock);
 
@@ -29,12 +30,13 @@ internal static class DialogReferencePicker
         TextBox textBox,
         string automationName,
         Thickness? margin = null,
-        Action<DialogReferencePickerRequest>? requestSelection = null)
+        Action<DialogReferencePickerRequest>? requestSelection = null,
+        double? width = null)
     {
         var pickerButton = new Button
         {
             Content = "...",
-            Width = 28,
+            Width = width ?? 28,
             Margin = margin ?? new Thickness(0, 0, 6, 0),
             Tag = new DialogReferencePickerRequest(textBox, automationName, textBox.Text),
             ToolTip = UiText.Get("DialogReferencePicker_ToolTip")

@@ -51,18 +51,43 @@ public static class TableLayoutOperations
         return true;
     }
 
+    /// <summary>
+    /// r227: the height Distribute Rows would write, or null when the operation does not apply.
+    /// Split out of <see cref="DistributeRows"/> so the decision has ONE definition, shared by the
+    /// mutation and by <see cref="WouldDistributeRows"/> -- a hand-written predicate alongside the
+    /// mutation is the mirror that drifts.
+    /// </summary>
+    private static double? ResolveDistributedRowHeight(Table table)
+    {
+        var explicitHeights = table.Rows
+            .Where(row => row.HeightPt.HasValue)
+            .Select(row => row.HeightPt!.Value)
+            .ToList();
+        return explicitHeights.Count > 0 ? explicitHeights.Average() : null;
+    }
+
+    /// <summary>
+    /// r227: whether Distribute Rows would actually change this table. Note the return of
+    /// <see cref="DistributeRows"/> does NOT answer this -- it reports whether the operation was
+    /// APPLICABLE, and is true even for a second run that writes the heights already there.
+    /// </summary>
+    public static bool WouldDistributeRows(Table? table)
+    {
+        if (table is null || table.Rows.Count == 0)
+            return false;
+
+        var targetHeight = ResolveDistributedRowHeight(table);
+        var targetRule = targetHeight.HasValue ? TableRowHeightRule.Exact : TableRowHeightRule.Auto;
+        return table.Rows.Any(row =>
+            !Nullable.Equals(row.HeightPt, targetHeight) || row.HeightRule != targetRule);
+    }
+
     public static bool DistributeRows(Table? table)
     {
         if (table is null || table.Rows.Count == 0)
             return false;
 
-        var explicitHeights = table.Rows
-            .Where(row => row.HeightPt.HasValue)
-            .Select(row => row.HeightPt!.Value)
-            .ToList();
-        var targetHeight = explicitHeights.Count > 0
-            ? explicitHeights.Average()
-            : (double?)null;
+        var targetHeight = ResolveDistributedRowHeight(table);
 
         foreach (var row in table.Rows)
         {
@@ -71,6 +96,41 @@ public static class TableLayoutOperations
         }
 
         return true;
+    }
+
+    /// <summary>r227: the width Distribute Columns would write. See the row twin for why.</summary>
+    private static double ResolveDistributedColumnWidth(Table table, double fallbackWidthPt)
+    {
+        var columnCount = table.ColumnCount;
+        var totalWidth = table.ColumnWidthsPt.Count == columnCount
+            ? table.ColumnWidthsPt.Sum()
+            : table.PreferredWidthPt ?? fallbackWidthPt;
+        if (totalWidth <= 0)
+            totalWidth = fallbackWidthPt;
+
+        return totalWidth / columnCount;
+    }
+
+    /// <summary>
+    /// r227: whether Distribute Columns would actually change this table. As with the row twin,
+    /// <see cref="DistributeColumns"/>'s own return value does not answer this -- it is true for any
+    /// table with columns, including one already evenly distributed.
+    /// </summary>
+    public static bool WouldDistributeColumns(
+        Table? table,
+        double fallbackWidthPt = DefaultAutoFitWindowWidthPt)
+    {
+        if (table is null || table.ColumnCount == 0)
+            return false;
+
+        var columnWidth = ResolveDistributedColumnWidth(table, fallbackWidthPt);
+        if (table.ColumnWidthsPt.Count != table.ColumnCount
+            || table.ColumnWidthsPt.Any(width => !width.Equals(columnWidth)))
+        {
+            return true;
+        }
+
+        return table.Rows.Any(row => row.Cells.Any(cell => !Nullable.Equals(cell.WidthPt, columnWidth)));
     }
 
     public static bool DistributeColumns(
@@ -84,13 +144,7 @@ public static class TableLayoutOperations
         if (columnCount == 0)
             return false;
 
-        var totalWidth = table.ColumnWidthsPt.Count == columnCount
-            ? table.ColumnWidthsPt.Sum()
-            : table.PreferredWidthPt ?? fallbackWidthPt;
-        if (totalWidth <= 0)
-            totalWidth = fallbackWidthPt;
-
-        var columnWidth = totalWidth / columnCount;
+        var columnWidth = ResolveDistributedColumnWidth(table, fallbackWidthPt);
         table.ColumnWidthsPt.Clear();
         for (var i = 0; i < columnCount; i++)
             table.ColumnWidthsPt.Add(columnWidth);

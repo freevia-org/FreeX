@@ -52,6 +52,10 @@ public sealed class ChartEditCommandTests
             var categories = chart.Categories.ToArray();
             var series = chart.Series.Select(item => (item.Name, Values: item.Values.ToArray())).ToArray();
 
+            // r206: the catalog contains the layout the fixture already has (id 2). Applying that one
+            // changes nothing, so it correctly pushes no undo entry -- assert that, not a round trip.
+            var alreadyApplied = chart.QuickLayoutId == layout.Id;
+
             bus.Execute(new SetChartQuickLayoutCommand(0, 0, layout));
 
             chart.QuickLayoutId.Should().Be(layout.Id);
@@ -66,6 +70,12 @@ public sealed class ChartEditCommandTests
             chart.Categories.Should().Equal(categories);
             chart.Series.Select(item => (item.Name, Values: item.Values.ToArray()))
                 .Should().BeEquivalentTo(series, options => options.WithStrictOrdering());
+
+            if (alreadyApplied)
+            {
+                chart.QuickLayoutId.Should().Be(layout.Id);
+                continue;
+            }
 
             bus.Undo().Should().BeTrue();
             chart.QuickLayoutId.Should().Be(2);
@@ -164,13 +174,19 @@ public sealed class ChartEditCommandTests
         var (_, bus, chart) = NewChartDoc();
         chart.Kind = ChartKind.Pie;
 
+        // A real edit first, undone, so there is a redo for the no-op to threaten.
+        bus.Execute(new SetChartTitleCommand(0, 0, "Renamed"));
+        bus.Undo().Should().BeTrue();
+        bus.CanRedo.Should().BeTrue();
+
         bus.Execute(new SetChartAxisTitlesCommand(0, 0, "Category", "Value"));
 
         chart.CategoryAxisTitle.Should().BeNull();
         chart.ValueAxisTitle.Should().BeNull();
-        bus.Undo().Should().BeTrue();
-        chart.CategoryAxisTitle.Should().BeNull();
-        chart.ValueAxisTitle.Should().BeNull();
+        // r206: this test is NAMED for the no-op and used to assert bus.Undo() was true -- i.e. it
+        // pinned the phantom undo entry the r205 census identified. A command that changed nothing
+        // must push no entry, and so must leave a pending redo intact.
+        bus.CanRedo.Should().BeTrue("an axis-title command on a pie chart changes nothing");
     }
 
     [Fact]

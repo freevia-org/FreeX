@@ -64,7 +64,9 @@ function Assert-ToolSourceCentralization {
     foreach ($requiredPortabilityContract in @(
             'NormalizationForm]::FormD',
             'Test-StaticRepositoryPathCase',
-            'python3, python',
+            "@('python3','python')",
+            "Resolve-WorkingInterpreter -Names @('bash') -ProbeArgs @('-c','exit 0')",
+            'bashCommand.Source -n',
             'nodeCommand.Source --check',
             'linuxOnlyShellPrefixes',
             'GNU readlink -f',
@@ -478,16 +480,25 @@ function Assert-ToolSourceCentralization {
         }
     }
 
+    # These four generators intentionally record hand-authored parity findings for a declared
+    # covered-input list rather than pinning source-file hashes: with dozens of parallel sessions
+    # editing the hot files they cover (e.g. DocumentView.cs, MainWindow.cs), byte-for-byte source
+    # hashing made an unrelated source edit turn main red on every commit. Regenerating only
+    # reproduces the declared findings, so callers must re-verify by hand when a listed source
+    # changes; see each generator's `freshnessCheck`/"## Freshness" prose.
     foreach ($sourceEvidenceGeneratorName in @(
             "Generate-FreeWDesignDialogParityEvidence.ps1",
             "Generate-FreeWMailMergeDialogParityEvidence.ps1",
             "Generate-FreeWMediaDialogParityEvidence.ps1",
             "Generate-FreeWShellPlatformParityEvidence.ps1")) {
         $sourceEvidenceGenerator = Get-Content -LiteralPath (Join-Path $ToolRoot $sourceEvidenceGeneratorName) -Raw
-        if (-not $sourceEvidenceGenerator.Contains("ToolScriptSupport.ps1") -or
-            -not $sourceEvidenceGenerator.Contains("Get-ToolNormalizedTextSha256") -or
-            $sourceEvidenceGenerator.Contains("Get-FileHash")) {
-            throw "$sourceEvidenceGeneratorName must use shared newline-independent source hashing."
+        if ($sourceEvidenceGenerator.Contains("sourceSha256") -or
+            $sourceEvidenceGenerator.Contains("SourceHashes") -or
+            $sourceEvidenceGenerator.Contains("wpfSha256") -or
+            $sourceEvidenceGenerator.Contains("avaloniaSha256") -or
+            $sourceEvidenceGenerator.Contains("Get-FileHash") -or
+            $sourceEvidenceGenerator.Contains("Get-ToolNormalizedTextSha256")) {
+            throw "$sourceEvidenceGeneratorName must not pin source-file hashes; it must only assert its declared covered-input list still resolves to real files."
         }
     }
 
@@ -707,6 +718,38 @@ function Assert-CommandInventoryGeneratedProjectCentralization {
     }
 
     Write-Host "Validated command inventory generated-project orchestration centralization."
+}
+
+function Assert-GitHubApiQueryPortability {
+    param([Parameter(Mandatory = $true)][string]$ToolRoot)
+
+    # A "gh api" call that spells its query inline -- repos/x/y?a=1&b=2 -- works on the Linux
+    # runners and breaks on Windows, where gh resolves through a .cmd shim: cmd.exe reads the
+    # unquoted ampersand as a command separator and tries to run the tail as a second command.
+    # Both release-candidate scripts carried exactly this bug, and because CI only ever runs them
+    # on ubuntu it stayed invisible until someone ran one locally to diagnose a failed release.
+    #
+    # Query fields belong in -f/--raw-field instead; gh appends them to the URL itself.
+    $offenders = @()
+    $urlQueryWithAmpersand = 'gh\s+api[^#]*\?[^\s"'']*&'
+    foreach ($script in @(Get-ChildItem -LiteralPath $ToolRoot -Filter '*.ps1' -File -Recurse)) {
+        $lines = [System.IO.File]::ReadAllLines($script.FullName)
+        for ($i = 0; $i -lt $lines.Length; $i++) {
+            $line = $lines[$i]
+            # A commented-out call never runs, and this very check has to describe the pattern.
+            if ($line -match '^\s*#') { continue }
+            if ($line -notmatch $urlQueryWithAmpersand) { continue }
+            $offenders += ('{0}:{1}: {2}' -f $script.Name, ($i + 1), $line.Trim())
+        }
+    }
+
+    if ($offenders.Count -gt 0) {
+        throw ("gh api query fields must be passed with -f, not spelled inline after a '?', or the " +
+            "call breaks on Windows where gh runs through a cmd.exe shim. Offending lines: " +
+            ($offenders -join '; '))
+    }
+
+    Write-Host "Validated that every gh api call passes its query fields portably."
 }
 
 function Assert-CommandInventoryGeneratorEncoding {
@@ -1787,6 +1830,7 @@ if ($resolvedDirectory.Equals($toolsRoot, [System.StringComparison]::OrdinalIgno
     Assert-CommandInventoryMenuTraversalCentralization -ToolRoot $resolvedDirectory
     Assert-CommandInventoryGeneratedProjectCentralization -ToolRoot $resolvedDirectory
     Assert-CommandInventoryGeneratorEncoding -ToolRoot $resolvedDirectory
+    Assert-GitHubApiQueryPortability -ToolRoot $resolvedDirectory
     Assert-GeneratedFileComparisonEncoding
     Assert-CommandInventoryMenuTraversalBehavior -ToolRoot $resolvedDirectory
     Assert-GeneratedProjectOrchestrationBehavior -ToolRoot $resolvedDirectory

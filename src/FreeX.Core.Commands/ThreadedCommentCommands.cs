@@ -149,9 +149,17 @@ public sealed class UpdateThreadedCommentTextCommand : IWorkbookCommand
         // offsets anchor into the OLD text, so keeping MentionsXml verbatim would point the
         // mention at the wrong (or out-of-range) substring of the new text. Excel itself drops a
         // mention whose text was edited away, so clear it rather than carry stale offsets.
-        var updated = _previous with { Text = _text };
-        if (!string.Equals(_previous.Text, _text, StringComparison.Ordinal))
-            updated = updated with { MentionsXml = null };
+        // r228: the command already computes this equality one line below, to decide whether the
+        // preserved @mention metadata is still valid -- so it has always known whether the text
+        // changed and simply wrote a new timestamp regardless. Opening a comment and pressing Save
+        // without typing is an ordinary gesture.
+        // The judgement worth stating rather than assuming: the timestamp helper is
+        // TouchRootTextEdit, named for a text edit. Stamping a text-edit time when no text was
+        // edited is wrong on the helper's own terms, not merely wasteful, so this returns before it.
+        if (string.Equals(_previous.Text, _text, StringComparison.Ordinal))
+            return new CommandOutcome(true, IsNoOp: true);
+
+        var updated = _previous with { Text = _text, MentionsXml = null };
 
         sheet.ThreadedComments[_address] = ThreadedCommentTimestamps.TouchRootTextEdit(updated, _timestampUtc);
         return new CommandOutcome(true, AffectedCells: [_address]);
@@ -206,12 +214,16 @@ public sealed class UpdateThreadedCommentReplyCommand : IWorkbookCommand
 
         var replies = _previous.Replies.ToList();
         var priorReply = replies[_replyIndex];
-        var updatedReply = priorReply with { Text = _text };
-        // Same rationale as UpdateThreadedCommentTextCommand: a reply's preserved raw @mention
-        // metadata anchors into the reply's OLD text, so it must be dropped when the text changes
-        // rather than carried forward pointing at the wrong/out-of-range substring.
-        if (!string.Equals(priorReply.Text, _text, StringComparison.Ordinal))
-            updatedReply = updatedReply with { MentionsXml = null };
+
+        // r228: the reply twin of the root-text guard above, for the same gesture and the same
+        // reason -- the equality was already being computed here to decide about @mention metadata.
+        if (string.Equals(priorReply.Text, _text, StringComparison.Ordinal))
+            return new CommandOutcome(true, IsNoOp: true);
+
+        // A reply's preserved raw @mention metadata anchors into the reply's OLD text, so it must be
+        // dropped when the text changes rather than carried forward pointing at the wrong (or
+        // out-of-range) substring.
+        var updatedReply = priorReply with { Text = _text, MentionsXml = null };
         replies[_replyIndex] = ThreadedCommentTimestamps.Touch(updatedReply, _timestampUtc);
         sheet.ThreadedComments[_address] = ThreadedCommentTimestamps.Touch(
             _previous with
@@ -323,6 +335,14 @@ public sealed class ResolveThreadedCommentCommand : IWorkbookCommand
             return protectedOutcome;
         if (!sheet.ThreadedComments.TryGetValue(_address, out _previous))
             return CommentCommandGuards.ThreadedCommentNotFound();
+
+        // r228: same judgement as the two Update* commands next door. Resolving a thread that is
+        // already resolved leaves every user-visible field identical and differs only in the
+        // timestamp Touch would stamp -- so the entry it pushed recorded nothing but its own act of
+        // being pushed, while clearing the pending redo.
+        if (_previous.IsResolved == _resolved)
+            return new CommandOutcome(true, IsNoOp: true);
+
         sheet.ThreadedComments[_address] = ThreadedCommentTimestamps.Touch(_previous with { IsResolved = _resolved }, _timestampUtc);
         return new CommandOutcome(true, AffectedCells: [_address]);
     }

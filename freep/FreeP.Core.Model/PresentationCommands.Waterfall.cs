@@ -20,6 +20,12 @@ public sealed class SetWaterfallTotalPointCommand : IPresentationCommand
 
     public string Label => _setAsTotal ? "Set Waterfall Point as Total" : "Clear Waterfall Total";
 
+    // r202: mirrors the guard Apply opens with -- otherwise the bus pushes an undo entry for a
+    // command that changed nothing, and that push clears the redo stack.
+    public bool HasEffect(Presentation p) =>
+        ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId) is { ChartType: ChartType.Waterfall } chart
+        && chart.Series.Count > 0 && _pointIndex >= 0 && _pointIndex < chart.Categories.Count;
+
     public void Apply(Presentation p)
     {
         var chart = ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId);

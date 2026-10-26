@@ -143,6 +143,10 @@ internal static class XlsxRichRunReader
                 var szVal = szEl?.Attribute("val")?.Value;
                 if (!string.IsNullOrWhiteSpace(szVal) &&
                     double.TryParse(szVal, NumberStyles.Float, CultureInfo.InvariantCulture, out var pts) &&
+                    // r486: an upper-bounded guard would exclude infinity on its own (see
+                    // XlsxWorksheetXmlValueParser); a bare "> 0" does not, and this size comes from
+                    // the file and goes into text layout.
+                    double.IsFinite(pts) &&
                     pts > 0)
                 {
                     fontSize = pts;
@@ -237,7 +241,8 @@ internal static class XlsxRichRunReader
         {
             var tintText = element.Attribute("tint")?.Value;
             var tint = !string.IsNullOrWhiteSpace(tintText) &&
-                       double.TryParse(tintText, NumberStyles.Float, CultureInfo.InvariantCulture, out var t)
+                       // r549: a non-finite tint falls back to 0 (no tint), as an absent attribute does.
+                       double.TryParse(tintText, NumberStyles.Float, CultureInfo.InvariantCulture, out var t) && double.IsFinite(t)
                            ? t : 0d;
             color = CellRunColor.FromTheme(themeIndex, tint);
             return true;

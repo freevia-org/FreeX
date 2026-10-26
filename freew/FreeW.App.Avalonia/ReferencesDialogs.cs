@@ -197,21 +197,12 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
         Close();
     }
 
-    private void RunUiTask(Func<Task> operation) => _ = ObserveUiTaskAsync(operation);
-
-    private static async Task ObserveUiTaskAsync(Func<Task> operation)
-    {
-        try
-        {
-            await operation();
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-        }
-    }
+    // r282: these three dialogs each carried their own copy of this funnel, and every copy caught
+    // the general exception into an EMPTY body -- so a failing OK button or Add/Edit source did
+    // nothing at all, with no message. MainWindow's equivalent reports to the status bar. Routed
+    // through the shared guard so there is ONE place to attach reporting when these dialogs gain an
+    // error surface; see the note in R282 for why they do not have one yet.
+    private void RunUiTask(Func<Task> operation) => AvaloniaUiTaskGuard.Run(operation);
 
     private static StackPanel LabeledColumn(string label, Control control, int column)
     {
@@ -819,21 +810,12 @@ internal sealed class SourceEntryDialog : FreeWDialogWindow
         authorField.Focus();
     }
 
-    private void RunUiTask(Func<Task> operation) => _ = ObserveUiTaskAsync(operation);
-
-    private static async Task ObserveUiTaskAsync(Func<Task> operation)
-    {
-        try
-        {
-            await operation();
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-        }
-    }
+    // r282: these three dialogs each carried their own copy of this funnel, and every copy caught
+    // the general exception into an EMPTY body -- so a failing OK button or Add/Edit source did
+    // nothing at all, with no message. MainWindow's equivalent reports to the status bar. Routed
+    // through the shared guard so there is ONE place to attach reporting when these dialogs gain an
+    // error surface; see the note in R282 for why they do not have one yet.
+    private void RunUiTask(Func<Task> operation) => AvaloniaUiTaskGuard.Run(operation);
 
     private void RefreshFields()
     {
@@ -1418,21 +1400,12 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
         return true;
     }
 
-    private void RunUiTask(Func<Task> operation) => _ = ObserveUiTaskAsync(operation);
-
-    private static async Task ObserveUiTaskAsync(Func<Task> operation)
-    {
-        try
-        {
-            await operation();
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-        }
-    }
+    // r282: these three dialogs each carried their own copy of this funnel, and every copy caught
+    // the general exception into an EMPTY body -- so a failing OK button or Add/Edit source did
+    // nothing at all, with no message. MainWindow's equivalent reports to the status bar. Routed
+    // through the shared guard so there is ONE place to attach reporting when these dialogs gain an
+    // error surface; see the note in R282 for why they do not have one yet.
+    private void RunUiTask(Func<Task> operation) => AvaloniaUiTaskGuard.Run(operation);
 
     private void RefreshMasterList(int? selectedIndex = null)
     {

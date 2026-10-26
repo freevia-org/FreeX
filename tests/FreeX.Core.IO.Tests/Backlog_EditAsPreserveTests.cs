@@ -73,7 +73,7 @@ public sealed class Backlog_editAs_preserve_Tests
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
         var drawingXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/drawings/drawing1.xml");
         var anchor = drawingXml.Descendants(SpreadsheetDrawingNs + "twoCellAnchor").Should().ContainSingle().Subject;
-        anchor.Attribute("editAs")?.Value.Should().Be(editAs,
+        anchor.Attribute("editAs")!.Value.Should().Be(editAs,
             "editAs describes move/resize behavior and must survive a save unchanged even though FreeX " +
             "never models/implements the resize behavior itself (round-trip preservation only, per backlog scope)");
     }
@@ -119,7 +119,7 @@ public sealed class Backlog_editAs_preserve_Tests
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
         var drawingXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/drawings/drawing1.xml");
         var anchor = drawingXml.Descendants(SpreadsheetDrawingNs + "twoCellAnchor").Should().ContainSingle().Subject;
-        anchor.Attribute("editAs")?.Value.Should().Be("oneCell");
+        anchor.Attribute("editAs")!.Value.Should().Be("oneCell");
     }
 
 

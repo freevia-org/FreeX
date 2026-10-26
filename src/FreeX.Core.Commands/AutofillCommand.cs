@@ -271,6 +271,13 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
 
         ApplyDataValidationCarry(ctx);
 
+        // r238: the same complete comparison FillCellsCommand adopted in r237 -- all five
+        // undo snapshots consulted, because those snapshots are the record of everything
+        // this command writes. Autofilling a series back over the values it already
+        // produced, or dragging the handle back to where it started, changes nothing.
+        if (NothingChanged(sheet))
+            return new CommandOutcome(true, IsNoOp: true);
+
         return new CommandOutcome(true, AffectedCells: writtenCells);
     }
 
@@ -342,6 +349,13 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
                 ClearAnnotations(sheet, addr);
             }
         }
+
+        // r238: the same complete comparison FillCellsCommand adopted in r237 -- all five
+        // undo snapshots consulted, because those snapshots are the record of everything
+        // this command writes. Autofilling a series back over the values it already
+        // produced, or dragging the handle back to where it started, changes nothing.
+        if (NothingChanged(sheet))
+            return new CommandOutcome(true, IsNoOp: true);
 
         return new CommandOutcome(true, AffectedCells: writtenCells);
     }
@@ -500,6 +514,13 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
             sheet.AddMergedRegion(tileRange);
             _createdMergedRegions.Add(tileRange);
         }
+
+        // r238: the same complete comparison FillCellsCommand adopted in r237 -- all five
+        // undo snapshots consulted, because those snapshots are the record of everything
+        // this command writes. Autofilling a series back over the values it already
+        // produced, or dragging the handle back to where it started, changes nothing.
+        if (NothingChanged(sheet))
+            return new CommandOutcome(true, IsNoOp: true);
 
         return new CommandOutcome(true, AffectedCells: writtenCells);
     }
@@ -1337,4 +1358,14 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
         Horizontal
     }
 
+
+    /// <summary>r238: see FillCellsCommand -- one decision over every snapshot this command keeps.</summary>
+    private bool NothingChanged(Sheet sheet) =>
+        CellWriteSnapshots.NothingChanged(
+            sheet,
+            _snapshot,
+            _hyperlinkSnapshot,
+            _richTextRunsSnapshot,
+            _phoneticGuideSnapshot,
+            _commentSnapshot);
 }

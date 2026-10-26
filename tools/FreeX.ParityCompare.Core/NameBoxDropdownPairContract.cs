@@ -292,6 +292,14 @@ public static class NameBoxDropdownPairContract
     }
 }
 
+/// <summary>
+/// r380: <paramref name="WasEvaluated"/> distinguishes "the contract ran and passed" from "the
+/// contract never ran". A single-side run (--win-only/--linux-only) cannot evaluate a PAIR
+/// contract at all, and used to be reported as a plain PASS -- a gate announcing success for work
+/// it did not do, which is the same shape as the assertions r353 found and the backend probe r360
+/// fixed. Defaults to true so the real Validate path is unchanged.
+/// </summary>
 public sealed record NameBoxDropdownPairContractResult(
     bool IsValid,
-    IReadOnlyList<string> Failures);
+    IReadOnlyList<string> Failures,
+    bool WasEvaluated = true);

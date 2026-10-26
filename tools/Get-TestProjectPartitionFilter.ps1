@@ -28,8 +28,15 @@ if (-not (Test-Path -LiteralPath $projectFullPath -PathType Leaf)) {
 $projectDirectory = Split-Path -Parent $projectFullPath
 $namespacePattern = '(?m)^\s*namespace\s+([A-Za-z_][A-Za-z0-9_.]*)\s*[;{]'
 $classPattern = '(?m)^\s*(?:public|internal)?\s*(?:(?:sealed|static|partial|abstract)\s+)*class\s+([A-Za-z_][A-Za-z0-9_]*)'
-$factAttributePattern = '\[Fact(?:Attribute)?(?:\(|\])'
-$theoryAttributePattern = '\[Theory(?:Attribute)?(?:\(|\])'
+# xUnit's convention is that custom test attributes derive from FactAttribute/TheoryAttribute and
+# keep the suffix ([StaFact], [BenchmarkFact], [UiE2eFact], ...). Matching only the bare [Fact]
+# spelling made every source file whose tests ALL use a custom attribute score zero discoverable
+# tests, so it was dropped as a candidate and its classes were excluded from EVERY partition's
+# filter -- silently not running them while the gate still reported green. FreeW.App.Host.Tests
+# alone has 173 such [StaFact]-only files. The leading [A-Za-z0-9_]* accepts the derived spellings;
+# requiring "(" or "]" straight after the suffix still rejects unrelated names like [Factory].
+$factAttributePattern = '\[[A-Za-z0-9_]*Fact(?:Attribute)?(?:\(|\])'
+$theoryAttributePattern = '\[[A-Za-z0-9_]*Theory(?:Attribute)?(?:\(|\])'
 $inlineDataAttributePattern = '\[InlineData(?:Attribute)?(?:\(|\])'
 $candidates = [System.Collections.Generic.List[object]]::new()
 
@@ -110,8 +117,13 @@ if ($selectedClasses.Count -eq 0) {
 }
 
 [xml]$project = Get-Content -LiteralPath $projectFullPath -Raw
+# Query via SelectNodes rather than dot-accessing PropertyGroup.VSTestTestCaseFilter: under
+# Set-StrictMode a project file with no <VSTestTestCaseFilter> element at all (most csproj files)
+# throws "The property ... cannot be found on this object" on the direct property access instead
+# of yielding an empty/absent result.
 $baseFilter = @(
-    $project.Project.PropertyGroup.VSTestTestCaseFilter |
+    $project.SelectNodes('//VSTestTestCaseFilter') |
+        ForEach-Object { $_.InnerText } |
         Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } |
         Select-Object -Last 1
 )

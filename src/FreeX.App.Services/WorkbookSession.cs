@@ -218,6 +218,9 @@ public sealed class WorkbookSession : IDisposable
     private readonly Dictionary<SheetId, bool> _viewShowHeadingsOverrides = [];
     private readonly Dictionary<SheetId, bool> _viewShowRulersOverrides = [];
     private readonly Dictionary<SheetId, bool> _viewShowFormulasOverrides = [];
+    // r199: Show Outline Symbols was the one member of this View-tab group with no per-window
+    // override, so Ctrl+8 in one window hid the outline in every sibling window.
+    private readonly Dictionary<SheetId, bool> _viewShowOutlineSymbolsOverrides = [];
     private readonly Dictionary<SheetId, uint> _viewFrozenRowsOverrides = [];
     private readonly Dictionary<SheetId, uint> _viewFrozenColsOverrides = [];
     /// <summary>
@@ -487,6 +490,7 @@ public sealed class WorkbookSession : IDisposable
         _viewShowHeadingsOverrides[ActiveSheet.Id] = ActiveSheet.ShowHeadings;
         _viewShowRulersOverrides[ActiveSheet.Id] = ActiveSheet.ShowRulers;
         _viewShowFormulasOverrides[ActiveSheet.Id] = ActiveSheet.ShowFormulas;
+        _viewShowOutlineSymbolsOverrides[ActiveSheet.Id] = ActiveSheet.ShowOutlineSymbols ?? true;
         _viewSplitRowOverrides[ActiveSheet.Id] = ActiveSheet.SplitRow;
         _viewSplitColOverrides[ActiveSheet.Id] = ActiveSheet.SplitColumn;
         _viewFrozenRowsOverrides[ActiveSheet.Id] = ActiveSheet.FrozenRows;
@@ -518,6 +522,7 @@ public sealed class WorkbookSession : IDisposable
         _viewShowHeadingsOverrides[sheetId] = sourceView.GetEffectiveShowHeadings(sheetId);
         _viewShowRulersOverrides[sheetId] = sourceView.GetEffectiveShowRulers(sheetId);
         _viewShowFormulasOverrides[sheetId] = sourceView.GetEffectiveShowFormulas(sheetId);
+        _viewShowOutlineSymbolsOverrides[sheetId] = sourceView.GetEffectiveShowOutlineSymbols(sheetId);
         _viewSplitRowOverrides[sheetId] = sourceView.GetEffectiveSplitRow();
         _viewSplitColOverrides[sheetId] = sourceView.GetEffectiveSplitCol();
         _viewFrozenRowsOverrides[sheetId] = sourceView.GetEffectiveFrozenRows();
@@ -584,6 +589,7 @@ public sealed class WorkbookSession : IDisposable
         sheetIds.UnionWith(_viewShowHeadingsOverrides.Keys);
         sheetIds.UnionWith(_viewShowRulersOverrides.Keys);
         sheetIds.UnionWith(_viewShowFormulasOverrides.Keys);
+        sheetIds.UnionWith(_viewShowOutlineSymbolsOverrides.Keys);
         sheetIds.UnionWith(_viewFrozenRowsOverrides.Keys);
         sheetIds.UnionWith(_viewFrozenColsOverrides.Keys);
         sheetIds.UnionWith(_viewSplitRowOverrides.Keys);
@@ -621,6 +627,8 @@ public sealed class WorkbookSession : IDisposable
                 sheet.ShowRulers = showRulers;
             if (_viewShowFormulasOverrides.TryGetValue(sheetId, out var showFormulas))
                 sheet.ShowFormulas = showFormulas;
+            if (_viewShowOutlineSymbolsOverrides.TryGetValue(sheetId, out var showOutlineSymbols))
+                sheet.ShowOutlineSymbols = showOutlineSymbols;
             if (_viewFrozenRowsOverrides.TryGetValue(sheetId, out var frozenRows))
                 sheet.FrozenRows = frozenRows;
             if (_viewFrozenColsOverrides.TryGetValue(sheetId, out var frozenCols))
@@ -1098,6 +1106,7 @@ public sealed class WorkbookSession : IDisposable
             _viewShowHeadingsOverrides[sheetId] = snapshot.ShowHeadings;
             _viewShowRulersOverrides[sheetId] = snapshot.ShowRulers;
             _viewShowFormulasOverrides[sheetId] = snapshot.ShowFormulas;
+            _viewShowOutlineSymbolsOverrides[sheetId] = snapshot.ShowOutlineSymbols;
             _viewFrozenRowsOverrides[sheetId] = snapshot.FrozenRows;
             _viewFrozenColsOverrides[sheetId] = snapshot.FrozenCols;
             _viewSplitRowOverrides[sheetId] = snapshot.SplitRow;
@@ -3062,26 +3071,16 @@ public sealed class WorkbookSession : IDisposable
     public WorkbookCellEditResult SetShowOutlineSymbols(bool showOutlineSymbols)
     {
         var targetSheetIds = CurrentGroupedEditSheetIds();
-        if (targetSheetIds.All(sheetId =>
-                (Workbook.GetSheet(sheetId)?.ShowOutlineSymbols ?? true) == showOutlineSymbols))
-        {
+        if (targetSheetIds.All(sheetId => GetEffectiveShowOutlineSymbols(sheetId) == showOutlineSymbols))
             return SuccessfulNoOpEditResult();
-        }
 
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            ToCommand(
-                "Show Outline Symbols",
-                targetSheetIds
-                    .Select(sheetId => (IWorkbookCommand)new SetWorksheetOutlineSymbolsCommand(
-                        sheetId,
-                        showOutlineSymbols))
-                    .ToArray()));
-        if (!result.Success)
-            return result;
-
-        ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
-        return result;
+        // r199: seeds this view's own override, like every sibling toggle in this group. Reading the
+        // shared Sheet field instead is what made Ctrl+8 leak into New Window siblings.
+        return ExecuteGroupedWorksheetViewCommand(
+            "Show Outline Symbols",
+            targetSheetIds,
+            sheetId => new SetWorksheetOutlineSymbolsCommand(sheetId, showOutlineSymbols),
+            sheetId => _viewShowOutlineSymbolsOverrides[sheetId] = showOutlineSymbols);
     }
 
     public WorkbookCellEditResult SetShowFormulas(bool showFormulas)
@@ -3126,6 +3125,9 @@ public sealed class WorkbookSession : IDisposable
     }
 
     public bool IsShowingRulers => GetEffectiveShowRulers(ActiveSheet.Id);
+
+    /// <summary>This view's own Show Outline Symbols state (r199), not the shared sheet field.</summary>
+    public bool IsShowingOutlineSymbols => GetEffectiveShowOutlineSymbols(ActiveSheet.Id);
 
     public WorkbookCellEditResult SetShowRulers(bool showRulers)
     {
@@ -6879,6 +6881,7 @@ public sealed class WorkbookSession : IDisposable
         _viewShowHeadingsOverrides.Remove(sheetId);
         _viewShowRulersOverrides.Remove(sheetId);
         _viewShowFormulasOverrides.Remove(sheetId);
+        _viewShowOutlineSymbolsOverrides.Remove(sheetId);
         _viewFrozenRowsOverrides.Remove(sheetId);
         _viewFrozenColsOverrides.Remove(sheetId);
         _viewSplitRowOverrides.Remove(sheetId);
@@ -7417,6 +7420,9 @@ public sealed class WorkbookSession : IDisposable
 
     private bool GetEffectiveShowFormulas(SheetId sheetId) =>
         GetOrSeedViewOverride(_viewShowFormulasOverrides, sheetId, static sheet => sheet.ShowFormulas);
+
+    internal bool GetEffectiveShowOutlineSymbols(SheetId sheetId) =>
+        GetOrSeedViewOverride(_viewShowOutlineSymbolsOverrides, sheetId, static sheet => sheet.ShowOutlineSymbols ?? true);
 
     private bool GetEffectiveShowRulers(SheetId sheetId) =>
         GetOrSeedViewOverride(_viewShowRulersOverrides, sheetId, static sheet => sheet.ShowRulers);
@@ -8269,7 +8275,8 @@ public sealed class WorkbookSession : IDisposable
                 SplitPaneOffsets: GetSplitPaneOffsetsForActiveSheet(),
                 FrozenRowsOverride: GetEffectiveFrozenRows(),
                 FrozenColsOverride: GetEffectiveFrozenCols(),
-                SplitOverride: new SplitPaneStateOverride(GetEffectiveSplitRow(), GetEffectiveSplitCol())));
+                SplitOverride: new SplitPaneStateOverride(GetEffectiveSplitRow(), GetEffectiveSplitCol()),
+                ShowOutlineSymbolsOverride: GetEffectiveShowOutlineSymbols(ActiveSheet.Id)));
 
     /// <summary>
     /// Returns the TopRight/BottomLeft independent-scroll offsets for the active sheet, if it has

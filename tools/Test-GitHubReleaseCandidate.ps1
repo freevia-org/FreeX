@@ -30,7 +30,10 @@ foreach ($workflow in $RequiredWorkflows) {
 
     if ([string]::IsNullOrWhiteSpace($RunMetadataDirectory)) {
         $encodedWorkflow = [System.Uri]::EscapeDataString($workflow)
-        $responseText = & gh api "repos/$Repository/actions/workflows/$encodedWorkflow/runs?head_sha=$normalizedSha&status=completed&per_page=20"
+        # Query fields go through -F rather than inline in the URL: on Windows gh resolves via a
+        # .cmd shim, and an unquoted "&" there is handed to cmd.exe as a command separator.
+        $responseText = & gh api --method GET "repos/$Repository/actions/workflows/$encodedWorkflow/runs" `
+            -f "head_sha=$normalizedSha" -f "status=completed" -f "per_page=20"
         if ($LASTEXITCODE -ne 0) {
             throw "Could not query completed '$workflow' runs for $normalizedSha."
         }

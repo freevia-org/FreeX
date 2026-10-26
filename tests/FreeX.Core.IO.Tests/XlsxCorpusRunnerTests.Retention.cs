@@ -112,7 +112,7 @@ public partial class XlsxCorpusRunnerTests
             .Should()
             .ContainSingle()
             .Subject;
-        webPr.Attribute("url")?.Value.Should().Be("https://example.com/freex-web-query.html");
+        webPr.Attribute("url")!.Value.Should().Be("https://example.com/freex-web-query.html");
     }
 
     [Fact]

@@ -330,6 +330,7 @@ public sealed class DropCapOptionsDialog : FreeWDialogWindow
         PageLayoutDialogChrome.ApplySurface(_font, surface.Field(DropCapOptionsDialogField.Font));
         PageLayoutDialogChrome.ApplySurface(_lines, surface.Field(DropCapOptionsDialogField.LinesToDrop));
         PageLayoutDialogChrome.ApplySurface(_distance, surface.Field(DropCapOptionsDialogField.DistanceFromText));
+        PageLayoutDialogChrome.ApplyValidation(_status, surface);
 
         var positions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 8) };
         positions.Children.Add(_none);

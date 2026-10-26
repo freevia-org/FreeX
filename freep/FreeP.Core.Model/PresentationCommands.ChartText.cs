@@ -17,6 +17,10 @@ public sealed class SetChartTextOptionsCommand : IPresentationCommand
 
     public string Label => "Set Chart Text Options";
 
+    // r202: mirrors the guard Apply opens with -- otherwise the bus pushes an undo entry for a
+    // command that changed nothing, and that push clears the redo stack.
+    public bool HasEffect(Presentation presentation) => FindChart(presentation) is not null;
+
     public void Apply(Presentation presentation)
     {
         var chart = FindChart(presentation);

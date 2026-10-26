@@ -67,8 +67,8 @@ internal static class XlsxWorksheetColumnWidthWriter
         {
             foreach (var col in existingCols.Elements(ns + "col"))
             {
-                if (!uint.TryParse(col.Attribute("min")?.Value, out var min) ||
-                    !uint.TryParse(col.Attribute("max")?.Value, out var max) ||
+                if (!uint.TryParse(col.Attribute("min")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var min) ||
+                    !uint.TryParse(col.Attribute("max")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var max) ||
                     min == 0 || max < min)
                 {
                     continue;
@@ -212,7 +212,7 @@ internal static class XlsxWorksheetColumnWidthWriter
         if (XlsxWorksheetXmlValueParser.IsTruthy(col.Attribute("hidden")?.Value) ||
             XlsxWorksheetXmlValueParser.IsTruthy(col.Attribute("collapsed")?.Value))
             return true;
-        if (int.TryParse(col.Attribute("outlineLevel")?.Value, out var level) && level > 0)
+        if (int.TryParse(col.Attribute("outlineLevel")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var level) && level > 0)
             return true;
         var style = col.Attribute("style")?.Value;
         return !string.IsNullOrEmpty(style) && style != "0";

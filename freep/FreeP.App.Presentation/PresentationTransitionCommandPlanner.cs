@@ -507,6 +507,7 @@ public static class PresentationTransitionCommandPlanner
                 NumberStyles.Float,
                 CultureInfo.InvariantCulture,
                 out double seconds)
+            && double.IsFinite(seconds)
             && (allowZero ? seconds >= 0 : seconds > 0))
         {
             milliseconds = (int)Math.Round(seconds * 1000.0);

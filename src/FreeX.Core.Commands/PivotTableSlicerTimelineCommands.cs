@@ -199,7 +199,10 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
             PivotTableRefreshService.UpdateBoundPivotCharts(ctx.Workbook, targetSheet, pivotTable);
         }
 
-        return new CommandOutcome(true, AffectedCells: resolvedTargets.Select(t => t.PivotTable.TargetRange.Start).ToArray());
+        return new CommandOutcome(
+            true,
+            AffectedCells: resolvedTargets.Select(t => t.PivotTable.TargetRange.Start).ToArray(),
+            IsNoOp: NothingChanged(timeline));
 
         void RestoreAllTimelineTargets()
         {
@@ -221,6 +224,56 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
             // never supposed to change.
             PivotTableSlicerTimelineCommandHelpers.RestoreMergedRegions(_mergedRegionsSnapshot);
         }
+    }
+
+    /// <summary>
+    /// r263: re-selecting the timeline range already in effect -- dragging the handle back where it
+    /// was, or re-applying a saved range -- writes the same dates and re-renders the same pivots.
+    /// Without this the command still pushed an undo entry, and UndoRedoStack.Push clears the redo
+    /// stack, destroying a real edit the user could have redone.
+    ///
+    /// <para>POST-HOC over everything Revert restores: the timeline's own selected dates and each
+    /// bound pivot's field state (through the snapshot), the re-rendered cell blocks, and the merged
+    /// regions those re-renders can strip.</para>
+    /// </summary>
+    private bool NothingChanged(TimelineModel timeline) =>
+        _snapshot is not null
+        && _snapshot.Matches(timeline)
+        && TargetSnapshotsUnchanged(_targetSnapshots)
+        && MergedRegionsUnchanged(_mergedRegionsSnapshot);
+
+    private static bool TargetSnapshotsUnchanged(
+        List<(Sheet Sheet, PivotTableModel PivotTable, List<(CellAddress Address, Cell? Cell)> Snapshot)>? targetSnapshots)
+    {
+        if (targetSnapshots is null)
+            return true;
+
+        foreach (var (sheet, _, snapshot) in targetSnapshots)
+        {
+            if (!PivotSnapshotComparison.RenderedCellsUnchanged(sheet, snapshot))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool MergedRegionsUnchanged(List<(Sheet Sheet, List<GridRange> MergedRegions)>? mergedRegionsSnapshot)
+    {
+        if (mergedRegionsSnapshot is null)
+            return true;
+
+        foreach (var (sheet, captured) in mergedRegionsSnapshot)
+        {
+            if (sheet.MergedRegions.Count != captured.Count)
+                return false;
+            foreach (var region in captured)
+            {
+                if (!sheet.MergedRegions.Contains(region))
+                    return false;
+            }
+        }
+
+        return true;
     }
 
     public void Revert(ICommandContext ctx)
@@ -286,6 +339,28 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
                 timeline.SelectedStartDate,
                 timeline.SelectedEndDate,
                 targets.Select(t => PivotTableTargetStateSnapshot.Capture(t.Sheet, t.PivotTable)).ToList());
+
+        /// <summary>
+        /// r263: true when everything Capture recorded still holds. The per-pivot half goes through
+        /// <c>PivotFieldLayoutStateSnapshot.Matches</c> (r256), because the re-render rebuilds those
+        /// field lists and record equality would compare them by reference.
+        /// </summary>
+        public bool Matches(TimelineModel timeline)
+        {
+            if (!string.Equals(SelectedStartDate, timeline.SelectedStartDate, StringComparison.Ordinal)
+                || !string.Equals(SelectedEndDate, timeline.SelectedEndDate, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            foreach (var snapshot in PivotTables)
+            {
+                if (!snapshot.State.Matches(snapshot.PivotTable))
+                    return false;
+            }
+
+            return true;
+        }
 
         public void Restore(TimelineModel timeline)
         {

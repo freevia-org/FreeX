@@ -255,21 +255,21 @@ public sealed class ReleaseAutomationWorkflowTests
         var publisher = WorkspaceFileLocator.ReadAllText("tools", "Publish-SisterAppTesterPackages.ps1");
         var expectedLanes = new[]
         {
-            """@{ app = "FreeX"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest" }""",
-            """@{ app = "FreeX"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest" }""",
-            """@{ app = "FreeX"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm" }""",
-            """@{ app = "FreeX"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel" }""",
-            """@{ app = "FreeX"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15" }""",
-            """@{ app = "FreeW"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest" }""",
-            """@{ app = "FreeW"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest" }""",
-            """@{ app = "FreeW"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm" }""",
-            """@{ app = "FreeW"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel" }""",
-            """@{ app = "FreeW"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15" }""",
-            """@{ app = "FreeP"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest" }""",
-            """@{ app = "FreeP"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest" }""",
-            """@{ app = "FreeP"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm" }""",
-            """@{ app = "FreeP"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel" }""",
-            """@{ app = "FreeP"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15" }"""
+            """@{ app = "FreeX"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest""",
+            """@{ app = "FreeX"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest""",
+            """@{ app = "FreeX"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm""",
+            """@{ app = "FreeX"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel""",
+            """@{ app = "FreeX"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15""",
+            """@{ app = "FreeW"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest""",
+            """@{ app = "FreeW"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest""",
+            """@{ app = "FreeW"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm""",
+            """@{ app = "FreeW"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel""",
+            """@{ app = "FreeW"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15""",
+            """@{ app = "FreeP"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest""",
+            """@{ app = "FreeP"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest""",
+            """@{ app = "FreeP"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm""",
+            """@{ app = "FreeP"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel""",
+            """@{ app = "FreeP"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15"""
         };
 
         workflow.Should().Contain("name: Full Signed Release");
@@ -293,7 +293,11 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().NotContain("fetch-depth: 0");
         workflow.Should().NotContain("inputs.platform == 'all' || inputs.platform == matrix.platform");
         workflow.Should().Contain("group: full-signed-release-${{ inputs.release_version }}");
-        workflow.Should().Contain("Full app releases must be dispatched from refs/heads/main.");
+        workflow.Should().Contain("$isMainRelease = $env:GITHUB_REF -eq \"refs/heads/main\"");
+        workflow.Should().Contain("$isTaggedContinuation = $allowedTagRefs -ccontains $env:GITHUB_REF");
+        workflow.Should().Contain("-not ($isMainRelease -or $isTaggedContinuation)");
+        workflow.Should().Contain("Full app releases must start from refs/heads/main or continue from an immutable tag for the requested version.");
+        workflow.Should().Contain("refs/tags/free-suite-v$version");
         workflow.Should().Contain("Later main commits do not invalidate this run.");
         workflow.Should().Contain("name: Validate version and reject conflicting immutable tags");
         workflow.Should().Contain("release_version must be a filesystem-safe semantic version such as 0.8.182.");
@@ -301,7 +305,12 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().NotContain("codex/full-release-");
         workflow.Should().Contain("name: Verify immutable release candidate");
         workflow.Should().Contain("actions: read");
-        workflow.Should().Contain("tools/Test-GitHubReleaseCandidate.ps1");
+        // The workflow invokes the resolver, which applies the unchanged attestation to the newest
+        // attested ancestor of the dispatch head. Assert the invocation and the delegation
+        // separately, so this cannot pass on a mere mention of the old path in a comment.
+        workflow.Should().Contain("pwsh -NoProfile -File tools/Resolve-GitHubReleaseCandidate.ps1");
+        var resolver = WorkspaceFileLocator.ReadAllText("tools", "Resolve-GitHubReleaseCandidate.ps1");
+        resolver.Should().Contain("Test-GitHubReleaseCandidate.ps1");
         workflow.Should().NotContain("preflight_matrix");
         workflow.Should().NotContain("verify_matrix");
         workflow.Should().NotContain("name: Preflight ${{ matrix.platform }}");
@@ -313,6 +322,8 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("fromJSON(needs.prepare.outputs.release_matrix)");
         workflow.Should().Contain("tools/Invoke-TestGate.ps1");
         workflow.Should().Contain("-Gate release");
+        workflow.Should().Contain("-RetryFailedProjectCount 1");
+        workflow.Should().Contain("-HangTimeout 30m");
         workflow.Should().Contain("name: FreeX full release gate");
         workflow.Should().Contain("needs: [prepare, candidate]");
         workflow.Should().Contain("name: Validate complete release inventory");
@@ -334,7 +345,16 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("### Windows x64");
         workflow.Should().Contain("### Linux x64 and ARM64");
         workflow.Should().Contain("### macOS Intel and Apple silicon");
-        workflow.Should().Contain("signed/notarized/stapled `.app` bundle on macOS");
+        // The macOS signing claim is conditional on the macos_unsigned input, because an unsigned
+        // build must not be published describing itself as signed. Pin both arms: the signed
+        // wording for a normal release, and the explicit NOT-signed wording for an unsigned one.
+        workflow.Should().Contain("inputs.macos_unsigned");
+        workflow.Should().Contain("'signed, notarized, and stapled'");
+        workflow.Should().Contain("'NOT signed or notarized'");
+        // -AllowUnsigned must never be passed unconditionally: every occurrence is gated on the
+        // input, so a normal release still fails closed when a signing secret is missing.
+        Regex.Matches(workflow, @"-AllowUnsigned").Count
+            .Should().Be(Regex.Matches(workflow, @"inputs\.macos_unsigned && '-AllowUnsigned'").Count);
         workflow.Should().Contain("$notes = @'");
         workflow.Should().Contain("sha256sum -c {{APP}}-v{{VERSION}}-linux-<architecture>.zip.sha256");
         workflow.Should().Contain("shasum -a 256 -c {{APP}}-v{{VERSION}}-osx-<architecture>.zip.sha256");

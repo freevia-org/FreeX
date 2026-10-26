@@ -156,8 +156,16 @@ public static class ConnectionSiteHelper
         if (string.IsNullOrWhiteSpace(token))
             return false;
 
+        // r560: IsFinite as well. These tokens come from a:custGeom/a:cxnLst, so they are
+        // file-controlled, and "1e400" parses SUCCESSFULLY to Infinity. The caller multiplies the
+        // result into an EMU coordinate and casts with (long)Math.Round, which saturates to
+        // long.MaxValue, sending any connector attached to the site to an absurd position.
+        // Rejecting here falls through to the guide-token switch below, whose unmatched case
+        // already answers NaN and returns false -- the fallback the caller expects, which draws
+        // the site on the shape's bounding box instead.
         if (double.TryParse(token, System.Globalization.NumberStyles.Float,
-            System.Globalization.CultureInfo.InvariantCulture, out value))
+            System.Globalization.CultureInfo.InvariantCulture, out value)
+            && double.IsFinite(value))
             return true;
 
         var normalized = token.Trim().ToLowerInvariant();

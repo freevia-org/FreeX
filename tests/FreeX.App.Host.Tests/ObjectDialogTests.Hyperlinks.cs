@@ -150,11 +150,11 @@ public sealed partial class ObjectDialogTests
     {
         var source = ReadObjectDialogSources();
 
-        source.Should().Contain("AddTextRow(grid, 0, UiText.Get(\"Hyperlink_TextToDisplay2\"), _displayBox, displayText)");
-        source.Should().Contain("AddTextRow(grid, 1, UiText.Get(\"Hyperlink_Address\"), _targetBox, target)");
+        source.Should().Contain("Content = UiText.Get(\"Hyperlink_TextToDisplay2\")");
+        source.Should().Contain("Content = UiText.Get(\"Hyperlink_Address\")");
         source.Should().Contain("new Label");
-        source.Should().Contain("Content = label");
-        source.Should().Contain("Target = box");
+        source.Should().Contain("Target = _displayBox");
+        source.Should().Contain("Target = _targetBox");
     }
 
     [Fact]
@@ -170,6 +170,7 @@ public sealed partial class ObjectDialogTests
         source.Should().Contain("UiText.Get(\"Hyperlink_LinkTypeEmailAddress\")");
         source.Should().Contain("_screenTipButton");
         source.Should().Contain("_bookmarkButton");
+        source.Should().Contain("_browseButton");
         source.Should().Contain("Content = UiText.Get(\"Hyperlink_ScreenTip\")");
         source.Should().Contain("Content = UiText.Get(\"Hyperlink_Bookmark\")");
         source.Should().Contain("ScreenTipDialog");
@@ -179,6 +180,8 @@ public sealed partial class ObjectDialogTests
         source.Should().Contain("HyperlinkDialogPlanner.LinkTypeColumnWidth");
         source.Should().Contain("HyperlinkDialogPlanner.LabelColumnWidth");
         source.Should().Contain("HyperlinkDialogPlanner.ActionButtonWidth");
+        source.Should().Contain("HyperlinkCurrentFolderContext");
+        source.Should().Contain("WpfFileDialogService.ShowOpenDialog");
     }
 
     [Fact]
@@ -282,7 +285,8 @@ public sealed partial class ObjectDialogTests
     {
         var source = ReadClassSource("HyperlinkDialog.cs", "public sealed class HyperlinkDialog", "");
 
-        source.Should().Contain("DialogButtonRowFactory.Create(Accept, HyperlinkDialogPlanner.ActionButtonWidth)");
+        source.Should().Contain("DialogButtonRowFactory.Create(");
+        source.Should().Contain("HyperlinkDialogPlanner.ActionButtonWidth");
         source.Should().Contain("if (!TryCreateResult(_targetBox.Text, _displayBox.Text, SelectedLinkType, _screenTip, _bookmark, out var result, out var error))");
         source.Should().Contain("ShowInvalidInputWarning(error ?? UiText.Get(\"Hyperlink_EnterHyperlinkDetails\"));");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, _targetBox);");

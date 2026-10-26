@@ -656,7 +656,7 @@ public sealed class PptxPackageRetentionTests
             Relationship(rootRels, CustomXmlRelType, "customXml/item1.xml").Should().NotBeNull();
             var externalReviewRel = Relationship(rootRels, ExternalReviewRelType, "https://example.com/freep-review");
             externalReviewRel.Should().NotBeNull();
-            externalReviewRel!.Attribute("TargetMode")?.Value.Should().Be("External");
+            externalReviewRel!.Attribute("TargetMode")!.Value.Should().Be("External");
             Relationship(rootRels, UnknownSlideMirrorRelType, "ppt/slides/slide1.xml").Should().BeNull();
 
             var presRels = LoadXml(archive, "ppt/_rels/presentation.xml.rels");

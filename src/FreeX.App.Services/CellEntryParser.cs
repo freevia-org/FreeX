@@ -203,10 +203,11 @@ public static class CellEntryParser
     // workbook saves fine here but real Excel then truncates it on open, silently losing data the
     // user believed was saved intact. Real Excel truncates the typed text to this limit rather than
     // rejecting the entry outright, so mirror that here rather than erroring the cell out.
-    private const int ExcelCellTextLimit = 32767;
+    private const int ExcelCellTextLimit = Free.Shared.IO.SurrogateSafeTruncation.SpreadsheetCellTextLimit;
 
+    // r200: one implementation, in the shared tier -- this cap had three, all cutting mid-surrogate.
     private static string TruncateToExcelCellTextLimit(string text) =>
-        text.Length > ExcelCellTextLimit ? text[..ExcelCellTextLimit] : text;
+        Free.Shared.IO.SurrogateSafeTruncation.LimitToCellText(text);
 
     // Float + AllowThousands so a comma-decimal locale's grouped integer (e.g. de-DE "1.234"
     // meaning 1234, '.' as thousands separator) is honored, not silently misread as a decimal.

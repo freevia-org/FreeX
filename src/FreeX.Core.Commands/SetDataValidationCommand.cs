@@ -63,6 +63,13 @@ public sealed class SetDataValidationCommand : IWorkbookCommand
         if (matchedRule is not null)
         {
             var idx = FindDataValidationIndex(sheet, matchedRule.Id);
+            // r250: the Data Validation dialog pre-fills the rule being edited, so pressing OK
+            // without changing anything replaces a rule with an equal one. DataValidation is a class
+            // with reference equality, so this needs SameAs -- whose coverage contract derives the
+            // member list from CloneForRanges, per r249.
+            if (idx >= 0 && sheet.DataValidations[idx].SameAs(_rule))
+                return new CommandOutcome(true, IsNoOp: true);
+
             _previous = idx >= 0 ? sheet.DataValidations[idx] : null;
             if (idx >= 0)
                 sheet.DataValidations[idx] = _rule;
@@ -242,7 +249,12 @@ public sealed class ClearDataValidationCommand : IWorkbookCommand
 
         _removed.Reverse();
         _added.Reverse();
-        return new CommandOutcome(true);
+
+        // r200: no rule overlapped the selection, so nothing was cleared -- and an undo entry for that
+        // clears the redo stack.
+        return _removed.Count == 0
+            ? new CommandOutcome(true, IsNoOp: true)
+            : new CommandOutcome(true);
     }
 
     public void Revert(ICommandContext ctx)

@@ -184,22 +184,10 @@ internal sealed partial class StyleDialog : FreeWDialogWindow
         Close(acceptance.Result);
     }
 
-    private void RunUiTask(Func<Task> operation) => _ = ObserveUiTaskAsync(operation);
-
-    private static async Task ObserveUiTaskAsync(Func<Task> operation)
-    {
-        try
-        {
-            await operation();
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            // This callback has no synchronous caller; contain host dialog-service failures.
-        }
-    }
+    // r282: was a fourth private copy of the swallowing funnel, found by the strengthened r270
+    // contract rather than by the original scan. Containment was deliberate, but it contained the
+    // failure into nothing: a throwing OK button left the dialog open with no message.
+    private void RunUiTask(Func<Task> operation) => AvaloniaUiTaskGuard.Run(operation);
 
     private static void AddRow(Panel panel, string label, Control field)
     {

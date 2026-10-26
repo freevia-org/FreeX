@@ -327,7 +327,7 @@ public sealed class XlsxRichRunSchemaOrderTests
 
         colorElements.Should().HaveCount(1, "one run with a color");
         var colorEl = colorElements[0];
-        colorEl.Attribute("theme")?.Value.Should().Be("4",
+        colorEl.Attribute("theme")!.Value.Should().Be("4",
             "theme index must be preserved, not replaced by rgb");
         colorEl.Attribute("rgb").Should().BeNull(
             "a theme color must NOT be written as rgb");
@@ -381,7 +381,7 @@ public sealed class XlsxRichRunSchemaOrderTests
             .Descendants(Ns + "color")
             .First(e => e.Parent?.Name.LocalName == "rPr");
 
-        colorEl.Attribute("indexed")?.Value.Should().Be("3",
+        colorEl.Attribute("indexed")!.Value.Should().Be("3",
             "indexed color reference must be preserved");
         colorEl.Attribute("rgb").Should().BeNull("indexed color must NOT be flattened to rgb");
     }
@@ -426,7 +426,7 @@ public sealed class XlsxRichRunSchemaOrderTests
             .Descendants(Ns + "color")
             .First(e => e.Parent?.Name.LocalName == "rPr");
 
-        colorEl.Attribute("rgb")?.Value.Should().StartWith("FF", "RGB color must be preserved with FF alpha prefix");
+        colorEl.Attribute("rgb")!.Value.Should().StartWith("FF", "RGB color must be preserved with FF alpha prefix");
         colorEl.Attribute("theme").Should().BeNull("rgb color must not gain a theme attribute");
     }
 

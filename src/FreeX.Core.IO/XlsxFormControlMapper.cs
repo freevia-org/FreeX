@@ -73,7 +73,7 @@ internal static class XlsxFormControlMapper
 
         var model = ReadControlProperties(ctrlPropXml) ?? new FormControlModel();
         model.Name = NullIfWhiteSpace(controlElement.Attribute("name")?.Value);
-        if (uint.TryParse(controlElement.Attribute("shapeId")?.Value, out var shapeId))
+        if (uint.TryParse(controlElement.Attribute("shapeId")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shapeId))
             model.ShapeId = shapeId;
 
         var controlPr = controlElement.Element(WorksheetNs + "controlPr");
@@ -164,7 +164,7 @@ internal static class XlsxFormControlMapper
         col = 0;
         var colValue = anchorCell.Element(DrawingNs + "col")?.Value;
         var rowValue = anchorCell.Element(DrawingNs + "row")?.Value;
-        return uint.TryParse(colValue, out col) & uint.TryParse(rowValue, out row);
+        return uint.TryParse(colValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out col) & uint.TryParse(rowValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out row);
     }
 
     private const long EmusPerPixel = 9525;
@@ -190,8 +190,8 @@ internal static class XlsxFormControlMapper
     private static bool TryReadAnchorPoint(XElement marker, out DrawingAnchorPoint point)
     {
         point = default!;
-        if (!uint.TryParse(marker.Element(DrawingNs + "col")?.Value, out var col) ||
-            !uint.TryParse(marker.Element(DrawingNs + "row")?.Value, out var row))
+        if (!uint.TryParse(marker.Element(DrawingNs + "col")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var col) ||
+            !uint.TryParse(marker.Element(DrawingNs + "row")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var row))
         {
             return false;
         }

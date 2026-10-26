@@ -78,6 +78,32 @@ internal static class WorkbookNamedRangeReferenceParser
         return sheetName.Length > 0 && rangeText.Length > 0;
     }
 
+    /// <summary>
+    /// r587: parses a bare (sheet-unqualified) A1 range such as "A1:D6" onto a known sheet. Exposed
+    /// for the save-side overlap guard, which has a WorksheetAutoFilterModel.Reference in hand and a
+    /// sheet, and no sheet name in the text.
+    /// </summary>
+    internal static bool TryParseBareRange(string? text, SheetId sheetId, out GridRange range)
+    {
+        range = default;
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var parts = text.Split(':');
+        if (parts.Length is < 1 or > 2)
+            return false;
+
+        if (!TryParseA1Part(parts[0], sheetId, out var start))
+            return false;
+
+        var endText = parts.Length == 2 ? parts[1] : parts[0];
+        if (!TryParseA1Part(endText, sheetId, out var end))
+            return false;
+
+        range = new GridRange(start, end);
+        return true;
+    }
+
     private static bool TryParseA1Part(string text, SheetId sheetId, out CellAddress address)
     {
         var normalized = text.Trim().Replace("$", "", StringComparison.Ordinal);

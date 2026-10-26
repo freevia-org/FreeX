@@ -176,6 +176,20 @@ public sealed class UnprotectSheetCommand : IWorkbookCommand
         if (!ProtectionPasswordHelper.VerifyStoredPassword(sheet.ProtectionPassword, _password))
             return new CommandOutcome(false, "The password you supplied is not correct.");
 
+        // r220: unprotecting a sheet that is not protected. The password check above passes (no
+        // stored password, none typed), and then every write below is a self-assignment -- but ONLY
+        // if the preserved metadata bag is already null too. That last clause is the point: an
+        // unprotected sheet loaded from a file can still carry a ProtectionMetadata bag, and
+        // clearing it IS a change to what gets written back. Comparing only IsProtected would have
+        // suppressed that, which is the dangerous direction.
+        if (!sheet.IsProtected
+            && sheet.ProtectionPassword is null
+            && sheet.ProtectionPermissions.Count == 0
+            && sheet.ProtectionMetadata is null)
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         _previousProtected = sheet.IsProtected;
         _previousPassword = sheet.ProtectionPassword;
         _previousPermissions = sheet.ProtectionPermissions.ToList();
@@ -224,12 +238,17 @@ public sealed class AllowEditRangeCommand : IWorkbookCommand
             return CommandGuards.RejectAllowedEditRangeOnTargetSheet();
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (!sheet.AllowEditRanges.Contains(_range))
+        if (sheet.AllowEditRanges.Contains(_range))
         {
-            sheet.AllowEditRanges.Add(_range);
-            _added = true;
+            // r232: the fifth instance of the shape r226 went looking for -- the command already
+            // knew, via this exact Contains check, that it had nothing to add, and said nothing.
+            // The Allow Users to Edit Ranges dialog lists the existing ranges and lets New be
+            // pressed with the same selection still active, so re-adding one is an ordinary gesture.
+            return new CommandOutcome(true, IsNoOp: true);
         }
 
+        sheet.AllowEditRanges.Add(_range);
+        _added = true;
         return new CommandOutcome(true);
     }
 
@@ -296,6 +315,11 @@ public sealed class ClearAllowEditRangesCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var ranges = ctx.GetSheet(_sheetId).AllowEditRanges;
+
+        // r220: clearing an already-empty list.
+        if (ranges.Count == 0)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousRanges = [.. ranges];
         ranges.Clear();
         return new CommandOutcome(true);

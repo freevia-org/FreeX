@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
+using System.Globalization;
 
 namespace FreeX.Core.IO;
 
@@ -116,7 +117,7 @@ internal static class XlsxWorksheetCommentReader
                 var authorId = comment.Attribute("authorId")?.Value;
                 var author = "";
                 if (authorId is not null &&
-                    int.TryParse(authorId, out var authorIndex) &&
+                    int.TryParse(authorId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var authorIndex) &&
                     authorIndex >= 0 &&
                     authorIndex < authors.Count)
                 {

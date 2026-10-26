@@ -656,7 +656,7 @@ public class WatermarkOptionsRoundTripTests
         rewritten.Attribute("style")!.Value.Should().Contain("v-text-kern:t");
         rewritten.Attribute("style")!.Value.Should().Contain("font-family:Calibri");
         rewritten.Attribute("style")!.Value.Should().Contain("font-size:1pt");
-        rewritten.Attribute("style")!.Value.Should().NotContain("font:italic");
+        rewritten.Attribute("style")?.Value.Should().NotContain("font:italic");
     }
 
     [Fact]

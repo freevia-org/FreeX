@@ -43,6 +43,239 @@ public sealed class FailureOutcomeMutationAuditTests(ITestOutputHelper output)
     /// argument bank is applied against each fixture; whenever Apply returns a failure outcome, the
     /// workbook must be byte-for-byte the state it was in before the call.
     /// </summary>
+
+    /// <summary>
+    /// r589: the undo sibling of the audit above. Every command that SUCCEEDS is reverted, and the
+    /// workbook must fingerprint back to exactly what it was.
+    /// <para>
+    /// Motivated by r586, where CreateStructuredTableCommand.Apply CLEARED a worksheet AutoFilter its
+    /// snapshot never captured -- undo removed the table and left the filter gone. Nothing in the
+    /// suite would have caught that: the per-command undo tests assert what their author thought to
+    /// check, and a fingerprint comparison asserts everything.
+    /// </para>
+    /// <para>
+    /// Three fields are excluded because they are monotonic BY DESIGN and undo deliberately does not
+    /// wind them back: ContentVersion (a change counter -- an undo is itself a change),
+    /// NextStructuredTableIdWatermark (whose own doc comment says "never decremented, including on
+    /// Undo", so a freed id is never handed out twice), and StyleCount (the style registry grows and
+    /// is not garbage-collected). Without those exclusions the audit reports 40 violations that are
+    /// all by design, which is worse than no audit at all.
+    /// </para>
+    /// <para>
+    /// The "filtered range" fixture exists for this test specifically: CreateStructuredTableCommand
+    /// only clears a filter when one is there to clear, so the other fixtures exercise the path that
+    /// needs no undo at all. Reverting r586's restore makes this audit report BOTH that command and
+    /// CreateStyledStructuredTableCommand -- the user-facing "Format as Table", which delegates to it
+    /// -- so the fix's reach is demonstrated rather than assumed.
+    /// </para>
+    /// </summary>
+
+    /// <summary>
+    /// r602: FreeX's missing third of a census the other two apps already have. FreeW's r527 and
+    /// FreeP's r528 both build every command with an index that cannot be valid, run the whole
+    /// HasEffect/Apply/Revert cycle, and require that none THROWS. FreeX had no equivalent, and the
+    /// failure-outcome audit above deliberately skips the throw path ("a different contract"), so
+    /// nothing in this repository asked the question of FreeX's commands at all.
+    /// <para>
+    /// As in r528, the stakes are a quality bar rather than a crash guard: CommandBus.Execute
+    /// TryReverts on a throw, so a raising command degrades to a failed one rather than escaping the
+    /// command layer. A command handed a stale address should DECLINE, not raise.
+    /// </para>
+    /// <para>
+    /// The hostile address is inside the grid's bounds but far past anything the fixture holds, which
+    /// is deliberate: an out-of-bounds address would be turned away by a bounds guard before the
+    /// command reached its own lookup, and the census would pass without exercising anything.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void EveryCommandSurvivesAHostileAddress()
+    {
+        var raised = new List<string>();
+        var exercised = new SortedSet<string>(StringComparer.Ordinal);
+        var succeeded = 0;
+        var declined = 0;
+
+        var commandTypes = typeof(EditCellsCommand).Assembly
+            .GetTypes()
+            .Where(t => t is { IsAbstract: false, IsInterface: false, IsGenericTypeDefinition: false })
+            .Where(t => typeof(IWorkbookCommand).IsAssignableFrom(t))
+            .Where(t => t != typeof(CompositeWorkbookCommand))
+            .OrderBy(t => t.FullName, StringComparer.Ordinal)
+            .ToList();
+
+        foreach (var type in commandTypes)
+        {
+            var (workbook, bank) = BuildFixture();
+            bank.MakeHostile();
+
+            if (!TryConstruct(type, bank, out var command, out _))
+                continue;
+
+            exercised.Add(type.Name);
+            var ctx = new TestCommandContext(workbook);
+
+            try
+            {
+                var outcome = command!.Apply(ctx);
+                if (outcome.Success) { succeeded++; command.Revert(ctx); } else { declined++; }
+            }
+            catch (Exception ex)
+            {
+                raised.Add($"{type.Name} -> {ex.GetType().Name}: {ex.Message.Split('\n')[0]}");
+            }
+        }
+
+        output.WriteLine($"exercised={exercised.Count} succeeded={succeeded} declined={declined} raised={raised.Count}");
+
+        exercised.Should().HaveCountGreaterThan(50,
+            "the census is worthless if argument synthesis stopped reaching the command surface");
+
+        raised.Should().BeEmpty(
+            "a command handed an address the workbook does not contain must decline, not raise -- " +
+            "the same bar FreeW's r527 and FreeP's r528 hold their commands to");
+    }
+    [Fact]
+    public void CommandsThatSucceed_AreFullyUndoneByRevert()
+    {
+        var violations = new List<string>();
+        var redoViolations = new List<string>();
+        var covered = new SortedSet<string>(StringComparer.Ordinal);
+        var reverted = 0;
+        var redone = 0;
+
+        var commandTypes = typeof(EditCellsCommand).Assembly
+            .GetTypes()
+            .Where(t => t is { IsAbstract: false, IsInterface: false, IsGenericTypeDefinition: false })
+            .Where(t => typeof(IWorkbookCommand).IsAssignableFrom(t))
+            .Where(t => t != typeof(CompositeWorkbookCommand))
+            .OrderBy(t => t.FullName, StringComparer.Ordinal)
+            .ToList();
+
+        foreach (var scenario in Scenarios())
+        {
+            foreach (var type in commandTypes)
+            {
+                var (workbook, bank) = scenario.Build();
+                if (!TryConstruct(type, bank, out var command, out _))
+                    continue;
+
+                var ctx = new TestCommandContext(workbook);
+                var before = WorkbookFingerprint.Capture(workbook);
+
+                CommandOutcome outcome;
+                try { outcome = command!.Apply(ctx); }
+                catch { continue; }
+
+                if (!outcome.Success || outcome.IsNoOp)
+                    continue;
+
+                covered.Add(type.Name);
+                var applied = WorkbookFingerprint.Capture(workbook);
+
+                try { command.Revert(ctx); }
+                catch (Exception ex)
+                {
+                    violations.Add($"{type.Name} [{scenario.Name}] REVERT THREW {ex.GetType().Name}");
+                    continue;
+                }
+
+                reverted++;
+                var after = WorkbookFingerprint.Capture(workbook);
+
+                // r591: the redo half. Re-applying after an undo must reproduce exactly the state the
+                // first apply produced -- the r457 class was a command minting a FRESH id on every
+                // Apply, so redo silently produced a DIFFERENT workbook that still looked right. The
+                // existing reflection drivers check redo over a couple of dozen commands; this checks
+                // it over every command the argument bank can build, against a full fingerprint.
+                var afterFirstApply = applied;
+                try
+                {
+                    var redoOutcome = command.Apply(ctx);
+                    if (redoOutcome.Success && !redoOutcome.IsNoOp)
+                    {
+                        redone++;
+                        var afterRedo = WorkbookFingerprint.Capture(workbook);
+                        var redoDiff = WorkbookFingerprint.Diff(afterFirstApply, afterRedo)
+                            .Where(path =>
+                                !path.Contains("ContentVersion", StringComparison.Ordinal) &&
+                                !path.Contains("NextStructuredTableIdWatermark", StringComparison.Ordinal) &&
+                                !path.Contains("StyleCount", StringComparison.Ordinal))
+                            .ToList();
+                        // r591: DuplicateSheetCommand is a KNOWN, pinned residue rather than a passing
+                        // case. It re-clones the whole sheet on every Apply, so the copy's
+                        // conditional formats, data validations, pictures and structured table are
+                        // minted with fresh identities on redo. R17 already stabilised the SHEET id
+                        // here for exactly the reason the entity ids need it too -- a later
+                        // redo-stack command that captured one of them (an edit to that picture, a
+                        // slicer bound to that table) is left pointing at nothing.
+                        //
+                        // Stabilising them means threading the minted ids through
+                        // CopyDrawingCollections, UniquifyClonedTables, CloneOwnedPivotCaches and
+                        // the slicer/timeline cloner, which is a different size of change from the
+                        // three one-line caches this round did make, in a method five earlier rounds
+                        // have already worked over. It is pinned here instead of half-fixed: the
+                        // EXACT four paths are allowed, so the drift cannot silently WIDEN, and the
+                        // day it is fixed this allowance goes stale and says so.
+                        if (type.Name == nameof(DuplicateSheetCommand))
+                        {
+                            redoDiff = redoDiff
+                                .Where(path => !path.Contains(".ConditionalFormats[0].Id", StringComparison.Ordinal)
+                                    && !path.Contains(".DataValidations[0].Id", StringComparison.Ordinal)
+                                    && !path.Contains(".Pictures[0].Id", StringComparison.Ordinal)
+                                    && !path.Contains(".StructuredTables[0].Id", StringComparison.Ordinal))
+                                .ToList();
+                        }
+
+                        if (redoDiff.Count > 0)
+                        {
+                            redoViolations.Add($"{type.Name} [{scenario.Name}] {redoDiff.Count} paths: "
+                                + string.Join(" | ", redoDiff.Take(4)));
+                        }
+                    }
+                }
+                catch
+                {
+                    // A command that refuses to re-apply is a different contract from one that
+                    // re-applies WRONGLY, and is not what this half audits.
+                }
+                if (after == before)
+                    continue;
+
+                var diff = WorkbookFingerprint.Diff(before, after)
+                    .Where(path =>
+                        !path.Contains("ContentVersion", StringComparison.Ordinal) &&
+                        !path.Contains("NextStructuredTableIdWatermark", StringComparison.Ordinal) &&
+                        !path.Contains("StyleCount", StringComparison.Ordinal))
+                    .ToList();
+                if (diff.Count == 0)
+                    continue;
+
+                violations.Add($"{type.Name} [{scenario.Name}] {diff.Count} paths: "
+                    + string.Join(" | ", diff.Take(4)));
+            }
+        }
+
+        output.WriteLine($"covered={covered.Count} reverted={reverted} redone={redone} redoViolations={redoViolations.Count}");
+        foreach (var v in redoViolations.Take(20)) output.WriteLine("  REDO " + v);
+
+        reverted.Should().BeGreaterThan(100,
+            "the audit is worthless if almost nothing actually applied and reverted");
+        covered.Should().HaveCountGreaterThan(50,
+            "type discovery plus argument synthesis must keep reaching most of the command surface");
+
+        violations.Should().BeEmpty(
+            "undo must restore everything a successful command changed, not only the state its own " +
+            "snapshot happened to capture");
+
+        redone.Should().BeGreaterThan(100,
+            "the redo half is worthless if almost nothing re-applied");
+
+        redoViolations.Should().BeEmpty(
+            "re-applying a command after an undo must reproduce exactly the state the first apply " +
+            "produced -- a freshly minted identity makes redo yield a DIFFERENT workbook that still " +
+            "looks right, and every later command that captured the old one is left pointing at " +
+            "nothing");
+    }
     [Fact]
     public void CommandsThatReturnFailureOutcomes_DoNotMutateTheWorkbook()
     {
@@ -238,6 +471,7 @@ public sealed class FailureOutcomeMutationAuditTests(ITestOutputHelper output)
         yield return ProtectedSheetScenario();
         yield return PlainScenario();
         yield return MissingTargetScenario();
+        yield return FilteredRangeScenario();
     }
 
     /// <summary>Protection is by far the largest failure family (the CommandGuards.Reject* sites),
@@ -264,6 +498,22 @@ public sealed class FailureOutcomeMutationAuditTests(ITestOutputHelper output)
         return (workbook, bank);
     });
 
+    /// <summary>
+    /// r589: a sheet that already carries a worksheet AutoFilter over the range the table commands
+    /// operate on. Without it the undo audit is blind to the whole class r586 found: a command whose
+    /// Apply clears state its snapshot never captured. CreateStructuredTableCommand only clears the
+    /// filter when one is THERE to clear, so a fixture with no filter exercises the code path that
+    /// needs no undo. A harness covers only what its fixtures contain (r585 learned the same of the
+    /// mutation probe), and a green audit over fixtures that cannot reach the defect says nothing
+    /// about it.
+    /// </summary>
+    private static Scenario FilteredRangeScenario() => new("filtered range", () =>
+    {
+        var (workbook, bank) = BuildFixture();
+        workbook.Sheets[0].AutoFilter = new WorksheetAutoFilterModel("A1:D6", null);
+        return (workbook, bank);
+    });
+
     private static (Workbook Workbook, ArgumentBank Bank) BuildFixture()
     {
         var workbook = new Workbook("audit");
@@ -279,6 +529,51 @@ public sealed class FailureOutcomeMutationAuditTests(ITestOutputHelper output)
         var picture = new PictureModel { Anchor = new CellAddress(sheet.Id, 2, 3), Width = 100, Height = 80 };
         sheet.Pictures.Add(picture);
 
+        // r590: structures the row/column-shift commands must MOVE, and that the scanning commands
+        // must find. They sit at row 10 and below, clear of the A1:C3 range the argument bank
+        // synthesizes, so they enrich what commands encounter without changing which range they act
+        // on -- in particular without colliding with the "filtered range" fixture, whose whole
+        // purpose is to let CreateStructuredTableCommand reach its clear-the-filter branch.
+        for (uint row = 10; row <= 18; row++)
+        {
+            for (uint col = 1; col <= 4; col++)
+                sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(row * col));
+        }
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "AuditTable",
+            DisplayName = "AuditTable",
+            Range = new GridRange(new CellAddress(sheet.Id, 10, 1), new CellAddress(sheet.Id, 13, 3)),
+        };
+        for (var i = 1; i <= 3; i++)
+            table.Columns.Add(new StructuredTableColumnModel(i, $"C{i}"));
+        sheet.StructuredTables.Add(table);
+
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 15, 1), new CellAddress(sheet.Id, 15, 2)));
+
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 16, 1), new CellAddress(sheet.Id, 18, 1)),
+            Type = DvType.Decimal,
+            Operator = DvOperator.Between,
+            Formula1 = "1",
+            Formula2 = "100",
+        });
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 16, 2), new CellAddress(sheet.Id, 18, 2)),
+            RuleType = CfRuleType.DataBar,
+            DataBarGradient = true,
+        });
+
+        sheet.Comments[new CellAddress(sheet.Id, 10, 4)] = "audit note";
+        sheet.CommentAuthors[new CellAddress(sheet.Id, 10, 4)] = "Auditor";
+        sheet.Hyperlinks[new CellAddress(sheet.Id, 11, 4)] = "https://example.invalid/";
+
         var bank = new ArgumentBank(workbook, sheet, picture.Id);
         return (workbook, bank);
     }
@@ -292,6 +587,18 @@ public sealed class FailureOutcomeMutationAuditTests(ITestOutputHelper output)
     /// </summary>
     private sealed class ArgumentBank(Workbook workbook, Sheet sheet, Guid objectId)
     {
+        /// <summary>
+        /// r602: an address inside the grid's bounds but far past anything the fixture contains, so a
+        /// command reaches its own lookup rather than being turned away by a bounds guard first.
+        /// That is the case FreeW's r527 and FreeP's r528 census: a STALE index, not an impossible one.
+        /// </summary>
+        private const uint HostileRow = 900_000;
+        private const uint HostileCol = 15_000;
+
+        private bool _hostile;
+
+        public void MakeHostile() => _hostile = true;
+
         private Guid _guid = objectId;
 
         public void OverrideGuid(Guid value) => _guid = value;
@@ -315,10 +622,21 @@ public sealed class FailureOutcomeMutationAuditTests(ITestOutputHelper output)
 
             if (type == typeof(SheetId)) { value = sheet.Id; return true; }
             if (type == typeof(WorkbookId)) { value = workbook.Id; return true; }
-            if (type == typeof(CellAddress)) { value = new CellAddress(sheet.Id, 2, 2); return true; }
+            if (type == typeof(CellAddress))
+            {
+                value = _hostile
+                    ? new CellAddress(sheet.Id, HostileRow, HostileCol)
+                    : new CellAddress(sheet.Id, 2, 2);
+                return true;
+            }
+
             if (type == typeof(GridRange))
             {
-                value = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 3));
+                value = _hostile
+                    ? new GridRange(
+                        new CellAddress(sheet.Id, HostileRow, HostileCol),
+                        new CellAddress(sheet.Id, HostileRow, HostileCol))
+                    : new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 3));
                 return true;
             }
 

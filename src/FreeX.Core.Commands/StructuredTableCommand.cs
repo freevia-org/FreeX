@@ -10,6 +10,8 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
     private readonly string? _styleName;
     private readonly bool _firstRowHasHeaders;
     private int? _createdTableId;
+    private WorksheetAutoFilterModel? _replacedAutoFilter;
+    private string? _createdTableName;
 
     public string Label => "Create Table";
     public int? CreatedTableId => _createdTableId;
@@ -54,8 +56,16 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
         if (CommandGuards.RejectIfStructuredTableRangeOverlapsSpill(sheet, _range) is { } spillOutcome)
             return spillOutcome;
 
-        var id = NextTableId(ctx.Workbook);
-        var name = NextTableName(ctx.Workbook);
+        // r591: reuse the id and name minted on the FIRST apply when this command is re-applied after
+        // an undo. Minting fresh ones makes redo produce a DIFFERENT workbook that still looks right:
+        // a slicer or pivot cache pinned to the table's id (see the watermark note below, and
+        // CommandGuards.PinOrphanedPivotCacheSourceTableIds) is left dangling by the redo, and a
+        // structured reference like Table2[Col] stops resolving if the name moved too.
+        // AddSheetCommand established exactly this for sheets (its R16 redo-stability fix, and R83
+        // for the code name); it was never carried to the create-table family. Found by the r591
+        // redo audit, not by reading.
+        var id = _createdTableId ?? NextTableId(ctx.Workbook);
+        var name = _createdTableName ?? NextTableName(ctx.Workbook);
         var table = new StructuredTableModel
         {
             Id = id,
@@ -70,8 +80,27 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
         foreach (var column in BuildColumns(sheet, _range, _firstRowHasHeaders))
             table.Columns.Add(column);
 
+        // r586: a worksheet AutoFilter overlapping the new table makes the SAVED file unloadable --
+        // ClosedXML refuses the combination on read ("The range ... overlaps with the worksheet's
+        // autofilter"), so leaving it in place lets a user produce a workbook FreeX cannot reopen.
+        // This is the same defect ToggleWorksheetAutoFilterCommand had, reached from the other
+        // direction: filter first, table second. The guards above already reason that way for merged
+        // regions ("just enforced from the other direction"), and this was the missing half.
+        //
+        // CLEARING rather than rejecting is what Excel does: creating a table over a filtered range
+        // replaces the worksheet filter with the table's own, and the new table carries
+        // HasAutoFilter = true, so the user keeps a filter either way. Undo restores it below.
+        if (sheet.AutoFilter is not null &&
+            AutoFilterRangeResolver.TryGetWorksheetAutoFilterRange(sheet, out var existingFilterRange) &&
+            existingFilterRange.Overlaps(_range))
+        {
+            _replacedAutoFilter = WorksheetAutoFilterCloner.Clone(sheet.AutoFilter);
+            sheet.AutoFilter = null;
+        }
+
         sheet.StructuredTables.Add(table);
         _createdTableId = id;
+        _createdTableName = name;
         return new CommandOutcome(true);
     }
 
@@ -82,6 +111,15 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
 
         var sheet = ctx.GetSheet(_sheetId);
         sheet.StructuredTables.RemoveAll(table => table.Id == _createdTableId.Value);
+
+        // r586: undo must put back the worksheet AutoFilter Apply cleared, not merely remove the
+        // table. Restoring the value without unwinding the structure the setter changed is a defect
+        // class this review has hit before.
+        if (_replacedAutoFilter is not null)
+        {
+            sheet.AutoFilter = _replacedAutoFilter;
+            _replacedAutoFilter = null;
+        }
     }
 
     // Table ids and names are OOXML workbook-wide identifiers (not per-sheet) — Excel requires every
@@ -122,7 +160,12 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
     // always comes back with SourceTableId null -- safe, not a gap, because PivotTableRefreshService
     // only ever fills a null SourceTableId in from a table that is CURRENTLY live, never from a freed
     // one, so nothing durable dangles on that path for this fold to need to protect.
-    private static int NextTableId(Workbook workbook)
+    // r197: internal so DuplicateSheetCommand uses THIS allocator instead of its own live-table
+    // scan. That scan was the third instance of the "second allocator for one id space" class this
+    // review program has confirmed, and here it defeats the protection the comment above describes:
+    // duplicating a sheet could re-issue the id of a deleted table that a pivot cache or slicer is
+    // still pinned to, silently binding the new table to the old one's data.
+    internal static int NextTableId(Workbook workbook)
     {
         var maxId = workbook.NextStructuredTableIdWatermark;
         foreach (var otherSheet in workbook.Sheets)
@@ -392,6 +435,14 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand, IEstima
         var configureOutcome = _configureCommand.Apply(ctx);
         if (!configureOutcome.Success)
             return configureOutcome;
+        // r247: bubble the children up, exactly as CompositeWorkbookCommand does (r224).
+        // This command is a composite in all but name -- one
+        // ConfigureStructuredTableStyleOptionsCommand (fixed in r219) plus a set of
+        // ApplyStyleCommands (fixed in r246) -- so once every child can say whether it
+        // changed anything, the parent can too, and re-applying a style the table already
+        // carries is reported for what it is. Starts from the option change so a run with no
+        // style commands at all still answers correctly.
+        var allNoOp = configureOutcome.IsNoOp;
 
         table = FindRequiredStructuredTable(sheet, _tableId);
         foreach (var styleCommand in BuildStyleCommands(table))
@@ -438,10 +489,13 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand, IEstima
                 return styleOutcome;
             }
 
+            if (!styleOutcome.IsNoOp)
+                allNoOp = false;
+
             _appliedStyleCommands.Add(styleCommand);
         }
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(true, IsNoOp: allNoOp);
     }
 
     public void Revert(ICommandContext ctx) => RevertAppliedCommands(ctx);
@@ -689,9 +743,19 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
         if (!CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))
             return CommandGuards.RejectStructuredTableNotFound();
 
-        _previousTable = sheet.StructuredTables[tableIndex];
-        sheet.StructuredTables[tableIndex] = CopyWithStyleOptions(
-            _previousTable,
+        var table = sheet.StructuredTables[tableIndex];
+
+        // r219: same trick as ConfigureSparklineCommand, and for the same reason. Rather than
+        // hand-listing the seven inputs -- a list that can silently fall out of step with the `with`
+        // expression it is supposed to mirror -- build the target state and compare it against the
+        // state it was derived FROM. Comparing against that same instance also keeps the untouched
+        // members reference-identical, so the record struct's equality is exact rather than
+        // accidentally always-false. Table Design's style-option checkboxes show the current state,
+        // so re-ticking one that is already ticked is an ordinary gesture.
+        var currentState = table.CaptureCopyState();
+        var targetState = WithStyleOptions(
+            currentState,
+            table,
             _showFirstColumn,
             _showLastColumn,
             _showRowStripes,
@@ -700,6 +764,11 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
             _updateStyleName,
             _hasAutoFilter,
             _totalsRowShown);
+        if (targetState == currentState)
+            return new CommandOutcome(true, IsNoOp: true);
+
+        _previousTable = table;
+        sheet.StructuredTables[tableIndex] = StructuredTableModel.FromCopyState(targetState);
 
         return new CommandOutcome(true);
     }
@@ -714,7 +783,13 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
             sheet.StructuredTables[tableIndex] = _previousTable;
     }
 
-    private static StructuredTableModel CopyWithStyleOptions(
+    /// <summary>
+    /// The single `with` expression this command applies. Kept as its own function so Apply can build
+    /// the target state, compare it against the state it came from, and write it -- one description of
+    /// the change, used for both the decision and the mutation, so the two cannot disagree.
+    /// </summary>
+    private static StructuredTableCopyState WithStyleOptions(
+        StructuredTableCopyState state,
         StructuredTableModel table,
         bool showFirstColumn,
         bool showLastColumn,
@@ -725,7 +800,7 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
         bool? hasAutoFilter,
         bool? totalsRowShown)
     {
-        var state = table.CaptureCopyState() with
+        return state with
         {
             HasAutoFilter = hasAutoFilter ?? table.HasAutoFilter,
             TotalsRowShown = totalsRowShown ?? table.TotalsRowShown,
@@ -735,7 +810,6 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
             ShowRowStripes = showRowStripes,
             ShowColumnStripes = showColumnStripes
         };
-        return StructuredTableModel.FromCopyState(state);
     }
 }
 
@@ -768,7 +842,13 @@ public sealed class CreateStyledStructuredTableCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         _applyStyleCommand = null;
-        _createTableCommand = new CreateStructuredTableCommand(_sheetId, _range, _styleName, _firstRowHasHeaders);
+        // r591: REUSE the inner command across a re-apply instead of building a fresh one. The
+        // delegation is only partial: Revert calls RevertAppliedCommands, which reverts the RETAINED
+        // instance, so undo was always covered by the inner command's fix -- but Apply used to mint a
+        // brand-new inner command on every call, throwing away the id it had cached and handing the
+        // redone table a different one. Holding the instance is what makes the inner r591 id reuse
+        // reach this path, which is the user-facing "Format as Table".
+        _createTableCommand ??= new CreateStructuredTableCommand(_sheetId, _range, _styleName, _firstRowHasHeaders);
         var createOutcome = _createTableCommand.Apply(ctx);
         if (!createOutcome.Success)
             return createOutcome;

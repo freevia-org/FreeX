@@ -126,7 +126,8 @@ public static class ImagePositionDialogPlanner
     private static bool TryParseOffset(string? text, CultureInfo culture, out double value)
     {
         var trimmed = (text ?? string.Empty).Trim();
-        return double.TryParse(trimmed, NumberStyles.Float, culture, out value);
+        // r551: a value that is not finite is not a position.
+        return double.TryParse(trimmed, NumberStyles.Float, culture, out value) && double.IsFinite(value);
     }
 
     private static ImageDialogChoice<TValue> ChoiceAt<TValue>(

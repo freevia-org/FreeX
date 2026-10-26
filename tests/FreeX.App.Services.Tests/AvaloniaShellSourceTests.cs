@@ -490,7 +490,16 @@ public sealed class AvaloniaShellSourceTests
 
         source.Should().Contain("private bool TryBeginFileOperation()");
         source.Should().Contain("if (_isOpening || _isSaving)");
-        source.Should().Contain("_isSaving = true;");
+
+        // r607: this asserted the literal "_isSaving = true;" inside TryBeginFileOperation. That
+        // pinned the STATEMENT rather than the requirement, and the requirement grew: the flag is
+        // per-window, a "New Window" sibling shares this window's Workbook, and setting it here
+        // alone left the sibling's guards passing while the adapter enumerated the shared model on a
+        // background thread (the WPF host's R115-app-host-save-race, unfixed on this side). The flag
+        // is now raised through a helper that also broadcasts to those siblings, so assert THAT --
+        // R607_SiblingWindowsAreToldWhenTheSharedWorkbookIsSerializedTests holds the stronger rule
+        // that no raw assignment may bypass it.
+        source.Should().Contain("SetSavingAndTellSiblings(true)");
         source.Should().Contain("private void EndFileOperation()");
         source.Should().Contain("_fileWorkflow.PlanSavePathNormalization(");
         source.Should().NotContain("private static bool ShouldPromptForNormalizedWorkbookOverwrite(");
@@ -512,8 +521,8 @@ public sealed class AvaloniaShellSourceTests
         overwritePlannerSource.Should().Contain("\"WorkbookSaveOverwriteReplaceButton\"");
         overwritePlannerSource.Should().Contain("\"WorkbookSaveOverwriteCancelButton\"");
 
-        source.Should().Contain(
-            "private Task ExportActiveSheetPdfAsync() =>" + Environment.NewLine +
+        source.ReplaceLineEndings("\n").Should().Contain(
+            "private Task ExportActiveSheetPdfAsync() =>\n" +
             "        ExportWorkbookPdfAsync(");
 
         var workbookExportBlock = ExtractSourceBlock(

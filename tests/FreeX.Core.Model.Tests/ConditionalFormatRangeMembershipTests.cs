@@ -53,24 +53,22 @@ public sealed class ConditionalFormatRangeMembershipTests
         rule.Contains(address).Should().BeTrue();
         rule.Overlaps(new GridRange(address, address)).Should().BeTrue();
 
-        // Exercise the complete loop before measuring so tiered JIT/PGO setup is not
-        // attributed to the allocation-free membership operations on cold CI workers.
-        for (var iteration = 0; iteration < 10_000; iteration++)
-        {
-            _ = rule.Contains(address);
-            _ = rule.Overlaps(new GridRange(address, address));
-        }
+        const int iterations = 10_000;
 
-        var before = GC.GetAllocatedBytesForCurrentThread();
-
-        for (var iteration = 0; iteration < 10_000; iteration++)
-        {
-            _ = rule.Contains(address);
-            _ = rule.Overlaps(new GridRange(address, address));
-        }
-
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        allocated.Should().Be(0);
+        // AllocationProbe warms the loop up (so tiered compilation of the measured path is not
+        // charged to it on a cold CI worker) and reports the lowest of several measurements, so a
+        // one-off allocation the runtime charges to the runner thread cannot fail the run.
+        AllocationProbe.ShouldNotAllocate(
+            () =>
+            {
+                for (var iteration = 0; iteration < iterations; iteration++)
+                {
+                    _ = rule.Contains(address);
+                    _ = rule.Overlaps(new GridRange(address, address));
+                }
+            },
+            operations: iterations * 2,
+            "membership checks must test the ranges in place instead of materializing AllRanges");
     }
 
     private static GridRange Range(

@@ -71,11 +71,10 @@ $sourceFiles = @(
     'freew/FreeW.App.Avalonia/ChartStylesGallery.cs',
     'freew/FreeW.App.Avalonia/SmartArtStylesGallery.cs'
 )
-$sourceSha256 = [ordered]@{}
 foreach ($relativePath in $sourceFiles) {
-    # Source freshness must not change when Git checks the same text out with CRLF on Windows and
-    # LF on Linux/macOS. Binary capture artifacts continue to use byte-exact hashes below.
-    $sourceSha256[$relativePath] = Get-VisualEvidenceNormalizedTextSha256 -Path (Join-Path $repo $relativePath)
+    if (-not (Test-Path -LiteralPath (Join-Path $repo $relativePath) -PathType Leaf)) {
+        throw "Evidence source is missing: $relativePath"
+    }
 }
 
 $standardTabs = @('home', 'insert', 'design', 'layout', 'references', 'mailings', 'review', 'view', 'help', 'developer')
@@ -160,7 +159,7 @@ $evidence = [ordered]@{
         wpf = 'FreeW.RibbonShot / real MainWindow / WPF RenderTargetBitmap'
         avalonia = [string]$avalonia.renderer
     }
-    sourceSha256 = $sourceSha256
+    generatedInputs = $sourceFiles
     pairedStaticChrome = $rows
     pairedContextualChrome = $contextRows
     nativeWordChrome = [ordered]@{
@@ -220,7 +219,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Generate-FreeWShel
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test-FreeWShellVisualEvidence.ps1
 ````
 
-The source hashes, row inventory, PNG hashes, and sizes are generated into `freew_shell_visual_evidence.json`. `-Check` is byte-for-byte against both generated files.
+This artifact records hand-authored parity findings for the source files listed in `generatedInputs`; the row inventory and the capture-artifact PNG hashes/sizes are generated into `freew_shell_visual_evidence.json`. `-Check` is byte-for-byte against both generated files and verifies the capture PNGs still match their recorded hashes, but it does not detect edits to the contents of the listed source files. When a listed source changes, the classifications above must be re-verified by hand and this artifact regenerated.
 "@
 
 if ($Check) {

@@ -81,8 +81,8 @@ public static partial class ChartOptionsDialogPlanCatalog
                 Choice(ChartOptionsDialogFieldId.TitleAlignment, surface.TitleAlignmentLabel, state.TitleAlignmentIndex, session.TitleAlignmentOptions, isEnabled: state.SupportsChartExTitleLayout),
             ]),
             Group("chart-display", "Chart", [
-                Toggle(ChartOptionsDialogFieldId.PlotVisibleOnly, surface.PlotVisibleOnlyLabel, state.PlotVisibleOnly),
-                Toggle(ChartOptionsDialogFieldId.RoundedCorners, surface.RoundedCornersLabel, state.RoundedCorners),
+                Toggle(ChartOptionsDialogFieldId.PlotVisibleOnly, surface.PlotVisibleOnlyLabel, state.PlotVisibleOnly, isEnabled: state.SupportsClassicChartAreaOptions),
+                Toggle(ChartOptionsDialogFieldId.RoundedCorners, surface.RoundedCornersLabel, state.RoundedCorners, isEnabled: state.SupportsClassicChartAreaOptions),
                 Choice(ChartOptionsDialogFieldId.ChartStyle, surface.ChartStyleLabel, state.StyleIndex, session.StyleOptions),
                 Choice(ChartOptionsDialogFieldId.Legend, surface.LegendLabel, state.LegendIndex, session.LegendOptions),
                 Toggle(ChartOptionsDialogFieldId.VaryColors, surface.VaryColorsLabel, state.VaryColors),

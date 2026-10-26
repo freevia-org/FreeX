@@ -38,13 +38,13 @@ internal static class XlsxDifferentialStyleAllocator
         var maxExistingNumFmtId = root
             .Element(workbookNs + "numFmts")?
             .Elements(workbookNs + "numFmt")
-            .Select(element => int.TryParse(element.Attribute("numFmtId")?.Value, out var id) ? id : 0)
+            .Select(element => int.TryParse(element.Attribute("numFmtId")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ? id : 0)
             .DefaultIfEmpty(0)
             .Max() ?? 0;
         var maxDxfNumFmtId = dxfs
             .Elements(workbookNs + "dxf")
             .SelectMany(dxf => dxf.Elements(workbookNs + "numFmt"))
-            .Select(element => int.TryParse(element.Attribute("numFmtId")?.Value, out var id) ? id : 0)
+            .Select(element => int.TryParse(element.Attribute("numFmtId")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ? id : 0)
             .DefaultIfEmpty(0)
             .Max();
         return Math.Max(MinCustomNumFmtId, Math.Max(maxExistingNumFmtId, maxDxfNumFmtId) + 1);

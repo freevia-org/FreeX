@@ -24,18 +24,12 @@ public sealed class DocumentViewBookmarkMergeLifecycleTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
-    private static async Task<bool> OnUiThread(Action action)
-    {
-        try
-        {
-            await Session.Dispatch(action, CancellationToken.None);
-            return true;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
+    // r466: delegates to the shared helper, like every other file in this assembly. This one kept a
+    // private copy of the pre-r360 version, whose `catch (Exception) { return false; }` swallowed
+    // EVERYTHING -- assertion failures included -- and turned the `if (!ran) return;` below into an
+    // unconditional pass. HeadlessUiThread was written to remove exactly that swallow; its own
+    // comment warns that leaving it in place makes "over a thousand" such guards silent passes.
+    private static Task<bool> OnUiThread(Action action) => HeadlessUiThread.Run(action);
 
     private static DocumentView BuildTwoParagraphView(string first, string second)
     {

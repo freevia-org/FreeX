@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using System.Globalization;
 
 using FreeX.Core.Model;
 
@@ -527,7 +528,7 @@ internal static class XlsxExternalLinkAuthoringWriter
             .Where(name =>
                 name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
                 name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-            .Select(name => int.TryParse(name[prefix.Length..^suffix.Length], out var number) ? number : 0)
+            .Select(name => int.TryParse(name[prefix.Length..^suffix.Length], NumberStyles.Integer, CultureInfo.InvariantCulture, out var number) ? number : 0)
             .DefaultIfEmpty(0)
             .Max();
 

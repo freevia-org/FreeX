@@ -614,10 +614,8 @@ internal static class FreeWAvaloniaRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (FreeWRibbonNumericValueParser.TryParseFontSize(
+            if (FreeWRibbonNumericValueParser.TryParseTypedFontSize(
                     context.SelectedValue,
-                    CultureInfo.InvariantCulture,
-                    NumberStyles.Any,
                     out var points))
             {
                 editor.SetSelectionFontSize(points);

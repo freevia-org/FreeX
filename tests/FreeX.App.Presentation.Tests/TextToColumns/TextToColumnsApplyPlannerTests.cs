@@ -368,7 +368,11 @@ public sealed class TextToColumnsApplyPlannerTests
     {
         var source = ReadPresentationTextToColumnsSource("TextToColumnsSplitter.cs");
 
-        source.Should().Contain("private static bool IsDelimiter(char ch, string delimiters)");
+        // r200: the matcher takes a position rather than a char, so a delimiter outside the BMP can
+        // match both of its code units -- but it must still walk the delimiter set without
+        // allocating, which is what this test and its allocation-budget sibling exist to hold.
+        source.Should().Contain("private static int DelimiterLengthAt(string text, int index, string delimiters)");
+        source.Should().NotContain("GetTextElementEnumerator");
         source.Should().NotContain("delimiters.Distinct().ToArray()");
     }
 

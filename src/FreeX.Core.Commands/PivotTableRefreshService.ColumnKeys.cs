@@ -266,7 +266,10 @@ public static partial class PivotTableRefreshService
     /// falling back to the cache field's Contains* flags for items saved before FreeX started
     /// recording per-item kinds).
     /// </summary>
-    private static ScalarValue ParseSharedItemScalarValue(string raw, char? kind, PivotCacheFieldModel cacheField)
+    // r577: internal rather than private so R577_CommandsNonFiniteParseTests can drive it directly.
+    // It is the only door a pivot-cache shared item takes into a typed ScalarValue, and the finite
+    // guard below is what keeps a NumberValue from being minted non-finite.
+    internal static ScalarValue ParseSharedItemScalarValue(string raw, char? kind, PivotCacheFieldModel cacheField)
     {
         var isDateKind = kind == 'd' ||
             (kind is null && cacheField.ContainsDate && !cacheField.ContainsString && !cacheField.ContainsNumber);
@@ -281,7 +284,12 @@ public static partial class PivotTableRefreshService
             (kind is null && cacheField.ContainsNumber && !cacheField.ContainsString && !cacheField.ContainsDate);
         if (isNumberKind)
         {
+            // r577: IsFinite -- raw is a pivot-cache shared item read straight out of the file, and
+            // NumberStyles.Float accepts both "NaN"/"Infinity" and an overflowing magnitude, so
+            // this line could mint a NumberValue that is not a number. A cell value may not be
+            // non-finite (r562, r563, r569, r576); an unreadable item stays the text it was.
             return double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+                && double.IsFinite(number)
                 ? new NumberValue(number)
                 : new TextValue(raw);
         }

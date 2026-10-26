@@ -303,7 +303,7 @@ internal static class XlsxChartAxisReader
         if (runProperties is null)
             return;
 
-        if (int.TryParse(runProperties.Attribute("sz")?.Value, out var size))
+        if (int.TryParse(runProperties.Attribute("sz")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var size))
         {
             var fontSize = Math.Clamp(size / 100.0, 6, 72);
             // R44-meta-3: keep the shared field for back-compat (last axis read wins, as before),
@@ -392,10 +392,10 @@ internal static class XlsxChartAxisReader
 
         var textColor = TryReadTextColor(runProperties);
         var textThemeColor = TryReadTextThemeColor(runProperties);
-        var fontSize = int.TryParse(runProperties?.Attribute("sz")?.Value, out var size)
+        var fontSize = int.TryParse(runProperties?.Attribute("sz")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var size)
             ? Math.Clamp(size / 100.0, 6, 72)
             : (double?)null;
-        var angle = int.TryParse(textProperties.Element(DrawingNs + "bodyPr")?.Attribute("rot")?.Value, out var rotation)
+        var angle = int.TryParse(textProperties.Element(DrawingNs + "bodyPr")?.Attribute("rot")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotation)
             ? Math.Clamp(rotation / 60000.0, -90, 90)
             : (double?)null;
 
@@ -742,7 +742,7 @@ internal static class XlsxChartAxisReader
         var line = gridlineElement
             .Element(ChartNs + "spPr")?
             .Element(DrawingNs + "ln");
-        var thickness = int.TryParse(line?.Attribute("w")?.Value, out var emus)
+        var thickness = int.TryParse(line?.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var emus)
             ? Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0.25, 10)
             : (double?)null;
         CellColor? color = null;
@@ -792,7 +792,7 @@ internal static class XlsxChartAxisReader
         if (line is null)
             return new AxisLineProperties(null, null);
 
-        var thickness = int.TryParse(line.Attribute("w")?.Value, out var emus)
+        var thickness = int.TryParse(line.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var emus)
             ? Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0.5, 10)
             : (double?)null;
         CellColor? color = null;

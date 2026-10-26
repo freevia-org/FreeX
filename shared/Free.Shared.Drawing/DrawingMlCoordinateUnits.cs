@@ -36,8 +36,13 @@ public static class DrawingMlCoordinateUnits
 
     public static double EmuToPixels(double emus) => emus / EmuPerPixel;
 
+    // r550: IsFinite as well as TryParse. An overflowing literal parses as TRUE with Infinity since
+    // .NET Core stopped throwing on overflow, so a coordinate that cannot be used returns 0 -- the
+    // same answer this overload already gives for a missing or unparseable attribute. Shared by all
+    // three apps' drawing readers, so the guard belongs here rather than at each caller.
     public static double EmuToPixels(string? value) =>
         double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var emus)
+        && double.IsFinite(emus)
             ? EmuToPixels(emus)
             : 0;
 

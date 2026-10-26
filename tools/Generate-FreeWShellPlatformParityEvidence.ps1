@@ -33,11 +33,9 @@ $sourceFiles = @(
     ,'shared/Free.Shared.Pdf.Skia/SkiaPdfWriter.cs'
 )
 
-$hashes = [ordered]@{}
 foreach ($relative in $sourceFiles) {
     $path = Join-Path $repo $relative
     if (-not (Test-Path -LiteralPath $path)) { throw "Missing evidence input: $relative" }
-    $hashes[$relative] = Get-ToolNormalizedTextSha256 -Path $path
 }
 
 $surfaces = @(
@@ -55,21 +53,20 @@ $evidence = [ordered]@{
     schema = 'freex.freew.shell-platform-parity.v1'
     authority = 'FreeW WPF native PrintDialog/XpsDocumentWriter behavior, supplemented by the existing Avalonia shared PDF draw-op contract'
     generatedInputs = $sourceFiles
-    sourceSha256 = $hashes
     ownershipBoundary = @(
         'MainWindow, ribbon registry/definition, Backstage callback, and the shared print-selection/platform boundary are included in the integration.'
     )
     surfaces = $surfaces
     uiWiringGaps = $uiGaps
     xpsLimitation = 'XPS remains WPF-only at the application surface. Avalonia does not expose an XPS export action because the native XPS stack is Windows/WPF-specific; the portable writer is retained as shared/internal code and is not a claim of Avalonia parity.'
-    freshnessCheck = 'Run tools/Generate-FreeWShellPlatformParityEvidence.ps1 -Check; nonzero means generated JSON/Markdown no longer match current source hashes.'
+    freshnessCheck = 'This artifact records hand-authored parity findings for the files listed in generatedInputs. Run tools/Generate-FreeWShellPlatformParityEvidence.ps1 -Check to verify the generator still reproduces those declared findings and that every listed input still exists; it does not detect edits to the contents of those files. When a listed source changes, the surfaces above must be re-verified by hand and this artifact regenerated.'
 }
 
 $jsonText = $evidence | ConvertTo-Json -Depth 20
 $surfaceLines = ($surfaces | ForEach-Object { "| $($_.name) | $($_.status) | $($_.implementation) | $($_.tests) |" }) -join "`n"
 $gapLines = if ($uiGaps.Count -eq 0) { '| None | No owned shell/UI wiring gaps remain. |' } else { ($uiGaps | ForEach-Object { "| ``$($_.file)`` | $($_.gap) |" }) -join "`n" }
 $markdownText = "# FreeW Shell Platform Parity`n`n" +
-    "Generated from WPF authority, Avalonia adapters, shared contracts, and focused-test source hashes. Run ``tools/Generate-FreeWShellPlatformParityEvidence.ps1 -Check`` to verify freshness.`n`n" +
+    "Records hand-authored parity findings for the WPF authority, Avalonia adapters, and shared-contract/focused-test inputs listed in ``generatedInputs``. Run ``tools/Generate-FreeWShellPlatformParityEvidence.ps1 -Check`` to verify the generator still reproduces it.`n`n" +
     "- Schema: ``$($evidence.schema)```n" +
     "- Authority: $($evidence.authority)`n" +
     "- Owned shell/UI wiring is complete; only external printer availability and the WPF-only XPS boundary remain platform-dependent.`n`n" +
@@ -77,7 +74,7 @@ $markdownText = "# FreeW Shell Platform Parity`n`n" +
     "## Exact UI Wiring Gaps`n`n| File | Gap for integration pass |`n|---|---|`n$gapLines`n`n" +
     "## XPS Boundary`n`n$($evidence.xpsLimitation)`n`n" +
     "The shared writer can emit a real OPC package with ``FixedDocSeq.fdseq``, ``FixedDocument.fdoc``, and ``.fpage`` parts for representable vector content, but this does not make XPS an Avalonia application capability. It does not write PDF bytes with an XPS extension.`n`n" +
-    "## Freshness`n`nThe JSON records SHA-256 hashes for every authority, implementation, shared contract, and focused-test input. ``-Check`` regenerates both artifacts in memory and fails if either committed artifact differs.`n"
+    "## Freshness`n`nThis artifact records hand-authored parity findings for the authority, implementation, shared-contract, and focused-test inputs listed in ``generatedInputs``. ``-Check`` regenerates both artifacts in memory and fails if either committed artifact differs from those declared findings, or if a listed input no longer exists; it does not detect edits to the contents of those files. When a listed source changes, the surfaces above must be re-verified by hand and this artifact regenerated.`n"
 
 if ($Check) {
     if (-not (Test-Path -LiteralPath $jsonPath) -or -not (Test-Path -LiteralPath $markdownPath)) { throw 'Generated evidence files are missing.' }

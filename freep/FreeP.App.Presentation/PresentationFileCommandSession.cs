@@ -1278,13 +1278,23 @@ public sealed class PresentationFileCommandSession
             _currentFileSourceLastWriteTimeUtc = result.SourceLastWriteTimeUtc;
             _readOnlySourcePath = result.IsFileSystemReadOnly ? result.SavedPath : null;
             SetSaved(result.SavedPath, suppressRecentFiles || result.SuppressRecentFiles);
+            // r454: a damaged slide is recovered as a blank one rather than costing the whole deck,
+            // which is right -- but the recovery has to be visible, or the user assumes the slide was
+            // always blank and destroys what it held on the next save. Appended to the opened-message
+            // because that is the feedback channel this session has; FreeX shows the equivalent in a
+            // dialog, and matching that here needs a message service this class does not carry.
+            var openedMessage = SisterAppFileTextPlanner.FormatOpened(
+                PresentationFileTextResources.Presentation,
+                Path.GetFileName(path));
+
+            if (result.LoadWarnings is { Count: > 0 } warnings)
+                openedMessage = openedMessage + " " + string.Join(" ", warnings);
+
             return await CompleteAsync(
                 PresentationFileCommandResult.Success(
                     PresentationFileCommand.Open,
                     result.SavedPath,
-                    SisterAppFileTextPlanner.FormatOpened(
-                        PresentationFileTextResources.Presentation,
-                        Path.GetFileName(path))),
+                    openedMessage),
                 cancellationToken,
                 reportFeedback);
         }
@@ -1375,13 +1385,22 @@ public sealed class PresentationFileCommandSession
             // normal way out of the read-only state).
             _readOnlySourcePath = null;
             _lifecycle.MarkSavedWithPath(result.SavedPath, result.SuppressRecentFiles);
+
+            // r461: content the format could not carry is reported with the save. The file is
+            // written either way -- this is what stands between "your picture is gone" and the user
+            // discovering it after the session that still holds the original has closed.
+            var savedMessage = SisterAppFileTextPlanner.FormatSaved(
+                PresentationFileTextResources.Presentation,
+                Path.GetFileName(result.SavedPath));
+
+            if (result.SaveWarnings is { Count: > 0 } saveWarnings)
+                savedMessage = savedMessage + " " + string.Join(" ", saveWarnings);
+
             return await CompleteAsync(
                 PresentationFileCommandResult.Success(
                     command,
                     result.SavedPath,
-                    SisterAppFileTextPlanner.FormatSaved(
-                        PresentationFileTextResources.Presentation,
-                        Path.GetFileName(result.SavedPath))),
+                    savedMessage),
                 cancellationToken);
         }
         catch (PresentationExternallyModifiedException)

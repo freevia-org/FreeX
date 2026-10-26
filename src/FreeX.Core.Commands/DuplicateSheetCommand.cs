@@ -349,9 +349,11 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
         for (var n = 2; n < 10_000; n++)
         {
             var suffix = $"_{n}";
-            var baseName = sourceName.Length + suffix.Length <= 255
-                ? sourceName
-                : sourceName[..(255 - suffix.Length)];
+            // r200: cut on a text-element boundary. PivotTable names have no length cap and no
+            // character-class gate (unlike structured-table names), so a user-typed name can carry an
+            // astral character across this computed cut point.
+            var baseName = Free.Shared.IO.SurrogateSafeTruncation.LimitToTextElements(
+                sourceName, 255 - suffix.Length);
             var candidate = baseName + suffix;
 
             if (workbook.Sheets.Any(s => s.PivotTables.Any(p =>
@@ -598,15 +600,14 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
             ? 1
             : workbook.PivotCaches.Max(cache => cache.CacheId) + 1;
 
-    private static int NextWorkbookTableId(Workbook workbook)
-    {
-        var maxId = 0;
-        foreach (var sheet in workbook.Sheets)
-        foreach (var table in sheet.StructuredTables)
-            maxId = Math.Max(maxId, table.Id);
-
-        return maxId + 1;
-    }
+    // r197: delegates to CreateStructuredTableCommand.NextTableId rather than scanning live tables.
+    // A local scan sees only ids still in use, so it re-issues the id of a table the user deleted --
+    // which CommandGuards.PinOrphanedPivotCacheSourceTableIds deliberately keeps pinned on any pivot
+    // cache or slicer that was bound to it. The duplicated sheet's new table then inherits that
+    // binding and the pivot or slicer silently reports on unrelated data. See NextTableId's own
+    // comment for why the watermark, the slicers and the pivot caches all have to be folded in.
+    private static int NextWorkbookTableId(Workbook workbook) =>
+        CreateStructuredTableCommand.NextTableId(workbook);
 
     private static string GenerateUniqueTableName(Workbook workbook, Sheet copy, string sourceName)
     {

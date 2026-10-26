@@ -313,14 +313,14 @@ public sealed class PageSetupDialogXamlTests
                 .SingleOrDefault(element => element.Attribute(x + "Name")?.Value == buttonName);
 
             button.Should().NotBeNull($"{buttonName} should expose Excel-like picker affordance");
-            button!.Attribute("Content")?.Value.Should().Be("...");
-            button.Attribute("Click")?.Value.Should().Be("RangePickerButton_Click");
-            button.Attribute("ToolTip")?.Value.Should().Contain("Collapse dialog");
-            button.Attribute("Tag")?.Value.Should().Be(targetName);
-            button.Attribute(x + "Name")?.Value.Should().Be(buttonName);
-            button.Attribute("AutomationProperties.Name")?.Value.Should().Be(automationName);
-            button.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be(automationId);
-            button.Attribute("AutomationProperties.HelpText")?.Value.Should().Be(helpText);
+            button!.Attribute("Content")!.Value.Should().Be("...");
+            button.Attribute("Click")!.Value.Should().Be("RangePickerButton_Click");
+            button.Attribute("ToolTip")!.Value.Should().Contain("Collapse dialog");
+            button.Attribute("Tag")!.Value.Should().Be(targetName);
+            button.Attribute(x + "Name")!.Value.Should().Be(buttonName);
+            button.Attribute("AutomationProperties.Name")!.Value.Should().Be(automationName);
+            button.Attribute("AutomationProperties.AutomationId")!.Value.Should().Be(automationId);
+            button.Attribute("AutomationProperties.HelpText")!.Value.Should().Be(helpText);
         }
 
         source.Should().Contain("RangePickerButton_Click");
@@ -532,9 +532,9 @@ public sealed class PageSetupDialogXamlTests
                 .Descendants(presentation + "Button")
                 .Single(element => element.Attribute("Content")?.Value == content);
 
-            button.Attribute("AutomationProperties.Name")?.Value.Should().Be(name);
-            button.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be(automationId);
-            button.Attribute("AutomationProperties.HelpText")?.Value.Should().Be(helpText);
+            button.Attribute("AutomationProperties.Name")!.Value.Should().Be(name);
+            button.Attribute("AutomationProperties.AutomationId")!.Value.Should().Be(automationId);
+            button.Attribute("AutomationProperties.HelpText")!.Value.Should().Be(helpText);
         }
     }
 

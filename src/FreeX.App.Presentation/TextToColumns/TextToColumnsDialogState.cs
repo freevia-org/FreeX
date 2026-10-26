@@ -14,7 +14,8 @@ public sealed record TextToColumnsDialogState(
     bool Comma,
     bool Space,
     bool Other,
-    char? OtherDelimiter,
+    // r200: string, not char -- see TextToColumnsDelimiters.CharacterFor.
+    string? OtherDelimiter,
     bool TreatConsecutiveDelimitersAsOne,
     TextToColumnsTextQualifier TextQualifier,
     IReadOnlyList<int> FixedWidthBreakPositions,

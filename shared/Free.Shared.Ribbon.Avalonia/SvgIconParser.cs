@@ -467,7 +467,14 @@ internal static class SvgIconParser
         {
             if (token.Length == 0)
                 return;
-            if (double.TryParse(token.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var n))
+            // r577: IsFinite -- double.TryParse returns TRUE with +/-Infinity on magnitude overflow
+            // since .NET Core stopped throwing, so a coordinate written "1e400" in an SVG (this
+            // parser also reads user-chosen files, via FreeW Insert Picture ->
+            // AvaloniaPictureRasterizerPort.RasterizeSvg) would enter the geometry as an infinite
+            // point. A non-finite token is no more a number than "abc" is, so it takes the same
+            // path: dropped, exactly as an unparseable token already is.
+            if (double.TryParse(token.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var n) &&
+                double.IsFinite(n))
                 list.Add(n);
             token.Clear();
         }
@@ -499,7 +506,10 @@ internal static class SvgIconParser
     {
         if (string.IsNullOrWhiteSpace(value))
             return null;
-        return double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var n)
+        // r577: IsFinite -- see the note in the number-list flush above. A non-finite length is
+        // not a length; null is this method's existing "no usable value" result.
+        return double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var n) &&
+               double.IsFinite(n)
             ? n
             : null;
     }
@@ -704,13 +714,19 @@ internal static class SvgIconParser
                 return 0;
 
             var value = raw.Trim();
+            // r577: Math.Clamp bounds Infinity but PROPAGATES NaN, so the clamp alone does not keep a
+            // non-finite gradient offset out of the Avalonia GradientStop -- an SVG stop-offset of
+            // "NaN" or "NaN%" reached it as NaN. Both spellings need the finite test, and 0 is the
+            // fallback this method already gives an offset it cannot read.
             if (value.EndsWith("%", StringComparison.Ordinal) &&
-                double.TryParse(value[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent))
+                double.TryParse(value[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent) &&
+                double.IsFinite(percent))
             {
                 return Math.Clamp(percent / 100d, 0d, 1d);
             }
 
-            return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var offset)
+            return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var offset) &&
+                   double.IsFinite(offset)
                 ? Math.Clamp(offset, 0d, 1d)
                 : 0d;
         }

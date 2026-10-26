@@ -75,11 +75,11 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
             _tableFilterSnapshot = StructuredTableFilterColumnSync.Apply(sheet, _range, (int)_filterColOffset, null);
 
             if (!sheet.ColumnFilterOwnedRows.TryGetValue(filterCol, out var ownedRows) || ownedRows.Count == 0)
-                return new CommandOutcome(true);
+                return new CommandOutcome(true, IsNoOp: NothingChanged(sheet));
 
             _undoSnapshot.CaptureIfNeeded(sheet);
             FilterHiddenRowUpdater.ClearColumnOwnedRange(sheet, filterCol, _range);
-            return new CommandOutcome(true);
+            return new CommandOutcome(true, IsNoOp: NothingChanged(sheet));
         }
 
         // table-semantics-F1: see FilterHiddenRowUpdater.GetFilterableFirstRow -- a headerless
@@ -172,8 +172,26 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
                 ArrayPool<bool>.Shared.Return(keptRows);
         }
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(true, IsNoOp: NothingChanged(sheet));
     }
+
+
+    /// <summary>
+    /// r254: this filter is re-applicable -- the Filter menu leaves the criterion in place, and
+    /// picking the same one again writes exactly what is already there. Without this the command
+    /// still pushed an undo entry, and UndoRedoStack.Push clears the redo stack, destroying a real
+    /// edit the user could have redone.
+    ///
+    /// <para>The decision is POST-HOC and reads the command's own undo record, which is by
+    /// construction the complete list of what Apply writes: Revert restores exactly these three
+    /// snapshots and nothing else, so if none of them differs from the sheet, nothing was written.
+    /// Nothing here mirrors the edit, so nothing here can drift from it.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet? sheet) =>
+        sheet is not null
+        && WorksheetAutoFilterColumnSync.Unchanged(sheet, _range, _previousAutoFilterColumns)
+        && StructuredTableFilterColumnSync.Unchanged(sheet, _tableFilterSnapshot)
+        && (!_undoSnapshot.HasSnapshot || _undoSnapshot.Matches(sheet));
 
     public void Revert(ICommandContext ctx)
     {

@@ -55,8 +55,8 @@ public sealed class R70_DataBarExplicitAutoCfvoRoundTripTests
             .Should().ContainSingle("an explicit Lowest/Highest Value endpoint must generate the x14 extended block").Subject;
         var thresholds = x14DataBar.Elements(X14Ns + "cfvo").ToArray();
         thresholds.Should().HaveCount(2);
-        thresholds[0].Attribute("type")?.Value.Should().Be("min");
-        thresholds[1].Attribute("type")?.Value.Should().Be("max");
+        thresholds[0].Attribute("type")!.Value.Should().Be("min");
+        thresholds[1].Attribute("type")!.Value.Should().Be("max");
     }
 
     [Fact]
@@ -74,8 +74,8 @@ public sealed class R70_DataBarExplicitAutoCfvoRoundTripTests
         var x14DataBar = XlsxPackageTestHelper.ReadWorksheetXml(stream).Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
         var thresholds = x14DataBar.Elements(X14Ns + "cfvo").ToArray();
         thresholds.Should().HaveCount(2);
-        thresholds[0].Attribute("type")?.Value.Should().Be("autoMin");
-        thresholds[1].Attribute("type")?.Value.Should().Be("autoMax");
+        thresholds[0].Attribute("type")!.Value.Should().Be("autoMin");
+        thresholds[1].Attribute("type")!.Value.Should().Be("autoMax");
     }
 
     [Fact]

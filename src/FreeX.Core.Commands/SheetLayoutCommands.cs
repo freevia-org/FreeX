@@ -81,8 +81,36 @@ public sealed class SetRowHeightCommand : IWorkbookCommand
             }
         }
 
+        // r245: r216 re-ranked this command to tier 3 because DrawingAnchorResizeHelper
+        // .ResizeForRowRange RESIZES every anchored object while looking like a snapshot
+        // line -- so deciding "no change" meant predicting that resize. It does not any
+        // more: the resize hands back each object with its old size, which is the record of
+        // what it did, and comparing that record is exact where predicting was not.
+        if (NothingChanged(sheet))
+            return new CommandOutcome(true, IsNoOp: true);
+
         return new CommandOutcome(true);
     }
+
+    /// <summary>
+    /// r245: every snapshot this command keeps, per the r237 invariant -- the row heights and
+    /// hidden flags in range, and the three drawing-object lists the resize helper returns.
+    /// Those lists hold each object WITH its old size, so comparing live against captured is
+    /// exact; the heights and hidden set are re-captured through the same RangeSnapshot the
+    /// command used, so the comparison cannot disagree with the capture.
+    /// </summary>
+    private bool NothingChanged(Sheet sheet) =>
+        _previousHeights is not null
+        && _previousHiddenRows is not null
+        && SameMap(_previousHeights, RangeSnapshot.Capture(sheet.RowHeights, _startRow, _endRow))
+        && RangeSnapshot.Capture(sheet.HiddenRows, _startRow, _endRow).SetEquals(_previousHiddenRows)
+        && (_previousShapeHeights?.TrueForAll(e => e.Shape.Height.Equals(e.OldHeight)) ?? true)
+        && (_previousPictureHeights?.TrueForAll(e => e.Picture.Height.Equals(e.OldHeight)) ?? true)
+        && (_previousTextBoxHeights?.TrueForAll(e => e.TextBox.Height.Equals(e.OldHeight)) ?? true);
+
+    internal static bool SameMap(Dictionary<uint, double> left, Dictionary<uint, double> right) =>
+        left.Count == right.Count
+        && left.All(entry => right.TryGetValue(entry.Key, out var value) && value.Equals(entry.Value));
 
     public void Revert(ICommandContext ctx)
     {
@@ -176,8 +204,22 @@ public sealed class SetColumnWidthCommand : IWorkbookCommand
             }
         }
 
+        // r245: the column twin -- see the row command above for why this is now decidable.
+        if (NothingChanged(sheet))
+            return new CommandOutcome(true, IsNoOp: true);
+
         return new CommandOutcome(true);
     }
+
+    /// <summary>r245: the column twin of the row decision above.</summary>
+    private bool NothingChanged(Sheet sheet) =>
+        _previousWidths is not null
+        && _previousHiddenCols is not null
+        && SetRowHeightCommand.SameMap(_previousWidths, RangeSnapshot.Capture(sheet.ColumnWidths, _startCol, _endCol))
+        && RangeSnapshot.Capture(sheet.HiddenCols, _startCol, _endCol).SetEquals(_previousHiddenCols)
+        && (_previousShapeWidths?.TrueForAll(e => e.Shape.Width.Equals(e.OldWidth)) ?? true)
+        && (_previousPictureWidths?.TrueForAll(e => e.Picture.Width.Equals(e.OldWidth)) ?? true)
+        && (_previousTextBoxWidths?.TrueForAll(e => e.TextBox.Width.Equals(e.OldWidth)) ?? true);
 
     public void Revert(ICommandContext ctx)
     {

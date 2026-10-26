@@ -117,8 +117,34 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
         chart.ShowDataInHiddenRowsAndColumns = _showHiddenData ?? chart.ShowDataInHiddenRowsAndColumns;
         chart.BlankDisplayMode = _blankDisplayMode ?? chart.BlankDisplayMode;
 
-        return new CommandOutcome(true, AffectedCells: [chart.DataRange.Start]);
+        return new CommandOutcome(true, AffectedCells: [chart.DataRange.Start], IsNoOp: NothingChanged(chart));
     }
+
+    /// <summary>
+    /// r259: re-confirming the PivotChart Options dialog without changing a setting writes every
+    /// property back as it was -- and every one of these settings is a checkbox or a dropdown the
+    /// dialog pre-fills from the chart's current state, so OK-without-changes is the ordinary case.
+    /// Without this the command still pushed an undo entry, and UndoRedoStack.Push clears the redo
+    /// stack, destroying a real edit the user could have redone.
+    ///
+    /// <para>The decision is POST-HOC over the command's whole undo record: Revert restores exactly
+    /// these ten fields, and each is compared against what the chart holds now. The data-table half
+    /// goes through <see cref="ChartDataTableModel.SameAs"/> rather than <c>==</c>, because that type
+    /// is a CLASS captured by Clone -- reference equality there would never fire.</para>
+    /// </summary>
+    private bool NothingChanged(ChartModel chart) =>
+        _previousChartStyleId == chart.ChartStyleId
+        && _previousShowFieldButtons == chart.ShowPivotChartFieldButtons
+        && _previousShowReportFilterButtons == chart.ShowPivotChartReportFilterButtons
+        && _previousShowAxisFieldButtons == chart.ShowPivotChartAxisFieldButtons
+        && _previousShowValueFieldButtons == chart.ShowPivotChartValueFieldButtons
+        && (!_previousDataTableCaptured || SameDataTable(_previousDataTable, chart.DataTable))
+        && _previousRoundedCorners == chart.RoundedCorners
+        && _previousShowHiddenData == chart.ShowDataInHiddenRowsAndColumns
+        && _previousBlankDisplayMode == chart.BlankDisplayMode;
+
+    private static bool SameDataTable(ChartDataTableModel? captured, ChartDataTableModel? current) =>
+        captured is null ? current is null : captured.SameAs(current);
 
     public void Revert(ICommandContext ctx)
     {

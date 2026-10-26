@@ -481,15 +481,15 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Single(element => element.Attribute(x + "Name")?.Value == "OpenProgressOverlay");
 
         LocalizedAttribute(overlay, "AutomationProperties.Name").Should().Be("Opening workbook");
-        overlay.Attribute("Panel.ZIndex")?.Value.Should().Be("260");
-        overlay.Attribute("Background")?.Value.Should().Be("Transparent");
+        overlay.Attribute("Panel.ZIndex")!.Value.Should().Be("260");
+        overlay.Attribute("Background")!.Value.Should().Be("Transparent");
 
         var progressBar = document
             .Descendants(presentation + "ProgressBar")
             .Single(element => element.Attribute(x + "Name")?.Value == "StatusSaveProgressBar");
 
-        progressBar.Attribute("Minimum")?.Value.Should().Be("0");
-        progressBar.Attribute("Maximum")?.Value.Should().Be("100");
+        progressBar.Attribute("Minimum")!.Value.Should().Be("0");
+        progressBar.Attribute("Maximum")!.Value.Should().Be("100");
 
         var progressText = document
             .Descendants(presentation + "TextBlock")
@@ -503,9 +503,9 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Single(element => element.Attribute(x + "Name")?.Value == "StatusSaveProgressCancelButton");
 
-        cancelButton.Attribute("Click")?.Value.Should().Be("CancelFileOperation_Click");
-        cancelButton.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("StatusSaveProgressCancelButton");
-        cancelButton.Attribute("Visibility")?.Value.Should().Be("Collapsed");
+        cancelButton.Attribute("Click")!.Value.Should().Be("CancelFileOperation_Click");
+        cancelButton.Attribute("AutomationProperties.AutomationId")!.Value.Should().Be("StatusSaveProgressCancelButton");
+        cancelButton.Attribute("Visibility")!.Value.Should().Be("Collapsed");
     }
 
     [Fact]
@@ -531,7 +531,7 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Single(element => element.Attribute("Click")?.Value == "SsMoreTemplatesBtn_Click");
 
-        button.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("MoreTemplatesExcludedButton");
+        button.Attribute("AutomationProperties.AutomationId")!.Value.Should().Be("MoreTemplatesExcludedButton");
         LocalizedAttribute(button, "AutomationProperties.Name").Should().Be("More templates unavailable");
         LocalizedAttribute(button, "AutomationProperties.HelpText")
             .Should()

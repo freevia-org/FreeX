@@ -47,8 +47,27 @@ public sealed class SaveCustomViewCommand : IWorkbookCommand
         else
             workbook.CustomViews.Add(view);
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(true, IsNoOp: NothingChanged(view));
     }
+
+    /// <summary>
+    /// r258: saving a custom view again with nothing changed in between -- the ordinary way a user
+    /// re-confirms a view, and the way the dialog's Add button behaves when the name already exists
+    /// -- captures the same workbook state and writes back an equal view. Without this the command
+    /// still pushed an undo entry, and UndoRedoStack.Push clears the redo stack, destroying a real
+    /// edit the user could have redone.
+    ///
+    /// <para>r231 declined to guard this because <c>newValue == previous</c> could not fire:
+    /// WorkbookCustomView carries a Sheets list, which record equality compares by reference, and
+    /// every save builds a fresh one. <see cref="SaveTargetComparison"/> compares it by content.
+    /// The decision is POST-HOC over the command's whole undo record -- Revert restores
+    /// <c>_previousView</c> and nothing else -- and adding a view where none existed is never a
+    /// no-op, which is why the no-previous case answers false.</para>
+    /// </summary>
+    private bool NothingChanged(WorkbookCustomView saved) =>
+        _hadPreviousView
+        && _previousView is not null
+        && SaveTargetComparison.Same(_previousView, saved);
 
     public void Revert(ICommandContext ctx)
     {
@@ -247,8 +266,35 @@ public sealed class ApplyCustomViewCommand : IWorkbookCommand
         if (CustomViewStatePlanner.SanitizeActiveSheetIndex(ctx.Workbook, view.ActiveSheetIndex) is { } activeSheetIndex)
             ctx.Workbook.ActiveSheetIndex = activeSheetIndex;
 
+        // r248: applying the custom view the workbook is already showing. Both snapshots
+        // participate -- the per-sheet view state and the active sheet -- and the state
+        // comparison goes through WorksheetCustomViewStateComparer rather than the record's
+        // own ==, because that record carries list members which records compare by
+        // REFERENCE, and every capture builds fresh lists.
+        if (NothingChanged(ctx))
+            return new CommandOutcome(true, IsNoOp: true);
+
         return new CommandOutcome(true);
     }
+    /// <summary>r248: every snapshot this command keeps -- see the r237 invariant.</summary>
+    private bool NothingChanged(ICommandContext ctx)
+    {
+        if (_previousActiveSheetIndex != CustomViewStatePlanner.CaptureActiveSheetIndex(ctx.Workbook))
+            return false;
+
+        if (_previousStates is null)
+            return true;
+
+        var live = ctx.Workbook.Sheets
+            .Select(sheet => SaveCustomViewCommand.CaptureExtendedState(
+                sheet, CustomViewStatePlanner.CaptureSheetState(sheet)))
+            .ToList();
+
+        return live.Count == _previousStates.Count
+            && live.Zip(_previousStates).All(pair =>
+                WorksheetCustomViewStateComparer.Same(pair.First, pair.Second));
+    }
+
 
     public void Revert(ICommandContext ctx)
     {

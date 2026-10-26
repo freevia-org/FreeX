@@ -34,7 +34,9 @@ public sealed partial class SpreadsheetXmlFileAdapter
         while (workbook.ValidateSheetName(candidate) is not null)
         {
             var marker = $" ({suffix++})";
-            candidate = string.Concat(baseName.AsSpan(0, Math.Min(baseName.Length, 31 - marker.Length)), marker);
+            // r195: see SurrogateSafeTruncation -- this loop re-slices at a different cut point than
+            // the initial truncation, so it needs the same guard.
+            candidate = SurrogateSafeTruncation.LimitToTextElements(baseName, 31 - marker.Length) + marker;
         }
 
         return candidate;
@@ -51,7 +53,11 @@ public sealed partial class SpreadsheetXmlFileAdapter
         if (sanitized.Length == 0)
             return "Sheet";
 
-        return sanitized.Length <= 31 ? sanitized : sanitized[..31];
+        // r194: see SurrogateSafeTruncation -- a raw [..31] can leave a lone surrogate that makes
+        // every later .xlsx save throw.
+        return sanitized.Length <= 31
+            ? sanitized
+            : SurrogateSafeTruncation.LimitToTextElements(sanitized, 31);
     }
 
     private static HyperlinkTargetKind GetHyperlinkTargetKind(string target)

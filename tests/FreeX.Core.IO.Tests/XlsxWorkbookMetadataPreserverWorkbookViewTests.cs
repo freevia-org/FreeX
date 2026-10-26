@@ -52,7 +52,7 @@ public sealed class XlsxWorkbookMetadataPreserverWorkbookViewTests
             "switching the active sheet tab and saving must update the existing primary " +
             "<workbookView> in place, not append a stale second one keyed on the pre-edit " +
             "activeTab");
-        workbookViews[0].Attribute("activeTab")?.Value.Should().Be(
+        workbookViews[0].Attribute("activeTab")!.Value.Should().Be(
             "1",
             "the single surviving workbookView must carry the NEW active tab, not the source's " +
             "stale pre-edit value");
@@ -84,11 +84,11 @@ public sealed class XlsxWorkbookMetadataPreserverWorkbookViewTests
             2,
             "a genuine second window from the source file must be preserved alongside the " +
             "(position-matched, in-place-merged) primary view");
-        workbookViews[0].Attribute("activeTab")?.Value.Should().Be(
+        workbookViews[0].Attribute("activeTab")!.Value.Should().Be(
             "1",
             "the primary view keeps the target's current active tab - it must not be reverted to " +
             "the source's stale value by the position-based merge");
-        workbookViews[1].Attribute("xWindow")?.Value.Should().Be(
+        workbookViews[1].Attribute("xWindow")!.Value.Should().Be(
             "480",
             "the genuine second window is appended from the source, carrying its own window geometry");
     }
@@ -123,10 +123,10 @@ public sealed class XlsxWorkbookMetadataPreserverWorkbookViewTests
             2,
             "a genuine second window must survive even when its activeTab collides with the " +
             "primary view's - it must not be merged away as if it were the same window");
-        workbookViews[0].Attribute("windowWidth")?.Value.Should().Be(
+        workbookViews[0].Attribute("windowWidth")!.Value.Should().Be(
             "19200",
             "the primary view is still merged in place, picking up the source's window geometry");
-        workbookViews[1].Attribute("xWindow")?.Value.Should().Be(
+        workbookViews[1].Attribute("xWindow")!.Value.Should().Be(
             "480",
             "the genuine second window is appended from the source, carrying its own window geometry");
     }
@@ -151,7 +151,7 @@ public sealed class XlsxWorkbookMetadataPreserverWorkbookViewTests
 
         workbookViews.Should().ContainSingle(
             "with no genuine second window in the source, the merge must not append anything extra");
-        workbookViews[0].Attribute("windowWidth")?.Value.Should().Be(
+        workbookViews[0].Attribute("windowWidth")!.Value.Should().Be(
             "19200",
             "the primary view is still merged in place, picking up the source's window geometry");
     }

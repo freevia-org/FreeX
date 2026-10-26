@@ -219,8 +219,8 @@ public class CharacterBorderShadingLanguageRoundTripTests
 
         var shd = rPr.Element(W + "shd");
         shd.Should().NotBeNull();
-        shd!.Attribute(W + "val")?.Value.Should().Be("pct50");
-        shd.Attribute(W + "fill")?.Value.Should().Be("A6A6A6");
+        shd!.Attribute(W + "val")!.Value.Should().Be("pct50");
+        shd.Attribute(W + "fill")!.Value.Should().Be("A6A6A6");
     }
 
     [Fact]
@@ -236,7 +236,7 @@ public class CharacterBorderShadingLanguageRoundTripTests
         });
 
         var shd = rPr.Element(W + "shd");
-        shd!.Attribute(W + "fill")?.Value.Should().Be("00FF00", "CharacterShadingHex wins in the w:shd slot");
+        shd!.Attribute(W + "fill")!.Value.Should().Be("00FF00", "CharacterShadingHex wins in the w:shd slot");
     }
 
     [Fact]
@@ -255,12 +255,12 @@ public class CharacterBorderShadingLanguageRoundTripTests
         var highlight = rPr.Element(W + "highlight");
         highlight.Should().NotBeNull(
             "HighlightColorHex must still be emitted as w:highlight even when CharacterShadingHex is also set");
-        highlight!.Attribute(W + "val")?.Value.Should().Be("yellow");
+        highlight!.Attribute(W + "val")!.Value.Should().Be("yellow");
 
         var shd = rPr.Element(W + "shd");
         shd.Should().NotBeNull();
-        shd!.Attribute(W + "val")?.Value.Should().Be("pct10", "CharacterShadingHex still owns the w:shd slot");
-        shd.Attribute(W + "fill")?.Value.Should().Be("FFC000");
+        shd!.Attribute(W + "val")!.Value.Should().Be("pct10", "CharacterShadingHex still owns the w:shd slot");
+        shd.Attribute(W + "fill")!.Value.Should().Be("FFC000");
     }
 
     [Fact]
@@ -289,8 +289,8 @@ public class CharacterBorderShadingLanguageRoundTripTests
 
         var shd = rPr.Element(W + "shd");
         shd.Should().NotBeNull();
-        shd!.Attribute(W + "val")?.Value.Should().Be("clear");
-        shd.Attribute(W + "fill")?.Value.Should().Be("FFFF00");
+        shd!.Attribute(W + "val")!.Value.Should().Be("clear");
+        shd.Attribute(W + "fill")!.Value.Should().Be("FFFF00");
     }
 
     // ---- Proofing Language (w:lang) ----
@@ -316,7 +316,7 @@ public class CharacterBorderShadingLanguageRoundTripTests
 
         var lang = rPr.Element(W + "lang");
         lang.Should().NotBeNull("w:lang must appear in the run properties");
-        lang!.Attribute(W + "val")?.Value.Should().Be("de-DE");
+        lang!.Attribute(W + "val")!.Value.Should().Be("de-DE");
     }
 
     [Fact]
@@ -363,9 +363,9 @@ public class CharacterBorderShadingLanguageRoundTripTests
 
         var lang = rPr.Element(W + "lang");
         lang.Should().NotBeNull();
-        lang!.Attribute(W + "val")?.Value.Should().Be("en-US");
-        lang.Attribute(W + "eastAsia")?.Value.Should().Be("ja-JP");
-        lang.Attribute(W + "bidi")?.Value.Should().Be("ar-SA");
+        lang!.Attribute(W + "val")!.Value.Should().Be("en-US");
+        lang.Attribute(W + "eastAsia")!.Value.Should().Be("ja-JP");
+        lang.Attribute(W + "bidi")!.Value.Should().Be("ar-SA");
     }
 
     // Sibling/no-regression coverage: a run that only ever set the general-script language (the common
@@ -378,7 +378,7 @@ public class CharacterBorderShadingLanguageRoundTripTests
 
         var lang = rPr.Element(W + "lang");
         lang.Should().NotBeNull();
-        lang!.Attribute(W + "val")?.Value.Should().Be("en-US");
+        lang!.Attribute(W + "val")!.Value.Should().Be("en-US");
         lang.Attribute(W + "eastAsia").Should().BeNull();
         lang.Attribute(W + "bidi").Should().BeNull();
 
@@ -435,10 +435,10 @@ public class CharacterBorderShadingLanguageRoundTripTests
 
         var rFonts = rPr.Element(W + "rFonts");
         rFonts.Should().NotBeNull();
-        rFonts!.Attribute(W + "ascii")?.Value.Should().Be("Calibri");
-        rFonts.Attribute(W + "hAnsi")?.Value.Should().Be("Calibri");
-        rFonts.Attribute(W + "eastAsia")?.Value.Should().Be("MS Gothic");
-        rFonts.Attribute(W + "cs")?.Value.Should().Be("Arial");
+        rFonts!.Attribute(W + "ascii")!.Value.Should().Be("Calibri");
+        rFonts.Attribute(W + "hAnsi")!.Value.Should().Be("Calibri");
+        rFonts.Attribute(W + "eastAsia")!.Value.Should().Be("MS Gothic");
+        rFonts.Attribute(W + "cs")!.Value.Should().Be("Arial");
     }
 
     // A pure-CJK run written by Word can carry only @eastAsia with no @ascii at all. Must still round-trip
@@ -460,7 +460,7 @@ public class CharacterBorderShadingLanguageRoundTripTests
         var rFonts = rPr.Element(W + "rFonts");
         rFonts.Should().NotBeNull("an East Asian-only typeface must still emit w:rFonts");
         rFonts!.Attribute(W + "ascii").Should().BeNull();
-        rFonts.Attribute(W + "eastAsia")?.Value.Should().Be("MS Gothic");
+        rFonts.Attribute(W + "eastAsia")!.Value.Should().Be("MS Gothic");
     }
 
     // Sibling/no-regression coverage: a run that only ever set the ascii typeface (the common shape for a
@@ -472,8 +472,8 @@ public class CharacterBorderShadingLanguageRoundTripTests
 
         var rFonts = rPr.Element(W + "rFonts");
         rFonts.Should().NotBeNull();
-        rFonts!.Attribute(W + "ascii")?.Value.Should().Be("Calibri");
-        rFonts.Attribute(W + "hAnsi")?.Value.Should().Be("Calibri");
+        rFonts!.Attribute(W + "ascii")!.Value.Should().Be("Calibri");
+        rFonts.Attribute(W + "hAnsi")!.Value.Should().Be("Calibri");
         rFonts.Attribute(W + "eastAsia").Should().BeNull();
         rFonts.Attribute(W + "cs").Should().BeNull();
 

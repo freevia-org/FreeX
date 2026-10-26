@@ -251,8 +251,8 @@ public sealed class RibbonGroupHost : ContentControl
         {
             popup.Child = new Border
             {
-                Background = _resourceHost.TryFindResource("FreeXRibbonSurfaceBrush") as Brush ?? Brushes.White,
-                BorderBrush = _resourceHost.TryFindResource("FreeXBorderBrush") as Brush ?? Brushes.Gray,
+                Background = RibbonThemeBrushes.Resolve(_resourceHost, "RibbonSurface", Brushes.White),
+                BorderBrush = RibbonThemeBrushes.Resolve(_resourceHost, "Border", Brushes.Gray),
                 BorderThickness = new Thickness(1),
                 Padding = new Thickness(4),
                 Child = _popupContentFactory()

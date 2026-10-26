@@ -23,7 +23,13 @@ namespace FreeX.Core.IO;
 /// <para><b>Round-trips faithfully (Full in the ODS capability profile):</b> cell values + types
 /// (number/text/bool/date/percentage/currency), A1↔OpenFormula formulas, number formats, fonts
 /// (name/size/bold/italic/underline/strike/color), fills (background), borders, alignment
-/// (h/v/wrap/rotation/indent), merged cells, multiple sheets + names, column widths, row heights.</para>
+/// (h/v/wrap/rotation/indent), merged cells, multiple sheets + names, column widths, row heights,
+/// cell hyperlinks (r293), cell comments/notes (r294).</para>
+///
+/// <para><b>Why those last two carry round numbers:</b> both were absent from BOTH lists below --
+/// neither promised nor deferred -- and both were silently dropped. A feature missing from this
+/// profile cannot be judged as loss-or-bug at all, which is what the profile exists to decide, so
+/// anything added to the adapter belongs in one of these two lists.</para>
 ///
 /// <para><b>Deferred (None/Lossy in the profile):</b> charts, images, data validation, conditional
 /// formatting, pivot tables, freeze panes — ODF can hold these but they are not yet mapped; their loss
@@ -41,6 +47,13 @@ public sealed partial class OdsFileAdapter : IFileAdapter
     internal static readonly XNamespace FoNs = "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0";
     internal static readonly XNamespace NumberNs = "urn:oasis:names:tc:opendocument:xmlns:datastyle:1.0";
     internal static readonly XNamespace SvgNs = "urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0";
+
+    /// <summary>
+    /// r293: XLink, which is where ODF puts a hyperlink target -- <c>text:a/@xlink:href</c> inside the
+    /// cell's paragraph. The adapter previously had no hyperlink handling on either side, so a
+    /// workbook saved to .ods lost every hyperlink silently, in a format that can represent them.
+    /// </summary>
+    internal static readonly XNamespace XlinkNs = "http://www.w3.org/1999/xlink";
 
     /// <summary>
     /// The OpenFormula namespace. Every formula this adapter writes is prefixed "of:=" per ODF 1.2's
@@ -84,6 +97,22 @@ public sealed partial class OdsFileAdapter : IFileAdapter
         XDocument contentDoc;
         using (var contentStream = contentEntry.Open())
             contentDoc = LoadXml(contentStream);
+
+        // r451: a content.xml whose root the reader does not recognise produced an EMPTY workbook --
+        // one default sheet, no cells -- with no error at all, and the next save wrote that over the
+        // user's file. Fourth instance of the class found by the same mutation probe (r448 FreeP,
+        // r449 FreeW, r450 FreeX/xlsx); FreeW's own ODT adapter already guards its equivalent with
+        // the same sentence, so this aligns the sibling rather than inventing a new contract.
+        //
+        // Deliberately checks only for the office:body wrapper, not for tables inside it: a document
+        // with a body and no sheets is a question for the reader below, whereas no body at all means
+        // the part was never a spreadsheet this reader can read.
+        if (contentDoc.Root?.Element(OfficeNs + "body") is null)
+        {
+            throw new InvalidDataException(
+                "The ODS package appears to be damaged: content.xml has no <office:body>. Opening " +
+                "it would show an empty workbook and saving would discard whatever it still holds.");
+        }
 
         // styles.xml may carry additional named styles; load it best-effort so styles referenced from
         // content (but defined in styles.xml) still resolve. Most LibreOffice files put per-cell automatic

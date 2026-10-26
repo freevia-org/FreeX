@@ -16,8 +16,16 @@ public sealed class InstallerPackagingContractTests
         workflow.Should().Contain("tools/packaging/New-AppInstallers.ps1");
         workflow.Should().Contain("tools/New-ReleaseArtifactManifest.ps1");
         workflow.Should().Contain("tools/New-ReleaseSbom.ps1");
-        workflow.Should().Contain("artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}.spdx.json");
-        workflow.Should().Contain("artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}.spdx.json.sha256");
+        // The suite upload glob must NOT have a hyphen after the runtime. Linux and Windows name
+        // their installer ...-<runtime>-installer.zip and -setup.exe, but macOS produces
+        // FreeSuite-v<version>-<runtime>.pkg. Releasing 0.8.187 built, validated and installed that
+        // .pkg and then uploaded an artifact without it, because the glob ended in "-*"; publishing
+        // failed half an hour later looking for a file nothing had uploaded.
+        workflow.Should().Contain("artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}*");
+        workflow.Should().NotContain("artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}-*");
+        // if-no-files-found cannot catch that: the manifests and SBOM always match the glob, so a
+        // missing payload uploads a healthy-looking metadata-only artifact.
+        workflow.Should().Contain("Require a suite installer payload before uploading");
         workflow.Should().Contain("tools/Test-ReleaseInstallation.ps1");
         workflow.Should().Contain("Microsoft.Sbom.DotNetTool --version 4.1.5");
         workflow.Should().Contain("tools/Test-ReleasePackageContents.ps1");
@@ -26,8 +34,44 @@ public sealed class InstallerPackagingContractTests
         workflow.Should().Contain("-Apps FreeX,FreeW,FreeP");
         workflow.Should().Contain("-Suite");
         workflow.Should().Contain("free-suite-v$version");
-        workflow.Should().Contain("signed/notarized/stapled `.app` bundle");
+        // The macOS bundle description is conditional on the macos_unsigned input so an unsigned
+        // build is never published claiming to be signed; assert the signed arm still exists.
+        workflow.Should().Contain("'signed, notarized, and stapled'");
         workflow.Should().Contain("FreeFamilySentryDsn: ${{ secrets.FREE_FAMILY_SENTRY_DSN }}");
+    }
+
+    [Fact]
+    public void WindowsVelopackPublisher_SignsPayloadBeforePackingAndVerifiesEveryExecutable()
+    {
+        var publisher = WorkspaceFileLocator.ReadAllText("tools", "Publish-WindowsVelopackPackage.ps1");
+
+        var payloadSigning = publisher.IndexOf("-Files $standalonePath,$mainExecutable", StringComparison.Ordinal);
+        var velopackPacking = publisher.IndexOf("& $VpkPath @vpkArguments", StringComparison.Ordinal);
+
+        payloadSigning.Should().BeGreaterThan(-1);
+        payloadSigning.Should().BeLessThan(velopackPacking,
+            "the app-host executable must be signed before Velopack embeds it in release packages");
+        publisher.Should().Contain("-Files $standalonePath,$mainExecutable,$setupPath");
+        publisher.Should().Contain("-VerifyOnly");
+    }
+
+    [Fact]
+    public void ReleaseInstallationSmoke_UsesVelopackCanonicalLaunchPath()
+    {
+        var smoke = WorkspaceFileLocator.ReadAllText("tools", "Test-ReleaseInstallation.ps1");
+
+        smoke.Should().Contain("Join-Path (Join-Path (Join-Path $Root $App) 'current')");
+        smoke.Should().NotContain("Get-ChildItem -LiteralPath $Root -Recurse -File -Filter \"$App.App.Host.exe\"");
+    }
+
+    [Fact]
+    public void WindowsSuitePackager_ReturnsOnlyTheBootstrapperPath()
+    {
+        var packager = WorkspaceFileLocator.ReadAllText("tools", "packaging", "New-FreeSuiteWindowsBootstrapper.ps1");
+
+        packager.Should().Contain("$publishOutput = @(& dotnet publish");
+        packager.Should().Contain("$publishOutput | ForEach-Object { Write-Host $_ }");
+        packager.Should().Contain("Write-Output $result");
     }
 
     [Fact]

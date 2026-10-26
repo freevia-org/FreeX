@@ -115,11 +115,31 @@ public static partial class BuiltInFunctions
         return ValueScalar(args[0]);
     }
 
+    /// <summary>
+    /// r576: VALUE() is a TERMINAL coercion -- its result goes straight into a cell with no
+    /// function left to domain-check it, so it must not emit a non-finite number.
+    /// VALUE("NaN") returned NaN, violating the invariant r562 disproved and r563/r569 defended
+    /// at the other writers.
+    ///
+    /// <para>The guard belongs HERE and not in ExcelTextNumberParser. Guarding the shared parser
+    /// broke 64 tests: this engine deliberately lets coercion yield a non-finite and has each
+    /// FUNCTION report the domain error, so PHI("1E309") is #NUM! rather than #VALUE!.</para>
+    ///
+    /// <para>It rejects NaN ONLY, and the line is principled rather than convenient. "NaN" is not
+    /// a number literal in Excel at all, so no reading of VALUE("NaN") yields a number. An
+    /// OVERFLOW to Infinity is a different thing -- a magnitude outcome -- and
+    /// AccessibilityCheckerServiceTests deliberately pins VALUE("1E309")&gt;0 as TRUE, in a test
+    /// whose subject is exactly this function's coercion and error semantics. Excel most likely
+    /// answers #NUM! there, but that cannot be verified on this machine (Excel COM is not
+    /// registered), and overturning a deliberately pinned expectation on an unverified reading is
+    /// what r516 had to retract. Settling it needs real Excel: what are =VALUE("1E309") and
+    /// =VALUE("NaN")?</para>
+    /// </summary>
     private static ScalarValue ValueScalar(ScalarValue value)
     {
         if (value is NumberValue nv) return nv;
         var text = ToText(value).Trim();
-        if (ExcelTextNumberParser.TryParse(text, out var d))
+        if (ExcelTextNumberParser.TryParse(text, out var d) && !double.IsNaN(d))
             return new NumberValue(d);
         return ErrorValue.Value;
     }

@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeX.Core.Formula;
 
 namespace FreeX.Core.IO;
 
@@ -28,7 +29,7 @@ public static class ExcelDateEntryParser
         }
 
         var culture = (CultureInfo)currentCulture.Clone();
-        culture.DateTimeFormat.Calendar.TwoDigitYearMax = 2029;
+        ExcelTwoDigitYearWindow.ApplyTo(culture);
         if (!DateTime.TryParse(text, culture, DateTimeStyles.NoCurrentDateDefault, out dateTime))
             return false;
 

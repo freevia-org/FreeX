@@ -1431,7 +1431,8 @@ public sealed partial class MainWindow : Window
                 ExportPdfAsync,
                 DirectPrintCapability,
                 PrintAsync,
-                _editor.CurrentReviewDisplayState).ShowDialog(this);
+                _editor.CurrentReviewDisplayState,
+                _editor.ShowMarkupBalloons).ShowDialog(this);
         }
         catch (Exception ex)
         {
@@ -2775,6 +2776,13 @@ public sealed partial class MainWindow : Window
         _pageStatus = SisterAppStatusBarChrome.CreateInfoText(foreground: white);
         _sectionStatus = SisterAppStatusBarChrome.CreateInfoText(foreground: white);
         _status = SisterAppStatusBarChrome.CreateInfoText(foreground: white);
+
+        // r283: dialogs have no status bar of their own, so a failure inside one had nowhere to go
+        // and r282 left it silent. Install this window's status line as the app-wide fallback, so a
+        // guarded UI task that supplies no reporter still reaches the user. Set here rather than at
+        // startup because it needs the constructed status control.
+        AvaloniaUiTaskGuard.FallbackFailureReporter = ReportUnhandledUiTaskFailure;
+
         _dataFolderStatus = SisterAppStatusBarChrome.CreateInfoText(foreground: white);
         _dataFolderStatus.Text = SisterAppStatusBarTextPlanner.FormatDataFolderStatus(
             FreeWApplicationFrameDescriptor.ResolveDataFolderLabel(_optionsStore.StorePath));
@@ -3466,6 +3474,17 @@ public sealed partial class MainWindow : Window
     // user feedback. This observer itself never faults, so it is safe to fire from any UI callback.
     private void RunUiTask(Func<Task> operation) => _ = ObserveUiTaskAsync(operation);
 
+    /// <summary>
+    /// r283: the app-wide fallback installed on <see cref="AvaloniaUiTaskGuard"/>. Reports through
+    /// the same status line, and with the same wording, that this window's own guarded tasks use, so
+    /// a failure raised in a dialog is not presented differently from one raised in the shell.
+    /// </summary>
+    private void ReportUnhandledUiTaskFailure(Exception failure) =>
+        _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+            FileText,
+            UiText.Get("Operation_Editor"),
+            failure.Message);
+
     private void RunUiTask<T>(Func<Task<T>> operation) =>
         RunUiTask(async () => { _ = await operation(); });
 
@@ -3663,8 +3682,6 @@ public sealed partial class MainWindow : Window
 
     private async Task OpenAsync() => await _fileCommands.OpenAsync();
 
-    private Task<bool> OpenRecentPathAsync(string path) =>
-/*
     /// <summary>
     /// Backstage "Open Recent". Must run the dirty-gate through the async workflow: the shared
     /// workflow's synchronous Open overload prompts for unsaved changes via a helper that blocks
@@ -3672,8 +3689,7 @@ public sealed partial class MainWindow : Window
     /// while that same UI thread is blocked — a guaranteed deadlock when the current document is
     /// dirty.
     /// </summary>
-    private Task<bool> OpenRecentAsync(string path) =>
-*/
+    private Task<bool> OpenRecentPathAsync(string path) =>
         _fileCommands.OpenSelectedPathAsync(path);
 
     private async Task<string?> PromptOpenPathAsync(FreeWDocumentOpenPickerRequest request)

@@ -145,7 +145,7 @@ public sealed class XlsxWorksheetViewWriterSplitPaneTests
 
         changed.Should().BeTrue();
         var pane = GetPane(document);
-        pane!.Attribute("activePane")?.Value.Should().Be("bottomRight",
+        pane!.Attribute("activePane")!.Value.Should().Be("bottomRight",
             "rebuilding the pane element must not silently reset the user's active split pane to topLeft");
     }
 
@@ -192,7 +192,7 @@ public sealed class XlsxWorksheetViewWriterSplitPaneTests
         changed.Should().BeTrue();
         var pane = GetPane(document);
         pane.Should().NotBeNull();
-        pane!.Attribute("activePane")?.Value.Should().Be("bottomRight",
+        pane!.Attribute("activePane")!.Value.Should().Be("bottomRight",
             "the active cell F30 is below and right of the split boundary introduced by this save");
 
         var selections = GetSelections(document);

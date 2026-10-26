@@ -4,6 +4,8 @@
     <!-- RibbonIconFactorySvgTests drives the slug-candidate helper directly rather than by
          reflection, so a change to its signature is a build error in the test lane. -->
     <InternalsVisibleTo Include="FreeX.App.Host.Tests" />
+    <!-- r279: RibbonThemeBrushes is driven directly so a signature change is a build error. -->
+    <InternalsVisibleTo Include="Free.Shared.Ribbon.Wpf.Tests" />
   </ItemGroup>
 
   <PropertyGroup>

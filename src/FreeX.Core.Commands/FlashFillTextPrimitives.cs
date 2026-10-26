@@ -56,8 +56,16 @@ internal static class FlashFillTextPrimitives
     /// Returns the upper-cased first character of <paramref name="value"/> as a string,
     /// or an empty string when the input is empty.
     /// </summary>
+    /// <remarks>
+    /// r198: the leading TEXT ELEMENT, not <c>value[0]</c>. Flash Fill writes the initial it derives
+    /// into <c>Cell.Value</c> for every filled row, so a name beginning outside the BMP used to store
+    /// a lone high surrogate — a codepoint with no glyph, which survives the .xlsx round trip as an
+    /// <c>_xD83D_</c> escape and renders as a replacement box in FreeX and Excel alike.
+    /// </remarks>
     public static string GetUpperInitial(string value) =>
-        string.IsNullOrEmpty(value) ? string.Empty : char.ToUpperInvariant(value[0]).ToString();
+        string.IsNullOrEmpty(value)
+            ? string.Empty
+            : value[..StringInfo.GetNextTextElementLength(value)].ToUpperInvariant();
 
     /// <summary>
     /// Advances <paramref name="start"/> and retreats <paramref name="end"/> past any

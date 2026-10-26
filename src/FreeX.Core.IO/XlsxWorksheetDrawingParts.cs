@@ -65,6 +65,16 @@ internal sealed record XlsxPicturePackagePart(
     // round-trip on save (XlsxWorksheetDrawingObjectWriter) or a decorative picture would incorrectly
     // become a real Missing-Alt-Text finding (in FreeX and in real Excel) after opening and resaving.
     bool IsDecorative = false,
+    // r318: true when this picture carries cNvPr@hidden. The Selection Pane's eye toggle
+    // (SelectionPaneCommands) sets PictureModel.IsVisible, and without this the hide was lost on
+    // save -- the picture came back visible the next time the file was opened.
+    bool IsHidden = false,
+    // r378: Format Picture > Size > "Lock aspect ratio" and Properties > "Locked", from a:picLocks.
+    // Both were session-only before: unchecking either and saving brought the lock back on reload.
+    // Absent picLocks means LOCKED here, matching PictureModel's documented default and Excel's
+    // authored default for a picture; a present element is read per the OOXML attribute defaults.
+    bool LockAspectRatio = true,
+    bool IsLocked = true,
     // R97-model-drawing-hyperlink-2-2: the picture's object-level hyperlink (<a:hlinkClick> on its
     // cNvPr), resolved via the drawing part's own relationships. Populated for EVERY loaded picture
     // (not just ones that stay source-loaded) so DuplicateSheetDrawingCloner/PastePicturesCommand
@@ -245,10 +255,16 @@ internal sealed record XlsxDrawingAnchor(
 
 internal static partial class XlsxWorksheetDrawingPartReader
 {
+    /// <summary>
+    /// r593: <paramref name="warnings"/> is optional so the many existing call sites are unchanged,
+    /// and is supplied by the worksheet load path, which already owns one. Without it a chart the
+    /// drawing DECLARES but the package cannot resolve was dropped in silence (r592).
+    /// </summary>
     public static XlsxWorksheetDrawingPackageParts ReadParts(
         ZipArchive archive,
         string worksheetPath,
-        XDocument worksheetXml)
+        XDocument worksheetXml,
+        List<string>? warnings = null)
     {
         var drawingContext = ReadDrawingContext(archive, worksheetPath, worksheetXml);
         if (drawingContext is null)
@@ -259,7 +275,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             ? XlsxPackageXmlEditor.LoadXml(drawingRelsEntry)
             : null;
 
-        var charts = ReadChartParts(archive, drawingPath, drawingXml, drawingRelsXml);
+        var charts = ReadChartParts(archive, drawingPath, drawingXml, drawingRelsXml, warnings);
         // R119-io-camera-linked-picture-identity: a reconstructed camera/linked-picture group (see
         // ReadPictureSnapshotGroupParts) is an <xdr:grpSp>, not an <xdr:pic>, so ReadPictureParts'
         // Descendants(pic) walk never finds it -- it must be read as its own pass and merged in here.
@@ -329,14 +345,32 @@ internal static partial class XlsxWorksheetDrawingPartReader
         ZipArchive archive,
         string drawingPath,
         XDocument drawingXml,
-        XDocument? drawingRelsXml)
+        XDocument? drawingRelsXml,
+        List<string>? warnings)
     {
         var charts = new List<XlsxChartPackagePart>();
-        if (drawingRelsXml?.Root is null)
-            return charts;
-
         XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
         XNamespace chartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+
+        if (drawingRelsXml?.Root is null)
+        {
+            // r593: a drawing with no rels part is ORDINARY -- one holding only shapes or text boxes
+            // has nothing to relate to -- so this exit must stay silent in the common case. It is a
+            // loss only when the drawing DECLARES charts, whose relationship ids can now never be
+            // resolved. Warning unconditionally here would put a line in front of the user on every
+            // ordinary shape-only drawing, which is how a warnings channel stops being read.
+            var declaredChartCount = drawingXml
+                .Descendants()
+                .Count(element => element.Name == chartNs + "chart" || element.Name == chartExNs + "chart");
+            if (declaredChartCount > 0)
+            {
+                warnings?.Add(
+                    $"[chart] Drawing '{drawingPath}' declares {declaredChartCount} chart(s) but its " +
+                    "relationship part is missing from the package; they were not loaded.");
+            }
+
+            return charts;
+        }
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
@@ -360,14 +394,27 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 continue;
 
             if (!relationshipTargets.TryGetValue(chartRelId, out var chartTarget))
+            {
+                // r593: the drawing DECLARES a chart and the package cannot resolve it. Dropping it
+                // silently means the user opens a damaged file, sees no chart, saves, and the
+                // declaration is gone for good without anything ever having said so.
+                warnings?.Add(
+                    $"[chart] Drawing '{drawingPath}': relationship '{chartRelId}' names a chart part " +
+                    "that is not in the package; the chart was not loaded.");
                 continue;
+            }
 
             var chartPath = XlsxPackagePath.ResolveRelationshipTarget(drawingPath, chartTarget);
             if (!seenChartPaths.Add(chartPath))
                 continue;
             var chartEntry = archive.GetEntry(chartPath);
             if (chartEntry is null)
+            {
+                warnings?.Add(
+                    $"[chart] Drawing '{drawingPath}': chart part '{chartPath}' is missing from the " +
+                    "package; the chart was not loaded.");
                 continue;
+            }
             var chartRelationships = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(chartPath)) is { } chartRelsEntry
                 ? XlsxPackageXmlEditor.LoadXml(chartRelsEntry)
                 : null;
@@ -510,6 +557,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
             // R90-app-accessibility-checker-5-2: preserve Excel's "Mark as decorative" flag so a
             // decorative picture stays exempt from the Missing-Alt-Text rule after a round-trip.
             var isDecorative = ReadNonVisualDecorative(pictureElement);
+            var isHidden = ReadNonVisualHidden(pictureElement);
+            var (lockAspectRatio, isLocked) = ReadPictureLocks(pictureElement);
             var anchorElement = FindNearestAnchorElement(pictureElement, spreadsheetDrawingNs);
             var pictureTransform = pictureElement.Element(spreadsheetDrawingNs + "spPr")?.Element(drawingNs + "xfrm");
 
@@ -555,6 +604,9 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 linkTarget,
                 svgImageBytes,
                 isDecorative,
+                isHidden,
+                lockAspectRatio,
+                isLocked,
                 ReadObjectHyperlink(pictureElement, spreadsheetDrawingNs, drawingNs, relNs, hyperlinkRelsById)));
         }
 
@@ -1180,7 +1232,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
 
         // sz is in hundredths of a point.
         var szAttr = rPr.Attribute("sz")?.Value;
-        var fontSizePt = szAttr is not null && int.TryParse(szAttr, out var szHundredths)
+        var fontSizePt = szAttr is not null && int.TryParse(szAttr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var szHundredths)
             ? szHundredths / 100.0
             : 0.0;
 
@@ -1455,6 +1507,35 @@ internal static partial class XlsxWorksheetDrawingPartReader
         return ReadFirstNonVisualAttribute(element, spreadsheetDrawingNs, "descr");
     }
 
+    /// <summary>
+    /// r318: whether the object is hidden (Selection Pane eye off), from cNvPr@hidden.
+    /// </summary>
+    /// <summary>r378: reads a:picLocks. Absent element = locked (see the record field comment).</summary>
+    private static (bool LockAspectRatio, bool IsLocked) ReadPictureLocks(XElement pictureElement)
+    {
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+        var locks = pictureElement
+            .Element(spreadsheetDrawingNs + "nvPicPr")?
+            .Element(spreadsheetDrawingNs + "cNvPicPr")?
+            .Element(drawingNs + "picLocks");
+        if (locks is null)
+            return (true, true);
+
+        static bool Flag(XElement element, string name) =>
+            element.Attribute(name)?.Value is "1" or "true";
+
+        return (Flag(locks, "noChangeAspect"), Flag(locks, "noMove") || Flag(locks, "noResize"));
+    }
+
+    private static bool ReadNonVisualHidden(XElement element)
+    {
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        var raw = ReadFirstNonVisualAttribute(element, spreadsheetDrawingNs, "hidden");
+        return raw is "1" or "true";
+    }
+
     private static string? ReadNonVisualTitle(XElement element)
     {
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
@@ -1508,7 +1589,13 @@ internal static partial class XlsxWorksheetDrawingPartReader
 
     private static double ReadDrawingRotation(XElement? transform)
     {
-        if (!double.TryParse(transform?.Attribute("rot")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var rotation))
+        // r549: IsFinite as well as TryParse. An overflowing literal parses as true with Infinity,
+        // and the normalisation below TURNS THAT INTO NaN -- Infinity / 60000 is Infinity, and
+        // Infinity % 360 is NaN, which then passes the "< 0" test and reaches the model as a NaN
+        // rotation. The writer already refuses non-finite (see NormalizeRotation), so without this
+        // the reader was the only way to get one into a picture.
+        if (!double.TryParse(transform?.Attribute("rot")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var rotation)
+            || !double.IsFinite(rotation))
             return 0;
         var degrees = rotation / 60000d;
         degrees %= 360;
@@ -1542,7 +1629,9 @@ internal static partial class XlsxWorksheetDrawingPartReader
             !double.TryParse(cyStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var cyEmu))
             return (null, null);
 
-        if (cxEmu < 0 || cyEmu < 0)
+        // r549: !IsFinite as well as the negative test -- NaN fails EVERY comparison, so "cxEmu < 0"
+        // let both NaN and Infinity through as a picture extent.
+        if (!double.IsFinite(cxEmu) || !double.IsFinite(cyEmu) || cxEmu < 0 || cyEmu < 0)
             return (null, null);
 
         // Return the values even when one axis is zero (e.g. a perfectly horizontal line has cy=0).
@@ -1865,7 +1954,9 @@ internal static partial class XlsxWorksheetDrawingPartReader
     }
 
     private static bool TryParseEmuAttribute(XElement element, string attributeName, out double value) =>
-        double.TryParse(element.Attribute(attributeName)?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+        // r549: an EMU coordinate that is not finite is not a coordinate.
+        double.TryParse(element.Attribute(attributeName)?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out value)
+        && double.IsFinite(value);
 
     /// <summary>
     /// Reads the nearest enclosing worksheet anchor for <paramref name="element"/> and, when the
@@ -1907,7 +1998,9 @@ internal static partial class XlsxWorksheetDrawingPartReader
     }
 
     private static double ReadEmuAttributeOrZero(XElement? element, string attributeName) =>
+        // r549: a non-finite EMU value falls back to 0, the same as an absent attribute.
         double.TryParse(element?.Attribute(attributeName)?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+        && double.IsFinite(value)
             ? value
             : 0;
 
@@ -1918,7 +2011,9 @@ internal static partial class XlsxWorksheetDrawingPartReader
     private static double ReadDrawingOutlineWidthPoints(XElement? lnElement)
     {
         var wValue = lnElement?.Attribute("w")?.Value;
-        if (!double.TryParse(wValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var emu) || emu <= 0)
+        // r549: NaN <= 0 is FALSE, so the width test alone passed NaN straight through.
+        if (!double.TryParse(wValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var emu)
+            || !double.IsFinite(emu) || emu <= 0)
             return 0;
         return emu / DrawingMlCoordinateUnits.EmuPerPoint;
     }

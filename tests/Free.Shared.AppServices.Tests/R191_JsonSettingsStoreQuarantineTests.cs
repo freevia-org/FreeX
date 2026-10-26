@@ -94,6 +94,38 @@ public sealed class R191_JsonSettingsStoreQuarantineTests : IDisposable
     }
 
     [Fact]
+    public void Save_FromASecondStoreOnTheSamePath_DoesNotOverwriteTheAlreadyRescuedCopy()
+    {
+        // r192. The rescue flag is per-INSTANCE, and several stores can exist against one path:
+        // FreeW builds a fresh store for the Quick Parts gallery on every window, so opening two
+        // windows over a corrupt file leaves both flagged. The second window's save then copied the
+        // file as it stood by then -- the first window's freshly written, VALID content -- over the
+        // rescued original, destroying exactly the bytes the rescue exists to keep.
+        const string original = "{ the user's real data, unparseable";
+        File.WriteAllText(StorePath, original);
+
+        var first = JsonSettingsStore<Settings>.ForPath(StorePath);
+        var second = JsonSettingsStore<Settings>.ForPath(StorePath);
+
+        // Both load the same corrupt file before either saves, as two windows would.
+        var firstSettings = first.Load();
+        var secondSettings = second.Load();
+        first.LastError.Should().NotBeNull();
+        second.LastError.Should().NotBeNull();
+
+        firstSettings.Items.Add("from window one");
+        first.Save(firstSettings).Should().BeTrue();
+        File.ReadAllText(QuarantinePath).Should().Be(original);
+
+        secondSettings.Items.Add("from window two");
+        second.Save(secondSettings).Should().BeTrue();
+
+        File.ReadAllText(QuarantinePath).Should().Be(
+            original,
+            "the first rescue wins -- the second store must not copy the now-valid file over it");
+    }
+
+    [Fact]
     public void Save_QuarantinesOnceOnly_SoLaterSavesDoNotOverwriteTheRescuedCopy()
     {
         const string original = "{ corrupt";

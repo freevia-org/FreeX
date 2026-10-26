@@ -80,6 +80,11 @@ public sealed class AddChartSheetCommand : IWorkbookCommand
     private readonly ChartType _chartType;
     private readonly string? _title;
     private SheetId? _createdSheetId;
+    // r591: the chart's OWN id, cached for the same reason R17 caches the sheet id just above.
+    // ChartModel.Id defaults to Guid.NewGuid(), so a redone Apply built a chart with a different
+    // identity even though R17 had already made the SHEET stable -- half the fix, and the half that
+    // was missing is the one every later command captures when it refers to "that chart".
+    private Guid? _createdChartId;
 
     public string Label => "Insert Chart Sheet";
     public SheetId? CreatedSheetId => _createdSheetId;
@@ -107,6 +112,7 @@ public sealed class AddChartSheetCommand : IWorkbookCommand
 
         var candidate = new ChartModel
         {
+            Id = _createdChartId ?? Guid.NewGuid(),
             Type = _chartType,
             DataRange = _dataRange,
             FirstColIsCategories = _chartType is not (ChartType.Scatter or ChartType.Bubble),
@@ -135,6 +141,7 @@ public sealed class AddChartSheetCommand : IWorkbookCommand
         }
         target.ResetViewStateToA1();
         target.Charts.Add(candidate);
+        _createdChartId = candidate.Id;
         return new CommandOutcome(true, AffectedCells: [_dataRange.Start]);
     }
 

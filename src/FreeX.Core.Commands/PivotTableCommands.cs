@@ -13,6 +13,15 @@ public sealed class AddPivotTableCommand : IWorkbookCommand
     private PivotCacheModel? _addedCache;
     private PivotTableModel? _addedPivotTable;
     private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
+    // r438: merged regions the user already had inside the target rectangle. The first render strips
+    // them (PivotTableRefreshService.ClearTargetRange unconditionally drops every merge overlapping
+    // the range it clears) and Restore below replays cell VALUES only, so Undo left the rectangle
+    // permanently un-merged. RefreshPivotTableCommand (meta-F2/round154) and MovePivotTableCommand
+    // (sweep92-F1) each fixed this for their own path; CREATION -- the one command that necessarily
+    // lands a pivot on top of the user's existing layout, and so the one most likely to meet a
+    // merged heading -- was left with the same hole. Scoped to the rectangle the render clears, so
+    // an unrelated merge elsewhere on the sheet is never touched.
+    private List<GridRange>? _targetMergedRegions;
 
     public string Label => "Insert PivotTable";
 
@@ -53,6 +62,8 @@ public sealed class AddPivotTableCommand : IWorkbookCommand
 
         var sourceSheet = ctx.GetSheet(_sourceRange.Start.Sheet);
         _targetSnapshot = Snapshot(sheet, _targetRange);
+        // r438: captured BEFORE the render below strips them. See the field's comment.
+        _targetMergedRegions = sheet.MergedRegions.Where(region => region.Overlaps(_targetRange)).ToList();
         var headers = ReadHeaders(sourceSheet, fieldCount);
         var cacheId = NextCacheId(ctx.Workbook);
         var cache = new PivotCacheModel
@@ -111,6 +122,9 @@ public sealed class AddPivotTableCommand : IWorkbookCommand
             _addedCache = null;
             _addedPivotTable = null;
             _targetSnapshot = null;
+            // The guard's own rollback restored MergedRegionsBefore wholesale, so there is nothing
+            // for Revert to put back and holding the list would only risk re-adding a live merge.
+            _targetMergedRegions = null;
             return failure;
         }
 
@@ -128,9 +142,19 @@ public sealed class AddPivotTableCommand : IWorkbookCommand
         if (_addedCache is not null)
             ctx.Workbook.PivotCaches.Remove(_addedCache);
         Restore(sheet, _targetSnapshot);
+        // r438: put back the merges the first render stripped. ClearRenderedRange above has already
+        // removed any merge the pivot itself created (merged row labels), so the sheet is clear of
+        // the render's own merges by the time these go back and nothing can overlap or clobber.
+        if (_targetMergedRegions is { Count: > 0 })
+        {
+            foreach (var region in _targetMergedRegions)
+                sheet.AddMergedRegion(region);
+        }
+
         _addedPivotTable = null;
         _addedCache = null;
         _targetSnapshot = null;
+        _targetMergedRegions = null;
     }
 
     private List<string> ReadHeaders(Sheet sheet, int fieldCount)
@@ -224,7 +248,22 @@ public sealed class AddPivotTableToNewWorksheetCommand : IWorkbookCommand
         if (CommandGuards.RejectIfWorkbookStructureProtected(ctx.Workbook) is { } protectedOutcome)
             return protectedOutcome;
 
-        var sheet = ctx.Workbook.AddSheet(GetUniquePivotSheetName(ctx.Workbook));
+        // r457: redo must recreate the sheet with the SAME id. Workbook.AddSheet always mints a
+        // brand-new SheetId, so undo-then-redo used to give the pivot's worksheet a different
+        // identity than the first Apply produced -- breaking anything that captured the original id,
+        // exactly as R16 documents for AddSheetCommand. That command already keeps its id across
+        // redo; this one creates a worksheet the same way and never got the same treatment.
+        Sheet sheet;
+        if (_createdSheetId is { } existingSheetId)
+        {
+            sheet = new Sheet(existingSheetId, GetUniquePivotSheetName(ctx.Workbook));
+            ctx.Workbook.InsertSheet(ctx.Workbook.Sheets.Count, sheet);
+        }
+        else
+        {
+            sheet = ctx.Workbook.AddSheet(GetUniquePivotSheetName(ctx.Workbook));
+        }
+
         sheet.ResetViewStateToA1();
         _createdSheetId = sheet.Id;
         var targetRange = CreateInitialTargetRange(sheet.Id, _sourceRange, _rowFieldIndexes.Count, _dataFieldIndexes.Count);
@@ -253,7 +292,10 @@ public sealed class AddPivotTableToNewWorksheetCommand : IWorkbookCommand
 
         _innerCommand?.Revert(ctx);
         ctx.Workbook.RemoveSheet(_createdSheetId.Value);
-        _createdSheetId = null;
+
+        // r457: _createdSheetId is deliberately KEPT so a redo recreates the same sheet identity --
+        // see Apply. Only the inner command is dropped, since Apply rebuilds it against the
+        // recreated sheet. (Apply's own failure path still clears both: nothing was created there.)
         _innerCommand = null;
     }
 
@@ -377,8 +419,34 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand, IEstimatesMemor
             return failure;
         }
 
-        return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
+        return new CommandOutcome(
+            true,
+            AffectedCells: [pivotTable.TargetRange.Start],
+            IsNoOp: NothingChanged(ctx, sheet, pivotTable, oldFootprint));
     }
+
+    /// <summary>
+    /// r262: refreshing a pivot whose source has not changed writes back the same render, the same
+    /// field lists and the same cache items -- and F5 on an unchanged workbook is the most ordinary
+    /// way to reach this command. Without this it still pushed an undo entry, and UndoRedoStack.Push
+    /// clears the redo stack, destroying a real edit the user could have redone.
+    ///
+    /// <para>POST-HOC over all four snapshots: the rendered cell block, the last-rendered range, the
+    /// field/cache/slicer snapshot, and the merged regions the re-render can strip. r261 wrote this
+    /// and reverted it because it never reported a no-op; the cause was a missing clause in
+    /// <c>SameCacheFields</c>, not this decision.</para>
+    /// </summary>
+    private bool NothingChanged(
+        ICommandContext ctx,
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        GridRange oldFootprint) =>
+        _lastRenderedRangeSnapshot == pivotTable.LastRenderedRange
+        && PivotSnapshotComparison.RenderedCellsUnchanged(sheet, _targetSnapshot)
+        && (_fieldSnapshot is null
+            || _fieldSnapshot.Matches(ctx.Workbook, pivotTable, CommandGuards.FindPivotCache(ctx.Workbook, pivotTable)))
+        && PivotSnapshotComparison.MergedRegionsUnchanged(
+            sheet, _oldMergedRegions, region => region.Overlaps(oldFootprint));
 
     public void Revert(ICommandContext ctx)
     {
@@ -444,6 +512,37 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand, IEstimatesMemor
                     .Where(slicer => string.Equals(slicer.SourcePivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase))
                     .Select(slicer => (slicer.Name, slicer.CacheItems.ToList()))
                     .ToList());
+
+        /// <summary>
+        /// r262: true when everything Capture recorded still holds. Content comparison throughout:
+        /// every member is a list rebuilt in place by the refresh, so record equality would compare
+        /// references and answer "changed" on every refresh, including one over unchanged data.
+        /// </summary>
+        public bool Matches(Workbook workbook, PivotTableModel pivotTable, PivotCacheModel? cache)
+        {
+            if (!PivotSnapshotComparison.SameFields(RowFields, pivotTable.RowFields)
+                || !PivotSnapshotComparison.SameFields(ColumnFields, pivotTable.ColumnFields)
+                || !PivotSnapshotComparison.SameFields(PageFields, pivotTable.PageFields)
+                || !PivotSnapshotComparison.SameScalarRecords(DataFields, pivotTable.DataFields)
+                || CacheId != cache?.CacheId
+                || !PivotSnapshotComparison.SameCacheFields(CacheFields, cache?.Fields.ToList() ?? []))
+            {
+                return false;
+            }
+
+            foreach (var (slicerName, cacheItems) in SlicerCacheItems)
+            {
+                var slicer = workbook.Slicers.FirstOrDefault(candidate =>
+                    string.Equals(candidate.Name, slicerName, StringComparison.OrdinalIgnoreCase));
+                if (slicer is null)
+                    continue;
+
+                if (!PivotSnapshotComparison.SameScalarRecords(cacheItems, slicer.CacheItems))
+                    return false;
+            }
+
+            return true;
+        }
 
         public void Restore(PivotTableModel pivotTable, Workbook workbook)
         {

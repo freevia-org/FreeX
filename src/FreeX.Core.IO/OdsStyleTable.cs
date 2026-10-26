@@ -13,6 +13,9 @@ namespace FreeX.Core.IO;
 /// </summary>
 internal sealed class OdsStyleTable
 {
+    /// <summary>Excel's maximum decimal places in a number format (r492).</summary>
+    private const int MaxDecimalPlaces = 30;
+
     private static readonly XNamespace Style = OdsFileAdapter.StyleNs;
     private static readonly XNamespace Fo = OdsFileAdapter.FoNs;
     private static readonly XNamespace Number = OdsFileAdapter.NumberNs;
@@ -131,7 +134,7 @@ internal sealed class OdsStyleTable
 
         // Vertical alignment hint (exact enum) preferred.
         var valignHint = (string?)cellProps.Attribute(Style + "freex-valign");
-        if (valignHint is not null && int.TryParse(valignHint, out var vi))
+        if (valignHint is not null && int.TryParse(valignHint, NumberStyles.Integer, CultureInfo.InvariantCulture, out var vi))
             style.VerticalAlignment = (VerticalAlignment)vi;
         else
         {
@@ -155,7 +158,7 @@ internal sealed class OdsStyleTable
     private void ApplyParagraphProperties(CellStyle style, XElement paraProps)
     {
         var halignHint = (string?)paraProps.Attribute(Style + "freex-halign");
-        if (halignHint is not null && int.TryParse(halignHint, out var hi))
+        if (halignHint is not null && int.TryParse(halignHint, NumberStyles.Integer, CultureInfo.InvariantCulture, out var hi))
             style.HorizontalAlignment = (HorizontalAlignment)hi;
         else
         {
@@ -171,7 +174,7 @@ internal sealed class OdsStyleTable
         }
 
         var indentHint = (string?)paraProps.Attribute(Style + "freex-indent");
-        if (indentHint is not null && int.TryParse(indentHint, out var indent))
+        if (indentHint is not null && int.TryParse(indentHint, NumberStyles.Integer, CultureInfo.InvariantCulture, out var indent))
             style.IndentLevel = Math.Clamp(indent, 0, 15);
     }
 
@@ -230,7 +233,7 @@ internal sealed class OdsStyleTable
     {
         width = 0;
         var hint = (string?)colProps.Attribute(Style + "freex-width-chars");
-        if (hint is not null && double.TryParse(hint, NumberStyles.Float, CultureInfo.InvariantCulture, out width))
+        if (hint is not null && double.TryParse(hint, NumberStyles.Float, CultureInfo.InvariantCulture, out width) && double.IsFinite(width))
             return true;
         var cm = (string?)colProps.Attribute(Style + "column-width");
         if (cm is not null && TryParseCm(cm, out var px))
@@ -245,7 +248,7 @@ internal sealed class OdsStyleTable
     {
         height = 0;
         var hint = (string?)rowProps.Attribute(Style + "freex-height-px");
-        if (hint is not null && double.TryParse(hint, NumberStyles.Float, CultureInfo.InvariantCulture, out height))
+        if (hint is not null && double.TryParse(hint, NumberStyles.Float, CultureInfo.InvariantCulture, out height) && double.IsFinite(height))
             return true;
         var cm = (string?)rowProps.Attribute(Style + "row-height");
         if (cm is not null && TryParseCm(cm, out var px))
@@ -259,9 +262,12 @@ internal sealed class OdsStyleTable
     private static bool TryParsePt(string value, out double pt)
     {
         pt = 0;
+        // r549: IsFinite -- see TryParseCm; an unrepresentable length is reported as unparseable.
         if (value.EndsWith("pt", StringComparison.Ordinal))
-            return double.TryParse(value.AsSpan(0, value.Length - 2), NumberStyles.Float, CultureInfo.InvariantCulture, out pt);
-        return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out pt);
+            return double.TryParse(value.AsSpan(0, value.Length - 2), NumberStyles.Float, CultureInfo.InvariantCulture, out pt)
+                && double.IsFinite(pt);
+        return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out pt)
+            && double.IsFinite(pt);
     }
 
     private static bool TryParseCm(string value, out double px)
@@ -290,7 +296,11 @@ internal sealed class OdsStyleTable
             return false;
         }
         px = cm * 37.795275591;
-        return true;
+
+        // r549: an overflowing literal (column-width="1e400cm") parses as TRUE with Infinity, so the
+        // unit conversion above yields a non-finite pixel width. Report it the way every unsupported
+        // unit here already is, so the column keeps its default rather than an infinite size.
+        return double.IsFinite(px);
     }
 
     private static bool IsDataStyle(XName name) =>
@@ -315,8 +325,14 @@ internal sealed class OdsStyleTable
         if (numberElement is not null)
         {
             var decimals = (string?)numberElement.Attribute(Number + "decimal-places");
-            if (decimals is not null && int.TryParse(decimals, out var d) && d > 0)
-                return "0." + new string('0', d);
+
+            // r492: `d > 0` is a lower bound only, and this value is chosen by the FILE, so
+            // decimal-places="2000000000" asked for a two-billion-character string -- 4 GB, thrown
+            // as an OutOfMemoryException while merely opening the document. Clamp to the 30 places
+            // Excel's number formats allow, which is the same bound FormatCellsNumberFormatPlanner
+            // already applies to the value coming from the Format Cells dialog.
+            if (decimals is not null && int.TryParse(decimals, NumberStyles.Integer, CultureInfo.InvariantCulture, out var d) && d > 0)
+                return "0." + new string('0', Math.Min(d, MaxDecimalPlaces));
             return "0";
         }
         return null;

@@ -8,7 +8,6 @@ public readonly record struct FormulaInlineEditorOverflow(bool Left, bool Right)
 
 public static class FormulaInlineEditorLayoutPlanner
 {
-    private const double MinimumTextSurfaceWidth = 160;
     private const double TextSurfaceTrailingBuffer = 16;
     private const double SelectionLikeBorderThickness = 1;
     private const double HiddenBorderCover = 2;
@@ -36,9 +35,9 @@ public static class FormulaInlineEditorLayoutPlanner
             effectiveHeight);
 
         var textLeft = editorRect.Left + 4;
-        var textWidth = Math.Max(
-            Math.Max(editorRect.Width - 8, MinimumTextSurfaceWidth),
-            desiredTextWidth + TextSurfaceTrailingBuffer);
+        var textWidth = Math.Max(0, editorRect.Width - 8);
+        if (desiredTextWidth > 0)
+            textWidth = Math.Max(textWidth, desiredTextWidth + TextSurfaceTrailingBuffer);
 
         if (double.IsFinite(availableRight))
             textWidth = Math.Min(textWidth, Math.Max(0, availableRight - textLeft));

@@ -227,7 +227,7 @@ public sealed class ChartTests : IDisposable
             ?.Descendants(extension + "state")
             .Single();
         savedState.Should().NotBeNull();
-        savedState!.Attribute("value")?.Value.Should().Be("keep");
+        savedState!.Attribute("value")!.Value.Should().Be("keep");
     }
 
     [Fact]
@@ -339,9 +339,9 @@ public sealed class ChartTests : IDisposable
             seriesLines.Should().NotBeNull();
             var line = seriesLines!.Element(ChartNs + "spPr")?.Element(DrawingNs + "ln");
             line.Should().NotBeNull();
-            line!.Attribute("w")?.Value.Should().Be("28575");
+            line!.Attribute("w")!.Value.Should().Be("28575");
             line.Element(DrawingNs + "solidFill").Should().NotBeNull();
-            line.Element(DrawingNs + "prstDash")?.Attribute("val")?.Value.Should().Be("dash");
+            line.Element(DrawingNs + "prstDash")?.Attribute("val")!.Value.Should().Be("dash");
         }
 
         var reopened = PptxPackageReader.Read(path);
@@ -570,7 +570,7 @@ public sealed class ChartTests : IDisposable
             var title = chartDoc.Root!.Element(ChartNs + "chart")!
                 .Element(ChartNs + "title");
             title.Should().NotBeNull();
-            title!.Element(ChartNs + "overlay")?.Attribute("val")?.Value.Should().Be(xmlValue);
+            title!.Element(ChartNs + "overlay")?.Attribute("val")!.Value.Should().Be(xmlValue);
         }
 
         var reloaded = PptxPackageReader.Read(path);
@@ -592,7 +592,7 @@ public sealed class ChartTests : IDisposable
         {
             var chartDoc = LoadChartXml(archive, chartIndex: 1);
             var chartEl = chartDoc.Root!.Element(ChartNs + "chart")!;
-            chartEl.Element(ChartNs + "plotVisOnly")?.Attribute("val")?.Value.Should().Be(xmlValue);
+            chartEl.Element(ChartNs + "plotVisOnly")?.Attribute("val")!.Value.Should().Be(xmlValue);
         }
 
         var reloaded = PptxPackageReader.Read(path);
@@ -612,7 +612,7 @@ public sealed class ChartTests : IDisposable
         using (var archive = ZipFile.OpenRead(path))
         {
             var chartDoc = LoadChartXml(archive, chartIndex: 1);
-            chartDoc.Root!.Element(ChartNs + "roundedCorners")?.Attribute("val")?.Value.Should().Be(xmlValue);
+            chartDoc.Root!.Element(ChartNs + "roundedCorners")?.Attribute("val")!.Value.Should().Be(xmlValue);
         }
 
         var reloaded = PptxPackageReader.Read(path);
@@ -637,7 +637,7 @@ public sealed class ChartTests : IDisposable
             root.Elements().Select(element => element.Name.LocalName)
                 .Should().ContainInOrder("pivotSource", "chart");
             pivotSource!.Element(ChartNs + "name")?.Value.Should().Be("PivotTable1");
-            pivotSource.Element(ChartNs + "fmtId")?.Attribute("val")?.Value.Should().Be("1");
+            pivotSource.Element(ChartNs + "fmtId")?.Attribute("val")!.Value.Should().Be("1");
         }
 
         var reloaded = PptxPackageReader.Read(path);
@@ -661,11 +661,11 @@ public sealed class ChartTests : IDisposable
             var root = LoadChartXml(archive, chartIndex: 1).Root!;
             root.Elements().Select(element => element.Name.LocalName)
                 .Should().ContainInOrder("date1904", "lang", "protection", "chart");
-            root.Element(ChartNs + "date1904")?.Attribute("val")?.Value.Should().Be("1");
-            root.Element(ChartNs + "lang")?.Attribute("val")?.Value.Should().Be("fr-FR");
-            root.Element(ChartNs + "protection")?.Attribute("chartObject")?.Value.Should().Be("1");
-            root.Element(ChartNs + "protection")?.Attribute("data")?.Value.Should().Be("0");
-            root.Element(ChartNs + "protection")?.Attribute("selection")?.Value.Should().Be("1");
+            root.Element(ChartNs + "date1904")?.Attribute("val")!.Value.Should().Be("1");
+            root.Element(ChartNs + "lang")?.Attribute("val")!.Value.Should().Be("fr-FR");
+            root.Element(ChartNs + "protection")?.Attribute("chartObject")!.Value.Should().Be("1");
+            root.Element(ChartNs + "protection")?.Attribute("data")!.Value.Should().Be("0");
+            root.Element(ChartNs + "protection")?.Attribute("selection")!.Value.Should().Be("1");
         }
 
         var reloaded = PptxPackageReader.Read(path);
@@ -688,10 +688,10 @@ public sealed class ChartTests : IDisposable
             var protection = LoadChartXml(archive, chartIndex: 1).Root!
                 .Element(ChartNs + "protection");
             protection.Should().NotBeNull();
-            protection!.Attribute("chartObject")?.Value.Should().Be("0");
-            protection.Attribute("data")?.Value.Should().Be("1");
-            protection.Attribute("formatting")?.Value.Should().Be("0");
-            protection.Attribute("selection")?.Value.Should().Be("0");
+            protection!.Attribute("chartObject")!.Value.Should().Be("0");
+            protection.Attribute("data")!.Value.Should().Be("1");
+            protection.Attribute("formatting")!.Value.Should().Be("0");
+            protection.Attribute("selection")!.Value.Should().Be("0");
         }
 
         var edited = PptxPackageReader.Read(editedPath);
@@ -1639,9 +1639,9 @@ public sealed class ChartTests : IDisposable
         {
             var chartDoc = LoadChartXml(archive, chartIndex: 1);
             var bubbleChart = chartDoc.Descendants(ChartNs + "bubbleChart").Single();
-            bubbleChart.Element(ChartNs + "bubbleScale")?.Attribute("val")?.Value.Should().Be("175");
-            bubbleChart.Element(ChartNs + "sizeRepresents")?.Attribute("val")?.Value.Should().Be("w");
-            bubbleChart.Element(ChartNs + "showNegBubbles")?.Attribute("val")?.Value.Should().Be("1");
+            bubbleChart.Element(ChartNs + "bubbleScale")?.Attribute("val")!.Value.Should().Be("175");
+            bubbleChart.Element(ChartNs + "sizeRepresents")?.Attribute("val")!.Value.Should().Be("w");
+            bubbleChart.Element(ChartNs + "showNegBubbles")?.Attribute("val")!.Value.Should().Be("1");
         }
 
         var rt = PptxPackageReader.Read(path).Slides[0].Shapes
@@ -3332,7 +3332,7 @@ public sealed class ChartTests : IDisposable
 
         var rowTwo = sheetDoc.Descendants().First(e => e.Name.LocalName == "row" && e.Attribute("r")?.Value == "2");
         var cellA2 = rowTwo.Elements().First(c => c.Attribute("r")?.Value == "A2");
-        cellA2.Attribute("t")?.Value.Should().Be("inlineStr", "col A must still hold the category label");
+        cellA2.Attribute("t")!.Value.Should().Be("inlineStr", "col A must still hold the category label");
         cellA2.Descendants().First(e => e.Name.LocalName == "t").Value.Should().Be("Q1");
     }
 

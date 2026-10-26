@@ -24,6 +24,11 @@ public sealed class SetShapeHyperlinkCommand : IPresentationCommand
 
     public string Label => _newLink is null ? "Remove Shape Link" : "Set Shape Link";
 
+    // r200: Remove Link on a shape that has none, or setting the link it already has, changes
+    // nothing -- and the undo entry the bus would push clears the redo stack.
+    public bool HasEffect(Presentation p) =>
+        FindShape(p) is { } shape && !Equals(shape.Hyperlink, _newLink);
+
     public void Apply(Presentation p)
     {
         var shape = FindShape(p);

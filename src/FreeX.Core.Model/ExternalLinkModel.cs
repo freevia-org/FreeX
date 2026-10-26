@@ -212,11 +212,19 @@ public sealed class ExternalLinkModel
             "str" => new TextValue(valueText),
             "b" => new BoolValue(valueText is "1" or "true" or "TRUE"),
             "e" => new ErrorValue(valueText),
+            // r562: IsFinite as well. This is a CACHED value from the other workbook, so it is
+            // file-controlled, and "1e400" parses successfully to Infinity. The path matters more
+            // than the site: it builds a NumberValue DIRECTLY, bypassing the formula evaluator,
+            // and the rest of the codebase relies on the opposite -- r552 reasoned about a
+            // neighbouring parser on the basis that a cell value cannot be non-finite because the
+            // evaluator returns #NUM! instead. Returning null is what this parser already does for
+            // a cached cell it cannot read, and the caller already skips nulls per cell.
             _ => double.TryParse(
                     valueText,
                     System.Globalization.NumberStyles.Float,
                     System.Globalization.CultureInfo.InvariantCulture,
                     out var number)
+                && double.IsFinite(number)
                 ? new NumberValue(number)
                 : null,
         };

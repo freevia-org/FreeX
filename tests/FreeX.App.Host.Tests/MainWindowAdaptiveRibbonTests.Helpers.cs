@@ -260,33 +260,42 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             return menu;
         }
 
-        public Button? VisibleOrCollapsedRibbonButton(string title) =>
+        private IReadOnlyList<Button> VisibleOrCollapsedRibbonButtons(string title) =>
             HomeRibbonChildren
                 .OfType<DependencyObject>()
                 .SelectMany(WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>)
                 .Concat(HomeRibbonChildren.OfType<DependencyObject>().SelectMany(WpfTestTree.FindLogicalDescendants<DependencyObject>))
                 .OfType<Button>()
                 .Distinct()
-                .FirstOrDefault(button =>
+                .Where(button =>
                     string.Equals(RibbonTooltip.GetTitle(button), title, StringComparison.Ordinal) ||
-                    string.Equals(GetButtonLabel(button), title, StringComparison.Ordinal));
+                    string.Equals(GetButtonLabel(button), title, StringComparison.Ordinal))
+                .ToList();
+
+        public Button? VisibleOrCollapsedRibbonButton(string title) =>
+            VisibleOrCollapsedRibbonButtons(title).FirstOrDefault();
 
         public bool VisibleRibbonButtonHasDropdownChevron(string title) =>
-            VisibleOrCollapsedRibbonButton(title) is { } button &&
-            DropdownChevronCount(button) > 0;
+            VisibleOrCollapsedRibbonButtons(title).Any(button => DropdownChevronCount(button) > 0);
 
         public int VisibleRibbonButtonDropdownChevronCount(string title) =>
-            VisibleOrCollapsedRibbonButton(title) is { } button
-                ? DropdownChevronCount(button)
-                : 0;
+            VisibleOrCollapsedRibbonButtons(title).Sum(DropdownChevronCount);
 
         public bool VisibleRibbonButtonHasDropdownZoneHandler(string title) =>
-            VisibleOrCollapsedRibbonButton(title) is { } button &&
-            RibbonMetadata.GetDropdownZoneHandlerAttached(button);
+            VisibleOrCollapsedRibbonButtons(title).Any(RibbonMetadata.GetDropdownZoneHandlerAttached);
 
         public bool VisibleRibbonButtonHasDropdownZoneHighlight(string title) =>
-            VisibleOrCollapsedRibbonButton(title) is { } button &&
-            HasDropdownZoneHighlight(button);
+            VisibleOrCollapsedRibbonButtons(title).Any(HasDropdownZoneHighlight);
+
+        public bool VisibleRibbonButtonHasDropdownZoneHandlerOrDedicatedCompanion(string title) =>
+            VisibleOrCollapsedRibbonButtons(title)
+                .Any(button => IsDedicatedSplitDropdownButton(button) ||
+                               RibbonMetadata.GetDropdownZoneHandlerAttached(button));
+
+        public bool VisibleRibbonButtonHasDropdownZoneHighlightOrDedicatedCompanion(string title) =>
+            VisibleOrCollapsedRibbonButtons(title)
+                .Any(button => IsDedicatedSplitDropdownButton(button) ||
+                               HasDropdownZoneHighlight(button));
 
         public RibbonCommandContentLayout? NamedRibbonButtonContentLayout(string name)
         {
@@ -306,6 +315,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         public IReadOnlyList<string> ActiveRibbonMenuButtonsWithoutSplitTreatment =>
             ActiveRibbonMenuButtons
+                .Where(button => !IsDedicatedSplitDropdownButton(button))
                 .Where(button => DropdownChevronCount(button) != 1 ||
                                  !RibbonMetadata.GetDropdownZoneHandlerAttached(button) ||
                                  !HasDropdownZoneHighlight(button))
@@ -362,6 +372,19 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 .FirstOrDefault(button =>
                     string.Equals(RibbonTooltip.GetTitle(button), title, StringComparison.Ordinal) ||
                     string.Equals(GetButtonLabel(button), title, StringComparison.Ordinal));
+
+        public Button? ActiveRibbonButtonByCommandName(string commandName) =>
+            WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(SelectedRibbonContentRoot)
+                .Concat(WpfTestTree.FindLogicalDescendants<DependencyObject>(SelectedRibbonContentRoot))
+                .OfType<Button>()
+                .Distinct()
+                .FirstOrDefault(button =>
+                    RibbonMetadata.TryGetCommandName(button, out var name) &&
+                    string.Equals(name, commandName, StringComparison.Ordinal));
+
+        private static bool IsDedicatedSplitDropdownButton(ButtonBase button) =>
+            RibbonMetadata.TryGetCommandName(button, out var commandName) &&
+            commandName.EndsWith(".Dropdown", StringComparison.Ordinal);
 
         private static int DropdownChevronCount(ButtonBase button) =>
             WpfTestTree.FindVisualSelfAndDescendants<DependencyObject>(button)
@@ -1223,12 +1246,6 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         IReadOnlyList<string> Expanded,
         IReadOnlyList<string> Collapsed);
 
-    private static void PumpDispatcher()
-    {
-        var frame = new System.Windows.Threading.DispatcherFrame();
-        System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
-            System.Windows.Threading.DispatcherPriority.Background,
-            new Action(() => frame.Continue = false));
-        System.Windows.Threading.Dispatcher.PushFrame(frame);
-    }
+    // r446: delegates to the one fixed implementation -- see DispatcherTestPump.
+    private static void PumpDispatcher() => DispatcherTestPump.PumpDispatcher();
 }

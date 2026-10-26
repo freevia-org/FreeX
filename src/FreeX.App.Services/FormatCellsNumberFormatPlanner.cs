@@ -332,6 +332,8 @@ public static class FormatCellsNumberFormatPlanner
             }
             catch (ArgumentException)
             {
+                // An unknown culture name contributes no currency label; the list is built from a
+                // best-effort sweep of regions and must not fail because one is unavailable here.
             }
         }
 

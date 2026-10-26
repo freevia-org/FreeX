@@ -659,10 +659,15 @@ public static partial class FlashFillService
     private static string GetEmailNameToken(IReadOnlyList<string> source, int index) =>
         source[index].Trim().ToLowerInvariant();
 
+    // r199: the leading TEXT ELEMENT, not token[0]. This helper reimplemented the extraction that
+    // GetFirstInitial does safely two calls away, so r198's fix to that one left all nine email
+    // patterns still storing a lone surrogate for a name beginning outside the BMP.
     private static string GetEmailNameInitial(IReadOnlyList<string> source, int index)
     {
         var token = source[index].Trim();
-        return token.Length == 0 ? string.Empty : char.ToLowerInvariant(token[0]).ToString();
+        return token.Length == 0
+            ? string.Empty
+            : token[..System.Globalization.StringInfo.GetNextTextElementLength(token)].ToLowerInvariant();
     }
 
     private static string CreateLowerTokenPairEmail(

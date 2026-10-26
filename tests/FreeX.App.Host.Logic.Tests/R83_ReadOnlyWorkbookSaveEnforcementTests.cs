@@ -127,14 +127,8 @@ public sealed class R83_ReadOnlyWorkbookSaveEnforcementTests
             PumpDispatcher();
         }
 
-        private static void PumpDispatcher()
-        {
-            var frame = new DispatcherFrame();
-            Dispatcher.CurrentDispatcher.BeginInvoke(
-                DispatcherPriority.Background,
-                new Action(() => frame.Continue = false));
-            Dispatcher.PushFrame(frame);
-        }
+        // r446: delegates to the one fixed implementation -- see R49MainWindowTestHarness.
+        private static void PumpDispatcher() => R49MainWindowTestHarness.PumpDispatcher();
     }
 
     /// <summary>A no-op message service -- this test's method under test never prompts.</summary>

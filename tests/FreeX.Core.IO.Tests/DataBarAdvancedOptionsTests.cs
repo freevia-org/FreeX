@@ -39,11 +39,11 @@ public sealed class DataBarAdvancedOptionsTests
 
         var worksheet = XlsxPackageTestHelper.ReadWorksheetXml(stream);
         var x14DataBar = worksheet.Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
-        x14DataBar.Attribute("border")?.Value.Should().Be("1");
-        x14DataBar.Attribute("axisPosition")?.Value.Should().Be("middle");
-        x14DataBar.Element(X14Ns + "axisColor")?.Attribute("rgb")?.Value.Should().Be("FF010203");
-        x14DataBar.Element(X14Ns + "negativeFillColor")?.Attribute("rgb")?.Value.Should().Be("FF040506");
-        x14DataBar.Element(X14Ns + "negativeBorderColor")?.Attribute("rgb")?.Value.Should().Be("FF070809");
+        x14DataBar.Attribute("border")!.Value.Should().Be("1");
+        x14DataBar.Attribute("axisPosition")!.Value.Should().Be("middle");
+        x14DataBar.Element(X14Ns + "axisColor")?.Attribute("rgb")!.Value.Should().Be("FF010203");
+        x14DataBar.Element(X14Ns + "negativeFillColor")?.Attribute("rgb")!.Value.Should().Be("FF040506");
+        x14DataBar.Element(X14Ns + "negativeBorderColor")?.Attribute("rgb")!.Value.Should().Be("FF070809");
     }
 
     [Fact]
@@ -57,9 +57,9 @@ public sealed class DataBarAdvancedOptionsTests
 
         var worksheet = XlsxPackageTestHelper.ReadWorksheetXml(stream);
         var x14DataBar = worksheet.Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
-        x14DataBar.Attribute("gradient")?.Value.Should().Be("1");
-        x14DataBar.Attribute("border")?.Value.Should().Be("1");
-        x14DataBar.Attribute("axisPosition")?.Value.Should().Be("middle");
+        x14DataBar.Attribute("gradient")!.Value.Should().Be("1");
+        x14DataBar.Attribute("border")!.Value.Should().Be("1");
+        x14DataBar.Attribute("axisPosition")!.Value.Should().Be("middle");
     }
 
     [Fact]
@@ -73,10 +73,10 @@ public sealed class DataBarAdvancedOptionsTests
         var x14DataBar = XlsxPackageTestHelper.ReadWorksheetXml(stream).Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
         var thresholds = x14DataBar.Elements(X14Ns + "cfvo").ToArray();
         thresholds.Should().HaveCount(2);
-        thresholds[0].Attribute("type")?.Value.Should().Be("num");
+        thresholds[0].Attribute("type")!.Value.Should().Be("num");
         thresholds[0].Element(XmNs + "f")?.Value.Should().Be("-10");
         thresholds[0].Attribute("val").Should().BeNull("x14 cfvo values are stored as xm:f children");
-        thresholds[1].Attribute("type")?.Value.Should().Be("percentile");
+        thresholds[1].Attribute("type")!.Value.Should().Be("percentile");
         thresholds[1].Element(XmNs + "f")?.Value.Should().Be("90");
         thresholds[1].Attribute("val").Should().BeNull("x14 cfvo values are stored as xm:f children");
     }
@@ -141,8 +141,8 @@ public sealed class DataBarAdvancedOptionsTests
         var maybeX14DataBar = x14Rule.Element(X14Ns + "dataBar");
         maybeX14DataBar.Should().NotBeNull();
         var x14DataBar = maybeX14DataBar!;
-        x14DataBar.Attribute("axisPosition")?.Value.Should().Be("none");
-        x14DataBar.Element(X14Ns + "negativeFillColor")?.Attribute("rgb")?.Value.Should().Be("FF090A0B");
+        x14DataBar.Attribute("axisPosition")!.Value.Should().Be("none");
+        x14DataBar.Element(X14Ns + "negativeFillColor")?.Attribute("rgb")!.Value.Should().Be("FF090A0B");
     }
 
     [Fact]
@@ -162,7 +162,7 @@ public sealed class DataBarAdvancedOptionsTests
         new XlsxFileAdapter().Save(workbook, saved);
 
         var x14DataBar = XlsxPackageTestHelper.ReadWorksheetXml(saved).Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
-        x14DataBar.Attribute("gradient")?.Value.Should().Be("1");
+        x14DataBar.Attribute("gradient")!.Value.Should().Be("1");
         x14DataBar.Attribute("border").Should().BeNull();
         x14DataBar.Attribute("axisPosition").Should().BeNull();
         x14DataBar.Element(X14Ns + "axisColor").Should().BeNull();
@@ -185,7 +185,7 @@ public sealed class DataBarAdvancedOptionsTests
         new XlsxFileAdapter().Save(workbook, saved);
 
         var axisColor = XlsxPackageTestHelper.ReadWorksheetXml(saved).Descendants(MainNs + "axisColor").Should().ContainSingle().Subject;
-        axisColor.Attribute("theme")?.Value.Should().Be("1");
+        axisColor.Attribute("theme")!.Value.Should().Be("1");
         axisColor.Attribute("rgb").Should().BeNull();
     }
 
@@ -209,14 +209,14 @@ public sealed class DataBarAdvancedOptionsTests
         new XlsxFileAdapter().Save(workbook, saved);
 
         var x14DataBar = XlsxPackageTestHelper.ReadWorksheetXml(saved).Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
-        x14DataBar.Attribute("border")?.Value.Should().Be("1");
+        x14DataBar.Attribute("border")!.Value.Should().Be("1");
         var maybeAxisColor = x14DataBar.Element(X14Ns + "axisColor");
         maybeAxisColor.Should().NotBeNull();
         var axisColor = maybeAxisColor!;
-        axisColor.Attribute("theme")?.Value.Should().Be("1");
+        axisColor.Attribute("theme")!.Value.Should().Be("1");
         axisColor.Attribute("rgb").Should().BeNull();
-        x14DataBar.Element(X14Ns + "fillColor")?.Attribute("theme")?.Value.Should().Be("2");
-        x14DataBar.Element(X14Ns + "borderColor")?.Attribute("theme")?.Value.Should().Be("3");
+        x14DataBar.Element(X14Ns + "fillColor")?.Attribute("theme")!.Value.Should().Be("2");
+        x14DataBar.Element(X14Ns + "borderColor")?.Attribute("theme")!.Value.Should().Be("3");
     }
 
     [Fact]
@@ -240,9 +240,9 @@ public sealed class DataBarAdvancedOptionsTests
         new XlsxFileAdapter().Save(workbook, stream);
 
         var x14DataBar = XlsxPackageTestHelper.ReadWorksheetXml(stream).Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
-        x14DataBar.Attribute("gradient")?.Value.Should().Be("1");
-        x14DataBar.Element(X14Ns + "axisColor")?.Attribute("theme")?.Value.Should().Be("1");
-        x14DataBar.Element(X14Ns + "fillColor")?.Attribute("theme")?.Value.Should().Be("2");
+        x14DataBar.Attribute("gradient")!.Value.Should().Be("1");
+        x14DataBar.Element(X14Ns + "axisColor")?.Attribute("theme")!.Value.Should().Be("1");
+        x14DataBar.Element(X14Ns + "fillColor")?.Attribute("theme")!.Value.Should().Be("2");
         XlsxPackageTestHelper.ReadWorksheetXml(stream).Descendants(X14Ns + "id").Should().ContainSingle();
     }
 
@@ -304,11 +304,11 @@ public sealed class DataBarAdvancedOptionsTests
         new XlsxFileAdapter().Save(workbook, stream);
 
         var dataBar = XlsxPackageTestHelper.ReadWorksheetXml(stream).Descendants(MainNs + "dataBar").Should().ContainSingle().Subject;
-        dataBar.Attribute("border")?.Value.Should().Be("1");
-        dataBar.Attribute("axisPosition")?.Value.Should().Be("middle");
-        dataBar.Element(MainNs + "axisColor")?.Attribute("rgb")?.Value.Should().Be("FF010203");
-        dataBar.Element(MainNs + "negativeFillColor")?.Attribute("rgb")?.Value.Should().Be("FF040506");
-        dataBar.Element(MainNs + "negativeBorderColor")?.Attribute("rgb")?.Value.Should().Be("FF070809");
+        dataBar.Attribute("border")!.Value.Should().Be("1");
+        dataBar.Attribute("axisPosition")!.Value.Should().Be("middle");
+        dataBar.Element(MainNs + "axisColor")?.Attribute("rgb")!.Value.Should().Be("FF010203");
+        dataBar.Element(MainNs + "negativeFillColor")?.Attribute("rgb")!.Value.Should().Be("FF040506");
+        dataBar.Element(MainNs + "negativeBorderColor")?.Attribute("rgb")!.Value.Should().Be("FF070809");
     }
 
     private static Workbook CreateWorkbookWithAdvancedDataBar()
@@ -540,7 +540,7 @@ public sealed class DataBarAdvancedOptionsTests
             .Subject;
         var color = dataBar.Element(MainNs + "color");
         color.Should().NotBeNull(because: "dataBar must emit a <color> element");
-        color!.Attribute("theme")?.Value.Should().Be("4", because: "Accent1 is OOXML theme index 4");
+        color!.Attribute("theme")!.Value.Should().Be("4", because: "Accent1 is OOXML theme index 4");
         color.Attribute("tint").Should().NotBeNull(because: "tint must be written");
         double.Parse(color.Attribute("tint")!.Value, System.Globalization.CultureInfo.InvariantCulture)
             .Should().BeApproximately(0.4, 0.0001, because: "tint round-trips");
@@ -575,7 +575,7 @@ public sealed class DataBarAdvancedOptionsTests
             .Should().ContainSingle().Subject
             .Element(MainNs + "color");
         color.Should().NotBeNull();
-        color!.Attribute("theme")?.Value.Should().Be("4");
+        color!.Attribute("theme")!.Value.Should().Be("4");
         color.Attribute("tint").Should().BeNull(because: "no tint was specified");
         color.Attribute("rgb").Should().BeNull(because: "theme color must not emit rgb");
     }

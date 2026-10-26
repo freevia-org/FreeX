@@ -26,6 +26,14 @@ public sealed partial class NativeJsonAdapter
         public string? Formula { get; set; }
         public string? FormulaArrayMode { get; set; }
         public bool IgnoreFormulaError { get; set; }
+        // r201: real document state the DTO did not carry. QuotePrefix is the leading apostrophe that
+        // makes a numeric-looking cell text and shows "Number Stored as Text"; the two Legacy* fields
+        // are a legacy CSE array's declared extent, which the loader sets and which decides where
+        // #N/A padding goes. All three were reset by a .fxl round trip -- and autosave/crash recovery
+        // goes through this adapter exclusively.
+        public bool QuotePrefix { get; set; }
+        public uint LegacyArrayRows { get; set; }
+        public uint LegacyArrayCols { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public int? StyleId { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -263,6 +271,9 @@ public sealed partial class NativeJsonAdapter
         private static ReadOnlySpan<byte> FormulaProperty => "Formula"u8;
         private static ReadOnlySpan<byte> FormulaArrayModeProperty => "FormulaArrayMode"u8;
         private static ReadOnlySpan<byte> IgnoreFormulaErrorProperty => "IgnoreFormulaError"u8;
+        private static ReadOnlySpan<byte> QuotePrefixProperty => "QuotePrefix"u8;
+        private static ReadOnlySpan<byte> LegacyArrayRowsProperty => "LegacyArrayRows"u8;
+        private static ReadOnlySpan<byte> LegacyArrayColsProperty => "LegacyArrayCols"u8;
         private static ReadOnlySpan<byte> StyleIdProperty => "StyleId"u8;
         private static ReadOnlySpan<byte> StyleProperty => "Style"u8;
         private static ReadOnlySpan<byte> NumberValueType => "n"u8;
@@ -276,6 +287,9 @@ public sealed partial class NativeJsonAdapter
         private static readonly JsonEncodedText FormulaName = JsonEncodedText.Encode(nameof(CellDto.Formula));
         private static readonly JsonEncodedText FormulaArrayModeName = JsonEncodedText.Encode(nameof(CellDto.FormulaArrayMode));
         private static readonly JsonEncodedText IgnoreFormulaErrorName = JsonEncodedText.Encode(nameof(CellDto.IgnoreFormulaError));
+        private static readonly JsonEncodedText QuotePrefixName = JsonEncodedText.Encode(nameof(CellDto.QuotePrefix));
+        private static readonly JsonEncodedText LegacyArrayRowsName = JsonEncodedText.Encode(nameof(CellDto.LegacyArrayRows));
+        private static readonly JsonEncodedText LegacyArrayColsName = JsonEncodedText.Encode(nameof(CellDto.LegacyArrayCols));
         private static readonly JsonEncodedText StyleIdName = JsonEncodedText.Encode(nameof(CellDto.StyleId));
         private static readonly JsonEncodedText StyleName = JsonEncodedText.Encode(nameof(CellDto.Style));
         private static readonly StandardFormat GeneralNumberFormat = StandardFormat.Parse("G");
@@ -353,6 +367,30 @@ public sealed partial class NativeJsonAdapter
                     reader.Read();
                     if (reader.TokenType is JsonTokenType.True or JsonTokenType.False)
                         dto.IgnoreFormulaError = reader.GetBoolean();
+                    else
+                        reader.Skip();
+                }
+                else if (reader.ValueTextEquals(QuotePrefixProperty))
+                {
+                    reader.Read();
+                    if (reader.TokenType is JsonTokenType.True or JsonTokenType.False)
+                        dto.QuotePrefix = reader.GetBoolean();
+                    else
+                        reader.Skip();
+                }
+                else if (reader.ValueTextEquals(LegacyArrayRowsProperty))
+                {
+                    reader.Read();
+                    if (reader.TokenType == JsonTokenType.Number)
+                        dto.LegacyArrayRows = reader.GetUInt32();
+                    else
+                        reader.Skip();
+                }
+                else if (reader.ValueTextEquals(LegacyArrayColsProperty))
+                {
+                    reader.Read();
+                    if (reader.TokenType == JsonTokenType.Number)
+                        dto.LegacyArrayCols = reader.GetUInt32();
                     else
                         reader.Skip();
                 }
@@ -480,6 +518,9 @@ public sealed partial class NativeJsonAdapter
             string? formula,
             FormulaArrayMode arrayMode,
             bool ignoreFormulaError,
+            bool quotePrefix,
+            uint legacyArrayRows,
+            uint legacyArrayCols,
             int? styleId,
             CellStyleDto? style,
             JsonSerializerOptions options,
@@ -495,6 +536,12 @@ public sealed partial class NativeJsonAdapter
                 writer.WriteString(FormulaArrayModeName, arrayMode.ToString());
             if (ignoreFormulaError)
                 writer.WriteBoolean(IgnoreFormulaErrorName, ignoreFormulaError);
+            if (quotePrefix)
+                writer.WriteBoolean(QuotePrefixName, quotePrefix);
+            if (legacyArrayRows > 0)
+                writer.WriteNumber(LegacyArrayRowsName, legacyArrayRows);
+            if (legacyArrayCols > 0)
+                writer.WriteNumber(LegacyArrayColsName, legacyArrayCols);
             if (styleId is { } nativeStyleId)
                 writer.WriteNumber(StyleIdName, nativeStyleId);
             if (style is not null)
@@ -517,6 +564,12 @@ public sealed partial class NativeJsonAdapter
                 writer.WriteString(FormulaArrayModeName, value.FormulaArrayMode);
             if (value.IgnoreFormulaError)
                 writer.WriteBoolean(IgnoreFormulaErrorName, value.IgnoreFormulaError);
+            if (value.QuotePrefix)
+                writer.WriteBoolean(QuotePrefixName, value.QuotePrefix);
+            if (value.LegacyArrayRows > 0)
+                writer.WriteNumber(LegacyArrayRowsName, value.LegacyArrayRows);
+            if (value.LegacyArrayCols > 0)
+                writer.WriteNumber(LegacyArrayColsName, value.LegacyArrayCols);
             if (value.StyleId is { } styleId)
                 writer.WriteNumber(StyleIdName, styleId);
             if (value.Style is not null)

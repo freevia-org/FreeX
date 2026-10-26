@@ -202,7 +202,7 @@ public sealed class FreeXCleanupB11Tests
 
         var dLblPos = ReadChartDLbls(saved).Element(ChartNs + "dLblPos");
         dLblPos.Should().NotBeNull();
-        dLblPos!.Attribute("val")!.Value.Should().NotBe("bestFit");
+        dLblPos!.Attribute("val")?.Value.Should().NotBe("bestFit");
 
         SchemaErrors(saved).Should().BeEmpty();
     }

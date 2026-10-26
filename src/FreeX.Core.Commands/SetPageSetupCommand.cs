@@ -163,8 +163,43 @@ public sealed class SetPageSetupCommand : IWorkbookCommand
         sheet.PrintErrorValue = _printErrorValue;
         sheet.PrintComments = _printComments;
         _applied = true;
+        // r243: Page Setup pre-fills every one of its controls from the sheet, so OK without
+        // editing rewrites all twenty fields with what they already hold.
+        if (NothingChanged(sheet))
+            return new CommandOutcome(true, IsNoOp: true);
+
         return new CommandOutcome(true);
     }
+
+
+    /// <summary>
+    /// r243: whether the Page Setup dialog's OK wrote anything different. Twenty snapshot
+    /// fields, twenty assignments, and every pair compared -- which is only safe to write by
+    /// hand because R237_NoOpDecisionUsesEverySnapshotContractTests fails if a _previous* field
+    /// declared by this class is not mentioned here. At twenty fields, transcription is exactly
+    /// the kind of thing a person gets wrong once and never notices.
+    /// </summary>
+    private bool NothingChanged(Sheet sheet) =>
+        Equals(_previousOrientation, sheet.PageOrientation)
+        && Equals(_previousPaperSize, sheet.PaperSize)
+        && Equals(_previousPaperSizeCode, sheet.PaperSizeCode)
+        && Equals(_previousMargins, sheet.PageMargins)
+        && Equals(_previousHeaderMargin, sheet.HeaderMargin)
+        && Equals(_previousFooterMargin, sheet.FooterMargin)
+        && Equals(_previousPrintGridlines, sheet.PrintGridlines)
+        && Equals(_previousPrintHeadings, sheet.PrintHeadings)
+        && Equals(_previousScaleToFit, sheet.ScaleToFit)
+        && Equals(_previousPrintTitleRows, sheet.PrintTitleRows)
+        && Equals(_previousPrintTitleColumns, sheet.PrintTitleColumns)
+        && Equals(_previousCenterHorizontally, sheet.CenterHorizontallyOnPage)
+        && Equals(_previousCenterVertically, sheet.CenterVerticallyOnPage)
+        && Equals(_previousPageOrder, sheet.PageOrder)
+        && Equals(_previousFirstPageNumber, sheet.FirstPageNumber)
+        && Equals(_previousPrintBlackAndWhite, sheet.PrintBlackAndWhite)
+        && Equals(_previousPrintDraftQuality, sheet.PrintDraftQuality)
+        && Equals(_previousPrintQualityDpi, sheet.PrintQualityDpi)
+        && Equals(_previousPrintErrorValue, sheet.PrintErrorValue)
+        && Equals(_previousPrintComments, sheet.PrintComments);
 
     public void Revert(ICommandContext ctx)
     {

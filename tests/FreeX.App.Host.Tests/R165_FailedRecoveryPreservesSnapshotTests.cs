@@ -62,14 +62,8 @@ public sealed class R165_FailedRecoveryPreservesSnapshotTests
         return window;
     }
 
-    private static void PumpDispatcher()
-    {
-        var frame = new DispatcherFrame();
-        Dispatcher.CurrentDispatcher.BeginInvoke(
-            DispatcherPriority.Background,
-            new Action(() => frame.Continue = false));
-        Dispatcher.PushFrame(frame);
-    }
+    // r446: delegates to the one fixed implementation -- see DispatcherTestPump.
+    private static void PumpDispatcher() => DispatcherTestPump.PumpDispatcher();
 
     /// <summary>
     /// Runs an async delegate to completion on the shared STA dispatcher thread -- matches

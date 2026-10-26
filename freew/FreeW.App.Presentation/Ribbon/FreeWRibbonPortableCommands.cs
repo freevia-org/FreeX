@@ -24,23 +24,40 @@ public sealed class FreeWRibbonFormatPainterCommand(Action<bool> activate) : IRi
     public void Execute(RibbonCommandContext context) => activate(_activation.Activate());
 }
 
+/// <summary>
+/// r604: the value here is TYPED BY THE USER, so it is read in the user's locale.
+///
+/// <para>This defaulted to <see cref="CultureInfo.InvariantCulture"/>, so the line-spacing box --
+/// its only two call sites, one per host -- silently discarded <c>1,5</c> for every comma-decimal
+/// user on BOTH platforms. The two hosts also disagreed about <see cref="NumberStyles"/>: the WPF
+/// site passed <c>Float | AllowThousands</c> and the Avalonia site took the <c>Any</c> default, so
+/// the same box accepted different text depending on the platform.</para>
+///
+/// <para>The default is now <see cref="LocalizedNumberEntry"/> with <see cref="NumberStyles.Float"/>,
+/// matching what FreeP's animation-duration field already settled for exactly this defect: Float
+/// excludes AllowThousands, so <c>1.5</c> cannot be misread as fifteen on a culture whose group
+/// separator is <c>.</c> -- it fails there and falls through to the invariant reading instead. An
+/// explicit <paramref name="culture"/> still wins, for callers that genuinely have one.</para>
+/// </summary>
 public sealed class FreeWRibbonNumericValueCommand(
     Action<double> apply,
     Func<double> getValue,
     double minimumExclusive,
-    NumberStyles numberStyles = NumberStyles.Any,
+    NumberStyles numberStyles = NumberStyles.Float,
     Action? prepareExecution = null,
     CultureInfo? culture = null) : IRibbonStatefulCommand
 {
+    private bool TryParseTypedValue(string value, out double parsed) =>
+        culture is null
+            ? LocalizedNumberEntry.TryParse(value, numberStyles, out parsed)
+            : FreeWRibbonNumericValueParser.TryParseScalar(value, culture, numberStyles, out parsed);
+
     public void Execute(RibbonCommandContext context)
     {
         var value = FreeWRibbonSelectedValue.Resolve(context);
         if (value is null
-            || !FreeWRibbonNumericValueParser.TryParseScalar(
-                value,
-                culture ?? CultureInfo.InvariantCulture,
-                numberStyles,
-                out var parsed)
+            || !TryParseTypedValue(value, out var parsed)
+            || !double.IsFinite(parsed)
             || parsed <= minimumExclusive)
         {
             return;
@@ -84,6 +101,21 @@ public static class FreeWRibbonNumericValueParser
         NumberStyles numberStyles,
         out double points) =>
         TryParseScalar(value, culture, numberStyles, out points) && points > 0;
+
+    /// <summary>
+    /// r604: the font-size box, read the way the user typed it.
+    ///
+    /// <para>The two hosts disagreed: the WPF ribbon passed <see cref="CultureInfo.CurrentCulture"/>
+    /// and the Avalonia ribbon passed <see cref="CultureInfo.InvariantCulture"/>, so the SAME box in
+    /// the SAME app accepted "10,5" on Windows and silently ignored it on Linux and macOS. Neither
+    /// host should be choosing: a typed number follows the user's locale, and
+    /// <see cref="LocalizedNumberEntry"/> keeps the invariant spelling working as a guarded
+    /// fallback.</para>
+    /// </summary>
+    public static bool TryParseTypedFontSize(string? value, out double points) =>
+        LocalizedNumberEntry.TryParse(value, NumberStyles.Float, out points)
+        && double.IsFinite(points)
+        && points > 0;
 
     public static bool TryParseObjectPosition(
         string? value,

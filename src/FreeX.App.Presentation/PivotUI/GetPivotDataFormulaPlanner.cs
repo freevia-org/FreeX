@@ -250,13 +250,13 @@ public static class GetPivotDataFormulaPlanner
     };
 
     private static bool IsGrandTotal(string value) =>
-        value.StartsWith("Grand Total", StringComparison.CurrentCultureIgnoreCase);
+        value.StartsWith("Grand Total", StringComparison.OrdinalIgnoreCase);
 
     private static bool TryReadSubtotalCaption(string value, out string item)
     {
         item = "";
-        if (!value.EndsWith(" Total", StringComparison.CurrentCultureIgnoreCase) ||
-            value.StartsWith("Grand Total", StringComparison.CurrentCultureIgnoreCase))
+        if (!value.EndsWith(" Total", StringComparison.OrdinalIgnoreCase) ||
+            value.StartsWith("Grand Total", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -266,7 +266,7 @@ public static class GetPivotDataFormulaPlanner
     }
 
     private static string TrimDataFieldSuffix(string item, string dataFieldName) =>
-        item.EndsWith(dataFieldName, StringComparison.CurrentCultureIgnoreCase)
+        item.EndsWith(dataFieldName, StringComparison.OrdinalIgnoreCase)
             ? item[..^dataFieldName.Length].TrimEnd()
             : item;
 }

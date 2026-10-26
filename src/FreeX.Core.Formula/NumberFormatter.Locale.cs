@@ -278,6 +278,8 @@ public static partial class NumberFormatter
         }
         catch (ArgumentOutOfRangeException)
         {
+            // A culture whose calendar cannot be set to Gregorian keeps its own; the format still
+            // renders, just in that calendar.
         }
     }
 

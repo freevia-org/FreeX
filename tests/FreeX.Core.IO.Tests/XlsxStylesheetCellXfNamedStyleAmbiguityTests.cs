@@ -41,7 +41,7 @@ public sealed class XlsxStylesheetCellXfNamedStyleAmbiguityTests
 
         var targetCellXfs = targetRoot.Element(WorkbookNs + "cellXfs")!.Elements(WorkbookNs + "xf").ToList();
         targetCellXfs.Should().HaveCount(2);
-        targetCellXfs[1].Attribute("xfId")?.Value.Should().Match(value => value == null || value == "0",
+        targetCellXfs[1].Attribute("xfId")!.Value.Should().Match(value => value == null || value == "0",
             "the shared rebuilt xf renders like BOTH 'Report2024' and 'Report2025', so it must not be " +
             "reconnected to either one -- doing so would silently mislabel whichever cell doesn't actually " +
             "own that name");
@@ -73,10 +73,10 @@ public sealed class XlsxStylesheetCellXfNamedStyleAmbiguityTests
 
         var targetCellXfs = targetRoot.Element(WorkbookNs + "cellXfs")!.Elements(WorkbookNs + "xf").ToList();
         targetCellXfs.Should().HaveCount(3);
-        targetCellXfs[1].Attribute("xfId")?.Value.Should().Be(report2024XfId,
+        targetCellXfs[1].Attribute("xfId")!.Value.Should().Be(report2024XfId,
             "the two named styles render differently, so each cell's rebuilt xf must still be reconnected " +
             "to its own recovered named style as before");
-        targetCellXfs[2].Attribute("xfId")?.Value.Should().Be(reportBoldXfId,
+        targetCellXfs[2].Attribute("xfId")!.Value.Should().Be(reportBoldXfId,
             "the two named styles render differently, so each cell's rebuilt xf must still be reconnected " +
             "to its own recovered named style as before");
     }

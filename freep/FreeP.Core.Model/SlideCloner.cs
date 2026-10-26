@@ -94,6 +94,14 @@ public static class SlideCloner
             OffsetYEmu     = shape.OffsetYEmu,
             ExtentCxEmu    = shape.ExtentCxEmu,
             ExtentCyEmu    = shape.ExtentCyEmu,
+            // r199: a group's child coordinate space (a:chOff/a:chExt). Dropping these made
+            // SlideCompositor.TransformGroupChild fall back to the group's own bounds, i.e. treat every
+            // child's chOff-space position as absolute -- so a duplicated or pasted group whose child
+            // space differs from its bounds came out with its contents displaced.
+            ChildOffsetXEmu  = shape.ChildOffsetXEmu,
+            ChildOffsetYEmu  = shape.ChildOffsetYEmu,
+            ChildExtentCxEmu = shape.ChildExtentCxEmu,
+            ChildExtentCyEmu = shape.ChildExtentCyEmu,
             HasExplicitZeroExtentTransform = shape.HasExplicitZeroExtentTransform,
             RotationDeg    = shape.RotationDeg,
             FlipH          = shape.FlipH,

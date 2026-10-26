@@ -38,7 +38,23 @@ public static class FxpFormat
         using var stream = File.OpenRead(path);
         var dto = JsonSerializer.Deserialize<PresentationDto>(stream, SerializerOptions)
             ?? throw new InvalidDataException("The presentation file is empty or not a valid .fxp document.");
-        return dto.ToModel();
+
+        try
+        {
+            return dto.ToModel();
+        }
+        catch (NullReferenceException ex)
+        {
+            // r453: well-formed JSON that is not a presentation ("{}", or any object missing the
+            // members ToModel dereferences) deserialises into a DTO of nulls and then fails deep
+            // inside it. The shell shows Exception.Message verbatim
+            // (PresentationNativeCommandOutcomePlanner), so the user read "Object reference not set
+            // to an instance of an object" for a file this reader already owns an accurate sentence
+            // about. Same fix FreeX made for the same reason in r382, down to keeping the original as
+            // InnerException so nothing is swallowed.
+            throw new InvalidDataException(
+                "The presentation file is empty or not a valid .fxp document.", ex);
+        }
     }
 
     /// <summary>Writes a presentation to a <c>.fxp</c> file (canonical JSON; UTF-8, no BOM).</summary>

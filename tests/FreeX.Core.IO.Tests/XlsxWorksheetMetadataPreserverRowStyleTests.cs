@@ -49,8 +49,8 @@ public sealed class XlsxWorksheetMetadataPreserverRowStyleTests
 
         // Native-only layout attributes still round-trip, but modeled outline state must not be
         // restored from the source after the rebuilt worksheet intentionally omits it.
-        targetRow.Attribute("ht")?.Value.Should().Be("27");
-        targetRow.Attribute("customHeight")?.Value.Should().Be("1");
+        targetRow.Attribute("ht")!.Value.Should().Be("27");
+        targetRow.Attribute("customHeight")!.Value.Should().Be("1");
         targetRow.Attribute("hidden").Should().BeNull();
         targetRow.Attribute("outlineLevel").Should().BeNull();
         targetRow.Attribute("collapsed").Should().BeNull();

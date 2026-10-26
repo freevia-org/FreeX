@@ -23,6 +23,11 @@ public sealed class SetWorksheetBackgroundCommand : IWorkbookCommand
             return new CommandOutcome(false, "Background image cannot be empty.");
 
         var sheet = ctx.GetSheet(_sheetId);
+        // r210: an equal-value setter -- the gallery/toggle pre-populates the current value, so
+        // re-confirming it pushed an undo entry that changed nothing, and that push clears redo.
+        if (Equals(sheet.BackgroundImage, _background))
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousBackground = sheet.BackgroundImage;
         sheet.BackgroundImage = _background;
         _applied = true;
@@ -53,6 +58,11 @@ public sealed class ClearWorksheetBackgroundCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        // r220: the sibling setter above got this guard in r210; the clear did not. Delete
+        // Background is reachable on a sheet that has none.
+        if (sheet.BackgroundImage is null)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousBackground = sheet.BackgroundImage;
         sheet.BackgroundImage = null;
         _applied = true;

@@ -1144,8 +1144,13 @@ public sealed partial class SlideCanvas : Control
         Bitmap? bitmap = null;
         try
         {
-            using var ms = new MemoryStream(pic.Bytes);
-            bitmap = new Bitmap(ms);
+            // r512: the sibling of r494. That round cached the decode behind picture FILLS; this is
+            // the path for picture SHAPES, which is both the commoner case and the one that was
+            // still decoding a fresh Bitmap on every paint and never disposing it -- the three
+            // Dispose calls further down are on the clip, alpha and transform scopes, not on this.
+            // Same table on purpose: both paths decode the same bytes, so a picture used as a shape
+            // and as a fill now shares one decode rather than holding two.
+            bitmap = DecodePicture(pic.Bytes);
         }
         catch (Exception ex)
         {
@@ -2574,12 +2579,44 @@ public sealed partial class SlideCanvas : Control
             GradientStops  = BuildGradientStops(g)
         };
 
-    private static IBrush MakePictureBrush(ResolvedFill.Picture p)
+    /// <summary>
+    /// r494: decoded picture fills, keyed by the image byte array's IDENTITY.
+    ///
+    /// <para>Every caller of <see cref="MakeBrush"/> is a Render method taking a DrawingContext, so
+    /// this ran once per PAINT. Each paint decoded a fresh <see cref="Bitmap"/> and handed it to an
+    /// ImageBrush, which does not own or dispose it, so a slide holding a picture-filled shape grew
+    /// native memory on every scroll, resize, animation tick and slide-show frame.</para>
+    ///
+    /// <para>Keying on the array instance rather than its contents keeps this honest: there is no
+    /// hashing cost, no staleness question (a different image is a different array), and the entry
+    /// dies with the image data it belongs to, so the table cannot outlive the deck. The bound moves
+    /// from one bitmap per paint to one per distinct image.</para>
+    /// </summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<byte[], Bitmap> DecodedPictureFills = new();
+
+    /// <summary>
+    /// r512: the one decode both picture paths share. Keyed on the byte array's IDENTITY, so a
+    /// different image is a different key and the entry dies with the image data rather than
+    /// outliving the deck. Internal so the caching behaviour can be asserted directly rather than
+    /// inferred from a rendered frame.
+    /// </summary>
+    internal static Bitmap DecodePicture(byte[] imageBytes)
+    {
+        if (DecodedPictureFills.TryGetValue(imageBytes, out var cached))
+            return cached;
+
+        using var stream = new MemoryStream(imageBytes);
+        var decoded = new Bitmap(stream);
+        DecodedPictureFills.AddOrUpdate(imageBytes, decoded);
+        return decoded;
+    }
+
+    internal static IBrush MakePictureBrush(ResolvedFill.Picture p)
     {
         try
         {
-            using var ms = new MemoryStream(p.ImageBytes);
-            var bmp = new Bitmap(ms);
+            var bmp = DecodePicture(p.ImageBytes);
+
             return new ImageBrush(bmp)
             {
                 Stretch  = p.Tile ? Stretch.None  : Stretch.Fill,
@@ -2703,6 +2740,26 @@ public sealed partial class SlideCanvas : Control
 
     // ── Composition helper ───────────────────────────────────────────────────
 
+    /// <summary>
+    /// The index <see cref="SlideCompositor"/> resolves a slidenum field against.
+    /// </summary>
+    /// <remarks>
+    /// r199: derived from the deck, the way the WPF sibling has always done it, rather than trusted
+    /// from <see cref="SlideIndex"/>. Setting <see cref="Slide"/> alone left the index behind, and
+    /// SlideShowWindow assigns Slide at twenty-odd navigation sites and SlideIndex at none -- so
+    /// every slide of a live presentation on this shell numbered itself "1". The property stays for
+    /// callers rendering a slide that is not in the deck (a detached copy, a thumbnail of a draft),
+    /// which is the only case IndexOf cannot answer.
+    /// </remarks>
+    internal int ResolveSlideIndex()
+    {
+        if (_presentation is null || _slide is null)
+            return _slideIndex;
+
+        var index = _presentation.Slides.IndexOf(_slide);
+        return index >= 0 ? index : _slideIndex;
+    }
+
     private void EnsureOps()
     {
         if (_cachedOps is not null) return;
@@ -2729,7 +2786,7 @@ public sealed partial class SlideCanvas : Control
                 : SlideCompositor.Compose(
                     _presentation,
                     _slide,
-                    _slideIndex,
+                    ResolveSlideIndex(),
                     RenderSlideBackground);
         }
         catch (Exception)

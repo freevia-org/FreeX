@@ -5,6 +5,7 @@ using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Xml;
 using System.Xml.Linq;
 using ClosedXML.Excel;
 using ClosedXML.Parser;
@@ -76,11 +77,51 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
     public XlsxLoadResult LoadWithWarnings(Stream stream, bool inspectFeatures)
     {
         var warnings = new List<string>();
+
+        // r450: a worksheet part whose root element is not <worksheet> is loaded as an EMPTY sheet,
+        // with every other sheet intact and nothing said. Found by the same malformed-input probe as
+        // r448 (FreeP) and r449 (FreeW): a workbook of 13 cells came back with 1, silently, and the
+        // next save would have written that loss to disk permanently.
+        //
+        // Unlike its siblings this is reported rather than refused, because one damaged sheet must
+        // not cost the user the eleven that are fine -- and unlike FreeP's reader, this adapter
+        // already owns a warning channel to say so with.
+        var unreadableSheetParts = FindUnreadableWorksheetParts(stream);
+        if (unreadableSheetParts.Count > 0)
+        {
+            warnings.Add(
+                unreadableSheetParts.Count == 1
+                    ? $"A worksheet in this file is damaged and was opened empty ({unreadableSheetParts[0]}). " +
+                      "Saving over the original would discard whatever it still contains."
+                    : $"{unreadableSheetParts.Count} worksheets in this file are damaged and were opened " +
+                      $"empty ({string.Join(", ", unreadableSheetParts)}). Saving over the original would " +
+                      "discard whatever they still contain.");
+        }
+
         Workbook workbook;
         XlsxFeatureReport? featureReport;
         lock (ClosedXmlGate)
         {
-            workbook = LoadCore(stream, warnings, inspectFeatures, out featureReport);
+            try
+            {
+                workbook = LoadCore(stream, warnings, inspectFeatures, out featureReport);
+            }
+            catch (Exception ex) when (IsDamagedPackageFailure(ex))
+            {
+                // r382: a package missing a required part surfaced the packaging layer's own words --
+                // "Specified part does not exist in the package", or a bare NullReferenceException
+                // when [Content_Types].xml is gone. The shell shows exception.Message verbatim
+                // (MainWindow.ReportAsyncCommandFailure), so that text is what the user reads, while
+                // this adapter already owns an accurate sentence for exactly this situation and used
+                // it only for the not-a-zip case. Package corruption already surfaces as
+                // WorkbookInvalidException elsewhere -- see the duplicate-zip-entry contract test --
+                // so this aligns the missing-part case with a contract that exists rather than
+                // inventing one. The original is kept as InnerException; nothing is swallowed.
+                throw new WorkbookInvalidException(
+                    "The workbook could not be read because the file is not a valid .xlsx package " +
+                    "(it may be corrupted, truncated, or missing required parts).",
+                    ex);
+            }
         }
 
         return new XlsxLoadResult(workbook, warnings.AsReadOnly(), featureReport);
@@ -88,6 +129,135 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
 
     /// <inheritdoc/>
     public Workbook Load(Stream stream) => LoadWithWarnings(stream).Workbook;
+
+    /// <summary>
+    /// r450: worksheet parts whose root element is not <c>worksheet</c>, which ClosedXML loads as an
+    /// empty sheet without complaint.
+    /// </summary>
+    /// <remarks>
+    /// Only the ROOT element is read, via <see cref="XmlReader"/>, so this costs a few bytes per
+    /// sheet rather than parsing every worksheet twice -- these files reach hundreds of megabytes and
+    /// the load path has been tuned for exactly that (see the patch-save work in the IO notes).
+    ///
+    /// A non-seekable stream is skipped rather than buffered: the check is a courtesy warning, and
+    /// copying an arbitrarily large workbook into memory to produce one would cost more than it is
+    /// worth. Everything here is best-effort -- any failure to inspect leaves the load exactly as it
+    /// was before, because a diagnostic must never be the thing that stops a file opening.
+    /// </remarks>
+    private static IReadOnlyList<string> FindUnreadableWorksheetParts(Stream stream)
+    {
+        if (!stream.CanSeek)
+            return [];
+
+        var originalPosition = stream.Position;
+        var damaged = new List<string>();
+
+        try
+        {
+            stream.Position = 0;
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+
+            foreach (var entry in archive.Entries
+                         .Where(candidate =>
+                             candidate.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                             candidate.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+                         .OrderBy(candidate => candidate.FullName, StringComparer.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    using var entryStream = entry.Open();
+                    // The package layer's shared settings, not hand-rolled ones: they carry the
+                    // character cap as well as the DTD and resolver protections, and R276's contract
+                    // test enforces exactly that -- it caught this scan writing its own pair.
+                    var settings = Free.Shared.Opc.SecureXmlReaderSettings.Create();
+                    settings.CloseInput = false;
+                    using var reader = XmlReader.Create(entryStream, settings);
+
+                    if (reader.MoveToContent() != XmlNodeType.Element ||
+                        !string.Equals(reader.LocalName, "worksheet", StringComparison.Ordinal))
+                    {
+                        damaged.Add(entry.FullName);
+                    }
+                }
+                catch
+                {
+                    // Malformed XML in a sheet part is a different failure, already surfaced by the
+                    // load itself as an XmlException; this scan only reports the case that loads
+                    // SILENTLY, so it must not claim the noisy ones too.
+                }
+            }
+        }
+        catch
+        {
+            return [];
+        }
+        finally
+        {
+            stream.Position = originalPosition;
+        }
+
+        return damaged;
+    }
+
+    /// <summary>
+    /// r382: recognises a package that is missing a part the reader needs. Deliberately narrow --
+    /// the packaging layer's own sentence, and the NullReferenceException that a missing
+    /// [Content_Types].xml produces inside the OOXML reader. Anything else keeps its own type and
+    /// message, including WorkbookPasswordProtectedException and cancellation, so this cannot
+    /// flatten an informative failure into a generic one.
+    /// </summary>
+    /// <summary>
+    /// r596: renamed from IsMissingPackagePartFailure, because it no longer covers only a MISSING
+    /// part. Truncating a part -- the interrupted-download and zip-repair damage shape, distinct
+    /// from deleting one -- leaves well-formed zip entries holding malformed XML, and every reader
+    /// in the package layer then throws a raw XmlException whose Message the shell shows verbatim.
+    /// The user read "Unexpected end of file has occurred. The following elements are not closed"
+    /// for a file this adapter already owns an accurate sentence about.
+    /// <para>
+    /// An XmlException on the LOAD path can only mean the file being opened is malformed: nothing
+    /// here parses FreeX's own output. So the type alone is sufficient evidence, unlike the
+    /// ArgumentOutOfRange/KeyNotFound shapes r592 added, which are ambiguous enough to need a
+    /// stack-frame test as well.
+    /// </para>
+    /// </summary>
+    private static bool IsDamagedPackageFailure(Exception exception) =>
+        exception is not WorkbookInvalidException and not OperationCanceledException &&
+        (
+            (exception is InvalidOperationException && exception.Message.Contains(
+                "does not exist in the package", StringComparison.OrdinalIgnoreCase)) ||
+            (exception is NullReferenceException &&
+             (exception.StackTrace?.Contains("DocumentFormat.OpenXml", StringComparison.Ordinal) == true ||
+              exception.StackTrace?.Contains("ClosedXML", StringComparison.Ordinal) == true)) ||
+            // r592: two more shapes the same damage takes, found by deleting each package part in turn
+            // and reloading. A missing xl/_rels/workbook.xml.rels makes DocumentFormat.OpenXml's
+            // OpenXmlPartContainer.GetPartById throw ArgumentOutOfRangeException, and a missing
+            // worksheet .rels reaches a bare Dictionary indexer and throws KeyNotFoundException.
+            // Neither is a NullReferenceException and neither carries r382's message, so both escaped
+            // the predicate and reached the shell as a raw framework exception -- and the shell shows
+            // exception.Message verbatim, so the user read "Index was out of range" for a damaged
+            // file. Same damage, same sentence: the type test is kept narrow, and the stack-frame
+            // test keeps it to failures that actually came from the packaging layer.
+            exception is System.Xml.XmlException ||
+            // r600: DocumentFormat.OpenXml's OpenXmlPart.LoadDomTree throws InvalidDataException
+            // ("Cannot load the root element from the part. The part contains invalid data.") when a
+            // part is well-formed XML of the WRONG SCHEMA -- the shape a buggy third-party writer or
+            // a bad merge produces, which neither attribute mutation, part deletion nor truncation
+            // reaches. That sentence is library text and the shell shows it verbatim.
+            //
+            // The test here is deliberately STRONGER than the stack-frame test r592 used for its two
+            // ambiguous types: FreeX.Core.IO itself throws InvalidDataException in eighteen places,
+            // each with its own actionable sentence, and several of them run inside a ClosedXML call
+            // chain -- so a StackTrace.Contains test would swallow FreeX's own errors and replace
+            // good messages with the generic one. TargetSite names where the exception was THROWN
+            // rather than merely what is on the stack, which is exactly the distinction needed.
+            (exception is InvalidDataException &&
+             exception.TargetSite?.DeclaringType?.Namespace?.StartsWith(
+                 "DocumentFormat.OpenXml", StringComparison.Ordinal) == true) ||
+            ((exception is ArgumentOutOfRangeException or KeyNotFoundException) &&
+             (exception.StackTrace?.Contains("DocumentFormat.OpenXml", StringComparison.Ordinal) == true ||
+              exception.StackTrace?.Contains("ClosedXML", StringComparison.Ordinal) == true ||
+              exception.StackTrace?.Contains("FreeX.Core.IO", StringComparison.Ordinal) == true))
+        );
 
     private Workbook LoadCore(
         Stream stream,
@@ -2232,6 +2402,27 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
                     styleOnlyWorksheetPathsToStrip,
                     sanitizationHints,
                     removeUnsupportedConditionalFormatting: false);
+                // r368: strip on a stream we know we may write to. The sanitizer returns the CALLER'S
+                // package stream unchanged when nothing needed sanitizing, and that stream may be
+                // read-only or already closed by an earlier open attempt -- a closed MemoryStream
+                // reports CanWrite false -- at which point opening it in ZipArchiveMode.Update threw
+                // ArgumentException("Update mode requires a stream with read, write, and seek
+                // capabilities") straight out of the load. This is the LAST-CHANCE path for a
+                // workbook whose orphaned shared formulas already stopped it opening, so the throw
+                // replaced a recoverable file with an unopenable one. Copying also stops the strip
+                // mutating a stream the caller still owns. ToArray is deliberate: it is documented to
+                // work on a disposed MemoryStream, which is precisely the case being recovered from.
+                // The copy must be EXPANDABLE: new MemoryStream(byte[]) wraps the array at fixed
+                // capacity, so the strip's rewrite throws NotSupportedException instead -- trading one
+                // unopenable file for another.
+                if (!basePackageStream.CanWrite || !basePackageStream.CanSeek || !basePackageStream.CanRead)
+                {
+                    var writablePackageStream = new MemoryStream();
+                    writablePackageStream.Write(basePackageStream.ToArray());
+                    writablePackageStream.Position = 0;
+                    basePackageStream = writablePackageStream;
+                }
+
                 StripOrphanedSharedFormulaSlaves(basePackageStream);
                 return basePackageStream;
             });

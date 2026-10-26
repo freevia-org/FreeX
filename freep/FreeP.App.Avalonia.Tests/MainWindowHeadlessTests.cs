@@ -8710,8 +8710,15 @@ public sealed class MainWindowHeadlessTests : IDisposable
         options.TitleOverlay.Should().BeTrue();
         options.ChartExTitlePosition.Should().Be(ChartExTitlePosition.Right);
         options.ChartExTitleAlignment.Should().Be(ChartExTitleAlignment.Far);
-        options.PlotVisibleOnly.Should().BeFalse();
-        options.RoundedCorners.Should().BeTrue();
+        // r394: this chart is flagged IsChartEx, and r379 made the classic chart-area capability
+        // enforced on commit rather than only by greying the control -- a chartEx chart has nowhere
+        // to store these, and a disabled field still round-trips a value through the dialog input.
+        // The WPF twin (ChartDataDialogTests) carries the same correction plus the classic-chart
+        // case proving the gate is not swallowing the options everywhere.
+        options.PlotVisibleOnly.Should().BeNull(
+            "a chartEx chart cannot store the classic 'plot visible cells only' option");
+        options.RoundedCorners.Should().BeNull(
+            "a chartEx chart cannot store classic rounded corners");
         options.Legend.Should().Be(LegendPosition.Bottom);
         options.LabelTextStyle.Should().NotBeNull();
         options.LabelTextStyle!.FontFamily.Should().Be("Aptos");

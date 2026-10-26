@@ -475,9 +475,31 @@ public static class PortableXpsWriter
 
     private static double FlipY(double y, double pageHeight) => pageHeight - y;
 
-    private static string F(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+    private static string F(double value) => Finite(value).ToString("0.###", CultureInfo.InvariantCulture);
 
     // Viewbox values are fractions of the image bounding box, so three decimals would quantise the
     // crop to whole percent of the source -- visibly wrong on a large bitmap.
-    private static string FFraction(double value) => value.ToString("0.######", CultureInfo.InvariantCulture);
+    private static string FFraction(double value) => Finite(value).ToString("0.######", CultureInfo.InvariantCulture);
+
+    // r469: NaN and Infinity used to be formatted straight into the markup, giving a FixedPage with
+    // Width="NaN" and paths reading `M NaN,NaN L ...`. Neither is a number in the abbreviated
+    // geometry syntax, so the package is a well-formed OPC container holding an unparseable page.
+    //
+    // This deliberately throws InvalidOperationException and NOT XpsUnsupportedContentException,
+    // even though the writer's other refusals use that type. FreeWAvaloniaXpsExport catches
+    // XpsUnsupportedContentException and retries by rasterising the SAME document through Skia,
+    // which was measured to accept a non-finite rectangle and return a page -- so raising the
+    // writer's own type would convert a broken coordinate into a silently blank page. The fallback
+    // exists for content XPS cannot REPRESENT, not for input that is not a number.
+    private static double Finite(double value)
+    {
+        if (!double.IsFinite(value))
+        {
+            throw new InvalidOperationException(
+                $"XPS export received a non-finite coordinate ({value}). Writing it would produce a " +
+                "package that looks valid but cannot be opened, so the export is refused.");
+        }
+
+        return value;
+    }
 }

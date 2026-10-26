@@ -31,10 +31,10 @@ internal static class RibbonWpfPopupAdapter
         contextMenu.MinWidth = chrome.MinWidth;
         contextMenu.MaxWidth = chrome.MaxWidth;
         contextMenu.Padding = ToThickness(chrome.PopupPadding);
-        contextMenu.Background = FindBrush(resourceHost, "ThemeRibbonSurfaceBrush", "FreeXRibbonSurfaceBrush", Brushes.White);
-        contextMenu.BorderBrush = FindBrush(resourceHost, "ThemeRibbonBorderBrush", "FreeXBorderBrush", Brushes.Gray);
+        contextMenu.Background = FindBrush(resourceHost, "ThemeRibbonSurfaceBrush", "RibbonSurface", Brushes.White);
+        contextMenu.BorderBrush = FindBrush(resourceHost, "ThemeRibbonBorderBrush", "Border", Brushes.Gray);
         contextMenu.BorderThickness = new Thickness(chrome.BorderThickness);
-        contextMenu.Foreground = FindBrush(resourceHost, "ThemeNeutralTextBrush", "FreeXTextBrush", Brushes.Black);
+        contextMenu.Foreground = FindBrush(resourceHost, "ThemeNeutralTextBrush", "Text", Brushes.Black);
         contextMenu.Effect = new DropShadowEffect
         {
             Color = Colors.Black,
@@ -372,11 +372,10 @@ internal static class RibbonWpfPopupAdapter
     private static Brush FindBrush(
         FrameworkElement resourceHost,
         string primaryKey,
-        string fallbackKey,
+        string role,
         Brush fallback) =>
         resourceHost.TryFindResource(primaryKey) as Brush ??
-        resourceHost.TryFindResource(fallbackKey) as Brush ??
-        fallback;
+        RibbonThemeBrushes.Resolve(resourceHost, role, fallback);
 
     private const uint MonitorDefaultToNearest = 2;
 

@@ -145,12 +145,13 @@ internal static class XlsxHeaderFooterPicturePackagePlanner
             else if (raw.EndsWith("pt", StringComparison.OrdinalIgnoreCase))
             {
                 raw = raw[..^2];
-                return double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var points)
+                // r549: a non-finite header/footer picture dimension is treated as absent.
+                return double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var points) && double.IsFinite(points)
                     ? points * (96.0 / 72.0)
                     : null;
             }
 
-            return double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var pixels)
+            return double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var pixels) && double.IsFinite(pixels)
                 ? pixels
                 : null;
         }

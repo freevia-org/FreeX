@@ -82,10 +82,75 @@ foreach ($gate in @($manifest.gates)) {
     if ($partitionCount -lt 1 -or $partitionCount -gt 64) {
         $errors.Add("Gate '$($gate.id)' must declare between 1 and 64 partitions.")
     }
-    if ($partitionCount -gt 1 -and $partitionProjects.Count -eq 0) {
-        $errors.Add("Gate '$($gate.id)' must name partitionProjects when it declares multiple partitions.")
+
+    # "costHintMinutes" orders the generated CI matrix longest-job-first so that only short jobs
+    # absorb the queueing delay once the runner pool saturates. A commit gate that omits it would
+    # silently sort last, so require it rather than defaulting it.
+    if ([string]$gate.gate -eq "commit") {
+        if ($gate.PSObject.Properties.Name -notcontains "costHintMinutes") {
+            $errors.Add("Gate '$($gate.id)' is a commit gate and must declare costHintMinutes (approximate minutes for one job of the gate as partitioned).")
+        }
+        else {
+            $costHint = $gate.costHintMinutes
+            $isPositiveNumber = ($costHint -is [int] -or $costHint -is [long] -or $costHint -is [double]) -and
+                [double]$costHint -gt 0 -and [double]$costHint -le 120
+            if (-not $isPositiveNumber) {
+                $errors.Add("Gate '$($gate.id)' has an invalid costHintMinutes; it must be a number greater than 0 and at most 120.")
+            }
+        }
     }
-    if ($partitionCount -eq 1 -and $partitionProjects.Count -gt 0) {
+
+    # "platformPartitions" is an optional sibling of "partitions" that overrides the partition
+    # count for individual platforms (e.g. running fewer jobs on scarce macOS capacity). It must
+    # only reference platforms the gate actually targets, and every value must be a positive
+    # integer within the same bound as "partitions".
+    $platformPartitionCounts = @{}
+    if ($gate.PSObject.Properties.Name -contains "platformPartitions") {
+        foreach ($platformPartitionProperty in @($gate.platformPartitions.PSObject.Properties)) {
+            $platform = [string]$platformPartitionProperty.Name
+            if ($allowedPlatforms -notcontains $platform -or @($gate.platforms) -notcontains $platform) {
+                $errors.Add("Gate '$($gate.id)' has platformPartitions for unsupported or untargeted platform '$platform'.")
+                continue
+            }
+            $value = $platformPartitionProperty.Value
+            $isPositiveInteger = ($value -is [int] -or $value -is [long] -or $value -is [double]) -and
+                [double]$value -eq [Math]::Floor([double]$value) -and [double]$value -ge 1
+            if (-not $isPositiveInteger -or [int]$value -gt 64) {
+                $errors.Add("Gate '$($gate.id)' has an invalid platformPartitions value for '$platform'; it must be a positive integer between 1 and 64.")
+                continue
+            }
+            $platformPartitionCounts[$platform] = [int]$value
+        }
+    }
+
+    # A gate with multiple partitions and no partitionProjects uses whole-project partitioning
+    # (tools/Invoke-TestGate.ps1 assigns each of the gate's test projects to exactly one
+    # partition via weighted bin packing) rather than class-level filtering of one named
+    # project. That strategy needs at least one project per partition on every targeted
+    # platform, or a partition would run nothing.
+    if ($partitionProjects.Count -eq 0) {
+        foreach ($platform in @($gate.platforms)) {
+            $effectivePartitionCount = if ($platformPartitionCounts.ContainsKey($platform)) {
+                $platformPartitionCounts[$platform]
+            }
+            else {
+                $partitionCount
+            }
+            if ($effectivePartitionCount -le 1) {
+                continue
+            }
+            $platformSpecificProjects = @(if (
+                $gate.PSObject.Properties.Name -contains "platformProjects" -and
+                $gate.platformProjects.PSObject.Properties.Name -contains $platform) {
+                @($gate.platformProjects.$platform)
+            })
+            $totalForPlatform = @($gate.projects).Count + $platformSpecificProjects.Count
+            if ($totalForPlatform -lt $effectivePartitionCount) {
+                $errors.Add("Gate '$($gate.id)' declares $effectivePartitionCount partitions for platform '$platform' but has only $totalForPlatform project(s); name partitionProjects to split within a project instead, or reduce the partition count.")
+            }
+        }
+    }
+    if ($partitionCount -eq 1 -and $platformPartitionCounts.Count -eq 0 -and $partitionProjects.Count -gt 0) {
         $errors.Add("Gate '$($gate.id)' names partitionProjects without declaring multiple partitions.")
     }
     if ($gate.PSObject.Properties.Name -contains "preflightModes") {

@@ -76,14 +76,8 @@ public sealed class R91_ToolbarVisualStateActiveCellTests
         return (window, workbook, sheet);
     }
 
-    private static void PumpDispatcher()
-    {
-        var frame = new System.Windows.Threading.DispatcherFrame();
-        System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
-            System.Windows.Threading.DispatcherPriority.Background,
-            new Action(() => frame.Continue = false));
-        System.Windows.Threading.Dispatcher.PushFrame(frame);
-    }
+    // r446: delegates to the one fixed implementation -- see DispatcherTestPump.
+    private static void PumpDispatcher() => DispatcherTestPump.PumpDispatcher();
 
     /// <summary>Sets up a backward-extended selection (anchor at C3, extended to A1) and drives
     /// the real private RefreshToolbarVisualState via reflection.</summary>
@@ -110,6 +104,14 @@ public sealed class R91_ToolbarVisualStateActiveCellTests
         field.Should().NotBeNull();
         var store = (IRibbonStateStore)field!.GetValue(window)!;
         return store.GetState(commandId).IsChecked;
+    }
+
+    private static string? GetRibbonValue(MainWindow window, string commandId)
+    {
+        var field = typeof(MainWindow).GetField("_ribbonState", BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        var store = (IRibbonStateStore)field!.GetValue(window)!;
+        return store.GetState(commandId).Value;
     }
 
     [Fact]
@@ -167,6 +169,33 @@ public sealed class R91_ToolbarVisualStateActiveCellTests
 
             GetRibbonChecked(window, "Bold").Should().BeTrue(
                 "the active cell A1 is bold and coincides with SelectedRange.Start here");
+        }
+        finally
+        {
+            MainWindowTestCleanup.CloseWithoutSavePrompt(window);
+            PumpDispatcher();
+        }
+    });
+
+    [Fact]
+    public void ActiveCell_PercentageStylePublishesPercentageHomeSelectorValue() =>
+        StaTestRunner.Run(() =>
+    {
+        var (window, workbook, sheet) = CreateAdoptedWindow();
+        try
+        {
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            var percentageStyleId = workbook.RegisterStyle(new CellStyle { NumberFormat = "0%" });
+            sheet.SetCell(a1, new Cell { Value = new NumberValue(0.25), StyleId = percentageStyleId });
+
+            SelectBackwardExtendedRangeAndRefreshToolbar(window, anchor: a1, extendTo: a1);
+
+            GetRibbonValue(window, "Number Format").Should().Be("0%",
+                "Excel built-in numFmtId 9 is the Percentage gallery value");
+            var selector = window.FindName("NumberFormatBox") as System.Windows.Controls.ComboBox;
+            selector.Should().NotBeNull("the rendered Home Number Format selector is repointed by command id");
+            selector!.Text.Should().Be("Percentage",
+                "the gallery maps active-cell numFmtId 9's 0% value to its Percentage label");
         }
         finally
         {

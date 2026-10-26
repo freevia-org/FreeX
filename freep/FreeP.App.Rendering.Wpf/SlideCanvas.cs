@@ -1090,6 +1090,36 @@ public sealed partial class SlideCanvas : FrameworkElement
 
     // ── Picture ────────────────────────────────────────────────────────────────
 
+
+    /// <summary>
+    /// r513: the WPF sibling of r512's decode seam. Keyed on the image array's IDENTITY, so a
+    /// different picture is a different key and the entry dies with the image data.
+    ///
+    /// <para>The severity differs from the Avalonia side and the difference is worth stating. There,
+    /// an undisposed Bitmap held native memory and the leak grew with every paint. Here BitmapImage
+    /// is GC-managed and the code already FREEZES it, so nothing leaks and nothing is thread-bound
+    /// (r495's rule) -- what repeated is the decode itself, once per render pass. Caching removes
+    /// the work rather than a leak, and it is safe precisely BECAUSE the image is frozen: a frozen
+    /// Freezable is shareable, so one instance can serve every caller.</para>
+    /// </summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<byte[], BitmapSource> DecodedPictures = new();
+
+    internal static BitmapSource DecodePicture(byte[] imageBytes)
+    {
+        if (DecodedPictures.TryGetValue(imageBytes, out var cached))
+            return cached;
+
+        using var stream = new System.IO.MemoryStream(imageBytes);
+        var image = new BitmapImage();
+        image.BeginInit();
+        image.StreamSource = stream;
+        image.CacheOption = BitmapCacheOption.OnLoad;
+        image.EndInit();
+        if (image.CanFreeze) image.Freeze();
+
+        DecodedPictures.AddOrUpdate(imageBytes, image);
+        return image;
+    }
     private static void RenderPicture(DrawingContext dc, DrawOp.Picture pic)
     {
         if (pic.Bytes.Length == 0) return;
@@ -1097,14 +1127,7 @@ public sealed partial class SlideCanvas : FrameworkElement
         BitmapSource? bitmap = null;
         try
         {
-            using var ms = new System.IO.MemoryStream(pic.Bytes);
-            var img = new BitmapImage();
-            img.BeginInit();
-            img.StreamSource = ms;
-            img.CacheOption = BitmapCacheOption.OnLoad;
-            img.EndInit();
-            if (img.CanFreeze) img.Freeze();
-            bitmap = img;
+            bitmap = DecodePicture(pic.Bytes);
         }
         catch (Exception ex)
         {
@@ -1789,13 +1812,9 @@ public sealed partial class SlideCanvas : FrameworkElement
         {
             try
             {
-                using var ms = new System.IO.MemoryStream(image.Bytes);
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.StreamSource = ms;
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.EndInit();
-                if (bitmap.CanFreeze) bitmap.Freeze();
+                // r513: picture bullets decode once per bullet per render pass, so this repeated
+                // even more often than the shape path did. Same seam.
+                var bitmap = DecodePicture(image.Bytes);
 
                 double size = Math.Max(1.0, bullet.FontSizePt * (96.0 / 72.0));
                 dc.DrawImage(bitmap, new Rect(bullet.X, bullet.Y, size, size));

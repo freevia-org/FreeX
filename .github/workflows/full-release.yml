@@ -35,6 +35,20 @@ on:
         required: true
         default: true
         type: boolean
+      macos_unsigned:
+        description: >-
+          Build UNSIGNED macOS packages when no Developer ID secrets are configured. Gatekeeper
+          refuses to open unsigned bundles by double-click, and the release notes say so.
+        required: false
+        default: false
+        type: boolean
+      dry_run:
+        description: >-
+          Build and validate every package but publish nothing. The weekly packaging rehearsal uses
+          this so the packaging path cannot rot unnoticed between releases.
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -49,6 +63,12 @@ concurrency:
 env:
   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
   DOTNET_NOLOGO: "1"
+  # This workflow runs the same per-project test gates as ci.yml through Invoke-TestGate.ps1, so it
+  # needs the same mitigation. Without it the generated-docs preflight -- which shells out and
+  # builds the documentation generators -- hung to its timeout on the FIRST attempt of every
+  # release and only passed on the gate retry: 15.8, 14.6 and 29.6 minutes for that one job across
+  # three consecutive releases, against 8.0 minutes in release-readiness.yml, which sets this.
+  MSBUILDDISABLENODEREUSE: "1"
 
 jobs:
   prepare:
@@ -74,22 +94,29 @@ jobs:
           $platformInput = "${{ inputs.platform }}"
           $apps = if ($appInput -eq "all") { @("FreeX", "FreeW", "FreeP") } else { @($appInput) }
           $platforms = if ($platformInput -eq "all") { @("windows", "linux", "macos") } else { @($platformInput) }
+          # costHintMinutes is the longest observed run of that lane across releases 34211267805 and
+          # 34218491134. It only decides DISPATCH ORDER, never behaviour: GitHub starts matrix jobs
+          # roughly in the order given, and the runner pools are small (macOS peaked at 4 concurrent
+          # in the last release, for ten macOS jobs). Listing the lanes app-major, as they were,
+          # dispatched the single longest macOS job -- FreeP osx-x64 at 8.5 minutes -- LAST, so it
+          # queued 12.5 minutes, finished at 21.9, and every suite job waits on the slowest package.
+          # Longest-first is the same rule Get-TestGateMatrix.ps1 already applies to the test matrix.
           $lanes = @(
-            @{ app = "FreeX"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest" },
-            @{ app = "FreeX"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest" },
-            @{ app = "FreeX"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm" },
-            @{ app = "FreeX"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel" },
-            @{ app = "FreeX"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15" },
-            @{ app = "FreeW"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest" },
-            @{ app = "FreeW"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest" },
-            @{ app = "FreeW"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm" },
-            @{ app = "FreeW"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel" },
-            @{ app = "FreeW"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15" },
-            @{ app = "FreeP"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest" },
-            @{ app = "FreeP"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest" },
-            @{ app = "FreeP"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm" },
-            @{ app = "FreeP"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel" },
-            @{ app = "FreeP"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15" }
+            @{ app = "FreeX"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest"; costHintMinutes = 19 },
+            @{ app = "FreeP"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest"; costHintMinutes = 10 },
+            @{ app = "FreeW"; platform = "windows"; runtime = "win-x64"; runner = "windows-latest"; costHintMinutes = 9 },
+            @{ app = "FreeP"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel"; costHintMinutes = 9 },
+            @{ app = "FreeX"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel"; costHintMinutes = 7 },
+            @{ app = "FreeW"; platform = "macos"; runtime = "osx-x64"; runner = "macos-15-intel"; costHintMinutes = 6 },
+            @{ app = "FreeX"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15"; costHintMinutes = 4 },
+            @{ app = "FreeX"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest"; costHintMinutes = 3 },
+            @{ app = "FreeW"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15"; costHintMinutes = 3 },
+            @{ app = "FreeX"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm"; costHintMinutes = 3 },
+            @{ app = "FreeP"; platform = "macos"; runtime = "osx-arm64"; runner = "macos-15"; costHintMinutes = 3 },
+            @{ app = "FreeP"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest"; costHintMinutes = 3 },
+            @{ app = "FreeW"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm"; costHintMinutes = 3 },
+            @{ app = "FreeW"; platform = "linux"; runtime = "linux-x64"; runner = "ubuntu-latest"; costHintMinutes = 3 },
+            @{ app = "FreeP"; platform = "linux"; runtime = "linux-arm64"; runner = "ubuntu-24.04-arm"; costHintMinutes = 2 }
           )
           $selectedLanes = @($lanes | Where-Object { $_.app -in $apps -and $_.platform -in $platforms })
           if ($selectedLanes.Count -eq 0) { throw "No release lanes were selected." }
@@ -103,7 +130,12 @@ jobs:
               }
           )
 
-          $packageMatrix = @{ include = $selectedLanes } | ConvertTo-Json -Compress
+          # The hint has done its job once the order is fixed; it must not reach the matrix, where
+          # every key becomes a job variable.
+          $orderedLanes = @($selectedLanes | ForEach-Object {
+            @{ app = $_.app; platform = $_.platform; runtime = $_.runtime; runner = $_.runner }
+          })
+          $packageMatrix = @{ include = $orderedLanes } | ConvertTo-Json -Compress
           $suiteMatrix = @{ include = $suiteLanes } | ConvertTo-Json -Compress
           $publishMatrix = @{ app = $apps } | ConvertTo-Json -Compress
           "package_matrix=$packageMatrix" >> $env:GITHUB_OUTPUT
@@ -115,9 +147,33 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -File tools/Get-TestGateMatrix.ps1 -Gate release -GitHubOutputPath $env:GITHUB_OUTPUT
 
+  publish-permission:
+    # Deliberately first and deliberately cheap. Every other job in this workflow runs happily
+    # without write access, so without this the run learns it cannot publish only after packaging
+    # everything -- which is how 0.8.187 burned forty minutes and twelve approvals before failing
+    # four times on POST /releases with "Resource not accessible by integration".
+    name: Verify this run can publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # Must match the publish jobs: a job's permissions can only reduce what the repository grants,
+      # so asking for write HERE is what makes the probe representative of what publish will get.
+      contents: write
+    steps:
+      - name: Checkout release contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Create and delete a draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: pwsh -NoProfile -File tools/Test-GitHubReleasePublishPermission.ps1 -Repository "${{ github.repository }}"
+
   candidate:
     name: Verify immutable release candidate
-    needs: prepare
+    needs: [prepare, publish-permission]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -133,10 +189,73 @@ jobs:
       - name: Validate latest release source
         shell: pwsh
         run: |
-          if ($env:GITHUB_REF -ne "refs/heads/main") {
-            throw "Full app releases must be dispatched from refs/heads/main."
+          $version = "${{ inputs.release_version }}".Trim()
+          $apps = if ("${{ inputs.app }}" -eq "all") { @("FreeX", "FreeW", "FreeP") } else { @("${{ inputs.app }}") }
+          $allowedTagRefs = @($apps | ForEach-Object { "refs/tags/$($_.ToLowerInvariant())-v$version" })
+          if ("${{ inputs.app }}" -eq "all") { $allowedTagRefs += "refs/tags/free-suite-v$version" }
+
+          $isMainRelease = $env:GITHUB_REF -eq "refs/heads/main"
+          $isTaggedContinuation = $allowedTagRefs -ccontains $env:GITHUB_REF
+          if (-not ($isMainRelease -or $isTaggedContinuation)) {
+            throw "Full app releases must start from refs/heads/main or continue from an immutable tag for the requested version."
           }
-          Write-Host "Pinned immutable release candidate $env:GITHUB_SHA. Later main commits do not invalidate this run."
+          Write-Host "Pinned immutable release candidate $env:GITHUB_SHA from $env:GITHUB_REF. Later main commits do not invalidate this run."
+
+      # Fail in seconds on a missing prerequisite rather than ~30 minutes in. Releasing 0.8.187 ran
+      # the entire release test matrix and every package build before the macOS lanes died on an
+      # absent MACOS_CODESIGN_CERTIFICATE_P12 -- and that had silently cost every earlier macOS
+      # release too, which is why 0.8.186 shipped with no macOS assets at all.
+      - name: Verify signing prerequisites for the requested platforms
+        shell: pwsh
+        env:
+          MACOS_CODESIGN_CERTIFICATE_P12: ${{ secrets.MACOS_CODESIGN_CERTIFICATE_P12 }}
+          MACOS_CODESIGN_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CODESIGN_CERTIFICATE_PASSWORD }}
+          MACOS_DEVELOPER_ID_APPLICATION: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION }}
+          MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+          MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+        run: |
+          $platform = "${{ inputs.platform }}"
+          if ($platform -ne "all" -and $platform -ne "macos") {
+            Write-Host "macOS lanes are not part of this release; skipping the Developer ID check."
+            return
+          }
+
+          $required = @(
+            "MACOS_CODESIGN_CERTIFICATE_P12",
+            "MACOS_CODESIGN_CERTIFICATE_PASSWORD",
+            "MACOS_DEVELOPER_ID_APPLICATION",
+            "MACOS_NOTARY_APPLE_ID",
+            "MACOS_NOTARY_TEAM_ID",
+            "MACOS_NOTARY_PASSWORD"
+          )
+          $missing = @($required | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) })
+          $unsigned = "${{ inputs.macos_unsigned }}" -eq "true"
+
+          if ($missing.Count -eq 0) {
+            Write-Host "All six Developer ID secrets are present; macOS packages will be signed and notarized."
+            if ($unsigned) {
+              throw ("macos_unsigned was requested but every Developer ID secret is configured. Refusing " +
+                "to publish deliberately unsigned macOS artifacts when they could be signed; re-run " +
+                "with macos_unsigned disabled.")
+            }
+            return
+          }
+
+          if (-not $unsigned) {
+            throw ("macOS packaging cannot be signed: $($missing.Count) of $($required.Count) Developer ID " +
+              "secret(s) are not configured ($($missing -join ', ')). Add them to the repository secrets, " +
+              "or re-run with macos_unsigned enabled to publish unsigned macOS builds that Gatekeeper " +
+              "will refuse to open by double-click.")
+          }
+
+          if ($missing.Count -ne $required.Count) {
+            throw ("Refusing to build unsigned macOS packages from a partial signing configuration. " +
+              "Missing: $($missing -join ', '). Supply all six Developer ID secrets, or none of them.")
+          }
+
+          Write-Warning ("No Developer ID secrets are configured and macos_unsigned was requested, so this " +
+            "release will publish UNSIGNED macOS packages.")
 
       - name: Validate version and reject conflicting immutable tags
         shell: pwsh
@@ -159,12 +278,22 @@ jobs:
             }
           }
 
-      - name: Require successful exact-SHA CI and CodeQL attestations
+      # Requiring CI and CodeQL attestations on the EXACT dispatch head is unsatisfiable here: main
+      # takes ~a commit a minute from parallel sessions and codeql.yml (cancel-in-progress, ~10min)
+      # is usually cancelled by the next push, so the head a release dispatches from is almost never
+      # attested. Three consecutive release attempts were rejected for that reason alone.
+      #
+      # Resolve-GitHubReleaseCandidate.ps1 keeps the attestation itself unchanged -- it still calls
+      # tools/Test-GitHubReleaseCandidate.ps1, which demands a completed successful run of every
+      # required workflow -- but applies it to the newest ANCESTOR of the head that qualifies, and
+      # reports how many commits ship without a green run of their own.
+      - name: Require successful CI and CodeQL attestations
+        id: attestation
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          pwsh -NoProfile -File tools/Test-GitHubReleaseCandidate.ps1 `
+          pwsh -NoProfile -File tools/Resolve-GitHubReleaseCandidate.ps1 `
             -Repository $env:GITHUB_REPOSITORY `
             -CommitSha $env:GITHUB_SHA
 
@@ -193,6 +322,27 @@ jobs:
           key: nuget-v2-${{ runner.os }}-${{ hashFiles('global.json', 'Directory.Packages.props', 'Directory.Build.props', 'Directory.Build.targets') }}
           restore-keys: nuget-v2-${{ runner.os }}-
 
+      # ci.yml and release-readiness.yml both cache obj across runs; this workflow never did, so every
+      # release test job rebuilt the world from scratch. Caching is confined to the TEST lane on
+      # purpose: the package jobs produce the artifacts we ship, and those keep building clean.
+      #
+      # Its own key namespace, because these are different gate ids building different project sets;
+      # sharing ci.yml's keys would make each lane evict the other's entries.
+      - name: Restore build output cache
+        id: buildcache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            **/obj
+            obj-build-cache-commit.txt
+          key: release-v1-${{ runner.os }}-${{ matrix.displayGateId }}-${{ github.sha }}
+          restore-keys: release-v1-${{ runner.os }}-${{ matrix.displayGateId }}-
+      - name: Make build-cache timestamps honest
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/Set-BuildCacheTimestamps.ps1
+      - name: Record the commit this cache will hold
+        shell: pwsh
+        run: '"${{ github.sha }}" | Set-Content -LiteralPath obj-build-cache-commit.txt -Encoding ascii'
       - name: Run isolated release test gate
         shell: pwsh
         run: |
@@ -203,8 +353,19 @@ jobs:
             -GateId "${{ matrix.gateId }}" `
             -PartitionIndex ${{ matrix.partitionIndex }} `
             -PartitionCount ${{ matrix.partitionCount }} `
-            -HangTimeout 15m `
+            -RetryFailedProjectCount 1 `
+            -HangTimeout 30m `
             -ResultsDirectory TestResults
+      # Only save a coherent tree: a job that died midway leaves a partial obj/, and restoring one
+      # fails outright with "CSC : error CS2012 ... Could not find a part of the path".
+      - name: Save build output cache
+        if: success() && steps.buildcache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            **/obj
+            obj-build-cache-commit.txt
+          key: release-v1-${{ runner.os }}-${{ matrix.displayGateId }}-${{ github.sha }}
       - name: Upload release test diagnostics
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -343,7 +504,7 @@ jobs:
               -Version $version `
               -Runtime "${{ matrix.runtime }}" `
               -InputRoot artifacts/release `
-              -OutputDir artifacts/release
+              -OutputDir artifacts/release ${{ inputs.macos_unsigned && '-AllowUnsigned' || '' }}
           }
 
           tools/Test-ReleasePackageContents.ps1 `
@@ -419,6 +580,8 @@ jobs:
     environment: public-preview
     timeout-minutes: 120
     permissions:
+      # The artifact-download fallback lists this run's artifacts through gh.
+      actions: read
       contents: read
       id-token: write
     strategy:
@@ -431,11 +594,29 @@ jobs:
           persist-credentials: false
 
       - name: Download portable app packages
+        id: download_portable
+        continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: tester-*-${{ inputs.release_version }}-${{ matrix.runtime }}
           path: downloaded-artifacts
           merge-multiple: false
+
+      # actions/download-artifact retries only inside its own step, over a few seconds,
+      # against the same service. Release 0.8.187 lost three Free Suite jobs to
+      # "Artifact download failed after 5 retries" during a GitHub artifact-service blip and
+      # threw away forty minutes of completed packaging. This is the outer loop it lacks.
+      - name: Recover from a transient artifact-service failure
+        if: steps.download_portable.outcome == 'failure'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          pwsh -NoProfile -File tools/Get-GitHubRunArtifact.ps1
+          -Repository "${{ github.repository }}"
+          -RunId "${{ github.run_id }}"
+          -Pattern "tester-*-${{ inputs.release_version }}-${{ matrix.runtime }}"
+          -Destination downloaded-artifacts
 
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -519,7 +700,7 @@ jobs:
               -Version $version `
               -Runtime "${{ matrix.runtime }}" `
               -InputRoot downloaded-artifacts `
-              -OutputDir artifacts/suite
+              -OutputDir artifacts/suite ${{ inputs.macos_unsigned && '-AllowUnsigned' || '' }}
           }
 
           tools/Test-ReleasePackageContents.ps1 `
@@ -527,7 +708,7 @@ jobs:
             -Apps FreeX,FreeW,FreeP `
             -Version "${{ inputs.release_version }}" `
             -Runtime "${{ matrix.runtime }}" `
-            -InputRoot artifacts\suite
+            -InputRoot artifacts\suite ${{ inputs.macos_unsigned && '-AllowUnsigned' || '' }}
 
       - name: Generate suite SBOM and validate inventory
         shell: pwsh
@@ -573,14 +754,41 @@ jobs:
             -Runtime "${{ matrix.runtime }}" `
             -InputRoot .
 
+      - name: Require a suite installer payload before uploading
+        shell: pwsh
+        run: |
+          # if-no-files-found: error cannot catch a missing installer here, because the manifests and
+          # the SBOM always match the upload glob. That is how 0.8.187 uploaded a metadata-only macOS
+          # suite artifact that looked healthy for another thirty minutes and then failed at publish.
+          $root = "artifacts/suite"
+          $prefix = "FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}"
+          $payloadExtensions = @(".pkg", ".zip", ".exe", ".deb", ".rpm")
+          $installers = @(Get-ChildItem -LiteralPath $root -File |
+            Where-Object {
+              $_.Name.StartsWith($prefix) -and
+              ($payloadExtensions -contains $_.Extension) -and
+              -not $_.Name.EndsWith(".sha256")
+            })
+          if ($installers.Count -eq 0) {
+            $present = @(Get-ChildItem -LiteralPath $root -File | ForEach-Object { $_.Name })
+            throw ("No Free Suite installer payload was produced for ${{ matrix.runtime }}. Uploading " +
+              "now would publish a metadata-only artifact that only fails at the publish step. " +
+              "Found in ${root}: " + ($present -join ", "))
+          }
+          Write-Host "Suite payload present: $($installers.Name -join ', ')"
+
+      # The glob deliberately has no hyphen after the runtime. Linux and Windows name their
+      # installer ...-<runtime>-installer.zip / -setup.exe, but macOS produces
+      # FreeSuite-v<version>-<runtime>.pkg, which a ...-<runtime>-* glob does not match. The
+      # suite .pkg was therefore built, validated and even installed, then silently left out of
+      # the artifact -- if-no-files-found stayed quiet because the manifests still matched -- so
+      # publishing 0.8.187 failed at the very end looking for a file nothing had uploaded.
       - name: Upload suite installer
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: tester-FreeSuite-${{ inputs.release_version }}-${{ matrix.runtime }}
           path: |
-            artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}-*
-            artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}.spdx.json
-            artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}.spdx.json.sha256
+            artifacts/suite/FreeSuite-v${{ inputs.release_version }}-${{ matrix.runtime }}*
             artifacts/suite/FreeX-v${{ inputs.release_version }}-${{ matrix.runtime }}-manifest.json
             artifacts/suite/FreeW-v${{ inputs.release_version }}-${{ matrix.runtime }}-manifest.json
             artifacts/suite/FreeP-v${{ inputs.release_version }}-${{ matrix.runtime }}-manifest.json
@@ -641,10 +849,14 @@ jobs:
   publish:
     name: Publish ${{ matrix.app }} release
     needs: [prepare, publication-gate]
+    # A dry run rehearses packaging only; nothing is tagged or published.
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
     environment: public-preview
     timeout-minutes: 20
     permissions:
+      # The artifact-download fallback lists this run's artifacts through gh.
+      actions: read
       contents: write
     strategy:
       fail-fast: false
@@ -656,11 +868,29 @@ jobs:
           persist-credentials: false
 
       - name: Download selected app packages
+        id: download_app
+        continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: tester-${{ matrix.app }}-${{ inputs.release_version }}-*
           path: downloaded-artifacts
           merge-multiple: false
+
+      # actions/download-artifact retries only inside its own step, over a few seconds,
+      # against the same service. Release 0.8.187 lost three Free Suite jobs to
+      # "Artifact download failed after 5 retries" during a GitHub artifact-service blip and
+      # threw away forty minutes of completed packaging. This is the outer loop it lacks.
+      - name: Recover from a transient artifact-service failure
+        if: steps.download_app.outcome == 'failure'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          pwsh -NoProfile -File tools/Get-GitHubRunArtifact.ps1
+          -Repository "${{ github.repository }}"
+          -RunId "${{ github.run_id }}"
+          -Pattern "tester-${{ matrix.app }}-${{ inputs.release_version }}-*"
+          -Destination downloaded-artifacts
 
       - name: Create or update signed release
         shell: pwsh
@@ -726,9 +956,9 @@ jobs:
 
           1. Choose `osx-x64` for Intel Macs or `osx-arm64` for Apple silicon. Download the matching `.zip` and `.sha256` file.
           2. Verify it with `shasum -a 256 -c {{APP}}-v{{VERSION}}-osx-<architecture>.zip.sha256`.
-          3. Prefer the matching `-apps.zip`; it contains a Developer ID signed, notarized, and stapled `.app` bundle plus an install helper.
+          3. Prefer the matching `-apps.zip`; it contains an `.app` bundle that is ${{ inputs.macos_unsigned && 'NOT signed or notarized -- macOS Gatekeeper refuses to open it by double-click; see the bundled README to clear the quarantine attribute' || 'Developer ID signed, notarized, and stapled' }}, plus an install helper.
 
-          Each platform includes a portable artifact and an installable package: signed Velopack `-setup.exe` on Windows, `-installer.zip` on Linux, and `-apps.zip` containing a signed/notarized/stapled `.app` bundle on macOS. Linux integrity is covered by SHA-256 checksums, manifests, and SPDX SBOMs.
+          Each platform includes a portable artifact and an installable package: signed Velopack `-setup.exe` on Windows, `-installer.zip` on Linux, and `-apps.zip` containing an `.app` bundle on macOS that is ${{ inputs.macos_unsigned && 'NOT signed or notarized' || 'signed, notarized, and stapled' }}. Linux integrity is covered by SHA-256 checksums, manifests, and SPDX SBOMs.
           '@
           $notes = $notes.
             Replace("{{APP}}", $app).
@@ -761,11 +991,13 @@ jobs:
   publish-suite:
     name: Publish Free Suite release
     needs: [suite-package, publication-gate]
-    if: inputs.app == 'all'
+    if: ${{ !inputs.dry_run && inputs.app == 'all' }}
     runs-on: ubuntu-latest
     environment: public-preview
     timeout-minutes: 20
     permissions:
+      # The artifact-download fallback lists this run's artifacts through gh.
+      actions: read
       contents: write
     steps:
       - name: Checkout release context
@@ -775,11 +1007,29 @@ jobs:
           persist-credentials: false
 
       - name: Download suite packages
+        id: download_suite
+        continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: tester-FreeSuite-${{ inputs.release_version }}-*
           path: downloaded-artifacts
           merge-multiple: true
+
+      # actions/download-artifact retries only inside its own step, over a few seconds,
+      # against the same service. Release 0.8.187 lost three Free Suite jobs to
+      # "Artifact download failed after 5 retries" during a GitHub artifact-service blip and
+      # threw away forty minutes of completed packaging. This is the outer loop it lacks.
+      - name: Recover from a transient artifact-service failure
+        if: steps.download_suite.outcome == 'failure'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          pwsh -NoProfile -File tools/Get-GitHubRunArtifact.ps1
+          -Repository "${{ github.repository }}"
+          -RunId "${{ github.run_id }}"
+          -Pattern "tester-FreeSuite-${{ inputs.release_version }}-*"
+          -Destination downloaded-artifacts -Flatten
 
       - name: Create or update suite release
         shell: pwsh
@@ -815,7 +1065,7 @@ jobs:
 
           This release installs FreeX, FreeW, and FreeP together by invoking the same per-app installers shipped on each app's release page. It does not create separate suite-owned copies, so suite-to-individual upgrades and individual-to-suite upgrades keep the same installation and uninstaller identities. Portable artifacts remain available on the individual release pages.
 
-          Windows uses a Freevia Authenticode-signed .NET bootstrapper containing the three signed Velopack installers; it has no Inno dependency. Linux uses an installer bundle whose `install.sh` defaults to `~/.local`, protected by SHA-256 checksums, manifests, and an SPDX SBOM. macOS uses a Developer ID Installer-signed, notarized, and stapled `.pkg` containing all three signed/notarized/stapled `.app` bundles.
+          Windows uses a Freevia Authenticode-signed .NET bootstrapper containing the three signed Velopack installers; it has no Inno dependency. Linux uses an installer bundle whose `install.sh` defaults to `~/.local`, protected by SHA-256 checksums, manifests, and an SPDX SBOM. macOS uses a `.pkg` containing all three `.app` bundles; it is ${{ inputs.macos_unsigned && 'NOT signed or notarized, so Gatekeeper refuses to open it by double-click' || 'Developer ID Installer-signed, notarized, and stapled' }}.
           '@.Replace("{{VERSION}}", $version)
 
           gh release view $tag *> $null
@@ -844,7 +1094,7 @@ jobs:
   verify-publication:
     name: Verify published release inventory
     needs: [publish, publish-suite]
-    if: ${{ always() && needs.publish.result == 'success' && (inputs.app != 'all' || needs.publish-suite.result == 'success') }}
+    if: ${{ always() && !inputs.dry_run && needs.publish.result == 'success' && (inputs.app != 'all' || needs.publish-suite.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

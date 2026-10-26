@@ -13,8 +13,11 @@ public static class LossyFormatFeatureLossPlanner
 {
     // The single-sheet/plain-text Save-As targets this codebase registers adapters for. The .xlsx
     // family has its own dedicated ConfirmUnsupportedXlsxFeatureSave gate (driven by the loaded
-    // XlsxFeatureReport) and is intentionally excluded here. .xml, .html/.mht, and .pdf are not
-    // (yet) checked at all and are a known gap, not something this planner already covers.
+    // XlsxFeatureReport) and is intentionally excluded here. .html/.mht (r409) and .xml (r410) are
+    // now covered, each by its own rule, because they lose DIFFERENT things -- see those predicates.
+    // .pdf stays uncovered deliberately: it is export-only (its adapter refuses to import at all), so
+    // there is no round trip to lose anything through, and the user choosing "PDF" has already said
+    // they want a rendering rather than a workbook. Excel does not prompt on PDF export either.
     private static readonly HashSet<string> LossyPlainTextExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".csv", ".txt", ".prn", ".slk", ".dif", ".dbf", ".tab", ".tsv"
@@ -23,8 +26,12 @@ public static class LossyFormatFeatureLossPlanner
     /// <summary>
     /// True if saving <paramref name="workbook"/> to <paramref name="extension"/> would silently drop
     /// content the format can't hold. For the plain/single-sheet formats (CSV/TXT/PRN/SLK/DIF/DBF/...)
-    /// that means more than one worksheet, or any chart/drawing object (chart, autoshape/textbox, or
-    /// picture) on any sheet -- a single-sheet workbook with none of those loses nothing there.
+    /// that means more than one worksheet, any chart/drawing object (chart, autoshape/textbox, or
+    /// picture) on any sheet, or any annotation layer beside the grid -- comments (classic or
+    /// threaded), hyperlinks, merged regions, data validations, conditional formats. A single-sheet
+    /// workbook with none of those loses nothing there. The annotation half was added in r408 after
+    /// measuring that a comment, a hyperlink and a merge all vanished through a .csv round trip with
+    /// no confirmation shown.
     /// <see cref="Core.IO.DelimitedTextWorkbookWriter"/> and the SLK/DIF/DBF/PRN writers only ever
     /// enumerate cell values, so <see cref="Sheet.Charts"/>, <see cref="Sheet.DrawingShapes"/>,
     /// <see cref="Sheet.Pictures"/>, and <see cref="Sheet.TextBoxes"/> are all equally unrepresentable
@@ -41,15 +48,88 @@ public static class LossyFormatFeatureLossPlanner
         if (normalizedExtension.Equals(".ods", StringComparison.OrdinalIgnoreCase))
             return workbook.HasVbaProjectPackage;
 
+        // r409: the web-page formats are single-sheet too, and MEASURED they drop comments and
+        // hyperlinks on a round trip while KEEPING merged regions. They therefore need their own
+        // predicate rather than joining the plain-text set: warning about merges that survive would
+        // make the prompt describe a loss that does not happen, and a prompt the user learns to
+        // dismiss protects nothing. Their remaining gap (validations and conditional formats were
+        // not measured) is deliberately not claimed here.
+        if (WebPageExtensions.Contains(normalizedExtension))
+            return workbook.Sheets.Count > 1 || workbook.Sheets.Any(HasWebPageUnrepresentableContent);
+
+        // r410: .xml keeps every worksheet AND comments/hyperlinks/merges, so it is not lossy in the
+        // ways above -- but it drops data validations and conditional formats, measured. It gets the
+        // narrowest rule of the three, which is the point: the prompt should describe this format's
+        // actual loss and stay silent otherwise.
+        if (normalizedExtension.Equals(".xml", StringComparison.OrdinalIgnoreCase))
+            return workbook.Sheets.Any(HasSpreadsheetXmlUnrepresentableContent);
+
         if (!LossyPlainTextExtensions.Contains(normalizedExtension))
             return false;
 
-        return workbook.Sheets.Count > 1 || workbook.Sheets.Any(HasUnrepresentableDrawingObject);
+        return workbook.Sheets.Count > 1 || workbook.Sheets.Any(HasUnrepresentableContent);
     }
+
+    /// <summary>
+    /// The web-page save targets. Single-sheet like the plain-text formats, but they preserve merged
+    /// regions, so they get their own loss profile rather than sharing one.
+    /// </summary>
+    private static readonly HashSet<string> WebPageExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".html", ".htm", ".mht", ".mhtml"
+    };
+
+    /// <summary>
+    /// What a web-page save actually discards, measured by round-tripping a workbook through
+    /// <c>HtmlFileAdapter</c> and <c>MhtFileAdapter</c>: comments and hyperlinks come back empty,
+    /// merged regions come back intact. Drawing objects are unrepresentable here for the same reason
+    /// as everywhere else.
+    /// </summary>
+    private static bool HasWebPageUnrepresentableContent(Sheet sheet) =>
+        HasUnrepresentableDrawingObject(sheet)
+        || sheet.Comments.Count > 0
+        || sheet.ThreadedComments.Count > 0
+        || sheet.Hyperlinks.Count > 0
+        || sheet.DataValidations.Count > 0
+        || sheet.ConditionalFormats.Count > 0;
+
+    /// <summary>
+    /// SpreadsheetML 2003 (.xml). r410 measured it as PARTIALLY lossy, which is why it cannot share
+    /// either rule above: comments, hyperlinks and merged regions all survive its round trip, while
+    /// data validations and conditional formats come back empty. It also holds multiple worksheets,
+    /// so sheet count is not a trigger here either.
+    /// </summary>
+    private static bool HasSpreadsheetXmlUnrepresentableContent(Sheet sheet) =>
+        sheet.DataValidations.Count > 0
+        || sheet.ConditionalFormats.Count > 0;
+
+    private static bool HasUnrepresentableContent(Sheet sheet) =>
+        HasUnrepresentableDrawingObject(sheet) || HasUnrepresentableAnnotation(sheet);
 
     private static bool HasUnrepresentableDrawingObject(Sheet sheet) =>
         sheet.Charts.Count > 0
         || sheet.DrawingShapes.Count > 0
         || sheet.Pictures.Count > 0
         || sheet.TextBoxes.Count > 0;
+
+    /// <summary>
+    /// Content that lives beside the grid rather than in it, and that the plain/single-sheet writers
+    /// discard just as silently as they discard a chart.
+    /// </summary>
+    /// <remarks>
+    /// r408: this gate's own contract is "would silently drop content the format can't hold", but it
+    /// enumerated only sheets and drawing objects. Measured: a SINGLE-sheet workbook carrying a
+    /// comment, a hyperlink and a merged region saved to .csv and reloaded came back with 0 comments,
+    /// 0 hyperlinks and 0 merges -- and no confirmation was shown, because none of those was on the
+    /// list. The writers enumerate cell values only (see the note above on
+    /// DelimitedTextWorkbookWriter), so these are exactly as unrepresentable as the drawing objects
+    /// already covered; the omission was in the check, not in any belief that they survived.
+    /// </remarks>
+    private static bool HasUnrepresentableAnnotation(Sheet sheet) =>
+        sheet.Comments.Count > 0
+        || sheet.ThreadedComments.Count > 0
+        || sheet.Hyperlinks.Count > 0
+        || sheet.MergedRegions.Count > 0
+        || sheet.DataValidations.Count > 0
+        || sheet.ConditionalFormats.Count > 0;
 }

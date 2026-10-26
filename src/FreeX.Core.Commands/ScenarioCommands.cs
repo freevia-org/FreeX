@@ -72,8 +72,29 @@ public sealed class SaveScenarioCommand : IWorkbookCommand
         }
 
         _applied = true;
-        return new CommandOutcome(true, AffectedCells: ScenarioCommandHelpers.BuildAffectedCells(_scenario.ChangingCells));
+        return new CommandOutcome(
+            true,
+            AffectedCells: ScenarioCommandHelpers.BuildAffectedCells(_scenario.ChangingCells),
+            IsNoOp: NothingChanged());
     }
+
+    /// <summary>
+    /// r258: saving a scenario again under the same name with nothing changed in between writes back
+    /// an equal scenario -- re-confirming the Scenario Manager's Edit dialog without touching a
+    /// value. Without this the command still pushed an undo entry, and UndoRedoStack.Push clears the
+    /// redo stack, destroying a real edit the user could have redone.
+    ///
+    /// <para>r231 declined to guard this because <c>newValue == previous</c> could not fire:
+    /// WorkbookScenario carries a ChangingCells list, which record equality compares by reference,
+    /// and every save builds a fresh one. <see cref="SaveTargetComparison"/> compares it by content.
+    /// The decision covers the command's whole undo record -- Revert replaces
+    /// <c>_previousScenario</c> at <c>_previousIndex</c>, or removes the added scenario when there
+    /// was none -- and that second case is never a no-op, which is why it answers false.</para>
+    /// </summary>
+    private bool NothingChanged() =>
+        _previousIndex >= 0
+        && _previousScenario is not null
+        && SaveTargetComparison.Same(_previousScenario, _scenario);
 
     public void Revert(ICommandContext ctx)
     {
@@ -113,6 +134,26 @@ public sealed class ApplyScenarioCommand : IWorkbookCommand
             return ScenarioCommandHelpers.ScenarioNotFound();
         if (ScenarioProtectionGuards.RejectIfChangingCellsProtected(ctx.Workbook, scenario.ChangingCells) is { } protectedOutcome)
             return protectedOutcome;
+
+        // r213: applying a scenario whose values every changing cell already holds writes the same
+        // bytes back. The scenario list highlights the active scenario, so re-clicking Show on it is
+        // an ordinary gesture -- and the undo entry it pushed cleared redo.
+        // Checked in a separate pass so no cell is written before the answer is known.
+        var alreadyMatches = true;
+        foreach (var change in scenario.ChangingCells)
+        {
+            var probeSheet = ctx.Workbook.GetSheet(change.Address.Sheet);
+            if (probeSheet is null)
+                return ScenarioCommandHelpers.ChangingCellsOutsideWorkbook();
+            if (!Equals(probeSheet.GetCell(change.Address)?.Value, change.Value))
+            {
+                alreadyMatches = false;
+                break;
+            }
+        }
+
+        if (alreadyMatches)
+            return new CommandOutcome(true, IsNoOp: true);
 
         _snapshot = [];
         foreach (var change in scenario.ChangingCells)

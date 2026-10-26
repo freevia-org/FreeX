@@ -40,10 +40,10 @@ public partial class PivotFieldFilterDialog : Window
     {
         _filterState = filterState;
         _initialTab = initialTab;
-        var selected = selectedItems?.ToHashSet(StringComparer.CurrentCultureIgnoreCase) ?? [];
+        var selected = selectedItems?.ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
         var hasExplicitSelection = selected.Count > 0;
         _items = new ObservableCollection<PivotFilterItem>(
-            items.DistinctBy(item => item.Value, StringComparer.CurrentCultureIgnoreCase)
+            items.DistinctBy(item => item.Value, StringComparer.OrdinalIgnoreCase)
                 .OrderBy(item => item.DisplayText, StringComparer.CurrentCultureIgnoreCase)
                 .Select(item => new PivotFilterItem(
                     item.DisplayText,

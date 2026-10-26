@@ -383,11 +383,11 @@ internal static class PptxChartReader
             return new ChartValueColorPosition { IsExtreme = true };
 
         var number = element.Element(Cx + "number")?.Attribute("val")?.Value;
-        if (double.TryParse(number, NumberStyles.Float, CultureInfo.InvariantCulture, out var numberValue))
+        if (double.TryParse(number, NumberStyles.Float, CultureInfo.InvariantCulture, out var numberValue) && double.IsFinite(numberValue))
             return new ChartValueColorPosition { Number = numberValue };
 
         var percent = element.Element(Cx + "percent")?.Attribute("val")?.Value;
-        if (double.TryParse(percent, NumberStyles.Float, CultureInfo.InvariantCulture, out var percentValue))
+        if (double.TryParse(percent, NumberStyles.Float, CultureInfo.InvariantCulture, out var percentValue) && double.IsFinite(percentValue))
             return new ChartValueColorPosition { Percent = percentValue };
 
         return null;
@@ -623,7 +623,7 @@ internal static class PptxChartReader
                     point.Value,
                     NumberStyles.Float,
                     CultureInfo.InvariantCulture,
-                    out var parsed)
+                    out var parsed) && double.IsFinite(parsed)
                     ? (double?)parsed
                     : null;
                 return (Index: index, Value: value);
@@ -655,7 +655,7 @@ internal static class PptxChartReader
         // misread as the compatibility style 102.
         var style = chartSpace.Element(C + "style")
             ?? chartSpace.Descendants(C + "style").FirstOrDefault();
-        return int.TryParse(style?.Attribute("val")?.Value, out var value) ? value : null;
+        return int.TryParse(style?.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : null;
     }
 
     // ── Title ─────────────────────────────────────────────────────────────────
@@ -937,7 +937,7 @@ internal static class PptxChartReader
             return null;
 
         return ext.Elements().Where(element => element.Name.LocalName == "idx")
-            .Select(element => int.TryParse(element.Attribute("val")?.Value, out var index) ? index : -1)
+            .Select(element => int.TryParse(element.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index) ? index : -1)
             .Where(index => index >= 0)
             .Distinct()
             .OrderBy(index => index)
@@ -1529,7 +1529,7 @@ internal static class PptxChartReader
         if (symbol.HasValue)
             style.Symbol = symbol.Value;
 
-        if (double.TryParse(markerEl.Element(C + "size")?.Attribute("val")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var sizePt))
+        if (double.TryParse(markerEl.Element(C + "size")?.Attribute("val")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var sizePt) && double.IsFinite(sizePt))
             style.SizePt = sizePt;
 
         var spPr = markerEl.Element(C + "spPr");
@@ -1752,7 +1752,7 @@ internal static class PptxChartReader
                 while (values.Count <= idx) values.Add(null);
                 var v = pt.Element(C + "v")?.Value;
                 if (v is not null &&
-                    double.TryParse(v, NumberStyles.Any, CultureInfo.InvariantCulture, out var dv))
+                    double.TryParse(v, NumberStyles.Any, CultureInfo.InvariantCulture, out var dv) && double.IsFinite(dv))
                     values[idx] = dv;
             }
             return;
@@ -1762,12 +1762,33 @@ internal static class PptxChartReader
         var numLit = valEl.Element(C + "numLit");
         if (numLit is not null)
         {
+            // r429: placed by idx and pre-sized from ptCount, exactly as the numRef branch above
+            // does. This branch used to APPEND each point in document order and ignore idx, which
+            // silently collapsed gaps: a series of {1.5, null, 3.5} is written -- correctly -- as
+            // ptCount=3 with points at idx 0 and idx 2, and came back as {1.5, 3.5}, shifting every
+            // later point one category to the LEFT. The chart still drew, with its remaining bars
+            // relabelled against the wrong categories.
+            //
+            // numLit is the branch used whenever a series has no formula behind it, which is the
+            // ordinary case for a chart authored in FreeP rather than linked to a worksheet range,
+            // so the correct numRef handling was masking a real defect in the common path.
+            int litPtCount = Math.Clamp(
+                ParseInt(numLit.Element(C + "ptCount")?.Attribute("val")?.Value),
+                0,
+                MaxChartSeriesPoints);
+
+            for (int i = 0; i < litPtCount; i++) values.Add(null);
+
             foreach (var pt in numLit.Elements(C + "pt"))
             {
+                int idx = ParseInt(pt.Attribute("idx")?.Value);
+                if (idx < 0 || idx >= MaxChartSeriesPoints) continue;
+                while (values.Count <= idx) values.Add(null);
+
                 var v = pt.Element(C + "v")?.Value;
-                values.Add(v is not null &&
-                    double.TryParse(v, NumberStyles.Any, CultureInfo.InvariantCulture, out var dv)
-                    ? dv : null);
+                if (v is not null &&
+                    double.TryParse(v, NumberStyles.Any, CultureInfo.InvariantCulture, out var dv) && double.IsFinite(dv))
+                    values[idx] = dv;
             }
         }
     }
@@ -1840,10 +1861,10 @@ internal static class PptxChartReader
             var minStr = scaling.Element(C + "min")?.Attribute("val")?.Value;
             var maxStr = scaling.Element(C + "max")?.Attribute("val")?.Value;
             if (minStr is not null &&
-                double.TryParse(minStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var minV))
+                double.TryParse(minStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var minV) && double.IsFinite(minV))
                 axis.Min = minV;
             if (maxStr is not null &&
-                double.TryParse(maxStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var maxV))
+                double.TryParse(maxStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var maxV) && double.IsFinite(maxV))
                 axis.Max = maxV;
         }
 
@@ -2303,8 +2324,11 @@ internal static class PptxChartReader
     private static int? ParseNullableInt(string? s) =>
         int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : null;
 
+    // r548: IsFinite because double.TryParse returns TRUE with Infinity for an overflowing
+    // literal like 1e400 -- no hostile token required. A value that cannot be represented is
+    // absent, which is what this helper already reports for anything unparseable.
     private static double? ParseDouble(string? s) =>
-        double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ? value : null;
+        double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && double.IsFinite(value) ? value : null;
 
     private static string? EmptyToNull(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value;

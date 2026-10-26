@@ -39,7 +39,8 @@ internal sealed class PrintPreviewDialog : Window
         Func<Task>? createPdf = null,
         BackstageDirectPrintCapability? directPrintCapability = null,
         Func<Task>? directPrint = null,
-        FreeW.App.Presentation.DocumentView.ReviewDisplayState? reviewDisplayState = null)
+        FreeW.App.Presentation.DocumentView.ReviewDisplayState? reviewDisplayState = null,
+        bool showMarkupBalloons = false)
     {
         ArgumentNullException.ThrowIfNull(document);
 
@@ -76,6 +77,13 @@ internal sealed class PrintPreviewDialog : Window
             _preview.ApplyShowMarkupComments(liveReviewState.ShowComments);
             _preview.ApplyShowMarkupFormatting(liveReviewState.ShowFormatting);
         }
+
+        // r198: Balloons is a fourth Show Markup toggle, but it lives on DocumentView rather than in
+        // ReviewDisplayState, so it was the one the block above missed. BuildPdfContent() gates the
+        // right-margin balloon strip (and the page widening that makes room for it) on this flag, and
+        // both ExportPdfAsync and PrintAsync render from the live editor -- so leaving the preview at
+        // its default false made the preview omit a column the real output prints.
+        _preview.ApplyShowMarkupBalloons(showMarkupBalloons);
         AutomationProperties.SetAutomationId(_preview, "PrintPreviewDocumentView");
 
         Content = BuildShell(state);

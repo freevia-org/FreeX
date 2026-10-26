@@ -1538,13 +1538,19 @@ public static class PasteCommandFactory
     // believes was saved intact. Real Excel's own paste behavior for an oversized field is to
     // truncate the pasted text to this limit rather than reject the whole paste, so mirror that here
     // rather than erroring the cell out.
-    internal const int ExcelCellTextLimit = 32767;
+    internal const int ExcelCellTextLimit = Free.Shared.IO.SurrogateSafeTruncation.SpreadsheetCellTextLimit;
 
+    // r200: one implementation, in the shared tier -- this cap had three, all cutting mid-surrogate.
     internal static string TruncateToExcelCellTextLimit(string text) =>
-        text.Length > ExcelCellTextLimit ? text[..ExcelCellTextLimit] : text;
+        Free.Shared.IO.SurrogateSafeTruncation.LimitToCellText(text);
 
     internal static ScalarValue ParseClipboardValue(string text)
     {
+        // r609: every numeric branch below caps to Excel's 15 significant digits, the same rule
+        // CellEntryParser applies to typed entry. Without it the SAME characters produced a
+        // different stored double depending on whether they were typed or pasted -- and the pasted
+        // one was a value Excel cannot hold, so "=A1=B1" over a typed and a pasted copy of one
+        // number answered FALSE. The comments on each branch already claimed to mirror typed entry.
         // Excel's text-escape convention: a leading apostrophe forces the pasted field to be kept
         // as text (apostrophe stripped), exactly like typing '123 into a cell. This must be checked
         // before any numeric/boolean coercion below.
@@ -1562,7 +1568,7 @@ public static class PasteCommandFactory
                 out var cultureNumber) &&
             double.IsFinite(cultureNumber))
         {
-            return new NumberValue(cultureNumber);
+            return new NumberValue(ExcelNumericPrecision.CapSignificantDigits(cultureNumber));
         }
 
         // Locale-aware thousands-grouping parse, matching CellEntryParser's NumberEntryStyles
@@ -1575,7 +1581,7 @@ public static class PasteCommandFactory
         // ValidGroupingRegex gate below) so a malformed grouping like "1.23,4" is still rejected.
         if (TryParseCultureGroupedNumber(text, System.Globalization.CultureInfo.CurrentCulture, out var groupedCultureNumber))
         {
-            return new NumberValue(groupedCultureNumber);
+            return new NumberValue(ExcelNumericPrecision.CapSignificantDigits(groupedCultureNumber));
         }
 
         // Excel-parity coercion for the accounting/thousands/parenthesized forms Excel recognizes on
@@ -1584,7 +1590,7 @@ public static class PasteCommandFactory
         // groupings like "1,2345" are correctly rejected as text rather than silently misparsed.
         if (TryParseExcelPasteNumber(text, out var excelNumber) && double.IsFinite(excelNumber))
         {
-            return new NumberValue(excelNumber);
+            return new NumberValue(ExcelNumericPrecision.CapSignificantDigits(excelNumber));
         }
 
         if (text.Equals("TRUE", StringComparison.OrdinalIgnoreCase) ||
@@ -1600,7 +1606,7 @@ public static class PasteCommandFactory
         // text instead of the number/date Excel would store.
         if (TryParsePastePercent(text, out var percentValue))
         {
-            return new NumberValue(percentValue);
+            return new NumberValue(ExcelNumericPrecision.CapSignificantDigits(percentValue));
         }
 
         if (TryParsePasteDate(text, out var pasteDate))
@@ -1916,7 +1922,35 @@ internal sealed class ExternalTextPasteSpecialCommand : IWorkbookCommand, IAffec
             sheet.SetCell(address, existing);
         }
 
-        return new CommandOutcome(true, AffectedCells: _affectedCells);
+        return new CommandOutcome(true, AffectedCells: _affectedCells, IsNoOp: NothingChanged(sheet));
+    }
+
+    /// <summary>
+    /// r257: pasting external text over a range that already holds exactly that text writes what is
+    /// already there -- re-pasting the same clipboard contents, or pasting a block back over the
+    /// place it was copied from. Without this the command still pushed an undo entry, and
+    /// UndoRedoStack.Push clears the redo stack, destroying a real edit the user could have redone.
+    ///
+    /// <para>The decision is POST-HOC over the command's whole undo record. It mirrors Revert's own
+    /// two cases rather than just the cell one: where Revert restores a style-only entry for an
+    /// address that held no cell, the comparison checks that style-only entry too, so a paste that
+    /// changed nothing but the style-only slot is not reported as a no-op.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet sheet)
+    {
+        if (_snapshot is null)
+            return true;
+
+        foreach (var (address, oldCell, oldStyleOnly) in _snapshot)
+        {
+            if (!CellEditCompanionSnapshot.SameCellOrAbsent(sheet, address, oldCell))
+                return false;
+
+            if (oldCell is null && sheet.GetStyleOnly(address.Row, address.Col) != oldStyleOnly)
+                return false;
+        }
+
+        return true;
     }
 
     public void Revert(ICommandContext ctx)

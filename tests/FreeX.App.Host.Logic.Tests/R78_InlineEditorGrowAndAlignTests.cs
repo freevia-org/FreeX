@@ -97,6 +97,43 @@ public sealed class R78_InlineEditorGrowAndAlignTests
     }
 
     [Fact]
+    public void ShowInlineEditor_ForEmptyCell_KeepsEditorSurfaceInsideCellAndChromeVisible()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
+            try
+            {
+                var sheet = workbook.GetSheetAt(0);
+                var addr = new CellAddress(sheet.Id, 1, 1);
+
+                R49MainWindowTestHarness.Invoke(window, "SetActiveCell", addr);
+                R49MainWindowTestHarness.Invoke(window, "ShowInlineEditor", addr, (double?)null);
+
+                var inlineEditor = GetInlineEditor(window);
+                var inlineEditorChrome = GetInlineEditorChrome(window);
+                var chromeBaseRect = GetInlineEditorChromeBaseRect(window);
+
+                inlineEditor.Should().NotBeNull();
+                inlineEditorChrome.Should().NotBeNull();
+                chromeBaseRect.Should().NotBeNull();
+                inlineEditor!.Width.Should().BeApproximately(
+                    chromeBaseRect!.Value.Width,
+                    0.01,
+                    "an empty edit session must not immediately cover the neighboring cell");
+                System.Windows.Controls.Panel.GetZIndex(inlineEditorChrome!).Should().BeGreaterThan(
+                    System.Windows.Controls.Panel.GetZIndex(inlineEditor),
+                    "the selection-colored edit chrome must remain visible while the TextBox owns input");
+                inlineEditorChrome!.Background.Should().Be(System.Windows.Media.Brushes.Transparent);
+            }
+            finally
+            {
+                R49MainWindowTestHarness.Close(window);
+            }
+        });
+    }
+
+    [Fact]
     public void ShowInlineEditor_ForRightAlignedCell_UsesRightTextAlignment()
     {
         StaTestRunner.Run(() =>
@@ -193,5 +230,19 @@ public sealed class R78_InlineEditorGrowAndAlignTests
         var field = typeof(MainWindow).GetField("_inlineEditor", BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new MissingFieldException(nameof(MainWindow), "_inlineEditor");
         return (System.Windows.Controls.TextBox?)field.GetValue(window);
+    }
+
+    private static System.Windows.Controls.Border? GetInlineEditorChrome(MainWindow window)
+    {
+        var field = typeof(MainWindow).GetField("_inlineEditorChrome", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new MissingFieldException(nameof(MainWindow), "_inlineEditorChrome");
+        return (System.Windows.Controls.Border?)field.GetValue(window);
+    }
+
+    private static FormulaEditorRect? GetInlineEditorChromeBaseRect(MainWindow window)
+    {
+        var field = typeof(MainWindow).GetField("_inlineEditorChromeBaseRect", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new MissingFieldException(nameof(MainWindow), "_inlineEditorChromeBaseRect");
+        return (FormulaEditorRect?)field.GetValue(window);
     }
 }

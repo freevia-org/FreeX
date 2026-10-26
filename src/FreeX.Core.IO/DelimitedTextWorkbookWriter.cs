@@ -41,8 +41,8 @@ internal static class DelimitedTextWorkbookWriter
     /// <summary>UTF-16 little-endian with a BOM — Excel's "Unicode Text (*.txt)" Save-As type.</summary>
     public static readonly Encoding Utf16LeBom = new UnicodeEncoding(bigEndian: false, byteOrderMark: true);
 
-    public static void Save(Workbook workbook, Stream stream, char delimiter) =>
-        Save(workbook, stream, delimiter, ResolveAnsiEncoding());
+    public static void Save(Workbook workbook, Stream stream, char delimiter, IFormatProvider? numberProvider = null) =>
+        Save(workbook, stream, delimiter, ResolveAnsiEncoding(), numberProvider);
 
     /// <summary>
     /// Resolves the OS ANSI code page (e.g. Windows-1252 on an English system, Shift-JIS/932 on a
@@ -81,7 +81,11 @@ internal static class DelimitedTextWorkbookWriter
     /// <see cref="XlsxFileAdapter"/> reports other non-fatal, partial-data-loss save outcomes via
     /// <see cref="IWarningCollectingFileAdapter"/>.
     /// </summary>
-    public static XlsxSaveResult SaveWithWarnings(Workbook workbook, Stream stream, char delimiter)
+    public static XlsxSaveResult SaveWithWarnings(
+        Workbook workbook,
+        Stream stream,
+        char delimiter,
+        IFormatProvider? numberProvider = null)
     {
         var fallback = new LossTrackingEncoderFallback();
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -95,7 +99,7 @@ internal static class DelimitedTextWorkbookWriter
             encoding = Encoding.GetEncoding(1252, fallback, DecoderFallback.ReplacementFallback);
         }
 
-        Save(workbook, stream, delimiter, encoding);
+        Save(workbook, stream, delimiter, encoding, numberProvider);
 
         if (!fallback.LossDetected)
             return XlsxSaveResult.Clean;
@@ -159,8 +163,14 @@ internal static class DelimitedTextWorkbookWriter
         }
     }
 
-    public static void Save(Workbook workbook, Stream stream, char delimiter, Encoding encoding)
+    public static void Save(
+        Workbook workbook,
+        Stream stream,
+        char delimiter,
+        Encoding encoding,
+        IFormatProvider? numberProvider = null)
     {
+        numberProvider ??= CultureInfo.InvariantCulture;
         SaveStreamPreparer.TruncateFromCurrentPosition(stream);
 
         if (workbook.Sheets.Count == 0) return;
@@ -209,7 +219,7 @@ internal static class DelimitedTextWorkbookWriter
             while (rowEnd < cells.Length && cells[rowEnd].Address.Row == rowNumber)
                 rowEnd++;
 
-            WriteRow(writer, delimiter, cells, rowStart, rowEnd, endCol, workbook);
+            WriteRow(writer, delimiter, cells, rowStart, rowEnd, endCol, workbook, numberProvider);
             nextRow = rowNumber + 1;
             rowStart = rowEnd;
         }
@@ -226,7 +236,8 @@ internal static class DelimitedTextWorkbookWriter
         int startIndex,
         int endIndex,
         uint endCol,
-        Workbook workbook)
+        Workbook workbook,
+        IFormatProvider numberProvider)
     {
         var previousCol = 0u;
         for (var index = startIndex; index < endIndex; index++)
@@ -234,7 +245,7 @@ internal static class DelimitedTextWorkbookWriter
             var (address, cell) = cells[index];
             var col = address.Col;
             WriteDelimiters(writer, delimiter, previousCol == 0 ? col - 1 : col - previousCol);
-            WriteCellField(writer, delimiter, cell, workbook);
+            WriteCellField(writer, delimiter, cell, workbook, numberProvider);
             previousCol = col;
         }
 
@@ -316,7 +327,7 @@ internal static class DelimitedTextWorkbookWriter
         writer.Write('"');
     }
 
-    private static void WriteCellField(TextWriter writer, char delimiter, Cell cell, Workbook workbook)
+    private static void WriteCellField(TextWriter writer, char delimiter, Cell cell, Workbook workbook, IFormatProvider numberProvider)
     {
         // CSV has no formula syntax: real Excel's "CSV (Comma delimited)" / "CSV UTF-8" Save-As
         // always writes a formula cell's calculated result (Cell.Value), never the formula source
@@ -326,7 +337,7 @@ internal static class DelimitedTextWorkbookWriter
         switch (cell.Value)
         {
             case NumberValue number:
-                WriteNumberValue(writer, delimiter, cell, number.Value, workbook);
+                WriteNumberValue(writer, delimiter, cell, number.Value, workbook, numberProvider);
                 return;
             case DateTimeValue dateTime:
                 WriteDateTimeValue(writer, delimiter, cell, dateTime, workbook);
@@ -356,7 +367,13 @@ internal static class DelimitedTextWorkbookWriter
                !string.Equals(numberFormat, "General", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static void WriteNumberValue(TextWriter writer, char delimiter, Cell cell, double value, Workbook workbook)
+    private static void WriteNumberValue(
+        TextWriter writer,
+        char delimiter,
+        Cell cell,
+        double value,
+        Workbook workbook,
+        IFormatProvider numberProvider)
     {
         if (TryGetAppliedNumberFormat(cell, workbook, out var numberFormat))
         {
@@ -366,14 +383,25 @@ internal static class DelimitedTextWorkbookWriter
             return;
         }
 
+        // A General number is written with the provider the adapter chose. Plain CSV passes the
+        // current culture because that is what Excel writes -- see CsvFileAdapter.ResolveNumberProvider
+        // -- while formats with a fixed delimiter stay invariant, since a decimal comma beside a comma
+        // delimiter would split the field in two.
+        // Written straight to the TextWriter, never through WriteField: this is the dense export
+        // path and a per-cell string allocation here is a measurable regression, which
+        // DelimitedTextFileAdapterTests.SourceGuards pins. Skipping the quoting logic is safe
+        // because default double formatting emits no group separators, so the text can only contain
+        // digits, a sign, a decimal mark and an exponent -- never the delimiter. (The caller keeps
+        // that true: CsvFileAdapter falls back to invariant numbers for any culture whose list
+        // separator IS its decimal mark.)
         Span<char> buffer = stackalloc char[32];
-        if (value.TryFormat(buffer, out var charsWritten, provider: CultureInfo.InvariantCulture))
+        if (value.TryFormat(buffer, out var charsWritten, provider: numberProvider))
         {
             writer.Write(buffer[..charsWritten]);
             return;
         }
 
-        writer.Write(value.ToString(CultureInfo.InvariantCulture));
+        writer.Write(value.ToString(numberProvider));
     }
 
     private static void WriteDateTimeValue(TextWriter writer, char delimiter, Cell cell, DateTimeValue value, Workbook workbook)

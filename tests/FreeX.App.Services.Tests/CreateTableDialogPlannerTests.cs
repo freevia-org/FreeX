@@ -48,18 +48,18 @@ public sealed class CreateTableDialogPlannerTests
     [Fact]
     public void DialogContract_UsesStableWindowsSizedSurfaceAndAutomationIds()
     {
-        CreateTableDialogPlanner.Width.Should().Be(360);
-        CreateTableDialogPlanner.Height.Should().Be(190);
-        CreateTableDialogPlanner.ButtonWidth.Should().Be(76);
+        CreateTableDialogPlanner.Width.Should().Be(224);
+        CreateTableDialogPlanner.Height.Should().Be(144);
+        CreateTableDialogPlanner.ButtonWidth.Should().Be(56);
         CreateTableDialogPlanner.DefaultFirstRowHasHeaders.Should().BeTrue();
-        CreateTableDialogPlanner.ContentMargin.Should().Be(16);
-        CreateTableDialogPlanner.RangeLabelBottomMargin.Should().Be(4);
-        CreateTableDialogPlanner.RangeEditorBottomMargin.Should().Be(12);
-        CreateTableDialogPlanner.HeadersBottomMargin.Should().Be(16);
-        CreateTableDialogPlanner.RangeBoxMinimumWidth.Should().Be(248);
-        CreateTableDialogPlanner.RangePickerWidth.Should().Be(28);
-        CreateTableDialogPlanner.RangePickerGap.Should().Be(6);
-        CreateTableDialogPlanner.ActionRowTopMargin.Should().Be(12);
+        CreateTableDialogPlanner.ContentMargin.Should().Be(8);
+        CreateTableDialogPlanner.RangeLabelBottomMargin.Should().Be(2);
+        CreateTableDialogPlanner.RangeEditorBottomMargin.Should().Be(6);
+        CreateTableDialogPlanner.HeadersBottomMargin.Should().Be(8);
+        CreateTableDialogPlanner.RangeBoxMinimumWidth.Should().Be(168);
+        CreateTableDialogPlanner.RangePickerWidth.Should().Be(20);
+        CreateTableDialogPlanner.RangePickerGap.Should().Be(2);
+        CreateTableDialogPlanner.ActionRowTopMargin.Should().Be(8);
         CreateTableDialogPlanner.DialogAutomationId.Should().Be("CreateTableDialog");
         CreateTableDialogPlanner.RangeBoxAutomationId.Should().Be("CreateTableRangeBox");
         CreateTableDialogPlanner.HeadersBoxAutomationId.Should().Be("CreateTableHeadersBox");

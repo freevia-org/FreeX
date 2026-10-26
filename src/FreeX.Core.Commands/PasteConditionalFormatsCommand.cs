@@ -107,6 +107,14 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
         foreach (var pasted in pastedRules)
             pasted.Priority = nextPriority++;
 
+        // r221: pastedRules is the exact record of what this paste produces -- Paste Special > Formats
+        // from a source range carrying no conditional-format rule yields none.
+        if (pastedRules.Count == 0)
+        {
+            _previousRules = null;
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         targetSheet.ConditionalFormats.AddRange(pastedRules);
 
         return new CommandOutcome(true, AffectedCells: pastedRules.SelectMany(rule => rule.AppliesTo.AllCells()).Distinct().ToList());

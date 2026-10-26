@@ -125,7 +125,7 @@ public sealed class FilterCommand : IWorkbookCommand
         // so Revert can restore any explicit user fill the reband's forceFill just overwrote.
         _tableRebandSnapshot = StructuredTableBandingReflow.ReflowIfMatched(ctx.Workbook, sheet, _range);
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(true, IsNoOp: NothingChanged(ctx, sheet));
     }
 
     /// <summary>
@@ -298,6 +298,82 @@ public sealed class FilterCommand : IWorkbookCommand
         }
     }
 
+    /// <summary>
+    /// r255: applying a value filter that is already applied -- re-confirming the same checkbox set
+    /// in the filter dropdown, or clearing a column that carries no filter -- writes exactly what is
+    /// already there. Without this the command still pushed an undo entry, and UndoRedoStack.Push
+    /// clears the redo stack, destroying a real edit the user could have redone.
+    ///
+    /// <para>This is the widest decision of the AutoFilter group, because this command has the most
+    /// to write: five snapshots, and Revert restores exactly those five. Each is compared by
+    /// content -- the two filter-column models through
+    /// <see cref="WorksheetAutoFilterColumnComparison"/>, the reband's cell block through the same
+    /// cell comparison the cell-editing commands use, and the slicer selections item by item -- so
+    /// "unchanged" means nothing the command can write differs, rather than that the obvious half
+    /// matches.</para>
+    /// </summary>
+    private bool NothingChanged(ICommandContext ctx, Sheet sheet)
+    {
+        if (!WorksheetAutoFilterColumnSync.Unchanged(sheet, _range, _previousAutoFilterColumns))
+            return false;
+
+        if (_undoSnapshot.HasSnapshot && !_undoSnapshot.Matches(sheet))
+            return false;
+
+        if (!TableFilterColumnsUnchanged(sheet, _previousTableFilterColumns))
+            return false;
+
+        if (_slicerSyncSnapshots is not null)
+        {
+            foreach (var snapshot in _slicerSyncSnapshots)
+            {
+                var slicer = ctx.Workbook.Slicers.FirstOrDefault(
+                    s => string.Equals(s.Name, snapshot.SlicerName, StringComparison.Ordinal));
+                if (slicer is null)
+                    continue;
+                if (slicer.SelectionCaptured != snapshot.PreviousSelectionCaptured)
+                    return false;
+                if (!slicer.SelectedItems.SequenceEqual(snapshot.PreviousSelectedItems, StringComparer.Ordinal))
+                    return false;
+            }
+        }
+
+        if (_tableRebandSnapshot is not null)
+        {
+            foreach (var (address, oldCell) in _tableRebandSnapshot)
+            {
+                if (!CellEditCompanionSnapshot.SameCellOrAbsent(sheet, address, oldCell))
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The structured-table half of <see cref="NothingChanged"/>, mirroring how Revert finds the
+    /// table it restores: by <c>_tableId</c>, which is -1 when no table matched the range.
+    /// </summary>
+    private bool TableFilterColumnsUnchanged(
+        Sheet sheet,
+        List<StructuredTableFilterColumnModel>? previousFilterColumns)
+    {
+        if (_tableId == -1 || previousFilterColumns is null)
+            return true;
+        if (!CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))
+            return true;
+
+        var current = sheet.StructuredTables[tableIndex].FilterColumns;
+        if (current.Count != previousFilterColumns.Count)
+            return false;
+        for (var i = 0; i < current.Count; i++)
+        {
+            if (!current[i].SameAs(previousFilterColumns[i]))
+                return false;
+        }
+        return true;
+    }
+
     public void Revert(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
@@ -445,8 +521,25 @@ public sealed class CellFillColorFilterCommand : IWorkbookCommand
                 ColorFilter = new WorksheetAutoFilterColorFilterModel(CellColor: true, Color: _fillColor)
             });
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(true, IsNoOp: NothingChanged(sheet));
     }
+
+    /// <summary>
+    /// r254: this filter is re-applicable -- the Filter menu leaves the criterion in place, and
+    /// picking the same one again writes exactly what is already there. Without this the command
+    /// still pushed an undo entry, and UndoRedoStack.Push clears the redo stack, destroying a real
+    /// edit the user could have redone.
+    ///
+    /// <para>The decision is POST-HOC and reads the command's own undo record, which is by
+    /// construction the complete list of what Apply writes: Revert restores exactly these three
+    /// snapshots and nothing else, so if none of them differs from the sheet, nothing was written.
+    /// Nothing here mirrors the edit, so nothing here can drift from it.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet? sheet) =>
+        sheet is not null
+        && WorksheetAutoFilterColumnSync.Unchanged(sheet, _range, _previousAutoFilterColumns)
+        && StructuredTableFilterColumnSync.Unchanged(sheet, _tableFilterSnapshot)
+        && (!_undoSnapshot.HasSnapshot || _undoSnapshot.Matches(sheet));
 
     public void Revert(ICommandContext ctx)
     {
@@ -549,8 +642,25 @@ public sealed class CellNoFillColorFilterCommand : IWorkbookCommand
                 ColorFilter = new WorksheetAutoFilterColorFilterModel(CellColor: true)
             });
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(true, IsNoOp: NothingChanged(sheet));
     }
+
+    /// <summary>
+    /// r254: this filter is re-applicable -- the Filter menu leaves the criterion in place, and
+    /// picking the same one again writes exactly what is already there. Without this the command
+    /// still pushed an undo entry, and UndoRedoStack.Push clears the redo stack, destroying a real
+    /// edit the user could have redone.
+    ///
+    /// <para>The decision is POST-HOC and reads the command's own undo record, which is by
+    /// construction the complete list of what Apply writes: Revert restores exactly these three
+    /// snapshots and nothing else, so if none of them differs from the sheet, nothing was written.
+    /// Nothing here mirrors the edit, so nothing here can drift from it.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet? sheet) =>
+        sheet is not null
+        && WorksheetAutoFilterColumnSync.Unchanged(sheet, _range, _previousAutoFilterColumns)
+        && StructuredTableFilterColumnSync.Unchanged(sheet, _tableFilterSnapshot)
+        && (!_undoSnapshot.HasSnapshot || _undoSnapshot.Matches(sheet));
 
     public void Revert(ICommandContext ctx)
     {
@@ -654,8 +764,25 @@ public sealed class CellFontColorFilterCommand : IWorkbookCommand
                 ColorFilter = new WorksheetAutoFilterColorFilterModel(CellColor: false, Color: _fontColor)
             });
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(true, IsNoOp: NothingChanged(sheet));
     }
+
+    /// <summary>
+    /// r254: this filter is re-applicable -- the Filter menu leaves the criterion in place, and
+    /// picking the same one again writes exactly what is already there. Without this the command
+    /// still pushed an undo entry, and UndoRedoStack.Push clears the redo stack, destroying a real
+    /// edit the user could have redone.
+    ///
+    /// <para>The decision is POST-HOC and reads the command's own undo record, which is by
+    /// construction the complete list of what Apply writes: Revert restores exactly these three
+    /// snapshots and nothing else, so if none of them differs from the sheet, nothing was written.
+    /// Nothing here mirrors the edit, so nothing here can drift from it.</para>
+    /// </summary>
+    private bool NothingChanged(Sheet? sheet) =>
+        sheet is not null
+        && WorksheetAutoFilterColumnSync.Unchanged(sheet, _range, _previousAutoFilterColumns)
+        && StructuredTableFilterColumnSync.Unchanged(sheet, _tableFilterSnapshot)
+        && (!_undoSnapshot.HasSnapshot || _undoSnapshot.Matches(sheet));
 
     public void Revert(ICommandContext ctx)
     {
@@ -697,7 +824,7 @@ internal struct FilterUndoSnapshot
     // ApplyColumnOwnedVisibility/ClearColumnOwnedRange AND-across-columns decision.
     private Dictionary<uint, HashSet<uint>>? _columnFilterOwnedRows;
 
-    public bool HasSnapshot => _hiddenRows is not null;
+    public readonly bool HasSnapshot => _hiddenRows is not null;
 
     public void Reset()
     {
@@ -723,6 +850,59 @@ internal struct FilterUndoSnapshot
             : sheet.ColumnFilterOwnedRows.ToDictionary(
                 kvp => kvp.Key,
                 HashSet<uint> (kvp) => [.. kvp.Value]);
+    }
+
+    /// <summary>
+    /// r252: whether the sheet still matches what this snapshot captured -- the question the eight
+    /// filter commands need and could not ask. r225 put them all on the debt list because each
+    /// touches BOTH the hidden-row state and the autofilter column model, so a guard covering one
+    /// would have been a partial mirror; this covers the first half completely, field for field with
+    /// <see cref="Capture"/>.
+    /// <para>
+    /// R252_FilterSnapshotComparisonCoverageContractTests compares this method against Capture and
+    /// fails if Capture reads a sheet member this does not. Capture is the maintained list of what
+    /// filter state consists of -- it has to be, or undo would lose some -- which is the same
+    /// source-of-truth trick r249 used with Clone.
+    /// </para>
+    /// </summary>
+    public readonly bool Matches(Sheet sheet)
+    {
+        if (!HasSnapshot)
+            return false;
+
+        return SameSet(_hiddenRows, sheet.HiddenRows)
+            && SameSet(_filterHiddenRows, sheet.FilterHiddenRows)
+            && SameSet(_valueFilterHiddenRows, sheet.ValueFilterHiddenRows)
+            && SameValueFilterColumns(_activeValueFilterColumns, sheet.ActiveValueFilterColumns)
+            && SameOwnedRows(_columnFilterOwnedRows, sheet.ColumnFilterOwnedRows);
+    }
+
+    private static bool SameSet(uint[]? captured, HashSet<uint> live) =>
+        captured is not null && captured.Length == live.Count && live.SetEquals(captured);
+
+    private static bool SameValueFilterColumns(
+        Dictionary<uint, IReadOnlyList<string>>? captured,
+        IReadOnlyDictionary<uint, IReadOnlyList<string>> live)
+    {
+        if (captured is null)
+            return live.Count == 0;
+
+        return captured.Count == live.Count
+            && captured.All(entry => live.TryGetValue(entry.Key, out var values)
+                && entry.Value.Count == values.Count
+                && entry.Value.SequenceEqual(values, StringComparer.Ordinal));
+    }
+
+    private static bool SameOwnedRows(
+        Dictionary<uint, HashSet<uint>>? captured,
+        IReadOnlyDictionary<uint, HashSet<uint>> live)
+    {
+        if (captured is null)
+            return live.Count == 0;
+
+        return captured.Count == live.Count
+            && captured.All(entry => live.TryGetValue(entry.Key, out var rows)
+                && rows.SetEquals(entry.Value));
     }
 
     public void CaptureIfNeeded(Sheet sheet)
@@ -882,6 +1062,42 @@ internal static class WorksheetAutoFilterColumnSync
         return previous;
     }
 
+    /// <summary>
+    /// r253: true when the AutoFilter model holds the same content it held when
+    /// <paramref name="previousFilterColumns"/> was captured -- the AutoFilter-model half of an
+    /// AutoFilter command's no-op decision (the hidden-row half is
+    /// <c>FilterUndoSnapshot.Matches</c>).
+    ///
+    /// <para>Asked AFTER <see cref="Apply"/> has run, so it does not mirror the edit: it reads the
+    /// record of what the edit did. A null snapshot means <see cref="Apply"/> found no matching
+    /// worksheet AutoFilter and returned without touching anything.</para>
+    ///
+    /// <para>Content comparison, not record equality: a re-applied filter is a freshly built column
+    /// model whose collections share no reference with the ones it replaced, so record equality
+    /// would report "changed" every time (see <see cref="WorksheetAutoFilterColumnComparison"/>).</para>
+    /// </summary>
+    public static bool Unchanged(
+        Sheet sheet,
+        GridRange range,
+        List<WorksheetAutoFilterColumnModel>? previousFilterColumns)
+    {
+        if (previousFilterColumns is null)
+            return true;
+
+        var autoFilter = sheet.AutoFilter;
+        if (autoFilter is null || !IsMatchingRange(autoFilter, range))
+            return true;
+
+        var current = autoFilter.FilterColumns;
+        if (current.Count != previousFilterColumns.Count)
+            return false;
+        for (var i = 0; i < current.Count; i++)
+        {
+            if (!current[i].SameAs(previousFilterColumns[i]))
+                return false;
+        }
+        return true;
+    }
     /// <summary>Undoes an <see cref="Apply"/> call, restoring the exact previous list contents.</summary>
     public static void Restore(Sheet sheet, GridRange range, List<WorksheetAutoFilterColumnModel>? previousFilterColumns)
     {
@@ -952,6 +1168,36 @@ internal static class StructuredTableFilterColumnSync
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// r254: true when the structured table's own filter-column list holds the same content it held
+    /// when <paramref name="snapshot"/> was captured -- the table half of an AutoFilter command's
+    /// no-op decision, alongside <see cref="WorksheetAutoFilterColumnSync.Unchanged"/> and
+    /// <c>FilterUndoSnapshot.Matches</c>.
+    ///
+    /// <para>Asked AFTER <see cref="Apply"/> has run, so it reads the record of what the edit did
+    /// rather than mirroring it. A null snapshot means <see cref="Apply"/> found no matching table
+    /// and returned without touching anything. Content comparison, not record equality: the
+    /// replacement column is freshly built and shares no collection reference with the one it
+    /// replaced.</para>
+    /// </summary>
+    public static bool Unchanged(Sheet sheet, StructuredTableFilterColumnSnapshot? snapshot)
+    {
+        if (snapshot is not { } value)
+            return true;
+        if (!CommandGuards.TryFindStructuredTableIndex(sheet, value.TableId, out var tableIndex))
+            return true;
+
+        var current = sheet.StructuredTables[tableIndex].FilterColumns;
+        if (current.Count != value.PreviousFilterColumns.Count)
+            return false;
+        for (var i = 0; i < current.Count; i++)
+        {
+            if (!current[i].SameAs(value.PreviousFilterColumns[i]))
+                return false;
+        }
+        return true;
     }
 
     /// <summary>Undoes an <see cref="Apply"/> call, restoring the exact previous list contents.</summary>

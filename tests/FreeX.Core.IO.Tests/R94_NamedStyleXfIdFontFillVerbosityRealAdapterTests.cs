@@ -73,12 +73,12 @@ public sealed class R94_NamedStyleXfIdFontFillVerbosityRealAdapterTests
         // must reconnect via xfId to the recovered "Good" cellStyleXfs record despite the font's
         // serialization differing in shape from ClosedXML's own rebuilt form.
         var goodCellXf = FindCellXfForCell(worksheetXml, cellXfs, "B2");
-        goodCellXf.Attribute("xfId")?.Value.Should().Be(goodXfId.ToString(),
+        goodCellXf.Attribute("xfId")!.Value.Should().Be(goodXfId.ToString(),
             "a cell styled with the plain named style 'Good' must reconnect to the recovered cellStyleXfs record even when its source font XML is more verbose/differently-ordered/differently-shaped than ClosedXML's own rebuild output");
 
         // D4: bound to "MyReportHeader" (font children entirely reordered: name/family before sz/b/color).
         var customCellXf = FindCellXfForCell(worksheetXml, cellXfs, "D4");
-        customCellXf.Attribute("xfId")?.Value.Should().Be(customXfId.ToString(),
+        customCellXf.Attribute("xfId")!.Value.Should().Be(customXfId.ToString(),
             "a cell styled with the user-defined named style must reconnect to its recovered cellStyleXfs record even when its source font XML reorders every child element relative to ClosedXML's own rebuild output");
 
         // Sibling/no-regression: a genuinely plain cell (no named style at all) must stay at xfId 0

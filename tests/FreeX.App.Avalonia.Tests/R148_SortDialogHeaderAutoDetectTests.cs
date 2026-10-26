@@ -52,13 +52,13 @@ public sealed class R148_SortDialogHeaderAutoDetectTests
         // The buggy literal must be gone from the CheckBox initializer itself. A plain
         // NotContain("IsChecked = true,") would be too broad (other checkboxes in this file
         // legitimately default to true), so anchor on the actual construction snippet instead.
-        var newLine = Environment.NewLine;
+        dialogMethod = dialogMethod.ReplaceLineEndings("\n");
         dialogMethod.Should().NotContain(
-            "Content = UiText.Get(\"RemoveDuplicates_MyDataHasHeadersAutomationName\")," + newLine +
+            "Content = UiText.Get(\"RemoveDuplicates_MyDataHasHeadersAutomationName\"),\n" +
             "            IsChecked = true,",
             "the headers checkbox must no longer hardcode IsChecked = true regardless of the range's content");
         dialogMethod.Should().Contain(
-            "Content = UiText.Get(\"RemoveDuplicates_MyDataHasHeadersAutomationName\")," + newLine +
+            "Content = UiText.Get(\"RemoveDuplicates_MyDataHasHeadersAutomationName\"),\n" +
             "            IsChecked = likelyHasHeaders,",
             "the headers checkbox must be initialized from the computed likelyHasHeaders value");
     }

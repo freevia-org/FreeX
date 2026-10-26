@@ -57,8 +57,8 @@ public sealed class R41_SheetViewSelectionTests
         var changed = XlsxWorksheetSheetViewNormalizer.NormalizeSheetViewElement(sheetView);
 
         changed.Should().BeFalse("a whole-row/whole-column selection is already valid and should not be reported as modified");
-        selection.Attribute("sqref")?.Value.Should().Be(sqref);
-        selection.Attribute("activeCell")?.Value.Should().Be(activeCell);
+        selection.Attribute("sqref")!.Value.Should().Be(sqref);
+        selection.Attribute("activeCell")!.Value.Should().Be(activeCell);
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public sealed class R41_SheetViewSelectionTests
         var changed = XlsxWorksheetSheetViewNormalizer.NormalizeSheetViewElement(sheetView);
 
         changed.Should().BeFalse();
-        selection.Attribute("sqref")?.Value.Should().Be("A1:C3");
+        selection.Attribute("sqref")!.Value.Should().Be("A1:C3");
     }
 
     [Fact]
@@ -168,12 +168,12 @@ public sealed class R41_SheetViewSelectionTests
         selections.Should().HaveCount(2, "both panes' SELECTION records must be preserved, not just the first one found");
 
         var topLeft = selections.Single(element => element.Attribute("pane")?.Value == "topLeft");
-        topLeft.Attribute("activeCell")?.Value.Should().Be("A1");
-        topLeft.Attribute("sqref")?.Value.Should().Be("A1:C1");
+        topLeft.Attribute("activeCell")!.Value.Should().Be("A1");
+        topLeft.Attribute("sqref")!.Value.Should().Be("A1:C1");
 
         var bottomRight = selections.Single(element => element.Attribute("pane")?.Value == "bottomRight");
-        bottomRight.Attribute("activeCell")?.Value.Should().Be("B10");
-        bottomRight.Attribute("sqref")?.Value.Should().Be("B10:B12");
+        bottomRight.Attribute("activeCell")!.Value.Should().Be("B10");
+        bottomRight.Attribute("sqref")!.Value.Should().Be("B10:B12");
     }
 
     [Fact]
@@ -202,7 +202,7 @@ public sealed class R41_SheetViewSelectionTests
         var selections = GetSelectionElements(loadedSheet);
         selections.Should().ContainSingle();
         selections[0].Attribute("pane").Should().BeNull();
-        selections[0].Attribute("activeCell")?.Value.Should().Be("C5");
-        selections[0].Attribute("sqref")?.Value.Should().Be("C5:C7");
+        selections[0].Attribute("activeCell")!.Value.Should().Be("C5");
+        selections[0].Attribute("sqref")!.Value.Should().Be("C5:C7");
     }
 }

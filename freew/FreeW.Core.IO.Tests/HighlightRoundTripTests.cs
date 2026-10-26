@@ -120,7 +120,7 @@ public class HighlightRoundTripTests
 
         var highlight = xdoc.Descendants(W + "highlight").FirstOrDefault();
         highlight.Should().NotBeNull("w:highlight must be emitted for named highlight colors");
-        highlight!.Attribute(W + "val")?.Value.Should().Be("yellow");
+        highlight!.Attribute(W + "val")!.Value.Should().Be("yellow");
     }
 
     [Fact]

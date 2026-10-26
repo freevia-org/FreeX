@@ -200,7 +200,46 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
         // / CommandOutcome.AffectedCells contract) knows which sheet and range this style command
         // touched -- without this, undoing a style command applied on a different sheet than the
         // one currently active had nothing to switch back to or restore a selection for.
+        // r246: the single-sheet twin of the r239 GroupedApplyStyleCommand decision. Both
+        // snapshots participate -- cells with their style-only entry and its provenance tag,
+        // and the rich-text runs this command rewrites when the diff touches run fonts.
+        // Pressing Bold on already-bold text, or re-picking the highlighted gallery style, is
+        // the gesture.
+        if (NothingChanged(sheet))
+            return new CommandOutcome(true, IsNoOp: true);
+
         return new CommandOutcome(true, AffectedCells: _snapshot.ConvertAll(s => s.Address));
+    }
+
+    /// <summary>r246: every snapshot this command keeps -- see the r237 invariant.</summary>
+    private bool NothingChanged(Sheet sheet)
+    {
+        if (_snapshot is not null)
+        {
+            foreach (var (address, oldCell, oldStyleOnly, oldStyleOnlySource) in _snapshot)
+            {
+                if (!CellEditCompanionSnapshot.SameCellOrAbsent(sheet, address, oldCell))
+                    return false;
+
+                if (oldCell is null
+                    && (!Nullable.Equals(oldStyleOnly, sheet.GetStyleOnly(address.Row, address.Col))
+                        || !Nullable.Equals(oldStyleOnlySource, sheet.GetStyleOnlySource(address.Row, address.Col))))
+                {
+                    return false;
+                }
+            }
+        }
+
+        if (_richTextSnapshot is null)
+            return true;
+
+        foreach (var (address, oldRuns) in _richTextSnapshot)
+        {
+            if (!sheet.RichTextRuns.TryGetValue(address, out var live) || !oldRuns.SequenceEqual(live))
+                return false;
+        }
+
+        return true;
     }
 
     public void Revert(ICommandContext ctx)

@@ -1,4 +1,5 @@
 using System.IO;
+using Free.Shared.Opc;
 using FreeW.Core.Model;
 
 namespace FreeW.Core.IO;
@@ -52,6 +53,16 @@ public sealed class DocxFileAdapter : IDocumentFileAdapter
 
     public TextDocument Load(Stream stream)
     {
+        // The strict branch below decompresses the package twice -- IsStrict opens it to read
+        // word/document.xml's namespace, then RewriteStrictToTransitional expands every part to
+        // rewrite its namespaces -- and both run BEFORE DocxReader, which is where the zip-bomb guard
+        // lives. A guard that only runs after the expansion it is meant to prevent protects nothing:
+        // measured, an archive this guard REJECTS (WorkbookTooLargeException) was rewritten by the
+        // strict path without complaint. Checked here, ahead of both, so the strict and transitional
+        // routes are bounded by the same rule. DocxReader checks again on its own stream, which is
+        // cheap (the central directory only) and keeps that path safe for its other callers.
+        WorkbookOpenSizeGuard.EnsureArchiveWithinLimits(stream);
+
         if (_strictMode && StrictOoxmlTransform.IsStrict(stream))
         {
             // Rewrite strict → transitional in-memory, then feed to the transitional engine.

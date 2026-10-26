@@ -152,6 +152,16 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand, 
         // master/header formula cell -- see DataTableAutoRefreshEffects for the full rationale.
         extraAffectedCells.AddRange(DataTableAutoRefreshEffects.Apply(ctx, _edits, _appliedTableEffects));
 
+        // r234: the question this command could not previously ask. Every write above is
+        // captured in _snapshot for Revert BEFORE it happens, so re-checking each snapshot
+        // against the live sheet says exactly whether the edit changed anything -- typing a
+        // cell's existing value back into it, or re-applying a style it already carries.
+        // The comparison lives in CellEditCompanionSnapshot with a reflection contract over
+        // Cell's members behind it, because a field missed there would report "unchanged"
+        // for a real edit in every command that uses it.
+        if (extraAffectedCells.Count == 0 && _snapshot.TrueForAll(entry => entry.MatchesCurrent(sheet)))
+            return new CommandOutcome(true, AffectedCells: _affectedCells, IsNoOp: true);
+
         if (extraAffectedCells.Count == 0)
             return new CommandOutcome(true, AffectedCells: _affectedCells);
 
@@ -566,6 +576,21 @@ internal sealed class PropagateCalculatedColumnCommand : IWorkbookCommand
         // shift from.
         var (firstDataRow, _) = StructuredTableEditEffects.GetDataBodyRowBounds(table);
         var normalizedFormula = StructuredTableEditEffects.ShiftFormulaRows(_sourceFormulaText, _sourceRow, firstDataRow, sheet.Name);
+
+        // r229: two writes, so two clauses -- the cell fills recorded in _snapshot AND the column's
+        // stored formula. Note what is NOT used here: SetCalculatedColumnFormula returns a bool, and
+        // that bool reports whether the COLUMN WAS FOUND, not whether anything changed. It returns
+        // true for a re-set of the identical formula. That is the second time this round's method
+        // has met a bool that reads like a did-it-change flag and is not (see r227's
+        // TableLayoutOperations.DistributeColumns), which is reason enough to check rather than
+        // assume every time.
+        if (_snapshot.Count == 0
+            && string.Equals(_previousColumn.CalculatedColumnFormula, normalizedFormula, StringComparison.Ordinal))
+        {
+            _snapshot = null;
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         table.SetCalculatedColumnFormula(_columnId, normalizedFormula);
         _applied = true;
 

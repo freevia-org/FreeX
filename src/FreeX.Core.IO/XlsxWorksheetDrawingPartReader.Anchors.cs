@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using FreeX.Core.Model;
+using System.Globalization;
 
 namespace FreeX.Core.IO;
 
@@ -192,7 +193,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
         columnZeroBased = 0;
         rowOffset = DrawingMlCoordinateUnits.EmuToPixels(marker.Element(spreadsheetDrawingNs + "rowOff")?.Value);
         columnOffset = DrawingMlCoordinateUnits.EmuToPixels(marker.Element(spreadsheetDrawingNs + "colOff")?.Value);
-        return uint.TryParse(marker.Element(spreadsheetDrawingNs + "row")?.Value, out rowZeroBased) &&
-               uint.TryParse(marker.Element(spreadsheetDrawingNs + "col")?.Value, out columnZeroBased);
+        return uint.TryParse(marker.Element(spreadsheetDrawingNs + "row")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out rowZeroBased) &&
+               uint.TryParse(marker.Element(spreadsheetDrawingNs + "col")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out columnZeroBased);
     }
 }

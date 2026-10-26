@@ -29,6 +29,13 @@ public sealed class SetChartPointOptionsCommand : IPresentationCommand
         PresentationCommandSizeEstimator.EstimateBytes(_oldPointStyle?.Marker?.Fill),
     });
 
+    // r202: mirrors the guard Apply opens with -- otherwise the bus pushes an undo entry for a
+    // command that changed nothing, and that push clears the redo stack.
+    public bool HasEffect(Presentation p) =>
+        ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId) is not null
+        && ChartHelper.FindFormattingSeries(p, _slideIndex, _shapeId, _newOptions.SeriesIndex) is not null
+        && _newOptions.PointIndex >= 0;
+
     public void Apply(Presentation p)
     {
         var chart = ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId);

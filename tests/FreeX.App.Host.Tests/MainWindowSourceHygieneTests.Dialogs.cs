@@ -230,7 +230,7 @@ public sealed partial class MainWindowSourceHygieneTests
 
         keyboardSource.Should().Contain("KeyboardCommandShortcut.InsertHyperlink");
         commandSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertHyperlink, InsertLinkBtn_Click)");
-        insertSource.Should().Contain("new HyperlinkDialog(prefill.Target, prefill.DisplayText) { Owner = this }");
+        insertSource.Should().Contain("new HyperlinkDialog(prefill.Target, prefill.DisplayText, _currentFilePath) { Owner = this }");
         insertSource.Should().Contain("new SetHyperlinkCommand(");
         insertSource.Should().Contain("HyperlinkNavigationPlanner.TryCreatePlan");
         insertSource.Should().Contain("TryNavigateToWorkbookReference(plan.Target)");

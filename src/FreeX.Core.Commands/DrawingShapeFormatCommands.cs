@@ -52,6 +52,22 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
         if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet, shape) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r215: mirrors BOTH conditional blocks and the IsSourceLoaded clear, which is itself gated on
+        // (_updateFill || _updateOutline) -- so the mirror is gated the same way rather than
+        // assuming the clear always happens.
+        var fillUnchanged = !_updateFill
+            || (shape.HasFill == (_hasFill ?? (_fillColor is not null))
+                && Equals(shape.FillColor, _fillColor)
+                && shape.GradientFillEndColor is null
+                && shape.GradientFillDirection == DrawingShapeGradientDirection.DiagonalDown
+                && shape.FillThemeColor is null);
+        var outlineUnchanged = !_updateOutline
+            || (Equals(shape.OutlineColor, _outlineColor) && shape.OutlineThemeColor is null);
+        var sourceFlagUnchanged = !(_updateFill || _updateOutline) || !shape.IsSourceLoaded;
+
+        if (fillUnchanged && outlineUnchanged && sourceFlagUnchanged)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousFillColor = shape.FillColor;
         _previousOutlineColor = shape.OutlineColor;
         _previousGradientFillEndColor = shape.GradientFillEndColor;
@@ -150,6 +166,18 @@ public sealed class SetDrawingShapeGradientCommand : IWorkbookCommand
         if (shape.Kind == DrawingShapeKind.Line)
             return new CommandOutcome(false, "Line shapes do not support gradient fills.");
 
+        // r214: all six written fields are compared -- including the two Apply forces (HasFill true,
+        // FillThemeColor null) and IsSourceLoaded, whose clear is itself a real change.
+        if (Equals(shape.FillColor, _startColor)
+            && Equals(shape.GradientFillEndColor, _endColor)
+            && shape.GradientFillDirection == _direction
+            && shape.FillThemeColor is null
+            && shape.HasFill
+            && !shape.IsSourceLoaded)
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         _previous = (shape.FillColor, shape.GradientFillEndColor, shape.GradientFillDirection, shape.FillThemeColor, shape.HasFill, shape.IsSourceLoaded);
         shape.HasFill = true;
         shape.FillColor = _startColor;
@@ -221,6 +249,16 @@ public sealed class SetDrawingShapeEffectCommand : IWorkbookCommand
         // author-unlocked shape's effects stay editable even while the sheet blocks "Edit objects".
         if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet, shape) is { } protectedOutcome)
             return protectedOutcome;
+
+        // r214: an equal-value setter, but the mirror must include IsSourceLoaded. Apply clears it
+        // unconditionally, and that flag decides whether the shape's original XML is replayed
+        // verbatim on save -- so clearing it is a real change even when the effect already matches.
+        if (shape.EffectPreset == _effectPreset
+            && shape.HasShadowEffect == (_effectPreset == DrawingShapeEffectPreset.Shadow)
+            && !shape.IsSourceLoaded)
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
 
         _previousHasShadowEffect = shape.HasShadowEffect;
         _previousEffectPreset = shape.EffectPreset;

@@ -92,12 +92,15 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        var next = !(sheet.ShowOutlineSymbols ?? true);
+        // r199: from THIS window's remembered state, not the shared field a sibling may have just
+        // changed -- and record the result as this window's own, like every other View-tab toggle.
+        var next = !GetEffectiveViewState(sheet).ShowOutlineSymbols;
         if (!TryExecuteWorksheetLayout(
                 () => _session.SetShowOutlineSymbols(next),
                 "Show Outline Symbols"))
             return;
 
+        SyncWindowViewState([_currentSheetId]);
         UpdateViewport();
     }
 

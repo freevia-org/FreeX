@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using FreeX.Core.Model;
+using System.Globalization;
 
 namespace FreeX.Core.IO;
 
@@ -64,7 +65,7 @@ internal static class XlsxChartSeriesFormatReader
             strokeColor = lineColor;
 
         double? strokeThickness = null;
-        if (int.TryParse(line?.Attribute("w")?.Value, out var emus))
+        if (int.TryParse(line?.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var emus))
             strokeThickness = Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0.5, 10);
 
         ChartLineDashStyle? dashStyle = line?.Element(DrawingNs + "prstDash") is { } dashElement
@@ -118,7 +119,7 @@ internal static class XlsxChartSeriesFormatReader
             strokeColor = color;
 
         double? strokeThickness = null;
-        if (int.TryParse(line?.Attribute("w")?.Value, out var emus))
+        if (int.TryParse(line?.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var emus))
             strokeThickness = Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0.5, 10);
 
         ChartLineDashStyle? dashStyle = line?.Element(DrawingNs + "prstDash") is { } dashElement
@@ -131,7 +132,7 @@ internal static class XlsxChartSeriesFormatReader
             ? FromXlsxMarkerStyle(symbolElement.Attribute("val")?.Value)
             : (ChartMarkerStyle?)null;
         double? markerSize = null;
-        if (int.TryParse(marker?.Element(ChartNs + "size")?.Attribute("val")?.Value, out var size))
+        if (int.TryParse(marker?.Element(ChartNs + "size")?.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var size))
             markerSize = Math.Clamp(size, 1, 30);
         CellColor? fillColor = null;
         WorkbookThemeColorReference? fillThemeColor = null;
@@ -155,7 +156,7 @@ internal static class XlsxChartSeriesFormatReader
             markerBorderColor = markerBorder;
 
         double? markerBorderThickness = null;
-        if (int.TryParse(markerLine?.Attribute("w")?.Value, out var markerLineEmus))
+        if (int.TryParse(markerLine?.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var markerLineEmus))
             markerBorderThickness = Math.Clamp(markerLineEmus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0, 10);
 
         if (strokeColor is null &&
@@ -203,7 +204,7 @@ internal static class XlsxChartSeriesFormatReader
     {
         foreach (var dPt in series.Elements(ChartNs + "dPt"))
         {
-            if (!int.TryParse(dPt.Element(ChartNs + "idx")?.Attribute("val")?.Value, out var pointIndex) ||
+            if (!int.TryParse(dPt.Element(ChartNs + "idx")?.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var pointIndex) ||
                 pointIndex < 0)
             {
                 continue;
@@ -250,7 +251,7 @@ internal static class XlsxChartSeriesFormatReader
             ? FromXlsxMarkerStyle(symbolElement.Attribute("val")?.Value)
             : (ChartMarkerStyle?)null;
         double? markerSize = null;
-        if (int.TryParse(marker.Element(ChartNs + "size")?.Attribute("val")?.Value, out var size))
+        if (int.TryParse(marker.Element(ChartNs + "size")?.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var size))
             markerSize = Math.Clamp(size, 1, 30);
 
         var markerShapeProperties = marker.Element(ChartNs + "spPr");
@@ -272,7 +273,7 @@ internal static class XlsxChartSeriesFormatReader
             borderColor = border;
 
         double? borderThickness = null;
-        if (int.TryParse(markerLine?.Attribute("w")?.Value, out var markerLineEmus))
+        if (int.TryParse(markerLine?.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var markerLineEmus))
             borderThickness = Math.Clamp(markerLineEmus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0, 10);
 
         if (markerStyle is null &&

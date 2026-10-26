@@ -49,6 +49,15 @@ public sealed class ConfigureChartHiddenEmptyCellsCommand : IWorkbookCommand
         if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet, chart) is { } protectedOutcome)
             return protectedOutcome;
 
+        // r219: the Hidden and Empty Cell Settings sub-dialog pre-selects the chart's current mode
+        // and check state, so pressing OK without touching either control re-writes what is there.
+        // Both fields Apply writes are compared, which is the whole of them.
+        if (chart.BlankDisplayMode == _blankDisplayMode
+            && chart.ShowDataInHiddenRowsAndColumns == _showDataInHiddenRowsAndColumns)
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         _previousBlankDisplayMode = chart.BlankDisplayMode;
         _previousShowDataInHiddenRowsAndColumns = chart.ShowDataInHiddenRowsAndColumns;
 

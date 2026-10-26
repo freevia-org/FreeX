@@ -69,7 +69,7 @@ public class TableStyleRoundTripTests
         var tblStyle = xml.Descendants(W + "tblStyle").FirstOrDefault();
 
         tblStyle.Should().NotBeNull("w:tblStyle must be written to w:tblPr when TableStyleId is set");
-        tblStyle!.Attribute(W + "val")?.Value.Should().Be("GridTable1Light");
+        tblStyle!.Attribute(W + "val")!.Value.Should().Be("GridTable1Light");
     }
 
     [Fact]
@@ -82,8 +82,8 @@ public class TableStyleRoundTripTests
             .FirstOrDefault(e => e.Attribute(W + "styleId")?.Value == "GridTable1Light");
 
         tableStyle.Should().NotBeNull("styles.xml must contain a w:style for the referenced table style");
-        tableStyle!.Attribute(W + "type")?.Value.Should().Be("table");
-        tableStyle.Element(W + "name")?.Attribute(W + "val")?.Value.Should().Be("Grid Table 1 Light");
+        tableStyle!.Attribute(W + "type")!.Value.Should().Be("table");
+        tableStyle.Element(W + "name")?.Attribute(W + "val")!.Value.Should().Be("Grid Table 1 Light");
     }
 
     [Fact]

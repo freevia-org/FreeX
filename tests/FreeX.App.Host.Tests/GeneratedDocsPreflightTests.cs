@@ -11,7 +11,15 @@ public sealed class GeneratedDocsPreflightTests
 
         script.Should().Contain("Generate-CommandInventoryDocs.ps1");
         script.Should().Contain("Generate-FreeWCommandInventory.ps1");
-        script.Should().Contain("& pwsh -NoProfile -File $resolvedScriptPath -Check");
+        // Each generator is still run through pwsh 7 with -Check, but the checks now run in
+        // parallel, so the interpreter and the per-generator arguments live in variables and the
+        // single literal "& pwsh -NoProfile -File $resolvedScriptPath -Check" no longer appears.
+        // Pin the parts that actually matter: pwsh 7 is required (Windows PowerShell 5.1 formats
+        // JSON differently and makes every generated doc look stale), and every generator is
+        // invoked with -Check rather than being regenerated in place.
+        script.Should().Contain("Get-Command pwsh");
+        script.Should().Contain("$PwshSource -NoProfile -File $Entry.ScriptPath");
+        script.Should().Contain("\"-Check\"");
         script.Should().Contain("Generated documentation checks passed.");
     }
 

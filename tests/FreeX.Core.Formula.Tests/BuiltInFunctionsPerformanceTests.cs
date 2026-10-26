@@ -28,18 +28,16 @@ public sealed class BuiltInFunctionsPerformanceTests
     [Fact]
     public void Names_RepeatedAccessDoesNotAllocateFunctionNameArrays()
     {
-        _ = BuiltInFunctions.Names.Count;
+        const int iterations = 10_000;
 
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
-        var before = GC.GetAllocatedBytesForCurrentThread();
-
-        for (var i = 0; i < 10_000; i++)
-            _ = BuiltInFunctions.Names.Count;
-
-        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
-        allocatedBytes.Should().BeLessThan(1_024);
+        AllocationProbe.ShouldNotAllocate(
+            () =>
+            {
+                for (var i = 0; i < iterations; i++)
+                    _ = BuiltInFunctions.Names.Count;
+            },
+            operations: iterations,
+            "the function-name catalog must be handed out from a cached read-only collection");
     }
 
     [Fact]

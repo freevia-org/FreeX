@@ -141,8 +141,8 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Descendants(presentation + "ListBox")
             .Single(element => element.Attribute(xaml + "Name")?.Value == "PivotAvailableFieldsList");
 
-        searchBox.Attribute("Margin")?.Value.Should().Be("0,0,0,4");
-        availableFieldsList.Attribute("MinHeight")?.Value.Should().Be("96");
+        searchBox.Attribute("Margin")!.Value.Should().Be("0,0,0,4");
+        availableFieldsList.Attribute("MinHeight")!.Value.Should().Be("96");
     }
 
     [Fact]
@@ -297,12 +297,12 @@ public sealed partial class MainWindowXamlKeyTipTests
         fieldLists.Should().NotBeEmpty();
         fieldLists.Should().AllSatisfy(list =>
         {
-            list.Attribute("AllowDrop")?.Value.Should().Be("True");
-            list.Attribute("PreviewMouseMove")?.Value.Should().Be("PivotFieldList_PreviewMouseMove");
-            list.Attribute("PreviewMouseRightButtonDown")?.Value.Should().Be("PivotFieldList_PreviewMouseRightButtonDown");
-            list.Attribute("GiveFeedback")?.Value.Should().Be("PivotFieldList_GiveFeedback");
-            list.Attribute("DragOver")?.Value.Should().Be("PivotFieldList_DragOver");
-            list.Attribute("Drop")?.Value.Should().Be("PivotFieldList_Drop");
+            list.Attribute("AllowDrop")!.Value.Should().Be("True");
+            list.Attribute("PreviewMouseMove")!.Value.Should().Be("PivotFieldList_PreviewMouseMove");
+            list.Attribute("PreviewMouseRightButtonDown")!.Value.Should().Be("PivotFieldList_PreviewMouseRightButtonDown");
+            list.Attribute("GiveFeedback")!.Value.Should().Be("PivotFieldList_GiveFeedback");
+            list.Attribute("DragOver")!.Value.Should().Be("PivotFieldList_DragOver");
+            list.Attribute("Drop")!.Value.Should().Be("PivotFieldList_Drop");
         });
 
         source.Should().Contain("PivotFieldList_PreviewMouseMove");

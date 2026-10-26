@@ -66,6 +66,17 @@ public sealed class SetShapeTextParagraphAlignmentCommand(
 
     public string Label => "Shape Paragraph Alignment";
 
+    // r203 census, fixed r204: an equal-value setter -- re-confirming what the ribbon already shows
+    // pushed an undo entry that changed nothing, and that push clears redo.
+    public bool HasEffect(IDocumentCommandContext context) =>
+        ShapeTextFormattingPlanner.TryGetShape(
+            context.Document, paragraphIndex, runIndex, childPath, out var shape)
+        && ShapeTextFormattingPlanner.CanApplyParagraphAlignment(shape)
+        && shape.TextParagraphs.Any(paragraph =>
+            !Equals(
+                paragraph.Formatting,
+                ShapeTextFormattingPlanner.WithAlignment(paragraph.Formatting, alignment)));
+
     public void Apply(IDocumentCommandContext context)
     {
         if (!ShapeTextFormattingPlanner.TryGetShape(

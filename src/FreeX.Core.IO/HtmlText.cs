@@ -1,4 +1,5 @@
 using System.Text;
+using System.Globalization;
 
 namespace FreeX.Core.IO;
 
@@ -89,7 +90,7 @@ internal static class HtmlText
             bool ok = numberPart.Length > 0 && (numberPart[0] is 'x' or 'X')
                 ? int.TryParse(numberPart[1..], System.Globalization.NumberStyles.HexNumber,
                     System.Globalization.CultureInfo.InvariantCulture, out code)
-                : int.TryParse(numberPart, out code);
+                : int.TryParse(numberPart, NumberStyles.Integer, CultureInfo.InvariantCulture, out code);
             if (!ok || code < 0 || code > 0x10FFFF)
                 return false;
             decoded = char.ConvertFromUtf32(code);

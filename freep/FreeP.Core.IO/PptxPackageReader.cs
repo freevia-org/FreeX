@@ -73,14 +73,64 @@ public static class PptxPackageReader
     // ── Public API ───────────────────────────────────────────────────────────────
 
     /// <summary>Opens a .pptx file from disk and returns a populated <see cref="Presentation"/>.</summary>
-    public static Presentation Read(string path)
+    public static Presentation Read(string path) => ReadWithWarnings(path).Presentation;
+
+    /// <summary>
+    /// r454: opens a .pptx and also reports the parts that could not be read.
+    /// </summary>
+    /// <remarks>
+    /// r448 fixed the case where NOTHING could be read -- the deck opened empty and silently -- but
+    /// deliberately left the per-slide recovery alone, because absorbing one bad slide rather than
+    /// losing the whole deck is right and matches PowerPoint. What was still wrong is that PowerPoint
+    /// TELLS you it repaired the file, while this reader replaced a damaged slide with a blank one
+    /// and said nothing: the user sees an empty slide, assumes it was always empty, and saving
+    /// discards whatever it held.
+    ///
+    /// That was recorded as needing a channel the reader did not have. This is that channel, shaped
+    /// after FreeX's <c>XlsxLoadResult</c> so the two apps report load damage the same way rather
+    /// than each inventing something. <see cref="Read(Stream)"/> still exists and still returns just
+    /// the presentation, so every caller that has no way to show a warning is unaffected.
+    /// </remarks>
+    public static PptxReadResult ReadWithWarnings(string path)
     {
         using var stream = File.OpenRead(path);
-        return Read(stream);
+        return ReadWithWarnings(stream);
     }
 
     /// <summary>Reads a .pptx from any stream and returns a populated <see cref="Presentation"/>.</summary>
-    public static Presentation Read(Stream stream)
+    public static Presentation Read(Stream stream) => ReadWithWarnings(stream).Presentation;
+
+    /// <summary>
+    /// r454: reads a .pptx from any stream, also reporting the parts that could not be read. See
+    /// <see cref="ReadWithWarnings(string)"/> for why this exists.
+    /// </summary>
+    public static PptxReadResult ReadWithWarnings(Stream stream)
+    {
+        var warnings = new List<string>();
+        Presentation presentation;
+        try
+        {
+            presentation = ReadCore(stream, warnings);
+        }
+        catch (System.Xml.XmlException ex)
+        {
+            // r599: an XmlException anywhere in the read means the package being OPENED is malformed,
+            // and this reader already owns actionable sentences for that -- see the "missing from the
+            // package. The file may be corrupt or truncated" throw below. A truncated docProps/core.xml
+            // reached the XML parser instead and threw framework text at the caller, so the same
+            // damage produced two different errors depending on which part happened to be cut.
+            // Nothing here parses FreeP's own output, so the type alone is sufficient evidence --
+            // the same reasoning r596 and r598 applied to the xlsx and docx readers.
+            throw new InvalidDataException(
+                "This presentation could not be read because the file is not a valid .pptx package " +
+                "(it may be corrupt or truncated).",
+                ex);
+        }
+
+        return new PptxReadResult(presentation, warnings.AsReadOnly());
+    }
+
+    private static Presentation ReadCore(Stream stream, List<string> warnings)
     {
         // Reject an oversized file before buffering it, the same way the xlsx loader does: check the
         // declared length up front for a seekable stream, then bound the copy itself so a non-seekable
@@ -115,7 +165,7 @@ public static class PptxPackageReader
         // Reject zip-bomb / oversized packages before any decompression-heavy reads (same guard xlsx uses).
         WorkbookOpenSizeGuard.EnsureArchiveWithinLimits(archive);
         var snapshot = CapturePackageSnapshot(archive);
-        var presentation = ReadArchive(archive);
+        var presentation = ReadArchive(archive, warnings);
         presentation.PackageSnapshot = snapshot;
         presentation.PackageKind = DetectPackageKind(snapshot);
         return presentation;
@@ -185,7 +235,7 @@ public static class PptxPackageReader
 
     // ── Core archive reading ──────────────────────────────────────────────────────
 
-    private static Presentation ReadArchive(ZipArchive archive)
+    private static Presentation ReadArchive(ZipArchive archive, List<string> warnings)
     {
         var presentation = new Presentation();
 
@@ -240,7 +290,36 @@ public static class PptxPackageReader
 
         // Parse presentation.xml
         var presXml = TryLoadXmlPart(archive, presPath);
-        if (presXml?.Root is null) return presentation;
+        if (presXml?.Root is null)
+        {
+            // r599: the r448 contradiction check, applied on THIS path too -- but REPORTED rather than
+            // thrown, which is the form that satisfies both contracts at once. That guard -- "slides on
+            // disk, none reachable" -- lives after sldIdLst is read, and a presentation.xml that will
+            // not PARSE returns here long before reaching it. So the exact end state r448 calls
+            // intolerable, and describes in its own words as "a partially written save ... yields
+            // ZERO slides and no error at all", was still reachable: truncating ppt/presentation.xml
+            // opened the deck as slides=0 with no warning, and saving over it would discard every
+            // slide the package still holds.
+            //
+            // The narrowness that makes r448 safe is preserved exactly: a genuinely slide-less
+            // package has no slide parts either, so it still opens silently.
+            //
+            // Throwing here was the first attempt and it was WRONG: Read_PresentationXmlPartPresent
+            // ButFailsHardenedXmlLoad_StillDegradesToEmpty_NotThrow exists precisely to stop the
+            // missing-part check being widened into the XML-parse-failure case, because a DTD-poisoned
+            // presentation.xml must be QUARANTINED rather than crash the open. That test caught it.
+            // A warning satisfies both: the malicious payload still degrades to an empty deck without
+            // throwing, and the user is still told that slides on disk went unread before they save
+            // over them.
+            if (PackageContainsSlideParts(archive))
+            {
+                warnings.Add(
+                    "This presentation appears to be damaged: it contains slides, but none of them " +
+                    "could be read. Saving over the original would discard the slides it still holds.");
+            }
+
+            return presentation;
+        }
 
         var presRoot = presXml.Root;
         var presDir = GetDirectoryName(presPath);
@@ -249,18 +328,18 @@ public static class PptxPackageReader
         var sldSz = presRoot.Element(P + "sldSz");
         if (sldSz is not null)
         {
-            if (long.TryParse(sldSz.Attribute("cx")?.Value, out var cx) && cx > 0)
+            if (long.TryParse(sldSz.Attribute("cx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cx) && cx > 0)
                 presentation.SlideSizeCxEmu = cx;
-            if (long.TryParse(sldSz.Attribute("cy")?.Value, out var cy) && cy > 0)
+            if (long.TryParse(sldSz.Attribute("cy")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cy) && cy > 0)
                 presentation.SlideSizeCyEmu = cy;
         }
 
         var notesSz = presRoot.Element(P + "notesSz");
         if (notesSz is not null)
         {
-            if (long.TryParse(notesSz.Attribute("cx")?.Value, out var cx) && cx > 0)
+            if (long.TryParse(notesSz.Attribute("cx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cx) && cx > 0)
                 presentation.NotesPageSizeCxEmu = cx;
-            if (long.TryParse(notesSz.Attribute("cy")?.Value, out var cy) && cy > 0)
+            if (long.TryParse(notesSz.Attribute("cy")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cy) && cy > 0)
                 presentation.NotesPageSizeCyEmu = cy;
         }
 
@@ -448,6 +527,27 @@ public static class PptxPackageReader
             slideInfos.Add((rId, ResolveRelationshipTargetZipPath(archive, presDir, slideRel.Target)));
         }
 
+        // r448: a package that CARRIES slide parts but resolves none of them is damaged, and must say
+        // so instead of opening as an empty deck.
+        //
+        // Everything above is deliberately tolerant -- missing elements read as absent, and the
+        // per-slide catch below keeps one bad slide from costing the whole deck. That tolerance has
+        // one intolerable end state: sldIdLst is read with a null-conditional, so a presentation.xml
+        // the reader does not recognise (a partially written save, or simply an unexpected namespace)
+        // yields ZERO slides and no error at all. The user opens their deck, sees an empty document,
+        // and the moment they save, the original is overwritten with nothing.
+        //
+        // The condition is deliberately narrow. A genuinely slide-less package -- which this writer
+        // can produce for an empty Presentation -- has no slide parts either, so it still opens
+        // silently. Only the contradiction is rejected: slides on disk, none reachable.
+        if (slideInfos.Count == 0 && PackageContainsSlideParts(archive))
+        {
+            throw new InvalidDataException(
+                "This presentation appears to be damaged: it contains slides, but none of them could " +
+                "be read. Opening it would show an empty presentation and saving would discard the " +
+                "slides it still holds.");
+        }
+
         // Create placeholder slides (with Id set) for the allSlides reference list.
         var allSlides = new List<Slide>(slideInfos.Count);
         foreach (var (rId, _) in slideInfos)
@@ -456,7 +556,7 @@ public static class PptxPackageReader
             allSlides.Add(new Slide
             {
                 Id = rId,
-                NumericId = uint.TryParse(numericId, out var parsedId) ? parsedId : null,
+                NumericId = uint.TryParse(numericId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedId) ? parsedId : null,
             });
         }
 
@@ -471,10 +571,14 @@ public static class PptxPackageReader
         for (int si = 0; si < slideInfos.Count; si++)
         {
             var (rId, slidePath) = slideInfos[si];
+
             Slide slide;
             try
             {
-                slide = ReadSlide(archive, slidePath, rId, presentation.Theme.ColorScheme, presentation.Layouts, tableStyles, allSlides, slidePartPathToId, presentation.Theme, mastersByPath);
+                slide = ReadSlide(archive, slidePath, rId, presentation.Theme.ColorScheme, presentation.Layouts, tableStyles, allSlides, slidePartPathToId, presentation.Theme, mastersByPath,
+                    _ => warnings.Add(
+                        $"Slide {si + 1} is damaged and was opened blank. Saving over the original " +
+                        "would discard whatever it still contains."));
                 slide.NumericId = allSlides[si].NumericId;
             }
             catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
@@ -483,6 +587,13 @@ public static class PptxPackageReader
                 // placeholder built in phase 1 (correct id, position and numeric id) so the deck
                 // still opens with the remaining slides intact and slide-jump hyperlinks resolve.
                 slide = allSlides[si];
+
+                // r454: but SAY SO. Recovering silently means the user sees a blank slide, assumes
+                // it was always blank, and destroys whatever it held on the next save. PowerPoint
+                // recovers too and tells you it did.
+                warnings.Add(
+                    $"Slide {si + 1} is damaged and was opened blank. Saving over the original would " +
+                    "discard whatever it still contains.");
             }
 
             // Replace the placeholder so hyperlinks referencing this slide still get the same object.
@@ -696,6 +807,16 @@ public static class PptxPackageReader
         return new PptxPackageSnapshot(entries);
     }
 
+    /// <summary>
+    /// r448: whether the package physically carries slide parts, independent of whether
+    /// presentation.xml manages to reference any. Matched on the conventional path rather than
+    /// through relationships, precisely because the relationship graph is what may be damaged.
+    /// </summary>
+    private static bool PackageContainsSlideParts(ZipArchive archive) =>
+        archive.Entries.Any(entry =>
+            entry.FullName.StartsWith("ppt/slides/slide", StringComparison.OrdinalIgnoreCase) &&
+            entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
+
     private static bool TryReadPackageEntry(ZipArchive archive, string path, out byte[] bytes)
     {
         bytes = Array.Empty<byte>();
@@ -840,7 +961,7 @@ public static class PptxPackageReader
 
         foreach (var cmAuthorEl in xml.Root.Elements(P + "cmAuthor"))
         {
-            if (!int.TryParse(cmAuthorEl.Attribute("id")?.Value, out var id)) continue;
+            if (!int.TryParse(cmAuthorEl.Attribute("id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id)) continue;
             var name     = cmAuthorEl.Attribute("name")?.Value     ?? string.Empty;
             var initials = cmAuthorEl.Attribute("initials")?.Value ?? string.Empty;
             result[id] = (name, initials);
@@ -889,8 +1010,8 @@ public static class PptxPackageReader
 
         foreach (var cmEl in xml.Root.Elements(P + "cm"))
         {
-            if (!int.TryParse(cmEl.Attribute("authorId")?.Value, out var authorId)) authorId = 0;
-            if (!int.TryParse(cmEl.Attribute("idx")?.Value, out var idx)) idx = 0;
+            if (!int.TryParse(cmEl.Attribute("authorId")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var authorId)) authorId = 0;
+            if (!int.TryParse(cmEl.Attribute("idx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx)) idx = 0;
 
             // BB6: don't silently fabricate an empty author when authorId is not in the map.
             // Preserve the numeric id as a placeholder so identity is not destroyed on round-trip.
@@ -1262,14 +1383,14 @@ public static class PptxPackageReader
             level.BulletSizePct = null;
         }
         else if (lvlEl.Element(A + "buSzPts") is { } buSzPtsL &&
-                 int.TryParse(buSzPtsL.Attribute("val")?.Value, out var szPtsL) &&
+                 int.TryParse(buSzPtsL.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var szPtsL) &&
                  szPtsL > 0)
         {
             level.BulletSizePt = szPtsL / 100.0;
             level.BulletSizePct = null;
         }
         else if (lvlEl.Element(A + "buSzPct") is { } buSzPctL &&
-                 int.TryParse(buSzPctL.Attribute("val")?.Value, out var szPctL))
+                 int.TryParse(buSzPctL.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var szPctL))
         {
             level.BulletSizePct = szPctL;
         }
@@ -1376,12 +1497,42 @@ public static class PptxPackageReader
         List<Slide>? allSlides = null,
         IReadOnlyDictionary<string, string>? slidePartPathToId = null,
         PresentationTheme? theme = null,
-        IReadOnlyDictionary<string, SlideMaster>? mastersByPath = null)
+        IReadOnlyDictionary<string, SlideMaster>? mastersByPath = null,
+        // r454: where a damaged slide is REPORTED. Passed in rather than detected by the caller,
+        // because the caller would have to parse the part a second time to learn what this method
+        // already knows -- and these decks reach hundreds of slides, so paying a double parse on
+        // every healthy open to describe a rare damaged one is the wrong trade.
+        Action<string>? reportUnreadablePart = null)
     {
         var slide = new Slide { Id = slideId };
 
         var xml = TryLoadXmlPart(archive, slidePath);
-        if (xml?.Root is null) return slide;
+        if (xml?.Root is null)
+        {
+            // The quiet path: a slide part that will not parse yields a BLANK slide and never throws,
+            // so the per-slide catch in the caller is not even reached. Once this has returned, a
+            // slide blank because it was damaged is indistinguishable from one the author left blank
+            // -- which is precisely what made the loss invisible.
+            reportUnreadablePart?.Invoke(slidePath);
+            return slide;
+        }
+
+        // r601: the part parsed, but it is not a SLIDE. Found by giving a slide part another part's
+        // XML -- valid zip, well-formed XML, wrong schema, the shape a buggy writer or a bad merge
+        // produces. TryLoadXmlPart returns a document, so the check above cannot see it, and every
+        // p:sld-relative lookup below then finds nothing: the slide reads BLANK and silently.
+        //
+        // r454 built the reporting for exactly this harm and said so -- "a slide blank because it was
+        // damaged is indistinguishable from one the author left blank, which is precisely what made
+        // the loss invisible" -- but it fires only when the part will not parse at all. The root
+        // element name is a decisive test with no false positives: a slide part whose root is not
+        // p:sld is wrong whatever else it contains, unlike "declares nothing", which is legitimate
+        // for many parts.
+        if (xml.Root.Name != P + "sld")
+        {
+            reportUnreadablePart?.Invoke(slidePath);
+            return slide;
+        }
 
         slide.IsHidden = xml.Root.Attribute("show")?.Value is { } show &&
             (show == "0" || string.Equals(show, "false", StringComparison.OrdinalIgnoreCase));
@@ -1671,6 +1822,14 @@ public static class PptxPackageReader
     /// </summary>
     private const int MaxShapeGroupNestingDepth = 64;
 
+    /// <summary>
+    /// r501: the same ceiling for a SmartArt point chain. A diagram's hierarchy is rebuilt by
+    /// recursion over parent-of connections, so its depth is chosen by the file. Real diagrams are
+    /// a handful of levels deep -- an organisation chart that reached 64 would be unreadable -- so
+    /// stopping here costs nothing real and removes an unrecoverable failure.
+    /// </summary>
+    private const int MaxSmartArtNodeDepth = 64;
+
     private static IEnumerable<SlideShape> ReadShapesFromTree(
         XElement spTree, ZipArchive archive, string partPath, PresentationColorScheme scheme,
         Dictionary<string, TableStyleData>? tableStyles = null,
@@ -1810,7 +1969,7 @@ public static class PptxPackageReader
                     var targetSeg = rel.Target.Split('/').Last(); // e.g. "slide2.xml"
                     var numStr = System.Text.RegularExpressions.Regex
                         .Match(targetSeg, @"\d+").Value;
-                    if (int.TryParse(numStr, out var num) && num >= 1 && num <= allSlides.Count)
+                    if (int.TryParse(numStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var num) && num >= 1 && num <= allSlides.Count)
                     {
                         var targetSlide = allSlides[num - 1];
                         return new Hyperlink { TargetSlideId = targetSlide.Id, Tooltip = tooltip };
@@ -2278,7 +2437,7 @@ public static class PptxPackageReader
         var target = graphicFrame.Descendants()
             .FirstOrDefault(element => string.Equals(element.Name.LocalName, "sldZmObj", StringComparison.OrdinalIgnoreCase))
             ?.Attribute("sldId")?.Value;
-        return uint.TryParse(target, out var slideId) ? slideId : null;
+        return uint.TryParse(target, NumberStyles.Integer, CultureInfo.InvariantCulture, out var slideId) ? slideId : null;
     }
 
     /// <summary>
@@ -3128,7 +3287,10 @@ public static class PptxPackageReader
     private static double? ReadDiagramColorPercentage(XElement colorEl, string localName)
     {
         var raw = colorEl.Elements().FirstOrDefault(e => e.Name.LocalName == localName)?.Attribute("val")?.Value;
-        if (!double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+        // r548: IsFinite as well as TryParse -- Math.Clamp bounds Infinity but PASSES NaN THROUGH,
+        // so the clamp below is not the guard it looks like. Same trap as FreeW's ParseVmlOpacity.
+        if (!double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+            || !double.IsFinite(value))
             return null;
         return Math.Clamp(value / 100000.0, 0.0, 1.0);
     }
@@ -3261,7 +3423,7 @@ public static class PptxPackageReader
 
                 if (!childrenOf.TryGetValue(srcId, out var kids))
                     childrenOf[srcId] = kids = new List<(string Id, int Order, int Sequence)>();
-                var srcOrd = int.TryParse(cxn.Attribute("srcOrd")?.Value, out var parsedSrcOrd)
+                var srcOrd = int.TryParse(cxn.Attribute("srcOrd")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedSrcOrd)
                     ? parsedSrcOrd
                     : int.MaxValue;
                 kids.Add((destId, srcOrd, connectionSequence++));
@@ -3295,6 +3457,15 @@ public static class PptxPackageReader
                 Level      = level,
                 IsAssistant = isAsst
             };
+            // r501: buildPath already stops a CYCLE, but nothing stopped DEPTH. A diagram whose
+            // points form a long parent-of chain recursed once per link, and a 5,000-node chain --
+            // a small file, since each point is a few dozen bytes -- overflowed the stack while
+            // OPENING the deck. StackOverflowException cannot be caught, so the process dies with
+            // no error and no recovery. Same bound and same reasoning as MaxShapeGroupNestingDepth
+            // above, which guards the shape tree in this very reader; SmartArt was simply missed.
+            if (level > MaxSmartArtNodeDepth)
+                return node;
+
             if (!buildPath.Add(id))
                 return node;
 
@@ -4695,8 +4866,8 @@ public static class PptxPackageReader
     private static ConnectorAttachment? ReadDspConnectorAttachment(XElement? element)
     {
         if (element is null ||
-            !uint.TryParse(element.Attribute("id")?.Value, out var shapeId) ||
-            !int.TryParse(element.Attribute("idx")?.Value, out var siteIndex))
+            !uint.TryParse(element.Attribute("id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shapeId) ||
+            !int.TryParse(element.Attribute("idx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var siteIndex))
         {
             return null;
         }
@@ -4848,9 +5019,9 @@ public static class PptxPackageReader
         var cell = new TableCell();
 
         // Merge attributes.
-        if (int.TryParse(tcEl.Attribute("gridSpan")?.Value, out var gs) && gs > 1)
+        if (int.TryParse(tcEl.Attribute("gridSpan")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var gs) && gs > 1)
             cell.GridSpan = gs;
-        if (int.TryParse(tcEl.Attribute("rowSpan")?.Value, out var rs) && rs > 1)
+        if (int.TryParse(tcEl.Attribute("rowSpan")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rs) && rs > 1)
             cell.RowSpan = rs;
         cell.HMerge = tcEl.Attribute("hMerge")?.Value is "1" or "true";
         cell.VMerge = tcEl.Attribute("vMerge")?.Value is "1" or "true";
@@ -5389,16 +5560,16 @@ public static class PptxPackageReader
         {
             var stCxnEl = cNvCxnSpPr.Element(A + "stCxn");
             if (stCxnEl is not null &&
-                uint.TryParse(stCxnEl.Attribute("id")?.Value, out var stId) &&
-                int.TryParse(stCxnEl.Attribute("idx")?.Value, out var stIdx))
+                uint.TryParse(stCxnEl.Attribute("id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var stId) &&
+                int.TryParse(stCxnEl.Attribute("idx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var stIdx))
             {
                 shape.ConnectionStart = new ConnectorAttachment { ShapeId = stId, SiteIndex = stIdx };
             }
 
             var endCxnEl = cNvCxnSpPr.Element(A + "endCxn");
             if (endCxnEl is not null &&
-                uint.TryParse(endCxnEl.Attribute("id")?.Value, out var endId) &&
-                int.TryParse(endCxnEl.Attribute("idx")?.Value, out var endIdx))
+                uint.TryParse(endCxnEl.Attribute("id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var endId) &&
+                int.TryParse(endCxnEl.Attribute("idx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var endIdx))
             {
                 shape.ConnectionEnd = new ConnectorAttachment { ShapeId = endId, SiteIndex = endIdx };
             }
@@ -5942,7 +6113,7 @@ public static class PptxPackageReader
                     valueText,
                     NumberStyles.Float,
                     CultureInfo.InvariantCulture,
-                    out var value))
+                    out var value) && double.IsFinite(value))
             {
                 shape.PresetGeometryAdjustments[name] = value;
             }
@@ -6065,7 +6236,14 @@ public static class PptxPackageReader
         // Look for a:alpha child directly on the color element
         var alphaEl = colorEl.Element(A + "alpha");
         if (alphaEl is not null && long.TryParse(alphaEl.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var alpha100k))
-            return (byte)(alpha100k * 255 / 100000);
+        {
+            // r428: ROUNDED, not truncated. Alpha is a byte here and a percentage in the file, and
+            // both conversions used integer division, so every save-and-reload lost one step: 0x40
+            // was written as 25098 (truncated from 25098.04) and read back as 63.99 -> 0x3F. Adding
+            // half the divisor before dividing recovers the original for all 256 values, which the
+            // accompanying test checks exhaustively rather than at a sample.
+            return (byte)Math.Min(255L, (alpha100k * 255 + 50000) / 100000);
+        }
         return 0x80; // default ~50% opacity
     }
 
@@ -6073,7 +6251,7 @@ public static class PptxPackageReader
     {
         if (string.IsNullOrWhiteSpace(value)) return 0;
         return double.TryParse(value, NumberStyles.Float,
-            CultureInfo.InvariantCulture, out var v) ? v : 0;
+            CultureInfo.InvariantCulture, out var v) && double.IsFinite(v) ? v : 0;
     }
 
     // ── TextBody ─────────────────────────────────────────────────────────────────
@@ -6116,9 +6294,9 @@ public static class PptxPackageReader
             // Wave 19A: parse cached normAutofit scaling values
             if (normAf is not null)
             {
-                if (int.TryParse(normAf.Attribute("fontScale")?.Value, out var fs) && fs > 0)
+                if (int.TryParse(normAf.Attribute("fontScale")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fs) && fs > 0)
                     body.FontScalePPT = fs;
-                if (int.TryParse(normAf.Attribute("lnSpcReduction")?.Value, out var lsr) && lsr > 0)
+                if (int.TryParse(normAf.Attribute("lnSpcReduction")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var lsr) && lsr > 0)
                     body.LnSpcReductionPPT = lsr;
             }
 
@@ -6162,7 +6340,7 @@ public static class PptxPackageReader
             }
 
             // Wave 22B: text columns (a:bodyPr numCol= spcCol=)
-            if (int.TryParse(bodyPr.Attribute("numCol")?.Value, out var numCol) && numCol > 1)
+            if (int.TryParse(bodyPr.Attribute("numCol")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var numCol) && numCol > 1)
                 body.ColumnCount = numCol;
             if (ParseLongNullable(bodyPr.Attribute("spcCol")?.Value) is { } spcColEmu)
                 body.ColumnSpacingEmu = spcColEmu;
@@ -6228,7 +6406,7 @@ public static class PptxPackageReader
             };
             para.RightToLeft = ParseNullableBoolean(pPr.Attribute("rtl")?.Value);
 
-            if (int.TryParse(pPr.Attribute("lvl")?.Value, out var lvl)) para.Level = Math.Clamp(lvl, 0, 8); // BU3: clamp to valid array range [0,8]
+            if (int.TryParse(pPr.Attribute("lvl")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var lvl)) para.Level = Math.Clamp(lvl, 0, 8); // BU3: clamp to valid array range [0,8]
 
             if (pPr.Element(A + "buNone") is not null)
             {
@@ -6244,7 +6422,7 @@ public static class PptxPackageReader
             {
                 para.BulletKind = BulletKind.Auto;
                 para.AutoNumType = PptxAutoNumberTypeCodec.Parse(buAutoNum.Attribute("type")?.Value);
-                if (int.TryParse(buAutoNum.Attribute("startAt")?.Value, out var startAt) && startAt >= 1)
+                if (int.TryParse(buAutoNum.Attribute("startAt")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var startAt) && startAt >= 1)
                 {
                     para.AutoNumStartAt = startAt;
                     para.AutoNumStartAtSpecified = true;
@@ -6284,14 +6462,14 @@ public static class PptxPackageReader
                 para.BulletSizePct = null;
             }
             else if (pPr.Element(A + "buSzPts") is { } buSzPts &&
-                     int.TryParse(buSzPts.Attribute("val")?.Value, out var szPts) &&
+                     int.TryParse(buSzPts.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var szPts) &&
                      szPts > 0)
             {
                 para.BulletSizePt = szPts / 100.0;
                 para.BulletSizePct = null;
             }
             else if (pPr.Element(A + "buSzPct") is { } buSzPct &&
-                     int.TryParse(buSzPct.Attribute("val")?.Value, out var szPct))
+                     int.TryParse(buSzPct.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var szPct))
             {
                 para.BulletSizePct = szPct;
             }
@@ -6320,7 +6498,7 @@ public static class PptxPackageReader
             {
                 foreach (var tabEl in tabLst.Elements(A + "tab"))
                 {
-                    if (!long.TryParse(tabEl.Attribute("pos")?.Value, out var tabPos)) continue;
+                    if (!long.TryParse(tabEl.Attribute("pos")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var tabPos)) continue;
                     var tabAlgn = tabEl.Attribute("algn")?.Value switch
                     {
                         "ctr"  => TabStopAlignment.Center,
@@ -6619,7 +6797,7 @@ public static class PptxPackageReader
         var rPr = fldEl.Element(A + "rPr");
         if (rPr is not null)
         {
-            if (int.TryParse(rPr.Attribute("sz")?.Value, out var sz) && sz > 0)
+            if (int.TryParse(rPr.Attribute("sz")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sz) && sz > 0)
                 fld.FontSizePt = sz / 100.0;
             fld.FontFamily = rPr.Element(A + "latin")?.Attribute("typeface")?.Value;
             fld.EastAsiaFontFamily = rPr.Element(A + "ea")?.Attribute("typeface")?.Value;
@@ -6632,11 +6810,11 @@ public static class PptxPackageReader
             fld.Kumimoji = ParseNullableBoolean(rPr.Attribute("kumimoji")?.Value);
             fld.SmartTagClean = ParseNullableBoolean(rPr.Attribute("smtClean")?.Value);
             fld.NormalizeHeight = ParseNullableBoolean(rPr.Attribute("normalizeH")?.Value);
-            if (int.TryParse(rPr.Attribute("spc")?.Value, out var characterSpacing))
+            if (int.TryParse(rPr.Attribute("spc")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var characterSpacing))
                 fld.CharacterSpacingHundredthsPt = characterSpacing;
-            if (int.TryParse(rPr.Attribute("kern")?.Value, out var kerningThreshold))
+            if (int.TryParse(rPr.Attribute("kern")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var kerningThreshold))
                 fld.KerningThresholdHundredthsPt = kerningThreshold;
-            if (int.TryParse(rPr.Attribute("baseline")?.Value, out var baseline))
+            if (int.TryParse(rPr.Attribute("baseline")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var baseline))
                 fld.BaselineOffset = baseline;
             fld.RightToLeft = ParseNullableBoolean(rPr.Attribute("rtl")?.Value);
             fld.Caps = rPr.Attribute("cap")?.Value.ToLowerInvariant() switch
@@ -6704,9 +6882,9 @@ public static class PptxPackageReader
             run.Kumimoji = ParseNullableBoolean(rPr.Attribute("kumimoji")?.Value);
             run.SmartTagClean = ParseNullableBoolean(rPr.Attribute("smtClean")?.Value);
             run.NormalizeHeight = ParseNullableBoolean(rPr.Attribute("normalizeH")?.Value);
-            if (int.TryParse(rPr.Attribute("spc")?.Value, out var characterSpacing))
+            if (int.TryParse(rPr.Attribute("spc")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var characterSpacing))
                 run.CharacterSpacingHundredthsPt = characterSpacing;
-            if (int.TryParse(rPr.Attribute("kern")?.Value, out var kerningThreshold))
+            if (int.TryParse(rPr.Attribute("kern")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var kerningThreshold))
                 run.KerningThresholdHundredthsPt = kerningThreshold;
             run.UnderlineStyleToken = rPr.Attribute("u")?.Value;
             run.StrikeStyleToken = rPr.Attribute("strike")?.Value;
@@ -6726,9 +6904,9 @@ public static class PptxPackageReader
                 "small" => RunTextCaps.Small,
                 _ => RunTextCaps.None,
             };
-            if (int.TryParse(rPr.Attribute("sz")?.Value, out var sz) && sz > 0)
+            if (int.TryParse(rPr.Attribute("sz")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sz) && sz > 0)
                 run.FontSizePt = sz / 100.0;
-            if (int.TryParse(rPr.Attribute("baseline")?.Value, out var baseline))
+            if (int.TryParse(rPr.Attribute("baseline")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var baseline))
                 run.BaselineOffset = baseline;
             run.FontFamily = rPr.Element(A + "latin")?.Attribute("typeface")?.Value;
             run.EastAsiaFontFamily = rPr.Element(A + "ea")?.Attribute("typeface")?.Value;
@@ -6774,9 +6952,9 @@ public static class PptxPackageReader
                         alpha = (byte)Math.Clamp((int)Math.Round(av / 100000.0 * 255), 0, 255);
                 }
                 double blurPt = 2.0, distPt = 2.0, dirDeg = 45.0;
-                if (long.TryParse(outerShdw.Attribute("blurRad")?.Value, out var blurEmu)) blurPt = DrawingMlCoordinateUnits.EmuToPoints(blurEmu);
-                if (long.TryParse(outerShdw.Attribute("dist")?.Value,    out var distEmu)) distPt = DrawingMlCoordinateUnits.EmuToPoints(distEmu);
-                if (long.TryParse(outerShdw.Attribute("dir")?.Value,     out var dirRaw))  dirDeg = dirRaw  / 60000.0;
+                if (long.TryParse(outerShdw.Attribute("blurRad")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var blurEmu)) blurPt = DrawingMlCoordinateUnits.EmuToPoints(blurEmu);
+                if (long.TryParse(outerShdw.Attribute("dist")?.Value,    NumberStyles.Integer, CultureInfo.InvariantCulture, out var distEmu)) distPt = DrawingMlCoordinateUnits.EmuToPoints(distEmu);
+                if (long.TryParse(outerShdw.Attribute("dir")?.Value,     NumberStyles.Integer, CultureInfo.InvariantCulture, out var dirRaw))  dirDeg = dirRaw  / 60000.0;
                 run.TextShadow = new RunTextShadow
                 {
                     Color  = shdwColor ?? new ThemeAwareColor(new SrgbColor(0, 0, 0)),
@@ -6800,11 +6978,11 @@ public static class PptxPackageReader
                     alpha = (byte)Math.Clamp((int)Math.Round(stA / 100000.0 * 255), 0, 255);
 
                 double blurPt = 0, distPt = 0, dirDeg = 90.0, scaleY = -1.0, endPos = 1.0;
-                if (long.TryParse(reflection.Attribute("blurRad")?.Value, out var blurEmu)) blurPt = DrawingMlCoordinateUnits.EmuToPoints(blurEmu);
-                if (long.TryParse(reflection.Attribute("dist")?.Value, out var distEmu)) distPt = DrawingMlCoordinateUnits.EmuToPoints(distEmu);
-                if (long.TryParse(reflection.Attribute("dir")?.Value, out var dirRaw)) dirDeg = dirRaw / 60000.0;
-                if (long.TryParse(reflection.Attribute("sy")?.Value, out var syRaw) && syRaw != 0) scaleY = syRaw / 100000.0;
-                if (long.TryParse(reflection.Attribute("endPos")?.Value, out var endPosRaw)) endPos = Math.Clamp(endPosRaw / 100000.0, 0.0, 1.0);
+                if (long.TryParse(reflection.Attribute("blurRad")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var blurEmu)) blurPt = DrawingMlCoordinateUnits.EmuToPoints(blurEmu);
+                if (long.TryParse(reflection.Attribute("dist")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var distEmu)) distPt = DrawingMlCoordinateUnits.EmuToPoints(distEmu);
+                if (long.TryParse(reflection.Attribute("dir")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dirRaw)) dirDeg = dirRaw / 60000.0;
+                if (long.TryParse(reflection.Attribute("sy")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var syRaw) && syRaw != 0) scaleY = syRaw / 100000.0;
+                if (long.TryParse(reflection.Attribute("endPos")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var endPosRaw)) endPos = Math.Clamp(endPosRaw / 100000.0, 0.0, 1.0);
 
                 run.TextReflection = new RunTextReflection
                 {
@@ -6822,7 +7000,7 @@ public static class PptxPackageReader
             if (glow is not null)
             {
                 double radiusPt = 0;
-                if (long.TryParse(glow.Attribute("rad")?.Value, out var radEmu))
+                if (long.TryParse(glow.Attribute("rad")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var radEmu))
                     radiusPt = DrawingMlCoordinateUnits.EmuToPoints(radEmu);
 
                 byte alpha = 0xA0;
@@ -6844,7 +7022,7 @@ public static class PptxPackageReader
             if (softEdge is not null)
             {
                 double radiusPt = 0;
-                if (long.TryParse(softEdge.Attribute("rad")?.Value, out var radEmu))
+                if (long.TryParse(softEdge.Attribute("rad")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var radEmu))
                     radiusPt = DrawingMlCoordinateUnits.EmuToPoints(radEmu);
 
                 run.TextSoftEdge = new RunTextSoftEdge
@@ -6941,7 +7119,7 @@ public static class PptxPackageReader
         if (preferP14Dur)
         {
             // p14:dur is the namespaced attribute on p:transition inside mc:Choice
-            if (int.TryParse(transEl.Attribute(P14 + "dur")?.Value, out var p14Dur) && p14Dur > 0)
+            if (int.TryParse(transEl.Attribute(P14 + "dur")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var p14Dur) && p14Dur > 0)
                 t.DurationMs = p14Dur;
         }
         // (No bare "dur" fallback — bare dur on p:transition is invalid and was the bug we're fixing.)
@@ -6950,7 +7128,7 @@ public static class PptxPackageReader
         t.AdvanceOnClick = transEl.Attribute("advClick")?.Value != "0";
 
         // advTm (auto-advance)
-        if (int.TryParse(transEl.Attribute("advTm")?.Value, out var advTm) && advTm > 0)
+        if (int.TryParse(transEl.Attribute("advTm")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var advTm) && advTm > 0)
             t.AdvanceAfterMs = advTm;
 
         // EB2: Find the effect child element across P, P14, and P159 namespaces.
@@ -7244,7 +7422,7 @@ public static class PptxPackageReader
             if (cond.Attribute("evt")?.Value == "onClick")
             {
                 var spTgt = cond.Descendants(P + "spTgt").FirstOrDefault();
-                if (spTgt is not null && uint.TryParse(spTgt.Attribute("spid")?.Value, out var spid))
+                if (spTgt is not null && uint.TryParse(spTgt.Attribute("spid")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var spid))
                     return spid;
             }
         }
@@ -7335,7 +7513,7 @@ public static class PptxPackageReader
         // bounded descendant search within innerChildTnLst, excluding any p:cTn that has a p:set
         // ancestor (which would be the sentinel dur="1" on the p:set behavior element).
         int durationMs = 500;
-        if (int.TryParse(cTn.Attribute("dur")?.Value, out var d) && d > 0)
+        if (int.TryParse(cTn.Attribute("dur")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var d) && d > 0)
         {
             durationMs = d;
         }
@@ -7350,7 +7528,7 @@ public static class PptxPackageReader
                 // Primary: animCTn is a direct p:cTn child of innerChildTnLst (FreeP's own form).
                 var animCTn = innerChildTnLst.Elements(P + "cTn").FirstOrDefault();
                 if (animCTn is not null &&
-                    int.TryParse(animCTn.Attribute("dur")?.Value, out var animDur) && animDur >= 1)
+                    int.TryParse(animCTn.Attribute("dur")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var animDur) && animDur >= 1)
                 {
                     durationMs = animDur;
                 }
@@ -7365,7 +7543,7 @@ public static class PptxPackageReader
                             c.Attribute("dur") != null &&
                             !c.Ancestors(P + "set").Any());
                     if (fallbackCTn is not null &&
-                        int.TryParse(fallbackCTn.Attribute("dur")?.Value, out var fbDur) && fbDur >= 1)
+                        int.TryParse(fallbackCTn.Attribute("dur")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fbDur) && fbDur >= 1)
                         durationMs = fbDur;
                 }
             }
@@ -7381,7 +7559,7 @@ public static class PptxPackageReader
             var delay = cond?.Attribute("delay")?.Value;
             if (delay == "indefinite")
                 innerTrigger = AnimationTrigger.OnClick;
-            else if (delay != null && int.TryParse(delay, out var delayVal))
+            else if (delay != null && int.TryParse(delay, NumberStyles.Integer, CultureInfo.InvariantCulture, out var delayVal))
             {
                 delayMs = delayVal;
                 innerTrigger = delayVal == 0 ? AnimationTrigger.WithPrevious : AnimationTrigger.AfterPrevious;
@@ -7411,7 +7589,7 @@ public static class PptxPackageReader
         var presetClass = cTn.Attribute("presetClass")?.Value;
         var presetIdStr = cTn.Attribute("presetID")?.Value;
         if (string.IsNullOrEmpty(presetClass)) return null;
-        if (!int.TryParse(presetIdStr, out var presetId)) return null;
+        if (!int.TryParse(presetIdStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var presetId)) return null;
 
         var presetSubtype = cTn.Attribute("presetSubtype")?.Value;
         var scaleBehavior = ReadScaleBehavior(
@@ -7494,7 +7672,7 @@ public static class PptxPackageReader
 
         var spTgt = FindSpTgt(buildPar);
         if (spTgt is null) return null;
-        if (!uint.TryParse(spTgt.Attribute("spid")?.Value, out var shapeId)) return null;
+        if (!uint.TryParse(spTgt.Attribute("spid")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shapeId)) return null;
         var (paragraphRangeStart, paragraphRangeEnd) = ReadParagraphRange(spTgt);
 
         var (kind, preset) = PptxAnimationMap.OoxmlToAnimationPreset(presetClass, presetId);
@@ -7513,7 +7691,14 @@ public static class PptxPackageReader
             var numericTo = buildPar.Descendants(P + "anim")
                 .FirstOrDefault(element => element.Attribute("valueType")?.Value == "num")
                 ?.Attribute("to")?.Value;
+            // r486: `scale >= 0` alone admits POSITIVE infinity -- .NET parses "Infinity" and
+            // overflows "1e999" to it -- and this value comes straight off the file. An infinite
+            // scale is then stored as the literal "Infinity" by AnimationScaleBehavior.Format and
+            // written back out verbatim as x="Infinity", which is not a number in ST_Percentage: the
+            // deck we SAVE is the one PowerPoint refuses. Sibling of r485, which guarded the string
+            // parser; this site parses the double itself and so needed its own check.
             if (double.TryParse(numericTo, NumberStyles.Float, CultureInfo.InvariantCulture, out var scale)
+                && double.IsFinite(scale)
                 && scale >= 0)
             {
                 scaleBehavior = AnimationScaleBehavior.FromTo(scale);
@@ -7583,9 +7768,9 @@ public static class PptxPackageReader
     {
         var pRg = spTgt.Element(P + "txEl")?.Element(P + "pRg");
         if (pRg is null) return (null, null);
-        if (!int.TryParse(pRg.Attribute("st")?.Value, out var start) || start < 0)
+        if (!int.TryParse(pRg.Attribute("st")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var start) || start < 0)
             return (null, null);
-        var end = int.TryParse(pRg.Attribute("end")?.Value, out var e) && e >= start ? e : start;
+        var end = int.TryParse(pRg.Attribute("end")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var e) && e >= start ? e : start;
         return (start, end);
     }
 
@@ -7716,11 +7901,11 @@ public static class PptxPackageReader
         var spTgt = cBhvr?.Element(P + "tgtEl")?.Element(P + "spTgt")
                  ?? FindSpTgt(buildPar);
         if (spTgt is null) return null;
-        if (!uint.TryParse(spTgt.Attribute("spid")?.Value, out var shapeId)) return null;
+        if (!uint.TryParse(spTgt.Attribute("spid")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shapeId)) return null;
 
         // Duration from animMotion/cBhvr/cTn
         var cTnDur = cBhvr?.Element(P + "cTn")?.Attribute("dur")?.Value;
-        if (cTnDur != null && int.TryParse(cTnDur, out var d) && d > 0)
+        if (cTnDur != null && int.TryParse(cTnDur, NumberStyles.Integer, CultureInfo.InvariantCulture, out var d) && d > 0)
             durationMs = d;
 
         // Delay: read from the outer buildPar cTn/stCondLst/cond/@delay, mirroring
@@ -7731,7 +7916,7 @@ public static class PptxPackageReader
         {
             var delayCond = outerStCondLst.Element(P + "cond");
             var delayVal = delayCond?.Attribute("delay")?.Value;
-            if (delayVal != null && delayVal != "indefinite" && int.TryParse(delayVal, out var delayParsed))
+            if (delayVal != null && delayVal != "indefinite" && int.TryParse(delayVal, NumberStyles.Integer, CultureInfo.InvariantCulture, out var delayParsed))
             {
                 delayMs = delayParsed;
                 if (trigger != AnimationTrigger.OnClick)
@@ -7876,8 +8061,9 @@ public static class PptxPackageReader
 
     private static double ParsePathDouble(string s)
     {
+        // r548: a non-finite path coordinate would propagate into custom-geometry rendering.
         if (double.TryParse(s.TrimEnd('f'), System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var v))
+                System.Globalization.CultureInfo.InvariantCulture, out var v) && double.IsFinite(v))
             return v;
         return 0;
     }
@@ -7921,7 +8107,7 @@ public static class PptxPackageReader
             var tac = PptxColorReader.TryReadColor(bgRef, scheme);
             if (tac is not null)
                 return new ShapeFill.Solid(tac);
-            if (int.TryParse(bgRef.Attribute("idx")?.Value, out var idx))
+            if (int.TryParse(bgRef.Attribute("idx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx))
             {
                 // Approximate: use the theme background color (dk1 for odd indices, lt1 otherwise).
                 var approxColor = (idx % 2 == 0)
@@ -7961,7 +8147,7 @@ public static class PptxPackageReader
             _ => PlaceholderType.Body
         };
 
-        int.TryParse(ph.Attribute("idx")?.Value, out var idx);
+        int.TryParse(ph.Attribute("idx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx);
         return new Placeholder { Type = type, Idx = idx };
     }
 

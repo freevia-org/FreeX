@@ -64,16 +64,25 @@ public static class DropCap
         var first = paragraph.Runs[firstTextIndex];
         var capFormatting = first.Formatting with { Bold = true, FontSizePt = sizePt };
 
+        // r193: the cap is one TEXT ELEMENT, not one UTF-16 char. `first.Text[..1]` split anything
+        // outside the BMP down the middle of its surrogate pair -- applying Drop Cap to a paragraph
+        // starting with an emoji left a lone high surrogate in the cap run and a lone low surrogate
+        // at the head of the remainder. That is not merely a rendering glitch here: this codebase
+        // treats a lone surrogate in model text as XML-illegal, and the sanitizer chokepoints abort
+        // the WHOLE save when one reaches a writer. Taking a grapheme cluster also keeps a base
+        // letter with its combining marks together, which is what a drop cap should show anyway.
+        var capLength = System.Globalization.StringInfo.GetNextTextElementLength(first.Text);
+
         // Carry the leading character into its own enlarged, bold run; the remainder keeps the original
         // formatting on the existing run (preserving any run-level marks such as a hyperlink).
-        if (first.Text.Length == 1)
+        if (first.Text.Length == capLength)
         {
             first.Formatting = capFormatting;
             paragraph.DropCap = BuildIntent(position, sizePt, lineSpan, distanceFromTextPt);
             return;
         }
 
-        var capRun = new Run(first.Text[..1], capFormatting)
+        var capRun = new Run(first.Text[..capLength], capFormatting)
         {
             HyperlinkUrl = first.HyperlinkUrl,
             HyperlinkAnchor = first.HyperlinkAnchor,
@@ -83,7 +92,7 @@ public static class DropCap
             // or the drop-cap letter silently unlinks from its style.
             StyleId = first.StyleId
         };
-        first.Text = first.Text[1..];
+        first.Text = first.Text[capLength..];
         paragraph.Runs.Insert(firstTextIndex, capRun);
         paragraph.DropCap = BuildIntent(position, sizePt, lineSpan, distanceFromTextPt);
     }

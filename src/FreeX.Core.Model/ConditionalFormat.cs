@@ -416,4 +416,93 @@ public sealed class ConditionalFormat
         clone.IconOverrides.AddRange(IconOverrides);
         return clone;
     }
+
+    /// <summary>
+    /// r249: content comparison, field for field with <see cref="Clone"/>.
+    /// <para>
+    /// ConditionalFormat is a class with reference equality and sixty settable members, so a
+    /// no-op decision about a rule needs this, and hand-listing sixty members is not something
+    /// anyone should be asked to re-read. Clone is already the maintained enumeration of what
+    /// this type consists of -- so R249_ConditionalFormatComparisonCoverageContractTests
+    /// compares THIS method against Clone's own assignment list and fails if they diverge.
+    /// A new member added to Clone and forgotten here is caught by the type's own definition
+    /// of itself rather than by anybody noticing.
+    /// </para>
+    /// </summary>
+    public bool SameAs(ConditionalFormat other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+
+        return
+            Equals(Id, other.Id)
+            && Equals(AppliesTo, other.AppliesTo)
+            && SameRanges(AdditionalRanges, other.AdditionalRanges)
+            && Equals(Priority, other.Priority)
+            && Equals(RuleType, other.RuleType)
+            && Equals(Operator, other.Operator)
+            && Equals(Value1, other.Value1)
+            && Equals(Value2, other.Value2)
+            && Equals(FormatIfTrue, other.FormatIfTrue)
+            && Equals(MinColor, other.MinColor)
+            && Equals(MidColor, other.MidColor)
+            && Equals(MaxColor, other.MaxColor)
+            && Equals(MinColorSource, other.MinColorSource)
+            && Equals(MidColorSource, other.MidColorSource)
+            && Equals(MaxColorSource, other.MaxColorSource)
+            && Equals(UseThreeColorScale, other.UseThreeColorScale)
+            && Equals(MinThresholdType, other.MinThresholdType)
+            && Equals(MinThresholdValue, other.MinThresholdValue)
+            && Equals(MinThresholdGreaterThanOrEqual, other.MinThresholdGreaterThanOrEqual)
+            && Equals(MidThresholdType, other.MidThresholdType)
+            && Equals(MidThresholdValue, other.MidThresholdValue)
+            && Equals(MidThresholdGreaterThanOrEqual, other.MidThresholdGreaterThanOrEqual)
+            && Equals(MaxThresholdType, other.MaxThresholdType)
+            && Equals(MaxThresholdValue, other.MaxThresholdValue)
+            && Equals(MaxThresholdGreaterThanOrEqual, other.MaxThresholdGreaterThanOrEqual)
+            && Equals(DataBarColor, other.DataBarColor)
+            && Equals(DataBarColorSource, other.DataBarColorSource)
+            && Equals(DataBarMinThresholdType, other.DataBarMinThresholdType)
+            && Equals(DataBarMinThresholdValue, other.DataBarMinThresholdValue)
+            && Equals(DataBarMaxThresholdType, other.DataBarMaxThresholdType)
+            && Equals(DataBarMaxThresholdValue, other.DataBarMaxThresholdValue)
+            && Equals(DataBarShowValue, other.DataBarShowValue)
+            && Equals(DataBarMinLength, other.DataBarMinLength)
+            && Equals(DataBarMaxLength, other.DataBarMaxLength)
+            && Equals(DataBarGradient, other.DataBarGradient)
+            && Equals(DataBarBorder, other.DataBarBorder)
+            && Equals(DataBarBorderColor, other.DataBarBorderColor)
+            && Equals(DataBarAxisPosition, other.DataBarAxisPosition)
+            && Equals(DataBarAxisColor, other.DataBarAxisColor)
+            && Equals(DataBarNegativeFillColor, other.DataBarNegativeFillColor)
+            && Equals(DataBarNegativeBorderColor, other.DataBarNegativeBorderColor)
+            && Equals(DataBarNegativeFillSameAsPositive, other.DataBarNegativeFillSameAsPositive)
+            && Equals(DataBarNegativeBorderSameAsPositive, other.DataBarNegativeBorderSameAsPositive)
+            && Equals(DataBarDirection, other.DataBarDirection)
+            && Equals(AboveAverage, other.AboveAverage)
+            && Equals(EqualAverage, other.EqualAverage)
+            && Equals(StdDevCount, other.StdDevCount)
+            && Equals(FormulaText, other.FormulaText)
+            && Equals(IconSetStyle, other.IconSetStyle)
+            && Equals(IconSetShowValue, other.IconSetShowValue)
+            && Equals(IconSetReverse, other.IconSetReverse)
+            && Equals(TopBottomRank, other.TopBottomRank)
+            && Equals(TopBottomPercent, other.TopBottomPercent)
+            && Equals(TextRuleText, other.TextRuleText)
+            && Equals(DateOccurringPeriod, other.DateOccurringPeriod)
+            && Equals(StopIfTrue, other.StopIfTrue)
+            && Equals(NativeAttributes, other.NativeAttributes)
+            && Equals(NativeChildXmls, other.NativeChildXmls)
+            && Equals(NativePayloadAttributes, other.NativePayloadAttributes)
+            && Equals(NativePayloadChildXmls, other.NativePayloadChildXmls)
+            && Equals(NativeContainerAttributes, other.NativeContainerAttributes)
+            && Equals(NativeContainerChildXmls, other.NativeContainerChildXmls);
+    }
+
+    private static bool SameRanges(IReadOnlyList<GridRange>? left, IReadOnlyList<GridRange>? right)
+    {
+        if (left is null || right is null)
+            return left is null && right is null;
+
+        return left.Count == right.Count && left.SequenceEqual(right);
+    }
 }

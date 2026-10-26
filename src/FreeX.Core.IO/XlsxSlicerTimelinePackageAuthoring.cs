@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
+using System.Globalization;
 
 namespace FreeX.Core.IO;
 
@@ -25,7 +26,7 @@ internal static class XlsxSlicerTimelinePackageAuthoring
 
             var file = name[directory.Length..^".xml".Length];
             if (file.StartsWith(stem, StringComparison.OrdinalIgnoreCase) &&
-                int.TryParse(file[stem.Length..], out var index))
+                int.TryParse(file[stem.Length..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var index))
             {
                 used.Add(index);
             }

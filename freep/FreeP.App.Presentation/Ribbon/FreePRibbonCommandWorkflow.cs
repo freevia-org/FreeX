@@ -1012,7 +1012,19 @@ public static class FreePRibbonCommandWorkflow
     private static void RegisterShapeEffect(Registrar commands, string commandId, Action execute) =>
         commands.Action(FreePRibbonCommandGroup.Shape, commandId, execute);
 
-    private static bool TryGetFontSize(RibbonCommandContext context, out double sizePt)
+    // r192: DrawingML's a:rPr/@sz is ST_TextFontSize, an int in hundredths of a point bounded to
+    // [100, 400000] -- 1pt to 4000pt. The Home > Font > Size ribbon control is an EDITABLE combo, so
+    // a user can type any number and press Enter; nothing between here and the writer bounded it,
+    // and PptxPackageWriter does `(int)Math.Round(FontSizePt * 100)`. A large enough entry therefore
+    // produced a schema-invalid sz, and past int.MaxValue/100 the cast overflows to a negative or
+    // wrapped value -- a file PowerPoint refuses to open. Clamping at the entry point keeps the
+    // model itself legal, which is where FreeX puts the equivalent bound too (ChartDataLabelsPlanner
+    // clamps its font size at the planner rather than at the writer).
+    internal const double MinFontSizePt = 1;
+    internal const double MaxFontSizePt = 4000;
+
+    // internal for the r192 bounds tests: a compiled seam rather than reflection.
+    internal static bool TryGetFontSize(RibbonCommandContext context, out double sizePt)
     {
         sizePt = context.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value)
             ? value switch
@@ -1025,7 +1037,15 @@ public static class FreePRibbonCommandWorkflow
                 _ => 0,
             }
             : 0;
-        return sizePt > 0 && !double.IsNaN(sizePt) && !double.IsInfinity(sizePt);
+
+        if (sizePt <= 0 || double.IsNaN(sizePt) || double.IsInfinity(sizePt))
+            return false;
+
+        // Clamped rather than rejected: an out-of-range size is a legible request for "as big as
+        // possible", not unreadable input, and the nearest legal value is what the user gets in
+        // PowerPoint too.
+        sizePt = Math.Clamp(sizePt, MinFontSizePt, MaxFontSizePt);
+        return true;
     }
 
     private static bool TryParseFontSize(string value, out double sizePt)

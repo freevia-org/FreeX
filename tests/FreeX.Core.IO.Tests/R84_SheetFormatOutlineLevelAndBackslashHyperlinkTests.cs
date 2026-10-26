@@ -67,7 +67,7 @@ public sealed class R84_SheetFormatOutlineLevelAndBackslashHyperlinkTests
         InvokeMergeWorksheetSheetFormatProperties(source, targetRoot);
 
         var targetSheetFormatPr = targetRoot.Element(WorkbookNs + "sheetFormatPr")!;
-        targetSheetFormatPr.Attribute("baseColWidth")?.Value.Should().Be("8",
+        targetSheetFormatPr.Attribute("baseColWidth")!.Value.Should().Be("8",
             "baseColWidth is never recomputed by ClosedXML and must still be preserved verbatim from the source");
     }
 

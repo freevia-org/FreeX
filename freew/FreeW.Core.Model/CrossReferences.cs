@@ -505,6 +505,8 @@ public static class CrossReferences
             labelAndNumber ? CrossRefInsertAs.CaptionLabelAndNumber : CrossRefInsertAs.CaptionText);
         if (range is not { } selected
             || target.BlockIndex is not { } blockIndex
+            || blockIndex < 0
+            || blockIndex >= doc.Blocks.Count
             || doc.Blocks[blockIndex] is not Paragraph paragraph)
         {
             return target.Display;

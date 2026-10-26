@@ -59,9 +59,9 @@ public sealed class XlsxLegacyNoteAddressShiftRoundTripTests
         // C5 (row=4,col=2 0-based) shifted to C6 (row=5,col=2 0-based).
         var shiftedShape = FindNoteShape(vmlXml!, row0: 5, col0: 2);
         shiftedShape.Should().NotBeNull("the note's shape must exist at its shifted address (C6)");
-        shiftedShape!.Attribute("style")?.Value.Should().Contain("width:200pt",
+        shiftedShape!.Attribute("style")!.Value.Should().Contain("width:200pt",
             "custom width must survive a row insert that shifts the note's address (R22-comments-hyperlinks-1)");
-        shiftedShape.Attribute("style")?.Value.Should().Contain("height:120pt",
+        shiftedShape.Attribute("style")!.Value.Should().Contain("height:120pt",
             "custom height must survive a row insert that shifts the note's address (R22-comments-hyperlinks-1)");
         HasVisible(shiftedShape).Should().BeTrue(
             "<x:Visible/> (pinned) state must survive a row insert that shifts the note's address");

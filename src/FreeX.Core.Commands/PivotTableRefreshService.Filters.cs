@@ -433,7 +433,9 @@ public static partial class PivotTableRefreshService
     private static string GroupKeyText(ScalarValue value, PivotFieldGrouping grouping) =>
         GroupKeyText(value, grouping, null, null, null);
 
-    private static string GroupKeyText(ScalarValue value, PivotFieldGrouping grouping, double? groupStart, double? groupEnd, double? groupInterval)
+    // r578: internal rather than private so R578_PivotNumberRangeGroupingTests can drive the
+    // numeric-range bucket labelling directly with the bounds a FILE can carry.
+    internal static string GroupKeyText(ScalarValue value, PivotFieldGrouping grouping, double? groupStart, double? groupEnd, double? groupInterval)
     {
         if (grouping == PivotFieldGrouping.None)
             return KeyText(value);
@@ -475,8 +477,19 @@ public static partial class PivotTableRefreshService
         if (value is not (NumberValue or DateTimeValue or BoolValue))
             return "(blank)";
 
-        if (interval <= 0)
+        // r578: the reject form "interval <= 0" rejects NEITHER Infinity nor NaN -- every comparison
+        // with NaN is false, and Infinity is not <= 0 -- so a non-finite bound read from the file
+        // (rangePr/@groupInterval, @startNum) survived it. The bucket maths then produces NaN for
+        // BOTH: start + Math.Floor((number - start) / NaN) * NaN is NaN, and for an infinite
+        // interval Math.Floor(x / Infinity) is 0 while 0 * Infinity is NaN as well. Every value in
+        // the field then landed in one bucket labelled with the literal text "NaN-NaN". A
+        // non-finite bound is treated as the absent one it cannot be distinguished from: interval
+        // falls back to 1 exactly as a non-positive one already does, and start to 0, which is what
+        // InvariantFieldKeyText passes when the field carries no GroupStart at all.
+        if (!double.IsFinite(interval) || interval <= 0)
             interval = 1;
+        if (!double.IsFinite(start))
+            start = 0;
         var number = Number(value);
 
         // The "Ending at" bound (Excel's Group Field dialog) is a load-bearing bucket

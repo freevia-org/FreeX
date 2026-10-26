@@ -97,7 +97,7 @@ public sealed class R44_PivotFilterPageAndSlicerItemsTests
 
         var itemsXml = ReadPivotFieldItems(saved, fieldIndex: 0);
         itemsXml.Single(item => item.Attribute("x")?.Value == "1")
-            .Attribute("hidden")?.Value.Should().Be("1",
+            .Attribute("hidden")!.Value.Should().Be("1",
                 "an untouched manual item filter must survive a resave that never mutated it");
         itemsXml.Single(item => item.Attribute("x")?.Value == "0")
             .Attribute("hidden").Should().BeNull();
@@ -137,7 +137,7 @@ public sealed class R44_PivotFilterPageAndSlicerItemsTests
         var pageFieldXml = ReadPivotXml(saved).Root!
             .Element(WorkbookNs + "pageFields")!
             .Element(WorkbookNs + "pageField")!;
-        pageFieldXml.Attribute("item")?.Value.Should().Be("1",
+        pageFieldXml.Attribute("item")!.Value.Should().Be("1",
                 "the page filter's selected item must be rewritten to West's shared-item index (1)");
 
         saved.Position = 0;
@@ -182,7 +182,7 @@ public sealed class R44_PivotFilterPageAndSlicerItemsTests
 
         var items = ReadPivotFieldItems(saved, fieldIndex: 0);
         items.Single(item => item.Attribute("x")?.Value == "0")
-            .Attribute("hidden")?.Value.Should().Be("1",
+            .Attribute("hidden")!.Value.Should().Be("1",
                 "the last Page field's SelectedItems takes precedence over Row/Column selections");
         items.Single(item => item.Attribute("x")?.Value == "1")
             .Attribute("hidden").Should().BeNull();

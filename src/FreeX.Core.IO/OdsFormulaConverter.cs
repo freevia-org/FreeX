@@ -1,5 +1,6 @@
 using System.Text;
 using FreeX.Core.Model;
+using System.Globalization;
 
 namespace FreeX.Core.IO;
 
@@ -334,7 +335,7 @@ internal static class OdsFormulaConverter
             i++;
         if (i == rowStart)
             return false;
-        if (!uint.TryParse(s.AsSpan(rowStart, i - rowStart), out var rowNum) || rowNum == 0 || rowNum > CellAddress.MaxRow)
+        if (!uint.TryParse(s.AsSpan(rowStart, i - rowStart), NumberStyles.Integer, CultureInfo.InvariantCulture, out var rowNum) || rowNum == 0 || rowNum > CellAddress.MaxRow)
             return false;
 
         // Must end at a token boundary; a trailing identifier char or '(' means this was part of a name.

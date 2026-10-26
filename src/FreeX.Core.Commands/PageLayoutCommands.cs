@@ -23,6 +23,10 @@ public sealed class SetPrintAreaCommand : IWorkbookCommand
             return new CommandOutcome(false, "Print area must be on the target sheet.");
 
         var sheet = ctx.GetSheet(_sheetId);
+        // r209: an equal-value setter -- see SetPageOrientationCommand.
+        if (sheet.PrintAreas.Count == 1 && sheet.PrintAreas[0].Equals(_printArea))
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousPrintAreas = sheet.PrintAreas.ToList();
         sheet.PrintArea = _printArea;
         return new CommandOutcome(true);
@@ -62,6 +66,10 @@ public sealed class SetPrintAreasCommand : IWorkbookCommand
         }
 
         var sheet = ctx.GetSheet(_sheetId);
+        // r213: an equal-value setter -- see SetChartStyleCommand.
+        if (sheet.PrintAreas.SequenceEqual(_printAreas))
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousPrintAreas = sheet.PrintAreas.ToList();
         sheet.SetPrintAreas(_printAreas);
         return new CommandOutcome(true);
@@ -89,6 +97,11 @@ public sealed class ClearPrintAreaCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        // r220: Page Layout > Print Area > Clear Print Area stays enabled whether or not one is set,
+        // so clearing when there is nothing to clear is a button the user can press at any time.
+        if (sheet.PrintAreas.Count == 0)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousPrintAreas = sheet.PrintAreas.ToList();
         sheet.PrintArea = null;
         return new CommandOutcome(true);

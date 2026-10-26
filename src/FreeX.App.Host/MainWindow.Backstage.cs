@@ -1106,6 +1106,24 @@ public partial class MainWindow
 
             ApplyFormulaErrorCheckingOptions(dlg.DisabledFormulaErrorCodesResult);
             ApplyOptionsCalculationSubmission(dlg.CalculationSubmission);
+
+            // r196: the Trust Center's crash-report opt-in used to be read once at startup, so
+            // unticking it changed nothing until the app was restarted -- the user withdrew consent
+            // and reports kept being sent. The checkbox carries no restart notice, and this is the
+            // one direction that must not lag. Applied alongside every other side effect this
+            // handler already drives immediately.
+            // r354: TryGetServices, not Services. This line already tolerates ICrashAnalytics being
+            // unregistered (the `is` test), but `App.Services` THROWS when the container itself is
+            // absent, and it sits in the middle of the commit -- so the whole Options commit aborted
+            // after some settings had been applied and before RebuildQuickAccessToolbar, the
+            // sibling-window broadcast and the view settings ran. An absent container now behaves
+            // like an absent service, which is the case the code was already written to handle.
+            if (App.TryGetServices(out var services) &&
+                services.GetService(typeof(ICrashAnalytics)) is ICrashAnalytics crashAnalytics)
+            {
+                crashAnalytics.ApplyOptIn(_options.CrashAnalyticsEnabled);
+            }
+
             RebuildQuickAccessToolbar();
 
             // Same shared-AppOptions defect the QAT context menu's
@@ -1260,7 +1278,7 @@ public partial class MainWindow
     }
 
     private void SaveAsButton_Click(object sender, RoutedEventArgs e) =>
-        RunGuardedUiCommand("Backstage Save As", SaveAsFromBackstageAsync);
+        RunGuardedUiCommand("Save Workbook As", SaveAsFromBackstageAsync);
 
     private async Task SaveAsFromBackstageAsync()
     {

@@ -103,7 +103,10 @@ public sealed class MasterLayoutRoundTripTests : IDisposable
 
         var pres = PptxPackageReader.Read(path);
         var originalMaster = pres.Masters.First();
-        if (originalMaster.TextStyles is null) return; // no txStyles to round-trip
+        // r361: was a silent `return` when the corpus lacked txStyles. It does not lack them --
+        // proven by replacing this with a failure -- so the precondition is asserted rather than used
+        // to skip the round-trip check that follows.
+        originalMaster.TextStyles.Should().NotBeNull("the corpus master carries txStyles, which is what this round-trip asserts");
 
         var originalTitleLvl0FontSize = originalMaster.TextStyles.TitleStyle[0]?.FontSizePt;
 
@@ -132,7 +135,7 @@ public sealed class MasterLayoutRoundTripTests : IDisposable
 
         var pres = PptxPackageReader.Read(path);
         var originalMaster = pres.Masters.First();
-        if (originalMaster.ColorMap is null) return; // no colorMap to round-trip
+        originalMaster.ColorMap.Should().NotBeNull("the corpus master carries a colorMap, which is what this round-trip asserts");
 
         var originalBg1 = originalMaster.ColorMap["bg1"];
 
@@ -187,7 +190,7 @@ public sealed class MasterLayoutRoundTripTests : IDisposable
             var ph = pres.Layouts[li].Placeholders.Find(p => p.TextBody?.LstStyle is { } ls && ls.HasAny);
             if (ph is not null) { lstStylePh = ph; lstStyleLayoutIdx = li; break; }
         }
-        if (lstStylePh is null) return; // no layout placeholder with lstStyle in this corpus file
+        lstStylePh.Should().NotBeNull("the corpus layout has a placeholder carrying lstStyle, which is what this round-trip asserts");
 
         var origPh = lstStylePh.Placeholder!;
         var originalAlign = lstStylePh.TextBody!.LstStyle![0]?.Align;

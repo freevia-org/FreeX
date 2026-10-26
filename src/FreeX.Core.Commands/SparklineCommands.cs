@@ -157,7 +157,16 @@ public sealed class ConfigureSparklineCommand : IWorkbookCommand
         if (sparkline is null)
             return new CommandOutcome(false, "The sparkline to edit was not found.");
 
-        _previous = SparklineSettings.Capture(sparkline);
+        // r219: the strongest form this guard can take. SparklineSettings is a readonly record
+        // struct and Capture/ApplyTo are visibly inverse over the same eight members, so comparing a
+        // fresh Capture against the request is a COMPLETE mirror by construction -- it cannot drift
+        // out of step with what ApplyTo writes the way a hand-listed field comparison can. The Format
+        // Sparkline dialog pre-fills every one of those controls, so OK-without-editing lands here.
+        var current = SparklineSettings.Capture(sparkline);
+        if (current == _settings)
+            return new CommandOutcome(true, IsNoOp: true);
+
+        _previous = current;
         _settings.ApplyTo(sparkline);
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [sparkline.Location]);

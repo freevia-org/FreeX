@@ -97,9 +97,9 @@ public sealed partial class MainWindowXamlKeyTipTests
             "StatusNormalViewButton",
             "StatusPageLayoutViewButton",
             "StatusPageBreakPreviewButton");
-        buttons["StatusNormalViewButton"].Attribute("Click")?.Value.Should().Be("NormalViewBtn_Click");
-        buttons["StatusPageLayoutViewButton"].Attribute("Click")?.Value.Should().Be("PageLayoutViewBtn_Click");
-        buttons["StatusPageBreakPreviewButton"].Attribute("Click")?.Value.Should().Be("PageBreakPreviewBtn_Click");
+        buttons["StatusNormalViewButton"].Attribute("Click")!.Value.Should().Be("NormalViewBtn_Click");
+        buttons["StatusPageLayoutViewButton"].Attribute("Click")!.Value.Should().Be("PageLayoutViewBtn_Click");
+        buttons["StatusPageBreakPreviewButton"].Attribute("Click")!.Value.Should().Be("PageBreakPreviewBtn_Click");
         buttons.Values.All(button =>
             string.Equals(button.Attribute("Style")?.Value, "{StaticResource StatusBarViewToggleButtonStyle}", StringComparison.Ordinal) &&
             button.Attribute("AutomationProperties.AutomationId") != null &&
@@ -130,29 +130,45 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Border")
             .Single(border => border.Attribute(x + "Name")?.Value == "StatusStatsViewport");
 
-        statsViewport.Attribute("Grid.Column")?.Value.Should().Be("1");
-        statsViewport.Attribute("ClipToBounds")?.Value.Should().Be("True");
+        statsViewport.Attribute("Grid.Column")!.Value.Should().Be("1");
+        statsViewport.Attribute("ClipToBounds")!.Value.Should().Be("True");
         statsViewport.Attribute("Margin")?.Value.Should().NotContain("180");
 
         var statsPanel = statsViewport
             .Descendants(presentation + "StackPanel")
             .Single(panel => panel.Attribute(x + "Name")?.Value == "StatusStatsPanel");
 
-        statsPanel.Attribute("HorizontalAlignment")?.Value.Should().Be("Right");
-        statsPanel.Attribute("ClipToBounds")?.Value.Should().Be("True");
+        statsPanel.Attribute("HorizontalAlignment")!.Value.Should().Be("Right");
+        statsPanel.Attribute("ClipToBounds")!.Value.Should().Be("True");
 
         var zoomControls = statusBarGrid
             .Descendants(presentation + "Grid")
             .Single(panel => panel.Attribute(x + "Name")?.Value == "StatusZoomControls");
 
-        zoomControls.Attribute("Grid.Column")?.Value.Should().Be("2");
-        zoomControls.Attribute("MinWidth")?.Value.Should().NotBeNullOrWhiteSpace();
-        zoomControls.Attribute("Height")?.Value.Should().Be("24");
+        zoomControls.Attribute("MinWidth")!.Value.Should().NotBeNullOrWhiteSpace();
+        zoomControls.Attribute("Height")!.Value.Should().Be("24");
         // WS-G round 4: converted to DynamicResource so the status bar tracks the active theme.
-        zoomControls.Attribute("Background")?.Value.Should().Be("{DynamicResource FreeXStatusSurfaceBrush}");
-        zoomControls.Attribute("Panel.ZIndex")?.Value.Should().Be("1");
-        zoomControls.Attribute("KeyboardNavigation.TabNavigation")?.Value.Should().Be("Cycle");
-        zoomControls.Attribute("KeyboardNavigation.ControlTabNavigation")?.Value.Should().Be("Cycle");
+        zoomControls.Attribute("Background")!.Value.Should().Be("{DynamicResource FreeXStatusSurfaceBrush}");
+
+        // r358: column placement, stacking and tab-cycling are asserted on the CONTAINER, which is
+        // where they live. They used to sit on StatusZoomControls itself, back when it was a direct
+        // child of StatusBarGrid; it was later wrapped in StatusInteractiveControls, which took the
+        // whole responsibility over. The old assertions kept naming the inner element and passed
+        // anyway, because a `?.` on a missing attribute skips the assertion -- so a refactor that
+        // moved a keyboard-accessibility contract off the element under test went unnoticed.
+        var interactiveControls = statusBarGrid
+            .Descendants(presentation + "StackPanel")
+            .Single(panel => panel.Attribute(x + "Name")?.Value == "StatusInteractiveControls");
+
+        interactiveControls.Attribute("Grid.Column")!.Value.Should().Be("2");
+        interactiveControls.Attribute("Panel.ZIndex")!.Value.Should().Be("1");
+        interactiveControls.Attribute("KeyboardNavigation.TabNavigation")!.Value.Should().Be("Cycle");
+        interactiveControls.Attribute("KeyboardNavigation.ControlTabNavigation")!.Value.Should().Be("Cycle");
+
+        // The zoom cluster must actually be inside that container, or the four assertions above say
+        // nothing about it.
+        interactiveControls.Descendants(presentation + "Grid")
+            .Should().Contain(zoomControls);
     }
 
     [Theory]
@@ -168,9 +184,9 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Single(element => element.Attribute(x + "Name")?.Value == buttonName);
 
-        button.Attribute("Width")?.Value.Should().Be("22");
-        button.Attribute("Height")?.Value.Should().Be("22");
-        button.Attribute("FontSize")?.Value.Should().Be("18");
+        button.Attribute("Width")!.Value.Should().Be("22");
+        button.Attribute("Height")!.Value.Should().Be("22");
+        button.Attribute("FontSize")!.Value.Should().Be("18");
         var strokeDimensions = button
             .Descendants(presentation + "Rectangle")
             .Select(rectangle => (Width: rectangle.Attribute("Width")?.Value, Height: rectangle.Attribute("Height")?.Value))

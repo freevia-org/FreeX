@@ -45,6 +45,13 @@ public sealed partial class MainWindow
                 RefreshAltTextRequest = RefreshAltTextRequestPlan,
                 RefreshReadingOrder = () => _ = _reviewWorkflowSession.RefreshReadingOrderPlan(),
                 RefreshAltTextPane = ShowAltTextPane,
+                // r193: the WPF endpoint has wired these since the save-point mechanism existed;
+                // this shell never did, so undoing back to the saved state left the presentation
+                // marked dirty and closing prompted to save an unmodified file.
+                MarkSavedAtUndoDepth = editor =>
+                    _fileWorkflow.MarkSavedAtUndoDepth(editor.Bus.UndoDepth, editor.Bus.Version),
+                TryMarkCleanIfAtSavePoint = editor =>
+                    _fileWorkflow.TryMarkCleanIfAtSavePoint(editor.Bus.UndoDepth, editor.Bus.Version),
             },
             NativeCommands = new PresentationWorkareaNativeCommandEndpoints
             {

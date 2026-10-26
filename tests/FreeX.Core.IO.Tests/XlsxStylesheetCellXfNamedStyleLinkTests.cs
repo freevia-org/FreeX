@@ -41,7 +41,7 @@ public sealed class XlsxStylesheetCellXfNamedStyleLinkTests
 
         var targetCellXfs = targetRoot.Element(WorkbookNs + "cellXfs")!.Elements(WorkbookNs + "xf").ToList();
         targetCellXfs.Should().HaveCount(2);
-        targetCellXfs[1].Attribute("xfId")?.Value.Should().Be(recoveredXfId,
+        targetCellXfs[1].Attribute("xfId")!.Value.Should().Be(recoveredXfId,
             "the cell's rebuilt xf must be reconnected to the recovered 'Good' named style, not left at ClosedXML's default xfId=\"0\"");
     }
 
@@ -60,7 +60,7 @@ public sealed class XlsxStylesheetCellXfNamedStyleLinkTests
             .Elements(WorkbookNs + "xf")
             .ToList();
 
-        targetCellXfs[0].Attribute("xfId")?.Value.Should().Match(value => value == null || value == "0",
+        targetCellXfs[0].Attribute("xfId")!.Value.Should().Match(value => value == null || value == "0",
             "the unrelated default cell must not be spuriously bound to the recovered named style");
     }
 

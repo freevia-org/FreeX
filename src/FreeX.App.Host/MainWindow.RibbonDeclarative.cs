@@ -228,6 +228,9 @@ public partial class MainWindow
                 continue;
 
             EnsureRibbonDropdownChevron(button);
+            if (IsDedicatedRibbonSplitDropdownButton(button))
+                continue;
+
             EnsureRibbonDropdownZoneHandler(button);
             EnsureRibbonDropdownZoneHighlight(button);
         }

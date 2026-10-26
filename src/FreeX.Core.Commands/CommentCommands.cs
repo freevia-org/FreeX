@@ -42,6 +42,15 @@ public sealed class SetCommentCommand : IWorkbookCommand
             && CommentCommandGuards.RejectIfCellHasThreadedComment(sheet, _address) is { } threadedOutcome)
             return threadedOutcome;
 
+        // r213: an equal-value setter -- see SetChartStyleCommand.
+        // Only a note that ALREADY exists can be a no-op: a brand-new one also writes the author
+        // below, so it always changes something.
+        if (sheet.Comments.TryGetValue(_address, out var existingComment)
+            && string.Equals(existingComment, _comment, StringComparison.Ordinal))
+        {
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         _hadPrevious = sheet.Comments.TryGetValue(_address, out _previousComment);
         sheet.Comments[_address] = _comment;
 
@@ -148,6 +157,15 @@ public sealed class ShowHideCommentCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+
+        // r455: a note's pinned state is PERSISTED -- ShownComments is written to the xlsx VML and to
+        // the native JSON, and read back on load -- so showing or hiding one durably changes the
+        // document. Its siblings in this file (SetCommentCommand, DeleteCommentCommand) already
+        // refuse when "Edit objects" is withheld; these two did not, which let a protected sheet be
+        // permanently altered through the one comment command that skipped the guard.
+        if (CommentCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
         if (!sheet.Comments.ContainsKey(_address))
             return new CommandOutcome(false, "No note exists at the selected cell.");
 
@@ -189,6 +207,12 @@ public sealed class ShowAllNotesCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+
+        // r455: same reasoning as ShowHideCommentCommand above -- pinned state is persisted, so this
+        // durably changes the document and must honour "Edit objects" like its siblings. Guarded
+        // BEFORE the snapshot, so a refused command leaves no undo state behind either.
+        if (CommentCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
+            return protectedOutcome;
 
         // Snapshot current state for undo.
         _snapshot = new HashSet<CellAddress>(sheet.ShownComments);
@@ -370,6 +394,12 @@ public sealed class ClearCommentsCommand : IWorkbookCommand
             .Where(_range.Contains)
             .Distinct()
             .ToList();
+
+        // r220: Clear > Comments over a selection that carries none. The r164 rewrite above already
+        // computed exactly the set of cells this command can touch, so an empty list is proof there
+        // is nothing to do -- no separate predicate to keep in step with the loop below.
+        if (addresses.Count == 0)
+            return new CommandOutcome(true, IsNoOp: true);
         foreach (var addr in addresses)
         {
             if (sheet.Comments.TryGetValue(addr, out var comment))

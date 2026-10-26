@@ -25,7 +25,7 @@ public sealed partial class CustomViewsDialogXamlTests
             .Descendants(presentation + "Button")
             .Single(element => element.Attribute("{http://schemas.microsoft.com/winfx/2006/xaml}Name")?.Value == "ShowButton");
 
-        showButton.Attribute("IsDefault")?.Value.Should().Be("True");
+        showButton.Attribute("IsDefault")!.Value.Should().Be("True");
     }
 
     [Fact]
@@ -36,7 +36,7 @@ public sealed partial class CustomViewsDialogXamlTests
 
         document.Descendants(presentation + "GroupBox")
             .Single()
-            .Attribute("Header")?.Value.Should().Be("_Views");
+            .Attribute("Header")!.Value.Should().Be("_Views");
 
         document.Descendants(presentation + "Button")
             .Select(element => element.Attribute("Content")?.Value)
@@ -86,8 +86,8 @@ public sealed partial class CustomViewsDialogXamlTests
                 .Descendants(presentation + "Button")
                 .Single(element => element.Attribute("Content")?.Value == content);
 
-            button.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be(automationId);
-            button.Attribute("AutomationProperties.HelpText")?.Value.Should().Be(helpText);
+            button.Attribute("AutomationProperties.AutomationId")!.Value.Should().Be(automationId);
+            button.Attribute("AutomationProperties.HelpText")!.Value.Should().Be(helpText);
         }
     }
 

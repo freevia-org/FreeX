@@ -44,7 +44,7 @@ public sealed class GoalSeekDialogXamlTests
                 .Descendants(presentation + "Label")
                 .Single(element => element.Attribute("Content")?.Value == content);
 
-            label.Attribute("Target")?.Value.Should().Be($"{{Binding ElementName={target}}}");
+            label.Attribute("Target")!.Value.Should().Be($"{{Binding ElementName={target}}}");
         }
     }
 
@@ -93,9 +93,9 @@ public sealed class GoalSeekDialogXamlTests
                 .Descendants(presentation + "TextBox")
                 .Single(element => element.Attribute(xaml + "Name")?.Value == textBoxName);
 
-            textBox.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be(automationId);
-            textBox.Attribute("AutomationProperties.Name")?.Value.Should().Be(name);
-            textBox.Attribute("AutomationProperties.HelpText")?.Value.Should().Be(helpText);
+            textBox.Attribute("AutomationProperties.AutomationId")!.Value.Should().Be(automationId);
+            textBox.Attribute("AutomationProperties.Name")!.Value.Should().Be(name);
+            textBox.Attribute("AutomationProperties.HelpText")!.Value.Should().Be(helpText);
         }
     }
 

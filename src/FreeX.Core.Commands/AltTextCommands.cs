@@ -29,6 +29,9 @@ public sealed class SetPictureAltTextCommand : IWorkbookCommand
         if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet, picture) is { } protectedOutcome)
             return protectedOutcome;
 
+        if (!_change.Changes(picture.AltText))
+            return new CommandOutcome(true, IsNoOp: true);
+
         picture.AltText = _change.Apply(picture.AltText);
         return new CommandOutcome(true, AffectedCells: [picture.Anchor]);
     }
@@ -69,6 +72,9 @@ public sealed class SetDrawingShapeAltTextCommand : IWorkbookCommand
         // objects".
         if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet, shape) is { } protectedOutcome)
             return protectedOutcome;
+
+        if (!_change.Changes(shape.AltText))
+            return new CommandOutcome(true, IsNoOp: true);
 
         shape.AltText = _change.Apply(shape.AltText);
         return new CommandOutcome(true, AffectedCells: [shape.Anchor]);
@@ -111,6 +117,9 @@ public sealed class SetTextBoxAltTextCommand : IWorkbookCommand
         if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet, textBox) is { } protectedOutcome)
             return protectedOutcome;
 
+        if (!_change.Changes(textBox.AltText))
+            return new CommandOutcome(true, IsNoOp: true);
+
         textBox.AltText = _change.Apply(textBox.AltText);
         return new CommandOutcome(true, AffectedCells: [textBox.Anchor]);
     }
@@ -136,6 +145,17 @@ sealed class AltTextCommandChange
 
     public string? PreviousAltText { get; private set; }
     public bool Applied { get; private set; }
+
+    /// <summary>
+    /// Whether applying would actually change <paramref name="currentAltText"/>.
+    /// </summary>
+    /// <remarks>
+    /// r209: the Alt Text pane pre-populates the current description, so closing it without editing
+    /// re-writes the same string. Without this the bus pushed an undo entry for that, and the push
+    /// CLEARS REDO -- discarding a real edit the user could still have redone.
+    /// </remarks>
+    public bool Changes(string? currentAltText) =>
+        !string.Equals(AltTextCommandText.Normalize(currentAltText), _altText, StringComparison.Ordinal);
 
     public string? Apply(string? currentAltText)
     {

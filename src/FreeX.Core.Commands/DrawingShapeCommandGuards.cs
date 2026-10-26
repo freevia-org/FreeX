@@ -67,7 +67,7 @@ internal static class DrawingShapeCommandGuards
 
         var targetIndex = index + direction;
         if (targetIndex < 0 || targetIndex >= normalizedOrder.Count)
-            return new CommandOutcome(true);
+            return new CommandOutcome(true, IsNoOp: true); // already at the front/back
 
         hadExplicitOrder = sheet.DrawingObjectZOrder.Count > 0;
         previousOrder = sheet.DrawingObjectZOrder.ToList();

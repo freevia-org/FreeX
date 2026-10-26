@@ -13,10 +13,12 @@ public sealed class TesterReleaseReadinessPreflightTests
         script.Should().Contain("release/progress.json overallCompletion must be between 0 and 100.");
         script.Should().Contain("Unsupported releasePatchSource");
         script.Should().Contain("Unsupported release channel");
-        script.Should().Contain("tools/Test-RepositoryPreflight.ps1");
-        script.Should().Contain("group: tester-release");
-        script.Should().Contain("signParameters.AllowUnsignedMsix = `$true");
-        script.Should().Contain("Velopack installer/portable/feed artifacts");
+        script.Should().Contain("tools/Test-GitHubReleaseCandidate.ps1");
+        script.Should().Contain("tools/Get-TestGateMatrix.ps1 -Gate release");
+        script.Should().Contain("group: full-signed-release-");
+        script.Should().Contain("Authenticate to Azure Artifact Signing");
+        script.Should().Contain("Publish-WindowsVelopackPackage.ps1");
+        script.Should().Contain("New-FreeSuiteWindowsBootstrapper.ps1");
         script.Should().Contain("Public-preview preflight requires completed accessibility gate inputs");
         script.Should().Contain("Tester release readiness preflight passed.");
     }
@@ -33,8 +35,9 @@ public sealed class TesterReleaseReadinessPreflightTests
         plan.Should().Contain("-AccessibilityUiaCatalog");
         plan.Should().Contain("-AccessibilityKnownIssues");
         plan.Should().Contain("Release dispatches must run from `main`");
-        plan.Should().Contain("signs the package when `FREEX_MSIX_CERTIFICATE_BASE64` is configured");
-        plan.Should().Contain("publishes an unsigned MSIX for tester continuity");
+        plan.Should().Contain("fails closed unless GitHub OIDC authenticates the dedicated release identity");
+        plan.Should().Contain("Azure Artifact Signing signs and verifies the standalone executable");
+        plan.Should().Contain("MSIX asset is retained only for Store/package validation");
     }
 
     [Fact]

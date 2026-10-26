@@ -312,7 +312,7 @@ internal static class HtmlTableReader
         int start = j;
         while (j < tag.Length && char.IsDigit(tag[j]))
             j++;
-        return j > start && int.TryParse(tag.AsSpan(start, j - start), out var v) && v > 0 ? v : 1;
+        return j > start && int.TryParse(tag.AsSpan(start, j - start), NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) && v > 0 ? v : 1;
     }
 
     /// <summary>Read a quoted string attribute value (e.g. <c>style="…"</c>), or null when absent.</summary>

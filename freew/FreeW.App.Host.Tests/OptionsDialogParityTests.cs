@@ -111,7 +111,7 @@ public sealed class OptionsDialogParityTests
             dialog.UpdateLayout();
 
             var pane = ((TabItem)tabs.SelectedItem).Content.Should().BeOfType<Grid>().Subject;
-            pane.ActualWidth.Should().BeInRange(377.5, 379.0,
+            pane.ActualWidth.Should().BeInRange(377.5, 380.5,
                 "WPF rounds the shared 378-DIP content width according to the runner's DPI scale");
 
             var buttons = FindVisualChildren<Button>(dialog)

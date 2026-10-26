@@ -8,7 +8,7 @@ namespace FreeX.App.Host.Tests;
 public sealed class FormulaInlineEditorLayoutPlannerTests
 {
     [Fact]
-    public void Create_MatchesEditorChromeToCellAndAllowsTextSurfaceToSpillRight()
+    public void Create_MatchesEditorChromeToCellAndKeepsIdleTextSurfaceInsideCell()
     {
         var layout = FormulaInlineEditorLayoutPlanner.Create(
             cellLeft: 100,
@@ -23,8 +23,23 @@ public sealed class FormulaInlineEditorLayoutPlannerTests
 
         layout.TextOverlayRect.Left.Should().Be(104);
         layout.TextOverlayRect.Top.Should().Be(40);
-        layout.TextOverlayRect.Width.Should().BeGreaterThan(layout.EditorRect.Width);
+        layout.TextOverlayRect.Width.Should().Be(56);
+        layout.TextOverlayRect.Right.Should().Be(160);
         layout.TextOverlayRect.Bottom.Should().BeLessThanOrEqualTo(layout.EditorRect.Bottom);
+    }
+
+    [Fact]
+    public void Create_ForSmallText_KeepsTextSurfaceInsideCell()
+    {
+        var layout = FormulaInlineEditorLayoutPlanner.Create(
+            cellLeft: 100,
+            cellTop: 40,
+            cellWidth: 64,
+            cellHeight: 20,
+            desiredTextWidth: 20);
+
+        layout.EditorRect.Should().Be(new FormulaEditorRect(100, 40, 64, 20));
+        layout.TextOverlayRect.Should().Be(new FormulaEditorRect(104, 40, 56, 20));
     }
 
     [Fact]

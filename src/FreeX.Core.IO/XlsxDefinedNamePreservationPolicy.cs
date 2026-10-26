@@ -41,7 +41,7 @@ internal sealed class XlsxDefinedNamePreservationPolicy
         if (localSheetIdAttribute is null)
             return true;
 
-        if (!int.TryParse(localSheetIdAttribute.Value, out var oldLocalSheetId) ||
+        if (!int.TryParse(localSheetIdAttribute.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var oldLocalSheetId) ||
             oldLocalSheetId < 0 ||
             oldLocalSheetId >= _sourceSheetNamesByLocalId.Count)
         {
@@ -87,7 +87,7 @@ internal sealed class XlsxDefinedNamePreservationPolicy
         var localSheetIdAttribute = candidate.Attribute("localSheetId");
         if (XlsxPrintSettingNameClassifier.TryClassify(name, out var printSettingKind) &&
             localSheetIdAttribute is not null &&
-            int.TryParse(localSheetIdAttribute.Value, out var scopeSheetIndex) &&
+            int.TryParse(localSheetIdAttribute.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var scopeSheetIndex) &&
             scopeSheetIndex >= 0 &&
             scopeSheetIndex < _workbook.Sheets.Count)
         {

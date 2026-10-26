@@ -37,7 +37,7 @@ public sealed class PivotFilterDialogXamlTests
                 .Descendants(presentation + "Label")
                 .Single(element => element.Attribute("Content")?.Value == content);
 
-            label.Attribute("Target")?.Value.Should().Be($"{{Binding ElementName={target}}}");
+            label.Attribute("Target")!.Value.Should().Be($"{{Binding ElementName={target}}}");
         }
     }
 
@@ -325,10 +325,10 @@ public sealed class PivotFilterDialogXamlTests
         var baseItemPanel = document.Descendants(presentation + "StackPanel")
             .Single(element => element.Attribute(xaml + "Name")?.Value == "BaseItemPanel");
 
-        baseFieldPanel.Attribute("Visibility")?.Value.Should().Be("Collapsed");
-        baseFieldPanel.Attribute("IsEnabled")?.Value.Should().Be("False");
-        baseItemPanel.Attribute("Visibility")?.Value.Should().Be("Collapsed");
-        baseItemPanel.Attribute("IsEnabled")?.Value.Should().Be("False");
+        baseFieldPanel.Attribute("Visibility")!.Value.Should().Be("Collapsed");
+        baseFieldPanel.Attribute("IsEnabled")!.Value.Should().Be("False");
+        baseItemPanel.Attribute("Visibility")!.Value.Should().Be("Collapsed");
+        baseItemPanel.Attribute("IsEnabled")!.Value.Should().Be("False");
 
         document.Descendants(presentation + "ComboBox")
             .Single(element => element.Attribute(xaml + "Name")?.Value == "ShowValuesAsBox")
@@ -521,7 +521,7 @@ public sealed class PivotFilterDialogXamlTests
             .Descendants(presentation + "Label")
             .Single(element => element.Attribute("Content")?.Value == content);
 
-        label.Attribute("Target")?.Value.Should().Be($"{{Binding ElementName={target}}}");
+        label.Attribute("Target")!.Value.Should().Be($"{{Binding ElementName={target}}}");
     }
 
     private static void AssertAutomation(
@@ -535,7 +535,7 @@ public sealed class PivotFilterDialogXamlTests
             .Descendants()
             .Single(element => element.Name.Namespace == presentation && element.Attribute(xaml + "Name")?.Value == name);
 
-        element.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be(automationId);
+        element.Attribute("AutomationProperties.AutomationId")!.Value.Should().Be(automationId);
         element.Attribute("AutomationProperties.HelpText")?.Value.Should().NotBeNullOrWhiteSpace();
     }
 

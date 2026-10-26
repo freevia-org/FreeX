@@ -197,6 +197,15 @@ public sealed class RenameSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
         if (validationError is not null)
             return new CommandOutcome(false, validationError);
 
+        // r217: renaming a sheet to the name it already has costs more than a phantom undo entry.
+        // This command is IWholeWorkbookRecalcCommand, and the body below runs RewriteAllFormulas
+        // across every sheet with a RenameSheetOp whose two halves are identical -- so pressing
+        // Enter on an unedited tab rewrote nothing, recalculated everything, and still cleared the
+        // redo stack. Ordinal on purpose: "Sheet1" -> "sheet1" IS a rename and must not be caught
+        // here, and ValidateSheetName above already accepted it as distinct from its siblings.
+        if (string.Equals(sheet.Name, _newName, StringComparison.Ordinal))
+            return new CommandOutcome(true, IsNoOp: true);
+
         _oldName = sheet.Name;
         sheet.Name = _newName;
         _formulaSnapshot.Clear();

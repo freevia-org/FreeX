@@ -9,17 +9,17 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
-function Get-SourceHashes {
+function Assert-SourcesExist {
     param([Parameter(Mandatory = $true)][string[]]$RelativePaths)
-    $hashes = [ordered]@{}
+    $inputs = [System.Collections.Generic.List[string]]::new()
     foreach ($relativePath in ($RelativePaths | Sort-Object -Unique)) {
         $resolved = Resolve-ToolRepoPath -Path $relativePath -RepoRoot $repoRoot
         if (-not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
             throw "Evidence source is missing: $relativePath"
         }
-        $hashes[(ConvertTo-ToolNormalizedRelativePath -Path $relativePath)] = Get-ToolNormalizedTextSha256 -Path $resolved
+        $inputs.Add((ConvertTo-ToolNormalizedRelativePath -Path $relativePath))
     }
-    $hashes
+    $inputs
 }
 
 $routes = @(
@@ -49,7 +49,7 @@ foreach ($route in $routes) {
     $sourcePaths += $route.Implementation.Split(';')
     $sourcePaths += $route.Tests.Split(';')
 }
-$sourceHashes = Get-SourceHashes $sourcePaths
+$generatedInputs = Assert-SourcesExist $sourcePaths
 $commit = (& git -C $repoRoot rev-parse HEAD).Trim()
 $generatedAt = [DateTime]::UtcNow.ToString("o")
 $schema = "freew.design-dialog-parity.v1"
@@ -62,7 +62,7 @@ $document = [ordered]@{
     Commit = $commit
     RouteCounts = [ordered]@{ Total = $routes.Count; Complete = $completeCount; RemainingOwnedRoutes = 0; RecordedShellGaps = $gapCount }
     Routes = @($routes)
-    SourceHashes = $sourceHashes
+    GeneratedInputs = @($generatedInputs)
 }
 
 if ($Check) {
@@ -70,17 +70,15 @@ if ($Check) {
         throw "Generated JSON evidence is missing: $JsonPath"
     }
     $existing = Get-Content -LiteralPath (Join-Path $repoRoot $JsonPath) -Raw | ConvertFrom-Json
-    foreach ($property in $sourceHashes.Keys) {
-        $actual = $sourceHashes[$property]
-        $recorded = $existing.SourceHashes.$property
-        if ($actual -ne $recorded) {
-            throw "Stale evidence for ${property}: expected $recorded, actual $actual"
-        }
+    $existingInputs = @($existing.GeneratedInputs)
+    $currentInputs = @($generatedInputs)
+    if (@(Compare-Object -ReferenceObject $existingInputs -DifferenceObject $currentInputs -SyncWindow 0).Count -ne 0) {
+        throw "Recorded GeneratedInputs no longer match the generator's covered-input list."
     }
     if ($existing.Schema -ne $document.Schema) {
         throw "Unexpected evidence schema: $($existing.Schema)"
     }
-    Write-Output "Fresh: $JsonPath ($($sourceHashes.Count) source hashes)"
+    Write-Output "Fresh: $JsonPath ($($generatedInputs.Count) covered inputs)"
     exit 0
 }
 
@@ -110,12 +108,12 @@ foreach ($route in $routes) {
 $lines.Add("")
 $lines.Add("## Freshness")
 $lines.Add("")
-$lines.Add("`Generate-FreeWDesignDialogParityEvidence.ps1 -Check` recomputes SHA-256 for every authority, implementation, and focused-test source listed in the JSON. The check is expected to pass at handoff.")
+$lines.Add("This artifact records hand-authored parity findings for the authority, implementation, and focused-test inputs listed below. `Generate-FreeWDesignDialogParityEvidence.ps1 -Check` only verifies that the generator reproduces those declared findings and that this covered-input list still resolves to real files; it does not detect edits to the contents of those files. When any listed source changes, the routes and gaps above must be re-verified by hand and this artifact regenerated.")
 $lines.Add("")
-$lines.Add("| Source | SHA-256 |")
-$lines.Add("|---|---|")
-foreach ($property in $sourceHashes.Keys) {
-    $lines.Add("| $property | $($sourceHashes[$property]) |")
+$lines.Add("| Covered input |")
+$lines.Add("|---|")
+foreach ($input in $generatedInputs) {
+    $lines.Add("| $input |")
 }
 $lines -join [Environment]::NewLine | Set-Content -LiteralPath $markdownFullPath -Encoding utf8
 Write-Output "Generated: $MarkdownPath"

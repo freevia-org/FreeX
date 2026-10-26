@@ -182,6 +182,17 @@ public sealed class NudgeChartCommand : IWorkbookCommand
         _previousTop = chart.Top;
         chart.Left = Math.Max(0, chart.Left + _deltaX);
         chart.Top = Math.Max(0, chart.Top + _deltaY);
+
+        // r225: this command CLAMPS where its three siblings do not, and that is the whole
+        // difference. Picture/Shape/TextBox add the delta to an anchor offset with no floor, so an
+        // arrow key always moves them; a chart already at Left 0 nudged left saturates at 0 and
+        // stays exactly where it was. Holding the arrow key against the edge then pushed an undo
+        // entry per repeat, each one clearing the pending redo.
+        // Decided after the write, by comparing against the values captured for Revert -- the
+        // clamp is Math.Max, so predicting it up front would mean duplicating it.
+        if (chart.Left.Equals(_previousLeft) && chart.Top.Equals(_previousTop))
+            return new CommandOutcome(true, IsNoOp: true);
+
         _applied = true;
         return new CommandOutcome(true, AffectedCells: []);
     }

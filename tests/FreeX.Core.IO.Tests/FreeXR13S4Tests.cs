@@ -134,11 +134,11 @@ public sealed class FreeXR13S4Tests
 
         var selection = ReadPrimarySelection(savedBytes, "xl/worksheets/sheet1.xml");
         selection.Should().NotBeNull();
-        selection!.Attribute("activeCell")?.Value.Should().Be("D4");
-        selection.Attribute("sqref")?.Value.Should().Be(
+        selection!.Attribute("activeCell")!.Value.Should().Be("D4");
+        selection.Attribute("sqref")!.Value.Should().Be(
             "A1:B2 D4:E5",
             "an unrelated zoom-only patch save must not collapse a preserved multi-area selection");
-        selection.Attribute("activeCellId")?.Value.Should().Be(
+        selection.Attribute("activeCellId")!.Value.Should().Be(
             "1",
             "activeCellId must survive alongside its untouched multi-area sqref");
     }

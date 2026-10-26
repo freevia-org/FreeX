@@ -203,7 +203,7 @@ internal static class R1C1FormulaConverter
 
         if (i == rowStart)
             return false;
-        if (!uint.TryParse(s.AsSpan(rowStart, i - rowStart), out var rowNum) || rowNum == 0 || rowNum > CellAddress.MaxRow)
+        if (!uint.TryParse(s.AsSpan(rowStart, i - rowStart), NumberStyles.Integer, CultureInfo.InvariantCulture, out var rowNum) || rowNum == 0 || rowNum > CellAddress.MaxRow)
             return false;
 
         // Reject if followed by an identifier char (part of a longer name) or '(' (a function call like
