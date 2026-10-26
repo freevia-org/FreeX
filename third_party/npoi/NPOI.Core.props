@@ -1,0 +1,20 @@
+<Project>
+  <!-- NPOI's upstream 2.8.1 source is Apache-2.0. We compile NPOI.Core ourselves so the
+       pre-built NuGet binary's separate OSMF agreement does not apply; see README.md. -->
+  <ItemGroup>
+    <Reference Include="NPOI.Core">
+      <HintPath>$(MSBuildThisFileDirectory)2.8.1/NPOI.Core.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+
+    <PackageReference Include="BouncyCastle.Cryptography" />
+    <PackageReference Include="Enums.NET" />
+    <PackageReference Include="ExtendedNumerics.BigDecimal" />
+    <PackageReference Include="MathNet.Numerics.Signed" />
+    <PackageReference Include="Microsoft.IO.RecyclableMemoryStream" />
+    <PackageReference Include="SharpZipLib" />
+    <PackageReference Include="SkiaSharp" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
+    <PackageReference Include="ZString" />
+  </ItemGroup>
+</Project>
