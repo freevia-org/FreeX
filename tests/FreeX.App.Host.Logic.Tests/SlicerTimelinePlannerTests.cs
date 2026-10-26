@@ -544,7 +544,7 @@ public sealed class SlicerTimelinePlannerTests
         previewTiles.Should().Contain("IsSelected: true");
         previewTiles.Should().NotContain("selected.Contains");
         full.Should().Contain("var selected = slicer.SelectedItems.Count == 0");
-        full.Should().Contain("new HashSet<string>(slicer.SelectedItems, StringComparer.CurrentCultureIgnoreCase)");
+        full.Should().Contain("new HashSet<string>(slicer.SelectedItems, StringComparer.OrdinalIgnoreCase)");
     }
 
     private static (Workbook Workbook, Sheet ActiveSheet) CreateLargeNativeVisualFilterWorkbook(int visibleControlCount)
