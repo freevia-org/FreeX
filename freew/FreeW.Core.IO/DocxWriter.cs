@@ -968,14 +968,15 @@ public static class DocxWriter
         IReadOnlyList<PreservedPart> preservedParts)
     {
         var preservedByName = preservedParts.ToDictionary(part => part.PartName, StringComparer.Ordinal);
+        var emittedPartNames = new HashSet<string>(StringComparer.Ordinal);
         var result = new List<PartLocalPreservedDrawingPart>();
         foreach (var paragraph in paragraphs)
             foreach (var run in paragraph.Runs)
                 if (run.PreservedDrawing is { } drawing)
                     foreach (var reference in drawing.References)
                     {
-                        if (result.Any(part => part.PartName == reference.PreservedPartName)
-                            || !preservedByName.TryGetValue(reference.PreservedPartName, out var preservedPart))
+                        if (!preservedByName.TryGetValue(reference.PreservedPartName, out var preservedPart)
+                            || !emittedPartNames.Add(reference.PreservedPartName))
                             continue;
                         var relationshipType = reference.RelationshipType
                             ?? PreservedDrawingRelationshipType(preservedPart.ContentTypeOverride);
