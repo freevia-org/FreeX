@@ -38,6 +38,38 @@ public sealed class NavigationPaneSessionTests
     }
 
     [Fact]
+    public void Query_reuses_document_order_matches_across_nested_heading_subtrees()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(Heading("Alpha"));
+        document.Blocks.Add(new Paragraph("needle in outer body"));
+        document.Blocks.Add(new Paragraph("Needle nested") { StyleId = "Heading2" });
+        var table = new Table();
+        var row = new TableRow();
+        row.Cells.Add(new TableCell("needle in a table"));
+        table.Rows.Add(row);
+        document.Blocks.Add(table);
+        document.Blocks.Add(new Paragraph("needle in nested body"));
+        document.Blocks.Add(new Paragraph("Quiet nested") { StyleId = "Heading2" });
+        document.Blocks.Add(new Paragraph("unrelated body"));
+        document.Blocks.Add(Heading("Later"));
+        document.Blocks.Add(new Paragraph("needle after the boundary"));
+        var session = new NavigationPaneSession(
+            () => document,
+            NoOpNavigationMutations());
+
+        var queried = session.SetQuery("NEEDLE");
+
+        queried.State.SearchHits.Should().Equal(1, 2, 3, 4, 8);
+        queried.State.Headings.Select(heading => heading.Text)
+            .Should().Equal("Alpha", "Needle nested", "Later");
+        queried.State.SearchStatusText.Should().Be("1 of 5");
+        queried.NavigateToBlockIndex.Should().Be(1);
+        session.StepSearch(-1).NavigateToBlockIndex.Should().Be(8);
+    }
+
+    [Fact]
     public void Outline_command_uses_shared_selection_and_mutation_target()
     {
         var document = TextDocument.CreateEmpty();

@@ -253,6 +253,7 @@ public static class PptxPackageWriter
     private static void ReconcileSlideZoomTargets(List<Slide> slides)
     {
         Dictionary<Slide, uint>? finalNumericIds = null;
+        Dictionary<string, Slide>? slidesById = null;
         foreach (var slide in slides)
         {
             foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
@@ -261,10 +262,12 @@ public static class PptxPackageWriter
                     || string.IsNullOrEmpty(info.ZoomTargetSlideId))
                     continue;
 
-                finalNumericIds ??= ComputeFinalSlideNumericIds(slides);
-                var target = slides.FirstOrDefault(s =>
-                    string.Equals(s.Id, info.ZoomTargetSlideId, StringComparison.Ordinal));
-                if (target is null
+                if (finalNumericIds is null)
+                {
+                    finalNumericIds = ComputeFinalSlideNumericIds(slides, out slidesById);
+                }
+
+                if (!slidesById!.TryGetValue(info.ZoomTargetSlideId, out var target)
                     || !finalNumericIds.TryGetValue(target, out var finalId)
                     || finalId == 0
                     || info.ZoomTargetSlideNumericId == finalId)
@@ -284,13 +287,19 @@ public static class PptxPackageWriter
     /// Read-only with respect to <see cref="Slide.NumericId"/>: the main loop still performs
     /// its own (identical, deterministic) assignment and is the single place that mutates it.
     /// </summary>
-    private static Dictionary<Slide, uint> ComputeFinalSlideNumericIds(IReadOnlyList<Slide> slides)
+    private static Dictionary<Slide, uint> ComputeFinalSlideNumericIds(
+        IReadOnlyList<Slide> slides,
+        out Dictionary<string, Slide> slidesById)
     {
         var result = new Dictionary<Slide, uint>();
+        slidesById = new Dictionary<string, Slide>(StringComparer.Ordinal);
         uint counter = 256;
         var used = new HashSet<uint>();
         foreach (var slide in slides)
         {
+            if (!string.IsNullOrEmpty(slide.Id))
+                slidesById.TryAdd(slide.Id, slide);
+
             var numericId = slide.NumericId.GetValueOrDefault();
             if (numericId == 0 || !used.Add(numericId))
             {

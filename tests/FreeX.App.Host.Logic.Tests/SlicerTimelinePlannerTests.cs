@@ -25,6 +25,18 @@ public sealed class SlicerTimelinePlannerTests
     }
 
     [Fact]
+    public void BuildSlicerTiles_ActiveSelectionMatchesCaptionsIgnoringCurrentCultureCase()
+    {
+        var slicer = new SlicerModel { Name = "Region Slicer" };
+        slicer.SelectedItems.Add("west");
+
+        var tiles = SlicerTimelinePlanner.BuildSlicerTiles(slicer, ["East", "West"]);
+
+        tiles.Single(tile => tile.Caption == "West").IsSelected.Should().BeTrue();
+        tiles.Single(tile => tile.Caption == "East").IsSelected.Should().BeFalse();
+    }
+
+    [Fact]
     public void BuildSlicerTiles_FallsBackToSelectedItemsWhenSourceItemsAreUnavailable()
     {
         var slicer = new SlicerModel { Name = "Category Slicer" };
@@ -506,10 +518,33 @@ public sealed class SlicerTimelinePlannerTests
             "new SortedSet<string>(StringComparer.CurrentCultureIgnoreCase)",
             "one culture-aware set doing both identity and ordering is exactly the r311 defect");
         buildSlicerTiles.Should().Contain("new List<SlicerTileItem>(items.Count)");
+        buildSlicerTiles.Should().Contain("var selected = slicer.SelectedItems.Count == 0");
+        buildSlicerTiles.Should().Contain("selected is null || selected.Contains(item)");
         buildSlicerTiles.Should().NotContain(".ToList()");
         buildSlicerTiles.Should().NotContain(".Distinct(");
         buildSlicerTiles.Should().NotContain(".OrderBy(");
         buildSlicerTiles.Should().NotContain(".Select(");
+    }
+
+    [Fact]
+    public void SlicerLayouts_AllocateSelectionLookupOnlyWhenRequired()
+    {
+        var source = DialogSourceTestSupport.ReadPresentationSources("SlicerTimeline", "SlicerLayoutModel.cs");
+        var preview = source[
+            source.IndexOf("public static SlicerLayoutModel Build(", StringComparison.Ordinal)..
+            source.IndexOf("public static SlicerLayoutModel BuildFull(", StringComparison.Ordinal)];
+        var full = source[
+            source.IndexOf("public static SlicerLayoutModel BuildFull(", StringComparison.Ordinal)..
+            source.IndexOf("// Lays out every available item", StringComparison.Ordinal)];
+        var previewTiles = source[
+            source.IndexOf("private static IReadOnlyList<SlicerTileLayout> BuildTiles(", StringComparison.Ordinal)..
+            source.IndexOf("private static IReadOnlyList<string> OrderAvailableItems", StringComparison.Ordinal)];
+
+        preview.Should().NotContain("new HashSet<string>");
+        previewTiles.Should().Contain("IsSelected: true");
+        previewTiles.Should().NotContain("selected.Contains");
+        full.Should().Contain("var selected = slicer.SelectedItems.Count == 0");
+        full.Should().Contain("new HashSet<string>(slicer.SelectedItems, StringComparer.OrdinalIgnoreCase)");
     }
 
     private static (Workbook Workbook, Sheet ActiveSheet) CreateLargeNativeVisualFilterWorkbook(int visibleControlCount)

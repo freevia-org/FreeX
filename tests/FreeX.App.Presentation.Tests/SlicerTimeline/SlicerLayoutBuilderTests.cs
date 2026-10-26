@@ -54,6 +54,7 @@ public sealed class SlicerLayoutBuilderTests
         // tileCount = 2; tileTop = top+26 = 76; tileHeight = max(14, min(22, (bottom-76-6)/2))
         // bottom = 170; (170-76-6)/2 = 44 -> clamped to 22.
         layout.Tiles.Should().HaveCount(2);
+        layout.Tiles.Should().OnlyContain(tile => tile.IsSelected);
         var first = layout.Tiles[0];
         first.Rect.Left.Should().Be(Bounds.Left + 6);
         first.Rect.Top.Should().Be(Bounds.Top + 26);
@@ -269,7 +270,7 @@ public sealed class SlicerLayoutBuilderTests
     public void BuildFull_PartialSelection_FlagsOnlySelectedTiles()
     {
         var slicer = new SlicerModel { Name = "S", Caption = "Region" };
-        slicer.SelectedItems.Add("B");
+        slicer.SelectedItems.Add("b");
 
         var layout = SlicerLayoutBuilder.BuildFull(slicer, ["A", "B", "C"], TallBounds);
 

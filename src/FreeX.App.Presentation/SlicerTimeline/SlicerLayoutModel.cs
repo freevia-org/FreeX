@@ -108,7 +108,6 @@ public static class SlicerLayoutBuilder
         ArgumentNullException.ThrowIfNull(availableItems);
 
         var items = OrderAvailableItems(slicer, availableItems);
-        var selected = new HashSet<string>(slicer.SelectedItems, StringComparer.OrdinalIgnoreCase);
         var hasActiveFilter = slicer.SelectedItems.Count > 0;
 
         var headerRect = new LayoutRect(
@@ -118,7 +117,7 @@ public static class SlicerLayoutBuilder
             Math.Min(HeaderMaxHeight, bounds.Height));
         var bodyRect = bounds;
 
-        var tiles = BuildTiles(slicer, items, selected, bounds);
+        var tiles = BuildTiles(slicer, items, bounds);
         var (multiSelectRect, clearFilterRect) = BuildHeaderIconRects(headerRect, slicer.ShowCaption);
         var captionRect = BuildCaptionRect(headerRect, multiSelectRect);
 
@@ -158,7 +157,9 @@ public static class SlicerLayoutBuilder
         ArgumentNullException.ThrowIfNull(availableItems);
 
         var items = OrderAvailableItems(slicer, availableItems);
-        var selected = new HashSet<string>(slicer.SelectedItems, StringComparer.OrdinalIgnoreCase);
+        var selected = slicer.SelectedItems.Count == 0
+            ? null
+            : new HashSet<string>(slicer.SelectedItems, StringComparer.OrdinalIgnoreCase);
         var hasActiveFilter = slicer.SelectedItems.Count > 0;
         var showCaption = slicer.ShowCaption;
 
@@ -194,7 +195,7 @@ public static class SlicerLayoutBuilder
     private static IReadOnlyList<SlicerTileLayout> BuildFullTiles(
         SlicerModel slicer,
         IReadOnlyList<string> items,
-        HashSet<string> selected,
+        IReadOnlySet<string>? selected,
         LayoutRect bounds,
         bool showCaption)
     {
@@ -218,7 +219,6 @@ public static class SlicerLayoutBuilder
         var tileWidth = Math.Max(1, (bounds.Width - TileHorizontalInset * 2 - totalGap) / columnCount);
 
         // No active filter => everything is "selected" (the unfiltered/all state).
-        var allSelected = selected.Count == 0;
         var visibleTileCount = Math.Min(items.Count, visibleRows * columnCount);
         var tiles = new List<SlicerTileLayout>(visibleTileCount);
         for (var index = 0; index < visibleTileCount; index++)
@@ -235,7 +235,7 @@ public static class SlicerLayoutBuilder
             tiles.Add(new SlicerTileLayout(
                 rect,
                 caption,
-                IsSelected: allSelected || selected.Contains(caption),
+                IsSelected: selected is null || selected.Contains(caption),
                 IsEnabled: true,
                 IsAllPreview: false,
                 ItemIndex: index));
@@ -333,7 +333,6 @@ public static class SlicerLayoutBuilder
     private static IReadOnlyList<SlicerTileLayout> BuildTiles(
         SlicerModel slicer,
         IReadOnlyList<string> items,
-        HashSet<string> selected,
         LayoutRect bounds)
     {
         var selectedCount = slicer.SelectedItems.Count;
@@ -366,7 +365,7 @@ public static class SlicerLayoutBuilder
             tiles.Add(new SlicerTileLayout(
                 rect,
                 itemCaption,
-                IsSelected: selected.Contains(itemCaption),
+                IsSelected: true,
                 IsEnabled: true,
                 IsAllPreview: false,
                 ItemIndex: itemIndex));

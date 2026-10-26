@@ -34,10 +34,12 @@ public static class SlicerTimelinePanePlanner
 
     public static IReadOnlyList<SlicerTileItem> BuildSlicerTiles(SlicerModel slicer, IEnumerable<string> sourceItems)
     {
+        var selected = slicer.SelectedItems.Count == 0
+            ? null
+            : slicer.SelectedItems.ToHashSet(StringComparer.OrdinalIgnoreCase);
         // r311: identity is ordinal -- the file decides which items exist and which are selected --
         // while display ORDER belongs to the user's locale. One culture-aware set was doing both, so
         // two source values the IO layer keeps distinct could collapse into a single tile.
-        var selected = slicer.SelectedItems.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var items = new List<string>();
         foreach (var item in sourceItems)
@@ -59,7 +61,7 @@ public static class SlicerTimelinePanePlanner
 
         var tiles = new List<SlicerTileItem>(items.Count);
         foreach (var item in items)
-            tiles.Add(new SlicerTileItem(slicer.Name, item, selected.Count == 0 || selected.Contains(item)));
+            tiles.Add(new SlicerTileItem(slicer.Name, item, selected is null || selected.Contains(item)));
 
         return tiles;
     }
