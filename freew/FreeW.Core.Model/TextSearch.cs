@@ -69,6 +69,52 @@ public static class TextSearch
     }
 
     /// <summary>
+    /// Full-option overload. Wildcard searches and plain literal searches take the historical paths
+    /// above unchanged; a non-wildcard needle that uses Word's caret codes (<c>^p ^t ^? ^#</c> ...)
+    /// or the prefix / suffix / ignore-punctuation / ignore-white-space options is compiled through
+    /// <see cref="FindSpecialCodes.ToRegexPattern"/> under the same timeout as a wildcard pattern.
+    /// </summary>
+    public static IEnumerable<(int Start, int Length)> FindAll(
+        string haystack,
+        string needle,
+        TextSearchOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(haystack);
+        ArgumentNullException.ThrowIfNull(needle);
+
+        if (needle.Length == 0)
+            return [];
+        if (options.UseWildcards || !FindSpecialCodes.RequiresPatternSearch(needle, options))
+            return FindAll(haystack, needle, options.MatchCase, options.WholeWord, options.UseWildcards);
+
+        return FindAllByPattern(haystack, needle, options);
+    }
+
+    private static IEnumerable<(int Start, int Length)> FindAllByPattern(
+        string haystack,
+        string needle,
+        TextSearchOptions options)
+    {
+        if (FindSpecialCodes.ToRegexPattern(needle, options) is not { } pattern)
+            yield break;
+
+        var regexOptions = RegexOptions.CultureInvariant
+            | (options.MatchCase ? RegexOptions.None : RegexOptions.IgnoreCase);
+        var regex = new Regex(pattern, regexOptions, WildcardMatchTimeout);
+        var from = 0;
+        while (from <= haystack.Length)
+        {
+            var m = MatchWithinTimeout(regex, haystack, from);
+            if (m is null || !m.Success)
+                yield break;
+
+            if (m.Length > 0)
+                yield return (m.Index, m.Length);
+            from = m.Index + Math.Max(1, m.Length);
+        }
+    }
+
+    /// <summary>
     /// Translates a Word-style wildcard pattern to a .NET regular expression pattern string.
     /// <list type="bullet">
     /// <item><c>*</c> → zero-or-more characters, non-greedy (<c>.*?</c>) — matches the shortest sequence so patterns like <c>h*o</c> find each word separately rather than one giant span.</item>
