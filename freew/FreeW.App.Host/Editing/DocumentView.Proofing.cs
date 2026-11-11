@@ -1,4 +1,10 @@
+using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Threading;
+using Free.Shared.Ribbon;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Editing;
 using FreeW.App.Presentation.Proofing;
@@ -27,6 +33,31 @@ public sealed partial class DocumentView
     private readonly HashSet<string> _ignoredProofingWords = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _ignoredGrammarRules = new(StringComparer.Ordinal);
 
+    // "Ignore Once" for a grammar issue: the rule, the paragraph text it was found in, and where. Editing
+    // the paragraph changes its text, so the issue is re-evaluated then, as in Word.
+    private readonly HashSet<(string RuleId, string ParagraphText, int Offset)> _ignoredGrammarOccurrences = [];
+
+    /// <summary>
+    /// Which grammar rules run in this editor. Every rule is individually switchable; the session's
+    /// "Don't check for this issue" choices are applied on top.
+    /// </summary>
+    public GrammarCheckOptions GrammarOptions
+    {
+        get => _grammarOptions;
+        set
+        {
+            _grammarOptions = value ?? GrammarCheckOptions.Default;
+            RefreshGrammarSquiggles();
+        }
+    }
+
+    private GrammarCheckOptions _grammarOptions = GrammarCheckOptions.Default;
+
+    private GrammarCheckOptions EffectiveGrammarOptions =>
+        _ignoredGrammarRules.Count == 0
+            ? _grammarOptions
+            : new GrammarCheckOptions(_grammarOptions.DisabledRuleIds.Concat(_ignoredGrammarRules));
+
     /// <summary>
     /// The persistent custom dictionary shared with Review &gt; Add to Dictionary. Null in editor-only
     /// contexts, where "Add to Dictionary" degrades to a session-scoped ignore.
@@ -41,6 +72,7 @@ public sealed partial class DocumentView
     {
         _ignoredProofingWords.Clear();
         _ignoredGrammarRules.Clear();
+        _ignoredGrammarOccurrences.Clear();
     }
 
     /// <summary>Creates the renderer port the shared walk-through session drives.</summary>
@@ -97,9 +129,26 @@ public sealed partial class DocumentView
     /// session's ignored grammar rules.
     /// </summary>
     private IReadOnlyList<ProofingDiagnostic> BuildProofingDiagnostics(bool spellCheckEnabled) =>
-        ProofingDiagnosticPlanner.Build(_model, spellCheckEnabled, ProofingDictionary?.Words)
-            .Where(diagnostic => diagnostic.RuleId is null || !_ignoredGrammarRules.Contains(diagnostic.RuleId))
+        ProofingDiagnosticPlanner.Build(_model, spellCheckEnabled, ProofingDictionary?.Words, EffectiveGrammarOptions)
+            .Where(diagnostic => !IsIgnoredGrammarOccurrence(diagnostic))
             .ToArray();
+
+    private bool IsIgnoredGrammarOccurrence(ProofingDiagnostic diagnostic) =>
+        _ignoredGrammarOccurrences.Count > 0
+        && diagnostic is { Kind: ProofingDiagnosticKind.Grammar, RuleId: { } ruleId }
+        && _model.Blocks[diagnostic.BlockIndex] is ModelParagraph paragraph
+        && _ignoredGrammarOccurrences.Contains((ruleId, paragraph.PlainText, diagnostic.ParagraphOffset));
+
+    /// <summary>
+    /// The grammar issues that get a blue double underline: none while as-you-type checking is off or the
+    /// document hides grammatical errors, and never an issue or rule the user chose to ignore.
+    /// </summary>
+    internal IReadOnlyList<ProofingDiagnostic> VisibleGrammarDiagnostics() =>
+        !SpellCheckEnabled || _model.HideGrammaticalErrors
+            ? []
+            : BuildProofingDiagnostics(spellCheckEnabled: true)
+                .Where(diagnostic => diagnostic.Kind == ProofingDiagnosticKind.Grammar)
+                .ToArray();
 
     private void CollectNativeSpellingIssues(List<ProofingReviewIssue> issues)
     {
@@ -328,8 +377,358 @@ public sealed partial class DocumentView
     /// <summary>Stops checking one grammar rule for the rest of the editing session.</summary>
     internal void IgnoreGrammarRule(string ruleId)
     {
-        if (!string.IsNullOrWhiteSpace(ruleId))
-            _ignoredGrammarRules.Add(ruleId);
+        if (string.IsNullOrWhiteSpace(ruleId))
+            return;
+
+        _ignoredGrammarRules.Add(ruleId);
+        RefreshGrammarSquiggles();
+    }
+
+    /// <summary>
+    /// Ignore Once for a grammar issue: this occurrence loses its underline and is skipped by the
+    /// walk-through until its paragraph is edited. (The native speller has no per-occurrence ignore, so a
+    /// spelling issue is only skipped by the walk-through itself.)
+    /// </summary>
+    internal void IgnoreProofingIssueOnce(ProofingReviewIssue issue)
+    {
+        ArgumentNullException.ThrowIfNull(issue);
+        if (issue.Kind != ProofingReviewIssueKind.Grammar
+            || issue.RuleId is not { } ruleId
+            || issue.BlockIndex < 0
+            || issue.BlockIndex >= _model.Blocks.Count
+            || _model.Blocks[issue.BlockIndex] is not ModelParagraph paragraph)
+        {
+            return;
+        }
+
+        _ignoredGrammarOccurrences.Add((ruleId, paragraph.PlainText, issue.Offset));
+        RefreshGrammarSquiggles();
+    }
+
+    // ── Blue double underline ────────────────────────────────────────────────────────────────────
+
+    // How long the text must be quiet before the grammar underlines are recomputed, so typing never
+    // waits on a whole-document pass.
+    private static readonly TimeSpan GrammarSquiggleDelay = TimeSpan.FromMilliseconds(350);
+
+    // Live ranges of the visible grammar issues in the CURRENT FlowDocument. TextPointers follow edits,
+    // so the underlines stay glued to their text between refreshes; a re-render replaces the document
+    // and the ranges are rebuilt.
+    private readonly List<TextRange> _grammarSquiggleRanges = [];
+    private GrammarSquiggleAdorner? _grammarSquiggleAdorner;
+    private DispatcherTimer? _grammarSquiggleTimer;
+
+    /// <summary>The flagged text under each blue double underline, in document order.</summary>
+    internal IReadOnlyList<string> GrammarSquiggleTexts =>
+        _grammarSquiggleRanges.Select(range => range.Text).ToArray();
+
+    // Called once from the constructor: the proofing chrome hangs off the editor's own events so the big
+    // editing file needs no further hooks.
+    private void InitializeProofingSurface()
+    {
+        Loaded += (_, _) => RefreshGrammarSquiggles();
+        TextChanged += (_, _) => ScheduleGrammarSquiggleRefresh();
+        _editingSession.Changed += ScheduleGrammarSquiggleRefresh;
+        PreviewMouseRightButtonDown += (_, e) =>
+            PrepareProofingContextMenu(GetPositionFromPoint(e.GetPosition(this), snapToText: false));
+        PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Apps || (e.SystemKey == Key.F10 && Keyboard.Modifiers == ModifierKeys.Shift))
+                PrepareProofingContextMenu(CaretPosition);
+        };
+    }
+
+    private void ScheduleGrammarSquiggleRefresh()
+    {
+        // The old ranges belong to a document that a re-render has just replaced: drop them at once.
+        if (_grammarSquiggleRanges.Count > 0
+            && !_grammarSquiggleRanges[0].Start.IsInSameDocument(Document.ContentStart))
+        {
+            _grammarSquiggleRanges.Clear();
+            _grammarSquiggleAdorner?.InvalidateVisual();
+        }
+
+        if (!IsLoaded)
+            return;
+
+        _grammarSquiggleTimer ??= CreateGrammarSquiggleTimer();
+        _grammarSquiggleTimer.Stop();
+        _grammarSquiggleTimer.Start();
+    }
+
+    private DispatcherTimer CreateGrammarSquiggleTimer()
+    {
+        var timer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = GrammarSquiggleDelay };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            RefreshGrammarSquiggles();
+        };
+        return timer;
+    }
+
+    /// <summary>
+    /// Recomputes the blue double underlines from the shared grammar diagnostics of the model. A range
+    /// whose live text no longer matches its diagnostic (the surface is ahead of the model mid-edit) is
+    /// skipped rather than drawn in the wrong place.
+    /// </summary>
+    internal void RefreshGrammarSquiggles()
+    {
+        _grammarSquiggleRanges.Clear();
+        foreach (var diagnostic in VisibleGrammarDiagnostics())
+        {
+            var start = TextPointerAtModelTextOffset(diagnostic.BlockIndex, diagnostic.ParagraphOffset);
+            var end = TextPointerAtModelTextOffset(
+                diagnostic.BlockIndex,
+                diagnostic.ParagraphOffset + diagnostic.Length);
+            if (start is null || end is null)
+                continue;
+
+            var range = new TextRange(start, end);
+            if (string.Equals(range.Text, diagnostic.Word, StringComparison.Ordinal))
+                _grammarSquiggleRanges.Add(range);
+        }
+
+        SyncGrammarSquiggleAdorner();
+    }
+
+    private void SyncGrammarSquiggleAdorner()
+    {
+        if (_grammarSquiggleAdorner is null)
+        {
+            if (_grammarSquiggleRanges.Count == 0 || AdornerLayer.GetAdornerLayer(this) is not { } layer)
+                return;
+
+            _grammarSquiggleAdorner = new GrammarSquiggleAdorner(this);
+            layer.Add(_grammarSquiggleAdorner);
+        }
+
+        _grammarSquiggleAdorner.InvalidateVisual();
+    }
+
+    /// <summary>
+    /// Word's grammar indicator: a blue double underline. Pure chrome on the adorner layer, so it never
+    /// becomes part of the FlowDocument and can never round-trip into the saved file.
+    /// </summary>
+    private sealed class GrammarSquiggleAdorner : Adorner
+    {
+        private static readonly Pen UnderlinePen = CreatePen();
+
+        private readonly DocumentView _view;
+
+        public GrammarSquiggleAdorner(DocumentView view) : base(view)
+        {
+            _view = view;
+            IsHitTestVisible = false;
+            // Follow scrolling, zooming and reflow.
+            _view.LayoutUpdated += (_, _) =>
+            {
+                if (_view._grammarSquiggleRanges.Count > 0)
+                    InvalidateVisual();
+            };
+        }
+
+        private static Pen CreatePen()
+        {
+            var pen = new Pen(new SolidColorBrush(Color.FromRgb(0x2B, 0x6C, 0xD9)), 1);
+            pen.Freeze();
+            return pen;
+        }
+
+        protected override void OnRender(DrawingContext drawingContext)
+        {
+            base.OnRender(drawingContext);
+            var ranges = _view._grammarSquiggleRanges;
+            if (ranges.Count == 0)
+                return;
+
+            var bounds = new Rect(_view.RenderSize);
+            drawingContext.PushClip(new RectangleGeometry(bounds));
+            try
+            {
+                foreach (var range in ranges)
+                {
+                    if (!range.Start.IsInSameDocument(_view.Document.ContentStart))
+                        continue;
+
+                    foreach (var segment in LineSegments(range, bounds))
+                    {
+                        // Two hairlines just under the text: Word's double underline.
+                        var y = Math.Round(segment.Bottom) - 0.5;
+                        drawingContext.DrawLine(UnderlinePen, new Point(segment.Left, y), new Point(segment.Right, y));
+                        drawingContext.DrawLine(
+                            UnderlinePen,
+                            new Point(segment.Left, y + 2),
+                            new Point(segment.Right, y + 2));
+                    }
+                }
+            }
+            finally
+            {
+                drawingContext.Pop();
+            }
+        }
+
+        // One rectangle per visual line the range covers (a flagged phrase can wrap).
+        private static IEnumerable<Rect> LineSegments(TextRange range, Rect bounds)
+        {
+            Rect first;
+            Rect last;
+            try
+            {
+                first = range.Start.GetCharacterRect(LogicalDirection.Forward);
+                last = range.End.GetCharacterRect(LogicalDirection.Backward);
+            }
+            catch (InvalidOperationException)
+            {
+                yield break;
+            }
+
+            if (first.IsEmpty || last.IsEmpty || last.Bottom < bounds.Top || first.Top > bounds.Bottom)
+                yield break;
+
+            if (Math.Abs(first.Top - last.Top) < 1)
+            {
+                if (last.Left > first.Left)
+                    yield return new Rect(first.Left, first.Top, last.Left - first.Left, first.Height);
+                yield break;
+            }
+
+            // Wrapped: walk the characters and merge those that share a line.
+            Rect? line = null;
+            for (var position = range.Start;
+                 position is not null && position.CompareTo(range.End) < 0;
+                 position = position.GetNextInsertionPosition(LogicalDirection.Forward))
+            {
+                var next = position.GetNextInsertionPosition(LogicalDirection.Forward);
+                if (next is null)
+                    break;
+
+                var left = position.GetCharacterRect(LogicalDirection.Forward);
+                var right = next.GetCharacterRect(LogicalDirection.Backward);
+                if (left.IsEmpty || right.IsEmpty || Math.Abs(left.Top - right.Top) >= 1 || right.Left <= left.Left)
+                    continue;
+
+                var glyph = new Rect(left.Left, left.Top, right.Left - left.Left, left.Height);
+                if (line is { } current && Math.Abs(current.Top - glyph.Top) < 1)
+                {
+                    line = Rect.Union(current, glyph);
+                    continue;
+                }
+
+                if (line is { } finished)
+                    yield return finished;
+                line = glyph;
+            }
+
+            if (line is { } remaining)
+                yield return remaining;
+        }
+    }
+
+    // ── Right-click menu ─────────────────────────────────────────────────────────────────────────
+
+    // The grammar menu installed for the pending right-click; null leaves WPF's own editing/spelling menu.
+    private ContextMenu? _grammarContextMenu;
+
+    /// <summary>The visible grammar issue covering <paramref name="position"/>, if any.</summary>
+    internal ProofingReviewIssue? GrammarIssueAt(TextPointer? position)
+    {
+        if (position is null || !TryGetModelTextOffset(position, out var model))
+            return null;
+
+        var diagnostic = VisibleGrammarDiagnostics().FirstOrDefault(candidate =>
+            candidate.BlockIndex == model.BlockIndex
+            && candidate.ParagraphOffset <= model.Offset
+            && model.Offset <= candidate.ParagraphOffset + candidate.Length);
+        return diagnostic is null ? null : ProofingReviewIssue.FromDiagnostic(diagnostic);
+    }
+
+    // Runs BEFORE the framework raises ContextMenuOpening. RichTextBox shows its built-in menu (with the
+    // native spelling suggestions) only while ContextMenu is null, so a grammar issue under the pointer
+    // swaps in the grammar menu and anything else restores the built-in one.
+    private void PrepareProofingContextMenu(TextPointer? position)
+    {
+        if (ReferenceEquals(ContextMenu, _grammarContextMenu))
+            ContextMenu = null;
+        _grammarContextMenu = null;
+
+        // A misspelling keeps the native speller's own menu even when a grammar issue overlaps it.
+        if (position is null || (SpellCheck.IsEnabled && GetSpellingError(position) is not null))
+            return;
+
+        // Only text that shows a grammar underline can open the grammar menu, so an ordinary right-click
+        // costs nothing; the model is synchronised only when one is actually hit.
+        if (!_grammarSquiggleRanges.Any(range =>
+                range.Start.IsInSameDocument(position) && range.Contains(position)))
+        {
+            return;
+        }
+
+        CommitToModel();
+        if (GrammarIssueAt(position) is not { } issue)
+            return;
+
+        _grammarContextMenu = BuildGrammarContextMenu(issue);
+        ContextMenu = _grammarContextMenu;
+    }
+
+    /// <summary>
+    /// Word's right-click menu over a grammar issue: the shared grammar section (rule, suggestions, Ignore
+    /// Once, Don't Check for This Issue) followed by the ordinary clipboard commands.
+    /// </summary>
+    internal ContextMenu BuildGrammarContextMenu(ProofingReviewIssue issue)
+    {
+        var menu = new ContextMenu();
+        var canEdit = AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit);
+        foreach (var planned in ProofingContextMenuPlanner.BuildGrammar(issue, canEdit, UiText.Get).Items)
+        {
+            if (planned.Kind == RibbonMenuItemKind.Separator || planned.CommandId is not { } commandId)
+            {
+                menu.Items.Add(new Separator());
+                continue;
+            }
+
+            var entry = new MenuItem { Header = planned.Header, IsEnabled = planned.IsEnabled, Tag = commandId.Value };
+            entry.Click += (_, _) => ExecuteGrammarContextMenuCommand(issue, commandId);
+            menu.Items.Add(entry);
+        }
+
+        // Framework commands supply their own localized captions and enablement.
+        foreach (var command in new[] { ApplicationCommands.Cut, ApplicationCommands.Copy, ApplicationCommands.Paste })
+            menu.Items.Add(new MenuItem { Command = command, CommandTarget = this });
+        return menu;
+    }
+
+    internal void ExecuteGrammarContextMenuCommand(ProofingReviewIssue issue, RibbonCommandId commandId)
+    {
+        if (ProofingContextMenuPlanner.TryParseReplacement(commandId, out var index))
+        {
+            if (index < issue.Suggestions.Count)
+            {
+                var suggestion = issue.Suggestions[index];
+                ApplyProofingReplacements(
+                [
+                    new ProofingReviewReplacement(
+                        issue.BlockIndex,
+                        suggestion.Offset,
+                        suggestion.Length,
+                        suggestion.Replacement),
+                ]);
+            }
+
+            return;
+        }
+
+        switch (commandId.Value)
+        {
+            case ProofingContextMenuPlanner.GrammarIgnoreOnce:
+                IgnoreProofingIssueOnce(issue);
+                break;
+            case ProofingContextMenuPlanner.GrammarIgnoreRule when issue.RuleId is { } ruleId:
+                IgnoreGrammarRule(ruleId);
+                break;
+        }
     }
 
     private sealed class ProofingReviewHost(DocumentView editor) : IProofingReviewHost
@@ -342,6 +741,8 @@ public sealed partial class DocumentView
 
         public bool ApplyReplacements(IReadOnlyList<ProofingReviewReplacement> replacements) =>
             editor.ApplyProofingReplacements(replacements);
+
+        public void IgnoreOnce(ProofingReviewIssue issue) => editor.IgnoreProofingIssueOnce(issue);
 
         public void IgnoreSpelling(ProofingReviewIssue issue) => editor.IgnoreProofingSpelling(issue);
 

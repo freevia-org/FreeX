@@ -58,6 +58,10 @@ public static class ProofingReviewPanePlanner
             .Concat(GrammarRuleTextCatalog.RequiredResourceKeys)
             .ToArray();
 
+    public static string IgnoreOnceLabel(Func<string, string?>? getText = null) => IgnoreOnce.Resolve(getText);
+
+    public static string IgnoreRuleLabel(Func<string, string?>? getText = null) => IgnoreRule.Resolve(getText);
+
     /// <summary>Word's completion message, shown when the walk-through has visited every issue.</summary>
     public static string CompleteMessage(Func<string, string?>? getText = null) => Complete.Resolve(getText);
 
@@ -131,7 +135,21 @@ public static class ProofingReviewPanePlanner
     {
         ArgumentNullException.ThrowIfNull(issue);
         ArgumentNullException.ThrowIfNull(suggestion);
-        if (suggestion.Replacement.Length > 0)
+
+        // A fix that edits only part of the flagged text (insert or remove a space, capitalise a
+        // letter) is shown as the whole corrected fragment: "word, next" says more than " ".
+        var relative = suggestion.Offset - issue.Offset;
+        var isPartialEdit = suggestion.Offset != issue.Offset || suggestion.Length != issue.Length;
+        if (isPartialEdit && relative >= 0 && relative + suggestion.Length <= issue.Text.Length)
+        {
+            var corrected = issue.Text[..relative]
+                + suggestion.Replacement
+                + issue.Text[(relative + suggestion.Length)..];
+            if (!string.IsNullOrWhiteSpace(corrected))
+                return corrected;
+        }
+
+        if (!string.IsNullOrWhiteSpace(suggestion.Replacement))
             return suggestion.Replacement;
 
         return GrammarRuleTextCatalog.Resolve(issue.RuleId, getText)?.DeleteFix

@@ -18,6 +18,7 @@ public sealed class ProofingReviewSessionTests
 
         session.IgnoreOnce().Should().BeTrue();
         session.Current!.Text.Should().Be("wierd");
+        host.IgnoredOnce.Should().ContainSingle().Which.RuleId.Should().Be(GrammarRuleIds.RepeatedWord);
 
         session.IgnoreOnce().Should().BeTrue();
         session.Current!.Text.Should().Be("teh", "the walk wraps to the top after the last issue");
@@ -363,6 +364,10 @@ public sealed class ProofingReviewSessionTests
 
             return true;
         }
+
+        public List<ProofingReviewIssue> IgnoredOnce { get; } = [];
+
+        public void IgnoreOnce(ProofingReviewIssue issue) => IgnoredOnce.Add(issue);
 
         public void IgnoreSpelling(ProofingReviewIssue issue) => IgnoredSpellings.Add(issue.Text);
 

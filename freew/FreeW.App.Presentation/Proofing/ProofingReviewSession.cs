@@ -114,6 +114,9 @@ public interface IProofingReviewHost
     /// </summary>
     bool ApplyReplacements(IReadOnlyList<ProofingReviewReplacement> replacements);
 
+    /// <summary>Stops flagging this one occurrence (Ignore Once), so its indicator goes away too.</summary>
+    void IgnoreOnce(ProofingReviewIssue issue);
+
     /// <summary>Stops flagging this spelling for the rest of the editing session (Ignore All).</summary>
     void IgnoreSpelling(ProofingReviewIssue issue);
 
@@ -199,6 +202,7 @@ public sealed class ProofingReviewSession
             return false;
 
         _ignoredOnce.Add(Current!);
+        _host.IgnoreOnce(Current!);
         Advance();
         return true;
     }
