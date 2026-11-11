@@ -518,7 +518,8 @@ jobs:
             -Apps "${{ matrix.app }}" `
             -Version $version `
             -Runtime "${{ matrix.runtime }}" `
-            -InputRoot artifacts\release
+            -InputRoot artifacts\release `
+            ${{ inputs.dry_run && '-SkipWindowsSignatureCheck' || '' }}
 
       - name: Generate SBOM and validate package inventory
         shell: pwsh
@@ -720,7 +721,8 @@ jobs:
             -Apps FreeX,FreeW,FreeP `
             -Version "${{ inputs.release_version }}" `
             -Runtime "${{ matrix.runtime }}" `
-            -InputRoot artifacts\suite ${{ inputs.macos_unsigned && '-AllowUnsigned' || '' }}
+            -InputRoot artifacts\suite ${{ inputs.macos_unsigned && '-AllowUnsigned' || '' }} `
+            ${{ inputs.dry_run && '-SkipWindowsSignatureCheck' || '' }}
 
       - name: Generate suite SBOM and validate inventory
         shell: pwsh

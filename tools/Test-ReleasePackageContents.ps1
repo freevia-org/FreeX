@@ -11,7 +11,12 @@ param(
     # a Developer ID, the macOS suite .pkg carries no signature and pkgutil --check-signature would
     # fail on an artifact that is unsigned by design. Everything else about the package is still
     # verified. Opt-in only, so a normally-signed release still fails when its signature is missing.
-    [switch]$AllowUnsigned
+    [switch]$AllowUnsigned,
+
+    # A dry-run packaging rehearsal signs nothing (it has no Azure credential by design), so the
+    # Windows Authenticode assertion cannot hold there. Opt-in only and passed by nothing but the
+    # dry run, so a real release -- including an unsigned-macOS one -- still fails on an unsigned PE.
+    [switch]$SkipWindowsSignatureCheck
 )
 
 $ErrorActionPreference = "Stop"
@@ -31,6 +36,7 @@ function Assert-Pe([System.IO.FileInfo]$File, [string]$Description) {
     try {
         if ($stream.ReadByte() -ne 0x4d -or $stream.ReadByte() -ne 0x5a) { throw "$Description is not a Windows PE executable: $($File.Name)" }
     } finally { $stream.Dispose() }
+    if ($SkipWindowsSignatureCheck) { return }
     $signature = Get-AuthenticodeSignature -LiteralPath $File.FullName
     if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid) {
         throw "$Description does not have a valid Authenticode signature: $($File.Name) ($($signature.Status))"
