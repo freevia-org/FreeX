@@ -55,8 +55,8 @@ public class DocumentStoriesTests
                 (DocumentStoryKind.Comment, 1, 6, "Reply six"),
                 (DocumentStoryKind.TextBox, 0, 1, "Box text"));
 
-        stories[1].Slot.Should().Be(HeaderFooterSlotKind.FirstFooter);
-        stories[4].Slot.Should().Be(HeaderFooterSlotKind.EvenHeader);
+        stories[1].Slot.Should().Be(StoryHeaderFooterSlot.FirstFooter);
+        stories[4].Slot.Should().Be(StoryHeaderFooterSlot.EvenHeader);
         stories[^1].TextBoxHostRun.Should().NotBeNull();
     }
 

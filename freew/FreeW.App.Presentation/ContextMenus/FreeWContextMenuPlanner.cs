@@ -62,18 +62,17 @@ public static class FreeWContextMenuPlanner
     public const string EffectsPrefix = "freew.context.effects.";
     public const string TableStylesPrefix = "freew.context.table-styles.";
 
+    /// <summary>
+    /// The neutral-English Find what special list: Word's caret codes (^p, ^t, ^?, ...), which
+    /// <see cref="FreeW.Core.Model.TextSearch"/> interprets. The single authority is
+    /// <see cref="FreeW.App.Presentation.Dialogs.FindReplaceDialogPlanner.BuildSpecialItems"/>, which
+    /// also builds the per-box, localized and wildcard-aware lists.
+    /// </summary>
     public static readonly IReadOnlyList<(string Label, string Insert)> FindSpecialCharacters =
-    [
-        ("Paragraph Mark  (^p / \\n)", "\n"),
-        ("Tab Character  (^t / \\t)", "\t"),
-        ("Any Character  (?)", "?"),
-        ("Any Digit  ([0-9])", "[0-9]"),
-        ("Any Letter  ([A-Za-z])", "[A-Za-z]"),
-        ("Beginning of Word  (<)", "<"),
-        ("End of Word  (>)", ">"),
-        ("Em Dash  (\u2014)", "\u2014"),
-        ("En Dash  (\u2013)", "\u2013"),
-    ];
+        FreeW.App.Presentation.Dialogs.FindReplaceDialogPlanner
+            .BuildSpecialItems(FreeW.App.Presentation.Dialogs.FindReplaceDialogFieldKind.Find, useWildcards: false)
+            .Select(item => (item.Label, item.Insert))
+            .ToArray();
 
     public static readonly IReadOnlyList<FreeWContextMenuInventoryEntry> Inventory =
     [

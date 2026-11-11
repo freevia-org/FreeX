@@ -392,4 +392,69 @@
   <data name="FreeW_FindReplace_NoReplacements" xml:space="preserve"><value>Aucun remplacement effectu&#xE9;.</value></data>
   <data name="FreeW_FindReplace_ReplacedOccurrences_Format" xml:space="preserve"><value>{0} occurrence{1} remplac&#xE9;e{1}.</value></data>
   <data name="FreeW_FindReplace_ReplacementsMade_Format" xml:space="preserve"><value>{0} remplacement(s) effectu&#xE9;(s).</value></data>
+  <data name="FreeW_FindReplace_Option_MatchPrefix" xml:space="preserve"><value>Pr&#xE9;fixe</value></data>
+  <data name="FreeW_FindReplace_Option_MatchSuffix" xml:space="preserve"><value>Suffixe</value></data>
+  <data name="FreeW_FindReplace_Option_IgnorePunctuation" xml:space="preserve"><value>Ignorer les caract&#xE8;res de ponctuation</value></data>
+  <data name="FreeW_FindReplace_Option_IgnoreWhiteSpace" xml:space="preserve"><value>Ignorer les espaces</value></data>
+  <data name="FreeW_FindReplace_Format_Button" xml:space="preserve"><value>Format&#x2026;</value></data>
+  <data name="FreeW_FindReplace_NoFormatting_Button" xml:space="preserve"><value>Sans attributs</value></data>
+  <data name="FreeW_FindReplace_Format_Summary_Format" xml:space="preserve"><value>Format&#xA0;: {0}</value></data>
+  <data name="FreeW_FindReplace_FormattedText" xml:space="preserve"><value>texte mis en forme</value></data>
+  <data name="FreeW_FindReplace_NothingToReplaceWith" xml:space="preserve"><value>Saisissez un texte de remplacement ou choisissez une mise en forme de remplacement.</value></data>
+  <data name="FreeW_FindReplace_Special_ParagraphMark" xml:space="preserve"><value>Marque de paragraphe</value></data>
+  <data name="FreeW_FindReplace_Special_TabCharacter" xml:space="preserve"><value>Tabulation</value></data>
+  <data name="FreeW_FindReplace_Special_AnyCharacter" xml:space="preserve"><value>Tout caract&#xE8;re</value></data>
+  <data name="FreeW_FindReplace_Special_AnyDigit" xml:space="preserve"><value>Tout chiffre</value></data>
+  <data name="FreeW_FindReplace_Special_AnyLetter" xml:space="preserve"><value>Toute lettre</value></data>
+  <data name="FreeW_FindReplace_Special_CaretCharacter" xml:space="preserve"><value>Caract&#xE8;re ^</value></data>
+  <data name="FreeW_FindReplace_Special_ManualLineBreak" xml:space="preserve"><value>Saut de ligne manuel</value></data>
+  <data name="FreeW_FindReplace_Special_ManualPageBreak" xml:space="preserve"><value>Saut de page manuel</value></data>
+  <data name="FreeW_FindReplace_Special_NonbreakingHyphen" xml:space="preserve"><value>Trait d'union ins&#xE9;cable</value></data>
+  <data name="FreeW_FindReplace_Special_NonbreakingSpace" xml:space="preserve"><value>Espace ins&#xE9;cable</value></data>
+  <data name="FreeW_FindReplace_Special_OptionalHyphen" xml:space="preserve"><value>Trait d'union conditionnel</value></data>
+  <data name="FreeW_FindReplace_Special_WhiteSpace" xml:space="preserve"><value>Espace</value></data>
+  <data name="FreeW_FindReplace_Special_EmDash" xml:space="preserve"><value>Tiret cadratin</value></data>
+  <data name="FreeW_FindReplace_Special_EnDash" xml:space="preserve"><value>Tiret demi-cadratin</value></data>
+  <data name="FreeW_FindReplace_Special_FindWhatText" xml:space="preserve"><value>Texte recherch&#xE9;</value></data>
+  <data name="FreeW_FindReplace_Special_BeginningOfWord" xml:space="preserve"><value>D&#xE9;but de mot</value></data>
+  <data name="FreeW_FindReplace_Special_EndOfWord" xml:space="preserve"><value>Fin de mot</value></data>
+  <data name="FreeW_FindReplace_Describe_Font_Format" xml:space="preserve"><value>Police&#xA0;: {0}</value></data>
+  <data name="FreeW_FindReplace_Describe_Size_Format" xml:space="preserve"><value>{0} pt</value></data>
+  <data name="FreeW_FindReplace_Describe_Bold" xml:space="preserve"><value>Gras</value></data>
+  <data name="FreeW_FindReplace_Describe_NotBold" xml:space="preserve"><value>Non gras</value></data>
+  <data name="FreeW_FindReplace_Describe_Italic" xml:space="preserve"><value>Italique</value></data>
+  <data name="FreeW_FindReplace_Describe_NotItalic" xml:space="preserve"><value>Non italique</value></data>
+  <data name="FreeW_FindReplace_Describe_Underline" xml:space="preserve"><value>Soulign&#xE9;</value></data>
+  <data name="FreeW_FindReplace_Describe_NoUnderline" xml:space="preserve"><value>Non soulign&#xE9;</value></data>
+  <data name="FreeW_FindReplace_Describe_FontColor_Format" xml:space="preserve"><value>Couleur de police&#xA0;: {0}</value></data>
+  <data name="FreeW_FindReplace_Describe_Highlight" xml:space="preserve"><value>Surlignage</value></data>
+  <data name="FreeW_FindReplace_Describe_HighlightColor_Format" xml:space="preserve"><value>Surlignage&#xA0;: {0}</value></data>
+  <data name="FreeW_FindReplace_Describe_NotHighlight" xml:space="preserve"><value>Sans surlignage</value></data>
+  <data name="FreeW_FindReplace_Describe_Style_Format" xml:space="preserve"><value>Style&#xA0;: {0}</value></data>
+  <data name="FreeW_FindReplace_FormatDialog_FindTitle" xml:space="preserve"><value>Rechercher une mise en forme</value></data>
+  <data name="FreeW_FindReplace_FormatDialog_ReplaceTitle" xml:space="preserve"><value>Mise en forme de remplacement</value></data>
+  <data name="FreeW_FindReplace_FormatDialog_Font_Label" xml:space="preserve"><value>Police&#xA0;:</value></data>
+  <data name="FreeW_FindReplace_FormatDialog_Size_Label" xml:space="preserve"><value>Taille&#xA0;:</value></data>
+  <data name="FreeW_FindReplace_FormatDialog_Color_Label" xml:space="preserve"><value>Couleur de police (hex)&#xA0;:</value></data>
+  <data name="FreeW_FindReplace_FormatDialog_HighlightColor_Label" xml:space="preserve"><value>Couleur de surlignage (hex)&#xA0;:</value></data>
+  <data name="FreeW_FindReplace_FormatDialog_Style_Label" xml:space="preserve"><value>Style de paragraphe&#xA0;:</value></data>
+  <data name="FreeW_FindReplace_FormatDialog_Bold" xml:space="preserve"><value>Gras</value></data>
+  <data name="FreeW_FindReplace_FormatDialog_Italic" xml:space="preserve"><value>Italique</value></data>
+  <data name="FreeW_FindReplace_FormatDialog_Underline" xml:space="preserve"><value>Soulign&#xE9;</value></data>
+  <data name="FreeW_FindReplace_FormatDialog_Highlight" xml:space="preserve"><value>Surlignage</value></data>
+  <data name="FreeW_FindReplace_FormatDialog_Any" xml:space="preserve"><value>(indiff&#xE9;rent)</value></data>
+  <data name="FreeW_FindReplace_FormatDialog_TriStateHint" xml:space="preserve"><value>Une case remplie signifie que le param&#xE8;tre ne fait pas partie de la recherche.</value></data>
+  <data name="FreeW_FindReplace_FormatDialog_InvalidSize" xml:space="preserve"><value>Saisissez une taille de police comprise entre 1 et 1638.</value></data>
+  <data name="FreeW_FindReplace_FormatDialog_InvalidColor" xml:space="preserve"><value>Saisissez une couleur sous la forme de six chiffres hexad&#xE9;cimaux, par exemple FF0000.</value></data>
+  <data name="FreeW_FindReplace_FoundInStory_Format" xml:space="preserve"><value>Trouv&#xE9; dans {0}&#xA0;: {1}</value></data>
+  <data name="FreeW_FindReplace_Story_Header_Format" xml:space="preserve"><value>l'en-t&#xEA;te (section {0})</value></data>
+  <data name="FreeW_FindReplace_Story_Footer_Format" xml:space="preserve"><value>le pied de page (section {0})</value></data>
+  <data name="FreeW_FindReplace_Story_FirstHeader_Format" xml:space="preserve"><value>l'en-t&#xEA;te de premi&#xE8;re page (section {0})</value></data>
+  <data name="FreeW_FindReplace_Story_FirstFooter_Format" xml:space="preserve"><value>le pied de premi&#xE8;re page (section {0})</value></data>
+  <data name="FreeW_FindReplace_Story_EvenHeader_Format" xml:space="preserve"><value>l'en-t&#xEA;te des pages paires (section {0})</value></data>
+  <data name="FreeW_FindReplace_Story_EvenFooter_Format" xml:space="preserve"><value>le pied des pages paires (section {0})</value></data>
+  <data name="FreeW_FindReplace_Story_Footnote_Format" xml:space="preserve"><value>la note de bas de page {0}</value></data>
+  <data name="FreeW_FindReplace_Story_Endnote_Format" xml:space="preserve"><value>la note de fin {0}</value></data>
+  <data name="FreeW_FindReplace_Story_Comment_Format" xml:space="preserve"><value>le commentaire {0}</value></data>
+  <data name="FreeW_FindReplace_Story_TextBox_Format" xml:space="preserve"><value>la zone de texte {0}</value></data>
 </root>

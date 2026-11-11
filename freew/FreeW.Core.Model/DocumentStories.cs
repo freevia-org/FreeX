@@ -11,7 +11,7 @@ public enum DocumentStoryKind
 }
 
 /// <summary>Which header/footer slot of a section a paragraph belongs to.</summary>
-public enum HeaderFooterSlotKind
+public enum StoryHeaderFooterSlot
 {
     Header,
     Footer,
@@ -45,7 +45,7 @@ public sealed record StoryParagraph(
     StoryParagraphAddress Address,
     Paragraph Paragraph,
     int StoryNumber,
-    HeaderFooterSlotKind Slot = HeaderFooterSlotKind.Header,
+    StoryHeaderFooterSlot Slot = StoryHeaderFooterSlot.Header,
     Run? TextBoxHostRun = null)
 {
     public DocumentStoryKind Kind => Address.Kind;
@@ -158,20 +158,20 @@ public static class DocumentStories
     public static StoryParagraph? Resolve(TextDocument document, StoryParagraphAddress address) =>
         Enumerate(document).FirstOrDefault(story => story.Address == address);
 
-    private static IEnumerable<(HeaderFooterSlotKind Slot, HeaderFooter Region)> Slots(SectionHeadersFooters store)
+    private static IEnumerable<(StoryHeaderFooterSlot Slot, HeaderFooter Region)> Slots(SectionHeadersFooters store)
     {
         if (store.Header is { } header)
-            yield return (HeaderFooterSlotKind.Header, header);
+            yield return (StoryHeaderFooterSlot.Header, header);
         if (store.Footer is { } footer)
-            yield return (HeaderFooterSlotKind.Footer, footer);
+            yield return (StoryHeaderFooterSlot.Footer, footer);
         if (store.FirstHeader is { } firstHeader)
-            yield return (HeaderFooterSlotKind.FirstHeader, firstHeader);
+            yield return (StoryHeaderFooterSlot.FirstHeader, firstHeader);
         if (store.FirstFooter is { } firstFooter)
-            yield return (HeaderFooterSlotKind.FirstFooter, firstFooter);
+            yield return (StoryHeaderFooterSlot.FirstFooter, firstFooter);
         if (store.EvenHeader is { } evenHeader)
-            yield return (HeaderFooterSlotKind.EvenHeader, evenHeader);
+            yield return (StoryHeaderFooterSlot.EvenHeader, evenHeader);
         if (store.EvenFooter is { } evenFooter)
-            yield return (HeaderFooterSlotKind.EvenFooter, evenFooter);
+            yield return (StoryHeaderFooterSlot.EvenFooter, evenFooter);
     }
 
     private static void CollectBlockParagraphs(IEnumerable<Block> blocks, List<Paragraph> target)
