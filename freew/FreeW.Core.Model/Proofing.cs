@@ -17,7 +17,21 @@ public sealed record ProofingDiagnostic(
     string Word,
     string NormalizedWord,
     string? LanguageTag,
-    ProofingDiagnosticKind Kind = ProofingDiagnosticKind.Spelling);
+    ProofingDiagnosticKind Kind = ProofingDiagnosticKind.Spelling,
+    string? RuleId = null,
+    IReadOnlyList<ProofingSuggestion>? Suggestions = null)
+{
+    /// <summary>The proposed fixes, never null (empty when the issue has an explanation only).</summary>
+    public IReadOnlyList<ProofingSuggestion> SuggestionsOrEmpty => Suggestions ?? [];
+}
+
+/// <summary>
+/// One proposed fix for a <see cref="ProofingDiagnostic"/>: replace <see cref="Length"/> characters at
+/// <see cref="ParagraphOffset"/> (paragraph plain-text coordinates) with <see cref="Replacement"/>. The
+/// edit range may differ from the flagged range: deleting a repeated word also removes the whitespace
+/// in front of it.
+/// </summary>
+public sealed record ProofingSuggestion(string Replacement, int ParagraphOffset, int Length);
 
 public static class ProofingDiagnosticPlanner
 {
@@ -165,7 +179,11 @@ public static class ProofingDiagnosticPlanner
                     paragraph,
                     document.DefaultRun.LanguageTag,
                     token,
-                    ProofingDiagnosticKind.Spelling);
+                    ProofingDiagnosticKind.Spelling,
+                    ruleId: null,
+                    ProofingCorrectionCatalog.SuggestionsFor(token.Word)
+                        .Select(suggestion => new ProofingSuggestion(suggestion, token.Start, token.Length))
+                        .ToArray());
             }
 
             if (previousToken is { } previous
@@ -177,7 +195,9 @@ public static class ProofingDiagnosticPlanner
                     paragraph,
                     document.DefaultRun.LanguageTag,
                     token,
-                    ProofingDiagnosticKind.Grammar);
+                    ProofingDiagnosticKind.Grammar,
+                    GrammarRuleIds.RepeatedWord,
+                    [new ProofingSuggestion(string.Empty, previous.End, token.End - previous.End)]);
             }
 
             previousToken = token;
@@ -238,7 +258,9 @@ public static class ProofingDiagnosticPlanner
         Paragraph paragraph,
         string? defaultLanguageTag,
         ProofingToken token,
-        ProofingDiagnosticKind kind)
+        ProofingDiagnosticKind kind,
+        string? ruleId,
+        IReadOnlyList<ProofingSuggestion> suggestions)
     {
         var (runIndex, runOffset, languageTag) = LocateRun(paragraph, token.Start, defaultLanguageTag);
 
@@ -251,7 +273,9 @@ public static class ProofingDiagnosticPlanner
             token.Word,
             token.Normalized,
             languageTag,
-            kind));
+            kind,
+            ruleId,
+            suggestions));
     }
 
     private static bool IsAdjacentRepeatedWord(ProofingToken previous, ProofingToken current, string text)

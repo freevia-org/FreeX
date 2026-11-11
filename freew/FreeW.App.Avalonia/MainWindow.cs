@@ -344,6 +344,7 @@ public sealed partial class MainWindow : Window
             Undo: () => ResolveHistoryDocumentEditor().Undo(),
             Redo: () => ResolveHistoryDocumentEditor().Redo(),
             RevealFormatting: ToggleRevealFormatting,
+            SpellingAndGrammar: ShowSpellingAndGrammarUnavailable,
             Thesaurus: ToggleThesaurusPane,
             LockCurrentField: () => _editor.SetFieldLockAtCaret(true),
             UnlockCurrentField: () => _editor.SetFieldLockAtCaret(false),
@@ -1253,6 +1254,11 @@ public sealed partial class MainWindow : Window
     }
 
     private void ToggleThesaurusPane() => _thesaurusPane.Toggle();
+
+    // F7 (Spelling & Grammar walk-through) is WPF-first: the shared ProofingReviewSession exists, but this
+    // shell has no pane for it yet, so the gesture reports that honestly instead of doing nothing.
+    private void ShowSpellingAndGrammarUnavailable() =>
+        _status.Text = UiText.Get("Proofing_Review_Unavailable_Status");
 
     private async Task OpenProofingLanguageDialogAsync()
     {

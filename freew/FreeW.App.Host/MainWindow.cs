@@ -99,6 +99,9 @@ public sealed partial class MainWindow : Window
     // synonyms for the word at the caret, backed by the bundled compact synonym dictionary. Insert replaces
     // the word; Copy puts the synonym on the clipboard. Mirrors the ReviewingPane dock/toggle shape.
     private ThesaurusPane _thesaurusPane = null!;
+    // Spelling & Grammar pane (Review > Proofing > Spelling & Grammar, F7): thin view of the shared
+    // ProofingReviewSession walk-through.
+    private SpellingGrammarPane _spellingGrammarPane = null!;
 
     // Balloon Overlay (Review > Show Markup > Show Revisions in Balloons): a 200px strip to the right
     // of the editor that renders comments and tracked-change revisions as rounded-rectangle callouts
@@ -338,6 +341,7 @@ public sealed partial class MainWindow : Window
             ArrangeAll = ArrangeAllWindows,
             SwitchWindows = ShowDocumentWindowPicker,
             OpenThesaurus = ToggleThesaurusPane,
+            OpenSpellingAndGrammar = StartSpellingAndGrammarCheck,
             ToggleReviewBalloons = ToggleBalloons,
             IsReviewBalloonsActive = () => _balloonOverlay?.BalloonsEnabled ?? false,
             OpenHelpOnline = () => OpenExternalHelpLink(
@@ -511,6 +515,7 @@ public sealed partial class MainWindow : Window
             Undo,
             Redo,
             RevealFormatting: ToggleRevealFormatting,
+            SpellingAndGrammar: StartSpellingAndGrammarCheck,
             Thesaurus: ToggleThesaurusPane,
             LockCurrentField: () => ExecuteCurrentFieldCommand(
                 FreeWKeyboardCommand.LockCurrentField,
@@ -616,6 +621,15 @@ public sealed partial class MainWindow : Window
         var thesaurusPane = _thesaurusPane.Build();
         DockPanel.SetDock(thesaurusPane, Dock.Right);
         body.Children.Add(thesaurusPane);
+
+        // Spelling & Grammar pane docks on the RIGHT (Word's side for its Spelling/Grammar panes).
+        // Collapsed until F7 / Review > Spelling & Grammar starts a walk-through.
+        _spellingGrammarPane = new SpellingGrammarPane(
+            editor,
+            (message, title) => DialogMessageHelper.ShowInfo(this, message, title));
+        var spellingGrammarPane = _spellingGrammarPane.Build();
+        DockPanel.SetDock(spellingGrammarPane, Dock.Right);
+        body.Children.Add(spellingGrammarPane);
 
         // Notes Pane docks on the BOTTOM (Word positions the notes pane below the body). Collapsed by
         // default; ToggleNotesPane shows/hides it and RefreshNotesPane rebuilds the stub list.
@@ -2069,6 +2083,10 @@ public sealed partial class MainWindow : Window
     {
         _thesaurusPane.Toggle();
     }
+
+    // Review > Proofing > Spelling & Grammar (F7): walk the document's spelling and grammar issues from
+    // the caret in the docked pane. Pressing F7 again restarts the walk from the current caret.
+    private void StartSpellingAndGrammarCheck() => _spellingGrammarPane.Start();
 
     // ── Balloon Overlay ──────────────────────────────────────────────────────────────────────────────
 

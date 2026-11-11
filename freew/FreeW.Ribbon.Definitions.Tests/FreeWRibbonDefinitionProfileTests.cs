@@ -218,7 +218,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
 
         new Dictionary<string, RibbonCommandIconKind>
         {
-            ["proofing"] = RibbonCommandIconKind.WordCount,
+            ["proofing"] = RibbonCommandIconKind.Spelling,
             ["speech"] = RibbonCommandIconKind.ReadAloud,
             ["accessibility"] = RibbonCommandIconKind.Accessibility,
             ["comments"] = RibbonCommandIconKind.Comment,

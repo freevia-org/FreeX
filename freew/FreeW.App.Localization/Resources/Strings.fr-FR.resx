@@ -180,6 +180,45 @@
   <data name="Proofing_LanguageCleared_Status" xml:space="preserve"><value>La langue de vérification a été effacée.</value></data>
   <data name="Proofing_LanguageSet_Status_Format" xml:space="preserve"><value>Langue de vérification définie sur {0}.</value></data>
   <data name="Proofing_AddToDictionary_MissingWord_Message" xml:space="preserve"><value>Placez le curseur dans un mot mal orthographié (souligné en rouge), puis choisissez Ajouter au dictionnaire.</value></data>
+  <data name="Proofing_Review_Title" xml:space="preserve"><value>Grammaire et orthographe</value></data>
+  <data name="Proofing_Review_SpellingHeading" xml:space="preserve"><value>Absent du dictionnaire</value></data>
+  <data name="Proofing_Review_SpellingExplanation" xml:space="preserve"><value>Ce mot est introuvable dans le dictionnaire.</value></data>
+  <data name="Proofing_Review_GrammarHeading" xml:space="preserve"><value>Grammaire</value></data>
+  <data name="Proofing_Review_SuggestionsLabel" xml:space="preserve"><value>Suggestions</value></data>
+  <data name="Proofing_Review_NoSuggestions" xml:space="preserve"><value>(Aucune suggestion)</value></data>
+  <data name="Proofing_Review_Change" xml:space="preserve"><value>Modifier</value></data>
+  <data name="Proofing_Review_ChangeAll" xml:space="preserve"><value>Modifier tout</value></data>
+  <data name="Proofing_Review_IgnoreOnce" xml:space="preserve"><value>Ignorer une fois</value></data>
+  <data name="Proofing_Review_IgnoreAll" xml:space="preserve"><value>Ignorer tout</value></data>
+  <data name="Proofing_Review_IgnoreRule" xml:space="preserve"><value>Ne plus vérifier ce problème</value></data>
+  <data name="Proofing_Review_AddToDictionary" xml:space="preserve"><value>Ajouter au dictionnaire</value></data>
+  <data name="Proofing_Review_Close" xml:space="preserve"><value>Fermer</value></data>
+  <data name="Proofing_Review_Complete" xml:space="preserve"><value>La vérification de la grammaire et de l'orthographe est terminée.</value></data>
+  <data name="Proofing_Review_Idle" xml:space="preserve"><value>Appuyez sur F7 pour vérifier l'orthographe et la grammaire.</value></data>
+  <data name="Proofing_Review_ChangeFailed" xml:space="preserve"><value>Cette modification est impossible, car le texte est protégé ou a changé.</value></data>
+  <data name="Proofing_Review_DeleteFix" xml:space="preserve"><value>Supprimer</value></data>
+  <data name="Proofing_Review_Unavailable_Status" xml:space="preserve"><value>La vérification de la grammaire et de l'orthographe n'est pas encore disponible dans cette application.</value></data>
+  <data name="Grammar_RepeatedWord_Title" xml:space="preserve"><value>Mot répété</value></data>
+  <data name="Grammar_RepeatedWord_Explanation" xml:space="preserve"><value>Le même mot apparaît deux fois de suite. Envisagez de supprimer la répétition.</value></data>
+  <data name="Grammar_RepeatedWord_Fix" xml:space="preserve"><value>Supprimer le mot répété</value></data>
+  <data name="Grammar_SentenceCapitalization_Title" xml:space="preserve"><value>Majuscule</value></data>
+  <data name="Grammar_SentenceCapitalization_Explanation" xml:space="preserve"><value>Une phrase doit commencer par une majuscule.</value></data>
+  <data name="Grammar_MultipleSpaces_Title" xml:space="preserve"><value>Espace en trop</value></data>
+  <data name="Grammar_MultipleSpaces_Explanation" xml:space="preserve"><value>Plusieurs espaces séparent ces mots. Envisagez de n'en utiliser qu'une.</value></data>
+  <data name="Grammar_SpaceBeforePunctuation_Title" xml:space="preserve"><value>Espace avant la ponctuation</value></data>
+  <data name="Grammar_SpaceBeforePunctuation_Explanation" xml:space="preserve"><value>Les signes de ponctuation suivent le mot précédent sans espace.</value></data>
+  <data name="Grammar_MissingSpaceAfterPunctuation_Title" xml:space="preserve"><value>Espace manquante</value></data>
+  <data name="Grammar_MissingSpaceAfterPunctuation_Explanation" xml:space="preserve"><value>Une espace est attendue après ce signe de ponctuation.</value></data>
+  <data name="Grammar_IndefiniteArticle_Title" xml:space="preserve"><value>A ou An</value></data>
+  <data name="Grammar_IndefiniteArticle_Explanation" xml:space="preserve"><value>En anglais, utilisez « a » devant un son consonne et « an » devant un son voyelle.</value></data>
+  <data name="Grammar_RepeatedPunctuation_Title" xml:space="preserve"><value>Ponctuation répétée</value></data>
+  <data name="Grammar_RepeatedPunctuation_Explanation" xml:space="preserve"><value>Ce signe de ponctuation est répété. Envisagez de ne l'utiliser qu'une fois.</value></data>
+  <data name="Grammar_UnpairedBracket_Title" xml:space="preserve"><value>Parenthèse non appariée</value></data>
+  <data name="Grammar_UnpairedBracket_Explanation" xml:space="preserve"><value>Cette parenthèse n'a pas de parenthèse ouvrante ou fermante correspondante dans le paragraphe.</value></data>
+  <data name="Grammar_UnpairedQuote_Title" xml:space="preserve"><value>Guillemet non apparié</value></data>
+  <data name="Grammar_UnpairedQuote_Explanation" xml:space="preserve"><value>Ce guillemet n'a pas de guillemet correspondant dans le paragraphe.</value></data>
+  <data name="Grammar_CommonConfusion_Title" xml:space="preserve"><value>Mots souvent confondus</value></data>
+  <data name="Grammar_CommonConfusion_Explanation" xml:space="preserve"><value>Cette expression est souvent écrite par erreur. Envisagez la formulation suggérée.</value></data>
   <data name="ChangeCase_SelectText_Message" xml:space="preserve"><value>Sélectionnez d'abord du texte, puis choisissez Modifier la casse.</value></data>
   <data name="Hyphenation_Title" xml:space="preserve"><value>Césure</value></data>
   <data name="Hyphenation_NoWords_Message" xml:space="preserve"><value>La césure manuelle n'a trouvé aucun mot à examiner.</value></data>

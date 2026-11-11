@@ -1583,6 +1583,7 @@ public sealed partial class DocumentView : RichTextBox
         _outlineCollapse.Clear();
         _trackChangesEnabled = document.TrackRevisions || RestrictEditingPolicy.ShouldForceTrackChanges;
         ApplySpellCheckVisibility();
+        ResetProofingSessionState();
         Render();
     }
 

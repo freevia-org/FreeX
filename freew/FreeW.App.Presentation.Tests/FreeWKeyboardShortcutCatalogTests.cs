@@ -7,13 +7,22 @@ public sealed class FreeWKeyboardShortcutCatalogTests
     [Fact]
     public void CatalogDefinesEverySharedCommandExactlyOnce()
     {
-        FreeWKeyboardShortcutCatalog.All.Should().HaveCount(22);
+        FreeWKeyboardShortcutCatalog.All.Should().HaveCount(23);
         FreeWKeyboardShortcutCatalog.All
             .Select(shortcut => shortcut.Command)
             .Should().BeEquivalentTo(Enum.GetValues<FreeWKeyboardCommand>());
         FreeWKeyboardShortcutCatalog.All
             .Select(shortcut => (shortcut.Key, shortcut.Modifiers))
             .Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public void F7_checks_spelling_and_grammar_and_ShiftF7_stays_the_thesaurus()
+    {
+        FreeWKeyboardShortcutCatalog.Resolve(FreeWKeyboardKey.F7, FreeWKeyboardModifiers.None)
+            .Should().Be(FreeWKeyboardCommand.SpellingAndGrammar);
+        FreeWKeyboardShortcutCatalog.Resolve(FreeWKeyboardKey.F7, FreeWKeyboardModifiers.Shift)
+            .Should().Be(FreeWKeyboardCommand.Thesaurus);
     }
 
     [Fact]

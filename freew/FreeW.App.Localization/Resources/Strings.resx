@@ -625,6 +625,45 @@
   <data name="Proofing_LanguageCleared_Status" xml:space="preserve"><value>Proofing language cleared.</value></data>
   <data name="Proofing_LanguageSet_Status_Format" xml:space="preserve"><value>Proofing language set to {0}.</value></data>
   <data name="Proofing_AddToDictionary_MissingWord_Message" xml:space="preserve"><value>Click into a misspelled (red-underlined) word first, then choose Add to Dictionary.</value></data>
+  <data name="Proofing_Review_Title" xml:space="preserve"><value>Spelling &amp; Grammar</value></data>
+  <data name="Proofing_Review_SpellingHeading" xml:space="preserve"><value>Not in Dictionary</value></data>
+  <data name="Proofing_Review_SpellingExplanation" xml:space="preserve"><value>This word was not found in the dictionary.</value></data>
+  <data name="Proofing_Review_GrammarHeading" xml:space="preserve"><value>Grammar</value></data>
+  <data name="Proofing_Review_SuggestionsLabel" xml:space="preserve"><value>Suggestions</value></data>
+  <data name="Proofing_Review_NoSuggestions" xml:space="preserve"><value>(No suggestions)</value></data>
+  <data name="Proofing_Review_Change" xml:space="preserve"><value>Change</value></data>
+  <data name="Proofing_Review_ChangeAll" xml:space="preserve"><value>Change All</value></data>
+  <data name="Proofing_Review_IgnoreOnce" xml:space="preserve"><value>Ignore Once</value></data>
+  <data name="Proofing_Review_IgnoreAll" xml:space="preserve"><value>Ignore All</value></data>
+  <data name="Proofing_Review_IgnoreRule" xml:space="preserve"><value>Don't Check for This Issue</value></data>
+  <data name="Proofing_Review_AddToDictionary" xml:space="preserve"><value>Add to Dictionary</value></data>
+  <data name="Proofing_Review_Close" xml:space="preserve"><value>Close</value></data>
+  <data name="Proofing_Review_Complete" xml:space="preserve"><value>Spelling and grammar check is complete.</value></data>
+  <data name="Proofing_Review_Idle" xml:space="preserve"><value>Press F7 to check spelling and grammar.</value></data>
+  <data name="Proofing_Review_ChangeFailed" xml:space="preserve"><value>This change can't be made because the text is protected or has changed.</value></data>
+  <data name="Proofing_Review_DeleteFix" xml:space="preserve"><value>Delete</value></data>
+  <data name="Proofing_Review_Unavailable_Status" xml:space="preserve"><value>The spelling and grammar check is not available in this app yet.</value></data>
+  <data name="Grammar_RepeatedWord_Title" xml:space="preserve"><value>Repeated Word</value></data>
+  <data name="Grammar_RepeatedWord_Explanation" xml:space="preserve"><value>The same word appears twice in a row. Consider deleting the repetition.</value></data>
+  <data name="Grammar_RepeatedWord_Fix" xml:space="preserve"><value>Delete Repeated Word</value></data>
+  <data name="Grammar_SentenceCapitalization_Title" xml:space="preserve"><value>Capitalization</value></data>
+  <data name="Grammar_SentenceCapitalization_Explanation" xml:space="preserve"><value>A sentence should begin with a capital letter.</value></data>
+  <data name="Grammar_MultipleSpaces_Title" xml:space="preserve"><value>Extra Space</value></data>
+  <data name="Grammar_MultipleSpaces_Explanation" xml:space="preserve"><value>There is more than one space between these words. Consider using a single space.</value></data>
+  <data name="Grammar_SpaceBeforePunctuation_Title" xml:space="preserve"><value>Space Before Punctuation</value></data>
+  <data name="Grammar_SpaceBeforePunctuation_Explanation" xml:space="preserve"><value>Punctuation marks follow the preceding word without a space.</value></data>
+  <data name="Grammar_MissingSpaceAfterPunctuation_Title" xml:space="preserve"><value>Missing Space</value></data>
+  <data name="Grammar_MissingSpaceAfterPunctuation_Explanation" xml:space="preserve"><value>A space is expected after this punctuation mark.</value></data>
+  <data name="Grammar_IndefiniteArticle_Title" xml:space="preserve"><value>A or An</value></data>
+  <data name="Grammar_IndefiniteArticle_Explanation" xml:space="preserve"><value>Use &quot;a&quot; before a consonant sound and &quot;an&quot; before a vowel sound.</value></data>
+  <data name="Grammar_RepeatedPunctuation_Title" xml:space="preserve"><value>Repeated Punctuation</value></data>
+  <data name="Grammar_RepeatedPunctuation_Explanation" xml:space="preserve"><value>This punctuation mark is repeated. Consider using it once.</value></data>
+  <data name="Grammar_UnpairedBracket_Title" xml:space="preserve"><value>Unpaired Bracket</value></data>
+  <data name="Grammar_UnpairedBracket_Explanation" xml:space="preserve"><value>This bracket has no matching opening or closing bracket in the paragraph.</value></data>
+  <data name="Grammar_UnpairedQuote_Title" xml:space="preserve"><value>Unpaired Quotation Mark</value></data>
+  <data name="Grammar_UnpairedQuote_Explanation" xml:space="preserve"><value>This quotation mark has no matching partner in the paragraph.</value></data>
+  <data name="Grammar_CommonConfusion_Title" xml:space="preserve"><value>Commonly Confused Words</value></data>
+  <data name="Grammar_CommonConfusion_Explanation" xml:space="preserve"><value>This phrase is often written by mistake. Consider the suggested wording.</value></data>
   <data name="ChangeCase_SelectText_Message" xml:space="preserve"><value>Select some text first, then choose Change Case.</value></data>
   <data name="Hyphenation_Title" xml:space="preserve"><value>Hyphenation</value></data>
   <data name="Hyphenation_NoWords_Message" xml:space="preserve"><value>Manual hyphenation found no words to review.</value></data>

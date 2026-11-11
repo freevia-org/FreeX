@@ -887,6 +887,7 @@ public sealed class FreeWRibbonParityTests
         CommandIds(proofing!)
             .Should()
             .Equal(
+                "freew.spelling-grammar",
                 "freew.statistics",
                 "freew.spellcheck-toggle",
                 "freew.add-to-dictionary",
@@ -896,8 +897,9 @@ public sealed class FreeWRibbonParityTests
         Labels(proofing!)
             .Should()
             .Equal(
-                "Word Count",
                 "Spelling & Grammar",
+                "Word Count",
+                "Check Spelling as You Type",
                 "Add to Dictionary",
                 "Thesaurus",
                 "Set Proofing Language");

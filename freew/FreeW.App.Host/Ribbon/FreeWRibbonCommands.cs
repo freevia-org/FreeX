@@ -727,6 +727,8 @@ internal static class FreeWRibbonCommands
                     UiText.Get("Thesaurus_Unavailable_Message"),
                     UiText.Get("Pane_Thesaurus_Heading"));
             }));
+            // Spelling & Grammar (F7) needs the shell's docked pane; editor-only registries fail closed.
+            registry.Bind(FreeWRibbonCommandAction.SpellingGrammar, FreeWRibbonExecutionProfile.UnavailableCommand);
         }
 
         // Review tab — Show Markup > Show Revisions in Balloons: toggle the right-margin balloon overlay.
@@ -753,6 +755,7 @@ internal static class FreeWRibbonCommands
         // it is no longer underlined. "Spell Check" is a stateful toggle over SpellCheck.IsEnabled.
         var customDictionary = CustomDictionaryStore.Load();
             editor.RegisterCustomDictionary(customDictionary.EnsurePersisted());
+        editor.ProofingDictionary = customDictionary;
         registry.Bind(FreeWRibbonCommandAction.AddToDictionary, new AddToDictionaryCommand(editor, customDictionary));
         var spellCheckToggle = new SpellCheckToggleCommand(editor);
         registry.Bind(FreeWRibbonCommandAction.SpellcheckToggle, spellCheckToggle);

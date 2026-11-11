@@ -347,6 +347,7 @@ internal static class FreeWRibbonCommandGroupCatalog
         name.StartsWith("MarkAsFinal", StringComparison.Ordinal) ||
         name.StartsWith("RestrictEditing", StringComparison.Ordinal) ||
         name.StartsWith("Spellcheck", StringComparison.Ordinal) ||
+        name.StartsWith("SpellingGrammar", StringComparison.Ordinal) ||
         name.StartsWith("AddToDictionary", StringComparison.Ordinal) ||
         name.StartsWith("SetProofingLanguage", StringComparison.Ordinal) ||
         name.StartsWith("Thesaurus", StringComparison.Ordinal) ||
