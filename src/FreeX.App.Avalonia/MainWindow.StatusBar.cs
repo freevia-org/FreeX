@@ -164,7 +164,13 @@ public sealed partial class MainWindow
             StatusBarPresentationPlanner.ReadoutAutomationId(kind));
         AutomationProperties.SetName(textBlock, fallbackName);
         AutomationProperties.SetHelpText(textBlock, fallbackName);
-        AutomationProperties.SetLiveSetting(textBlock, AutomationLiveSetting.Polite);
+        // macOS: Avalonia 12.0.4's native -[AvnAccessibilityElement raiseLiveRegionChanged] throws
+        // NSInvalidArgumentException (nil object in NSDictionary) and aborts the process when one of
+        // these readouts changes while an accessibility client is attached (reproduced: multi-cell
+        // select, then click a single cell collapses the statistics). Skip the polite live region on
+        // macOS until the framework is fixed; Name/HelpText still carry the values for VoiceOver.
+        if (!OperatingSystem.IsMacOS())
+            AutomationProperties.SetLiveSetting(textBlock, AutomationLiveSetting.Polite);
     }
 
     private IEnumerable<TextBlock> SelectionStatisticTexts()
