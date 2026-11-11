@@ -39,7 +39,8 @@ public sealed class MergedCellNavigationOwnershipTests
 
         editing.Should().Contain("ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(");
         editing.Should().NotContain("private static CellAddress AdjustTargetPastMerge(");
-        selection.Should().Contain("ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(");
+        // Plain-step merge stepping now lives inside the shared ResolveTarget decision.
+        selection.Should().Contain("ExcelWorksheetNavigationPlanner.ResolveTarget(");
         adapter.Should().Contain("FreeX.App.Presentation.ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(");
     }
 
