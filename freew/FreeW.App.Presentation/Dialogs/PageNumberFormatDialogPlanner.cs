@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
@@ -633,53 +632,13 @@ public static class PageNumberFormatDialogPlanner
         // grows linearly with the value: the dialog's own "Start at" field accepts any int, and
         // 2,000,000,000 renders a 2,000,000-character numeral for every page number. 3999 is the
         // classic roman limit and the threshold the suite's other copies of this helper already use.
-        if (value > 3999)
-            return value.ToString(CultureInfo.InvariantCulture);
-
-        (int Value, string Token)[] symbols =
-        [
-            (1000, "M"),
-            (900, "CM"),
-            (500, "D"),
-            (400, "CD"),
-            (100, "C"),
-            (90, "XC"),
-            (50, "L"),
-            (40, "XL"),
-            (10, "X"),
-            (9, "IX"),
-            (5, "V"),
-            (4, "IV"),
-            (1, "I"),
-        ];
-
-        var remaining = value;
-        var sb = new StringBuilder();
-        foreach (var (number, token) in symbols)
-        {
-            while (remaining >= number)
-            {
-                sb.Append(token);
-                remaining -= number;
-            }
-        }
-
-        return sb.ToString();
+        return Free.Shared.IO.NumeralFormatter.TryToRoman(value, upper: true, out var roman)
+            ? roman
+            : value.ToString(CultureInfo.InvariantCulture);
     }
 
-    private static string ToLetters(int value, bool lower)
-    {
-        var n = value;
-        var sb = new StringBuilder();
-        var baseChar = lower ? 'a' : 'A';
-
-        while (n > 0)
-        {
-            n--;
-            sb.Insert(0, (char)(baseChar + n % 26));
-            n /= 26;
-        }
-
-        return sb.ToString();
-    }
+    private static string ToLetters(int value, bool lower) =>
+        Free.Shared.IO.NumeralFormatter.TryToBijectiveLetters(value, upper: !lower, out var letters)
+            ? letters
+            : value.ToString(CultureInfo.InvariantCulture);
 }

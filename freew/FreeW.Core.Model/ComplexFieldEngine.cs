@@ -1285,43 +1285,16 @@ public static class ComplexFieldEngine
 
     private static string ToRoman(int value)
     {
-        if (value is <= 0 or > 3999)
-            return value.ToString(CultureInfo.InvariantCulture);
-
-        (int Value, string Symbol)[] map =
-        [
-            (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
-            (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
-            (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")
-        ];
-        var remaining = value;
-        var result = new System.Text.StringBuilder();
-        foreach (var (number, symbol) in map)
-        {
-            while (remaining >= number)
-            {
-                result.Append(symbol);
-                remaining -= number;
-            }
-        }
-        return result.ToString();
+        // Out of the classic 1..3999 range the field degrades to the plain decimal number.
+        return Free.Shared.IO.NumeralFormatter.TryToRoman(value, upper: true, out var roman)
+            ? roman
+            : value.ToString(CultureInfo.InvariantCulture);
     }
 
-    private static string ToAlphabetic(int value, bool lower)
-    {
-        if (value <= 0)
-            return value.ToString(CultureInfo.InvariantCulture);
-
-        var chars = new List<char>();
-        var current = value;
-        while (current > 0)
-        {
-            current--;
-            chars.Insert(0, (char)((lower ? 'a' : 'A') + current % 26));
-            current /= 26;
-        }
-        return new string(chars.ToArray());
-    }
+    private static string ToAlphabetic(int value, bool lower) =>
+        Free.Shared.IO.NumeralFormatter.TryToBijectiveLetters(value, upper: !lower, out var letters)
+            ? letters
+            : value.ToString(CultureInfo.InvariantCulture);
 
     // The integer reset value of a SEQ \r switch (e.g. "\r 5" → 5), or null when absent/unparseable.
     private static int? SeqReset(string instruction) =>
