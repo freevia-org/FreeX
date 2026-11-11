@@ -37,6 +37,7 @@
   <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="Avalonia.Skia" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <!-- 18A: System.Drawing.Common for pixel access in ApplyColorEffectsAvalonia.
          The call site is wrapped in try/catch so the renderer degrades gracefully when
