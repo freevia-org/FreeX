@@ -4,6 +4,7 @@ using Free.Shared.AppServices;
 using Free.Shared.Shell.Wpf;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Shell;
+using TextDocument = FreeW.Core.Model.TextDocument;
 
 namespace FreeW.App.Host;
 
@@ -20,11 +21,11 @@ internal sealed partial class AutosaveCoordinator
     public AutosaveCoordinator(
         DocumentView editor,
         FileCommands file,
-        Func<FreeWAutosavePorts, FreeWAutosaveSession>? sessionFactory = null,
+        Func<AutosaveDocumentPorts<TextDocument>, FreeWAutosaveSession>? sessionFactory = null,
         Func<AutosaveRecoveryCandidate, bool>? recoverInNewWindow = null)
     {
         _file = file;
-        var ports = new FreeWAutosavePorts(
+        var ports = new AutosaveDocumentPorts<TextDocument>(
             GetOriginalFilePath: () => file.CurrentPath,
             GetDisplayName: () => file.DisplayName,
             GetIsDirty: () => file.IsDirty,
@@ -76,7 +77,7 @@ internal sealed partial class AutosaveCoordinator
     /// </remarks>
     public bool OfferRecovery(Window owner)
     {
-        var text = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
+        var text = FreeWAutosaveProfile.Recovery.ResolveText(UiText.Get);
         return WpfAutosaveRecoveryHost.OfferStartup(
             owner,
             new WpfAutosaveRecoveryMessages(
@@ -86,19 +87,19 @@ internal sealed partial class AutosaveCoordinator
             () => _file.CurrentPath is not null,
             _session.PlanRecoveries,
             (recovery, remainingCount) =>
-                new FreeWRecoveryOffer(recovery, remainingCount, FreeWRecoveryPromptMode.Startup).Prompt,
+                FreeWAutosaveProfile.Recovery.CreateOffer(recovery, remainingCount, AutosaveRecoveryPromptMode.Startup).Prompt,
             (recovery, useCurrentWindow) => _session.CompleteRecovery(
                 recovery,
                 accepted: true,
                 useCurrentWindow
                     ? _file.OpenSnapshot
                     : (_, _) => _recoverInNewWindow?.Invoke(recovery.Candidate) ?? false,
-                FreeWRecoveryRestoreExceptionPolicy.QuarantineCandidate));
+                AutosaveRecoveryRestoreExceptionPolicy.QuarantineCandidate));
     }
 
     public bool RecoverUnsavedDocuments(Window owner)
     {
-        var text = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
+        var text = FreeWAutosaveProfile.Recovery.ResolveText(UiText.Get);
         return WpfAutosaveRecoveryHost.RecoverManually(
             owner,
             new WpfAutosaveRecoveryMessages(
@@ -107,7 +108,7 @@ internal sealed partial class AutosaveCoordinator
                 text.FailureMessageFormat),
             _session.PlanRecoveries,
             (recovery, remainingCount) =>
-                new FreeWRecoveryOffer(recovery, remainingCount, FreeWRecoveryPromptMode.Manual).Prompt,
+                FreeWAutosaveProfile.Recovery.CreateOffer(recovery, remainingCount, AutosaveRecoveryPromptMode.Manual).Prompt,
             (recovery, useCurrentWindow) =>
             {
                 // The manual command may target a window with unrelated unsaved edits. Run the

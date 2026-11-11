@@ -52,8 +52,8 @@ public sealed class AutosaveRecoverySupersededByNewerOriginalTests : IDisposable
     /// <summary>
     /// Reproduces the finding's scenario: a crash leaves a snapshot at 10:00, the user later reopens
     /// the original and saves normally at 10:15 (the original file's mtime is now newer than the
-    /// snapshot). Neither <see cref="AutosaveRecoveryPlanner.PlanAll"/> nor
-    /// <see cref="AutosaveRecoveryPlanner.PlanLatest(AutosaveSnapshotStore)"/> may still offer it.
+    /// snapshot). Neither <see cref="AutosaveRecoveryProfile.PlanAll"/> nor
+    /// <see cref="AutosaveRecoveryProfile.PlanLatest(AutosaveSnapshotStore)"/> may still offer it.
     /// </summary>
     [Fact]
     public void PlanAll_And_PlanLatest_ExcludeASnapshotSupersededByANewerOriginalSave()
@@ -70,9 +70,9 @@ public sealed class AutosaveRecoverySupersededByNewerOriginalTests : IDisposable
         store.EnumerateCandidates().Should().ContainSingle(c => c.SnapshotPath == stale.SnapshotPath,
             "the raw store must still see the file -- filtering happens in the planner, not enumeration");
 
-        AutosaveRecoveryPlanner.PlanAll(store).Should().BeEmpty(
+        FreeWAutosaveProfile.Recovery.PlanAll(store).Should().BeEmpty(
             "a snapshot older than the original it would overwrite must never be offered");
-        AutosaveRecoveryPlanner.PlanLatest(store).Should().BeNull(
+        FreeWAutosaveProfile.Recovery.PlanLatest(store).Should().BeNull(
             "PlanLatest must apply the same supersede filter as PlanAll");
     }
 
@@ -95,9 +95,9 @@ public sealed class AutosaveRecoverySupersededByNewerOriginalTests : IDisposable
 
         var store = new AutosaveSnapshotStore(RecoveryDir);
 
-        var all = AutosaveRecoveryPlanner.PlanAll(store);
+        var all = FreeWAutosaveProfile.Recovery.PlanAll(store);
         all.Should().ContainSingle(r => r.Candidate.SnapshotPath == fresh.SnapshotPath,
             "a snapshot newer than its original is a genuine crash recovery and must still be offered");
-        AutosaveRecoveryPlanner.PlanLatest(store)!.Candidate.SnapshotPath.Should().Be(fresh.SnapshotPath);
+        FreeWAutosaveProfile.Recovery.PlanLatest(store)!.Candidate.SnapshotPath.Should().Be(fresh.SnapshotPath);
     }
 }

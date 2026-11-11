@@ -1,62 +1,69 @@
 using FreeP.App.Compositor;
 using FreeW.App.Presentation.Shell;
-using FreePPlan = FreeP.App.Compositor.AutosaveRecoveryPlan;
-using FreeWPlan = FreeW.App.Presentation.Shell.AutosaveRecoveryPlan;
 
 namespace Free.Shared.AppServices.Tests;
 
+/// <summary>
+/// Proves each sister app binds the shared autosave profile layer with the right parameters.
+/// The behaviour of that layer is tested once in <see cref="AutosaveApplicationProfileTests"/>.
+/// </summary>
 public sealed class SisterAutosaveRecoveryAdoptionTests
 {
     [Fact]
-    public void FacadesRetainProductCadenceAndImplementSharedPlanContract()
+    public void BindingsRetainProductCadenceAndSerializerPair()
     {
         FreePAutosaveSession.DefaultInterval.Should().Be(TimeSpan.FromSeconds(60));
         FreeWAutosaveSession.DefaultInterval.Should().Be(TimeSpan.FromSeconds(30));
-
-        var candidate = new AutosaveRecoveryCandidate(
-            "snapshot.fxl",
-            "snapshot.sidecar.json",
-            new AutosaveSidecar());
-        IAutosaveRecoveryPlan presentationPlan = new FreePPlan(candidate, "Presentation");
-        IAutosaveRecoveryPlan documentPlan = new FreeWPlan(candidate, "Document");
-
-        presentationPlan.DisplayName.Should().Be("Presentation");
-        documentPlan.DisplayName.Should().Be("Document");
+        FreePAutosaveProfile.Session.Interval.Should().Be(FreePAutosaveSession.DefaultInterval);
+        FreeWAutosaveProfile.Session.Interval.Should().Be(FreeWAutosaveSession.DefaultInterval);
+        FreePAutosaveProfile.Session.Recovery.Should().BeSameAs(FreePAutosaveProfile.Recovery);
+        FreeWAutosaveProfile.Session.Recovery.Should().BeSameAs(FreeWAutosaveProfile.Recovery);
     }
 
     [Fact]
-    public void FacadesParameterizePromptProductAndDocumentNoun()
+    public void BindingsParameterizePromptProductDocumentNounAndFallback()
     {
         var candidate = new AutosaveRecoveryCandidate(
             "snapshot.fxl",
             "snapshot.sidecar.json",
             new AutosaveSidecar());
 
-        new FreePRecoveryOffer(
-                new FreePPlan(candidate, "Quarterly"),
+        FreePAutosaveProfile.Recovery
+            .CreateOffer(
+                new AutosaveRecoveryPlan(candidate, "Quarterly"),
                 2,
-                FreePRecoveryPromptMode.StartupQuotedDisplayName)
+                AutosaveRecoveryPromptMode.StartupQuotedDisplayName)
             .Prompt.Should().Be(
                 "FreeP found unsaved changes to \"Quarterly\" from a previous session (2 unsaved presentations found). Recover this one?");
 
-        new FreeWRecoveryOffer(
-                new FreeWPlan(candidate, "Draft"),
+        FreeWAutosaveProfile.Recovery
+            .CreateOffer(
+                new AutosaveRecoveryPlan(candidate, "Draft"),
                 2,
-                FreeWRecoveryPromptMode.Manual)
+                AutosaveRecoveryPromptMode.Manual)
             .Prompt.Should().Be(
                 "Recover unsaved changes to Draft? (2 unsaved documents found.)");
+
+        FreePAutosaveProfile.Recovery.UnnamedItemFallback.Should().Be("a presentation");
+        FreeWAutosaveProfile.Recovery.UnnamedItemFallback.Should().Be("a document");
     }
 
     [Fact]
-    public void FacadesRetainProductSpecificTextAndFreePBackstageExtension()
+    public void BindingsRetainProductSpecificTextAndFreePBackstageExtension()
     {
-        var presentationText = FreeP.App.Compositor.AutosaveRecoveryTextCatalog.Resolve();
-        var documentText = FreeW.App.Presentation.Shell.AutosaveRecoveryTextCatalog.Resolve();
+        var presentationText = FreePAutosaveProfile.Recovery.ResolveText();
+        var documentText = FreeWAutosaveProfile.Recovery.ResolveText();
 
+        presentationText.Title.Should().Be("FreeP - Recover");
         presentationText.NoDocumentsMessage.Should().Be("No unsaved presentations were found.");
-        presentationText.BackstageLabel.Should().Be("Recover Unsaved Presentations");
+        presentationText.FailureMessageFormat.Should().Be("Could not recover the presentation.\n\n{0}");
+        documentText.Title.Should().Be("FreeW - Recover");
         documentText.NoDocumentsMessage.Should().Be("No unsaved documents were found.");
-        FreeP.App.Compositor.AutosaveRecoveryTextCatalog.RequiredResourceKeys
-            .Should().Contain("Autosave_Recovery_Backstage_Label");
+        documentText.FailureMessageFormat.Should().Be("Could not recover the document.\n\n{0}");
+
+        FreePAutosaveProfile.ResolveBackstageLabel().Should().Be("Recover Unsaved Presentations");
+        FreePAutosaveProfile.RequiredResourceKeys.Should().Contain("Autosave_Recovery_Backstage_Label");
+        FreeWAutosaveProfile.Recovery.RequiredResourceKeys
+            .Should().NotContain("Autosave_Recovery_Backstage_Label");
     }
 }

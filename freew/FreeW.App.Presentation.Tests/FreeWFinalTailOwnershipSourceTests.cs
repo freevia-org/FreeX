@@ -66,7 +66,7 @@ public sealed class FreeWFinalTailOwnershipSourceTests
         var chart = Read("freew", "FreeW.App.Avalonia", "MediaDialogParity.cs");
         var wpf = Read("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
 
-        recovery.Should().Contain("AutosaveRecoveryTextCatalog.Resolve(UiText.Get)");
+        recovery.Should().Contain("FreeWAutosaveProfile.Recovery.ResolveText(UiText.Get)");
         recovery.Should().NotContain("Content = \"Recover\"");
         recovery.Should().NotContain("Content = \"Skip\"");
         quickParts.Should().Contain("QuickPartCommandPlanner.ResolveText(UiText.Get)");

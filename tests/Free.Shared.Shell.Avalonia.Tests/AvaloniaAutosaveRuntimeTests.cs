@@ -118,7 +118,7 @@ public sealed class AvaloniaAutosaveRuntimeTests
         foreach (var source in sources)
         {
             source.Should().Contain("AvaloniaRecoveryPromptDialogComposer.Compose(")
-                .And.Contain("AutosaveRecoveryTextCatalog.Resolve(UiText.Get)")
+                .And.Contain("AutosaveProfile.Recovery.ResolveText(UiText.Get)")
                 .And.Contain("ResolveResponseOverride(message, ref handled, ref response)")
                 .And.NotContain("new TextBlock\n        {\n            Text = message")
                 .And.NotContain("AvaloniaCompactDialogChrome.CreateActionRow([yes, no]");

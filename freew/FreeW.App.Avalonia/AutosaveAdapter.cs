@@ -35,7 +35,7 @@ internal sealed partial class AutosaveAdapter : IDisposable
     public AutosaveAdapter(
         DocumentView editor,
         FileCommandWorkflow workflow,
-        Func<FreeWAutosavePorts, FreeWAutosaveSession>? sessionFactory = null,
+        Func<AutosaveDocumentPorts<TextDocument>, FreeWAutosaveSession>? sessionFactory = null,
         Func<AutosaveRecoveryCandidate, Task<bool>>? recoverInNewWindowAsync = null,
         Func<Task<bool>>? confirmDiscardOrSaveAsync = null,
         Func<TextDocument?>? getMailMergeTemplate = null,
@@ -66,7 +66,7 @@ internal sealed partial class AutosaveAdapter : IDisposable
                     editor.LoadDocument(document);
                     return ValueTask.CompletedTask;
                 }));
-        var ports = new FreeWAutosavePorts(
+        var ports = new AutosaveDocumentPorts<TextDocument>(
             GetOriginalFilePath: () => workflow.CurrentPath,
             GetDisplayName: () => workflow.DisplayName,
             GetIsDirty: () => workflow.IsDirty,
@@ -150,10 +150,10 @@ internal sealed partial class AutosaveAdapter : IDisposable
             owner,
             currentWindowHasExplicitDocument: () => _workflow.CurrentPath is not null,
             _session.PlanRecoveries,
-            createOffer: static (recovery, remainingCount) => new FreeWRecoveryOffer(
+            createOffer: static (recovery, remainingCount) => FreeWAutosaveProfile.Recovery.CreateOffer(
                 recovery,
                 remainingCount,
-                FreeWRecoveryPromptMode.StartupQuotedDisplayName),
+                AutosaveRecoveryPromptMode.StartupQuotedDisplayName),
             promptAsync: offer => new ValueTask<bool>(RecoveryPromptDialog.ShowAsync(owner, offer.Prompt)),
             recoverInCurrentWindow: CompleteDocumentRecovery,
             recoverInNewWindowAsync: recovery => _recoverInNewWindowAsync is null
@@ -178,16 +178,16 @@ internal sealed partial class AutosaveAdapter : IDisposable
     {
         ArgumentNullException.ThrowIfNull(owner);
 
-        var text = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
+        var text = FreeWAutosaveProfile.Recovery.ResolveText(UiText.Get);
 
         await AvaloniaAutosaveRecoveryHost.RecoverManuallyAsync(
             owner,
             new(text.Title, text.NoDocumentsMessage, text.FailureMessageFormat),
             _session.PlanRecoveries,
-            createOffer: static (recovery, remainingCount) => new FreeWRecoveryOffer(
+            createOffer: static (recovery, remainingCount) => FreeWAutosaveProfile.Recovery.CreateOffer(
                 recovery,
                 remainingCount,
-                FreeWRecoveryPromptMode.Manual),
+                AutosaveRecoveryPromptMode.Manual),
             promptAsync: offer => new ValueTask<bool>(RecoveryPromptDialog.ShowAsync(owner, offer.Prompt)),
             _confirmDiscardOrSaveAsync,
             recoverInCurrentWindow: CompleteDocumentRecovery,
@@ -223,7 +223,7 @@ internal sealed partial class AutosaveAdapter : IDisposable
             restoreSnapshot: (snapshotPath, originalPath) =>
                 _documentFileWorkflow.OpenSnapshotAsync(snapshotPath, originalPath)
                     .GetAwaiter().GetResult().Succeeded,
-            FreeWRecoveryRestoreExceptionPolicy.QuarantineCandidate);
+            AutosaveRecoveryRestoreExceptionPolicy.QuarantineCandidate);
 
     public void Dispose()
     {
@@ -240,7 +240,7 @@ internal sealed partial class RecoveryPromptDialog : FreeWDialogWindow
 {
     private RecoveryPromptDialog(string message)
     {
-        var recoveryText = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
+        var recoveryText = FreeWAutosaveProfile.Recovery.ResolveText(UiText.Get);
         AvaloniaRecoveryPromptDialogComposer.Compose(
             this,
             message,

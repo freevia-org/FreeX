@@ -20,19 +20,19 @@ internal sealed partial class AutosaveCoordinator
     public AutosaveCoordinator(
         Func<Presentation> getPresentation,
         PresentationFileCommandSession file,
-        Func<FreePAutosavePorts, FreePAutosaveSession>? sessionFactory = null,
+        Func<AutosaveDocumentPorts<Presentation>, FreePAutosaveSession>? sessionFactory = null,
         Func<AutosaveRecoveryCandidate, bool>? recoverInNewWindow = null)
     {
         ArgumentNullException.ThrowIfNull(getPresentation);
         ArgumentNullException.ThrowIfNull(file);
 
         _file = file;
-        var ports = new FreePAutosavePorts(
+        var ports = new AutosaveDocumentPorts<Presentation>(
             GetOriginalFilePath: () => file.CurrentPath,
             GetDisplayName: () => file.DisplayName,
             GetIsDirty: () => file.IsDirty,
             GetDirtyGeneration: () => file.DirtyGeneration,
-            ExecuteWithPresentation: writePresentation => writePresentation(getPresentation()));
+            ExecuteWithDocument: writePresentation => writePresentation(getPresentation()));
         _session = sessionFactory?.Invoke(ports) ?? new FreePAutosaveSession(ports);
         _recoverInNewWindow = recoverInNewWindow;
         _timer = new WpfAutosaveTimer(FreePAutosaveSession.DefaultInterval, _session.Snapshot);
@@ -72,7 +72,7 @@ internal sealed partial class AutosaveCoordinator
     /// </remarks>
     public bool OfferRecovery(Window owner)
     {
-        var text = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
+        var text = FreePAutosaveProfile.Recovery.ResolveText(UiText.Get);
         return WpfAutosaveRecoveryHost.OfferStartup(
             owner,
             new WpfAutosaveRecoveryMessages(
@@ -82,14 +82,14 @@ internal sealed partial class AutosaveCoordinator
             () => _file.CurrentPath is not null,
             _session.PlanRecoveries,
             (recovery, remainingCount) =>
-                new FreePRecoveryOffer(recovery, remainingCount, FreePRecoveryPromptMode.Startup).Prompt,
+                FreePAutosaveProfile.Recovery.CreateOffer(recovery, remainingCount, AutosaveRecoveryPromptMode.Startup).Prompt,
             (recovery, useCurrentWindow) => _session.CompleteRecovery(
                 recovery,
                 accepted: true,
                 useCurrentWindow
                     ? _file.RestoreAutosaveSnapshot
                     : (_, _) => _recoverInNewWindow?.Invoke(recovery.Candidate) ?? false,
-                FreePRecoveryRestoreExceptionPolicy.QuarantineCandidate));
+                AutosaveRecoveryRestoreExceptionPolicy.QuarantineCandidate));
     }
 
     /// <summary>
@@ -100,7 +100,7 @@ internal sealed partial class AutosaveCoordinator
     /// </summary>
     public bool RecoverUnsavedPresentations(Window owner)
     {
-        var text = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
+        var text = FreePAutosaveProfile.Recovery.ResolveText(UiText.Get);
         return WpfAutosaveRecoveryHost.RecoverManually(
             owner,
             new WpfAutosaveRecoveryMessages(
@@ -109,7 +109,7 @@ internal sealed partial class AutosaveCoordinator
                 text.FailureMessageFormat),
             _session.PlanRecoveries,
             (recovery, remainingCount) =>
-                new FreePRecoveryOffer(recovery, remainingCount, FreePRecoveryPromptMode.Manual).Prompt,
+                FreePAutosaveProfile.Recovery.CreateOffer(recovery, remainingCount, AutosaveRecoveryPromptMode.Manual).Prompt,
             (recovery, useCurrentWindow) =>
             {
                 // The manual command may target a window with unrelated unsaved edits. Run the

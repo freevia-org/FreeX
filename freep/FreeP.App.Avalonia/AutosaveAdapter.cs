@@ -41,7 +41,7 @@ internal sealed partial class AutosaveAdapter : IDisposable
         Func<Presentation> getPresentation,
         FileCommandWorkflow workflow,
         Action<Presentation, string?> applyRecoveredPresentation,
-        Func<FreePAutosavePorts, FreePAutosaveSession>? sessionFactory = null,
+        Func<AutosaveDocumentPorts<Presentation>, FreePAutosaveSession>? sessionFactory = null,
         Func<AutosaveRecoveryCandidate, Task<bool>>? recoverInNewWindowAsync = null,
         Func<Task<bool>>? confirmDiscardOrSaveAsync = null)
     {
@@ -50,12 +50,12 @@ internal sealed partial class AutosaveAdapter : IDisposable
         ArgumentNullException.ThrowIfNull(applyRecoveredPresentation);
 
         _applyRecoveredPresentation = applyRecoveredPresentation;
-        var ports = new FreePAutosavePorts(
+        var ports = new AutosaveDocumentPorts<Presentation>(
             GetOriginalFilePath: () => workflow.CurrentPath,
             GetDisplayName: () => workflow.DisplayName,
             GetIsDirty: () => workflow.IsDirty,
             GetDirtyGeneration: () => workflow.DirtyGeneration,
-            ExecuteWithPresentation: writePresentation =>
+            ExecuteWithDocument: writePresentation =>
                 writePresentation(getPresentation()));
         _session = sessionFactory?.Invoke(ports) ?? new FreePAutosaveSession(ports);
         _periodicLoop = new AutosavePeriodicTaskLoop(
@@ -131,16 +131,16 @@ internal sealed partial class AutosaveAdapter : IDisposable
             owner,
             currentWindowHasExplicitDocument: () => _getCurrentPath() is not null,
             _session.PlanRecoveries,
-            createOffer: static (recovery, remainingCount) => new FreePRecoveryOffer(
+            createOffer: static (recovery, remainingCount) => FreePAutosaveProfile.Recovery.CreateOffer(
                 recovery,
                 remainingCount,
-                FreePRecoveryPromptMode.StartupQuotedDisplayName),
+                AutosaveRecoveryPromptMode.StartupQuotedDisplayName),
             promptAsync: offer => new ValueTask<bool>(RecoveryPromptDialog.ShowAsync(owner, offer.Prompt)),
             recoverInCurrentWindow: recovery => _session.CompletePresentationRecovery(
                 recovery,
                 accepted: true,
                 _applyRecoveredPresentation,
-                FreePRecoveryRestoreExceptionPolicy.QuarantineCandidate),
+                AutosaveRecoveryRestoreExceptionPolicy.QuarantineCandidate),
             recoverInNewWindowAsync: recovery => _recoverInNewWindowAsync is null
                 ? Task.FromResult(false)
                 : _recoverInNewWindowAsync(recovery.Candidate),
@@ -164,23 +164,23 @@ internal sealed partial class AutosaveAdapter : IDisposable
     {
         ArgumentNullException.ThrowIfNull(owner);
 
-        var text = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
+        var text = FreePAutosaveProfile.Recovery.ResolveText(UiText.Get);
 
         await AvaloniaAutosaveRecoveryHost.RecoverManuallyAsync(
             owner,
             new(text.Title, text.NoDocumentsMessage, text.FailureMessageFormat),
             _session.PlanRecoveries,
-            createOffer: static (recovery, remainingCount) => new FreePRecoveryOffer(
+            createOffer: static (recovery, remainingCount) => FreePAutosaveProfile.Recovery.CreateOffer(
                 recovery,
                 remainingCount,
-                FreePRecoveryPromptMode.Manual),
+                AutosaveRecoveryPromptMode.Manual),
             promptAsync: offer => new ValueTask<bool>(RecoveryPromptDialog.ShowAsync(owner, offer.Prompt)),
             _confirmDiscardOrSaveAsync,
             recoverInCurrentWindow: recovery => _session.CompletePresentationRecovery(
                 recovery,
                 accepted: true,
                 _applyRecoveredPresentation,
-                FreePRecoveryRestoreExceptionPolicy.QuarantineCandidate),
+                AutosaveRecoveryRestoreExceptionPolicy.QuarantineCandidate),
             recoverInNewWindowAsync: recovery => _recoverInNewWindowAsync is null
                 ? Task.FromResult(false)
                 : _recoverInNewWindowAsync(recovery.Candidate),
@@ -203,7 +203,7 @@ internal sealed partial class RecoveryPromptDialog : FreePDialogWindow
 {
     private RecoveryPromptDialog(string message)
     {
-        var recoveryText = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
+        var recoveryText = FreePAutosaveProfile.Recovery.ResolveText(UiText.Get);
         AvaloniaRecoveryPromptDialogComposer.Compose(
             this,
             message,
