@@ -15,16 +15,9 @@ internal static class HostAccessOwnershipAssertions
         "TestResponder"
     ];
 
-    internal static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Repository root was not found.");
-    }
+    // TestWorkspaceFileLocator is linked into every test project by the root Directory.Build.targets.
+    internal static string FindRepositoryRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
     internal static string CurrentConfiguration() =>
         new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name

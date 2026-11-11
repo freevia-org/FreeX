@@ -46,6 +46,15 @@ public sealed class ToolHarnessDedupSourceTests
         freePProgram.Should().Contain("RepositoryRootLocator.Find(AppContext.BaseDirectory, \"FreeP.slnx\")");
         parityProgram.Should().Contain("RepositoryRootLocator.Find(AppContext.BaseDirectory, \"FreeX.slnx\")");
         smartArtEvidence.Should().Contain("RepositoryRootLocator.Find(AppContext.BaseDirectory, \"FreeX.slnx\")");
+        var excelChromeProgram = TestWorkspaceFiles.ReadRepoText(
+            "tools", "FreeX.ExcelChromeCompare", "Program.cs");
+        var hostAccessAssertions = TestWorkspaceFiles.ReadRepoText(
+            "freew", "TestSupport", "HostAccessOwnershipAssertions.cs");
+
+        excelChromeProgram.Should().Contain("RepositoryRootLocator.Find(start, \"FreeX.slnx\")");
+        excelChromeProgram.Should().NotContain("new DirectoryInfo(start)");
+        hostAccessAssertions.Should().Contain(
+            "TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory(\"FreeX.slnx\")");
         runner.Should().NotContain("private static string FindRepositoryRoot(");
         freePProgram.Should().NotContain("static string FindRoot()");
         parityOptions.Should().NotContain("class RepoLocator");
