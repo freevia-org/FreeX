@@ -5653,6 +5653,8 @@ public sealed partial class DocumentView : RichTextBox
         _renderViewMode = ViewMode;
         _renderImageDiagnostics = new List<string>();
         var flow = new FlowDocument { PagePadding = new Thickness(0) };
+        // Word's default is no pair kerning (see RunKerningPlanner); runs that request it opt back in.
+        Typography.SetKerning(flow, false);
         flow.FontFamily = new FontFamily(_model.DefaultRun.FontFamily ?? "Calibri");
         flow.FontSize = (_model.DefaultRun.FontSizePt ?? 11) * PxPerPoint;
         ApplyColumnLayout(flow, _model.Page, useNativeColumnRule: false);
@@ -10904,6 +10906,9 @@ public sealed partial class DocumentView : RichTextBox
                 hasNonTextLayoutObject: hasNonTextLayoutObject) ||
                 hasNonTextLayoutObject
         };
+        // Word default: no pair kerning. Set on the paragraph (not only the editor FlowDocument) so
+        // synthetic marker/field runs inherit it wherever the block is re-hosted (page boxes, print).
+        Typography.SetKerning(wpf, false);
 
         if (paraFmt.Border is { } border && TryParseColor(border.ColorHex, out var borderColor))
         {
@@ -15072,6 +15077,9 @@ public sealed partial class DocumentView : RichTextBox
 
     private static void ApplyOpenTypeTypography(DependencyObject target, RunFormatting formatting)
     {
+        // Word kerns only where w:kern asks for it; WPF kerns by default. Stamp the decision on every
+        // run explicitly so it survives moves/clones into the paginated and print FlowDocuments.
+        Typography.SetKerning(target, RunKerningPlanner.IsKerningEnabled(formatting, DefaultFontSizePt));
         var plan = RunOpenTypeFeaturePlanner.Build(formatting);
         if (plan.NumberForm is { } numberForm)
         {
@@ -16788,6 +16796,7 @@ public sealed partial class DocumentView : RichTextBox
             ToolTip = source.ToolTip
         };
         Typography.SetCapitals(clone, Typography.GetCapitals(source));
+        Typography.SetKerning(clone, Typography.GetKerning(source));
         // Carry the two independent caps flags too (see SmallCapsFlagProperty's doc comment) -- they are
         // separate attached properties, not part of the FontWeight/FontStyle/... list copied above, so a
         // split that didn't also copy them would silently reset a both-true run's SmallCaps to false on
