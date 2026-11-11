@@ -419,7 +419,7 @@ internal static class ExcelSmokeFixtures
         totalCell.StyleId = moneyStyle;
         sheet.SetCell(new CellAddress(sheet.Id, 8, 3), totalCell);
         sheet.Comments[new CellAddress(sheet.Id, 8, 3)] = "Cached formula value included for Excel reopen validation.";
-        sheet.Hyperlinks[new CellAddress(sheet.Id, 10, 1)] = "https://github.com/tony-xmelon/FreeX";
+        sheet.Hyperlinks[new CellAddress(sheet.Id, 10, 1)] = "https://github.com/freevia-org/FreeX";
         sheet.HyperlinkMetadata[new CellAddress(sheet.Id, 10, 1)] = new HyperlinkMetadata(
             HyperlinkTargetKind.ExistingFileOrWebPage,
             "FreeX repository",

@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 [CmdletBinding()]
 param(
-    [string]$Repository = "tony-xmelon/FreeX",
+    [string]$Repository = "freevia-org/FreeX",
     [switch]$Strict,
     [string]$OutputPath
 )

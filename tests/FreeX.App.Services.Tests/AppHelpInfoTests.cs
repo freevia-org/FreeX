@@ -8,9 +8,9 @@ public sealed class AppHelpInfoTests
     [Fact]
     public void Links_ExposeStableProjectHelpTargets()
     {
-        AppHelpInfo.HelpUrl.Should().Be("https://github.com/tony-xmelon/FreeX");
-        AppHelpInfo.FeedbackUrl.Should().Be("https://github.com/tony-xmelon/FreeX/issues/new");
-        AppHelpInfo.LatestReleaseUrl.Should().Be("https://github.com/tony-xmelon/FreeX/releases/latest");
+        AppHelpInfo.HelpUrl.Should().Be("https://github.com/freevia-org/FreeX");
+        AppHelpInfo.FeedbackUrl.Should().Be("https://github.com/freevia-org/FreeX/issues/new");
+        AppHelpInfo.LatestReleaseUrl.Should().Be("https://github.com/freevia-org/FreeX/releases/latest");
         AppHelpInfo.ReleaseChannel.Should().Be("test");
     }
 

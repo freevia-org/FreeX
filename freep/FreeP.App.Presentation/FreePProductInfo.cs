@@ -7,7 +7,7 @@ namespace FreeP.App.Compositor;
 public static class FreePProductInfo
 {
     public const string ProductName = "FreeP";
-    public const string HelpUrl = "https://github.com/tony-xmelon/FreeX/tree/main/freep";
+    public const string HelpUrl = "https://github.com/freevia-org/FreeX/tree/main/freep";
 
     public static string CreateFeedbackUrl(Assembly assembly)
     {

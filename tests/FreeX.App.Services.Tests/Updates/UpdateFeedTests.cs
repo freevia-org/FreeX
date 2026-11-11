@@ -9,7 +9,7 @@ public class UpdateFeedTests
     [Fact]
     public void GitHubFeedUrl_IsRepoReleasesRoot()
     {
-        UpdateFeed.GitHubRepoUrl.Should().Be("https://github.com/tony-xmelon/FreeX");
+        UpdateFeed.GitHubRepoUrl.Should().Be("https://github.com/freevia-org/FreeX");
     }
 
     [Theory]

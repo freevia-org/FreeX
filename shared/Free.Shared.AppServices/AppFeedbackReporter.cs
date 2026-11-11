@@ -5,7 +5,7 @@ namespace Free.Shared.AppServices;
 /// <summary>Creates privacy-safe, prefilled feedback reports for every Free-family application.</summary>
 public static class AppFeedbackReporter
 {
-    public const string DefaultIssueBaseUrl = "https://github.com/tony-xmelon/FreeX/issues/new";
+    public const string DefaultIssueBaseUrl = "https://github.com/freevia-org/FreeX/issues/new";
     public const string DefectIssueForm = "user-test-report.yml";
 
     public static string CreateIssueUrl(

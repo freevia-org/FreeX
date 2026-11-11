@@ -20,8 +20,8 @@
     <category>Office</category>
     <category>Spreadsheet</category>
   </categories>
-  <url type="homepage">https://github.com/tony-xmelon/FreeX</url>
-  <url type="bugtracker">https://github.com/tony-xmelon/FreeX/issues</url>
+  <url type="homepage">https://github.com/freevia-org/FreeX</url>
+  <url type="bugtracker">https://github.com/freevia-org/FreeX/issues</url>
   <content_rating type="oars-1.1"/>
   <developer id="io.github.tony-xmelon">
     <name>FreeX contributors</name>

@@ -22,7 +22,7 @@ public sealed class AppIssueReportTests
 
         var url = AppIssueReporter.CreateIssueUrl(context);
 
-        url.Should().StartWith("https://github.com/tony-xmelon/FreeX/issues/new?");
+        url.Should().StartWith("https://github.com/freevia-org/FreeX/issues/new?");
         var unescaped = Uri.UnescapeDataString(url);
         unescaped.Should().Contain("template=user-test-report.yml");
         unescaped.Should().Contain("title=[FreeX Version Test | Windows Test | X64]");

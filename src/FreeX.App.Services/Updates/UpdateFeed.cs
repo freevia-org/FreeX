@@ -6,7 +6,7 @@ namespace FreeX.App.Services.Updates;
 /// </summary>
 public static class UpdateFeed
 {
-    public const string GitHubRepoUrl = "https://github.com/tony-xmelon/FreeX";
+    public const string GitHubRepoUrl = "https://github.com/freevia-org/FreeX";
 
     /// <summary>
     /// The tester channel pulls GitHub pre-releases; stable (or unknown) channels do not.

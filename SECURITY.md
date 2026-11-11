@@ -14,7 +14,7 @@ Do not disclose a suspected vulnerability, exploit, secret, or sensitive sample
 document in a public issue.
 
 Use GitHub's
-[private vulnerability-reporting form](https://github.com/tony-xmelon/FreeX/security/advisories/new).
+[private vulnerability-reporting form](https://github.com/freevia-org/FreeX/security/advisories/new).
 
 Include, when safe and relevant:
 

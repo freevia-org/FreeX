@@ -25,7 +25,7 @@ try {
         $payload = Find-ToolReleaseArtifact -InputRoot $InputRoot -Name $payloadName
         Copy-Item -LiteralPath $payload.FullName -Destination (Join-Path $stage $payload.Name)
     }
-    $namespace = "https://github.com/tony-xmelon/FreeX/releases/$CommitSha/$Name/$Runtime"
+    $namespace = "https://github.com/freevia-org/FreeX/releases/$CommitSha/$Name/$Runtime"
     & $SbomToolPath generate -b $stage -bc $RepositoryRoot -pn $Name -pv $Version -ps 'FreeX contributors' -nsb $namespace
     if ($LASTEXITCODE -ne 0) { throw "sbom-tool failed with exit code $LASTEXITCODE." }
     $generated = Join-Path $stage '_manifest/spdx_2.2/manifest.spdx.json'

@@ -1,7 +1,7 @@
 # Feedback And Support
 
 Feedback for FreeX, FreeW, and FreeP is accepted through the repository's
-[GitHub issue forms](https://github.com/tony-xmelon/FreeX/issues/new/choose).
+[GitHub issue forms](https://github.com/freevia-org/FreeX/issues/new/choose).
 Use the user-test report for a crash or defect and the family feedback form for
 a suggestion, usability concern, or general comment.
 

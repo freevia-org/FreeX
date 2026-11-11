@@ -17,7 +17,7 @@ public static class AppInfo
     public const string HelpUrl = AppHelpInfo.HelpUrl;
     public const string FeedbackUrl = AppHelpInfo.FeedbackUrl;
     public const string LatestReleaseUrl = AppHelpInfo.LatestReleaseUrl;
-    public const string LatestTesterDownloadUrl = "https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.exe";
+    public const string LatestTesterDownloadUrl = "https://github.com/freevia-org/FreeX/releases/latest/download/FreeX-latest-win-x64.exe";
     public const string TrademarkNotice = AppHelpInfo.TrademarkNotice;
     public const string ProjectLicenseNotice = AppHelpInfo.ProjectLicenseNotice;
     public const string PrivacyNotice = AppHelpInfo.PrivacyNotice;

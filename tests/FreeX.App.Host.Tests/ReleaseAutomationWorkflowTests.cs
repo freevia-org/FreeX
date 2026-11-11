@@ -400,9 +400,9 @@ public sealed class ReleaseAutomationWorkflowTests
 
         plan.Should().Contain("Stable latest non-prerelease tester downloads");
         plan.Should().Contain("FreeX-latest-win-x64.exe");
-        plan.Should().Contain("https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.exe");
-        plan.Should().Contain("https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-arm64.zip");
-        plan.Should().Contain("https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-x64.zip");
+        plan.Should().Contain("https://github.com/freevia-org/FreeX/releases/latest/download/FreeX-latest-win-x64.exe");
+        plan.Should().Contain("https://github.com/freevia-org/FreeX/releases/latest/download/FreeX-latest-macos-arm64.zip");
+        plan.Should().Contain("https://github.com/freevia-org/FreeX/releases/latest/download/FreeX-latest-macos-x64.zip");
         plan.Should().Contain("GitHub's `releases/latest` redirect remains on the latest non-prerelease tester build");
         plan.Should().Contain("GitHub OIDC authenticates the dedicated release identity");
         plan.Should().Contain("Store-bound MSIX packages are submitted with the Partner Center identity");

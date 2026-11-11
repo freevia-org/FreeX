@@ -655,9 +655,9 @@ Trademark notice:
 
 Legal and privacy notices:
   In the app: Help > Legal Notices
-  https://github.com/tony-xmelon/FreeX/blob/main/docs/legal/legal-notices.md
-  https://github.com/tony-xmelon/FreeX/blob/main/docs/legal/privacy.md
-  https://github.com/tony-xmelon/FreeX/blob/main/THIRD_PARTY_NOTICES.md
+  https://github.com/freevia-org/FreeX/blob/main/docs/legal/legal-notices.md
+  https://github.com/freevia-org/FreeX/blob/main/docs/legal/privacy.md
+  https://github.com/freevia-org/FreeX/blob/main/THIRD_PARTY_NOTICES.md
 "@
 Set-Content -LiteralPath $readmePath -Value $readme -Encoding ASCII
 

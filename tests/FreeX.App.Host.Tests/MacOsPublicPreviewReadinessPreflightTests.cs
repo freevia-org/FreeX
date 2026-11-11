@@ -1282,7 +1282,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         var manifest = new Dictionary<string, object?>
         {
             ["schema"] = "io.github.tony-xmelon.freex.macos-preview-readiness.v1",
-            ["repository"] = "tony-xmelon/FreeX",
+            ["repository"] = "freevia-org/FreeX",
             ["workflow"] = "macOS App Preview",
             ["run_id"] = "42",
             ["run_attempt"] = "1",
@@ -1354,7 +1354,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
             ["schema"] = "io.github.tony-xmelon.freex.macos-distribution-candidate.v1",
             ["release_id"] = "macos-distribution-candidate-run42-attempt1-0123abcd",
             ["tag"] = "macos-distribution-candidate-42-1-0123abcd",
-            ["repository"] = "tony-xmelon/FreeX",
+            ["repository"] = "freevia-org/FreeX",
             ["workflow"] = "macOS App Preview",
             ["run_id"] = "42",
             ["run_attempt"] = "1",

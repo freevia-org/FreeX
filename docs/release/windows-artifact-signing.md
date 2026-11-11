@@ -86,7 +86,7 @@ Authenticode-sign ZIP, NUPKG, JSON, SBOM, or checksum files.
 
 CI uses the dedicated `FreeX GitHub Artifact Signing` Entra application; it has
 no client secret or PFX. Its only federated subject is
-`repo:tony-xmelon/FreeX:environment:public-preview`, and its Azure access is the
+`repo:freevia-org/FreeX:environment:public-preview`, and its Azure access is the
 **Artifact Signing Certificate Profile Signer** role at the
 `freevia-public-signing` profile scope.
 

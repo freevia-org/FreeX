@@ -17,21 +17,21 @@
 
 Stable latest non-prerelease tester downloads:
 
-https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.exe
+https://github.com/freevia-org/FreeX/releases/latest/download/FreeX-latest-win-x64.exe
 
-https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.msix
+https://github.com/freevia-org/FreeX/releases/latest/download/FreeX-latest-win-x64.msix
 
-https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-arm64.zip
+https://github.com/freevia-org/FreeX/releases/latest/download/FreeX-latest-macos-arm64.zip
 
-https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-x64.zip
+https://github.com/freevia-org/FreeX/releases/latest/download/FreeX-latest-macos-x64.zip
 
 GitHub's `releases/latest` redirect remains on the latest non-prerelease tester build.
 
 Latest verified tester release:
 
-- Release: [FreeX (Test Release) v0.8.127](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-127-2026-06-20-19-57-44-run127-attempt1%2B1790d2ab)
+- Release: [FreeX (Test Release) v0.8.127](https://github.com/freevia-org/FreeX/releases/tag/v0-8-127-2026-06-20-19-57-44-run127-attempt1%2B1790d2ab)
 - Tag: `v0-8-127-2026-06-20-19-57-44-run127-attempt1+1790d2ab`
-- GitHub Actions run: [27881901112](https://github.com/tony-xmelon/FreeX/actions/runs/27881901112), run number 127 attempt 1, completed successfully
+- GitHub Actions run: [27881901112](https://github.com/freevia-org/FreeX/actions/runs/27881901112), run number 127 attempt 1, completed successfully
 - Target commit: `1790d2abdc7112047382c3f19fcb417eb0227059`
 - Release posture: stable latest internal tester release; not a public-preview candidate because live keyboard-only, screen-reader, UIA catalog, and known-issues accessibility gate evidence was not recorded
 - Asset check: versioned Windows `.exe`, stable-name Windows `.exe`, versioned MSIX, stable-name MSIX, stable macOS arm64/x64 preview zips, Velopack-style assets, and matching checksum assets were published by the workflow after successful hosted release-gate verification. GitHub marked this non-prerelease as latest, so the stable latest Windows and macOS download links resolve through this release.

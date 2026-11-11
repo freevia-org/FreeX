@@ -11,10 +11,10 @@ public sealed class AppInfoTests
     [Fact]
     public void ProjectUrls_PointAtFreeXRepository()
     {
-        AppInfo.HelpUrl.Should().Be("https://github.com/tony-xmelon/FreeX");
-        AppInfo.FeedbackUrl.Should().Be("https://github.com/tony-xmelon/FreeX/issues/new");
-        AppInfo.LatestReleaseUrl.Should().Be("https://github.com/tony-xmelon/FreeX/releases/latest");
-        AppInfo.LatestTesterDownloadUrl.Should().Be("https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.exe");
+        AppInfo.HelpUrl.Should().Be("https://github.com/freevia-org/FreeX");
+        AppInfo.FeedbackUrl.Should().Be("https://github.com/freevia-org/FreeX/issues/new");
+        AppInfo.LatestReleaseUrl.Should().Be("https://github.com/freevia-org/FreeX/releases/latest");
+        AppInfo.LatestTesterDownloadUrl.Should().Be("https://github.com/freevia-org/FreeX/releases/latest/download/FreeX-latest-win-x64.exe");
     }
 
     [Fact]

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/tony-xmelon/FreeX/freex-native-3d-formula-validation.schema.json",
+  "$id": "https://github.com/freevia-org/FreeX/freex-native-3d-formula-validation.schema.json",
   "title": "FreeX native XLSX 3-D formula physical validation",
   "type": "object",
   "additionalProperties": false,

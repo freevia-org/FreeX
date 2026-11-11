@@ -1,10 +1,10 @@
 # Default review owner for product, release, legal, and security changes.
-* @tony-xmelon
+* @freevia-org
 
 # Keep release authority and user-facing legal text under explicit review.
-/.github/workflows/ @tony-xmelon
-/tools/packaging/ @tony-xmelon
-/docs/legal/ @tony-xmelon
-/LICENSE @tony-xmelon
-/THIRD_PARTY_NOTICES.md @tony-xmelon
-/SECURITY.md @tony-xmelon
+/.github/workflows/ @freevia-org
+/tools/packaging/ @freevia-org
+/docs/legal/ @freevia-org
+/LICENSE @freevia-org
+/THIRD_PARTY_NOTICES.md @freevia-org
+/SECURITY.md @freevia-org

@@ -9,15 +9,15 @@ namespace FreeW.App.Presentation;
 public static class FreeWProductInfo
 {
     public const string ProductName = "FreeW";
-    public const string HelpUrl = "https://github.com/tony-xmelon/FreeX/tree/main/freew";
-    public const string FeedbackUrl = "https://github.com/tony-xmelon/FreeX/issues/new?title=FreeW%20feedback";
-    public const string LatestReleaseUrl = "https://github.com/tony-xmelon/FreeX/actions/workflows/freew-release.yml";
+    public const string HelpUrl = "https://github.com/freevia-org/FreeX/tree/main/freew";
+    public const string FeedbackUrl = "https://github.com/freevia-org/FreeX/issues/new?title=FreeW%20feedback";
+    public const string LatestReleaseUrl = "https://github.com/freevia-org/FreeX/actions/workflows/freew-release.yml";
     public const string DesktopRendererDescription =
         "Built with .NET 10. FreeW provides WPF and Avalonia desktop renderers.";
     public const string TrademarkNotice = FamilyLegalNotices.FreeWTrademarkNotice;
     public const string ProjectLicenseNotice = "FreeW Source License: Copyright (c) 2026 FreeX contributors. All rights reserved. Tester binaries may be downloaded and run for personal evaluation and testing. Redistribution or commercial distribution requires separate written permission from the copyright holder.";
     public const string PrivacyNotice = "Privacy: FreeW is a local desktop app. Documents are opened, edited, and saved on this machine unless the user explicitly chooses an external sharing path. Local tester diagnostics stay on the user's machine unless the user chooses to share them. FreeW does not intentionally collect document contents, filenames, or file paths in diagnostics or crash reports.";
-    public const string SourceNotice = "Full project license, legal notice, privacy notice, third-party notices, and bundled third-party license texts are available in Help > Legal Notices and are maintained with the Free-family release materials at https://github.com/tony-xmelon/FreeX.";
+    public const string SourceNotice = "Full project license, legal notice, privacy notice, third-party notices, and bundled third-party license texts are available in Help > Legal Notices and are maintained with the Free-family release materials at https://github.com/freevia-org/FreeX.";
 
     public static string GetVersionText(Assembly assembly)
     {
