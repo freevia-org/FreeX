@@ -4608,7 +4608,16 @@ public sealed partial class MainWindow : Window
             Print: DirectPrintCapability.IsAvailable
                 ? () => _applicationCommands.Execute(FreeWKeyboardCommand.PrintDocument)
                 : null,
-            PrintPreview: () => RunUiTask(OpenPrintPreviewAsync));
+            PrintPreview: () => RunUiTask(OpenPrintPreviewAsync),
+            NewFromBuiltInTemplate: templateId =>
+            {
+                if (BuiltInDocumentTemplates.Find(templateId) is { } template)
+                    RunUiTask(() => _fileCommands.NewFromTemplateAsync(template.Create));
+            },
+            NewFromTemplateFile: templatePath =>
+                RunUiTask(() => _fileCommands.NewFromTemplatePathAsync(templatePath)),
+            GetPersonalTemplatesFolder: () =>
+                PersonalTemplatesFolder.Resolve(_options.PersonalTemplatesFolder));
 
     private async Task SaveCopyAsync() => await _fileCommands.SaveCopyAsync();
 

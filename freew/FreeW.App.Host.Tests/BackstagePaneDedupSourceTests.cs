@@ -202,7 +202,7 @@ public sealed class BackstagePaneDedupSourceTests
             "BackstageView.cs"));
 
         source.Should().Contain("SisterBackstagePaneSpecPlanner");
-        source.Should().Contain("_session.BuildNewPaneSpec(PaneSpecs)");
+        source.Should().Contain("_session.BuildTemplateGallery()");
         source.Should().Contain("_session.BuildOptionsPaneSpec(PaneSpecs)");
         source.Should().Contain("_session.BuildAccountPane(");
         source.Should().NotContain("ApplicationOptionsSummaryPlanner.Build(");

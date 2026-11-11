@@ -240,7 +240,7 @@ public class RibbonAndDocumentTests
         mainWindow.Should().Contain("new SisterAvaloniaAsyncWindowCloseCoordinator(");
         mainWindow.Should().Contain("saveAsync: SaveAsync");
         mainWindow.Should().Contain("FreeWDocumentFileWorkflow _documentFileWorkflow");
-        documentCommandSession.Should().Contain("_workflow.OpenPathAsync(path, suppressRecentFiles)");
+        documentCommandSession.Should().Contain("_workflow.OpenPathAsync(path, suppressRecentFiles, templateMode: templateMode)");
         documentCommandSession.Should().Contain("_workflow.SavePathAsync(path, filterIndex, kind)");
         mainWindow.Should().Contain("SaveCompatibilityWarningDialog.ShowAsync(this, plan)");
         mainWindow.Should().Contain("_documentPersistence.BuildSavePickerPlan(");
