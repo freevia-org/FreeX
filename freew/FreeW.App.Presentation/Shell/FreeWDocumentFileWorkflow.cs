@@ -121,7 +121,8 @@ public sealed class FreeWDocumentFileWorkflow
     public async Task<DocumentOpenWorkflowResult> OpenPathAsync(
         string path,
         bool suppressRecentFiles = false,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        DocumentTemplateOpenMode templateMode = DocumentTemplateOpenMode.NewDocument)
     {
         var result = await _execution.OpenAsync(new DocumentOpenExecutionRequest(
             path,
@@ -137,9 +138,27 @@ public sealed class FreeWDocumentFileWorkflow
                 _ports.SetCurrentFileName?.Invoke(FileName(savedPath));
                 return ValueTask.CompletedTask;
             },
-            UpdateFieldsAsync: _ports.UpdateFieldsAsync), cancellationToken);
+            UpdateFieldsAsync: _ports.UpdateFieldsAsync,
+            TemplateMode: templateMode), cancellationToken);
 
         return new(result.Outcome, result.OpenResult, result.Exception);
+    }
+
+    /// <summary>
+    /// Loads an in-memory template document (a built-in template) as the editor's new, untitled
+    /// document. The caller owns the dirty gate and the saved-without-path publication (the shared
+    /// lifecycle's New), exactly as it does for a blank File &gt; New.
+    /// </summary>
+    public async Task LoadNewDocumentAsync(
+        TextDocument document,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        await _ports.LoadDocumentAsync(document, cancellationToken);
+        _ports.SetCurrentFileName?.Invoke(null);
+        if (document.UpdateFieldsOnOpen && _ports.UpdateFieldsAsync is not null)
+            await _ports.UpdateFieldsAsync(cancellationToken);
     }
 
     public async Task<DocumentOpenWorkflowResult> ApplyOpenResultAsync(

@@ -104,7 +104,15 @@ public sealed class DocumentPersistenceWorkflow
             preferredExtension);
     }
 
-    public DocumentOpenResult Open(string path)
+    /// <summary>
+    /// Opens <paramref name="path"/>. A template format (.dotx/.dotm/.dot/.ott) opens as a brand-new
+    /// untitled document by default -- Word's File &gt; New / double-click behaviour -- and as the
+    /// template file itself when <paramref name="templateMode"/> is
+    /// <see cref="DocumentTemplateOpenMode.EditTemplate"/> (Word's File &gt; Open behaviour).
+    /// </summary>
+    public DocumentOpenResult Open(
+        string path,
+        DocumentTemplateOpenMode templateMode = DocumentTemplateOpenMode.NewDocument)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
@@ -127,7 +135,8 @@ public sealed class DocumentPersistenceWorkflow
         using var stream = File.OpenRead(path);
         var document = adapter.Load(stream);
         LinkedImagePreviewResolver.ResolveLocalPreviews(document, path);
-        var opensAsTemplate = format?.OpensAsTemplate == true;
+        var opensAsTemplate = format?.OpensAsTemplate == true
+            && templateMode == DocumentTemplateOpenMode.NewDocument;
         var savedPath = opensAsTemplate ? null : path;
         // r137-freew-persistence-external-modification: capture the write time we observed at open
         // so a later Save can detect a second writer (another FreeW/Word instance, a sync client, a
@@ -261,6 +270,16 @@ public sealed class DocumentPersistenceWorkflow
                 DocumentFileFormatResolver.NormalizeExtension(format.Extension),
                 DocumentFileFormatResolver.NormalizeExtension(selectedFormat.Extension),
                 StringComparison.OrdinalIgnoreCase));
+}
+
+/// <summary>How a template-format file (one whose format <c>OpensAsTemplate</c>) is opened.</summary>
+public enum DocumentTemplateOpenMode
+{
+    /// <summary>Create a new untitled document based on the template (File &gt; New, double-click).</summary>
+    NewDocument,
+
+    /// <summary>Open the template file itself for editing (File &gt; Open).</summary>
+    EditTemplate,
 }
 
 public sealed record DocumentOpenResult(
