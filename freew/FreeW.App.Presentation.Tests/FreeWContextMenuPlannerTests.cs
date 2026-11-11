@@ -7,11 +7,11 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class FreeWContextMenuPlannerTests
 {
     [Fact]
-    public void Inventory_CoversSevenExplicitWpfFamiliesAndPortableEditorCore()
+    public void Inventory_CoversEightExplicitWpfFamiliesAndPortableEditorCore()
     {
-        FreeWContextMenuPlanner.Inventory.Count(entry => entry.IsExplicitWpfContextMenu).Should().Be(7);
+        FreeWContextMenuPlanner.Inventory.Count(entry => entry.IsExplicitWpfContextMenu).Should().Be(8);
         FreeWContextMenuPlanner.Inventory.Count(entry => entry.Coverage == FreeWContextMenuCoverage.Paired).Should().Be(9);
-        FreeWContextMenuPlanner.Inventory.Count(entry => entry.Coverage == FreeWContextMenuCoverage.ExternalOnly).Should().Be(1);
+        FreeWContextMenuPlanner.Inventory.Count(entry => entry.Coverage == FreeWContextMenuCoverage.ExternalOnly).Should().Be(2);
         FreeWContextMenuPlanner.Inventory.Select(entry => entry.Id).Should().OnlyHaveUniqueItems();
     }
 
