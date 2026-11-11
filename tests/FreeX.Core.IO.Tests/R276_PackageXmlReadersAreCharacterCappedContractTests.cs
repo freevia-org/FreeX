@@ -72,69 +72,160 @@ public sealed class R276_PackageXmlReadersAreCharacterCappedContractTests
         act.Should().NotThrow("the cap must bound hostile input without rejecting ordinary parts");
     }
 
-    [Fact]
-    public void EveryXmlReaderSettingsInThePackageLayerSetsBothProtections()
+    // Production roots of all three apps plus the shared tier. Test projects, TestSupport, tools,
+    // build output and docs are not production code.
+    private static readonly string[] ProductionRoots = ["src", "freew", "freep", "shared"];
+
+    // Files that may construct an XmlReaderSettings other than through SecureXmlReaderSettings,
+    // each with its justification. Keep this list short; an entry needs a reason a package part or
+    // user file can never reach it.
+    private static readonly Dictionary<string, string> AllowedConstructions = new(StringComparer.Ordinal)
     {
-        var root = RepositoryRoot();
-        var layer = Path.Combine(root, "src", "FreeX.Core.IO");
-        var offenders = new List<string>();
-        var examined = 0;
+        ["shared/Free.Shared.Opc/SecureXmlReaderSettings.cs"] =
+            "the single hardened factory itself",
+        ["src/FreeX.Core.Formula/BuiltInFunctions.TextAdvanced.cs"] =
+            "FILTERXML evaluates a formula-argument string already held in memory (DtdProcessing is "
+            + "Prohibit and XmlResolver is null); FreeX.Core.Formula does not reference Free.Shared.Opc",
+    };
 
-        foreach (var file in Directory.EnumerateFiles(layer, "*.cs", SearchOption.AllDirectories))
-        {
-            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            {
-                continue;
-            }
+    /// <summary>
+    /// Any mention of the <c>XmlReaderSettings</c> type whose statement also constructs one,
+    /// whatever the spelling: <c>new XmlReaderSettings</c>, <c>XmlReaderSettings x = new()</c>,
+    /// <c>XmlReaderSettings Make() =&gt; new() {...}</c>, <c>static readonly XmlReaderSettings S = new()</c>.
+    /// (<c>SecureXmlReaderSettings</c> never matches: the pattern requires a word boundary before the type.)
+    /// </summary>
+    private static readonly Regex Construction = new(
+        @"\bnew\s+(?:System\.Xml\.)?XmlReaderSettings\b"
+        + @"|(?<![\w.])(?:System\.Xml\.)?XmlReaderSettings\b[^;]*?(?:=>|=|\breturn\b)\s*new\s*\(",
+        RegexOptions.Compiled);
 
-            var lines = File.ReadAllLines(file);
-            for (var i = 0; i < lines.Length; i++)
-            {
-                if (!lines[i].Contains("new XmlReaderSettings", StringComparison.Ordinal))
-                    continue;
-
-                examined++;
-                var initializer = Initializer(lines, i);
-
-                var hasDtd = Regex.IsMatch(initializer, @"DtdProcessing\s*=\s*DtdProcessing\.(Prohibit|Ignore)");
-                var hasCap = initializer.Contains("MaxCharactersInDocument", StringComparison.Ordinal);
-                if (hasDtd && hasCap)
-                    continue;
-
-                offenders.Add(
-                    $"{Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')}:{i + 1} -- "
-                    + $"DtdProcessing={(hasDtd ? "set" : "MISSING")}, MaxCharactersInDocument={(hasCap ? "set" : "MISSING")}");
-            }
-        }
-
-        examined.Should().BeGreaterThan(8,
-            "the scan must find the hand-rolled settings objects; a collapsed count means the pattern "
-            + "stopped matching and this passed while checking nothing");
-
-        offenders.Should().BeEmpty(
-            "prefer SecureXmlReaderSettings.Create(), which sets DtdProcessing, XmlResolver and the "
-            + "character cap together. Setting only DtdProcessing hardens against entity attacks "
-            + "while leaving the part unbounded, and the zip's declared sizes cannot be trusted to "
-            + "bound it -- see the comment in XlsxPivotCacheReader.\n" + string.Join("\n", offenders));
+    private static string StripComments(string text)
+    {
+        var blockFree = Regex.Replace(text, @"/\*.*?\*/", "", RegexOptions.Singleline);
+        return Regex.Replace(blockFree, @"//.*$", "", RegexOptions.Multiline);
     }
 
-    private static string Initializer(string[] lines, int start)
+    [Theory]
+    [InlineData("var s = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit };", true)]
+    [InlineData("var s = new System.Xml.XmlReaderSettings();", true)]
+    [InlineData("private static readonly XmlReaderSettings S = new()\n{\n    DtdProcessing = DtdProcessing.Prohibit\n};", true)]
+    [InlineData("XmlReaderSettings s = new();", true)]
+    [InlineData("private static XmlReaderSettings Make() =>\n    new()\n    {\n    };", true)]
+    [InlineData("private static XmlReaderSettings Make() { return new() { }; }", true)]
+    [InlineData("var s = SecureXmlReaderSettings.Create();", false)]
+    [InlineData("var s = Free.Shared.Opc.SecureXmlReaderSettings.Create(); s.IgnoreComments = true;", false)]
+    [InlineData("private static XmlReaderSettings Make() { var s = SecureXmlReaderSettings.Create(); return s; }", false)]
+    public void TheConstructionDetectorSeesEverySpelling(string source, bool expected)
     {
-        var text = string.Empty;
-        var depth = 0;
-        var opened = false;
-        for (var i = start; i < Math.Min(start + 15, lines.Length); i++)
+        Construction.IsMatch(source).Should().Be(expected);
+    }
+
+    [Fact]
+    public void NoProductionCodeConstructsXmlReaderSettingsOutsideTheSecureFactory()
+    {
+        var root = RepositoryRoot();
+        var offenders = new List<string>();
+        var scanned = 0;
+        var secureCalls = 0;
+        var allowedHits = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var layer in ProductionRoots)
         {
-            text += lines[i];
-            depth += lines[i].Count(c => c == '{') - lines[i].Count(c => c == '}');
-            if (lines[i].Contains('{', StringComparison.Ordinal))
-                opened = true;
-            if (opened && depth <= 0)
-                break;
+            var directory = Path.Combine(root, layer);
+            if (!Directory.Exists(directory))
+                continue;
+
+            foreach (var file in Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories))
+            {
+                var relative = Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/');
+                if (IsNonProduction(relative))
+                    continue;
+
+                scanned++;
+                var text = StripComments(File.ReadAllText(file));
+                secureCalls += Regex.Matches(text, @"SecureXmlReaderSettings\.Create\(").Count;
+
+                foreach (Match match in Construction.Matches(text))
+                {
+                    if (AllowedConstructions.ContainsKey(relative))
+                    {
+                        allowedHits.Add(relative);
+                        continue;
+                    }
+
+                    var line = text.Take(match.Index).Count(c => c == '\n') + 1;
+                    offenders.Add($"{relative}:{line}");
+                }
+            }
         }
 
-        return text;
+        scanned.Should().BeGreaterThan(1000, "the production roots or the locator have drifted");
+        secureCalls.Should().BeGreaterThan(40,
+            "the scan must see the many SecureXmlReaderSettings.Create() call sites; a collapsed count "
+            + "means the scan stopped reading real code and this passed while checking nothing");
+        allowedHits.Should().BeEquivalentTo(AllowedConstructions.Keys,
+            "a stale allow-list entry hides a future regression in that file; remove entries that no longer construct");
+
+        offenders.Should().BeEmpty(
+            "construct XmlReaderSettings through SecureXmlReaderSettings.Create(), which sets "
+            + "DtdProcessing, XmlResolver and the character cap together, then set any extra Ignore* "
+            + "flags on the returned instance. A hand-rolled initializer (including target-typed new()) "
+            + "easily omits the cap, and the zip's declared sizes cannot be trusted to bound a part -- "
+            + "see the comment in XlsxPivotCacheReader.\n" + string.Join("\n", offenders));
+    }
+
+    private static bool IsNonProduction(string relativePath)
+    {
+        foreach (var segment in relativePath.Split('/'))
+        {
+            if (segment is "obj" or "bin" or "tools" or "tests" or "docs" or "build" or "TestSupport"
+                || segment.EndsWith(".Tests", StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The two readers that previously had NO character cap (the feature inspector's scan settings
+    /// and the worksheet preflight settings) now carry the full hardened profile. The cap value is
+    /// not injectable without widening the public API, so this asserts the settings objects the
+    /// readers are created from and, separately, that such settings reject an oversized part.
+    /// </summary>
+    [Fact]
+    public void FormerlyUncappedReaderSettingsCarryTheFullHardenedProfile()
+    {
+        var all = new (string Name, XmlReaderSettings Settings)[]
+        {
+            ("XlsxFeatureInspector.ScanXmlSettings", XlsxFeatureInspector.CreateScanXmlSettings()),
+            ("XlsxWorksheetMetadataPreserver.PreflightSettings", XlsxWorksheetMetadataPreserver.CreateWorksheetPreflightReaderSettings()),
+        };
+
+        foreach (var (name, settings) in all)
+        {
+            settings.DtdProcessing.Should().Be(DtdProcessing.Prohibit, name);
+            settings.MaxCharactersInDocument.Should().Be(SecureXmlReaderSettings.DefaultMaxCharactersInDocument, name);
+            settings.IgnoreComments.Should().BeTrue(name);
+            settings.IgnoreProcessingInstructions.Should().BeTrue(name);
+        }
+
+        XlsxWorksheetMetadataPreserver.CreateWorksheetPreflightReaderSettings().IgnoreWhitespace.Should().BeTrue();
+
+        // Mechanism check on a copy of the real settings with the cap lowered: an oversized part throws.
+        var capped = XlsxFeatureInspector.CreateScanXmlSettings();
+        capped.MaxCharactersInDocument = 512;
+        using var reader = XmlReader.Create(
+            new MemoryStream(Encoding.UTF8.GetBytes("<r>" + new string('x', 4096) + "</r>")),
+            capped);
+        var act = () =>
+        {
+            while (reader.Read())
+            {
+            }
+        };
+        act.Should().Throw<XmlException>();
     }
 
     private static string RepositoryRoot() =>
