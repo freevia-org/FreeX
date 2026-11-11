@@ -8617,7 +8617,11 @@ public sealed partial class DocumentView : RichTextBox
             marker.FontSize = firstRun.FontSize;
         else
             marker.FontSize = (document.DefaultRun.FontSizePt ?? DefaultFontSizePt) * PxPerPoint;
-        paragraph.Inlines.InsertBefore(paragraph.Inlines.FirstInline, marker);
+        // An empty list paragraph (no runs at all) has no FirstInline to insert before.
+        if (paragraph.Inlines.FirstInline is { } firstInline)
+            paragraph.Inlines.InsertBefore(firstInline, marker);
+        else
+            paragraph.Inlines.Add(marker);
     }
 
     /// <summary>
@@ -11519,11 +11523,10 @@ public sealed partial class DocumentView : RichTextBox
         }
         // WPF xml:lang / Language for spell-check: set the run's language so the built-in spell checker
         // uses the correct dictionary when one is installed. Falls back to the system default when null.
-        if (fmt.LanguageTag is { Length: > 0 } lang)
-        {
-            try { wpf.Language = System.Windows.Markup.XmlLanguage.GetLanguage(lang); }
-            catch (InvalidOperationException) { /* unknown language tag — skip */ }
-        }
+        // Document language tags are untrusted (legacy names such as "es-ES_tradnl" are not valid
+        // xml:lang values), so resolve through the normalizing helper rather than GetLanguage directly.
+        if (DocumentLanguageTags.TryGetXmlLanguage(fmt.LanguageTag) is { } xmlLanguage)
+            wpf.Language = xmlLanguage;
 
         // Small caps / all caps. AllCaps wins visually (Typography.Capitals can only show one caps mode),
         // but both independent flags are stamped on the dedicated attached properties above so
