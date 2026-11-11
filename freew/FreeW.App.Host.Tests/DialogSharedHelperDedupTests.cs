@@ -75,7 +75,8 @@ public sealed class DialogSharedHelperDedupTests
     [Fact]
     public void AutosaveCoordinator_RoutesRecoveryMessagesThroughDialogMessageHelper()
     {
-        var source = ReadDialogSource("AutosaveCoordinator.cs");
+        var source = File.ReadAllText(TestWorkspaceFileLocator.Find(
+            "shared", "Free.Shared.Shell.Wpf", "WpfAutosaveHost.cs"));
         var sharedSource = File.ReadAllText(TestWorkspaceFileLocator.Find(
             "shared", "Free.Shared.Shell.Wpf", "WpfAutosaveRecoveryHost.cs"));
 

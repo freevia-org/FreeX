@@ -203,6 +203,12 @@ public sealed class AvaloniaAutosaveRecoveryHostTests
     public void FreePAndFreeWAdaptersDelegateRecoveryHostPolicyToTheSharedRuntime()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var sharedHost = File.ReadAllText(Path.Combine(
+            root, "shared", "Free.Shared.Shell.Avalonia", "AvaloniaAutosaveHost.cs"));
+        sharedHost.Should().Contain("AvaloniaAutosaveRecoveryHost.OfferStartupAsync(")
+            .And.Contain("AvaloniaAutosaveRecoveryHost.RecoverManuallyAsync(")
+            .And.NotContain("RecoveryWorkflow.RunAsync(");
+
         var sources = new[]
         {
             File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "AutosaveAdapter.cs")),
@@ -211,8 +217,10 @@ public sealed class AvaloniaAutosaveRecoveryHostTests
 
         foreach (var source in sources)
         {
-            source.Should().Contain("AvaloniaAutosaveRecoveryHost.OfferStartupAsync(")
-                .And.Contain("AvaloniaAutosaveRecoveryHost.RecoverManuallyAsync(")
+            source.Should().Contain("AvaloniaAutosaveHost<")
+                .And.Contain("_host.OfferRecoveryAsync(")
+                .And.Contain("_host.RecoverManuallyAsync(")
+                .And.NotContain("AvaloniaAutosaveRecoveryHost.")
                 .And.NotContain("RecoveryWorkflow.RunAsync(")
                 .And.NotContain("RecoverIntoCurrentWindowGatedAsync");
         }

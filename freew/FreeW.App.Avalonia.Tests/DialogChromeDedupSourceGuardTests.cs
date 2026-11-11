@@ -20,13 +20,9 @@ public sealed class DialogChromeDedupSourceGuardTests
     {
         var expectations = new (string FileName, string[] RequiredSnippets)[]
         {
-            ("AutosaveAdapter.cs",
-              [
-                  "using Free.Shared.Shell.Avalonia;",
-                  "AvaloniaRecoveryPromptDialogComposer.Compose(",
-                "new(recoveryText.Title, recoveryText.RecoverButton, recoveryText.SkipButton),",
-                "response => Close(response));",
-              ]),
+            // The autosave recovery prompt is no longer a FreeW dialog: it is the shared
+            // AvaloniaAutosaveRecoveryPromptDialog (see AvaloniaAutosaveRuntimeTests in
+            // Free.Shared.Shell.Avalonia.Tests, which pins the composer delegation).
             ("DesignDialogs.cs",
             [
                 "using Free.Shared.Shell.Avalonia;",

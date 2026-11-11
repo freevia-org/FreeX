@@ -109,6 +109,14 @@ public sealed class AvaloniaAutosaveRuntimeTests
     public void FreePAndFreeWRecoveryPrompts_DelegateConstructionToTheSharedComposer()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        // The prompt is ONE shared dialog class; neither product re-declares a recovery dialog.
+        var shared = File.ReadAllText(Path.Combine(
+            root, "shared", "Free.Shared.Shell.Avalonia", "AvaloniaAutosaveHost.cs"));
+        shared.Should().Contain("AvaloniaRecoveryPromptDialogComposer.Compose(")
+            .And.Contain("recovery.ResolveText(getText)")
+            .And.NotContain("new TextBlock\n        {\n            Text = message")
+            .And.NotContain("AvaloniaCompactDialogChrome.CreateActionRow([yes, no]");
+
         var sources = new[]
         {
             File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "AutosaveAdapter.cs")),
@@ -117,11 +125,10 @@ public sealed class AvaloniaAutosaveRuntimeTests
 
         foreach (var source in sources)
         {
-            source.Should().Contain("AvaloniaRecoveryPromptDialogComposer.Compose(")
-                .And.Contain("AutosaveProfile.Recovery.ResolveText(UiText.Get)")
-                .And.Contain("ResolveResponseOverride(message, ref handled, ref response)")
-                .And.NotContain("new TextBlock\n        {\n            Text = message")
-                .And.NotContain("AvaloniaCompactDialogChrome.CreateActionRow([yes, no]");
+            source.Should().NotContain("AvaloniaRecoveryPromptDialogComposer")
+                .And.NotContain("DialogWindow")
+                .And.NotContain("new TextBlock")
+                .And.NotContain("class RecoveryPromptDialog");
         }
     }
 }

@@ -2,7 +2,7 @@ namespace FreeW.App.Host;
 
 internal sealed partial class AutosaveCoordinator
 {
-    internal string SnapshotIdForTests => _session.SnapshotId;
-    internal void SnapshotNowForTests() => _session.Snapshot();
-    internal void SimulateCrashForTests() => _session.Dispose();
+    internal string SnapshotIdForTests => _host.Session.SnapshotId;
+    internal void SnapshotNowForTests() => _host.Session.Snapshot();
+    internal void SimulateCrashForTests() => _host.Session.Dispose();
 }

@@ -61,12 +61,16 @@ public sealed class FreeWFinalTailOwnershipSourceTests
     [Fact]
     public void IdentifiedDialogsResolvePortableLocalizedText()
     {
-        var recovery = Read("freew", "FreeW.App.Avalonia", "AutosaveAdapter.cs");
+        var recovery = Read("shared", "Free.Shared.Shell.Avalonia", "AvaloniaAutosaveHost.cs");
         var quickParts = Read("freew", "FreeW.App.Avalonia", "FinalCommandParityDialogs.cs");
         var chart = Read("freew", "FreeW.App.Avalonia", "MediaDialogParity.cs");
         var wpf = Read("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
 
-        recovery.Should().Contain("FreeWAutosaveProfile.Recovery.ResolveText(UiText.Get)");
+        // The shared Avalonia autosave host resolves the prompt text from the product profile with
+        // the product's localizer; FreeW's adapter supplies exactly those two inputs.
+        Read("freew", "FreeW.App.Avalonia", "AutosaveAdapter.cs").Should()
+            .Contain("FreeWAutosaveProfile.Session").And.Contain("UiText.Get");
+        recovery.Should().Contain("recovery.ResolveText(getText)");
         recovery.Should().NotContain("Content = \"Recover\"");
         recovery.Should().NotContain("Content = \"Skip\"");
         quickParts.Should().Contain("QuickPartCommandPlanner.ResolveText(UiText.Get)");

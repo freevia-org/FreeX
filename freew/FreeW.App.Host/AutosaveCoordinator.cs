@@ -9,14 +9,13 @@ using TextDocument = FreeW.Core.Model.TextDocument;
 namespace FreeW.App.Host;
 
 /// <summary>
-/// WPF scheduling and prompt adapter for the renderer-neutral <see cref="FreeWAutosaveSession"/>.
+/// FreeW's binding of the shared <see cref="WpfAutosaveHost{TDocument}"/> (dispatcher timer,
+/// clean-exit stop, emergency snapshot, startup/manual recovery). Only the document ports, the
+/// guarded restore, and the new-window / dirty-gate callbacks are FreeW-specific.
 /// </summary>
 internal sealed partial class AutosaveCoordinator
 {
-    private readonly FileCommands _file;
-    private readonly WpfAutosaveTimer _timer;
-    private readonly FreeWAutosaveSession _session;
-    private readonly Func<AutosaveRecoveryCandidate, bool>? _recoverInNewWindow;
+    private readonly WpfAutosaveHost<TextDocument> _host;
 
     public AutosaveCoordinator(
         DocumentView editor,
@@ -24,7 +23,6 @@ internal sealed partial class AutosaveCoordinator
         Func<AutosaveDocumentPorts<TextDocument>, FreeWAutosaveSession>? sessionFactory = null,
         Func<AutosaveRecoveryCandidate, bool>? recoverInNewWindow = null)
     {
-        _file = file;
         var ports = new AutosaveDocumentPorts<TextDocument>(
             GetOriginalFilePath: () => file.CurrentPath,
             GetDisplayName: () => file.DisplayName,
@@ -41,92 +39,40 @@ internal sealed partial class AutosaveCoordinator
                 // away.
                 writeDocument(editor.MailMergeSession?.Template ?? editor.Model);
             });
-        _session = sessionFactory?.Invoke(ports) ?? new FreeWAutosaveSession(ports);
-        _recoverInNewWindow = recoverInNewWindow;
-        _timer = new WpfAutosaveTimer(FreeWAutosaveSession.DefaultInterval, _session.Snapshot);
+
+        _host = new WpfAutosaveHost<TextDocument>(
+            FreeWAutosaveProfile.Session,
+            ports,
+            new WpfAutosaveHostCallbacks<TextDocument>(
+                // startup-fileopen F2 (WPF host): a command-line/file-association document opened into
+                // this window before the startup offer runs is not dirty, so it must not be replaced.
+                CurrentWindowHasExplicitDocument: () => file.CurrentPath is not null,
+                RestoreIntoCurrentWindow: AutosaveRecoveryRestore<TextDocument>.FromSnapshotPath(
+                    file.OpenSnapshot),
+                // The manual command may target a window with unrelated unsaved edits. Run the
+                // product's synchronous dirty gate before accepting the recovery candidate.
+                ConfirmRecoveryIntoCurrentWindow: () =>
+                    file.ConfirmCloseAllowed("recovering an unsaved document"),
+                RecoverInNewWindow: recoverInNewWindow),
+            UiText.Get,
+            sessionFactory: sessionPorts => sessionFactory?.Invoke(sessionPorts) ?? new FreeWAutosaveSession(sessionPorts));
     }
 
-    public void Start() => _timer.Start();
+    public void Start() => _host.Start();
 
     /// <summary>
     /// Best-effort emergency snapshot for the crash handler (see Program.cs's
-    /// TryEmergencySnapshotAllWindows). Must never throw -- delegates to
-    /// <see cref="FreeWAutosaveSession.TryEmergencySnapshot"/>, which is never-throw by design.
+    /// TryEmergencySnapshotAllWindows). Must never throw.
     /// </summary>
-    public void TryEmergencySnapshot() => _session.TryEmergencySnapshot();
+    public void TryEmergencySnapshot() => _host.TryEmergencySnapshot();
 
-    public void Stop()
-    {
-        _timer.Stop();
-        _session.CompleteCleanExit();
-    }
+    public void Stop() => _host.Stop();
 
     /// <summary>
     /// Offers every prior-session snapshot on startup. The first accepted document uses this window;
     /// subsequent documents open through the new-window callback.
     /// </summary>
-    /// <remarks>
-    /// startup-fileopen F2 (WPF host): mirrors the fix already applied to FreeP's Avalonia
-    /// <c>AutosaveAdapter.OfferRecoveryAsync</c>. A command-line/file-association document may
-    /// already be loaded into this window before this offer runs, not yet dirty, so routing the
-    /// first accepted candidate into "the current window" unconditionally would silently replace it.
-    /// We snapshot whether the window already holds an explicitly opened document (<see
-    /// cref="_file"/>.<c>CurrentPath</c> non-null) BEFORE any candidate is applied, and if so force
-    /// every accepted candidate through the new-window path instead, same as every candidate beyond
-    /// the first. A genuinely fresh window (no startup file) keeps the prior unconditional behaviour.
-    /// </remarks>
-    public bool OfferRecovery(Window owner)
-    {
-        var text = FreeWAutosaveProfile.Recovery.ResolveText(UiText.Get);
-        return WpfAutosaveRecoveryHost.OfferStartup(
-            owner,
-            new WpfAutosaveRecoveryMessages(
-                text.Title,
-                text.NoDocumentsMessage,
-                text.FailureMessageFormat),
-            () => _file.CurrentPath is not null,
-            _session.PlanRecoveries,
-            (recovery, remainingCount) =>
-                FreeWAutosaveProfile.Recovery.CreateOffer(recovery, remainingCount, AutosaveRecoveryPromptMode.Startup).Prompt,
-            (recovery, useCurrentWindow) => _session.CompleteRecovery(
-                recovery,
-                accepted: true,
-                useCurrentWindow
-                    ? _file.OpenSnapshot
-                    : (_, _) => _recoverInNewWindow?.Invoke(recovery.Candidate) ?? false,
-                AutosaveRecoveryRestoreExceptionPolicy.QuarantineCandidate));
-    }
+    public bool OfferRecovery(Window owner) => _host.OfferRecovery(owner);
 
-    public bool RecoverUnsavedDocuments(Window owner)
-    {
-        var text = FreeWAutosaveProfile.Recovery.ResolveText(UiText.Get);
-        return WpfAutosaveRecoveryHost.RecoverManually(
-            owner,
-            new WpfAutosaveRecoveryMessages(
-                text.Title,
-                text.NoDocumentsMessage,
-                text.FailureMessageFormat),
-            _session.PlanRecoveries,
-            (recovery, remainingCount) =>
-                FreeWAutosaveProfile.Recovery.CreateOffer(recovery, remainingCount, AutosaveRecoveryPromptMode.Manual).Prompt,
-            (recovery, useCurrentWindow) =>
-            {
-                // The manual command may target a window with unrelated unsaved edits. Run the
-                // product's synchronous dirty gate before accepting the recovery candidate.
-                if (useCurrentWindow && !_file.ConfirmCloseAllowed("recovering an unsaved document"))
-                {
-                    return _session.CompleteRecovery(
-                        recovery,
-                        accepted: false,
-                        _file.OpenSnapshot);
-                }
-
-                return _session.CompleteRecovery(
-                    recovery,
-                    accepted: true,
-                    useCurrentWindow
-                        ? _file.OpenSnapshot
-                        : (_, _) => _recoverInNewWindow?.Invoke(recovery.Candidate) ?? false);
-            });
-    }
+    public bool RecoverUnsavedDocuments(Window owner) => _host.RecoverManually(owner);
 }
