@@ -47,7 +47,13 @@ public sealed record BackstageCallbacks(
     Action? OnClosed = null,
     Func<string>? GetDisplayName = null,
     Func<string?>? GetCurrentPath = null,
-    Func<string, bool>? FileExists = null);
+    Func<string, bool>? FileExists = null,
+    // File > New templates. Null means the host cannot create a document from that kind of template,
+    // and the gallery then offers only what it can actually do (see FreeWTemplateGalleryPlanner).
+    Action<string>? NewFromBuiltInTemplate = null,
+    Action<string>? NewFromTemplateFile = null,
+    Func<string>? GetPersonalTemplatesFolder = null,
+    Func<string, IReadOnlyList<PersonalTemplateEntry>>? ListPersonalTemplates = null);
 
 /// <summary>
 /// Owns FreeW Backstage state projection, command policy, enablement, and pane planning.
@@ -78,12 +84,59 @@ public sealed class FreeWBackstageSession
     {
         ArgumentNullException.ThrowIfNull(openMore);
 
-        return BackstagePaneSurfacePlanner.BuildHomePane(
+        var surface = BackstagePaneSurfacePlanner.BuildHomePane(
             _callbacks.GetRecentEntries(),
             Bind(_callbacks.NewDocument),
             Bind(_callbacks.OpenRecent),
             Bind(_callbacks.Browse),
             openMore);
+        return _callbacks.NewFromBuiltInTemplate is { } newFromBuiltIn
+            ? surface with { Groups = AddTemplateRows(surface.Groups, Bind(newFromBuiltIn)) }
+            : surface;
+    }
+
+    /// <summary>
+    /// File &gt; New: the built-in templates plus the user's personal .dotx/.dotm files, each as a
+    /// tile with a miniature page. Every tile action dismisses the Backstage first, like the other panes.
+    /// </summary>
+    public FreeWTemplateGallerySpec BuildTemplateGallery()
+    {
+        var canUseTemplateFiles = _callbacks.NewFromTemplateFile is not null;
+        var folder = canUseTemplateFiles
+            ? _callbacks.GetPersonalTemplatesFolder?.Invoke() ?? PersonalTemplatesFolder.Resolve(null)
+            : null;
+        var personal = folder is null
+            ? null
+            : (_callbacks.ListPersonalTemplates ?? PersonalTemplateCatalog.List)(folder);
+
+        return FreeWTemplateGalleryPlanner.Build(
+            Bind(_callbacks.NewDocument),
+            _callbacks.NewFromBuiltInTemplate is { } newFromBuiltIn ? Bind(newFromBuiltIn) : null,
+            _callbacks.NewFromTemplateFile is { } newFromFile ? Bind(newFromFile) : null,
+            personal,
+            folder,
+            _getText);
+    }
+
+    // The Home pane's "New" group lists the built-in templates after "Blank document".
+    private IReadOnlyList<BackstageActionGroup> AddTemplateRows(
+        IReadOnlyList<BackstageActionGroup> groups,
+        Action<string> newFromBuiltIn)
+    {
+        if (groups.Count == 0)
+            return groups;
+
+        var rows = BuiltInDocumentTemplates.All
+            .Where(template => template.Id != BuiltInDocumentTemplates.BlankId)
+            .Select(template => new BackstageActionRow(
+                FreeWTemplateGalleryPlanner.TemplateName(template, _getText),
+                FreeWTemplateGalleryPlanner.TemplateDescription(template, _getText),
+                () => newFromBuiltIn(template.Id))
+            {
+                AutomationId = "BackstageAction_NewFrom"
+                    + AutomationIdToken.KeepLettersAndDigits(template.Id),
+            });
+        return [groups[0] with { Actions = [.. groups[0].Actions, .. rows] }, .. groups.Skip(1)];
     }
 
     public BackstageOpenPaneSurfaceSpec BuildOpenPane(string? filter) =>

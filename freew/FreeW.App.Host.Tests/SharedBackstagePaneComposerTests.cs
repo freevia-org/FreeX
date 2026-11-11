@@ -292,7 +292,7 @@ public sealed class SharedBackstagePaneComposerTests
         recent.Paths.Should().Equal("C:/Docs/Budget.docx");
         template.Heading.Should().Be("New");
         template.TileCaption.Should().Be("Blank document");
-        template.FooterText.Should().Be("More templates are not available in this build.");
+        template.FooterText.Should().Be("Pick a template to start a new, untitled document.");
         options.Description.Should().Be("FreeW application settings. These persist between sessions and apply immediately.");
         options.EditText.Should().Be("Edit options\u2026");
         account.Heading.Should().Be("Account");

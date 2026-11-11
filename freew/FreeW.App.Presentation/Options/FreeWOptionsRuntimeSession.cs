@@ -42,6 +42,8 @@ public sealed class FreeWOptionsRuntimeSession
         LiveOptions.AutoCorrectEnabled = editedOptions.AutoCorrectEnabled;
         LiveOptions.AutoFormat = editedOptions.AutoFormat;
         LiveOptions.AutoCorrect = editedOptions.AutoCorrect;
+        // PersonalTemplatesFolder is deliberately not applied: the Options dialog does not edit it, so
+        // its result always carries the default and copying it would reset a configured folder.
         LiveOptions.Normalize();
 
         return EditorTypingOptions;
@@ -119,5 +121,6 @@ public sealed class FreeWOptionsRuntimeSession
         target.AutoCorrectEnabled = source.AutoCorrectEnabled;
         target.AutoFormat = source.AutoFormat;
         target.AutoCorrect = source.AutoCorrect;
+        target.PersonalTemplatesFolder = source.PersonalTemplatesFolder;
     }
 }

@@ -56,7 +56,7 @@ public sealed class FileWorkflowArchitectureTests
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "MainWindow.cs");
 
         session.Should().Contain("public sealed class FreeWDocumentFileCommandSession");
-        session.Should().Contain("_workflow.OpenPathAsync(path, suppressRecentFiles)");
+        session.Should().Contain("_workflow.OpenPathAsync(path, suppressRecentFiles, templateMode: templateMode)");
         session.Should().Contain("_workflow.ImportPdfTextPathAsync(path)");
         session.Should().Contain("_workflow.SaveCurrentPathAsync(path)");
         session.Should().Contain("_workflow.SavePathAsync(path, filterIndex, kind)");
