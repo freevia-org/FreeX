@@ -231,6 +231,31 @@ public sealed class SharedCupsPrintServiceTests
         invocation.Arguments.Should().ContainInOrder("-t", "Budget", "/tmp/job.pdf");
     }
 
+    [Theory]
+    [InlineData(PrintSides.OneSided, "sides=one-sided")]
+    [InlineData(PrintSides.TwoSidedLongEdge, "sides=two-sided-long-edge")]
+    [InlineData(PrintSides.TwoSidedShortEdge, "sides=two-sided-short-edge")]
+    public void CommandPlanner_CarriesTheChosenSidesToCups(PrintSides sides, string expectedOption)
+    {
+        var invocation = SharedCupsPrintCommandPlanner.Submit(
+            "/tmp/job.pdf",
+            new PrintSelection(Sides: sides),
+            "Office");
+
+        invocation.Arguments.Should().ContainInOrder("-o", expectedOption);
+    }
+
+    [Fact]
+    public void CommandPlanner_LeavesSidesToThePrinterWhenNoPreferenceIsGiven()
+    {
+        var invocation = SharedCupsPrintCommandPlanner.Submit(
+            "/tmp/job.pdf",
+            new PrintSelection(),
+            "Office");
+
+        invocation.Arguments.Should().NotContain(argument => argument.StartsWith("sides=", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task DiscoverAsync_DefaultModePreservesPrinterStatusBehavior()
     {

@@ -1320,7 +1320,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     [FreeXRibbonCommandIds.ViewNormal] = SetNormalView,
                     // Insert ▸ Comment (reuse New Comment); Insert ▸ Header & Footer (Page Setup).
                     ["Comment"] = () => RunGuarded(ShowNewThreadedCommentDialogAsync),
-                    ["Header & Footer"] = () => RunGuarded(() => ShowPageSetupDialogAsync()),
+                    ["Header & Footer"] = () => RunGuarded(ShowHeaderFooterDialogAsync),
                     // Page Layout ▸ Themes (Office / Colorful / Grayscale picker).
                     ["Themes"] = () => RunGuarded(ShowThemesGalleryAsync),
                     ["Theme Colors"] = () => RunGuarded(ShowThemeColorsGalleryAsync),

@@ -9,6 +9,15 @@ public enum PrintOrientation
     Landscape,
 }
 
+/// <summary>Which sides of the paper a job prints on. <see cref="PrinterDefault"/> sends no preference.</summary>
+public enum PrintSides
+{
+    PrinterDefault,
+    OneSided,
+    TwoSidedLongEdge,
+    TwoSidedShortEdge,
+}
+
 public enum PrintPageRangeKind
 {
     All,
@@ -63,7 +72,8 @@ public sealed record PrintSelection(
     PrintPageRange? PageRange = null,
     PrintOrientation Orientation = PrintOrientation.Document,
     bool Collate = true,
-    string? JobTitle = null)
+    string? JobTitle = null,
+    PrintSides Sides = PrintSides.PrinterDefault)
 {
     public PrintPageRange EffectivePageRange => PageRange ?? PrintPageRange.All;
 
