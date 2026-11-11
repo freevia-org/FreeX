@@ -269,7 +269,7 @@ if (-not (Test-Path -LiteralPath $fixturePath -PathType Leaf)) { throw "Fixture 
 if (-not (Test-Path -LiteralPath $probeSource -PathType Leaf)) { throw "Probe was not found: $probeSource" }
 if (-not (Test-Path -LiteralPath $schemaPath -PathType Leaf)) { throw "Schema was not found: $schemaPath" }
 New-Item -ItemType Directory -Path $evidenceDirectory -Force | Out-Null
-$sourceBefore = (Get-FileHash -LiteralPath $fixturePath -Algorithm SHA256).Hash.ToLowerInvariant()
+$sourceBefore = (Get-ToolFileSha256 -Path $fixturePath)
 $firstResult = $null
 $reopenResult = $null
 $started = $false
@@ -293,7 +293,7 @@ try {
     $started = $false
 
     $manifestPath = Merge-Results -First $firstResult -Reopen $reopenResult
-    $sourceAfter = (Get-FileHash -LiteralPath $fixturePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $sourceAfter = (Get-ToolFileSha256 -Path $fixturePath)
     $sourceBefore | Set-Content -LiteralPath (Join-Path $evidenceDirectory "source-before.sha256.txt") -Encoding ascii
     $sourceAfter | Set-Content -LiteralPath (Join-Path $evidenceDirectory "source-after.sha256.txt") -Encoding ascii
     if ($sourceBefore -ne $sourceAfter) { throw "The immutable corpus fixture changed during physical validation." }

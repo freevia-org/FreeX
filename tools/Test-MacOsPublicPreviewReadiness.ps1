@@ -14,36 +14,14 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $validationErrors = New-Object System.Collections.Generic.List[string]
 
-function ConvertTo-GitHubWorkflowCommandValue {
-    param([string]$Value)
-
-    if ($null -eq $Value) {
-        return ""
-    }
-
-    return $Value.Replace("%", "%25").Replace("`r", "%0D").Replace("`n", "%0A")
-}
-
-function Write-GitHubErrorAnnotation {
-    param([Parameter(Mandatory = $true)][string]$Message)
-
-    if ($env:GITHUB_ACTIONS -ne "true") {
-        return
-    }
-
-    $escapedMessage = ConvertTo-GitHubWorkflowCommandValue -Value $Message
-    Write-Host "::error title=macOS public-preview readiness::$escapedMessage"
-}
-
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 $pathComparison = Get-ToolPathComparison
+$readinessTitle = "macOS public-preview readiness"
 
 function Add-ValidationError {
     param([Parameter(Mandatory = $true)][string]$Message)
 
-    $validationErrors.Add($Message)
-    Write-GitHubErrorAnnotation -Message $Message
-    Write-Error $Message -ErrorAction Continue
+    Add-ToolValidationError -Errors $validationErrors -Message $Message -GitHubTitle $readinessTitle
 }
 
 function Assert-True {
@@ -52,9 +30,7 @@ function Assert-True {
         [Parameter(Mandatory = $true)][string]$Message
     )
 
-    if (-not $Condition) {
-        Add-ValidationError $Message
-    }
+    Assert-ToolValidationCondition -Errors $validationErrors -Condition $Condition -Message $Message -GitHubTitle $readinessTitle
 }
 
 function Assert-FileExists {
@@ -63,12 +39,7 @@ function Assert-FileExists {
         [Parameter(Mandatory = $true)][string]$Label
     )
 
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
-        Add-ValidationError "$Label was not found: $Path"
-        return $false
-    }
-
-    return $true
+    return Assert-ToolFileExists -Errors $validationErrors -Path $Path -Label $Label -GitHubTitle $readinessTitle
 }
 
 function Assert-ContainsText {
@@ -78,9 +49,7 @@ function Assert-ContainsText {
         [Parameter(Mandatory = $true)][string]$Message
     )
 
-    if ($Text.IndexOf($Needle, [System.StringComparison]::Ordinal) -lt 0) {
-        Add-ValidationError $Message
-    }
+    Assert-ToolContainsText -Errors $validationErrors -Text $Text -Needle $Needle -Message $Message -GitHubTitle $readinessTitle
 }
 
 function Assert-DoesNotContainText {
@@ -90,9 +59,7 @@ function Assert-DoesNotContainText {
         [Parameter(Mandatory = $true)][string]$Message
     )
 
-    if ($Text.IndexOf($Needle, [System.StringComparison]::Ordinal) -ge 0) {
-        Add-ValidationError $Message
-    }
+    Assert-ToolDoesNotContainText -Errors $validationErrors -Text $Text -Needle $Needle -Message $Message -GitHubTitle $readinessTitle
 }
 
 function Get-ExpectedFileNames {

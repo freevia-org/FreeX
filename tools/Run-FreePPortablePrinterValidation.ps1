@@ -36,11 +36,7 @@ $schemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freep-portable-pri
 $null = . (Join-Path $PSScriptRoot "LinuxInteractiveDocker/ManifestEvidence.ps1")
 $fakeLpstat = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freep-portable-printer-fake-lpstat.sh"
 $fakeLp = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freep-portable-printer-fake-lp.sh"
-$resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
-    [IO.Path]::GetFullPath($OutputDir)
-} else {
-    [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
-}
+$resolvedOutputRoot = Resolve-ToolRepoPath -Path $OutputDir -RepoRoot $repoRoot
 
 function Invoke-Docker {
     param([Parameter(Mandatory = $true)][string[]]$Arguments)

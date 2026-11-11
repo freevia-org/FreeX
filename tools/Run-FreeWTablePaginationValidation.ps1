@@ -21,7 +21,7 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
-$outputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) { [IO.Path]::GetFullPath($OutputDir) } else { [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir)) }
+$outputRoot = Resolve-ToolRepoPath -Path $OutputDir -RepoRoot $repoRoot
 $fixtureDir = Join-Path $outputRoot "fixture"
 $fixturePath = Join-Path $fixtureDir "table-page-composition-stress.docx"
 $fixtureName = Split-Path -Leaf $fixturePath
@@ -112,7 +112,7 @@ $sharedPlanPath = Join-Path $outputRoot "shared-plan-test.txt"
 $fidelityOutput = if ($ShortOutput) { Join-Path $outputRoot "fidelity-render.txt" } else { "" }
 Invoke-CapturedExternal dotnet @("run", "--project", $fidelityProject, "--configuration", "Release", "--", "--generate-f2-corpus", $fixtureDir) -OutputPath $fidelityOutput
 if (-not (Test-Path -LiteralPath $fixturePath -PathType Leaf)) { throw "Generated fixture is missing: $fixturePath" }
-$fixtureHash = (Get-FileHash -LiteralPath $fixturePath -Algorithm SHA256).Hash.ToLowerInvariant()
+$fixtureHash = (Get-ToolFileSha256 -Path $fixturePath)
 Invoke-CapturedExternal dotnet @("test", $plannerProject, "--configuration", "Release", "--filter", "FullyQualifiedName~DocumentViewLayoutPlannerTests.BuildTableLayoutPlans_AccountsForLeadingDocumentContentWhenEstimatingFirstTablePage", "--logger", "console;verbosity=minimal") -OutputPath $sharedPlanPath
 Assert-FocusedTestProof $sharedPlanPath "DocumentViewLayoutPlannerTests.BuildTableLayoutPlans_AccountsForLeadingDocumentContentWhenEstimatingFirstTablePage"
 $avaloniaTablePath = Join-Path $outputRoot "avalonia-table-structure-test.txt"

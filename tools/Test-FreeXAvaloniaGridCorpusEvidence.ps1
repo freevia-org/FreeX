@@ -33,7 +33,7 @@ foreach ($capture in $captures) {
     if (-not (Test-Path -LiteralPath $pngPath) -or (Get-Item -LiteralPath $pngPath).Length -le 0) {
         throw "Grid corpus capture '$($capture.id)' is missing a non-empty PNG."
     }
-    $hash = (Get-FileHash -LiteralPath $pngPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $hash = (Get-ToolFileSha256 -Path $pngPath)
     if ($hash -ne [string]$capture.sha256) {
         throw "Grid corpus capture '$($capture.id)' PNG hash does not match the manifest."
     }

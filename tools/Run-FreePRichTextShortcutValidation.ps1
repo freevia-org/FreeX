@@ -253,16 +253,16 @@ try {
     New-Item -ItemType Directory -Path $evidenceDirectory -Force | Out-Null
     $probeLog = Join-Path $evidenceDirectory "probe.log"; New-Item -ItemType File -Path $probeLog -Force | Out-Null
     $sourceBefore = Join-Path $evidenceDirectory "fixture-source-before.sha256.txt"; $sourceAfter = Join-Path $evidenceDirectory "fixture-source-after.sha256.txt"
-    (Get-FileHash -LiteralPath $fixturePath -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -LiteralPath $sourceBefore -Encoding ascii
+    (Get-ToolFileSha256 -Path $fixturePath) | Set-Content -LiteralPath $sourceBefore -Encoding ascii
     $dockerArguments = @("exec", "--env", "FREEP_DOCUMENT_PATH=/documents/$fixtureFileName", "--env", "FREEP_EXPECTED_DOCUMENT_NAME=$fixtureFileName", "--env", "FREEP_EXPECTED_WINDOW_PATTERN=FreeP", "--env", "FREEP_APP_SURFACE=$surface", "--env", "FREEP_COVERAGE_SCOPE=$scope", "--env", "FREEP_SCREEN_WIDTH=$Width", "--env", "FREEP_SCREEN_HEIGHT=$Height", "--env", "FREEP_SCREEN_DPI=$Dpi", [string]$session.containerName, "bash", "/work/freep-rich-text-shortcut-probe.sh", "/work/freep-rich-text-shortcut-validation")
     Push-Location $repoRoot; try { $probeOutput = @(& docker @dockerArguments 2>&1); $probeExitCode = $LASTEXITCODE } finally { Pop-Location }
     if ($probeOutput.Count -gt 0) { $probeOutput | Set-Content -LiteralPath $probeLog -Encoding utf8 } else { "docker exec produced no stdout/stderr; inspect the manifest and runtime evidence." | Set-Content -LiteralPath $probeLog -Encoding utf8 }
-    (Get-FileHash -LiteralPath $fixturePath -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -LiteralPath $sourceAfter -Encoding ascii
+    (Get-ToolFileSha256 -Path $fixturePath) | Set-Content -LiteralPath $sourceAfter -Encoding ascii
     $mountedDocument = Join-Path $resolvedOutputRoot "freep/documents/$fixtureFileName"; $mountedAfter = Join-Path $evidenceDirectory "fixture-host-mounted-after.sha256.txt"
     $hostMountedAfterAvailable = $false
     try {
         if (Test-Path -LiteralPath $mountedDocument -PathType Leaf) {
-            $mountedHash = (Get-FileHash -LiteralPath $mountedDocument -Algorithm SHA256).Hash.ToLowerInvariant()
+            $mountedHash = (Get-ToolFileSha256 -Path $mountedDocument)
             Set-Content -LiteralPath $mountedAfter -Value $mountedHash -Encoding ascii -ErrorAction Stop
             $hostMountedAfterAvailable = $true
         }

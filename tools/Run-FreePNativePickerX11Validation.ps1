@@ -63,7 +63,7 @@ function Write-HashArtifact {
         "MISSING: $Path" | Set-Content -LiteralPath $Destination -Encoding utf8
         return
     }
-    (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() |
+    (Get-ToolFileSha256 -Path $Path) |
         Set-Content -LiteralPath $Destination -Encoding ascii
 }
 

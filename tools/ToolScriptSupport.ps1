@@ -91,14 +91,41 @@ function Get-ToolPowerShellPath {
     throw "A supported PowerShell host was not found. Install pwsh on Linux/macOS or pwsh/Windows PowerShell on Windows."
 }
 
-function Get-ToolNormalizedTextSha256 {
+# Portable SHA-256 of a file's raw bytes as lowercase hex. Deliberately avoids the optional
+# Get-FileHash cmdlet and produces the same text as `(Get-FileHash ...).Hash.ToLowerInvariant()`.
+function Get-ToolFileSha256 {
     param([Parameter(Mandatory = $true)][string]$Path)
+
+    # Resolve against the PowerShell location (not the process directory) like Get-FileHash -LiteralPath.
+    $stream = [IO.File]::OpenRead((Resolve-ToolProviderPath -Path $Path))
+    try {
+        $hasher = [Security.Cryptography.SHA256]::Create()
+        try {
+            return [BitConverter]::ToString($hasher.ComputeHash($stream)).Replace("-", "").ToLowerInvariant()
+        }
+        finally {
+            $hasher.Dispose()
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
+# SHA-256 of a text file with CRLF/CR normalized to LF, as UTF-8 without BOM. By default invalid
+# UTF-8 throws; -Lenient decodes it with replacement characters instead (the legacy behaviour of
+# Get-VisualEvidenceNormalizedTextSha256, which committed evidence manifests were generated with).
+function Get-ToolNormalizedTextSha256 {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [switch]$Lenient
+    )
 
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         throw "Text file not found: $Path"
     }
 
-    $utf8 = [System.Text.UTF8Encoding]::new($false, $true)
+    $utf8 = [System.Text.UTF8Encoding]::new($false, -not $Lenient)
     $text = [System.IO.File]::ReadAllText($Path, $utf8)
     $normalized = $text.Replace("`r`n", "`n").Replace("`r", "`n")
     $bytes = $utf8.GetBytes($normalized)
@@ -262,6 +289,66 @@ function Add-ToolValidationError {
     }
     if (-not $SuppressWriteError) {
         Write-Error $Message -ErrorAction Continue
+    }
+}
+
+# Accumulating (non-throwing) assertions built on Add-ToolValidationError: a failed check records
+# the message in $Errors (and annotates GitHub Actions when -GitHubTitle is given) and the script
+# keeps going so one run reports every problem. Scripts that fail fast with `throw` keep their own.
+function Assert-ToolValidationCondition {
+    param(
+        [Parameter(Mandatory = $true)]$Errors,
+        [Parameter(Mandatory = $true)][bool]$Condition,
+        [Parameter(Mandatory = $true)][string]$Message,
+        [string]$GitHubTitle
+    )
+
+    if (-not $Condition) {
+        Add-ToolValidationError -Errors $Errors -Message $Message -GitHubTitle $GitHubTitle
+    }
+}
+
+function Assert-ToolFileExists {
+    param(
+        [Parameter(Mandatory = $true)]$Errors,
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Label,
+        [string]$GitHubTitle
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        Add-ToolValidationError -Errors $Errors -Message "$Label was not found: $Path" -GitHubTitle $GitHubTitle
+        return $false
+    }
+
+    return $true
+}
+
+function Assert-ToolContainsText {
+    param(
+        [Parameter(Mandatory = $true)]$Errors,
+        [Parameter(Mandatory = $true)][string]$Text,
+        [Parameter(Mandatory = $true)][string]$Needle,
+        [Parameter(Mandatory = $true)][string]$Message,
+        [string]$GitHubTitle
+    )
+
+    if ($Text.IndexOf($Needle, [System.StringComparison]::Ordinal) -lt 0) {
+        Add-ToolValidationError -Errors $Errors -Message $Message -GitHubTitle $GitHubTitle
+    }
+}
+
+function Assert-ToolDoesNotContainText {
+    param(
+        [Parameter(Mandatory = $true)]$Errors,
+        [Parameter(Mandatory = $true)][string]$Text,
+        [Parameter(Mandatory = $true)][string]$Needle,
+        [Parameter(Mandatory = $true)][string]$Message,
+        [string]$GitHubTitle
+    )
+
+    if ($Text.IndexOf($Needle, [System.StringComparison]::Ordinal) -ge 0) {
+        Add-ToolValidationError -Errors $Errors -Message $Message -GitHubTitle $GitHubTitle
     }
 }
 

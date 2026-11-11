@@ -292,7 +292,7 @@ foreach ($runtime in $Runtimes) {
         Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $packagePath -Force
     }
 
-    $hash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $hash = (Get-ToolFileSha256 -Path $packagePath)
     $shaPath = "$packagePath.sha256"
     "$hash  $packageName" | Set-Content -LiteralPath $shaPath -NoNewline -Encoding ascii
     Write-Host "Produced $packageName"

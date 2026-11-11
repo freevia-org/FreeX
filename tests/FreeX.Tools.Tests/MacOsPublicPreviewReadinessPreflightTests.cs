@@ -47,7 +47,8 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         script.Should().Contain("macos_launch_smoke");
         script.Should().Contain("RequireSeparateDiagnosticsArtifact");
         script.Should().Contain("GITHUB_ACTIONS");
-        script.Should().Contain("::error title=macOS public-preview readiness::");
+        script.Should().Contain("-GitHubTitle $readinessTitle");
+        script.Should().Contain("$readinessTitle = \"macOS public-preview readiness\"");
         script.Should().Contain("freex-$Runtime-macos-open-with-launch-smoke.txt");
         script.Should().Contain("freex-$Runtime-macos-default-open-launch-smoke.txt");
         script.Should().Contain("launchservices_default_open_boundary");

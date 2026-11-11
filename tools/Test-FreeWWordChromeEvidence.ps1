@@ -20,12 +20,19 @@ $captureSource = Get-Content -LiteralPath $resolvedCaptureScript -Raw
 foreach ($requiredText in @(
         "ScreenshotCaptureSupport.ps1",
         "Assert-ForegroundWindowOwnership",
+        "Set-NativeChromeForegroundWindow",
         "CopyFromScreen-window-rectangle-top-band",
         "Clear-CurrentCapture",
         "Word.Application")) {
     if ($captureSource.IndexOf($requiredText, [StringComparison]::Ordinal) -lt 0) {
         throw "FreeW Word chrome capture script is missing required guard or provenance '$requiredText'."
     }
+}
+# The AttachThreadInput foreground transfer is shared with the PowerPoint lane in ScreenshotCaptureSupport.ps1.
+$captureSupportSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot "ScreenshotCaptureSupport.ps1") -Raw
+if ($captureSupportSource.IndexOf("AttachThreadInput", [StringComparison]::Ordinal) -lt 0 -or
+    $captureSupportSource.IndexOf("function Set-NativeChromeForegroundWindow", [StringComparison]::Ordinal) -lt 0) {
+    throw "ScreenshotCaptureSupport.ps1 must own the AttachThreadInput foreground transfer used by the Word chrome capture."
 }
 $setupGuardOffset = $captureSource.IndexOf(
     'Set-WordForegroundWindow $windowHandle $wordProcessId $expectedTitle "Word chrome capture setup"',

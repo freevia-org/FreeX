@@ -74,7 +74,7 @@ function Find-UniqueInput {
 function Write-Sha256 {
     param([string]$Path)
     $name = Split-Path -Leaf $Path
-    $hash = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+    $hash = (Get-ToolFileSha256 -Path $Path)
     "$hash  $name" | Set-Content -LiteralPath "$Path.sha256" -NoNewline -Encoding ascii
 }
 

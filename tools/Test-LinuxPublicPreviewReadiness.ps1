@@ -98,7 +98,7 @@ foreach ($runtime in $Runtimes) {
 
         if ((Test-Path -LiteralPath $tarballPath) -and (Test-Path -LiteralPath $checksumPath)) {
             $expectedHash = ((Get-Content -LiteralPath $checksumPath -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
-            $actualHash = (Get-FileHash -LiteralPath $tarballPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            $actualHash = (Get-ToolFileSha256 -Path $tarballPath)
             Assert-True ($expectedHash -eq $actualHash) "[$runtime] tarball checksum does not match recomputed SHA-256."
             Assert-True ($evidence["tarball_sha256"] -eq $actualHash) "[$runtime] evidence tarball_sha256 does not match the tarball."
             $tarballSha256 = $actualHash
