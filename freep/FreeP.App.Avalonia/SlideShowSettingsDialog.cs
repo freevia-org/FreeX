@@ -39,66 +39,42 @@ internal sealed partial class SlideShowSettingsDialog : FreePDialogWindow
         Title = surface.Title;
         AutomationProperties.SetName(this, surface.AccessibleName);
         AutomationProperties.SetAutomationId(this, surface.AutomationId);
-        Width = 345.3333333333333;
+        Width = SlideShowSettingsDialogVisualMetrics.AvaloniaWindowWidth;
         Height = 240;
         CanResize = false;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
-        _useTimingsCheck = new CheckBox
+        var checks = new Dictionary<SlideShowSettingsDialogField, CheckBox>();
+        foreach (var toggle in SlideShowSettingsDialogSession.ToggleFields)
         {
-            Content = surface.Field(SlideShowSettingsDialogField.UseTimings).Label,
-            IsChecked = initial.UseSlideTimings,
-        };
-        _showAnimationCheck = new CheckBox
-        {
-            Content = surface.Field(SlideShowSettingsDialogField.ShowWithoutAnimation).Label,
-            IsChecked = initial.ShowWithoutAnimation,
-        };
-        _showNarrationCheck = new CheckBox
-        {
-            Content = surface.Field(SlideShowSettingsDialogField.PlayNarration).Label,
-            IsChecked = initial.ShowWithNarration,
-        };
-        _showMediaControlsCheck = new CheckBox
-        {
-            Content = surface.Field(SlideShowSettingsDialogField.ShowMediaControls).Label,
-            IsChecked = initial.ShowMediaControls,
-        };
-        _showMasterShapesCheck = new CheckBox
-        {
-            Content = surface.Field(SlideShowSettingsDialogField.ShowMasterGraphics).Label,
-            IsChecked = initial.ShowMasterShapes,
-        };
-        _loopCheck = new CheckBox
-        {
-            Content = surface.Field(SlideShowSettingsDialogField.LoopUntilStopped).Label,
-            IsChecked = initial.LoopUntilStopped,
-        };
+            var check = new CheckBox
+            {
+                Content = surface.Field(toggle.Field).Label,
+                IsChecked = toggle.Initial(initial),
+            };
+            PresentationDialogControlAdapter.ApplySemantic(check, surface.Field(toggle.Field));
+            checks[toggle.Field] = check;
+        }
+
+        _useTimingsCheck = checks[SlideShowSettingsDialogField.UseTimings];
+        _showAnimationCheck = checks[SlideShowSettingsDialogField.ShowWithoutAnimation];
+        _showNarrationCheck = checks[SlideShowSettingsDialogField.PlayNarration];
+        _showMediaControlsCheck = checks[SlideShowSettingsDialogField.ShowMediaControls];
+        _showMasterShapesCheck = checks[SlideShowSettingsDialogField.ShowMasterGraphics];
+        _loopCheck = checks[SlideShowSettingsDialogField.LoopUntilStopped];
+        _showScrollbarCheck = checks[SlideShowSettingsDialogField.ShowBrowseScrollbar];
         _showTypeCombo = new ComboBox
         {
             ItemsSource = SlideShowSettingsDialogSession.ShowTypeOptions,
             SelectedIndex = initial.ShowTypeIndex,
-        };
-        _showScrollbarCheck = new CheckBox
-        {
-            Content = surface.Field(SlideShowSettingsDialogField.ShowBrowseScrollbar).Label,
-            IsChecked = initial.ShowBrowseScrollbar,
         };
         _kioskRestartText = new TextBox
         {
             Text = initial.KioskRestartMilliseconds,
             MinWidth = 76,
         };
-
-        PresentationDialogControlAdapter.ApplySemantic(_useTimingsCheck, surface.Field(SlideShowSettingsDialogField.UseTimings));
-        PresentationDialogControlAdapter.ApplySemantic(_showAnimationCheck, surface.Field(SlideShowSettingsDialogField.ShowWithoutAnimation));
-        PresentationDialogControlAdapter.ApplySemantic(_showNarrationCheck, surface.Field(SlideShowSettingsDialogField.PlayNarration));
-        PresentationDialogControlAdapter.ApplySemantic(_showMediaControlsCheck, surface.Field(SlideShowSettingsDialogField.ShowMediaControls));
-        PresentationDialogControlAdapter.ApplySemantic(_showMasterShapesCheck, surface.Field(SlideShowSettingsDialogField.ShowMasterGraphics));
-        PresentationDialogControlAdapter.ApplySemantic(_loopCheck, surface.Field(SlideShowSettingsDialogField.LoopUntilStopped));
         PresentationDialogControlAdapter.ApplySemantic(_showTypeCombo, surface.Field(SlideShowSettingsDialogField.ShowType));
-        PresentationDialogControlAdapter.ApplySemantic(_showScrollbarCheck, surface.Field(SlideShowSettingsDialogField.ShowBrowseScrollbar));
         PresentationDialogControlAdapter.ApplySemantic(_kioskRestartText, surface.Field(SlideShowSettingsDialogField.KioskRestartMilliseconds));
 
         _formSession = new(
@@ -196,11 +172,10 @@ internal sealed partial class SlideShowSettingsDialog : FreePDialogWindow
 
     private void SyncLoopCheckForShowType()
     {
-        var isKiosk = _showTypeCombo.SelectedItem is SlideShowSettingsShowTypeOption option
-            && option.ShowType == PresentationShowType.BrowsedAtKiosk;
-        if (isKiosk)
+        var loop = SlideShowSettingsDialogSession.ResolveLoopState(
+            (_showTypeCombo.SelectedItem as SlideShowSettingsShowTypeOption)?.ShowType);
+        if (loop.ForceChecked)
             _loopCheck.IsChecked = true;
-        _loopCheck.IsEnabled = !isKiosk;
+        _loopCheck.IsEnabled = loop.IsEnabled;
     }
-
 }
