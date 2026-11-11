@@ -467,13 +467,17 @@ public sealed class ChartRenderCommandPlannerTests
             source.Should().Contain("ChartMarkerRenderPrimitiveDispatcher.Dispatch(");
             source.Should().Contain("IChartMarkerRenderPrimitiveSink");
             source.Should().Contain("ChartMarkerRenderPrimitive.Ellipse");
-            source.Should().Contain("ToMarkerGeometry(path.Geometry)");
-            source.Should().Contain("private static StreamGeometry ToMarkerGeometry(");
             source.Should().NotContain("switch (marker.Symbol)");
             source.Should().NotContain("ChartMarkerPrimitiveSymbol");
             source.Should().NotContain("MarkerPolygonGeometry");
             source.Should().NotContain("private static ChartPathPrimitive OffsetPath(");
         }
+        wpfCanvas.Should().Contain("ToMarkerGeometry(path.Geometry)");
+        wpfCanvas.Should().Contain("private static StreamGeometry ToMarkerGeometry(");
+        // The Avalonia canvas draws marker paths through the one ChartPathPrimitive converter;
+        // a byte-identical ToMarkerGeometry twin must not come back.
+        avaloniaCanvas.Should().Contain("ToGeometry(path.Geometry)");
+        avaloniaCanvas.Should().NotContain("ToMarkerGeometry(");
         dispatcher.Should().Contain("foreach (var primitive in primitives)");
         dispatcher.Should().Contain("switch (primitive)");
         dispatcher.Should().Contain("case ChartMarkerRenderPrimitive.Ellipse value: sink.Render(value); break;");

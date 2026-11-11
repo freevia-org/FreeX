@@ -6371,18 +6371,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             : fillBlock;
     }
 
-    // Maps DrawingShapeOutlineDash → dash arrays compatible with Avalonia StrokeDashArray.
-    // Arrays are dash/gap lengths in units of stroke thickness, matching WPF DashStyles.
-    private static double[]? GetShapeOutlineDashArray(DrawingShapeOutlineDash dash) => dash switch
-    {
-        DrawingShapeOutlineDash.Dash or DrawingShapeOutlineDash.LongDash
-            or DrawingShapeOutlineDash.SystemDash                       => [2, 2],
-        DrawingShapeOutlineDash.Dot or DrawingShapeOutlineDash.SystemDot => [1, 2],
-        DrawingShapeOutlineDash.DashDot or DrawingShapeOutlineDash.SystemDashDot => [2, 2, 1, 2],
-        DrawingShapeOutlineDash.LongDashDot                             => [2, 2, 1, 2],
-        DrawingShapeOutlineDash.LongDashDotDot                          => [2, 2, 1, 2, 1, 2],
-        _                                                               => null,
-    };
+    // Dash/gap lengths (in stroke thicknesses) come from the shared DrawingML preset table, the same
+    // one the WPF grid and FreeP renderers read; Avalonia StrokeDashArray uses the same unit.
+    private static double[]? GetShapeOutlineDashArray(DrawingShapeOutlineDash dash) =>
+        DrawingMlPresetDashPattern.ToArray(dash.ToPresetDash());
 
     // Non-ellipse shapes: render the true preset outline via the geometry factory when available,
     // falling back to a plain rectangle for kinds the factory does not cover.

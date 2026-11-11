@@ -426,7 +426,8 @@ public sealed class SlideCanvasTests
             .BeOfType<System.Windows.Media.SolidColorBrush>()
             .Subject;
         brush.Color.Should().Be(System.Windows.Media.Color.FromArgb(0x7F, 0x12, 0x34, 0x56));
-        pen.DashStyle.Should().Be(System.Windows.Media.DashStyles.DashDot);
+        // ECMA-376 prstDash dashDot is 4 on, 3 off, 1 on, 3 off (not the WPF built-in 2,2,0,2).
+        pen.DashStyle.Dashes.Should().Equal(4.0, 3.0, 1.0, 3.0);
         pen.IsFrozen.Should().BeTrue();
     }
 

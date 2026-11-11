@@ -1005,19 +1005,12 @@ public sealed partial class SlideCanvas : Control
             DashStyle = MapDashStyleAvalonia(stroke.Dash)
         };
 
-    private static IDashStyle? MapDashStyleAvalonia(OutlineDash dash) => dash switch
-    {
-        OutlineDash.Dash           => DashStyle.Dash,
-        OutlineDash.Dot            => DashStyle.Dot,
-        OutlineDash.DashDot        => DashStyle.DashDot,
-        OutlineDash.LongDash       => new DashStyle([8.0, 3.0], 0),
-        OutlineDash.LongDashDot    => new DashStyle([8.0, 3.0, 1.0, 3.0], 0),
-        OutlineDash.LongDashDotDot => new DashStyle([8.0, 3.0, 1.0, 3.0, 1.0, 3.0], 0),
-        OutlineDash.SystemDash     => DashStyle.Dash,
-        OutlineDash.SystemDot      => DashStyle.Dot,
-        OutlineDash.SystemDashDot  => DashStyle.DashDot,
-        _                          => null
-    };
+    // Dash/gap lengths (in line widths) come from the shared DrawingML preset table; only the
+    // native DashStyle wrapping lives here.
+    private static IDashStyle? MapDashStyleAvalonia(OutlineDash dash) =>
+        DrawingMlPresetDashPattern.Get(dash.ToPresetDash()) is { } pattern
+            ? new DashStyle(pattern, 0)
+            : null;
 
     private static void DrawChartMarker(DrawingContext dc, ChartMarkerRenderPlan marker) =>
         ChartMarkerRenderPrimitiveDispatcher.Dispatch(
@@ -1045,31 +1038,10 @@ public sealed partial class SlideCanvas : Control
             dc.DrawGeometry(
                 path.Geometry.Fill is { } fill ? ToBrush(fill) : null,
                 path.Stroke is { } stroke ? ToPen(stroke) : null,
-                ToMarkerGeometry(path.Geometry));
+                ToGeometry(path.Geometry));
 
         public void Render(ChartMarkerRenderPrimitive.Line line) =>
             dc.DrawLine(ToPen(line.Stroke), ToPoint(line.Start), ToPoint(line.End));
-    }
-
-    private static StreamGeometry ToMarkerGeometry(ChartPathPrimitive path)
-    {
-        var geometry = new StreamGeometry();
-        using (var ctx = geometry.Open())
-        {
-            for (int pointIndex = 0; pointIndex < path.Points.Count; pointIndex++)
-            {
-                var point = ToPoint(path.Points[pointIndex]);
-                if (pointIndex == 0)
-                    ctx.BeginFigure(point, isFilled: path.Fill.HasValue);
-                else
-                    ctx.LineTo(point);
-            }
-
-            if (path.Points.Count > 0)
-                ctx.EndFigure(isClosed: path.IsClosed);
-        }
-
-        return geometry;
     }
 
     private static StreamGeometry ToGeometry(ChartPathPrimitive path)
@@ -2674,19 +2646,7 @@ public sealed partial class SlideCanvas : Control
             var brush = new SolidColorBrush(Color.FromArgb(vis.Alpha, vis.Color.R, vis.Color.G, vis.Color.B));
             return new Pen(brush, vis.WidthDip)
             {
-                DashStyle = vis.Dash switch
-                {
-                    OutlineDash.Dash           => DashStyle.Dash,
-                    OutlineDash.Dot            => DashStyle.Dot,
-                    OutlineDash.DashDot        => DashStyle.DashDot,
-                    OutlineDash.LongDash       => new DashStyle([8.0, 3.0], 0),
-                    OutlineDash.LongDashDot    => new DashStyle([8.0, 3.0, 1.0, 3.0], 0),
-                    OutlineDash.LongDashDotDot => new DashStyle([8.0, 3.0, 1.0, 3.0, 1.0, 3.0], 0),
-                    OutlineDash.SystemDash     => DashStyle.Dash,
-                    OutlineDash.SystemDot      => DashStyle.Dot,
-                    OutlineDash.SystemDashDot  => DashStyle.DashDot,
-                    _                          => null
-                }
+                DashStyle = MapDashStyleAvalonia(vis.Dash)
             };
         }
 
@@ -2698,19 +2658,7 @@ public sealed partial class SlideCanvas : Control
                 : MakeLinearGradientBrush(grad.Fill);
             return new Pen(gradBrush, grad.WidthDip)
             {
-                DashStyle = grad.Dash switch
-                {
-                    OutlineDash.Dash           => DashStyle.Dash,
-                    OutlineDash.Dot            => DashStyle.Dot,
-                    OutlineDash.DashDot        => DashStyle.DashDot,
-                    OutlineDash.LongDash       => new DashStyle([8.0, 3.0], 0),
-                    OutlineDash.LongDashDot    => new DashStyle([8.0, 3.0, 1.0, 3.0], 0),
-                    OutlineDash.LongDashDotDot => new DashStyle([8.0, 3.0, 1.0, 3.0, 1.0, 3.0], 0),
-                    OutlineDash.SystemDash     => DashStyle.Dash,
-                    OutlineDash.SystemDot      => DashStyle.Dot,
-                    OutlineDash.SystemDashDot  => DashStyle.DashDot,
-                    _                          => null
-                }
+                DashStyle = MapDashStyleAvalonia(grad.Dash)
             };
         }
 
@@ -2719,19 +2667,7 @@ public sealed partial class SlideCanvas : Control
             IBrush patternBrush = MakePatternBrush(pattern.Fill);
             return new Pen(patternBrush, pattern.WidthDip)
             {
-                DashStyle = pattern.Dash switch
-                {
-                    OutlineDash.Dash           => DashStyle.Dash,
-                    OutlineDash.Dot            => DashStyle.Dot,
-                    OutlineDash.DashDot        => DashStyle.DashDot,
-                    OutlineDash.LongDash       => new DashStyle([8.0, 3.0], 0),
-                    OutlineDash.LongDashDot    => new DashStyle([8.0, 3.0, 1.0, 3.0], 0),
-                    OutlineDash.LongDashDotDot => new DashStyle([8.0, 3.0, 1.0, 3.0, 1.0, 3.0], 0),
-                    OutlineDash.SystemDash     => DashStyle.Dash,
-                    OutlineDash.SystemDot      => DashStyle.Dot,
-                    OutlineDash.SystemDashDot  => DashStyle.DashDot,
-                    _                          => null
-                }
+                DashStyle = MapDashStyleAvalonia(pattern.Dash)
             };
         }
 

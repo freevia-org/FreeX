@@ -2711,19 +2711,12 @@ public sealed partial class SlideCanvas : FrameworkElement
         return null;
     }
 
-    private static DashStyle MapDashStyleWpf(OutlineDash dash) => dash switch
-    {
-        OutlineDash.Dash           => DashStyles.Dash,
-        OutlineDash.Dot            => DashStyles.Dot,
-        OutlineDash.DashDot        => DashStyles.DashDot,
-        OutlineDash.LongDash       => new DashStyle(new[] { 8.0, 3.0 }, 0),
-        OutlineDash.LongDashDot    => new DashStyle(new[] { 8.0, 3.0, 1.0, 3.0 }, 0),
-        OutlineDash.LongDashDotDot => new DashStyle(new[] { 8.0, 3.0, 1.0, 3.0, 1.0, 3.0 }, 0),
-        OutlineDash.SystemDash     => DashStyles.Dash,
-        OutlineDash.SystemDot      => DashStyles.Dot,
-        OutlineDash.SystemDashDot  => DashStyles.DashDot,
-        _                          => DashStyles.Solid
-    };
+    // Dash/gap lengths (in line widths) come from the shared DrawingML preset table; only the
+    // native DashStyle wrapping lives here.
+    private static DashStyle MapDashStyleWpf(OutlineDash dash) =>
+        DrawingMlPresetDashPattern.Get(dash.ToPresetDash()) is { } pattern
+            ? new DashStyle(pattern, 0)
+            : DashStyles.Solid;
 
     private static T FreezeBrush<T>(T brush) where T : Brush
     {
@@ -2733,46 +2726,10 @@ public sealed partial class SlideCanvas : FrameworkElement
 
     // ── ShapeGeometry → WPF StreamGeometry ─────────────────────────────────────
 
-    private static System.Windows.Media.Geometry ContourListToGeometry(ShapeGeometry shape)
-    {
-        var geometry = new StreamGeometry();
-        using (var ctx = geometry.Open())
-        {
-            foreach (var contour in shape.Contours)
-                AppendContour(ctx, contour);
-        }
-
-        if (geometry.CanFreeze) geometry.Freeze();
-        return geometry;
-    }
-
-    private static void AppendContour(StreamGeometryContext ctx, ShapeContour contour)
-    {
-        ctx.BeginFigure(ToPoint(contour.Start), contour.Filled, contour.Closed);
-        foreach (var seg in contour.Segments)
-        {
-            switch (seg.Kind)
-            {
-                case ShapeSegmentKind.Line:
-                    ctx.LineTo(ToPoint(seg.End), isStroked: true, isSmoothJoin: false);
-                    break;
-                case ShapeSegmentKind.CubicBezier:
-                    ctx.BezierTo(ToPoint(seg.Control1), ToPoint(seg.Control2), ToPoint(seg.End),
-                                 isStroked: true, isSmoothJoin: false);
-                    break;
-                case ShapeSegmentKind.Arc:
-                    ctx.ArcTo(
-                        ToPoint(seg.End),
-                        new Size(seg.RadiusX, seg.RadiusY),
-                        rotationAngle: 0,
-                        seg.LargeArc,
-                        seg.SweepClockwise ? SweepDirection.Clockwise : SweepDirection.Counterclockwise,
-                        isStroked: true,
-                        isSmoothJoin: false);
-                    break;
-            }
-        }
-    }
+    // Even-odd is kept deliberately: slide geometry includes imported custGeom paths whose holes
+    // may be same-direction subpaths, which Nonzero would fill. See WpfShapeGeometryAdapter.
+    private static System.Windows.Media.Geometry ContourListToGeometry(ShapeGeometry shape) =>
+        Free.Shared.Drawing.Wpf.WpfShapeGeometryAdapter.ToGeometry(shape, FillRule.EvenOdd);
 
     private static ChartPlanRect ToPlanRect(LayoutRect rect) =>
         new(rect.X, rect.Y, rect.Width, rect.Height);
