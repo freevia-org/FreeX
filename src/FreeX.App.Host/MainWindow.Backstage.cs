@@ -314,9 +314,30 @@ public partial class MainWindow
         if (!TryResolveBackstagePrintPaginator(_backstagePrintPreviewDocument, settings, out var paginator))
             return;
 
-        // A missing saved queue falls through to null so the native dialog uses Windows' default.
-        var printQueue = Free.Shared.Shell.Wpf.WpfPrintQueueCatalog.Resolve(settings.PrinterName);
+        // The pane shows the Windows default printer until the user picks another one.
+        var printQueue = Free.Shared.Shell.Wpf.WpfPrintQueueCatalog.Resolve(settings.PrinterName)
+            ?? (string.IsNullOrWhiteSpace(settings.PrinterName)
+                ? Free.Shared.Shell.Wpf.WpfPrintQueueCatalog.Discover().DefaultQueue
+                : null);
 
+        // Excel's Print button prints immediately with the pane's settings and returns to the workbook.
+        if (printQueue is not null)
+        {
+            if (NativePrintDialogService.PrintDirect(
+                    paginator,
+                    printQueue,
+                    PrintSettingsPlanner.ClampCopies(settings.Copies),
+                    settings.Collated,
+                    settings.Sides,
+                    this))
+            {
+                HideStartScreen();
+            }
+
+            return;
+        }
+
+        // No usable printer queue: fall back to the system dialog so the user can pick or add one.
         NativePrintDialogService.ShowPrintDialogAndPrint(
             paginator,
             printQueue,

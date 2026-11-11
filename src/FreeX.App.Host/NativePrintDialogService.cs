@@ -90,6 +90,44 @@ internal static class NativePrintDialogService
         }
     }
 
+    /// <summary>
+    /// Sends the job straight to <paramref name="printQueue"/> with the settings chosen in the Print
+    /// pane, as Excel's File &gt; Print button does -- no second system dialog in between.
+    /// </summary>
+    public static bool PrintDirect(
+        DocumentPaginator paginator,
+        PrintQueue printQueue,
+        int copies,
+        bool collated,
+        PrintPreviewSidesMode sidesMode,
+        Window? owner = null)
+    {
+        try
+        {
+            var directPrinter = new PrintDialog { PrintQueue = printQueue };
+            if (NativePrinterDeviceSettings.TryCreateSessionPrintTicket(printQueue.FullName) is { } sessionTicket)
+                directPrinter.PrintTicket = sessionTicket;
+
+            if (directPrinter.PrintTicket is not null)
+            {
+                NativePrinterDeviceSettings.ApplyPageGeometry(
+                    directPrinter.PrintTicket,
+                    ResolveFirstPageSize(paginator));
+                directPrinter.PrintTicket.CopyCount = Math.Clamp(copies, 1, 999);
+                directPrinter.PrintTicket.Collation = collated ? Collation.Collated : Collation.Uncollated;
+                directPrinter.PrintTicket.Duplexing = PrintPreviewDialog.ResolvePrintTicketDuplexing(sidesMode);
+            }
+
+            directPrinter.PrintDocument(paginator, "FreeX worksheet");
+            return true;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            ShowPrintFailedMessage(ex, owner);
+            return false;
+        }
+    }
+
     private static void ShowPrintFailedMessage(Exception ex, Window? owner)
     {
         var presentation = PageLayoutMessagePresentationCatalog

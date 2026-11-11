@@ -122,6 +122,26 @@ internal static class NativePrinterDeviceSettings
     }
 
     /// <summary>
+    /// The print ticket for the settings remembered for <paramref name="printerName"/> this session,
+    /// or <see langword="null"/> when the user has not changed that printer's properties.
+    /// </summary>
+    public static PrintTicket? TryCreateSessionPrintTicket(string printerName)
+    {
+        if (string.IsNullOrWhiteSpace(printerName) || !SessionDevModes.TryGetValue(printerName, out var devModeBytes))
+            return null;
+
+        try
+        {
+            using var converter = new PrintTicketConverter(printerName, PrintTicketConverter.MaxPrintSchemaVersion);
+            return converter.ConvertDevModeToPrintTicket(devModeBytes);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Converts the device settings carried by <paramref name="settings"/> (including anything chosen
     /// in the native print dialog's Preferences) into a WPF print ticket, or <see langword="null"/>
     /// when the driver cannot convert them.
