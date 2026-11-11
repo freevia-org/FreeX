@@ -157,9 +157,12 @@ public class DocumentStoriesTests
             new StoryParagraphAddress(DocumentStoryKind.Footnote, 40),
             _ => called = true);
 
+        command.HasEffect(context).Should().BeFalse("the bus must not push an undo entry for it");
         command.Apply(context);
         command.Revert(context);
 
         called.Should().BeFalse();
+        new EditStoryParagraphCommand(new StoryParagraphAddress(DocumentStoryKind.Footnote, 0), _ => { })
+            .HasEffect(context).Should().BeTrue();
     }
 }

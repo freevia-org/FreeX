@@ -255,6 +255,14 @@ public sealed class EditStoryParagraphCommand(
             ? DocumentCommandMutationKind.Comment
             : DocumentCommandMutationKind.BodyText;
 
+    /// <summary>
+    /// The edit itself is opaque, but an address that no longer resolves (the story was deleted
+    /// since the edit was planned) certainly changes nothing, so the bus must not push an undo
+    /// entry -- and clear redo -- for it.
+    /// </summary>
+    public bool HasEffect(IDocumentCommandContext context) =>
+        DocumentStories.Resolve(context.Document, address) is not null;
+
     public void Apply(IDocumentCommandContext context)
     {
         _previousRuns = null;
