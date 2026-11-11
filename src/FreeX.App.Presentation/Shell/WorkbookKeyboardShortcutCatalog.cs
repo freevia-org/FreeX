@@ -112,7 +112,6 @@ public enum KeyboardCommandShortcut
     MinimizeWorkbookWindow,
     MaximizeOrRestoreWorkbookWindow,
     OpenContextMenu,
-    EditInFormulaBar,
     InsertWorksheet,
     ZoomIn,
     ZoomOut,
@@ -259,7 +258,6 @@ public static class WorkbookKeyboardShortcutCatalog
         C(KeyboardCommandShortcut.OpenFormatCellsFont, WorkbookShortcutKey.P, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
         C(KeyboardCommandShortcut.NewNote, WorkbookShortcutKey.F2, WorkbookShortcutModifiers.Shift),
         C(KeyboardCommandShortcut.NewThreadedComment, WorkbookShortcutKey.F2, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-        C(KeyboardCommandShortcut.EditInFormulaBar, WorkbookShortcutKey.F2, WorkbookShortcutModifiers.Control),
         C(KeyboardCommandShortcut.ZoomIn, WorkbookShortcutKey.OemPlus, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Alt),
         C(KeyboardCommandShortcut.ZoomOut, WorkbookShortcutKey.OemMinus, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Alt),
         C(KeyboardCommandShortcut.CopyFormulaFromAbove, WorkbookShortcutKey.OemQuotes, WorkbookShortcutModifiers.Control),
@@ -297,6 +295,8 @@ public static class WorkbookKeyboardShortcutCatalog
             new WorkbookShortcutChord(WorkbookShortcutKey.P, WorkbookShortcutModifiers.Control),
             new WorkbookShortcutChord(WorkbookShortcutKey.P, WorkbookShortcutModifiers.Meta)),
         new(WorkbookShortcutRoute.PrintWorkbook, new WorkbookShortcutChord(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift)),
+        // Excel: Ctrl+F2 displays the print preview area on the Print tab in the Backstage view.
+        new(WorkbookShortcutRoute.PrintWorkbook, new WorkbookShortcutChord(WorkbookShortcutKey.F2, WorkbookShortcutModifiers.Control)),
         new(
             WorkbookShortcutRoute.Copy,
             new WorkbookShortcutChord(WorkbookShortcutKey.C, WorkbookShortcutModifiers.Control),

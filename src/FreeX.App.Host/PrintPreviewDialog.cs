@@ -23,7 +23,8 @@ public sealed partial class PrintPreviewDialog : Window
         SheetId sheetId = default,
         Sheet? sheet = null,
         Action<IWorkbookCommand>? executeCommand = null,
-        string? fixturePrinterName = null)
+        string? fixturePrinterName = null,
+        bool hasSelection = false)
     {
         InitializePrintPreviewLayout(
             workbookName,
@@ -36,6 +37,7 @@ public sealed partial class PrintPreviewDialog : Window
             sheetId,
             sheet,
             executeCommand,
-            fixturePrinterName);
+            fixturePrinterName,
+            hasSelection);
     }
 }

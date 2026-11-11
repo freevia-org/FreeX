@@ -123,9 +123,10 @@ public sealed class AvaloniaMainWindowKeyboardParityTests
             await Press(window, Key.OemMinus, KeyModifiers.Control | KeyModifiers.Alt);
             window.Session.ZoomPercent.Should().Be(zoom);
 
+            // Ctrl+F2 is Excel's Print Preview shortcut, so it must not start a formula-bar edit.
             window.Session.SelectCell(formulaAddress);
             await Press(window, Key.F2, KeyModifiers.Control);
-            window.Session.FormulaEditAddress.Should().Be(formulaAddress);
+            window.Session.FormulaEditAddress.Should().BeNull();
         });
     }
 

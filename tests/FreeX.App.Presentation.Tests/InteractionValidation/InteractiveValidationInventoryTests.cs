@@ -9,7 +9,7 @@ public sealed class InteractiveValidationInventoryTests
     [Fact]
     public void KeyboardShortcuts_ContainTheDocumentedLogicalScenariosByArea()
     {
-        InteractiveValidationInventory.KeyboardShortcuts.Should().HaveCount(94);
+        InteractiveValidationInventory.KeyboardShortcuts.Should().HaveCount(93);
         InteractiveValidationInventory.KeyboardShortcuts.Sum(scenario => scenario.Interactions.Count)
             .Should().Be(278);
         InteractiveValidationInventory.KeyboardShortcuts
@@ -24,7 +24,7 @@ public sealed class InteractiveValidationInventoryTests
                 ["Clipboard"] = 4,
                 ["Data"] = 4,
                 ["Edit"] = 2,
-                ["Editing"] = 13,
+                ["Editing"] = 12,
                 ["File"] = 5,
                 ["Find"] = 2,
                 ["Formatting"] = 8,
