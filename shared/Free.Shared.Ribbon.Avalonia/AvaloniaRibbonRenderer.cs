@@ -258,6 +258,11 @@ public static class AvaloniaRibbonRenderer
         internal IBrush TabTextBrush { get; }
         internal FuncControlTemplate<CheckBox> CheckBoxTemplate { get; }
     }
+    // macOS visual-parity switch. Every adjustment gated on this flag corrects a divergence between
+    // the Avalonia ribbon on macOS and the Windows reference chrome (clamped tab headers, the tab
+    // strip band stopping after the last tab, the editable combo clipping its text, row pitch).
+    // Windows and Linux rendering are intentionally left untouched.
+    private static readonly bool MacOsChromeParity = OperatingSystem.IsMacOS();
     private static readonly FontFamily RibbonFontFamily =
         new("Segoe UI, Arial, Liberation Sans, Noto Sans, DejaVu Sans, Helvetica, sans-serif");
     private static readonly FuncControlTemplate<Button> RibbonButtonTemplate = new((button, _) =>
@@ -626,7 +631,9 @@ public static class AvaloniaRibbonRenderer
             },
             Height = RibbonTabChromeMetrics.HeaderHeight,
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            MinWidth = 42,
+            // Windows sizes each tab to its label plus the shared horizontal padding; the 42px floor
+            // makes short tabs (File, Data, View, Help) wider than the Windows strip.
+            MinWidth = MacOsChromeParity ? 0 : 42,
             Margin = new Thickness(0, 0, RibbonTabChromeMetrics.InterTabGap, 0),
         };
         AddHeaderChild(grid, new TextBlock
@@ -745,6 +752,17 @@ public static class AvaloniaRibbonRenderer
             BorderBrush = Brushes.Transparent,
             BorderThickness = new Thickness(0),
         };
+        if (MacOsChromeParity)
+        {
+            // Windows paints the tab strip as a full-width band; Fluent's TabControl only shows the
+            // strip colour behind the tab items themselves, so the band stopped after the last tab.
+            // Paint the items panel (it stretches across the whole strip row) with the strip brush.
+            var tabStripBrush = resolvedPalette.TabStripBrush;
+            tabControl.ItemsPanel = new FuncTemplate<Panel?>(() => new WrapPanel { Background = tabStripBrush });
+            // Windows closes the ribbon with a 1px rule above the formula bar.
+            tabControl.BorderBrush = resolvedPalette.DividerBrush;
+            tabControl.BorderThickness = new Thickness(0, 0, 0, 1);
+        }
         ApplyRibbonTheme(tabControl, resolvedPalette);
         tabControl.Items.Add(BuildFileTabItem(resolvedPalette));
 
@@ -1400,6 +1418,15 @@ public static class AvaloniaRibbonRenderer
             },
         };
 
+        if (MacOsChromeParity)
+        {
+            // The application-level compact dialog styles cap every TabItem at the 24px dialog tab
+            // height (MaxHeight). Without a nearer MaxHeight the ribbon tab is clamped to 24px while
+            // its header is 28px, which clips the accent underline to a hairline and pushes the
+            // labels off-centre. Pin the ribbon's own maximum to the shared header height.
+            tabBase.Setters.Add(new Setter(Layoutable.MaxHeightProperty, RibbonTabChromeMetrics.HeaderHeight));
+        }
+
         var tabHover = new Style(x => x.OfType<TabItem>().Class(":pointerover"))
         {
             Setters =
@@ -1803,14 +1830,15 @@ public static class AvaloniaRibbonRenderer
         AvaloniaRibbonPalette palette)
     {
         var rows = new StackPanel { Orientation = Orientation.Vertical, VerticalAlignment = VerticalAlignment.Top };
-        var current = NewRow(isFirst: true);
+        var rowCount = controls.Count(c => c is RibbonRowBreak) + 1;
+        var current = NewRow(isFirst: true, rowCount);
 
         foreach (var control in controls)
         {
             if (control is RibbonRowBreak)
             {
                 rows.Children.Add(current);
-                current = NewRow(isFirst: false);
+                current = NewRow(isFirst: false, rowCount);
                 continue;
             }
 
@@ -1826,6 +1854,25 @@ public static class AvaloniaRibbonRenderer
         Orientation = Orientation.Horizontal,
         Margin = new Thickness(0, isFirst ? 0 : 2, 0, 0),
     };
+
+    // Windows distributes a group's rows over the full content height (28px pitch for two rows, 25px
+    // for three) instead of packing them against the top at a 24px pitch. Both forms stay inside the
+    // 76px hero-button height, so the ribbon height does not change.
+    private static StackPanel NewRow(bool isFirst, int rowCount)
+    {
+        var row = NewRow(isFirst);
+        if (!MacOsChromeParity)
+            return row;
+
+        var (firstTop, gap) = rowCount switch
+        {
+            2 => (3d, 6d),
+            3 => (1d, 3d),
+            _ => (0d, 2d),
+        };
+        row.Margin = new Thickness(0, isFirst ? firstTop : gap, 0, 0);
+        return row;
+    }
 
     // Groups without explicit rows pack medium/small/combo controls into columns. Individual groups
     // may opt into a denser two-row Office layout without changing the default ribbon vocabulary.
@@ -1870,7 +1917,7 @@ public static class AvaloniaRibbonRenderer
                     var isCombo = control is RibbonComboBox;
                     if (column is not null && columnIsCombo != isCombo)
                         Flush();
-                    column ??= NewColumn();
+                    column ??= NewColumn(maximumRowsPerColumn);
                     columnIsCombo = isCombo;
                     column.Children.Add(BuildInlineControl(control, registry, afterExecute, palette));
                     if (column.Children.Count >= maximumRowsPerColumn)
@@ -1888,6 +1935,27 @@ public static class AvaloniaRibbonRenderer
         VerticalAlignment = VerticalAlignment.Top,
         Margin = new Thickness(1, 1, 1, 0),
     };
+
+    // Same Windows row pitch as NewRow(isFirst, rowCount) for auto-packed columns.
+    private static StackPanel NewColumn(int maximumRowsPerColumn)
+    {
+        var column = NewColumn();
+        if (!MacOsChromeParity)
+            return column;
+
+        switch (maximumRowsPerColumn)
+        {
+            case 2:
+                column.Margin = new Thickness(1, 3, 1, 0);
+                column.Spacing = 6;
+                break;
+            case 3:
+                column.Spacing = 3;
+                break;
+        }
+
+        return column;
+    }
 
     // Dispatches a single non-large control to its WPF-matching form: combo, checkbox, icon-only (Small),
     // or icon+label (Medium / default).
@@ -2244,6 +2312,8 @@ public static class AvaloniaRibbonRenderer
             ClipToBounds = false,
             Tag = combo.CommandId.Value,
         };
+        if (MacOsChromeParity)
+            box.TemplateApplied += (_, args) => CompactEditableComboParts(box, args.NameScope);
         if (combo.Choices.Count > 0)
         {
             box.DisplayMemberBinding = new Binding(nameof(RibbonComboBoxChoice.Label));
@@ -2354,6 +2424,44 @@ public static class AvaloniaRibbonRenderer
 
         ApplyEnablement(box, combo, registry, palette);
         return box;
+    }
+
+    /// <summary>
+    /// Fits Fluent's editable ComboBox parts into the 22px ribbon row. The stock template hosts a
+    /// TextBox with a 32px minimum height, top-aligned 14px text and a 32px glyph column: inside a
+    /// 22px combo the text is pushed above the field and clipped (the font name), and a narrow combo
+    /// has no room left for its text at all (the font size). Local values set here take precedence
+    /// over the template bindings without replacing the template, so selection, editing, popup and
+    /// automation behaviour are unchanged.
+    /// </summary>
+    private static void CompactEditableComboParts(ComboBox box, INameScope nameScope)
+    {
+        const double glyphColumnWidth = 16;
+
+        if (nameScope.Find<TextBox>("PART_EditableTextBox") is { } editor)
+        {
+            editor.MinHeight = 0;
+            editor.MinWidth = 0;
+            editor.FontSize = box.FontSize;
+            editor.FontFamily = box.FontFamily;
+            editor.Padding = new Thickness(5, 0, 2, 0);
+            editor.VerticalAlignment = VerticalAlignment.Center;
+            editor.VerticalContentAlignment = VerticalAlignment.Center;
+
+            var partsGrid = editor.Parent as Grid ?? editor.GetVisualParent() as Grid;
+            if (partsGrid is { ColumnDefinitions.Count: > 1 })
+                partsGrid.ColumnDefinitions[1].Width = new GridLength(glyphColumnWidth);
+        }
+
+        if (nameScope.Find<PathIcon>("DropDownGlyph") is { } glyph)
+        {
+            glyph.Width = 8;
+            glyph.Height = 8;
+            glyph.Margin = new Thickness(0, 0, 4, 0);
+        }
+
+        if (nameScope.Find<Border>("DropDownOverlay") is { } overlay)
+            overlay.Width = glyphColumnWidth - 2;
     }
 
     private static Control NewIcon(RibbonControl control, double size, HorizontalAlignment h)
@@ -3116,11 +3224,11 @@ public static class AvaloniaRibbonRenderer
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            stack.Children.Add(AvaloniaRibbonIcons.Build(
+            var collapsedIcon = AvaloniaRibbonIcons.Build(
                 representativeIcon.Icon.Kind,
-                34,
-                representativeIcon.CommandName ?? _group.Header));
-            stack.Children.Add(new TextBlock
+                MacOsChromeParity ? 22 : 34,
+                representativeIcon.CommandName ?? _group.Header);
+            var collapsedLabel = new TextBlock
             {
                 Text = _group.Header,
                 FontSize = 11,
@@ -3131,8 +3239,24 @@ public static class AvaloniaRibbonRenderer
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Width = 58,
                 Margin = new Thickness(0, 2, 0, 0),
-            });
-            stack.Children.Add(Chevron(new Thickness(0, 2, 0, 0), _palette));
+            };
+            var collapsedChevronMargin = new Thickness(0, 2, 0, 0);
+            if (MacOsChromeParity)
+            {
+                // Windows shows a compact ~20px glyph over a regular 12px near-black caption, with
+                // the caption and chevron spread down the button rather than hugging the icon.
+                collapsedIcon.HorizontalAlignment = HorizontalAlignment.Center;
+                collapsedIcon.Margin = new Thickness(0, 8, 0, 4);
+                collapsedLabel.FontSize = 12;
+                collapsedLabel.FontFamily = RibbonFontFamily;
+                collapsedLabel.Foreground = _palette.TabTextBrush;
+                collapsedLabel.Margin = new Thickness(0, 6, 0, 0);
+                collapsedChevronMargin = new Thickness(0, 4, 0, 0);
+            }
+
+            stack.Children.Add(collapsedIcon);
+            stack.Children.Add(collapsedLabel);
+            stack.Children.Add(Chevron(collapsedChevronMargin, _palette));
 
             var button = new Button
             {

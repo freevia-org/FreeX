@@ -236,6 +236,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private static readonly IBrush FormulaBarControlBorder = Brush(192, 192, 192);
     private static readonly FontFamily FormulaBarFontFamily =
         new("Segoe UI, Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, DejaVu Sans Condensed, Arial, Liberation Sans, sans-serif");
+    // macOS has no Segoe UI but does ship Arial Narrow, so the chain above resolves to a condensed
+    // face there and the name box / formula text render visibly narrower than the Windows formula
+    // bar. The formula bar row uses this regular-width chain on macOS (the same face the ribbon
+    // resolves to), keeping the dialog usages of FormulaBarFontFamily unchanged.
+    private static readonly FontFamily MacOsFormulaBarFontFamily =
+        new("Segoe UI, Arial, Helvetica Neue, Helvetica, sans-serif");
     // Subtotal is a compact WPF data dialog: its inputs and buttons are shorter than the generic
     // 24px compact-dialog family. Keep the shared chrome and only override the measured WPF metrics.
     private static readonly AvaloniaCompactDialogChromeStyle SubtotalDialogChromeStyle =
@@ -296,8 +302,26 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // Status-bar text token — the muted header foreground, applied uniformly to the status / selection-stats
     // / zoom texts so the status bar reads consistently (was scattered inline 73,80,93 magic values).
     // WS-G token: FreeXWhiteBrush (#FFFFFF) — byte-identical to the literal.
+    // The registered StatusForeground token wins so the text always contrasts with the token-driven
+    // StatusSurface background (the default FreeX theme is a light Office footer with dark ink, exactly
+    // like the WPF host's FreeXStatusForegroundBrush). White is only the unthemed fallback, paired with
+    // the hardcoded navy StatusBarSurface fallback.
     private static readonly IBrush StatusBarForeground =
-        AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.WhiteBrush) ?? Brushes.White;
+        AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.StatusForegroundBrush)
+        ?? AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.WhiteBrush) ?? Brushes.White;
+    // Title-bar ink (window title + title-bar QAT glyphs): the TitleBarForeground token paired with the
+    // token-driven TitleBarSurface, mirroring the WPF host's FreeXTitleBarForegroundBrush. White is the
+    // unthemed fallback for the hardcoded navy TitleBarSurface fallback.
+    private static readonly IBrush TitleBarForeground =
+        AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.Brush("TitleBarForeground"))
+        ?? AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.WhiteBrush) ?? Brushes.White;
+    // Checked status-bar view shortcut chrome. Themed: the WPF StatusBarViewToggleButtonStyle pair
+    // (RibbonButtonHover fill + BorderStrong outline) that keeps the StatusForeground glyph readable.
+    // Unthemed fallback: the legacy accent fill for the white-on-navy footer.
+    private static readonly IBrush StatusBarCheckedViewBackground =
+        AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.Brush("RibbonButtonHover")) ?? Brush(15, 109, 140);
+    private static readonly IBrush StatusBarCheckedViewBorder =
+        AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.Brush("BorderStrong")) ?? Brush(10, 87, 112);
 
     // Toolbar/chrome ink tokens — the primary (title text, glyph rules) and secondary (detail text) inks,
     // named so the chrome typography stays consistent instead of repeating inline 25,31,40 / 94,103,116.
@@ -327,6 +351,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // so it stands out from the rest of the selection's flat SelectionHeaderBackground.
     private static readonly IBrush ActiveSelectionHeaderBackground = Brush(151, 181, 135);
     private static readonly IBrush SelectionHeaderForeground = Brush(31, 31, 31);
+    // Windows draws the worksheet row/column headings in a regular-weight face (WPF GridView's
+    // DefaultTypeface). The macOS system font's SemiBold face reads as outright bold at the 11px
+    // heading size, so macOS uses the regular weight to match the Windows headings; the other
+    // desktop targets keep their existing SemiBold rendering.
+    private static readonly FontWeight WorksheetHeaderFontWeight =
+        OperatingSystem.IsMacOS() ? FontWeight.Normal : FontWeight.SemiBold;
     private static readonly IBrush DrawingObjectBoundsFill = Brush(42, 11, 112, 116);
     private static readonly IBrush DrawingObjectBoundsBorder = Brush(11, 112, 116);
     private static readonly IBrush DrawingObjectBoundsForeground = Brush(5, 67, 69);
@@ -1650,7 +1680,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Window: this,
             Body: root,
             TitleBarBackground: TitleBarSurface,
-            TitleBarForeground: StatusBarForeground));
+            TitleBarForeground: TitleBarForeground));
         PopulateQuickAccessToolbar(windowFrame.QatHost, belowRibbonQatHost);
         return windowFrame.Root;
     }
@@ -3414,6 +3444,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _cellAddressText.FontFamily = FormulaBarFontFamily;
         _cellAddressText.FontSize = 13;
         _cellAddressText.FontWeight = FontWeight.SemiBold;
+        if (OperatingSystem.IsMacOS())
+        {
+            // Arial has no semibold face, so SemiBold resolves to full Bold on macOS; the Windows
+            // name box reads as regular-weight text.
+            _cellAddressText.FontFamily = MacOsFormulaBarFontFamily;
+            _cellAddressText.FontWeight = FontWeight.Normal;
+        }
         _cellAddressText.Foreground = Brush(28, 38, 48);
         _cellAddressText.TextAlignment = TextAlignment.Left;
         _cellAddressText.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
@@ -3435,6 +3472,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaBox.Height = collapsedFormulaBarPlan.EditorHeight;
         _formulaBox.MinHeight = collapsedFormulaBarPlan.EditorHeight;
         _formulaBox.FontFamily = FormulaBarFontFamily;
+        if (OperatingSystem.IsMacOS())
+            _formulaBox.FontFamily = MacOsFormulaBarFontFamily;
         _formulaBox.FontSize = 15;
         _formulaBox.Padding = new Thickness(6, 4, 6, 2);
         _formulaBox.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -3531,6 +3570,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         DockPanel.SetDock(_formulaExpandButton, Dock.Right);
 
         _formulaReferenceTextOverlay.FontFamily = FormulaBarFontFamily;
+        if (OperatingSystem.IsMacOS())
+            _formulaReferenceTextOverlay.FontFamily = MacOsFormulaBarFontFamily;
         _formulaReferenceTextOverlay.FontSize = 15;
         _formulaReferenceTextOverlay.Foreground = PrimaryInk;
         _formulaReferenceTextOverlay.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -3980,8 +4021,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         button.Margin = margin;
         button.Padding = new Thickness(0);
         button.Template = StatusBarViewButtonTemplate;
-        button.Foreground = Brushes.White;
-        button.Content = AvaloniaRibbonIcons.Build(new RibbonCommandIcon(iconKind), 15, Brushes.White);
+        button.Foreground = StatusBarForeground;
+        button.Content = AvaloniaRibbonIcons.Build(new RibbonCommandIcon(iconKind), 15, StatusBarForeground);
         button.Tag = iconKind;
         button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
         button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
@@ -4002,9 +4043,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private static void ApplyStatusBarViewButtonState(ToggleButton button, bool isChecked)
     {
         button.IsChecked = isChecked;
-        var foreground = Brushes.White;
-        button.Background = isChecked ? SheetTabContourBrush : Brushes.Transparent;
-        button.BorderBrush = isChecked ? Brush(10, 87, 112) : Brushes.Transparent;
+        var foreground = StatusBarForeground;
+        button.Background = isChecked ? StatusBarCheckedViewBackground : Brushes.Transparent;
+        button.BorderBrush = isChecked ? StatusBarCheckedViewBorder : Brushes.Transparent;
         button.BorderThickness = new Thickness(1);
         if (button.Tag is RibbonCommandIconKind iconKind)
             button.Content = AvaloniaRibbonIcons.Build(new RibbonCommandIcon(iconKind), 15, foreground);
@@ -4019,7 +4060,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Padding = new Thickness(0),
             Background = Brushes.Transparent,
             BorderThickness = new Thickness(0),
-            Foreground = Brushes.White,
+            Foreground = StatusBarForeground,
             Content = CreateStatusBarZoomGlyph(isZoomIn),
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
@@ -4050,7 +4091,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Width = 12,
             Height = 2,
-            Fill = Brushes.White,
+            Fill = StatusBarForeground,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
         });
@@ -4060,7 +4101,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             {
                 Width = 2,
                 Height = 12,
-                Fill = Brushes.White,
+                Fill = StatusBarForeground,
                 HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
             });
@@ -4987,6 +5028,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ClipToBounds = true,
             Children = { grid },
         };
+        // The overlays carry an explicit Width/Height equal to the projected grid size, which is
+        // larger than the visible host whenever the last row/column is only partially visible.
+        // Avalonia centers an explicitly sized Stretch child inside a smaller slot, which shifted
+        // every overlay visual (freeze-pane divider, drawing objects, comments, page breaks) up and
+        // left by half the overshoot relative to the cells. Anchor them to the grid origin instead.
+        AnchorSheetOverlayToGridOrigin(pageBreakOverlay);
+        AnchorSheetOverlayToGridOrigin(manualPageBreakOverlay);
+        AnchorSheetOverlayToGridOrigin(overlay);
         if (pageBreakOverlay is not null)
             composite.Children.Add(pageBreakOverlay);
         if (manualPageBreakOverlay is not null)
@@ -4994,6 +5043,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (overlay.Children.Count > 0)
             composite.Children.Add(overlay);
         return composite;
+    }
+
+    private static void AnchorSheetOverlayToGridOrigin(Control? sheetOverlay)
+    {
+        if (sheetOverlay is null)
+            return;
+
+        sheetOverlay.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
+        sheetOverlay.VerticalAlignment = AvaloniaVerticalAlignment.Top;
     }
 
     private static readonly IBrush ManualPageBreakLineBrush = Brush(0, 103, 192);
@@ -7052,7 +7110,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             TextAlignment.Center,
             AvaloniaVerticalAlignment.Center,
             TextWrapping.NoWrap,
-            FontWeight.SemiBold,
+            WorksheetHeaderFontWeight,
             FontStyle.Normal,
             fontSize: 11,
             textDecorations: null,
@@ -8798,8 +8856,24 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             "TIMES NEW ROMAN" => "Liberation Serif",
             _ => "Liberation Sans, sans-serif",
         };
+        if (OperatingSystem.IsMacOS())
+            fallback = $"{ResolveMacOsCellFontFallback(fontName)}, {fallback}";
         return new FontFamily($"{fontName}, {fallback}");
     }
+
+    // macOS ships neither the Office faces (Calibri/Aptos/Segoe UI) nor the Liberation/DejaVu
+    // substitutes the list above targets for Linux, so without an installed candidate every cell
+    // would drop to whatever the platform picks last. Name faces that are part of a stock macOS
+    // install (Carlito first, in case the user added the metric-compatible Calibri clone) so the
+    // worksheet text resolves deterministically and measures/paints with the same face.
+    private static string ResolveMacOsCellFontFallback(string fontName) =>
+        fontName.Trim().ToUpperInvariant() switch
+        {
+            "CALIBRI" or "APTOS" => "Carlito, Helvetica Neue, Arial",
+            "APTOS NARROW" => "Arial Narrow, Avenir Next Condensed, Helvetica Neue",
+            "TIMES NEW ROMAN" or "CAMBRIA" => "Times New Roman, Times",
+            _ => "Helvetica Neue, Arial",
+        };
 
     /// <summary>
     /// Looks up the four neighboring cells' touching border edges (above's bottom, below's top,
