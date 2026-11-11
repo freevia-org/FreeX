@@ -399,9 +399,10 @@ jobs:
     needs: [prepare, candidate]
     runs-on: ${{ matrix.runner }}
     # A dry run publishes nothing and signs nothing, so it needs neither the approval gate nor the Azure
-    # federated credential (both of which belong to PUBLISHING). Without this the weekly rehearsal parked
+    # federated credential (both of which belong to PUBLISHING). The expression is written with the
+    # non-empty value on the TRUE side because an empty string is falsy in && / || chains. Without this the weekly rehearsal parked
     # at the gate forever and exercised nothing past the tests.
-    environment: ${{ inputs.dry_run && '' || 'public-preview' }}
+    environment: ${{ !inputs.dry_run && 'public-preview' || '' }}
     timeout-minutes: 45
     permissions:
       contents: read
@@ -583,9 +584,10 @@ jobs:
     if: inputs.app == 'all'
     runs-on: ${{ matrix.runner }}
     # A dry run publishes nothing and signs nothing, so it needs neither the approval gate nor the Azure
-    # federated credential (both of which belong to PUBLISHING). Without this the weekly rehearsal parked
+    # federated credential (both of which belong to PUBLISHING). The expression is written with the
+    # non-empty value on the TRUE side because an empty string is falsy in && / || chains. Without this the weekly rehearsal parked
     # at the gate forever and exercised nothing past the tests.
-    environment: ${{ inputs.dry_run && '' || 'public-preview' }}
+    environment: ${{ !inputs.dry_run && 'public-preview' || '' }}
     timeout-minutes: 120
     permissions:
       # The artifact-download fallback lists this run's artifacts through gh.
