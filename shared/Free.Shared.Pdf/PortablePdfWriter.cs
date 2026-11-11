@@ -23,7 +23,6 @@ namespace Free.Shared.Pdf;
 public static class PortablePdfWriter
 {
     private static readonly Encoding PdfEncoding = Encoding.ASCII;
-    private static readonly byte[] PngSignature = [137, 80, 78, 71, 13, 10, 26, 10];
     private static readonly EffectBlurStamp[] EffectBlurStamps =
     [
         new(-1, -1, 0.08), new(0, -1, 0.12), new(1, -1, 0.08),
@@ -887,10 +886,11 @@ public static class PortablePdfWriter
 
     private static PngPdfPixels DecodePngToPdfPixels(byte[] data)
     {
-        if (data.Length < PngSignature.Length || !data.AsSpan(0, PngSignature.Length).SequenceEqual(PngSignature))
+        if (!Free.Shared.Drawing.ImageHeader.HasPngSignature(data))
             throw new FormatException("Not a PNG image.");
 
-        var position = PngSignature.Length;
+        const int pngSignatureLength = 8;
+        var position = pngSignatureLength;
         var width = 0;
         var height = 0;
         var bitDepth = 0;

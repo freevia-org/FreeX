@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Text;
 using Free.Shared.AppServices;
 using FreeW.App.Presentation.Dialogs;
@@ -799,23 +798,8 @@ public static class FreeWClipboardApplicationWorkflow
     /// Reads the pixel width/height straight out of a PNG's mandatory first chunk (length(4) "IHDR"(4)
     /// width(4, big-endian) height(4, big-endian) ...), immediately after the 8-byte PNG signature.
     /// </summary>
-    private static bool TryDecodePngSize(byte[] pngBytes, out int width, out int height)
-    {
-        width = 0;
-        height = 0;
-        if (pngBytes.Length < 24)
-            return false;
-
-        if (pngBytes[12] != (byte)'I' || pngBytes[13] != (byte)'H'
-            || pngBytes[14] != (byte)'D' || pngBytes[15] != (byte)'R')
-        {
-            return false;
-        }
-
-        width = (int)BinaryPrimitives.ReadUInt32BigEndian(pngBytes.AsSpan(16, 4));
-        height = (int)BinaryPrimitives.ReadUInt32BigEndian(pngBytes.AsSpan(20, 4));
-        return width > 0 && height > 0;
-    }
+    private static bool TryDecodePngSize(byte[] pngBytes, out int width, out int height) =>
+        Free.Shared.Drawing.ImageHeader.TryReadPngSize(pngBytes, out width, out height);
 
     private static FreeWClipboardTransferResult Succeeded(FreeWClipboardPayload? payload = null) =>
         new(FreeWClipboardTransferStatus.Succeeded, payload);
