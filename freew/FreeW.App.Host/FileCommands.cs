@@ -5,6 +5,7 @@ using Free.Shared.AppServices;
 using Free.Shared.IO;
 using Free.Shared.Shell.Wpf;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Shell;
@@ -236,6 +237,25 @@ internal sealed class FileCommands
     public bool New() => _fileCommands.NewAsync().GetAwaiter().GetResult();
 
     /// <summary>
+    /// File &gt; New from a built-in template: same dirty gate as <see cref="New"/>, then loads the
+    /// template as a new untitled document. Returns false for an unknown id or a cancelled gate.
+    /// </summary>
+    public bool NewFromBuiltInTemplate(string templateId) =>
+        BuiltInDocumentTemplates.Find(templateId) is { } template
+        && _fileCommands.NewFromTemplateAsync(template.Create).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// File &gt; New from a personal template file (.dotx/.dotm): creates a new untitled document
+    /// based on it; the template file itself is not opened for editing.
+    /// </summary>
+    public bool NewFromTemplateFile(string templatePath) =>
+        _fileCommands.NewFromTemplatePathAsync(templatePath).GetAwaiter().GetResult();
+
+    /// <summary>The folder personal templates are listed from and template saves start in.</summary>
+    public string PersonalTemplatesFolderPath =>
+        PersonalTemplatesFolder.Resolve(_options.PersonalTemplatesFolder);
+
+    /// <summary>
     /// File &gt; Open. Dirty-gates first, then shows the open dialog and loads the chosen file.
     /// Returns false if the user cancels at either step.
     /// </summary>
@@ -348,7 +368,13 @@ internal sealed class FileCommands
             suggestedFileName,
             preferredExtension);
 
-        var result = WpfFileDialogService.ShowSaveDialog(_window, plan);
+        // Saving as a Word template starts in the personal templates folder, as Word does.
+        var result = WpfFileDialogService.ShowSaveDialog(
+            _window,
+            plan,
+            initialDirectory: PersonalTemplatesFolder.ResolveSaveDirectory(
+                preferredExtension,
+                _options.PersonalTemplatesFolder));
         if (!result.Chosen)
             return false;
 

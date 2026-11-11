@@ -37,8 +37,11 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("_session.BuildInfoPane()");
             source.Should().Contain("Panes.BuildRecentPane(");
             source.Should().Contain("_session.BuildRecentPaneSpec(PaneSpecs)");
-            source.Should().Contain("Panes.BuildTemplatePane(");
-            source.Should().Contain("_session.BuildNewPaneSpec(PaneSpecs)");
+            // The New pane is FreeW's own template gallery (built-in + personal templates), planned by
+            // the shared session and drawn by a thin renderer, not the single-tile shared pane.
+            source.Should().Contain("BackstageTemplateGalleryRenderer.Build(");
+            source.Should().Contain("_session.BuildTemplateGallery()");
+            source.Should().NotContain("Panes.BuildTemplatePane(");
             source.Should().Contain("Panes.BuildOptionsPane(");
             source.Should().Contain("_session.BuildOptionsPaneSpec(PaneSpecs)");
             source.Should().Contain("BuildHomePane = BuildHomePane");

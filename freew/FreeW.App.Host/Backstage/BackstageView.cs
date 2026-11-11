@@ -371,7 +371,11 @@ internal sealed partial class BackstageView : UserControl
 
     private UIElement BuildNewPane()
     {
-        return Panes.BuildTemplatePane(_session.BuildNewPaneSpec(PaneSpecs));
+        return BackstageTemplateGalleryRenderer.Build(
+            Kit,
+            _session.BuildTemplateGallery(),
+            Theme.TileWidth,
+            Theme.TileHeight);
     }
 
     private UIElement BuildOptionsPane()

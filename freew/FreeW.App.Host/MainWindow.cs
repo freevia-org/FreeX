@@ -810,7 +810,10 @@ public sealed partial class MainWindow : Window
                 _editor.Focus();
             },
             GetDisplayName: () => _file.DisplayName,
-            GetCurrentPath: () => _file.CurrentPath));
+            GetCurrentPath: () => _file.CurrentPath,
+            NewFromBuiltInTemplate: templateId => _file.NewFromBuiltInTemplate(templateId),
+            NewFromTemplateFile: templatePath => _file.NewFromTemplateFile(templatePath),
+            GetPersonalTemplatesFolder: () => _file.PersonalTemplatesFolderPath));
 
         // Compose the window. The title bar occupies its own top row of the OUTER grid, always above the
         // Backstage; `belowTitle` stacks the Backstage overlay over the 3-row body (ribbon + document +
