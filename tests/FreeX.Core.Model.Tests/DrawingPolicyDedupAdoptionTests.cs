@@ -46,6 +46,18 @@ public sealed class DrawingPolicyDedupAdoptionTests
     }
 
     [Fact]
+    public void WpfDashedPens_SetExplicitFlatDashCap()
+    {
+        TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("src", "FreeX.App.UI", "GridView.DrawingObjects.cs")
+            .Should().Contain("DashCap = PenLineCap.Flat");
+        var freeP = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+            "freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        freeP.Should().Contain("pen.DashCap = PenLineCap.Flat;")
+            .And.Contain("ApplyDashStyleWpf(pen, stroke.Dash)")
+            .And.NotContain("MapDashStyleWpf(stroke.Dash)");
+    }
+
+    [Fact]
     public void WpfContourToGeometryConsumers_DelegateToSharedWpfShapeGeometryAdapter()
     {
         var freeX = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(

@@ -2680,7 +2680,7 @@ public sealed partial class SlideCanvas : FrameworkElement
             var brush = new SolidColorBrush(Color.FromArgb(vis.Alpha, vis.Color.R, vis.Color.G, vis.Color.B));
             if (brush.CanFreeze) brush.Freeze();
             var pen = new Pen(brush, vis.WidthDip);
-            pen.DashStyle = MapDashStyleWpf(vis.Dash);
+            ApplyDashStyleWpf(pen, vis.Dash);
             if (pen.CanFreeze) pen.Freeze();
             return pen;
         }
@@ -2693,7 +2693,7 @@ public sealed partial class SlideCanvas : FrameworkElement
                 : MakeLinearGradientBrush(grad.Fill);
             if (gradBrush.CanFreeze) gradBrush.Freeze();
             var pen = new Pen(gradBrush, grad.WidthDip);
-            pen.DashStyle = MapDashStyleWpf(grad.Dash);
+            ApplyDashStyleWpf(pen, grad.Dash);
             if (pen.CanFreeze) pen.Freeze();
             return pen;
         }
@@ -2703,7 +2703,7 @@ public sealed partial class SlideCanvas : FrameworkElement
             var brush = MakePatternBrush(pattern.Fill);
             if (brush.CanFreeze) brush.Freeze();
             var pen = new Pen(brush, pattern.WidthDip);
-            pen.DashStyle = MapDashStyleWpf(pattern.Dash);
+            ApplyDashStyleWpf(pen, pattern.Dash);
             if (pen.CanFreeze) pen.Freeze();
             return pen;
         }
@@ -2717,6 +2717,14 @@ public sealed partial class SlideCanvas : FrameworkElement
         DrawingMlPresetDashPattern.Get(dash.ToPresetDash()) is { } pattern
             ? new DashStyle(pattern, 0)
             : DashStyles.Solid;
+
+    // The ECMA-376 lengths are for flat-capped dashes; an explicit flat DashCap keeps a capped dash
+    // from growing by half the line width at each end. Must run before the pen is frozen.
+    private static void ApplyDashStyleWpf(Pen pen, OutlineDash dash)
+    {
+        pen.DashStyle = MapDashStyleWpf(dash);
+        pen.DashCap = PenLineCap.Flat;
+    }
 
     private static T FreezeBrush<T>(T brush) where T : Brush
     {
@@ -2805,7 +2813,7 @@ public sealed partial class SlideCanvas : FrameworkElement
         var pen = new Pen(
             ToBrush(new ChartFillPlan(stroke.Color, stroke.Alpha) { Fill = stroke.Fill }),
             stroke.Thickness);
-        pen.DashStyle = MapDashStyleWpf(stroke.Dash);
+        ApplyDashStyleWpf(pen, stroke.Dash);
         if (pen.CanFreeze) pen.Freeze();
         return pen;
     }

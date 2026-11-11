@@ -1757,7 +1757,8 @@ public partial class GridView
         var dashStyle = DrawingMlPresetDashPattern.Get(outline.Dash.ToPresetDash()) is { } dashPattern
             ? new DashStyle(dashPattern, 0)
             : DashStyles.Solid;
-        var pen = new Pen(brush, thicknessDip) { DashStyle = dashStyle };
+        // Flat dash cap: the ECMA-376 lengths are for flat-capped dashes.
+        var pen = new Pen(brush, thicknessDip) { DashStyle = dashStyle, DashCap = PenLineCap.Flat };
         pen.Freeze();
         return pen;
     }
