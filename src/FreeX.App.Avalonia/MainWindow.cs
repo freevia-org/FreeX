@@ -234,8 +234,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private const double FreezeDividerThickness = 2;
     private static readonly IBrush ToolbarBorder = Brush(218, 222, 228);
     private static readonly IBrush FormulaBarControlBorder = Brush(192, 192, 192);
+    // Resolved through the shared UI-font authority: unchanged on Windows/Linux, the regular-width
+    // macOS chain on macOS (every dialog/pane/menu consumer of FormulaBarFontFamily follows).
     private static readonly FontFamily FormulaBarFontFamily =
-        new("Segoe UI, Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, DejaVu Sans Condensed, Arial, Liberation Sans, sans-serif");
+        AvaloniaCompactDialogChrome.ResolveUiFontFamily("Segoe UI, Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, DejaVu Sans Condensed, Arial, Liberation Sans, sans-serif");
     // macOS has no Segoe UI but does ship Arial Narrow, so the chain above resolves to a condensed
     // face there and the name box / formula text render visibly narrower than the Windows formula
     // bar. The formula bar row uses this regular-width chain on macOS (the same face the ribbon
@@ -3041,7 +3043,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private Control BuildToolbar()
     {
         _titleText.FontSize = 14;
-        _titleText.FontFamily = new FontFamily("Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, DejaVu Sans Condensed, Arial, Liberation Sans, sans-serif");
+        _titleText.FontFamily = AvaloniaCompactDialogChrome.ResolveUiFontFamily("Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, DejaVu Sans Condensed, Arial, Liberation Sans, sans-serif");
         _titleText.FontWeight = FontWeight.Normal;
         _titleText.Foreground = PrimaryInk;
         _titleText.MaxWidth = 180;

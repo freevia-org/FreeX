@@ -188,7 +188,7 @@ public sealed partial class MainWindow
         Child = new TextBlock
         {
             Text = keyTip,
-            FontFamily = new FontFamily("Segoe UI"),
+            FontFamily = Free.Shared.Shell.Avalonia.AvaloniaCompactDialogChrome.ResolveUiFontFamily("Segoe UI"),
             FontSize = 10,
             Foreground = Brushes.Black,
             HorizontalAlignment = HorizontalAlignment.Center,

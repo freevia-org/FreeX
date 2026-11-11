@@ -162,7 +162,11 @@ public sealed class BackstageProjectionSourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.LiveBackstage.cs"));
 
         source.Should().Contain("BackstageRecentFileListPlanner.Build(");
-        source.Should().Contain("BackstageRecentFileListPlanner.SelectPinnedFirst(");
+        // The Home pane mirrors WPF's Recent | Pinned tabs, so it reads the planner's separate
+        // lists through the shared tab-selection planner instead of one merged pinned-first list.
+        source.Should().Contain("BackstageTabSelectionPlanner.Select(");
+        source.Should().Contain("plan.PinnedItems");
+        source.Should().Contain("plan.RecentItems");
         source.Should().Contain("FreeXBackstageHomePanePlanner.Build()");
         source.Should().Contain("BackstageGreetingFormatter.FormatGreeting(DateTime.Now)");
         source.Should().Contain("RecentFileViewModel entry");
