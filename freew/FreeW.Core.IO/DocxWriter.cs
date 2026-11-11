@@ -9871,6 +9871,10 @@ public static class DocxWriter
                     StyleType.Numbering => "numbering",
                     _ => "paragraph"
                 }),
+                // Keep the source package's default-style designation (w:default precedes w:styleId in
+                // Word's own attribute order): without it a reopened document no longer resolves its
+                // pStyle-less paragraphs through a default style whose id is not "Normal".
+                style.IsDefault ? new XAttribute(W + "default", "1") : null,
                 new XAttribute(W + "styleId", style.Id),
                 new XElement(W + "name", new XAttribute(W + "val", style.Name)));
             if (!string.IsNullOrEmpty(style.BasedOnStyleId))

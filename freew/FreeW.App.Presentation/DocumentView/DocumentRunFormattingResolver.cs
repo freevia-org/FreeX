@@ -21,7 +21,11 @@ public static class DocumentRunFormattingResolver
         ArgumentNullException.ThrowIfNull(directFormatting);
 
         var resolved = document.DefaultRun;
-        foreach (var style in StyleChain(document, paragraph.StyleId))
+        // A paragraph with no w:pStyle resolves through the document's default paragraph style.
+        var paragraphStyleId = string.IsNullOrWhiteSpace(paragraph.StyleId)
+            ? DocumentStyle.FindDefaultParagraphStyleId(document)
+            : paragraph.StyleId;
+        foreach (var style in StyleChain(document, paragraphStyleId))
             resolved = Overlay(resolved, style.Run);
         // The run's own linked character style (w:rPr/w:rStyle, e.g. "Intense Emphasis") layers on top
         // of the paragraph's style chain and under the run's direct formatting -- the same three-tier

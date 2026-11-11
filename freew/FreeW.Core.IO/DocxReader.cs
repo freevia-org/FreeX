@@ -8540,6 +8540,9 @@ public static class DocxReader
                 Id = id,
                 Name = s.Element(W + "name")?.Attribute(W + "val")?.Value ?? id,
                 Type = styleType,
+                // w:default="1" marks the style a pStyle-less paragraph resolves through; its id is only
+                // "Normal" in English-authored packages (localized Word writes e.g. "a").
+                IsDefault = s.Attribute(W + "default")?.Value is "1" or "true" or "on",
                 BasedOnStyleId = s.Element(W + "basedOn")?.Attribute(W + "val")?.Value,
                 // The "Style for following paragraph" (w:next): the style applied to the paragraph created
                 // when Enter is pressed at the end of one carrying this style (e.g. Heading1 -> Normal).

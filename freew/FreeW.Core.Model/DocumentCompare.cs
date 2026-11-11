@@ -208,6 +208,7 @@ public static class DocumentCompare
                 Id = style.Id,
                 Name = name,
                 Type = style.Type,
+                IsDefault = style.IsDefault,
                 BasedOnStyleId = style.BasedOnStyleId,
                 NextStyleId = style.NextStyleId,
                 LinkedStyleId = style.LinkedStyleId,

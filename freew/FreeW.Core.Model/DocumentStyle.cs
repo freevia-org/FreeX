@@ -14,6 +14,30 @@ public sealed class DocumentStyle
     public string? BasedOnStyleId { get; init; }
 
     /// <summary>
+    /// Whether the source package marked this style as the default for its <see cref="Type"/>
+    /// (<c>w:style/@w:default="1"</c>). A paragraph with no <c>w:pStyle</c> resolves through the default
+    /// paragraph style whatever its id is — localized Word builds name it e.g. <c>a</c>, not
+    /// <c>Normal</c>. Resolution is render-side (see <see cref="FindDefaultParagraphStyleId"/>); the id
+    /// is never baked into paragraphs, so pStyle-less paragraphs round-trip pStyle-less.
+    /// </summary>
+    public bool IsDefault { get; init; }
+
+    /// <summary>
+    /// The id of the document's default paragraph style (the first paragraph style flagged
+    /// <see cref="IsDefault"/>), or null when the document declares none.
+    /// </summary>
+    public static string? FindDefaultParagraphStyleId(TextDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        foreach (var style in document.Styles.Values)
+        {
+            if (style.IsDefault && style.Type == StyleType.Paragraph)
+                return style.Id;
+        }
+        return null;
+    }
+
+    /// <summary>
     /// The style applied to the paragraph created when the user presses Enter at the end of a paragraph
     /// carrying this style — Word's "Style for following paragraph" (<c>w:next</c> in styles.xml). For
     /// example the built-in Heading styles set this to <c>Normal</c> so body text follows a heading. Null

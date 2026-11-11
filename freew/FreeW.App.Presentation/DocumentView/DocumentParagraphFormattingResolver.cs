@@ -14,7 +14,12 @@ public static class DocumentParagraphFormattingResolver
         ArgumentNullException.ThrowIfNull(paragraph);
 
         var direct = paragraph.Formatting;
-        var style = ResolveStyleChain(document, paragraph.StyleId);
+        // A paragraph with no w:pStyle resolves through the document's default paragraph style.
+        var style = ResolveStyleChain(
+            document,
+            string.IsNullOrWhiteSpace(paragraph.StyleId)
+                ? DocumentStyle.FindDefaultParagraphStyleId(document)
+                : paragraph.StyleId);
         if (style is null)
             return ApplyDocumentDefaults(direct, document.DefaultParagraph);
         if (direct == ParagraphFormatting.Default)
