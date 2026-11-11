@@ -9,17 +9,18 @@ using System.Windows.Documents;
 using System.Windows.Media;
 using Free.Shared.Shell;
 using FreeW.App.Presentation.Dialogs;
-using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
 
 /// <summary>
-/// A modeless Find &amp; Replace tool over the FreeW editing surface. Searches the live document via
-/// TextPointer navigation (within a text run), selects matches, and replaces the selection. Match
-/// decisions (case sensitivity, whole-word boundaries, Word-style wildcards) are delegated to the
-/// pure <see cref="TextSearch"/> helper. Includes a Go To section that jumps to a heading (via
+/// A modeless Find &amp; Replace tool over the FreeW editing surface, modelled on Word's: special
+/// (caret) codes, find/replace formatting with a summary line under each box, the Match prefix /
+/// Match suffix / Ignore punctuation / Ignore white-space options, and a search that covers every
+/// story. Match decisions are delegated to the shared planner (<see cref="FindReplaceDialogPlanner"/>
+/// and <see cref="FindReplaceStoryPlanner"/>); this class only owns the native controls and the
+/// TextPointer traversal of the body. Includes a Go To section that jumps to a heading (via
 /// <see cref="DocumentOutline"/>) or to the document start/end. Opened with Ctrl+F / Ctrl+H.
 /// </summary>
 internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
@@ -28,11 +29,12 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
     private readonly DocumentView _editor;
     private readonly TextBox _findBox = new() { MinWidth = Surface.Metrics.FieldMinWidth };
     private readonly TextBox _replaceBox = new() { MinWidth = Surface.Metrics.FieldMinWidth };
-    private readonly CheckBox _matchCase = new() { Margin = new Thickness(0, 6, 0, 0) };
-    private readonly CheckBox _wholeWord = new() { Margin = new Thickness(0, 4, 0, 0) };
-    private readonly CheckBox _useWildcards = new() { Margin = new Thickness(0, 4, 0, 0) };
+    private readonly TextBlock _findFormatSummary = NewFormatSummary();
+    private readonly TextBlock _replaceFormatSummary = NewFormatSummary();
+    private readonly Dictionary<FindReplaceOptionKind, CheckBox> _options = [];
     private readonly ComboBox _goToTarget = new() { MinWidth = Surface.Metrics.FieldMinWidth, Margin = new Thickness(0, 6, 0, 0) };
-    private readonly TextBlock _status = new() { Foreground = Brushes.Gray, Margin = new Thickness(0, 6, 0, 0) };
+    private readonly TextBlock _status = new() { Foreground = Brushes.Gray, Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap };
+    private readonly FindReplaceDialogText _text = new(UiText.Get);
     private readonly FindReplaceDialogSession _session;
 
     public FindReplaceDialog(
@@ -42,9 +44,11 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
     {
         _editor = editor;
         _session = new FindReplaceDialogSession(
-            new WpfFindReplaceCommandHost(editor),
+            new WpfFindReplaceCommandHost(editor, _text),
             openMode,
-            FindReplaceDialogPlanner.ResolvePolicyText(UiText.Get));
+            FindReplaceDialogPlanner.ResolvePolicyText(UiText.Get),
+            _text,
+            () => editor.Model);
         Owner = owner;
         Title = Surface.Title;
         Width = Surface.Metrics.WindowWidth;
@@ -56,53 +60,50 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
         AutomationProperties.SetAutomationId(_findBox, Surface.Field(FindReplaceDialogFieldKind.Find).AutomationId);
         AutomationProperties.SetAutomationId(_replaceBox, Surface.Field(FindReplaceDialogFieldKind.Replace).AutomationId);
         AutomationProperties.SetAutomationId(_goToTarget, Surface.GoToTargetAutomationId);
-        _matchCase.Content = Surface.Option(FindReplaceOptionKind.MatchCase).Label;
-        _wholeWord.Content = Surface.Option(FindReplaceOptionKind.WholeWord).Label;
-        _useWildcards.Content = Surface.Option(FindReplaceOptionKind.UseWildcards).Label;
-        AutomationProperties.SetAutomationId(_matchCase, Surface.Option(FindReplaceOptionKind.MatchCase).AutomationId);
-        AutomationProperties.SetAutomationId(_wholeWord, Surface.Option(FindReplaceOptionKind.WholeWord).AutomationId);
-        AutomationProperties.SetAutomationId(_useWildcards, Surface.Option(FindReplaceOptionKind.UseWildcards).AutomationId);
+        AutomationProperties.SetAutomationId(_findFormatSummary, FindReplaceDialogPlanner.FindFormatSummaryAutomationId);
+        AutomationProperties.SetAutomationId(_replaceFormatSummary, FindReplaceDialogPlanner.ReplaceFormatSummaryAutomationId);
 
         var grid = new Grid { Margin = new Thickness(Surface.Metrics.OuterMargin) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        for (var i = 0; i < 7; i++)
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddRow(grid, 0, Surface.Field(FindReplaceDialogFieldKind.Find).Label, _findBox);
-        AddRow(grid, 1, Surface.Field(FindReplaceDialogFieldKind.Replace).Label, _replaceBox);
+        AddRow(grid, Surface.Field(FindReplaceDialogFieldKind.Find).Label, _findBox);
+        AddInFieldColumn(grid, _findFormatSummary);
+        AddRow(grid, Surface.Field(FindReplaceDialogFieldKind.Replace).Label, _replaceBox);
+        AddInFieldColumn(grid, _replaceFormatSummary);
 
-        Grid.SetRow(_matchCase, 2);
-        Grid.SetColumn(_matchCase, 1);
-        grid.Children.Add(_matchCase);
+        AddOption(grid, FindReplaceOptionKind.MatchCase, Surface.Option(FindReplaceOptionKind.MatchCase).AutomationId);
+        AddOption(grid, FindReplaceOptionKind.WholeWord, Surface.Option(FindReplaceOptionKind.WholeWord).AutomationId);
+        AddOption(grid, FindReplaceOptionKind.UseWildcards, Surface.Option(FindReplaceOptionKind.UseWildcards).AutomationId);
+        AddOption(grid, FindReplaceOptionKind.MatchPrefix, Surface.Option(FindReplaceOptionKind.MatchPrefix).AutomationId);
+        AddOption(grid, FindReplaceOptionKind.MatchSuffix, Surface.Option(FindReplaceOptionKind.MatchSuffix).AutomationId);
+        AddOption(grid, FindReplaceOptionKind.IgnorePunctuation, Surface.Option(FindReplaceOptionKind.IgnorePunctuation).AutomationId);
+        AddOption(grid, FindReplaceOptionKind.IgnoreWhiteSpace, Surface.Option(FindReplaceOptionKind.IgnoreWhiteSpace).AutomationId);
 
-        Grid.SetRow(_wholeWord, 3);
-        Grid.SetColumn(_wholeWord, 1);
-        grid.Children.Add(_wholeWord);
-
-        Grid.SetRow(_useWildcards, 4);
-        Grid.SetColumn(_useWildcards, 1);
-        grid.Children.Add(_useWildcards);
-
-        // "Use Wildcards" disables "Whole word" (incompatible, mirrors Word).
-        _useWildcards.Checked += (_, _) => ApplyOptionPolicy();
-        _useWildcards.Unchecked += (_, _) => ApplyOptionPolicy();
+        // "Use wildcards" disables every option but Match case (incompatible, mirrors Word).
+        _options[FindReplaceOptionKind.UseWildcards].Checked += (_, _) => ApplyOptionPolicy();
+        _options[FindReplaceOptionKind.UseWildcards].Unchecked += (_, _) => ApplyOptionPolicy();
         ApplyOptionPolicy();
 
-        // Special ▾ button — inserts a special character into whichever box last had focus.
-        var specialButton = BuildSpecialButton();
-        Grid.SetRow(specialButton, 5);
-        Grid.SetColumn(specialButton, 1);
-        grid.Children.Add(specialButton);
+        // Special / Format / No Formatting act on whichever box last had focus, as in Word.
+        var tools = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
+        tools.Children.Add(BuildSpecialButton());
+        tools.Children.Add(MakeToolButton(
+            _text.Get(FindReplaceTextId.FormatButton),
+            FindReplaceDialogPlanner.FormatButtonAutomationId,
+            (_, _) => ChooseFormat()));
+        tools.Children.Add(MakeToolButton(
+            _text.Get(FindReplaceTextId.NoFormattingButton),
+            FindReplaceDialogPlanner.NoFormattingButtonAutomationId,
+            (_, _) => ShowFormatState(_session.ClearFormat(LastFocusedField))));
+        AddInFieldColumn(grid, tools);
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, Surface.Metrics.ActionTopMargin, 0, 0) };
         buttons.Children.Add(MakeButton(Surface.Actions[0], (_, _) => Execute(Surface.Actions[0].Kind)));
         buttons.Children.Add(MakeButton(Surface.Actions[1], (_, _) => Execute(Surface.Actions[1].Kind)));
         buttons.Children.Add(MakeButton(Surface.Actions[2], (_, _) => Execute(Surface.Actions[2].Kind)));
         buttons.Children.Add(MakeButton(Surface.Actions[3], (_, _) => Close()));
-        Grid.SetRow(buttons, 6);
-        Grid.SetColumn(buttons, 1);
-        grid.Children.Add(buttons);
+        AddInFieldColumn(grid, buttons);
 
         var outer = new StackPanel();
         outer.Children.Add(grid);
@@ -120,8 +121,13 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
         DialogFocus.FocusAndSelect(state.OpenMode == FindReplaceOpenMode.Replace ? _replaceBox : _findBox);
     }
 
-    // Track which text field was focused last so Special inserts into the right box.
+    // Track which text field was focused last so Special / Format act on the right box.
     private TextBox _lastFocusedBox = null!;
+
+    private FindReplaceDialogFieldKind LastFocusedField =>
+        ReferenceEquals(_lastFocusedBox, _replaceBox)
+            ? FindReplaceDialogFieldKind.Replace
+            : FindReplaceDialogFieldKind.Find;
 
     private UIElement BuildSpecialButton()
     {
@@ -130,24 +136,26 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
         _replaceBox.GotFocus += (_, _) => _lastFocusedBox = _replaceBox;
 
         var menu = new ContextMenu();
-        foreach (var (label, insert) in FreeWContextMenuPlanner.FindSpecialCharacters)
-        {
-            var item = new MenuItem { Header = label };
-            var insertValue = insert; // capture
-            item.Click += (_, _) => InsertSpecial(insertValue);
-            menu.Items.Add(item);
-        }
-
         var btn = new Button
         {
             Content = Surface.SpecialButtonLabel,
             HorizontalAlignment = HorizontalAlignment.Left,
             Padding = new Thickness(6, 3, 6, 3),
-            Margin = new Thickness(0, 4, 0, 0)
         };
         AutomationProperties.SetAutomationId(btn, Surface.SpecialButtonAutomationId);
         btn.Click += (_, _) =>
         {
+            // Word offers a different list per box, and wildcard operators when wildcards are on.
+            SyncSessionInput();
+            menu.Items.Clear();
+            foreach (var item in _session.BuildSpecialItems(LastFocusedField))
+            {
+                var entry = new MenuItem { Header = item.Label };
+                var insertValue = item.Insert; // capture
+                entry.Click += (_, _) => InsertSpecial(insertValue);
+                menu.Items.Add(entry);
+            }
+
             menu.PlacementTarget = btn;
             menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
             menu.IsOpen = true;
@@ -163,6 +171,33 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
         box.CaretIndex = plan.CaretIndex;
         box.Focus();
     }
+
+    private void ChooseFormat()
+    {
+        var field = LastFocusedField;
+        if (FindFormatDialog.Choose(this, field, _session.FormatFor(field), _editor.Model, _text) is { } format)
+            ShowFormatState(_session.SetFormat(field, format));
+    }
+
+    private void ShowFormatState(FindReplaceDialogState state)
+    {
+        ShowSummary(_findFormatSummary, state.FindFormatSummary);
+        ShowSummary(_replaceFormatSummary, state.ReplaceFormatSummary);
+    }
+
+    private static void ShowSummary(TextBlock summary, string text)
+    {
+        summary.Text = text;
+        summary.Visibility = text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private static TextBlock NewFormatSummary() => new()
+    {
+        Foreground = Brushes.Gray,
+        TextWrapping = TextWrapping.Wrap,
+        Margin = new Thickness(0, 2, 0, 0),
+        Visibility = Visibility.Collapsed,
+    };
 
     // The Go To section: a labelled combo of jump targets (document start/end + each heading) and a
     // Go button that jumps the caret/scroll there via DocumentView.BringBlockIntoView.
@@ -224,8 +259,10 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
         _status.Text = _session.State.StatusText;
     }
 
-    private static void AddRow(Grid grid, int row, string label, UIElement field)
+    private static void AddRow(Grid grid, string label, UIElement field)
     {
+        var row = grid.RowDefinitions.Count;
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, Surface.Metrics.RowTopMargin, 8, 0) };
         Grid.SetRow(text, row);
         Grid.SetColumn(text, 0);
@@ -237,9 +274,38 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
         grid.Children.Add(field);
     }
 
+    private void AddOption(Grid grid, FindReplaceOptionKind kind, string automationId)
+    {
+        var box = new CheckBox
+        {
+            Content = FindReplaceDialogPlanner.LabelFor(kind, _text),
+            Margin = new Thickness(0, _options.Count == 0 ? 6 : 4, 0, 0),
+        };
+        AutomationProperties.SetAutomationId(box, automationId);
+        _options[kind] = box;
+        AddInFieldColumn(grid, box);
+    }
+
+    private static void AddInFieldColumn(Grid grid, UIElement element)
+    {
+        var row = grid.RowDefinitions.Count;
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetRow(element, row);
+        Grid.SetColumn(element, 1);
+        grid.Children.Add(element);
+    }
+
     private static Button MakeButton(string content, RoutedEventHandler onClick, string automationId)
     {
         var button = new Button { Content = content, MinWidth = Surface.Metrics.ButtonMinWidth, Margin = new Thickness(6, 0, 0, 0), Padding = new Thickness(6, 3, 6, 3) };
+        AutomationProperties.SetAutomationId(button, automationId);
+        button.Click += onClick;
+        return button;
+    }
+
+    private static Button MakeToolButton(string content, string automationId, RoutedEventHandler onClick)
+    {
+        var button = new Button { Content = content, Margin = new Thickness(6, 0, 0, 0), Padding = new Thickness(6, 3, 6, 3) };
         AutomationProperties.SetAutomationId(button, automationId);
         button.Click += onClick;
         return button;
@@ -258,90 +324,158 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
         new(
             _findBox.Text,
             _replaceBox.Text,
-            _matchCase.IsChecked == true,
-            _wholeWord.IsChecked == true,
-            _useWildcards.IsChecked == true);
+            IsChecked(FindReplaceOptionKind.MatchCase),
+            IsChecked(FindReplaceOptionKind.WholeWord),
+            IsChecked(FindReplaceOptionKind.UseWildcards),
+            IsChecked(FindReplaceOptionKind.MatchPrefix),
+            IsChecked(FindReplaceOptionKind.MatchSuffix),
+            IsChecked(FindReplaceOptionKind.IgnorePunctuation),
+            IsChecked(FindReplaceOptionKind.IgnoreWhiteSpace));
+
+    private bool IsChecked(FindReplaceOptionKind kind) => _options[kind].IsChecked == true;
 
     private void ApplyOptionPolicy()
     {
         var state = SyncSessionInput();
-        _wholeWord.IsEnabled = state.WholeWordEnabled;
-        if (_wholeWord.IsChecked == true && !state.Options.WholeWord)
-            _wholeWord.IsChecked = false;
+        foreach (var (kind, box) in _options)
+        {
+            box.IsEnabled = state.IsOptionEnabled(kind);
+            if (box.IsChecked == true && !state.IsOptionChecked(kind))
+                box.IsChecked = false;
+        }
     }
 
-    private sealed class WpfFindReplaceCommandHost(DocumentView editor) : IFindReplaceDialogCommandHost
+    private sealed class WpfFindReplaceCommandHost(DocumentView editor, FindReplaceDialogText text)
+        : IFindReplaceDialogCommandHost
     {
+        private const int MaxReplacements = 100_000;
+
+        // Find Next has left the body: the match it is "on" lives in a header/footer, a note, a
+        // comment or a text box, none of which the body RichTextBox can select. The walk continues
+        // from _storyPosition until the stories run out, then wraps back to the top of the body.
+        private FindReplaceStoryMatch? _storyMatch;
+        private FindReplaceSearchRequest? _storyRequest;
+        private FindReplaceStoryPosition? _storyPosition;
+
+        public string? LastMatchStatus { get; private set; }
+
         public bool FindNext(FindReplaceSearchRequest request)
         {
-            var start = editor.Selection.IsEmpty ? editor.CaretPosition : editor.Selection.End;
-            return SelectFrom(start, request) || SelectFrom(editor.Document.ContentStart, request);
+            LastMatchStatus = null;
+            return Advance(request);
         }
 
         public bool ReplaceNext(FindReplaceReplaceRequest request)
         {
-            var replaced = !editor.Selection.IsEmpty
-                && FindReplaceDialogPlanner.MatchesExactly(
-                    editor.Selection.Text,
-                    request.Term,
-                    request.Options)
-                && editor.RestrictEditingPolicy.Allows(RestrictEditingOperationKind.BodyTextEdit);
-            var originalMatchText = replaced ? editor.Selection.Text : null;
-            if (replaced)
+            LastMatchStatus = null;
+            var search = request.ToSearchRequest();
+            if (!editor.RestrictEditingPolicy.Allows(RestrictEditingOperationKind.BodyTextEdit))
+                return Advance(search);
+
+            if (_storyMatch is { } story && Equals(_storyRequest, search))
             {
-                editor.InsertText(request.Replacement);
+                editor.CommitToModel();
+                if (FindReplaceStoryPlanner.IsCurrent(editor.Model, search, story))
+                {
+                    var replacement = FindReplaceStoryPlanner.PlanReplacement(
+                        editor.Model, story, request, RevisionContext());
+                    if (replacement.Command is { } command)
+                        editor.Commands.Execute(command);
+                    _storyPosition = replacement.Resume();
+                }
+
+                return Advance(search);
             }
 
-            var searchRequest = new FindReplaceSearchRequest(request.Term, request.Options);
-            var start = editor.Selection.IsEmpty
-                ? editor.CaretPosition
-                : SkipTrackedLeftoverMatch(editor.Selection.End, originalMatchText);
-            return SelectFrom(start, searchRequest)
-                || SelectFrom(editor.Document.ContentStart, searchRequest);
+            if (!editor.Selection.IsEmpty)
+            {
+                var projection = Project(search);
+                var selectionStart = projection.OffsetOf(editor.Selection.Start);
+                var selectionEnd = projection.OffsetOf(editor.Selection.End);
+                var selected = FindReplaceDialogPlanner.FindAllInSegments(projection.Segments, search)
+                    .FirstOrDefault(match =>
+                        match.Start == selectionStart && match.Start + match.Length == selectionEnd);
+                if (selected.Length > 0)
+                {
+                    // Text plus formatting is several bus commands; the user asked for one Replace.
+                    int resume;
+                    editor.Commands.BeginUndoGroup(notifyOnEachExecute: true);
+                    try
+                    {
+                        resume = ReplaceBodyMatch(ref projection, selected, request, out _);
+                    }
+                    finally
+                    {
+                        if (editor.Commands.IsUndoGroupOpen)
+                            editor.Commands.CommitUndoGroup("Replace");
+                    }
+
+                    ClearStoryCursor();
+                    projection = Project(search);
+                    return SelectBody(projection, search, resume)
+                        || SelectStory(search, null)
+                        || SelectBody(projection, search, 0);
+                }
+            }
+
+            return Advance(search);
         }
 
         public FindReplaceAllExecutionResult ReplaceAll(FindReplaceReplaceRequest request)
         {
+            LastMatchStatus = null;
+            ClearStoryCursor();
             var restrictToSelection = !editor.Selection.IsEmpty;
             if (!editor.RestrictEditingPolicy.Allows(RestrictEditingOperationKind.BodyTextEdit))
                 return new FindReplaceAllExecutionResult(0, restrictToSelection);
 
-            var (from, limit) = restrictToSelection
-                ? (editor.Selection.Start, editor.Selection.End)
-                : (editor.Document.ContentStart, editor.Document.ContentEnd);
-
+            var search = request.ToSearchRequest();
+            var projection = Project(search);
+            var from = restrictToSelection ? projection.OffsetOf(editor.Selection.Start) : 0;
+            var limit = restrictToSelection ? projection.OffsetOf(editor.Selection.End) : int.MaxValue;
             var count = 0;
-            var pointer = from;
-            var searchRequest = new FindReplaceSearchRequest(request.Term, request.Options);
 
-            // Every InsertText below lands on editor.Commands as its own DocumentCommandBus entry; without
+            // Every edit below lands on editor.Commands as its own DocumentCommandBus entry; without
             // this group, N replacements become N separate undo-stack entries and one Ctrl+Z only reverts
             // the last match instead of the whole Replace All (matches the BeginUndoGroup/CommitUndoGroup
             // idiom other multi-step edits already use, e.g. DocumentEditingSession.ApplyMultilevelListDefinition).
             // notifyOnEachExecute: true -- unlike those coordinators, each replacement here is FOUND by
-            // walking the rendered surface (TryFind below), so the redraw between edits must still happen
+            // walking the rendered surface (the projection), so the redraw between edits must still happen
             // mid-batch or the next edit's CommitToModel() re-reads the stale surface and silently discards
             // every replacement but the last (see DocumentCommandBus.BeginUndoGroup's doc comment).
             editor.Commands.BeginUndoGroup(notifyOnEachExecute: true);
             try
             {
-                while (count < 100_000 && TryFind(pointer, searchRequest, out var matchStart, out var matchEnd))
+                for (var visited = 0; visited < MaxReplacements; visited++)
                 {
-                    if (restrictToSelection && matchStart.CompareTo(limit) >= 0)
+                    var start = from;
+                    var match = FindReplaceDialogPlanner.FindAllInSegments(projection.Segments, search)
+                        .FirstOrDefault(candidate => candidate.Start >= start);
+                    if (match.Length == 0 || (restrictToSelection && match.Start >= limit))
                         break;
 
-                    var originalMatchText = new TextRange(matchStart, matchEnd).Text;
-                    editor.Selection.Select(matchStart, matchEnd);
-                    editor.InsertText(request.Replacement);
-                    pointer = SkipTrackedLeftoverMatch(editor.Selection.End, originalMatchText);
-                    count++;
+                    var lengthBefore = projection.Length;
+                    from = ReplaceBodyMatch(ref projection, match, request, out var replaced);
+                    if (restrictToSelection)
+                        limit += projection.Length - lengthBefore;
+                    if (replaced)
+                        count++;
                 }
-                // r179: the body FlowDocument is finished; now the default header and footer,
-                // which TryFind cannot reach at all (they are not in editor.Document). Skipped
-                // when the operation is restricted to a selection -- a selection is a body
-                // concept, and reaching outside it is the r178 bug the Avalonia side already had.
+
+                // r179: the body FlowDocument is finished; now every story the projection cannot
+                // reach at all (they are not in editor.Document): the headers and footers of every
+                // section, footnotes, endnotes, comments and text boxes. Skipped when the operation
+                // is restricted to a selection -- a selection is a body concept, and reaching outside
+                // it is the r178 bug the Avalonia side already had.
                 if (!restrictToSelection)
-                    count += ReplaceAllInDefaultHeaderFooter(request);
+                {
+                    editor.CommitToModel();
+                    count += FindReplaceStoryPlanner.ReplaceAll(
+                        editor.Model,
+                        request,
+                        editor.Commands.Execute,
+                        RevisionContext());
+                }
 
                 editor.Commands.CommitUndoGroup("Replace All");
             }
@@ -377,145 +511,155 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
             return new FindReplaceAllExecutionResult(count, restrictToSelection);
         }
 
-        private static TextPointer SkipTrackedLeftoverMatch(TextPointer afterReplace, string? originalMatchText)
-        {
-            if (string.IsNullOrEmpty(originalMatchText))
-                return afterReplace;
-            var probeEnd = afterReplace.GetPositionAtOffset(originalMatchText.Length);
-            if (probeEnd is null)
-                return afterReplace;
-            return new TextRange(afterReplace, probeEnd).Text == originalMatchText
-                ? probeEnd
-                : afterReplace;
-        }
-
-
         /// <summary>
-        /// Replaces every remaining match in the document default header and footer, returning how many.
-        ///
-        /// r179: WPF Replace All searched ONLY the body. TryFind walks TextPointers over
-        /// editor.Document -- the RichTextBox body FlowDocument -- and headers/footers are not in it;
-        /// they live in the model and are edited through a separate sub-editor the dialog is never
-        /// given. So a term appearing in a header was silently left alone and the count reported to
-        /// the user was short by that many. The Avalonia shell was fixed for this in r177; this is the
-        /// same fix expressed against the model, since the WPF search cannot reach the content.
-        ///
-        /// Mirrors the Avalonia rules exactly: header before footer, and each replacement RESUMES past
-        /// the text it just wrote (a replacement that re-creates the search term -- Confidential ->
-        /// Strictly Confidential -- would otherwise re-find itself forever), with a resume naming the
-        /// footer also meaning the header is finished.
+        /// Moves to the next match: the rest of the body from the caret, then every other story, then
+        /// the body again from its top. While the walk is inside the other stories it stays there
+        /// until they are exhausted.
         /// </summary>
-        private int ReplaceAllInDefaultHeaderFooter(FindReplaceReplaceRequest request)
+        private bool Advance(FindReplaceSearchRequest request)
         {
-            var count = 0;
-            (bool IsFooter, int ParagraphIndex, int Offset)? resume = null;
-
-            while (count < 100_000)
+            var projection = Project(request);
+            if (_storyMatch is not null && Equals(_storyRequest, request))
             {
-                var hit = FindReplaceDialogPlanner.FindNextHeaderFooterMatch(
-                    editor.Model, request.Term, request.Options, resume);
-                if (hit is not { IsInHeaderFooter: true } match)
-                    break;
+                if (SelectStory(request, _storyPosition))
+                    return true;
 
-                var isFooter = match.HeaderFooterIsFooter!.Value;
-                var paragraphIndex = match.HeaderFooterParagraphIndex!.Value;
-                var start = match.Start;
-                var length = match.Length;
-                var replacement = request.Replacement;
-
-                // Decide BEFORE executing whether the splice is safe, so a match that overlaps a
-                // field or an image pushes no undo entry at all. Skipping it is the conservative
-                // answer: the alternative is rewriting the cached text of a PAGE field as if the
-                // user had typed it.
-                var slotRegion = isFooter ? editor.Model.Footer : editor.Model.Header;
-                var target = slotRegion is not null && paragraphIndex < slotRegion.Paragraphs.Count
-                    ? slotRegion.Paragraphs[paragraphIndex]
-                    : null;
-                if (target is null || !RevisionEditPlanner.CanReplacePlainTextRange(target, start, length))
-                {
-                    // Step over this occurrence and keep going, or the next search re-finds it.
-                    resume = (isFooter, paragraphIndex, start + Math.Max(1, length));
-                    continue;
-                }
-
-                // r180: record the edit as a REVISION when Track Changes is on, exactly as the body
-                // loop does (editor.InsertText routes through the tracked path). Rewriting header
-                // text untracked while the identical replacement in the body is tracked would hide
-                // the change from the reviewer it was turned on for.
-                var tracked = editor.TrackChangesEnabled;
-                var resumeOffset = start + replacement.Length;
-
-                editor.Commands.Execute(new FreeW.Core.Model.EditHeaderFooterParagraphCommand(
-                    sectionIndex: -1,
-                    useFinalSectionStore: true,
-                    slot: isFooter ? 1 : 0,
-                    paragraphIndex: paragraphIndex,
-                    rebuild: (FreeW.Core.Model.Paragraph paragraph) =>
-                    {
-                        if (!tracked)
-                        {
-                            RevisionEditPlanner.TryReplacePlainTextRange(paragraph, start, length, replacement);
-                            return;
-                        }
-
-                        var author = editor.RevisionAuthor;
-                        var dateXml = editor.RevisionDateXmlForEdit();
-                        var deleted = RevisionEditPlanner.DeleteRangeAsRevision(
-                            paragraph, start, start + length, author, dateXml);
-                        var formatting = RevisionEditPlanner.FormattingAtOffset(paragraph, deleted.CaretOffset);
-                        var afterInsert = RevisionEditPlanner.InsertTrackedText(
-                            paragraph, deleted.CaretOffset, replacement, formatting, author, dateXml);
-
-                        // The struck-through original stays in the paragraph, so the next search has
-                        // to start past it too or it re-finds the text it just marked deleted.
-                        resumeOffset = afterInsert + (deleted.KeptDeletedText ? length : 0);
-                    }));
-
-                resume = (isFooter, paragraphIndex, resumeOffset);
-                count++;
+                ClearStoryCursor();
+                return SelectBody(projection, request, 0) || SelectStory(request, null);
             }
 
-            return count;
+            ClearStoryCursor();
+            var from = projection.OffsetOf(
+                editor.Selection.IsEmpty ? editor.CaretPosition : editor.Selection.End);
+            return SelectBody(projection, request, from)
+                || SelectStory(request, null)
+                || SelectBody(projection, request, 0);
         }
 
+        private FindReplaceBodyProjection Project(FindReplaceSearchRequest request) =>
+            editor.BuildFindReplaceProjection(includeFormatting: request.Format is not null);
 
-        private bool SelectFrom(TextPointer from, FindReplaceSearchRequest request)
+        private bool SelectBody(FindReplaceBodyProjection projection, FindReplaceSearchRequest request, int from)
         {
-            if (!TryFind(from, request, out var matchStart, out var matchEnd))
-                return false;
-
-            editor.Selection.Select(matchStart, matchEnd);
-            editor.Focus();
-            return true;
-        }
-
-        private bool TryFind(
-            TextPointer from,
-            FindReplaceSearchRequest request,
-            out TextPointer matchStart,
-            out TextPointer matchEnd)
-        {
-            matchStart = matchEnd = editor.Document.ContentStart;
-            for (var pointer = from; pointer is not null; pointer = pointer.GetNextContextPosition(LogicalDirection.Forward))
+            foreach (var (start, length) in FindReplaceDialogPlanner.FindAllInSegments(projection.Segments, request))
             {
-                if (pointer.GetPointerContext(LogicalDirection.Forward) != TextPointerContext.Text)
+                if (start < from || !projection.TryGetRange(start, length, out var matchStart, out var matchEnd))
                     continue;
 
-                var runText = pointer.GetTextInRun(LogicalDirection.Forward);
-                foreach (var (index, length) in FindReplaceDialogPlanner.FindAll(runText, request.Term, request.Options))
-                {
-                    var start = pointer.GetPositionAtOffset(index);
-                    var end = start?.GetPositionAtOffset(length);
-                    if (start is null || end is null)
-                        continue;
-
-                    matchStart = start;
-                    matchEnd = end;
-                    return true;
-                }
+                editor.Selection.Select(matchStart, matchEnd);
+                editor.Focus();
+                return true;
             }
 
             return false;
+        }
+
+        private bool SelectStory(FindReplaceSearchRequest request, FindReplaceStoryPosition? from)
+        {
+            editor.CommitToModel();
+            if (FindReplaceStoryPlanner.FindNext(editor.Model, request, from) is not { } match)
+                return false;
+
+            _storyMatch = match;
+            _storyRequest = request;
+            _storyPosition = match.End;
+            LastMatchStatus = FindReplaceStoryPlanner.DescribeMatch(match, text);
+            return true;
+        }
+
+        private void ClearStoryCursor()
+        {
+            _storyMatch = null;
+            _storyRequest = null;
+            _storyPosition = null;
+        }
+
+        private FindReplaceRevisionContext? RevisionContext() =>
+            editor.TrackChangesEnabled
+                ? new FindReplaceRevisionContext(editor.RevisionAuthor, editor.RevisionDateXmlForEdit())
+                : null;
+
+        /// <summary>
+        /// Replaces one body match through the editor (so Track Changes, restrict-editing and undo all
+        /// behave as for typing) and returns the haystack offset the search resumes from, with
+        /// <paramref name="projection"/> rebuilt against the re-rendered surface.
+        /// </summary>
+        /// <remarks>
+        /// Every edit re-renders and drops the selection, so each step re-selects by offset. The
+        /// replaced stretch is located by how much the haystack grew: untracked that is exactly the
+        /// new text; tracked it also holds the struck-through original, which projects as
+        /// placeholders nothing can match -- so a replacement that re-creates the search term cannot
+        /// be found again either way.
+        /// </remarks>
+        private int ReplaceBodyMatch(
+            ref FindReplaceBodyProjection projection,
+            (int Start, int Length) match,
+            FindReplaceReplaceRequest request,
+            out bool replaced)
+        {
+            replaced = false;
+            var skip = match.Start + match.Length;
+            var found = projection.Text.Substring(match.Start, match.Length);
+            var plan = FindReplaceDialogPlanner.PlanReplacement(request, found);
+            var includeFormatting = request.FindFormat is not null;
+            var regionLength = match.Length;
+
+            if (plan.ReplacesText)
+            {
+                if (!projection.TryGetRange(match.Start, match.Length, out var matchStart, out var matchEnd))
+                    return skip;
+
+                var before = projection;
+                editor.Selection.Select(matchStart, matchEnd);
+                editor.ReplaceSelectionForFind(plan.Text);
+                projection = editor.BuildFindReplaceProjection(includeFormatting);
+
+                // Unchanged text means the editor refused the edit (a locked region, say): step over
+                // the match rather than report a replacement that did not happen.
+                if (plan.Text != found && projection.Text == before.Text)
+                    return skip;
+
+                regionLength = Math.Max(0, match.Length + projection.Length - before.Length);
+            }
+
+            replaced = true;
+            if (plan.Format is { } format)
+            {
+                var (start, length) = TrimPlaceholders(projection.Text, match.Start, regionLength);
+                if (format.ParagraphStyleId is { Length: > 0 } styleId && Select(projection, start, length))
+                {
+                    editor.SetParagraphStyle(styleId);
+                    projection = editor.BuildFindReplaceProjection(includeFormatting);
+                }
+
+                if (format.HasCharacterFormatting && Select(projection, start, length))
+                {
+                    editor.ApplyFindCharacterFormatToSelection(format);
+                    projection = editor.BuildFindReplaceProjection(includeFormatting);
+                }
+            }
+
+            return match.Start + regionLength;
+        }
+
+        private bool Select(FindReplaceBodyProjection projection, int start, int length)
+        {
+            if (!projection.TryGetRange(start, length, out var rangeStart, out var rangeEnd))
+                return false;
+
+            editor.Selection.Select(rangeStart, rangeEnd);
+            return !editor.Selection.IsEmpty;
+        }
+
+        private static (int Start, int Length) TrimPlaceholders(string text, int start, int length)
+        {
+            var end = Math.Min(text.Length, start + length);
+            start = Math.Min(start, end);
+            while (start < end && text[start] == FindSpecialCodes.ObjectPlaceholder)
+                start++;
+            while (end > start && text[end - 1] == FindSpecialCodes.ObjectPlaceholder)
+                end--;
+            return (start, end - start);
         }
     }
 }

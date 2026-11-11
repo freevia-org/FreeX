@@ -65,9 +65,15 @@ public sealed class FreeWBehaviorSourceGuardTests
         }
 
         wpf.Should().Contain("class WpfFindReplaceCommandHost");
-        wpf.Should().Contain("FindReplaceDialogPlanner.FindAll(");
-        wpf.Should().Contain("FindReplaceDialogPlanner.MatchesExactly(");
-        wpf.Should().Contain("TextPointer from");
+        // The body is matched by the shared segment search over a native projection of the rendered
+        // story (special codes and formatting need whole-paragraph context, which a per-run
+        // TextPointer scan never had); every other story is searched and edited by the shared
+        // story planner.
+        wpf.Should().Contain("FindReplaceDialogPlanner.FindAllInSegments(");
+        wpf.Should().Contain("FindReplaceDialogPlanner.PlanReplacement(");
+        wpf.Should().Contain("FindReplaceStoryPlanner.ReplaceAll(");
+        wpf.Should().Contain("editor.BuildFindReplaceProjection(");
+        wpf.Should().NotContain("TextSearch.FindAll(");
         wpf.Should().Contain("restrictToSelection");
         avaloniaCommandHost.Should().Contain("class AvaloniaFindReplaceCommandHost");
         avaloniaCommandHost.Should().Contain("editor.FindNext(request.Term, request.Options)");
