@@ -111,7 +111,14 @@ public static class PrintPreviewSettingsPanelPlanner
         [
             new(Get(textResolver, "MainWindow_Header_A4", "A4"), WorksheetPaperSize.A4),
             new(Get(textResolver, "MainWindow_Header_Letter", "Letter"), WorksheetPaperSize.Letter),
-            new(Get(textResolver, "MainWindow_Header_Legal", "Legal"), WorksheetPaperSize.Legal)
+            new(Get(textResolver, "MainWindow_Header_Legal", "Legal"), WorksheetPaperSize.Legal),
+            new(Get(textResolver, "MainWindow_Header_Executive", "Executive"), WorksheetPaperSize.Executive),
+            new(Get(textResolver, "MainWindow_Header_Statement", "Statement"), WorksheetPaperSize.Statement),
+            new(Get(textResolver, "MainWindow_Header_Tabloid", "Tabloid"), WorksheetPaperSize.Tabloid),
+            new(Get(textResolver, "MainWindow_Header_A3", "A3"), WorksheetPaperSize.A3),
+            new(Get(textResolver, "MainWindow_Header_A5", "A5"), WorksheetPaperSize.A5),
+            new(Get(textResolver, "MainWindow_Header_B4", "B4 (JIS)"), WorksheetPaperSize.B4),
+            new(Get(textResolver, "MainWindow_Header_B5", "B5 (JIS)"), WorksheetPaperSize.B5)
         ];
 
     public static IReadOnlyList<PrintPreviewChoice<WorksheetPageMargins>> CreateMarginOptions(
@@ -141,6 +148,13 @@ public static class PrintPreviewSettingsPanelPlanner
         {
             WorksheetPaperSize.Letter => 1,
             WorksheetPaperSize.Legal => 2,
+            WorksheetPaperSize.Executive => 3,
+            WorksheetPaperSize.Statement => 4,
+            WorksheetPaperSize.Tabloid => 5,
+            WorksheetPaperSize.A3 => 6,
+            WorksheetPaperSize.A5 => 7,
+            WorksheetPaperSize.B4 => 8,
+            WorksheetPaperSize.B5 => 9,
             _ => 0
         };
 

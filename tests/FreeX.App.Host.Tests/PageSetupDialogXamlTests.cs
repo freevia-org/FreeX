@@ -124,7 +124,10 @@ public sealed class PageSetupDialogXamlTests
         source.Should().Contain("PageSetupDialogFocusTarget.LeftMargin => LeftMarginBox");
         source.Should().Contain("PageSetupDialogFocusTarget.PaperSize => PaperSizeBox");
         handlerSource.Should().Contain("OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.CustomMargins);");
-        handlerSource.Should().Contain("OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ExtendedPaperSize);");
+        // Excel applies every size on the ribbon menu directly; none of them detours through Page Setup.
+        handlerSource.Should().NotContain("OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ExtendedPaperSize);");
+        handlerSource.Should().Contain("ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.A3);");
+        handlerSource.Should().Contain("ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.Statement);");
         handlerSource.Should().Contain("ShowPageSetupDialog(PageSetupDialogPlanner.PlanOpen(source));");
     }
 

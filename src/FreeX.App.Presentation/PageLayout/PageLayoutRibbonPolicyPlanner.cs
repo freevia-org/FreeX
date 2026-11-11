@@ -21,7 +21,12 @@ public enum PageLayoutPaperSizePreset
     A4,
     Legal,
     B4,
-    B5
+    B5,
+    Executive,
+    Statement,
+    Tabloid,
+    A3,
+    A5
 }
 
 public enum PageLayoutScaleField
@@ -87,6 +92,11 @@ public static class PageLayoutRibbonPolicyPlanner
             PageLayoutPaperSizePreset.Legal => WorksheetPaperSize.Legal,
             PageLayoutPaperSizePreset.B4 => WorksheetPaperSize.B4,
             PageLayoutPaperSizePreset.B5 => WorksheetPaperSize.B5,
+            PageLayoutPaperSizePreset.Executive => WorksheetPaperSize.Executive,
+            PageLayoutPaperSizePreset.Statement => WorksheetPaperSize.Statement,
+            PageLayoutPaperSizePreset.Tabloid => WorksheetPaperSize.Tabloid,
+            PageLayoutPaperSizePreset.A3 => WorksheetPaperSize.A3,
+            PageLayoutPaperSizePreset.A5 => WorksheetPaperSize.A5,
             _ => WorksheetPaperSize.A4
         };
 
