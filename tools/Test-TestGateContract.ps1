@@ -305,8 +305,6 @@ Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected '-PartitionIn
 Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected '-PartitionCount ${{ matrix.partitionCount }}'
 Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected 'if: matrix.runStaticPreflight'
 Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected 'if: matrix.runPlatformPreflight'
-Assert-WorkflowContains -Path ".github/workflows/freew-ci.yml" -Expected '-Gate commit -App FreeW -Platform ${{ matrix.platform }}'
-Assert-WorkflowContains -Path ".github/workflows/freep-ci.yml" -Expected '-Gate commit -App FreeP -Platform ${{ matrix.platform }}'
 Assert-WorkflowContains -Path ".github/workflows/full-release.yml" -Expected 'name: Full Signed Release'
 Assert-WorkflowContains -Path ".github/workflows/full-release.yml" -Expected 'tools/Test-GitHubReleaseCandidate.ps1'
 Assert-WorkflowContains -Path ".github/workflows/full-release.yml" -Expected 'tools/Get-TestGateMatrix.ps1 -Gate release'

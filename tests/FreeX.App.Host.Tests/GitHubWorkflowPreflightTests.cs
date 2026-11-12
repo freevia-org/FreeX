@@ -67,27 +67,6 @@ public sealed class GitHubWorkflowPreflightTests
     }
 
     [Fact]
-    public void FreeWWorkflow_IsManualDispatchOnlyAndRunsItsValidationGate()
-    {
-        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "freew-ci.yml");
-
-        workflow.Should().Contain("workflow_dispatch:");
-        workflow.Should().NotContain("push:");
-        workflow.Should().NotContain("pull_request:");
-        workflow.Should().NotContain("schedule:");
-        workflow.Should().Contain("permissions:");
-        workflow.Should().Contain("contents: read");
-        workflow.Should().NotContain("contents: write");
-        workflow.Should().NotContain("pull_request_target");
-        workflow.Should().Contain("runs-on: ${{ matrix.runner }}");
-        workflow.Should().Contain("dotnet build FreeW.slnx --configuration Release");
-        workflow.Should().Contain("platform: windows");
-        workflow.Should().Contain("platform: linux");
-        workflow.Should().Contain("platform: macos");
-        workflow.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeW -Platform ${{ matrix.platform }}");
-    }
-
-    [Fact]
     public void GlobalJson_PinsDotNetSdkBandWithFeatureRollForward()
     {
         var globalJson = WorkspaceFileLocator.ReadAllText("global.json");
@@ -155,27 +134,6 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain("macOS TFM validation artifact upload must be evidence-only");
         script.Should().Contain("macOS TFM validation job must not run dotnet publish");
         script.Should().Contain("Validated $($workflows.Count) GitHub workflow file(s).");
-    }
-
-    [Fact]
-    public void FreePWorkflow_IsManualDispatchOnlyAndRunsItsValidationGate()
-    {
-        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "freep-ci.yml");
-
-        workflow.Should().Contain("workflow_dispatch:");
-        workflow.Should().NotContain("push:");
-        workflow.Should().NotContain("pull_request:");
-        workflow.Should().NotContain("schedule:");
-        workflow.Should().Contain("permissions:");
-        workflow.Should().Contain("contents: read");
-        workflow.Should().NotContain("contents: write");
-        workflow.Should().NotContain("pull_request_target");
-        workflow.Should().Contain("runs-on: ${{ matrix.runner }}");
-        workflow.Should().Contain("dotnet build FreeP.slnx --configuration Release");
-        workflow.Should().Contain("platform: windows");
-        workflow.Should().Contain("platform: linux");
-        workflow.Should().Contain("platform: macos");
-        workflow.Should().Contain("tools/Invoke-TestGate.ps1 -Gate commit -App FreeP -Platform ${{ matrix.platform }}");
     }
 
     [Fact]

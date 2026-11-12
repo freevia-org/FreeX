@@ -59,11 +59,9 @@ FreeX's cell-grid surface.
 
 ### CI
 
-A dedicated workflow, `.github/workflows/freew-ci.yml` ("FreeW CI"), builds `FreeW.slnx` in Release
-(0 warnings enforced) then runs `dotnet test FreeW.slnx --no-build` on `windows-latest` with .NET 10.
-It is manual-only (`workflow_dispatch`, dispatched via the Actions tab) rather than triggered on
-every push/PR — it also runs as part of `full-release.yml`'s FreeW test lane on every signed
-release, so coverage happens at release time rather than per-commit.
+FreeW is covered by the per-app commit gates in `ci.yml` (driven by `eng/test-gates.json`) and by
+`full-release.yml`'s FreeW test lane on every signed release. The former manual-only `freew-ci.yml`
+workflow was removed as a duplicate of those gates.
 
 ---
 

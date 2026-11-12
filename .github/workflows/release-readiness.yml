@@ -42,8 +42,86 @@ env:
   MSBUILDDISABLENODEREUSE: "1"
 
 jobs:
+  # A scheduled run on a commit that already has a recent, fully executed, green readiness run can
+  # learn nothing new: the same SHA runs the same gates. Measured over 212 runs, 206 re-tested an
+  # already-tested SHA (~12,500 runner-minutes). So a scheduled run is skipped when the newest
+  # successful FULL run for this exact SHA is younger than seven days; the weekly forced re-run
+  # still catches runner-image and toolchain drift on a quiet main. workflow_dispatch always runs in
+  # full, and any failure to read the history fails open (the lanes run).
+  #
+  # Nothing consumes readiness conclusions as evidence: Resolve-GitHubReleaseCandidate.ps1 and
+  # full-release.yml only look at ci.yml and codeql.yml, so a skipped run cannot make a release
+  # candidate unresolvable. A skipped run concludes success (all gate jobs skipped).
+  # A skipped run is itself "success", so a run only counts as a FULL run when its "Select release
+  # gates" job succeeded; otherwise skipped runs would extend the window forever.
+  guard:
+    name: Skip unchanged commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # Read-only access to this repository's run history; no checkout, no contents access.
+      actions: read
+    outputs:
+      skip: ${{ steps.decide.outputs.skip }}
+    steps:
+      - name: Decide whether this commit needs a full readiness run
+        id: decide
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          $skip = 'false'
+          $reason = "event '$($env:EVENT_NAME)' always runs in full."
+          try {
+            if ($env:EVENT_NAME -eq 'schedule') {
+              $maxAgeDays = 7
+              $reason = "no successful full readiness run exists for $($env:SHA); running in full."
+              # status=success matches on conclusion; --jq emits plain strings so no date parsing
+              # is done by the JSON converter.
+              $rows = gh api --method GET "repos/$($env:REPOSITORY)/actions/workflows/release-readiness.yml/runs" `
+                -f "head_sha=$($env:SHA)" -f status=success -f per_page=100 `
+                --jq '.workflow_runs[] | [.id, .run_started_at] | @tsv'
+              if ($LASTEXITCODE -ne 0) { throw "gh api failed listing readiness runs (exit $LASTEXITCODE)." }
+              $candidates = @($rows | Where-Object { $_ } | ForEach-Object {
+                  $parts = $_ -split "`t"
+                  [pscustomobject]@{ Id = $parts[0]; Started = [DateTimeOffset]::Parse($parts[1], [System.Globalization.CultureInfo]::InvariantCulture) }
+                } | Where-Object { $_.Id -ne $env:RUN_ID } | Sort-Object Started -Descending)
+              foreach ($candidate in $candidates) {
+                $jobRows = gh api --method GET "repos/$($env:REPOSITORY)/actions/runs/$($candidate.Id)/jobs" `
+                  -f per_page=100 `
+                  --jq '.jobs[] | [.name, .conclusion] | @tsv'
+                if ($LASTEXITCODE -ne 0) { throw "gh api failed listing jobs of run $($candidate.Id) (exit $LASTEXITCODE)." }
+                $prepared = @($jobRows | Where-Object { $_ -eq "Select release gates`tsuccess" })
+                if ($prepared.Count -eq 0) { continue }
+                # Newest full green run for this SHA.
+                $ageDays = ([DateTimeOffset]::UtcNow - $candidate.Started).TotalDays
+                if ($ageDays -lt $maxAgeDays) {
+                  $skip = 'true'
+                  $reason = "run $($candidate.Id) already passed in full on $($env:SHA) $([math]::Round($ageDays, 1)) days ago (< $maxAgeDays); skipping."
+                }
+                else {
+                  $reason = "newest full run $($candidate.Id) for $($env:SHA) is $([math]::Round($ageDays, 1)) days old (>= $maxAgeDays); forcing the weekly full run."
+                }
+                break
+              }
+            }
+          }
+          catch {
+            $skip = 'false'
+            $reason = "could not read readiness history ($($_.Exception.Message)); failing open and running in full."
+          }
+          Write-Host $reason
+          "skip=$skip" | Out-File -LiteralPath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "Release readiness guard: skip=$skip. $reason" | Out-File -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+
   prepare:
     name: Select release gates
+    needs: guard
+    if: needs.guard.outputs.skip != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -137,6 +215,8 @@ jobs:
     # needs the network and compares against state outside the repository, so it belongs here on the
     # schedule rather than in the commit gate.
     name: README download links
+    needs: guard
+    if: needs.guard.outputs.skip != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -157,7 +237,7 @@ jobs:
       contents: read
       # Reads this run own job durations to check the dispatch cost hints below.
       actions: read
-    needs: [prepare, gates, readme-freshness]
+    needs: [guard, prepare, gates, readme-freshness]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -170,6 +250,17 @@ jobs:
       - name: Report which release lanes are rotting
         shell: pwsh
         run: |
+          $guardResult = "${{ needs.guard.result }}"
+          $guardSkip = "${{ needs.guard.outputs.skip }}"
+          if ($guardResult -eq 'success' -and $guardSkip -eq 'true') {
+            Write-Host "Skipped: this commit already passed a full readiness run within the last seven days."
+            exit 0
+          }
+          # An unreadable guard must not look like a pass: it fails open, so a failed guard job is
+          # a workflow defect rather than a skip.
+          if ($guardResult -ne 'success') {
+            throw "The skip guard did not complete ($guardResult); the readiness lanes did not run."
+          }
           $prepareResult = "${{ needs.prepare.result }}"
           $gatesResult = "${{ needs.gates.result }}"
           $readmeResult = "${{ needs['readme-freshness'].result }}"
