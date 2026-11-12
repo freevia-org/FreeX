@@ -1408,7 +1408,11 @@ public sealed partial class MainWindow
         {
             Margin = new Thickness(10),
             ColumnDefinitions = new ColumnDefinitions("150,*,Auto"),
-            RowDefinitions = PageSetupFixedRows(
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"),
+        };
+        // The WPF Auto rows above resolve to fixed heights; pin them so a taller Avalonia line box
+        // or check-box template cannot add a pixel or two per row.
+        sheetGrid.RowDefinitions = PageSetupFixedRows(
                 PageSetupFieldRowHeight + 8,
                 PageSetupFieldRowHeight + 8,
                 PageSetupFieldRowHeight + 8,
@@ -1418,8 +1422,7 @@ public sealed partial class MainWindow
                 8 + PageSetupCheckBoxHeight + 8,
                 PageSetupCheckBoxHeight,
                 8 + PageSetupFieldRowHeight,
-                8 + PageSetupFieldRowHeight),
-        };
+                8 + PageSetupFieldRowHeight);
 
         void AddSheetLabel(int row, string text, Thickness margin)
         {
