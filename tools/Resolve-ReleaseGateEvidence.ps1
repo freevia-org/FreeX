@@ -135,7 +135,7 @@ function Find-ReusableEvidence {
     # Query fields go through -f rather than inline in the URL (see Test-GitHubReleaseCandidate.ps1).
     $runsDocument = Get-JsonDocument $RunsMetadataPath {
         & gh api --method GET "repos/$Repository/actions/workflows/$([System.Uri]::EscapeDataString($Workflow))/runs" `
-            -f "head_sha=$sha" -f 'status=completed' -f 'per_page=20'
+            -f "head_sha=$sha" -f 'status=completed' -f 'per_page=100'
     } "completed $Workflow runs for $sha"
 
     $runs = @(
@@ -152,9 +152,11 @@ function Find-ReusableEvidence {
     }
 
     $lastReason = ''
-    # The newest few only: an older green run is also older evidence, and a long walk adds API calls
-    # without adding confidence.
-    foreach ($run in @($runs | Select-Object -First 3)) {
+    # Bounded walk. release-readiness.yml skips a scheduled run for a commit that already passed in
+    # full within the last seven days, and a skipped run still concludes success but holds no gate
+    # jobs, so up to ~28 of them (4 runs/day x 7 days) can sit between now and the full run. The age
+    # check below runs before any jobs lookup, so stale runs cost no API call.
+    foreach ($run in @($runs | Select-Object -First 40)) {
         $runId = [string][long]$run.id
         $age = $Now.ToUniversalTime() - (ConvertTo-UtcOffset $run.updated_at).UtcDateTime
         if ($age.TotalMinutes -lt -5) {

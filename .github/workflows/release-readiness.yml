@@ -51,7 +51,7 @@ jobs:
   #
   # Nothing consumes readiness conclusions as evidence: Resolve-GitHubReleaseCandidate.ps1 and
   # full-release.yml only look at ci.yml and codeql.yml, so a skipped run cannot make a release
-  # candidate unresolvable. A skipped run concludes success (all gate jobs skipped).
+  # candidate unresolvable. A skipped run concludes success (all gate jobs skipped). Release-gate\n  # evidence reuse (tools/Resolve-ReleaseGateEvidence.ps1) accepts only a run that holds every\n  # expected gate job, so a skipped run is never mistaken for evidence and the resolver walks past it.
   # A skipped run is itself "success", so a run only counts as a FULL run when its "Select release
   # gates" job succeeded; otherwise skipped runs would extend the window forever.
   guard:
