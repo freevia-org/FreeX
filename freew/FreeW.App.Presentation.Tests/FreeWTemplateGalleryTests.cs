@@ -79,14 +79,18 @@ public sealed class FreeWTemplateGalleryTests : IDisposable
     [Fact]
     public void Build_ListsPersonalTemplatesAndOpensTheChosenFile()
     {
+        // Paths are built with the platform separator: the description shows Path.GetFileName, which
+        // does not split on '\' on Linux/macOS.
         var opened = new List<string>();
+        var folder = Path.Combine(Path.GetTempPath(), "Templates");
+        var macroReport = Path.Combine(folder, "Macro Report.dotm");
         var entries = new[]
         {
-            new PersonalTemplateEntry(@"C:\Templates\Invoice.dotx", "Invoice"),
-            new PersonalTemplateEntry(@"C:\Templates\Macro Report.dotm", "Macro Report"),
+            new PersonalTemplateEntry(Path.Combine(folder, "Invoice.dotx"), "Invoice"),
+            new PersonalTemplateEntry(macroReport, "Macro Report"),
         };
 
-        var gallery = FreeWTemplateGalleryPlanner.Build(() => { }, _ => { }, opened.Add, entries, @"C:\Templates");
+        var gallery = FreeWTemplateGalleryPlanner.Build(() => { }, _ => { }, opened.Add, entries, folder);
 
         var personal = gallery.Sections[1];
         personal.EmptyText.Should().BeNull();
@@ -96,7 +100,7 @@ public sealed class FreeWTemplateGalleryTests : IDisposable
         personal.Tiles.Should().OnlyContain(tile => tile.Thumbnail.Count > 0);
 
         personal.Tiles[1].Invoke();
-        opened.Should().Equal(@"C:\Templates\Macro Report.dotm");
+        opened.Should().Equal(macroReport);
     }
 
     [Fact]
