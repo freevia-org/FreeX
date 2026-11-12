@@ -179,6 +179,10 @@ jobs:
     permissions:
       contents: read
       actions: read
+    outputs:
+      # Only the literal string 'true' lets release-tests be skipped; empty or anything else runs them.
+      gate_evidence_reuse: ${{ steps.gate_evidence.outputs.reuse }}
+      gate_evidence_run_id: ${{ steps.gate_evidence.outputs.evidence_run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -297,9 +301,32 @@ jobs:
             -Repository $env:GITHUB_REPOSITORY `
             -CommitSha $env:GITHUB_SHA
 
+      # release-readiness.yml runs the same release-only gates on a schedule. If a readiness run
+      # already proved ALL of them on EXACTLY this commit (fresh, every expected job present once and
+      # green), re-running them here adds nothing. Anything short of that -- no run, an ancestor's run,
+      # a missing or red gate, an old run, any lookup error -- reports reuse=false and release-tests
+      # runs every gate. The script never fails the job and never turns an error into a skip.
+      - name: Look for release-gate evidence on this exact commit
+        id: gate_evidence
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pwsh -NoProfile -File tools/Resolve-ReleaseGateEvidence.ps1 `
+            -Repository $env:GITHUB_REPOSITORY `
+            -CommitSha $env:GITHUB_SHA `
+            -GitHubOutputPath $env:GITHUB_OUTPUT
+
   release-tests:
     name: Release test ${{ matrix.app }} ${{ matrix.platform }} ${{ matrix.displayGateId }}
     needs: [prepare, candidate]
+    # A dry run (including the weekly packaging rehearsal) rehearses PACKAGING and publishes nothing,
+    # so re-running the fifteen release-only test gates there only burns ~97 runner-minutes and holds
+    # macOS slots that the macOS package legs then queue for (FreeW osx-x64 waited 4.9 minutes for
+    # one). release-readiness.yml already covers those gates on a schedule. A real release never
+    # skips them unless a readiness run proved every gate on this exact commit (candidate's
+    # gate_evidence_reuse): release-gate below accepts 'skipped' only for one of those two reasons.
+    if: ${{ !inputs.dry_run && needs.candidate.outputs.gate_evidence_reuse != 'true' }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     strategy:
@@ -388,7 +415,18 @@ jobs:
           $prepareResult = "${{ needs.prepare.result }}"
           $candidateResult = "${{ needs.candidate.result }}"
           $releaseTestResult = "${{ needs.release-tests.result }}"
-          if ($prepareResult -ne 'success' -or $candidateResult -ne 'success' -or $releaseTestResult -ne 'success') {
+          # 'skipped' is acceptable for exactly two reasons. A dry run publishes nothing (publish and
+          # publish-suite are gated on !inputs.dry_run). Or the candidate job found a successful
+          # release-readiness run that proved every expected release gate on this exact commit. A real
+          # release otherwise needs a green result from every release test, so a skipped, cancelled or
+          # failed one still fails the gate.
+          $isDryRun = "${{ inputs.dry_run }}" -eq 'true'
+          $evidenceReused = "${{ needs.candidate.outputs.gate_evidence_reuse }}" -eq 'true'
+          if ($evidenceReused) {
+            Write-Host "Release-only gates were verified from release-readiness run ${{ needs.candidate.outputs.gate_evidence_run_id }} on this exact commit."
+          }
+          $releaseTestsAcceptable = $releaseTestResult -eq 'success' -or (($isDryRun -or $evidenceReused) -and $releaseTestResult -eq 'skipped')
+          if ($prepareResult -ne 'success' -or $candidateResult -ne 'success' -or -not $releaseTestsAcceptable) {
             throw "Preparation: $prepareResult; exact-SHA integration attestations: $candidateResult; release-only tests: $releaseTestResult."
           }
 

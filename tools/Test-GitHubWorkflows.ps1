@@ -407,6 +407,8 @@ foreach ($workflow in $workflows) {
         }
         $allowedAutomaticTriggers = switch ($workflow.Name) {
             "codeql.yml" { @("push", "schedule") }
+            # ci.yml also runs a daily FULL-matrix drift run (impact selection may reduce pushes).
+            "ci.yml" { @("push", "schedule") }
             "release-readiness.yml" { @("schedule") }
             "release-packaging-rehearsal.yml" { @("schedule") }
             default { @("push") }

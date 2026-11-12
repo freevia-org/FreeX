@@ -268,6 +268,56 @@ public sealed class ReleaseAutomationWorkflowTests
         // Every Azure login step is Windows-only, so no ungated leg needs the environment secrets.
         Regex.Matches(workflow, @"(?s)if: matrix\.platform == 'windows' && !inputs\.dry_run\s+uses: azure/login").Count.Should().Be(2);
     }
+    private static string ExtractWorkflowJob(string workflow, string jobId)
+    {
+        var match = Regex.Match(workflow, $@"(?ms)^  {Regex.Escape(jobId)}:\r?\n.*?(?=^  [A-Za-z][A-Za-z0-9_-]*:\r?$|\z)");
+        match.Success.Should().BeTrue($"the workflow should define the '{jobId}' job");
+        return match.Value;
+    }
+
+    [Fact]
+    public void FullReleaseWorkflow_SkipsReleaseTestsOnlyForDryRunsAndStillRequiresThemForRealReleases()
+    {
+        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "full-release.yml");
+        var releaseTests = ExtractWorkflowJob(workflow, "release-tests");
+        var releaseGate = ExtractWorkflowJob(workflow, "release-gate");
+        var publicationGate = ExtractWorkflowJob(workflow, "publication-gate");
+
+        // The dry run and the weekly rehearsal (which dispatches dry_run=true) rehearse packaging;
+        // release-readiness.yml already runs the release-only gates, so re-running them held macOS
+        // slots the package legs needed. The condition must be exactly the dry_run input: nothing
+        // else may switch the real-release tests off.
+        // The only other way the tests are skipped is verified readiness evidence on this exact
+        // commit, and only the literal 'true' from the candidate job counts (empty runs everything).
+        releaseTests.Should().Contain(
+            "if: ${{ !inputs.dry_run && needs.candidate.outputs.gate_evidence_reuse != 'true' }}");
+        var candidate = ExtractWorkflowJob(workflow, "candidate");
+        candidate.Should().Contain("gate_evidence_reuse: ${{ steps.gate_evidence.outputs.reuse }}");
+        candidate.Should().Contain("pwsh -NoProfile -File tools/Resolve-ReleaseGateEvidence.ps1");
+        candidate.Should().Contain("-CommitSha $env:GITHUB_SHA");
+
+        // 'skipped' is accepted only together with the dry_run input or verified evidence; a real
+        // release without either needs 'success'.
+        releaseGate.Should().Contain("$isDryRun = \"${{ inputs.dry_run }}\" -eq 'true'");
+        releaseGate.Should().Contain("$evidenceReused = \"${{ needs.candidate.outputs.gate_evidence_reuse }}\" -eq 'true'");
+        releaseGate.Should().Contain(
+            "$releaseTestsAcceptable = $releaseTestResult -eq 'success' -or (($isDryRun -or $evidenceReused) -and $releaseTestResult -eq 'skipped')");
+        releaseGate.Should().Contain("-not $releaseTestsAcceptable");
+        releaseGate.Should().NotContain("$releaseTestResult -ne 'success'",
+            "the old unconditional check would reject the skipped tests of a dry run");
+        releaseGate.Should().Contain("if: always()");
+
+        // Everything downstream still needs the gate, and the gate must still be green to publish.
+        publicationGate.Should().Contain("needs: [prepare, release-gate, package, suite-package]");
+        publicationGate.Should().Contain("$releaseGateResult -ne 'success'");
+        ExtractWorkflowJob(workflow, "publish").Should().Contain("if: ${{ !inputs.dry_run }}");
+        ExtractWorkflowJob(workflow, "publish").Should().Contain("needs: [prepare, publication-gate]");
+        ExtractWorkflowJob(workflow, "publish-suite").Should().Contain("needs: [suite-package, publication-gate]");
+
+        // Packaging never waited on the tests, so dropping them cannot starve the package legs.
+        ExtractWorkflowJob(workflow, "package").Should().Contain("needs: [prepare, candidate]");
+    }
+
     [Fact]
     public void FullReleaseWorkflow_UsesOneAppVersionTagAndIndependentPlatformPackages()
     {

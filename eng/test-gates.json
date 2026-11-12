@@ -1,5 +1,27 @@
 {
   "schemaVersion": 1,
+  "ciImpact": {
+    "inertDocsDirectories": [
+      "architecture",
+      "branding",
+      "known-issues",
+      "ribbonshot-breaks",
+      "superpowers",
+      "ui-test-artifacts",
+      "unification"
+    ],
+    "inertReferenceExemptions": [
+      {
+        "file": "tools/Measure-DedupResiduals.ps1",
+        "reason": "Generator that writes docs/unification/dedup-residual-metrics.*; no gate, preflight or test invokes it."
+      },
+      {
+        "file": "tools/Test-Measure-DedupResiduals.ps1",
+        "reason": "Self-test of that generator against a temporary fixture tree; no gate, preflight or test invokes it."
+      }
+    ],
+    "maxAncestors": 50
+  },
   "gates": [
     {
       "id": "freex-core-portable",

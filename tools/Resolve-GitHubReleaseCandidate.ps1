@@ -35,6 +35,11 @@ Set-StrictMode -Version Latest
 # is. The attestation itself is unchanged -- Test-GitHubReleaseCandidate.ps1 still requires a
 # completed, successful run of every required workflow for whichever commit is chosen.
 #
+# Impact-reduced ci.yml runs do NOT weaken this: a run that skipped the test matrix because only
+# provably inert documentation changed is accepted by Test-GitHubReleaseCandidate.ps1 only when it
+# names a full-coverage ancestor anchor with its own successful run (tools/CiImpactSupport.ps1);
+# otherwise that SHA is rejected here and the walk continues to an older candidate.
+#
 # What this does NOT do is make the release fully attested: the workflow still builds the dispatch
 # head, so any commit between the attested ancestor and the head ships without a green CI run of its
 # own. That is a deliberate trade and it is reported loudly below rather than hidden, so the gap is
@@ -92,6 +97,9 @@ for ($index = 0; $index -lt $ancestors.Count; $index++) {
             Repository = $Repository
             CommitSha = $candidate
             RequiredWorkflows = $RequiredWorkflows
+            # Lets the attestation prove that an impact-reduced ci.yml run's coverage anchor is an
+            # ancestor of this candidate without another API round trip.
+            AncestorShas = $ancestors
         }
         if (-not [string]::IsNullOrWhiteSpace($RunMetadataRoot)) {
             $candidateArguments['RunMetadataDirectory'] = Join-Path $RunMetadataRoot $candidate

@@ -305,8 +305,6 @@ Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected '-PartitionIn
 Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected '-PartitionCount ${{ matrix.partitionCount }}'
 Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected 'if: matrix.runStaticPreflight'
 Assert-WorkflowContains -Path ".github/workflows/ci.yml" -Expected 'if: matrix.runPlatformPreflight'
-Assert-WorkflowContains -Path ".github/workflows/freew-ci.yml" -Expected '-Gate commit -App FreeW -Platform ${{ matrix.platform }}'
-Assert-WorkflowContains -Path ".github/workflows/freep-ci.yml" -Expected '-Gate commit -App FreeP -Platform ${{ matrix.platform }}'
 Assert-WorkflowContains -Path ".github/workflows/full-release.yml" -Expected 'name: Full Signed Release'
 Assert-WorkflowContains -Path ".github/workflows/full-release.yml" -Expected 'tools/Test-GitHubReleaseCandidate.ps1'
 Assert-WorkflowContains -Path ".github/workflows/full-release.yml" -Expected 'tools/Get-TestGateMatrix.ps1 -Gate release'
@@ -357,6 +355,24 @@ $actualGlobalGateSet = @($globalGates | Sort-Object) -join '|'
 $expectedGlobalGateSet = @($expectedWindowsCommitGates | Sort-Object) -join '|'
 if ($actualGlobalGateSet -ne $expectedGlobalGateSet) {
     $errors.Add("Global build-contract changes must select every Windows commit gate.")
+}
+
+# Impact-based CI selection must fail safe: the inert-directory proof, the path/decision tables, the
+# reduced-matrix invariants and the release-attestation probes all live in one script.
+try {
+    & (Join-Path $PSScriptRoot "Test-CiImpactSelection.ps1") | Out-Host
+}
+catch {
+    $errors.Add($_.Exception.Message)
+}
+
+# The diff-scoped LOCAL preflight must map every preflight check to its trigger paths, and CI must
+# keep running everything.
+try {
+    & (Join-Path $PSScriptRoot "Test-PreflightScopes.ps1") | Out-Host
+}
+catch {
+    $errors.Add($_.Exception.Message)
 }
 
 $gateDocumentation = Get-Content -LiteralPath (Join-Path $repoRoot "docs/testing/test-gates.md") -Raw

@@ -3,7 +3,6 @@ param(
     [string]$DialogParityInventoryScriptPath = "tools/Generate-DialogParityInventory.ps1",
     [string]$DialogVisualEvidenceSummaryScriptPath = "tools/Generate-DialogVisualEvidenceSummary.ps1",
     [string]$ConditionalFormatOpenedStateEvidenceScriptPath = "tools/Generate-ConditionalFormatOpenedStateEvidence.ps1",
-    [string]$CrossAppParityDashboardScriptPath = "tools/Generate-CrossAppParityDashboard.ps1",
     [string]$FreePCommandParityInventoryScriptPath = "tools/Generate-FreePCommandParityInventory.ps1",
     [string]$FreePDialogPaneParityInventoryScriptPath = "tools/Generate-FreePDialogPaneParityInventory.ps1",
     [string]$FreePDialogPaneVisualEvidenceManifestScriptPath = "tools/Generate-FreePDialogPaneVisualEvidenceManifest.ps1",
@@ -105,6 +104,10 @@ function Write-GeneratedDocsResults {
     }
 }
 
+# The cross-app parity dashboard generator's own `-Check` is not listed here: the "aggregation
+# guards" entry below (Test-CrossAppParityDashboard.ps1) already runs it under pwsh,
+# powershell.exe and invariant globalization before its schema checks.
+#
 # Almost all of these checks are independent, read-only comparisons (each reads its own generated
 # doc(s) off disk and reports whether regenerating them would change anything) with no shared
 # mutable state, so they are dispatched in parallel to cut wall-clock time dominated by
@@ -123,7 +126,6 @@ $parallelEntries = @(
     Resolve-GeneratedDocsCheckEntry -Label "dialog parity inventory" -ScriptPath $DialogParityInventoryScriptPath
     Resolve-GeneratedDocsCheckEntry -Label "dialog visual evidence summary" -ScriptPath $DialogVisualEvidenceSummaryScriptPath
     Resolve-GeneratedDocsCheckEntry -Label "conditional-format opened-state evidence" -ScriptPath $ConditionalFormatOpenedStateEvidenceScriptPath
-    Resolve-GeneratedDocsCheckEntry -Label "cross-app parity dashboard" -ScriptPath $CrossAppParityDashboardScriptPath
     Resolve-GeneratedDocsCheckEntry -Label "FreeP dialog/pane parity inventory" -ScriptPath $FreePDialogPaneParityInventoryScriptPath
     Resolve-GeneratedDocsCheckEntry -Label "FreeP dialog/pane visual evidence" -ScriptPath $FreePDialogPaneVisualEvidenceManifestScriptPath
     Resolve-GeneratedDocsCheckEntry -Label "FreeP whole-window visual evidence" -ScriptPath $FreePWholeWindowVisualEvidenceManifestScriptPath

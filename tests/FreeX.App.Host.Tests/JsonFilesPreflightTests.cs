@@ -22,21 +22,13 @@ public sealed class JsonFilesPreflightTests
     }
 
     [Fact]
-    public void JsonFilesPreflight_PassesFromOutsideRepositoryWorkingDirectory()
+    public void JsonFilesPreflight_PassesFromOutsideRepositoryWorkingDirectoryAndCoversTrackedJsonFiles()
     {
         var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory("Test-JsonFiles.ps1");
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Validated ");
         result.Output.Should().Contain("JSON file(s).");
-    }
-
-    [Fact]
-    public void JsonFilesPreflight_DefaultCoverageMatchesTrackedJsonFiles()
-    {
-        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory("Test-JsonFiles.ps1");
-
-        result.ExitCode.Should().Be(0, result.Error);
         ExtractValidatedCount(result.Output).Should().Be(GetTrackedJsonFileCount());
     }
 
