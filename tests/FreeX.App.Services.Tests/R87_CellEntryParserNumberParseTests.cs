@@ -144,7 +144,7 @@ public sealed class R87_CellEntryParserNumberParseTests
         var cell = CellEntryParser.CreateCell("$5", address, useR1C1ReferenceStyle: false, workbook);
 
         cell.Value.Should().BeOfType<NumberValue>().Which.Value.Should().Be(5);
-        workbook.GetStyle(cell.StyleId).NumberFormat.Should().Be("$#,##0.00");
+        workbook.GetStyle(cell.StyleId).NumberFormat.Should().Be("$#,##0", "Excel shows a typed $5 as $5, not $5.00");
     }
 
     [Fact]

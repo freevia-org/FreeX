@@ -132,8 +132,15 @@ public sealed class BackstageWorksheetShortcutLeakTests
                 copiesBox.Focus().Should().BeTrue();
                 copiesBox.SelectAll();
 
-                window.KeyPress(Key.D3, RawInputModifiers.None, PhysicalKey.Digit3, "3");
-                window.KeyRelease(Key.D3, RawInputModifiers.None, PhysicalKey.Digit3, "3");
+                var digitKeyDown = new KeyEventArgs
+                {
+                    RoutedEvent = InputElement.KeyDownEvent,
+                    Key = Key.D3,
+                    Source = copiesBox,
+                };
+                copiesBox.RaiseEvent(digitKeyDown);
+                digitKeyDown.Handled.Should().BeFalse(
+                    "a printable key aimed at a File screen text box must stay unhandled, or X11 drops its TextInput");
                 window.KeyTextInput("3");
                 await DrainInputAsync();
                 copiesBox.Text.Should().Be("3", "typing into File > Print's Copies box must change it");
