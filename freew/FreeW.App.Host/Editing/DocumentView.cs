@@ -7312,6 +7312,46 @@ public sealed partial class DocumentView : RichTextBox
         var fillBrush = BuildDrawingFillBrush(wordArt.Fill);
         var foreground = BuildDrawingWordArtTextBrush(wordArt);
         var wpfEffect = BuildWordArtEffect(plan.Effects, DocumentEffectSet.FromTheme(_model.Theme));
+        var borderThickness = wordArt.Outline.IsVisible ? Math.Max(0.5, wordArt.Outline.WidthDip) : 0;
+        var bodyInsets = new Thickness(
+            WordArtBodyHorizontalInsetDip,
+            WordArtBodyVerticalInsetDip,
+            WordArtBodyHorizontalInsetDip,
+            WordArtBodyVerticalInsetDip);
+        var textWidthDip = Math.Max(1, plan.Rect.WidthDip - 2 * borderThickness);
+        var textHeightDip = Math.Max(1, plan.Rect.HeightDip - 2 * borderThickness);
+        if (wordArt.Warp == WordArtWarp.Wave1
+            && MeasureWordArtLineWidthDip(wordArt.Text, wordArt.FontFamily, wordArt.FontSizeDip, wordArt.Bold)
+                > textWidthDip - bodyInsets.Left - bodyInsets.Right)
+        {
+            // Word wraps a warped text body that does not fit its shape's text rectangle, then warps
+            // the wrapped block as a whole (drawing-objects-complex: "Free" / "W"). The single-line
+            // glyph placement below only covers text that fits on one line.
+            // A shape glow is not drawn here: a halo outside the box enlarges the object's visual bounds,
+            // which the floating overlay and print/export composites fit back into the object frame.
+            var hasShapeGlow = plan.Effects.HasGlow;
+            return new Border
+            {
+                Width = plan.Rect.WidthDip,
+                Height = plan.Rect.HeightDip,
+                BorderBrush = wordArt.Outline.IsVisible ? BuildDrawingStrokeBrush(wordArt.Outline) : null,
+                BorderThickness = new Thickness(borderThickness),
+                Background = fillBrush,
+                Child = BuildPresetWarpedWordArtText(
+                    wordArt.Text,
+                    wordArt.FontFamily,
+                    wordArt.FontSizeDip,
+                    wordArt.Bold,
+                    foreground,
+                    wordArt.Warp,
+                    textWidthDip,
+                    textHeightDip,
+                    bodyInsets,
+                    hasShapeGlow ? null : wpfEffect,
+                    wrapToWidth: true),
+            };
+        }
+
         if (wordArt.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)
         {
             var preserveOpaqueGlowBlueFill = wordArt is
@@ -7358,7 +7398,6 @@ public sealed partial class DocumentView : RichTextBox
                 glowColor: glowColor);
         }
 
-        var borderThickness = wordArt.Outline.IsVisible ? Math.Max(0.5, wordArt.Outline.WidthDip) : 0;
         FrameworkElement textVisual;
         if (WordArtWarpGeometry.Supports(wordArt.Warp))
         {
@@ -7371,10 +7410,11 @@ public sealed partial class DocumentView : RichTextBox
                 wordArt.Bold,
                 foreground,
                 wordArt.Warp,
-                Math.Max(1, plan.Rect.WidthDip - 2 * borderThickness),
-                Math.Max(1, plan.Rect.HeightDip - 2 * borderThickness),
-                new Thickness(WordArtBodyHorizontalInsetDip, WordArtBodyVerticalInsetDip, WordArtBodyHorizontalInsetDip, WordArtBodyVerticalInsetDip),
-                wpfEffect);
+                textWidthDip,
+                textHeightDip,
+                bodyInsets,
+                wpfEffect,
+                wrapToWidth: !WordArtWarpGeometry.IsArc(wordArt.Warp));
         }
         else
         {
@@ -7403,6 +7443,20 @@ public sealed partial class DocumentView : RichTextBox
         };
     }
 
+    private static double MeasureWordArtLineWidthDip(string text, string fontFamily, double fontSizeDip, bool bold) =>
+        new FormattedText(
+            string.IsNullOrEmpty(text) ? " " : text,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Windows.FlowDirection.LeftToRight,
+            new Typeface(
+                new FontFamily(string.IsNullOrWhiteSpace(fontFamily) ? "Calibri" : fontFamily),
+                FontStyles.Normal,
+                bold ? FontWeights.Bold : FontWeights.Normal,
+                FontStretches.Normal),
+            Math.Max(1, fontSizeDip),
+            Brushes.Black,
+            1.0).WidthIncludingTrailingWhitespace;
+
     // DrawingML body insets (a:bodyPr lIns/rIns 91440 EMU, tIns/bIns 45720 EMU) in DIPs.
     private const double WordArtBodyHorizontalInsetDip = 9.6;
     private const double WordArtBodyVerticalInsetDip = 4.8;
@@ -7422,7 +7476,8 @@ public sealed partial class DocumentView : RichTextBox
         double widthDip,
         double heightDip,
         Thickness insets,
-        System.Windows.Media.Effects.Effect? effect)
+        System.Windows.Media.Effects.Effect? effect,
+        bool wrapToWidth = false)
     {
         var path = new System.Windows.Shapes.Path
         {
@@ -7449,15 +7504,23 @@ public sealed partial class DocumentView : RichTextBox
             Math.Max(1, fontSizeDip),
             Brushes.Black,
             1.0);
+        var innerLeft = Math.Min(insets.Left, path.Width / 2);
+        var innerTop = Math.Min(insets.Top, path.Height / 2);
+        var innerWidth = Math.Max(1, path.Width - innerLeft - Math.Min(insets.Right, path.Width / 2));
+        var innerHeight = Math.Max(1, path.Height - innerTop - Math.Min(insets.Bottom, path.Height / 2));
+        // An envelope warp lays the body out first (square wrap at the text rectangle's width) and
+        // then warps the wrapped block as a whole.
+        if (wrapToWidth && formatted.WidthIncludingTrailingWhitespace > innerWidth)
+        {
+            formatted.Trimming = TextTrimming.None;
+            formatted.MaxTextWidth = innerWidth;
+        }
+
         var source = formatted.BuildGeometry(new Point(0, 0));
         var bounds = source.Bounds;
         if (bounds.IsEmpty || bounds.Width <= 0 || bounds.Height <= 0)
             return path;
 
-        var innerLeft = Math.Min(insets.Left, path.Width / 2);
-        var innerTop = Math.Min(insets.Top, path.Height / 2);
-        var innerWidth = Math.Max(1, path.Width - innerLeft - Math.Min(insets.Right, path.Width / 2));
-        var innerHeight = Math.Max(1, path.Height - innerTop - Math.Min(insets.Bottom, path.Height / 2));
         var aspect = bounds.Height / bounds.Width;
         var maxStep = Math.Max(0.5, bounds.Width / 96);
 
