@@ -70,7 +70,10 @@ public static class StyleDefinitionDialogText
         "StyleDefinition_Description_StyleFormat",
         "StyleDefinition_Description_BasedOnFormat",
         "StyleDefinition_Description_FollowingFormat",
-        "StyleDefinition_Manage_UpdateToMatch",
+        "StyleGallery_Context_UpdateToMatchFormat",
+        "StyleGallery_Context_Modify",
+        "StyleGallery_Context_RemoveFromGallery",
+        "StyleGallery_Context_DeleteFormat",
     ];
 
     public static string NewTitle => Text("StyleDefinition_NewTitle");
@@ -100,7 +103,12 @@ public static class StyleDefinitionDialogText
     public static string FontSizeError => Text("StyleDefinition_Error_FontSize");
     public static string DuplicateNameError(string name) =>
         Format("StyleDefinition_Error_DuplicateNameFormat", name);
-    public static string ManageUpdateToMatch => Text("StyleDefinition_Manage_UpdateToMatch");
+    public static string GalleryModify => Text("StyleGallery_Context_Modify");
+    public static string GalleryRemove => Text("StyleGallery_Context_RemoveFromGallery");
+    public static string GalleryUpdateToMatch(string styleName) =>
+        Format("StyleGallery_Context_UpdateToMatchFormat", styleName);
+    public static string GalleryDelete(string styleName) =>
+        Format("StyleGallery_Context_DeleteFormat", styleName);
 
     public static string KindLabel(StyleDefinitionKind kind) => kind switch
     {

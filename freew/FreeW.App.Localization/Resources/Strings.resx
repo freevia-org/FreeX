@@ -1027,5 +1027,8 @@
   <data name="StyleDefinition_Description_StyleFormat" xml:space="preserve"><value>Style: {0}</value></data>
   <data name="StyleDefinition_Description_BasedOnFormat" xml:space="preserve"><value>Based on: {0}</value></data>
   <data name="StyleDefinition_Description_FollowingFormat" xml:space="preserve"><value>Following style: {0}</value></data>
-  <data name="StyleDefinition_Manage_UpdateToMatch" xml:space="preserve"><value>Update to Match Selection</value></data>
+  <data name="StyleGallery_Context_UpdateToMatchFormat" xml:space="preserve"><value>Update {0} to Match Selection</value></data>
+  <data name="StyleGallery_Context_Modify" xml:space="preserve"><value>Modify…</value></data>
+  <data name="StyleGallery_Context_RemoveFromGallery" xml:space="preserve"><value>Remove from Style Gallery</value></data>
+  <data name="StyleGallery_Context_DeleteFormat" xml:space="preserve"><value>Delete {0}…</value></data>
 </root>

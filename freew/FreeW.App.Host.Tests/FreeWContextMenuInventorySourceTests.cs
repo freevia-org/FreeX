@@ -6,7 +6,7 @@ namespace FreeW.App.Host.Tests;
 public sealed class FreeWContextMenuInventorySourceTests
 {
     [Fact]
-    public void WpfHost_HasExactlyEightExplicitMenuConstructionsIncludingGrammarMenu()
+    public void WpfHost_HasExactlyTenExplicitMenuConstructionsIncludingGrammarMenu()
     {
         var root = HostRoot();
         var source = Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
@@ -16,8 +16,10 @@ public sealed class FreeWContextMenuInventorySourceTests
 
         // ThemeGallery's shared-planner-backed Effects picker is the seventh explicit WPF menu
         // construction added alongside the existing paragraph-spacing picker; the editor's grammar
-        // menu (DocumentView.Proofing.cs, planned by ProofingContextMenuPlanner) is the eighth.
-        source.Sum(text => Regex.Matches(text, @"new\s+ContextMenu\s*\(").Count).Should().Be(8);
+        // menu (DocumentView.Proofing.cs, planned by ProofingContextMenuPlanner) is the eighth. The
+        // Styles gallery swatch menu (StyleGalleryPlanner) and the Modify Style dialog's Format menu
+        // (StyleDefinitionDialogSession.FormatMenu) are the ninth and tenth.
+        source.Sum(text => Regex.Matches(text, @"new\s+ContextMenu\s*\(").Count).Should().Be(10);
     }
 
     [Fact]
@@ -37,6 +39,8 @@ public sealed class FreeWContextMenuInventorySourceTests
             .And.Contain("FreeWContextMenuPlanner.BuildEffects");
         Read("Ribbon", "TableStylesGallery.cs").Should().Contain("FreeWContextMenuPlanner.BuildTableStyles");
         Read("Editing", "DocumentView.Proofing.cs").Should().Contain("ProofingContextMenuPlanner.BuildGrammar");
+        Read("Ribbon", "StylesGallery.cs").Should().Contain("StyleGalleryPlanner.BuildContextMenu(");
+        Read("StyleDefinitionDialog.cs").Should().Contain("foreach (var entry in session.FormatMenu)");
     }
 
     private static string HostRoot() => Path.Combine(

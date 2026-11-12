@@ -337,6 +337,103 @@ public sealed class StyleDefinitionDialogSession
             Paragraph = paragraph;
     }
 
+    /// <summary>
+    /// Takes the result of the Format menu's Paragraph dialog. Indents and the flow toggles are taken
+    /// as entered; spacing and the tri-state options are only recorded as set on the style when the
+    /// user actually changed them, so an untouched field keeps inheriting from the based-on style.
+    /// </summary>
+    public void ApplyParagraphDialogResult(ParagraphBreaksDialogResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        if (!HasParagraphFormatting)
+            return;
+
+        var paragraph = Paragraph with
+        {
+            IndentLeftPt = result.LeftPt,
+            IndentRightPt = result.RightPt,
+            FirstLineIndentPt = result.FirstLinePt,
+            KeepWithNext = result.KeepWithNext,
+            KeepLinesTogether = result.KeepLinesTogether,
+            PageBreakBefore = result.PageBreakBefore,
+        };
+        if (Math.Abs(result.SpaceBeforePt - paragraph.SpaceBeforePt) > 0.0001)
+        {
+            paragraph = paragraph with
+            {
+                SpaceBeforePt = Math.Max(0, result.SpaceBeforePt),
+                SpaceBeforeIsSet = true,
+                BeforeAutoSpacing = false,
+            };
+        }
+        if (Math.Abs(result.SpaceAfterPt - paragraph.SpaceAfterPt) > 0.0001)
+        {
+            paragraph = paragraph with
+            {
+                SpaceAfterPt = Math.Max(0, result.SpaceAfterPt),
+                SpaceAfterIsSet = true,
+                AfterAutoSpacing = false,
+            };
+        }
+        if (Math.Abs(result.LineSpacing - paragraph.LineSpacing) > 0.0001)
+        {
+            paragraph = paragraph with
+            {
+                LineRule = LineSpacingRule.Multiple,
+                LineSpacing = Math.Max(0.5, result.LineSpacing),
+                LineSpacingIsSet = true,
+            };
+        }
+        if (result.WidowControl != paragraph.WidowControl)
+            paragraph = paragraph with { WidowControl = result.WidowControl, WidowControlIsSet = true };
+        if (result.SuppressAutoHyphens != paragraph.SuppressAutoHyphens)
+        {
+            paragraph = paragraph with
+            {
+                SuppressAutoHyphens = result.SuppressAutoHyphens,
+                SuppressAutoHyphensIsSet = true,
+            };
+        }
+        if (result.SuppressLineNumbers != paragraph.SuppressLineNumbers)
+        {
+            paragraph = paragraph with
+            {
+                SuppressLineNumbers = result.SuppressLineNumbers,
+                SuppressLineNumbersIsSet = true,
+            };
+        }
+        if (result.ContextualSpacing != (paragraph.ContextualSpacing is true))
+            paragraph = paragraph with { ContextualSpacing = result.ContextualSpacing };
+
+        // Record equality keeps an untouched dialog from producing a new instance (and so a spurious
+        // "modified" style): only replace the working formatting when something really changed.
+        if (paragraph != Paragraph)
+            Paragraph = paragraph;
+    }
+
+    /// <summary>Takes the result of the Format menu's Tabs dialog.</summary>
+    public void ApplyTabStops(IReadOnlyList<TabStop> tabStops)
+    {
+        ArgumentNullException.ThrowIfNull(tabStops);
+        if (HasParagraphFormatting && !Paragraph.TabStops.SequenceEqual(tabStops))
+            Paragraph = Paragraph with { TabStops = tabStops.ToArray() };
+    }
+
+    /// <summary>Takes the paragraph border and shading from the Format menu's Borders and Shading dialog.</summary>
+    public void ApplyBorderAndShading(ParagraphBorder? border, string? shadingHex, ShadingPattern shadingPattern)
+    {
+        if (!HasParagraphFormatting)
+            return;
+        var paragraph = Paragraph with
+        {
+            Border = border,
+            ShadingColorHex = string.IsNullOrWhiteSpace(shadingHex) ? null : shadingHex,
+            ShadingPattern = string.IsNullOrWhiteSpace(shadingHex) ? ShadingPattern.Clear : shadingPattern,
+        };
+        if (paragraph != Paragraph)
+            Paragraph = paragraph;
+    }
+
     public StyleDefinitionPreview Preview
     {
         get

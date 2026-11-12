@@ -7,6 +7,7 @@ using System.Windows.Media;
 using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -38,11 +39,28 @@ internal sealed class StylesGallery : Control
 
     private readonly DocumentView _editor;
     private readonly IRibbonCommandRegistry? _registry;
+    private readonly StackPanel _swatches = new() { Orientation = Orientation.Horizontal };
+    private string? _signature;
 
     private StylesGallery(DocumentView editor, IRibbonCommandRegistry? registry)
     {
         _editor = editor;
         _registry = registry;
+    }
+
+    // Rebuild the visible strip when the style catalog no longer matches what the swatches show (a
+    // style was created, renamed, deleted, re-flagged for the gallery, or the edit was undone).
+    private void RefreshSwatches()
+    {
+        var signature = StyleGalleryPlanner.Signature(_editor.Model);
+        if (string.Equals(signature, _signature, System.StringComparison.Ordinal))
+            return;
+
+        _swatches.Children.Clear();
+        foreach (var (name, id) in Entries())
+            _swatches.Children.Add(BuildSwatch(name, id, large: true));
+        // Entries() may seed Normal / No Spacing, so take the signature after it ran.
+        _signature = StyleGalleryPlanner.Signature(_editor.Model);
     }
 
     /// <summary>Build the gallery strip (visible swatches + a "more" expander) for the Home > Styles group.</summary>
@@ -58,9 +76,19 @@ internal sealed class StylesGallery : Control
             Background = Brushes.White,
             SnapsToDevicePixels = true
         };
-        var swatches = new StackPanel { Orientation = Orientation.Horizontal };
-        foreach (var (name, id) in gallery.Entries())
-            swatches.Children.Add(gallery.BuildSwatch(name, id, large: true));
+        var swatches = gallery._swatches;
+        gallery.RefreshSwatches();
+        // Follow the catalog while the gallery is on screen; a gallery instance is rebuilt per ribbon
+        // presentation, so it must not stay subscribed (and alive) after it is unloaded.
+        root.Loaded += (_, _) =>
+        {
+            editor.EditingSessionChanged -= gallery.RefreshSwatches;
+            editor.EditingSessionChanged += gallery.RefreshSwatches;
+            gallery.RefreshSwatches();
+        };
+        root.Unloaded += (_, _) => editor.EditingSessionChanged -= gallery.RefreshSwatches;
+        // A newly opened document replaces the model without an edit notification.
+        root.MouseEnter += (_, _) => gallery.RefreshSwatches();
         // Word shows a fixed-width scrollable styles gallery, not the whole list inline. Bound the visible
         // strip so the group stays compact (and doesn't force the adaptive panel to collapse it).
         strip.Child = new ScrollViewer
@@ -84,15 +112,20 @@ internal sealed class StylesGallery : Control
             VerticalAlignment = VerticalAlignment.Stretch,
             ToolTip = FreeWUiTextCatalog.MoreStylesToolTip
         };
-        var popup = gallery.BuildMorePopup(more);
-        more.Checked += (_, _) => popup.IsOpen = true;
-        popup.Closed += (_, _) => more.IsChecked = false;
+        // The full list is rebuilt each time it opens, so it always shows the current catalog.
+        more.Checked += (_, _) =>
+        {
+            var popup = gallery.BuildMorePopup(more);
+            popup.Closed += (_, _) => more.IsChecked = false;
+            popup.IsOpen = true;
+        };
         root.Children.Add(more);
 
         return root;
     }
 
-    // The styles to show: the built-ins that exist in the document, plus any custom paragraph styles.
+    // The styles to show: the built-ins that exist in the document, plus the custom paragraph and
+    // character styles flagged for the gallery (StyleGalleryPlanner owns that rule).
     // "Normal" and "No Spacing" are Word's two always-offered Quick Styles -- shown (and, since a fresh
     // document only auto-seeds the built-ins that carry a formatting role, NoSpacing does not -- seeded)
     // regardless of whether the document's catalog already defines them, exactly like Normal already was.
@@ -116,11 +149,64 @@ internal sealed class StylesGallery : Control
         }
 
         var builtInIds = new HashSet<string>(BuiltIns.Select(e => e.Id));
-        foreach (var style in model.Styles.Values)
+        foreach (var entry in StyleGalleryPlanner.CustomEntries(model))
         {
-            if (style.Type == StyleType.Paragraph && !builtInIds.Contains(style.Id) && !StyleManager.IsBuiltIn(style.Id))
-                yield return (style.Name, style.Id);
+            if (!builtInIds.Contains(entry.Id))
+                yield return (entry.Name, entry.Id);
         }
+    }
+
+    // Word's swatch right-click menu: Update <style> to Match Selection, Modify…, Remove from Style
+    // Gallery and Delete, planned by StyleGalleryPlanner and built when the menu opens so the labels and
+    // enabled states reflect the catalog at that moment.
+    private ContextMenu BuildSwatchContextMenu(string styleId)
+    {
+        var menu = new ContextMenu();
+        menu.Opened += (_, _) =>
+        {
+            menu.Items.Clear();
+            foreach (var planned in StyleGalleryPlanner.BuildContextMenu(_editor.Model, styleId))
+            {
+                var item = new MenuItem { Header = planned.Label, IsEnabled = planned.IsEnabled };
+                System.Windows.Automation.AutomationProperties.SetAutomationId(item, planned.AutomationId);
+                var command = planned.Command;
+                item.Click += (_, _) => RunSwatchCommand(command, styleId);
+                menu.Items.Add(item);
+            }
+        };
+        // WPF only opens a context menu that has items; the real ones replace this when it opens.
+        menu.Items.Add(new MenuItem());
+        return menu;
+    }
+
+    private void RunSwatchCommand(StyleGalleryContextCommand command, string styleId)
+    {
+        _editor.EndStylePreview();
+        switch (command)
+        {
+            case StyleGalleryContextCommand.UpdateToMatchSelection:
+                _editor.UpdateStyleToMatchSelection(styleId);
+                break;
+
+            case StyleGalleryContextCommand.Modify:
+                if (_editor.Model.Styles.TryGetValue(styleId, out var existing)
+                    && StyleDefinitionDialog.AskModify(Window.GetWindow(_editor), _editor.Model, existing) is { } definition)
+                {
+                    _editor.ModifyStyle(styleId, definition);
+                }
+                break;
+
+            case StyleGalleryContextCommand.RemoveFromGallery:
+                _editor.SetStyleGalleryVisibility(styleId, showInGallery: false);
+                break;
+
+            case StyleGalleryContextCommand.Delete:
+                _editor.DeleteParagraphStyle(styleId);
+                break;
+        }
+
+        _editor.Focus();
+        RefreshSwatches();
     }
 
     // The full-list popup shown by the "▾" expander: every style entry as a tall row swatch.
@@ -198,8 +284,15 @@ internal sealed class StylesGallery : Control
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis
         };
-        if (run.Underline)
-            label.TextDecorations = TextDecorations.Underline;
+        if (run.Underline || run.Strikethrough)
+        {
+            var decorations = new TextDecorationCollection();
+            if (run.Underline)
+                decorations.Add(TextDecorations.Underline);
+            if (run.Strikethrough)
+                decorations.Add(TextDecorations.Strikethrough);
+            label.TextDecorations = decorations;
+        }
 
         var button = new Button
         {
@@ -210,7 +303,8 @@ internal sealed class StylesGallery : Control
             Padding = large ? new Thickness(8, 2, 8, 2) : new Thickness(8, 4, 8, 4),
             Cursor = System.Windows.Input.Cursors.Hand,
             HorizontalContentAlignment = HorizontalAlignment.Left,
-            ToolTip = name
+            ToolTip = name,
+            ContextMenu = BuildSwatchContextMenu(styleId)
         };
         if (large)
         {
@@ -281,6 +375,7 @@ internal sealed class StylesGallery : Control
         Bold = over.Bold || baseRun.Bold,
         Italic = over.Italic || baseRun.Italic,
         Underline = over.Underline || baseRun.Underline,
+        Strikethrough = over.Strikethrough || baseRun.Strikethrough,
         FontFamily = over.FontFamily ?? baseRun.FontFamily,
         FontSizePt = over.FontSizePt ?? baseRun.FontSizePt,
         ColorHex = over.ColorHex ?? baseRun.ColorHex

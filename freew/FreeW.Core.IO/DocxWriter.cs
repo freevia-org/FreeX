@@ -10278,6 +10278,14 @@ public static class DocxWriter
             pPr.Add(new XElement(W + "keepLines"));
         if (includeFlowBorderAndShading && f.PageBreakBefore)
             pPr.Add(new XElement(W + "pageBreakBefore"));
+        // Only an explicit widow/orphan or line-number choice is written, so styles that never set one
+        // keep serializing exactly as before.
+        if (includeFlowBorderAndShading && f.WidowControlIsSet)
+            pPr.Add(new XElement(W + "widowControl",
+                f.WidowControl ? null : new XAttribute(W + "val", "0")));
+        if (includeFlowBorderAndShading && f.SuppressLineNumbersIsSet)
+            pPr.Add(new XElement(W + "suppressLineNumbers",
+                f.SuppressLineNumbers ? null : new XAttribute(W + "val", "0")));
         if (includeFlowBorderAndShading && f.Border is { } border)
         {
             var styleToken = BorderLineStyles.ToToken(border.LineStyle);
@@ -10316,6 +10324,10 @@ public static class DocxWriter
         if (f.TabStops.Count > 0)
             pPr.Add(new XElement(W + "tabs",
                 f.TabStops.Select(BuildTabStop)));
+        // w:suppressAutoHyphens follows w:tabs in CT_PPrBase order; written only when explicitly set.
+        if (includeFlowBorderAndShading && f.SuppressAutoHyphensIsSet)
+            pPr.Add(new XElement(W + "suppressAutoHyphens",
+                f.SuppressAutoHyphens ? null : new XAttribute(W + "val", "0")));
 
         // w:spacing carries before/after and line spacing — CT_PPrBase order: after bidi, before ind.
         // before/after emitted only when non-zero; line spacing only when it differs from the model

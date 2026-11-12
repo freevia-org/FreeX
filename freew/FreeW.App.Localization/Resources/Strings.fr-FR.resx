@@ -561,5 +561,8 @@
   <data name="StyleDefinition_Description_StyleFormat" xml:space="preserve"><value>Style : {0}</value></data>
   <data name="StyleDefinition_Description_BasedOnFormat" xml:space="preserve"><value>Basé sur : {0}</value></data>
   <data name="StyleDefinition_Description_FollowingFormat" xml:space="preserve"><value>Style suivant : {0}</value></data>
-  <data name="StyleDefinition_Manage_UpdateToMatch" xml:space="preserve"><value>Mettre à jour selon la sélection</value></data>
+  <data name="StyleGallery_Context_UpdateToMatchFormat" xml:space="preserve"><value>Mettre à jour {0} pour correspondre à la sélection</value></data>
+  <data name="StyleGallery_Context_Modify" xml:space="preserve"><value>Modifier…</value></data>
+  <data name="StyleGallery_Context_RemoveFromGallery" xml:space="preserve"><value>Supprimer de la galerie de styles</value></data>
+  <data name="StyleGallery_Context_DeleteFormat" xml:space="preserve"><value>Supprimer {0}…</value></data>
 </root>

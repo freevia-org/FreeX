@@ -73,7 +73,10 @@ public sealed class RendererNeutralProjectionOwnershipSourceTests
         ribbon.Should().NotContain("private static class CommentAuthor");
         wpfView.Should().Contain("ReviewAuthorIdentityPlanner.ResolveAuthor(");
         wpfView.Should().NotContain("return string.IsNullOrWhiteSpace(author) ? \"FreeW User\"");
-        ribbon.Should().Contain("StyleDialogPlanner.BuildStyleNamesById(editor.Model)");
+        // New Style / Modify Style hand the document to the Word-style definition dialog, whose
+        // presentation session owns the based-on / following-style choices (filtered by style type).
+        ribbon.Should().Contain("StyleDefinitionDialog.AskNew(owner, editor.Model, editor.CurrentParagraphStyleId)");
+        ribbon.Should().Contain("StyleDefinitionDialog.AskModify(owner, editor.Model, existing)");
         ribbon.Should().NotContain("private static IReadOnlyDictionary<string, string> StyleNamesById");
         avalonia.Should().Contain("CommentInitialsPolicy.ResolveBadge(");
         avalonia.Should().Contain("ReviewAuthorIdentityPlanner.BuildCommentStamp(");

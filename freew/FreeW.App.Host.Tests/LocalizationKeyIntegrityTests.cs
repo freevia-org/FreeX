@@ -62,6 +62,7 @@ public sealed class LocalizationKeyIntegrityTests
             .Concat(ChartAxisTitlesDialogPlanner.RequiredResourceKeys)
             .Concat(ChartSizeDialogPlanner.RequiredResourceKeys)
             .Concat(AutosaveRecoveryTextCatalog.RequiredResourceKeys)
+            .Concat(StyleDefinitionDialogText.RequiredResourceKeys)
             .Distinct(StringComparer.Ordinal);
 
         required.Should().OnlyContain(key => available.Contains(key));

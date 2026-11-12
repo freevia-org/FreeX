@@ -168,6 +168,18 @@ public sealed class DocumentStyleCatalogCoordinator
         });
     }
 
+    /// <summary>Word's "Add to / Remove from the Styles gallery" for one style, as an undoable edit.</summary>
+    public DocumentStyle? SetGalleryVisibility(string styleId, bool showInGallery)
+    {
+        if (string.IsNullOrWhiteSpace(styleId) || !Document.Styles.ContainsKey(styleId))
+            return null;
+
+        return ExecuteModification(
+            styleId,
+            showInGallery ? "Add to Style Gallery" : "Remove from Style Gallery",
+            document => StyleManager.ModifyStyle(document, styleId, quickFormat: showInGallery));
+    }
+
     /// <summary>
     /// Word's Delete Style: removes a custom style and returns everything formatted with it to the
     /// default, as one undo step. Built-in styles are refused.
