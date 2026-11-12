@@ -13,7 +13,7 @@ public sealed class MailMergeRibbonWorkflowTests
 
         MailMergeRibbonWorkflow.Register(registry, bindings);
 
-        MailMergeRibbonWorkflow.Actions.Should().OnlyHaveUniqueItems().And.HaveCount(33);
+        MailMergeRibbonWorkflow.Actions.Should().OnlyHaveUniqueItems().And.HaveCount(35);
         foreach (var action in MailMergeRibbonWorkflow.Actions)
         {
             var id = FreeWRibbonCommandWorkflow.GetPrimaryCommandId(action);
@@ -58,6 +58,34 @@ public sealed class MailMergeRibbonWorkflowTests
 
         Stateful(registry, "freew.merge-find-recipient").GetState().IsEnabled.Should().BeFalse();
         Stateful(registry, "freew.merge-check-errors").GetState().IsEnabled.Should().BeFalse();
+        Stateful(registry, "freew.merge-type-new-list").GetState().IsEnabled.Should().BeFalse();
+        Stateful(registry, "freew.merge-use-existing-list").GetState().IsEnabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public void RecipientSourceCommands_UseTheRendererBindingsWhenSupplied()
+    {
+        var events = new List<string>();
+        var registry = new FreeWRibbonCommandBindingPorts();
+        MailMergeRibbonWorkflow.Register(
+            registry,
+            CreateBindings(events) with
+            {
+                TypeNewList = new RecordingCommand(events, "type-new-list"),
+                UseExistingList = new RecordingCommand(events, "use-existing-list"),
+                EditRecipients = new RecordingCommand(events, "edit-recipients"),
+            });
+
+        Execute(registry, "freew.merge-type-new-list");
+        Execute(registry, "freew.merge-use-existing-list");
+        Execute(registry, "freew.merge-edit-recipients");
+        Execute(registry, "freew.merge-data");
+
+        events.Should().Equal("type-new-list", "use-existing-list", "edit-recipients", "recipients");
+        FreeWRibbonCommandWorkflow.GetPrimaryCommandId(FreeWRibbonCommandAction.MergeTypeNewList).Value
+            .Should().Be("freew.merge-type-new-list");
+        FreeWRibbonCommandWorkflow.GetPrimaryCommandId(FreeWRibbonCommandAction.MergeUseExistingList).Value
+            .Should().Be("freew.merge-use-existing-list");
     }
 
     [Fact]

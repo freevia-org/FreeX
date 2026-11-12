@@ -9975,13 +9975,16 @@ public static class DocxWriter
             // Word's built-in linked style pairs stay linked across a round-trip.
             if (!string.IsNullOrEmpty(style.LinkedStyleId))
                 element.Add(new XElement(W + "link", new XAttribute(W + "val", style.LinkedStyleId)));
+            // "Add to the Styles gallery" (w:qFormat, after w:link and before w:pPr in CT_Style order).
+            if (style.QuickFormat)
+                element.Add(new XElement(W + "qFormat"));
             // A single w:pPr (which precedes w:rPr in CT_Style order) carrying the style's paragraph
             // formatting (alignment / indents / spacing) and, for a preserved style-level list, its numPr.
             // Built only for paragraph styles, and only when there is something to emit, so character styles
             // and formatting-only paragraph styles are unaffected.
             if (style.Type != StyleType.Character)
             {
-                var pPr = BuildStyleParagraphProperties(style.Paragraph);
+                var pPr = BuildStyleParagraphProperties(style.Paragraph, includeFlowBorderAndShading: true);
                 if (chapterPageNumberingStyleIds.Contains(style.Id))
                 {
                     pPr ??= new XElement(W + "pPr");
@@ -10269,9 +10272,52 @@ public static class DocxWriter
     /// <see cref="BuildParagraphProperties"/>, which also handles instance-only concerns (pStyle, section
     /// breaks, FreeW's modelled lists) that have no place on a style definition.
     /// </summary>
-    private static XElement? BuildStyleParagraphProperties(ParagraphFormatting f)
+    private static XElement? BuildStyleParagraphProperties(
+        ParagraphFormatting f,
+        bool includeFlowBorderAndShading = false)
     {
         var pPr = new XElement(W + "pPr");
+
+        // Flow toggles, border and shading a style can carry (Modify Style > Format > Paragraph / Border).
+        // CT_PPrBase order: keepNext, keepLines, pageBreakBefore, ... pBdr, shd, tabs, ... spacing, ind, jc.
+        if (includeFlowBorderAndShading && f.KeepWithNext)
+            pPr.Add(new XElement(W + "keepNext"));
+        if (includeFlowBorderAndShading && f.KeepLinesTogether)
+            pPr.Add(new XElement(W + "keepLines"));
+        if (includeFlowBorderAndShading && f.PageBreakBefore)
+            pPr.Add(new XElement(W + "pageBreakBefore"));
+        // Only an explicit widow/orphan or line-number choice is written, so styles that never set one
+        // keep serializing exactly as before.
+        if (includeFlowBorderAndShading && f.WidowControlIsSet)
+            pPr.Add(new XElement(W + "widowControl",
+                f.WidowControl ? null : new XAttribute(W + "val", "0")));
+        if (includeFlowBorderAndShading && f.SuppressLineNumbersIsSet)
+            pPr.Add(new XElement(W + "suppressLineNumbers",
+                f.SuppressLineNumbers ? null : new XAttribute(W + "val", "0")));
+        if (includeFlowBorderAndShading && f.Border is { } border)
+        {
+            var styleToken = BorderLineStyles.ToToken(border.LineStyle);
+            XElement Edge(string name) => new(W + name,
+                new XAttribute(W + "val", styleToken),
+                new XAttribute(W + "sz", PointsToEighthPoints(border.WidthPt)),
+                new XAttribute(W + "space", 0),
+                new XAttribute(W + "color", border.ColorHex.TrimStart('#')));
+            var drawBottom = border.BottomOnly || border.Bottom;
+            var drawTop = !border.BottomOnly && border.Top;
+            var drawLeft = !border.BottomOnly && border.Left;
+            var drawRight = !border.BottomOnly && border.Right;
+            if (drawTop || drawLeft || drawBottom || drawRight)
+                pPr.Add(new XElement(W + "pBdr",
+                    drawTop ? Edge("top") : null,
+                    drawLeft ? Edge("left") : null,
+                    drawBottom ? Edge("bottom") : null,
+                    drawRight ? Edge("right") : null));
+        }
+        if (includeFlowBorderAndShading && f.ShadingColorHex is { Length: > 0 } shading)
+            pPr.Add(new XElement(W + "shd",
+                new XAttribute(W + "val", ShadingPatterns.ToToken(f.ShadingPattern)),
+                new XAttribute(W + "color", "auto"),
+                new XAttribute(W + "fill", shading.TrimStart('#'))));
 
         // Children MUST follow the CT_PPr / EG_PPrBase schema sequence, matching the order used by the
         // main BuildParagraphProperties. The relevant subset emitted here, in schema order, is:
@@ -10286,6 +10332,10 @@ public static class DocxWriter
         if (f.TabStops.Count > 0)
             pPr.Add(new XElement(W + "tabs",
                 f.TabStops.Select(BuildTabStop)));
+        // w:suppressAutoHyphens follows w:tabs in CT_PPrBase order; written only when explicitly set.
+        if (includeFlowBorderAndShading && f.SuppressAutoHyphensIsSet)
+            pPr.Add(new XElement(W + "suppressAutoHyphens",
+                f.SuppressAutoHyphens ? null : new XAttribute(W + "val", "0")));
 
         // w:spacing carries before/after and line spacing — CT_PPrBase order: after bidi, before ind.
         // before/after emitted only when non-zero; line spacing only when it differs from the model

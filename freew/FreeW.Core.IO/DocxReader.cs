@@ -8606,6 +8606,9 @@ public static class DocxReader
                 // character style. FreeW does not resolve through the link but retains it so Word built-in
                 // linked style pairs stay linked on save instead of silently unlinking.
                 LinkedStyleId = s.Element(W + "link")?.Attribute(W + "val")?.Value,
+                // "Add to the Styles gallery" (w:qFormat): present (and not switched off) means shown.
+                QuickFormat = s.Element(W + "qFormat") is { } qFormat
+                    && qFormat.Attribute(W + "val")?.Value is not ("0" or "false" or "off"),
                 OutlineLevel = ReadOutlineLevel(pPr),
                 Run = rPr is null ? RunFormatting.Default : ReadRunFormatting(rPr, themeFonts),
                 Paragraph = pPr is null ? ParagraphFormatting.Default : ReadParagraphFormatting(pPr),

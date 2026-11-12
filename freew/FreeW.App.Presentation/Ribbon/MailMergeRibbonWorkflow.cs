@@ -26,7 +26,13 @@ public sealed record MailMergeRibbonBindings(
     IRibbonCommand FinishMerge,
     IRibbonCommand SendEmail,
     IRibbonCommand? FindRecipient = null,
-    IRibbonCommand? CheckErrors = null);
+    IRibbonCommand? CheckErrors = null,
+    // Select Recipients > Type a New List / Use an Existing List, and the Edit Recipient List dialog.
+    // A renderer that does not supply the first two leaves them disabled; one that does not supply
+    // EditRecipients keeps opening its recipient-selection command for that button.
+    IRibbonCommand? TypeNewList = null,
+    IRibbonCommand? UseExistingList = null,
+    IRibbonCommand? EditRecipients = null);
 
 /// <summary>
 /// Owns Mailings-tab command identity, aliases, rule-kind mapping, and unavailable-route policy.
@@ -43,6 +49,8 @@ public static class MailMergeRibbonWorkflow
         FreeWRibbonCommandAction.StartMailMergeDirectory,
         FreeWRibbonCommandAction.StartMailMergeNormal,
         FreeWRibbonCommandAction.MergeData,
+        FreeWRibbonCommandAction.MergeTypeNewList,
+        FreeWRibbonCommandAction.MergeUseExistingList,
         FreeWRibbonCommandAction.MergeEditRecipients,
         FreeWRibbonCommandAction.MergeField,
         FreeWRibbonCommandAction.MergeAddressBlock,
@@ -89,7 +97,15 @@ public static class MailMergeRibbonWorkflow
             FreeWRibbonCommandAction.MergeData,
             bindings.SelectRecipients,
             "freew.select-recipients");
-        Bind(FreeWRibbonCommandAction.MergeEditRecipients, bindings.SelectRecipients);
+        Bind(
+            FreeWRibbonCommandAction.MergeTypeNewList,
+            bindings.TypeNewList ?? FreeWRibbonExecutionProfile.UnavailableCommand);
+        Bind(
+            FreeWRibbonCommandAction.MergeUseExistingList,
+            bindings.UseExistingList ?? FreeWRibbonExecutionProfile.UnavailableCommand);
+        Bind(
+            FreeWRibbonCommandAction.MergeEditRecipients,
+            bindings.EditRecipients ?? bindings.SelectRecipients);
         Bind(FreeWRibbonCommandAction.MergeField, bindings.InsertMergeField);
         BindWithAliases(
             FreeWRibbonCommandAction.MergeAddressBlock,

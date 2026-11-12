@@ -519,6 +519,12 @@ internal static partial class FreeWCanonicalRibbonTabs
                 });
                 AddProfiledButton(group, avalonia, "freew.merge-data", "Select Recipients",
                     RibbonCommandIconKind.Recipients);
+                // Word's Select Recipients menu entries. FreeW's Mailings groups are flat, so they sit
+                // beside Select Recipients (which keeps the paste/type-CSV entry point).
+                AddProfiledButton(group, avalonia, "freew.merge-type-new-list", "Type a New List",
+                    RibbonCommandIconKind.Recipients);
+                AddProfiledButton(group, avalonia, "freew.merge-use-existing-list", "Use an Existing List",
+                    RibbonCommandIconKind.Recipients);
                 AddProfiledButton(group, avalonia, "freew.merge-edit-recipients", "Edit Recipient List",
                     RibbonCommandIconKind.Recipients);
                 AddProfiledButton(group, avalonia, "freew.merge-filter-sort", "Filter & Sort Recipients",

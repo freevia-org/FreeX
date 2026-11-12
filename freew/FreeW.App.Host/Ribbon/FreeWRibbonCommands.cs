@@ -1295,6 +1295,9 @@ internal static class FreeWRibbonCommands
                     emailDocuments: indexes => emailMergeCommand.Execute(indexes)),
                 SendEmail: emailMergeCommand,
                 FindRecipient: new FindMergeRecipientCommand(editor, mergeSession),
+                TypeNewList: new TypeNewRecipientListCommand(editor, mergeSession),
+                UseExistingList: new UseExistingRecipientListCommand(editor, mergeSession),
+                EditRecipients: new EditRecipientListCommand(editor, mergeSession),
                 CheckErrors: new CheckMergeErrorsCommand(
                     editor,
                     mergeSession,
@@ -2091,30 +2094,29 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Home > Styles: New Style. Opens a dialog capturing a name + a few formatting options + a based-on
-    // style, then creates a custom DocumentStyle via the pure StyleManager and applies it to the
-    // selection through the same reversible StyleId path the styles dropdown uses. Newly created styles
-    // appear in the Style dropdown after reopening the document (the ribbon combo's item list is built
-    // once from the immutable definition); the create + immediate apply is the must-have and works now.
+    // Home > Styles: New Style. Opens Word's Create New Style from Formatting dialog (style type,
+    // based-on / following style, font and paragraph formatting, Format menu, gallery flag) and hands
+    // the result to the shared style-catalog coordinator, which creates the paragraph, character or
+    // linked style and applies it to the selection as an undoable edit. The Styles gallery follows the
+    // catalog, so the new style is offered there straight away.
     private sealed class NewStyleCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
             var owner = Window.GetWindow(editor);
-            var catalog = StyleDialogPlanner.BuildStyleNamesById(editor.Model);
-            var def = StyleDialog.AskNew(owner, catalog, editor.CurrentParagraphStyleId);
+            var def = StyleDefinitionDialog.AskNew(owner, editor.Model, editor.CurrentParagraphStyleId);
             if (def is null)
                 return;
 
             editor.Focus();
-            editor.CreateParagraphStyleAndApply(def.Name, def.BasedOnId, def.Run, def.Paragraph, def.NextStyleId);
+            editor.CreateStyleAndApply(def);
         }
     }
 
-    // Home > Styles: Manage Styles. Lists the document's styles; the selected one can be modified (name is
-    // fixed, formatting/based-on editable), deleted (built-ins are refused by StyleManager), or applied to
-    // the selection. Pragmatic by design — the pure StyleManager carries the rules; this is the surface.
+    // Home > Styles: Manage Styles. Lists the document's styles; the selected one can be modified in the
+    // Modify Style dialog (custom styles can also be renamed there), deleted (built-ins are refused; text
+    // using a deleted style returns to the default, as in Word), or applied to the selection.
     private sealed class ManageStylesCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -2142,13 +2144,10 @@ internal static class FreeWRibbonCommands
                     case ManageStyleAction.Modify mod:
                         if (!editor.Model.Styles.TryGetValue(mod.StyleId, out var existing))
                             continue;
-                        var def = StyleDialog.AskModify(
-                            owner,
-                            StyleDialogPlanner.BuildStyleNamesById(editor.Model),
-                            existing);
+                        var def = StyleDefinitionDialog.AskModify(owner, editor.Model, existing);
                         if (def is null)
                             continue;
-                        editor.ModifyParagraphStyle(mod.StyleId, def.Run, def.Paragraph, def.BasedOnId, def.NextStyleId);
+                        editor.ModifyStyle(mod.StyleId, def);
                         continue;
                 }
             }

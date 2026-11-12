@@ -94,6 +94,7 @@ public sealed class DocumentEditingSession
         Objects = new DocumentObjectEditingCoordinator(this);
         Tables = new DocumentTableEditingCoordinator(this);
         References = new DocumentReferenceEditingCoordinator(this);
+        Styles = new DocumentStyleCatalogCoordinator(this);
     }
 
     public event Action? Changed;
@@ -123,6 +124,8 @@ public sealed class DocumentEditingSession
     public DocumentObjectEditingCoordinator Objects { get; }
 
     public DocumentTableEditingCoordinator Tables { get; }
+
+    public DocumentStyleCatalogCoordinator Styles { get; }
 
     public DocumentReferenceEditingCoordinator References { get; }
 
@@ -1020,22 +1023,11 @@ public sealed class DocumentEditingSession
         return updated;
     }
 
-    /// <summary>Deletes a custom paragraph style through the shared catalog policy and undo history.</summary>
-    public bool DeleteParagraphStyle(string styleId)
-    {
-        if (string.IsNullOrWhiteSpace(styleId)
-            || StyleManager.IsBuiltIn(styleId)
-            || !Document.Styles.ContainsKey(styleId))
-        {
-            return false;
-        }
-
-        var deleted = false;
-        _commands.Execute(new StyleCatalogCommand(
-            "Delete Style",
-            document => deleted = StyleManager.DeleteStyle(document, styleId)));
-        return deleted;
-    }
+    /// <summary>
+    /// Deletes a custom style through the shared catalog policy and undo history. Paragraphs and runs
+    /// formatted with it return to the default, as in Word (see <see cref="DeleteStyleCommand"/>).
+    /// </summary>
+    public bool DeleteParagraphStyle(string styleId) => Styles.DeleteStyle(styleId);
 
     /// <summary>
     /// Replaces an ordinary body range with untracked text as one undoable edit. The range may span

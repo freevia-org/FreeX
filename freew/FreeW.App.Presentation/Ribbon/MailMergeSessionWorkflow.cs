@@ -184,6 +184,49 @@ public sealed class MailMergeSessionWorkflow
         return new(Session.EndPreview(), "Matched recipient fields.");
     }
 
+    /// <summary>
+    /// Applies the Edit Recipient List result: the merge now runs over the records at
+    /// <paramref name="sourceIndexes"/> of the list as loaded (<see cref="MailMergeSession.SourceData"/>),
+    /// in that order. Because the positions are known, each record keeps its true original number for
+    /// MERGEREC, and the full list stays available so an excluded recipient can be included again.
+    /// </summary>
+    public MailMergeSessionTransition ApplyRecipientSelection(IReadOnlyList<int> sourceIndexes)
+    {
+        ArgumentNullException.ThrowIfNull(sourceIndexes);
+
+        var source = Session.SourceData;
+        if (source is null)
+            return new(null, "Select recipients first (Mailings > Select Recipients), then edit the recipient list.");
+
+        var editableTemplate = Session.EndPreview();
+        var seen = new HashSet<int>();
+        var selected = sourceIndexes
+            .Where(index => index >= 0 && index < source.Count && seen.Add(index))
+            .ToArray();
+        Session.Data = MergeRecipientTable.SelectRows(source, selected);
+        Session.OriginalRecordNumbers = selected.Select(index => index + 1).ToArray();
+        Session.CurrentIndex = 0;
+        Session.HasFilteredRecipients = selected.Length < source.Count;
+        return new(editableTemplate, $"Recipient list now contains {selected.Length} record(s).");
+    }
+
+    /// <summary>
+    /// The positions, in the list as loaded, of the records the merge currently runs over (in merge
+    /// order) — what Edit Recipient List shows as checked.
+    /// </summary>
+    public IReadOnlyList<int> ActiveSourceIndexes()
+    {
+        var source = Session.SourceData;
+        var data = Session.Data;
+        if (source is null || data is null)
+            return [];
+
+        return Enumerable.Range(0, data.Count)
+            .Select(index => OriginalRecordNumber(index) - 1)
+            .Where(index => index >= 0 && index < source.Count)
+            .ToArray();
+    }
+
     public MailMergeSessionTransition ApplyRecipientFilter(MergeData data)
     {
         ArgumentNullException.ThrowIfNull(data);

@@ -71,5 +71,6 @@ public static class NamedStyleApplicationPlanner
         FontFamily = styleRun.FontFamily ?? baseRun.FontFamily,
         FontSizePt = styleRun.FontSizePt ?? baseRun.FontSizePt,
         ColorHex = styleRun.ColorHex ?? baseRun.ColorHex,
+        HighlightColorHex = styleRun.HighlightColorHex ?? baseRun.HighlightColorHex,
     };
 }
