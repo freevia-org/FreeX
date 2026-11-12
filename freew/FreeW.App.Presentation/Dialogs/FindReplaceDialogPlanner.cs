@@ -1025,8 +1025,7 @@ public static class FindReplaceDialogPlanner
             var sizeText = input.FontSizeText.Trim();
             if ((!double.TryParse(sizeText, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.CurrentCulture, out var parsed)
                     && !double.TryParse(sizeText, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out parsed))
-                || parsed < 1
-                || parsed > 1638)
+                || !(parsed >= 1 && parsed <= 1638))
             {
                 error = FindReplaceTextId.FormatDialogInvalidSize;
                 return false;
