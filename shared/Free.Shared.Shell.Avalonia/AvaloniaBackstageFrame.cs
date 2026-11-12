@@ -1,7 +1,10 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -10,11 +13,27 @@ using Free.Shared.Shell;
 
 namespace Free.Shared.Shell.Avalonia;
 
+/// <summary>
+/// Rail colours for the Avalonia Backstage frame. Mirrors the WPF <c>BackstageAccent</c>:
+/// <paramref name="Foreground"/> is the ink for rail labels, icons and the back arrow and defaults to
+/// white (the dark-rail look) when omitted.
+/// </summary>
 public sealed record AvaloniaBackstageAccent(
     Color Sidebar,
     Color Hover,
     Color Selected,
-    Color Separator);
+    Color Separator,
+    Color? Foreground = null)
+{
+    /// <summary>
+    /// Opt-in WPF rail-button states (<c>BackstageSidebarNavButton*</c> in BackstageChromeResources.xaml):
+    /// a square, chrome-less plate whose only fills are <see cref="Hover"/> (pointer-over or keyboard
+    /// focus) and <see cref="Selected"/>; no theme pointer-over/pressed plate, no press scale, no focus
+    /// rectangle; the selected label is SemiBold; and the back button hugs its arrow instead of spanning
+    /// the rail. Off by default so existing hosts keep the stock button chrome.
+    /// </summary>
+    public bool FlatRailChrome { get; init; }
+}
 
 public sealed record AvaloniaBackstageFrameChrome(
     Func<BackstageIconKind, string?, double, IBrush, Control> CreateIcon);
@@ -34,7 +53,25 @@ public sealed class AvaloniaBackstageFrame : UserControl
     private readonly ContentControl _content = new();
     private readonly Button _backButton;
     private readonly List<(SisterBackstageEntryPlan<Control> Entry, Button Button)> _navButtons = [];
+    private readonly IBrush _railForeground;
     private Button? _selectedButton;
+    private Button? _keyboardFocusedButton;
+
+    // Chrome-less rail button template used when the accent opts into FlatRailChrome. The presenter is
+    // deliberately left unnamed so the theme's PART_ContentPresenter pointer-over/pressed/disabled fills
+    // do not apply; the frame paints the plate through Button.Background instead.
+    private static readonly FuncControlTemplate<Button> FlatRailButtonTemplate = new((button, _) =>
+    {
+        var presenter = new ContentPresenter();
+        presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = button });
+        presenter.Bind(Layoutable.HorizontalAlignmentProperty, new Binding(nameof(ContentControl.HorizontalContentAlignment)) { Source = button });
+        presenter.Bind(Layoutable.VerticalAlignmentProperty, new Binding(nameof(ContentControl.VerticalContentAlignment)) { Source = button });
+
+        var border = new Border { Child = presenter };
+        border.Bind(Border.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = button });
+        border.Bind(Border.PaddingProperty, new Binding(nameof(TemplatedControl.Padding)) { Source = button });
+        return border;
+    });
 
     public AvaloniaBackstageFrame(
         AvaloniaBackstageAccent accent,
@@ -44,6 +81,7 @@ public sealed class AvaloniaBackstageFrame : UserControl
         ArgumentNullException.ThrowIfNull(entries);
 
         _accent = accent;
+        _railForeground = Brush(accent.Foreground ?? Colors.White);
         _chrome = chrome ?? new AvaloniaBackstageFrameChrome(CreateDefaultIcon);
         IsVisible = false;
         Background = Brushes.White;
@@ -171,13 +209,16 @@ public sealed class AvaloniaBackstageFrame : UserControl
                 BackstageIconKind.Previous,
                 "back",
                 BackstageVisualContract.Frame.BackButtonIconSize,
-                Brushes.White),
+                _railForeground),
             Background = Brushes.Transparent,
-            Foreground = Brushes.White,
+            Foreground = _railForeground,
             BorderThickness = new Thickness(0),
             Padding = ToThickness(BackstageVisualContract.Frame.BackButtonPadding),
             FontSize = BackstageVisualContract.Frame.BackButtonFontSize,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
+            // WPF's BackstageSidebarBackButton is left-aligned, so its hover plate hugs the arrow.
+            HorizontalAlignment = _accent.FlatRailChrome
+                ? HorizontalAlignment.Left
+                : HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Left,
         };
         AutomationProperties.SetAutomationId(button, "BackstageBackButton");
@@ -231,12 +272,12 @@ public sealed class AvaloniaBackstageFrame : UserControl
                 icon,
                 entry.IconCommandName,
                 BackstageVisualContract.Frame.NavigationIconSize,
-                Brushes.White));
+                _railForeground));
         }
         content.Children.Add(new TextBlock
         {
             Text = entry.Label,
-            Foreground = Brushes.White,
+            Foreground = _railForeground,
             FontSize = BackstageVisualContract.Frame.NavigationFontSize,
             VerticalAlignment = VerticalAlignment.Center,
         });
@@ -245,7 +286,7 @@ public sealed class AvaloniaBackstageFrame : UserControl
         {
             Content = content,
             Background = Brushes.Transparent,
-            Foreground = Brushes.White,
+            Foreground = _railForeground,
             BorderThickness = new Thickness(0),
             Padding = ToThickness(BackstageVisualContract.Frame.NavigationButtonPadding),
             HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -287,21 +328,71 @@ public sealed class AvaloniaBackstageFrame : UserControl
 
     private void SetSelected(Button button)
     {
-        if (_selectedButton is not null && !ReferenceEquals(_selectedButton, button))
-            _selectedButton.Background = Brushes.Transparent;
-        button.Background = Brush(_accent.Selected);
+        var previous = _selectedButton;
         _selectedButton = button;
+        if (previous is not null && !ReferenceEquals(previous, button))
+        {
+            previous.Background = ResolveRestingBackground(previous, isSelected: false);
+            if (_accent.FlatRailChrome)
+                previous.FontWeight = FontWeight.Normal;
+        }
+
+        button.Background = Brush(_accent.Selected);
+        if (_accent.FlatRailChrome)
+            button.FontWeight = FontWeight.SemiBold;
     }
 
     private void ApplyHoverChrome(Button button, Func<bool> isSelected)
     {
+        if (_accent.FlatRailChrome)
+            ApplyFlatRailChrome(button, isSelected);
+
         button.PointerEntered += (_, _) =>
         {
             if (!isSelected())
                 button.Background = Brush(_accent.Hover);
         };
         button.PointerExited += (_, _) =>
-            button.Background = isSelected() ? Brush(_accent.Selected) : Brushes.Transparent;
+            button.Background = ResolveRestingBackground(button, isSelected());
+    }
+
+    // WPF parity for BackstageSidebarNavButton: no theme plate, no press scale, no focus rectangle; a
+    // keyboard-focused entry shows the hover fill instead (the IsKeyboardFocused trigger). Only Tab /
+    // arrow-key focus counts, so the programmatic focus Show() gives the back button stays unpainted,
+    // matching WPF where Show() focuses the frame rather than a rail button.
+    private void ApplyFlatRailChrome(Button button, Func<bool> isSelected)
+    {
+        button.Template = FlatRailButtonTemplate;
+        button.FocusAdorner = null;
+        button.CornerRadius = new CornerRadius(0);
+        // A local value outranks the theme's ":pressed" scale(0.98) transform setter.
+        button.RenderTransform = null;
+
+        button.GotFocus += (_, e) =>
+        {
+            if (e.NavigationMethod is not (NavigationMethod.Tab or NavigationMethod.Directional))
+                return;
+
+            _keyboardFocusedButton = button;
+            if (!isSelected())
+                button.Background = Brush(_accent.Hover);
+        };
+        button.LostFocus += (_, _) =>
+        {
+            if (ReferenceEquals(_keyboardFocusedButton, button))
+                _keyboardFocusedButton = null;
+            if (!button.IsPointerOver)
+                button.Background = ResolveRestingBackground(button, isSelected());
+        };
+    }
+
+    private IBrush ResolveRestingBackground(Button button, bool isSelected)
+    {
+        if (isSelected)
+            return Brush(_accent.Selected);
+        return ReferenceEquals(_keyboardFocusedButton, button)
+            ? Brush(_accent.Hover)
+            : Brushes.Transparent;
     }
 
     private Button? FindButton(SisterBackstageEntryPlan<Control> entry) =>
@@ -343,7 +434,12 @@ public sealed class AvaloniaBackstageFrame : UserControl
         if (plan.DismissFrame)
             Hide();
         else if (plan.TargetIndex is { } targetIndex)
-            buttons[targetIndex].Focus();
+        {
+            if (_accent.FlatRailChrome)
+                buttons[targetIndex].Focus(NavigationMethod.Directional);
+            else
+                buttons[targetIndex].Focus();
+        }
         return true;
     }
 
