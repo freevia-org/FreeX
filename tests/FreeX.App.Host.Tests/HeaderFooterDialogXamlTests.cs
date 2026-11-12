@@ -142,7 +142,11 @@ public sealed class HeaderFooterDialogXamlTests
                 headerBox.SelectedItem = headerBox.Items.Cast<ComboBoxItem>()
                     .Single(item => ((HeaderFooterPresetChoice)item.Tag).Id == HeaderFooterPresetId.ConfidentialPage);
                 DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "HeaderCenterBox").Text
-                    .Should().Be("Confidential, Page &[Page]");
+                    .Should().Be("Confidential", "a two-part preset fills centre and right, as in Excel");
+                DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "HeaderRightBox").Text
+                    .Should().Be("Page &[Page]");
+                DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "HeaderLeftBox").Text
+                    .Should().BeEmpty();
             }
             finally
             {

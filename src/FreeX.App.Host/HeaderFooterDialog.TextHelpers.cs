@@ -19,14 +19,18 @@ public partial class HeaderFooterDialog
         }
     }
 
-    private static void ApplyPreset(TextBox target, object? selectedItem)
+    // A preset replaces the whole header/footer, as in Excel: two-part presets fill centre and right.
+    private static void ApplyPreset(TextBox left, TextBox center, TextBox right, object? selectedItem)
     {
         if (selectedItem is not ComboBoxItem { Tag: HeaderFooterPresetChoice choice })
             return;
 
-        target.Text = choice.Value;
-        target.CaretIndex = target.Text.Length;
-        target.Focus();
+        var sections = choice.Sections;
+        left.Text = sections.Left;
+        center.Text = sections.Center;
+        right.Text = sections.Right;
+        center.CaretIndex = center.Text.Length;
+        center.Focus();
     }
 
     private void InsertTokenIntoActiveBox(string token)
