@@ -111,26 +111,33 @@ public class HeaderFooterFieldAndFrameReadTests
 
         var runs = doc.FinalSectionHeadersFooters.Footer!.Paragraphs.Single().Runs;
         runs.Select(run => run.Text).Should().Equal("a ", "", " b");
-        runs[1].Formatting.FontFamily.Should().Be("Symbol");
-        runs[0].Formatting.FontFamily.Should().BeNull();
-        runs[2].Formatting.FontFamily.Should().BeNull();
+        runs[1].Formatting.SymbolFont.Should().Be("Symbol");
+        runs[1].Formatting.FontFamily.Should().BeNull();
+        runs[0].Formatting.SymbolFont.Should().BeNull();
+        runs[2].Formatting.SymbolFont.Should().BeNull();
+        ThemeFontTokenResolver.ApplyForRendering(runs[1].Formatting, doc).FontFamily.Should().Be("Symbol");
     }
 
     [Fact]
-    public void SymbolElement_SurvivesASaveAndReopen()
+    public void SymbolElement_IsWrittenBackAsSym()
     {
         var doc = ReadWithFooter(
             "<w:p><w:r><w:t>x</w:t></w:r></w:p>",
             "<w:p><w:r><w:sym w:font=\"Wingdings\" w:char=\"F0FC\"/></w:r></w:p>");
         using var saved = new MemoryStream();
         DocxWriter.Write(doc, saved);
+
+        var body = DocumentXml(saved);
+        var symbol = body.Descendants(W + "sym").Single();
+        symbol.Attribute(W + "font")!.Value.Should().Be("Wingdings");
+        symbol.Attribute(W + "char")!.Value.Should().Be("F0FC");
+        body.Descendants(W + "t").Should().NotContain(text => text.Value.Contains(''));
+
         saved.Position = 0;
-
-        var reopened = DocxReader.Read(saved);
-
-        var run = reopened.Blocks.OfType<Paragraph>().First().Runs.Single(candidate => candidate.Text.Length > 0);
+        var run = DocxReader.Read(saved).Blocks.OfType<Paragraph>().First().Runs.Single(candidate => candidate.Text.Length > 0);
+        run.Formatting.SymbolFont.Should().Be("Wingdings");
         run.Text.Should().Be("");
-        run.Formatting.FontFamily.Should().Be("Wingdings");
+        run.Formatting.FontFamily.Should().BeNull();
     }
 
     /// <summary>
@@ -143,7 +150,49 @@ public class HeaderFooterFieldAndFrameReadTests
     [InlineData("majorBidi", "Times New Roman")]
     [InlineData("minorBidi", "Arial")]
     [InlineData("majorHAnsi", "Cambria")]
-    public void RunThemeFontToken_ResolvesAgainstTheDocumentTheme(string token, string expected)
+    public void RunThemeFontToken_StaysATokenAndResolvesAgainstTheDocumentTheme(string token, string expected)
+    {
+        var doc = ReadThemedDocument(
+            $"<w:p><w:r><w:rPr><w:rFonts w:asciiTheme=\"{token}\" w:hAnsiTheme=\"{token}\" w:cstheme=\"{token}\"/></w:rPr><w:t>themed</w:t></w:r>" +
+            "<w:r><w:t>plain</w:t></w:r></w:p>");
+
+        var runs = doc.Blocks.OfType<Paragraph>().Single().Runs;
+        runs[0].Formatting.FontFamily.Should().BeNull("the token is not baked into a literal font");
+        runs[0].Formatting.ThemeFonts.Should().Be(new RunThemeFontTokens(token, token, null, token));
+        ThemeFontTokenResolver.ApplyForRendering(runs[0].Formatting, doc).FontFamily.Should().Be(expected);
+        runs[1].Formatting.ThemeFonts.Should().BeNull();
+    }
+
+    [Fact]
+    public void RunThemeFontTokens_AreWrittenBackForEverySlot()
+    {
+        var doc = ReadThemedDocument(
+            "<w:p><w:r><w:rPr><w:rFonts w:asciiTheme=\"majorBidi\" w:hAnsiTheme=\"majorBidi\" w:eastAsiaTheme=\"minorEastAsia\" w:cstheme=\"majorBidi\"/></w:rPr><w:t>themed</w:t></w:r></w:p>");
+        using var saved = new MemoryStream();
+        DocxWriter.Write(doc, saved);
+
+        var rFonts = DocumentXml(saved).Descendants(W + "r")
+            .Single(run => run.Element(W + "t")?.Value == "themed")
+            .Element(W + "rPr")!.Element(W + "rFonts")!;
+
+        rFonts.Attribute(W + "asciiTheme")!.Value.Should().Be("majorBidi");
+        rFonts.Attribute(W + "hAnsiTheme")!.Value.Should().Be("majorBidi");
+        rFonts.Attribute(W + "eastAsiaTheme")!.Value.Should().Be("minorEastAsia");
+        rFonts.Attribute(W + "cstheme")!.Value.Should().Be("majorBidi");
+        rFonts.Attribute(W + "ascii").Should().BeNull("no resolved literal font is baked into the run");
+    }
+
+    private static readonly System.Xml.Linq.XNamespace W = Wns;
+
+    private static System.Xml.Linq.XElement DocumentXml(MemoryStream package)
+    {
+        package.Position = 0;
+        using var zip = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        using var stream = zip.GetEntry("word/document.xml")!.Open();
+        return System.Xml.Linq.XElement.Load(stream);
+    }
+
+    private static TextDocument ReadThemedDocument(string bodyXml)
     {
         var ms = new MemoryStream();
         using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
@@ -156,9 +205,7 @@ public class HeaderFooterFieldAndFrameReadTests
             }
 
             Add("word/document.xml",
-                $"<w:document xmlns:w=\"{Wns}\"><w:body>" +
-                $"<w:p><w:r><w:rPr><w:rFonts w:asciiTheme=\"{token}\" w:hAnsiTheme=\"{token}\" w:cstheme=\"{token}\"/></w:rPr><w:t>themed</w:t></w:r>" +
-                "<w:r><w:t>plain</w:t></w:r></w:p></w:body></w:document>");
+                $"<w:document xmlns:w=\"{Wns}\"><w:body>{bodyXml}</w:body></w:document>");
             Add("word/settings.xml", $"<w:settings xmlns:w=\"{Wns}\"><w:themeFontLang w:val=\"fr-FR\" w:bidi=\"ar-SA\"/></w:settings>");
             Add("word/theme/theme1.xml",
                 "<a:theme xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" name=\"Office\"><a:themeElements>" +
@@ -169,11 +216,7 @@ public class HeaderFooterFieldAndFrameReadTests
         }
 
         ms.Position = 0;
-        var doc = DocxReader.Read(ms);
-
-        var runs = doc.Blocks.OfType<Paragraph>().Single().Runs;
-        runs[0].Formatting.FontFamily.Should().Be(expected);
-        runs[1].Formatting.FontFamily.Should().BeNull();
+        return DocxReader.Read(ms);
     }
 
     [Fact]

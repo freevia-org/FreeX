@@ -287,6 +287,20 @@ public sealed record RunFormatting
     /// </summary>
     public string? ComplexScriptFontFamily { get; init; }
 
+    /// <summary>
+    /// The run's <c>w:rFonts</c> theme-font tokens (<c>w:asciiTheme="majorBidi"</c> ...), kept as tokens so
+    /// a save writes them back and a theme change still re-fonts the run. Renderers resolve them per view
+    /// (<see cref="ThemeFontTokenResolver"/>); a literal <see cref="FontFamily"/> on the same run still wins.
+    /// </summary>
+    public RunThemeFontTokens? ThemeFonts { get; init; }
+
+    /// <summary>
+    /// Set when the run is Word symbol characters (<c>w:sym w:font w:char</c>): its text holds the
+    /// private-use code points (U+F0xx) and this names the symbol font that draws them. Saved back as
+    /// <c>w:sym</c> elements, not as text in a literal font.
+    /// </summary>
+    public string? SymbolFont { get; init; }
+
     public double? FontSizePt { get; init; }
 
     /// <summary>

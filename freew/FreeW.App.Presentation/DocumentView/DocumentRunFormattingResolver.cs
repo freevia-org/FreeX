@@ -32,7 +32,9 @@ public static class DocumentRunFormattingResolver
         // cascade Word uses (paragraph style -> character style -> direct formatting).
         foreach (var style in StyleChain(document, runStyleId))
             resolved = Overlay(resolved, style.Run);
-        resolved = Overlay(resolved, directFormatting);
+        // Theme-font tokens and symbol fonts stay tokens in the model; they become font names only here,
+        // against the document's current theme, so a theme change re-fonts the run.
+        resolved = Overlay(resolved, ThemeFontTokenResolver.ApplyForRendering(directFormatting, document));
         // "Same as the Latin size" is modeled as null, so effective formatting copied back onto a run
         // (format painter, probes) does not grow a redundant complex-script size.
         return resolved.ComplexScriptFontSizePt == resolved.FontSizePt

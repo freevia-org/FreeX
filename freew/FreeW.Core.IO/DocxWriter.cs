@@ -4358,7 +4358,20 @@ public static partial class DocxWriter
             // A tracked deletion stores its text in w:delText (so Word renders it as deleted content);
             // all other runs use the ordinary w:t element.
             var textElement = run.Revision == RevisionKind.Deleted ? "delText" : "t";
-            r.Add(BuildRunTextContent(run.Text, textElement));
+            if (run.Formatting.SymbolFont is { Length: > 0 } symbolFont && run.Text.Length > 0)
+            {
+                // Word symbol characters go back out as w:sym (font + hex code point), as read.
+                foreach (var symbol in run.Text)
+                {
+                    r.Add(new XElement(W + "sym",
+                        new XAttribute(W + "font", symbolFont),
+                        new XAttribute(W + "char", ((int)symbol).ToString("X4", CultureInfo.InvariantCulture))));
+                }
+            }
+            else
+            {
+                r.Add(BuildRunTextContent(run.Text, textElement));
+            }
         }
         return r;
     }
@@ -8295,9 +8308,11 @@ public static partial class DocxWriter
     // none of the three typefaces is set, so untouched runs emit no w:rFonts at all.
     private static XElement? BuildRunFontsElement(RunFormatting f)
     {
+        var tokens = f.ThemeFonts is { IsEmpty: false } themeTokens ? themeTokens : null;
         if (f.FontFamily is not { Length: > 0 }
             && f.EastAsiaFontFamily is not { Length: > 0 }
-            && f.ComplexScriptFontFamily is not { Length: > 0 })
+            && f.ComplexScriptFontFamily is not { Length: > 0 }
+            && tokens is null)
             return null;
 
         var element = new XElement(W + "rFonts");
@@ -8310,6 +8325,15 @@ public static partial class DocxWriter
             element.Add(new XAttribute(W + "eastAsia", eastAsia));
         if (f.ComplexScriptFontFamily is { Length: > 0 } complexScript)
             element.Add(new XAttribute(W + "cs", complexScript));
+        // Theme-font tokens round-trip as tokens, so the run keeps following the document theme in Word.
+        if (tokens?.Ascii is { Length: > 0 } asciiTheme)
+            element.Add(new XAttribute(W + "asciiTheme", asciiTheme));
+        if (tokens?.EastAsia is { Length: > 0 } eastAsiaTheme)
+            element.Add(new XAttribute(W + "eastAsiaTheme", eastAsiaTheme));
+        if (tokens?.HAnsi is { Length: > 0 } hAnsiTheme)
+            element.Add(new XAttribute(W + "hAnsiTheme", hAnsiTheme));
+        if (tokens?.ComplexScript is { Length: > 0 } complexScriptTheme)
+            element.Add(new XAttribute(W + "cstheme", complexScriptTheme));
         return element;
     }
 

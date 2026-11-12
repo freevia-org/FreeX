@@ -139,8 +139,6 @@ public static partial class DocxReader
     /// </summary>
     public static TextDocument Read(Stream stream)
     {
-        // A nested package read (altChunk) installs its own theme; the outer one is restored after it.
-        var outerRunThemeFonts = _runThemeFonts;
         try
         {
             return ReadCore(stream);
@@ -151,27 +149,13 @@ public static partial class DocxReader
                 "Could not read this as a Word document (.docx/.docm/.dotx/.dotm). The file is not a valid " +
                 "OOXML package -- it may be corrupted or truncated.", ex);
         }
-        finally
-        {
-            _runThemeFonts = outerRunThemeFonts;
-        }
     }
-
-    /// <summary>
-    /// The theme fonts of the package being read, so every run's <c>w:rFonts</c> theme tokens
-    /// (<c>w:asciiTheme="majorBidi"</c> ...) resolve -- not only those in w:docDefaults and styles.
-    /// Set per <see cref="Read(Stream)"/> call (see <see cref="_nestedWordPackageAltChunkDepth"/> for why
-    /// a thread-static rather than a parameter threaded through every run reader).
-    /// </summary>
-    [ThreadStatic]
-    private static ThemeFontResolution? _runThemeFonts;
 
     private static TextDocument ReadCore(Stream stream)
     {
         using var archive = OpenZipArchive(stream);
         // Reject zip-bomb / oversized packages before any decompression-heavy reads (same guard xlsx uses).
         WorkbookOpenSizeGuard.EnsureArchiveWithinLimits(archive);
-        _runThemeFonts = ResolveDocumentThemeFonts(archive);
         var documentXml = LoadPart(archive, "word/document.xml")
             ?? throw new InvalidDataException("Not a Word document: word/document.xml is missing.");
 
@@ -328,6 +312,18 @@ public static partial class DocxReader
             sharedTheme.FontScheme.MajorLatinTypeface ?? string.Empty,
             sharedTheme.FontScheme.MinorLatinTypeface ?? string.Empty,
             sharedTheme.FormatSchemeName);
+
+        // Render-only: the non-Latin theme slots run theme-font tokens resolve against.
+        if (ResolveDocumentThemeFonts(archive) is { } fonts)
+        {
+            document.ThemeScriptFonts = new ThemeScriptFonts(
+                fonts.MajorEastAsia,
+                fonts.MinorEastAsia,
+                fonts.MajorComplexScript,
+                fonts.MinorComplexScript,
+                fonts.MajorBidiScript,
+                fonts.MinorBidiScript);
+        }
     }
 
     /// <summary>
@@ -4718,11 +4714,11 @@ public static partial class DocxReader
             else if (child.Name == W + "sym" && ReadSymbolCharacter(child) is { } symbol)
             {
                 // w:sym w:font="Symbol" w:char="F0B7": a glyph of a symbol font addressed by its
-                // private-use code point. It becomes its own run in that font, so the glyph survives
-                // (it used to be dropped) and saves back as the same character in the same font.
+                // private-use code point. It becomes its own run carrying the symbol font (used to be
+                // dropped); renderers draw it in that font and the writer emits w:sym again.
                 AddTextFragment();
                 var symbolFormatting = formatting;
-                formatting = formatting with { FontFamily = symbol.Font ?? formatting.FontFamily };
+                formatting = formatting with { SymbolFont = symbol.Font ?? formatting.FontFamily ?? "Symbol" };
                 text.Append(symbol.Character);
                 AddTextFragment();
                 formatting = symbolFormatting;
@@ -8522,7 +8518,6 @@ public static partial class DocxReader
     {
         if (rPr is null)
             return RunFormatting.Default;
-        themeFonts ??= _runThemeFonts;
 
         var underline = rPr.Element(W + "u");
         var colorElement = rPr.Element(W + "color");
@@ -8601,6 +8596,20 @@ public static partial class DocxReader
         if (string.IsNullOrEmpty(complexScriptFont))
             complexScriptFont = ResolveThemeFontToken(rFontsElement?.Attribute(W + "cstheme")?.Value, themeFonts, eastAsia: false, complexScript: true);
 
+        // A run's own theme tokens (no theme passed: only w:docDefaults/styles resolve at read) stay tokens
+        // in the model -- written back on save, resolved against the current theme by the renderers
+        // (ThemeFontTokenResolver) -- so a later theme change still re-fonts the run.
+        RunThemeFontTokens? themeTokens = null;
+        if (themeFonts is null && rFontsElement is not null)
+        {
+            var tokens = new RunThemeFontTokens(
+                rFontsElement.Attribute(W + "asciiTheme")?.Value,
+                rFontsElement.Attribute(W + "hAnsiTheme")?.Value,
+                rFontsElement.Attribute(W + "eastAsiaTheme")?.Value,
+                rFontsElement.Attribute(W + "cstheme")?.Value);
+            themeTokens = tokens.IsEmpty ? null : tokens;
+        }
+
         // Toggles authored OFF (<w:b w:val="0"/>, <w:u w:val="none"/>) must override an inherited "on"
         // from the paragraph/character style chain; record them so the cascade can tell them from unset.
         var explicitlyOff = RunToggleOverrides.None;
@@ -8636,6 +8645,7 @@ public static partial class DocxReader
             FontFamily = asciiFont,
             EastAsiaFontFamily = string.IsNullOrEmpty(eastAsiaFont) ? null : eastAsiaFont,
             ComplexScriptFontFamily = string.IsNullOrEmpty(complexScriptFont) ? null : complexScriptFont,
+            ThemeFonts = themeTokens,
             FontSizePt = HalfPointsToPoints(rPr.Element(W + "sz")?.Attribute(W + "val")?.Value),
             // Only a w:szCs that differs from w:sz is modeled; the common sz == szCs pair stays null.
             ComplexScriptFontSizePt =

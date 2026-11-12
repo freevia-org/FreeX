@@ -4293,6 +4293,13 @@ public sealed class TextDocument
     public DocumentTheme Theme { get; set; } = DocumentTheme.Default;
 
     /// <summary>
+    /// The opened package theme's East Asian / complex-script font slots, used to resolve run theme-font
+    /// tokens at render time (see <see cref="ThemeFontTokenResolver"/>). Render-only; null when the
+    /// package had no theme.
+    /// </summary>
+    public ThemeScriptFonts? ThemeScriptFonts { get; set; }
+
+    /// <summary>
     /// The document's footnotes, keyed by footnote id (matching <see cref="Run.FootnoteId"/> on the
     /// body reference runs). Maps to word/footnotes.xml (w:footnotes / w:footnote w:id="N"). Empty
     /// when the document has no footnotes, in which case no footnotes part is emitted.
