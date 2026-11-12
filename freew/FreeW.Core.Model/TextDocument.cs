@@ -2843,8 +2843,18 @@ public sealed record CellBorders
     /// <summary>Right edge border, or null to inherit.</summary>
     public CellBorderEdge? Right { get; init; }
 
-    /// <summary>True when all four edges are null (nothing to emit).</summary>
-    public bool IsEmpty => Top is null && Bottom is null && Left is null && Right is null;
+    /// <summary>The top edge is explicitly removed (<c>w:top w:val="nil"/"none"</c>) rather than inherited.</summary>
+    public bool NoTop { get; init; }
+    /// <summary>The bottom edge is explicitly removed rather than inherited.</summary>
+    public bool NoBottom { get; init; }
+    /// <summary>The left edge is explicitly removed rather than inherited.</summary>
+    public bool NoLeft { get; init; }
+    /// <summary>The right edge is explicitly removed rather than inherited.</summary>
+    public bool NoRight { get; init; }
+
+    /// <summary>True when no edge is set or explicitly removed (nothing to emit).</summary>
+    public bool IsEmpty => Top is null && Bottom is null && Left is null && Right is null
+        && !NoTop && !NoBottom && !NoLeft && !NoRight;
 }
 
 /// <summary>
@@ -3155,6 +3165,13 @@ public sealed class Table : Block
     /// the Word default/absence; true maps to <c>overlap</c> and false maps to <c>never</c>.
     /// </summary>
     public bool? FloatingTableAllowsOverlap { get; set; }
+
+    /// <summary>
+    /// Whether the table is laid out visually right-to-left (<c>w:tblPr/w:bidiVisual</c>): the first
+    /// grid column sits at the right edge and columns advance leftwards. False (the default) emits no
+    /// element, so existing tables are unaffected.
+    /// </summary>
+    public bool RightToLeft { get; set; }
 
     /// <summary>
     /// Compatibility facade for Word's "Text wrapping: Around" control. Enabling creates the historical

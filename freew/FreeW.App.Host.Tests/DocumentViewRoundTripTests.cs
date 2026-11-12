@@ -1662,9 +1662,13 @@ public sealed class DocumentViewRoundTripTests
         customCell.Padding.Right.Should().Be(0);
         var customHost = customCell.Blocks.OfType<BlockUIContainer>().Single().Child
             .Should().BeOfType<System.Windows.Controls.Grid>().Subject;
-        var transform = customHost.RenderTransform.Should().BeOfType<System.Windows.Media.TranslateTransform>().Subject;
-        transform.X.Should().Be(-4);
-        transform.Y.Should().Be(0);
+        customHost.RenderTransform.Should().BeSameAs(System.Windows.Media.Transform.Identity,
+            "a flow-table cell with its own borders keeps its chrome registered on the cell edge");
+        // Word's default 5.4pt side margins still inset the text of a custom-bordered cell (w:tcMar /
+        // w:tblCellMar are independent of w:tcBorders); the nested editor contributes the first 6 DIP.
+        var contentStack = customHost.Children.OfType<System.Windows.Controls.StackPanel>().Single();
+        contentStack.Margin.Left.Should().BeApproximately(5.4 * 96.0 / 72.0 - 6, 0.001);
+        contentStack.Margin.Right.Should().BeApproximately(5.4 * 96.0 / 72.0 - 6, 0.001);
 
         renderedCells[1].Padding.Left.Should().Be(4);
         renderedCells[1].Padding.Right.Should().Be(4);
@@ -1680,22 +1684,307 @@ public sealed class DocumentViewRoundTripTests
         var renderedTable = RenderedTables(view.Document).Should().ContainSingle().Subject;
         var rows = renderedTable.RowGroups.SelectMany(group => group.Rows).ToList();
         var restartCell = rows[1].Cells[0];
-        var continuationCell = rows[2].Cells[0];
 
+        // The fixture authors w:tblCellSpacing, so Word draws the merge as ONE detached box that
+        // spans the gap between its two rows: a real RowSpan, with the continuation cell absorbed.
         rows.Should().HaveCount(5);
         rows[1].Cells.Should().HaveCount(4);
-        rows[2].Cells.Should().HaveCount(4);
+        rows[2].Cells.Should().HaveCount(3);
+        restartCell.RowSpan.Should().Be(2);
         restartCell.Background.Should().BeOfType<System.Windows.Media.SolidColorBrush>();
-        continuationCell.Background.Should().BeOfType<System.Windows.Media.SolidColorBrush>();
-        ((System.Windows.Media.SolidColorBrush)continuationCell.Background!).Color
-            .Should().Be(((System.Windows.Media.SolidColorBrush)restartCell.Background!).Color);
-        restartCell.BorderThickness.Bottom.Should().Be(0);
-        continuationCell.BorderThickness.Top.Should().Be(0);
+        restartCell.BorderThickness.Bottom.Should().BeGreaterThan(0);
 
         view.CommitToModel();
         var committedTable = view.Model.Blocks.OfType<Table>().Should().ContainSingle().Subject;
         committedTable.Rows[1].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Restart);
+        committedTable.Rows[2].Cells.Should().HaveCount(4);
         committedTable.Rows[2].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Continue);
+    }
+
+    [StaFact]
+    public void TableVerticalMerge_WithoutCellSpacing_KeepsSeamlessExplicitCells()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(2, 2);
+        table.Rows[0].Cells[0].VerticalMerge = VerticalMergeState.Restart;
+        table.Rows[1].Cells[0].VerticalMerge = VerticalMergeState.Continue;
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var rendered = RenderedTables(view.Document).Single();
+        var rows = rendered.RowGroups.Single().Rows;
+        rendered.CellSpacing.Should().Be(0, "Word collapses cell borders unless w:tblCellSpacing is authored");
+        rows[1].Cells.Should().HaveCount(2);
+        rows[0].Cells[0].RowSpan.Should().Be(1);
+        rows[0].Cells[0].BorderThickness.Bottom.Should().Be(0);
+        rows[1].Cells[0].BorderThickness.Top.Should().Be(0);
+    }
+
+    [StaTheory]
+    [InlineData(CellTextDirection.Rotate90, -90.0, HorizontalAlignment.Left, VerticalAlignment.Bottom)]
+    [InlineData(CellTextDirection.Rotate270, 90.0, HorizontalAlignment.Right, VerticalAlignment.Top)]
+    public void TableCellTextDirection_RotatesTheWayWordReadsIt(
+        CellTextDirection direction,
+        double expectedAngle,
+        HorizontalAlignment expectedHorizontal,
+        VerticalAlignment expectedVertical)
+    {
+        // btLr reads bottom-to-top starting at the cell's bottom-left; tbRl reads top-to-bottom
+        // starting at its top-right. WPF rotation angles are clockwise-positive.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(1, 1);
+        table.Rows[0].HeightPt = 60;
+        table.Rows[0].Cells[0].TextDirection = direction;
+        table.Rows[0].Cells[0].Paragraphs.Clear();
+        table.Rows[0].Cells[0].Paragraphs.Add(new Paragraph("Key account"));
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var cell = RenderedTables(view.Document).Single().RowGroups.Single().Rows.Single().Cells.Single();
+        var host = cell.Blocks.OfType<BlockUIContainer>().Single().Child!;
+        var rotated = LogicalDescendants<System.Windows.Controls.StackPanel>(host)
+            .Single(panel => panel.LayoutTransform is System.Windows.Media.RotateTransform);
+        ((System.Windows.Media.RotateTransform)rotated.LayoutTransform).Angle.Should().Be(expectedAngle);
+        var anchor = (System.Windows.Controls.StackPanel)rotated.Parent;
+        anchor.HorizontalAlignment.Should().Be(expectedHorizontal);
+        anchor.VerticalAlignment.Should().Be(expectedVertical);
+    }
+
+    [StaFact]
+    public void TableWiderThanTheTextColumn_IsScaledToFit_WithoutRewritingTheAuthoredGrid()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var contentWidthPt = DocumentViewLayoutPlanner.BuildPageMetrics(doc.Page).ContentWidthDip * 72.0 / 96.0;
+        var table = Table.Create(1, 2);
+        table.ColumnWidthsPt.Add(contentWidthPt * 0.6);
+        table.ColumnWidthsPt.Add(contentWidthPt * 0.6);
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var rendered = RenderedTables(view.Document).Single();
+        (rendered.Columns.Sum(column => column.Width.Value)
+                + rendered.BorderThickness.Left + rendered.BorderThickness.Right).Should().BeApproximately(
+            DocumentViewLayoutPlanner.BuildPageMetrics(doc.Page).ContentWidthDip, 0.01,
+            "an over-wide grid would otherwise lose its right border to the page column clip");
+
+        view.CommitToModel();
+        view.Model.Blocks.OfType<Table>().Single().ColumnWidthsPt
+            .Should().Equal(table.ColumnWidthsPt);
+    }
+
+    private static TextDocument ImportedDocumentWithCellSpacingCascade(string? tableStylePPr, out Table table)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Styles.Clear();
+        // What DocxReader produces for a package whose docDefaults declare 8pt after: the value rides on
+        // the paragraph with its IsSet flag clear (nothing but the document default set it).
+        doc.DefaultParagraph = ParagraphFormatting.Default with { SpaceBeforePt = 0, SpaceAfterPt = 8 };
+        const string ns = "xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"";
+        doc.Styles["TableNormal"] = new DocumentStyle
+        {
+            Id = "TableNormal",
+            Name = "Normal Table",
+            Type = StyleType.Table,
+            IsDefault = true,
+            PreservedTableStyleXml = $"<w:style {ns} w:type=\"table\" w:default=\"1\" w:styleId=\"TableNormal\"/>"
+        };
+        doc.Styles["TableGrid"] = new DocumentStyle
+        {
+            Id = "TableGrid",
+            Name = "Table Grid",
+            Type = StyleType.Table,
+            BasedOnStyleId = "TableNormal",
+            Paragraph = tableStylePPr is null
+                ? ParagraphFormatting.Default
+                : ParagraphFormatting.Default with { SpaceAfterPt = 0, SpaceAfterIsSet = true },
+            PreservedTableStyleXml =
+                $"<w:style {ns} w:type=\"table\" w:styleId=\"TableGrid\">{tableStylePPr}</w:style>"
+        };
+        table = Table.Create(1, 2);
+        foreach (var cell in table.Rows[0].Cells)
+        {
+            cell.Paragraphs.Clear();
+            cell.Paragraphs.Add(new Paragraph("cell")
+            {
+                Formatting = ParagraphFormatting.Default with { SpaceAfterPt = 8 }
+            });
+        }
+        table.Rows[0].Cells[1].Borders = new CellBorders
+        {
+            Top = new CellBorderEdge(BorderLineStyle.Single, "#1F4E79", 1)
+        };
+        doc.Blocks.Add(table);
+        return doc;
+    }
+
+    [StaFact]
+    public void TableCellSpacing_UnstyledImportedTable_KeepsTheDocumentDefaultSpaceAfter()
+    {
+        // No w:tblStyle => Word's default "Table Normal", which declares no paragraph spacing, so the
+        // docDefaults' 8pt-after applies inside the cells (and Word keeps it under the last paragraph).
+        var doc = ImportedDocumentWithCellSpacingCascade(tableStylePPr: null, out _);
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var cells = RenderedTables(view.Document).Single().RowGroups.Single().Rows.Single().Cells;
+        var expected = 8 * 96.0 / 72.0;
+        RenderedCellParagraphs(cells[0]).Single().Margin.Bottom.Should().BeApproximately(expected, 0.001);
+        cells[0].Padding.Bottom.Should().BeApproximately(expected, 0.001,
+            "WPF collapses the trailing block margin against the cell edge; Word does not");
+        // A cell with its own borders keeps the reserve INSIDE its border chrome host.
+        cells[1].Padding.Bottom.Should().Be(0);
+        ((System.Windows.Controls.Grid)cells[1].Blocks.OfType<BlockUIContainer>().Single().Child)
+            .Children.OfType<System.Windows.Controls.StackPanel>().Single()
+            .Margin.Bottom.Should().BeApproximately(expected, 0.001);
+    }
+
+    [StaFact]
+    public void TableCellSpacing_TableStyleParagraphSpacing_OverridesTheDocumentDefault()
+    {
+        // Table Grid declares <w:spacing w:after="0"/>: the table style sits between the paragraph
+        // style and docDefaults, so its cells are compact.
+        var doc = ImportedDocumentWithCellSpacingCascade(
+            "<w:pPr><w:spacing w:after=\"0\"/></w:pPr>", out var table);
+        table.TableStyleId = "TableGrid";
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var cells = RenderedTables(view.Document).Single().RowGroups.Single().Rows.Single().Cells;
+        RenderedCellParagraphs(cells[0]).Single().Margin.Bottom.Should().Be(0);
+        cells[0].Padding.Bottom.Should().Be(0);
+    }
+
+    [StaFact]
+    public void CellBordersRemovedWithNil_HideTheInheritedGrid_AndSurviveCommit()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(1, 2);
+        var removed = new CellBorders { NoTop = true, NoLeft = true, NoBottom = true, NoRight = true };
+        table.Rows[0].Cells[0].Borders = removed;
+        table.Rows[0].Cells[1].Borders = removed;
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var rendered = RenderedTables(view.Document).Single();
+        rendered.BorderThickness.Should().Be(new Thickness(0), "a layout table has no outer frame");
+        rendered.RowGroups.Single().Rows.Single().Cells
+            .Should().OnlyContain(cell => cell.BorderThickness == new Thickness(0));
+
+        view.CommitToModel();
+        view.Model.Blocks.OfType<Table>().Single().Rows[0].Cells
+            .Should().OnlyContain(cell => cell.Borders == removed);
+    }
+
+    [StaFact]
+    public void BidiVisualTable_MirrorsColumns_AndSurvivesCommit()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(1, 2);
+        table.RightToLeft = true;
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        RenderedTables(view.Document).Single().FlowDirection
+            .Should().Be(System.Windows.FlowDirection.RightToLeft);
+        view.CommitToModel();
+        view.Model.Blocks.OfType<Table>().Single().RightToLeft.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void UnstyledImportedTable_DoesNotPaintLegacyHeaderOrBandFills()
+    {
+        // stress010: no w:tblStyle, w:tblLook noHBand="0". Word resolves the look against the default
+        // table style, which has no band formatting, so nothing is shaded.
+        var doc = ImportedDocumentWithCellSpacingCascade(tableStylePPr: null, out var table);
+        table.Formatting = table.Formatting with { HeaderRow = true, BandedRows = true };
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        RenderedTables(view.Document).Single().RowGroups.Single().Rows.Single().Cells
+            .Should().OnlyContain(cell => cell.Background == null);
+    }
+
+    [StaFact]
+    public void ImportedTableStyle_DrivesConditionalFormatting_WithoutBakingItIntoTheModel()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Styles["Ledger"] = new DocumentStyle
+        {
+            Id = "Ledger",
+            Name = "Ledger",
+            Type = StyleType.Table,
+            PreservedTableStyleXml =
+                """
+                <w:style xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:type="table" w:styleId="Ledger">
+                  <w:tblPr>
+                    <w:tblStyleRowBandSize w:val="1"/>
+                    <w:tblBorders><w:top w:val="single" w:sz="4" w:color="auto"/></w:tblBorders>
+                  </w:tblPr>
+                  <w:tblStylePr w:type="firstRow"><w:rPr><w:b/><w:color w:val="FFFFFF"/></w:rPr><w:tcPr><w:shd w:val="clear" w:fill="1F4E79"/></w:tcPr></w:tblStylePr>
+                  <w:tblStylePr w:type="firstCol"><w:rPr><w:b/></w:rPr></w:tblStylePr>
+                  <w:tblStylePr w:type="band1Horz"><w:tcPr><w:shd w:val="clear" w:fill="DDEBF7"/></w:tcPr></w:tblStylePr>
+                </w:style>
+                """
+        };
+        var table = Table.Create(4, 2);
+        table.TableStyleId = "Ledger";
+        table.Formatting = table.Formatting with { HeaderRow = true, FirstColumn = true, BandedRows = false };
+        foreach (var row in table.Rows)
+        {
+            foreach (var modelCell in row.Cells)
+            {
+                modelCell.Paragraphs.Clear();
+                modelCell.Paragraphs.Add(new Paragraph("cell"));
+            }
+        }
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        RenderedTables(view.Document).Single().BorderBrush
+            .Should().BeOfType<System.Windows.Media.SolidColorBrush>()
+            .Which.Color.Should().Be(System.Windows.Media.Colors.Black,
+                "the imported style's w:tblBorders colour 'auto' is black, not the gallery fallback grey");
+        var rows = RenderedTables(view.Document).Single().RowGroups.Single().Rows;
+        static System.Windows.Documents.Run RunOf(System.Windows.Documents.TableCell cell) =>
+            RenderedCellParagraphs(cell).Single().Inlines.OfType<System.Windows.Documents.Run>().First();
+
+        ((System.Windows.Media.SolidColorBrush)rows[0].Cells[1].Background!).Color
+            .Should().Be(System.Windows.Media.Color.FromRgb(0x1F, 0x4E, 0x79));
+        RunOf(rows[0].Cells[1]).FontWeight.Should().Be(FontWeights.Bold);
+        ((System.Windows.Media.SolidColorBrush)RunOf(rows[0].Cells[1]).Foreground).Color
+            .Should().Be(System.Windows.Media.Colors.White);
+        RunOf(rows[2].Cells[0]).FontWeight.Should().Be(FontWeights.Bold, "w:tblLook firstColumn is on");
+        RunOf(rows[2].Cells[1]).FontWeight.Should().Be(FontWeights.Normal);
+        rows[1].Cells[1].Background.Should().BeNull(
+            "w:tblLook noHBand suppresses the style's band shading, and no legacy grey band replaces it");
+        rows[2].Cells[1].Background.Should().BeNull();
+
+        view.CommitToModel();
+        var committed = view.Model.Blocks.OfType<Table>().Single();
+        committed.Rows.SelectMany(row => row.Cells).SelectMany(cell => cell.Paragraphs)
+            .SelectMany(paragraph => paragraph.Runs)
+            .Should().OnlyContain(run => !run.Formatting.Bold && run.Formatting.ColorHex == null,
+                "style-derived run formatting is render-only");
+        committed.Rows.SelectMany(row => row.Cells).Should().OnlyContain(cell => cell.ShadingColorHex == null);
     }
 
     [StaFact]
@@ -1841,11 +2130,15 @@ public sealed class DocumentViewRoundTripTests
         var rendered = RenderedTables(view.Document).First();
         rendered.Margin.Left.Should().Be(0);
         rendered.Margin.Right.Should().Be(0);
+        // Word's table width includes the authored cell spacing; WPF adds it on top of the columns,
+        // so the rendered columns plus every gap must still equal the authored width.
+        var spacingDip = sourceTable.CellSpacingPt!.Value * (96.0 / 72.0) * 2;
+        rendered.CellSpacing.Should().BeApproximately(spacingDip, 0.001);
+        (rendered.Columns.Sum(column => column.Width.Value) + spacingDip * (rendered.Columns.Count + 1)
+                + rendered.BorderThickness.Left + rendered.BorderThickness.Right)
+            .Should().BeApproximately(sourceTable.PreferredWidthPt!.Value * (96.0 / 72.0), 0.01);
         rendered.RowGroups[0].Rows[0].Cells[0].Padding.Top.Should()
-            .BeApproximately(
-                sourceTable.Rows[0].Cells[0].Margins!.TopPt * (96.0 / 72.0)
-                + sourceTable.CellSpacingPt!.Value * (96.0 / 72.0),
-                0.01);
+            .BeApproximately(sourceTable.Rows[0].Cells[0].Margins!.TopPt * (96.0 / 72.0), 0.01);
         rendered.RowGroups[0].Rows[0].Cells[0].Background.Should().NotBeNull(
             "ordinary flow tables retain their existing WPF cell-surface ownership");
     }

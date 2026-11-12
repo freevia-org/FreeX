@@ -4528,6 +4528,9 @@ public static class DocxReader
             _ => null
         };
 
+        // Visually right-to-left table (w:bidiVisual): columns are mirrored, first grid column at the right.
+        table.RightToLeft = ReadToggle(tblPr, "bidiVisual");
+
         // Default cell margins (w:tblCellMar); absent → null (use the implicit docx default).
         table.DefaultCellMargins = ReadCellMargins(tblPr?.Element(W + "tblCellMar"));
 
@@ -4775,8 +4778,17 @@ public static class DocxReader
         var left = ReadEdge("left");
         var bottom = ReadEdge("bottom");
         var right = ReadEdge("right");
-        if (top is null && left is null && bottom is null && right is null) return null;
-        return new CellBorders { Top = top, Left = left, Bottom = bottom, Right = right };
+        // An explicit nil/none edge REMOVES the inherited table border on that side (layout tables
+        // hide their grid this way); it is not the same as an absent edge, which inherits.
+        bool IsRemoved(string name) =>
+            tcBorders.Element(W + name)?.Attribute(W + "val")?.Value is "none" or "nil";
+        var result = new CellBorders
+        {
+            Top = top, Left = left, Bottom = bottom, Right = right,
+            NoTop = IsRemoved("top"), NoLeft = IsRemoved("left"),
+            NoBottom = IsRemoved("bottom"), NoRight = IsRemoved("right")
+        };
+        return result.IsEmpty ? null : result;
     }
 
     private static bool ReadBorders(XElement? tblBorders)

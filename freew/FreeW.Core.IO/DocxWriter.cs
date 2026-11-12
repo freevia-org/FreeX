@@ -2785,6 +2785,9 @@ public static class DocxWriter
         if (table.FloatingTableAllowsOverlap is { } allowsOverlap)
             tblPr.Add(new XElement(W + "tblOverlap",
                 new XAttribute(W + "val", allowsOverlap ? "overlap" : "never")));
+        // Visually right-to-left table (w:bidiVisual) follows tblOverlap in CT_TblPr.
+        if (table.RightToLeft)
+            tblPr.Add(new XElement(W + "bidiVisual"));
 
         // Preferred table width (w:tblW): a fixed dxa width when set, else automatic (the historical default).
         // AutoFitMode.Window is the one exception: both Window and Contents write the same
@@ -2933,19 +2936,24 @@ public static class DocxWriter
     private static XElement BuildCellBordersElement(CellBorders borders)
     {
         var tcBorders = new XElement(W + "tcBorders");
-        void Edge(string name, CellBorderEdge? edge)
+        void Edge(string name, CellBorderEdge? edge, bool removed)
         {
-            if (edge is null) return;
+            if (edge is null)
+            {
+                if (removed)
+                    tcBorders.Add(new XElement(W + name, new XAttribute(W + "val", "nil")));
+                return;
+            }
             tcBorders.Add(new XElement(W + name,
                 new XAttribute(W + "val", BorderLineStyles.ToToken(edge.Style)),
                 new XAttribute(W + "sz", (int)Math.Round(edge.WidthPt * 8)),
                 new XAttribute(W + "space", 0),
                 new XAttribute(W + "color", edge.ColorHex.TrimStart('#'))));
         }
-        Edge("top", borders.Top);
-        Edge("left", borders.Left);
-        Edge("bottom", borders.Bottom);
-        Edge("right", borders.Right);
+        Edge("top", borders.Top, borders.NoTop);
+        Edge("left", borders.Left, borders.NoLeft);
+        Edge("bottom", borders.Bottom, borders.NoBottom);
+        Edge("right", borders.Right, borders.NoRight);
         return tcBorders;
     }
 

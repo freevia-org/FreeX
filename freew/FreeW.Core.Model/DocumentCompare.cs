@@ -1225,6 +1225,7 @@ public static class DocumentCompare
             IndentFromLeftPt = revised.IndentFromLeftPt,
             FloatingPosition = revised.FloatingPosition,
             FloatingTableAllowsOverlap = revised.FloatingTableAllowsOverlap,
+            RightToLeft = revised.RightToLeft,
             DefaultCellMargins = revised.DefaultCellMargins,
             CellSpacingPt = revised.CellSpacingPt,
             AutoFit = revised.AutoFit

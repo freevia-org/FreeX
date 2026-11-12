@@ -71,6 +71,40 @@ public class TablePropertiesRoundTripTests
     }
 
     [Fact]
+    public void Cell_RemovedBorderEdges_RoundTripAsNil_DistinctFromInheritedEdges()
+    {
+        var table = Table.Create(1, 2);
+        table.Rows[0].Cells[0].Borders = new CellBorders { NoTop = true, NoLeft = true, NoBottom = true, NoRight = true };
+
+        var tcBorders = DocumentXml(table).Descendants(W + "tcBorders").Single();
+        tcBorders.Elements().Select(edge => $"{edge.Name.LocalName}:{edge.Attribute(W + "val")?.Value}")
+            .Should().Equal("top:nil", "left:nil", "bottom:nil", "right:nil");
+
+        var read = SingleTableAfterRoundTrip(table);
+        read.Rows[0].Cells[0].Borders.Should().Be(table.Rows[0].Cells[0].Borders);
+        read.Rows[0].Cells[1].Borders.Should().BeNull("an absent w:tcBorders inherits the table borders");
+    }
+
+    [Fact]
+    public void Table_BidiVisual_RoundTripsInSchemaOrder_AndIsAbsentByDefault()
+    {
+        var table = Table.Create(1, 2);
+        table.TableStyleId = "TableGrid";
+        table.PreferredWidthPt = 360;
+        table.RightToLeft = true;
+
+        var tblPr = DocumentXml(table).Descendants(W + "tblPr").Single();
+        tblPr.Elements().Select(element => element.Name.LocalName)
+            .TakeWhile(name => name != "tblW")
+            .Should().Equal("tblStyle", "bidiVisual");
+        SingleTableAfterRoundTrip(table).RightToLeft.Should().BeTrue();
+
+        var plain = Table.Create(1, 2);
+        DocumentXml(plain).Descendants(W + "bidiVisual").Should().BeEmpty();
+        SingleTableAfterRoundTrip(plain).RightToLeft.Should().BeFalse();
+    }
+
+    [Fact]
     public void Table_FloatingPositionAndOverlap_EmitExactAttributesAndRoundTrip()
     {
         var table = Table.Create(1, 1);
