@@ -6641,6 +6641,7 @@ public static partial class DocxReader
             ShowDataLabels: typeElement.Element(C + "dLbls") is not null,
             ScatterConnectsPoints: kind == ChartKind.Scatter
                 && string.Equals(typeElement.Element(C + "scatterStyle")?.Attribute("val")?.Value, "lineMarker", StringComparison.OrdinalIgnoreCase));
+        chart.NativeTextSizes = ReadChartTextSizes(chartSpace, chartElement, plotArea, typeElement);
 
         // Current packages store the gallery ids in the extension URI, which is valid chart XML.
         // Keep reading the old private child payload so existing FreeW files retain their settings.
@@ -6671,6 +6672,66 @@ public static partial class DocxReader
 
         return chart;
     }
+
+    /// <summary>
+    /// Resolves the chart's text sizes: an element's own rich-text run / <c>c:txPr</c> size wins, then the
+    /// chart-space <c>c:txPr</c> default, then Word's rendering of a part without text properties (18pt
+    /// rich-text titles — the DrawingML run default — and 9pt labels and legend).
+    /// </summary>
+    private static ChartTextSizes ReadChartTextSizes(
+        XElement chartSpace,
+        XElement chartElement,
+        XElement plotArea,
+        XElement typeElement)
+    {
+        var defaults = ChartTextSizes.WordDefault;
+        var spacePt = TextPropertiesSizePt(chartSpace.Element(C + "txPr"));
+        var basePt = spacePt ?? defaults.TickLabelPt;
+        var axes = plotArea.Elements()
+            .Where(element => element.Name == C + "catAx" || element.Name == C + "valAx"
+                || element.Name == C + "dateAx" || element.Name == C + "serAx")
+            .ToList();
+
+        var title = chartElement.Element(C + "title");
+        var titlePt = RichTextSizePt(title)
+            ?? TextPropertiesSizePt(title?.Element(C + "txPr"))
+            ?? (spacePt is { } spaceTitleBase ? spaceTitleBase * 1.4 : defaults.TitlePt);
+
+        var axisTitle = axes.Select(axis => axis.Element(C + "title")).FirstOrDefault(element => element is not null);
+        var axisTitlePt = RichTextSizePt(axisTitle)
+            ?? TextPropertiesSizePt(axisTitle?.Element(C + "txPr"))
+            ?? spacePt
+            ?? defaults.AxisTitlePt;
+
+        var tickPt = axes
+            .Select(axis => TextPropertiesSizePt(axis.Element(C + "txPr")))
+            .FirstOrDefault(size => size is not null) ?? basePt;
+        var legendPt = TextPropertiesSizePt(chartElement.Element(C + "legend")?.Element(C + "txPr")) ?? basePt;
+        var dataLabelPt = typeElement.Descendants(C + "dLbls")
+            .Select(labels => TextPropertiesSizePt(labels.Element(C + "txPr")))
+            .FirstOrDefault(size => size is not null) ?? basePt;
+
+        return new ChartTextSizes(titlePt, axisTitlePt, tickPt, legendPt, dataLabelPt);
+    }
+
+    private static double? RichTextSizePt(XElement? titleElement)
+    {
+        var rich = titleElement?.Element(C + "tx")?.Element(C + "rich");
+        if (rich is null)
+            return null;
+
+        return rich.Descendants(A + "r").Select(run => DrawingTextSizePt(run.Element(A + "rPr"))).FirstOrDefault(size => size is not null)
+            ?? rich.Descendants(A + "defRPr").Select(DrawingTextSizePt).FirstOrDefault(size => size is not null);
+    }
+
+    private static double? TextPropertiesSizePt(XElement? textProperties) =>
+        textProperties?.Descendants(A + "defRPr").Select(DrawingTextSizePt).FirstOrDefault(size => size is not null);
+
+    private static double? DrawingTextSizePt(XElement? properties) =>
+        int.TryParse(properties?.Attribute("sz")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var hundredths)
+        && hundredths is >= 100 and <= 400000
+            ? hundredths / 100.0
+            : null;
 
     private static void ApplyFreeWChartDesignExtensionUri(string uri, Chart chart)
     {

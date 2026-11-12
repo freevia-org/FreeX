@@ -19,6 +19,31 @@ public sealed class ChartSmartArtVisualPlannerTests
     }
 
     [Fact]
+    public void ChartScene_ImportedTextSizesOverrideGallerySizesInDips()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["Q1", "Q2"], [1.0, 2.0], "Actual", "Revenue");
+        chart.ShowLegend = true;
+        chart.CategoryAxisTitle = "Quarter";
+        chart.ValueAxisTitle = "USD";
+        chart.QuickLayoutId = 9;
+        var gallery = ChartSmartArtVisualPlanner.BuildChartScene(chart, 280, 168);
+
+        chart.NativeTextSizes = new ChartTextSizes(18, 15, 9, 7.5, 6);
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, 280, 168);
+
+        double Size(ChartSceneTextKind kind) => scene.Texts.First(text => text.Kind == kind).FontSize;
+        Size(ChartSceneTextKind.Title).Should().BeApproximately(24, 0.001);
+        Size(ChartSceneTextKind.AxisTitle).Should().BeApproximately(20, 0.001);
+        Size(ChartSceneTextKind.CategoryAxis).Should().BeApproximately(12, 0.001);
+        Size(ChartSceneTextKind.ValueAxis).Should().BeApproximately(12, 0.001);
+        Size(ChartSceneTextKind.DataLabel).Should().BeApproximately(8, 0.001);
+        scene.Legend.Should().OnlyContain(entry => Math.Abs(entry.FontSize - 10) < 0.001
+            && entry.TextX >= entry.SwatchX + entry.SwatchSize + 1);
+        scene.Bars.Should().Equal(gallery.Bars, "text sizes do not move the plot geometry");
+        gallery.Legend.Should().OnlyContain(entry => entry.FontSize == 9);
+    }
+
+    [Fact]
     public void ChartScene_ColumnGolden_CentralizesFrameAxesBarsLabelsAndLegend()
     {
         var chart = Chart.Create(ChartKind.Column, ["Q1", "Q2"], [1.0, 2.0], "Actual");

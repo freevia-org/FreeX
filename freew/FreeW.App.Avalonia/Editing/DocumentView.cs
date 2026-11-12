@@ -4996,7 +4996,7 @@ public sealed partial class DocumentView : Control
                 ChartSceneTextAnchor.TopLeft,
                 ChartSceneTextKind.Legend,
                 "#000000",
-                9), sourceRect, pageTopDip, pageHeightPt);
+                entry.FontSize), sourceRect, pageTopDip, pageHeightPt);
         }
 
         return WrapPdfVisualOps(ops, plan, frame);
@@ -28251,7 +28251,7 @@ public sealed partial class DocumentView : Control
                 scene.PaletteHex[index % scene.PaletteHex.Count])),
                 new Rect(entry.SwatchX, entry.SwatchY, entry.SwatchSize, entry.SwatchSize));
             DrawSceneText(context, new ChartSceneText(entry.Text, entry.TextX, entry.TextY,
-                ChartSceneTextAnchor.TopLeft, ChartSceneTextKind.Legend, "#000000", 9));
+                ChartSceneTextAnchor.TopLeft, ChartSceneTextKind.Legend, "#000000", entry.FontSize));
         }
     }
 

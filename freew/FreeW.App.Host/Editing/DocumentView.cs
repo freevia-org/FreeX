@@ -15472,7 +15472,7 @@ public sealed partial class DocumentView : RichTextBox
             Canvas.SetTop(swatch, entry.SwatchY);
             canvas.Children.Add(swatch);
             AddSceneText(canvas, new ChartSceneText(entry.Text, entry.TextX, entry.TextY,
-                ChartSceneTextAnchor.TopLeft, ChartSceneTextKind.Legend, "#000000", 9));
+                ChartSceneTextAnchor.TopLeft, ChartSceneTextKind.Legend, "#000000", entry.FontSize));
         }
     }
 

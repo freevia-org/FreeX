@@ -154,6 +154,22 @@ public sealed record ChartNativeVisualSettings(
     bool ShowDataLabels,
     bool ScatterConnectsPoints);
 
+/// <summary>
+/// Resolved text sizes (points) of an imported chart part: explicit <c>a:defRPr</c>/<c>a:rPr</c>
+/// <c>@sz</c> values (hundredths of a point) from the element's <c>c:txPr</c> / rich text, falling back
+/// to the chart-space <c>c:txPr</c> and then to Word's defaults for a chart part without text properties.
+/// </summary>
+public sealed record ChartTextSizes(
+    double TitlePt,
+    double AxisTitlePt,
+    double TickLabelPt,
+    double LegendPt,
+    double DataLabelPt)
+{
+    /// <summary>Word's rendering of a chart part that carries no text properties at all.</summary>
+    public static ChartTextSizes WordDefault { get; } = new(18, 18, 9, 9, 9);
+}
+
 // ─── Chart Gallery catalogs ───────────────────────────────────────────────────
 //
 // Three curated sets mirror Word's Chart Design ribbon galleries:
@@ -395,6 +411,12 @@ public sealed class Chart
     /// </summary>
     public ChartNativeVisualSettings? NativeVisualSettings { get; set; }
 
+    /// <summary>
+    /// Text sizes recovered from an imported chart part (see <see cref="ChartTextSizes"/>). Null keeps
+    /// FreeW's gallery text sizes for charts authored in the model. View-only: never serialized.
+    /// </summary>
+    public ChartTextSizes? NativeTextSizes { get; set; }
+
     public Chart() { }
 
     /// <summary>
@@ -435,7 +457,8 @@ public sealed class Chart
             StyleId = StyleId,
             ColorSchemeId = ColorSchemeId,
             QuickLayoutId = QuickLayoutId,
-            NativeVisualSettings = NativeVisualSettings
+            NativeVisualSettings = NativeVisualSettings,
+            NativeTextSizes = NativeTextSizes
         };
         clone.Categories.AddRange(Categories);
         foreach (var series in Series)
