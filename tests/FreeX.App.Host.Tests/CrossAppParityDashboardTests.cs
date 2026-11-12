@@ -20,13 +20,8 @@ public sealed class CrossAppParityDashboardTests
             "portable PowerShell scripts must use repository paths with forward slashes");
         generatorSource.Should().Contain("tools/Test-RepositoryPreflight.ps1");
 
-        var result = PowerShellScriptRunner.RunToolScriptWithPwsh(
-            "Generate-CrossAppParityDashboard.ps1",
-            repoRoot,
-            "-Check");
-
-        result.ExitCode.Should().Be(0, result.CombinedOutput);
-
+        // Test-CrossAppParityDashboard.ps1 runs the generator's -Check under pwsh, powershell.exe,
+        // and invariant globalization (asserted below), so a separate pwsh -Check run is redundant.
         var hostGuard = PowerShellScriptRunner.RunToolScript(
             "Test-CrossAppParityDashboard.ps1",
             repoRoot);
