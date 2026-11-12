@@ -116,6 +116,12 @@ public sealed partial class DocumentView : RichTextBox
     [ThreadStatic]
     private static bool _renderPageBreakMarkers = true;
 
+    // True only inside Render() of a non-interactive page render (RenderPageBreakMarkers == false: print
+    // preview, fidelity capture), which never reads its text back or places a caret in it; see
+    // SlashLineBreakDisplayPlanner. Reset at the end of the pass so an editor's own runs never get it.
+    [ThreadStatic]
+    private static bool _renderJoinSlashes;
+
     /// <summary>
     /// Collects a message for every embedded image the current <see cref="Render"/> pass could not
     /// decode (see <see cref="DecodeImage"/>), so <see cref="ImageDecodeDiagnostics"/> reflects the
@@ -5669,6 +5675,7 @@ public sealed partial class DocumentView : RichTextBox
         _renderFieldEvaluationFileName = FieldEvaluationFileName;
         _renderReviewDisplayPolicy = CurrentReviewDisplayPolicy;
         _renderPageBreakMarkers = RenderPageBreakMarkers;
+        _renderJoinSlashes = !RenderPageBreakMarkers;
         _renderViewMode = ViewMode;
         _renderImageDiagnostics = new List<string>();
         var flow = new FlowDocument { PagePadding = new Thickness(0) };
@@ -5904,6 +5911,7 @@ public sealed partial class DocumentView : RichTextBox
         // Snapshot this pass's image-decode losses onto the instance so ImageDecodeDiagnostics reflects
         // what is actually showing in the document right now (see the field's doc comment).
         _imageDecodeDiagnostics = (IReadOnlyList<string>?)_renderImageDiagnostics ?? Array.Empty<string>();
+        _renderJoinSlashes = false;
 
         // See SpellCheckDocumentAssignmentGate: serialize the Document swap (and the WPF spell-checker
         // initialization it can trigger) across all DocumentView instances to avoid a native COM race
@@ -10026,14 +10034,13 @@ public sealed partial class DocumentView : RichTextBox
             var blocks = new List<System.Windows.Documents.Block>();
             foreach (var (page, segmentIndex) in paginationPlan.Pages.Select((page, index) => (page, index)))
             {
-                var segmentTopRegistrationDip = table.CellSpacingPt is > 0
-                    ? table.CellSpacingPt.Value * PxPerPoint / 2
-                    : 0;
+                // Each page segment is an ordinary flow table (BuildTable shares the cell-spacing,
+                // tcMar and border chrome with unsplit tables), so the section adds no inset of its own.
                 var section = new System.Windows.Documents.Section
                 {
                     BreakPageBefore = segmentIndex > 0,
                     Margin = new Thickness(0),
-                    Padding = new Thickness(0, segmentTopRegistrationDip, 0, 0)
+                    Padding = new Thickness(0)
                 };
                 section.Blocks.Add(BuildTable(
                     table,
@@ -10232,15 +10239,17 @@ public sealed partial class DocumentView : RichTextBox
         // Word collapses adjacent cell borders unless w:tblCellSpacing is authored; WPF's default
         // Table.CellSpacing (2px) would otherwise draw every table as detached double-ruled boxes.
         // An authored spacing surrounds every cell, so the gap between two cells is twice the value.
-        var flowCellSpacingDip = !isPaginationSegment && table.CellSpacingPt is > 0
+        // Page segments of a split table use the same spacing: ResolveRenderedTableColumnWidths carves
+        // it out of the grid, so the segment keeps Word's authored table width.
+        var flowCellSpacingDip = table.CellSpacingPt is > 0
             ? table.CellSpacingPt.Value * PxPerPoint * 2
             : 0;
         wpf.CellSpacing = flowCellSpacingDip;
-        // WPF Table.CellSpacing grows both axes and breaks Word's fixed-width paginated tables.
-        // Preserve that width contract while reserving the authored vertical cell gap on each row.
-        var paginationVerticalCellSpacingDip = isPaginationSegment && table.CellSpacingPt is > 0
-            ? table.CellSpacingPt.Value * PxPerPoint
-            : 0;
+        // WPF leaves only half of CellSpacing between the table edge and its outer cells, while Word
+        // keeps the full gap there too; the table padding supplies the missing half, which is also the
+        // share ResolveRenderedTableColumnWidths already carves out of the grid for the two edges.
+        if (flowCellSpacingDip > 0)
+            wpf.Padding = new Thickness(flowCellSpacingDip / 2);
         var columns = table.ColumnCount;
         var columnWidthsDip = ResolveRenderedTableColumnWidths(
             table, document, columns, autoFitColumnWidthsDip, flowCellSpacingDip);
@@ -10364,19 +10373,17 @@ public sealed partial class DocumentView : RichTextBox
                         mergedRowSpan++;
                     }
                 }
-                var ordinaryCellMargins = !isPaginationSegment
-                    ? modelCell.Margins ?? table.DefaultCellMargins ?? TableCellMargins.Default
-                    : null;
+                var ordinaryCellMargins = modelCell.Margins ?? table.DefaultCellMargins ?? TableCellMargins.Default;
                 // The 4-DIP horizontal inset stands in for Word's default 5.4pt cell margin; an authored
                 // margin tighter than that (layout tables with w:tblCellMar left/right = 0) must not be
                 // widened, or the cell text sits visibly right of Word's.
                 var wpfCell = new WpfTableCell
                 {
                     Padding = new Thickness(
-                        Math.Min(4, ordinaryCellMargins?.LeftPt * PxPerPoint ?? 4),
-                        (ordinaryCellMargins?.TopPt * PxPerPoint ?? 2) + paginationVerticalCellSpacingDip,
-                        Math.Min(4, ordinaryCellMargins?.RightPt * PxPerPoint ?? 4),
-                        (ordinaryCellMargins?.BottomPt * PxPerPoint ?? 2) + paginationVerticalCellSpacingDip)
+                        Math.Min(4, ordinaryCellMargins.LeftPt * PxPerPoint),
+                        ordinaryCellMargins.TopPt * PxPerPoint,
+                        Math.Min(4, ordinaryCellMargins.RightPt * PxPerPoint),
+                        ordinaryCellMargins.BottomPt * PxPerPoint)
                 };
                 if (span > 1)
                     wpfCell.ColumnSpan = span;
@@ -10485,9 +10492,6 @@ public sealed partial class DocumentView : RichTextBox
                 // Bottom use a Grid+StackPanel wrapper. Exact-height clamping is not enforceable in WPF
                 // FlowDocument (content may overflow the MinHeight), which is a known residual WPF limit.
                 var vAlign = modelCell.VerticalAlignment;
-                var paginatedContentMargins = isPaginationSegment && table.CellSpacingPt is > 0
-                    ? modelCell.Margins ?? table.DefaultCellMargins ?? TableCellMargins.Default
-                    : null;
                 if (hasPlannedCellBorders)
                 {
                     var cellContentHost = BuildCellContentHost(
@@ -10496,59 +10500,52 @@ public sealed partial class DocumentView : RichTextBox
                         vAlign,
                         rowHeightPx,
                         cellBorderPlan,
-                        paginatedContentMargins,
                         preservedNumberingMarkers);
-                    if (isPaginationSegment
-                        && table.CellSpacingPt is > 0
-                        && wpfCell.Background is { } spacedCellBackground)
+                    // A cell with its own w:tcBorders still honours w:tcMar (flow tables and page
+                    // segments of a split table alike): keep the border chrome on the cell edge and
+                    // inset only the text by the authored margin (less the inset the nested editor
+                    // already contributes).
+                    cellContentHost.RenderTransform = Transform.Identity;
+                    var contentStack = cellContentHost.Children
+                        .OfType<System.Windows.Controls.StackPanel>().First();
+                    // Word measures the cell margin from the inner side of the cell's border.
+                    double BorderExtent(TableCellBorderVisualEdge edge) =>
+                        TableCellBorderVisualPlanner.StrokeExtentDip(cellBorderPlan.Edge(edge));
+                    contentStack.Margin = new Thickness(
+                        Math.Max(0, ordinaryCellMargins.LeftPt * PxPerPoint - WpfTableCellContentInsetDip)
+                            + BorderExtent(TableCellBorderVisualEdge.Left),
+                        0,
+                        Math.Max(0, ordinaryCellMargins.RightPt * PxPerPoint - WpfTableCellContentInsetDip)
+                            + BorderExtent(TableCellBorderVisualEdge.Right),
+                        0);
+                    // The border chrome spans the content host, so the vertical cell margins belong
+                    // inside it (Word draws the text tcMar-top below the cell's top edge); as cell
+                    // padding they would push the chrome down with the text. Unless the row height is
+                    // exact, the last paragraph's space-after belongs inside the chrome as well (an
+                    // at-least row grows to content that includes it, as in Word).
+                    var trailingAfterDip = modelRow.HeightRule != TableRowHeightRule.Exact
+                        && contentStack.Children.Count > 0
+                        && contentStack.Children[^1] is System.Windows.Controls.RichTextBox lastEditor
+                        && lastEditor.Document.Blocks.LastBlock is WpfParagraph { Margin.Bottom: > 0 } lastParagraph
+                            ? lastParagraph.Margin.Bottom
+                            : 0;
+                    contentStack.Margin = new Thickness(
+                        contentStack.Margin.Left,
+                        wpfCell.Padding.Top + BorderExtent(TableCellBorderVisualEdge.Top),
+                        contentStack.Margin.Right,
+                        wpfCell.Padding.Bottom + trailingAfterDip + BorderExtent(TableCellBorderVisualEdge.Bottom));
+                    wpfCell.Padding = new Thickness(0);
+                    if (modelRow.HeightRule == TableRowHeightRule.Exact && modelRow.HeightPt is > 0)
                     {
-                        var spacingDip = table.CellSpacingPt.Value * PxPerPoint;
-                        var surfaceMargin = new Thickness(
-                            cellIndex == 0 ? spacingDip / 2 : -spacingDip,
+                        // w:hRule="exact": Word clips text that does not fit instead of growing the
+                        // row, and lays the cell box out at the authored height plus the cell's top
+                        // margin (see ExactRowCellBoxHeightDip). Only the text is clipped, never the
+                        // border chrome.
+                        cellContentHost.Height = ExactRowCellBoxHeightDip(modelRow, ordinaryCellMargins, flowCellSpacingDip, isHeaderRow: rowIndex == 0 && table.Formatting.RepeatHeaderRow);
+                        contentStack.MaxHeight = Math.Max(
                             0,
-                            cellIndex == modelRow.Cells.Count - 1 ? spacingDip : 0,
-                            0);
-                        var fillSurface = new Border
-                        {
-                            Background = spacedCellBackground,
-                            IsHitTestVisible = false,
-                            Margin = surfaceMargin
-                        };
-                        System.Windows.Controls.Panel.SetZIndex(fillSurface, -1);
-                        cellContentHost.Children.Insert(0, fillSurface);
-                        cellContentHost.Children.OfType<TableCellBorderChrome>().Single().Margin = surfaceMargin;
-                        wpfCell.Background = null;
-                    }
-                    if (ordinaryCellMargins is { } borderedCellMargins)
-                    {
-                        // A flow-table cell with its own w:tcBorders still honours w:tcMar: keep the
-                        // border chrome on the cell edge and inset only the text by the authored margin
-                        // (less the inset the nested editor already contributes).
-                        cellContentHost.RenderTransform = Transform.Identity;
-                        var contentStack = cellContentHost.Children
-                            .OfType<System.Windows.Controls.StackPanel>().First();
-                        contentStack.Margin = new Thickness(
-                            Math.Max(0, borderedCellMargins.LeftPt * PxPerPoint - WpfTableCellContentInsetDip),
-                            0,
-                            Math.Max(0, borderedCellMargins.RightPt * PxPerPoint - WpfTableCellContentInsetDip),
-                            0);
-                        if (rowHeightPx is null)
-                        {
-                            // Without an authored row height the border chrome is only as tall as its
-                            // content host, so the vertical cell margins and the last paragraph's
-                            // space-after belong inside it rather than outside as cell padding.
-                            var trailingAfterDip = contentStack.Children.Count > 0
-                                && contentStack.Children[^1] is System.Windows.Controls.RichTextBox lastEditor
-                                && lastEditor.Document.Blocks.LastBlock is WpfParagraph { Margin.Bottom: > 0 } lastParagraph
-                                    ? lastParagraph.Margin.Bottom
-                                    : 0;
-                            contentStack.Margin = new Thickness(
-                                contentStack.Margin.Left,
-                                wpfCell.Padding.Top,
-                                contentStack.Margin.Right,
-                                wpfCell.Padding.Bottom + trailingAfterDip);
-                            wpfCell.Padding = new Thickness(0);
-                        }
+                            cellContentHost.Height - contentStack.Margin.Top - contentStack.Margin.Bottom);
+                        contentStack.ClipToBounds = true;
                     }
                     wpfCell.Blocks.Add(new BlockUIContainer(cellContentHost));
                 }
@@ -10556,14 +10553,33 @@ public sealed partial class DocumentView : RichTextBox
                 {
                     // Keep the authored row height around its content. Appending a separate spacer
                     // below the content makes WPF add the two heights together.
-                    wpfCell.Blocks.Add(new BlockUIContainer(BuildCellContentHost(
+                    var heightHost = BuildCellContentHost(
                         modelCell,
                         document,
                         vAlign,
                         rowHeightPx,
                         cellBorderPlan,
-                        paginatedContentMargins,
-                        preservedNumberingMarkers)));
+                        preservedNumberingMarkers);
+                    if (modelRow.HeightRule == TableRowHeightRule.Exact && modelRow.HeightPt is > 0)
+                    {
+                        // Same exact-row box as a bordered cell: the vertical margins sit inside the
+                        // fixed box instead of growing it as cell padding. FlowDocument adds ~1 DIP of
+                        // cell chrome (the shared grid line) around the host, measured on the fixtures.
+                        var heightStack = heightHost.Children.OfType<System.Windows.Controls.StackPanel>().First();
+                        heightStack.Margin = new Thickness(
+                            heightStack.Margin.Left,
+                            wpfCell.Padding.Top,
+                            heightStack.Margin.Right,
+                            wpfCell.Padding.Bottom);
+                        wpfCell.Padding = new Thickness(wpfCell.Padding.Left, 0, wpfCell.Padding.Right, 0);
+                        heightHost.Height = Math.Max(0, ExactRowCellBoxHeightDip(modelRow, ordinaryCellMargins, flowCellSpacingDip, isHeaderRow: rowIndex == 0 && table.Formatting.RepeatHeaderRow) - 1);
+                        heightHost.MinHeight = 0;
+                        heightStack.MaxHeight = Math.Max(
+                            0,
+                            heightHost.Height - heightStack.Margin.Top - heightStack.Margin.Bottom);
+                        heightStack.ClipToBounds = true;
+                    }
+                    wpfCell.Blocks.Add(new BlockUIContainer(heightHost));
                 }
                 else if (modelCell.TextDirection != CellTextDirection.Horizontal)
                 {
@@ -10660,8 +10676,7 @@ public sealed partial class DocumentView : RichTextBox
                 // Word keeps the space-after of a cell's last paragraph inside the cell; WPF collapses
                 // a trailing block margin against the cell edge, so reserve it as bottom padding.
                 // (A row with an authored height already contains that space inside its minimum.)
-                if (!isPaginationSegment
-                    && rowHeightPx is null
+                if (rowHeightPx is null
                     && !hasPlannedCellBorders
                     && TrailingCellParagraphSpaceAfterDip(wpfCell) is > 0 and var trailingSpaceAfterDip)
                 {
@@ -10937,7 +10952,6 @@ public sealed partial class DocumentView : RichTextBox
         TableCellVerticalAlignment verticalAlignment,
         double? minHeightPx,
         TableCellBorderVisualPlan borderPlan,
-        TableCellMargins? contentMargins,
         IReadOnlyDictionary<ModelParagraph, PreservedNumberingMarkerPlan> preservedNumberingMarkers)
     {
         var grid = new System.Windows.Controls.Grid
@@ -10951,11 +10965,6 @@ public sealed partial class DocumentView : RichTextBox
 
         var stack = new System.Windows.Controls.StackPanel
         {
-            RenderTransform = contentMargins is { } margins
-                ? new TranslateTransform(
-                    Math.Max(0, margins.LeftPt * PxPerPoint - WpfTableCellContentInsetDip),
-                    margins.TopPt * PxPerPoint)
-                : Transform.Identity,
             VerticalAlignment = verticalAlignment switch
             {
                 TableCellVerticalAlignment.Center => VerticalAlignment.Center,
@@ -11074,6 +11083,25 @@ public sealed partial class DocumentView : RichTextBox
         return textBlocks;
     }
 
+    /// <summary>
+    /// The laid-out cell box of a w:hRule="exact" row, fitted to Word's own rendering of the table
+    /// fixtures (row pitch measured per row in pixels): an exact row's pitch is the authored height plus
+    /// the cell's top margin -- 54pt body rows with 2pt tcMar pitch 74.6px (72 + 2.67) and 30pt header
+    /// rows 43-43.5px (40 + 2.67). In a table with cell spacing, body rows add the spacing gap on top
+    /// (58pt rows pitch 84.3px = 77.3 + 2.67 + 4.8) while a w:tblHeader row keeps the same 43px pitch,
+    /// its box giving up the gap (38px). WPF adds <paramref name="cellSpacingDip"/> itself, so the box
+    /// returned here is the pitch less that gap.
+    /// </summary>
+    internal static double ExactRowCellBoxHeightDip(
+        ModelTableRow row,
+        TableCellMargins margins,
+        double cellSpacingDip = 0,
+        bool isHeaderRow = false)
+    {
+        var pitchDip = ((row.HeightPt ?? 0) + Math.Max(0, margins.TopPt)) * PxPerPoint;
+        return Math.Max(0, isHeaderRow || row.IsRepeatingHeader ? pitchDip - cellSpacingDip : pitchDip);
+    }
+
     private static double TrailingCellParagraphSpaceAfterDip(WpfTableCell cell)
     {
         static WpfParagraph? LastParagraph(object? element) => element switch
@@ -11140,7 +11168,8 @@ public sealed partial class DocumentView : RichTextBox
         var spacingTotal = cellSpacingDip * (columns + 1);
         // The table's own left/right border sits outside the columns in WPF.
         var tableBorderDip = table.Formatting.Borders ? 2 * (cellSpacingDip > 0 ? PxPerPoint / 2 : 0.5) : 0;
-        var target = total - spacingTotal;
+        // With cell spacing Word draws the detached outer frame inside the authored table width too.
+        var target = total - spacingTotal - (cellSpacingDip > 0 ? tableBorderDip : 0);
         if (table.FloatingPosition is null)
         {
             var metrics = DocumentViewLayoutPlanner.BuildPageMetrics(document.Page);
@@ -11974,8 +12003,11 @@ public sealed partial class DocumentView : RichTextBox
 
     // Remove the display-only soft hyphens (U+00AD) the renderer inserts for automatic hyphenation, so a run
     // read back on commit carries exactly the model text. A no-op for text without soft hyphens.
-    internal static string StripSoftHyphens(string text) =>
-        text.IndexOf(Hyphenator.SoftHyphen) < 0 ? text : text.Replace(Hyphenator.SoftHyphen.ToString(), string.Empty);
+    internal static string StripSoftHyphens(string text)
+    {
+        text = SlashLineBreakDisplayPlanner.Strip(text);
+        return text.IndexOf(Hyphenator.SoftHyphen) < 0 ? text : text.Replace(Hyphenator.SoftHyphen.ToString(), string.Empty);
+    }
 
     // Word's w:smallCaps and w:caps are two independent run flags, but WPF's Typography.Capitals is a
     // single value that can show at most one "caps mode" at a time -- BuildRun below maps AllCaps=true to
@@ -12115,6 +12147,10 @@ public sealed partial class DocumentView : RichTextBox
         var runText = run.Text;
         if (document.Page.AutoHyphenation && !paragraph.Formatting.SuppressAutoHyphens && runText.Length > 0)
             runText = HyphenateForDisplay(runText, document.Page.DoNotHyphenateCaps);
+        // Word does not wrap after a solidus inside a word ("header/footer"); WPF does. Page-only renders
+        // suppress that break with a display-only joiner (stripped on commit like the soft hyphens).
+        if (_renderJoinSlashes)
+            runText = SlashLineBreakDisplayPlanner.Join(runText);
         var wpf = new WpfRun(runText)
         {
             FontWeight = fmt.Bold ? FontWeights.Bold : FontWeights.Normal,
