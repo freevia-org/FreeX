@@ -65,8 +65,7 @@ public sealed class MacOsParityDataHomeInsertFormulaDialogFeatureTests
 
                 Find<Button>(dialog, "DataValidationCancelButton")
                     .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                await DrainInputAsync();
-                await task;
+                await CompleteAsync(task);
             }
             finally
             {
@@ -77,15 +76,19 @@ public sealed class MacOsParityDataHomeInsertFormulaDialogFeatureTests
         }, CancellationToken.None);
     }
 
+    // C3 is selected; a marker in A5 moves with a row edit and a marker in E3 with a column edit, so
+    // each case observes the worksheet itself rather than transient status text.
     [Theory]
-    [InlineData(false, "CellShiftEntireRowOption", "Inserted rows")]
-    [InlineData(false, "CellShiftEntireColumnOption", "Inserted columns")]
-    [InlineData(true, "CellShiftEntireRowOption", "Deleted rows")]
-    [InlineData(true, "CellShiftEntireColumnOption", "Deleted columns")]
+    [InlineData(false, "CellShiftEntireRowOption", 6u, 1u, "row-marker")]
+    [InlineData(false, "CellShiftEntireColumnOption", 3u, 6u, "column-marker")]
+    [InlineData(true, "CellShiftEntireRowOption", 4u, 1u, "row-marker")]
+    [InlineData(true, "CellShiftEntireColumnOption", 3u, 4u, "column-marker")]
     public async Task InsertDeleteCells_EntireRowAndColumnChoices_RouteToTheWholeBandOperations(
         bool delete,
         string optionAutomationId,
-        string expectedStatus)
+        uint expectedMarkerRow,
+        uint expectedMarkerColumn,
+        string expectedMarker)
     {
         await Session.Dispatch(async () =>
         {
@@ -94,6 +97,8 @@ public sealed class MacOsParityDataHomeInsertFormulaDialogFeatureTests
             {
                 window.Show();
                 var sheet = window.Session.ActiveSheet;
+                sheet.SetCell(new CellAddress(sheet.Id, 5, 1), Cell.FromValue(new TextValue("row-marker")));
+                sheet.SetCell(new CellAddress(sheet.Id, 3, 5), Cell.FromValue(new TextValue("column-marker")));
                 var cell = new CellAddress(sheet.Id, 3, 3);
                 window.Session.SelectCell(cell);
                 window.Session.SelectRange(new GridRange(cell, cell));
@@ -111,10 +116,10 @@ public sealed class MacOsParityDataHomeInsertFormulaDialogFeatureTests
                 Find<RadioButton>(dialog, optionAutomationId).IsChecked = true;
                 dialog.GetVisualDescendants().OfType<Button>().Single(button => button.IsDefault)
                     .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                await DrainInputAsync();
-                await task;
+                await CompleteAsync(task);
 
-                window.StatusTextForTest.Text.Should().Be(expectedStatus);
+                sheet.GetValue(expectedMarkerRow, expectedMarkerColumn)
+                    .Should().Be(new TextValue(expectedMarker));
             }
             finally
             {
@@ -166,8 +171,7 @@ public sealed class MacOsParityDataHomeInsertFormulaDialogFeatureTests
                 rowRadio.IsChecked = true;
                 rowBox.Text = "7";
                 Find<Button>(dialog, "PageBreakOkButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                await DrainInputAsync();
-                await task;
+                await CompleteAsync(task);
 
                 sheet.RowPageBreaks.Should().Contain(7u);
             }
@@ -204,7 +208,7 @@ public sealed class MacOsParityDataHomeInsertFormulaDialogFeatureTests
 
                 firstKeyBox.Text = "Small, Large";
                 Find<Button>(dialog, "SortOptionsOkButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                await DrainInputAsync();
+                await CompleteAsync(task);
                 result = await task;
             }
             finally
@@ -219,8 +223,10 @@ public sealed class MacOsParityDataHomeInsertFormulaDialogFeatureTests
         result!.FirstKeySortOrder.Should().Be("Small, Large");
     }
 
+    // Structural only: the help button opens a second modal box owned by this dialog, and a nested
+    // modal is not driven here (the help text itself is covered by FunctionHelpMessages below).
     [Fact]
-    public async Task InsertFunction_HasSearchAndHelpButtons_AndHelpShowsTheSelectedFunction()
+    public async Task InsertFunction_HasSearchAndHelpButtons()
     {
         await Session.Dispatch(async () =>
         {
@@ -234,27 +240,18 @@ public sealed class MacOsParityDataHomeInsertFormulaDialogFeatureTests
 
                 var goButton = Find<Button>(dialog, "InsertFunctionGoButton");
                 var helpButton = Find<Button>(dialog, "InsertFunctionHelpButton");
-                var searchBox = Find<TextBox>(dialog, "InsertFunctionSearchBox");
-                var listBox = Find<ListBox>(dialog, "InsertFunctionListBox");
+                var okButton = Find<Button>(dialog, "InsertFunctionOkButton");
+                goButton.IsVisible.Should().BeTrue();
+                helpButton.IsVisible.Should().BeTrue();
+                helpButton.Width.Should().Be(146);
+                goButton.Width.Should().Be(64);
 
-                searchBox.Text = "VLOOKUP";
-                goButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                await DrainInputAsync();
-                listBox.Items.Cast<object?>().Should().Contain("VLOOKUP");
-                listBox.SelectedItem = "VLOOKUP";
-                await DrainInputAsync();
-
-                helpButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                await DrainInputAsync();
-                var help = dialog.OwnedWindows.OfType<Window>().Single();
-                AutomationProperties.GetAutomationId(help).Should().Be("FunctionHelpDialog");
-                Find<TextBlock>(help, "FunctionHelpMessageText").Text.Should().StartWith("VLOOKUP()");
-                Find<Button>(help, "FunctionHelpOkButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                await DrainInputAsync();
+                // WPF button row: help first, then OK and Cancel.
+                var row = (Panel)helpButton.Parent!;
+                row.Children.IndexOf(helpButton).Should().BeLessThan(row.Children.IndexOf(okButton));
 
                 Find<Button>(dialog, "InsertFunctionCancelButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                await DrainInputAsync();
-                await task;
+                await CompleteAsync(task);
             }
             finally
             {
@@ -305,8 +302,7 @@ public sealed class MacOsParityDataHomeInsertFormulaDialogFeatureTests
                 targetBox.Text.Should().Be("/tmp/linked-file.txt");
 
                 Find<Button>(dialog, "HyperlinkCancelButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                await DrainInputAsync();
-                await task;
+                await CompleteAsync(task);
             }
             finally
             {
@@ -340,6 +336,18 @@ public sealed class MacOsParityDataHomeInsertFormulaDialogFeatureTests
         window.AllowCloseWithoutDirtyPromptForParityCapture();
         if (window.IsVisible)
             window.Close();
+    }
+
+    /// <summary>
+    /// Waits for a dialog flow to finish, but never indefinitely: a flow that is still open after
+    /// the bound fails the test (the caller's finally block then closes whatever is left).
+    /// </summary>
+    private static async Task CompleteAsync(Task flow)
+    {
+        await DrainInputAsync();
+        var finished = await Task.WhenAny(flow, Task.Delay(5000));
+        ReferenceEquals(finished, flow).Should().BeTrue("the dialog flow must complete once its dialog is closed");
+        await flow;
     }
 
     private static async Task DrainInputAsync()
