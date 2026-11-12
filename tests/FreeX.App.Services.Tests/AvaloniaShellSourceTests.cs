@@ -2965,13 +2965,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("dialogResult.Value.Fields,");
         source.Should().Contain("dialogResult.Value.RequestedAction);");
         source.Should().Contain("PageSetupDialogSurfacePlan surface,");
-        source.Should().Contain("var orientationChoices = PageSetupDialogPlanner.OrientationChoices");
+        source.Should().Contain("var portraitRadio = CreateChoiceRadio(");
         source.Should().Contain("ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(orientationChoices, UiText.Get)");
-        source.Should().Contain("SelectedIndex = surface.ChoiceIndexes.Orientation");
+        source.Should().Contain("surface.ChoiceIndexes.Orientation == 1");
         source.Should().Contain("SelectedIndex = surface.ChoiceIndexes.PaperSize");
         source.Should().Contain("PageSetupDialogPlanner.BuildFields(initial, new PageSetupDialogSurfaceInput");
         source.Should().Contain("var paperSizeChoices = PageSetupDialogPlanner.PaperSizeChoices");
-        source.Should().Contain("var pageOrderChoices = PageSetupDialogPlanner.PageOrderChoices");
+        source.Should().Contain("var overThenDownRadio = CreateChoiceRadio(");
         source.Should().Contain("var printErrorValueChoices = PageSetupDialogPlanner.PrintErrorValueChoices");
         source.Should().Contain("var printCommentChoices = PageSetupDialogPlanner.PrintCommentChoices");
         source.Should().Contain("AutomationProperties.SetAutomationId(tabs, PageSetupDialogPlanner.TabsAutomationId)");
