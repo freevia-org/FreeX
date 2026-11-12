@@ -510,6 +510,14 @@ public static class FreeWRibbonEditorExecutionProfile
 
     }
 
+    /// <summary>The ribbon command id that applies <paramref name="grouping"/> to the selected chart.</summary>
+    public static string ChartGroupingCommandId(ChartGrouping grouping) => grouping switch
+    {
+        ChartGrouping.Stacked => "freew.chart-grouping-stacked",
+        ChartGrouping.PercentStacked => "freew.chart-grouping-percent",
+        _ => "freew.chart-grouping-standard",
+    };
+
     public static FreeWRibbonChartSmartArtCommands RegisterChartSmartArt(
         FreeWRibbonCommandBindingPorts bindings,
         FreeWRibbonChartSmartArtExecutionPorts ports)
@@ -524,6 +532,24 @@ public static class FreeWRibbonEditorExecutionProfile
             bindings.Register($"freew.chart-type-{captured.ToString().ToLowerInvariant()}", Stateful(
                 () => ports.SetChartKind(captured),
                 () => ports.SelectedChart() is not null,
+                ports.PrepareExecution));
+        }
+
+        // Change Chart Type > Clustered / Stacked / 100% Stacked, for the kinds that can stack. Routed
+        // through the hosts' existing undoable chart-data replacement, so neither shell needs a new port.
+        foreach (var grouping in Enum.GetValues<ChartGrouping>())
+        {
+            var captured = grouping;
+            bindings.Register(ChartGroupingCommandId(captured), Stateful(
+                () =>
+                {
+                    if (ports.SelectedChart() is not { SupportsGrouping: true } chart || chart.Grouping == captured)
+                        return;
+                    var updated = chart.Clone();
+                    updated.Grouping = captured;
+                    ports.ApplyChartDataOutcome(updated);
+                },
+                () => ports.SelectedChart() is { SupportsGrouping: true },
                 ports.PrepareExecution));
         }
 

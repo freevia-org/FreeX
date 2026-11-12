@@ -616,6 +616,25 @@
   <data name="InsertChart_AddRow_Label" xml:space="preserve"><value>Add Row</value></data>
   <data name="InsertChart_RemoveRow_Label" xml:space="preserve"><value>Remove Row</value></data>
   <data name="InsertChart_EmptyRows_Validation" xml:space="preserve"><value>Enter at least one data row.</value></data>
+  <data name="InsertChart_Type_Column" xml:space="preserve"><value>Column</value></data>
+  <data name="InsertChart_Type_Bar" xml:space="preserve"><value>Bar</value></data>
+  <data name="InsertChart_Type_Line" xml:space="preserve"><value>Line</value></data>
+  <data name="InsertChart_Type_Pie" xml:space="preserve"><value>Pie</value></data>
+  <data name="InsertChart_Type_Scatter" xml:space="preserve"><value>Scatter</value></data>
+  <data name="InsertChart_Type_Area" xml:space="preserve"><value>Area</value></data>
+  <data name="InsertChart_Type_Doughnut" xml:space="preserve"><value>Doughnut</value></data>
+  <data name="InsertChart_Type_Radar" xml:space="preserve"><value>Radar</value></data>
+  <data name="InsertChart_Type_Bubble" xml:space="preserve"><value>Bubble</value></data>
+  <data name="InsertChart_Type_Stock" xml:space="preserve"><value>Stock</value></data>
+  <data name="InsertChart_Type_Combo" xml:space="preserve"><value>Combo</value></data>
+  <data name="InsertChart_Type_ColumnStacked" xml:space="preserve"><value>Stacked Column</value></data>
+  <data name="InsertChart_Type_ColumnPercentStacked" xml:space="preserve"><value>100% Stacked Column</value></data>
+  <data name="InsertChart_Type_BarStacked" xml:space="preserve"><value>Stacked Bar</value></data>
+  <data name="InsertChart_Type_BarPercentStacked" xml:space="preserve"><value>100% Stacked Bar</value></data>
+  <data name="InsertChart_Type_LineStacked" xml:space="preserve"><value>Stacked Line</value></data>
+  <data name="InsertChart_Type_LinePercentStacked" xml:space="preserve"><value>100% Stacked Line</value></data>
+  <data name="InsertChart_Type_AreaStacked" xml:space="preserve"><value>Stacked Area</value></data>
+  <data name="InsertChart_Type_AreaPercentStacked" xml:space="preserve"><value>100% Stacked Area</value></data>
   <data name="ShapeGallery_Dialog_Title" xml:space="preserve"><value>Shapes</value></data>
   <data name="ShapeGallery_Group_Lines" xml:space="preserve"><value>Lines</value></data>
   <data name="ShapeGallery_Group_Rectangles" xml:space="preserve"><value>Rectangles</value></data>

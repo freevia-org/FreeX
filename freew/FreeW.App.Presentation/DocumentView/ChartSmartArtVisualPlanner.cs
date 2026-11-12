@@ -234,7 +234,8 @@ public sealed record ChartVisualPlan(
     IReadOnlyList<string> PaletteHex,
     IReadOnlyList<string> Categories,
     IReadOnlyList<ChartSeriesVisualPlan> Series,
-    ChartValueAxisPlan ValueAxis);
+    ChartValueAxisPlan ValueAxis,
+    ChartGrouping Grouping = ChartGrouping.Standard);
 
 public sealed record ChartElementCommandState(
     bool CanToggleLegend,
@@ -413,7 +414,7 @@ public sealed record SmartArtVisualPlan(
     SmartArtHierarchyGeometryPlan? HierarchyGeometry = null,
     SmartArtLayoutGeometryPlan? LayoutGeometry = null);
 
-public static class ChartSmartArtVisualPlanner
+public static partial class ChartSmartArtVisualPlanner
 {
     public static ChartVisualPlan BuildChartPlan(Chart chart)
     {
@@ -455,7 +456,7 @@ public static class ChartSmartArtVisualPlanner
         var series = chart.Series
             .Select(item => new ChartSeriesVisualPlan(
                 NormalizeSignatureText(item.Name),
-                item.Values.ToList()))
+                item.Values.Select(PlottableValue).ToList()))
             .ToList();
 
         return new ChartVisualPlan(
@@ -477,7 +478,8 @@ public static class ChartSmartArtVisualPlanner
             ResolveImportedNativePalette(chart, scheme),
             chart.Categories.Select(NormalizeSignatureText).ToList(),
             series,
-            ChartValueAxisPlan.FromSeries(series));
+            BuildValueAxisPlan(chart, series),
+            chart.EffectiveGrouping);
     }
 
     private static IReadOnlyList<string> ResolveImportedNativePalette(Chart chart, ChartColorScheme scheme)
@@ -549,7 +551,7 @@ public static class ChartSmartArtVisualPlanner
             ? 62 + (legendCount > 0 ? 14 : 0)
             : 30;
         var plotLeft = hasAxisTitles ? 44 + valueTitleWidth : 32 + valueTitleWidth;
-        var plotRightMargin = hasAxisTitles ? chart.Kind == ChartKind.Scatter ? 25 : 16 : 8;
+        var plotRightMargin = (hasAxisTitles ? chart.Kind == ChartKind.Scatter ? 25 : 16 : 8) + FamilyRightMargin(chart);
         var plot = new ChartSceneRect(
             plotLeft,
             titleHeight + 8,
@@ -569,7 +571,7 @@ public static class ChartSmartArtVisualPlanner
         var gridStroke = "#E6E6E6";
         var textColor = "#000000";
 
-        if (!isPie)
+        if (UsesCartesianValueAxis(chart))
         {
             var horizontalGrid = chart.Kind == ChartKind.Bar;
             for (var value = axis.Minimum; value <= axis.Maximum + axis.MajorUnit / 2; value += axis.MajorUnit)
@@ -592,7 +594,7 @@ public static class ChartSmartArtVisualPlanner
                 var labelX = horizontalGrid ? plot.X + fraction * plot.Width : plot.X - 2;
                 var labelY = horizontalGrid ? plot.Bottom + 2 : plot.Bottom - fraction * plot.Height;
                 texts.Add(new ChartSceneText(
-                    value.ToString("G3", CultureInfo.InvariantCulture),
+                    FormatValueAxisLabel(chart, value),
                     labelX,
                     labelY,
                     horizontalGrid ? ChartSceneTextAnchor.TopCenter : ChartSceneTextAnchor.CenterRight,
@@ -608,14 +610,21 @@ public static class ChartSmartArtVisualPlanner
             }
             else
             {
-                var zeroY = plot.Bottom - axis.ZeroFraction * plot.Height;
+                // Clamped: a stock chart's axis need not include zero, and its baseline is the plot floor.
+                var zeroY = plot.Bottom - Math.Clamp(axis.ZeroFraction, 0, 1) * plot.Height;
                 axisLines.Add(new ChartSceneLine(plot.X, zeroY, plot.Right, zeroY, axisStroke, 1));
                 if (chart.Kind == ChartKind.Scatter)
                     axisLines.Add(new ChartSceneLine(plot.X, plot.Y, plot.X, plot.Bottom, axisStroke, 1));
             }
         }
 
-        if (chart.Kind is ChartKind.Column or ChartKind.Bar)
+        if (TryBuildFamilyGeometry(
+                chart, plan, plot, paletteHex, categoryCount, axisStroke,
+                gridLines, axisLines, bars, lineSeries, markers, texts))
+        {
+            // Stacked / radar / bubble / stock / combination geometry (ChartSmartArtVisualPlanner.ChartFamilies).
+        }
+        else if (chart.Kind is ChartKind.Column or ChartKind.Bar)
         {
             var cats = Math.Max(1, categoryCount);
             var seriesCount = Math.Max(1, plan.Series.Count);
@@ -914,10 +923,17 @@ public static class ChartSmartArtVisualPlanner
                     ? 5 * magnitude
                     : 10 * magnitude;
 
-        return (
-            Math.Floor(dataMinimum / step) * step - step,
-            Math.Ceiling(dataMaximum / step) * step + step,
-            step);
+        var minimum = Math.Floor(dataMinimum / step) * step - step;
+        var maximum = Math.Ceiling(dataMaximum / step) * step + step;
+        // The callers walk this axis with `tick += step`. If the bounds overflowed, or the step is too
+        // small to move a value of this magnitude, that walk would never end: use the default axis.
+        if (!double.IsFinite(minimum) || !double.IsFinite(maximum) || !(step > 0)
+            || !(minimum + step > minimum) || !(maximum - step < maximum))
+        {
+            return (0, 5, 1);
+        }
+
+        return (minimum, maximum, step);
     }
 
     private static string FormatChartAxisValue(double value) =>
@@ -978,7 +994,9 @@ public static class ChartSmartArtVisualPlanner
             "axisTitles=" + BoolFlag(chart.ShowAxisTitles),
             "categoryAxis=" + NormalizeSignatureText(chart.CategoryAxisTitle),
             "valueAxis=" + NormalizeSignatureText(chart.ValueAxisTitle),
-            "palette=" + string.Join(",", chart.PaletteHex));
+            "palette=" + string.Join(",", chart.PaletteHex))
+            // Appended only for stacked charts so every existing signature stays byte-identical.
+            + (chart.Grouping == ChartGrouping.Standard ? string.Empty : "|grouping=" + chart.Grouping);
     }
 
     public static IReadOnlyList<string> BuildChartDataSignatures(IEnumerable<ChartVisualPlan> charts)
@@ -1130,7 +1148,8 @@ public static class ChartSmartArtVisualPlanner
             ChartKind.Area => ChartVisualGeometryKind.Area,
             ChartKind.Pie => ChartVisualGeometryKind.Pie,
             ChartKind.Doughnut => ChartVisualGeometryKind.Doughnut,
-            ChartKind.Scatter => ChartVisualGeometryKind.MarkerOnly,
+            ChartKind.Scatter or ChartKind.Bubble => ChartVisualGeometryKind.MarkerOnly,
+            ChartKind.Radar or ChartKind.Stock => ChartVisualGeometryKind.Lines,
             _ => ChartVisualGeometryKind.Bars
         };
 

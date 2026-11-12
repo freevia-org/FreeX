@@ -154,6 +154,25 @@
   <data name="InsertChart_AddRow_Label" xml:space="preserve"><value>Ajouter une ligne</value></data>
   <data name="InsertChart_RemoveRow_Label" xml:space="preserve"><value>Supprimer la ligne</value></data>
   <data name="InsertChart_EmptyRows_Validation" xml:space="preserve"><value>Saisissez au moins une ligne de données.</value></data>
+  <data name="InsertChart_Type_Column" xml:space="preserve"><value>Histogramme</value></data>
+  <data name="InsertChart_Type_Bar" xml:space="preserve"><value>Barres</value></data>
+  <data name="InsertChart_Type_Line" xml:space="preserve"><value>Courbes</value></data>
+  <data name="InsertChart_Type_Pie" xml:space="preserve"><value>Secteurs</value></data>
+  <data name="InsertChart_Type_Scatter" xml:space="preserve"><value>Nuage de points</value></data>
+  <data name="InsertChart_Type_Area" xml:space="preserve"><value>Aires</value></data>
+  <data name="InsertChart_Type_Doughnut" xml:space="preserve"><value>Anneau</value></data>
+  <data name="InsertChart_Type_Radar" xml:space="preserve"><value>Radar</value></data>
+  <data name="InsertChart_Type_Bubble" xml:space="preserve"><value>Bulles</value></data>
+  <data name="InsertChart_Type_Stock" xml:space="preserve"><value>Boursier</value></data>
+  <data name="InsertChart_Type_Combo" xml:space="preserve"><value>Graphique combiné</value></data>
+  <data name="InsertChart_Type_ColumnStacked" xml:space="preserve"><value>Histogramme empilé</value></data>
+  <data name="InsertChart_Type_ColumnPercentStacked" xml:space="preserve"><value>Histogramme empilé 100 %</value></data>
+  <data name="InsertChart_Type_BarStacked" xml:space="preserve"><value>Barres empilées</value></data>
+  <data name="InsertChart_Type_BarPercentStacked" xml:space="preserve"><value>Barres empilées 100 %</value></data>
+  <data name="InsertChart_Type_LineStacked" xml:space="preserve"><value>Courbes empilées</value></data>
+  <data name="InsertChart_Type_LinePercentStacked" xml:space="preserve"><value>Courbes empilées 100 %</value></data>
+  <data name="InsertChart_Type_AreaStacked" xml:space="preserve"><value>Aires empilées</value></data>
+  <data name="InsertChart_Type_AreaPercentStacked" xml:space="preserve"><value>Aires empilées 100 %</value></data>
   <data name="ShapeGallery_Dialog_Title" xml:space="preserve"><value>Formes</value></data>
   <data name="ShapeGallery_Group_Lines" xml:space="preserve"><value>Lignes</value></data>
   <data name="ShapeGallery_Group_Rectangles" xml:space="preserve"><value>Rectangles</value></data>

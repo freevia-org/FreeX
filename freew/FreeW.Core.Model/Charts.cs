@@ -41,7 +41,44 @@ public enum ChartKind
     Area,
 
     /// <summary>A doughnut chart (OOXML c:doughnutChart — a pie with a hole; uses the first series).</summary>
-    Doughnut
+    Doughnut,
+
+    /// <summary>A radar chart (OOXML c:radarChart): one closed polygon per series over the category spokes.</summary>
+    Radar,
+
+    /// <summary>
+    /// A bubble chart (OOXML c:bubbleChart): categories supply x-values, series values the y-values and
+    /// <see cref="ChartSeries.BubbleSizes"/> the bubble sizes.
+    /// </summary>
+    Bubble,
+
+    /// <summary>
+    /// A high-low-close stock chart (OOXML c:stockChart with c:hiLowLines). Carries exactly three series,
+    /// in High, Low, Close order.
+    /// </summary>
+    Stock,
+
+    /// <summary>
+    /// A column + line combination (a c:barChart and a c:lineChart sharing one plot area). Series flagged
+    /// <see cref="ChartSeries.PlotAsLine"/> draw as lines, optionally against a secondary value axis.
+    /// </summary>
+    Combo
+}
+
+/// <summary>
+/// How the series of a column, bar, line or area chart combine (OOXML <c>c:grouping</c>):
+/// side by side / overlaid, stacked, or stacked and normalised to 100%.
+/// </summary>
+public enum ChartGrouping
+{
+    /// <summary>Clustered columns/bars; unstacked lines/areas (c:grouping "clustered" / "standard").</summary>
+    Standard,
+
+    /// <summary>Series stacked on top of each other (c:grouping "stacked").</summary>
+    Stacked,
+
+    /// <summary>Series stacked and scaled so every category totals 100% (c:grouping "percentStacked").</summary>
+    PercentStacked
 }
 
 /// <summary>
@@ -58,6 +95,18 @@ public sealed class ChartSeries
     /// <summary>The numeric values, aligned positionally with the chart's category labels.</summary>
     public List<double> Values { get; } = [];
 
+    /// <summary>
+    /// Bubble sizes aligned with <see cref="Values"/> (bubble charts only; empty otherwise). A missing size
+    /// falls back to the magnitude of the point's value.
+    /// </summary>
+    public List<double> BubbleSizes { get; } = [];
+
+    /// <summary>Combo charts only: draw this series as a line instead of columns.</summary>
+    public bool PlotAsLine { get; set; }
+
+    /// <summary>Combo charts only: plot this line series against the secondary (right-hand) value axis.</summary>
+    public bool UseSecondaryAxis { get; set; }
+
     public ChartSeries() { }
 
     /// <summary>Creates a named series from an ordered set of values.</summary>
@@ -65,6 +114,33 @@ public sealed class ChartSeries
     {
         Name = name;
         Values.AddRange(values);
+    }
+
+    /// <summary>Creates an independent copy carrying every per-series setting.</summary>
+    public ChartSeries Clone()
+    {
+        var clone = new ChartSeries(Name, Values)
+        {
+            PlotAsLine = PlotAsLine,
+            UseSecondaryAxis = UseSecondaryAxis,
+        };
+        clone.BubbleSizes.AddRange(BubbleSizes);
+        return clone;
+    }
+
+    /// <summary>Copies name, values and per-series settings from <paramref name="source"/>.</summary>
+    public void CopyFrom(ChartSeries source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        Name = source.Name;
+        var values = source.Values.ToArray();
+        var sizes = source.BubbleSizes.ToArray();
+        Values.Clear();
+        Values.AddRange(values);
+        BubbleSizes.Clear();
+        BubbleSizes.AddRange(sizes);
+        PlotAsLine = source.PlotAsLine;
+        UseSecondaryAxis = source.UseSecondaryAxis;
     }
 }
 
@@ -228,6 +304,21 @@ public sealed class Chart
     /// <summary>The chart kind (column/bar/line/pie).</summary>
     public ChartKind Kind { get; set; } = ChartKind.Column;
 
+    /// <summary>
+    /// How the series combine (clustered / stacked / 100% stacked). Only meaningful for column, bar, line
+    /// and area charts — see <see cref="EffectiveGrouping"/>.
+    /// </summary>
+    public ChartGrouping Grouping { get; set; }
+
+    /// <summary>True for the kinds whose series can be stacked (column, bar, line, area).</summary>
+    public bool SupportsGrouping => Kind is ChartKind.Column or ChartKind.Bar or ChartKind.Line or ChartKind.Area;
+
+    /// <summary>The grouping the chart actually uses: <see cref="Grouping"/> where the kind supports it.</summary>
+    public ChartGrouping EffectiveGrouping => SupportsGrouping ? Grouping : ChartGrouping.Standard;
+
+    /// <summary>Radar charts only: the polygons are filled (c:radarStyle "filled") rather than outlined.</summary>
+    public bool RadarFilled { get; set; }
+
     /// <summary>The chart title, or null when the chart has no title.</summary>
     public string? Title { get; set; }
 
@@ -329,6 +420,8 @@ public sealed class Chart
         var clone = new Chart
         {
             Kind = Kind,
+            Grouping = Grouping,
+            RadarFilled = RadarFilled,
             Title = Title,
             ShowLegend = ShowLegend,
             CategoryAxisTitle = CategoryAxisTitle,
@@ -346,7 +439,7 @@ public sealed class Chart
         };
         clone.Categories.AddRange(Categories);
         foreach (var series in Series)
-            clone.Series.Add(new ChartSeries(series.Name, series.Values));
+            clone.Series.Add(series.Clone());
         return clone;
     }
 }

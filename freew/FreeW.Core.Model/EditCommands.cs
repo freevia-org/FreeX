@@ -1,4 +1,4 @@
-﻿namespace FreeW.Core.Model;
+namespace FreeW.Core.Model;
 
 /// <summary>Insert a block (paragraph or table) at an index in the document body.</summary>
 public sealed class InsertBlockCommand(int index, Block block) : IDocumentCommand
@@ -5259,7 +5259,7 @@ internal static class ChartSmartArtCommandHelpers
 /// </summary>
 public sealed class SetChartKindCommand(int paragraphIndex, int runIndex, ChartKind kind) : IDocumentCommand
 {
-    private ChartKind _previous;
+    private ChartDataShapeSnapshot? _previous;
     private bool _applied;
 
     public string Label => "Change Chart Type";
@@ -5273,15 +5273,18 @@ public sealed class SetChartKindCommand(int paragraphIndex, int runIndex, ChartK
     public void Apply(IDocumentCommandContext context)
     {
         if (ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart) return;
-        _previous = chart.Kind;
+        // Some kinds need a particular data shape (stock = High/Low/Close, combo = at least one line), so the
+        // whole kind-dependent state is captured here and restored exactly on undo.
+        _previous = ChartDataShapeSnapshot.Capture(chart);
         chart.Kind = kind;
+        ChartKindNormalizer.Normalize(chart);
         _applied = true;
     }
 
     public void Revert(IDocumentCommandContext context)
     {
         if (!_applied || ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart) return;
-        chart.Kind = _previous;
+        _previous?.Restore(chart);
         _applied = false;
     }
 }
@@ -5555,6 +5558,8 @@ public sealed class ReplaceChartDataCommand(int paragraphIndex, int runIndex, Ch
     private static void Copy(Chart source, Chart target)
     {
         target.Kind = source.Kind;
+        target.Grouping = source.Grouping;
+        target.RadarFilled = source.RadarFilled;
         target.Title = source.Title;
         target.ShowLegend = source.ShowLegend;
         target.CategoryAxisTitle = source.CategoryAxisTitle;
@@ -5567,7 +5572,7 @@ public sealed class ReplaceChartDataCommand(int paragraphIndex, int runIndex, Ch
         target.Categories.AddRange(source.Categories);
         target.Series.Clear();
         foreach (var series in source.Series)
-            target.Series.Add(new ChartSeries(series.Name, series.Values));
+            target.Series.Add(series.Clone());
     }
 }
 

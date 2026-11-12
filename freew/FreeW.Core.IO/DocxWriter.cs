@@ -15,7 +15,7 @@ namespace FreeW.Core.IO;
 /// [Content_Types].xml, package + document relationships, word/document.xml and word/styles.xml.
 /// Round-trips with <see cref="DocxReader"/> over the supported formatting subset.
 /// </summary>
-public static class DocxWriter
+public static partial class DocxWriter
 {
     private const string OfficeDocumentRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
     private const string StylesRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
@@ -7708,26 +7708,25 @@ public static class DocxWriter
         const long catAxisId = 111111111L;
         const long valAxisId = 222222222L;
 
-        var hasAxes = chart.Kind is not (ChartKind.Pie or ChartKind.Doughnut);
-        var plotContent = chart.Kind switch
-        {
-            ChartKind.Pie => BuildPieChart(chart, doughnut: false),
-            ChartKind.Doughnut => BuildPieChart(chart, doughnut: true),
-            ChartKind.Scatter => BuildScatterChart(chart, catAxisId, valAxisId),
-            _ => BuildCartesianChart(chart, catAxisId, valAxisId),
-        };
+        // The kind actually written (see SerializedChartKind: a stock/combo chart whose data does not have
+        // that shape degrades to a plain line/column chart rather than emitting invalid chart XML).
+        var serializedKind = SerializedChartKind(chart);
+        var hasAxes = serializedKind is not (ChartKind.Pie or ChartKind.Doughnut);
+        var plotContent = BuildPlotCharts(chart, serializedKind, catAxisId, valAxisId);
 
         var plotArea = new XElement(C + "plotArea",
             new XElement(C + "layout"),
             plotContent);
         if (hasAxes)
         {
-            // Scatter uses a value axis for x (so x-values plot numerically); the other cartesian kinds use a
-            // category axis for x. The category-axis title doubles as the scatter x-axis title.
-            plotArea.Add(chart.Kind == ChartKind.Scatter
+            // Scatter and bubble use a value axis for x (so x-values plot numerically); the other cartesian
+            // kinds use a category axis for x. The category-axis title doubles as the numeric x-axis title.
+            plotArea.Add(serializedKind is ChartKind.Scatter or ChartKind.Bubble
                 ? BuildValueAxis(catAxisId, valAxisId, "b", categoryAxisTitle, showGridlines: false)
                 : BuildCategoryAxis(catAxisId, valAxisId, categoryAxisTitle));
             plotArea.Add(BuildValueAxis(valAxisId, catAxisId, "l", valueAxisTitle, showGridlines));
+            if (ChartUsesSecondaryAxis(chart, serializedKind))
+                plotArea.Add(BuildSecondaryAxes());
         }
         if (ChartHasPlotAreaFill(chart))
             plotArea.Add(BuildChartPlotAreaProperties());
@@ -7914,41 +7913,6 @@ public static class DocxWriter
                         new XElement(A + "r",
                             new XElement(A + "t", title))))),
             new XElement(C + "overlay", new XAttribute("val", "0")));
-
-    /// <summary>
-    /// Builds the c:barChart (column or bar), c:lineChart or c:areaChart element holding the chart's series and
-    /// the axis-id back-references. barDir distinguishes column (vertical bars) from bar (horizontal).
-    /// </summary>
-    private static XElement BuildCartesianChart(Chart chart, long catAxisId, long valAxisId)
-    {
-        XElement root;
-        if (chart.Kind == ChartKind.Line)
-        {
-            root = new XElement(C + "lineChart",
-                new XElement(C + "grouping", new XAttribute("val", "standard")));
-        }
-        else if (chart.Kind == ChartKind.Area)
-        {
-            root = new XElement(C + "areaChart",
-                new XElement(C + "grouping", new XAttribute("val", "standard")));
-        }
-        else
-        {
-            root = new XElement(C + "barChart",
-                new XElement(C + "barDir", new XAttribute("val", chart.Kind == ChartKind.Bar ? "bar" : "col")),
-                new XElement(C + "grouping", new XAttribute("val", "clustered")));
-        }
-
-        for (var i = 0; i < chart.Series.Count; i++)
-            root.Add(BuildSeries(chart, chart.Series[i], i));
-
-        if (ChartShowsDataLabels(chart))
-            root.Add(BuildChartDataLabels());
-
-        root.Add(new XElement(C + "axId", new XAttribute("val", catAxisId)));
-        root.Add(new XElement(C + "axId", new XAttribute("val", valAxisId)));
-        return root;
-    }
 
     /// <summary>
     /// Builds the c:scatterChart element: each series carries c:xVal (the shared categories parsed as numbers,

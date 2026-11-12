@@ -17,7 +17,7 @@ namespace FreeW.Core.IO;
 /// run formatting (bold/italic/underline/strike, size, colour, font), paragraph formatting
 /// (alignment, spacing, indents, style ref) and styles.xml.
 /// </summary>
-public static class DocxReader
+public static partial class DocxReader
 {
     private static readonly XNamespace Mc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
     private static readonly XNamespace A14 = "http://schemas.microsoft.com/office/drawing/2010/main";
@@ -6065,11 +6065,14 @@ public static class DocxReader
 
         // Find the single chart-type element and map it to a ChartKind. barChart's c:barDir distinguishes
         // column (vertical) from bar (horizontal); anything else falls back to Column.
-        var (typeElement, kind) = ResolveChartType(plotArea);
-        if (typeElement is null)
+        // A plot the model cannot represent faithfully (3-D, surface, open-high-low-close, a combination
+        // other than column + line, ...) is not modelled at all: the caller preserves it verbatim.
+        if (ResolveChartLayout(plotArea) is not { } layout)
             return null;
+        var typeElement = layout.Primary;
+        var kind = layout.Kind;
 
-        var chart = new Chart { Kind = kind };
+        var chart = new Chart { Kind = kind, Grouping = layout.Grouping, RadarFilled = layout.RadarFilled };
 
         // Title: the first c:title's concatenated a:t text (when present and not auto-deleted).
         var titleText = string.Concat(
@@ -6088,26 +6091,8 @@ public static class DocxReader
 
         // Categories: read once from the first series, shared across series. Scatter has no c:cat — its
         // categories live in c:xVal (a number cache), so read those as their invariant string form.
-        var firstSeries = typeElement.Elements(C + "ser").FirstOrDefault();
-        if (firstSeries is not null)
-        {
-            if (kind == ChartKind.Scatter)
-                foreach (var x in ReadNumberCache(firstSeries.Element(C + "xVal")))
-                    chart.Categories.Add(x.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            else
-                foreach (var value in ReadStringCache(firstSeries.Element(C + "cat")))
-                    chart.Categories.Add(value);
-        }
-
-        // Series: name (c:tx string cache) + values (c:val number cache, or c:yVal for scatter).
-        var valueElementName = kind == ChartKind.Scatter ? "yVal" : "val";
-        foreach (var ser in typeElement.Elements(C + "ser"))
-        {
-            var name = ReadStringCache(ser.Element(C + "tx")).FirstOrDefault();
-            var series = new ChartSeries { Name = string.IsNullOrEmpty(name) ? null : name };
-            series.Values.AddRange(ReadNumberCache(ser.Element(C + valueElementName)));
-            chart.Series.Add(series);
-        }
+        // Series: name (c:tx string cache) + values (c:val number cache, or c:yVal for scatter / bubble).
+        ReadChartSeries(layout, chart);
 
         // Size: the inline or anchor extent (EMU) maps back to points.
         var extent = container.Element(Wp + "extent");
@@ -6591,31 +6576,6 @@ public static class DocxReader
                 relationship => relationship.Key,
                 relationship => (Type: relationship.Value.Type, Target: relationship.Value.Target),
                 StringComparer.Ordinal);
-
-    /// <summary>
-    /// Finds the plot area's single chart-type element and maps it to a <see cref="ChartKind"/>:
-    /// c:barChart → Column/Bar (by c:barDir), c:lineChart → Line, c:areaChart → Area, c:pieChart → Pie,
-    /// c:doughnutChart → Doughnut, c:scatterChart → Scatter. Returns (null, Column) when none is present.
-    /// </summary>
-    private static (XElement? Element, ChartKind Kind) ResolveChartType(XElement plotArea)
-    {
-        if (plotArea.Element(C + "barChart") is { } bar)
-        {
-            var dir = bar.Element(C + "barDir")?.Attribute("val")?.Value;
-            return (bar, dir == "bar" ? ChartKind.Bar : ChartKind.Column);
-        }
-        if (plotArea.Element(C + "lineChart") is { } line)
-            return (line, ChartKind.Line);
-        if (plotArea.Element(C + "areaChart") is { } area)
-            return (area, ChartKind.Area);
-        if (plotArea.Element(C + "pieChart") is { } pie)
-            return (pie, ChartKind.Pie);
-        if (plotArea.Element(C + "doughnutChart") is { } doughnut)
-            return (doughnut, ChartKind.Doughnut);
-        if (plotArea.Element(C + "scatterChart") is { } scatter)
-            return (scatter, ChartKind.Scatter);
-        return (null, ChartKind.Column);
-    }
 
     /// <summary>
     /// Reads the bottom (category/x) and left (value/y) axis titles from a plot area by axis position. The
