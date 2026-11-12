@@ -334,6 +334,9 @@ public sealed partial class MainWindow : Window
             OpenNotesPaneAtNote = OpenNotesPaneAtNote,
             OpenHeaderFooterPane = OpenHeaderFooterPane,
             CloseHeaderFooterPane = CloseHeaderFooterPane,
+            GetHeaderFooterSectionSlot = CurrentHeaderFooterSectionSlot,
+            MoveHeaderFooterSection = MoveHeaderFooterSection,
+            ToggleHeaderFooterLinkToPrevious = ToggleHeaderFooterLinkToPrevious,
             AcceptThisChange = AcceptSelectedRevision,
             RejectThisChange = RejectSelectedRevision,
             PreviousChange = () => StepRevision(-1),
@@ -2324,6 +2327,7 @@ public sealed partial class MainWindow : Window
             HorizontalAlignment = HorizontalAlignment.Left
         };
         closeBtn.Click += (_, _) => CloseHeaderFooterPane();
+        InitializeHeaderFooterPaneEditing();
 
         var layout = new DockPanel();
         DockPanel.SetDock(_hfSlotLabel, Dock.Top);
@@ -2362,32 +2366,12 @@ public sealed partial class MainWindow : Window
             if (_pagedEditPanel.FocusInPageHfRegion(slot))
                 return;
         }
-        _hfActiveSlot = slot;
-
-        var label = HeaderFooterDialogPlanner.LabelFor(slot);
-        _hfSlotLabel.Text = UiText.Format("HeaderFooter_Editing_Status_Format", label);
-
-        var hf = _editor.Model.FinalSectionHeadersFooters;
-        var current = HeaderFooterDialogPlanner.GetSlot(hf, slot);
-
-        // Wrapper document — seeded with the main doc's DefaultRun so fonts match.
-        var wrapper = TextDocument.CreateEmpty();
-        wrapper.DefaultRun       = _editor.Model.DefaultRun;
-        wrapper.DefaultParagraph = _editor.Model.DefaultParagraph;
-        wrapper.Blocks.Clear();
-
-        if (current is not null)
-        {
-            foreach (var para in current.Paragraphs)
-                wrapper.Blocks.Add(para);
-        }
-        if (wrapper.Blocks.Count == 0)
-            wrapper.Blocks.Add(new Paragraph());
-
-        ConfigureFieldEvaluationContext(_hfSubEditor);
-        _hfSubEditor.LoadModel(wrapper);
-
-        _hfPane.Visibility = Visibility.Visible;
+        // Target the section containing the caret (Word edits the header/footer of the page you are
+        // on). While the pane is already open, stay in the section being edited: Go to Header / Go to
+        // Footer and the Edit menus switch slot, not section.
+        var sectionIndex = _hfActiveSlot is null ? _editor.CurrentSectionIndex() : _hfActiveSectionIndex;
+        CommitHeaderFooterPaneEdits();
+        ShowHeaderFooterSlot(sectionIndex, slot);
     }
 
     // Close (commit) the Header/Footer pane: commit the sub-editor's edits back to the slot in the
@@ -2401,24 +2385,13 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        _hfSubEditor.CommitToModel();
-
-        // Build a new HeaderFooter from the sub-editor's blocks.
-        var hfOut = new HeaderFooter();
-        foreach (var block in _hfSubEditor.Model.Blocks.OfType<Paragraph>())
-            hfOut.Paragraphs.Add(block);
-
-        // Write back to the correct slot.
-        var hf = _editor.Model.FinalSectionHeadersFooters;
-        HeaderFooterDialogPlanner.SetSlot(hf, _hfActiveSlot.Value, hfOut);
+        // Write the edited content back to the header/footer the active section displays (its own, or
+        // the shared one it is linked to) and re-render; untouched content is left exactly as it was.
+        CommitHeaderFooterPaneEdits();
 
         _hfActiveSlot  = null;
         _hfPane.Visibility = Visibility.Collapsed;
-
-        // Re-render the main editor and return focus (no-op page-settings commit triggers
-        // CommitToModel + Render inside ApplyPageSettings without changing any setting).
-        _editor.ApplyPageSettings(_ => { });
-        MarkDirtyOutsideBodyUndo();
+        SyncHeaderFooterSectionRibbonState();
         _editor.Focus();
     }
 

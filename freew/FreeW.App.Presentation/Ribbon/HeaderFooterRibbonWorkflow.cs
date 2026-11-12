@@ -22,7 +22,10 @@ public sealed record HeaderFooterRibbonBindings(
     IRibbonCommand InsertHeaderPageNumber,
     IRibbonCommand InsertFooterPageNumber,
     IRibbonCommand InsertDateTime,
-    IRibbonCommand InsertDocumentInfo);
+    IRibbonCommand InsertDocumentInfo,
+    IRibbonStatefulCommand PreviousSection,
+    IRibbonStatefulCommand NextSection,
+    IRibbonStatefulCommand LinkToPrevious);
 
 public sealed record HeaderFooterRibbonCommand(
     RibbonCommandId Id,
@@ -36,6 +39,23 @@ public sealed record HeaderFooterPageSettingsPorts(
     Action<Action<PageSettings>> ApplyPageSettings,
     Func<bool> IsEnabled,
     Func<RibbonCommandContext, string?>? ResolveSelectedValue = null);
+
+/// <summary>
+/// Renderer adapters behind the Header &amp; Footer Navigation group's per-section commands.
+/// <paramref name="GetActiveSlot"/> reports the section + slot the editing surface targets (null when the
+/// renderer has none); <paramref name="MoveToAdjacentSection"/> is null when the renderer cannot move its
+/// editing surface between sections, which disables Previous/Next rather than faking them.
+/// </summary>
+public sealed record HeaderFooterSectionNavigationPorts(
+    Func<HeaderFooterSectionSlotView?> GetActiveSlot,
+    Action<int>? MoveToAdjacentSection,
+    Action? ToggleLinkToPrevious,
+    Func<bool>? IsEnabled = null);
+
+public sealed record HeaderFooterSectionNavigationCommands(
+    IRibbonStatefulCommand PreviousSection,
+    IRibbonStatefulCommand NextSection,
+    IRibbonStatefulCommand LinkToPrevious);
 
 public sealed record HeaderFooterPageSettingCommands(
     IRibbonStatefulCommand DifferentFirstPage,
@@ -70,6 +90,9 @@ public static class HeaderFooterRibbonWorkflow
         FreeWRibbonCommandAction.HfInsertPageNumberFooter,
         FreeWRibbonCommandAction.HfInsertDatetime,
         FreeWRibbonCommandAction.HfInsertField,
+        FreeWRibbonCommandAction.HfPreviousSection,
+        FreeWRibbonCommandAction.HfNextSection,
+        FreeWRibbonCommandAction.HfLinkToPrevious,
     ];
 
     public static HeaderFooterRibbonCommands Register(
@@ -93,7 +116,7 @@ public static class HeaderFooterRibbonWorkflow
         foreach (var binding in FreeWRibbonSemanticCatalog.HeaderFooterEditSlots)
             Bind(binding.Action, bindings.CreateEditSlotCommand(binding.Slot));
 
-        var stateful = new List<HeaderFooterRibbonCommand>(4);
+        var stateful = new List<HeaderFooterRibbonCommand>(7);
         BindStateful(FreeWRibbonCommandAction.HfDifferentFirstPage, bindings.DifferentFirstPage);
         BindStateful(FreeWRibbonCommandAction.HfDifferentOddEven, bindings.DifferentOddEvenPages);
         BindStateful(FreeWRibbonCommandAction.HfHeaderFromTop, bindings.HeaderFromTop);
@@ -107,6 +130,9 @@ public static class HeaderFooterRibbonWorkflow
         Bind(FreeWRibbonCommandAction.HfInsertPageNumberFooter, bindings.InsertFooterPageNumber);
         Bind(FreeWRibbonCommandAction.HfInsertDatetime, bindings.InsertDateTime);
         Bind(FreeWRibbonCommandAction.HfInsertField, bindings.InsertDocumentInfo);
+        BindStateful(FreeWRibbonCommandAction.HfPreviousSection, bindings.PreviousSection);
+        BindStateful(FreeWRibbonCommandAction.HfNextSection, bindings.NextSection);
+        BindStateful(FreeWRibbonCommandAction.HfLinkToPrevious, bindings.LinkToPrevious);
 
         return new HeaderFooterRibbonCommands(stateful);
 
@@ -156,6 +182,61 @@ public static class HeaderFooterRibbonWorkflow
             Func<PageSettings, double> getDistance,
             Action<PageSettings, double> setDistance) =>
             new PageSettingDistanceCommand(ports, getDistance, setDistance);
+    }
+
+    /// <summary>
+    /// Creates Word's per-section Navigation commands: Previous / Next move the editing surface to the
+    /// neighbouring section's header/footer (disabled at the document ends), and Link to Previous is a
+    /// toggle that is checked while the section inherits the slot and unavailable in the first section.
+    /// </summary>
+    public static HeaderFooterSectionNavigationCommands CreateSectionNavigationCommands(
+        HeaderFooterSectionNavigationPorts ports)
+    {
+        ArgumentNullException.ThrowIfNull(ports);
+        ArgumentNullException.ThrowIfNull(ports.GetActiveSlot);
+
+        return new HeaderFooterSectionNavigationCommands(
+            PreviousSection: new SectionMoveCommand(ports, direction: -1),
+            NextSection: new SectionMoveCommand(ports, direction: +1),
+            LinkToPrevious: new LinkToPreviousCommand(ports));
+    }
+
+    private sealed class SectionMoveCommand(
+        HeaderFooterSectionNavigationPorts ports,
+        int direction) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (GetState().IsEnabled)
+                ports.MoveToAdjacentSection!(direction);
+        }
+
+        public RibbonCommandState GetState()
+        {
+            var canMove = ports.MoveToAdjacentSection is not null
+                && ports.IsEnabled?.Invoke() != false
+                && ports.GetActiveSlot() is { } view
+                && (direction < 0 ? view.HasPreviousSection : view.HasNextSection);
+            return new RibbonCommandState(IsEnabled: canMove);
+        }
+    }
+
+    private sealed class LinkToPreviousCommand(HeaderFooterSectionNavigationPorts ports) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (GetState().IsEnabled)
+                ports.ToggleLinkToPrevious!();
+        }
+
+        public RibbonCommandState GetState()
+        {
+            var view = ports.GetActiveSlot();
+            var enabled = ports.ToggleLinkToPrevious is not null
+                && ports.IsEnabled?.Invoke() != false
+                && view is { CanLinkToPrevious: true };
+            return new RibbonCommandState(IsEnabled: enabled, IsChecked: view?.IsLinkedToPrevious == true);
+        }
     }
 
     private sealed class PageSettingToggleCommand(

@@ -654,12 +654,20 @@ internal static partial class FreeWCanonicalRibbonTabs
                     AddProfiledButton(group, avalonia, "freew.hf-insert-field", "Document Info",
                         RibbonCommandIconKind.Field);
                 });
-                tab.Group("hf-navigation", "Navigation", "N", 100, group =>
+                tab.Group("hf-navigation", "Navigation", "N", 150, group =>
                 {
                     AddProfiledButton(group, avalonia, "freew.hf-go-to-header", "Go to Header",
                         RibbonCommandIconKind.Header);
                     AddProfiledButton(group, avalonia, "freew.hf-go-to-footer", "Go to Footer",
                         RibbonCommandIconKind.Footer);
+                    // Word's per-section navigation: move the header/footer editing surface to the
+                    // neighbouring section, and choose whether this section inherits the previous one's.
+                    AddProfiledButton(group, avalonia, "freew.hf-previous-section", "Previous",
+                        RibbonCommandIconKind.Previous);
+                    AddProfiledButton(group, avalonia, "freew.hf-next-section", "Next",
+                        RibbonCommandIconKind.Next);
+                    AddHeaderFooterOption(group, avalonia, "freew.hf-link-to-previous",
+                        "Link to Previous", RibbonCommandIconKind.Link);
                 });
                 tab.Group("hf-options", "Options", "O", 90, group =>
                 {

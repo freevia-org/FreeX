@@ -62,4 +62,14 @@ public sealed partial class MainWindow
     internal bool ApplyPendingNoteEditForTests() => ApplyPendingNoteEdit();
     internal void SelectNotesFilterForTests(int index) => _notesFilterBox.SelectedIndex = index;
     internal void ToggleNotesPaneForTests() => ToggleNotesPane();
+
+    internal DocumentView HeaderFooterSubEditorForTests => _hfSubEditor;
+    internal string HeaderFooterPaneLabelForTests => _hfSlotLabel.Text;
+    internal bool IsHeaderFooterPaneOpenForTests => _hfPane.Visibility == Visibility.Visible;
+    internal FreeW.App.Presentation.Ribbon.HeaderFooterSectionSlotView? HeaderFooterSectionSlotForTests =>
+        CurrentHeaderFooterSectionSlot();
+    internal void OpenHeaderFooterPaneForTests(string slotName) => OpenHeaderFooterPane(slotName);
+    internal void CloseHeaderFooterPaneForTests() => CloseHeaderFooterPane();
+    internal void MoveHeaderFooterSectionForTests(int direction) => MoveHeaderFooterSection(direction);
+    internal void ToggleHeaderFooterLinkToPreviousForTests() => ToggleHeaderFooterLinkToPrevious();
 }

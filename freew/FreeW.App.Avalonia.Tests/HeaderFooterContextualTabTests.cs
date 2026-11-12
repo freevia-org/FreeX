@@ -72,6 +72,9 @@ public sealed class HeaderFooterContextualTabTests
             "freew.hf-edit-even-footer",
             "freew.hf-go-to-header",
             "freew.hf-go-to-footer",
+            "freew.hf-previous-section",
+            "freew.hf-next-section",
+            "freew.hf-link-to-previous",
             "freew.hf-close",
             "freew.hf-different-first-page",
             "freew.hf-different-odd-even",
@@ -169,6 +172,43 @@ public sealed class HeaderFooterContextualTabTests
 
         Execute(registry, "freew.hf-close");
         view.IsHeaderFooterCaretActive.Should().BeFalse("Close Header and Footer should exit the header/footer caret");
+    }
+
+    [Fact]
+    public void Link_to_previous_reports_and_toggles_the_caret_sections_header_linkage()
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("section one") { SectionBreak = new Section(new PageSettings()) });
+        document.Blocks.Add(new Paragraph("section two"));
+        document.Sections[0].HeadersFooters.Header = new HeaderFooter("shared header");
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+
+        view.MoveCaretToBlockForTest(0, 0);
+        // Caret in section 1: nothing to link to.
+        State(registry, "freew.hf-link-to-previous").IsEnabled.Should().BeFalse();
+
+        view.MoveCaretToBlockForTest(1, 0);
+        view.ActiveHeaderFooterSectionSlot.SectionIndex.Should().Be(1);
+        State(registry, "freew.hf-link-to-previous").Should().BeEquivalentTo(
+            new RibbonCommandState(IsEnabled: true, IsChecked: true));
+
+        Execute(registry, "freew.hf-link-to-previous");
+
+        State(registry, "freew.hf-link-to-previous").IsChecked.Should().BeFalse();
+        var own = view.Document.Sections[1].HeadersFooters.Header;
+        own.Should().NotBeNull().And.NotBeSameAs(view.Document.Sections[0].HeadersFooters.Header);
+        own!.PlainText.Should().Be("shared header", "unlinking copies the inherited header");
+
+        Execute(registry, "freew.hf-link-to-previous");
+
+        State(registry, "freew.hf-link-to-previous").IsChecked.Should().BeTrue();
+        view.Document.Sections[1].HeadersFooters.Header.Should().BeNull();
+
+        // Avalonia edits headers in place, so there is no editing surface to move between sections.
+        State(registry, "freew.hf-previous-section").IsEnabled.Should().BeFalse();
+        State(registry, "freew.hf-next-section").IsEnabled.Should().BeFalse();
     }
 
     [Fact]

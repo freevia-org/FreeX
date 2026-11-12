@@ -181,5 +181,6 @@ public sealed partial class MainWindow
     private void CommitPendingPaneEdits()
     {
         ApplyPendingNoteEdit();
+        CommitHeaderFooterPaneEdits();
     }
 }

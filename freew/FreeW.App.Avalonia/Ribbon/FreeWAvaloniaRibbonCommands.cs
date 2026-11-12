@@ -221,6 +221,15 @@ internal static class FreeWAvaloniaRibbonCommands
                 GetPageSettings: () => editor.CurrentSectionPageSettings(),
                 ApplyPageSettings: editor.ApplyPageSettings,
                 IsEnabled: () => !editor.IsEditingLocked));
+        // Per-section linkage. Avalonia edits headers/footers in place on the page, so there is no
+        // separate editing surface to move between sections: Previous/Next stay disabled (no move port)
+        // rather than pretending, while Link to Previous is fully backed by the shared planner.
+        var headerFooterSectionNavigation = HeaderFooterRibbonWorkflow.CreateSectionNavigationCommands(
+            new HeaderFooterSectionNavigationPorts(
+                GetActiveSlot: () => editor.ActiveHeaderFooterSectionSlot,
+                MoveToAdjacentSection: null,
+                ToggleLinkToPrevious: editor.ToggleHeaderFooterLinkToPrevious,
+                IsEnabled: () => !editor.IsEditingLocked));
         HeaderFooterRibbonWorkflow.Register(
             headerFooterCommands,
             new HeaderFooterRibbonBindings(
@@ -244,7 +253,10 @@ internal static class FreeWAvaloniaRibbonCommands
                 InsertHeaderPageNumber: new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: false)),
                 InsertFooterPageNumber: new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)),
                 InsertDateTime: new ActionRibbonCommand(editor.InsertHeaderFooterDateTime),
-                InsertDocumentInfo: new ActionRibbonCommand(editor.InsertHeaderFooterDocumentInfo)));
+                InsertDocumentInfo: new ActionRibbonCommand(editor.InsertHeaderFooterDocumentInfo),
+                PreviousSection: headerFooterSectionNavigation.PreviousSection,
+                NextSection: headerFooterSectionNavigation.NextSection,
+                LinkToPrevious: headerFooterSectionNavigation.LinkToPrevious));
 
         // ── Insert depth 2 (AV-INSERT2) ──────────────────────────────────────
         RegisterInsertDepth2Commands(r, editor, callbacks);

@@ -881,11 +881,51 @@ internal static class FreeWRibbonCommands
                 : new EditHeaderSlotCommand(editor, slotName);
         }
 
+        // Per-section navigation state: the host's editing surface when it has one, otherwise the
+        // default header of the section containing the caret.
+        var getHeaderFooterSectionSlot = hostPorts?.GetHeaderFooterSectionSlot
+            ?? (() => HeaderFooterSectionLinkPlanner.Describe(
+                editor.Model.Sections,
+                editor.CurrentSectionIndex(),
+                HeaderFooterSlotKind.Header));
+        var headerFooterSectionNavigation = HeaderFooterRibbonWorkflow.CreateSectionNavigationCommands(
+            new HeaderFooterSectionNavigationPorts(
+                GetActiveSlot: getHeaderFooterSectionSlot,
+                MoveToAdjacentSection: hostPorts?.MoveHeaderFooterSection,
+                ToggleLinkToPrevious: hostPorts?.ToggleHeaderFooterLinkToPrevious
+                    ?? (() =>
+                    {
+                        editor.CommitToModel();
+                        if (HeaderFooterSectionLinkPlanner.ToggleLinkToPrevious(
+                                editor.Model.Sections,
+                                editor.CurrentSectionIndex(),
+                                HeaderFooterSlotKind.Header))
+                        {
+                            editor.ApplyPageSettings(_ => { });
+                        }
+                    })));
+
         IRibbonCommand NavigateHeaderFooterSlot(HeaderFooterSlotKind slot)
         {
             var slotName = HeaderFooterDialogPlanner.SlotNameFor(slot);
             if (onOpenHeaderFooterPane is not null)
-                return new OpenHeaderFooterPaneCommand(editor, slotName, onOpenHeaderFooterPane);
+            {
+                // Go to Header / Go to Footer keeps the page type being edited (first-page header ->
+                // first-page footer), as Word jumps between the header and footer of the same page.
+                return new ActionRibbonCommand(() =>
+                {
+                    var target = getHeaderFooterSectionSlot() is { } active
+                        ? HeaderFooterSectionLinkPlanner.CounterpartSlot(
+                            active.Slot,
+                            HeaderFooterSectionLinkPlanner.IsHeader(slot))
+                        : slot;
+                    new OpenHeaderFooterPaneCommand(
+                            editor,
+                            HeaderFooterDialogPlanner.SlotNameFor(target),
+                            onOpenHeaderFooterPane)
+                        .Execute(RibbonCommandContext.Empty);
+                });
+            }
             return slot == HeaderFooterSlotKind.Header
                 ? new GoToHeaderCommand(editor)
                 : new GoToFooterCommand(editor);
@@ -920,7 +960,10 @@ internal static class FreeWRibbonCommands
                 InsertHeaderPageNumber: new InsertIntoHeaderSlotCommand(editor, isFooter: false, InsertSlotKind.PageNumber),
                 InsertFooterPageNumber: new InsertIntoHeaderSlotCommand(editor, isFooter: true, InsertSlotKind.PageNumber),
                 InsertDateTime: new InsertIntoHeaderSlotCommand(editor, isFooter: false, InsertSlotKind.DateTime),
-                InsertDocumentInfo: new InsertIntoHeaderSlotCommand(editor, isFooter: false, InsertSlotKind.DocumentInfo)));
+                InsertDocumentInfo: new InsertIntoHeaderSlotCommand(editor, isFooter: false, InsertSlotKind.DocumentInfo),
+                PreviousSection: headerFooterSectionNavigation.PreviousSection,
+                NextSection: headerFooterSectionNavigation.NextSection,
+                LinkToPrevious: headerFooterSectionNavigation.LinkToPrevious));
         foreach (var entry in headerFooterRibbon.StatefulCommands)
             stateful.Add((entry.Id, entry.Command));
         registry.Bind(FreeWRibbonCommandAction.Field, new InsertFieldCommand(resolveFieldTarget, askField));
@@ -6906,7 +6949,9 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            var page = editor.Model.Page;
+            // Different First Page / Different Odd & Even are per-section: the slot is available when the
+            // section containing the caret displays it, not when the document's final section does.
+            var page = editor.CurrentSectionPageSettings();
             var plan = HeaderFooterDialogPlanner.PlanSlotActivation(slotName, page);
             if (plan.Kind != HeaderFooterSlotActivationKind.Active)
             {
@@ -6928,8 +6973,9 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var hf = editor.Model.FinalSectionHeadersFooters;
-            var page = editor.Model.Page;
+            var sections = editor.Model.Sections;
+            var sectionIndex = editor.CurrentSectionIndex();
+            var page = editor.CurrentSectionPageSettings();
             var plan = HeaderFooterDialogPlanner.PlanSlotActivation(slotName, page);
 
             if (plan.Kind != HeaderFooterSlotActivationKind.Active)
@@ -6941,12 +6987,27 @@ internal static class FreeWRibbonCommands
                 return;
             }
 
-            var current = HeaderFooterDialogPlanner.GetSlot(hf, plan.Slot);
-            var result = HeaderFooterSlotDialog.Prompt(Window.GetWindow(editor), plan.Label, current);
+            // The caret's section, honoring Link to Previous: a linked section shows (and edits) the
+            // header/footer it inherits rather than the document's final section's.
+            var view = HeaderFooterSectionLinkPlanner.Describe(sections, sectionIndex, plan.Slot);
+            var result = HeaderFooterSlotDialog.Prompt(
+                Window.GetWindow(editor),
+                HeaderFooterSectionLinkPlanner.BuildEditingLabel(view),
+                view.Content);
             if (!result.Accepted)
                 return; // cancelled
 
-            HeaderFooterDialogPlanner.SetSlot(hf, plan.Slot, result.Value);
+            if (result.Value is { } edited)
+            {
+                HeaderFooterSectionLinkPlanner.CommitSlotContent(sections, sectionIndex, plan.Slot, edited);
+            }
+            else
+            {
+                // Cleared: drop the definition from the section that owns it.
+                var owner = HeaderFooterPagePlanner.ResolveSlotOwner(sections, sectionIndex, plan.Slot);
+                if (HeaderFooterDialogPlanner.GetSlot(owner, plan.Slot) is not null)
+                    HeaderFooterDialogPlanner.SetSlot(owner, plan.Slot, null);
+            }
 
             editor.Focus();
         }
@@ -6987,9 +7048,11 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var model = editor.Model;
-            var hf = isFooter ? model.Footer : model.Header;
-            var slot = hf;
+            // Insert into the header/footer the caret's section displays (its own or the linked one).
+            var sections = editor.Model.Sections;
+            var sectionIndex = editor.CurrentSectionIndex();
+            var slotKind = isFooter ? HeaderFooterSlotKind.Footer : HeaderFooterSlotKind.Header;
+            var slot = HeaderFooterSectionLinkPlanner.Describe(sections, sectionIndex, slotKind).Content;
 
             switch (kind)
             {
@@ -7017,10 +7080,8 @@ internal static class FreeWRibbonCommands
                 }
             }
 
-            if (isFooter)
-                model.Footer = slot;
-            else
-                model.Header = slot;
+            if (slot is not null)
+                HeaderFooterSectionLinkPlanner.CommitSlotContent(sections, sectionIndex, slotKind, slot);
 
             editor.Focus();
         }
