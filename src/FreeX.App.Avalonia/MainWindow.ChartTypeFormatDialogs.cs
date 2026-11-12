@@ -23,7 +23,7 @@ namespace FreeX.App.Avalonia;
 /// via <see cref="ApplyChartLayout"/>, then re-resolves the selected chart after closing. The WPF host's
 /// <c>ChartBarFormatDialog</c> / <c>ChartPieFormatDialog</c> / <c>ChartBubbleFormatDialog</c> /
 /// <c>ChartStockFormatDialog</c> are the behavior reference. Shared dialog plumbing (NewChartDialog,
-/// CreateChartDialogButtons, DescribeColor, ShowMoreColorsDialogAsync) lives in MainWindow.ChartFormatDialogs.
+/// CreateChartDialogButtons, CreateChartColorEditor) lives in MainWindow.ChartFormatDialogs.
 /// </summary>
 public sealed partial class MainWindow
 {
@@ -346,7 +346,6 @@ public sealed partial class MainWindow
 
     private async Task<ChartStockFormatInput?> ShowChartStockFormatDialogAsync(ChartStockFormatInput current)
     {
-        var state = current;
         var gapWidthField = ChartStockFormatPlanner.GetDialogField(ChartStockFormatDialogFieldId.GapWidth);
         var upFillField = ChartStockFormatPlanner.GetDialogField(ChartStockFormatDialogFieldId.UpBarFill);
         var upBorderField = ChartStockFormatPlanner.GetDialogField(ChartStockFormatDialogFieldId.UpBarBorder);
@@ -358,55 +357,14 @@ public sealed partial class MainWindow
         var gapWidthBox = CreateChartTextBox(current.UpDownBarGapWidth.ToString(CultureInfo.InvariantCulture), 260);
         ApplyTypeFormatDescriptorAutomation(gapWidthBox, gapWidthField.LabelResourceKey, gapWidthField.AutomationId);
 
-        var upFillButton = ColorPickerButton(upFillField, current.UpBarFillColor);
-        var upBorderButton = ColorPickerButton(upBorderField, current.UpBarBorderColor);
-        var downFillButton = ColorPickerButton(downFillField, current.DownBarFillColor);
-        var downBorderButton = ColorPickerButton(downBorderField, current.DownBarBorderColor);
-        var highLowButton = ColorPickerButton(highLowColorField, current.HighLowLineColor);
+        var upFillEditor = StockColorEditor(upFillField, current.UpBarFillColor);
+        var upBorderEditor = StockColorEditor(upBorderField, current.UpBarBorderColor);
+        var downFillEditor = StockColorEditor(downFillField, current.DownBarFillColor);
+        var downBorderEditor = StockColorEditor(downBorderField, current.DownBarBorderColor);
+        var highLowEditor = StockColorEditor(highLowColorField, current.HighLowLineColor);
 
         var thicknessBox = CreateChartTextBox(current.HighLowLineThickness.ToString("G", CultureInfo.InvariantCulture), 260);
         ApplyTypeFormatDescriptorAutomation(thicknessBox, thicknessField.LabelResourceKey, thicknessField.AutomationId);
-
-        upFillButton.Click += (_, _) => RunGuarded(async () =>
-        {
-            var label = TypeFormatDescriptorText(upFillField.LabelResourceKey);
-            var chosen = await ShowMoreColorsDialogAsync(
-                label,
-                state.UpBarFillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-            if (chosen is { } color) { state = state with { UpBarFillColor = color }; upFillButton.Content = DescribeColor(label, color); }
-        });
-        upBorderButton.Click += (_, _) => RunGuarded(async () =>
-        {
-            var label = TypeFormatDescriptorText(upBorderField.LabelResourceKey);
-            var chosen = await ShowMoreColorsDialogAsync(
-                label,
-                state.UpBarBorderColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-            if (chosen is { } color) { state = state with { UpBarBorderColor = color }; upBorderButton.Content = DescribeColor(label, color); }
-        });
-        downFillButton.Click += (_, _) => RunGuarded(async () =>
-        {
-            var label = TypeFormatDescriptorText(downFillField.LabelResourceKey);
-            var chosen = await ShowMoreColorsDialogAsync(
-                label,
-                state.DownBarFillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-            if (chosen is { } color) { state = state with { DownBarFillColor = color }; downFillButton.Content = DescribeColor(label, color); }
-        });
-        downBorderButton.Click += (_, _) => RunGuarded(async () =>
-        {
-            var label = TypeFormatDescriptorText(downBorderField.LabelResourceKey);
-            var chosen = await ShowMoreColorsDialogAsync(
-                label,
-                state.DownBarBorderColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-            if (chosen is { } color) { state = state with { DownBarBorderColor = color }; downBorderButton.Content = DescribeColor(label, color); }
-        });
-        highLowButton.Click += (_, _) => RunGuarded(async () =>
-        {
-            var label = TypeFormatDescriptorText(highLowColorField.LabelResourceKey);
-            var chosen = await ShowMoreColorsDialogAsync(
-                label,
-                state.HighLowLineColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-            if (chosen is { } color) { state = state with { HighLowLineColor = color }; highLowButton.Content = DescribeColor(label, color); }
-        });
 
         var dialog = NewChartDialog(UiText.Get(ChartStockFormatPlanner.TitleResourceKey), ChartStockFormatPlanner.DialogAutomationId);
 
@@ -415,11 +373,11 @@ public sealed partial class MainWindow
         {
             if (!ChartStockFormatPlanner.TryParseDialogInput(
                     gapWidthBox.Text ?? string.Empty,
-                    state.UpBarFillColor,
-                    state.UpBarBorderColor,
-                    state.DownBarFillColor,
-                    state.DownBarBorderColor,
-                    state.HighLowLineColor,
+                    upFillEditor.Color,
+                    upBorderEditor.Color,
+                    downFillEditor.Color,
+                    downBorderEditor.Color,
+                    highLowEditor.Color,
                     thicknessBox.Text ?? string.Empty,
                     out var input,
                     out var issue))
@@ -432,14 +390,13 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartStockFormatInput?)null);
 
-        // WPF ChartStockFormatDialog: 380 wide, one options group in which every field, colors
-        // included, has its own label. The WPF inline help describes typing hex colors into text
-        // boxes, which the More Colors buttons replace here, so it is left out.
+        // WPF ChartStockFormatDialog: 380 wide, one options group that opens with the inline help
+        // about typing hex colors and in which every field, colors included, has its own label.
         HostTypeFormatDialogContent(
             dialog,
             380,
             ChartStockFormatPlanner.GetOptionsSection().HeaderResourceKey,
-            helpResourceKey: null,
+            helpResourceKey: "ChartStockFormat_HelpText",
             new StackPanel
             {
                 Children =
@@ -447,15 +404,15 @@ public sealed partial class MainWindow
                     TypeFormatDescriptorLabel(gapWidthField.LabelResourceKey),
                     gapWidthBox,
                     TypeFormatDescriptorLabel(upFillField.LabelResourceKey),
-                    upFillButton,
+                    upFillEditor.Row,
                     TypeFormatDescriptorLabel(upBorderField.LabelResourceKey),
-                    upBorderButton,
+                    upBorderEditor.Row,
                     TypeFormatDescriptorLabel(downFillField.LabelResourceKey),
-                    downFillButton,
+                    downFillEditor.Row,
                     TypeFormatDescriptorLabel(downBorderField.LabelResourceKey),
-                    downBorderButton,
+                    downBorderEditor.Row,
                     TypeFormatDescriptorLabel(highLowColorField.LabelResourceKey),
-                    highLowButton,
+                    highLowEditor.Row,
                     TypeFormatDescriptorLabel(thicknessField.LabelResourceKey),
                     thicknessBox,
                 },
@@ -505,12 +462,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(control, automationId);
     }
 
-    /// <summary>Builds a 260-wide color-picker button labelled by a shared descriptor, showing the current color.</summary>
-    private static Button ColorPickerButton(ChartStockFormatDialogFieldDescriptor field, CellColor? color)
-    {
-        var label = TypeFormatDescriptorText(field.LabelResourceKey);
-        var button = CreateChartButton(DescribeColor(label, color), 260);
-        ApplyTypeFormatDescriptorAutomation(button, field.LabelResourceKey, field.AutomationId);
-        return button;
-    }
+    /// <summary>Builds the picker-plus-text-box color editor for a stock field from its shared descriptor.</summary>
+    private ChartColorEditor StockColorEditor(ChartStockFormatDialogFieldDescriptor field, CellColor? color) =>
+        CreateChartColorEditor(TypeFormatDescriptorText(field.LabelResourceKey), field.AutomationId, color);
 }

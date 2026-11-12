@@ -28,7 +28,7 @@ public sealed class AvaloniaCompactDialogChromeClusterASourceTests
         commentsSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 10, 0, 0))");
 
         insertDeleteSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle InsertDeleteCellsDialogChromeStyle => new(FormulaBarFontFamily);");
-        insertDeleteSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyRadioButton(first, InsertDeleteCellsDialogChromeStyle);");
+        insertDeleteSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyRadioButton(button, InsertDeleteCellsDialogChromeStyle);");
         insertDeleteSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0))");
 
         rowColumnSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle RowColumnDialogChromeStyle => new(FormulaBarFontFamily);");

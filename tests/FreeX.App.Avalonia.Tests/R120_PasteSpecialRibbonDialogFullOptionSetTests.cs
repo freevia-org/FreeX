@@ -127,6 +127,55 @@ public sealed class R120_PasteSpecialRibbonDialogFullOptionSetTests
         source.Should().NotContain("enum PasteSpecialDialogActionKind");
     }
 
+    // WPF PasteSpecialDialog lists the source-theme content kind in the first column between
+    // Validation and All Except Borders; the Avalonia dialog must expose it and route it to the shared
+    // PasteSpecialContentKind.
+    [Fact]
+    public async Task PasteSpecialDialog_AllUsingSourceTheme_IsListedInWpfPositionAndComposesTheSharedContentKind()
+    {
+        PasteSpecialDialogSelection? selection = null;
+        string?[] contentIds = [];
+
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                window.Show();
+                var task = window.PromptPasteSpecialModeAsync(probe =>
+                {
+                    contentIds = probe.ContentRadios
+                        .Select(r => AutomationProperties.GetAutomationId(r))
+                        .ToArray();
+                    var sourceTheme = probe.ContentRadios.Single(
+                        r => AutomationProperties.GetAutomationId(r) == "PasteSpecialAllUsingSourceThemeRadio");
+                    sourceTheme.IsChecked = true;
+                    probe.OkButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                });
+                selection = await task;
+            }
+            finally
+            {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
+                window.Close();
+            }
+            return true;
+        }, CancellationToken.None);
+
+        contentIds.Should().HaveCount(PasteSpecialPlanner.Surface.WpfChoices.Count);
+        Array.IndexOf(contentIds, "PasteSpecialAllUsingSourceThemeRadio")
+            .Should().Be(Array.IndexOf(contentIds, "PasteSpecialValidationRadio") + 1);
+        Array.IndexOf(contentIds, "PasteSpecialAllExceptBordersRadio")
+            .Should().Be(Array.IndexOf(contentIds, "PasteSpecialAllUsingSourceThemeRadio") + 1);
+
+        selection.Should().NotBeNull();
+        var plan = PasteSpecialPlanner.CreatePlan(selection!);
+        plan.Action.Should().Be(PasteSpecialAction.Paste);
+        plan.PasteMode.Should().Be(PasteMode.All);
+        plan.Options.ContentKind.Should().Be(PasteSpecialContentKind.AllUsingSourceTheme);
+    }
+
     // ---- Real production dialog, driven end-to-end (no clipboard touched by this method itself) -----
     [Fact]
     public async Task PasteSpecialDialog_ValuesAndNumberFormatsWithTransposeSkipBlanksAndAddOperation_ComposesIntoOneSelection()

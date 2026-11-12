@@ -69,9 +69,9 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "InsertFunctionDialog");
 
-        // WPF: _searchBox { MinWidth = 260, Margin = (4, 0, 8, 6) }; without the Go button the box runs
-        // to the right edge.
-        var searchBox = new TextBox { MinWidth = 260, Margin = new Thickness(4, 0, 0, 6) };
+        // WPF: _searchBox { MinWidth = 260, Margin = (4, 0, 8, 6) } with the search button in the
+        // trailing Auto column.
+        var searchBox = new TextBox { MinWidth = 260, Margin = new Thickness(4, 0, 8, 6) };
         ApplyFnTextBoxChrome(searchBox);
         AutomationProperties.SetName(searchBox, ResolveInsertFunctionLabel("InsertFunction_SearchForAFunction"));
         AutomationProperties.SetAutomationId(searchBox, "InsertFunctionSearchBox");
@@ -142,6 +142,35 @@ public sealed partial class MainWindow
 
         searchBox.TextChanged += (_, _) => RefreshList();
         categoryBox.SelectionChanged += (_, _) => RefreshList();
+
+        // WPF: go { Width = 64, Height = 24, Margin = (0, 0, 0, 6) } re-runs the search.
+        var goButton = new Button
+        {
+            Content = StripDisplayMnemonic(UiText.Get("InsertFunction_Go")),
+            Margin = new Thickness(0, 0, 0, 6),
+        };
+        ApplyFnButtonChrome(goButton, minWidth: 64);
+        goButton.Width = 64;
+        goButton.Height = 24;
+        goButton.MinHeight = 24;
+        goButton.MaxHeight = 24;
+        AutomationProperties.SetName(goButton, UiText.CreateAutomationName(UiText.Get("InsertFunction_Go")));
+        AutomationProperties.SetAutomationId(goButton, "InsertFunctionGoButton");
+        goButton.Click += (_, _) => RefreshList();
+
+        // WPF: help { Width = 146 } leads the button row and shows the selected function's help.
+        var helpButton = new Button
+        {
+            Content = StripDisplayMnemonic(UiText.Get("InsertFunction_HelpOnThisFunction")),
+        };
+        ApplyFnButtonChrome(helpButton, minWidth: 146);
+        helpButton.Width = 146;
+        AutomationProperties.SetName(helpButton, UiText.CreateAutomationName(UiText.Get("InsertFunction_HelpOnThisFunction")));
+        AutomationProperties.SetAutomationId(helpButton, "InsertFunctionHelpButton");
+        helpButton.Click += (_, _) => RunGuarded(() => ShowFunctionHelpDialogAsync(
+            dialog,
+            UiText.Get("InsertFunction_FunctionHelpTitle"),
+            BuildInsertFunctionHelpMessage(CurrentEntry())));
         listBox.SelectionChanged += (_, _) => UpdateHelp();
 
         // WPF: OK and Cancel are Width = 80, 8px apart, OK first.
@@ -194,7 +223,7 @@ public sealed partial class MainWindow
 
         // WPF: btnRow.Margin = (0, 8, 0, 0), docked to the bottom.
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
-            [okButton, cancelButton],
+            [helpButton, okButton, cancelButton],
             new Thickness(0, 8, 0, 0));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
@@ -211,11 +240,12 @@ public sealed partial class MainWindow
         DockPanel.SetDock(helpPanel, Dock.Bottom);
 
         // WPF searchPanel: Grid { Margin = (0, 0, 0, 8) } with the labels (5px Label padding) in an
-        // Auto column and the search box / category combo in the star column.
+        // Auto column, the search box / category combo in the star column and the search button in a
+        // trailing Auto column.
         var header = new AvaloniaGrid
         {
             Margin = new Thickness(0, 0, 0, 8),
-            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
             RowDefinitions =
             {
                 new RowDefinition { Height = GridLength.Auto, MinHeight = 26 },
@@ -227,6 +257,8 @@ public sealed partial class MainWindow
         header.Children.Add(searchLabel);
         AvaloniaGrid.SetColumn(searchBox, 1);
         header.Children.Add(searchBox);
+        AvaloniaGrid.SetColumn(goButton, 2);
+        header.Children.Add(goButton);
         var categoryLabel = CreateInsertFunctionLabel("InsertFunction_OrSelectACategory");
         AvaloniaGrid.SetRow(categoryLabel, 1);
         header.Children.Add(categoryLabel);
@@ -413,9 +445,24 @@ public sealed partial class MainWindow
             }
         };
 
-        // WPF CreateButtonRow: Margin = (0, 12, 0, 0); OK then Cancel, 76px wide, 8px apart.
+        // WPF CreateButtonRow: help { Width = 146 } first; its message lists the function and every
+        // argument with its description.
+        var helpButton = new Button
+        {
+            Content = StripDisplayMnemonic(UiText.Get("FunctionArguments_HelpButton")),
+        };
+        ApplyFnButtonChrome(helpButton, minWidth: 146);
+        helpButton.Width = 146;
+        AutomationProperties.SetName(helpButton, UiText.CreateAutomationName(UiText.Get("FunctionArguments_HelpButton")));
+        AutomationProperties.SetAutomationId(helpButton, "FunctionArgumentsHelpButton");
+        helpButton.Click += (_, _) => RunGuarded(() => ShowFunctionHelpDialogAsync(
+            dialog,
+            UiText.Get("FunctionArguments_HelpTitle"),
+            BuildFunctionArgumentsHelpMessage(function.Name, arguments)));
+
+        // WPF CreateButtonRow: Margin = (0, 12, 0, 0); help, OK then Cancel (76px wide), 8px apart.
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
-            [okButton, cancelButton],
+            [helpButton, okButton, cancelButton],
             new Thickness(0, 12, 0, 0));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
@@ -475,6 +522,74 @@ public sealed partial class MainWindow
 
         await dialog.ShowDialog(this);
         return result;
+    }
+
+    // WPF InsertFunctionDialog.ShowFunctionHelp: a prompt to pick a function when nothing is selected,
+    // otherwise the function with its description. The resource keeps its line breaks as a
+    // backtick-n marker, which is expanded here.
+    internal static string BuildInsertFunctionHelpMessage(InsertFunctionCatalogEntry? entry)
+    {
+        var message = entry is null
+            ? UiText.Get("InsertFunction_SelectFunctionForHelpMessage")
+            : UiText.Format("InsertFunction_FunctionHelpMessage", entry.Name, entry.Description);
+        return message.Replace("`n", Environment.NewLine, StringComparison.Ordinal);
+    }
+
+    // WPF FunctionArgumentsDialog.ShowFunctionHelp.
+    internal static string BuildFunctionArgumentsHelpMessage(
+        string functionName,
+        IReadOnlyList<FunctionArgumentSpec> arguments) =>
+        $"{functionName}(){Environment.NewLine}{Environment.NewLine}" +
+        string.Join(
+            Environment.NewLine,
+            arguments.Select(argument => $"{argument.Name}: {argument.Description}"));
+
+    /// <summary>The information box WPF shows for the function help buttons, owned by the dialog.</summary>
+    private static async Task ShowFunctionHelpDialogAsync(Window owner, string title, string message)
+    {
+        var okButton = new Button
+        {
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
+            IsDefault = true,
+            IsCancel = true,
+        };
+        ApplyFnButtonChrome(okButton, minWidth: 80, isDefault: true);
+        AutomationProperties.SetAutomationId(okButton, "FunctionHelpOkButton");
+
+        var messageText = new TextBlock
+        {
+            Text = message,
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = HeaderForeground,
+        };
+        AutomationProperties.SetAutomationId(messageText, "FunctionHelpMessageText");
+
+        var helpDialog = new Window
+        {
+            Title = title,
+            Width = 420,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+            Content = new StackPanel
+            {
+                Margin = new Thickness(16),
+                Spacing = 12,
+                Children =
+                {
+                    messageText,
+                    AvaloniaCompactDialogChrome.CreateActionRow([okButton]),
+                },
+            },
+        };
+        AutomationProperties.SetAutomationId(helpDialog, "FunctionHelpDialog");
+        okButton.Click += (_, _) => helpDialog.Close();
+        helpDialog.Opened += (_, _) => okButton.Focus();
+        await helpDialog.ShowDialog(owner);
     }
 
     private void InsertComposedFunctionFormula(string functionName, string formula)

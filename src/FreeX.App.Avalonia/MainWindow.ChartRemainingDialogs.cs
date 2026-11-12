@@ -296,8 +296,6 @@ public sealed partial class MainWindow
         // WPF ChartAreaLegendDialog: two group boxes — "Fill & Line" (chart-area / plot-area fill +
         // border, border width) and "Legend" (show / position / overlay + legend text/fill/border colors,
         // border width, font size) — followed by an [OK][Cancel] row (primary on the left).
-        var state = current;
-
         // Nominal editor width; ApplyWpfChartFieldMetrics stretches every editor across its group, as
         // the WPF stack does.
         const int ControlWidth = 300;
@@ -306,47 +304,14 @@ public sealed partial class MainWindow
         var legendSection = ChartAreaFormatPlanner.GetLegendSection();
 
         // ---- "Fill & Line" group controls ----------------------------------------------------------
-        var chartAreaButton = MakeAreaColorButton(ChartAreaFormatDialogFieldId.ChartAreaFillColor, current.ChartAreaFillColor);
-        var plotAreaButton = MakeAreaColorButton(ChartAreaFormatDialogFieldId.PlotAreaFillColor, current.PlotAreaFillColor);
-        var plotBorderButton = MakeAreaColorButton(ChartAreaFormatDialogFieldId.PlotAreaBorderColor, current.PlotAreaBorderColor);
+        var chartAreaEditor = MakeAreaColorEditor(ChartAreaFormatDialogFieldId.ChartAreaFillColor, current.ChartAreaFillColor);
+        var plotAreaEditor = MakeAreaColorEditor(ChartAreaFormatDialogFieldId.PlotAreaFillColor, current.PlotAreaFillColor);
+        var plotBorderEditor = MakeAreaColorEditor(ChartAreaFormatDialogFieldId.PlotAreaBorderColor, current.PlotAreaBorderColor);
 
         var borderWidthBox = MakeAreaNumberBox(
             ChartAreaFormatDialogFieldId.PlotAreaBorderThickness,
             current.PlotAreaBorderThickness.ToString(CultureInfo.InvariantCulture),
             ControlWidth);
-
-        async Task PickAreaColor(
-            ChartAreaFormatDialogFieldId fieldId,
-            Func<CellColor?> getColor,
-            Action<CellColor> setColor,
-            Button button)
-        {
-            var label = AreaFieldLabel(fieldId);
-            var chosen = await ShowMoreColorsDialogAsync(
-                label,
-                getColor() ?? ChartQuickFormatCycler.DefaultSeriesColor);
-            if (chosen is { } color)
-            {
-                setColor(color);
-                button.Content = DescribeColor(label, color);
-            }
-        }
-
-        chartAreaButton.Click += (_, _) => RunGuarded(() => PickAreaColor(
-            ChartAreaFormatDialogFieldId.ChartAreaFillColor,
-            () => state.ChartAreaFillColor,
-            color => state = state with { ChartAreaFillColor = color },
-            chartAreaButton));
-        plotAreaButton.Click += (_, _) => RunGuarded(() => PickAreaColor(
-            ChartAreaFormatDialogFieldId.PlotAreaFillColor,
-            () => state.PlotAreaFillColor,
-            color => state = state with { PlotAreaFillColor = color },
-            plotAreaButton));
-        plotBorderButton.Click += (_, _) => RunGuarded(() => PickAreaColor(
-            ChartAreaFormatDialogFieldId.PlotAreaBorderColor,
-            () => state.PlotAreaBorderColor,
-            color => state = state with { PlotAreaBorderColor = color },
-            plotBorderButton));
 
         // "Fill & Line" group box — matches WPF CreateGroupBox(ChartDialog_FillLineGroup, ...) with
         // the inline help paragraph at the top (ChartAreaLegend_FillLineHelpText).
@@ -357,11 +322,11 @@ public sealed partial class MainWindow
                 CreateChartDialogInlineHelp(
                     UiText.Get(fillLineSection.HelpResourceKey ?? throw new InvalidOperationException("Fill-line section requires help text."))),
                 MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.ChartAreaFillColor),
-                chartAreaButton,
+                chartAreaEditor.Row,
                 MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.PlotAreaFillColor),
-                plotAreaButton,
+                plotAreaEditor.Row,
                 MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.PlotAreaBorderColor),
-                plotBorderButton,
+                plotBorderEditor.Row,
                 MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.PlotAreaBorderThickness),
                 borderWidthBox,
             },
@@ -385,25 +350,9 @@ public sealed partial class MainWindow
 
         var overlayCheck = MakeAreaDescriptorCheck(ChartAreaFormatDialogFieldId.LegendOverlay, current.LegendOverlay);
 
-        var legendTextButton = MakeAreaColorButton(ChartAreaFormatDialogFieldId.LegendTextColor, current.LegendTextColor);
-        var legendFillButton = MakeAreaColorButton(ChartAreaFormatDialogFieldId.LegendFillColor, current.LegendFillColor);
-        var legendBorderButton = MakeAreaColorButton(ChartAreaFormatDialogFieldId.LegendBorderColor, current.LegendBorderColor);
-
-        legendTextButton.Click += (_, _) => RunGuarded(() => PickAreaColor(
-            ChartAreaFormatDialogFieldId.LegendTextColor,
-            () => state.LegendTextColor,
-            color => state = state with { LegendTextColor = color },
-            legendTextButton));
-        legendFillButton.Click += (_, _) => RunGuarded(() => PickAreaColor(
-            ChartAreaFormatDialogFieldId.LegendFillColor,
-            () => state.LegendFillColor,
-            color => state = state with { LegendFillColor = color },
-            legendFillButton));
-        legendBorderButton.Click += (_, _) => RunGuarded(() => PickAreaColor(
-            ChartAreaFormatDialogFieldId.LegendBorderColor,
-            () => state.LegendBorderColor,
-            color => state = state with { LegendBorderColor = color },
-            legendBorderButton));
+        var legendTextEditor = MakeAreaColorEditor(ChartAreaFormatDialogFieldId.LegendTextColor, current.LegendTextColor);
+        var legendFillEditor = MakeAreaColorEditor(ChartAreaFormatDialogFieldId.LegendFillColor, current.LegendFillColor);
+        var legendBorderEditor = MakeAreaColorEditor(ChartAreaFormatDialogFieldId.LegendBorderColor, current.LegendBorderColor);
 
         var legendBorderWidthBox = MakeAreaNumberBox(
             ChartAreaFormatDialogFieldId.LegendBorderThickness,
@@ -423,11 +372,11 @@ public sealed partial class MainWindow
                 positionCombo,
                 overlayCheck,
                 MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.LegendTextColor),
-                legendTextButton,
+                legendTextEditor.Row,
                 MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.LegendFillColor),
-                legendFillButton,
+                legendFillEditor.Row,
                 MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.LegendBorderColor),
-                legendBorderButton,
+                legendBorderEditor.Row,
                 MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.LegendBorderThickness),
                 legendBorderWidthBox,
                 MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.LegendFontSize),
@@ -440,7 +389,7 @@ public sealed partial class MainWindow
         // Dialog title matches the WPF ChartAreaLegendDialog ("Format Chart Area").
         // WPF ChartAreaLegendDialog focuses the chart-area fill editor on load. Use the matching
         // Avalonia color control explicitly so nested scroll content does not lose the initial focus.
-        var dialog = NewChartDialog(UiText.Get("ChartAreaLegend_Title"), "FormatChartAreaDialog", chartAreaButton);
+        var dialog = NewChartDialog(UiText.Get("ChartAreaLegend_Title"), "FormatChartAreaDialog", chartAreaEditor.Picker);
         // Shared explicit size so the headless parity capture (which reads dialog.Bounds verbatim) matches
         // the WPF chart-area dialog contract.
         dialog.SizeToContent = SizeToContent.Manual;
@@ -455,16 +404,16 @@ public sealed partial class MainWindow
                 : (ChartLegendPosition?)null;
 
             if (!ChartAreaFormatPlanner.TryParseDialogInput(
-                    FormatOptionalColorText(state.ChartAreaFillColor),
-                    FormatOptionalColorText(state.PlotAreaFillColor),
-                    FormatOptionalColorText(state.PlotAreaBorderColor),
+                    chartAreaEditor.Text,
+                    plotAreaEditor.Text,
+                    plotBorderEditor.Text,
                     borderWidthBox.Text,
                     showLegendCheck.IsChecked == true,
                     chosenPosition,
                     overlayCheck.IsChecked == true,
-                    FormatOptionalColorText(state.LegendTextColor),
-                    FormatOptionalColorText(state.LegendFillColor),
-                    FormatOptionalColorText(state.LegendBorderColor),
+                    legendTextEditor.Text,
+                    legendFillEditor.Text,
+                    legendBorderEditor.Text,
                     legendBorderWidthBox.Text,
                     legendFontSizeBox.Text,
                     out var input,
@@ -538,13 +487,12 @@ public sealed partial class MainWindow
                 FontFamily = FormulaBarFontFamily,
             };
 
-        Button MakeAreaColorButton(ChartAreaFormatDialogFieldId fieldId, CellColor? color)
-        {
-            var label = AreaFieldLabel(fieldId);
-            var button = CreateChartButton(DescribeColor(label, color), ControlWidth);
-            ApplyAreaDescriptorAutomation(button, fieldId);
-            return button;
-        }
+        ChartColorEditor MakeAreaColorEditor(ChartAreaFormatDialogFieldId fieldId, CellColor? color) =>
+            CreateChartColorEditor(
+                CreateChartButton("...", ChartColorPickerButtonWidth),
+                AreaFieldLabel(fieldId),
+                AreaField(fieldId).AutomationId,
+                color);
 
         TextBox MakeAreaNumberBox(ChartAreaFormatDialogFieldId fieldId, string text, double width)
         {

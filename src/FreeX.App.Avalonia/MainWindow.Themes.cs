@@ -11,60 +11,16 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
-    // Page Layout ▸ Themes (parity gap: the buttons were no-ops). Picker of the three built-in themes
-    // (Office / FreeX Colorful / Grayscale); applying one runs SetWorkbookThemeCommand (undo/redo).
-    // Built-in theme recipes come from WorkbookThemeCatalog so Avalonia and WPF stay aligned.
+    // Page Layout ▸ Themes: the workbook theme editor (MainWindow.ThemeCustomize.cs) with the three
+    // built-in presets (Office / FreeX Colorful / Grayscale) and the customise fields; saving runs
+    // SetWorkbookThemeCommand (undo/redo). Built-in theme recipes come from WorkbookThemeCatalog so
+    // Avalonia and WPF stay aligned.
 
     private async Task ShowThemesGalleryAsync()
     {
-        WorkbookTheme? picked = null;
-        var dialog = new Window
-        {
-            Title = UiText.Get("Common_Themes"),
-            // The WPF WorkbookThemeDialog heading and preset row: 14px root margin, an 18px semibold
-            // heading 10px above a horizontal row of 92 / 126 / 92 px preset buttons 8px apart.
-            Width = 14 + 92 + 8 + 126 + 8 + 92 + 14,
-            Height = 14 + 24 + 10 + global::Free.Shared.Shell.CompactDialogVisualTokens.ButtonHeight + 14,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-            CanResize = false,
-        };
-
-        var presetRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        double[] presetWidths = [92, 126, 92];
-        foreach (var option in WorkbookThemeCatalog.ThemePresets.Where(option => !option.IsCustomizeAction))
-        {
-            var local = option.CreateTheme();
-            var width = presetRow.Children.Count < presetWidths.Length ? presetWidths[presetRow.Children.Count] : 92;
-            var button = new Button
-            {
-                Content = StripDisplayMnemonic(UiText.Get(option.LabelResourceKey)),
-                Width = width,
-            };
-            AvaloniaCompactDialogChrome.ApplyButton(button, AvaloniaCompactDialogChrome.WindowsStyle, width);
-            button.Click += (_, _) => { picked = local; dialog.Close(); };
-            presetRow.Children.Add(button);
-        }
-
-        var panel = new StackPanel
-        {
-            Margin = new Thickness(14),
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = StripDisplayMnemonic(UiText.Get("WorkbookTheme_Theme")),
-                    FontSize = 18,
-                    FontWeight = FontWeight.SemiBold,
-                    Height = 24,
-                    Margin = new Thickness(0, 0, 0, 10),
-                },
-                presetRow,
-            },
-        };
-
-        dialog.Content = panel;
-        await dialog.ShowDialog(this);
+        // The WPF WorkbookThemeDialog: the preset row loads a built-in theme into the editor and the
+        // theme (preset or customised) is applied when the dialog is saved.
+        var picked = await ShowWorkbookThemeDialogAsync(_session.Workbook.Theme);
         if (picked is not { } chosen)
             return;
 

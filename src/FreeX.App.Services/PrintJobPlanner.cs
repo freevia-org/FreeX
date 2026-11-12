@@ -48,8 +48,11 @@ public sealed record PrintJobRequest(
     int? ToPage = null,
     int? ActiveSheetIndex = null,
     GridRange? SelectedRange = null,
-    bool IgnorePrintAreas = false,
-    PrintSides Sides = PrintSides.PrinterDefault);
+    bool IgnorePrintAreas = false)
+{
+    /// <summary>Init-only so the positional constructor keeps its signature for already-compiled callers.</summary>
+    public PrintSides Sides { get; init; } = PrintSides.PrinterDefault;
+}
 
 /// <summary>
 /// The validated, ready-to-spool plan for a print job. Carries the underlying page plan (so the shell

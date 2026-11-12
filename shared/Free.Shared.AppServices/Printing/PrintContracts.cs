@@ -72,9 +72,15 @@ public sealed record PrintSelection(
     PrintPageRange? PageRange = null,
     PrintOrientation Orientation = PrintOrientation.Document,
     bool Collate = true,
-    string? JobTitle = null,
-    PrintSides Sides = PrintSides.PrinterDefault)
+    string? JobTitle = null)
 {
+    /// <summary>
+    /// Init-only on purpose, not a constructor parameter: adding a parameter changes the constructor's
+    /// signature, which breaks every already-compiled caller of this shared record (FreeW, FreeP and
+    /// their tests) with <see cref="MissingMethodException"/> until all of them are rebuilt.
+    /// </summary>
+    public PrintSides Sides { get; init; } = PrintSides.PrinterDefault;
+
     public PrintPageRange EffectivePageRange => PageRange ?? PrintPageRange.All;
 
     public void Validate()

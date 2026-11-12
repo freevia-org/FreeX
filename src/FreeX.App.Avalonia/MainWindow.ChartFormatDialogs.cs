@@ -78,9 +78,9 @@ public sealed partial class MainWindow
         var percentCheck = MakeDescriptorCheck(ChartDataLabelsDialogFieldId.Percentage, state.ShowPercentage);
         var calloutsCheck = MakeDescriptorCheck(ChartDataLabelsDialogFieldId.Callouts, state.ShowCallouts ?? false);
 
-        var fillButton = MakeColorButton(ChartDataLabelsDialogFieldId.FillColor, state.FillColor);
-        var borderButton = MakeColorButton(ChartDataLabelsDialogFieldId.BorderColor, state.BorderColor);
-        var textButton = MakeColorButton(ChartDataLabelsDialogFieldId.TextColor, state.TextColor);
+        var fillEditor = MakeColorEditor(ChartDataLabelsDialogFieldId.FillColor, state.FillColor);
+        var borderEditor = MakeColorEditor(ChartDataLabelsDialogFieldId.BorderColor, state.BorderColor);
+        var textEditor = MakeColorEditor(ChartDataLabelsDialogFieldId.TextColor, state.TextColor);
 
         var borderThicknessBox = MakeDescriptorNumberBox(
             ChartDataLabelsDialogFieldId.BorderThickness,
@@ -91,35 +91,6 @@ public sealed partial class MainWindow
         var angleBox = MakeDescriptorNumberBox(
             ChartDataLabelsDialogFieldId.TextAngle,
             (state.Angle ?? 0).ToString(CultureInfo.InvariantCulture));
-
-        async Task PickColor(ChartDataLabelsDialogFieldId fieldId, Func<CellColor?> getColor, Action<CellColor> setColor, Button button)
-        {
-            var label = FieldLabel(fieldId);
-            var chosen = await ShowMoreColorsDialogAsync(
-                label,
-                getColor() ?? ChartQuickFormatCycler.DefaultSeriesColor);
-            if (chosen is { } color)
-            {
-                setColor(color);
-                button.Content = DescribeColor(label, color);
-            }
-        }
-
-        fillButton.Click += (_, _) => RunGuarded(() => PickColor(
-            ChartDataLabelsDialogFieldId.FillColor,
-            () => state.FillColor,
-            color => state = state with { FillColor = color },
-            fillButton));
-        borderButton.Click += (_, _) => RunGuarded(() => PickColor(
-            ChartDataLabelsDialogFieldId.BorderColor,
-            () => state.BorderColor,
-            color => state = state with { BorderColor = color },
-            borderButton));
-        textButton.Click += (_, _) => RunGuarded(() => PickColor(
-            ChartDataLabelsDialogFieldId.TextColor,
-            () => state.TextColor,
-            color => state = state with { TextColor = color },
-            textButton));
 
         var dialog = NewChartDialog(UiText.Get("ChartDataLabels_Title"), "ChartDataLabelsDialog");
 
@@ -147,9 +118,9 @@ public sealed partial class MainWindow
                     separator,
                     numberFormat,
                     calloutsCheck.IsChecked == true,
-                    ColorText(state.FillColor),
-                    ColorText(state.BorderColor),
-                    ColorText(state.TextColor),
+                    fillEditor.Text,
+                    borderEditor.Text,
+                    textEditor.Text,
                     borderThicknessBox.Text,
                     fontSizeBox.Text,
                     angleBox.Text,
@@ -184,17 +155,17 @@ public sealed partial class MainWindow
             },
         });
 
-        // WPF labels every color editor; the Avalonia editor is the More Colors button.
+        // WPF labels every color editor: a picker button beside a hex text box.
         var stylePanel = ApplyWpfChartFieldMetrics(new StackPanel
         {
             Children =
             {
                 MakeDescriptorLabel(ChartDataLabelsDialogFieldId.FillColor),
-                fillButton,
+                fillEditor.Row,
                 MakeDescriptorLabel(ChartDataLabelsDialogFieldId.BorderColor),
-                borderButton,
+                borderEditor.Row,
                 MakeDescriptorLabel(ChartDataLabelsDialogFieldId.TextColor),
-                textButton,
+                textEditor.Row,
                 MakeDescriptorLabel(ChartDataLabelsDialogFieldId.BorderThickness),
                 borderThicknessBox,
                 MakeDescriptorLabel(ChartDataLabelsDialogFieldId.FontSize),
@@ -218,9 +189,6 @@ public sealed partial class MainWindow
         HostChartDialogContent(dialog, 420, body, buttonRow, scrollWpfHeight: 560);
 
         return await dialog.ShowDialog<ChartDataLabelsInput?>(this);
-
-        static string ColorText(CellColor? color) =>
-            color is { } c ? $"#{c.R:X2}{c.G:X2}{c.B:X2}" : "none";
 
         static ChartDataLabelsDialogFieldDescriptor Field(ChartDataLabelsDialogFieldId fieldId) =>
             ChartDataLabelsPlanner.GetDialogField(fieldId);
@@ -258,13 +226,8 @@ public sealed partial class MainWindow
             return box;
         }
 
-        Button MakeColorButton(ChartDataLabelsDialogFieldId fieldId, CellColor? color)
-        {
-            var label = FieldLabel(fieldId);
-            var button = CreateChartButton(DescribeColor(label, color), 260);
-            ApplyDescriptorAutomation(button, fieldId);
-            return button;
-        }
+        ChartColorEditor MakeColorEditor(ChartDataLabelsDialogFieldId fieldId, CellColor? color) =>
+            CreateChartColorEditor(FieldLabel(fieldId), Field(fieldId).AutomationId, color);
 
         static GroupBox MakeDescriptorGroup(ChartDataLabelsDialogSectionDescriptor section, Control content) =>
             CreateChartDialogGroupBox(UiText.Get(section.HeaderResourceKey), content);
@@ -339,8 +302,8 @@ public sealed partial class MainWindow
 
         var majorGridCheck = MakeAxisDescriptorCheck(ChartAxisDialogFieldId.MajorGridlines, state.ShowMajorGridlines);
         var minorGridCheck = MakeAxisDescriptorCheck(ChartAxisDialogFieldId.MinorGridlines, state.ShowMinorGridlines);
-        var majorGridColorButton = MakeAxisColorButton(ChartAxisDialogFieldId.MajorGridlineColor, state.MajorGridlineColor);
-        var minorGridColorButton = MakeAxisColorButton(ChartAxisDialogFieldId.MinorGridlineColor, state.MinorGridlineColor);
+        var majorGridColorEditor = MakeAxisColorEditor(ChartAxisDialogFieldId.MajorGridlineColor, state.MajorGridlineColor);
+        var minorGridColorEditor = MakeAxisColorEditor(ChartAxisDialogFieldId.MinorGridlineColor, state.MinorGridlineColor);
         var gridlineThicknessBox = MakeAxisDescriptorNumberBox(
             ChartAxisDialogFieldId.GridlineThickness,
             (state.GridlineThickness ?? 1).ToString(CultureInfo.InvariantCulture));
@@ -352,55 +315,17 @@ public sealed partial class MainWindow
         minorTickCombo.SelectedItem = state.MinorTickStyle ?? ChartAxisTickStyle.None;
 
         var labelsCheck = MakeAxisDescriptorCheck(ChartAxisDialogFieldId.ShowLabels, state.ShowLabels ?? true);
-        var labelColorButton = MakeAxisColorButton(ChartAxisDialogFieldId.LabelTextColor, state.LabelTextColor);
+        var labelColorEditor = MakeAxisColorEditor(ChartAxisDialogFieldId.LabelTextColor, state.LabelTextColor);
         var labelFontSizeBox = MakeAxisDescriptorNumberBox(
             ChartAxisDialogFieldId.LabelFontSize,
             (state.LabelFontSize ?? 11).ToString(CultureInfo.InvariantCulture));
         var labelAngleBox = MakeAxisDescriptorNumberBox(
             ChartAxisDialogFieldId.LabelAngle,
             (state.LabelAngle ?? 0).ToString(CultureInfo.InvariantCulture));
-        var lineColorButton = MakeAxisColorButton(ChartAxisDialogFieldId.LineColor, state.LineColor);
+        var lineColorEditor = MakeAxisColorEditor(ChartAxisDialogFieldId.LineColor, state.LineColor);
         var lineThicknessBox = MakeAxisDescriptorNumberBox(
             ChartAxisDialogFieldId.LineThickness,
             (state.LineThickness ?? 1).ToString(CultureInfo.InvariantCulture));
-
-        async Task PickAxisColor(
-            ChartAxisDialogFieldId fieldId,
-            Func<CellColor?> getColor,
-            Action<CellColor> setColor,
-            Button button)
-        {
-            var label = AxisFieldLabel(fieldId);
-            var chosen = await ShowMoreColorsDialogAsync(
-                label,
-                getColor() ?? ChartQuickFormatCycler.DefaultSeriesColor);
-            if (chosen is { } color)
-            {
-                setColor(color);
-                button.Content = DescribeColor(label, color);
-            }
-        }
-
-        majorGridColorButton.Click += (_, _) => RunGuarded(() => PickAxisColor(
-            ChartAxisDialogFieldId.MajorGridlineColor,
-            () => state.MajorGridlineColor,
-            color => state = state with { MajorGridlineColor = color },
-            majorGridColorButton));
-        minorGridColorButton.Click += (_, _) => RunGuarded(() => PickAxisColor(
-            ChartAxisDialogFieldId.MinorGridlineColor,
-            () => state.MinorGridlineColor,
-            color => state = state with { MinorGridlineColor = color },
-            minorGridColorButton));
-        labelColorButton.Click += (_, _) => RunGuarded(() => PickAxisColor(
-            ChartAxisDialogFieldId.LabelTextColor,
-            () => state.LabelTextColor,
-            color => state = state with { LabelTextColor = color },
-            labelColorButton));
-        lineColorButton.Click += (_, _) => RunGuarded(() => PickAxisColor(
-            ChartAxisDialogFieldId.LineColor,
-            () => state.LineColor,
-            color => state = state with { LineColor = color },
-            lineColorButton));
 
         // WPF ChartAxisFormatDialog selects the minimum editor when the dialog is loaded. Keep the
         // equivalent Avalonia target explicit because this dialog's controls are nested in scrollable
@@ -433,16 +358,16 @@ public sealed partial class MainWindow
                     numberFormat,
                     majorGridCheck.IsChecked == true,
                     minorGridCheck.IsChecked == true,
-                    FormatOptionalColorText(state.MajorGridlineColor),
-                    FormatOptionalColorText(state.MinorGridlineColor),
+                    majorGridColorEditor.Text,
+                    minorGridColorEditor.Text,
                     gridlineThicknessBox.Text,
                     majorTickStyle,
                     minorTickStyle,
                     labelsCheck.IsChecked == true,
-                    FormatOptionalColorText(state.LabelTextColor),
+                    labelColorEditor.Text,
                     labelFontSizeBox.Text,
                     labelAngleBox.Text,
-                    FormatOptionalColorText(state.LineColor),
+                    lineColorEditor.Text,
                     lineThicknessBox.Text,
                     out var input,
                     out var issue))
@@ -481,9 +406,9 @@ public sealed partial class MainWindow
                 majorGridCheck,
                 minorGridCheck,
                 MakeAxisDescriptorLabel(ChartAxisDialogFieldId.MajorGridlineColor),
-                majorGridColorButton,
+                majorGridColorEditor.Row,
                 MakeAxisDescriptorLabel(ChartAxisDialogFieldId.MinorGridlineColor),
-                minorGridColorButton,
+                minorGridColorEditor.Row,
                 MakeAxisDescriptorLabel(ChartAxisDialogFieldId.GridlineThickness),
                 gridlineThicknessBox,
             },
@@ -499,13 +424,13 @@ public sealed partial class MainWindow
                 minorTickCombo,
                 labelsCheck,
                 MakeAxisDescriptorLabel(ChartAxisDialogFieldId.LabelTextColor),
-                labelColorButton,
+                labelColorEditor.Row,
                 MakeAxisDescriptorLabel(ChartAxisDialogFieldId.LabelFontSize),
                 labelFontSizeBox,
                 MakeAxisDescriptorLabel(ChartAxisDialogFieldId.LabelAngle),
                 labelAngleBox,
                 MakeAxisDescriptorLabel(ChartAxisDialogFieldId.LineColor),
-                lineColorButton,
+                lineColorEditor.Row,
                 MakeAxisDescriptorLabel(ChartAxisDialogFieldId.LineThickness),
                 lineThicknessBox,
             },
@@ -586,13 +511,8 @@ public sealed partial class MainWindow
             return combo;
         }
 
-        Button MakeAxisColorButton(ChartAxisDialogFieldId fieldId, CellColor? color)
-        {
-            var label = AxisFieldLabel(fieldId);
-            var button = CreateChartButton(DescribeColor(label, color), ControlWidth);
-            ApplyAxisDescriptorAutomation(button, fieldId);
-            return button;
-        }
+        ChartColorEditor MakeAxisColorEditor(ChartAxisDialogFieldId fieldId, CellColor? color) =>
+            CreateChartColorEditor(AxisFieldLabel(fieldId), AxisField(fieldId).AutomationId, color);
 
         TextBlock MakeAxisSectionHelp(ChartAxisDialogSectionDescriptor section)
         {
@@ -652,12 +572,10 @@ public sealed partial class MainWindow
         ApplySeriesDescriptorAutomation(seriesCombo, ChartSeriesFormatDialogFieldId.Series);
         seriesCombo.SelectedIndex = Math.Clamp(current.SeriesIndex, 0, seriesCount - 1);
 
-        // Per-series edit state, re-read from the chart whenever the chosen series changes so the dialog
-        // shows each series' own format. Color buttons open the shared More Colors picker.
-        var state = current;
-
-        var fillButton = MakeSeriesColorButton(ChartSeriesFormatDialogFieldId.FillColor, current.FillColor);
-        var strokeButton = MakeSeriesColorButton(ChartSeriesFormatDialogFieldId.StrokeColor, current.StrokeColor);
+        // The editors are re-loaded from the chart whenever the chosen series changes so the dialog
+        // shows each series' own format. Each color is a picker button beside a hex text box, as in WPF.
+        var fillEditor = MakeSeriesColorEditor(ChartSeriesFormatDialogFieldId.FillColor, current.FillColor);
+        var strokeEditor = MakeSeriesColorEditor(ChartSeriesFormatDialogFieldId.StrokeColor, current.StrokeColor);
         var strokeThicknessBox = MakeSeriesDescriptorNumberBox(
             ChartSeriesFormatDialogFieldId.StrokeThickness,
             FormatNullableDouble(current.StrokeThickness));
@@ -676,9 +594,8 @@ public sealed partial class MainWindow
 
         void LoadState(ChartSeriesFormatInput value)
         {
-            state = value;
-            fillButton.Content = DescribeColor(SeriesFieldLabel(ChartSeriesFormatDialogFieldId.FillColor), value.FillColor);
-            strokeButton.Content = DescribeColor(SeriesFieldLabel(ChartSeriesFormatDialogFieldId.StrokeColor), value.StrokeColor);
+            fillEditor.Load(value.FillColor);
+            strokeEditor.Load(value.StrokeColor);
             strokeThicknessBox.Text = FormatNullableDouble(value.StrokeThickness);
             dashCombo.SelectedItem = value.DashStyle is { } dash ? dash : noneText;
             markerCombo.SelectedItem = value.MarkerStyle is { } marker ? marker : noneText;
@@ -693,29 +610,6 @@ public sealed partial class MainWindow
             LoadState(ChartSeriesFormatPlanner.Read(chart, index));
         };
 
-        fillButton.Click += (_, _) => RunGuarded(async () =>
-        {
-            var chosen = await ShowMoreColorsDialogAsync(
-                SeriesFieldLabel(ChartSeriesFormatDialogFieldId.FillColor),
-                state.FillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-            if (chosen is { } color)
-            {
-                state = state with { FillColor = color };
-                fillButton.Content = DescribeColor(SeriesFieldLabel(ChartSeriesFormatDialogFieldId.FillColor), color);
-            }
-        });
-        strokeButton.Click += (_, _) => RunGuarded(async () =>
-        {
-            var chosen = await ShowMoreColorsDialogAsync(
-                SeriesFieldLabel(ChartSeriesFormatDialogFieldId.StrokeColor),
-                state.StrokeColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-            if (chosen is { } color)
-            {
-                state = state with { StrokeColor = color };
-                strokeButton.Content = DescribeColor(SeriesFieldLabel(ChartSeriesFormatDialogFieldId.StrokeColor), color);
-            }
-        });
-
         var dialog = NewChartDialog(UiText.Get("ChartSeriesFormat_Title"), "ChartSeriesFormatDialog");
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartSeriesFormat");
@@ -723,8 +617,8 @@ public sealed partial class MainWindow
         {
             if (!ChartSeriesFormatPlanner.TryParseDialogInput(
                     Math.Max(0, seriesCombo.SelectedIndex),
-                    FormatOptionalColorText(state.FillColor),
-                    FormatOptionalColorText(state.StrokeColor),
+                    fillEditor.Text,
+                    strokeEditor.Text,
                     strokeThicknessBox.Text,
                     SelectedDashStyle(),
                     SelectedMarkerStyle(),
@@ -758,9 +652,9 @@ public sealed partial class MainWindow
             Children =
             {
                 MakeSeriesDescriptorLabel(ChartSeriesFormatDialogFieldId.FillColor),
-                fillButton,
+                fillEditor.Row,
                 MakeSeriesDescriptorLabel(ChartSeriesFormatDialogFieldId.StrokeColor),
-                strokeButton,
+                strokeEditor.Row,
                 MakeSeriesDescriptorLabel(ChartSeriesFormatDialogFieldId.StrokeThickness),
                 strokeThicknessBox,
                 MakeSeriesDescriptorLabel(ChartSeriesFormatDialogFieldId.DashStyle),
@@ -824,13 +718,8 @@ public sealed partial class MainWindow
             return box;
         }
 
-        Button MakeSeriesColorButton(ChartSeriesFormatDialogFieldId fieldId, CellColor? color)
-        {
-            var label = SeriesFieldLabel(fieldId);
-            var button = CreateChartButton(DescribeColor(label, color), 260);
-            ApplySeriesDescriptorAutomation(button, fieldId);
-            return button;
-        }
+        ChartColorEditor MakeSeriesColorEditor(ChartSeriesFormatDialogFieldId fieldId, CellColor? color) =>
+            CreateChartColorEditor(SeriesFieldLabel(fieldId), SeriesField(fieldId).AutomationId, color);
 
         static GroupBox MakeSeriesDescriptorGroup(ChartSeriesFormatDialogSectionDescriptor section, Control content) =>
             CreateChartDialogGroupBox(UiText.Get(section.HeaderResourceKey), content);
@@ -865,7 +754,6 @@ public sealed partial class MainWindow
 
     private async Task<ChartTrendlineInput?> ShowChartTrendlineDialogAsync(ChartTrendlineInput current)
     {
-        var state = current;
         var showCheck = MakeTrendlineDescriptorCheck(ChartTrendlineDialogFieldId.ShowTrendline, current.ShowTrendline);
 
         var typeChoices = ChartTrendlinePlanner.GetTypeChoices();
@@ -886,7 +774,7 @@ public sealed partial class MainWindow
         var equationCheck = MakeTrendlineDescriptorCheck(ChartTrendlineDialogFieldId.ShowEquation, current.ShowEquation);
         var rSquaredCheck = MakeTrendlineDescriptorCheck(ChartTrendlineDialogFieldId.ShowRSquared, current.ShowRSquared);
 
-        var colorButton = MakeTrendlineColorButton(ChartTrendlineDialogFieldId.LineColor, current.Color);
+        var colorEditor = MakeTrendlineColorEditor(ChartTrendlineDialogFieldId.LineColor, current.Color);
         var thicknessBox = MakeTrendlineDescriptorNumberBox(
             ChartTrendlineDialogFieldId.LineThickness,
             (current.Thickness ?? 1.5).ToString(CultureInfo.InvariantCulture));
@@ -894,18 +782,6 @@ public sealed partial class MainWindow
         var dashCombo = CreateChartComboBox(260, dashChoices);
         ApplyTrendlineDescriptorAutomation(dashCombo, ChartTrendlineDialogFieldId.DashStyle);
         dashCombo.SelectedItem = current.DashStyle ?? ChartLineDashStyle.Solid;
-
-        colorButton.Click += (_, _) => RunGuarded(async () =>
-        {
-            var chosen = await ShowMoreColorsDialogAsync(
-                TrendlineFieldLabel(ChartTrendlineDialogFieldId.LineColor),
-                state.Color ?? ChartQuickFormatCycler.DefaultSeriesColor);
-            if (chosen is { } color)
-            {
-                state = state with { Color = color };
-                colorButton.Content = DescribeColor(TrendlineFieldLabel(ChartTrendlineDialogFieldId.LineColor), color);
-            }
-        });
 
         var dialog = NewChartDialog(UiText.Get("ChartTrendline_Title"), "ChartTrendlineDialog");
 
@@ -923,7 +799,7 @@ public sealed partial class MainWindow
                     orderBox.Text,
                     equationCheck.IsChecked == true,
                     rSquaredCheck.IsChecked == true,
-                    FormatOptionalColorText(state.Color),
+                    colorEditor.Text,
                     thicknessBox.Text,
                     dashStyle,
                     out var input,
@@ -958,7 +834,7 @@ public sealed partial class MainWindow
             Children =
             {
                 MakeTrendlineDescriptorLabel(ChartTrendlineDialogFieldId.LineColor),
-                colorButton,
+                colorEditor.Row,
                 MakeTrendlineDescriptorLabel(ChartTrendlineDialogFieldId.LineThickness),
                 thicknessBox,
                 MakeTrendlineDescriptorLabel(ChartTrendlineDialogFieldId.DashStyle),
@@ -1019,13 +895,8 @@ public sealed partial class MainWindow
             return box;
         }
 
-        Button MakeTrendlineColorButton(ChartTrendlineDialogFieldId fieldId, CellColor? color)
-        {
-            var label = TrendlineFieldLabel(fieldId);
-            var button = CreateChartButton(DescribeColor(label, color), 260);
-            ApplyTrendlineDescriptorAutomation(button, fieldId);
-            return button;
-        }
+        ChartColorEditor MakeTrendlineColorEditor(ChartTrendlineDialogFieldId fieldId, CellColor? color) =>
+            CreateChartColorEditor(TrendlineFieldLabel(fieldId), TrendlineField(fieldId).AutomationId, color);
 
         static GroupBox MakeTrendlineDescriptorGroup(ChartTrendlineDialogSectionDescriptor section, Control content) =>
             CreateChartDialogGroupBox(UiText.Get(section.HeaderResourceKey), content);
@@ -1440,10 +1311,73 @@ public sealed partial class MainWindow
     private static string FormatNullableDouble(double? value) =>
         value is { } v ? v.ToString(CultureInfo.CurrentCulture) : string.Empty;
 
-    private static string DescribeColor(string label, CellColor? color) =>
-        color is { } c
-            ? UiText.Format("ChartColor_DescriptionFormat", label, $"#{c.R:X2}{c.G:X2}{c.B:X2}")
-            : UiText.Format("ChartColor_DefaultDescriptionFormat", label);
+    /// <summary>
+    /// A chart color field as WPF <c>ChartDialogHelpers.AddColorText</c> builds it: a 28px picker button
+    /// docked left of a text box that holds a hex color or the no-color keyword. The text box is the
+    /// value the planner parses, so a typed color and a picked color take the same path.
+    /// </summary>
+    private sealed record ChartColorEditor(Button Picker, TextBox Box, Grid Row)
+    {
+        public string Text => Box.Text ?? string.Empty;
+
+        /// <summary>The typed color, or null when the text is the no-color keyword or not a color.</summary>
+        public CellColor? Color => ParseChartColorText(Box.Text);
+
+        public void Load(CellColor? color) => Box.Text = FormatOptionalColorText(color);
+    }
+
+    /// <summary>
+    /// Builds a <see cref="ChartColorEditor"/>. The picker keeps the field descriptor's automation id
+    /// (the id the color button always had); the text box takes the id derived by
+    /// <see cref="ChartColorTextBoxAutomationId"/>. The picker opens the shared color picker with its
+    /// no-color button and writes the choice back into the text box.
+    /// </summary>
+    private ChartColorEditor CreateChartColorEditor(string label, string automationId, CellColor? color) =>
+        CreateChartColorEditor(CreateChartButton("...", ChartColorPickerButtonWidth), label, automationId, color);
+
+    /// <summary>Builds the editor around a picker button the calling dialog made through the chart factory.</summary>
+    private ChartColorEditor CreateChartColorEditor(Button picker, string label, string automationId, CellColor? color)
+    {
+        picker.Margin = new Thickness(0, 0, 6, 0);
+        AutomationProperties.SetName(
+            picker,
+            UiText.Format("ChartDialog_PickColorAutomationName", UiText.CreateAutomationName(label)));
+        AutomationProperties.SetAutomationId(picker, automationId);
+
+        var box = CreateChartTextBox(FormatOptionalColorText(color), ChartColorPickerButtonWidth);
+        box.Width = double.NaN;
+        box.HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Stretch;
+        AutomationProperties.SetName(box, label);
+        AutomationProperties.SetAutomationId(box, ChartColorTextBoxAutomationId(automationId));
+        Grid.SetColumn(box, 1);
+
+        picker.Click += (_, _) => RunGuarded(async () =>
+        {
+            var choice = await ShowColorPickerDialogAsync(label, ParseChartColorText(box.Text), allowNoColor: true);
+            if (choice is not { } picked)
+                return;
+
+            box.Text = FormatOptionalColorText(picked.Color);
+        });
+
+        var row = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            Children = { picker, box },
+        };
+        return new ChartColorEditor(picker, box, row);
+    }
+
+    private const double ChartColorPickerButtonWidth = 28;
+
+    /// <summary>The automation id of a color field's text box: the picker id with a text-box suffix.</summary>
+    private static string ChartColorTextBoxAutomationId(string pickerAutomationId) =>
+        (pickerAutomationId.EndsWith("Button", StringComparison.Ordinal)
+            ? pickerAutomationId[..^"Button".Length]
+            : pickerAutomationId) + "TextBox";
+
+    private static CellColor? ParseChartColorText(string? text) =>
+        ColorInputParser.TryParseOptionalHexColor(text ?? string.Empty, out var color) ? color : null;
 
     private static string FormatOptionalColorText(CellColor? color) =>
         color is { } c ? $"#{c.R:X2}{c.G:X2}{c.B:X2}" : "none";

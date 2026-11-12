@@ -201,7 +201,10 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         chartWorkflowSource.Should().Contain("ChartQuickCommandPlanner.Plan(chart, command.Command)");
         chartQuickPlannerSource.Should().Contain("ChartQuickFormatCycler.ReadFirstSeriesFormat(chart)");
         chartQuickPlannerSource.Should().Contain("ChartQuickFormatCycler.MergeFirstSeriesFormat(chart, updated)");
-        chartDialogSources.Should().Contain("ChartQuickFormatCycler.DefaultSeriesColor");
+        // The chart dialogs seed their picker from the typed color text (WPF ChartDialogHelpers); the
+        // quick fill/outline commands keep the shared default series color.
+        chartTabsSource.Should().Contain("ChartQuickFormatCycler.DefaultSeriesColor");
+        chartDialogSources.Should().Contain("ParseChartColorText(box.Text)");
 
         var combined = string.Join(
             Environment.NewLine,
@@ -1100,9 +1103,10 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var wireSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.RibbonMenuWires.cs"));
 
-        source.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.Insert)");
-        source.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.Remove)");
-        source.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.ResetAll)");
+        source.Should().Contain("PageBreakDialogPlanner.BuildDefaultInput(_session.SelectedRange)");
+        source.Should().Contain("PageBreakDialogPlanner.TryCreateResult(");
+        source.Should().Contain("PageBreakDialogPlanner.PlanPageBreaks(");
+        source.Should().Contain("CreatePageLayoutCommandSession().PlanPageBreaks(plan)");
         source.Should().Contain("CreatePageLayoutCommandSession().PlanPageBreakAction(");
         source.Should().Contain("ExecutePageLayoutCommandWithShellRefresh(plan);");
         source.Should().NotContain("private enum PageBreakAction");

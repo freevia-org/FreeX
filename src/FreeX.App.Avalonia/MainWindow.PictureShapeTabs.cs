@@ -442,7 +442,8 @@ public sealed partial class MainWindow
             ObjectSizeDialogField.Width,
             CultureInfo.CurrentCulture);
         // WPF ObjectSizeDialog: a 16px margin around stacked label-above-editor pairs (label 4px
-        // above its stretched editor, 8px between pairs), height first, then a row of 72px buttons.
+        // above its stretched editor, 8px between pairs), height first, then the lock check box and
+        // a row of 72px buttons.
         var widthBox = new TextBox
         {
             Text = state.WidthText,
@@ -460,6 +461,58 @@ public sealed partial class MainWindow
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(heightBox, PictureShapeDialogChromeStyle);
         AutomationProperties.SetAutomationId(heightBox, "ObjectSizeHeightBox");
+
+        // WPF ObjectSizeDialog: the lock check box sits directly under the width editor, starts
+        // checked, and is a dialog-only convenience (the result carries the size alone). While it
+        // is checked, typing in one editor rewrites the other from the size the dialog opened with.
+        var lockAspectRatioBox = new CheckBox
+        {
+            Content = StripDisplayMnemonic(UiText.Get("ObjectSizing_LockAspectRatio")),
+            IsChecked = state.LockAspectRatio,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+        };
+        AvaloniaCompactDialogChrome.ApplyCheckBox(lockAspectRatioBox, PictureShapeDialogChromeStyle);
+        AutomationProperties.SetAutomationId(lockAspectRatioBox, "ObjectSizeLockAspectRatioCheckBox");
+        AutomationProperties.SetName(lockAspectRatioBox, UiText.Get("ObjectSizing_LockAspectRatio2"));
+        AutomationProperties.SetHelpText(
+            lockAspectRatioBox,
+            UiText.Get("ObjectSizing_KeepTheObjectSWidthAndHeightProportional"));
+
+        var updatingSize = false;
+        widthBox.TextChanged += (_, _) =>
+        {
+            if (updatingSize || lockAspectRatioBox.IsChecked != true)
+                return;
+            if (ObjectSizeDialogPlanner.SyncHeightFromWidth(widthBox.Text, state.OriginalSize) is not { } syncedHeight)
+                return;
+
+            updatingSize = true;
+            try
+            {
+                heightBox.Text = ObjectSizeDialogPlanner.FormatSize(syncedHeight, CultureInfo.CurrentCulture);
+            }
+            finally
+            {
+                updatingSize = false;
+            }
+        };
+        heightBox.TextChanged += (_, _) =>
+        {
+            if (updatingSize || lockAspectRatioBox.IsChecked != true)
+                return;
+            if (ObjectSizeDialogPlanner.SyncWidthFromHeight(heightBox.Text, state.OriginalSize) is not { } syncedWidth)
+                return;
+
+            updatingSize = true;
+            try
+            {
+                widthBox.Text = ObjectSizeDialogPlanner.FormatSize(syncedWidth, CultureInfo.CurrentCulture);
+            }
+            finally
+            {
+                updatingSize = false;
+            }
+        };
 
         var warning = new TextBlock();
         AvaloniaCompactDialogChrome.ApplyValidationStatus(warning, PictureShapeDialogChromeStyle);
@@ -521,6 +574,7 @@ public sealed partial class MainWindow
                 heightBox,
                 FieldLabel(UiText.Get("InsertLoc_WidthLabel")),
                 widthBox,
+                lockAspectRatioBox,
                 warning,
                 AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]),
             },

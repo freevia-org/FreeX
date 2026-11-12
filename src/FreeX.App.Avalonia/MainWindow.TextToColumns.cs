@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 
 using Free.Shared.Shell.Avalonia;
@@ -15,6 +16,7 @@ using FreeX.Core.Model;
 
 using AvaloniaGrid = Avalonia.Controls.Grid;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaLine = Avalonia.Controls.Shapes.Line;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
@@ -38,9 +40,9 @@ public sealed partial class MainWindow
     ];
 
     /// <summary>
-    /// The per-column format choices the dialog offers, in dropdown order. One entry per date order
-    /// (not just MDY) so every DMY/YMD/MYD/DYM/YDM layout Excel's Text Import Wizard supports is
-    /// reachable here too.
+    /// Every per-column format the dialog can reach through its format radio buttons and the date-order
+    /// combo, in display order. One entry per date order (not just MDY) so every DMY/YMD/MYD/DYM/YDM
+    /// layout Excel's Text Import Wizard supports is reachable here too.
     /// </summary>
     private static IReadOnlyList<(TextToColumnsColumnFormat Format, string Label)> TextToColumnsFormatChoices
     {
@@ -68,9 +70,9 @@ public sealed partial class MainWindow
     /// <summary>
     /// The compact Text-to-Columns dialog: pick Delimited vs Fixed-width; for delimited choose the
     /// delimiter checkboxes (Tab/Semicolon/Comma/Space/Other+char), treat-consecutive and the text
-    /// qualifier; for fixed-width enter the break positions. A live preview (driven by
-    /// <see cref="TextToColumnsPlanner.Preview"/>) shows the split, and a per-column format dropdown
-    /// (General/Text/Date/Skip) annotates the output. On Apply the split is written across columns
+    /// qualifier; for fixed-width place the break lines on the ruler or type their positions. A live
+    /// preview (driven by <see cref="TextToColumnsPlanner.Preview"/>) shows the split, and the per-column
+    /// format radio buttons (General/Text/Date/Skip) annotate the output. On Apply the split is written across columns
     /// starting at the source column through the shared session command path (undoable + refreshing).
     /// </summary>
     private async Task ShowTextToColumnsDialogAsync()
@@ -166,14 +168,52 @@ public sealed partial class MainWindow
         var formatColumnBox = new ComboBox { Width = 110 };
         ApplyDataOpsComboBoxChrome(formatColumnBox);
         AutomationProperties.SetAutomationId(formatColumnBox, "TextToColumnsFormatColumnBox");
-        var formatBox = new ComboBox
+
+        // WPF TextToColumnsDialog.ColumnFormats.cs: the column data format is a radio group (general,
+        // text, date with its date-order combo, do not import) under the column picker.
+        RadioButton CreateColumnFormatRadio(string resourceKey, string automationId, bool isChecked = false)
         {
-            ItemsSource = TextToColumnsFormatChoices.Select(c => c.Label).ToList(),
+            var radio = new RadioButton
+            {
+                Content = UiText.Get(resourceKey),
+                GroupName = "TtcColumnFormat",
+                IsChecked = isChecked,
+            };
+            ApplyDataOpsRadioButtonChrome(radio);
+            AutomationProperties.SetAutomationId(radio, automationId);
+            return radio;
+        }
+
+        var formatGeneralButton = CreateColumnFormatRadio("TextToColumns_General", "TextToColumnsFormatGeneralButton", isChecked: true);
+        var formatTextButton = CreateColumnFormatRadio("TextToColumns_Text", "TextToColumnsFormatTextButton");
+        var formatDateButton = CreateColumnFormatRadio("TextToColumns_Date", "TextToColumnsFormatDateButton");
+        var formatSkipButton = CreateColumnFormatRadio("TextToColumns_DoNotImportColumnSkip", "TextToColumnsFormatSkipButton");
+        // WPF: _dateFormatBox Width = 72, Margin = (8, 0, 0, 0), listing the six date orders.
+        var dateFormatBox = new ComboBox
+        {
+            ItemsSource = TextToColumnsDateFormatChoices
+                .Select(TextToColumnsDialogPlanner.DateColumnFormatLabel)
+                .ToList(),
             SelectedIndex = 0,
-            MinWidth = 140,
+            Width = 72,
+            Margin = new Thickness(8, 0, 0, 0),
         };
-        ApplyDataOpsComboBoxChrome(formatBox);
-        AutomationProperties.SetAutomationId(formatBox, "TextToColumnsFormatBox");
+        ApplyDataOpsComboBoxChrome(dateFormatBox);
+        AutomationProperties.SetAutomationId(dateFormatBox, "TextToColumnsDateFormatBox");
+        AutomationProperties.SetName(
+            dateFormatBox,
+            StripDisplayMnemonic(UiText.Get("TextToColumns_Date")).TrimEnd(':'));
+
+        // WPF: _fixedWidthRuler -- a 58px white canvas showing the longest sample row under a tick
+        // scale, with the break lines drawn over it.
+        var fixedWidthRuler = new Canvas
+        {
+            Height = 58,
+            Background = Brushes.White,
+            ClipToBounds = true,
+        };
+        AutomationProperties.SetAutomationId(fixedWidthRuler, "TextToColumnsFixedWidthRuler");
+        AutomationProperties.SetName(fixedWidthRuler, StripDisplayMnemonic(UiText.Get("TextToColumns_Breaks")).TrimEnd(':'));
 
         var destinationBox = new TextBox
         {
@@ -242,6 +282,16 @@ public sealed partial class MainWindow
         var columnFormats = new Dictionary<int, TextToColumnsColumnFormat>();
         var previewColumnCount = 1;
         var overwriteConfirmed = false;
+        var suppressColumnFormatSync = false;
+        int? dragBreakIndex = null;
+
+        int FixedWidthMaxLength() => TextToColumnsFixedWidthRulerPlanner.MaxLength(sources);
+
+        IReadOnlyList<int> CurrentFixedWidthBreakPositions() =>
+            TextToColumnsFixedWidthBreakPlanner.ParseBreakPositions(breaksBox.Text);
+
+        void RefreshFixedWidthRuler() =>
+            RenderTextToColumnsFixedWidthRuler(fixedWidthRuler, sources, CurrentFixedWidthBreakPositions());
 
         TextToColumnsDialogState BuildState()
         {
@@ -274,6 +324,7 @@ public sealed partial class MainWindow
         {
             overwriteConfirmed = false;
             warningText.IsVisible = false;
+            RefreshFixedWidthRuler();
 
             if (!TextToColumnsDialogPlanner.TryBuildOptions(BuildState(), out var options, out var previewIssue))
             {
@@ -300,30 +351,189 @@ public sealed partial class MainWindow
         void RefreshFormatColumnChoices()
         {
             var previousIndex = formatColumnBox.SelectedIndex;
-            formatColumnBox.ItemsSource = Enumerable.Range(1, previewColumnCount)
-                .Select(n => UiText.Format("TableLoc_TtcColumnN", n))
-                .ToList();
-            formatColumnBox.SelectedIndex = previousIndex >= 0 && previousIndex < previewColumnCount
-                ? previousIndex
-                : 0;
+            suppressColumnFormatSync = true;
+            try
+            {
+                formatColumnBox.ItemsSource = Enumerable.Range(1, previewColumnCount)
+                    .Select(n => UiText.Format("TableLoc_TtcColumnN", n))
+                    .ToList();
+                formatColumnBox.SelectedIndex = previousIndex >= 0 && previousIndex < previewColumnCount
+                    ? previousIndex
+                    : 0;
+            }
+            finally
+            {
+                suppressColumnFormatSync = false;
+            }
+
             SyncFormatBoxToSelectedColumn();
         }
 
+        // WPF SyncColumnFormatControls: the radio group and the date-order combo reflect the stored
+        // format of the selected output column.
         void SyncFormatBoxToSelectedColumn()
         {
+            if (suppressColumnFormatSync)
+                return;
+
             var column = Math.Max(0, formatColumnBox.SelectedIndex);
             var format = columnFormats.TryGetValue(column, out var f) ? f : TextToColumnsColumnFormat.General;
-            for (var i = 0; i < TextToColumnsFormatChoices.Count; i++)
+            suppressColumnFormatSync = true;
+            try
             {
-                if (TextToColumnsFormatChoices[i].Format == format)
+                formatGeneralButton.IsChecked = format == TextToColumnsColumnFormat.General;
+                formatTextButton.IsChecked = format == TextToColumnsColumnFormat.Text;
+                formatDateButton.IsChecked = TextToColumnsDialogPlanner.IsDateColumnFormat(format);
+                dateFormatBox.SelectedItem = TextToColumnsDialogPlanner.DateColumnFormatLabel(format);
+                formatSkipButton.IsChecked = format == TextToColumnsColumnFormat.Skip;
+            }
+            finally
+            {
+                suppressColumnFormatSync = false;
+            }
+        }
+
+        // WPF StoreSelectedColumnFormat.
+        void StoreSelectedColumnFormat(TextToColumnsColumnFormat format)
+        {
+            if (suppressColumnFormatSync || formatColumnBox.SelectedIndex < 0)
+                return;
+
+            columnFormats[formatColumnBox.SelectedIndex] = format;
+            RefreshPreview();
+        }
+
+        TextToColumnsColumnFormat SelectedDateColumnFormat() =>
+            TextToColumnsDialogPlanner.DateColumnFormatFromLabel(dateFormatBox.SelectedItem as string);
+
+        // WPF RefreshMode: the custom delimiter box is only editable while its check box is ticked,
+        // and the ruler only reacts in fixed-width mode.
+        void RefreshSplitModeControls()
+        {
+            var modePlan = TextToColumnsWizardSurfacePlanner.CreateModePlan(
+                fixedWidthButton.IsChecked == true,
+                otherBox.IsChecked == true);
+            otherCharBox.IsEnabled = modePlan.CustomDelimiterEnabled;
+            fixedWidthRuler.IsEnabled = modePlan.FixedWidthControlsEnabled;
+            fixedWidthRuler.Opacity = modePlan.FixedWidthRulerOpacity;
+        }
+
+        otherBox.IsCheckedChanged += (_, _) =>
+        {
+            RefreshSplitModeControls();
+            // WPF: ticking the check box moves focus into its now-enabled field.
+            if (otherBox.IsChecked == true && otherCharBox.IsEffectivelyVisible)
+                otherCharBox.Focus();
+        };
+
+        // Fixed-width ruler interaction (WPF TextToColumnsDialog.FixedWidth.cs): a press on empty
+        // ruler adds a break line and starts dragging it, a press on a line drags that line, and a
+        // right-click or a double-click on a line removes it. The breaks box stays the single source
+        // of the positions, exactly as in WPF.
+        void UpdateFixedWidthBreakPositions(IReadOnlyList<int> positions)
+        {
+            breaksBox.Text = string.Join(",", positions);
+            RefreshPreview();
+        }
+
+        int FindNearestFixedWidthBreakIndex(IReadOnlyList<int> positions, double x, double tolerance) =>
+            TextToColumnsFixedWidthRulerPlanner.FindNearestBreakIndex(
+                positions,
+                x,
+                tolerance,
+                fixedWidthRuler.Bounds.Width,
+                FixedWidthMaxLength());
+
+        int FixedWidthPositionFromRulerX(double x) =>
+            TextToColumnsFixedWidthRulerPlanner.PositionFromRulerX(
+                x,
+                fixedWidthRuler.Bounds.Width,
+                FixedWidthMaxLength());
+
+        int AddFixedWidthBreakAt(double x)
+        {
+            var maxLength = FixedWidthMaxLength();
+            var position = Math.Clamp(FixedWidthPositionFromRulerX(x), 1, maxLength - 1);
+            var updated = TextToColumnsFixedWidthBreakPlanner.AddBreakPosition(
+                CurrentFixedWidthBreakPositions(),
+                position,
+                maxLength);
+            UpdateFixedWidthBreakPositions(updated);
+            return updated.ToList().IndexOf(position);
+        }
+
+        void CancelFixedWidthRulerDrag(IPointer pointer)
+        {
+            dragBreakIndex = null;
+            if (ReferenceEquals(pointer.Captured, fixedWidthRuler))
+                pointer.Capture(null);
+        }
+
+        fixedWidthRuler.PointerPressed += (_, e) =>
+        {
+            if (fixedWidthButton.IsChecked != true)
+                return;
+
+            var point = e.GetCurrentPoint(fixedWidthRuler);
+            var x = point.Position.X;
+            var positions = CurrentFixedWidthBreakPositions();
+            if (point.Properties.IsRightButtonPressed || e.ClickCount >= 2)
+            {
+                CancelFixedWidthRulerDrag(e.Pointer);
+                var nearestToRemove = FindNearestFixedWidthBreakIndex(positions, x, tolerance: 10);
+                if (nearestToRemove >= 0)
                 {
-                    formatBox.SelectedIndex = i;
-                    return;
+                    UpdateFixedWidthBreakPositions(
+                        TextToColumnsFixedWidthBreakPlanner.RemoveBreakPosition(positions, nearestToRemove));
                 }
+
+                e.Handled = true;
+                return;
             }
 
-            formatBox.SelectedIndex = 0;
-        }
+            if (!point.Properties.IsLeftButtonPressed)
+                return;
+
+            var nearest = FindNearestFixedWidthBreakIndex(positions, x, tolerance: 8);
+            dragBreakIndex = nearest >= 0 ? nearest : AddFixedWidthBreakAt(x);
+            e.Pointer.Capture(fixedWidthRuler);
+            e.Handled = true;
+        };
+        fixedWidthRuler.PointerMoved += (_, e) =>
+        {
+            if (dragBreakIndex is not { } index)
+                return;
+
+            var point = e.GetCurrentPoint(fixedWidthRuler);
+            if (!point.Properties.IsLeftButtonPressed)
+            {
+                CancelFixedWidthRulerDrag(e.Pointer);
+                e.Handled = true;
+                return;
+            }
+
+            var x = point.Position.X;
+            UpdateFixedWidthBreakPositions(TextToColumnsFixedWidthBreakPlanner.MoveBreakPosition(
+                CurrentFixedWidthBreakPositions(),
+                index,
+                FixedWidthPositionFromRulerX(x),
+                FixedWidthMaxLength()));
+            dragBreakIndex = FindNearestFixedWidthBreakIndex(
+                CurrentFixedWidthBreakPositions(),
+                x,
+                tolerance: double.MaxValue);
+            e.Handled = true;
+        };
+        fixedWidthRuler.PointerReleased += (_, e) =>
+        {
+            if (dragBreakIndex is null)
+                return;
+
+            CancelFixedWidthRulerDrag(e.Pointer);
+            e.Handled = true;
+        };
+        fixedWidthRuler.PointerCaptureLost += (_, _) => dragBreakIndex = null;
+        fixedWidthRuler.SizeChanged += (_, _) => RefreshFixedWidthRuler();
 
         foreach (var box in new[] { tabBox, semicolonBox, commaBox, spaceBox, otherBox })
         {
@@ -336,12 +546,30 @@ public sealed partial class MainWindow
         breaksBox.TextChanged += (_, _) => RefreshPreview();
         destinationBox.TextChanged += (_, _) => overwriteConfirmed = false;
         formatColumnBox.SelectionChanged += (_, _) => SyncFormatBoxToSelectedColumn();
-        formatBox.SelectionChanged += (_, _) =>
+        formatGeneralButton.IsCheckedChanged += (_, _) =>
         {
-            var column = Math.Max(0, formatColumnBox.SelectedIndex);
-            var choiceIndex = Math.Max(0, formatBox.SelectedIndex);
-            columnFormats[column] = TextToColumnsFormatChoices[choiceIndex].Format;
-            RefreshPreview();
+            if (formatGeneralButton.IsChecked == true)
+                StoreSelectedColumnFormat(TextToColumnsColumnFormat.General);
+        };
+        formatTextButton.IsCheckedChanged += (_, _) =>
+        {
+            if (formatTextButton.IsChecked == true)
+                StoreSelectedColumnFormat(TextToColumnsColumnFormat.Text);
+        };
+        formatDateButton.IsCheckedChanged += (_, _) =>
+        {
+            if (formatDateButton.IsChecked == true)
+                StoreSelectedColumnFormat(SelectedDateColumnFormat());
+        };
+        dateFormatBox.SelectionChanged += (_, _) =>
+        {
+            if (formatDateButton.IsChecked == true)
+                StoreSelectedColumnFormat(SelectedDateColumnFormat());
+        };
+        formatSkipButton.IsCheckedChanged += (_, _) =>
+        {
+            if (formatSkipButton.IsChecked == true)
+                StoreSelectedColumnFormat(TextToColumnsColumnFormat.Skip);
         };
 
         // WPF wizard navigation: [< Back][Next >][Finish][Cancel]
@@ -351,9 +579,13 @@ public sealed partial class MainWindow
         var nextButton = new Button { Content = UiText.Get("TableLoc_TtcNext"), MinWidth = 72 };
         ApplyDataOpsButtonChrome(nextButton);
         AutomationProperties.SetAutomationId(nextButton, "TextToColumnsNextButton");
-        var applyButton = new Button { Content = UiText.Get("TableLoc_TtcFinish"), IsDefault = true, MinWidth = 72 };
-        ApplyDataOpsButtonChrome(applyButton, isDefault: true);
+        var applyButton = new Button { Content = UiText.Get("TableLoc_TtcFinish"), MinWidth = 72 };
+        ApplyDataOpsButtonChrome(applyButton);
         AutomationProperties.SetAutomationId(applyButton, "TextToColumnsApplyButton");
+        // WPF UpdateWizardStep moves the default button with the step (Next on steps 1-2, Finish on
+        // step 3), so the default accent follows IsDefault instead of being fixed at creation.
+        ApplyTextToColumnsDefaultButtonAccent(nextButton);
+        ApplyTextToColumnsDefaultButtonAccent(applyButton);
         var cancelButton = new Button { Content = UiText.Get("TableLoc_Cancel"), IsCancel = true, MinWidth = 72 };
         ApplyDataOpsButtonChrome(cancelButton);
         AutomationProperties.SetAutomationId(cancelButton, "TextToColumnsCancelButton");
@@ -500,6 +732,8 @@ public sealed partial class MainWindow
             wizardInstruction.Text = UiText.Get(stepPlan.InstructionKey);
             backButton.IsEnabled = stepPlan.BackEnabled;
             nextButton.IsEnabled = stepPlan.NextEnabled;
+            nextButton.IsDefault = stepPlan.NextDefault;
+            applyButton.IsDefault = stepPlan.FinishDefault;
             // Panel visibility (panels are assigned after this function definition)
             if (originalDataTypePanel is not null) originalDataTypePanel.IsVisible = stepPlan.ShowOriginalDataTypePanel;
             if (delimiterPanel is not null) delimiterPanel.IsVisible = stepPlan.ShowDelimiterPanel;
@@ -510,6 +744,7 @@ public sealed partial class MainWindow
 
         void HandleSplitModeChanged()
         {
+            RefreshSplitModeControls();
             SyncWizardNavigation();
             RefreshPreview();
         }
@@ -615,12 +850,24 @@ public sealed partial class MainWindow
         ApplyTextToColumnsGroupBoxChrome(delimiterGroup);
         delimiterPanel = delimiterGroup;
 
-        // Step 2 (fixed width) -- WPF CreateFixedWidthPanel. The interactive break-line ruler is not
-        // implemented in this shell, so the group carries only the "Breaks:" row (label 8px before a
-        // 160px field).
+        // Step 2 (fixed width) -- WPF CreateFixedWidthPanel: the wrapped ruler hint (6px below), the
+        // break-line ruler, then the breaks row 6px below (label 8px before a 160px field).
+        var fixedWidthRulerHintText =
+            UiText.Get("TextToColumns_ClickTheRulerToCreateABreakLineDragToMoveItOrRightClickALineToRemoveIt");
+        var fixedWidthRulerHint = new TextBlock
+        {
+            Text = fixedWidthRulerHintText,
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 0, 0, 6),
+        };
+        AutomationProperties.SetAutomationId(fixedWidthRulerHint, "TextToColumnsFixedWidthRulerHint");
+        AutomationProperties.SetHelpText(fixedWidthRuler, fixedWidthRulerHintText);
         var breaksRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 6, 0, 0),
             Children =
             {
                 CreateFieldLabel("TextToColumns_Breaks", new Thickness(0, 0, 8, 0)),
@@ -632,7 +879,10 @@ public sealed partial class MainWindow
             Header = UiText.Get("TextToColumns_FixedWidth2"),
             Padding = new Thickness(8),
             Margin = new Thickness(0, 0, 0, 8),
-            Content = breaksRow,
+            Content = new StackPanel
+            {
+                Children = { fixedWidthRulerHint, fixedWidthRuler, breaksRow },
+            },
         };
         ApplyTextToColumnsGroupBoxChrome(fixedWidthGroup);
         fixedWidthPanel = fixedWidthGroup;
@@ -696,9 +946,9 @@ public sealed partial class MainWindow
         ApplyTextToColumnsGroupBoxChrome(advancedOptionsGroup);
 
         // Step 3 -- WPF CreateColumnFormatPanel: GroupBox { Padding = 8, Margin = (0, 10, 0, 0) } with
-        // the "Column:" label 8px before the 110px column picker (10px gap after it), the per-column
-        // format choice, then the nested Advanced group. WPF lists the format as radio buttons; this
-        // shell keeps its single format drop-down in that position.
+        // the column label 8px before the 110px column picker, the format radio buttons stacked
+        // below it (the date radio sharing its row with the date-order combo), then the nested
+        // Advanced group.
         formatColumnBox.Margin = new Thickness(0, 0, 10, 0);
         var formatRow = new StackPanel
         {
@@ -707,8 +957,12 @@ public sealed partial class MainWindow
             {
                 CreateFieldLabel("TextToColumns_ColumnLabel", new Thickness(0, 0, 8, 0)),
                 formatColumnBox,
-                formatBox,
             },
+        };
+        var dateFormatRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Children = { formatDateButton, dateFormatBox },
         };
         var columnFormatGroup = new GroupBox
         {
@@ -717,7 +971,15 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 10, 0, 0),
             Content = new StackPanel
             {
-                Children = { formatRow, advancedOptionsGroup },
+                Children =
+                {
+                    formatRow,
+                    formatGeneralButton,
+                    formatTextButton,
+                    dateFormatRow,
+                    formatSkipButton,
+                    advancedOptionsGroup,
+                },
             },
         };
         ApplyTextToColumnsGroupBoxChrome(columnFormatGroup);
@@ -836,6 +1098,7 @@ public sealed partial class MainWindow
         };
         ConfigureDeferredDialogCancel(dialog, cancelButton);
 
+        RefreshSplitModeControls();
         SyncWizardNavigation();
         RefreshPreview();
         await dialog.ShowDialog(this);
@@ -922,6 +1185,86 @@ public sealed partial class MainWindow
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Content = grid,
         };
+    }
+
+    /// <summary>
+    /// Draws the WPF fixed-width ruler: the longest sample row in a monospaced face 28px down, a tick
+    /// per character position (taller every fifth) along the top edge and a 2px line per break
+    /// position. Positions map to the ruler width through the shared ruler planner.
+    /// </summary>
+    internal static void RenderTextToColumnsFixedWidthRuler(
+        Canvas ruler,
+        IReadOnlyList<string> previewRows,
+        IReadOnlyList<int> breakPositions)
+    {
+        ruler.Children.Clear();
+        var sample = string.Empty;
+        foreach (var row in previewRows)
+        {
+            if (row.Length > sample.Length)
+                sample = row;
+        }
+
+        var sampleText = new TextBlock
+        {
+            Text = sample,
+            FontFamily = new FontFamily("Consolas, Menlo, DejaVu Sans Mono, Liberation Mono, monospace"),
+            FontSize = 12,
+            Foreground = Brushes.Black,
+            IsHitTestVisible = false,
+        };
+        Canvas.SetLeft(sampleText, 4);
+        Canvas.SetTop(sampleText, 28);
+        ruler.Children.Add(sampleText);
+
+        var maxLength = TextToColumnsFixedWidthRulerPlanner.MaxLength(previewRows);
+        var rulerWidth = ruler.Bounds.Width;
+        for (var tick = 1; tick < maxLength; tick++)
+        {
+            var x = TextToColumnsFixedWidthRulerPlanner.RulerXFromPosition(tick, rulerWidth, maxLength);
+            ruler.Children.Add(new AvaloniaLine
+            {
+                StartPoint = new Point(x, 0),
+                EndPoint = new Point(x, tick % 5 == 0 ? 10 : 6),
+                Stroke = Brushes.Gray,
+                StrokeThickness = 1,
+                IsHitTestVisible = false,
+            });
+        }
+
+        foreach (var position in breakPositions)
+        {
+            var x = TextToColumnsFixedWidthRulerPlanner.RulerXFromPosition(position, rulerWidth, maxLength);
+            ruler.Children.Add(new AvaloniaLine
+            {
+                StartPoint = new Point(x, 0),
+                EndPoint = new Point(x, 56),
+                Stroke = Brushes.Black,
+                StrokeThickness = 2,
+                IsHitTestVisible = false,
+                Tag = position,
+            });
+        }
+    }
+
+    /// <summary>
+    /// Shows the default-button accent border only while the button is the dialog default, so the
+    /// accent can move between the wizard's Next and Finish buttons with the step.
+    /// </summary>
+    private static void ApplyTextToColumnsDefaultButtonAccent(Button button)
+    {
+        var accent = Application.Current is { } app
+            && app.TryGetResource("ThemeAccentBrush", ThemeVariant.Default, out var value)
+            && value is IBrush brush
+                ? brush
+                : Brush(15, 109, 140);
+        button.Styles.Add(new Style(selector => selector.OfType<Button>().PropertyEquals(Button.IsDefaultProperty, true))
+        {
+            Setters =
+            {
+                new Setter(Button.BorderBrushProperty, accent),
+            },
+        });
     }
 
     /// <summary>

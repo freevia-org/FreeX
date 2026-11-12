@@ -210,11 +210,8 @@ public sealed partial class MainWindow
         return Task.CompletedTask;
     }
 
-    private async Task OpenQuickAnalysisChartPickerAsync()
-    {
-        if (await ShowChartTypePickerAsync(ChartType.Column) is { } pickedChartType)
-            InsertChartFromSelection(pickedChartType);
-    }
+    // WPF routes the Quick Analysis chart picker through the Insert Chart dialog handler.
+    private Task OpenQuickAnalysisChartPickerAsync() => ShowInsertChartDialog();
 
     private async Task ShowQuickAnalysisConditionalFormatDialogAsync(
         QuickAnalysisConditionalFormatDialogPlan dialogPlan)

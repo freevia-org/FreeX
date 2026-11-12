@@ -239,7 +239,7 @@ public sealed class SharedCupsPrintServiceTests
     {
         var invocation = SharedCupsPrintCommandPlanner.Submit(
             "/tmp/job.pdf",
-            new PrintSelection(Sides: sides),
+            new PrintSelection { Sides = sides },
             "Office");
 
         invocation.Arguments.Should().ContainInOrder("-o", expectedOption);
