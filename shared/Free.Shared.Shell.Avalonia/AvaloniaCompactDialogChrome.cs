@@ -1952,7 +1952,9 @@ public static class AvaloniaCompactDialogChrome
         // its neighbours, through its own margins so the neighbours keep their slots and captions.
         // It is bottom-aligned so a fixed header height still ends one pixel inside the pane, and
         // its template draws the frame the rise (and that pixel) above its slot.
-        var selectedSideMargin = raisesSelectedTab ? -selectedTabRise : 0;
+        // The sideways part is not reproduced: tab captions here are narrower than Segoe UI's, so
+        // a 2 px overlap reached the neighbour's last letter.
+        var selectedSideMargin = 0d;
         selectedTabStyle.Setters.Add(new Setter(
             TabItem.MarginProperty,
             new Thickness(
