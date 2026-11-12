@@ -10070,7 +10070,7 @@ Saved PDF file:&#xD;
     <value>_Breaks:</value>
   </data>
   <data name="PrintPreview_PrintHelpText" xml:space="preserve">
-    <value>Opens the Windows print dialog and applies the selected printer and copies when possible.</value>
+    <value>Prints with the selected printer, copies and settings.</value>
   </data>
   <data name="PivotTableDataSource_EnterValidSourceRange" xml:space="preserve">
     <value>Enter a valid PivotTable source range.</value>
@@ -11521,7 +11521,7 @@ Saved PDF file:&#xD;
     <value>_Clear All</value>
   </data>
   <data name="PrintPreview_PrintToolTip" xml:space="preserve">
-    <value>Open the Windows print dialog with the selected printer and copy count.</value>
+    <value>Print with the selected printer, copies and settings.</value>
   </data>
   <data name="WatchWindow_AddWatch" xml:space="preserve">
     <value>_Add Watch</value>
