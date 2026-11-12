@@ -24,6 +24,15 @@ globalization, process, or OS behavior stay in `*-portable` gates on Windows, Li
 Pure calculation/model/localization/definition suites with no platform behavior run once through
 the `platformProjects.linux` portion of an existing underloaded Linux gate rather than repeating
 identical assertions on three operating systems or paying for a separate runner checkout and setup.
+The two most expensive FreeX macOS legs (`freex-portable-unix` and `freex-avalonia` on macOS, about
+17 of the 22 billed macOS minutes of a push and the longest macOS job) do not run on push: they are
+the release-tier, macOS-only entries `freex-portable-unix-macos` and `freex-avalonia-macos`, which run
+in `release-readiness.yml` every six hours and in `Full Signed Release`, so macOS coverage of the
+same projects arrives before every release rather than being dropped. Windows and Linux keep all of
+those suites in push CI, including the platform-agnostic managed-core ones (Formula, Model,
+Presentation, Localization). `Test-TestGateContract.ps1` pins that every one of those projects stays
+assigned on macOS and that the two legs stay release-tier and macOS-only. FreeW and FreeP keep their
+small macOS commit legs: they own the macOS platform preflight and finish in 1.5 to 3 minutes.
 The canonical `CI` workflow runs automatically
 for `main` pushes, remains manually dispatchable, and cancels superseded runs for the same ref.
 Branches are integrated after repository preflight and a successful Release build; this repository
@@ -178,7 +187,7 @@ native packaging and installation work in parallel. App publication still waits 
 release-only test gate, every selected package, and the
 all-app workflow also waits for every suite package before creating or updating any release.
 The all-platform release matrix deliberately budgets the observed 20 concurrent GitHub runner slots:
-15 release-test entries run immediately while speculative packaging is capped at five concurrent
+18 release-test entries run immediately while speculative packaging is capped at five concurrent
 jobs. This prevents package builds from queueing the tests that decide whether publication is allowed;
 remaining package jobs still overlap the longer release-only UI and render lanes.
 Release packaging and publication checkouts are shallow because they only need the immutable checked-out

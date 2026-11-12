@@ -125,7 +125,7 @@ public sealed class TestGateMatrixTests
 
         var unix = gates.Single(gate => gate.GetProperty("id").GetString() == "freex-portable-unix");
         unix.GetProperty("platforms").EnumerateArray().Select(value => value.GetString())
-            .Should().Equal("linux", "macos");
+            .Should().Equal("linux");
         unix.GetProperty("projects").GetArrayLength().Should().Be(9);
 
         var avalonia = gates.Single(gate => gate.GetProperty("id").GetString() == "freex-avalonia");
@@ -136,6 +136,43 @@ public sealed class TestGateMatrixTests
         var partitioner = WorkspaceFileLocator.ReadAllText("tools", "Get-TestProjectPartitionFilter.ps1");
         partitioner.Should().Contain("$inlineDataAttributePattern");
         partitioner.Should().Contain("[Math]::Max($theoryCount, $inlineDataCount)");
+    }
+
+    [Fact]
+    public void Manifest_MovesExpensiveMacOsLegsFromPushCiToTheReleaseTierWithoutLosingMacOsCoverage()
+    {
+        using var manifest = JsonDocument.Parse(WorkspaceFileLocator.ReadAllText("eng", "test-gates.json"));
+        var gates = manifest.RootElement.GetProperty("gates").EnumerateArray().ToArray();
+        string[] PlatformsOf(JsonElement gate) =>
+            gate.GetProperty("platforms").EnumerateArray().Select(value => value.GetString()!).ToArray();
+        string[] ProjectsOf(JsonElement gate) =>
+            gate.GetProperty("projects").EnumerateArray().Select(value => value.GetString()!).ToArray();
+
+        // Push CI: the two expensive FreeX macOS legs are gone (the cheap FreeW/FreeP macOS legs stay).
+        var commitMacOs = gates.Where(gate =>
+                gate.GetProperty("gate").GetString() == "commit" && PlatformsOf(gate).Contains("macos"))
+            .Select(gate => gate.GetProperty("id").GetString())
+            .ToArray();
+        commitMacOs.Should().BeEquivalentTo(new[] { "freew-core-portable", "freep-core-portable" });
+        PlatformsOf(gates.Single(gate => gate.GetProperty("id").GetString() == "freex-avalonia"))
+            .Should().Equal("windows", "linux");
+
+        // Release tier: the same projects, same partitioning, still on macOS.
+        var commitUnix = gates.Single(gate => gate.GetProperty("id").GetString() == "freex-portable-unix");
+        var commitAvalonia = gates.Single(gate => gate.GetProperty("id").GetString() == "freex-avalonia");
+        var releaseUnix = gates.Single(gate => gate.GetProperty("id").GetString() == "freex-portable-unix-macos");
+        var releaseAvalonia = gates.Single(gate => gate.GetProperty("id").GetString() == "freex-avalonia-macos");
+        foreach (var leg in new[] { releaseUnix, releaseAvalonia })
+        {
+            leg.GetProperty("gate").GetString().Should().Be("release");
+            PlatformsOf(leg).Should().Equal("macos");
+        }
+
+        ProjectsOf(releaseUnix).Should().BeEquivalentTo(ProjectsOf(commitUnix));
+        ProjectsOf(releaseAvalonia).Should().BeEquivalentTo(ProjectsOf(commitAvalonia));
+        releaseAvalonia.GetProperty("partitions").GetInt32()
+            .Should().Be(commitAvalonia.GetProperty("partitions").GetInt32());
+        releaseAvalonia.GetProperty("requiresFullHistory").GetBoolean().Should().BeTrue();
     }
 
     [Fact]

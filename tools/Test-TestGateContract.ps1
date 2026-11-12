@@ -266,6 +266,57 @@ foreach ($required in @(
     }
 }
 
+# The expensive FreeX macOS legs run in the release gate (release-readiness.yml and Full Signed
+# Release), not on every push. Moving a leg off push CI must never silently drop its macOS coverage:
+# every project below has to stay assigned on macOS, and the two legs that carry them must be
+# release-tier, macOS-only entries so they run before any release (and nightly readiness).
+$macOsReleaseOnlyLegs = @{
+    "freex-portable-unix-macos" = @(
+        "tests/Free.Shared.AppServices.Tests/Free.Shared.AppServices.Tests.csproj",
+        "tests/FreeX.Core.Formula.Tests/FreeX.Core.Formula.Tests.csproj",
+        "tests/FreeX.Core.IO.Tests/FreeX.Core.IO.Tests.csproj",
+        "tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj",
+        "tests/FreeX.App.Localization.Tests/FreeX.App.Localization.Tests.csproj",
+        "tests/FreeX.App.Presentation.Tests/FreeX.App.Presentation.Tests.csproj",
+        "tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj",
+        "tests/FreeX.Integration.Tests/FreeX.Integration.Tests.csproj",
+        "tests/FreeX.ParityCompare.Tests/FreeX.ParityCompare.Tests.csproj"
+    )
+    "freex-avalonia-macos" = @(
+        "tests/Free.Shared.Shell.Avalonia.Tests/Free.Shared.Shell.Avalonia.Tests.csproj",
+        "tests/FreeX.App.Avalonia.Tests/FreeX.App.Avalonia.Tests.csproj"
+    )
+}
+foreach ($legId in $macOsReleaseOnlyLegs.Keys) {
+    if (-not $gateById.ContainsKey($legId)) {
+        $errors.Add("Release gate '$legId' is missing; the FreeX macOS suites it carries would no longer run anywhere.")
+        continue
+    }
+    $leg = $gateById[$legId]
+    if ([string]$leg.gate -ne "release" -or (@($leg.platforms) -join "|") -ne "macos") {
+        $errors.Add("Gate '$legId' must be a release-tier, macOS-only entry (it holds macOS coverage that is deliberately off push CI).")
+    }
+    foreach ($projectPath in $macOsReleaseOnlyLegs[$legId]) {
+        if (-not $coveredProjectPlatforms.Contains("macos|$projectPath")) {
+            $errors.Add("Test project '$projectPath' lost its macOS coverage; it must stay assigned to a macOS gate.")
+        }
+        if (@($leg.projects) -notcontains $projectPath) {
+            $errors.Add("Release gate '$legId' must keep running '$projectPath' on macOS.")
+        }
+    }
+}
+$macOsPushProjects = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+foreach ($gate in @($manifest.gates | Where-Object { $_.gate -eq "commit" -and @($_.platforms) -contains "macos" })) {
+    foreach ($projectPath in @($gate.projects)) { [void]$macOsPushProjects.Add([string]$projectPath) }
+}
+foreach ($legId in $macOsReleaseOnlyLegs.Keys) {
+    foreach ($projectPath in $macOsReleaseOnlyLegs[$legId]) {
+        if ($macOsPushProjects.Contains($projectPath)) {
+            $errors.Add("Test project '$projectPath' runs on macOS in both a commit gate and release gate '$legId'; the expensive macOS leg belongs only in the release gate.")
+        }
+    }
+}
+
 $testProjects = @(
     Get-ChildItem -LiteralPath $repoRoot -Recurse -File -Filter "*.csproj" |
         Where-Object {
