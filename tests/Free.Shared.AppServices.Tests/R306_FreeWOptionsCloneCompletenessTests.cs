@@ -77,6 +77,7 @@ public sealed class R306_FreeWOptionsCloneCompletenessTests
             // are varied by reflection so a new property is covered the day it is added.
             DefaultSaveFormat = FreeWOptions.DocxDefaultFormat,
             UiLanguage = "fr-FR",
+            PersonalTemplatesFolder = @"C:\Templates",
         };
 
         var expected = new Dictionary<string, object?>(StringComparer.Ordinal);
@@ -114,7 +115,12 @@ public sealed class R306_FreeWOptionsCloneCompletenessTests
     public void TheTestActuallyVariesEverySetting()
     {
         var defaults = new FreeWOptions();
-        var source = new FreeWOptions { DefaultSaveFormat = FreeWOptions.DocxDefaultFormat, UiLanguage = "fr-FR" };
+        var source = new FreeWOptions
+        {
+            DefaultSaveFormat = FreeWOptions.DocxDefaultFormat,
+            UiLanguage = "fr-FR",
+            PersonalTemplatesFolder = @"C:\Templates",
+        };
         foreach (var property in SettingProperties())
         {
             if (DistinctValue(property, defaults) is { } value)
