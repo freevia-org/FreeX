@@ -55,10 +55,12 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("SymbolPicker_Symbol"),
-            Width = SymbolPickerCatalogPlanner.DialogWidth,
-            Height = SymbolPickerCatalogPlanner.DialogHeight,
-            MinWidth = 760,
-            MinHeight = 540,
+            // WPF SymbolPickerDialog is a resizable DialogWidth x DialogHeight window (min 760x540).
+            // Those are OUTER sizes; the client area the content is laid out in drops the frame.
+            Width = SymbolPickerCatalogPlanner.DialogWidth - WpfResizableFrameWidth,
+            Height = SymbolPickerCatalogPlanner.DialogHeight - WpfResizableFrameHeight,
+            MinWidth = 760 - WpfResizableFrameWidth,
+            MinHeight = 540 - WpfResizableFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };

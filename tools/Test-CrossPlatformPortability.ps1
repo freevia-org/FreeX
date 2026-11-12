@@ -160,11 +160,12 @@ function Test-StaticRepositoryPathCase {
 }
 
 $reservedLeafPattern = '^(?i:(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$))'
+$invalidLeafChars = [char[]]'<>:"|?*'
 foreach ($path in $trackedPaths) {
-    $leaf = ($path -split '/')[-1]
+    $leaf = $path.Substring($path.LastIndexOf('/') + 1)
     if ($leaf -match '[. ]$' -or $leaf -match $reservedLeafPattern -or
-        $leaf.IndexOfAny([char[]]'<>:"|?*') -ge 0 -or
-        @($leaf.ToCharArray() | Where-Object { [int]$_ -lt 32 }).Count -gt 0) {
+        $leaf.IndexOfAny($invalidLeafChars) -ge 0 -or
+        $leaf -cmatch '[\x00-\x1f]') {
         Add-PortabilityError "Windows-incompatible tracked path: $path"
     }
 }
@@ -201,7 +202,7 @@ $portableTextPaths = @($trackedPaths | Where-Object {
 })
 foreach ($relativePath in $portableTextPaths) {
     $bytes = [System.IO.File]::ReadAllBytes((Join-Path $repoRoot $relativePath))
-    if ($bytes -contains 13) {
+    if ([Array]::IndexOf($bytes, [byte]13) -ge 0) {
         Add-PortabilityError "$relativePath contains CR/CRLF bytes; scripts and workflows must use LF endings."
     }
     if ($bytes.Length -gt 0 -and $bytes[$bytes.Length - 1] -ne 10) {

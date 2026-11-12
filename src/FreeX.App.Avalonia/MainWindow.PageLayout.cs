@@ -641,10 +641,13 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get(PageSetupDialogPlanner.TitleResourceKey),
+            // WPF PageSetupDialog.xaml is a 600x560 NoResize window; Height is an OUTER size there, so
+            // the client area drops the caption/frame.
             Width = PageSetupDialogPlanner.WindowWidth,
-            Height = PageSetupDialogPlanner.WindowHeight,
+            Height = PageSetupDialogPlanner.WindowHeight - WpfNoResizeFrameHeight,
             MinWidth = PageSetupDialogPlanner.MinWindowWidth,
             MinHeight = PageSetupDialogPlanner.MinWindowHeight,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -1067,56 +1070,95 @@ public sealed partial class MainWindow
         buttonRow.Children.Add(leftButtons);
         buttonRow.Children.Add(rightButtons);
 
-        var adjustRow = new StackPanel
+        // Page tab, as PageSetupDialog.xaml lays it out: a two-column form (120px label column, 8px
+        // label gap, 8px row gap) inside a 10px page margin, with the "Scaling" group spanning both
+        // columns. The group holds an (Auto, 72, Auto, 72, Auto) grid: radio | box | caption | box | caption.
+        var pageGrid = new Grid
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 6,
-            Children =
-            {
-                adjustRadio,
-                scalePercentBox,
-                PageSetupLabel("%"),
-            },
+            Margin = new Thickness(10),
+            ColumnDefinitions = new ColumnDefinitions("120,*"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto"),
         };
 
-        var fitRow = new StackPanel
+        void AddPageField(int row, string label, Control value)
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 6,
-            Children =
-            {
-                fitRadio,
-                fitWideBox,
-                PageSetupLabel(UiText.Get("PageSetup_WideBy")),
-                fitTallBox,
-                PageSetupLabel(UiText.Get("PageSetup_Tall")),
-            },
+            var labelControl = PageSetupLabel(label);
+            labelControl.Margin = new Thickness(0, 0, 8, 8);
+            value.Margin = new Thickness(0, 0, 0, 8);
+            value.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+            Grid.SetRow(labelControl, row);
+            Grid.SetColumn(labelControl, 0);
+            Grid.SetRow(value, row);
+            Grid.SetColumn(value, 1);
+            pageGrid.Children.Add(labelControl);
+            pageGrid.Children.Add(value);
+        }
+
+        var scalingGrid = new Grid
+        {
+            Margin = new Thickness(8),
+            ColumnDefinitions = new ColumnDefinitions("Auto,72,Auto,72,Auto"),
+            RowDefinitions = new RowDefinitions("Auto,Auto"),
         };
+
+        void AddScalingCell(Control control, int row, int column, Thickness margin)
+        {
+            control.Margin = margin;
+            Grid.SetRow(control, row);
+            Grid.SetColumn(control, column);
+            scalingGrid.Children.Add(control);
+        }
+
+        adjustRadio.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        fitRadio.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        scalePercentBox.MinWidth = 0;
+        fitWideBox.MinWidth = 0;
+        fitTallBox.MinWidth = 0;
+        AddScalingCell(adjustRadio, 0, 0, new Thickness(0, 0, 8, 8));
+        AddScalingCell(scalePercentBox, 0, 1, new Thickness(0, 0, 6, 8));
+        AddScalingCell(PageSetupLabel(UiText.Get("PageSetup_NormalSize")), 0, 2, new Thickness(0, 0, 0, 8));
+        AddScalingCell(fitRadio, 1, 0, new Thickness(0, 0, 8, 0));
+        AddScalingCell(fitWideBox, 1, 1, new Thickness(0, 0, 6, 0));
+        AddScalingCell(PageSetupLabel(UiText.Get("PageSetup_WideBy")), 1, 2, new Thickness(0, 0, 6, 0));
+        AddScalingCell(fitTallBox, 1, 3, new Thickness(0, 0, 6, 0));
+        AddScalingCell(PageSetupLabel(UiText.Get("PageSetup_Tall")), 1, 4, new Thickness(0));
+
+        // WPF UpdateScalingInputState: only the boxes of the selected scaling mode are enabled.
+        void UpdateScalingInputState()
+        {
+            var fitTo = fitRadio.IsChecked == true;
+            scalePercentBox.IsEnabled = !fitTo;
+            fitWideBox.IsEnabled = fitTo;
+            fitTallBox.IsEnabled = fitTo;
+        }
+
+        adjustRadio.IsCheckedChanged += (_, _) => UpdateScalingInputState();
+        fitRadio.IsCheckedChanged += (_, _) => UpdateScalingInputState();
+        UpdateScalingInputState();
+
+        var scalingGroup = new GroupBox
+        {
+            Header = UiText.Get("PageSetup_Scaling"),
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 2, 0, 8),
+            Content = scalingGrid,
+        };
+        ApplyPlainWindowGroupBoxChrome(scalingGroup, PageLayoutDialogChromeStyle);
+        Grid.SetRow(scalingGroup, 2);
+        Grid.SetColumnSpan(scalingGroup, 2);
+
+        AddPageField(0, UiText.Get("PageSetup_Orientation"), orientationBox);
+        AddPageField(1, UiText.Get("PageSetup_PaperSize"), paperBox);
+        pageGrid.Children.Add(scalingGroup);
+        AddPageField(3, UiText.Get("PageSetup_FirstPageNumber"), firstPageNumberBox);
+        AddPageField(4, UiText.Get("PageSetup_PrintQuality"), printQualityBox);
 
         var pageTab = new TabItem
         {
             Header = StripDisplayMnemonic(UiText.Get("PageSetup_PageTab")),
             Content = new ScrollViewer
             {
-                Content = new StackPanel
-                {
-                    Margin = new Thickness(14),
-                    Spacing = 8,
-                    Children =
-                    {
-                        PageSetupLabel(UiText.Get("PageSetup_Orientation")),
-                        orientationBox,
-                        PageSetupLabel(UiText.Get("PageSetup_PaperSize")),
-                        paperBox,
-                        new TextBlock { Text = UiText.Get("PageSetup_Scaling"), FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 6, 0, 0) },
-                        adjustRow,
-                        fitRow,
-                        PageSetupLabel(UiText.Get("PageSetup_FirstPageNumber")),
-                        firstPageNumberBox,
-                        PageSetupLabel(UiText.Get("PageSetup_PrintQuality")),
-                        printQualityBox,
-                    },
-                },
+                Content = pageGrid,
             },
         };
 
@@ -1481,10 +1523,12 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("HeaderFooter_HeaderAndFooter"),
-            Width = 760,
-            Height = 600,
-            MinWidth = 700,
-            MinHeight = 520,
+            // WPF HeaderFooterDialog.xaml is a resizable 760x600 window (min 700x520). Those are OUTER
+            // sizes; the client area the 12px-margin root grid is laid out in drops the frame.
+            Width = 760 - WpfResizableFrameWidth,
+            Height = 600 - WpfResizableFrameHeight,
+            MinWidth = 700 - WpfResizableFrameWidth,
+            MinHeight = 520 - WpfResizableFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -1685,6 +1729,8 @@ public sealed partial class MainWindow
             Content = footerContent,
         };
         tabs = new TabControl { Items = { headerTab, footerTab }, SelectedIndex = openFooterTab ? 1 : 0 };
+        // WPF: HeaderFooterTabs has Margin="0,0,0,10" above the token toolbar.
+        tabs.Margin = new Thickness(0, 0, 0, 10);
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
         AutomationProperties.SetAutomationId(tabs, "HeaderFooterTabs");
 
@@ -1963,7 +2009,7 @@ public sealed partial class MainWindow
         };
         var root = new Grid
         {
-            Margin = new Thickness(12, 12, 28, 48),
+            Margin = new Thickness(12),
             RowDefinitions = new RowDefinitions("*,Auto,Auto,Auto"),
         };
         Grid.SetRow(tabs, 0);

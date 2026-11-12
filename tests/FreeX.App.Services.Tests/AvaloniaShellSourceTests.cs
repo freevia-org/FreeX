@@ -3183,9 +3183,9 @@ public sealed class AvaloniaShellSourceTests
         var routeSource = normalizedSource[handlerIndex..nextMethodIndex];
 
         routeSource.Should().Contain("Width = 360,");
-        routeSource.Should().Contain("Height = 210,");
+        routeSource.Should().Contain("Height = 210 - WpfNoResizeFrameHeight,");
         routeSource.Should().Contain("MinWidth = 360,");
-        routeSource.Should().Contain("MaxHeight = 210,");
+        routeSource.Should().Contain("MaxHeight = 210 - WpfNoResizeFrameHeight,");
         routeSource.Should().NotContain("DataTableRangeSummaryText");
         routeSource.Should().NotContain("Table range:");
         routeSource.Should().NotContain("new OneVariableDataTableCommand");
@@ -5955,7 +5955,7 @@ public sealed class AvaloniaShellSourceTests
         customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(deleteButton, \"CustomViewsDeleteButton\");");
         customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"CustomViewAddDialog\");");
         customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(nameBox, \"CustomViewNameBox\");");
-        customViewsSource.Should().Contain("Width = 640,");
+        customViewsSource.Should().Contain("Width = 640 - WpfResizableFrameWidth,");
         customViewsSource.Should().Contain("CreateCustomViewsHeader()");
         customViewsSource.Should().Contain("AddCustomViewsHeaderCell(header, 1, UiText.Get(\"CustomViews_Sheets\"));");
         customViewsSource.Should().Contain("new ColumnDefinitions(\"200,70,110,210\")");

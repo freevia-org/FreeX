@@ -189,19 +189,22 @@ public sealed partial class MainWindow
             dialogRef?.Close();
         }
 
-        var rootBox = new TextBox { AcceptsReturn = true, MinWidth = 320, MinHeight = 60, TextWrapping = TextWrapping.Wrap, Text = existing?.Text ?? string.Empty };
+        // WPF: MinLines = 3 / MaxLines = 6 for the comment and reply editors (16px lines + chrome).
+        var rootBox = new TextBox { AcceptsReturn = true, MinWidth = 320, MinHeight = 56, MaxHeight = 104, TextWrapping = TextWrapping.Wrap, Text = existing?.Text ?? string.Empty };
         AvaloniaCompactDialogChrome.ApplyTextBox(rootBox, style, fixedHeight: false);
         AutomationProperties.SetName(rootBox, existing is null ? UiText.Get("ThreadedComment_CommentAutomationName") : UiText.Get("ThreadedComment_EditCommentAutomationName"));
         AutomationProperties.SetAutomationId(rootBox, "ThreadedCommentRootBox");
         AutomationProperties.SetHelpText(rootBox, existing is null ? UiText.Get("ThreadedComment_CommentHelpText") : UiText.Get("ThreadedComment_EditCommentHelpText"));
 
-        var replyBox = new TextBox { AcceptsReturn = true, MinWidth = 320, MinHeight = 48, TextWrapping = TextWrapping.Wrap };
+        var replyBox = new TextBox { AcceptsReturn = true, MinWidth = 320, MinHeight = 56, MaxHeight = 104, TextWrapping = TextWrapping.Wrap };
         AvaloniaCompactDialogChrome.ApplyTextBox(replyBox, style, fixedHeight: false);
+        rootBox.VerticalContentAlignment = global::Avalonia.Layout.VerticalAlignment.Top;
+        replyBox.VerticalContentAlignment = global::Avalonia.Layout.VerticalAlignment.Top;
         AutomationProperties.SetName(replyBox, UiText.Get("ThreadedComment_ReplyAutomationName"));
         AutomationProperties.SetAutomationId(replyBox, "ThreadedCommentReplyBox");
         AutomationProperties.SetHelpText(replyBox, UiText.Get("ThreadedComment_ReplyHelpText"));
 
-        var resolveBox = new CheckBox { Content = UiText.Get("ThreadedComment_MarkAsResolved"), IsChecked = existing?.IsResolved ?? false };
+        var resolveBox = new CheckBox { Content = UiText.Get("ThreadedComment_MarkAsResolved"), IsChecked = existing?.IsResolved ?? false, Margin = new Thickness(0, 4, 0, 8) };
         AvaloniaCompactDialogChrome.ApplyCheckBox(resolveBox, style);
         AutomationProperties.SetName(resolveBox, UiText.Get("ThreadedComment_MarkAsResolvedAutomationName"));
         AutomationProperties.SetAutomationId(resolveBox, "ThreadedCommentResolvedBox");
@@ -212,8 +215,11 @@ public sealed partial class MainWindow
 
         var ok = new Button { Content = existing is null ? UiText.Get("ThreadedComment_AddButton") : UiText.Get("ThreadedComment_ReplyButton"), IsDefault = true };
         var cancel = new Button { Content = UiText.Get("ThreadedComment_CancelButton"), IsCancel = true };
-        AvaloniaCompactDialogChrome.ApplyButton(ok, style, 84, isDefault: true);
-        AvaloniaCompactDialogChrome.ApplyButton(cancel, style, 84);
+        // WPF: both buttons are 80 wide, [Add/Reply] first, 8px apart.
+        AvaloniaCompactDialogChrome.ApplyButton(ok, style, 80, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, style, 80);
+        ok.Width = 80;
+        cancel.Width = 80;
         AutomationProperties.SetName(ok, existing is null ? UiText.Get("ThreadedComment_AddCommentAutomationName") : UiText.Get("ThreadedComment_ReplyToCommentAutomationName"));
         AutomationProperties.SetAutomationId(ok, existing is null ? "ThreadedCommentAddButton" : "ThreadedCommentReplyButton");
         AutomationProperties.SetHelpText(ok, existing is null ? UiText.Get("ThreadedComment_AddCommentHelpText") : UiText.Get("ThreadedComment_ReplyToCommentHelpText"));
@@ -224,9 +230,11 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Format("ThreadedComment_TitleFormat", cellRef),
-            Width = 480,
-            MinHeight = 280,
-            MaxHeight = 640,
+            // WPF ThreadedCommentDialog: Width = 480, MinHeight = 280, MaxHeight = 600 are *outer*
+            // sizes of a sizable-frame window; Avalonia sizes the client area.
+            Width = 480 - WpfResizableFrameWidth,
+            MinHeight = 280 - WpfResizableFrameHeight,
+            MaxHeight = 600 - WpfResizableFrameHeight,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -234,17 +242,20 @@ public sealed partial class MainWindow
         };
         dialogRef = dialog;
 
-        var content = new StackPanel { Margin = new Thickness(14) };
+        // WPF: DockPanel { Margin = 12 } with the button row docked to the bottom (and first in the
+        // tab order) and the thread / editors stacked above it.
+        var content = new StackPanel();
 
         if (existing is not null)
         {
+            // WPF: the thread scrolls within 180px (300 without replies); its panel ends 8px above
+            // the editor label.
             var scroll = new ScrollViewer
             {
                 VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-                MaxHeight = existing.Replies.Count > 0 ? 160 : 260,
-                Margin = new Thickness(0, 0, 0, 8),
+                MaxHeight = existing.Replies.Count > 0 ? 180 : 300,
             };
-            var threadPanel = new StackPanel();
+            var threadPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
             threadPanel.Children.Add(BuildThreadMessage(existing.Author, existing.Text, existing.CreatedAtUtc, isRoot: true));
             foreach (var reply in existing.Replies)
                 threadPanel.Children.Add(BuildThreadMessage(reply.Author, reply.Text, reply.CreatedAtUtc, isRoot: false));
@@ -278,9 +289,14 @@ public sealed partial class MainWindow
 
         content.Children.Add(resolveBox);
         content.Children.Add(validationText);
-        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([cancel, ok], new Thickness(0, 10, 0, 0)));
 
-        dialog.Content = content;
+        var threadedButtonRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 8, 0, 0));
+        DockPanel.SetDock(threadedButtonRow, Dock.Bottom);
+        dialog.Content = new DockPanel
+        {
+            Margin = new Thickness(12),
+            Children = { threadedButtonRow, content },
+        };
 
         void ShowValidationMessage(string message, TextBox focusTarget)
         {
@@ -329,7 +345,8 @@ public sealed partial class MainWindow
         AvaloniaCompactDialogChromeStyle style,
         Action<ThreadedCommentDialogResult> accept)
     {
-        var selector = new ComboBox { MinWidth = 200 };
+        // WPF: the selector (MinWidth = 180) stretches across the dialog like the editors.
+        var selector = new ComboBox { MinWidth = 180, HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Stretch };
         AvaloniaCompactDialogChrome.ApplyComboBox(selector, style);
         AutomationProperties.SetName(selector, UiText.Get("ThreadedComment_ReplyToEditOrDeleteAutomationName"));
         AutomationProperties.SetAutomationId(selector, ThreadedCommentDialogPlanner.ReplySelectorAutomationId);
@@ -342,16 +359,21 @@ public sealed partial class MainWindow
             selector.Items.Add(item);
         }
 
-        var selectedReplyBox = new TextBox { AcceptsReturn = true, MinWidth = 320, MinHeight = 48, TextWrapping = TextWrapping.Wrap };
+        // WPF: MinLines = 2 / MaxLines = 5.
+        var selectedReplyBox = new TextBox { AcceptsReturn = true, MinWidth = 320, MinHeight = 40, MaxHeight = 88, TextWrapping = TextWrapping.Wrap };
         AvaloniaCompactDialogChrome.ApplyTextBox(selectedReplyBox, style, fixedHeight: false);
+        selectedReplyBox.VerticalContentAlignment = global::Avalonia.Layout.VerticalAlignment.Top;
         AutomationProperties.SetName(selectedReplyBox, UiText.Get("ThreadedComment_SelectedReplyTextAutomationName"));
         AutomationProperties.SetAutomationId(selectedReplyBox, ThreadedCommentDialogPlanner.SelectedReplyEditorAutomationId);
         AutomationProperties.SetHelpText(selectedReplyBox, UiText.Get("ThreadedComment_SelectedReplyTextHelpText"));
 
         var updateButton = new Button { Content = UiText.Get("ThreadedComment_UpdateReplyButton") };
         var deleteButton = new Button { Content = UiText.Get("ThreadedComment_DeleteReplyButton") };
-        AvaloniaCompactDialogChrome.ApplyButton(updateButton, style, 110);
-        AvaloniaCompactDialogChrome.ApplyButton(deleteButton, style, 110);
+        // WPF: Update / Delete are 112 wide in a left-aligned row 8px below the reply editor.
+        AvaloniaCompactDialogChrome.ApplyButton(updateButton, style, 112);
+        AvaloniaCompactDialogChrome.ApplyButton(deleteButton, style, 112);
+        updateButton.Width = 112;
+        deleteButton.Width = 112;
         AutomationProperties.SetName(updateButton, UiText.Get("ThreadedComment_UpdateSelectedReplyAutomationName"));
         AutomationProperties.SetAutomationId(updateButton, ThreadedCommentDialogPlanner.UpdateReplyAutomationId);
         AutomationProperties.SetHelpText(updateButton, UiText.Get("ThreadedComment_UpdateSelectedReplyHelpText"));
@@ -423,7 +445,9 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 8, 0, 2),
         });
         panel.Children.Add(selectedReplyBox);
-        panel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([updateButton, deleteButton], new Thickness(0, 8, 0, 0)));
+        var replyActionRow = AvaloniaCompactDialogChrome.CreateActionRow([updateButton, deleteButton], new Thickness(0, 8, 0, 0));
+        replyActionRow.HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left;
+        panel.Children.Add(replyActionRow);
         content.Children.Add(panel);
 
         selector.SelectedIndex = 0;

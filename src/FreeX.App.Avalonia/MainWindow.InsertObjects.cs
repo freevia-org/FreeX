@@ -310,8 +310,13 @@ public sealed partial class MainWindow
         var dialog = new FreeXDialogWindow(InsertObjectDialogChromeStyle)
         {
             Title = UiText.Get(CreateTableDialogPlanner.TitleKey),
+            // WPF CreateTableDialog is a Width x Height (224x144) NoResize window: an OUTER size, whose
+            // client area the content just fills. The Avalonia controls are a few pixels taller per
+            // row, so the height follows the content rather than CreateTableDialogPlanner.Height.
             Width = CreateTableDialogPlanner.Width,
-            Height = CreateTableDialogPlanner.Height,
+            MinWidth = CreateTableDialogPlanner.Width,
+            MaxWidth = CreateTableDialogPlanner.Width,
+            SizeToContent = SizeToContent.Height,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -334,9 +339,14 @@ public sealed partial class MainWindow
         var rangePicker = new Button
         {
             Content = "...",
-            Margin = new Thickness(0, 0, CreateTableDialogPlanner.RangePickerGap, 0),
+            // WPF CreateReferenceEditor: the picker is docked to the RIGHT of the range box with the
+            // gap on its left; the range box fills the rest of the row.
+            Margin = new Thickness(CreateTableDialogPlanner.RangePickerGap, 0, 0, 0),
+            Padding = new Thickness(0),
         };
+        DockPanel.SetDock(rangePicker, Dock.Right);
         ApplyInsertObjectFixedButtonChrome(rangePicker, CreateTableDialogPlanner.RangePickerWidth);
+        rangePicker.Padding = new Thickness(0);
         AutomationProperties.SetName(rangePicker, UiText.Get(CreateTableDialogPlanner.RangePickerAutomationNameKey));
         AutomationProperties.SetAutomationId(rangePicker, "CreateTableRangePicker");
 
@@ -403,9 +413,8 @@ public sealed partial class MainWindow
                     FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
                 },
-                new StackPanel
+                new DockPanel
                 {
-                    Orientation = Orientation.Horizontal,
                     Margin = new Thickness(0, 0, 0, CreateTableDialogPlanner.RangeEditorBottomMargin),
                     Children = { rangePicker, rangeBox },
                 },

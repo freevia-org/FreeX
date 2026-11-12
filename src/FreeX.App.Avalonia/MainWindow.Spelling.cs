@@ -91,89 +91,114 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("ShellLoc_SpellingTitle"),
-            Width = 460,
-            Height = 360,
+            // WPF SpellCheckDialog is a 480x330 *outer* NoResize window. Avalonia sizes the client
+            // area, so take the Windows caption/frame off the height.
+            Width = 480,
+            Height = 330 - WpfNoResizeFrameHeight,
+            MinWidth = 480,
+            MinHeight = 330 - WpfNoResizeFrameHeight,
+            MaxWidth = 480,
+            MaxHeight = 330 - WpfNoResizeFrameHeight,
+            CanResize = false,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "SpellCheckDialog");
 
         var decision = new SpellCheckSessionDecision(SpellCheckSessionAction.Stop);
-        var layout = new StackPanel
-        {
-            Margin = new Thickness(16),
-            Spacing = 8,
-        };
 
-        layout.Children.Add(new TextBlock
+        // WPF: a read-only, wrapping 56px box showing the word that is not in the dictionary. The
+        // cell the word lives in is selected in the grid behind the dialog, as in WPF.
+        var notInDictionaryBox = new TextBox
         {
-            Text = UiText.Get("ShellLoc_SpellingNotInDictionary"),
-            FontWeight = FontWeight.SemiBold,
-        });
-        layout.Children.Add(new SelectableTextBlock
-        {
-            Text = $"{issue.SheetName}!{issue.CellReference}:  {issue.ContextText}",
+            Text = issue.Word,
+            IsReadOnly = true,
+            Height = 56,
             TextWrapping = TextWrapping.Wrap,
-            FontFamily = new FontFamily("Consolas, Menlo, Monospace"),
-        });
-        layout.Children.Add(new TextBlock
-        {
-            Text = UiText.Get("ShellLoc_SpellingSuggestions"),
-            FontWeight = FontWeight.SemiBold,
-            Margin = new Thickness(0, 6, 0, 0),
-        });
+            AcceptsReturn = false,
+        };
+        AutomationProperties.SetName(notInDictionaryBox, UiText.Get("SpellCheck_NotInDictionary2"));
+        AutomationProperties.SetAutomationId(notInDictionaryBox, "SpellCheckNotInDictionaryBox");
+        AutomationProperties.SetHelpText(
+            notInDictionaryBox,
+            UiText.Get("SpellCheck_ShowsTheWordThatWasNotFoundInTheDictionary"));
+        ToolTip.SetTip(notInDictionaryBox, $"{issue.SheetName}!{issue.CellReference}:  {issue.ContextText}");
+        AvaloniaCompactDialogChrome.ApplyTextBox(notInDictionaryBox, SpellingDialogChromeStyle, fixedHeight: false);
+        notInDictionaryBox.VerticalContentAlignment = VerticalAlignment.Top;
 
         var suggestions = string.IsNullOrWhiteSpace(issue.Suggestion)
             ? Array.Empty<string>()
             : new[] { issue.Suggestion };
         var suggestionList = new ListBox
         {
-            Height = 110,
+            // WPF: _suggestionsBox.Height = 76; an issue without a suggestion leaves the list empty.
+            Height = 76,
             Focusable = true,
         };
         KeyboardNavigation.SetIsTabStop(suggestionList, true);
+        AutomationProperties.SetName(suggestionList, UiText.Get("SpellCheck_Suggestions2"));
         AutomationProperties.SetAutomationId(suggestionList, "SpellCheckSuggestionsList");
+        AutomationProperties.SetHelpText(suggestionList, UiText.Get("SpellCheck_ChooseASuggestedSpellingReplacement"));
         AvaloniaCompactDialogChrome.ApplyListBox(suggestionList, SpellingDialogChromeStyle);
         foreach (var suggestion in suggestions)
             suggestionList.Items.Add(suggestion);
-        if (suggestions.Length == 0)
-            suggestionList.Items.Add(UiText.Get("ShellLoc_SpellingNoSuggestions"));
-        else
+        if (suggestions.Length > 0)
             suggestionList.SelectedIndex = 0;
-        layout.Children.Add(suggestionList);
 
         var replacementBox = new TextBox
         {
             Text = suggestions.Length > 0 ? suggestions[0] : issue.Word,
         };
+        AutomationProperties.SetName(replacementBox, UiText.Get("SpellCheck_ChangeTo2"));
         AutomationProperties.SetAutomationId(replacementBox, "SpellCheckReplacementBox");
+        AutomationProperties.SetHelpText(
+            replacementBox,
+            UiText.Get("SpellCheck_EnterTheReplacementTextForTheMisspelledWord"));
         AvaloniaCompactDialogChrome.ApplyTextBox(replacementBox, SpellingDialogChromeStyle);
-        layout.Children.Add(new TextBlock { Text = UiText.Get("ShellLoc_SpellingChangeTo") });
-        layout.Children.Add(replacementBox);
 
         suggestionList.SelectionChanged += (_, _) =>
         {
-            if (suggestionList.SelectedItem is string picked &&
-                picked != UiText.Get("ShellLoc_SpellingNoSuggestions"))
-            {
+            if (suggestionList.SelectedItem is string picked)
                 replacementBox.Text = picked;
-            }
         };
 
-        var ignoreButton = new Button { Content = UiText.Get("ShellLoc_SpellingIgnore") };
-        var ignoreAllButton = new Button { Content = UiText.Get("ShellLoc_SpellingIgnoreAll") };
+        // WPF captions (and their access keys). The default button keeps a plain-string caption.
+        var ignoreButton = new Button { Content = UiText.Get("SpellCheck_IgnoreOnce") };
+        var ignoreAllButton = new Button { Content = UiText.Get("SpellCheck_IgnoreAll") };
         var changeButton = new Button { Content = UiText.Get("ShellLoc_SpellingChange"), IsDefault = true };
-        var changeAllButton = new Button { Content = UiText.Get("ShellLoc_SpellingChangeAll") };
+        var changeAllButton = new Button { Content = UiText.Get("SpellCheck_ChangeAll") };
         var addButton = new Button { Content = UiText.Get("SpellCheck_AddToDictionary") };
-        var closeButton = new Button { Content = UiText.Get("Common_Close"), IsCancel = true };
+        var closeButton = new Button { Content = UiText.Get("SpellCheck_Cancel"), IsCancel = true };
+        // WPF button widths: Ignore Once / Add to Dictionary 118, the rest 90.
+        AvaloniaCompactDialogChrome.ApplyButton(ignoreButton, SpellingDialogChromeStyle, 118);
+        AvaloniaCompactDialogChrome.ApplyButton(ignoreAllButton, SpellingDialogChromeStyle, 90);
+        AvaloniaCompactDialogChrome.ApplyButton(changeButton, SpellingDialogChromeStyle, 90, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(changeAllButton, SpellingDialogChromeStyle, 90);
+        AvaloniaCompactDialogChrome.ApplyButton(addButton, SpellingDialogChromeStyle, 118);
+        AvaloniaCompactDialogChrome.ApplyButton(closeButton, SpellingDialogChromeStyle, 90);
+        ignoreButton.Width = 118;
+        ignoreAllButton.Width = 90;
+        changeButton.Width = 90;
+        changeAllButton.Width = 90;
+        addButton.Width = 118;
+        closeButton.Width = 90;
+        AutomationProperties.SetAutomationId(ignoreButton, "SpellCheckIgnoreOnceButton");
+        AutomationProperties.SetAutomationId(ignoreAllButton, "SpellCheckIgnoreAllButton");
+        AutomationProperties.SetAutomationId(changeButton, "SpellCheckChangeButton");
+        AutomationProperties.SetAutomationId(changeAllButton, "SpellCheckChangeAllButton");
         AutomationProperties.SetAutomationId(addButton, "SpellCheckAddToDictionaryButton");
         AutomationProperties.SetAutomationId(closeButton, "SpellCheckCancelButton");
-        AvaloniaCompactDialogChrome.ApplyButton(ignoreButton, SpellingDialogChromeStyle, 96);
-        AvaloniaCompactDialogChrome.ApplyButton(ignoreAllButton, SpellingDialogChromeStyle, 96);
-        AvaloniaCompactDialogChrome.ApplyButton(changeButton, SpellingDialogChromeStyle, 96, isDefault: true);
-        AvaloniaCompactDialogChrome.ApplyButton(changeAllButton, SpellingDialogChromeStyle, 96);
-        AvaloniaCompactDialogChrome.ApplyButton(addButton, SpellingDialogChromeStyle, 118);
-        AvaloniaCompactDialogChrome.ApplyButton(closeButton, SpellingDialogChromeStyle, 96);
+        AutomationProperties.SetName(closeButton, UiText.Get("SpellCheck_CancelSpelling"));
+        AutomationProperties.SetHelpText(ignoreButton, UiText.Get("SpellCheck_IgnoreThisOccurrenceHelpText"));
+        AutomationProperties.SetHelpText(ignoreAllButton, UiText.Get("SpellCheck_IgnoreAllOccurrencesHelpText"));
+        AutomationProperties.SetHelpText(changeButton, UiText.Get("SpellCheck_ReplaceThisOccurrenceHelpText"));
+        AutomationProperties.SetHelpText(changeAllButton, UiText.Get("SpellCheck_ReplaceAllOccurrencesHelpText"));
+        AutomationProperties.SetHelpText(addButton, UiText.Get("SpellCheck_AddTheWordToTheCustomDictionaryHelpText"));
+        AutomationProperties.SetHelpText(
+            closeButton,
+            UiText.Get("SpellCheck_CloseTheSpellingDialogWithoutApplyingASpellingAction"));
 
         ignoreButton.Click += (_, _) =>
         {
@@ -206,19 +231,75 @@ public sealed partial class MainWindow
             dialog.Close();
         };
 
-        layout.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow(
-            [ignoreButton, ignoreAllButton, changeButton],
-            new Thickness(0, 10, 0, 0)));
-        layout.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow(
-            [changeAllButton, addButton, closeButton],
-            new Thickness(0, 6, 0, 0)));
-
-        dialog.Content = new ScrollViewer
+        // WPF: Change / Change All are only available while there is replacement text.
+        void RefreshChangeButtonState()
         {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Content = layout,
+            var hasReplacement = !string.IsNullOrWhiteSpace(replacementBox.Text);
+            changeButton.IsEnabled = hasReplacement;
+            changeAllButton.IsEnabled = hasReplacement;
+        }
+
+        replacementBox.TextChanged += (_, _) => RefreshChangeButtonState();
+        RefreshChangeButtonState();
+
+        // WPF SpellCheckDialog.CreateSpellCheckContent: Grid { Margin = 16 } with a star field column
+        // (12px right gutter) and a 124px action column. Labels sit 4px above their control and 10px
+        // below the previous one; the action buttons are stacked 6px apart with Cancel 8px lower.
+        static Label CreateSpellingFieldLabel(string resourceKey, Control target, double topMargin) =>
+            new()
+            {
+                Content = new AccessText { Text = UiText.Get(resourceKey) },
+                Target = target,
+                Padding = new Thickness(0),
+                Margin = new Thickness(0, topMargin, 0, 4),
+            };
+
+        var fields = new StackPanel
+        {
+            Margin = new Thickness(0, 0, 12, 0),
+            Children =
+            {
+                CreateSpellingFieldLabel("SpellCheck_NotInDictionary", notInDictionaryBox, 0),
+                notInDictionaryBox,
+                CreateSpellingFieldLabel("SpellCheck_Suggestions", suggestionList, 10),
+                suggestionList,
+                CreateSpellingFieldLabel("SpellCheck_ChangeTo", replacementBox, 10),
+                replacementBox,
+            },
         };
+
+        var actionButtons = new StackPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Right,
+        };
+        foreach (var button in new[] { ignoreButton, ignoreAllButton, changeButton, changeAllButton, addButton })
+        {
+            button.Margin = new Thickness(0, 0, 0, 6);
+            button.HorizontalAlignment = HorizontalAlignment.Center;
+            actionButtons.Children.Add(button);
+        }
+
+        closeButton.Margin = new Thickness(0, 8, 0, 0);
+        closeButton.HorizontalAlignment = HorizontalAlignment.Center;
+        actionButtons.Children.Add(closeButton);
+
+        var layout = new Grid
+        {
+            Margin = new Thickness(16),
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                new ColumnDefinition { Width = new GridLength(124) },
+            },
+            Children =
+            {
+                fields,
+                actionButtons,
+            },
+        };
+        Grid.SetColumn(actionButtons, 1);
+
+        dialog.Content = layout;
         var initialFocus = suggestions.Length > 0 ? (Control)suggestionList : replacementBox;
         ConfigureNativeDialogInitialFocus(dialog, layout, initialFocus);
         ConfigureDeferredDialogCancel(dialog, closeButton);

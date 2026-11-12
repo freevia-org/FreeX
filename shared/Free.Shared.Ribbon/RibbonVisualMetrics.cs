@@ -21,7 +21,7 @@ public static class RibbonVisualMetrics
         PopupPadding: new RibbonPopupInsets(4, 4, 4, 4),
         ItemPadding: new RibbonPopupInsets(10, 5, 10, 5),
         BorderThickness: 1,
-        CornerRadius: 2,
+        CornerRadius: 0,
         ShadowDepth: 2,
         ShadowBlurRadius: 8,
         ShadowOpacity: 0.22,

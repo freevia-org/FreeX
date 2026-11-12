@@ -1365,6 +1365,12 @@ public static class AvaloniaCompactDialogChrome
         });
     }
 
+    /// <summary>
+    /// Product-wide caption ink for group boxes. Null keeps the theme accent (FreeW/FreeP);
+    /// FreeX sets control ink at startup because its WPF dialogs caption groups in plain text ink.
+    /// </summary>
+    public static IBrush? DefaultGroupBoxCaptionBrush { get; set; }
+
     public static void ApplyGroupBox(
         GroupBox groupBox,
         AvaloniaCompactDialogChromeStyle? style = null,
@@ -1373,7 +1379,7 @@ public static class AvaloniaCompactDialogChrome
     {
         ArgumentNullException.ThrowIfNull(groupBox);
         style ??= WindowsStyle;
-        var accent = captionBrush ?? ThemeAccentBrush(style);
+        var accent = captionBrush ?? DefaultGroupBoxCaptionBrush ?? ThemeAccentBrush(style);
 
         groupBox.FontFamily = style.FontFamily;
         groupBox.FontSize = style.FontSize;

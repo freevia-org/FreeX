@@ -71,10 +71,12 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get(EvaluateFormulaDialogPlanner.TitleKey),
-            Width = EvaluateFormulaDialogPlanner.Width,
-            Height = EvaluateFormulaDialogPlanner.Height,
-            MinWidth = EvaluateFormulaDialogPlanner.MinWidth,
-            MinHeight = EvaluateFormulaDialogPlanner.MinHeight,
+            // WPF EvaluateFormulaDialog sizes are outer sizes of a resizable window; Avalonia sizes the
+            // client area, so take the Windows caption/frame off.
+            Width = EvaluateFormulaDialogPlanner.Width - WpfResizableFrameWidth,
+            Height = EvaluateFormulaDialogPlanner.Height - WpfResizableFrameHeight,
+            MinWidth = EvaluateFormulaDialogPlanner.MinWidth - WpfResizableFrameWidth,
+            MinHeight = EvaluateFormulaDialogPlanner.MinHeight - WpfResizableFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };

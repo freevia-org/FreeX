@@ -133,10 +133,11 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get(WatchWindowDialogPlanner.TitleKey),
-            Width = WatchWindowDialogPlanner.Width,
-            Height = WatchWindowDialogPlanner.Height,
-            MinWidth = WatchWindowDialogPlanner.MinWidth,
-            MinHeight = WatchWindowDialogPlanner.MinHeight,
+            // WPF WatchWindowDialog sizes are outer sizes of a resizable window.
+            Width = WatchWindowDialogPlanner.Width - WpfResizableFrameWidth,
+            Height = WatchWindowDialogPlanner.Height - WpfResizableFrameHeight,
+            MinWidth = WatchWindowDialogPlanner.MinWidth - WpfResizableFrameWidth,
+            MinHeight = WatchWindowDialogPlanner.MinHeight - WpfResizableFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -146,7 +147,6 @@ public sealed partial class MainWindow
         // Extended (multi) selection mirrors the WPF ListView so Delete / Delete-Watch act on the picked rows.
         var list = new ListBox
         {
-            MinHeight = 200,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             Padding = new Thickness(0),
@@ -221,9 +221,8 @@ public sealed partial class MainWindow
         var addButton = new Button
         {
             Content = UiText.Get("RibbonWire_WatchWindowAdd"),
-            MinWidth = 110,
         };
-        ApplyRibbonMenuButtonChrome(addButton, 110);
+        ApplyWatchWindowButtonChrome(addButton, 96);
         AutomationProperties.SetAutomationId(addButton, "WatchWindowAddButton");
         addButton.Click += (_, _) => RunGuarded(async () =>
         {
@@ -237,10 +236,9 @@ public sealed partial class MainWindow
         var deleteButton = new Button
         {
             Content = UiText.Get("RibbonWire_WatchWindowDelete"),
-            MinWidth = 110,
             IsEnabled = (list.SelectedItems?.Count ?? 0) > 0,
         };
-        ApplyRibbonMenuButtonChrome(deleteButton, 110);
+        ApplyWatchWindowButtonChrome(deleteButton, 96);
         AutomationProperties.SetAutomationId(deleteButton, "WatchWindowDeleteButton");
         deleteButton.Click += (_, _) => DeleteSelectedWatches();
         list.SelectionChanged += (_, _) =>
@@ -249,19 +247,17 @@ public sealed partial class MainWindow
         var refreshButton = new Button
         {
             Content = UiText.Get("RibbonWire_WatchWindowRefresh"),
-            MinWidth = 110,
         };
-        ApplyRibbonMenuButtonChrome(refreshButton, 110);
+        ApplyWatchWindowButtonChrome(refreshButton, 80);
         AutomationProperties.SetAutomationId(refreshButton, "WatchWindowRefreshButton");
         refreshButton.Click += (_, _) => RefreshList();
 
         var closeButton = new Button
         {
             Content = UiText.Get("Common_Close"),
-            MinWidth = 84,
             IsCancel = true,
         };
-        ApplyRibbonMenuButtonChrome(closeButton, 84);
+        ApplyWatchWindowButtonChrome(closeButton, 80);
         AutomationProperties.SetAutomationId(closeButton, "WatchWindowCloseButton");
         closeButton.Click += (_, _) => dialog.Close();
 
@@ -289,30 +285,36 @@ public sealed partial class MainWindow
             RoutingStrategies.Tunnel,
             handledEventsToo: true);
 
-        // WPF order: Add Watch | Refresh | Delete Watch | Close
+        // WPF order: Add Watch | Refresh | Delete Watch | Close -- right-aligned, each button carrying
+        // Margin = (4, 0, 0, 0), the row 8px under the list.
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
+            Spacing = 4,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Margin = new Thickness(0, 8, 0, 0),
             Children = { addButton, refreshButton, deleteButton, closeButton },
         };
+        Grid.SetRow(buttonRow, 2);
 
-        dialog.Content = new StackPanel
+        // WPF: Label { Padding = 0, Margin = (0, 0, 0, 4) } docked above the list, which fills the
+        // rest of DockPanel { Margin = 10 }.
+        var listLabel = new TextBlock
         {
-            Margin = new Thickness(14),
-            Spacing = 6,
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = StripDisplayMnemonic(UiText.Get("WatchWindow_Watches")),
-                    FontSize = 12,
-                    FontFamily = FormulaBarFontFamily,
-                },
-                new StackPanel { Spacing = 0, Children = { columnHeader, list } },
-                buttonRow,
-            },
+            Text = StripDisplayMnemonic(UiText.Get("WatchWindow_Watches")),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 0, 0, 4),
+        };
+        DockPanel.SetDock(columnHeader, Dock.Top);
+        var listPanel = new DockPanel { Children = { columnHeader, list } };
+        Grid.SetRow(listPanel, 1);
+
+        dialog.Content = new Grid
+        {
+            Margin = new Thickness(10),
+            RowDefinitions = new RowDefinitions("Auto,*,Auto"),
+            Children = { listLabel, listPanel, buttonRow },
         };
 
         _watchWindowDialog = dialog;
@@ -329,6 +331,16 @@ public sealed partial class MainWindow
                 _refreshWatchWindow = null;
             });
         return Task.CompletedTask;
+    }
+
+    // WPF: every Watch Window button is Height = 26 with a fixed width (96 / 80 / 96 / 80).
+    private static void ApplyWatchWindowButtonChrome(Button button, double width)
+    {
+        button.Width = width;
+        ApplyRibbonMenuButtonChrome(button, width);
+        button.Height = 26;
+        button.MinHeight = 26;
+        button.MaxHeight = 26;
     }
 
     // Watch Window grid columns mirror the WPF dialog (Book | Sheet | Name | Cell | Value | Formula).
@@ -360,7 +372,6 @@ public sealed partial class MainWindow
                 Text = UiText.Get(WatchWindowColumns[i].Key),
                 FontSize = 12,
                 FontFamily = FormulaBarFontFamily,
-                FontWeight = FontWeight.SemiBold,
                 Margin = new Thickness(6, 2),
             };
             Grid.SetColumn(header, i);
@@ -404,7 +415,8 @@ public sealed partial class MainWindow
         {
             Title = UiText.Get(AddWatchDialogPlanner.TitleKey),
             Width = AddWatchDialogPlanner.Width,
-            Height = AddWatchDialogPlanner.Height,
+            // WPF AddWatchDialog is a 360x170 *outer* NoResize window; Avalonia sizes the client area.
+            Height = AddWatchDialogPlanner.Height - WpfNoResizeFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -494,11 +506,8 @@ public sealed partial class MainWindow
 
         var root = new DockPanel
         {
-            Margin = new Thickness(
-                AddWatchDialogPlanner.RootMargin,
-                AddWatchDialogPlanner.RootMargin,
-                AddWatchDialogPlanner.RootMargin + AddWatchDialogPlanner.AvaloniaWpfClientRightInset,
-                AddWatchDialogPlanner.RootMargin),
+            // WPF: DockPanel { Margin = RootMargin } -- the buttons end RootMargin from the right edge.
+            Margin = new Thickness(AddWatchDialogPlanner.RootMargin),
         };
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);

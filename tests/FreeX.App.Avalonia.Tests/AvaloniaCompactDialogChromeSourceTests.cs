@@ -317,16 +317,16 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         consolidateSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyListBox(listBox, DataOpsDialogChromeStyle);");
         consolidateSource.Should().Contain("[addButton, removeButton]");
 
-        definedNamesSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([closeButton], new Thickness(0, 10, 0, 0));");
+        definedNamesSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([closeButton], new Thickness(0, 8, 0, 0));");
         definedNamesSource.Should().Contain("ApplyNamesCheckBoxChrome(topRowBox);");
         definedNamesSource.Should().Contain("ApplyNamesCheckBoxChrome(leftColumnBox);");
         definedNamesSource.Should().Contain("ApplyNamesCheckBoxChrome(bottomRowBox);");
         definedNamesSource.Should().Contain("ApplyNamesCheckBoxChrome(rightColumnBox);");
         definedNamesSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, NamesDialogChromeStyle);");
         definedNamesSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow(");
-        definedNamesSource.Should().Contain("[cancelButton, okButton]");
+        definedNamesSource.Should().Contain("[okButton, cancelButton]");
 
-        protectionSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 10, 0, 0));");
+        protectionSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 12, 0, 0));");
         selectionPaneSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);");
         selectionPaneSource.Should().NotContain("Children = { ok, cancel }");
         tableResizeSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0))");
@@ -380,13 +380,13 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         protectionSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, ProtectionDialogChromeStyle, minWidth, isDefault);");
         protectionSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, ProtectionDialogChromeStyle);");
         protectionSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, ProtectionDialogChromeStyle);");
-        protectionSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 10, 0, 0));");
+        protectionSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 12, 0, 0));");
 
         moveCopySource.Should().Contain("private static AvaloniaCompactDialogChromeStyle MoveCopySheetDialogChromeStyle => new(FormulaBarFontFamily);");
         moveCopySource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, MoveCopySheetDialogChromeStyle, minWidth, isDefault);");
         moveCopySource.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, MoveCopySheetDialogChromeStyle);");
         moveCopySource.Should().Contain("AvaloniaCompactDialogChrome.ApplyListBox(listBox, MoveCopySheetDialogChromeStyle);");
-        moveCopySource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 12, 0, 0));");
+        moveCopySource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]);");
 
         sheetOptionsSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle SheetOptionsDialogChromeStyle => new(FormulaBarFontFamily);");
         sheetOptionsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, SheetOptionsDialogChromeStyle, minWidth, isDefault);");
@@ -515,8 +515,8 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         parityCaptureSource.Should().Contain("ErrorCheckingParityFixture.CreateIssues(sheetId)");
         errorCheckingSource.Should().Contain("Width = ErrorCheckingDialogPlanner.AvaloniaClientWidth");
         errorCheckingSource.Should().Contain("Height = ErrorCheckingDialogPlanner.AvaloniaClientHeight");
-        errorCheckingSource.Should().Contain("HorizontalAlignment = AvaloniaHorizontalAlignment.Left");
-        errorCheckingSource.Should().Contain("VerticalAlignment = AvaloniaVerticalAlignment.Top");
+        errorCheckingSource.Should().NotContain("HorizontalAlignment = AvaloniaHorizontalAlignment.Left,");
+        errorCheckingSource.Should().NotContain("VerticalAlignment = AvaloniaVerticalAlignment.Top,");
         errorCheckingSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(");
         errorCheckingSource.Should().Contain("ErrorCheckingDialogChromeStyle,");
         errorCheckingSource.Should().NotContain("Height=24, Padding=(4,1), white background");

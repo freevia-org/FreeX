@@ -134,9 +134,9 @@ chmod +x FreeX
 ./FreeX >/work/out/app.log 2>&1 &
 APP_PID=$!
 
-echo "[setup] Waiting for FreeX window (up to 20s)..."
+echo "[setup] Waiting for FreeX window (up to 90s; cold start reads ~345 assemblies over the bind mount)..."
 sleep 6
-for i in $(seq 1 14); do
+for i in $(seq 1 84); do
   if xdotool search --onlyvisible --name FreeX 2>/dev/null | grep -q .; then
     break
   fi
@@ -153,7 +153,7 @@ WID=$(xdotool search --onlyvisible --name FreeX 2>/dev/null | tail -1 || true)
 echo ""
 echo "=== FLOW: launch ==="
 if [ -z "$WID" ]; then
-  record_fail "launch" "No FreeX window found after 20s (xdotool search returned empty)"
+  record_fail "launch" "No FreeX window found after 90s (xdotool search returned empty)"
   echo "[debug] wmctrl -l:"
   wmctrl -l 2>/dev/null || true
   echo "[debug] app.log tail:"

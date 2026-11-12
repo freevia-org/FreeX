@@ -46,10 +46,15 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("AllowEditRange_Title"),
+            // WPF AllowEditRangeDialog is a 430x420 *outer* NoResize window; Avalonia sizes the client
+            // area, so take the Windows caption/frame off the height.
             Width = 430,
-            Height = 420,
-            MinWidth = 390,
-            MinHeight = 380,
+            Height = 420 - WpfNoResizeFrameHeight,
+            MinWidth = 430,
+            MinHeight = 420 - WpfNoResizeFrameHeight,
+            MaxWidth = 430,
+            MaxHeight = 420 - WpfNoResizeFrameHeight,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -95,7 +100,7 @@ public sealed partial class MainWindow
         AvaloniaCompactDialogChrome.ApplyButton(deleteButton, AllowEditRangeDialogChromeStyle, deleteButton.MinWidth);
         AutomationProperties.SetAutomationId(deleteButton, "AllowEditRangeDeleteButton");
         // WPF has a Permissions button (always disabled in this implementation)
-        var permissionsButton = new Button { Content = UiText.Get("AllowEditRange_PermissionsButton"), MinWidth = 100, IsEnabled = false };
+        var permissionsButton = new Button { Content = UiText.Get("AllowEditRange_PermissionsButton"), MinWidth = 104, IsEnabled = false };
         AvaloniaCompactDialogChrome.ApplyButton(permissionsButton, AllowEditRangeDialogChromeStyle, permissionsButton.MinWidth);
         AutomationProperties.SetAutomationId(permissionsButton, "AllowEditRangePermissionsButton");
 
@@ -106,6 +111,7 @@ public sealed partial class MainWindow
             IsVisible = false,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 6, 0, 0),
         };
         AutomationProperties.SetAutomationId(warningText, "AllowEditRangeWarningText");
 
@@ -268,10 +274,11 @@ public sealed partial class MainWindow
             Children = { newButton, modifyButton, deleteButton, permissionsButton },
         };
 
-        // WPF: GroupBox containing the list and its left-aligned action row.
+        // WPF: GroupBox { Margin = (0, 0, 0, 10) } spanning the dialog width, whose inner panel
+        // (Margin = 8) stacks the list and its left-aligned action row.
         var existingRangesGroupContent = new StackPanel
         {
-            Margin = new Thickness(4, 10, 2, 6),
+            Margin = new Thickness(8),
             Children = { rangesList, rangeButtons },
         };
 
@@ -279,10 +286,12 @@ public sealed partial class MainWindow
         {
             Header = StripDisplayMnemonic(UiText.Get("AllowEditRange_ExistingRangesLabel")),
             Content = existingRangesGroupContent,
-            Margin = new Thickness(0, 0, 0, 6),
-            HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left,
+            Margin = new Thickness(0, 0, 0, 10),
+            Padding = new Thickness(0),
         };
         AvaloniaCompactDialogChrome.ApplyGroupBox(existingRangesGroup, AllowEditRangeDialogChromeStyle);
+        // WPF AllowEditRangeDialog is a plain Window: the group caption is normal ink.
+        ApplyPlainWindowGroupBoxChrome(existingRangesGroup, AllowEditRangeDialogChromeStyle);
 
         // WPF: the Range section is a bare label and editor with no inline picker.
         var rangeGroup = new StackPanel
@@ -298,7 +307,6 @@ public sealed partial class MainWindow
                 },
                 rangeBox,
             },
-            Margin = new Thickness(0, 0, 0, 5),
         };
 
         // Range-specific password label + box (WPF parity: AllowEditRangeDialog.cs's Protection_Password
@@ -306,7 +314,6 @@ public sealed partial class MainWindow
         var rangePasswordPanel = new StackPanel
         {
             Spacing = 4,
-            Margin = new Thickness(0, 8, 0, 0),
             Children =
             {
                 new TextBlock
@@ -322,16 +329,17 @@ public sealed partial class MainWindow
         // WPF bottom button order: [OK][Cancel]
         var bottomRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, closeButton], style: AvaloniaCompactDialogChrome.WindowsStyle);
 
+        // WPF: root StackPanel { Margin = 12 } -- intro (10px below), the ranges group (10px below),
+        // the range label 4px above its box, the grey example line with Margin = (0, 6, 0, 10), the
+        // password label 4px above its box, then the [OK][Cancel] row directly underneath.
         var dialogBody = new StackPanel
         {
-            Width = 390,
-            Spacing = 4,
             Children =
             {
-                new TextBlock { Text = UiText.Get("AllowEditRange_Intro"), Foreground = HeaderForeground, TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 0, 0, 4) },
+                new TextBlock { Text = UiText.Get("AllowEditRange_Intro"), Foreground = HeaderForeground, TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 0, 0, 10) },
                 existingRangesGroup,
                 rangeGroup,
-                new TextBlock { Text = UiText.Get("AllowEditRange_Example"), Foreground = SecondaryInk, TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TextBlock { Text = UiText.Get("AllowEditRange_Example"), Foreground = Brush(109, 109, 109), TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 6, 0, 10) },
                 rangePasswordPanel,
                 warningText,
             },
@@ -339,8 +347,7 @@ public sealed partial class MainWindow
 
         dialog.Content = new StackPanel
         {
-            Margin = new Thickness(4, 12, 12, 12),
-            Width = 390,
+            Margin = new Thickness(12),
             Children =
             {
                 dialogBody,

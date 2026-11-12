@@ -36,27 +36,18 @@ Invoke-ToolCanonicalPwshHost -ScriptPath $PSCommandPath -ForwardedArguments $PSB
     if ($value -is [switch]) { "-$_" } else { "-$_"; [string]$value }
 })
 
-function Invoke-RepositoryPreflight {
-    param(
-        [Parameter(Mandatory = $true)][string]$ScriptPath,
-        [Parameter(Mandatory = $true)][string]$Label,
-        [hashtable]$Parameters = @{}
-    )
-
-    $resolvedScriptPath = Resolve-ToolRepoPath -Path $ScriptPath -RepoRoot $repoRoot
-    if (-not (Test-Path -LiteralPath $resolvedScriptPath -PathType Leaf)) {
-        throw "$Label preflight script was not found: $resolvedScriptPath"
-    }
-
-    Write-Host "Running $Label preflight..."
-    & $resolvedScriptPath @Parameters
-}
-
 function Resolve-RepositoryPreflightEntry {
     param(
         [Parameter(Mandatory = $true)][string]$Label,
         [Parameter(Mandatory = $true)][string]$ScriptPath,
-        [hashtable]$Parameters = @{}
+        [hashtable]$Parameters = @{},
+        # Isolated entries run as their own `pwsh -File` child process instead of inside a shared
+        # runspace. Required for scripts that mutate process-wide state (environment variables,
+        # current directory) or that rely on exit codes, so they cannot disturb the other checks.
+        [switch]$Isolated,
+        # Lower runs first. Dispatch order only affects wall-clock (start the long checks first);
+        # output is always printed in declared order.
+        [int]$Priority = 50
     )
 
     $resolvedScriptPath = Resolve-ToolRepoPath -Path $ScriptPath -RepoRoot $repoRoot
@@ -67,19 +58,21 @@ function Resolve-RepositoryPreflightEntry {
         Label = $Label
         ScriptPath = $resolvedScriptPath
         Parameters = $Parameters
+        Isolated = [bool]$Isolated
+        Priority = $Priority
     }
 }
 
+# All checks below are independent, read-only validators (JSON/XML linting, workflow/manifest
+# contracts, .NET SDK/reference/solution consistency, cross-platform source scans, generated
+# docs, conflict-marker sweeps, PowerShell-tool/macOS/Linux-packaging self-tests): none of them
+# depends on another having run first. They used to run as two serial phases (static, then
+# platform), which made the platform phase pure added wall-clock; they now share one parallel
+# batch. Dispatch is dominated by per-process/full-repo-scan cost rather than CPU, so running
+# them in parallel materially cuts wall-clock time on this machine.
+$entries = @()
 if ($Mode -in @("All", "Static")) {
-    # These checks are independent, read-only validators (JSON/XML linting, workflow/manifest
-    # contracts, .NET SDK/reference/solution consistency, cross-platform source scans, generated
-    # docs, conflict-marker sweeps): none of them writes shared state or depends on another
-    # having already run, and none of them shells out to `dotnet build`/`dotnet test` (the
-    # generated-docs check's own two build-based generators already serialize themselves inside
-    # tools/Test-GeneratedDocs.ps1 to avoid MSBuild lock contention on shared projects). Dispatch
-    # is dominated by per-process/full-repo-scan cost rather than CPU, so running them in
-    # parallel materially cuts wall-clock time on this machine.
-    $staticEntries = @(
+    $entries += @(
         Resolve-RepositoryPreflightEntry -Label "JSON files" -ScriptPath $JsonFilesScriptPath
         Resolve-RepositoryPreflightEntry -Label "XML files" -ScriptPath $XmlFilesScriptPath
         Resolve-RepositoryPreflightEntry -Label "GitHub workflows" -ScriptPath $GitHubWorkflowsScriptPath
@@ -88,7 +81,7 @@ if ($Mode -in @("All", "Static")) {
         Resolve-RepositoryPreflightEntry -Label ".NET project references" -ScriptPath $DotNetProjectReferencesScriptPath
         Resolve-RepositoryPreflightEntry -Label "solution projects" -ScriptPath $SolutionProjectsScriptPath
         Resolve-RepositoryPreflightEntry -Label "CodeQL production solution" -ScriptPath $CodeQlSolutionScriptPath
-        Resolve-RepositoryPreflightEntry -Label "cross-platform portability" -ScriptPath $CrossPlatformPortabilityScriptPath
+        Resolve-RepositoryPreflightEntry -Label "cross-platform portability" -ScriptPath $CrossPlatformPortabilityScriptPath -Priority 0
         Resolve-RepositoryPreflightEntry -Label "default test solution projects" -ScriptPath $SolutionProjectsScriptPath -Parameters @{
             SolutionPath = "FreeX.DefaultTests.slnx"
             ProjectPathPrefixes = @("tests/")
@@ -107,14 +100,42 @@ if ($Mode -in @("All", "Static")) {
             SolutionPath = "FreeP.slnx"
             ProjectPathPrefixes = @("freep/")
         }
-        Resolve-RepositoryPreflightEntry -Label "generated docs" -ScriptPath $GeneratedDocsScriptPath
+        Resolve-RepositoryPreflightEntry -Label "generated docs" -ScriptPath $GeneratedDocsScriptPath -Priority 1
         Resolve-RepositoryPreflightEntry -Label "Git conflict markers" -ScriptPath $ConflictMarkersScriptPath
     )
+}
 
-    $staticResults = $staticEntries | ForEach-Object -ThrottleLimit $ThrottleLimit -Parallel {
-        $entry = $_
-        $params = $entry.Parameters
-        try {
+if ($Mode -in @("All", "Platform")) {
+    # The platform self-tests set environment variables and spawn synthetic tool processes, so
+    # each runs isolated in its own pwsh process rather than inside the shared runspace pool.
+    $entries += @(
+        Resolve-RepositoryPreflightEntry -Label "PowerShell tools" -ScriptPath $ToolScriptsScriptPath -Isolated -Priority 2
+        Resolve-RepositoryPreflightEntry -Label "macOS app readiness" -ScriptPath $MacOsAppReadinessScriptPath -Isolated -Priority 3
+        Resolve-RepositoryPreflightEntry -Label "Linux packaging scripts" -ScriptPath $LinuxPackagingScriptsScriptPath -Isolated -Priority 3
+    )
+}
+
+$pwshSource = (Get-Process -Id $PID).Path
+
+# Start the longest checks first (stable within a priority) so the batch ends when the single
+# longest check ends, not when a long check that happened to be queued last finally starts.
+$dispatchOrder = @($entries | Sort-Object -Property Priority -Stable)
+
+$results = $dispatchOrder | ForEach-Object -ThrottleLimit $ThrottleLimit -Parallel {
+    $entry = $_
+    $params = $entry.Parameters
+    try {
+        if ($entry.Isolated) {
+            $output = & $using:pwshSource -NoProfile -File $entry.ScriptPath @params 2>&1
+            $exitCode = $LASTEXITCODE
+            [pscustomobject]@{
+                Label = $entry.Label
+                Success = ($exitCode -eq 0)
+                Output = @($output | ForEach-Object { $_.ToString() })
+                ErrorMessage = "exited with code $exitCode"
+            }
+        }
+        else {
             $output = & $entry.ScriptPath @params 2>&1
             [pscustomobject]@{
                 Label = $entry.Label
@@ -123,43 +144,37 @@ if ($Mode -in @("All", "Static")) {
                 ErrorMessage = $null
             }
         }
-        catch {
-            [pscustomobject]@{
-                Label = $entry.Label
-                Success = $false
-                Output = @()
-                ErrorMessage = $_.Exception.Message
-            }
-        }
     }
-
-    # Preserve deterministic, attributable output: print each check's own output grouped under
-    # its label in the original declared order (not parallel completion order), then fail the
-    # whole gate naming every check that failed, if any did.
-    $resultsByLabel = @{}
-    foreach ($result in $staticResults) {
-        $resultsByLabel[$result.Label] = $result
-    }
-    $staticFailures = [System.Collections.Generic.List[string]]::new()
-    foreach ($entry in $staticEntries) {
-        $result = $resultsByLabel[$entry.Label]
-        Write-Host "Running $($entry.Label) preflight..."
-        foreach ($line in $result.Output) {
-            Write-Host $line
+    catch {
+        [pscustomobject]@{
+            Label = $entry.Label
+            Success = $false
+            Output = @()
+            ErrorMessage = $_.Exception.Message
         }
-        if (-not $result.Success) {
-            $staticFailures.Add("$($entry.Label) preflight failed: $($result.ErrorMessage)")
-        }
-    }
-    if ($staticFailures.Count -gt 0) {
-        throw ("Repository static preflight failed:`n - " + ($staticFailures -join "`n - "))
     }
 }
 
-if ($Mode -in @("All", "Platform")) {
-    Invoke-RepositoryPreflight -ScriptPath $ToolScriptsScriptPath -Label "PowerShell tools"
-    Invoke-RepositoryPreflight -ScriptPath $MacOsAppReadinessScriptPath -Label "macOS app readiness"
-    Invoke-RepositoryPreflight -ScriptPath $LinuxPackagingScriptsScriptPath -Label "Linux packaging scripts"
+# Preserve deterministic, attributable output: print each check's own output grouped under
+# its label in the original declared order (not parallel completion order), then fail the
+# whole gate naming every check that failed, if any did.
+$resultsByLabel = @{}
+foreach ($result in $results) {
+    $resultsByLabel[$result.Label] = $result
+}
+$failures = [System.Collections.Generic.List[string]]::new()
+foreach ($entry in $entries) {
+    $result = $resultsByLabel[$entry.Label]
+    Write-Host "Running $($entry.Label) preflight..."
+    foreach ($line in $result.Output) {
+        Write-Host $line
+    }
+    if (-not $result.Success) {
+        $failures.Add("$($entry.Label) preflight failed: $($result.ErrorMessage)")
+    }
+}
+if ($failures.Count -gt 0) {
+    throw ("Repository preflight failed:`n - " + ($failures -join "`n - "))
 }
 
 Write-Host "Repository preflight checks passed. Mode: $Mode."

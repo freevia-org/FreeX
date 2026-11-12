@@ -63,7 +63,10 @@ public sealed class AccessibilityCheckerSourceTests
 
         avaloniaSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog);");
         avaloniaSource.Should().Contain("AvaloniaCompactDialogChrome.WindowsStyle");
-        avaloniaSource.Should().Contain("AccessibilityCheckerDialogMetrics.ResultsTreeHeight");
+        avaloniaSource.Should().NotContain("AccessibilityCheckerDialogMetrics.ResultsTreeHeight");
+        avaloniaSource.Should().Contain("RowDefinitions = new RowDefinitions(\"Auto,*,Auto\"),");
+        avaloniaSource.Should().Contain("Width = AccessibilityCheckerDialogMetrics.Width - WpfResizableFrameWidth,");
+        avaloniaSource.Should().Contain("Height = AccessibilityCheckerDialogMetrics.Height - WpfResizableFrameHeight,");
         avaloniaSource.Should().Contain("Class(\":selected\")");
         avaloniaSource.Should().Contain("Template().OfType<Border>().Name(\"PART_LayoutRoot\")");
         avaloniaSource.Should().Contain("Color.FromRgb(0xE6, 0xF0, 0xFA)");

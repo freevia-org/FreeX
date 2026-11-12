@@ -3321,6 +3321,9 @@ public static class AvaloniaRibbonRenderer
                 application.Styles.Add(CreatePopupPresenterStyle(chrome, palette));
                 application.Styles.Add(CreatePopupPresenterBorderStyle(chrome, palette));
                 application.Styles.Add(CreateSubmenuPopupPlacementStyle(contract));
+                foreach (var style in CreateSquareMenuPopupStyles())
+                    application.Styles.Add(style);
+                application.Styles.Add(CreateSubmenuPopupBorderStyle(chrome, palette));
                 return new object();
             });
         }
@@ -3384,6 +3387,9 @@ public static class AvaloniaRibbonRenderer
             new Setter(TemplatedControl.MaxWidthProperty, chrome.MaxWidth),
             new Setter(TemplatedControl.PaddingProperty, ToThickness(chrome.PopupPadding)),
             new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(chrome.BorderThickness)),
+            // WPF: MainWindowResources.xaml <Style TargetType="MenuItem"> FontSize=12 (Fluent: 14).
+            // Submenu items inherit it through their parent MenuItem.
+            new Setter(TemplatedControl.FontSizeProperty, 12d),
         },
     };
 
@@ -3412,7 +3418,10 @@ public static class AvaloniaRibbonRenderer
     {
         Setters =
         {
-            new Setter(Popup.PlacementProperty, PlacementMode.Right),
+            // Top edge level with the parent item, as the WPF adapter's PlanSubmenu (y = anchor.Y)
+            // places it. PlacementMode.Right centres the popup on the item, which lifts a short
+            // submenu a row above its parent.
+            new Setter(Popup.PlacementProperty, PlacementMode.RightEdgeAlignedTop),
             new Setter(
                 Popup.PlacementConstraintAdjustmentProperty,
                 contract.Submenu.RepositionAtScreenEdge
@@ -3421,6 +3430,43 @@ public static class AvaloniaRibbonRenderer
             new Setter(Popup.HorizontalOffsetProperty, contract.Submenu.AnchorGap),
         },
     };
+
+    // The Fluent MenuItem template hosts its submenu in an unnamed Border inside PART_Popup that
+    // takes OverlayCornerRadius (8px), so a ribbon submenu came up
+    // rounded next to its square first-level popup. Give it the first-level chrome.
+    private static Style CreateSubmenuPopupBorderStyle(
+        RibbonPopupChromeMetrics chrome,
+        AvaloniaRibbonPalette palette) => new(x => x.OfType<MenuItem>().Class(SubmenuPlacementClass).Template().OfType<Popup>().Child().OfType<Border>())
+    {
+        Setters =
+        {
+            new Setter(Border.BackgroundProperty, palette.SurfaceBrush),
+            new Setter(Border.BorderBrushProperty, palette.DividerBrush),
+            new Setter(Border.BorderThicknessProperty, new Thickness(chrome.Submenu.BorderThickness)),
+            new Setter(Border.CornerRadiusProperty, new CornerRadius(chrome.CornerRadius)),
+            // Padding stays on the theme's flyout padding, which is what the first-level popup
+            // border renders with, so both levels inset their items identically.
+        },
+    };
+
+    // WPF menus are square at every level (MainWindowResources.xaml ContextMenu template and the
+    // system MenuItem submenu). Fluent rounds context menus, menu flyouts and every submenu popup
+    // with OverlayCornerRadius, which the app-wide ControlCornerRadius override does not reach.
+    private static IReadOnlyList<Style> CreateSquareMenuPopupStyles() =>
+    [
+        new Style(x => x.Is<ContextMenu>())
+        {
+            Setters = { new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(0)) },
+        },
+        new Style(x => x.Is<MenuFlyoutPresenter>())
+        {
+            Setters = { new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(0)) },
+        },
+        new Style(x => x.Is<MenuItem>().Template().OfType<Popup>().Child().OfType<Border>())
+        {
+            Setters = { new Setter(Border.CornerRadiusProperty, new CornerRadius(0)) },
+        },
+    ];
 
     private static Thickness ToThickness(RibbonPopupInsets insets) =>
         new(insets.Left, insets.Top, insets.Right, insets.Bottom);

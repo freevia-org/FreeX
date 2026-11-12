@@ -9,6 +9,8 @@ using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Dialogs;
 
 using AvaloniaGrid = Avalonia.Controls.Grid;
+using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -55,16 +57,21 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("MainWindow_Content_InsertFunction"),
-            Width = 560,
-            Height = 470,
+            // WPF InsertFunctionDialog: Width = 560; Height = 460 (outer, resizable).
+            Width = 560 - WpfResizableFrameWidth,
+            Height = 460 - WpfResizableFrameHeight,
             MinWidth = 460,
-            MinHeight = 380,
+            MinHeight = 380 - WpfResizableFrameHeight,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "InsertFunctionDialog");
 
-        var searchBox = new TextBox { MinWidth = 260 };
+        // WPF: _searchBox { MinWidth = 260, Margin = (4, 0, 8, 6) }; without the Go button the box runs
+        // to the right edge.
+        var searchBox = new TextBox { MinWidth = 260, Margin = new Thickness(4, 0, 0, 6) };
         ApplyFnTextBoxChrome(searchBox);
         AutomationProperties.SetName(searchBox, ResolveInsertFunctionLabel("InsertFunction_SearchForAFunction"));
         AutomationProperties.SetAutomationId(searchBox, "InsertFunctionSearchBox");
@@ -74,13 +81,15 @@ public sealed partial class MainWindow
         {
             ItemsSource = InsertFunctionCatalogPlanner.BuildCategoryChoices(catalog),
             SelectedItem = InsertFunctionCatalogPlanner.MostRecentlyUsedCategory,
-            MinWidth = 220,
+            // WPF: _categoryBox { Margin = (4, 0, 0, 0) } fills the editor column.
+            Margin = new Thickness(4, 0, 0, 0),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
         ApplyFnComboBoxChrome(categoryBox);
         AutomationProperties.SetName(categoryBox, ResolveInsertFunctionLabel("InsertFunction_OrSelectACategory"));
         AutomationProperties.SetAutomationId(categoryBox, "InsertFunctionCategoryBox");
 
-        var listBox = new ListBox { MinHeight = 160 };
+        var listBox = new ListBox { MinHeight = 80 };
         ApplyFnListBoxStyle(listBox);
         AutomationProperties.SetName(listBox, ResolveInsertFunctionLabel("InsertFunction_SelectAFunction"));
         AutomationProperties.SetAutomationId(listBox, "InsertFunctionListBox");
@@ -90,6 +99,9 @@ public sealed partial class MainWindow
             FontSize = 12,
             FontWeight = FontWeight.SemiBold,
             TextWrapping = TextWrapping.Wrap,
+            Foreground = HeaderForeground,
+            // WPF: _syntaxText.Margin = (0, 0, 0, 4).
+            Margin = new Thickness(0, 0, 0, 4),
         };
         AutomationProperties.SetName(syntaxText, UiText.Get("InsertFunction_FunctionSyntaxAutomationName"));
         AutomationProperties.SetAutomationId(syntaxText, "InsertFunctionSyntaxText");
@@ -99,7 +111,8 @@ public sealed partial class MainWindow
             FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
             MinHeight = 40,
-            Foreground = Brush(96, 96, 96),
+            // WPF: Brushes.DimGray.
+            Foreground = Brush(105, 105, 105),
         };
         AutomationProperties.SetName(descriptionText, UiText.Get("InsertFunction_FunctionDescriptionAutomationName"));
         AutomationProperties.SetAutomationId(descriptionText, "InsertFunctionDescriptionText");
@@ -131,6 +144,7 @@ public sealed partial class MainWindow
         categoryBox.SelectionChanged += (_, _) => RefreshList();
         listBox.SelectionChanged += (_, _) => UpdateHelp();
 
+        // WPF: OK and Cancel are Width = 80, 8px apart, OK first.
         var okButton = new Button
         {
             Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
@@ -178,35 +192,64 @@ public sealed partial class MainWindow
             }
         };
 
+        // WPF: btnRow.Margin = (0, 8, 0, 0), docked to the bottom.
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
-            [cancelButton, okButton],
-            new Thickness(0, 10, 0, 0));
+            [okButton, cancelButton],
+            new Thickness(0, 8, 0, 0));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
-        var helpPanel = new StackPanel
+        // WPF: the syntax/help GroupBox carries Margin = (0, 8, 0, 0), Padding = 8 and sits
+        // above the button row (a plain Window, so a black caption).
+        var helpPanel = new GroupBox
         {
-            Spacing = 4,
-            Margin = new Thickness(0, 10, 0, 0),
-            Children = { syntaxText, descriptionText },
+            Header = UiText.Get("InsertFunction_FormulaSyntaxAndHelp"),
+            Margin = new Thickness(0, 8, 0, 0),
+            Padding = new Thickness(8),
+            Content = new StackPanel { Children = { syntaxText, descriptionText } },
         };
+        ApplyPlainWindowGroupBoxChrome(helpPanel, InsertFunctionDialogChromeStyle);
         DockPanel.SetDock(helpPanel, Dock.Bottom);
 
-        var header = new StackPanel
+        // WPF searchPanel: Grid { Margin = (0, 0, 0, 8) } with the labels (5px Label padding) in an
+        // Auto column and the search box / category combo in the star column.
+        var header = new AvaloniaGrid
         {
-            Spacing = 10,
-            Children =
+            Margin = new Thickness(0, 0, 0, 8),
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            RowDefinitions =
             {
-                CreateInsertFunctionField(ResolveInsertFunctionLabel("InsertFunction_SearchForAFunction"), searchBox),
-                CreateInsertFunctionField(ResolveInsertFunctionLabel("InsertFunction_OrSelectACategory"), categoryBox),
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("InsertFunction_SelectAFunction")), FontSize = 12 },
+                new RowDefinition { Height = GridLength.Auto, MinHeight = 26 },
+                new RowDefinition { Height = GridLength.Auto, MinHeight = 26 },
             },
         };
+        var searchLabel = CreateInsertFunctionLabel("InsertFunction_SearchForAFunction");
+        searchLabel.Margin = new Thickness(5, 0, 5, 6);
+        header.Children.Add(searchLabel);
+        AvaloniaGrid.SetColumn(searchBox, 1);
+        header.Children.Add(searchBox);
+        var categoryLabel = CreateInsertFunctionLabel("InsertFunction_OrSelectACategory");
+        AvaloniaGrid.SetRow(categoryLabel, 1);
+        header.Children.Add(categoryLabel);
+        AvaloniaGrid.SetRow(categoryBox, 1);
+        AvaloniaGrid.SetColumn(categoryBox, 1);
+        header.Children.Add(categoryBox);
         DockPanel.SetDock(header, Dock.Top);
 
+        // WPF: listLabel { Padding = (0, 0, 0, 4) } docked above the list.
+        var listLabel = new TextBlock
+        {
+            Text = StripDisplayMnemonic(UiText.Get("InsertFunction_SelectAFunction")),
+            FontSize = 12,
+            Foreground = HeaderForeground,
+            Margin = new Thickness(0, 0, 0, 4),
+        };
+        DockPanel.SetDock(listLabel, Dock.Top);
+
+        // WPF: DockPanel { Margin = 12 } -- search panel, button row, help group, list label, list.
         dialog.Content = new DockPanel
         {
-            Margin = new Thickness(16),
-            Children = { header, buttonRow, helpPanel, listBox },
+            Margin = new Thickness(12),
+            Children = { header, buttonRow, helpPanel, listLabel, listBox },
         };
 
         dialog.Opened += (_, _) =>
@@ -231,9 +274,13 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("FunctionArguments_Title"),
+            // WPF FunctionArgumentsDialog: Width = 520, Height = clamp(220 + 58 per argument, 300, 620)
+            // (outer), ResizeMode.NoResize.
             Width = 520,
-            Height = Math.Max(300, Math.Min(620, 220 + (arguments.Count * 58))),
-            MinWidth = 440,
+            Height = Math.Max(300, Math.Min(620, 220 + (arguments.Count * 58))) - WpfNoResizeFrameHeight,
+            CanResize = false,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -254,11 +301,14 @@ public sealed partial class MainWindow
                 function.Name,
                 argumentBoxes.Select(box => box.Text));
 
-        var argumentStack = new StackPanel { Spacing = 8 };
+        // WPF AddArgumentRow: Grid { Margin = (0, 0, 0, 8) } with a 120px label column; the editor
+        // (a 28px "..." picker docked left, 6px gap, then the box with Margin = (8, 0, 0, 2)) and the
+        // 11px grey help line (8px left margin) share the star column.
+        var argumentStack = new StackPanel();
         for (var argumentIndex = 0; argumentIndex < arguments.Count; argumentIndex++)
         {
             var argument = arguments[argumentIndex];
-            var box = new TextBox();
+            var box = new TextBox { Margin = new Thickness(8, 0, 0, 2) };
             ApplyFnTextBoxChrome(box);
             box.TextChanged += (_, _) => UpdatePreview();
             argumentBoxes.Add(box);
@@ -268,43 +318,57 @@ public sealed partial class MainWindow
             var referencePicker = new Button
             {
                 Content = "...",
-                Width = 30,
-                MinWidth = 30,
-                Margin = new Thickness(6, 0, 0, 0),
+                Width = 28,
+                MinWidth = 28,
+                Margin = new Thickness(0, 0, 6, 2),
+                HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
             };
-            ApplyFnButtonChrome(referencePicker, minWidth: 30);
+            ApplyFnButtonChrome(referencePicker, minWidth: 28);
+            referencePicker.Padding = new Thickness(0);
             AutomationProperties.SetName(
                 referencePicker,
                 UiText.Format("FunctionArguments_SelectWorksheetReferenceAutomationNameFormat", argument.Name));
             AutomationProperties.SetAutomationId(referencePicker, $"FunctionArgumentReferencePicker{argumentIndex}");
 
-            var editorRow = new AvaloniaGrid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-            editorRow.Children.Add(box);
-            AvaloniaGrid.SetColumn(referencePicker, 1);
+            var editorRow = new AvaloniaGrid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
             editorRow.Children.Add(referencePicker);
+            AvaloniaGrid.SetColumn(box, 1);
+            editorRow.Children.Add(box);
             AttachDialogRangePicker(
                 dialog,
                 referencePicker,
                 box,
                 "range.function-argument.reference");
 
-            var label = argument.Optional ? $"{argument.Name} (optional):" : $"{argument.Name}:";
-            argumentStack.Children.Add(new StackPanel
+            var argumentLabel = new TextBlock
             {
-                Spacing = 2,
-                Children =
-                {
-                    new TextBlock { Text = label, FontSize = 12, FontWeight = FontWeight.Medium },
-                    editorRow,
-                    new TextBlock
-                    {
-                        Text = argument.Description,
-                        TextWrapping = TextWrapping.Wrap,
-                        FontSize = 11,
-                        Foreground = Brush(96, 96, 96),
-                    },
-                },
-            });
+                Text = $"{argument.Name}:",
+                FontSize = 12,
+                Foreground = HeaderForeground,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            };
+            var argumentHelp = new TextBlock
+            {
+                Text = argument.Description,
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 11,
+                Foreground = Brush(109, 109, 109),
+                Margin = new Thickness(8, 0, 0, 0),
+            };
+            var argumentRow = new AvaloniaGrid
+            {
+                Margin = new Thickness(0, 0, 0, 8),
+                ColumnDefinitions = new ColumnDefinitions("120,*"),
+                RowDefinitions = new RowDefinitions("Auto,Auto"),
+            };
+            argumentRow.Children.Add(argumentLabel);
+            AvaloniaGrid.SetColumn(editorRow, 1);
+            argumentRow.Children.Add(editorRow);
+            AvaloniaGrid.SetRow(argumentHelp, 1);
+            AvaloniaGrid.SetColumn(argumentHelp, 1);
+            argumentRow.Children.Add(argumentHelp);
+            argumentStack.Children.Add(argumentRow);
         }
 
         var okButton = new Button
@@ -349,15 +413,19 @@ public sealed partial class MainWindow
             }
         };
 
+        // WPF CreateButtonRow: Margin = (0, 12, 0, 0); OK then Cancel, 76px wide, 8px apart.
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
-            [cancelButton, okButton],
+            [okButton, cancelButton],
             new Thickness(0, 12, 0, 0));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         UpdatePreview();
+        // WPF: DockPanel { Margin = 12 }; the body stacks the function name (4px), its grey
+        // description (12px), the argument rows, the formula-result label (12px above, 2px below) and the
+        // semi-bold preview.
         dialog.Content = new DockPanel
         {
-            Margin = new Thickness(16),
+            Margin = new Thickness(12),
             Children =
             {
                 buttonRow,
@@ -365,19 +433,32 @@ public sealed partial class MainWindow
                 {
                     Content = new StackPanel
                     {
-                        Spacing = 10,
                         Children =
                         {
-                            new TextBlock { Text = function.Name, FontSize = 12, FontWeight = FontWeight.SemiBold },
+                            new TextBlock
+                            {
+                                Text = function.Name,
+                                FontSize = 12,
+                                FontWeight = FontWeight.SemiBold,
+                                Foreground = HeaderForeground,
+                                Margin = new Thickness(0, 0, 0, 4),
+                            },
                             new TextBlock
                             {
                                 Text = function.Description,
                                 FontSize = 12,
                                 TextWrapping = TextWrapping.Wrap,
-                                Foreground = Brush(96, 96, 96),
+                                Foreground = Brush(109, 109, 109),
+                                Margin = new Thickness(0, 0, 0, 12),
                             },
                             argumentStack,
-                            new TextBlock { Text = UiText.Get("FunctionArguments_FormulaResultLabel"), FontSize = 12, Margin = new Thickness(0, 8, 0, 0) },
+                            new TextBlock
+                            {
+                                Text = UiText.Get("FunctionArguments_FormulaResultLabel"),
+                                FontSize = 12,
+                                Foreground = HeaderForeground,
+                                Margin = new Thickness(0, 12, 0, 2),
+                            },
                             previewText,
                         },
                     },
@@ -413,15 +494,14 @@ public sealed partial class MainWindow
         return $"{functionName.ToUpperInvariant()}({string.Join(", ", parameters)})";
     }
 
-    private static StackPanel CreateInsertFunctionField(string label, Control control) =>
+    private static TextBlock CreateInsertFunctionLabel(string resourceKey) =>
         new()
         {
-            Spacing = 4,
-            Children =
-            {
-                new TextBlock { Text = StripDisplayMnemonic(label), FontSize = 12 },
-                control,
-            },
+            Text = StripDisplayMnemonic(UiText.Get(resourceKey)),
+            FontSize = 12,
+            Foreground = HeaderForeground,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Margin = new Thickness(5, 0, 5, 0),
         };
 
     private static string ResolveInsertFunctionLabel(string resourceKey) =>
