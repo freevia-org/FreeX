@@ -123,7 +123,8 @@ internal static class PrintLayout
     internal static IReadOnlyDictionary<int, List<(double Top, double Bottom)>> ResolveChangeBarBands(
         DocumentView editor, DocumentPaginator paginator, double contentWidthDip, double lineHeightDip)
     {
-        if (!editor.CurrentReviewDisplayPolicy.ShouldShowSimpleMarkupChangeBar)
+        var reviewPolicy = editor.CurrentReviewDisplayPolicy;
+        if (!reviewPolicy.ShouldShowSimpleMarkupChangeBar && !reviewPolicy.ShouldMarkAllMarkupChangedLines)
             return EmptyChangeBarBands;
         if (paginator.Source is not FlowDocument flow || paginator is not DynamicDocumentPaginator dynamicPaginator)
             return EmptyChangeBarBands;
@@ -153,7 +154,7 @@ internal static class PrintLayout
             catch (InvalidOperationException) { }
 
             var heightDip = EstimateChangeBarBlockHeightDip(block, contentWidthDip, typeface, fontSize, lineHeightDip);
-            if (ChangeBarBlockHasRevision(block))
+            if (ChangeBarBlockHasRevision(block, reviewPolicy))
             {
                 bands ??= [];
                 if (!bands.TryGetValue(currentPage, out var list))
@@ -163,7 +164,127 @@ internal static class PrintLayout
             currentY += heightDip;
         }
 
+        if (bands is not null && reviewPolicy.ShouldMarkAllMarkupChangedLines)
+            bands = RefineChangedLineBandsFromRenderedPages(
+                paginator, dynamicPaginator, flowBlocks, model, reviewPolicy, bands);
+
         return (IReadOnlyDictionary<int, List<(double Top, double Bottom)>>?)bands ?? EmptyChangeBarBands;
+    }
+
+    /// <summary>
+    /// Replaces the estimated bands with each changed block's real position on its rendered page. The
+    /// All Markup changed-line rule sits right beside the inline markup, so a single-font, spacing-free
+    /// estimate that drifts by a paragraph reads as marking the wrong text. A page's top-level block
+    /// visuals appear in document order; when their count matches the blocks the paginator placed on
+    /// that page they are paired one to one, otherwise that page keeps its estimate.
+    /// </summary>
+    private static Dictionary<int, List<(double Top, double Bottom)>> RefineChangedLineBandsFromRenderedPages(
+        DocumentPaginator paginator,
+        DynamicDocumentPaginator dynamicPaginator,
+        System.Windows.Documents.Block[] flowBlocks,
+        TextDocument model,
+        ReviewDisplayPolicy reviewPolicy,
+        Dictionary<int, List<(double Top, double Bottom)>> estimated)
+    {
+        var count = Math.Min(flowBlocks.Length, model.Blocks.Count);
+        var startPage = new int[count];
+        var endPage = new int[count];
+        try
+        {
+            dynamicPaginator.ComputePageCount();
+            for (var i = 0; i < count; i++)
+            {
+                startPage[i] = dynamicPaginator.GetPageNumber(flowBlocks[i].ContentStart);
+                endPage[i] = Math.Max(startPage[i], dynamicPaginator.GetPageNumber(flowBlocks[i].ContentEnd));
+            }
+        }
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException)
+        {
+            return estimated;
+        }
+
+        var refined = new Dictionary<int, List<(double Top, double Bottom)>>();
+        for (var pageIndex = 0; pageIndex < paginator.PageCount; pageIndex++)
+        {
+            var onPage = Enumerable.Range(0, count)
+                .Where(i => startPage[i] <= pageIndex && pageIndex <= endPage[i])
+                .ToList();
+            if (!onPage.Any(i => ChangeBarBlockHasRevision(model.Blocks[i], reviewPolicy)))
+                continue;
+
+            var rendered = TryMeasureRenderedBlocks(paginator, pageIndex, onPage.Count);
+            if (rendered is null)
+            {
+                if (estimated.TryGetValue(pageIndex, out var fallback))
+                    refined[pageIndex] = fallback;
+                continue;
+            }
+
+            var list = new List<(double Top, double Bottom)>();
+            for (var k = 0; k < onPage.Count; k++)
+            {
+                if (ChangeBarBlockHasRevision(model.Blocks[onPage[k]], reviewPolicy) && rendered[k] is { } band)
+                    list.Add(band);
+            }
+            if (list.Count > 0)
+                refined[pageIndex] = list;
+        }
+
+        return refined;
+    }
+
+    /// <summary>
+    /// The vertical extent (relative to the page's content-box top) of each of the
+    /// <paramref name="blockCount"/> top-level blocks drawn on a page, or null when the page's visual
+    /// tree does not expose exactly that many block visuals (e.g. a multi-column page).
+    /// </summary>
+    private static (double Top, double Bottom)?[]? TryMeasureRenderedBlocks(
+        DocumentPaginator paginator,
+        int pageIndex,
+        int blockCount)
+    {
+        var page = paginator.GetPage(pageIndex);
+        if (page == DocumentPage.Missing || page.Visual is not { } root || blockCount <= 0)
+            return null;
+
+        var contentTop = page.ContentBox.IsEmpty ? 0 : page.ContentBox.Top;
+        (double Top, double Bottom)? Measure(Visual visual)
+        {
+            var bounds = VisualTreeHelper.GetDescendantBounds(visual);
+            if (bounds.IsEmpty)
+                return null;
+            var onPage = ReferenceEquals(visual, root)
+                ? bounds
+                : visual.TransformToAncestor(root).TransformBounds(bounds);
+            return (onPage.Top - contentTop, onPage.Bottom - contentTop);
+        }
+
+        if (blockCount == 1)
+            return [Measure(root)];
+
+        // The block container sits a few wrapper levels below the page visual (page > content >
+        // section), always down the first child; it is above every paragraph's own line visuals.
+        var visual = (Visual)root;
+        for (var depth = 0; depth < 5; depth++)
+        {
+            var childCount = VisualTreeHelper.GetChildrenCount(visual);
+            if (childCount == blockCount)
+            {
+                var bands = new (double Top, double Bottom)?[blockCount];
+                for (var i = 0; i < blockCount; i++)
+                    bands[i] = VisualTreeHelper.GetChild(visual, i) is Visual child ? Measure(child) : null;
+                return bands;
+            }
+
+            // Only single-child wrapper levels lead to the block container; anything wider that does
+            // not match is some other structure, so stop rather than pair blocks with the wrong visuals.
+            // Anything that does not match is a wrapper level (or some other structure): keep
+            // descending a little, then give up rather than pair blocks with the wrong visuals.
+            if (childCount == 0 || VisualTreeHelper.GetChild(visual, 0) is not Visual first)
+                return null;
+            visual = first;
+        }
+        return null;
     }
 
     private static readonly IReadOnlyDictionary<int, IReadOnlyList<DocumentFloatingObjectSnapshot>> EmptyFloatingObjectsByPage =
@@ -407,16 +528,22 @@ internal static class PrintLayout
     /// model level: true when any run in <paramref name="block"/> carries a tracked insertion/deletion or a
     /// tracked formatting change. Recurses into table cells the same way <see cref="FootnoteIds"/> does.
     /// </summary>
-    private static bool ChangeBarBlockHasRevision(FreeW.Core.Model.Block block) => block switch
+    private static bool ChangeBarBlockHasRevision(FreeW.Core.Model.Block block, ReviewDisplayPolicy policy) => block switch
     {
-        FreeW.Core.Model.Paragraph paragraph => paragraph.Runs.Any(ChangeBarRunHasRevision),
+        FreeW.Core.Model.Paragraph paragraph => paragraph.Runs.Any(run => ChangeBarRunHasRevision(run, policy)),
         FreeW.Core.Model.Table table => table.Rows.Any(row =>
-            row.Cells.Any(cell => cell.Paragraphs.Any(p => p.Runs.Any(ChangeBarRunHasRevision)))),
+            row.Cells.Any(cell => cell.Paragraphs.Any(p => p.Runs.Any(run => ChangeBarRunHasRevision(run, policy))))),
         _ => false
     };
 
-    private static bool ChangeBarRunHasRevision(FreeW.Core.Model.Run run) =>
-        run.Revision != RevisionKind.None || run.FormatRevision is not null;
+    /// <summary>
+    /// Simple Markup flags any tracked change. All Markup's changed-line rule follows what is actually
+    /// marked up inline: insertions/deletions, plus formatting changes only while those are shown.
+    /// </summary>
+    private static bool ChangeBarRunHasRevision(FreeW.Core.Model.Run run, ReviewDisplayPolicy policy) =>
+        run.Revision != RevisionKind.None
+        || (run.FormatRevision is not null
+            && (policy.ShouldShowSimpleMarkupChangeBar || policy.ShouldHighlightFormattingChanges));
 
     private static FlowDocument BuildPaginatedDocument(
         DocumentView editor,
@@ -467,8 +594,13 @@ internal static class PrintLayout
             cloneSource = inlineBreakRenderSource.Document;
         }
 
-        foreach (var block in CloneBlocks(cloneSource))
-            flow.Blocks.Add(block);
+        // Word prints a comment's range only together with its margin balloon; without the balloon
+        // strip the printed page shows no comment highlight at all.
+        using (balloonSources is { Count: > 0 } ? null : DocumentView.SuspendCommentRangeHighlights(cloneSource))
+        {
+            foreach (var block in CloneBlocks(cloneSource))
+                flow.Blocks.Add(block);
+        }
 
         // XAML cloning strips the private paragraph tags that carry model section breaks. Restore
         // page-type break ownership here so every consumer of this print/preview document sees the
@@ -633,7 +765,8 @@ internal static class PrintLayout
             fragmentedFootnotePages: fragmentedFootnotePages,
             balloonSources: balloonSources,
             changeBarBands: changeBarBands,
-            floatingObjectsByPage: floatingObjectsByPage);
+            floatingObjectsByPage: floatingObjectsByPage,
+            changedLineRules: !editor.CurrentReviewDisplayPolicy.ShouldShowSimpleMarkupChangeBar);
     }
 
     private static bool NeedsSectionAwareRendering(TextDocument document) =>
@@ -831,7 +964,8 @@ internal sealed class HeaderFooterPaginator(
     IReadOnlyDictionary<int, DocumentFootnoteContinuationPagePlan>? fragmentedFootnotePages = null,
     IReadOnlyList<ReviewBalloonSource>? balloonSources = null,
     IReadOnlyDictionary<int, List<(double Top, double Bottom)>>? changeBarBands = null,
-    IReadOnlyDictionary<int, IReadOnlyList<DocumentFloatingObjectSnapshot>>? floatingObjectsByPage = null) : DocumentPaginator
+    IReadOnlyDictionary<int, IReadOnlyList<DocumentFloatingObjectSnapshot>>? floatingObjectsByPage = null,
+    bool changedLineRules = false) : DocumentPaginator
 {
     private bool? _requiresDedicatedEndnotePage;
 
@@ -945,7 +1079,9 @@ internal sealed class HeaderFooterPaginator(
         if (hasLineNumbers)
             visual.Children.Add(BuildLineNumbers(basePage, pageNumber));
         if (hasChangeBars)
-            visual.Children.Add(BuildChangeBars(pageChangeBarBands!, basePage.ContentBox));
+            visual.Children.Add(changedLineRules
+                ? BuildChangedLineRules(pageChangeBarBands!, basePage.ContentBox, PageLayout.PointsToDip(page.MarginLeftPt))
+                : BuildChangeBars(pageChangeBarBands!, basePage.ContentBox));
 
         var marginLeft = PageLayout.PointsToDip(page.MarginLeftPt);
         var contentWidth = Math.Max(0, size.Width - marginLeft - PageLayout.PointsToDip(page.MarginRightPt));
@@ -1604,6 +1740,36 @@ internal sealed class HeaderFooterPaginator(
             if (y2 <= y1)
                 y2 = Math.Min(content.Bottom, y1 + 1);
             dc.DrawLine(pen, new Point(barX, y1), new Point(barX, y2));
+        }
+        return visual;
+    }
+
+    /// <summary>Colour of Word's All Markup "changed lines" rule.</summary>
+    internal static readonly Color ChangedLineRuleColor = Color.FromRgb(0x40, 0x40, 0x40);
+
+    /// <summary>
+    /// Draws Word's All Markup "changed lines" rule for each band: a hairline halfway across the left
+    /// margin beside every block that carries an inline-marked tracked change. Unlike the Simple
+    /// Markup bar (<see cref="BuildChangeBars"/>) it accompanies the inline colour/underline/strike.
+    /// </summary>
+    private static DrawingVisual BuildChangedLineRules(
+        IReadOnlyList<(double Top, double Bottom)> bands,
+        Rect content,
+        double marginLeftDip)
+    {
+        var visual = new DrawingVisual();
+        if (bands.Count == 0 || content.Height <= 0 || marginLeftDip <= 2)
+            return visual;
+
+        var pen = new Pen(new SolidColorBrush(ChangedLineRuleColor), 1.0);
+        var x = Math.Round(marginLeftDip / 2) + 0.5;
+        using var dc = visual.RenderOpen();
+        foreach (var (top, bottom) in bands)
+        {
+            var y1 = Math.Clamp(content.Top + top, content.Top, content.Bottom);
+            var y2 = Math.Clamp(content.Top + bottom, content.Top, content.Bottom);
+            if (y2 > y1)
+                dc.DrawLine(pen, new Point(x, y1), new Point(x, y2));
         }
         return visual;
     }

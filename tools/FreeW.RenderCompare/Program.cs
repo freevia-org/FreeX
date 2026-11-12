@@ -95,6 +95,8 @@ internal static class Program
         // watermark, page border and line numbers render identically to the app.
         var flow = view.Document;
         view.Document = new System.Windows.Documents.FlowDocument();
+        // Same as the print path without a balloon strip: no comment-range highlight on the page.
+        _ = DocumentView.SuspendCommentRangeHighlights(flow);
 
         var pageSettings = view.Model.Page;
         var (pageWidth, pageHeight) = PageLayout.PageSizeDip(pageSettings);

@@ -215,8 +215,8 @@ static void RenderDocumentComposite(
         ShowMarkupComments = reviewMarkup,
     };
     bodyView.LoadModel(doc);
-    if (!reviewMarkup && TrackChanges.HasRevisions(doc))
-        bodyView.ApplyDisplayForReview(ReviewDisplayMode.NoMarkup);
+    // Word's exported page keeps tracked changes marked up inline (All Markup); only the comment
+    // balloons/ranges are review-only (--review-markup). The committed Word baselines show the markup.
 
     // Review balloons belong to the physical page containing their model anchor. Capture the
     // same block-to-page map that the paged editor uses before the live FlowDocument is detached.
