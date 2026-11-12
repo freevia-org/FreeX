@@ -100,6 +100,12 @@ public sealed record EquationVisualElement(
 {
     public IReadOnlyList<EquationVisualMatrixRow> MatrixRows { get; init; } = [];
     public string BaseText { get; init; } = string.Empty;
+
+    /// <summary>
+    /// False for a fraction written without a bar (a binomial coefficient's stack, OMML m:type "noBar").
+    /// Only meaningful for <see cref="EquationVisualElementKind.Fraction"/>.
+    /// </summary>
+    public bool FractionBarVisible { get; init; } = true;
     public string Accent { get; init; } = string.Empty;
     public bool BarTop { get; init; } = true;
     public string OpenDelimiter { get; init; } = string.Empty;
@@ -633,6 +639,16 @@ public static class EquationVisualPlanner
                 AddScriptElement(run, segments, elements, depth, includeSubscript: true, includeSuperscript: true);
                 break;
 
+            // A limit (m:limLow / m:limUpp) is drawn with the script geometry until it has its own
+            // centred-below layout: the limit expression is small and attached to its base.
+            case MathRunKind.LowerLimit:
+                AddScriptElement(run, segments, elements, depth, includeSubscript: true, includeSuperscript: false);
+                break;
+
+            case MathRunKind.UpperLimit:
+                AddScriptElement(run, segments, elements, depth, includeSubscript: false, includeSuperscript: true);
+                break;
+
             case MathRunKind.Fraction:
                 AddFractionElement(run, segments, elements, depth);
                 break;
@@ -760,7 +776,10 @@ public static class EquationVisualPlanner
             denominatorText,
             runSegments,
             numeratorPlan,
-            denominatorPlan));
+            denominatorPlan) with
+        {
+            FractionBarVisible = run.FractionType != MathFractionType.NoBar
+        });
     }
 
     private static EquationVisualPlan? BuildSlotPlan(Equation? equation, int depth) =>

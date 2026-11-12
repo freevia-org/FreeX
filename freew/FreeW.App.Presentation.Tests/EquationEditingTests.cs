@@ -269,6 +269,32 @@ public sealed class EquationEditingTests
         trig.Runs.Count(run => run.Kind == MathRunKind.FunctionApply).Should().Be(4);
     }
 
+    // ── Rendering of the constructs the editor adds ──────────────────────────────────────────────────
+
+    [Fact]
+    public void VisualPlan_HidesTheBarOfANoBarFraction()
+    {
+        var binomial = FreeW.App.Presentation.DocumentView.EquationVisualPlanner.Build(EquationLinearFormat.Parse(@"n\atop k"));
+        var fraction = FreeW.App.Presentation.DocumentView.EquationVisualPlanner.Build(EquationLinearFormat.Parse("n/k"));
+
+        binomial.Elements.Should().ContainSingle().Which.FractionBarVisible.Should().BeFalse();
+        fraction.Elements.Should().ContainSingle().Which.FractionBarVisible.Should().BeTrue();
+    }
+
+    [Fact]
+    public void VisualPlan_DrawsALimitAttachedToItsBase()
+    {
+        var lower = FreeW.App.Presentation.DocumentView.EquationVisualPlanner.Build(new Equation([MathRun.LowerLimit("lim", "x")]));
+        var upper = FreeW.App.Presentation.DocumentView.EquationVisualPlanner.Build(new Equation([MathRun.UpperLimit("x", "def")]));
+
+        lower.Segments.Select(segment => (segment.Text, segment.Role)).Should().Equal(
+            ("lim", FreeW.App.Presentation.DocumentView.EquationVisualSegmentRole.Base),
+            ("x", FreeW.App.Presentation.DocumentView.EquationVisualSegmentRole.Subscript));
+        upper.Segments.Select(segment => (segment.Text, segment.Role)).Should().Equal(
+            ("x", FreeW.App.Presentation.DocumentView.EquationVisualSegmentRole.Base),
+            ("def", FreeW.App.Presentation.DocumentView.EquationVisualSegmentRole.Superscript));
+    }
+
     // ── Tools workflow ───────────────────────────────────────────────────────────────────────────────
 
     private sealed class Host

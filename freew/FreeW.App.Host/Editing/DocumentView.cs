@@ -15000,7 +15000,8 @@ public sealed partial class DocumentView : RichTextBox
         stack.Children.Add(BuildEquationStructureTextBlock(numerator, WpfTextAlignment.Center));
         stack.Children.Add(new Border
         {
-            Background = Brushes.Black,
+            // A "no bar" fraction (binomial coefficient) keeps the stack's spacing without the rule.
+            Background = element.FractionBarVisible ? Brushes.Black : Brushes.Transparent,
             Height = 1,
             MinWidth = 14,
             Margin = new Thickness(0, 0, 0, 0)
