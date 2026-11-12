@@ -6641,7 +6641,9 @@ public static partial class DocxReader
             ShowDataLabels: typeElement.Element(C + "dLbls") is not null,
             ScatterConnectsPoints: kind == ChartKind.Scatter
                 && string.Equals(typeElement.Element(C + "scatterStyle")?.Attribute("val")?.Value, "lineMarker", StringComparison.OrdinalIgnoreCase));
-        chart.NativeTextSizes = ReadChartTextSizes(chartSpace, chartElement, plotArea, typeElement);
+        var authoredTextSizes = ReadChartAuthoredTextSizes(chartSpace, chartElement, plotArea, typeElement);
+        chart.AuthoredTextSizes = authoredTextSizes.HasAny ? authoredTextSizes : null;
+        chart.NativeTextSizes = authoredTextSizes.Resolve();
 
         // Current packages store the gallery ids in the extension URI, which is valid chart XML.
         // Keep reading the old private child payload so existing FreeW files retain their settings.
@@ -6674,44 +6676,35 @@ public static partial class DocxReader
     }
 
     /// <summary>
-    /// Resolves the chart's text sizes: an element's own rich-text run / <c>c:txPr</c> size wins, then the
-    /// chart-space <c>c:txPr</c> default, then Word's rendering of a part without text properties (18pt
-    /// rich-text titles — the DrawingML run default — and 9pt labels and legend).
+    /// Reads the text sizes the chart part states: an element's own rich-text run / <c>c:txPr</c> size and
+    /// the chart-space <c>c:txPr</c> default. <see cref="ChartAuthoredTextSizes.Resolve"/> fills the rest
+    /// with Word's rendering of a part without text properties (18pt rich-text titles — the DrawingML run
+    /// default — and 9pt labels and legend).
     /// </summary>
-    private static ChartTextSizes ReadChartTextSizes(
+    private static ChartAuthoredTextSizes ReadChartAuthoredTextSizes(
         XElement chartSpace,
         XElement chartElement,
         XElement plotArea,
         XElement typeElement)
     {
-        var defaults = ChartTextSizes.WordDefault;
-        var spacePt = TextPropertiesSizePt(chartSpace.Element(C + "txPr"));
-        var basePt = spacePt ?? defaults.TickLabelPt;
         var axes = plotArea.Elements()
             .Where(element => element.Name == C + "catAx" || element.Name == C + "valAx"
                 || element.Name == C + "dateAx" || element.Name == C + "serAx")
             .ToList();
-
         var title = chartElement.Element(C + "title");
-        var titlePt = RichTextSizePt(title)
-            ?? TextPropertiesSizePt(title?.Element(C + "txPr"))
-            ?? (spacePt is { } spaceTitleBase ? spaceTitleBase * 1.4 : defaults.TitlePt);
-
         var axisTitle = axes.Select(axis => axis.Element(C + "title")).FirstOrDefault(element => element is not null);
-        var axisTitlePt = RichTextSizePt(axisTitle)
-            ?? TextPropertiesSizePt(axisTitle?.Element(C + "txPr"))
-            ?? spacePt
-            ?? defaults.AxisTitlePt;
 
-        var tickPt = axes
-            .Select(axis => TextPropertiesSizePt(axis.Element(C + "txPr")))
-            .FirstOrDefault(size => size is not null) ?? basePt;
-        var legendPt = TextPropertiesSizePt(chartElement.Element(C + "legend")?.Element(C + "txPr")) ?? basePt;
-        var dataLabelPt = typeElement.Descendants(C + "dLbls")
-            .Select(labels => TextPropertiesSizePt(labels.Element(C + "txPr")))
-            .FirstOrDefault(size => size is not null) ?? basePt;
-
-        return new ChartTextSizes(titlePt, axisTitlePt, tickPt, legendPt, dataLabelPt);
+        return new ChartAuthoredTextSizes(
+            ChartSpacePt: TextPropertiesSizePt(chartSpace.Element(C + "txPr")),
+            TitlePt: RichTextSizePt(title) ?? TextPropertiesSizePt(title?.Element(C + "txPr")),
+            AxisTitlePt: RichTextSizePt(axisTitle) ?? TextPropertiesSizePt(axisTitle?.Element(C + "txPr")),
+            TickLabelPt: axes
+                .Select(axis => TextPropertiesSizePt(axis.Element(C + "txPr")))
+                .FirstOrDefault(size => size is not null),
+            LegendPt: TextPropertiesSizePt(chartElement.Element(C + "legend")?.Element(C + "txPr")),
+            DataLabelPt: typeElement.Descendants(C + "dLbls")
+                .Select(labels => TextPropertiesSizePt(labels.Element(C + "txPr")))
+                .FirstOrDefault(size => size is not null));
     }
 
     private static double? RichTextSizePt(XElement? titleElement)
