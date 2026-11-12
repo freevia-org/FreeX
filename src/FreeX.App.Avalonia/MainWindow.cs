@@ -179,7 +179,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         internal void ResizeClient(Size size) => ClientSize = size;
     }
 
-    private const double CellIndentLevelWidth = 12;
+    // Format Cells > Alignment > Indent: 8 DIPs per level, matching the WPF grid
+    // (GridView.Rendering.cs: indentPx = IndentLevel * 8.0).
+    private const double CellIndentLevelWidth = 8;
+    // Horizontal inset of cell text from the cell edge, in DIPs at 100% zoom. Mirrors the 2px pad the
+    // WPF grid applies through CellTextOrientationLayoutPlanner.CalculateLayout (Left + 2 / Right - 2)
+    // and its wrap/shrink width (rect.Width - 4). Every Avalonia cell-text computation (cell TextBlock
+    // margin, overflow overlay origin, shrink-to-fit width, in-cell editor padding) routes through this.
+    private const double CellTextHorizontalPadding = 2;
     private const string CommaNumberFormat = "#,##0.00";
     private const string CurrencyNumberFormat = "$#,##0.00";
     private const double DoubleUnderlineSecondStrokeOffset = 2;
@@ -208,9 +215,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
     private const double InitialViewportHeight = 880;
     private const double InitialViewportWidth = 1440;
-    private const double MinimumDisplayedColumnWidth = 48;
-    private const double MinimumDisplayedRowHeight = 20;
-    private const double WorksheetFontSizeDisplayOffset = 1;
+    // The WPF grid lays rows/columns out at their model size (ViewportModel metrics are already
+    // DIPs at 100%), so a narrow column or short row must not be inflated here: only a 2 DIP floor
+    // is kept so a zero-size (but not hidden) track stays visible and resizable.
+    private const double MinimumDisplayedColumnWidth = 2;
+    private const double MinimumDisplayedRowHeight = 2;
+    private const double DefaultWorksheetFontSizePoints = 11;
+
+    /// <summary>
+    /// Converts a cell font size in points to display DIPs (96 DPI), exactly like the WPF grid's
+    /// <c>GridView.ToDisplayFontSize</c>: Calibri 11pt renders at 14.67 DIPs. A non-positive size
+    /// falls back to the 11pt worksheet default, as WPF does.
+    /// </summary>
+    internal static double ToWorksheetDisplayFontSize(double? pointSize) =>
+        Math.Max(1.0, (pointSize is > 0 ? pointSize.Value : DefaultWorksheetFontSizePoints) * (96.0 / 72.0));
     private const double SheetHorizontalScrollbarDefaultWidth = 380;
     private const double SheetHorizontalScrollbarMinimumWidth = 260;
     private const double SheetHorizontalScrollbarMaximumWidth = 420;
@@ -331,7 +349,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private static readonly IBrush SecondaryInk = Brush(94, 103, 116);
     private static readonly IBrush SelectionBorder = Brush(33, 115, 70);
     private const double SelectionOutlineThickness = 2;
-    private const double AutofillHandleSize = 10;
+    // Outer size of the fill handle. The WPF grid draws a 6 DIP square stroked with the 2 DIP
+    // selection pen (GridView.Rendering.Selection.cs DrawSelectionHandle), i.e. a solid 8 DIP square
+    // centred on the selection's bottom-right corner.
+    private const double AutofillHandleSize = 8;
     private const double AutofillHandleHitPadding = 6;
     private const double HeaderResizeHitThickness = 9;
     // Shared selection-fill token — byte-identical to the WPF grid's SelectionBrush
@@ -352,13 +373,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // multi-cell selection, the active cell's own row/column header renders with this stronger tint
     // so it stands out from the rest of the selection's flat SelectionHeaderBackground.
     private static readonly IBrush ActiveSelectionHeaderBackground = Brush(151, 181, 135);
-    private static readonly IBrush SelectionHeaderForeground = Brush(31, 31, 31);
-    // Windows draws the worksheet row/column headings in a regular-weight face (WPF GridView's
-    // DefaultTypeface). The macOS system font's SemiBold face reads as outright bold at the 11px
-    // heading size, so macOS uses the regular weight to match the Windows headings; the other
-    // desktop targets keep their existing SemiBold rendering.
-    private static readonly FontWeight WorksheetHeaderFontWeight =
-        OperatingSystem.IsMacOS() ? FontWeight.Normal : FontWeight.SemiBold;
+    // WPF draws every heading label with HeaderTextBrush (black), selected or not.
+    private static readonly IBrush SelectionHeaderForeground = Brushes.Black;
+    // The WPF grid draws the worksheet row/column headings with GridView's DefaultTypeface: regular
+    // weight Calibri at 11 DIPs (GridView.Rendering.Headers.cs GetDefaultHeaderFormattedText(.., 11)).
+    // Every Avalonia target uses the same regular weight and the default worksheet font chain.
+    private static readonly FontWeight WorksheetHeaderFontWeight = FontWeight.Normal;
+    private const double WorksheetHeaderFontSize = 11;
+    private static readonly FontFamily WorksheetHeaderFontFamily = CreateWorksheetFontFamily("Calibri");
     private static readonly IBrush DrawingObjectBoundsFill = Brush(42, 11, 112, 116);
     private static readonly IBrush DrawingObjectBoundsBorder = Brush(11, 112, 116);
     private static readonly IBrush DrawingObjectBoundsForeground = Brush(5, 67, 69);
@@ -6391,7 +6413,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var flowDirection = MapCellFlowDirection(isEffectivelyRightToLeft);
             var weight = style?.Bold == true ? FontWeight.Bold : FontWeight.Normal;
             var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;
-            var fontSize = Math.Max(1, (style?.FontSize ?? CellStyle.Default.FontSize) + WorksheetFontSizeDisplayOffset);
+            var fontSize = ToWorksheetDisplayFontSize(style?.FontSize);
             var textDecorations = BuildTextDecorations(style);
 
             var text = new Border
@@ -6803,9 +6825,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var foreground = style is null
                 ? Brushes.Black
                 : Brush(style.ResolveFontColor(_session.Workbook.Theme));
-            var fontSize = Math.Max(
-                1,
-                ((style?.FontSize ?? CellStyle.Default.FontSize) + WorksheetFontSizeDisplayOffset) * zoomFactor);
+            var fontSize = Math.Max(1, ToWorksheetDisplayFontSize(style?.FontSize) * zoomFactor);
             var flowDirection = MapCellFlowDirection(
                 CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft(
                     style?.ReadingOrder ?? CellReadingOrder.Context,
@@ -6831,7 +6851,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 ? MeasureRichRunsWidth(richRuns!, flowDirection)
                 : textWidth;
             var indent = GetCellIndentPadding(style) * zoomFactor;
-            var horizontalPadding = 8 * zoomFactor;
+            var horizontalPadding = CellTextHorizontalPadding * zoomFactor;
             var effectiveAlignment = CellTextOrientationLayoutPlanner.ResolveEffectiveHorizontalAlignment(
                 style?.HorizontalAlignment ?? CellHAlign.General,
                 isNumeric: false,
@@ -6843,12 +6863,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 _ => left + horizontalPadding + indent,
             };
             var verticalAlignment = style?.VerticalAlignment ?? CellVAlign.Bottom;
-            var textTop = verticalAlignment switch
+            // The in-cell TextBlock is laid out inside the cell's own gridline border (see
+            // CreateCellBorder), so the continuation must use the same inset slot or the overflowed
+            // tail would sit one gridline lower/higher than the text it continues.
+            var gridlineInset = _session.IsShowingGridlines ? Math.Max(1, zoomFactor) : 0;
+            var textSlotHeight = Math.Max(0, rowHeight - (gridlineInset * 2));
+            var textSlotOffset = verticalAlignment switch
             {
-                CellVAlign.Top => top,
-                CellVAlign.Center => top + Math.Max(0, (rowHeight - textHeight) / 2),
-                _ => top + Math.Max(0, rowHeight - textHeight),
+                CellVAlign.Top => 0d,
+                CellVAlign.Center => Math.Max(0, (textSlotHeight - textHeight) / 2),
+                _ => Math.Max(0, textSlotHeight - textHeight),
             };
+            var textTop = top + gridlineInset + textSlotOffset;
 
             var cellRight = left + colWidth;
             if (effectiveAlignment is CellHAlign.Left or CellHAlign.General or CellHAlign.Center)
@@ -7114,11 +7140,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             TextWrapping.NoWrap,
             WorksheetHeaderFontWeight,
             FontStyle.Normal,
-            fontSize: 11,
+            fontSize: WorksheetHeaderFontSize,
             textDecorations: null,
             selected: false,
             zoomFactor: zoomFactor,
-            horizontalPadding: 2);
+            horizontalPadding: 2,
+            fontFamily: WorksheetHeaderFontFamily);
 
     private Control CreateSelectAllCornerCell(double zoomFactor)
     {
@@ -8745,7 +8772,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 TextWrapping.NoWrap,
                 FontWeight.Normal,
                 FontStyle.Normal,
-                fontSize: 12,
+                fontSize: ToWorksheetDisplayFontSize(null),
                 textDecorations: null,
                 selected,
                 address,
@@ -8754,7 +8781,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 cellHeight: cellHeight,
                 sparklineLayer: sparklineLayer,
                 mergeRegion: mergeRegion,
-                flowDirection: MapCellFlowDirection(emptyCellIsRtl));
+                flowDirection: MapCellFlowDirection(emptyCellIsRtl),
+                // Only the cell being edited shows text, so only it needs the worksheet font chain:
+                // typing into an empty cell then uses the same face the committed value will render
+                // with (resolving a FontFamily for every blank cell on each rebuild would be waste).
+                fontFamily: Equals(_inlineCellEditAddress, address)
+                    ? ResolveAvaloniaCellFontFamily(null, _session.Workbook.Theme)
+                    : null);
         }
 
         var style = cell.Style;
@@ -8788,7 +8821,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var textWrapping = style?.WrapText == true ? TextWrapping.Wrap : TextWrapping.NoWrap;
         var weight = style?.Bold == true ? FontWeight.Bold : FontWeight.Normal;
         var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;
-        var fontSize = (style?.FontSize ?? CellStyle.Default.FontSize) + WorksheetFontSizeDisplayOffset;
+        var fontSize = ToWorksheetDisplayFontSize(style?.FontSize);
         var fontFamily = ResolveAvaloniaCellFontFamily(style, _session.Workbook.Theme);
         var textDecorations = BuildTextDecorations(style);
         var indentPadding = GetCellIndentPadding(style) + GetPivotRowLabelTextPadding(address.Row, address.Col);
@@ -8844,9 +8877,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             isFormula: !string.IsNullOrEmpty(cell.Formula));
     }
 
-    private static FontFamily ResolveAvaloniaCellFontFamily(CellStyle? style, WorkbookTheme theme)
+    private static FontFamily ResolveAvaloniaCellFontFamily(CellStyle? style, WorkbookTheme theme) =>
+        CreateWorksheetFontFamily((style ?? CellStyle.Default).ResolveEffectiveFontName(theme));
+
+    private static FontFamily CreateWorksheetFontFamily(string fontName)
     {
-        var fontName = (style ?? CellStyle.Default).ResolveEffectiveFontName(theme);
         var fallback = fontName.Trim().ToUpperInvariant() switch
         {
             "CALIBRI" => "Carlito, Liberation Sans",
@@ -9266,6 +9301,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         double zoomFactor,
         double cellHeight)
     {
+        // The editor replaces the cell's content inside the cell's own gridline border, so its text
+        // inset is the shared cell-edge padding minus that border — the caret/text then start exactly
+        // where the committed cell text is drawn (see CreateCellBorder).
+        var editorGridlineThickness = _session.IsShowingGridlines ? Math.Max(1, zoomFactor) : 0;
+        var editorTextInset = Math.Max(0, (CellTextHorizontalPadding * zoomFactor) - editorGridlineThickness);
+        var editorTextPadding = new Thickness(
+            editorTextInset + (indentPadding * zoomFactor),
+            0,
+            editorTextInset,
+            0);
         var editor = new TextBox
         {
             Text = _inlineCellEditText ?? "",
@@ -9273,7 +9318,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Foreground = foreground,
             BorderBrush = Brushes.Transparent,
             BorderThickness = new Thickness(0),
-            Padding = new Thickness((8 + indentPadding) * zoomFactor, 0, 8 * zoomFactor, 0),
+            Padding = editorTextPadding,
             FontSize = Math.Max(1, fontSize * zoomFactor),
             FontFamily = fontFamily,
             FontWeight = fontWeight,
@@ -9340,7 +9385,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var referenceOverlay = new TextBlock
         {
             Foreground = foreground,
-            Padding = new Thickness((8 + indentPadding) * zoomFactor, 0, 8 * zoomFactor, 0),
+            Padding = editorTextPadding,
             FontSize = Math.Max(1, fontSize * zoomFactor),
             FontFamily = fontFamily,
             FontWeight = fontWeight,
@@ -10314,20 +10359,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             {
                 Width = handleSize,
                 Height = handleSize,
-                Background = Brushes.White,
-                BorderBrush = SelectionBorder,
-                BorderThickness = new Thickness(Math.Max(1, zoomFactor)),
+                // Solid selection-green square centred on the bottom-right corner, like the WPF
+                // grid's DrawSelectionHandle (whose 2 DIP pen fully covers its 6 DIP white rect).
+                Background = SelectionBorder,
                 HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
                 VerticalAlignment = AvaloniaVerticalAlignment.Bottom,
                 Margin = new Thickness(0, 0, -(handleSize / 2), -(handleSize / 2)),
                 IsHitTestVisible = false,
                 ClipToBounds = false,
                 ZIndex = 101,
-                Child = new Border
-                {
-                    Background = SelectionBorder,
-                    Margin = new Thickness(Math.Max(1, zoomFactor)),
-                },
             };
             AutomationProperties.SetAutomationId(handle, "WorksheetAutofillHandle");
             AvaloniaGrid.SetRow(handle, rowIndex + rowSpan - 1 + headerOffset);
@@ -11513,7 +11553,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         CfDataBarRenderInstruction? conditionalDataBar = null,
         CfIconRenderInstruction? conditionalIcon = null,
         Control? sparklineLayer = null,
-        double horizontalPadding = 8,
+        double horizontalPadding = CellTextHorizontalPadding,
         IBrush? patternBrush = null,
         IReadOnlyList<ResolvedCellTextRun>? richRuns = null,
         FlowDirection flowDirection = FlowDirection.LeftToRight,
@@ -11526,7 +11566,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
         var scaledFontSize = Math.Max(1, fontSize * zoomFactor);
-        var scaledHorizontalPadding = horizontalPadding * zoomFactor;
+        // Gridline/selection border thickness scales with zoom so it grows together with cell
+        // content/text — matching Excel/WPF where the whole grid (gridlines included) is scaled by a
+        // single RenderTransform (see MainWindow.ViewCommands.cs), instead of staying a razor-thin
+        // fixed 1 DIP line at high zoom while everything else quadruples in size.
+        var scaledBorderThickness = showGridlines ? Math.Max(1, zoomFactor) : 0;
+        // horizontalPadding is measured from the CELL EDGE (WPF anchors text at rect.Left + 2 /
+        // rect.Right - 2). The TextBlock lives inside this cell's own gridline border, so its margin is
+        // the remainder once that border is accounted for — the text then sits at the same offset
+        // whether or not gridlines are shown, and lines up with the overflow overlay, which positions
+        // the continuation from the cell edge.
+        var scaledCellEdgePadding = horizontalPadding * zoomFactor;
+        var scaledHorizontalPadding = Math.Max(0, scaledCellEdgePadding - scaledBorderThickness);
         var scaledIndentPadding = indentPadding * zoomFactor;
 
         // Rich text runs override cell-level super/subscript — each run carries its own VertAlign
@@ -11553,7 +11604,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // and is skipped for Fill alignment / rich runs, which resolve sizing independently.
         if (style?.ShrinkToFit == true && textWrapping != TextWrapping.Wrap && !isFillAlign && !textMaterialization.HasRichText)
         {
-            var availableWidth = Math.Max(1, cellWidth - (scaledHorizontalPadding * 2) - scaledIndentPadding);
+            // WPF: Math.Max(1, rect.Width - 4 - indentPx).
+            var availableWidth = Math.Max(1, cellWidth - (scaledCellEdgePadding * 2) - scaledIndentPadding);
             adjustedFontSize = ResolveShrinkToFitFontSize(effectiveText, fontWeight, fontStyle, adjustedFontSize, availableWidth);
         }
 
@@ -11675,11 +11727,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             cellContent = indicatorHost;
         }
 
-        // Gridline/selection border thickness scales with zoom so it grows together with cell
-        // content/text — matching Excel/WPF where the whole grid (gridlines included) is scaled by a
-        // single RenderTransform (see MainWindow.ViewCommands.cs), instead of staying a razor-thin
-        // fixed 1 DIP line at high zoom while everything else quadruples in size.
-        var scaledBorderThickness = Math.Max(1, zoomFactor);
         var defaultBorderBrush = suppressDefaultGridlines
             ? background ?? patternBrush ?? Brushes.Transparent
             : GridLine;
@@ -11687,9 +11734,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Background = background,
             BorderBrush = showGridlines ? defaultBorderBrush : Brushes.Transparent,
-            BorderThickness = showGridlines
-                ? new Thickness(scaledBorderThickness)
-                : new Thickness(0),
+            BorderThickness = new Thickness(scaledBorderThickness),
             ClipToBounds = true,
             Child = cellContent,
         };
