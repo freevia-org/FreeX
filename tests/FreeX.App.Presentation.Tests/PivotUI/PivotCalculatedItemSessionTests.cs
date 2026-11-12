@@ -53,6 +53,28 @@ public sealed class PivotCalculatedItemSessionTests
     }
 
     [Fact]
+    public void Create_ProjectsInsertableItemsForTheSelectedLayoutField()
+    {
+        var session = PivotCalculatedItemSession.Create(
+            PivotWithLayout(),
+            ["Region", "Product", "Value"],
+            itemNamesBySourceFieldIndex: new Dictionary<int, IEnumerable<string>>
+            {
+                [0] = [" East ", "east", "West"],
+                [1] = ["Hardware", " Software "]
+            });
+
+        session.SelectedSourceFieldIndex.Should().Be(0);
+        session.ItemReferences.Should().Equal("East", "West");
+
+        session.SelectSourceField(1, startNew: true);
+        session.ItemReferences.Should().Equal("Hardware", "Software");
+
+        PivotCalculatedItemSession.Create(PivotWithLayout(), ["Region", "Product"])
+            .ItemReferences.Should().BeEmpty();
+    }
+
+    [Fact]
     public void EmptyLayout_ExposesLocalizedOpenAndSaveIssues()
     {
         var text = PivotCalculatedItemSessionText.Default with

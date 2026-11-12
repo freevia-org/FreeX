@@ -172,6 +172,21 @@ public sealed partial class MainWindow
         newSheetBox.IsCheckedChanged += (_, _) => UpdateDestinationState();
         existingSheetBox.IsCheckedChanged += (_, _) => UpdateDestinationState();
 
+        // WPF PivotTableDialog ends its content with a checked-by-default box that decides whether the
+        // field pane opens for the new PivotTable.
+        var openFieldListBox = new CheckBox
+        {
+            Content = StripDisplayMnemonic(UiText.Get("PivotTable_OpenPivotTableFieldsPane")),
+            IsChecked = true,
+            MinHeight = 20,
+            MaxHeight = 20,
+        };
+        ApplyPivotCheckBoxChrome(openFieldListBox);
+        AutomationProperties.SetAutomationId(openFieldListBox, "PivotOpenFieldListBox");
+        AutomationProperties.SetName(
+            openFieldListBox,
+            StripDisplayMnemonic(UiText.Get("PivotTable_OpenPivotTableFieldsPane")));
+
         var errorText = new TextBlock
         {
             Foreground = Brush(180, 30, 30),
@@ -206,7 +221,7 @@ public sealed partial class MainWindow
                         ? PivotDestinationKind.ExistingWorksheet
                         : PivotDestinationKind.NewWorksheet,
                     destinationBox.Text,
-                    OpenFieldList: true,
+                    OpenFieldList: openFieldListBox.IsChecked == true,
                     roles));
             if (!plan.CanApply)
             {
@@ -236,6 +251,11 @@ public sealed partial class MainWindow
             }
 
             dialog.Close();
+            // WPF opens the field pane only when the plan's transition asks for it. This shell shows
+            // the pane for whichever PivotTable holds the active cell, so the choice is carried by the
+            // same flag the Analyze field-list toggle owns: checked reopens the pane, unchecked keeps
+            // it closed until the user toggles it back on.
+            _pivotFieldPaneUserHidden = !outcome.Transition.RefreshFieldList;
             ApplyPivotApplicationOutcome(outcome);
         };
         cancelButton.Click += (_, _) => dialog.Close();
@@ -243,8 +263,9 @@ public sealed partial class MainWindow
         // Layout mirrors PivotTableDialog: a 16px root margin; semi-bold section headers (6px below);
         // the source radio (6px below); labels and reference editors indented 22px under their radio
         // with a 4px label gap; the two destination radios 4px apart; the location editor 12px above
-        // the trailing block; and the Create/Cancel row with no extra top margin. A WPF radio is a 16px
-        // row where the compact Avalonia radio is 20px, so the radio gaps drop 4px to keep the pitch.
+        // the field-pane check box, which sits 16px above the Create/Cancel row (no extra top margin).
+        // A WPF radio or check box is a 16px row where the compact Avalonia one is 20px, so those gaps
+        // drop 4px to keep the pitch.
         TextBlock CreateSectionHeader(string text) => new()
         {
             Text = text,
@@ -255,6 +276,7 @@ public sealed partial class MainWindow
         };
 
         selectTableRangeButton.Margin = new Thickness(0, 0, 0, 2);
+        openFieldListBox.Margin = new Thickness(0, 0, 0, 12);
         errorText.Margin = new Thickness(0, 0, 0, 8);
         var buttonRow = CreatePivotDialogButtonRow(okButton, cancelButton, new Thickness(0));
 
@@ -278,7 +300,8 @@ public sealed partial class MainWindow
                 newSheetBox,
                 existingSheetBox,
                 CreatePivotDialogLabel(UiText.Get("PivotTable_LocationLabel"), new Thickness(22, 0, 0, 4)),
-                CreatePivotDialogReferenceEditor(destinationPicker, destinationBox, new Thickness(22, 0, 0, 16)),
+                CreatePivotDialogReferenceEditor(destinationPicker, destinationBox, new Thickness(22, 0, 0, 12)),
+                openFieldListBox,
                 errorText,
                 buttonRow,
             },

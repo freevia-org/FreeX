@@ -93,7 +93,8 @@ public sealed class PivotCalculatedItemSession
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,
         PivotCalculatedItemSessionText? text = null,
-        string newFormula = "= ")
+        string newFormula = "= ",
+        IReadOnlyDictionary<int, IEnumerable<string>>? itemNamesBySourceFieldIndex = null)
     {
         ArgumentNullException.ThrowIfNull(pivotTable);
         ArgumentNullException.ThrowIfNull(headers);
@@ -102,7 +103,7 @@ public sealed class PivotCalculatedItemSession
             pivotTable,
             fields,
             PivotCalculatedItemPlanner.AvailableFieldReferences(headers),
-            new Dictionary<int, IReadOnlyList<string>>(),
+            BuildItemReferences(itemNamesBySourceFieldIndex),
             fields.FirstOrDefault()?.SourceFieldIndex ?? -1,
             string.Empty,
             newFormula,
@@ -120,10 +121,7 @@ public sealed class PivotCalculatedItemSession
     {
         ArgumentNullException.ThrowIfNull(fieldNames);
         var headers = fieldNames.ToList();
-        var itemReferences = itemNamesBySourceFieldIndex?.ToDictionary(
-            pair => Math.Max(0, pair.Key),
-            pair => PivotCalculatedItemPlanner.AvailableFieldReferences(pair.Value.ToList()))
-            ?? new Dictionary<int, IReadOnlyList<string>>();
+        var itemReferences = BuildItemReferences(itemNamesBySourceFieldIndex);
         return new PivotCalculatedItemSession(
             new PivotTableModel(),
             PivotCalculatedItemPlanner.AvailableSourceFields(headers),
@@ -134,6 +132,24 @@ public sealed class PivotCalculatedItemSession
             formula,
             string.Empty,
             text ?? PivotCalculatedItemSessionText.Default);
+    }
+
+    // The insertable item references per source field: trimmed, non-blank and de-duplicated the same way the
+    // source-field references are, keyed by the (non-negative) source field index.
+    private static IReadOnlyDictionary<int, IReadOnlyList<string>> BuildItemReferences(
+        IReadOnlyDictionary<int, IEnumerable<string>>? itemNamesBySourceFieldIndex)
+    {
+        var itemReferences = new Dictionary<int, IReadOnlyList<string>>();
+        if (itemNamesBySourceFieldIndex is null)
+            return itemReferences;
+
+        foreach (var pair in itemNamesBySourceFieldIndex)
+        {
+            itemReferences[Math.Max(0, pair.Key)] =
+                PivotCalculatedItemPlanner.AvailableFieldReferences(pair.Value.ToList());
+        }
+
+        return itemReferences;
     }
 
     public PivotCalculatedDraft UpdateDraft(string? name, string? formula)

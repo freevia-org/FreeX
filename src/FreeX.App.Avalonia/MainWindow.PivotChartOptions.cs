@@ -1,13 +1,18 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Layout;
+using Avalonia.Media;
 
+using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -61,6 +66,30 @@ public sealed partial class MainWindow
             return;
 
         var current = PivotChartOptionsPlanner.Read(chart!);
+
+        // WPF PivotChartOptionsDialog opens with a chart-style group: a 126px single-select gallery of
+        // the shared chart styles laid out four to a row, seeded with the chart's current style.
+        var styleItems = ChartStylePlanner.GetStyleOptions()
+            .Select(descriptor => new PivotChartStyleGalleryItem(
+                descriptor.StyleId,
+                descriptor.ResourceValue is { } displayValue
+                    ? UiText.Format(descriptor.DisplayNameResourceKey, displayValue)
+                    : UiText.Get(descriptor.DisplayNameResourceKey)))
+            .ToList();
+        var styleGallery = new ListBox
+        {
+            SelectionMode = SelectionMode.Single,
+            Height = 126,
+            Margin = new Thickness(0, 0, 0, 8),
+            ItemsSource = styleItems,
+            ItemsPanel = new FuncTemplate<Panel?>(() => new UniformGrid { Columns = 4 }),
+            ItemTemplate = new FuncDataTemplate<PivotChartStyleGalleryItem>(
+                (item, _) => CreatePivotChartStyleGalleryContent(item?.DisplayName ?? string.Empty)),
+            SelectedIndex = ChartStylePlanner.FindStyleOptionIndex(current.ChartStyleId),
+        };
+        ApplyPivotListBoxChrome(styleGallery);
+        ScrollViewer.SetHorizontalScrollBarVisibility(styleGallery, ScrollBarVisibility.Disabled);
+        ApplyFieldAutomation(styleGallery, PivotChartOptionsDialogFieldId.ChartStyle);
 
         // WPF check boxes are 16px rows; the compact Avalonia check box is 20px, so every WPF bottom
         // margin (8 / 6 / 16) is reduced by 4px to keep the same row pitch.
@@ -125,10 +154,24 @@ public sealed partial class MainWindow
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) => dialog.Close(true);
 
-        // Layout mirrors PivotChartOptionsDialog: a 16px root margin, a field-buttons group and a
-        // layout group (each 12px above the next block, content inset 10,8,10,10), dependent boxes
-        // indented 18px, the blank-display label 4px above its stretched combo, then the shared pivot
-        // OK/Cancel row. The WPF chart-style gallery group is not part of this shell.
+        // Layout mirrors PivotChartOptionsDialog: a 16px root margin, a chart-style group (label 4px
+        // above the gallery), a field-buttons group and a layout group (each 12px above the next block,
+        // content inset 10,8,10,10), dependent boxes indented 18px, the blank-display label 4px above
+        // its stretched combo, then the shared pivot OK/Cancel row.
+        var stylePanel = new StackPanel
+        {
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = FieldLabel(PivotChartOptionsDialogFieldId.ChartStyle),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    Margin = new Thickness(0, 0, 0, 4),
+                },
+                styleGallery,
+            },
+        };
         var buttonPanel = new StackPanel
         {
             Children = { showFieldButtons, reportFilterButtons, axisFieldButtons, valueFieldButtons },
@@ -154,6 +197,9 @@ public sealed partial class MainWindow
 
         var content = new StackPanel { Margin = new Thickness(16) };
         content.Children.Add(CreatePivotDialogGroupBox(
+            UiText.Get(PivotChartOptionsPlanner.GetChartStyleSection().HeaderResourceKey),
+            stylePanel));
+        content.Children.Add(CreatePivotDialogGroupBox(
             UiText.Get(PivotChartOptionsPlanner.GetFieldButtonsSection().HeaderResourceKey),
             buttonPanel));
         content.Children.Add(CreatePivotDialogGroupBox(
@@ -161,7 +207,8 @@ public sealed partial class MainWindow
             layoutPanel));
         content.Children.Add(CreatePivotDialogButtonRow(ok, cancel));
         dialog.Content = content;
-        ConfigurePivotDialogLifecycle(dialog, showFieldButtons);
+        // WPF puts initial keyboard focus on the style gallery.
+        ConfigurePivotDialogLifecycle(dialog, styleGallery);
 
         var confirmed = await dialog.ShowDialog<bool>(this);
         if (!confirmed)
@@ -174,8 +221,11 @@ public sealed partial class MainWindow
         var blankDisplayMode = blankDisplayBox.SelectedItem is PivotChartOptionsResolvedBlankDisplayChoice pickedBlankDisplay
             ? pickedBlankDisplay.Mode
             : current.BlankDisplayMode;
+        var selectedStyleId = styleGallery.SelectedItem is PivotChartStyleGalleryItem pickedStyle
+            ? pickedStyle.StyleId
+            : null;
         var input = PivotChartOptionsPlanner.CreateResult(
-            current.ChartStyleId,
+            selectedStyleId,
             showFieldButtons.IsChecked == true,
             reportFilterButtons.IsChecked == true,
             axisFieldButtons.IsChecked == true,
@@ -218,9 +268,69 @@ public sealed partial class MainWindow
         void ApplyFieldAutomation(Control control, PivotChartOptionsDialogFieldId fieldId)
         {
             var descriptor = PivotChartOptionsPlanner.GetDialogField(fieldId);
-            AutomationProperties.SetName(control, FieldLabel(fieldId));
+            AutomationProperties.SetName(
+                control,
+                descriptor.AutomationNameResourceKey is { } automationNameKey
+                    ? UiText.Get(automationNameKey)
+                    : FieldLabel(fieldId));
             AutomationProperties.SetAutomationId(control, descriptor.AutomationId);
         }
+    }
+
+    // One chart-style gallery entry; the text form is what assistive tools read for the item.
+    private sealed record PivotChartStyleGalleryItem(int? StyleId, string DisplayName)
+    {
+        public override string ToString() => DisplayName;
+    }
+
+    // WPF PivotChartOptionsDialog style-gallery item: a 28px white preview holding three accent bars
+    // (8px wide, 12/19/15 tall, 2px side margins, 4px above the bottom edge) over the centred 10pt style
+    // name. WPF fixes the item at 82px; here it stretches to the four-column cell so nothing clips.
+    private static Control CreatePivotChartStyleGalleryContent(string displayName)
+    {
+        var bars = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalAlignment = AvaloniaVerticalAlignment.Bottom,
+            Margin = new Thickness(0, 0, 0, 4),
+        };
+        foreach (var height in new[] { 12d, 19d, 15d })
+        {
+            bars.Children.Add(new Border
+            {
+                Width = 8,
+                Height = height,
+                Margin = new Thickness(2, 0, 2, 0),
+                Background = Brush(0, 120, 215),
+                VerticalAlignment = AvaloniaVerticalAlignment.Bottom,
+            });
+        }
+
+        return new StackPanel
+        {
+            Margin = new Thickness(3),
+            Children =
+            {
+                new Border
+                {
+                    Height = 28,
+                    Background = Brushes.White,
+                    BorderBrush = Brush(160, 160, 160),
+                    BorderThickness = new Thickness(1),
+                    Child = bars,
+                },
+                new TextBlock
+                {
+                    Text = displayName,
+                    FontFamily = FormulaBarFontFamily,
+                    FontSize = 10,
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    Margin = new Thickness(0, 3, 0, 0),
+                },
+            },
+        };
     }
 
     /// <summary>

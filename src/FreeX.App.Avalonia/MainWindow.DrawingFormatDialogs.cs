@@ -17,7 +17,7 @@ namespace FreeX.App.Avalonia;
 
 /// <summary>
 /// Windows-parity drawing-object editing dialogs for the Avalonia/macOS shell: Format Picture / Format Shape
-/// (size with lock-aspect syncing, rotation, alt text), Crop Picture (per-edge crop percentages), and the shape
+/// (size with lock-aspect syncing, rotation, the picture crop page, alt text), Crop Picture (per-edge crop percentages), and the shape
 /// Gradient Fill (start/end stop colors + direction with a live preview). Input collection lives here; all the
 /// validation, parsing, aspect-ratio math, preset/direction catalogs, and result building come from portable
 /// planners in <see cref="FreeX.App.Presentation.DrawingUI"/> and <see cref="FreeX.App.Services"/> so the behavior
@@ -53,7 +53,7 @@ public sealed partial class MainWindow
     }
 
     // -------------------------------------------------------------------------------------------------------
-    // Format Picture / Format Shape (size + rotation + alt text)
+    // Format Picture / Format Shape (size + rotation + crop + alt text)
     // -------------------------------------------------------------------------------------------------------
 
     private async System.Threading.Tasks.Task OpenFormatPictureDialogAsync()
@@ -64,7 +64,18 @@ public sealed partial class MainWindow
         if (ResolveSelectedFormatTarget() is not { } target)
             return;
 
+        // WPF FormatPictureDialog carries a crop page between the size and alternative-text pages.
+        // Only pictures have crop edges, so shapes and text boxes keep the two-page dialog.
+        PictureModel? picture = null;
+        if (target.Kind == DrawingObjectTargetKind.Picture)
+        {
+            picture = ResolveSelectedPicture();
+            if (picture is null)
+                return;
+        }
+
         var state = FormatPicturePlanner.CreateDialogState(target.Values);
+        var cropValues = picture is null ? null : PictureCropDialogPlanner.Capture(picture);
         var suppressSync = false;
 
         // WPF FormatPictureDialog: the editors stretch across the tab page's star column.
@@ -108,6 +119,39 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(altTextBox, "FormatObjectAltTextBox");
         AutomationProperties.SetName(altTextBox, UiText.Get("FormatPicture_AltTextLabel"));
+
+        var cropBoxes = cropValues is null
+            ? Array.Empty<TextBox>()
+            : new[]
+            {
+                CropBox("FormatObjectCropLeftBox", PictureCropDialogPlanner.FormatPercent(cropValues.Left)),
+                CropBox("FormatObjectCropTopBox", PictureCropDialogPlanner.FormatPercent(cropValues.Top)),
+                CropBox("FormatObjectCropRightBox", PictureCropDialogPlanner.FormatPercent(cropValues.Right)),
+                CropBox("FormatObjectCropBottomBox", PictureCropDialogPlanner.FormatPercent(cropValues.Bottom)),
+            };
+        if (cropValues is { IsCroppable: false })
+        {
+            foreach (var cropBox in cropBoxes)
+                cropBox.IsEnabled = false;
+        }
+
+        // Shared validation for both object kinds: the crop list is the comma-delimited
+        // left/top/right/bottom text the planner parses (objects without crop edges submit zeros).
+        bool TryReadFormatResult(
+            out FormatPicturePlanner.PictureFormatResult? formatResult,
+            out FormatPicturePlanner.FormatPictureDialogValidationError? validationError) =>
+            FormatPicturePlanner.TryCreatePictureResult(
+                new FormatPicturePlanner.FormatObjectSubmission(
+                    widthBox.Text,
+                    heightBox.Text,
+                    rotationBox.Text,
+                    lockAspectBox.IsChecked == true,
+                    altTextBox.Text),
+                cropBoxes.Length == 4
+                    ? string.Join(", ", cropBoxes.Select(cropBox => cropBox.Text))
+                    : "0, 0, 0, 0",
+                out formatResult,
+                out validationError);
 
         bool AspectLocked() => state.LockAspectRatioSupported && lockAspectBox.IsChecked == true;
 
@@ -161,24 +205,6 @@ public sealed partial class MainWindow
         ApplyDrawingButtonChrome(cancel, width: 72);
         AutomationProperties.SetAutomationId(cancel, "FormatObjectCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
-        ok.Click += (_, _) =>
-        {
-            if (!FormatPicturePlanner.TryCreateResult(
-                    new FormatPicturePlanner.FormatObjectSubmission(
-                        widthBox.Text,
-                        heightBox.Text,
-                        rotationBox.Text,
-                        lockAspectBox.IsChecked == true,
-                        altTextBox.Text),
-                    out _,
-                    out var error))
-            {
-                ShowEditIssue(error ?? FormatPicturePlanner.InvalidSizeMessage);
-                return;
-            }
-
-            dialog.Close(true);
-        };
 
         // WPF FormatPictureDialog: a 14px root margin around a tab control that fills the window down
         // to the OK/Cancel row. Each tab page is a two-column grid (12px margin, 110px label column,
@@ -193,6 +219,83 @@ public sealed partial class MainWindow
             Grid.SetRow(lockAspectBox, 3);
             Grid.SetColumn(lockAspectBox, 1);
             sizePage.Children.Add(lockAspectBox);
+        }
+
+        // WPF ResetSizeToInitial: the button under the lock check box restores the size, rotation
+        // and lock state the dialog opened with. Like every WPF button dropped into a grid cell it
+        // stretches across the editor column.
+        var resetSizeButton = new Button
+        {
+            Content = UiText.Get("FormatPicture_ResetSizeButton"),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 0, 0, 8),
+        };
+        AvaloniaCompactDialogChrome.ApplyButton(resetSizeButton, DrawingDialogChromeStyle, 96);
+        AutomationProperties.SetAutomationId(resetSizeButton, "FormatObjectResetSizeButton");
+        resetSizeButton.Click += (_, _) =>
+        {
+            suppressSync = true;
+            widthBox.Text = state.WidthText;
+            heightBox.Text = state.HeightText;
+            rotationBox.Text = state.RotationText;
+            lockAspectBox.IsChecked = state.LockAspectRatio;
+            suppressSync = false;
+        };
+        Grid.SetRow(resetSizeButton, 4);
+        Grid.SetColumn(resetSizeButton, 1);
+        sizePage.Children.Add(resetSizeButton);
+
+        // WPF CreateCropTab: left, top, right, bottom percentages, the reset button in the editor
+        // column and, for pictures that are not inserted images, the disabled editors plus a note.
+        Grid? cropPage = null;
+        if (cropValues is { } initialCrop)
+        {
+            cropPage = CreateFormatObjectTabGrid();
+            AddFormatObjectTabRow(cropPage, 0, UiText.Get("FormatPicture_LeftLabel"), cropBoxes[0]);
+            AddFormatObjectTabRow(cropPage, 1, UiText.Get("FormatPicture_TopLabel"), cropBoxes[1]);
+            AddFormatObjectTabRow(cropPage, 2, UiText.Get("FormatPicture_RightLabel"), cropBoxes[2]);
+            AddFormatObjectTabRow(cropPage, 3, UiText.Get("FormatPicture_BottomLabel"), cropBoxes[3]);
+            AutomationProperties.SetName(cropBoxes[0], StripDisplayMnemonic(UiText.Get("FormatPicture_LeftLabel")));
+            AutomationProperties.SetName(cropBoxes[1], StripDisplayMnemonic(UiText.Get("FormatPicture_TopLabel")));
+            AutomationProperties.SetName(cropBoxes[2], StripDisplayMnemonic(UiText.Get("FormatPicture_RightLabel")));
+            AutomationProperties.SetName(cropBoxes[3], StripDisplayMnemonic(UiText.Get("FormatPicture_BottomLabel")));
+
+            var resetCropButton = new Button
+            {
+                Content = UiText.Get("FormatPicture_ResetCropButton"),
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+                Margin = new Thickness(0, 0, 0, 8),
+                IsEnabled = initialCrop.IsCroppable,
+            };
+            AvaloniaCompactDialogChrome.ApplyButton(resetCropButton, DrawingDialogChromeStyle, 96);
+            AutomationProperties.SetAutomationId(resetCropButton, "FormatObjectResetCropButton");
+            resetCropButton.Click += (_, _) =>
+            {
+                cropBoxes[0].Text = PictureCropDialogPlanner.FormatPercent(initialCrop.Left);
+                cropBoxes[1].Text = PictureCropDialogPlanner.FormatPercent(initialCrop.Top);
+                cropBoxes[2].Text = PictureCropDialogPlanner.FormatPercent(initialCrop.Right);
+                cropBoxes[3].Text = PictureCropDialogPlanner.FormatPercent(initialCrop.Bottom);
+            };
+            Grid.SetRow(resetCropButton, 4);
+            Grid.SetColumn(resetCropButton, 1);
+            cropPage.Children.Add(resetCropButton);
+
+            if (!initialCrop.IsCroppable)
+            {
+                var cropUnavailableNote = new TextBlock
+                {
+                    Text = UiText.Get("FormatPicture_CropUnavailableMessage"),
+                    Foreground = HeaderForeground,
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 8, 0, 0),
+                };
+                AutomationProperties.SetAutomationId(cropUnavailableNote, "FormatObjectCropUnavailableText");
+                Grid.SetRow(cropUnavailableNote, 5);
+                Grid.SetColumn(cropUnavailableNote, 1);
+                cropPage.Children.Add(cropUnavailableNote);
+            }
         }
 
         var altTextPage = CreateFormatObjectTabGrid();
@@ -213,16 +316,62 @@ public sealed partial class MainWindow
         Grid.SetColumn(altTextBox, 1);
         altTextPage.Children.Add(altTextBox);
 
-        var tabs = new TabControl
-        {
-            Items =
-            {
-                new TabItem { Header = StripDisplayMnemonic(UiText.Get("FormatPicture_SizeTab")), Content = sizePage },
-                new TabItem { Header = StripDisplayMnemonic(UiText.Get("FormatPicture_AltTextTab")), Content = altTextPage },
-            },
-        };
+        // WPF tab order: size, crop (pictures only here), alternative text.
+        var sizeTab = new TabItem { Header = StripDisplayMnemonic(UiText.Get("FormatPicture_SizeTab")), Content = sizePage };
+        var cropTab = cropPage is null
+            ? null
+            : new TabItem { Header = StripDisplayMnemonic(UiText.Get("FormatPicture_CropTab")), Content = cropPage };
+        var altTextTab = new TabItem { Header = StripDisplayMnemonic(UiText.Get("FormatPicture_AltTextTab")), Content = altTextPage };
+        var tabs = new TabControl();
+        tabs.Items.Add(sizeTab);
+        if (cropTab is not null)
+            tabs.Items.Add(cropTab);
+        tabs.Items.Add(altTextTab);
         AutomationProperties.SetAutomationId(tabs, "FormatObjectTabs");
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs, DrawingDialogChromeStyle);
+
+        // WPF Accept + FocusInvalidInput: report the localized problem, switch to the page that owns
+        // the offending editor and select its text.
+        void FocusFormatEditor(TabItem tab, TextBox editor)
+        {
+            tabs.SelectedItem = tab;
+            // A page that was not the selected one is not laid out yet and cannot take focus until it is.
+            dialog.UpdateLayout();
+            AvaloniaCompactDialogChrome.FocusAndSelect(editor);
+        }
+
+        ok.Click += (_, _) =>
+        {
+            if (TryReadFormatResult(out _, out var validationError))
+            {
+                dialog.Close(true);
+                return;
+            }
+
+            switch (validationError)
+            {
+                case FormatPicturePlanner.FormatPictureDialogValidationError.Rotation:
+                    ShowEditIssue(UiText.Get("FormatPicture_InvalidRotationMessage"));
+                    FocusFormatEditor(sizeTab, rotationBox);
+                    break;
+                case FormatPicturePlanner.FormatPictureDialogValidationError.Crop when cropTab is not null:
+                    ShowEditIssue(UiText.Get("FormatPicture_InvalidCropPercentagesMessage"));
+                    FocusFormatEditor(
+                        cropTab,
+                        cropBoxes.FirstOrDefault(cropBox => !PictureCropDialogPlanner.TryParsePercent(cropBox.Text, out _))
+                            ?? cropBoxes[0]);
+                    break;
+                default:
+                    ShowEditIssue(UiText.Get("FormatPicture_InvalidSizeMessage"));
+                    FocusFormatEditor(
+                        sizeTab,
+                        FormatPicturePlanner.ResolveInvalidField(widthBox.Text, heightBox.Text, rotationBox.Text)
+                            == FormatPicturePlanner.FormatObjectDialogField.Width
+                            ? widthBox
+                            : heightBox);
+                    break;
+            }
+        };
 
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);
         var content = new Grid
@@ -247,28 +396,39 @@ public sealed partial class MainWindow
         if (!confirmed)
             return;
 
-        if (!FormatPicturePlanner.TryCreateResult(
-                new FormatPicturePlanner.FormatObjectSubmission(
-                    widthBox.Text,
-                    heightBox.Text,
-                    rotationBox.Text,
-                    lockAspectBox.IsChecked == true,
-                    altTextBox.Text),
-                out var result,
-                out _) ||
-            result is null)
+        if (!TryReadFormatResult(out var result, out _) || result is null)
+            return;
+
+        if (picture is null)
         {
+            ApplyFormatObjectResult(result.Format, target);
             return;
         }
 
-        ApplyFormatObjectResult(result, target);
+        // Same path as the WPF host: one composite (single undo step) of resize, rotation, lock
+        // aspect ratio, alternative text and, for inserted images, the crop edges. The picture is
+        // resolved again because the selection may have changed while the dialog was open.
+        var current = DrawingTargetResolver.ResolveSelectedPicture(
+            _session.ActiveSheet,
+            _selectedDrawingObjectKind,
+            _selectedDrawingObjectId).Target;
+        RunDrawingObjectCommand(
+            DrawingObjectFormatCommandPolicy.BuildPictureFormatCommand(
+                _session.ActiveSheet.Id,
+                current,
+                result,
+                "Format Picture",
+                UiText.Get("MainWindowMessage_PictureWasNotFound")),
+            UiText.Get("FormatPicture_Applied"),
+            "Format Picture");
     }
 
     private static Grid CreateFormatObjectTabGrid() => new()
     {
         Margin = new Thickness(12),
         ColumnDefinitions = new ColumnDefinitions("110,*"),
-        RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto"),
+        // WPF CreateTwoColumnGrid: six auto rows (editors, check box, reset button, note).
+        RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto"),
         VerticalAlignment = AvaloniaVerticalAlignment.Top,
     };
 

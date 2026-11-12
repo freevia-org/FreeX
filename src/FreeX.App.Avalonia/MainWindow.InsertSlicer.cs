@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.SlicerTimeline;
@@ -14,10 +15,11 @@ namespace FreeX.App.Avalonia;
 
 /// <summary>
 /// Insert ▸ Slicer / Insert ▸ Timeline for the active PivotTable. Both commands resolve the active (or first)
-/// pivot on the active sheet, present a compact field picker (checkbox list for slicers, single-select list for
-/// timelines), then create one <see cref="SlicerModel"/> per chosen field through shared application plans.
-/// The Core command behind each plan validates that a
-/// timeline field actually contains dates and surfaces an error if not; the shell relays that message rather
+/// pivot on the active sheet and present the WPF dialog shape: an editable field combo (the pivot's source
+/// fields, or a typed field name) and a caption box seeded with the default control name, then create the
+/// slicer or timeline for that field under that caption through shared application plans.
+/// The Core command behind each plan validates the field and the name (and that a
+/// timeline field actually contains dates) and surfaces an error if not; the shell relays that message rather
 /// than crashing. When no pivot is present, the shell just shows an explanatory status line.
 /// </summary>
 public sealed partial class MainWindow
@@ -54,114 +56,26 @@ public sealed partial class MainWindow
             return;
         }
 
-        var headers = PivotApplication.ReadSourceHeaders(
-            new PivotApplicationTarget(_session.ActiveSheet, pivot));
-        if (headers.Count == 0)
+        var fields = ReadInsertControlFields(pivot);
+        if (fields.Count == 0)
         {
             RefreshShell(UiText.Get("PivotLoc_NoFieldsToSlice"));
             return;
         }
 
-        var dialog = new Window
-        {
-            // WPF: a NoResize window PivotSlicerTimelineDialogContract.Width wide. This shell picks
-            // several fields from a check list instead of one field plus a caption, so the height
-            // follows the list rather than the WPF contract height.
-            Title = UiText.Get("PivotSlicerTimeline_InsertSlicer"),
-            Width = PivotSlicerTimelineDialogContract.Width,
-            MinWidth = PivotSlicerTimelineDialogContract.Width,
-            MaxWidth = PivotSlicerTimelineDialogContract.Width,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-        };
-        AutomationProperties.SetAutomationId(dialog, "InsertSlicerDialog");
-
-        var checkBoxes = new List<CheckBox>(headers.Count);
-        var fieldStack = new StackPanel();
-        foreach (var header in headers)
-        {
-            var checkBox = new CheckBox { Content = header };
-            ApplyDataOpsCheckBoxChrome(checkBox);
-            checkBoxes.Add(checkBox);
-            fieldStack.Children.Add(checkBox);
-        }
-
-        var fieldList = new ScrollViewer
-        {
-            Content = fieldStack,
-            MaxHeight = 220,
-        };
-        AutomationProperties.SetAutomationId(fieldList, "InsertSlicerFieldList");
-
-        var warningText = new TextBlock
-        {
-            Foreground = Brush(180, 30, 30),
-            TextWrapping = TextWrapping.Wrap,
-            IsVisible = false,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-        };
-        AutomationProperties.SetAutomationId(warningText, "InsertSlicerWarningText");
-
-        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
-        ApplyPivotButtonChrome(okButton, PivotDialogButtonMinWidth, isDefault: true);
-        AutomationProperties.SetAutomationId(okButton, "InsertSlicerOkButton");
-        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
-        ApplyPivotButtonChrome(cancelButton, PivotDialogButtonMinWidth);
-        AutomationProperties.SetAutomationId(cancelButton, "InsertSlicerCancelButton");
-
-        okButton.Click += (_, _) =>
-        {
-            warningText.IsVisible = false;
-
-            var selectedFields = checkBoxes
-                .Where(box => box.IsChecked == true && box.Content is string)
-                .Select(box => (string)box.Content!)
-                .ToList();
-
-            if (selectedFields.Count == 0)
-            {
-                warningText.Text = UiText.Get("PivotLoc_SelectAtLeastOneField");
-                warningText.IsVisible = true;
-                return;
-            }
-
-            if (!TryInsertSlicerControls(pivot, selectedFields, out var error))
-            {
-                warningText.Text = error;
-                warningText.IsVisible = true;
-                return;
-            }
-
-            dialog.Close();
-        };
-        cancelButton.Click += (_, _) => dialog.Close();
-
-        var buttonRow = CreatePivotDialogButtonRow(okButton, cancelButton);
-
-        // Layout mirrors the WPF InsertSlicer dialog: a 16px root margin, one captioned group box
-        // (content inset 10,8,10,10, 12px above the button row's own 12px top margin) and the shared
-        // pivot OK/Cancel row. The prompt naming the PivotTable labels the check list inside the group.
-        var groupContent = new StackPanel();
-        var groupPrompt = CreatePivotDialogLabel(UiText.Format("PivotLoc_ChooseFieldsForSlicers", pivot.Name));
-        groupPrompt.TextWrapping = TextWrapping.Wrap;
-        groupContent.Children.Add(groupPrompt);
-        groupContent.Children.Add(fieldList);
-        groupContent.Children.Add(warningText);
-
-        dialog.Content = new StackPanel
-        {
-            Margin = new Thickness(16),
-            Children =
-            {
-                CreatePivotDialogGroupBox(UiText.Get("PivotSlicerTimeline_ChooseFieldsGroup"), groupContent),
-                buttonRow,
-            },
-        };
-
-        await dialog.ShowDialog(this);
+        await ShowInsertPivotControlDialogAsync(
+            fields,
+            new InsertPivotControlDialogText(
+                TitleKey: "PivotSlicerTimeline_InsertSlicer",
+                GroupKey: "PivotSlicerTimeline_ChooseFieldsGroup",
+                FieldLabelKey: "PivotSlicerTimeline_FieldToConnectLabel",
+                CaptionLabelKey: "PivotSlicerTimeline_SlicerCaptionLabel",
+                DefaultNameKey: "PivotSlicerTimeline_DefaultSlicerName",
+                MissingFieldKey: "PivotSlicerTimeline_SelectFieldToConnect",
+                MissingCaptionKey: "PivotSlicerTimeline_EnterSlicerCaption"),
+            automationPrefix: "InsertSlicer",
+            (string fieldName, string caption, out string error) =>
+                TryInsertSlicerControl(pivot, fieldName, caption, out error));
     }
 
     private async Task ShowInsertTimelineDialogAsync()
@@ -176,46 +90,93 @@ public sealed partial class MainWindow
             return;
         }
 
-        var headers = PivotApplication.ReadSourceHeaders(
-            new PivotApplicationTarget(_session.ActiveSheet, pivot));
-        if (headers.Count == 0)
+        var fields = ReadInsertControlFields(pivot);
+        if (fields.Count == 0)
         {
             RefreshShell(UiText.Get("PivotLoc_NoFieldsForTimeline"));
             return;
         }
 
+        await ShowInsertPivotControlDialogAsync(
+            fields,
+            new InsertPivotControlDialogText(
+                TitleKey: "PivotSlicerTimeline_InsertTimeline",
+                GroupKey: "PivotSlicerTimeline_ChooseDateFieldsGroup",
+                FieldLabelKey: "PivotSlicerTimeline_DateFieldToConnectLabel",
+                CaptionLabelKey: "PivotSlicerTimeline_TimelineCaptionLabel",
+                DefaultNameKey: "PivotSlicerTimeline_DefaultTimelineName",
+                MissingFieldKey: "PivotSlicerTimeline_SelectDateFieldToConnect",
+                MissingCaptionKey: "PivotSlicerTimeline_EnterTimelineCaption"),
+            automationPrefix: "InsertTimeline",
+            (string fieldName, string caption, out string error) =>
+                TryInsertTimelineControl(pivot, fieldName, caption, out error));
+    }
+
+    // The resource keys that differ between the slicer and the timeline flavour of the shared dialog.
+    private sealed record InsertPivotControlDialogText(
+        string TitleKey,
+        string GroupKey,
+        string FieldLabelKey,
+        string CaptionLabelKey,
+        string DefaultNameKey,
+        string MissingFieldKey,
+        string MissingCaptionKey);
+
+    private delegate bool TryInsertPivotControl(string fieldName, string caption, out string error);
+
+    // The non-blank source-field captions the field combo offers, in source order (the WPF field list).
+    private IReadOnlyList<string> ReadInsertControlFields(PivotTableModel pivot) =>
+        PivotApplication.ReadSourceHeaders(new PivotApplicationTarget(_session.ActiveSheet, pivot))
+            .Where(header => !string.IsNullOrWhiteSpace(header))
+            .ToList();
+
+    /// <summary>
+    /// The WPF InsertSlicerDialog / InsertTimelineDialog shape: one captioned group box holding an editable
+    /// field combo (first field preselected) above a caption box seeded with the default control name for
+    /// that field, then the shared pivot button row. Accepting requires a non-blank field and caption (the
+    /// WPF validation order and messages, shown inline with focus moved to the offending input) and keeps
+    /// the dialog open when the Core command rejects the insert.
+    /// </summary>
+    private async Task ShowInsertPivotControlDialogAsync(
+        IReadOnlyList<string> fields,
+        InsertPivotControlDialogText text,
+        string automationPrefix,
+        TryInsertPivotControl tryInsert)
+    {
+        var initialField = fields[0];
+
         var dialog = new Window
         {
-            // WPF: a NoResize window PivotSlicerTimelineDialogContract.Width wide. This shell picks
-            // several fields from a check list instead of one field plus a caption, so the height
-            // follows the list rather than the WPF contract height.
-            Title = UiText.Get("PivotSlicerTimeline_InsertTimeline"),
+            // WPF: a NoResize window of PivotSlicerTimelineDialogContract size, so the app-wide dialog
+            // sizing makes the contract height the minimum and lets the height follow the content.
+            Title = UiText.Get(text.TitleKey),
             Width = PivotSlicerTimelineDialogContract.Width,
             MinWidth = PivotSlicerTimelineDialogContract.Width,
             MaxWidth = PivotSlicerTimelineDialogContract.Width,
+            MinHeight = PivotSlicerTimelineDialogContract.Height - WpfNoResizeFrameHeight,
             SizeToContent = SizeToContent.Height,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
-        AutomationProperties.SetAutomationId(dialog, "InsertTimelineDialog");
+        AutomationProperties.SetAutomationId(dialog, automationPrefix + "Dialog");
 
-        var checkBoxes = new List<CheckBox>(headers.Count);
-        var fieldStack = new StackPanel();
-        foreach (var header in headers)
+        var fieldBox = new ComboBox
         {
-            var checkBox = new CheckBox { Content = header };
-            ApplyDataOpsCheckBoxChrome(checkBox);
-            checkBoxes.Add(checkBox);
-            fieldStack.Children.Add(checkBox);
-        }
-
-        var fieldList = new ScrollViewer
-        {
-            Content = fieldStack,
-            MaxHeight = 220,
+            IsEditable = true,
+            ItemsSource = fields,
+            SelectedIndex = 0,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
-        AutomationProperties.SetAutomationId(fieldList, "InsertTimelineFieldList");
+        ApplyPivotComboBoxChrome(fieldBox);
+        fieldBox.Text = initialField;
+        AutomationProperties.SetAutomationId(fieldBox, automationPrefix + "FieldList");
+        AutomationProperties.SetName(fieldBox, UiText.CreateAutomationName(UiText.Get(text.FieldLabelKey)));
+
+        var captionBox = new TextBox { Text = UiText.Format(text.DefaultNameKey, initialField) };
+        ApplyPivotTextBoxChrome(captionBox);
+        AutomationProperties.SetAutomationId(captionBox, automationPrefix + "CaptionBox");
+        AutomationProperties.SetName(captionBox, UiText.CreateAutomationName(UiText.Get(text.CaptionLabelKey)));
 
         var warningText = new TextBlock
         {
@@ -225,35 +186,59 @@ public sealed partial class MainWindow
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
-        AutomationProperties.SetAutomationId(warningText, "InsertTimelineWarningText");
+        AutomationProperties.SetAutomationId(warningText, automationPrefix + "WarningText");
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
         ApplyPivotButtonChrome(okButton, PivotDialogButtonMinWidth, isDefault: true);
-        AutomationProperties.SetAutomationId(okButton, "InsertTimelineOkButton");
+        AutomationProperties.SetAutomationId(okButton, automationPrefix + "OkButton");
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
         ApplyPivotButtonChrome(cancelButton, PivotDialogButtonMinWidth);
-        AutomationProperties.SetAutomationId(cancelButton, "InsertTimelineCancelButton");
+        AutomationProperties.SetAutomationId(cancelButton, automationPrefix + "CancelButton");
+
+        // The editable combo hosts its own text box; keyboard focus belongs on that editor.
+        void FocusFieldBox()
+        {
+            dialog.UpdateLayout();
+            if (fieldBox.GetVisualDescendants().OfType<TextBox>().FirstOrDefault() is { } editor)
+            {
+                editor.Focus();
+                editor.SelectAll();
+            }
+            else
+            {
+                fieldBox.Focus();
+            }
+        }
+
+        void ShowWarning(string message)
+        {
+            warningText.Text = message;
+            warningText.IsVisible = true;
+        }
 
         okButton.Click += (_, _) =>
         {
             warningText.IsVisible = false;
 
-            var selectedFields = checkBoxes
-                .Where(box => box.IsChecked == true && box.Content is string)
-                .Select(box => (string)box.Content!)
-                .ToList();
-
-            if (selectedFields.Count == 0)
+            var fieldName = (fieldBox.Text ?? string.Empty).Trim();
+            var caption = (captionBox.Text ?? string.Empty).Trim();
+            if (fieldName.Length == 0)
             {
-                warningText.Text = UiText.Get("PivotLoc_SelectAtLeastOneDateField");
-                warningText.IsVisible = true;
+                ShowWarning(UiText.Get(text.MissingFieldKey));
+                FocusFieldBox();
                 return;
             }
 
-            if (!TryInsertTimelineControls(pivot, selectedFields, out var error))
+            if (caption.Length == 0)
             {
-                warningText.Text = error;
-                warningText.IsVisible = true;
+                ShowWarning(UiText.Get(text.MissingCaptionKey));
+                captionBox.Focus();
+                return;
+            }
+
+            if (!tryInsert(fieldName, caption, out var error))
+            {
+                ShowWarning(error);
                 return;
             }
 
@@ -263,14 +248,13 @@ public sealed partial class MainWindow
 
         var buttonRow = CreatePivotDialogButtonRow(okButton, cancelButton);
 
-        // Layout mirrors the WPF InsertTimeline dialog: a 16px root margin, one captioned group box
-        // (content inset 10,8,10,10, 12px above the button row's own 12px top margin) and the shared
-        // pivot OK/Cancel row. The prompt naming the PivotTable labels the check list inside the group.
+        // Layout mirrors the WPF dialog: a 16px root margin, one captioned group box (content inset
+        // 10,8,10,10, 12px above the button row's own 12px top margin) with each label above its
+        // control and an 8px row gap, then the shared pivot button row. The inline warning is
+        // Avalonia-only and takes no room until it is shown.
         var groupContent = new StackPanel();
-        var groupPrompt = CreatePivotDialogLabel(UiText.Format("PivotLoc_ChooseDateFieldsForTimelines", pivot.Name));
-        groupPrompt.TextWrapping = TextWrapping.Wrap;
-        groupContent.Children.Add(groupPrompt);
-        groupContent.Children.Add(fieldList);
+        AddPivotDialogLabeledControl(groupContent, UiText.Get(text.FieldLabelKey), fieldBox);
+        AddPivotDialogLabeledControl(groupContent, UiText.Get(text.CaptionLabelKey), captionBox);
         groupContent.Children.Add(warningText);
 
         dialog.Content = new StackPanel
@@ -278,95 +262,60 @@ public sealed partial class MainWindow
             Margin = new Thickness(16),
             Children =
             {
-                CreatePivotDialogGroupBox(UiText.Get("PivotSlicerTimeline_ChooseDateFieldsGroup"), groupContent),
+                CreatePivotDialogGroupBox(UiText.Get(text.GroupKey), groupContent),
                 buttonRow,
             },
         };
+        dialog.Opened += (_, _) => FocusFieldBox();
 
         await dialog.ShowDialog(this);
     }
 
     /// <summary>
-    /// Creates one slicer per selected field through the shared Pivot application session. Each name is made unique
-    /// against the workbook's existing slicers. Returns false (with a message) on the first command rejection so
-    /// the dialog can keep the picker open.
+    /// Creates the slicer for <paramref name="fieldName"/> under <paramref name="caption"/> through the shared
+    /// Pivot application session, exactly as the WPF host does. Returns false (with a message) when the command
+    /// rejects it so the dialog can stay open.
     /// </summary>
-    private bool TryInsertSlicerControls(PivotTableModel pivot, IReadOnlyList<string> fields, out string error)
+    private bool TryInsertSlicerControl(PivotTableModel pivot, string fieldName, string caption, out string error)
     {
-        error = string.Empty;
-        var applied = 0;
-        foreach (var field in fields)
+        _slicerTimelinePaneDismissed = false;
+        var outcome = PivotApplication.Execute(
+            PivotApplication.PlanInsertSlicer(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                caption,
+                fieldName));
+        if (!outcome.Success)
         {
-            var name = MakeUniqueControlName(field, _session.Workbook.Slicers.Select(s => s.Name));
-            var outcome = PivotApplication.Execute(
-                PivotApplication.PlanInsertSlicer(
-                    new PivotApplicationTarget(_session.ActiveSheet, pivot),
-                    name,
-                    field));
-            if (!outcome.Success)
-            {
-                error = outcome.Message?.Detail ?? UiText.Format("PivotLoc_CouldNotInsertSlicer", field);
-                if (applied > 0)
-                    RefreshShell(UiText.Format("PivotLoc_InsertedSlicersCount", applied));
-                return false;
-            }
-
-            applied++;
+            error = outcome.Message?.Detail ?? UiText.Format("PivotLoc_CouldNotInsertSlicer", fieldName);
+            return false;
         }
 
-        RefreshShell(applied == 1 ? UiText.Format("PivotLoc_InsertedSlicerFor", fields[0]) : UiText.Format("PivotLoc_InsertedSlicersCount", applied));
+        error = string.Empty;
+        RefreshShell(UiText.Format("PivotLoc_InsertedSlicerFor", fieldName));
         return true;
     }
 
     /// <summary>
-    /// Creates one timeline per selected field through the shared Pivot application session. Core rejects
-    /// fields that do not contain dates ("Timeline source field must contain dates."); that message is surfaced
-    /// verbatim. Returns false on the first rejection.
+    /// Creates the timeline for <paramref name="fieldName"/> under <paramref name="caption"/> through the
+    /// shared Pivot application session. Core rejects fields that do not contain dates; that message is
+    /// surfaced verbatim. Returns false on rejection so the dialog can stay open.
     /// </summary>
-    private bool TryInsertTimelineControls(PivotTableModel pivot, IReadOnlyList<string> fields, out string error)
+    private bool TryInsertTimelineControl(PivotTableModel pivot, string fieldName, string caption, out string error)
     {
-        error = string.Empty;
-        var applied = 0;
-        foreach (var field in fields)
+        _slicerTimelinePaneDismissed = false;
+        var outcome = PivotApplication.Execute(
+            PivotApplication.PlanInsertTimeline(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                caption,
+                fieldName));
+        if (!outcome.Success)
         {
-            var name = MakeUniqueControlName(field, _session.Workbook.Timelines.Select(t => t.Name));
-            var outcome = PivotApplication.Execute(
-                PivotApplication.PlanInsertTimeline(
-                    new PivotApplicationTarget(_session.ActiveSheet, pivot),
-                    name,
-                    field));
-            if (!outcome.Success)
-            {
-                error = outcome.Message?.Detail ?? UiText.Format("PivotLoc_CouldNotInsertTimeline", field);
-                if (applied > 0)
-                    RefreshShell(UiText.Format("PivotLoc_InsertedTimelinesCount", applied));
-                return false;
-            }
-
-            applied++;
+            error = outcome.Message?.Detail ?? UiText.Format("PivotLoc_CouldNotInsertTimeline", fieldName);
+            return false;
         }
 
-        RefreshShell(applied == 1 ? UiText.Format("PivotLoc_InsertedTimelineFor", fields[0]) : UiText.Format("PivotLoc_InsertedTimelinesCount", applied));
+        error = string.Empty;
+        RefreshShell(UiText.Format("PivotLoc_InsertedTimelineFor", fieldName));
         return true;
     }
-
-    /// <summary>
-    /// Produces a slicer/timeline name based on the field caption that does not collide with any
-    /// <paramref name="existingNames"/> (case-insensitive), appending " 2", " 3", … as needed.
-    /// </summary>
-    private static string MakeUniqueControlName(string fieldName, IEnumerable<string> existingNames)
-    {
-        var taken = new HashSet<string>(existingNames, StringComparer.OrdinalIgnoreCase);
-        var baseName = string.IsNullOrWhiteSpace(fieldName) ? "Field" : fieldName.Trim();
-        if (!taken.Contains(baseName))
-            return baseName;
-
-        for (var suffix = 2; ; suffix++)
-        {
-            var candidate = $"{baseName} {suffix}";
-            if (!taken.Contains(candidate))
-                return candidate;
-        }
-    }
-
 }

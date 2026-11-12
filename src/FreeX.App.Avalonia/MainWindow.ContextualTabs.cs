@@ -50,6 +50,10 @@ public sealed partial class MainWindow
             ["Chart Styles"] = CycleChartStyle,
             ["Select Data Source"] = () => RunGuarded(ShowSelectChartDataDialog),
             [FreeXRibbonCommandIds.ChartChangeType] = () => RunGuarded(ShowChangeChartTypeDialog),
+            // Insert ▸ Recommended Charts opens the Insert Chart dialog (Recommended / All Charts tabs),
+            // as the WPF InsertChartPickerBtn_Click handler does, instead of the ribbon host's direct
+            // column-chart insert.
+            ["Recommended Charts"] = () => RunGuarded(ShowInsertChartDialog),
             // WPF's Combo Chart button is an immediate shared ComboToggle mutation. Keep the full
             // per-series planner dialog available to parity capture, but route the ribbon command
             // through the same quick-command path as WPF so existing combo charts can be toggled off

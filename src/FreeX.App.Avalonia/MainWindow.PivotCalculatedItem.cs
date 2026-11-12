@@ -39,15 +39,31 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving)
             return;
 
-        var headers = PivotApplication.ReadSourceHeaders(
-            new PivotApplicationTarget(_session.ActiveSheet, pivot));
+        var pivotTarget = new PivotApplicationTarget(_session.ActiveSheet, pivot);
+        var headers = PivotApplication.ReadSourceHeaders(pivotTarget);
+        // The source items of every row/column field a calculated item can attach to, so the dialog can
+        // offer them as formula references (the WPF available-items list).
+        var itemNamesBySourceFieldIndex = new Dictionary<int, IEnumerable<string>>();
+        foreach (var layoutField in pivot.RowFields.Concat(pivot.ColumnFields))
+        {
+            if (!itemNamesBySourceFieldIndex.ContainsKey(layoutField.SourceFieldIndex))
+            {
+                itemNamesBySourceFieldIndex[layoutField.SourceFieldIndex] =
+                    PivotApplication.ReadSourceItems(pivotTarget, layoutField.SourceFieldIndex);
+            }
+        }
+
         var workflowText = PivotCalculatedItemSessionText.Default with
         {
             NoSourceFieldMessage = UiText.Get("PivotCalcItem_NoField"),
             SavedStatusFormat = UiText.Get("PivotCalcItem_Saved"),
             DeletedStatusFormat = UiText.Get("PivotCalcItem_Deleted")
         };
-        var calculatedItemSession = PivotCalculatedItemSession.Create(pivot, headers, workflowText);
+        var calculatedItemSession = PivotCalculatedItemSession.Create(
+            pivot,
+            headers,
+            workflowText,
+            itemNamesBySourceFieldIndex: itemNamesBySourceFieldIndex);
         if (calculatedItemSession.OpenIssue is { } openIssue)
         {
             ShowEditIssue(openIssue.Message);
@@ -96,7 +112,20 @@ public sealed partial class MainWindow
             existingBox.SelectedIndex = 0;
         }
 
+        // WPF PivotCalculatedItemDialog: an 80px list of the selected field's items below the field list.
+        var itemsList = new ListBox { Height = 80 };
+        ApplyPivotListBoxChrome(itemsList);
+        AutomationProperties.SetAutomationId(itemsList, "PivotCalcItemItemList");
+        AutomationProperties.SetName(itemsList, UiText.Get("PivotCalculated_AvailableItems"));
+        void RefreshItemList()
+        {
+            var itemReferences = calculatedItemSession.ItemReferences;
+            itemsList.ItemsSource = itemReferences;
+            itemsList.SelectedIndex = itemReferences.Count > 0 ? 0 : -1;
+        }
+
         ReloadExistingNames();
+        RefreshItemList();
         fieldBox.SelectionChanged += (_, _) =>
         {
             var selectedField = calculatedItemSession.Fields[Math.Max(0, fieldBox.SelectedIndex)];
@@ -104,6 +133,7 @@ public sealed partial class MainWindow
                 selectedField.SourceFieldIndex,
                 startNew: true);
             ReloadExistingNames();
+            RefreshItemList();
             nameBox.Text = draft.Name;
             formulaBox.Text = draft.Formula;
         };
@@ -135,9 +165,11 @@ public sealed partial class MainWindow
         ApplyPivotButtonChrome(insertButton, 110);
         insertButton.Width = 110;
         AutomationProperties.SetAutomationId(insertButton, "PivotCalcItemInsertButton");
-        void InsertSelectedReference()
+        void InsertSelectedReference() => InsertFormulaReference(fieldsList.SelectedItem as string);
+        void InsertSelectedItem() => InsertFormulaReference(itemsList.SelectedItem as string);
+        void InsertFormulaReference(string? reference)
         {
-            if (fieldsList.SelectedItem is not string reference)
+            if (reference is null)
                 return;
 
             calculatedItemSession.UpdateDraft(nameBox.Text, formulaBox.Text);
@@ -154,15 +186,26 @@ public sealed partial class MainWindow
         insertButton.Click += (_, _) => InsertSelectedReference();
         fieldsList.DoubleTapped += (_, _) => InsertSelectedReference();
 
+        var insertItemButton = new Button
+        {
+            Content = UiText.Get("PivotCalculated_InsertItem"),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+        };
+        ApplyPivotButtonChrome(insertItemButton, 110);
+        insertItemButton.Width = 110;
+        AutomationProperties.SetAutomationId(insertItemButton, "PivotCalcItemInsertItemButton");
+        insertItemButton.Click += (_, _) => InsertSelectedItem();
+        itemsList.DoubleTapped += (_, _) => InsertSelectedItem();
+
         var dialog = new Window
         {
-            // WPF PivotCalculatedItemDialog is 500 wide and NoResize with a content-following height.
-            // Its 560px outer minimum allows for the available-items list this shell does not have, so
-            // the height simply follows the content here instead of leaving an empty band.
+            // WPF PivotCalculatedItemDialog: 500x560 outer, NoResize, so the app-wide dialog sizing
+            // makes 560 the minimum and lets the height follow the content.
             Title = UiText.Get("PivotCalculated_CalculatedItem"),
             Width = 500,
             MinWidth = 500,
             MaxWidth = 500,
+            MinHeight = 560 - WpfNoResizeFrameHeight,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
@@ -210,9 +253,9 @@ public sealed partial class MainWindow
 
         // Layout mirrors PivotCalculatedItemDialog: a 16px root margin, a field-and-item group and an
         // insert-into-formula group (each 12px above the next block, content inset 10,8,10,10), labels
-        // above their controls with an 8px row gap, the 110px insert button left-aligned under the 80px
-        // field list, and the button row 12px below. The existing-item picker and Delete are
-        // Avalonia-only.
+        // above their controls with an 8px row gap, a 110px insert button left-aligned under each 80px
+        // list (field list first, then the selected field's item list) with 8px below it, and the
+        // button row 12px below. The existing-item picker and Delete are Avalonia-only.
         var itemPanel = new StackPanel();
         AddPivotDialogLabeledControl(itemPanel, UiText.Get("PivotCalculated_SourceFieldLabel"), fieldBox);
         AddPivotDialogLabeledControl(itemPanel, UiText.Get("PivotCalcItem_ExistingLabel"), existingBox);
@@ -221,7 +264,11 @@ public sealed partial class MainWindow
 
         var insertPanel = new StackPanel();
         AddPivotDialogLabeledControl(insertPanel, UiText.Get("PivotCalculated_AvailableFieldsLabel"), fieldsList);
+        insertButton.Margin = new Thickness(0, 0, 0, 8);
         insertPanel.Children.Add(insertButton);
+        AddPivotDialogLabeledControl(insertPanel, UiText.Get("PivotCalculated_AvailableItemsLabel"), itemsList);
+        insertItemButton.Margin = new Thickness(0, 0, 0, 8);
+        insertPanel.Children.Add(insertItemButton);
 
         var content = new StackPanel { Margin = new Thickness(16) };
         content.Children.Add(CreatePivotDialogGroupBox(UiText.Get("PivotCalculated_FieldAndItemGroup"), itemPanel));

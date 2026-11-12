@@ -139,7 +139,7 @@ public sealed class AvaloniaChartFormatDialogSourceTests
         source.Should().Contain("dialog.Height = ChartAreaFormatPlanner.DialogHeight;");
         source.Should().Contain("MakeAreaDescriptorCheck(ChartAreaFormatDialogFieldId.ShowLegend");
         source.Should().Contain("MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.LegendFontSize");
-        source.Should().Contain("MakeAreaColorButton(ChartAreaFormatDialogFieldId.ChartAreaFillColor");
+        source.Should().Contain("MakeAreaColorEditor(ChartAreaFormatDialogFieldId.ChartAreaFillColor");
         source.Should().NotContain("double.TryParse((borderWidthBox.Text");
         source.Should().NotContain("AutomationProperties.SetName(positionCombo, \"Legend position\")");
         source.Should().NotContain("UiText.Get(\"ChartArea_ChartAreaFill\")");
@@ -156,7 +156,7 @@ public sealed class AvaloniaChartFormatDialogSourceTests
         source.Should().Contain("ChartDataLabelsPlanner.TryParseDialogInput(");
         source.Should().Contain("MakeDescriptorCheck(ChartDataLabelsDialogFieldId.Callouts");
         source.Should().Contain("MakeDescriptorNumberBox(");
-        source.Should().Contain("MakeColorButton(ChartDataLabelsDialogFieldId.FillColor");
+        source.Should().Contain("MakeColorEditor(ChartDataLabelsDialogFieldId.FillColor");
         source.Should().NotContain("UiText.Get(\"ChartDataLabels_Show\")");
         source.Should().NotContain("UiText.Get(\"ChartDataLabels_ContainsLabel\")");
     }
@@ -175,10 +175,10 @@ public sealed class AvaloniaChartFormatDialogSourceTests
         source.Should().Contain("MakeAxisDescriptorNumberBox(ChartAxisDialogFieldId.Minimum");
         source.Should().Contain("MakeAxisDescriptorNumberBox(ChartAxisDialogFieldId.MinorUnit");
         source.Should().Contain("MakeAxisDescriptorLabel(ChartAxisDialogFieldId.NumberFormat");
-        source.Should().Contain("MakeAxisColorButton(ChartAxisDialogFieldId.MajorGridlineColor");
+        source.Should().Contain("MakeAxisColorEditor(ChartAxisDialogFieldId.MajorGridlineColor");
         source.Should().Contain("MakeAxisTickStyleCombo(ChartAxisDialogFieldId.MajorTickMarks");
         source.Should().Contain("MakeAxisDescriptorLabel(ChartAxisDialogFieldId.LineThickness");
-        source.Should().Contain("FormatOptionalColorText(state.LineColor)");
+        source.Should().Contain("lineColorEditor.Text,");
         source.Should().Contain("MakeAxisDescriptorGroup(tickMarksSection");
         source.Should().NotContain("AutomationProperties.SetName(minimumBox, \"Axis minimum\")");
         source.Should().NotContain("UiText.Get(\"ChartAxis_MinimumLabel\")");
@@ -194,7 +194,7 @@ public sealed class AvaloniaChartFormatDialogSourceTests
         source.Should().Contain("ChartSeriesFormatPlanner.GetSeriesOptionsSection()");
         source.Should().Contain("ChartSeriesFormatPlanner.GetFillLineSection()");
         source.Should().Contain("ChartSeriesFormatPlanner.TryParseDialogInput(");
-        source.Should().Contain("MakeSeriesColorButton(ChartSeriesFormatDialogFieldId.FillColor");
+        source.Should().Contain("MakeSeriesColorEditor(ChartSeriesFormatDialogFieldId.FillColor");
         source.Should().Contain("MakeSeriesDescriptorLabel(ChartSeriesFormatDialogFieldId.DashStyle");
         source.Should().NotContain("AutomationProperties.SetName(seriesCombo, \"Series\")");
         source.Should().NotContain("UiText.Get(\"ChartSeries_FillAndLineLabel\")");
@@ -209,7 +209,7 @@ public sealed class AvaloniaChartFormatDialogSourceTests
         source.Should().Contain("ChartTrendlinePlanner.GetOptionsSection()");
         source.Should().Contain("ChartTrendlinePlanner.GetLineSection()");
         source.Should().Contain("ChartTrendlinePlanner.TryParseDialogInput(");
-        source.Should().Contain("MakeTrendlineColorButton(ChartTrendlineDialogFieldId.LineColor");
+        source.Should().Contain("MakeTrendlineColorEditor(ChartTrendlineDialogFieldId.LineColor");
         source.Should().Contain("MakeTrendlineDescriptorLabel(ChartTrendlineDialogFieldId.DashStyle");
         source.Should().NotContain("TryParseIntInRange(periodBox.Text, ChartTrendlinePlanner.MinPeriod");
         source.Should().NotContain("UiText.Get(\"ChartTrendline_Show\")");
@@ -243,7 +243,8 @@ public sealed class AvaloniaChartFormatDialogSourceTests
         source.Should().Contain("ChartBubbleFormatPlanner.TryParseDialogInput(");
         source.Should().Contain("ChartStockFormatPlanner.TryParseDialogInput(");
         source.Should().Contain("TypeFormatDescriptorLabel(");
-        source.Should().Contain("ColorPickerButton(ChartStockFormatDialogFieldDescriptor field");
+        source.Should().Contain("StockColorEditor(ChartStockFormatDialogFieldDescriptor field");
+        source.Should().Contain("helpResourceKey: \"ChartStockFormat_HelpText\"");
 
         source.Should().NotContain("UiText.Get(\"ChartFmt_BarTitle\")");
         source.Should().NotContain("UiText.Get(\"ChartFmt_PieTitle\")");
@@ -253,6 +254,79 @@ public sealed class AvaloniaChartFormatDialogSourceTests
         source.Should().NotContain("double.TryParse((thicknessBox.Text");
         source.Should().NotContain("AutomationProperties.SetName(gapWidthBox, \"Up/down bar gap width\")");
         source.Should().NotContain("AutomationProperties.SetAutomationId(gapWidthBox, \"ChartStockFormatGapWidthBox\")");
+    }
+
+    [Fact]
+    public void ChartColorFields_PairPickerButtonWithTypedColorTextBox()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartFormatDialogs.cs"));
+
+        // WPF ChartDialogHelpers.AddColorText: a picker button beside the text box the planner parses.
+        source.Should().Contain("private ChartColorEditor CreateChartColorEditor(string label, string automationId, CellColor? color)");
+        source.Should().Contain("UiText.Format(\"ChartDialog_PickColorAutomationName\", UiText.CreateAutomationName(label))");
+        source.Should().Contain("AutomationProperties.SetAutomationId(picker, automationId);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(box, ChartColorTextBoxAutomationId(automationId));");
+        source.Should().Contain("ShowColorPickerDialogAsync(label, ParseChartColorText(box.Text), allowNoColor: true)");
+        source.Should().Contain("ColorInputParser.TryParseOptionalHexColor(");
+        source.Should().Contain("fillEditor.Text,");
+        source.Should().Contain("colorEditor.Text,");
+        source.Should().NotContain("ChartColor_DescriptionFormat");
+
+        var areaSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartRemainingDialogs.cs"));
+        areaSource.Should().Contain("\"FormatChartAreaDialog\", chartAreaEditor.Picker);");
+        areaSource.Should().Contain("chartAreaEditor.Text,");
+        areaSource.Should().Contain("legendBorderEditor.Text,");
+    }
+
+    [Fact]
+    public void SelectDataSource_HasHiddenEmptyCellSettingsAndInDialogRangeValidation()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTabs.cs"));
+
+        // WPF HiddenEmptyCellSettingsDialog: three radios and the hidden-data check box, applied
+        // through the shared command planner only when something changed.
+        source.Should().Contain("ShowHiddenEmptyCellSettingsDialogAsync(");
+        source.Should().Contain("UiText.Get(\"SelectDataSource_HiddenEmptyCells_ShowEmptyCellsAsLabel\")");
+        source.Should().Contain("UiText.Get(\"SelectDataSource_HiddenEmptyCells_GapsOption\")");
+        source.Should().Contain("UiText.Get(\"SelectDataSource_HiddenEmptyCells_ZeroOption\")");
+        source.Should().Contain("UiText.Get(\"SelectDataSource_HiddenEmptyCells_ConnectOption\")");
+        source.Should().Contain("UiText.Get(\"SelectDataSource_HiddenEmptyCells_ShowHiddenDataOption\")");
+        source.Should().Contain("\"HiddenEmptyCellsGapsOption\"");
+        source.Should().Contain("\"HiddenEmptyCellsShowHiddenDataCheck\"");
+        source.Should().Contain("ChartCommandWorkflowPlanner.BuildHiddenEmptyCellsCommand(");
+        source.Should().Contain("ChartCommandWorkflowPlanner.BuildRemoveSeriesCommand(");
+        source.Should().NotContain("SelectDataSourcePlanner.HiddenEmptyCellsMessageResourceKey");
+
+        // WPF validates the range inside the dialog and keeps it open.
+        source.Should().Contain("ChartInputParser.TryParseDataRange(");
+        source.Should().Contain("UiText.Get(SelectDataSourcePlanner.InvalidRangeMessageResourceKey)");
+        source.Should().Contain("seriesList.DoubleTapped += (_, _) => EditSelectedSeries();");
+        source.Should().Contain("axisLabelsList.DoubleTapped += (_, _) => EditAxisLabels();");
+        source.Should().Contain("switchRowColumnCheck.IsCheckedChanged +=");
+    }
+
+    [Fact]
+    public void InsertChartDialog_HasRecommendedAndAllChartsTabsFromSharedPlanners()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.InsertChartDialog.cs"));
+        var chartTabsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTabs.cs"));
+        var contextual = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ContextualTabs.cs"));
+
+        // WPF InsertChartDialog: recommendations from the shared planner, two tabs, the layout check box.
+        source.Should().Contain("RecommendedChartPlanner.Recommend(_session.ActiveSheet, _session.SelectedRange)");
+        source.Should().Contain("ChartTypePickerPlanner.GetRecommendedPanel()");
+        source.Should().Contain("ChartTypePickerPlanner.GetRecommendedGalleryChoices(recommendedTypes)");
+        source.Should().Contain("UiText.Get(\"InsertChart_Title\")");
+        source.Should().Contain("UiText.Get(\"InsertChart_RecommendedChartsTab\")");
+        source.Should().Contain("UiText.Get(\"InsertChart_AllChartsTab\")");
+        source.Should().Contain("UiText.Get(\"InsertChart_UseRecommendedLayout\")");
+        source.Should().Contain("BuildAllChartsPickerBody(currentType: null, \"InsertChart\")");
+        source.Should().Contain("ConfigureChartDialogKeyboardLifecycle(dialog, recommendedGallery);");
+        source.Should().Contain("InsertChartFromSelection(choice.ChartType);");
+
+        // The All Charts body is the one the Change Chart Type dialog shows.
+        chartTabsSource.Should().Contain("BuildAllChartsPickerBody(currentType, \"ChangeChartType\")");
+        contextual.Should().Contain("[\"Recommended Charts\"] = () => RunGuarded(ShowInsertChartDialog)");
     }
 
     private static string RepoFile(params string[] parts) =>

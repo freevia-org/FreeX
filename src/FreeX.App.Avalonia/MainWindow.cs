@@ -16905,11 +16905,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Windows shows the font name + size as selectable LISTS. We keep the existing text
         // boxes as the value sink that feeds the result (FontName/FontSize), and add list
         // pickers as the primary selectors that write the chosen value into those boxes.
-        var fontNameChoices = new[]
-        {
-            "Calibri", "Arial", "Times New Roman", "Verdana", "Tahoma", "Segoe UI",
-            "Courier New", "Georgia", "Cambria", "Consolas", "Comic Sans MS", "Trebuchet MS",
-        };
+        // WPF lists the installed font families (sorted, de-duplicated, current font first when
+        // it is not installed); the curated names below stay available on every platform.
+        var fontNameChoices = BuildFormatCellsFontNameChoices(
+            new[]
+            {
+                "Calibri", "Arial", "Times New Roman", "Verdana", "Tahoma", "Segoe UI",
+                "Courier New", "Georgia", "Cambria", "Consolas", "Comic Sans MS", "Trebuchet MS",
+            },
+            currentFontName);
         var fontNameList = new ListBox
         {
             ItemsSource = fontNameChoices,
@@ -17081,15 +17085,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         italicBox.IsCheckedChanged += (_, _) => SyncFontStyleListFromBoxes();
         SyncFontStyleListFromBoxes();
 
+        // WPF DlgUnderlineStyleBox: none, single, double, single accounting, double accounting.
+        // The model carries a single and a double underline flag, so (exactly as the WPF dialog
+        // does through the shared planner) both single entries set the former and both double
+        // entries the latter.
+        var fontLabels = CreateFormatCellsFontLabels();
         var underlineStyleLabels = new[]
         {
-            UiText.Get("FormatCells_UnderlineNone"),
-            UiText.Get("FormatCells_UnderlineSingle"),
+            fontLabels.UnderlineNone,
+            fontLabels.UnderlineSingle,
+            fontLabels.UnderlineDouble,
+            fontLabels.UnderlineSingleAccounting,
+            fontLabels.UnderlineDoubleAccounting,
         };
         var underlineStyleBox = new ComboBox
         {
             ItemsSource = underlineStyleLabels,
-            SelectedIndex = underlineBox.IsChecked == true ? 1 : 0,
+            SelectedIndex = doubleUnderlineBox.IsChecked == true ? 2 : underlineBox.IsChecked == true ? 1 : 0,
         };
         AutomationProperties.SetName(
             underlineStyleBox,
@@ -17103,17 +17115,32 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             if (syncingUnderlineStyle || underlineStyleBox.SelectedIndex < 0)
                 return;
+            var underlineLabel = underlineStyleBox.SelectedItem as string;
             syncingUnderlineStyle = true;
-            underlineBox.IsChecked = underlineStyleBox.SelectedIndex == 1;
+            underlineBox.IsChecked = FormatCellsDialogPlanner.IsSingleUnderlineSelected(underlineLabel, fontLabels);
+            doubleUnderlineBox.IsChecked = FormatCellsDialogPlanner.IsDoubleUnderlineSelected(underlineLabel, fontLabels);
             syncingUnderlineStyle = false;
         };
         underlineBox.IsCheckedChanged += (_, _) =>
         {
             if (syncingUnderlineStyle)
                 return;
+            // Keep an accounting entry that already agrees with the flag.
+            var underlineLabel = underlineStyleBox.SelectedItem as string;
+            var wantsSingle = underlineBox.IsChecked == true;
+            if (wantsSingle == FormatCellsDialogPlanner.IsSingleUnderlineSelected(underlineLabel, fontLabels))
+                return;
+            if (!wantsSingle && FormatCellsDialogPlanner.IsDoubleUnderlineSelected(underlineLabel, fontLabels))
+                return;
             syncingUnderlineStyle = true;
-            underlineStyleBox.SelectedIndex = underlineBox.IsChecked == true ? 1 : 0;
+            underlineStyleBox.SelectedIndex = wantsSingle ? 1 : 0;
             syncingUnderlineStyle = false;
+        };
+        // WPF DlgNormalFontCheck_Checked resets the drop-down to its first entry.
+        normalFontBox.IsCheckedChanged += (_, _) =>
+        {
+            if (normalFontBox.IsChecked == true)
+                underlineStyleBox.SelectedIndex = 0;
         };
 
         // WPF colour row: an R,G,B box with a 54px pick button docked on its right. The picker
@@ -17146,6 +17173,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 fontColorBox.SelectColor(typedFontColor);
         }
         fontColorTextBox.LostFocus += (_, _) => CommitFontColorText();
+        // WPF FontPreviewInput_Changed: the sample follows the colour while it is being typed. The
+        // picker (the value the planner reads) is still only updated on commit, so a half-typed
+        // colour never rewrites the text under the caret.
+        fontColorTextBox.TextChanged += (_, _) =>
+        {
+            if (normalFontBox.IsChecked == true
+                || string.Equals(fontColorTextBox.Text, fontColorSyncedText, StringComparison.Ordinal))
+            {
+                RefreshFontPreview();
+                return;
+            }
+
+            if (TryParseRgb(fontColorTextBox.Text, out var typedPreviewColor))
+                fontPreview.Foreground = Brush(typedPreviewColor);
+        };
 
         var fontColorPalette = new UniformGrid
         {
@@ -17685,7 +17727,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 Bold: boldBox.IsChecked == true,
                 Italic: italicBox.IsChecked == true,
                 Underline: underlineBox.IsChecked == true,
-                DoubleUnderline: doubleUnderlineBox.IsChecked == true,
+                DoubleUnderline: doubleUnderlineBox.IsChecked == true
+                    || FormatCellsDialogPlanner.IsDoubleUnderlineSelected(underlineStyleBox.SelectedItem as string, fontLabels),
                 Strikethrough: strikethroughBox.IsChecked == true,
                 Superscript: superscriptBox.IsChecked == true,
                 Subscript: subscriptBox.IsChecked == true,

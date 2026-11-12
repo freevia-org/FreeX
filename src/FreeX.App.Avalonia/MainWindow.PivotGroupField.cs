@@ -111,6 +111,22 @@ public sealed partial class MainWindow
         AddPivotDialogLabeledControl(rangePanel, UiText.Get("PivotFieldGrouping_EndingAtLabel"), endBox);
         AddPivotDialogLabeledControl(rangePanel, UiText.Get("PivotFieldGrouping_ByLabel"), intervalBox);
 
+        // WPF PivotFieldGroupingDialog: an unchecked box under the Range group that submits the selected
+        // field as ungrouped whatever the group-by and range inputs hold. WPF leaves every other input
+        // enabled while it is checked, so no enable/disable wiring hangs off it.
+        var ungroupBox = new CheckBox
+        {
+            Content = StripDisplayMnemonic(UiText.Get("PivotFieldGrouping_UngroupSelectedField")),
+            IsChecked = false,
+            MinHeight = 20,
+            MaxHeight = 20,
+        };
+        ApplyPivotCheckBoxChrome(ungroupBox);
+        AutomationProperties.SetAutomationId(ungroupBox, "PivotGroupUngroupBox");
+        AutomationProperties.SetName(
+            ungroupBox,
+            StripDisplayMnemonic(UiText.Get("PivotFieldGrouping_UngroupSelectedField")));
+
         void LoadFromField(PivotGroupFieldOption option)
         {
             var current = PivotGroupFieldPlanner.FindLayoutField(pivot, option.SourceFieldIndex);
@@ -162,7 +178,7 @@ public sealed partial class MainWindow
         {
             var grouping = PivotGroupFieldPlanner.GroupingFromIndex(groupingBox.SelectedIndex);
             if (!PivotGroupFieldPlanner.TryValidate(
-                    grouping, ungroup: false, startBox.Text, endBox.Text, intervalBox.Text,
+                    grouping, ungroupBox.IsChecked == true, startBox.Text, endBox.Text, intervalBox.Text,
                     out _, out _, out _, out var error))
             {
                 ShowEditIssue(error ?? PivotGroupFieldPlanner.InvalidStartMessage);
@@ -174,7 +190,9 @@ public sealed partial class MainWindow
 
         // Layout mirrors PivotFieldGroupingDialog: a 16px root margin and three group boxes (Selection,
         // Group by, Range), each 12px above the next block with content inset 10,8,10,10 and labels
-        // above their controls, then the shared pivot OK/Cancel row.
+        // above their controls, the ungroup check box with a 16px bottom margin, then the shared pivot
+        // OK/Cancel row (a WPF check box is a 16px row where the compact Avalonia one is 20px, so that
+        // margin drops 4px).
         var selectionPanel = new StackPanel();
         AddPivotDialogLabeledControl(selectionPanel, UiText.Get("PivotFieldGrouping_FieldLabel"), fieldBox);
         var groupingPanel = new StackPanel();
@@ -183,10 +201,9 @@ public sealed partial class MainWindow
         var content = new StackPanel { Margin = new Thickness(16) };
         content.Children.Add(CreatePivotDialogGroupBox(UiText.Get("PivotFieldGrouping_SelectionGroup"), selectionPanel));
         content.Children.Add(CreatePivotDialogGroupBox(UiText.Get("PivotFieldGrouping_GroupByGroup"), groupingPanel));
-        content.Children.Add(CreatePivotDialogGroupBox(
-            UiText.Get("PivotFieldGrouping_RangeGroup"),
-            rangePanel,
-            new Thickness(0, 0, 0, 4)));
+        content.Children.Add(CreatePivotDialogGroupBox(UiText.Get("PivotFieldGrouping_RangeGroup"), rangePanel));
+        ungroupBox.Margin = new Thickness(0, 0, 0, 12);
+        content.Children.Add(ungroupBox);
         content.Children.Add(CreatePivotDialogButtonRow(ok, cancel));
         dialog.Content = content;
         ConfigurePivotDialogLifecycle(dialog, fieldBox);
@@ -203,7 +220,7 @@ public sealed partial class MainWindow
                 selected.Caption,
                 selected.SourceFieldIndex,
                 selectedGrouping,
-                ungroup: false,
+                ungroupBox.IsChecked == true,
                 startBox.Text,
                 endBox.Text,
                 intervalBox.Text,
@@ -214,7 +231,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        var status = selectedGrouping == PivotFieldGrouping.None
+        var status = submission!.Ungroup || selectedGrouping == PivotFieldGrouping.None
             ? UiText.Format("PivotGroup_Ungrouped", selected.Caption)
             : UiText.Format("PivotGroup_Grouped", selected.Caption);
         ApplyPivotGrouping(pivot, submission!, status);

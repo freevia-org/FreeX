@@ -201,7 +201,10 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         chartWorkflowSource.Should().Contain("ChartQuickCommandPlanner.Plan(chart, command.Command)");
         chartQuickPlannerSource.Should().Contain("ChartQuickFormatCycler.ReadFirstSeriesFormat(chart)");
         chartQuickPlannerSource.Should().Contain("ChartQuickFormatCycler.MergeFirstSeriesFormat(chart, updated)");
-        chartDialogSources.Should().Contain("ChartQuickFormatCycler.DefaultSeriesColor");
+        // The chart dialogs seed their picker from the typed color text (WPF ChartDialogHelpers); the
+        // quick fill/outline commands keep the shared default series color.
+        chartTabsSource.Should().Contain("ChartQuickFormatCycler.DefaultSeriesColor");
+        chartDialogSources.Should().Contain("ParseChartColorText(box.Text)");
 
         var combined = string.Join(
             Environment.NewLine,

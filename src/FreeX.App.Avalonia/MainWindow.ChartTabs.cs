@@ -146,6 +146,60 @@ public sealed partial class MainWindow
     /// </summary>
     private async Task<ChartType?> ShowChartTypePickerAsync(ChartType currentType)
     {
+        // The category list, subtype gallery and preview are the shared All Charts body, which the
+        // Insert Chart dialog hosts on its second tab.
+        var (bodyGrid, _, subtypeGallery) = BuildAllChartsPickerBody(currentType, "ChangeChartType");
+
+        var dialog = NewChartDialog(UiText.Get("ChangeChartType_Title"), "ChangeChartTypeDialog");
+        dialog.Width = ChartTypeChangePlanner.DialogWidth;
+        dialog.Height = ChartTypeChangePlanner.DialogHeight;
+        dialog.MinWidth = ChartTypeChangePlanner.DialogWidth;
+        dialog.MinHeight = ChartTypeChangePlanner.DialogHeight;
+        dialog.SizeToContent = SizeToContent.Manual;
+
+        var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons(
+            "ChangeChartType",
+            ChartTypeChangePlanner.PickerButtonWidth);
+        okButton.Click += (_, _) => dialog.Close(subtypeGallery.SelectedItem is ChartTypePickerOptionPlan picked ? (ChartType?)picked.Type : null);
+        cancelButton.Click += (_, _) => dialog.Close((ChartType?)null);
+        buttonRow.Margin = new Thickness(0, 8, 0, 0);
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 0,
+            Children =
+            {
+                // WPF "Choose a chart type" heading.
+                new TextBlock
+                {
+                    Text = UiText.Get(ChartTypePickerPlanner.ChooseChartTypeHeadingKey),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    FontWeight = FontWeight.SemiBold,
+                    Margin = new Thickness(0, 0, 0, 8),
+                },
+                bodyGrid,
+                buttonRow,
+            },
+        };
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, ChartDialogChromeStyle);
+        ConfigureChartDialogKeyboardLifecycle(dialog, subtypeGallery);
+
+        return await dialog.ShowDialog<ChartType?>(this);
+    }
+
+    /// <summary>The All Charts picker body with the two lists the hosting dialog reads and focuses.</summary>
+    private readonly record struct ChartTypePickerBody(Grid Body, ListBox CategoryList, ListBox SubtypeGallery);
+
+    /// <summary>
+    /// Builds the All Charts panel shared by the Change Chart Type dialog and the Insert Chart dialog's
+    /// second tab (WPF <c>InsertChartDialog.CreateAllChartsPanel</c>): heading and help above a category
+    /// list, the subtype gallery for the selected category, and the preview panel. The lists are seeded
+    /// from <paramref name="currentType"/> when one is given, otherwise from the first category.
+    /// </summary>
+    private ChartTypePickerBody BuildAllChartsPickerBody(ChartType? currentType, string automationIdPrefix)
+    {
         var categories = ChartTypePickerPlanner.GetCategories();
         var panel = ChartTypePickerPlanner.GetAllChartsPanel();
 
@@ -162,7 +216,7 @@ public sealed partial class MainWindow
             },
         };
         AutomationProperties.SetName(categoryList, UiText.Get(panel.CategoryListAutomationNameResourceKey!));
-        AutomationProperties.SetAutomationId(categoryList, "ChangeChartTypeCategoryList");
+        AutomationProperties.SetAutomationId(categoryList, $"{automationIdPrefix}CategoryList");
 
         // ---- Subtype gallery (right top) -----------------------------------------------------------
         var subtypeGallery = new ListBox
@@ -176,7 +230,7 @@ public sealed partial class MainWindow
             },
         };
         AutomationProperties.SetName(subtypeGallery, UiText.Get(panel.SubtypeGalleryAutomationNameResourceKey));
-        AutomationProperties.SetAutomationId(subtypeGallery, "ChangeChartTypeSubtypeGallery");
+        AutomationProperties.SetAutomationId(subtypeGallery, $"{automationIdPrefix}SubtypeGallery");
 
         categoryList.SelectionChanged += (_, _) =>
         {
@@ -201,20 +255,6 @@ public sealed partial class MainWindow
 
         // ---- Preview panel (right side) ------------------------------------------------------------
         var preview = BuildChartTypePreviewPanel(panel.Preview);
-
-        var dialog = NewChartDialog(UiText.Get("ChangeChartType_Title"), "ChangeChartTypeDialog");
-        dialog.Width = ChartTypeChangePlanner.DialogWidth;
-        dialog.Height = ChartTypeChangePlanner.DialogHeight;
-        dialog.MinWidth = ChartTypeChangePlanner.DialogWidth;
-        dialog.MinHeight = ChartTypeChangePlanner.DialogHeight;
-        dialog.SizeToContent = SizeToContent.Manual;
-
-        var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons(
-            "ChangeChartType",
-            ChartTypeChangePlanner.PickerButtonWidth);
-        okButton.Click += (_, _) => dialog.Close(subtypeGallery.SelectedItem is ChartTypePickerOptionPlan picked ? (ChartType?)picked.Type : null);
-        cancelButton.Click += (_, _) => dialog.Close((ChartType?)null);
-        buttonRow.Margin = new Thickness(0, 8, 0, 0);
 
         // WPF keeps the All Charts heading/help in the picker grid's first row. The lists begin in
         // the second row, while the preview spans both rows; preserve that vertical relationship.
@@ -271,29 +311,7 @@ public sealed partial class MainWindow
         Grid.SetRowSpan(preview, 2);
         bodyGrid.Children.Add(preview);
 
-        dialog.Content = new StackPanel
-        {
-            Margin = new Thickness(16),
-            Spacing = 0,
-            Children =
-            {
-                // WPF "Choose a chart type" heading.
-                new TextBlock
-                {
-                    Text = UiText.Get(ChartTypePickerPlanner.ChooseChartTypeHeadingKey),
-                    FontSize = 12,
-                    FontFamily = FormulaBarFontFamily,
-                    FontWeight = FontWeight.SemiBold,
-                    Margin = new Thickness(0, 0, 0, 8),
-                },
-                bodyGrid,
-                buttonRow,
-            },
-        };
-        AvaloniaCompactDialogChrome.ApplyWindow(dialog, ChartDialogChromeStyle);
-        ConfigureChartDialogKeyboardLifecycle(dialog, subtypeGallery);
-
-        return await dialog.ShowDialog<ChartType?>(this);
+        return new ChartTypePickerBody(bodyGrid, categoryList, subtypeGallery);
     }
 
     /// <summary>
@@ -391,7 +409,9 @@ public sealed partial class MainWindow
         var result = await ShowSelectDataSourceDialogAsync(
             FormatRangeReference(chart.DataRange),
             chart.FirstColIsCategories,
-            chart.SeriesInRows);
+            chart.SeriesInRows,
+            chart.BlankDisplayMode,
+            chart.ShowDataInHiddenRowsAndColumns);
         if (result is not { } choice)
             return;
 
@@ -412,9 +432,36 @@ public sealed partial class MainWindow
                 dataRange,
                 choice.FirstColumnIsCategories,
                 choice.SwitchRowColumn));
-        RefreshShell(commandResult.Success
-            ? UiText.Format("ChartLoc_ChartDataSourceSetTo", FormatRangeReference(dataRange))
-            : commandResult.ErrorMessage ?? UiText.Get("ChartLoc_SelectDataFailed"));
+        if (!commandResult.Success)
+        {
+            RefreshShell(commandResult.ErrorMessage ?? UiText.Get("ChartLoc_SelectDataFailed"));
+            return;
+        }
+
+        // WPF replays each Remove Series click in click order as its own undoable command; a single
+        // rejected removal does not block the rest.
+        if (choice.PendingSeriesRemovals is { Count: > 0 } pendingRemovals)
+        {
+            foreach (var seriesIndex in pendingRemovals)
+            {
+                _session.ExecuteReviewCommand(
+                    ChartCommandWorkflowPlanner.BuildRemoveSeriesCommand(_session.ActiveSheet.Id, chart, seriesIndex));
+            }
+        }
+
+        // Only issue a hidden/empty-cell undo step when the sub-dialog actually changed something.
+        if (choice.BlankDisplayMode != chart.BlankDisplayMode ||
+            choice.ShowDataInHiddenRowsAndColumns != chart.ShowDataInHiddenRowsAndColumns)
+        {
+            _session.ExecuteReviewCommand(
+                ChartCommandWorkflowPlanner.BuildHiddenEmptyCellsCommand(
+                    _session.ActiveSheet.Id,
+                    chart,
+                    choice.BlankDisplayMode,
+                    choice.ShowDataInHiddenRowsAndColumns));
+        }
+
+        RefreshShell(UiText.Format("ChartLoc_ChartDataSourceSetTo", FormatRangeReference(dataRange)));
     }
 
     /// <summary>
@@ -425,7 +472,9 @@ public sealed partial class MainWindow
     private async Task<SelectDataSourceResult?> ShowSelectDataSourceDialogAsync(
         string initialRange,
         bool firstColumnIsCategories,
-        bool switchRowColumn = false)
+        bool switchRowColumn = false,
+        ChartBlankDisplayMode blankDisplayMode = ChartBlankDisplayMode.Gap,
+        bool showDataInHiddenRowsAndColumns = false)
     {
         var rangeField = SelectDataSourcePlanner.GetChartDataRangeField();
         var switchField = SelectDataSourcePlanner.GetSwitchRowColumnField();
@@ -519,6 +568,10 @@ public sealed partial class MainWindow
         // range box is edited again.
         var seriesItems = new List<string>();
         var inManualSeriesMode = false;
+        // WPF queues each Remove Series click on a chart-backed row (in click order) and replays it
+        // after OK; rows appended by Add Series sit after the real ones and are list-only.
+        var pendingSeriesRemovals = new List<int>();
+        var realSeriesCount = 0;
 
         void RefreshButtonState()
         {
@@ -534,11 +587,18 @@ public sealed partial class MainWindow
 
             var preview = SelectDataSourcePlanner.InferPreviewEntries(
                 rangeBox.Text ?? string.Empty,
-                categoriesCheck.IsChecked == true);
+                categoriesCheck.IsChecked == true,
+                index => UiText.Format("SelectDataSource_SeriesNameFormat", index),
+                index => UiText.Format("SelectDataSource_CategoryNameFormat", index),
+                UiText.Get("SelectDataSource_CategoryLabelsFallback"),
+                switchRowColumnCheck.IsChecked == true);
 
             seriesItems.Clear();
             foreach (var s in preview.Series)
                 seriesItems.Add(SelectDataSourcePlanner.FormatSeriesListItem(s.Name, s.ValuesRangeText));
+            // A fresh preview re-derives the list, so queued removals no longer refer to a row.
+            pendingSeriesRemovals.Clear();
+            realSeriesCount = seriesItems.Count;
 
             seriesList.ItemsSource = null;
             seriesList.ItemsSource = seriesItems;
@@ -563,6 +623,11 @@ public sealed partial class MainWindow
             inManualSeriesMode = false;
             RefreshLists();
         };
+        switchRowColumnCheck.IsCheckedChanged += (_, _) =>
+        {
+            inManualSeriesMode = false;
+            RefreshLists();
+        };
         seriesList.SelectionChanged += (_, _) => RefreshButtonState();
         axisLabelsList.SelectionChanged += (_, _) => RefreshButtonState();
 
@@ -577,11 +642,22 @@ public sealed partial class MainWindow
             RefreshButtonState();
         };
 
-        editSeriesButton.Click += (_, _) =>
+        // WPF routes the Edit button and a double-click on the list through the same handler.
+        void EditSelectedSeries()
         {
             if (seriesList.Items.Count > 0 && seriesList.SelectedIndex < 0)
                 seriesList.SelectedIndex = 0;
-        };
+        }
+
+        void EditAxisLabels()
+        {
+            if (axisLabelsList.Items.Count > 0)
+                axisLabelsList.SelectedIndex = 0;
+        }
+
+        editSeriesButton.Click += (_, _) => EditSelectedSeries();
+        seriesList.DoubleTapped += (_, _) => EditSelectedSeries();
+        axisLabelsList.DoubleTapped += (_, _) => EditAxisLabels();
 
         removeSeriesButton.Click += (_, _) =>
         {
@@ -589,6 +665,12 @@ public sealed partial class MainWindow
             if (idx < 0)
                 return;
             inManualSeriesMode = true;
+            if (idx < realSeriesCount)
+            {
+                pendingSeriesRemovals.Add(idx);
+                realSeriesCount--;
+            }
+
             seriesItems.RemoveAt(idx);
             seriesList.ItemsSource = null;
             seriesList.ItemsSource = seriesItems;
@@ -596,11 +678,7 @@ public sealed partial class MainWindow
             RefreshButtonState();
         };
 
-        editAxisLabelsButton.Click += (_, _) =>
-        {
-            if (axisLabelsList.Items.Count > 0)
-                axisLabelsList.SelectedIndex = 0;
-        };
+        editAxisLabelsButton.Click += (_, _) => EditAxisLabels();
 
         // ---- Initial population of the preview lists -----------------------------------------
         RefreshLists();
@@ -618,21 +696,36 @@ public sealed partial class MainWindow
         dialog.MinHeight = 500 - WpfNoResizeFrameHeight;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("SelectChartData");
-        okButton.Click += (_, _) =>
+        okButton.Click += (_, _) => RunGuarded(async () =>
         {
             var rangeText = rangeBox.Text ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(rangeText))
+            // WPF validates in the dialog: an unusable range warns, keeps the dialog open and puts the
+            // caret back in the range editor with its text selected.
+            if (!ChartInputParser.TryParseDataRange(
+                    rangeText,
+                    _session.ActiveSheet.Id,
+                    name => _session.Workbook.GetSheet(name)?.Id,
+                    out _))
             {
-                // Keep dialog open; let the shell report the invalid range after close.
-                dialog.Close((SelectDataSourceResult?)null);
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    dialog,
+                    UiText.Get(SelectDataSourcePlanner.InvalidRangeMessageResourceKey),
+                    UiText.Get(SelectDataSourcePlanner.DialogTitleResourceKey));
+                rangeBox.Focus();
+                rangeBox.SelectAll();
                 return;
             }
 
-            dialog.Close((SelectDataSourceResult?)SelectDataSourcePlanner.CreateResult(
+            dialog.Close((SelectDataSourceResult?)(SelectDataSourcePlanner.CreateResult(
                 rangeText,
                 categoriesCheck.IsChecked == true,
-                switchRowColumnCheck.IsChecked == true));
-        };
+                switchRowColumnCheck.IsChecked == true) with
+            {
+                PendingSeriesRemovals = pendingSeriesRemovals.ToList(),
+                BlankDisplayMode = blankDisplayMode,
+                ShowDataInHiddenRowsAndColumns = showDataInHiddenRowsAndColumns,
+            }));
+        });
         cancelButton.Click += (_, _) => dialog.Close((SelectDataSourceResult?)null);
 
         // Helper to build a panel with a list on the left and buttons stacked on the right.
@@ -673,25 +766,15 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(hiddenEmptyButton, hiddenEmptyAction.AutomationId);
         hiddenEmptyButton.Click += (_, _) => RunGuarded(async () =>
         {
-            var infoDialog = NewChartDialog(
-                UiText.Get(SelectDataSourcePlanner.HiddenEmptyCellsTitleResourceKey),
-                "SelectChartDataHiddenEmptyDialog");
-            // WPF HiddenEmptyCellSettingsDialog metrics: 360 wide, 16px margin, a 76px button 20px
-            // below the content.
-            var closeBtn = CreateChartButton(UiText.Get("Common_Ok"), ChartTypeChangePlanner.PickerButtonWidth, isDefault: true);
-            closeBtn.Click += (_, _) => infoDialog.Close();
-            HostChartDialogContent(
-                infoDialog,
-                360,
-                new TextBlock
-                {
-                    Text = UiText.Get(SelectDataSourcePlanner.HiddenEmptyCellsMessageResourceKey),
-                    FontSize = 12,
-                    FontFamily = FormulaBarFontFamily,
-                    TextWrapping = TextWrapping.Wrap,
-                },
-                CreateChartDialogActionRow([closeBtn], new Thickness(0, 20, 0, 0)));
-            await infoDialog.ShowDialog(dialog);
+            var settings = await ShowHiddenEmptyCellSettingsDialogAsync(
+                dialog,
+                blankDisplayMode,
+                showDataInHiddenRowsAndColumns);
+            if (settings is not { } chosen)
+                return;
+
+            blankDisplayMode = chosen.BlankDisplayMode;
+            showDataInHiddenRowsAndColumns = chosen.ShowDataInHiddenRowsAndColumns;
         });
 
         // WPF stacks the rows with their own margins (no uniform spacing): label 4px above the range
@@ -727,6 +810,104 @@ public sealed partial class MainWindow
         AttachDialogRangePicker(dialog, rangePickButton, rangeBox, "range.chart-data-source.range");
 
         return await dialog.ShowDialog<SelectDataSourceResult?>(this);
+    }
+
+    /// <summary>The blank-cell display mode and hidden-data visibility chosen in the sub-dialog.</summary>
+    private readonly record struct HiddenEmptyCellSettingsChoice(
+        ChartBlankDisplayMode BlankDisplayMode,
+        bool ShowDataInHiddenRowsAndColumns);
+
+    /// <summary>
+    /// The Select Data Source sub-dialog matching WPF <c>HiddenEmptyCellSettingsDialog</c>: three radio
+    /// buttons for how blank cells plot and a check box for hidden rows and columns. Returns null when
+    /// cancelled; the caller applies the choice through
+    /// <see cref="ChartCommandWorkflowPlanner.BuildHiddenEmptyCellsCommand"/> after the parent dialog is
+    /// accepted.
+    /// </summary>
+    private static async Task<HiddenEmptyCellSettingsChoice?> ShowHiddenEmptyCellSettingsDialogAsync(
+        Window owner,
+        ChartBlankDisplayMode blankDisplayMode,
+        bool showDataInHiddenRowsAndColumns)
+    {
+        const string BlankDisplayGroup = "SelectDataSourceHiddenEmptyBlankDisplay";
+        var gapsButton = CreateChartRadioButton(
+            UiText.Get("SelectDataSource_HiddenEmptyCells_GapsOption"),
+            BlankDisplayGroup,
+            blankDisplayMode is not (ChartBlankDisplayMode.Zero or ChartBlankDisplayMode.Span));
+        var zeroButton = CreateChartRadioButton(
+            UiText.Get("SelectDataSource_HiddenEmptyCells_ZeroOption"),
+            BlankDisplayGroup,
+            blankDisplayMode == ChartBlankDisplayMode.Zero);
+        var connectButton = CreateChartRadioButton(
+            UiText.Get("SelectDataSource_HiddenEmptyCells_ConnectOption"),
+            BlankDisplayGroup,
+            blankDisplayMode == ChartBlankDisplayMode.Span);
+        var showHiddenDataBox = CreateChartCheckBox(
+            UiText.Get("SelectDataSource_HiddenEmptyCells_ShowHiddenDataOption"),
+            showDataInHiddenRowsAndColumns);
+        AutomationProperties.SetAutomationId(gapsButton, "HiddenEmptyCellsGapsOption");
+        AutomationProperties.SetAutomationId(zeroButton, "HiddenEmptyCellsZeroOption");
+        AutomationProperties.SetAutomationId(connectButton, "HiddenEmptyCellsConnectOption");
+        AutomationProperties.SetAutomationId(showHiddenDataBox, "HiddenEmptyCellsShowHiddenDataCheck");
+
+        // WPF: radios 4px apart (16px glyph rows), the check box 16px below them. The Avalonia rows are
+        // 20px, so 2px comes off each gap to keep the pitch.
+        gapsButton.Margin = new Thickness(0, 0, 0, 0);
+        zeroButton.Margin = new Thickness(0, 0, 0, 0);
+        connectButton.Margin = new Thickness(0);
+        showHiddenDataBox.MinHeight = 20;
+        showHiddenDataBox.MaxHeight = 20;
+        showHiddenDataBox.Margin = new Thickness(0, 14, 0, 0);
+
+        var checkedButton = zeroButton.IsChecked == true ? zeroButton
+            : connectButton.IsChecked == true ? connectButton
+            : gapsButton;
+        var settingsDialog = NewChartDialog(
+            UiText.Get(SelectDataSourcePlanner.HiddenEmptyCellsTitleResourceKey),
+            "SelectChartDataHiddenEmptyDialog",
+            checkedButton);
+
+        var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("HiddenEmptyCells");
+        buttonRow.Margin = new Thickness(0, 20, 0, 0);
+        okButton.Click += (_, _) =>
+        {
+            var mode = zeroButton.IsChecked == true
+                ? ChartBlankDisplayMode.Zero
+                : connectButton.IsChecked == true
+                    ? ChartBlankDisplayMode.Span
+                    : ChartBlankDisplayMode.Gap;
+            settingsDialog.Close((HiddenEmptyCellSettingsChoice?)new HiddenEmptyCellSettingsChoice(
+                mode,
+                showHiddenDataBox.IsChecked == true));
+        };
+        cancelButton.Click += (_, _) => settingsDialog.Close((HiddenEmptyCellSettingsChoice?)null);
+
+        // WPF HiddenEmptyCellSettingsDialog is a 360x280 window with a 16px margin.
+        HostChartDialogContent(
+            settingsDialog,
+            360,
+            new StackPanel
+            {
+                Spacing = 0,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = UiText.Get("SelectDataSource_HiddenEmptyCells_ShowEmptyCellsAsLabel"),
+                        FontSize = 12,
+                        FontFamily = FormulaBarFontFamily,
+                        Margin = new Thickness(0, 0, 0, 8),
+                    },
+                    gapsButton,
+                    zeroButton,
+                    connectButton,
+                    showHiddenDataBox,
+                },
+            },
+            buttonRow,
+            fixedWpfHeight: 280);
+
+        return await settingsDialog.ShowDialog<HiddenEmptyCellSettingsChoice?>(owner);
     }
 
     // ---- Chart Design: layout toggles (real, SetChartLayoutCommand) -----------------------------------

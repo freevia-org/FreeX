@@ -34,7 +34,8 @@ public sealed class ChartDialogChromeDedupSourceTests
         tabsSource.Should().Contain("CreateChartComboBox(260, positionChoices)");
         typeFormatSource.Should().Contain("CreateChartTextBox(current.BarGapWidth.ToString(CultureInfo.InvariantCulture), 260)");
         typeFormatSource.Should().Contain("CreateChartComboBox(260, sizeChoices)");
-        typeFormatSource.Should().Contain("CreateChartButton(DescribeColor(label, color), 260)");
+        typeFormatSource.Should().Contain("CreateChartColorEditor(TypeFormatDescriptorText(field.LabelResourceKey), field.AutomationId, color)");
+        formatSource.Should().Contain("CreateChartButton(\"...\", ChartColorPickerButtonWidth)");
 
         foreach (var source in new[] { formatSource, remainingSource, tabsSource, typeFormatSource })
         {
