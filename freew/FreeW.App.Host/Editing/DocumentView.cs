@@ -9459,7 +9459,9 @@ public sealed partial class DocumentView : RichTextBox
         // Preserve column widths (column-level in WPF) so the docx tblGrid round-trips through edit.
         foreach (var column in wpfTable.Columns)
         {
-            if (column.Width.IsAbsolute && column.Width.Value > 0)
+            if (column.Tag is WpfTableColumnTag { AuthoredWidthPt: > 0 } authoredColumn)
+                table.ColumnWidthsPt.Add(authoredColumn.AuthoredWidthPt);
+            else if (column.Width.IsAbsolute && column.Width.Value > 0)
                 table.ColumnWidthsPt.Add(column.Width.Value / PxPerPoint);
             else
                 table.ColumnWidthsPt.Add(0);
@@ -9933,6 +9935,8 @@ public sealed partial class DocumentView : RichTextBox
 
     private sealed record WpfFloatingTableFigureTag(int SourceBlockIndex);
 
+    private sealed record WpfTableColumnTag(double AuthoredWidthPt);
+
     private static IReadOnlyList<System.Windows.Documents.Block> BuildTableBlocks(
         ModelTable table,
         TextDocument document,
@@ -10149,26 +10153,38 @@ public sealed partial class DocumentView : RichTextBox
                 isPaginationSegment,
                 table.BlockContentControl)
         };
-        if (isPaginationSegment)
-        {
-            wpf.CellSpacing = 0;
-        }
+        // Word collapses adjacent cell borders unless w:tblCellSpacing is authored; WPF's default
+        // Table.CellSpacing (2px) would otherwise draw every table as detached double-ruled boxes.
+        // An authored spacing surrounds every cell, so the gap between two cells is twice the value.
+        var flowCellSpacingDip = !isPaginationSegment && table.CellSpacingPt is > 0
+            ? table.CellSpacingPt.Value * PxPerPoint * 2
+            : 0;
+        wpf.CellSpacing = flowCellSpacingDip;
         // WPF Table.CellSpacing grows both axes and breaks Word's fixed-width paginated tables.
         // Preserve that width contract while reserving the authored vertical cell gap on each row.
-        var paginationVerticalCellSpacingDip = table.CellSpacingPt is > 0
+        var paginationVerticalCellSpacingDip = isPaginationSegment && table.CellSpacingPt is > 0
             ? table.CellSpacingPt.Value * PxPerPoint
             : 0;
         var columns = table.ColumnCount;
+        var columnWidthsDip = ResolveRenderedTableColumnWidths(
+            table, document, columns, autoFitColumnWidthsDip, flowCellSpacingDip);
         for (var c = 0; c < columns; c++)
         {
             var column = new TableColumn();
             // WPF FlowDocument tables only support column-level (not per-cell) widths, so the model's
             // column widths drive TableColumn.Width here; per-cell widths are preserved in the model
             // for docx round-trip but not individually rendered.
-            if (autoFitColumnWidthsDip is not null)
-                column.Width = new GridLength(autoFitColumnWidthsDip[c]);
-            else if (c < table.ColumnWidthsPt.Count && table.ColumnWidthsPt[c] > 0)
-                column.Width = new GridLength(table.ColumnWidthsPt[c] * PxPerPoint);
+            if (columnWidthsDip[c] is { } columnWidthDip)
+            {
+                column.Width = new GridLength(columnWidthDip);
+                // A render-only rescale must not be read back as the authored grid on commit.
+                if (autoFitColumnWidthsDip is null
+                    && c < table.ColumnWidthsPt.Count
+                    && Math.Abs(table.ColumnWidthsPt[c] * PxPerPoint - columnWidthDip) > 0.001)
+                {
+                    column.Tag = new WpfTableColumnTag(table.ColumnWidthsPt[c]);
+                }
+            }
             wpf.Columns.Add(column);
         }
         var cellEffectiveFills = tableLayoutPlan.Cells.ToDictionary(
@@ -10186,20 +10202,27 @@ public sealed partial class DocumentView : RichTextBox
         var catalogStyle = table.TableStyleId is { Length: > 0 } sid
             ? DocumentTableStyle.FindById(sid)
             : null;
+        var importedTableStyle = ImportedTableStyle.TryResolve(document.Styles, table.TableStyleId);
 
         // A header-only custom-border table keeps its complete uniform table payload for generic chrome.
         // Word resolves its literal "auto" token to black here, ahead of the named-style fallback.
+        // An explicit w:tblBorders payload outranks any style; an imported style definition outranks the
+        // built-in gallery entry. "auto" is black in both.
         var borderColor = TryResolveHeaderOnlyTableBorderColor(table, out var explicitBorderColor)
             ? explicitBorderColor
-            : catalogStyle?.BorderColorHex is { Length: > 0 } borderHex
-                ? WpfRgbColorAdapter.ParseDrawingMlOrDefault(borderHex, Colors.Black)
-                : Color.FromRgb(0x9A, 0x9A, 0x9A);
+            : TryResolveTableBorderTokenColor(FirstTableBorderColorToken(table.Borders), out var payloadBorderColor)
+                ? payloadBorderColor
+                : TryResolveTableBorderTokenColor(importedTableStyle?.BorderColorToken, out var importedBorderColor)
+                    ? importedBorderColor
+                    : catalogStyle?.BorderColorHex is { Length: > 0 } borderHex
+                        ? WpfRgbColorAdapter.ParseDrawingMlOrDefault(borderHex, Colors.Black)
+                        : Color.FromRgb(0x9A, 0x9A, 0x9A);
         var borderBrush = new SolidColorBrush(borderColor);
 
         if (table.Formatting.Borders)
         {
             wpf.BorderBrush = borderBrush;
-            wpf.BorderThickness = new Thickness(0.5);
+            wpf.BorderThickness = new Thickness(flowCellSpacingDip > 0 ? PxPerPoint / 2 : 0.5);
         }
 
         var totalRows = table.Rows.Count;
@@ -10241,6 +10264,27 @@ public sealed partial class DocumentView : RichTextBox
                 var cellIndex = projected.CellIndex;
                 var gridColumn = projected.StartColumn;
                 var span = projected.Span;
+                // With an authored cell spacing a vertical merge is one detached box spanning the gap
+                // between its rows; only a real RowSpan can paint that. The continuation cells are
+                // absorbed here and re-synthesised by ReadTable from the RowSpan.
+                var mergedRowSpan = 1;
+                if (flowCellSpacingDip > 0 && modelCell.VerticalMerge != VerticalMergeState.None)
+                {
+                    if (modelCell.VerticalMerge == VerticalMergeState.Continue
+                        && FindVerticalMergeRestart(table, rowIndex, gridColumn) is not null)
+                    {
+                        continue;
+                    }
+                    for (var below = rowIndex + 1; below < table.Rows.Count; below++)
+                    {
+                        if (TableGridProjection.At(table.Rows[below], gridColumn)?.Cell.VerticalMerge
+                            != VerticalMergeState.Continue)
+                        {
+                            break;
+                        }
+                        mergedRowSpan++;
+                    }
+                }
                 var ordinaryCellMargins = !isPaginationSegment
                     ? modelCell.Margins ?? table.DefaultCellMargins ?? TableCellMargins.Default
                     : null;
@@ -10254,10 +10298,12 @@ public sealed partial class DocumentView : RichTextBox
                 };
                 if (span > 1)
                     wpfCell.ColumnSpan = span;
+                if (mergedRowSpan > 1)
+                    wpfCell.RowSpan = mergedRowSpan;
                 if (table.Formatting.Borders)
                 {
                     wpfCell.BorderBrush = borderBrush;
-                    wpfCell.BorderThickness = new Thickness(0.5);
+                    wpfCell.BorderThickness = new Thickness(flowCellSpacingDip > 0 ? PxPerPoint / 2 : 0.5);
                 }
                 // Stash the model's author-set shading, per-cell borders, text direction and vertical
                 // alignment on the cell Tag so ReadTable can recover them on commit. A colour-equality
@@ -10288,12 +10334,30 @@ public sealed partial class DocumentView : RichTextBox
                 var cellAppearance = mergeSource is { } source
                     ? EffectiveFillFor(source.RowIndex, source.CellIndex)
                     : EffectiveFillFor(rowIndex, cellIndex);
-                if (TryParseColor(cellAppearance.EffectiveFillHex, out var cellFill))
+                var styleBold = cellAppearance.EffectiveBold;
+                string? styleTextColorHex = null;
+                if (importedTableStyle is not null)
+                {
+                    // The document's own table-style definition is authoritative over the built-in
+                    // gallery entry and the legacy toggle fills: Word paints what styles.xml declares.
+                    var appearanceRow = mergeSource?.RowIndex ?? rowIndex;
+                    var styleFormat = importedTableStyle.ResolveCell(
+                        table.Formatting, appearanceRow, totalRows, gridColumn, span,
+                        TableGridProjection.TableWidth(table));
+                    var appearanceCell = mergeSource is { } merged
+                        ? table.Rows[merged.RowIndex].Cells[merged.CellIndex]
+                        : modelCell;
+                    if (TryParseColor(appearanceCell.ShadingColorHex ?? styleFormat.FillHex, out var importedFill))
+                        wpfCell.Background = new SolidColorBrush(importedFill);
+                    styleBold = styleFormat.Bold == true;
+                    styleTextColorHex = styleFormat.ColorHex;
+                }
+                else if (TryParseColor(cellAppearance.EffectiveFillHex, out var cellFill))
                     wpfCell.Background = new SolidColorBrush(cellFill);
-                if (cellAppearance.EffectiveBold)
+                if (styleBold)
                     wpfCell.FontWeight = FontWeights.Bold;
                 var hasPlannedCellBorders = cellBorderPlan.HasVisibleEdges;
-                if (!hasPlannedCellBorders && table.Formatting.Borders &&
+                if (!hasPlannedCellBorders && table.Formatting.Borders && flowCellSpacingDip <= 0 &&
                     modelCell.VerticalMerge is VerticalMergeState.Restart or VerticalMergeState.Continue)
                 {
                     var hasContinuation = modelCell.VerticalMerge == VerticalMergeState.Restart &&
@@ -10348,6 +10412,20 @@ public sealed partial class DocumentView : RichTextBox
                         cellContentHost.Children.OfType<TableCellBorderChrome>().Single().Margin = surfaceMargin;
                         wpfCell.Background = null;
                     }
+                    if (ordinaryCellMargins is { } borderedCellMargins)
+                    {
+                        // A flow-table cell with its own w:tcBorders still honours w:tcMar: keep the
+                        // border chrome on the cell edge and inset only the text by the authored margin
+                        // (less the inset the nested editor already contributes).
+                        cellContentHost.RenderTransform = Transform.Identity;
+                        var contentStack = cellContentHost.Children
+                            .OfType<System.Windows.Controls.StackPanel>().First();
+                        contentStack.Margin = new Thickness(
+                            Math.Max(0, borderedCellMargins.LeftPt * PxPerPoint - WpfTableCellContentInsetDip),
+                            0,
+                            Math.Max(0, borderedCellMargins.RightPt * PxPerPoint - WpfTableCellContentInsetDip),
+                            0);
+                    }
                     wpfCell.Blocks.Add(new BlockUIContainer(cellContentHost));
                 }
                 else if (rowHeightPx is not null)
@@ -10369,7 +10447,7 @@ public sealed partial class DocumentView : RichTextBox
                     // text rotates inside the cell, mirroring how shapes apply LayoutTransform to their
                     // text blocks (see BuildShape). A BlockUIContainer lets any UIElement live in a
                     // FlowDocument block.
-                    var angle = modelCell.TextDirection == CellTextDirection.Rotate90 ? 90.0 : 270.0;
+                    var angle = CellTextRotationAngle(modelCell.TextDirection);
                     var stack = new System.Windows.Controls.StackPanel
                     {
                         RenderTransformOrigin = new Point(0.5, 0.5),
@@ -10450,6 +10528,8 @@ public sealed partial class DocumentView : RichTextBox
                     foreach (var paraBlock in BuildTableCellParagraphs(modelCell, document, preservedNumberingMarkers))
                         wpfCell.Blocks.Add(paraBlock);
                 }
+                if (styleBold || styleTextColorHex is not null)
+                    ApplyTableStyleRunOverlay(wpfCell, styleBold, styleTextColorHex);
                 wpfRow.Cells.Add(wpfCell);
             }
             group.Rows.Add(wpfRow);
@@ -10637,11 +10717,21 @@ public sealed partial class DocumentView : RichTextBox
             // RichTextBox or StackPanel with LayoutTransform makes WPF's table measure an
             // unconstrained swapped axis and can expand a short Word row to the full page height.
             var textWidth = minHeightPx is { } height ? Math.Max(1, height) : 100;
-            var angle = modelCell.TextDirection == CellTextDirection.Rotate90 ? 90.0 : 270.0;
-            stack.HorizontalAlignment = HorizontalAlignment.Center;
-            stack.VerticalAlignment = VerticalAlignment.Center;
-            foreach (var textBlock in BuildConstrainedRotatedCellTextBlocks(modelCell, document, textWidth, angle))
-                stack.Children.Add(textBlock);
+            var angle = CellTextRotationAngle(modelCell.TextDirection);
+            // Word starts btLr text at the bottom-left of the cell and tbRl text at the top-right.
+            var isBottomToTop = modelCell.TextDirection == CellTextDirection.Rotate90;
+            stack.HorizontalAlignment = isBottomToTop ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+            stack.VerticalAlignment = isBottomToTop ? VerticalAlignment.Bottom : VerticalAlignment.Top;
+            // The line stack has a fixed line width, so a layout rotation yields a finite
+            // (line-stack x row-height) slot that WPF can anchor to the cell corner.
+            var rotatedLines = new System.Windows.Controls.StackPanel
+            {
+                Width = textWidth,
+                LayoutTransform = new RotateTransform(angle)
+            };
+            foreach (var textBlock in BuildConstrainedRotatedCellTextBlocks(modelCell, document, textWidth))
+                rotatedLines.Children.Add(textBlock);
+            stack.Children.Add(rotatedLines);
         }
         else
         {
@@ -10677,8 +10767,7 @@ public sealed partial class DocumentView : RichTextBox
     private static IReadOnlyList<System.Windows.Controls.TextBlock> BuildConstrainedRotatedCellTextBlocks(
         ModelTableCell cell,
         TextDocument document,
-        double textWidth,
-        double angle)
+        double textWidth)
     {
         var modelParagraphs = cell.Paragraphs.Count > 0
             ? cell.Paragraphs
@@ -10700,12 +10789,10 @@ public sealed partial class DocumentView : RichTextBox
             {
                 Width = textWidth,
                 TextWrapping = TextWrapping.Wrap,
-                TextAlignment = System.Windows.TextAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, before, 0, after),
-                RenderTransformOrigin = new Point(0.5, 0.5),
-                RenderTransform = new RotateTransform(angle)
+                TextAlignment = System.Windows.TextAlignment.Left,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, before, 0, after)
             };
             foreach (var run in modelParagraph.Runs)
                 textBlock.Inlines.Add(BuildRun(run, modelParagraph, document));
@@ -10732,6 +10819,139 @@ public sealed partial class DocumentView : RichTextBox
         }
 
         return textBlocks;
+    }
+
+    // w:textDirection btLr reads bottom-to-top (a counter-clockwise quarter turn); tbRl reads
+    // top-to-bottom (clockwise). WPF's RotateTransform angle is clockwise-positive.
+    private static double CellTextRotationAngle(CellTextDirection direction) =>
+        direction == CellTextDirection.Rotate90 ? -90.0 : 90.0;
+
+    private static string? FirstTableBorderColorToken(TableBorders? borders) =>
+        borders is null
+            ? null
+            : new[]
+                {
+                    borders.Top, borders.Left, borders.Bottom, borders.Right,
+                    borders.InsideHorizontal, borders.InsideVertical
+                }
+                .FirstOrDefault(edge => edge is not null)?.ColorToken;
+
+    private static bool TryResolveTableBorderTokenColor(string? token, out Color color)
+    {
+        color = Colors.Black;
+        if (string.IsNullOrWhiteSpace(token))
+            return false;
+        return string.Equals(token.Trim(), "auto", StringComparison.OrdinalIgnoreCase)
+            || TryParseColor(token.Trim(), out color);
+    }
+
+    // Column widths as WPF lays them out: an authored cell spacing is carved out of the grid (Word's
+    // table width includes it, WPF adds it on top), and a grid wider than the text column is scaled
+    // back so the right-hand border is not clipped away by the page column.
+    private static double?[] ResolveRenderedTableColumnWidths(
+        ModelTable table,
+        TextDocument document,
+        int columns,
+        IReadOnlyList<double>? autoFitColumnWidthsDip,
+        double cellSpacingDip)
+    {
+        var widths = new double?[columns];
+        for (var c = 0; c < columns; c++)
+        {
+            if (autoFitColumnWidthsDip is not null)
+                widths[c] = autoFitColumnWidthsDip[c];
+            else if (c < table.ColumnWidthsPt.Count && table.ColumnWidthsPt[c] > 0)
+                widths[c] = table.ColumnWidthsPt[c] * PxPerPoint;
+        }
+        if (columns == 0 || widths.Any(width => width is null))
+            return widths;
+
+        var total = widths.Sum(width => width!.Value);
+        var spacingTotal = cellSpacingDip * (columns + 1);
+        var target = total - spacingTotal;
+        if (table.FloatingPosition is null)
+        {
+            var metrics = DocumentViewLayoutPlanner.BuildPageMetrics(document.Page);
+            var contentWidth = document.Page.ColumnCount > 1
+                ? DocumentViewLayoutPlanner.BuildColumnPlan(
+                    document.Page, metrics.ContentWidthDip, usePageColumns: true).WidthDip
+                : metrics.ContentWidthDip;
+            var available = contentWidth - Math.Max(0, table.IndentFromLeftPt ?? 0) * PxPerPoint - spacingTotal;
+            if (available > 0)
+                target = Math.Min(target, available);
+        }
+        if (total <= 0 || target <= 0 || Math.Abs(target - total) < 0.01)
+            return widths;
+
+        var scale = target / total;
+        for (var c = 0; c < columns; c++)
+            widths[c] = widths[c]!.Value * scale;
+        return widths;
+    }
+
+    // Table-style conditional run formatting (first row/column bold, header text colour). BuildRun
+    // stamps an explicit weight on every run, so cell-level inheritance cannot carry it. The rendered
+    // snapshot on the run's marker is updated alongside the live property, so CommitToModel sees no
+    // difference and never bakes the style-derived value into the run's direct formatting.
+    private static void ApplyTableStyleRunOverlay(WpfTableCell cell, bool bold, string? colorHex)
+    {
+        Brush? brush = TryParseColor(colorHex, out var color) ? new SolidColorBrush(color) : null;
+        var renderedColorHex = brush is null ? null : ToHex(color);
+
+        void ApplyToInlines(IEnumerable<Inline> inlines)
+        {
+            foreach (var inline in inlines)
+            {
+                if (inline is Span span)
+                {
+                    ApplyToInlines(span.Inlines);
+                    continue;
+                }
+                if (inline is not WpfRun { Tag: RunMarkers { CharacterFormat: { } marker } markers } run)
+                    continue;
+                var rendered = marker.RenderedFormatting;
+                if (bold && !rendered.Bold)
+                {
+                    run.FontWeight = FontWeights.Bold;
+                    rendered = rendered with { Bold = true };
+                }
+                if (brush is not null
+                    && rendered.ColorHex is null
+                    && run.ReadLocalValue(TextElement.ForegroundProperty) == DependencyProperty.UnsetValue)
+                {
+                    run.Foreground = brush;
+                    rendered = rendered with { ColorHex = renderedColorHex };
+                }
+                run.Tag = markers with { CharacterFormat = marker with { RenderedFormatting = rendered } };
+            }
+        }
+
+        void ApplyToElement(object element)
+        {
+            switch (element)
+            {
+                case WpfParagraph paragraph:
+                    ApplyToInlines(paragraph.Inlines);
+                    break;
+                case BlockUIContainer { Child: { } child }:
+                    ApplyToElement(child);
+                    break;
+                case System.Windows.Controls.RichTextBox richTextBox:
+                    foreach (var block in richTextBox.Document.Blocks)
+                        ApplyToElement(block);
+                    break;
+                case System.Windows.Controls.TextBlock textBlock:
+                    ApplyToInlines(textBlock.Inlines);
+                    break;
+                case System.Windows.Controls.Panel panel:
+                    foreach (var panelChild in panel.Children)
+                        ApplyToElement(panelChild);
+                    break;
+            }
+        }
+
+        foreach (var block in cell.Blocks)
+            ApplyToElement(block);
     }
 
     private static (int RowIndex, int CellIndex)? FindVerticalMergeRestart(
