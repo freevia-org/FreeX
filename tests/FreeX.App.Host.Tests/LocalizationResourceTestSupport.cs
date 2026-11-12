@@ -14,9 +14,14 @@ internal static class LocalizationResourceTestSupport
     public static Dictionary<string, string> ReadResxValues(string fileName) =>
         ResxResourceTestSupport.ReadResxValues(ResourceDirectory, fileName);
 
-    public static Dictionary<string, string> ReadEffectiveNeutralValues() =>
-        UiText.GetNeutralResourceKeys()
-            .ToDictionary(key => key, UiText.GetNeutral, StringComparer.Ordinal);
+    // The effective neutral catalog is immutable for the life of the process and every consumer
+    // only reads it, so compute it once instead of once per culture-theory case.
+    private static readonly Lazy<Dictionary<string, string>> EffectiveNeutralValues = new(
+        () => UiText.GetNeutralResourceKeys()
+            .ToDictionary(key => key, UiText.GetNeutral, StringComparer.Ordinal),
+        LazyThreadSafetyMode.ExecutionAndPublication);
+
+    public static Dictionary<string, string> ReadEffectiveNeutralValues() => EffectiveNeutralValues.Value;
 
     public static HashSet<string> CompositePlaceholderTokens(string value) =>
         ResxResourceTestSupport.CompositePlaceholderTokens(value);
