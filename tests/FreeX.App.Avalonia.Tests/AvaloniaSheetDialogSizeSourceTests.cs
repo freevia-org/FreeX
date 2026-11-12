@@ -13,12 +13,13 @@ public sealed class AvaloniaSheetDialogSizeSourceTests
             source,
             "private async Task<string?> ShowRenameSheetDialogAsync(string currentName)",
             "private async Task ShowFindDialogAsync()");
+        // WPF Width/Height are outer sizes; the Avalonia client height drops the caption/frame.
         renameDialog.Should().Contain("Width = 340,");
-        renameDialog.Should().Contain("Height = 150,");
+        renameDialog.Should().Contain("Height = 150 - WpfNoResizeFrameHeight,");
         renameDialog.Should().Contain("MinWidth = 340,");
-        renameDialog.Should().Contain("MinHeight = 150,");
+        renameDialog.Should().Contain("MinHeight = 150 - WpfNoResizeFrameHeight,");
         renameDialog.Should().Contain("MaxWidth = 340,");
-        renameDialog.Should().Contain("MaxHeight = 150,");
+        renameDialog.Should().Contain("MaxHeight = 150 - WpfNoResizeFrameHeight,");
         renameDialog.Should().Contain("CanResize = false,");
         renameDialog.Should().Contain("MinWidth = 72,");
 
@@ -26,12 +27,11 @@ public sealed class AvaloniaSheetDialogSizeSourceTests
             source,
             "private async Task<WorkbookHiddenSheet?> ShowUnhideSheetDialogAsync(IReadOnlyList<WorkbookHiddenSheet> hiddenSheets)",
             "private async Task<string?> ShowRenameSheetDialogAsync(string currentName)");
+        // The WPF 160 outer height clips its own button row; the height follows the content here.
         unhideDialog.Should().Contain("Width = 340,");
-        unhideDialog.Should().Contain("Height = 160,");
         unhideDialog.Should().Contain("MinWidth = 340,");
-        unhideDialog.Should().Contain("MinHeight = 160,");
         unhideDialog.Should().Contain("MaxWidth = 340,");
-        unhideDialog.Should().Contain("MaxHeight = 160,");
+        unhideDialog.Should().Contain("SizeToContent = SizeToContent.Height,");
         unhideDialog.Should().Contain("CanResize = false,");
         unhideDialog.Should().Contain("ApplyDialogButtonChrome(okButton, width: 72, isDefault: true);");
         unhideDialog.Should().Contain("ApplyDialogButtonChrome(cancelButton, width: 72);");

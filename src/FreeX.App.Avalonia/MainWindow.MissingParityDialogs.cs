@@ -284,6 +284,9 @@ public sealed partial class MainWindow
             Background = Brushes.White,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
+            // WPF dialogs inherit the 12px UI font; the Avalonia window default is 14px.
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
         };
         AutomationProperties.SetAutomationId(dialog, "HeaderFooterPictureFormatDialog");
 
@@ -311,21 +314,37 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close((WorksheetHeaderFooterPicture?)null);
 
+        // WPF HeaderFooterPictureFormatDialog.CreateContent: 16px root margin, the file name 12px above
+        // the first label, each label 4px above its box, boxes 8px apart, a left-aligned 72px Reset
+        // button with an (0, 8, 0, 12) margin, then OK/Cancel. The window keeps the WPF 360x270 as its
+        // client size (the Avalonia controls are taller per row than the WPF ones, so the content
+        // would not fit the 241px the WPF client area leaves).
+        TextBlock CreateFieldLabel(string resourceKey)
+        {
+            var label = CreateMissingParityLabel(UiText.Get(resourceKey));
+            label.Margin = new Thickness(0, 0, 0, 4);
+            return label;
+        }
+
+        widthBox.Margin = new Thickness(0, 0, 0, 8);
+        heightBox.Margin = new Thickness(0, 0, 0, 8);
+        resetButton.HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left;
+        resetButton.Margin = new Thickness(0, 8, 0, 12);
+        warning.Margin = new Thickness(0, 0, 0, 4);
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
-            Spacing = 4,
             Children =
             {
-                new TextBlock { Text = state.FileName, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 0, 0, 8) },
-                CreateMissingParityLabel(UiText.Get("FormatPicture_WidthLabel")),
+                new TextBlock { Text = state.FileName, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 0, 0, 12) },
+                CreateFieldLabel("FormatPicture_WidthLabel"),
                 widthBox,
-                CreateMissingParityLabel(UiText.Get("FormatPicture_HeightLabel")),
+                CreateFieldLabel("FormatPicture_HeightLabel"),
                 heightBox,
                 lockAspectRatio,
                 resetButton,
                 warning,
-                AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 4, 0, 0)),
+                AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]),
             },
         };
         dialog.Opened += (_, _) =>

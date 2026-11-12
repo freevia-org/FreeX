@@ -140,33 +140,69 @@ public sealed partial class MainWindow
         var options = CellShiftDialogPlanner.GetCellSelectionChoices(mode);
         var firstOption = options[0];
         var secondOption = options[1];
-        var first = new RadioButton { Content = StripDisplayMnemonic(UiText.Get(firstOption.LabelKey)), GroupName = "shift", IsChecked = true, Margin = new Thickness(0, 2) };
-        var second = new RadioButton { Content = StripDisplayMnemonic(UiText.Get(secondOption.LabelKey)), GroupName = "shift", Margin = new Thickness(0, 2) };
+        var first = new RadioButton { Content = StripDisplayMnemonic(UiText.Get(firstOption.LabelKey)), GroupName = "shift", IsChecked = true, Margin = new Thickness(0, 0, 0, 2) };
+        var second = new RadioButton { Content = StripDisplayMnemonic(UiText.Get(secondOption.LabelKey)), GroupName = "shift", Margin = new Thickness(0, 0, 0, 2) };
         var ok = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")), IsDefault = true };
         var cancel = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")), IsCancel = true };
         ApplyCellShiftAutomation(first, firstOption);
         ApplyCellShiftAutomation(second, secondOption);
         AvaloniaCompactDialogChrome.ApplyRadioButton(first, InsertDeleteCellsDialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyRadioButton(second, InsertDeleteCellsDialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyButton(ok, InsertDeleteCellsDialogChromeStyle, 84, isDefault: true);
-        AvaloniaCompactDialogChrome.ApplyButton(cancel, InsertDeleteCellsDialogChromeStyle, 84);
+        // WPF radios are ~16px rows with a 6px bottom margin; a 20px compact row plus 2px keeps the pitch.
+        first.MinHeight = second.MinHeight = 20;
+        first.MaxHeight = second.MaxHeight = 20;
+        // WPF DialogButtonRowFactory.Create(Accept, buttonWidth: 72).
+        AvaloniaCompactDialogChrome.ApplyButton(ok, InsertDeleteCellsDialogChromeStyle, 72, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, InsertDeleteCellsDialogChromeStyle, 72);
+
+        // Layout mirrors WPF CellShiftDialog: a 310px-wide NoResize window, a 12px root
+        // DockPanel whose first child is the semibold prompt (docked left, the DockPanel default),
+        // the option group (stack margin 8,6,8,8) docked top beside it and the OK/Cancel row below.
+        // WPF lets the button row fill the leftover height; here the window is sized to the content
+        // and the row keeps standard-height buttons.
+        var prompt = new TextBlock
+        {
+            Text = UiText.Get(surface.PromptKey),
+            FontWeight = global::Avalonia.Media.FontWeight.SemiBold,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 0, 0, 6),
+        };
+        var optionGroup = new GroupBox
+        {
+            Header = UiText.Get(surface.GroupHeaderKey),
+            Padding = new Thickness(0),
+            Margin = new Thickness(0),
+            Content = new StackPanel
+            {
+                Margin = new Thickness(8, 6, 8, 8),
+                Children = { first, second },
+            },
+        };
+        ApplyPlainWindowGroupBoxChrome(optionGroup, InsertDeleteCellsDialogChromeStyle);
+        DockPanel.SetDock(optionGroup, Dock.Top);
+        var actionRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0));
+        actionRow.VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Bottom;
+        DockPanel.SetDock(actionRow, Dock.Bottom);
 
         var dialog = new Window
         {
             Title = UiText.Get(surface.TitleKey),
-            Width = 320,
-            Height = 180,
+            Width = 310,
+            MinWidth = 310,
+            MaxWidth = 310,
+            SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             CanResize = false,
-            Content = new StackPanel
+            Content = new DockPanel
             {
-                Margin = new Thickness(14),
+                Margin = new Thickness(12),
                 Children =
                 {
-                    first,
-                    second,
-                    AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)),
+                    prompt,
+                    optionGroup,
+                    actionRow,
                 },
             },
         };

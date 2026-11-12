@@ -33,10 +33,14 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("FillSeries_Title"),
+            // WPF FillSeriesStepDialog is a 380x386 NoResize window. The height is
+            // sized to the content: this shell reports input errors inline (WPF uses a message box),
+            // so the dialog grows by the warning line instead of clipping it.
             Width = 380,
-            Height = 356,
-            MinWidth = 360,
-            MinHeight = 320,
+            MinWidth = 380,
+            MaxWidth = 380,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -83,6 +87,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(stopBox, "FillSeriesStopValueBox");
 
         var trendBox = new CheckBox { Content = UiText.Get("FillSeries_Trend") };
+        trendBox.Margin = new Thickness(0, 10, 0, 0);
         ApplyDataOpsCheckBoxChrome(trendBox);
         AutomationProperties.SetAutomationId(trendBox, "FillSeriesTrendCheckBox");
 
@@ -93,6 +98,7 @@ public sealed partial class MainWindow
             IsVisible = false,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 8, 0, 0),
         };
         AutomationProperties.SetAutomationId(warningText, "FillSeriesWarningText");
 
@@ -227,7 +233,7 @@ public sealed partial class MainWindow
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Margin = new Thickness(0, 16, 0, 0),
-            Children = { cancelButton, okButton },
+            Children = { okButton, cancelButton },
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
@@ -239,16 +245,18 @@ public sealed partial class MainWindow
                 buttonRow,
                 new ScrollViewer
                 {
+                    // WPF CreateSeriesContent: semibold section headers (6px below, 12px above from the
+                    // second one on), option rows with a 4px bottom margin (a 20px compact radio row
+                    // already carries it), label/box rows 8px apart and the Trend box 10px below.
                     Content = new StackPanel
                     {
-                        Spacing = 8,
                         Children =
                         {
-                            new TextBlock { Text = UiText.Get("FillSeries_SeriesInHeader"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                            new TextBlock { Text = UiText.Get("FillSeries_SeriesInHeader"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 0, 0, 6) },
                             FillSeriesRow(rowsButton, columnsButton),
-                            new TextBlock { Text = UiText.Get("FillSeries_TypeHeader"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                            new TextBlock { Text = UiText.Get("FillSeries_TypeHeader"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 12, 0, 6) },
                             FillSeriesRow(linearButton, growthButton, dateButton, autoFillButton),
-                            new TextBlock { Text = UiText.Get("FillSeries_DateUnitHeader"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                            new TextBlock { Text = UiText.Get("FillSeries_DateUnitHeader"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 12, 0, 6) },
                             FillSeriesRow(dayButton, weekdayButton, monthButton, yearButton),
                             FillSeriesLabeledBox(UiText.Get("FillSeries_StepValueLabel"), stepBox),
                             FillSeriesLabeledBox(UiText.Get("FillSeries_StopValueLabel"), stopBox),
@@ -273,7 +281,7 @@ public sealed partial class MainWindow
 
     private static Grid FillSeriesLabeledBox(string label, Control field)
     {
-        var grid = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+        var grid = new Grid { Margin = new Thickness(0, 8, 0, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
         var labelBlock = new TextBlock
