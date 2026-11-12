@@ -502,4 +502,64 @@
   <data name="FreeW_FindReplace_Story_Endnote_Format" xml:space="preserve"><value>la note de fin {0}</value></data>
   <data name="FreeW_FindReplace_Story_Comment_Format" xml:space="preserve"><value>le commentaire {0}</value></data>
   <data name="FreeW_FindReplace_Story_TextBox_Format" xml:space="preserve"><value>la zone de texte {0}</value></data>
+  <data name="StyleDefinition_NewTitle" xml:space="preserve"><value>Créer un style à partir de la mise en forme</value></data>
+  <data name="StyleDefinition_ModifyTitle" xml:space="preserve"><value>Modifier le style</value></data>
+  <data name="StyleDefinition_PropertiesGroup" xml:space="preserve"><value>Propriétés</value></data>
+  <data name="StyleDefinition_NameLabel" xml:space="preserve"><value>Nom :</value></data>
+  <data name="StyleDefinition_TypeLabel" xml:space="preserve"><value>Type de style :</value></data>
+  <data name="StyleDefinition_BasedOnLabel" xml:space="preserve"><value>Style basé sur :</value></data>
+  <data name="StyleDefinition_NextStyleLabel" xml:space="preserve"><value>Style du paragraphe suivant :</value></data>
+  <data name="StyleDefinition_FormattingGroup" xml:space="preserve"><value>Mise en forme</value></data>
+  <data name="StyleDefinition_FontLabel" xml:space="preserve"><value>Police :</value></data>
+  <data name="StyleDefinition_SizeLabel" xml:space="preserve"><value>Taille :</value></data>
+  <data name="StyleDefinition_Bold" xml:space="preserve"><value>Gras</value></data>
+  <data name="StyleDefinition_Italic" xml:space="preserve"><value>Italique</value></data>
+  <data name="StyleDefinition_Underline" xml:space="preserve"><value>Souligné</value></data>
+  <data name="StyleDefinition_Strikethrough" xml:space="preserve"><value>Barré</value></data>
+  <data name="StyleDefinition_FontColorLabel" xml:space="preserve"><value>Couleur de police :</value></data>
+  <data name="StyleDefinition_HighlightLabel" xml:space="preserve"><value>Surlignage :</value></data>
+  <data name="StyleDefinition_AlignmentLabel" xml:space="preserve"><value>Alignement :</value></data>
+  <data name="StyleDefinition_Type_Paragraph" xml:space="preserve"><value>Paragraphe</value></data>
+  <data name="StyleDefinition_Type_Character" xml:space="preserve"><value>Caractère</value></data>
+  <data name="StyleDefinition_Type_Linked" xml:space="preserve"><value>Lié (paragraphe et caractère)</value></data>
+  <data name="StyleDefinition_AddToGallery" xml:space="preserve"><value>Ajouter à la galerie de styles</value></data>
+  <data name="StyleDefinition_FormatButton" xml:space="preserve"><value>Format</value></data>
+  <data name="StyleDefinition_Format_Font" xml:space="preserve"><value>Police…</value></data>
+  <data name="StyleDefinition_Format_Paragraph" xml:space="preserve"><value>Paragraphe…</value></data>
+  <data name="StyleDefinition_Format_Tabs" xml:space="preserve"><value>Tabulations…</value></data>
+  <data name="StyleDefinition_Format_Border" xml:space="preserve"><value>Bordure…</value></data>
+  <data name="StyleDefinition_PreviewLabel" xml:space="preserve"><value>Aperçu</value></data>
+  <data name="StyleDefinition_PreviewSample" xml:space="preserve"><value>Exemple de texte Exemple de texte Exemple de texte</value></data>
+  <data name="StyleDefinition_NoBasedOn" xml:space="preserve"><value>(aucun style)</value></data>
+  <data name="StyleDefinition_SameStyle" xml:space="preserve"><value>(même style)</value></data>
+  <data name="StyleDefinition_Error_EmptyName" xml:space="preserve"><value>Entrez un nom de style.</value></data>
+  <data name="StyleDefinition_Error_DuplicateNameFormat" xml:space="preserve"><value>Un style nommé « {0} » existe déjà. Choisissez un autre nom.</value></data>
+  <data name="StyleDefinition_Error_FontSize" xml:space="preserve"><value>Entrez une taille de police comprise entre 1 et 1638.</value></data>
+  <data name="StyleDefinition_Description_FontFormat" xml:space="preserve"><value>Police : {0}</value></data>
+  <data name="StyleDefinition_Description_SizeFormat" xml:space="preserve"><value>{0} pt</value></data>
+  <data name="StyleDefinition_Description_FontColorFormat" xml:space="preserve"><value>Couleur de police : {0}</value></data>
+  <data name="StyleDefinition_Description_HighlightFormat" xml:space="preserve"><value>Surlignage : {0}</value></data>
+  <data name="StyleDefinition_Description_Align_Left" xml:space="preserve"><value>Gauche</value></data>
+  <data name="StyleDefinition_Description_Align_Center" xml:space="preserve"><value>Centré</value></data>
+  <data name="StyleDefinition_Description_Align_Right" xml:space="preserve"><value>Droite</value></data>
+  <data name="StyleDefinition_Description_Align_Justify" xml:space="preserve"><value>Justifié</value></data>
+  <data name="StyleDefinition_Description_IndentLeftFormat" xml:space="preserve"><value>Retrait : Gauche : {0} pt</value></data>
+  <data name="StyleDefinition_Description_IndentRightFormat" xml:space="preserve"><value>Retrait : Droite : {0} pt</value></data>
+  <data name="StyleDefinition_Description_FirstLineFormat" xml:space="preserve"><value>Première ligne : {0} pt</value></data>
+  <data name="StyleDefinition_Description_HangingFormat" xml:space="preserve"><value>Suspendu : {0} pt</value></data>
+  <data name="StyleDefinition_Description_SpaceBeforeFormat" xml:space="preserve"><value>Espace avant : {0} pt</value></data>
+  <data name="StyleDefinition_Description_SpaceAfterFormat" xml:space="preserve"><value>Espace après : {0} pt</value></data>
+  <data name="StyleDefinition_Description_LineSpacingFormat" xml:space="preserve"><value>Interligne : {0}</value></data>
+  <data name="StyleDefinition_Description_KeepWithNext" xml:space="preserve"><value>Paragraphes solidaires</value></data>
+  <data name="StyleDefinition_Description_KeepLines" xml:space="preserve"><value>Lignes solidaires</value></data>
+  <data name="StyleDefinition_Description_PageBreakBefore" xml:space="preserve"><value>Saut de page avant</value></data>
+  <data name="StyleDefinition_Description_Border" xml:space="preserve"><value>Bordure</value></data>
+  <data name="StyleDefinition_Description_ShadingFormat" xml:space="preserve"><value>Trame de fond : {0}</value></data>
+  <data name="StyleDefinition_Description_TabStopsFormat" xml:space="preserve"><value>Taquets de tabulation : {0}</value></data>
+  <data name="StyleDefinition_Description_Linked" xml:space="preserve"><value>Lié</value></data>
+  <data name="StyleDefinition_Description_ShowInGallery" xml:space="preserve"><value>Afficher dans la galerie de styles</value></data>
+  <data name="StyleDefinition_Description_StyleFormat" xml:space="preserve"><value>Style : {0}</value></data>
+  <data name="StyleDefinition_Description_BasedOnFormat" xml:space="preserve"><value>Basé sur : {0}</value></data>
+  <data name="StyleDefinition_Description_FollowingFormat" xml:space="preserve"><value>Style suivant : {0}</value></data>
+  <data name="StyleDefinition_Manage_UpdateToMatch" xml:space="preserve"><value>Mettre à jour selon la sélection</value></data>
 </root>

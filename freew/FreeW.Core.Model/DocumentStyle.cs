@@ -8,6 +8,35 @@ public enum StyleType { Paragraph, Character, Table, Numbering }
 /// </summary>
 public sealed class DocumentStyle
 {
+    public DocumentStyle()
+    {
+    }
+
+    /// <summary>
+    /// Copy constructor: every catalog rewrite (modify, rename, delete-promotion, undo snapshot) starts
+    /// from a complete copy and overrides only what it changes through an object initializer, so a newly
+    /// added property can never be silently dropped by one of those call sites.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]
+    public DocumentStyle(DocumentStyle source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        Id = source.Id;
+        Name = source.Name;
+        Type = source.Type;
+        BasedOnStyleId = source.BasedOnStyleId;
+        IsDefault = source.IsDefault;
+        NextStyleId = source.NextStyleId;
+        LinkedStyleId = source.LinkedStyleId;
+        QuickFormat = source.QuickFormat;
+        OutlineLevel = source.OutlineLevel;
+        Run = source.Run;
+        Paragraph = source.Paragraph;
+        TableBorders = source.TableBorders;
+        PreservedTableStyleXml = source.PreservedTableStyleXml;
+        PreservedNumbering = source.PreservedNumbering;
+    }
+
     public required string Id { get; init; }
     public required string Name { get; init; }
     public StyleType Type { get; init; } = StyleType.Paragraph;
@@ -56,6 +85,14 @@ public sealed class DocumentStyle
     /// Null when the style carries no link.
     /// </summary>
     public string? LinkedStyleId { get; init; }
+
+    /// <summary>
+    /// Word's "Add to the Styles gallery" flag (<c>w:style/w:qFormat</c>): whether a custom style is
+    /// offered in the Home &gt; Styles quick gallery. A style that clears it stays in the catalog (and in
+    /// Manage Styles) but is not shown as a gallery swatch. Styles authored in FreeW default to shown;
+    /// the DOCX reader takes the value from the package.
+    /// </summary>
+    public bool QuickFormat { get; init; } = true;
 
     /// <summary>
     /// The Word outline level carried by <c>w:pPr/w:outlineLvl</c> for a paragraph style.

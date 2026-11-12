@@ -65,18 +65,34 @@ public static class StyleManager
         string? basedOnId,
         RunFormatting run,
         ParagraphFormatting para,
-        string? nextStyleId = null)
+        string? nextStyleId = null,
+        StyleType type = StyleType.Paragraph,
+        bool quickFormat = true)
     {
         ArgumentNullException.ThrowIfNull(doc);
         ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(para);
+        if (type is not (StyleType.Paragraph or StyleType.Character))
+            throw new ArgumentOutOfRangeException(nameof(type), type, "Only paragraph and character styles can be authored.");
         var trimmed = (name ?? string.Empty).Trim();
         if (trimmed.Length == 0)
             throw new ArgumentException("Style name must be non-empty.", nameof(name));
 
         var id = GenerateUniqueId(doc, trimmed);
         var uniqueName = MakeNameUnique(doc, trimmed);
-        var basedOn = basedOnId is { Length: > 0 } && doc.Styles.ContainsKey(basedOnId) ? basedOnId : null;
+        // Word only lets a character style inherit from another character style; a paragraph based-on
+        // is dropped like any other invalid reference.
+        var basedOn = basedOnId is { Length: > 0 }
+            && doc.Styles.TryGetValue(basedOnId, out var basedOnStyle)
+            && (type != StyleType.Character || basedOnStyle.Type == StyleType.Character)
+            ? basedOnId
+            : null;
+        if (type == StyleType.Character)
+        {
+            // A character style carries no paragraph formatting and no follow-on style.
+            para = ParagraphFormatting.Default;
+            nextStyleId = null;
+        }
         // A next-style may point at an existing style or at the new style itself (Word allows a style to
         // chain to itself, e.g. a body style whose follow-on is the same style). Anything else is dropped.
         var next = nextStyleId is { Length: > 0 }
@@ -87,13 +103,109 @@ public static class StyleManager
         {
             Id = id,
             Name = uniqueName,
+            Type = type,
             BasedOnStyleId = basedOn,
             NextStyleId = next,
+            QuickFormat = quickFormat,
             Run = run,
             Paragraph = para,
         };
         doc.Styles[id] = style;
         return style;
+    }
+
+    /// <summary>The suffix Word gives the character half of a linked style ("Heading 1 Char").</summary>
+    public const string LinkedCharacterStyleSuffix = " Char";
+
+    /// <summary>
+    /// Create Word's "Linked (paragraph and character)" style: a paragraph style plus its paired
+    /// <c>"&lt;name&gt; Char"</c> character style, each naming the other through
+    /// <see cref="DocumentStyle.LinkedStyleId"/> (<c>w:link</c>). Applied with a caret it formats the
+    /// paragraph; applied to a text selection it formats just those characters through the character half.
+    /// The character half carries the same run formatting, is based on the linked character style of the
+    /// paragraph half's based-on style (when that one is itself linked), and is kept out of the gallery
+    /// because Word shows a linked pair as one entry. Returns the paragraph half.
+    /// </summary>
+    public static DocumentStyle CreateLinkedStyle(
+        TextDocument doc,
+        string name,
+        string? basedOnId,
+        RunFormatting run,
+        ParagraphFormatting para,
+        string? nextStyleId = null,
+        bool quickFormat = true)
+    {
+        var paragraphStyle = CreateStyle(doc, name, basedOnId, run, para, nextStyleId, StyleType.Paragraph, quickFormat);
+        var characterBasedOn = paragraphStyle.BasedOnStyleId is { } parentId
+            ? FindLinkedCharacterStyle(doc, parentId)?.Id
+            : null;
+        var characterStyle = CreateStyle(
+            doc,
+            paragraphStyle.Name + LinkedCharacterStyleSuffix,
+            characterBasedOn,
+            run,
+            ParagraphFormatting.Default,
+            nextStyleId: null,
+            StyleType.Character,
+            quickFormat: false);
+        doc.Styles[characterStyle.Id] = new DocumentStyle(characterStyle) { LinkedStyleId = paragraphStyle.Id };
+        var linkedParagraph = new DocumentStyle(paragraphStyle) { LinkedStyleId = characterStyle.Id };
+        doc.Styles[paragraphStyle.Id] = linkedParagraph;
+        return linkedParagraph;
+    }
+
+    /// <summary>
+    /// The character half of the linked pair <paramref name="styleId"/> heads, or null when the style
+    /// is not a paragraph style whose <c>w:link</c> names a character style.
+    /// </summary>
+    public static DocumentStyle? FindLinkedCharacterStyle(TextDocument doc, string styleId)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+        return styleId is not null
+            && doc.Styles.TryGetValue(styleId, out var style)
+            && style.Type == StyleType.Paragraph
+            && style.LinkedStyleId is { Length: > 0 } linkedId
+            && doc.Styles.TryGetValue(linkedId, out var linked)
+            && linked.Type == StyleType.Character
+            ? linked
+            : null;
+    }
+
+    /// <summary>
+    /// True when <paramref name="style"/> is the character half of a linked pair. Word presents the pair
+    /// as a single style named after the paragraph half, so style pickers hide this half.
+    /// </summary>
+    public static bool IsLinkedCharacterHalf(TextDocument doc, DocumentStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+        ArgumentNullException.ThrowIfNull(style);
+        return style.Type == StyleType.Character
+            && style.LinkedStyleId is { Length: > 0 } linkedId
+            && doc.Styles.TryGetValue(linkedId, out var linked)
+            && linked.Type == StyleType.Paragraph;
+    }
+
+    /// <summary>
+    /// Re-derive the character half of a linked pair from its paragraph half after the paragraph half
+    /// was modified or renamed: a linked style is one style to the user, so its run formatting and name
+    /// ("&lt;name&gt; Char") follow the paragraph half. No-op (returns null) for an unlinked style.
+    /// </summary>
+    public static DocumentStyle? SyncLinkedCharacterStyle(TextDocument doc, string paragraphStyleId)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+        if (FindLinkedCharacterStyle(doc, paragraphStyleId) is not { } linked
+            || !doc.Styles.TryGetValue(paragraphStyleId, out var paragraphStyle))
+        {
+            return null;
+        }
+
+        var desiredName = paragraphStyle.Name + LinkedCharacterStyleSuffix;
+        var name = string.Equals(linked.Name, desiredName, StringComparison.Ordinal)
+            ? linked.Name
+            : MakeNameUnique(desiredName, NamesExcept(doc, linked.Id));
+        var updated = new DocumentStyle(linked) { Name = name, Run = paragraphStyle.Run };
+        doc.Styles[linked.Id] = updated;
+        return updated;
     }
 
     /// <summary>
@@ -115,7 +227,8 @@ public static class StyleManager
         string? basedOnId = null,
         bool clearBasedOn = false,
         string? nextStyleId = null,
-        bool clearNext = false)
+        bool clearNext = false,
+        bool? quickFormat = null)
     {
         ArgumentNullException.ThrowIfNull(doc);
         if (styleId is null || !doc.Styles.TryGetValue(styleId, out var existing))
@@ -125,8 +238,10 @@ public static class StyleManager
         if (name is { } candidate)
         {
             var trimmed = candidate.Trim();
-            if (trimmed.Length > 0)
-                newName = trimmed;
+            // A rename may not collide with another style's display name (Word refuses two styles sharing
+            // a w:name); a colliding rename takes the same " N" suffix a colliding create does.
+            if (trimmed.Length > 0 && !string.Equals(trimmed, existing.Name, StringComparison.Ordinal))
+                newName = MakeNameUnique(trimmed, NamesExcept(doc, styleId));
         }
 
         var newBasedOn = existing.BasedOnStyleId;
@@ -149,24 +264,17 @@ public static class StyleManager
             newNext = nextStyleId;
 
         // DocumentStyle's Id/Name/BasedOn are init-only, so replace the entry rather than mutate it.
-        var updated = new DocumentStyle
+        // The copy constructor preserves the structural data the modify dialog does not edit (table
+        // borders, preserved numbering, the w:link pairing, preserved table style XML), so modifying a
+        // style read from a docx does not silently drop any of it on the next save.
+        var updated = new DocumentStyle(existing)
         {
-            Id = existing.Id,
             Name = newName,
-            Type = existing.Type,
-            IsDefault = existing.IsDefault,
             BasedOnStyleId = newBasedOn,
             NextStyleId = newNext,
-            OutlineLevel = existing.OutlineLevel,
+            QuickFormat = quickFormat ?? existing.QuickFormat,
             Run = run ?? existing.Run,
             Paragraph = para ?? existing.Paragraph,
-            // Preserve read-only structural data the modify dialog does not edit, so modifying a style read
-            // from a docx does not silently drop its table borders, preserved numbering, linked
-            // character/paragraph style pairing (w:style/w:link), or preserved table style XML on the next save.
-            TableBorders = existing.TableBorders,
-            PreservedNumbering = existing.PreservedNumbering,
-            LinkedStyleId = existing.LinkedStyleId,
-            PreservedTableStyleXml = existing.PreservedTableStyleXml,
         };
         doc.Styles[styleId] = updated;
         return updated;
@@ -195,26 +303,89 @@ public static class StyleManager
                 continue;
 
             // DocumentStyle's BasedOnStyleId is init-only, so replace the entry rather than mutate it.
-            doc.Styles[child.Id] = new DocumentStyle
-            {
-                Id = child.Id,
-                Name = child.Name,
-                Type = child.Type,
-                IsDefault = child.IsDefault,
-                BasedOnStyleId = promotedBasedOn,
-                NextStyleId = child.NextStyleId,
-                OutlineLevel = child.OutlineLevel,
-                Run = child.Run,
-                Paragraph = child.Paragraph,
-                TableBorders = child.TableBorders,
-                PreservedNumbering = child.PreservedNumbering,
-                LinkedStyleId = child.LinkedStyleId,
-                PreservedTableStyleXml = child.PreservedTableStyleXml,
-            };
+            doc.Styles[child.Id] = new DocumentStyle(child) { BasedOnStyleId = promotedBasedOn };
         }
 
         return doc.Styles.Remove(styleId);
     }
+
+    /// <summary>
+    /// Word's Delete Style: remove the custom style <paramref name="styleId"/> (and, for a linked pair,
+    /// its character half) and leave nothing pointing at it. Paragraphs formatted with a removed
+    /// paragraph style return to the default paragraph style (Normal), which is what Word does, and runs
+    /// carrying a removed character style drop it; other styles' follow-on (<c>w:next</c>) and link
+    /// (<c>w:link</c>) references to a removed id are cleared, and children are promoted onto the removed
+    /// style's own based-on exactly as <see cref="DeleteStyle"/> does. Returns the removed ids (empty when
+    /// the style is built-in or absent, in which case nothing changes).
+    /// </summary>
+    public static IReadOnlyList<string> DeleteStyleAndReassign(TextDocument doc, string styleId)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+        if (styleId is null || IsBuiltIn(styleId) || !doc.Styles.ContainsKey(styleId))
+            return [];
+
+        var removed = new List<string>(2) { styleId };
+        if (FindLinkedCharacterStyle(doc, styleId) is { } linkedHalf
+            && !IsBuiltIn(linkedHalf.Id)
+            && string.Equals(linkedHalf.LinkedStyleId, styleId, StringComparison.Ordinal))
+        {
+            removed.Add(linkedHalf.Id);
+        }
+
+        foreach (var id in removed)
+            DeleteStyle(doc, id);
+
+        var removedSet = removed.ToHashSet(StringComparer.Ordinal);
+        foreach (var style in doc.Styles.Values.ToArray())
+        {
+            var dropNext = style.NextStyleId is { } next && removedSet.Contains(next);
+            var dropLink = style.LinkedStyleId is { } link && removedSet.Contains(link);
+            if (!dropNext && !dropLink)
+                continue;
+            doc.Styles[style.Id] = new DocumentStyle(style)
+            {
+                NextStyleId = dropNext ? null : style.NextStyleId,
+                LinkedStyleId = dropLink ? null : style.LinkedStyleId,
+            };
+        }
+
+        foreach (var paragraph in EnumerateStyledParagraphs(doc))
+        {
+            if (paragraph.StyleId is { } paragraphStyleId && removedSet.Contains(paragraphStyleId))
+                paragraph.StyleId = null;
+            foreach (var run in paragraph.Runs)
+            {
+                if (run.StyleId is { } runStyleId && removedSet.Contains(runStyleId))
+                    run.StyleId = null;
+            }
+        }
+
+        return removed;
+    }
+
+    /// <summary>
+    /// Every paragraph a style reference can live on, in one deterministic order: body (including table
+    /// cells and nested tables), headers/footers, footnotes, endnotes, and the text boxes inside them.
+    /// Shared by <see cref="DeleteStyleAndReassign"/> and the undo snapshot of the command that drives it,
+    /// so both always see the same paragraphs in the same order.
+    /// </summary>
+    public static IEnumerable<Paragraph> EnumerateStyledParagraphs(TextDocument doc)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+        return TextDocumentStoryTraversal.EnumerateParagraphs(
+            doc,
+            TextDocumentStorySubset.All,
+            TextDocumentStoryTraversalOptions.IncludeTextBoxes
+            | TextDocumentStoryTraversalOptions.IncludeShapeTextBoxes
+            | TextDocumentStoryTraversalOptions.IncludeNestedTables);
+    }
+
+    private static HashSet<string> NamesExcept(TextDocument doc, string styleId) =>
+        new(
+            doc.Styles.Values
+                .Where(style => !string.Equals(style.Id, styleId, StringComparison.Ordinal))
+                .Select(style => style.Name),
+            StringComparer.OrdinalIgnoreCase);
 
     // Derive a unique style id from the display name: keep ASCII letters/digits, then disambiguate with a
     // numeric suffix against the existing catalog (which includes the built-ins). Deterministic.
