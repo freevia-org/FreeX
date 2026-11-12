@@ -214,6 +214,7 @@ public sealed partial class MainWindow
         comboBox.MinHeight = WorksheetContextMiniToolbarRowHeight;
         comboBox.MaxHeight = WorksheetContextMiniToolbarRowHeight;
         comboBox.HorizontalAlignment = HorizontalAlignment.Left;
+        comboBox.VerticalAlignment = VerticalAlignment.Center;
         comboBox.Margin = new Thickness(0, 0, 3, 0);
         comboBox.Text = text;
         AutomationProperties.SetName(comboBox, automationName);
@@ -275,6 +276,7 @@ public sealed partial class MainWindow
             MinHeight = 0,
             Padding = new Thickness(0),
             Margin = new Thickness(0, 0, 2, 0),
+            VerticalAlignment = VerticalAlignment.Center,
             Background = Brushes.White,
             BorderBrush = Brushes.Transparent,
             BorderThickness = new Thickness(0),

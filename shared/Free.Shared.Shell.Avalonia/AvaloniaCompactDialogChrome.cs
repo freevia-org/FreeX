@@ -320,6 +320,7 @@ public static class AvaloniaCompactDialogChrome
                         // chrome here painted a second bordered box over the glyph and its 24px
                         // height pushed the text below a 22px combo.
                         textBox.MinHeight = 0;
+                        textBox.MinWidth = 0;
                         textBox.SelectionBrush = style.TextSelectionBrush ?? TextSelectionBrush;
                         break;
                     }
@@ -963,7 +964,12 @@ public static class AvaloniaCompactDialogChrome
             VerticalContentAlignment = VerticalAlignment.Center,
         };
         if (CompactEditableComboOwnsEditor)
+        {
+            // Fluent's 64px TextBox minimum width made the editor overflow a narrow combo (a
+            // 42px font-size box) and centre itself off the left edge, clipping its text.
             editableText.MinHeight = 0;
+            editableText.MinWidth = 0;
+        }
         editableText.Bind(TextBox.ForegroundProperty, new Binding(nameof(TemplatedControl.Foreground)) { Source = comboBox });
         editableText.Bind(TextBox.TextProperty, new Binding(nameof(ComboBox.Text))
         {
