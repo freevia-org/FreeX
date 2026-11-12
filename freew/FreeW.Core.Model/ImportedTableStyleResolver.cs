@@ -20,8 +20,9 @@ public sealed record ImportedTableStyleCellFormat(
 /// <summary>
 /// Render-only resolution of an imported <c>w:style w:type="table"</c> definition
 /// (<see cref="DocumentStyle.PreservedTableStyleXml"/>). The document's own definition is authoritative
-/// over FreeW's built-in gallery entry of the same id: Word paints what styles.xml says, including
-/// "no banding" when the style declares no <c>w:tblStyleRowBandSize</c>. Nothing resolved here is written
+/// over FreeW's built-in gallery entry of the same id: Word paints what styles.xml says (bands only for
+/// the <c>band1Horz</c>/<c>band2Horz</c>/<c>band1Vert</c>/<c>band2Vert</c> conditions it defines, gated by
+/// <c>w:tblLook</c>). Nothing resolved here is written
 /// back into the model, so the package round-trips unchanged.
 /// </summary>
 public sealed class ImportedTableStyle
@@ -43,10 +44,10 @@ public sealed class ImportedTableStyle
         Paragraph = paragraph;
     }
 
-    /// <summary>Rows per horizontal band; 0 when the style chain declares none (Word then paints no bands).</summary>
+    /// <summary>Rows per horizontal band; 1 when the style chain declares none (the OOXML default).</summary>
     public int RowBandSize { get; }
 
-    /// <summary>Columns per vertical band; 0 when the style chain declares none.</summary>
+    /// <summary>Columns per vertical band; 1 when the style chain declares none.</summary>
     public int ColumnBandSize { get; }
 
     /// <summary>The table style's own paragraph properties (<c>w:style/w:pPr</c>) through its based-on chain.</summary>
@@ -88,8 +89,9 @@ public sealed class ImportedTableStyle
         }
 
         var conditions = new Dictionary<string, ImportedTableStyleCellFormat>(StringComparer.Ordinal);
-        var rowBandSize = 0;
-        var columnBandSize = 0;
+        // ECMA-376 17.7.6.5/17.7.6.7: an omitted band size is one row/column per band.
+        var rowBandSize = 1;
+        var columnBandSize = 1;
         var paragraph = ParagraphFormatting.Default;
         string? borderColorToken = null;
         for (var index = chain.Count - 1; index >= 0; index--)
