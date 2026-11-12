@@ -294,6 +294,169 @@ public sealed class HeaderFooterPaginatorTests
             "a fitting endnote should remain overlaid after the final body content");
     }
 
+    /// <summary>
+    /// The print overlay used to flatten a header to one left-aligned 11pt line. Word lays out every
+    /// header paragraph with its own alignment and tab stops: a centred paragraph, a paragraph tabbed
+    /// to a centre stop and a right-aligned paragraph are three separate lines at three positions.
+    /// </summary>
+    [StaFact]
+    public void Header_LaysOutEachParagraphWithItsAlignmentAndTabStops()
+    {
+        var model = TextDocument.CreateEmpty();
+        var (contentWidthDip, _) = PageLayout.ContentAreaDip(model.Page);
+        var contentWidthPt = contentWidthDip * 72.0 / 96.0;
+        var header = new HeaderFooter();
+        header.Paragraphs.Add(new Paragraph("HHHHHH")
+        {
+            Formatting = new ParagraphFormatting { Alignment = FreeW.Core.Model.TextAlignment.Center }
+        });
+        header.Paragraphs.Add(new Paragraph("\tHHHHHH")
+        {
+            Formatting = new ParagraphFormatting
+            {
+                TabStops = [new TabStop(contentWidthPt / 2, TabStopAlignment.Center)]
+            }
+        });
+        header.Paragraphs.Add(new Paragraph("HHHHHH")
+        {
+            Formatting = new ParagraphFormatting { Alignment = FreeW.Core.Model.TextAlignment.Right }
+        });
+        model.Header = header;
+
+        var lines = RenderHeaderInkLines(model);
+
+        Assert.Equal(3, lines.Count);
+        var (marginLeft, _, marginRight, _) = PageLayout.MarginsDip(model.Page);
+        var (pageWidth, _) = PageLayout.PageSizeDip(model.Page);
+        var centre = marginLeft + contentWidthDip / 2;
+        Assert.InRange((lines[0].Left + lines[0].Right) / 2, centre - 4, centre + 4);
+        Assert.InRange((lines[1].Left + lines[1].Right) / 2, centre - 4, centre + 4);
+        Assert.InRange(lines[2].Right, pageWidth - marginRight - 4, pageWidth - marginRight + 1);
+        // The header starts at "Header from edge" (0.5" by default), not at an arbitrary strip offset.
+        Assert.InRange(lines[0].Top, 48, 48 + 12);
+    }
+
+    /// <summary>
+    /// Word's classic page-number gallery writes the PAGE field as a framed paragraph
+    /// (w:framePr w:xAlign="right"): it floats at the right of the text area beside the first header
+    /// line instead of taking a line of its own at the left.
+    /// </summary>
+    [StaFact]
+    public void Header_FramedPageNumberFloatsAtItsAlignedSideBesideTheText()
+    {
+        var model = TextDocument.CreateEmpty();
+        var header = new HeaderFooter();
+        var pageNumber = new Paragraph { FrameHorizontalAlignment = FreeW.Core.Model.TextAlignment.Right };
+        pageNumber.Runs.Add(Run.PageNumberField());
+        header.Paragraphs.Add(pageNumber);
+        header.Paragraphs.Add(new Paragraph("HHHHHH"));
+        model.Header = header;
+
+        var lines = RenderHeaderInkLines(model);
+
+        var line = Assert.Single(lines);
+        var (marginLeft, _, marginRight, _) = PageLayout.MarginsDip(model.Page);
+        var (pageWidth, _) = PageLayout.PageSizeDip(model.Page);
+        Assert.InRange(line.Left, marginLeft - 1, marginLeft + 4);
+        Assert.InRange(line.Right, pageWidth - marginRight - 4, pageWidth - marginRight + 1);
+    }
+
+    /// <summary>
+    /// A header taller than the top margin pushes the body down (Word starts the body below the
+    /// header's last line); a header that fits leaves the margin alone.
+    /// </summary>
+    [StaFact]
+    public void TallHeader_PushesTheBodyBelowItsLastLine()
+    {
+        var model = TextDocument.CreateEmpty();
+        model.Header = new HeaderFooter("one line");
+        Assert.Equal((0d, 0d), PrintLayout.ResolveHeaderFooterBodyInsetsDip(model, model.Page));
+
+        var tall = new HeaderFooter();
+        for (var i = 0; i < 8; i++)
+            tall.Paragraphs.Add(new Paragraph($"header line {i}"));
+        model.Header = tall;
+
+        var (top, bottom) = PrintLayout.ResolveHeaderFooterBodyInsetsDip(model, model.Page);
+
+        Assert.True(top > 40, $"eight header lines overflow a 1in margin by several lines, got {top}");
+        Assert.Equal(0d, bottom);
+    }
+
+    /// <summary>
+    /// A single-section document still selects its header per page: with "Different first page" on,
+    /// page 1 prints the first-page header (here none), never the default running header.
+    /// </summary>
+    [StaFact]
+    public void DifferentFirstPage_DoesNotPrintTheRunningHeaderOnPageOne()
+    {
+        var model = TextDocument.CreateEmpty();
+        model.Header = new HeaderFooter("HHHHHH");
+        Assert.Single(RenderHeaderInkLines(model));
+
+        model.Page.DifferentFirstPage = true;
+        Assert.Empty(RenderHeaderInkLines(model));
+
+        model.FinalSectionHeadersFooters.FirstHeader = new HeaderFooter("HHHHHH");
+        model.FinalSectionHeadersFooters.FirstHeader.Paragraphs.Add(new Paragraph("HHHHHH"));
+        Assert.Equal(2, RenderHeaderInkLines(model).Count);
+    }
+
+    private readonly record struct InkLine(double Top, double Bottom, double Left, double Right);
+
+    /// <summary>
+    /// Renders page 1 through <see cref="HeaderFooterPaginator"/> over an empty body and returns the
+    /// rows of ink found above the body area, top to bottom, with each row's horizontal ink extent.
+    /// </summary>
+    private static List<InkLine> RenderHeaderInkLines(TextDocument model)
+    {
+        var (pageWidth, pageHeight) = PageLayout.PageSizeDip(model.Page);
+        var inner = new SinglePagePaginator(new Size(pageWidth, pageHeight));
+        var paginator = new HeaderFooterPaginator(inner, model, model.Page);
+        var page = paginator.GetPage(0);
+
+        var width = (int)Math.Ceiling(pageWidth);
+        var height = (int)Math.Ceiling(pageHeight / 2);
+        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+            width, height, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(page.Visual);
+        var stride = width * 4;
+        var pixels = new byte[stride * height];
+        bitmap.CopyPixels(pixels, stride, 0);
+
+        var lines = new List<InkLine>();
+        int? start = null;
+        int left = int.MaxValue, right = int.MinValue;
+        for (var y = 0; y < height; y++)
+        {
+            var rowHasInk = false;
+            for (var x = 0; x < width; x++)
+            {
+                var offset = y * stride + x * 4;
+                if (pixels[offset] < 128 && pixels[offset + 1] < 128 && pixels[offset + 2] < 128)
+                {
+                    rowHasInk = true;
+                    left = Math.Min(left, x);
+                    right = Math.Max(right, x);
+                }
+            }
+
+            if (rowHasInk)
+            {
+                start ??= y;
+            }
+            else if (start is { } top)
+            {
+                lines.Add(new InkLine(top, y, left, right + 1));
+                start = null;
+                left = int.MaxValue;
+                right = int.MinValue;
+            }
+        }
+
+        return lines;
+    }
+
     private static string RepositoryFile(params string[] parts) =>
         TestWorkspaceFileLocator.Find(parts);
 

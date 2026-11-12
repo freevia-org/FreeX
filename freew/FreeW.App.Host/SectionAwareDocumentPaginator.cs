@@ -11,35 +11,74 @@ using FreeW.Core.Model;
 namespace FreeW.App.Host;
 
 /// <summary>
-/// Paginates documents whose sections do not share one page geometry. WPF's normal
-/// <see cref="FlowDocument"/> paginator has one <see cref="DocumentPaginator.PageSize"/> for the
+/// Paginates documents whose sections do not share one page geometry or header/footer set. WPF's
+/// normal <see cref="FlowDocument"/> paginator has one <see cref="DocumentPaginator.PageSize"/> for the
 /// whole flow, so it cannot represent a portrait page followed by a landscape page. This paginator
-/// uses the existing section-aware page sharding engine and exposes one physical page per page box.
+/// exposes one physical page per page box of the section-aware page plan.
+/// <para>
+/// Each page's body is the real, line-level page the pagination engine laid out for that section
+/// (<see cref="PaginationEngine.SegmentPagination"/>) -- not the page box's own block shard. A shard
+/// holds whole blocks, so a paragraph running over a page boundary used to print clipped on its first
+/// page and leave the page it continued onto blank (header only).
+/// </para>
 /// </summary>
 internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
 {
-    private const double HeaderFooterStripHeightDip = 36;
-
     private readonly IReadOnlyList<PageBox> _pageBoxes;
+    private readonly (PaginationEngine.SegmentPagination Segment, int LocalPage)?[] _bodyPages;
+    private readonly int[] _sectionPageIndex;
+    private readonly Dictionary<(HeaderFooter Slot, double Width), HeaderFooterBandMetrics> _bandMetrics = [];
     private readonly IDocumentPaginatorSource _source;
     private readonly TextDocument _model;
     private Size _pageSize;
 
-    private SectionAwareDocumentPaginator(DocumentView sourceEditor, PaginatedEditorPanel panel)
+    private SectionAwareDocumentPaginator(
+        DocumentView sourceEditor,
+        PaginatedEditorPanel panel,
+        IReadOnlyList<PaginationEngine.SegmentPagination> segments)
     {
         _pageBoxes = panel.PageBoxes.ToArray();
         _model = sourceEditor.Model;
         var (width, height) = PageLayout.PageSizeDip(sourceEditor.Model.Page);
         _pageSize = new Size(width, height);
         _source = new PaginatorSource(this);
+
+        // Body page k of the page plan is page (k - PageOffset) of the segment that owns it. Parity
+        // blank pages and the synthetic endnote page own no body page.
+        _bodyPages = new (PaginationEngine.SegmentPagination, int)?[_pageBoxes.Count];
+        _sectionPageIndex = new int[_pageBoxes.Count];
+        var bodyIndex = 0;
+        for (var i = 0; i < _pageBoxes.Count; i++)
+        {
+            var box = _pageBoxes[i];
+            _sectionPageIndex[i] = i > 0 && ReferenceEquals(_pageBoxes[i - 1].PageGeometry, box.PageGeometry)
+                ? _sectionPageIndex[i - 1] + 1
+                : 0;
+            if (box.IsParitySyntheticPage || box.IsEndnoteSyntheticPage)
+                continue;
+
+            foreach (var segment in segments)
+            {
+                if (bodyIndex >= segment.PageOffset && bodyIndex < segment.PageOffset + segment.PageCount)
+                {
+                    _bodyPages[i] = (segment, bodyIndex - segment.PageOffset);
+                    break;
+                }
+            }
+
+            bodyIndex++;
+        }
     }
 
     internal static DocumentPaginator Build(DocumentView sourceEditor)
     {
         ArgumentNullException.ThrowIfNull(sourceEditor);
-        return new SectionAwareDocumentPaginator(
+        var segments = new List<PaginationEngine.SegmentPagination>();
+        var panel = PaginatedEditorPanel.Build(
             sourceEditor,
-            PaginatedEditorPanel.Build(sourceEditor, includeParityBlankPages: true));
+            includeParityBlankPages: true,
+            segmentPaginations: segments);
+        return new SectionAwareDocumentPaginator(sourceEditor, panel, segments);
     }
 
     public override bool IsPageCountValid => true;
@@ -67,8 +106,12 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
         var box = _pageBoxes[pageNumber];
         var page = box.PageGeometry;
         var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
-        var (marginLeft, marginTop, marginRight, marginBottom) = PageLayout.MarginsDip(page);
+        var size = new Size(pageWidth, pageHeight);
+        var (marginLeft, marginTop, _, marginBottom) = PageLayout.MarginsDip(page);
         var (contentWidth, contentHeight) = PageLayout.ContentAreaDip(page);
+        var body = _bodyPages[pageNumber];
+        var bodyTop = marginTop + (body?.Segment.TopInsetDip ?? 0);
+        var bodyBottom = pageHeight - marginBottom - (body?.Segment.BottomInsetDip ?? 0);
 
         var visual = new ContainerVisual();
         var background = new DrawingVisual();
@@ -76,56 +119,99 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
             dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, pageWidth, pageHeight));
         visual.Children.Add(background);
 
-        var bodyPage = PaginateFlow(box.Body.Document, page, contentWidth, contentHeight);
-        if (bodyPage is not null)
+        if (!string.IsNullOrEmpty(page.Watermark))
+            visual.Children.Add(HeaderFooterPaginator.BuildWatermark(page.Watermark!, size));
+
+        // "First page" / "all but first page" borders count pages within the section that owns them.
+        var border = page.PageBorder;
+        var hasBorder = border is not null
+            && PageBorderVisibilityPlanner.ShouldRender(border.Display, _sectionPageIndex[pageNumber]);
+        if (hasBorder && PageBorderVisibilityPlanner.LayerFor(border!.ZOrder) == PageBorderRenderLayer.BehindText)
+            visual.Children.Add(HeaderFooterPaginator.BuildPageBorder(border, size, page, _model));
+
+        if (body is { } bodyPage)
         {
-            var bodyVisual = new DrawingVisual();
-            using (var dc = bodyVisual.RenderOpen())
-            {
-                dc.DrawRectangle(
-                    new VisualBrush(bodyPage.Visual) { Stretch = Stretch.None },
-                    null,
-                    new Rect(marginLeft, marginTop, contentWidth, contentHeight));
-            }
-            visual.Children.Add(bodyVisual);
+            AddSegmentBodyVisual(visual, bodyPage.Segment, bodyPage.LocalPage);
+        }
+        else
+        {
+            AddShardBodyVisual(visual, box, page, marginLeft, marginTop, contentWidth, contentHeight);
         }
 
         if (page.ColumnsLineBetween && page.ColumnCount > 1)
             visual.Children.Add(DocumentView.BuildColumnRuleVisual(
                 page,
                 marginLeft,
-                marginTop,
+                bodyTop,
                 contentWidth,
-                pageHeight - marginBottom));
+                bodyBottom));
 
-        AddNoteRegionVisual(visual, box, marginLeft, marginTop, contentWidth, contentHeight, pageHeight);
+        AddNoteRegionVisual(
+            visual,
+            box,
+            marginLeft,
+            bodyTop,
+            contentWidth,
+            Math.Max(0, bodyBottom - bodyTop),
+            pageHeight,
+            notesInsideBody: body is { Segment.FootnoteReserveDip: > 0 });
 
-        AddHeaderFooterVisual(
-            visual,
-            box.HeaderSubEditor,
-            pageWidth,
-            pageHeight,
-            marginLeft,
-            marginTop,
-            marginRight,
-            marginBottom,
-            isHeader: true);
-        AddHeaderFooterVisual(
-            visual,
-            box.FooterSubEditor,
-            pageWidth,
-            pageHeight,
-            marginLeft,
-            marginTop,
-            marginRight,
-            marginBottom,
-            isHeader: false);
+        AddHeaderFooterBand(visual, box, box.HeaderSlotContent, isHeader: true, page, pageHeight, marginLeft, contentWidth);
+        AddHeaderFooterBand(visual, box, box.FooterSlotContent, isHeader: false, page, pageHeight, marginLeft, contentWidth);
+
+        if (hasBorder && PageBorderVisibilityPlanner.LayerFor(border!.ZOrder) == PageBorderRenderLayer.InFrontOfText)
+            visual.Children.Add(HeaderFooterPaginator.BuildPageBorder(border, size, page, _model));
 
         return new DocumentPage(
             visual,
-            new Size(pageWidth, pageHeight),
+            size,
             new Rect(0, 0, pageWidth, pageHeight),
-            new Rect(marginLeft, marginTop, contentWidth, contentHeight));
+            new Rect(marginLeft, bodyTop, contentWidth, Math.Max(0, bodyBottom - bodyTop)));
+    }
+
+    /// <summary>
+    /// Adds the real laid-out page <paramref name="localPage"/> of <paramref name="segment"/>. The
+    /// segment's flow is paginated at the full sheet size with the margins as padding, so its page
+    /// visual is already in sheet coordinates.
+    /// </summary>
+    private static void AddSegmentBodyVisual(
+        ContainerVisual container,
+        PaginationEngine.SegmentPagination segment,
+        int localPage)
+    {
+        var page = segment.Paginator.GetPage(localPage);
+        if (page == DocumentPage.Missing || page.Visual is null)
+            return;
+
+        // A repeat GetPage (PDF export asks twice per page) hands back the same cached visual.
+        if (VisualTreeHelper.GetParent(page.Visual) is ContainerVisual previous)
+            previous.Children.Remove(page.Visual);
+        container.Children.Add(page.Visual);
+    }
+
+    /// <summary>Fallback when no segment pagination is available: the page box's own block shard.</summary>
+    private static void AddShardBodyVisual(
+        ContainerVisual container,
+        PageBox box,
+        PageSettings page,
+        double marginLeft,
+        double marginTop,
+        double contentWidth,
+        double contentHeight)
+    {
+        var bodyPage = PaginateFlow(box.Body.Document, page, contentWidth, contentHeight);
+        if (bodyPage is null)
+            return;
+
+        var bodyVisual = new DrawingVisual();
+        using (var dc = bodyVisual.RenderOpen())
+        {
+            dc.DrawRectangle(
+                new VisualBrush(bodyPage.Visual) { Stretch = Stretch.None },
+                null,
+                new Rect(marginLeft, marginTop, contentWidth, contentHeight));
+        }
+        container.Children.Add(bodyVisual);
     }
 
     private static DocumentPage? PaginateFlow(
@@ -148,12 +234,10 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
     }
 
     /// <summary>
-    /// Paints this page box's footnote/endnote text into the bottom margin, mirroring the note band
-    /// the ordinary single-geometry print path draws (see
-    /// <c>PrintPreviewWindow.BuildNotesAtFoot</c>). <see cref="GetPage"/> otherwise only ever painted
-    /// the body, header, and footer sub-visuals, so a footnote/endnote reference mark printed with no
-    /// note text anywhere on the page for any document routed to this paginator
-    /// (<c>NeedsSectionAwareRendering</c> / <c>HasParitySectionStarts</c>).
+    /// Paints this page box's footnote/endnote text. With <paramref name="notesInsideBody"/> the notes
+    /// end at the bottom of the body area, inside the space the pagination reserved for them (where
+    /// Word puts them); otherwise they follow the body area into the bottom margin, mirroring the note
+    /// band the single-geometry print path draws (see <c>HeaderFooterPaginator.BuildNotesAtFoot</c>).
     /// </summary>
     private void AddNoteRegionVisual(
         ContainerVisual container,
@@ -162,7 +246,8 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
         double marginTop,
         double contentWidth,
         double contentHeight,
-        double pageHeight)
+        double pageHeight,
+        bool notesInsideBody)
     {
         if (contentWidth <= 0)
             return;
@@ -179,26 +264,29 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
         if (plan.Rows.Count == 0)
             return;
 
-        var visual = new DrawingVisual();
-        using (var dc = visual.RenderOpen())
+        var visual = new ContainerVisual();
+        var rules = new DrawingVisual();
+        visual.Children.Add(rules);
+        var noteFont = new FontFamily("Calibri");
+        using (var dc = rules.RenderOpen())
         {
-            var y = marginTop + contentHeight + PageLayout.PointsToDip(3);
+            var contentBottom = marginTop + contentHeight;
+            var y = notesInsideBody && footnoteIds.Count > 0
+                ? Math.Max(marginTop, contentBottom - plan.EstimatedHeightDip - PageLayout.PointsToDip(3))
+                : contentBottom + PageLayout.PointsToDip(3);
             var maxY = pageHeight - PageLayout.PointsToDip(4);
 
             if (plan.Kind == DocumentNoteRegionKind.Endnotes && box.IsEndnoteSyntheticPage
                 && plan.Heading is { Length: > 0 } heading && y < maxY)
             {
-                var headingText = new FormattedText(
+                var headingText = PrintPlainText.Build(
                     heading,
-                    System.Globalization.CultureInfo.CurrentCulture,
-                    FlowDirection.LeftToRight,
-                    new Typeface(new FontFamily("Calibri"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal),
+                    noteFont,
                     PageLayout.PointsToDip(plan.TextFontSizePt + 2),
                     Brushes.Black,
-                    1.0)
-                { MaxTextWidth = contentWidth };
-                dc.DrawText(headingText, new Point(marginLeft, y));
-                y += headingText.Height + PageLayout.PointsToDip(2);
+                    contentWidth,
+                    weight: FontWeights.Bold);
+                y += PrintPlainText.Place(visual, headingText, marginLeft, y) + PageLayout.PointsToDip(2);
             }
 
             if (y < maxY)
@@ -217,75 +305,60 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
                     break;
 
                 var label = string.IsNullOrEmpty(row.Label) ? string.Empty : $"{row.Label}. ";
-                var formatted = new FormattedText(
+                var text = PrintPlainText.Build(
                     label + row.Text,
-                    System.Globalization.CultureInfo.CurrentCulture,
-                    FlowDirection.LeftToRight,
-                    new Typeface("Calibri"),
+                    noteFont,
                     PageLayout.PointsToDip(plan.TextFontSizePt),
                     Brushes.Black,
-                    1.0)
-                { MaxTextWidth = contentWidth, Trimming = TextTrimming.None };
-                dc.DrawText(formatted, new Point(marginLeft, y));
-                y += Math.Max(row.EstimatedHeightDip, formatted.Height) + PageLayout.PointsToDip(1);
+                    contentWidth);
+                y += Math.Max(row.EstimatedHeightDip, PrintPlainText.Place(visual, text, marginLeft, y))
+                    + PageLayout.PointsToDip(1);
             }
         }
 
         container.Children.Add(visual);
     }
 
-    private static void AddHeaderFooterVisual(
+    /// <summary>
+    /// Lays out the page's header or footer slot with <see cref="HeaderFooterBandRenderer"/> at the
+    /// section's own "from edge" distance and natural height. (The page box's in-page sub-editor is a
+    /// fixed 36-DIP strip; rasterising it stretched the text to the content width and clipped anything
+    /// past the first lines.)
+    /// </summary>
+    private void AddHeaderFooterBand(
         ContainerVisual container,
-        DocumentView? editor,
-        double pageWidth,
+        PageBox box,
+        HeaderFooter? slot,
+        bool isHeader,
+        PageSettings page,
         double pageHeight,
         double marginLeft,
-        double marginTop,
-        double marginRight,
-        double marginBottom,
-        bool isHeader)
+        double contentWidth)
     {
-        if (editor is null)
+        if (slot is not { IsEmpty: false } || contentWidth <= 0)
             return;
 
-        var page = PaginateHeaderFooter(editor.Document, pageWidth);
-        if (page is null)
-            return;
-
-        var visual = new DrawingVisual();
-        var y = isHeader
-            ? Math.Max(0, marginTop - HeaderFooterStripHeightDip)
-            : pageHeight - Math.Max(18, marginBottom - 18);
-        using (var dc = visual.RenderOpen())
+        var maxHeight = HeaderFooterBandRenderer.MaxBandHeightDip(page);
+        if (!_bandMetrics.TryGetValue((slot, contentWidth), out var metrics))
         {
-            dc.DrawRectangle(
-                new VisualBrush(page.Visual)
-                {
-                    Stretch = Stretch.Fill,
-                    AlignmentX = AlignmentX.Left,
-                    AlignmentY = AlignmentY.Top
-                },
-                null,
-                new Rect(
-                    marginLeft,
-                    y,
-                    Math.Max(0, pageWidth - marginLeft - marginRight),
-                    HeaderFooterStripHeightDip));
+            _bandMetrics[(slot, contentWidth)] = metrics =
+                HeaderFooterBandRenderer.Measure(_model, slot, isHeader, contentWidth, maxHeight);
         }
-        container.Children.Add(visual);
-    }
 
-    private static DocumentPage? PaginateHeaderFooter(FlowDocument flow, double pageWidth)
-    {
-        flow.PageWidth = Math.Max(1, pageWidth);
-        flow.PageHeight = HeaderFooterStripHeightDip;
-        flow.PagePadding = new Thickness(0);
-        flow.ColumnWidth = Math.Max(1, pageWidth);
+        var context = new HeaderFooterBandContext(
+            box.PageNumber,
+            box.PageNumberText,
+            Math.Max(1, box.FieldPageCount),
+            Math.Max(1, box.SectionOrdinal),
+            Math.Max(1, box.SectionPageCount));
+        if (HeaderFooterBandRenderer.Render(_model, slot, isHeader, context, contentWidth, metrics, maxHeight) is not { } band)
+            return;
 
-        var paginator = ((IDocumentPaginatorSource)flow).DocumentPaginator;
-        paginator.PageSize = new Size(Math.Max(1, pageWidth), HeaderFooterStripHeightDip);
-        paginator.ComputePageCount();
-        return paginator.PageCount > 0 ? paginator.GetPage(0) : null;
+        var top = isHeader
+            ? HeaderFooterBandRenderer.HeaderDistanceDip(page)
+            : Math.Max(0, pageHeight - HeaderFooterBandRenderer.FooterDistanceDip(page) - metrics.HeightDip);
+        band.Offset = new Vector(marginLeft, top);
+        container.Children.Add(band);
     }
 
     private sealed class PaginatorSource(DocumentPaginator paginator) : IDocumentPaginatorSource

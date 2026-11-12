@@ -12536,6 +12536,42 @@ public sealed partial class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Clears the review highlight <see cref="ApplyCommentMarker"/> painted on every commented run of
+    /// <paramref name="document"/> and returns a scope that puts it back. Print / Print Preview / PDF /
+    /// XPS use it while cloning the page content: Word's printed page shows a comment's range only
+    /// together with its margin balloon, never as a highlight on its own.
+    /// </summary>
+    internal static IDisposable SuspendCommentRangeHighlights(FlowDocument document)
+    {
+        var suspended = new List<(WpfRun Run, Brush Background)>();
+        foreach (var block in document.Blocks)
+        {
+            foreach (var run in DescendantRuns(block))
+            {
+                if (run.Tag is RunMarkers { Comment: not null }
+                    && run.Background is SolidColorBrush { Color: var color } brush
+                    && (color == CommentHighlight || color == ResolvedCommentHighlight))
+                {
+                    suspended.Add((run, brush));
+                    run.Background = null;
+                }
+            }
+        }
+
+        return new CommentHighlightSuspension(suspended);
+    }
+
+    private sealed class CommentHighlightSuspension(List<(WpfRun Run, Brush Background)> suspended) : IDisposable
+    {
+        public void Dispose()
+        {
+            foreach (var (run, background) in suspended)
+                run.Background = background;
+            suspended.Clear();
+        }
+    }
+
+    /// <summary>
     /// Builds the hover tooltip for a comment range: the comment (author: text), each reply on its own
     /// "(author: text)" line, and a trailing "[Resolved]" marker when the thread is resolved. Mirrors the
     /// pane-less, tooltip-based comment surface FreeW already uses.

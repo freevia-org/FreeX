@@ -123,7 +123,8 @@ internal static class PrintLayout
     internal static IReadOnlyDictionary<int, List<(double Top, double Bottom)>> ResolveChangeBarBands(
         DocumentView editor, DocumentPaginator paginator, double contentWidthDip, double lineHeightDip)
     {
-        if (!editor.CurrentReviewDisplayPolicy.ShouldShowSimpleMarkupChangeBar)
+        var reviewPolicy = editor.CurrentReviewDisplayPolicy;
+        if (!reviewPolicy.ShouldShowSimpleMarkupChangeBar && !reviewPolicy.ShouldMarkAllMarkupChangedLines)
             return EmptyChangeBarBands;
         if (paginator.Source is not FlowDocument flow || paginator is not DynamicDocumentPaginator dynamicPaginator)
             return EmptyChangeBarBands;
@@ -153,7 +154,7 @@ internal static class PrintLayout
             catch (InvalidOperationException) { }
 
             var heightDip = EstimateChangeBarBlockHeightDip(block, contentWidthDip, typeface, fontSize, lineHeightDip);
-            if (ChangeBarBlockHasRevision(block))
+            if (ChangeBarBlockHasRevision(block, reviewPolicy))
             {
                 bands ??= [];
                 if (!bands.TryGetValue(currentPage, out var list))
@@ -163,7 +164,127 @@ internal static class PrintLayout
             currentY += heightDip;
         }
 
+        if (bands is not null && reviewPolicy.ShouldMarkAllMarkupChangedLines)
+            bands = RefineChangedLineBandsFromRenderedPages(
+                paginator, dynamicPaginator, flowBlocks, model, reviewPolicy, bands);
+
         return (IReadOnlyDictionary<int, List<(double Top, double Bottom)>>?)bands ?? EmptyChangeBarBands;
+    }
+
+    /// <summary>
+    /// Replaces the estimated bands with each changed block's real position on its rendered page. The
+    /// All Markup changed-line rule sits right beside the inline markup, so a single-font, spacing-free
+    /// estimate that drifts by a paragraph reads as marking the wrong text. A page's top-level block
+    /// visuals appear in document order; when their count matches the blocks the paginator placed on
+    /// that page they are paired one to one, otherwise that page keeps its estimate.
+    /// </summary>
+    private static Dictionary<int, List<(double Top, double Bottom)>> RefineChangedLineBandsFromRenderedPages(
+        DocumentPaginator paginator,
+        DynamicDocumentPaginator dynamicPaginator,
+        System.Windows.Documents.Block[] flowBlocks,
+        TextDocument model,
+        ReviewDisplayPolicy reviewPolicy,
+        Dictionary<int, List<(double Top, double Bottom)>> estimated)
+    {
+        var count = Math.Min(flowBlocks.Length, model.Blocks.Count);
+        var startPage = new int[count];
+        var endPage = new int[count];
+        try
+        {
+            dynamicPaginator.ComputePageCount();
+            for (var i = 0; i < count; i++)
+            {
+                startPage[i] = dynamicPaginator.GetPageNumber(flowBlocks[i].ContentStart);
+                endPage[i] = Math.Max(startPage[i], dynamicPaginator.GetPageNumber(flowBlocks[i].ContentEnd));
+            }
+        }
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException)
+        {
+            return estimated;
+        }
+
+        var refined = new Dictionary<int, List<(double Top, double Bottom)>>();
+        for (var pageIndex = 0; pageIndex < paginator.PageCount; pageIndex++)
+        {
+            var onPage = Enumerable.Range(0, count)
+                .Where(i => startPage[i] <= pageIndex && pageIndex <= endPage[i])
+                .ToList();
+            if (!onPage.Any(i => ChangeBarBlockHasRevision(model.Blocks[i], reviewPolicy)))
+                continue;
+
+            var rendered = TryMeasureRenderedBlocks(paginator, pageIndex, onPage.Count);
+            if (rendered is null)
+            {
+                if (estimated.TryGetValue(pageIndex, out var fallback))
+                    refined[pageIndex] = fallback;
+                continue;
+            }
+
+            var list = new List<(double Top, double Bottom)>();
+            for (var k = 0; k < onPage.Count; k++)
+            {
+                if (ChangeBarBlockHasRevision(model.Blocks[onPage[k]], reviewPolicy) && rendered[k] is { } band)
+                    list.Add(band);
+            }
+            if (list.Count > 0)
+                refined[pageIndex] = list;
+        }
+
+        return refined;
+    }
+
+    /// <summary>
+    /// The vertical extent (relative to the page's content-box top) of each of the
+    /// <paramref name="blockCount"/> top-level blocks drawn on a page, or null when the page's visual
+    /// tree does not expose exactly that many block visuals (e.g. a multi-column page).
+    /// </summary>
+    private static (double Top, double Bottom)?[]? TryMeasureRenderedBlocks(
+        DocumentPaginator paginator,
+        int pageIndex,
+        int blockCount)
+    {
+        var page = paginator.GetPage(pageIndex);
+        if (page == DocumentPage.Missing || page.Visual is not { } root || blockCount <= 0)
+            return null;
+
+        var contentTop = page.ContentBox.IsEmpty ? 0 : page.ContentBox.Top;
+        (double Top, double Bottom)? Measure(Visual visual)
+        {
+            var bounds = VisualTreeHelper.GetDescendantBounds(visual);
+            if (bounds.IsEmpty)
+                return null;
+            var onPage = ReferenceEquals(visual, root)
+                ? bounds
+                : visual.TransformToAncestor(root).TransformBounds(bounds);
+            return (onPage.Top - contentTop, onPage.Bottom - contentTop);
+        }
+
+        if (blockCount == 1)
+            return [Measure(root)];
+
+        // The block container sits a few wrapper levels below the page visual (page > content >
+        // section), always down the first child; it is above every paragraph's own line visuals.
+        var visual = (Visual)root;
+        for (var depth = 0; depth < 5; depth++)
+        {
+            var childCount = VisualTreeHelper.GetChildrenCount(visual);
+            if (childCount == blockCount)
+            {
+                var bands = new (double Top, double Bottom)?[blockCount];
+                for (var i = 0; i < blockCount; i++)
+                    bands[i] = VisualTreeHelper.GetChild(visual, i) is Visual child ? Measure(child) : null;
+                return bands;
+            }
+
+            // Only single-child wrapper levels lead to the block container; anything wider that does
+            // not match is some other structure, so stop rather than pair blocks with the wrong visuals.
+            // Anything that does not match is a wrapper level (or some other structure): keep
+            // descending a little, then give up rather than pair blocks with the wrong visuals.
+            if (childCount == 0 || VisualTreeHelper.GetChild(visual, 0) is not Visual first)
+                return null;
+            visual = first;
+        }
+        return null;
     }
 
     private static readonly IReadOnlyDictionary<int, IReadOnlyList<DocumentFloatingObjectSnapshot>> EmptyFloatingObjectsByPage =
@@ -407,16 +528,22 @@ internal static class PrintLayout
     /// model level: true when any run in <paramref name="block"/> carries a tracked insertion/deletion or a
     /// tracked formatting change. Recurses into table cells the same way <see cref="FootnoteIds"/> does.
     /// </summary>
-    private static bool ChangeBarBlockHasRevision(FreeW.Core.Model.Block block) => block switch
+    private static bool ChangeBarBlockHasRevision(FreeW.Core.Model.Block block, ReviewDisplayPolicy policy) => block switch
     {
-        FreeW.Core.Model.Paragraph paragraph => paragraph.Runs.Any(ChangeBarRunHasRevision),
+        FreeW.Core.Model.Paragraph paragraph => paragraph.Runs.Any(run => ChangeBarRunHasRevision(run, policy)),
         FreeW.Core.Model.Table table => table.Rows.Any(row =>
-            row.Cells.Any(cell => cell.Paragraphs.Any(p => p.Runs.Any(ChangeBarRunHasRevision)))),
+            row.Cells.Any(cell => cell.Paragraphs.Any(p => p.Runs.Any(run => ChangeBarRunHasRevision(run, policy))))),
         _ => false
     };
 
-    private static bool ChangeBarRunHasRevision(FreeW.Core.Model.Run run) =>
-        run.Revision != RevisionKind.None || run.FormatRevision is not null;
+    /// <summary>
+    /// Simple Markup flags any tracked change. All Markup's changed-line rule follows what is actually
+    /// marked up inline: insertions/deletions, plus formatting changes only while those are shown.
+    /// </summary>
+    private static bool ChangeBarRunHasRevision(FreeW.Core.Model.Run run, ReviewDisplayPolicy policy) =>
+        run.Revision != RevisionKind.None
+        || (run.FormatRevision is not null
+            && (policy.ShouldShowSimpleMarkupChangeBar || policy.ShouldHighlightFormattingChanges));
 
     private static FlowDocument BuildPaginatedDocument(
         DocumentView editor,
@@ -427,6 +554,11 @@ internal static class PrintLayout
         var page = editor.Model.Page;
         var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
         var (left, top, right, bottom) = PageLayout.MarginsDip(page);
+        // A header taller than the top margin (or a footer taller than the bottom margin) pushes the
+        // body text area in, exactly as Word does, instead of overprinting the first/last body lines.
+        var (headerInsetDip, footerInsetDip) = ResolveHeaderFooterBodyInsetsDip(editor.Model, page);
+        top += headerInsetDip;
+        bottom += footerInsetDip;
         // Widen the page (not the body content width) to add the balloon strip purely as extra space
         // on the right, matching Word's own "the page gets wider" behaviour instead of squeezing body
         // text to make room.
@@ -462,8 +594,13 @@ internal static class PrintLayout
             cloneSource = inlineBreakRenderSource.Document;
         }
 
-        foreach (var block in CloneBlocks(cloneSource))
-            flow.Blocks.Add(block);
+        // Word prints a comment's range only together with its margin balloon; without the balloon
+        // strip the printed page shows no comment highlight at all.
+        using (balloonSources is { Count: > 0 } ? null : DocumentView.SuspendCommentRangeHighlights(cloneSource))
+        {
+            foreach (var block in CloneBlocks(cloneSource))
+                flow.Blocks.Add(block);
+        }
 
         // XAML cloning strips the private paragraph tags that carry model section breaks. Restore
         // page-type break ownership here so every consumer of this print/preview document sees the
@@ -475,6 +612,7 @@ internal static class PrintLayout
         // ordinary notes on the established reserve path and use fragment owners only for the
         // narrow plain-flow overflow signature proven by the fidelity compositor.
         var (contentWidthDip, contentHeightDip) = PageLayout.ContentAreaDip(page);
+        contentHeightDip = Math.Max(0, contentHeightDip - headerInsetDip - footerInsetDip);
         if (!applyFragmentedFootnoteFlow
             || !FootnoteContinuationFlowComposer.TryApply(
                 flow,
@@ -493,6 +631,41 @@ internal static class PrintLayout
         }
 
         return flow;
+    }
+
+    /// <summary>
+    /// The extra top/bottom body inset, in DIP, that the document header/footer needs beyond the page
+    /// margins (see <see cref="HeaderFooterBandRenderer.ResolveBodyInsetsDip"/>), capped so the body
+    /// always keeps a usable height. Zero for the overwhelmingly common header that fits its margin.
+    /// </summary>
+    internal static (double TopDip, double BottomDip) ResolveHeaderFooterBodyInsetsDip(
+        TextDocument document,
+        PageSettings page)
+    {
+        return ResolveHeaderFooterBodyInsetsDip(document, page, document.Header, document.Footer);
+    }
+
+    internal static (double TopDip, double BottomDip) ResolveHeaderFooterBodyInsetsDip(
+        TextDocument document,
+        PageSettings page,
+        HeaderFooter? header,
+        HeaderFooter? footer)
+    {
+        if (header is not { IsEmpty: false } && footer is not { IsEmpty: false })
+            return (0, 0);
+
+        var (topDip, bottomDip) = HeaderFooterBandRenderer.ResolveBodyInsetsDip(
+            document, page, header, footer);
+        var (_, contentHeightDip) = PageLayout.ContentAreaDip(page);
+        var available = Math.Max(0, contentHeightDip - 72);
+        if (topDip + bottomDip > available)
+        {
+            var scale = topDip + bottomDip <= 0 ? 0 : available / (topDip + bottomDip);
+            topDip *= scale;
+            bottomDip *= scale;
+        }
+
+        return (topDip, bottomDip);
     }
 
     private static void ApplyFootnoteBodyReserve(FlowDocument flow, TextDocument document)
@@ -601,7 +774,8 @@ internal static class PrintLayout
             fragmentedFootnotePages: fragmentedFootnotePages,
             balloonSources: balloonSources,
             changeBarBands: changeBarBands,
-            floatingObjectsByPage: floatingObjectsByPage);
+            floatingObjectsByPage: floatingObjectsByPage,
+            changedLineRules: !editor.CurrentReviewDisplayPolicy.ShouldShowSimpleMarkupChangeBar);
     }
 
     private static bool NeedsSectionAwareRendering(TextDocument document) =>
@@ -799,7 +973,8 @@ internal sealed class HeaderFooterPaginator(
     IReadOnlyDictionary<int, DocumentFootnoteContinuationPagePlan>? fragmentedFootnotePages = null,
     IReadOnlyList<ReviewBalloonSource>? balloonSources = null,
     IReadOnlyDictionary<int, List<(double Top, double Bottom)>>? changeBarBands = null,
-    IReadOnlyDictionary<int, IReadOnlyList<DocumentFloatingObjectSnapshot>>? floatingObjectsByPage = null) : DocumentPaginator
+    IReadOnlyDictionary<int, IReadOnlyList<DocumentFloatingObjectSnapshot>>? floatingObjectsByPage = null,
+    bool changedLineRules = false) : DocumentPaginator
 {
     private bool? _requiresDedicatedEndnotePage;
 
@@ -863,7 +1038,7 @@ internal sealed class HeaderFooterPaginator(
         // PrintLayout.ResolveFloatingObjectsByPage for how each one's real target page is resolved.
         var pageFloatingObjects = floatingObjectsByPage?.GetValueOrDefault(pageNumber);
         var hasFloatingObjects = pageFloatingObjects is { Count: > 0 };
-        if (model.Header is not { IsEmpty: false } && model.Footer is not { IsEmpty: false }
+        if (model.FinalSectionHeadersFooters.IsEmpty
             && !hasWatermark && !hasBorder && !hasLineNumbers && !hasColumnRule && !hasNotesAtFoot
             && !hasBalloons && !hasChangeBars && !hasFloatingObjects)
             return basePage;
@@ -875,7 +1050,7 @@ internal sealed class HeaderFooterPaginator(
             visual.Children.Add(BuildWatermark(page.Watermark!, size));
         if (hasBorder
             && PageBorderVisibilityPlanner.LayerFor(pageBorder!.ZOrder) == PageBorderRenderLayer.BehindText)
-            visual.Children.Add(BuildPageBorder(pageBorder, size));
+            visual.Children.Add(BuildPageBorder(pageBorder, size, page, model));
         // PdfExport queries the same paginator twice per page (once to recover XPS text overlays, once
         // to rasterize), and the inner FlowDocumentPaginator can hand back the identical cached
         // DocumentPage/Visual for a repeat GetPage(pageNumber) call. Once this method has already wrapped
@@ -902,7 +1077,7 @@ internal sealed class HeaderFooterPaginator(
         }
         if (hasBorder
             && PageBorderVisibilityPlanner.LayerFor(pageBorder!.ZOrder) == PageBorderRenderLayer.InFrontOfText)
-            visual.Children.Add(BuildPageBorder(pageBorder, size));
+            visual.Children.Add(BuildPageBorder(pageBorder, size, page, model));
         if (hasColumnRule)
             visual.Children.Add(DocumentView.BuildColumnRuleVisual(
                 page,
@@ -913,24 +1088,14 @@ internal sealed class HeaderFooterPaginator(
         if (hasLineNumbers)
             visual.Children.Add(BuildLineNumbers(basePage, pageNumber));
         if (hasChangeBars)
-            visual.Children.Add(BuildChangeBars(pageChangeBarBands!, basePage.ContentBox));
+            visual.Children.Add(changedLineRules
+                ? BuildChangedLineRules(pageChangeBarBands!, basePage.ContentBox, PageLayout.PointsToDip(page.MarginLeftPt))
+                : BuildChangeBars(pageChangeBarBands!, basePage.ContentBox));
 
         var marginLeft = PageLayout.PointsToDip(page.MarginLeftPt);
         var contentWidth = Math.Max(0, size.Width - marginLeft - PageLayout.PointsToDip(page.MarginRightPt));
 
-        if (model.Header is { IsEmpty: false } header)
-        {
-            var headerText = ResolveText(header, pageNumber);
-            var top = PageLayout.PointsToDip(Math.Max(0, page.MarginTopPt - 36));
-            visual.Children.Add(BuildOverlay(headerText, marginLeft, top, contentWidth));
-        }
-
-        if (model.Footer is { IsEmpty: false } footer)
-        {
-            var footerText = ResolveText(footer, pageNumber);
-            var bottom = size.Height - PageLayout.PointsToDip(Math.Max(18, page.MarginBottomPt - 18));
-            visual.Children.Add(BuildOverlay(footerText, marginLeft, bottom, contentWidth));
-        }
+        AddHeaderFooterBands(visual, pageNumber, size, marginLeft, contentWidth);
 
         if (hasNotesAtFoot)
         {
@@ -1096,7 +1261,7 @@ internal sealed class HeaderFooterPaginator(
     /// reserves space inside the content area for these; FreeW approximates by drawing them in the
     /// otherwise-empty bottom margin so the note text is visible (previously only the reference marker was).
     /// </summary>
-    private DrawingVisual BuildNotesAtFoot(
+    private ContainerVisual BuildNotesAtFoot(
         Size size,
         double marginLeft,
         double contentWidth,
@@ -1106,7 +1271,7 @@ internal sealed class HeaderFooterPaginator(
         double? separatorYOverride = null,
         double? maxYOverride = null)
     {
-        var visual = new DrawingVisual();
+        var visual = new ContainerVisual();
         if (contentWidth <= 0)
             return visual;
 
@@ -1151,9 +1316,11 @@ internal sealed class HeaderFooterPaginator(
 
         var contentBottom = size.Height - PageLayout.PointsToDip(page.MarginBottomPt);
         var pen = new Pen(new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)), 0.5);
-        using var dc = visual.RenderOpen();
         var sepY = separatorYOverride ?? contentBottom + PageLayout.PointsToDip(3);
-        dc.DrawLine(pen, new Point(marginLeft, sepY), new Point(marginLeft + contentWidth * 0.3, sepY));
+        var separator = new DrawingVisual();
+        using (var dc = separator.RenderOpen())
+            dc.DrawLine(pen, new Point(marginLeft, sepY), new Point(marginLeft + contentWidth * 0.3, sepY));
+        visual.Children.Add(separator);
 
         var y = sepY + PageLayout.PointsToDip(2);
         var maxY = maxYOverride ?? size.Height - PageLayout.PointsToDip(4); // stay on the sheet
@@ -1161,32 +1328,27 @@ internal sealed class HeaderFooterPaginator(
         {
             if (y >= maxY)
                 break;
-            var formatted = new FormattedText(
+            var row = PrintPlainText.Build(
                 $"{label}. {text}",
-                System.Globalization.CultureInfo.CurrentCulture,
-                FlowDirection.LeftToRight,
-                new Typeface("Calibri"),
+                NoteFontFamily,
                 PageLayout.PointsToDip(9.0),
                 Brushes.Black,
-                1.0)
-            {
-                MaxTextWidth = contentWidth,
-                MaxLineCount = 2,
-                Trimming = TextTrimming.CharacterEllipsis
-            };
-            dc.DrawText(formatted, new Point(marginLeft, y));
-            y += formatted.Height + PageLayout.PointsToDip(1);
+                contentWidth,
+                maxLines: 2);
+            y += PrintPlainText.Place(visual, row, marginLeft, y) + PageLayout.PointsToDip(1);
         }
         return visual;
     }
 
-    private DrawingVisual BuildContinuationNotesAtFoot(
+    private static readonly FontFamily NoteFontFamily = new("Calibri");
+
+    private ContainerVisual BuildContinuationNotesAtFoot(
         Size size,
         double marginLeft,
         double contentWidth,
         DocumentFootnoteContinuationPagePlan continuationPage)
     {
-        var visual = new DrawingVisual();
+        var visual = new ContainerVisual();
         if (contentWidth <= 0)
             return visual;
 
@@ -1197,34 +1359,31 @@ internal sealed class HeaderFooterPaginator(
         var contentTop = PageLayout.PointsToDip(page.MarginTopPt);
         var contentBottom = size.Height - PageLayout.PointsToDip(page.MarginBottomPt);
         var y = Math.Max(contentTop, contentBottom - plan.EstimatedHeightDip - trailingReserveDip);
-        using var dc = visual.RenderOpen();
         if (continuationPage.SeparatorKind is not DocumentFootnoteSeparatorKind.None)
         {
             var pen = new Pen(new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)), 0.5);
-            dc.DrawLine(
-                pen,
-                new Point(marginLeft + plan.SeparatorXOffsetDip, y),
-                new Point(marginLeft + plan.SeparatorXOffsetDip + plan.SeparatorWidthDip, y));
+            var separator = new DrawingVisual();
+            using (var dc = separator.RenderOpen())
+            {
+                dc.DrawLine(
+                    pen,
+                    new Point(marginLeft + plan.SeparatorXOffsetDip, y),
+                    new Point(marginLeft + plan.SeparatorXOffsetDip + plan.SeparatorWidthDip, y));
+            }
+            visual.Children.Add(separator);
             y += 8;
         }
 
         foreach (var row in plan.Rows)
         {
             var label = string.IsNullOrEmpty(row.Label) ? string.Empty : $"{row.Label}. ";
-            var formatted = new FormattedText(
+            var text = PrintPlainText.Build(
                 label + row.Text,
-                System.Globalization.CultureInfo.CurrentCulture,
-                FlowDirection.LeftToRight,
-                new Typeface("Calibri"),
+                NoteFontFamily,
                 PageLayout.PointsToDip(plan.TextFontSizePt),
                 Brushes.Black,
-                1.0)
-            {
-                MaxTextWidth = contentWidth,
-                Trimming = TextTrimming.None
-            };
-            dc.DrawText(formatted, new Point(marginLeft, y));
-            y += Math.Max(row.EstimatedHeightDip, formatted.Height);
+                contentWidth);
+            y += Math.Max(row.EstimatedHeightDip, PrintPlainText.Place(visual, text, marginLeft, y));
         }
         return visual;
     }
@@ -1293,20 +1452,11 @@ internal sealed class HeaderFooterPaginator(
             && PageBorderVisibilityPlanner.ShouldRender(border.Display, pageNumber);
         if (hasBorder
             && PageBorderVisibilityPlanner.LayerFor(border!.ZOrder) == PageBorderRenderLayer.BehindText)
-            visual.Children.Add(BuildPageBorder(border, size));
+            visual.Children.Add(BuildPageBorder(border, size, page, model));
 
         var marginLeft = PageLayout.PointsToDip(page.MarginLeftPt);
         var contentWidth = Math.Max(0, size.Width - marginLeft - PageLayout.PointsToDip(page.MarginRightPt));
-        if (model.Header is { IsEmpty: false } header)
-        {
-            var top = PageLayout.PointsToDip(Math.Max(0, page.MarginTopPt - 36));
-            visual.Children.Add(BuildOverlay(ResolveText(header, pageNumber), marginLeft, top, contentWidth));
-        }
-        if (model.Footer is { IsEmpty: false } footer)
-        {
-            var bottom = size.Height - PageLayout.PointsToDip(Math.Max(18, page.MarginBottomPt - 18));
-            visual.Children.Add(BuildOverlay(ResolveText(footer, pageNumber), marginLeft, bottom, contentWidth));
-        }
+        AddHeaderFooterBands(visual, pageNumber, size, marginLeft, contentWidth);
 
         visual.Children.Add(BuildNotesAtFoot(
             size,
@@ -1320,7 +1470,7 @@ internal sealed class HeaderFooterPaginator(
 
         if (hasBorder
             && PageBorderVisibilityPlanner.LayerFor(border!.ZOrder) == PageBorderRenderLayer.InFrontOfText)
-            visual.Children.Add(BuildPageBorder(border, size));
+            visual.Children.Add(BuildPageBorder(border, size, page, model));
 
         var contentBox = new Rect(
             marginLeft,
@@ -1435,7 +1585,7 @@ internal sealed class HeaderFooterPaginator(
     /// Draws the whole-page border (w:pgBorders) as a rectangle just inside the page edge, matching the
     /// editor's BorderBrush/BorderThickness chrome so on-screen and printed pages agree.
     /// </summary>
-    private DrawingVisual BuildPageBorder(PageBorder border, Size size)
+    internal static DrawingVisual BuildPageBorder(PageBorder border, Size size, PageSettings page, TextDocument model)
     {
         var visual = new DrawingVisual();
         var color = ParseColor(border.ColorHex);
@@ -1599,6 +1749,36 @@ internal sealed class HeaderFooterPaginator(
             if (y2 <= y1)
                 y2 = Math.Min(content.Bottom, y1 + 1);
             dc.DrawLine(pen, new Point(barX, y1), new Point(barX, y2));
+        }
+        return visual;
+    }
+
+    /// <summary>Colour of Word's All Markup "changed lines" rule.</summary>
+    internal static readonly Color ChangedLineRuleColor = Color.FromRgb(0x40, 0x40, 0x40);
+
+    /// <summary>
+    /// Draws Word's All Markup "changed lines" rule for each band: a hairline halfway across the left
+    /// margin beside every block that carries an inline-marked tracked change. Unlike the Simple
+    /// Markup bar (<see cref="BuildChangeBars"/>) it accompanies the inline colour/underline/strike.
+    /// </summary>
+    private static DrawingVisual BuildChangedLineRules(
+        IReadOnlyList<(double Top, double Bottom)> bands,
+        Rect content,
+        double marginLeftDip)
+    {
+        var visual = new DrawingVisual();
+        if (bands.Count == 0 || content.Height <= 0 || marginLeftDip <= 2)
+            return visual;
+
+        var pen = new Pen(new SolidColorBrush(ChangedLineRuleColor), 1.0);
+        var x = Math.Round(marginLeftDip / 2) + 0.5;
+        using var dc = visual.RenderOpen();
+        foreach (var (top, bottom) in bands)
+        {
+            var y1 = Math.Clamp(content.Top + top, content.Top, content.Bottom);
+            var y2 = Math.Clamp(content.Top + bottom, content.Top, content.Bottom);
+            if (y2 > y1)
+                dc.DrawLine(pen, new Point(x, y1), new Point(x, y2));
         }
         return visual;
     }
@@ -1778,7 +1958,7 @@ internal sealed class HeaderFooterPaginator(
     }
 
     /// <summary>Draws the faint, 45-degree page watermark text centred on the page, behind the content.</summary>
-    private static DrawingVisual BuildWatermark(string text, Size size)
+    internal static DrawingVisual BuildWatermark(string text, Size size)
     {
         var visual = new DrawingVisual();
         var formatted = new FormattedText(
@@ -1803,49 +1983,65 @@ internal sealed class HeaderFooterPaginator(
     private static Color ParseColor(string hex)
         => WpfRgbColorAdapter.ParseDrawingMlOrDefault(hex, Colors.Black);
 
-    /// <summary>Renders one line of header/footer text into a positioned drawing visual.</summary>
-    private static DrawingVisual BuildOverlay(string text, double x, double y, double width)
-    {
-        var visual = new DrawingVisual();
-        // No text, or no usable content width (margins meet/exceed the page width): nothing to draw.
-        // MaxTextWidth must stay finite — WPF's text formatter throws ArgumentOutOfRangeException
-        // ("paragraphWidth '∞'") if it is set to PositiveInfinity, which previously crashed the whole
-        // print/preview paginator for narrow-content header/footer pages.
-        if (string.IsNullOrEmpty(text) || width <= 0)
-            return visual;
-
-        var formatted = new FormattedText(
-            text,
-            System.Globalization.CultureInfo.CurrentCulture,
-            FlowDirection.LeftToRight,
-            new Typeface("Calibri"),
-            PageLayout.PointsToDip(11.0), // 11pt header/footer text, expressed in DIP
-            Brushes.Black,
-            1.0)
-        {
-            MaxTextWidth = width,
-            MaxLineCount = 1,
-            Trimming = TextTrimming.CharacterEllipsis
-        };
-
-        using (var dc = visual.RenderOpen())
-            dc.DrawText(formatted, new Point(x, y));
-        return visual;
-    }
+    private readonly Dictionary<HeaderFooter, HeaderFooterBandMetrics> _bandMetrics = [];
 
     /// <summary>
-    /// Flattens a header/footer to a single display line, substituting the live page number for any
-    /// page-number field run.
+    /// Composites the header into the top of the sheet at the section's "Header from edge" distance and
+    /// the footer so that its last line ends at "Footer from edge" above the bottom of the sheet. Each is
+    /// laid out by <see cref="HeaderFooterBandRenderer"/> -- every paragraph, with its own alignment, tab
+    /// stops, run formatting and fields -- rather than as one flattened line.
     /// </summary>
-    private string ResolveText(HeaderFooter content, int zeroBasedPageNumber)
-        => HeaderFooterVisualPlanner.ResolveLineText(
-            content,
-            new HeaderFooterFieldResolutionContext(
-                model,
-                (zeroBasedPageNumber + 1).ToString(System.Globalization.CultureInfo.CurrentCulture),
-                inner.PageCount,
-                SectionOrdinal: 1,
-                SectionPageCount: inner.PageCount,
-                EvaluatedAt: DateTime.Now,
-                Culture: System.Globalization.CultureInfo.CurrentCulture));
+    private void AddHeaderFooterBands(
+        ContainerVisual visual,
+        int zeroBasedPageNumber,
+        Size size,
+        double marginLeft,
+        double contentWidth)
+    {
+        // No usable content width (margins meet/exceed the page width): nothing to draw. A non-positive
+        // layout width would otherwise reach WPF's text formatter and fail the whole paginator.
+        if (contentWidth <= 0)
+            return;
+
+        var context = new HeaderFooterBandContext(
+            zeroBasedPageNumber + 1,
+            PageNumberText: null,
+            Math.Max(1, PageCount));
+        var maxHeight = HeaderFooterBandRenderer.MaxBandHeightDip(page);
+        // Different-first-page and different-odd-and-even select the slot per page, as in Word; a
+        // selected slot that is absent prints nothing rather than falling back to the default one.
+        var slots = FreeW.App.Presentation.Ribbon.HeaderFooterPagePlanner.ResolveSlots(
+            model.FinalSectionHeadersFooters,
+            zeroBasedPageNumber + 1,
+            page,
+            FreeW.App.Presentation.Ribbon.HeaderFooterPagePlanner.UsesDifferentOddEvenPages(model));
+
+        if (slots.Header is { IsEmpty: false } header)
+        {
+            var metrics = ResolveBandMetrics(header, isHeader: true, contentWidth, maxHeight);
+            if (HeaderFooterBandRenderer.Render(model, header, true, context, contentWidth, metrics, maxHeight) is { } band)
+            {
+                band.Offset = new Vector(marginLeft, HeaderFooterBandRenderer.HeaderDistanceDip(page));
+                visual.Children.Add(band);
+            }
+        }
+
+        if (slots.Footer is { IsEmpty: false } footer)
+        {
+            var metrics = ResolveBandMetrics(footer, isHeader: false, contentWidth, maxHeight);
+            if (HeaderFooterBandRenderer.Render(model, footer, false, context, contentWidth, metrics, maxHeight) is { } band)
+            {
+                var top = size.Height - HeaderFooterBandRenderer.FooterDistanceDip(page) - metrics.HeightDip;
+                band.Offset = new Vector(marginLeft, Math.Max(0, top));
+                visual.Children.Add(band);
+            }
+        }
+    }
+
+    private HeaderFooterBandMetrics ResolveBandMetrics(HeaderFooter slot, bool isHeader, double contentWidth, double maxHeight)
+    {
+        if (!_bandMetrics.TryGetValue(slot, out var metrics))
+            _bandMetrics[slot] = metrics = HeaderFooterBandRenderer.Measure(model, slot, isHeader, contentWidth, maxHeight);
+        return metrics;
+    }
 }

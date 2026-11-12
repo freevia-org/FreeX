@@ -95,13 +95,17 @@ internal static class Program
         // watermark, page border and line numbers render identically to the app.
         var flow = view.Document;
         view.Document = new System.Windows.Documents.FlowDocument();
+        // Same as the print path without a balloon strip: no comment-range highlight on the page.
+        _ = DocumentView.SuspendCommentRangeHighlights(flow);
 
         var pageSettings = view.Model.Page;
         var (pageWidth, pageHeight) = PageLayout.PageSizeDip(pageSettings);
         var (left, top, right, bottom) = PageLayout.MarginsDip(pageSettings);
         flow.PageWidth = pageWidth;
         flow.PageHeight = pageHeight;
-        flow.PagePadding = new Thickness(left, top, right, bottom);
+        // Same header/footer body insets PrintLayout.BuildPaginatedDocument applies.
+        var (headerInset, footerInset) = PrintLayout.ResolveHeaderFooterBodyInsetsDip(view.Model, pageSettings);
+        flow.PagePadding = new Thickness(left, top + headerInset, right, bottom + footerInset);
         DocumentView.ApplyColumnLayout(flow, pageSettings);
         // ApplyColumnLayout sets ColumnWidth = +Infinity for single-column and leans on PageWidth to
         // constrain it; for some header/multi-section docs that leaks through as an unconstrained

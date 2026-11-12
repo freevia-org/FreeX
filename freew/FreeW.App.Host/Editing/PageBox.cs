@@ -131,6 +131,24 @@ internal sealed class PageBox : Border
     /// </summary>
     internal HeaderFooterSlotKind? HeaderSlot { get; }
 
+    /// <summary>
+    /// The resolved header/footer content this page shows (null when the slot is absent) and the field
+    /// values it resolves against. Print composition lays these out itself, at the section's real
+    /// header/footer distances and full height, instead of rasterising the fixed-height sub-editors.
+    /// </summary>
+    internal HeaderFooter? HeaderSlotContent { get; }
+
+    internal HeaderFooter? FooterSlotContent { get; }
+
+    /// <summary>Total page count used for NUMPAGES on this page.</summary>
+    internal int FieldPageCount { get; }
+
+    /// <summary>1-based ordinal of the section this page belongs to.</summary>
+    internal int SectionOrdinal { get; }
+
+    /// <summary>Number of pages in this page's section (SECTIONPAGES).</summary>
+    internal int SectionPageCount { get; }
+
     internal string? HeaderSlotName => HeaderSlot is { } slot
         ? HeaderFooterDialogPlanner.SlotNameFor(slot)
         : null;
@@ -234,6 +252,11 @@ internal sealed class PageBox : Border
         PageGeometry = page;
         HeaderSlot = headerSlotKind;
         FooterSlot = footerSlotKind;
+        HeaderSlotContent = headerSlot;
+        FooterSlotContent = footerSlot;
+        FieldPageCount = pageCount;
+        SectionOrdinal = sectionOrdinal;
+        SectionPageCount = sectionPageCount;
         if (footnoteIds is { Count: > 0 }) FootnoteIds = footnoteIds;
         if (endnoteIds is { Count: > 0 })
             EndnoteIds = endnoteIds;
@@ -410,7 +433,7 @@ internal sealed class PageBox : Border
     /// in the slot render as the correct page number without mutating the model's field runs.
     /// </para>
     /// </summary>
-    private static DocumentView BuildHfSubEditor(
+    internal static DocumentView BuildHfSubEditor(
         TextDocument sourceModel,
         HeaderFooter? slot,
         double marginLeft,
@@ -421,15 +444,32 @@ internal sealed class PageBox : Border
         string? hfPageNumberText = null,
         int hfPageCount = 0,
         int hfSectionOrdinal = 0,
-        int hfSectionPageCount = 0)
+        int hfSectionPageCount = 0,
+        bool inheritSourceStyles = false,
+        IReadOnlyList<FreeW.Core.Model.Block>? blocksOverride = null)
     {
         // Build wrapper document (same pattern as MainWindow.OpenHeaderFooterPane).
         var wrapper = TextDocument.CreateEmpty();
         wrapper.DefaultRun       = sourceModel.DefaultRun;
         wrapper.DefaultParagraph = sourceModel.DefaultParagraph;
+        if (inheritSourceStyles)
+        {
+            // Print composition resolves the slot's paragraphs against the real style catalog, so the
+            // Header/Footer styles' centre and right tab stops, fonts and spacing apply as in Word.
+            foreach (var (styleId, style) in sourceModel.Styles)
+                wrapper.Styles[styleId] = style;
+            wrapper.Theme = sourceModel.Theme;
+            wrapper.Page.DefaultTabStopPt = sourceModel.Page.DefaultTabStopPt;
+        }
         wrapper.Blocks.Clear();
 
-        if (slot is not null)
+        if (blocksOverride is not null)
+        {
+            // Print composition supplies the exact block sequence (see HeaderFooterBandRenderer).
+            foreach (var block in blocksOverride)
+                wrapper.Blocks.Add(block);
+        }
+        else if (slot is not null)
         {
             if (slot.Table is { Rows.Count: > 0 } layoutTable)
             {

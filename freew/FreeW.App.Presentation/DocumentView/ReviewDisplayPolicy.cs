@@ -26,6 +26,13 @@ public readonly record struct ReviewDisplayPolicy(
 
     public bool ShouldShowSimpleMarkupChangeBar => DisplayMode == ReviewDisplayMode.SimpleMarkup;
 
+    /// <summary>
+    /// All Markup shows every insertion and deletion inline, and Word additionally marks each changed
+    /// line with a thin "changed lines" rule in the margin -- on screen and on the printed page.
+    /// </summary>
+    public bool ShouldMarkAllMarkupChangedLines =>
+        DisplayMode == ReviewDisplayMode.AllMarkup && ShowInsertionsAndDeletions;
+
     public bool ShouldHighlightComments =>
         ShowComments && DisplayMode is ReviewDisplayMode.AllMarkup or ReviewDisplayMode.SimpleMarkup;
 

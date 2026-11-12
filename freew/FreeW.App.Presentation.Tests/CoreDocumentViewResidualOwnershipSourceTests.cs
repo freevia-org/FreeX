@@ -46,7 +46,11 @@ public sealed class CoreDocumentViewResidualOwnershipSourceTests
 
         planner.Should().Contain("public static string? ResolveFieldText(");
         planner.Should().Contain("public static string ResolveLineText(");
-        printPreview.Should().Contain("HeaderFooterVisualPlanner.ResolveLineText(");
+        // The print compositor no longer flattens a header/footer to one line of text itself: it lays
+        // the slot out through HeaderFooterBandRenderer (the body's own model-to-flow mapping), so it
+        // must neither resolve field text nor re-derive it locally.
+        printPreview.Should().Contain("HeaderFooterBandRenderer.Render(");
+        printPreview.Should().NotContain("HeaderFooterVisualPlanner.ResolveLineText(");
         avalonia.Should().Contain("HeaderFooterVisualPlanner.ResolveFieldText(");
         printPreview.Should().NotContain("r.FieldKind == RunFieldKind.PageNumber");
         avalonia.Should().NotContain("private string? ResolveHfField(");

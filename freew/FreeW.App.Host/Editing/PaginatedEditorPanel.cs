@@ -157,7 +157,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         DocumentView sourceEditor,
         PaginatedPageLayoutMode layoutMode = PaginatedPageLayoutMode.Vertical,
         bool includeParityBlankPages = false,
-        IPlatformClipboard? platformClipboard = null)
+        IPlatformClipboard? platformClipboard = null,
+        List<PaginationEngine.SegmentPagination>? segmentPaginations = null)
     {
         var model = sourceEditor.Model;
 
@@ -176,9 +177,11 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         int pageCount;
         try
         {
-            assignment = PaginationEngine.ComputeBlockPageAssignment(sourceEditor);
+            assignment = PaginationEngine.ComputeBlockPageAssignment(
+                sourceEditor, out var totalPageCount, segmentPaginations);
             pageCount = assignment.Length > 0 ? assignment.Max() + 1 : 1;
-            pageCount = Math.Max(1, pageCount);
+            // A final block that runs on past the page it starts on still owns those physical pages.
+            pageCount = Math.Max(1, Math.Max(pageCount, totalPageCount));
         }
         catch
         {
