@@ -548,9 +548,9 @@ public sealed partial class MainWindow
         };
         ApplyMoreColorsFixedButtonChrome(okButton, 76, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "MoreColorsOkButton");
-        okButton.Click += async (_, _) =>
+        okButton.Click += (_, _) => RunGuarded(async () =>
         {
-            // async void handler: never let a failure escape to the dispatcher.
+            // Keep the dialog responsive if the handler fails; RunGuarded reports anything that escapes.
             try
             {
                 if (!FreeX.App.Presentation.ColorInputParser.TryParseColorText(hexBox.Text ?? string.Empty, out var parsed))
@@ -578,7 +578,7 @@ public sealed partial class MainWindow
             {
                 dialog.Close((ColorPickerChoice?)null);
             }
-        };
+        });
 
         var cancelButton = new Button
         {

@@ -488,7 +488,11 @@ public sealed partial class MainWindow
             };
 
         ChartColorEditor MakeAreaColorEditor(ChartAreaFormatDialogFieldId fieldId, CellColor? color) =>
-            CreateChartColorEditor(AreaFieldLabel(fieldId), AreaField(fieldId).AutomationId, color);
+            CreateChartColorEditor(
+                CreateChartButton("...", ChartColorPickerButtonWidth),
+                AreaFieldLabel(fieldId),
+                AreaField(fieldId).AutomationId,
+                color);
 
         TextBox MakeAreaNumberBox(ChartAreaFormatDialogFieldId fieldId, string text, double width)
         {

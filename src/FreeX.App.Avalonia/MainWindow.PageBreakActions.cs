@@ -181,7 +181,7 @@ public sealed partial class MainWindow
             dialog.Close();
         }
 
-        okButton.Click += async (_, _) => await AcceptAsync();
+        okButton.Click += (_, _) => RunGuarded(AcceptAsync);
         cancelButton.Click += (_, _) => dialog.Close();
 
         dialog.Content = new StackPanel
@@ -263,6 +263,9 @@ public sealed partial class MainWindow
 
     private void ApplyPageBreakDialogResult(PageBreakDialogResult result)
     {
+        if (_isOpening || _isSaving)
+            return;
+
         var sheet = _session.ActiveSheet;
         var plan = PageBreakDialogPlanner.PlanPageBreaks(
             result,

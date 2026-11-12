@@ -1332,9 +1332,12 @@ public sealed partial class MainWindow
     /// <see cref="ChartColorTextBoxAutomationId"/>. The picker opens the shared color picker with its
     /// no-color button and writes the choice back into the text box.
     /// </summary>
-    private ChartColorEditor CreateChartColorEditor(string label, string automationId, CellColor? color)
+    private ChartColorEditor CreateChartColorEditor(string label, string automationId, CellColor? color) =>
+        CreateChartColorEditor(CreateChartButton("...", ChartColorPickerButtonWidth), label, automationId, color);
+
+    /// <summary>Builds the editor around a picker button the calling dialog made through the chart factory.</summary>
+    private ChartColorEditor CreateChartColorEditor(Button picker, string label, string automationId, CellColor? color)
     {
-        var picker = CreateChartButton("...", ChartColorPickerButtonWidth);
         picker.Margin = new Thickness(0, 0, 6, 0);
         AutomationProperties.SetName(
             picker,

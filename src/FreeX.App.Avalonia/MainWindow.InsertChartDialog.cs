@@ -30,7 +30,7 @@ public sealed partial class MainWindow
     // WPF InsertChartDialog: a 660x430 outer window whose tab control is 310 high with 12px below it.
     private const double InsertChartDialogWidth = 660;
     private const double InsertChartDialogHeight = 430;
-    private const double InsertChartTabsHeight = 310;
+    private const double ChartPickerTabsHeight = 310;
 
     private async Task ShowInsertChartDialog()
     {
@@ -133,7 +133,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(allChartsTab, "InsertChartAllChartsTab");
         var tabs = new TabControl
         {
-            Height = InsertChartTabsHeight,
+            Height = ChartPickerTabsHeight,
             Margin = new Thickness(0, 0, 0, 12),
             Items = { recommendedTab, allChartsTab },
         };

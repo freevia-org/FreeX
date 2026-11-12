@@ -359,9 +359,9 @@ public sealed partial class MainWindow
             AutomationProperties.SetName(pickButton, UiText.Get(pickNameKey));
             AutomationProperties.SetAutomationId(pickButton, $"WorkbookTheme{slot}ColorPickerButton");
             AutomationProperties.SetHelpText(pickButton, UiText.Format("WorkbookTheme_PickColorHelpTextFormat", slotName));
-            pickButton.Click += async (_, _) =>
+            pickButton.Click += (_, _) => RunGuarded(async () =>
             {
-                // async void handler: never let a failure escape to the dispatcher.
+                // Keep the dialog responsive if the handler fails; RunGuarded reports anything that escapes.
                 try
                 {
                     CellColor? initialColor = null;
@@ -388,7 +388,7 @@ public sealed partial class MainWindow
                 {
                     ShowOpenIssue(ex.Message);
                 }
-            };
+            });
             colorBox.TextChanged += (_, _) =>
             {
                 UpdatePreview();
@@ -480,9 +480,9 @@ public sealed partial class MainWindow
         };
         AvaloniaCompactDialogChrome.ApplyButton(saveButton, AvaloniaCompactDialogChrome.WindowsStyle, 86, isDefault: true);
         AutomationProperties.SetAutomationId(saveButton, "SaveButton");
-        saveButton.Click += async (_, _) =>
+        saveButton.Click += (_, _) => RunGuarded(async () =>
         {
-            // async void handler: never let a failure escape to the dispatcher.
+            // Keep the dialog responsive if the handler fails; RunGuarded reports anything that escapes.
             try
             {
                 var colorTextBySlot = colorFields.ToDictionary(
@@ -524,7 +524,7 @@ public sealed partial class MainWindow
             {
                 ShowOpenIssue(ex.Message);
             }
-        };
+        });
 
         var cancelButton = new Button
         {

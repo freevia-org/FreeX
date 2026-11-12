@@ -409,9 +409,9 @@ public sealed partial class MainWindow
         var result = await ShowSelectDataSourceDialogAsync(
             FormatRangeReference(chart.DataRange),
             chart.FirstColIsCategories,
-            chart.SeriesInRows,
             chart.BlankDisplayMode,
-            chart.ShowDataInHiddenRowsAndColumns);
+            chart.ShowDataInHiddenRowsAndColumns,
+            chart.SeriesInRows);
         if (result is not { } choice)
             return;
 
@@ -472,9 +472,9 @@ public sealed partial class MainWindow
     private async Task<SelectDataSourceResult?> ShowSelectDataSourceDialogAsync(
         string initialRange,
         bool firstColumnIsCategories,
-        bool switchRowColumn = false,
         ChartBlankDisplayMode blankDisplayMode = ChartBlankDisplayMode.Gap,
-        bool showDataInHiddenRowsAndColumns = false)
+        bool showDataInHiddenRowsAndColumns = false,
+        bool switchRowColumn = false)
     {
         var rangeField = SelectDataSourcePlanner.GetChartDataRangeField();
         var switchField = SelectDataSourcePlanner.GetSwitchRowColumnField();
@@ -716,15 +716,21 @@ public sealed partial class MainWindow
                 return;
             }
 
-            dialog.Close((SelectDataSourceResult?)(SelectDataSourcePlanner.CreateResult(
+            // The planner result carries the range and the two check boxes; the queued series
+            // removals and the hidden/empty-cell choice ride along on the same result.
+            SelectDataSourceResult? WithPendingEdits(SelectDataSourceResult accepted) =>
+                accepted with
+                {
+                    PendingSeriesRemovals = pendingSeriesRemovals.ToList(),
+                    BlankDisplayMode = blankDisplayMode,
+                    ShowDataInHiddenRowsAndColumns = showDataInHiddenRowsAndColumns,
+                };
+
+            var accepted = WithPendingEdits(SelectDataSourcePlanner.CreateResult(
                 rangeText,
                 categoriesCheck.IsChecked == true,
-                switchRowColumnCheck.IsChecked == true) with
-            {
-                PendingSeriesRemovals = pendingSeriesRemovals.ToList(),
-                BlankDisplayMode = blankDisplayMode,
-                ShowDataInHiddenRowsAndColumns = showDataInHiddenRowsAndColumns,
-            }));
+                switchRowColumnCheck.IsChecked == true));
+            dialog.Close(accepted);
         });
         cancelButton.Click += (_, _) => dialog.Close((SelectDataSourceResult?)null);
 
