@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Free.Shared.AppServices.Printing;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.PageLayout;
@@ -80,6 +81,7 @@ public sealed partial class MainWindow
         PrinterDiscoveryResult discovery)
     {
         var selectedScope = scopePlan.DefaultScope;
+        var selectedSides = PrintPreviewSidesMode.OneSided;
         var canSpool = _printService.IsSupported && discovery.IsAvailable;
         var dialogDiscovery = canSpool
             ? discovery
@@ -106,7 +108,9 @@ public sealed partial class MainWindow
                 PageRangeKinds = [PrintPageRangeKind.All, PrintPageRangeKind.Range],
                 CreateAdditionalContent = () => CreatePrintScopePanel(
                     scopePlan,
-                    scope => selectedScope = scope),
+                    scope => selectedScope = scope,
+                    // Sides only mean something to a real printer queue, not to the Save-as-PDF fallback.
+                    canSpool ? sides => selectedSides = sides : null),
                 AllowSubmissionWithoutPrinter = true,
                 ShowOrientation = false,
                 Text = BuildPrintDialogText(canSpool),
@@ -124,7 +128,17 @@ public sealed partial class MainWindow
             effectiveRange.FirstPage,
             effectiveRange.LastPage,
             selection.Copies,
-            selection.Collate);
+            selection.Collate) with
+        {
+            Sides = canSpool
+                ? selectedSides switch
+                {
+                    PrintPreviewSidesMode.TwoSidedLongEdge => PrintSides.TwoSidedLongEdge,
+                    PrintPreviewSidesMode.TwoSidedShortEdge => PrintSides.TwoSidedShortEdge,
+                    _ => PrintSides.OneSided,
+                }
+                : PrintSides.PrinterDefault,
+        };
 
         await ExecutePrintJobAsync(
             request,
@@ -156,7 +170,8 @@ public sealed partial class MainWindow
 
     private Control CreatePrintScopePanel(
         WorkbookExportScopePlan scopePlan,
-        Action<WorkbookExportPrintScope> selectScope)
+        Action<WorkbookExportPrintScope> selectScope,
+        Action<PrintPreviewSidesMode>? selectSides = null)
     {
         var panel = new StackPanel { Spacing = 4 };
         panel.Children.Add(CreatePrintSectionHeader(UiText.Get("Print_ScopeHeader")));
@@ -182,6 +197,29 @@ public sealed partial class MainWindow
                     selectScope(capturedScope);
             };
             panel.Children.Add(radio);
+        }
+
+        if (selectSides is not null)
+        {
+            var sidesOptions = PrintPreviewToolbarStatePlanner.CreateSidesOptions(
+                new PrintSettingsTextResolver(UiText.Get, (key, args) => UiText.Format(key, args)));
+            var sidesHeader = UiText.Get("PrintPreview_SidesSectionLabel")
+                .Replace("_", string.Empty, StringComparison.Ordinal)
+                .TrimEnd(':');
+            panel.Children.Add(CreatePrintSectionHeader(sidesHeader));
+            var sidesBox = new ComboBox
+            {
+                ItemsSource = sidesOptions.Select(option => option.Text).ToArray(),
+                SelectedIndex = 0,
+                MinWidth = 220,
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
+            };
+            AutomationProperties.SetAutomationId(sidesBox, "PrintSides");
+            AutomationProperties.SetName(sidesBox, sidesHeader);
+            sidesBox.SelectionChanged += (_, _) =>
+                selectSides(PrintPreviewToolbarStatePlanner.SidesIndexToMode(sidesBox.SelectedIndex));
+            panel.Children.Add(sidesBox);
         }
 
         return panel;

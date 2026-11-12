@@ -227,19 +227,19 @@ public sealed class PageSetupDialogPlannerTests
     }
 
     [Fact]
-    public void PresetHelpers_ApplyHeaderAndFooterCenterChoices()
+    public void PresetHelpers_ReplaceTheWholeHeaderOrFooterLikeExcel()
     {
         PageSetupDialogPlanner.ApplyHeaderPreset(
                 new WorksheetHeaderFooter("L", "custom", "R"),
                 selectedIndex: 7)
             .Should()
-            .Be(new WorksheetHeaderFooter("L", "Confidential, Page &[Page]", "R"));
+            .Be(new WorksheetHeaderFooter("", "Confidential", "Page &[Page]"));
 
         PageSetupDialogPlanner.ApplyFooterPreset(
                 new WorksheetHeaderFooter("L", "custom", "R"),
                 selectedIndex: 8)
             .Should()
-            .Be(new WorksheetHeaderFooter("L", "&[Time]", "R"));
+            .Be(new WorksheetHeaderFooter("", "&[Time]", ""));
     }
 
     [Fact]

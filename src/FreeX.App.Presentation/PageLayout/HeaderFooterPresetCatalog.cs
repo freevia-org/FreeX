@@ -1,3 +1,5 @@
+using FreeX.Core.Model;
+
 namespace FreeX.App.Presentation.PageLayout;
 
 /// <summary>A stable identity for a header/footer preset, independent of its label and token text.</summary>
@@ -26,6 +28,9 @@ public sealed record HeaderFooterPresetChoice(
     string EditorLabelResourceKey)
 {
     public string Value => HeaderFooterPresetCatalog.ValueFor(Id);
+
+    /// <summary>The left/centre/right text this preset puts in a header or footer.</summary>
+    public WorksheetHeaderFooter Sections => HeaderFooterPresetCatalog.SectionsFor(Id);
 }
 
 /// <summary>
@@ -95,6 +100,19 @@ public static class HeaderFooterPresetCatalog
         HeaderFooterPresetId.Date => "&[Date]",
         HeaderFooterPresetId.Time => "&[Time]",
         _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
+    };
+
+    /// <summary>
+    /// The whole header/footer a preset produces. As in Excel, a preset replaces all three sections:
+    /// a single-part preset sits in the centre, and a two-part preset ("Date, Page 1") puts its first
+    /// part in the centre and its second on the right instead of one comma-joined centre string.
+    /// </summary>
+    public static WorksheetHeaderFooter SectionsFor(HeaderFooterPresetId id) => id switch
+    {
+        HeaderFooterPresetId.BookXlsxSheet => new("", "&[File]", "&[Tab]"),
+        HeaderFooterPresetId.ConfidentialPage => new("", "Confidential", "Page &[Page]"),
+        HeaderFooterPresetId.DatePage => new("", "&[Date]", "Page &[Page]"),
+        _ => new("", ValueFor(id), "")
     };
 
     private static HeaderFooterPresetChoice Choice(
