@@ -611,6 +611,12 @@ public static class EquationLinearFormat
                     Flush();
                     output.Add(_opaqueParts[token.OpaqueIndex]);
                 }
+                else if (token.Kind == TokenKind.Char && token.Text == " " && !FollowsPunctuation(index))
+                {
+                    // As in Word's linear format, a space after an operand only triggers build-up: it is
+                    // consumed and never appears in the built-up result (math spacing comes from the layout).
+                    // A space after punctuation (", -∞<x<∞") is kept; a literal one is written "\ " or "…".
+                }
                 else
                 {
                     text.Append(token.Text);
@@ -630,6 +636,12 @@ public static class EquationLinearFormat
                 text.Clear();
             }
         }
+
+        private bool FollowsPunctuation(int index) =>
+            index > 0
+            && _tokens[index - 1].Kind == TokenKind.Char
+            && (_tokens[index - 1].Text is "," or ";"
+                || (_tokens[index - 1].Text == " " && FollowsPunctuation(index - 1)));
 
         // fraction := factor ( fractionOperator factor )*
         private bool TryFraction(ref int index, int end, int depth, out Operand operand)
@@ -761,7 +773,7 @@ public static class EquationLinearFormat
                 next++;
             }
 
-            if (!TryPrimary(ref next, end, depth + 1, out var operand))
+            if (!TryPrimary(ref next, end, depth + 1, out var operand, allowPostfix: false))
                 return false;
 
             if (sign is not null)
@@ -772,7 +784,7 @@ public static class EquationLinearFormat
             return true;
         }
 
-        private bool TryPrimary(ref int index, int end, int depth, out Operand operand)
+        private bool TryPrimary(ref int index, int end, int depth, out Operand operand, bool allowPostfix = true)
         {
             operand = null!;
             if (index >= end || depth > MaxParseDepth)
@@ -801,9 +813,22 @@ public static class EquationLinearFormat
                 next++;
             }
 
+            // Postfix factorials and primes belong to their operand, so x/1! is x over 1! and n!/k! one
+            // fraction, as in Word's linear format.
+            if (allowPostfix && operand.FunctionName is null)
+            {
+                var postfix = new StringBuilder();
+                while (postfix.Length < MaxChainLength && IsCharToken(next, end) && PostfixOperators.Contains(_tokens[next].Text))
+                    postfix.Append(_tokens[next++].Text);
+                if (postfix.Length > 0)
+                    operand = new Operand(EquationStructure.CanonicalRuns([.. operand.Runs, MathRun.PlainText(postfix.ToString())]));
+            }
+
             index = next;
             return true;
         }
+
+        private static readonly HashSet<string> PostfixOperators = ["!", "′", "″", "‴", "'"];
 
         private bool TryStructuralPrimary(ref int index, int end, int depth, out Operand operand)
         {
@@ -1076,23 +1101,23 @@ public static class EquationLinearFormat
             if (lower is null && upper is null && !hasOf)
                 return false;
 
+            // The operand is the following term: a product of factors (implicit multiplication, spaces
+            // between them consumed) up to the next operator, as Word builds ∑_(k=0)^n▒(n¦k) x^k a^(n-k)
+            // and ∫_0^1 f(x) dx with everything after the operator inside the n-ary.
             List<MathRun> body = [];
+            var bodyStart = next;
             if (hasOf)
+                bodyStart++;
+            else if (IsChar(bodyStart, end, " "))
+                bodyStart++;
+            if (TryTerm(ref bodyStart, end, depth + 1, out var term))
+            {
+                body = term;
+                next = bodyStart;
+            }
+            else if (hasOf)
             {
                 next++;
-                if (TryFactor(ref next, end, depth + 1, out var explicitBody))
-                    body = explicitBody.Runs;
-            }
-            else
-            {
-                var bodyStart = next;
-                if (IsChar(bodyStart, end, " "))
-                    bodyStart++;
-                if (TryFactor(ref bodyStart, end, depth + 1, out var implicitBody))
-                {
-                    body = implicitBody.Runs;
-                    next = bodyStart;
-                }
             }
 
             var (lowerText, lowerEquation) = Slot(lower ?? []);
@@ -1113,6 +1138,29 @@ public static class EquationLinearFormat
                 }
             ]);
             index = next;
+            return true;
+        }
+
+        // term := fraction ( " "? fraction )*  — a product of operands with no operator between them.
+        private bool TryTerm(ref int index, int end, int depth, out List<MathRun> runs)
+        {
+            runs = [];
+            if (!TryFraction(ref index, end, depth, out var first))
+                return false;
+
+            runs.AddRange(first.Runs);
+            for (var chain = 0; chain < MaxChainLength; chain++)
+            {
+                var next = index;
+                if (IsChar(next, end, " "))
+                    next++;
+                if (!TryFraction(ref next, end, depth, out var factor))
+                    break;
+                runs.AddRange(factor.Runs);
+                index = next;
+            }
+
+            runs = EquationStructure.CanonicalRuns(runs);
             return true;
         }
 
@@ -1238,8 +1286,25 @@ public static class EquationLinearFormat
                 return string.Empty;
 
             var pieces = runs.Select(Fragment).ToList();
+            if (runs.Count == 1)
+                return pieces[0];
+
+            // Word separates an operand that ends a script, fraction or function from a following
+            // operand with a space (x^k a^(n-k), 1/2 (α±β), 2 sin⁡x): write the same text.
+            var spaced = new StringBuilder(pieces[0]);
+            for (var index = 1; index < runs.Count; index++)
+            {
+                if (NeedsBuildUpSpace(runs[index - 1], runs[index], pieces[index]))
+                    spaced.Append(' ');
+                spaced.Append(pieces[index]);
+            }
+
+            var spacedText = spaced.ToString();
+            if (Verify(spacedText, runs))
+                return spacedText;
+
             var joined = string.Concat(pieces);
-            if (runs.Count == 1 || Verify(joined, runs))
+            if (Verify(joined, runs))
                 return joined;
 
             // Neighbours interact only over a short distance, so first settle each fragment against the two
@@ -1305,6 +1370,34 @@ public static class EquationLinearFormat
 
         private static string Isolate(string piece) => Symbols.InvisibleOpen + piece + Symbols.InvisibleClose;
 
+        private static bool NeedsBuildUpSpace(MathRun left, MathRun right, string rightPiece)
+        {
+            if (rightPiece.Length == 0)
+                return false;
+
+            var first = ElementAt(rightPiece, 0);
+            var startsOperand = right.Kind == MathRunKind.FunctionApply
+                || first == Symbols.InvisibleOpen
+                || Symbols.OpenBrackets.Contains(first)
+                || (IsOperandCharacter(first) && !Symbols.IsStructural(first));
+            if (!startsOperand)
+                return false;
+
+            var bracketOrFunction = right.Kind == MathRunKind.FunctionApply
+                || first == Symbols.InvisibleOpen
+                || Symbols.OpenBrackets.Contains(first);
+            return left.Kind switch
+            {
+                MathRunKind.Superscript or MathRunKind.Subscript or MathRunKind.SubSuperscript
+                    or MathRunKind.FunctionApply => true,
+                MathRunKind.Fraction => bracketOrFunction,
+                MathRunKind.Text => right.Kind == MathRunKind.FunctionApply
+                    && left.Text.Length > 0
+                    && char.IsLetterOrDigit(left.Text[^1]),
+                _ => false
+            };
+        }
+
         private string Fragment(MathRun run)
         {
             if (run.Kind == MathRunKind.Text)
@@ -1341,13 +1434,19 @@ public static class EquationLinearFormat
 
             // Brackets are always escaped: one left unpaired in text would pair with a bracket of an
             // enclosing structure once this text is written inside it.
-            var minimal = Escape(text, element =>
+            bool MinimalEscape(string element) =>
                 element is "\\" or "\"" or "&" or "@" or Symbols.ArgumentSeparator or Symbols.ExplicitOpen or Symbols.ExplicitClose
                 || Symbols.OpenBrackets.Contains(element)
                 || Symbols.CloseBrackets.Contains(element)
-                || Symbols.BarBrackets.Contains(element));
+                || Symbols.BarBrackets.Contains(element);
+            var minimal = Escape(text, MinimalEscape);
             if (Verify(minimal, expected))
                 return minimal;
+
+            // Spaces the parser would consume as build-up triggers are written as literal "\ ".
+            var spaced = Escape(text, element => element == " " || MinimalEscape(element));
+            if (Verify(spaced, expected))
+                return spaced;
 
             var escaped = Escape(text, Symbols.IsStructural);
             if (Verify(escaped, expected))
