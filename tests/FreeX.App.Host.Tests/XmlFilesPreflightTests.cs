@@ -21,21 +21,13 @@ public sealed class XmlFilesPreflightTests
     }
 
     [Fact]
-    public void XmlFilesPreflight_PassesFromOutsideRepositoryWorkingDirectory()
+    public void XmlFilesPreflight_PassesFromOutsideRepositoryWorkingDirectoryAndCoversTrackedXmlBackedFiles()
     {
         var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory("Test-XmlFiles.ps1");
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Validated ");
         result.Output.Should().Contain("XML-backed file(s).");
-    }
-
-    [Fact]
-    public void XmlFilesPreflight_DefaultCoverageMatchesTrackedXmlBackedFiles()
-    {
-        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory("Test-XmlFiles.ps1");
-
-        result.ExitCode.Should().Be(0, result.Error);
         ExtractValidatedCount(result.Output).Should().Be(GetTrackedXmlBackedFileCount());
     }
 
