@@ -721,6 +721,8 @@
   <data name="HeaderFooter_Header_Label" xml:space="preserve"><value>Header</value></data>
   <data name="HeaderFooter_Footer_Label" xml:space="preserve"><value>Footer</value></data>
   <data name="HeaderFooter_Editing_Status_Format" xml:space="preserve"><value>Editing: {0}</value></data>
+  <data name="HeaderFooter_SectionLabel_Format" xml:space="preserve"><value>{0} -Section {1}-</value></data>
+  <data name="HeaderFooter_SameAsPrevious_Format" xml:space="preserve"><value>{0} (Same as Previous)</value></data>
   <data name="HeaderFooter_Edit_Title_Format" xml:space="preserve"><value>Edit {0}</value></data>
   <data name="HeaderFooter_Text_Label_Format" xml:space="preserve"><value>{0} text:</value></data>
   <data name="Window_SecondView_Title_Format" xml:space="preserve"><value>FreeW - {0} (second view)</value></data>

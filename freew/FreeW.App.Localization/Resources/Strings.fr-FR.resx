@@ -259,6 +259,8 @@
   <data name="HeaderFooter_Header_Label" xml:space="preserve"><value>En-tête</value></data>
   <data name="HeaderFooter_Footer_Label" xml:space="preserve"><value>Pied de page</value></data>
   <data name="HeaderFooter_Editing_Status_Format" xml:space="preserve"><value>Modification : {0}</value></data>
+  <data name="HeaderFooter_SectionLabel_Format" xml:space="preserve"><value>{0} -Section {1}-</value></data>
+  <data name="HeaderFooter_SameAsPrevious_Format" xml:space="preserve"><value>{0} (Identique au pr&#233;c&#233;dent)</value></data>
   <data name="HeaderFooter_Edit_Title_Format" xml:space="preserve"><value>Modifier {0}</value></data>
   <data name="HeaderFooter_Text_Label_Format" xml:space="preserve"><value>Texte de {0} :</value></data>
   <data name="Window_SecondView_Title_Format" xml:space="preserve"><value>FreeW - {0} (deuxième vue)</value></data>

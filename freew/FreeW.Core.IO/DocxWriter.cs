@@ -801,6 +801,7 @@ public static class DocxWriter
         // historical names (header1/header2, footer1/footer2); see AddSectionParts for the seeding scheme.
         var headerCount = 0;
         var footerCount = 0;
+        var linkRequiredSlots = CollectLinkRequiredHeaderFooters(document);
 
         void AddSlot(Section? section, SectionHeadersFooters hf, PageSettings page, bool legacyFinal)
         {
@@ -811,7 +812,11 @@ public static class DocxWriter
             {
                 var watermark = isHeader ? ResolveWordVisibleWatermark(page) : null;
                 var hasWatermark = watermark is not null;
-                if ((content is null || content.IsEmpty) && !hasWatermark)
+                // A blank header/footer is normally not worth a part -- except when the section owns it
+                // precisely to STOP inheriting an earlier section's content ("Link to Previous" off). Without
+                // its own reference Word (and our reader) would treat the section as linked again.
+                var keepsSectionUnlinked = content is not null && linkRequiredSlots.Contains(content);
+                if ((content is null || content.IsEmpty) && !hasWatermark && !keepsSectionUnlinked)
                     return;
                 content ??= new HeaderFooter();
                 int index;
@@ -872,16 +877,18 @@ public static class DocxWriter
             // different-odd/even is on; first parts only when different-first-page is on.
             AddPart(isHeader: true, HeaderFooterType.Default, hf.Header);
             AddPart(isHeader: false, HeaderFooterType.Default, hf.Footer);
-            if (page.DifferentOddEvenPages)
-            {
+            //
+            // A section whose own flag is off normally drops its even/first header/footer, with one exception:
+            // when a LATER section turns the flag on and is linked to previous it inherits exactly that part,
+            // so dropping it would silently blank the later section after a save/reopen (linkRequiredSlots).
+            if (page.DifferentOddEvenPages || linkRequiredSlots.Contains(hf.EvenHeader!))
                 AddPart(isHeader: true, HeaderFooterType.Even, hf.EvenHeader);
+            if (page.DifferentOddEvenPages || linkRequiredSlots.Contains(hf.EvenFooter!))
                 AddPart(isHeader: false, HeaderFooterType.Even, hf.EvenFooter);
-            }
-            if (page.DifferentFirstPage)
-            {
+            if (page.DifferentFirstPage || linkRequiredSlots.Contains(hf.FirstHeader!))
                 AddPart(isHeader: true, HeaderFooterType.First, hf.FirstHeader);
+            if (page.DifferentFirstPage || linkRequiredSlots.Contains(hf.FirstFooter!))
                 AddPart(isHeader: false, HeaderFooterType.First, hf.FirstFooter);
-            }
         }
 
         // The final (body-level) section first, so it owns the legacy header1/footer1/header2/footer2 names.
@@ -894,6 +901,74 @@ public static class DocxWriter
         return parts;
     }
 
+    /// <summary>
+    /// Finds the header/footer slots that must be written purely to keep per-section linkage intact.
+    /// WordprocessingML expresses "Link to Previous" by absence: a section whose w:sectPr has no
+    /// w:headerReference/w:footerReference of a type shows the previous section's header/footer of that type.
+    /// Two cases therefore need a part the writer would otherwise skip:
+    /// <list type="bullet">
+    /// <item>a BLANK slot a section owns to stop inheriting an earlier section's visible content ("Link to
+    /// Previous" off, nothing typed) -- without its own reference it would come back linked;</item>
+    /// <item>an even/first slot of a section whose own different-odd-even / different-first-page flag is
+    /// off, when a LATER linked section turns the flag on and so displays exactly that inherited part.</item>
+    /// </list>
+    /// Everything else keeps the historical rules, so existing packages stay byte-stable.
+    /// </summary>
+    private static HashSet<HeaderFooter> CollectLinkRequiredHeaderFooters(TextDocument document)
+    {
+        var result = new HashSet<HeaderFooter>(ReferenceEqualityComparer.Instance);
+        (Func<SectionHeadersFooters, HeaderFooter?> Slot, Func<PageSettings, bool> IsDisplayed)[] slots =
+        [
+            (hf => hf.Header, _ => true),
+            (hf => hf.Footer, _ => true),
+            (hf => hf.EvenHeader, page => page.DifferentOddEvenPages),
+            (hf => hf.EvenFooter, page => page.DifferentOddEvenPages),
+            (hf => hf.FirstHeader, page => page.DifferentFirstPage),
+            (hf => hf.FirstFooter, page => page.DifferentFirstPage),
+        ];
+
+        // Document order: every non-final section (its sectPr sits on its last paragraph), then the final one.
+        var ordered = document.Blocks
+            .OfType<Paragraph>()
+            .Where(paragraph => paragraph.SectionBreak is not null)
+            .Select(paragraph => (paragraph.SectionBreak!.HeadersFooters, paragraph.SectionBreak!.Page))
+            .Append((document.FinalSectionHeadersFooters, document.Page))
+            .ToList();
+        if (ordered.Count < 2)
+            return result;
+
+        foreach (var (slot, isDisplayed) in slots)
+        {
+            var inheritsVisibleContent = false;
+            HeaderFooter? hiddenOwnerContent = null;
+            foreach (var (headersFooters, page) in ordered)
+            {
+                var content = slot(headersFooters);
+                if (content is null)
+                {
+                    // Linked: shows whatever the chain shows. If that is a part its owner would not write
+                    // because the owner's own flag is off, the owner must write it after all.
+                    if (hiddenOwnerContent is not null && isDisplayed(page))
+                        result.Add(hiddenOwnerContent);
+                    continue;
+                }
+
+                if (content.IsEmpty)
+                {
+                    if (inheritsVisibleContent)
+                        result.Add(content);
+                    inheritsVisibleContent = false;
+                    hiddenOwnerContent = null;
+                    continue;
+                }
+
+                inheritsVisibleContent = true;
+                hiddenOwnerContent = isDisplayed(page) ? null : content;
+            }
+        }
+
+        return result;
+    }
     // A custom FreeW text-watermark property is editable metadata, not a Word-visible watermark by
     // itself. Keep the distinction on save: an imported package with no VML shape must not gain one.
     // Explicit disabled VML remains materialized because its retained source payload is authoritative.
