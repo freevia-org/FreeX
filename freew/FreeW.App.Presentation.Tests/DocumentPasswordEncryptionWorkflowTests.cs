@@ -148,7 +148,7 @@ public sealed class DocumentPasswordEncryptionWorkflowTests : IDisposable
         document.EncryptionPassword = Password;
         var store = new AutosaveSnapshotStore(_temporaryDirectory.Path);
         using var session = new FreeWAutosaveSession(
-            new FreeWAutosavePorts(
+            new AutosaveDocumentPorts<TextDocument>(
                 GetOriginalFilePath: () => "C:\\Docs\\Secret.docx",
                 GetDisplayName: () => "Secret.docx",
                 GetIsDirty: () => true,
