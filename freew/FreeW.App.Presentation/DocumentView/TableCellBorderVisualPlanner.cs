@@ -158,6 +158,22 @@ public static class TableCellBorderVisualPlanner
         return [ProjectEdgeSegment(edge.Edge, leftDip, topDip, rightDip, bottomDip, 0)];
     }
 
+    /// <summary>
+    /// The full thickness one edge's strokes cover across the cell edge, as <see cref="BuildStrokeSegments"/>
+    /// draws them (a double rule is two strokes plus the gap between them). Word lays the border inside
+    /// the cell box and starts the cell margin at its inner side, so a renderer insets both the strokes
+    /// and the text by this amount. Wave borders keep their outward registration and report zero.
+    /// </summary>
+    public static double StrokeExtentDip(TableCellBorderEdgeVisualPlan edge)
+    {
+        ArgumentNullException.ThrowIfNull(edge);
+        if (!edge.IsVisible || edge.IsWave)
+            return 0;
+        return edge.IsDouble
+            ? Math.Max(1.0, edge.WidthDip * 1.5) + edge.WidthDip
+            : edge.WidthDip;
+    }
+
     public static TableCellBorderVisualSegment ProjectEdgeSegment(
         TableCellBorderVisualEdge edge,
         double leftDip,

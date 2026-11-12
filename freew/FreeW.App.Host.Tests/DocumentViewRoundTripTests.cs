@@ -2102,8 +2102,12 @@ public sealed class DocumentViewRoundTripTests
         tableSections[1].BreakPageBefore.Should().BeTrue();
         wpfTables[0].RowGroups.SelectMany(group => group.Rows).Should().HaveCount(5);
         wpfTables[1].RowGroups.SelectMany(group => group.Rows).Should().HaveCount(5);
-        wpfTables[1].RowGroups[0].Rows[1].Cells[0].Padding.Top.Should().Be(2,
-            "the no-cell-spacing pagination control must retain its original vertical padding");
+        wpfTables[1].RowGroups[0].Rows[1].Cells[0].Padding.Top.Should().BeApproximately(
+            (modelTable.Rows[5].Cells[0].Margins ?? modelTable.DefaultCellMargins!).TopPt * (96.0 / 72.0),
+            0.001,
+            "a page segment honours the authored w:tblCellMar exactly like an unsplit flow table");
+        wpfTables.Should().OnlyContain(table => table.CellSpacing == 0,
+            "Word collapses cell borders unless w:tblCellSpacing is authored, on every page segment");
         CellContentStack(wpfTables[1].RowGroups[0].Rows[1].Cells[0]).RenderTransform
             .Should().BeSameAs(System.Windows.Media.Transform.Identity,
                 "the no-cell-spacing pagination control keeps its existing content baseline");
@@ -2233,8 +2237,15 @@ public sealed class DocumentViewRoundTripTests
         (rendered.Columns.Sum(column => column.Width.Value) + spacingDip * (rendered.Columns.Count + 1)
                 + rendered.BorderThickness.Left + rendered.BorderThickness.Right)
             .Should().BeApproximately(sourceTable.PreferredWidthPt!.Value * (96.0 / 72.0), 0.01);
-        rendered.RowGroups[0].Rows[0].Cells[0].Padding.Top.Should()
-            .BeApproximately(sourceTable.Rows[0].Cells[0].Margins!.TopPt * (96.0 / 72.0), 0.01);
+        // A bordered cell keeps its tcMar inside the border chrome: the text starts the authored top
+        // margin below the inner side of the cell's top border.
+        var sourceCell = sourceTable.Rows[0].Cells[0];
+        var renderedCell = rendered.RowGroups[0].Rows[0].Cells[0];
+        var topBorderExtent = TableCellBorderVisualPlanner.StrokeExtentDip(
+            TableCellBorderVisualPlanner.Build(sourceCell.Borders, 96.0 / 72.0).Edge(TableCellBorderVisualEdge.Top));
+        renderedCell.Padding.Top.Should().Be(0);
+        CellContentStack(renderedCell).Margin.Top.Should()
+            .BeApproximately(sourceCell.Margins!.TopPt * (96.0 / 72.0) + topBorderExtent, 0.01);
         rendered.RowGroups[0].Rows[0].Cells[0].Background.Should().NotBeNull(
             "ordinary flow tables retain their existing WPF cell-surface ownership");
     }
@@ -2592,44 +2603,50 @@ public sealed class DocumentViewRoundTripTests
         pagination.Pages[2].SourceRowIndexes.Should().Equal(7, 8);
         sections.Should().HaveCount(3);
         sections.Select(section => section.BreakPageBefore).Should().Equal(false, true, true);
-        var spacingDip = sourceTable.CellSpacingPt!.Value * (96.0 / 72.0);
         sections.Should().OnlyContain(section =>
-            Math.Abs(section.Padding.Top - spacingDip / 2) < 0.01
+            section.Padding.Top == 0
             && section.Padding.Left == 0
             && section.Padding.Right == 0
             && section.Padding.Bottom == 0);
+
+        // Every page segment is laid out exactly like the unsplit flow table (shared BuildTable code):
+        // the authored spacing is the WPF CellSpacing (twice the per-cell value) plus the outer half
+        // WPF omits at the table edge, and the grid gives that spacing back so the authored width holds.
+        var spacingDip = sourceTable.CellSpacingPt!.Value * (96.0 / 72.0) * 2;
+        tables.Should().OnlyContain(table =>
+            Math.Abs(table.CellSpacing - spacingDip) < 0.001
+            && Math.Abs(table.Padding.Left - spacingDip / 2) < 0.001
+            && Math.Abs(table.Padding.Top - spacingDip / 2) < 0.001);
+        tables.Select(table => table.Columns.Sum(column => column.Width.Value) + spacingDip * (table.Columns.Count + 1)
+                + table.BorderThickness.Left + table.BorderThickness.Right)
+            .Should().AllSatisfy(width => width.Should().BeApproximately(
+                sourceTable.PreferredWidthPt!.Value * (96.0 / 72.0), 0.01));
 
         var pageRows = tables
             .Select(table => table.RowGroups.SelectMany(group => group.Rows).ToList())
             .ToList();
         pageRows.Select(rows => rows.Count).Should().Equal(3, 5, 3);
-        var expectedVerticalPadding = 2 + sourceTable.CellSpacingPt!.Value * (96.0 / 72.0);
-        tables[1].RowGroups[0].Rows[1].Cells[0].Padding.Top.Should()
-            .BeApproximately(expectedVerticalPadding, 0.01);
-        tables[0].RowGroups[0].Rows[0].Cells[0].Padding.Top.Should()
-            .BeApproximately(expectedVerticalPadding, 0.01);
         var spacedCell = tables[1].RowGroups[0].Rows[1].Cells[0];
-        spacedCell.Background.Should().BeNull(
-            "paginated tables reserve the authored cell-spacing gutter outside the inner surface");
-        var spacedRow = tables[1].RowGroups[0].Rows[1];
-        var firstSurface = SpacedCellSurface(spacedRow.Cells[0]);
-        var internalSurface = SpacedCellSurface(spacedRow.Cells[1]);
-        var lastSurface = SpacedCellSurface(spacedRow.Cells[^1]);
-        firstSurface.Background.Should().NotBeNull();
-        firstSurface.Margin.Left.Should().BeApproximately(spacingDip / 2, 0.01);
-        internalSurface.Margin.Left.Should().BeApproximately(-spacingDip, 0.01);
-        lastSurface.Margin.Right.Should().BeApproximately(spacingDip, 0.01);
+        spacedCell.Padding.Should().Be(new Thickness(0),
+            "a bordered cell keeps its tcMar inside the border chrome, not as cell padding");
+        spacedCell.Background.Should().NotBeNull(
+            "page segments keep the ordinary WPF cell-surface ownership of flow tables");
         var resolvedMargins = sourceTable.Rows[3].Cells[0].Margins ?? sourceTable.DefaultCellMargins!;
-        var contentTransform = CellContentStack(spacedCell).RenderTransform
-            .Should().BeOfType<System.Windows.Media.TranslateTransform>().Subject;
-        contentTransform.X.Should().BeApproximately(
-            Math.Max(0, resolvedMargins.LeftPt * (96.0 / 72.0) - 6.0),
+        var borderPlan = TableCellBorderVisualPlanner.Build(sourceTable.Rows[3].Cells[0].Borders, 96.0 / 72.0);
+        var contentStack = CellContentStack(spacedCell);
+        contentStack.Margin.Left.Should().BeApproximately(
+            Math.Max(0, resolvedMargins.LeftPt * (96.0 / 72.0) - 6.0)
+                + TableCellBorderVisualPlanner.StrokeExtentDip(borderPlan.Edge(TableCellBorderVisualEdge.Left)),
             0.01,
-            "the resolved left margin contributes only the inset not already owned by WPF's cell hosts");
-        contentTransform.Y.Should().BeApproximately(
-            resolvedMargins.TopPt * (96.0 / 72.0),
-            0.01,
-            "the resolved per-cell top margin registers content without changing exact row measurement");
+            "the tcMar starts at the inner side of the cell border, less the inset WPF's cell hosts own");
+        contentStack.Margin.Top.Should().BeApproximately(
+            resolvedMargins.TopPt * (96.0 / 72.0)
+                + TableCellBorderVisualPlanner.StrokeExtentDip(borderPlan.Edge(TableCellBorderVisualEdge.Top)),
+            0.01);
+        var exactRowHost = (System.Windows.Controls.Grid)contentStack.Parent;
+        exactRowHost.Height.Should().BeApproximately(sourceTable.Rows[3].HeightPt!.Value * (96.0 / 72.0), 0.01,
+            "an exact-height row is exactly its authored height, margins included");
+        contentStack.ClipToBounds.Should().BeTrue("Word clips text that overflows an exact-height row");
         RenderedRowText(pageRows[0][0]).Should().Contain("Page area");
         RenderedRowText(pageRows[0][1]).Should().Contain("Segment 1");
         RenderedRowText(pageRows[0][2]).Should().Contain("Segment 2");
@@ -2738,11 +2755,6 @@ public sealed class DocumentViewRoundTripTests
         recovered.Formatting.FontSizePt.Should().Be(16);
         recovered.Formatting.ColorHex.Should().Be("#345678");
     }
-
-    private static System.Windows.Controls.Border SpacedCellSurface(System.Windows.Documents.TableCell cell) =>
-        cell.Blocks.OfType<BlockUIContainer>().Single().Child
-            .Should().BeOfType<System.Windows.Controls.Grid>().Subject.Children
-            .OfType<System.Windows.Controls.Border>().Single();
 
     private static System.Windows.Controls.StackPanel CellContentStack(System.Windows.Documents.TableCell cell) =>
         cell.Blocks.OfType<BlockUIContainer>().Single().Child
