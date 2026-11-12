@@ -235,6 +235,7 @@ public sealed class ProofingDiagnosticPlannerTests
         var doc = DocumentWithRun(new Run("the, the. the www.the the mail the@example.com the"));
 
         ProofingDiagnosticPlanner.Build(doc, spellCheckEnabled: true)
+            .Where(diagnostic => diagnostic.RuleId == GrammarRuleIds.RepeatedWord)
             .Should().BeEmpty();
     }
 

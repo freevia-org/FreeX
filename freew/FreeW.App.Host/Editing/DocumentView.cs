@@ -362,6 +362,8 @@ public sealed partial class DocumentView : RichTextBox
         CommandBindings.Add(new CommandBinding(ApplicationCommands.Copy, OnCopyExecuted, OnCopyCanExecute));
         CommandBindings.Add(new CommandBinding(ApplicationCommands.Cut, OnCutExecuted, OnCutCanExecute));
         CommandBindings.Add(new CommandBinding(ApplicationCommands.Paste, OnPasteExecuted, OnPasteCanExecute));
+
+        InitializeProofingSurface();
     }
 
     public TextDocument Model => _model;
@@ -509,10 +511,7 @@ public sealed partial class DocumentView : RichTextBox
     /// <see cref="SpellCheck"/> for spelling, while this exposes the portable grammar slice used by
     /// non-WPF renderers.
     /// </summary>
-    public IReadOnlyList<ProofingDiagnostic> SharedGrammarDiagnostics =>
-        ProofingDiagnosticPlanner.BuildVisibleIndicators(_model, SpellCheckEnabled)
-            .Where(diagnostic => diagnostic.Kind == ProofingDiagnosticKind.Grammar)
-            .ToList();
+    public IReadOnlyList<ProofingDiagnostic> SharedGrammarDiagnostics => VisibleGrammarDiagnostics();
 
     private void ApplySpellCheckVisibility() =>
         SpellCheck.IsEnabled = !IsNativeSpellCheckSuppressed()
@@ -1583,6 +1582,7 @@ public sealed partial class DocumentView : RichTextBox
         _outlineCollapse.Clear();
         _trackChangesEnabled = document.TrackRevisions || RestrictEditingPolicy.ShouldForceTrackChanges;
         ApplySpellCheckVisibility();
+        ResetProofingSessionState();
         Render();
     }
 

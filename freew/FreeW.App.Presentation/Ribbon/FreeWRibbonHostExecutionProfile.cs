@@ -82,6 +82,7 @@ public static class FreeWRibbonHostExecutionProfile
         var statistics = new ActionRibbonCommand(ports.OpenWordCountDialog);
         bindings.Bind(FreeWRibbonCommandAction.Statistics, statistics);
         bindings.Register("freew.word-count", statistics);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.SpellingGrammar, ports.OpenSpellingAndGrammar);
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.Thesaurus, ports.OpenThesaurus);
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.CheckAccessibility, ports.CheckAccessibility);
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.InspectDocument, ports.InspectDocument);

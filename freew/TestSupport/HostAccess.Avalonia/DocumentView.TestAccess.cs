@@ -184,7 +184,7 @@ public sealed partial class DocumentView
 
             var offsets = BuildProofingOffsetSet();
             return _placed
-                .Where(pc => !pc.Sentinel && !pc.IsCell && offsets.Contains((pc.Block, pc.Offset)))
+                .Where(pc => !pc.Sentinel && !pc.IsCell && offsets.ContainsKey((pc.Block, pc.Offset)))
                 .Select(pc => (pc.Block, pc.Offset, new Rect(pc.X, pc.Y, Math.Max(1, pc.W), pc.LineHeight)))
                 .ToList();
         }

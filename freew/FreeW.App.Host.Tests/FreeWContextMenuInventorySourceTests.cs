@@ -6,7 +6,7 @@ namespace FreeW.App.Host.Tests;
 public sealed class FreeWContextMenuInventorySourceTests
 {
     [Fact]
-    public void WpfHost_HasExactlySevenExplicitMenuConstructionsIncludingEffectsGallery()
+    public void WpfHost_HasExactlyEightExplicitMenuConstructionsIncludingGrammarMenu()
     {
         var root = HostRoot();
         var source = Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
@@ -15,8 +15,9 @@ public sealed class FreeWContextMenuInventorySourceTests
             .Select(File.ReadAllText);
 
         // ThemeGallery's shared-planner-backed Effects picker is the seventh explicit WPF menu
-        // construction added alongside the existing paragraph-spacing picker.
-        source.Sum(text => Regex.Matches(text, @"new\s+ContextMenu\s*\(").Count).Should().Be(7);
+        // construction added alongside the existing paragraph-spacing picker; the editor's grammar
+        // menu (DocumentView.Proofing.cs, planned by ProofingContextMenuPlanner) is the eighth.
+        source.Sum(text => Regex.Matches(text, @"new\s+ContextMenu\s*\(").Count).Should().Be(8);
     }
 
     [Fact]
@@ -35,6 +36,7 @@ public sealed class FreeWContextMenuInventorySourceTests
             .Contain("FreeWContextMenuPlanner.BuildParagraphSpacing")
             .And.Contain("FreeWContextMenuPlanner.BuildEffects");
         Read("Ribbon", "TableStylesGallery.cs").Should().Contain("FreeWContextMenuPlanner.BuildTableStyles");
+        Read("Editing", "DocumentView.Proofing.cs").Should().Contain("ProofingContextMenuPlanner.BuildGrammar");
     }
 
     private static string HostRoot() => Path.Combine(

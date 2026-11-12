@@ -822,9 +822,12 @@ internal static partial class FreeWCanonicalRibbonTabs
                 "review.proofing",
                 tab => tab.Group("proofing", "Proofing", "P", 100, g =>
                     {
-                        // Word Count hero, then the two proofing toggles/commands as labelled Medium rows.
+                        // Spelling & Grammar (F7) leads the group as in Word: it walks the document from the
+                        // caret through every spelling and grammar issue (Change / Ignore / Add to Dictionary).
+                        // Word Count follows, then the proofing toggles/commands as labelled Medium rows.
+                        g.Large("freew.spelling-grammar", "Spelling & Grammar", RibbonCommandIconKind.Spelling);
                         g.Large("freew.statistics", "Word Count", RibbonCommandIconKind.WordCount);
-                        g.MediumToggle("freew.spellcheck-toggle", "Spelling & Grammar", RibbonCommandIconKind.Spelling);
+                        g.MediumToggle("freew.spellcheck-toggle", "Check Spelling as You Type", RibbonCommandIconKind.Spelling);
                         g.Medium("freew.add-to-dictionary", "Add to Dictionary", RibbonCommandIconKind.Book);
                         // Thesaurus (Shift+F7): looks up synonyms for the selected/caret word in the bundled
                         // compact English synonym dictionary (Moby II derivative, ~3 000 headwords, public domain).
@@ -838,8 +841,9 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("proofing", "Proofing", null, 110, g =>
                     {
+                        g.Button("freew.spelling-grammar", "Spelling & Grammar", b => Icon(b, RibbonCommandIconKind.Spelling));
                         g.Button("freew.statistics", "Word Count", b => Icon(b, RibbonCommandIconKind.WordCount));
-                        g.Toggle("freew.spellcheck-toggle", "Spelling & Grammar");
+                        g.Toggle("freew.spellcheck-toggle", "Check Spelling as You Type");
                         g.Button("freew.add-to-dictionary", "Add to Dictionary");
                         g.Button("freew.thesaurus", "Thesaurus");
                         g.Button("freew.set-proofing-language", "Set Proofing Language");

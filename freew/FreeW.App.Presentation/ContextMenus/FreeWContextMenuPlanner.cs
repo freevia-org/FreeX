@@ -86,6 +86,7 @@ public static class FreeWContextMenuPlanner
         new("table-styles", "Table Styles catalog", "Ribbon/TableStylesGallery.cs", "FreeWAvaloniaRibbonDefinition.cs", FreeWContextMenuCoverage.Paired, true),
         new("editor-spelling", "Portable spelling suggestions and dictionary actions for planner diagnostics", "WPF RichTextBox/Windows spell checker", "ProofingDiagnosticPlanner correction catalog", FreeWContextMenuCoverage.Paired, false),
         new("editor-spelling-native", "Native OS spelling coverage beyond planner diagnostics", "WPF RichTextBox/Windows spell checker", "No portable OS dictionary provider", FreeWContextMenuCoverage.ExternalOnly, false),
+        new("editor-grammar", "Grammar issue suggestions and ignore actions (ProofingContextMenuPlanner)", "Editing/DocumentView.Proofing.cs", "No grammar menu yet; issues show the blue double underline only", FreeWContextMenuCoverage.ExternalOnly, true),
     ];
 
     public static RibbonMenu BuildEditor(

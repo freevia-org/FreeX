@@ -17,7 +17,21 @@ public sealed record ProofingDiagnostic(
     string Word,
     string NormalizedWord,
     string? LanguageTag,
-    ProofingDiagnosticKind Kind = ProofingDiagnosticKind.Spelling);
+    ProofingDiagnosticKind Kind = ProofingDiagnosticKind.Spelling,
+    string? RuleId = null,
+    IReadOnlyList<ProofingSuggestion>? Suggestions = null)
+{
+    /// <summary>The proposed fixes, never null (empty when the issue has an explanation only).</summary>
+    public IReadOnlyList<ProofingSuggestion> SuggestionsOrEmpty => Suggestions ?? [];
+}
+
+/// <summary>
+/// One proposed fix for a <see cref="ProofingDiagnostic"/>: replace <see cref="Length"/> characters at
+/// <see cref="ParagraphOffset"/> (paragraph plain-text coordinates) with <see cref="Replacement"/>. The
+/// edit range may differ from the flagged range: deleting a repeated word also removes the whitespace
+/// in front of it.
+/// </summary>
+public sealed record ProofingSuggestion(string Replacement, int ParagraphOffset, int Length);
 
 public static class ProofingDiagnosticPlanner
 {
@@ -34,9 +48,22 @@ public static class ProofingDiagnosticPlanner
     public static IReadOnlyList<ProofingDiagnostic> Build(
         TextDocument document,
         bool spellCheckEnabled,
-        IEnumerable<string>? customDictionaryWords = null)
+        IEnumerable<string>? customDictionaryWords = null) =>
+        Build(document, spellCheckEnabled, customDictionaryWords, GrammarCheckOptions.Default);
+
+    /// <summary>
+    /// Builds spelling and grammar diagnostics with an explicit grammar-rule selection. Grammar rules
+    /// other than the repeated-word check are English-only: they skip runs whose proofing language is
+    /// not English, and every rule skips no-proof text.
+    /// </summary>
+    public static IReadOnlyList<ProofingDiagnostic> Build(
+        TextDocument document,
+        bool spellCheckEnabled,
+        IEnumerable<string>? customDictionaryWords,
+        GrammarCheckOptions? grammarOptions)
     {
         ArgumentNullException.ThrowIfNull(document);
+        grammarOptions ??= GrammarCheckOptions.Default;
 
         if (!spellCheckEnabled)
             return [];
@@ -60,7 +87,8 @@ public static class ProofingDiagnosticPlanner
                 blockIndex,
                 paragraph,
                 document,
-                customWords);
+                customWords,
+                grammarOptions);
         }
 
         return diagnostics;
@@ -80,8 +108,9 @@ public static class ProofingDiagnosticPlanner
     public static IReadOnlyList<ProofingDiagnostic> BuildVisibleIndicators(
         TextDocument document,
         bool spellCheckEnabled,
-        IEnumerable<string>? customDictionaryWords = null) =>
-        Build(document, spellCheckEnabled, customDictionaryWords)
+        IEnumerable<string>? customDictionaryWords = null,
+        GrammarCheckOptions? grammarOptions = null) =>
+        Build(document, spellCheckEnabled, customDictionaryWords, grammarOptions)
             .Where(diagnostic => diagnostic.Kind switch
             {
                 ProofingDiagnosticKind.Spelling => !document.HideSpellingErrors,
@@ -119,10 +148,13 @@ public static class ProofingDiagnosticPlanner
         int blockIndex,
         Paragraph paragraph,
         TextDocument document,
-        HashSet<string> customWords)
+        HashSet<string> customWords,
+        GrammarCheckOptions grammarOptions)
     {
         var text = paragraph.PlainText;
         var noProofOffsets = BuildNoProofOffsets(document, paragraph, text.Length);
+        var firstDiagnostic = diagnostics.Count;
+        var checkRepeatedWords = grammarOptions.IsEnabled(GrammarRuleIds.RepeatedWord);
         var i = 0;
         ProofingToken? previousToken = null;
         while (i < text.Length)
@@ -165,10 +197,15 @@ public static class ProofingDiagnosticPlanner
                     paragraph,
                     document.DefaultRun.LanguageTag,
                     token,
-                    ProofingDiagnosticKind.Spelling);
+                    ProofingDiagnosticKind.Spelling,
+                    ruleId: null,
+                    ProofingCorrectionCatalog.SuggestionsFor(token.Word)
+                        .Select(suggestion => new ProofingSuggestion(suggestion, token.Start, token.Length))
+                        .ToArray());
             }
 
-            if (previousToken is { } previous
+            if (checkRepeatedWords
+                && previousToken is { } previous
                 && IsAdjacentRepeatedWord(previous, token, text))
             {
                 AddDiagnostic(
@@ -177,11 +214,102 @@ public static class ProofingDiagnosticPlanner
                     paragraph,
                     document.DefaultRun.LanguageTag,
                     token,
-                    ProofingDiagnosticKind.Grammar);
+                    ProofingDiagnosticKind.Grammar,
+                    GrammarRuleIds.RepeatedWord,
+                    [new ProofingSuggestion(string.Empty, previous.End, token.End - previous.End)]);
             }
 
             previousToken = token;
         }
+
+        AddGrammarRuleDiagnostics(diagnostics, blockIndex, paragraph, document, text, noProofOffsets, grammarOptions);
+
+        // Keep each paragraph's diagnostics in reading order whichever pass produced them.
+        if (diagnostics.Count - firstDiagnostic > 1)
+        {
+            var ordered = diagnostics
+                .Skip(firstDiagnostic)
+                .OrderBy(diagnostic => diagnostic.ParagraphOffset)
+                .ToArray();
+            diagnostics.RemoveRange(firstDiagnostic, ordered.Length);
+            diagnostics.AddRange(ordered);
+        }
+    }
+
+    private static void AddGrammarRuleDiagnostics(
+        List<ProofingDiagnostic> diagnostics,
+        int blockIndex,
+        Paragraph paragraph,
+        TextDocument document,
+        string text,
+        bool[] noProofOffsets,
+        GrammarCheckOptions grammarOptions)
+    {
+        if (text.Length == 0)
+            return;
+
+        // The rule engine is English-only: text in any other proofing language is as off-limits to it
+        // as no-proof text.
+        var excluded = BuildNonEnglishOffsets(document, paragraph, text.Length);
+        for (var offset = 0; offset < excluded.Length; offset++)
+            excluded[offset] |= noProofOffsets[offset];
+        if (Array.TrueForAll(excluded, static isExcluded => isExcluded))
+            return;
+
+        foreach (var issue in GrammarRuleEngine.Check(text, grammarOptions, offset => excluded[offset]))
+        {
+            AddDiagnostic(
+                diagnostics,
+                blockIndex,
+                paragraph,
+                document.DefaultRun.LanguageTag,
+                new ProofingToken(
+                    issue.Start,
+                    issue.Length,
+                    issue.Text,
+                    issue.Text.ToLower(CultureInfo.InvariantCulture),
+                    IsEmailOrUrlLike: false),
+                ProofingDiagnosticKind.Grammar,
+                issue.RuleId,
+                issue.Suggestions);
+        }
+    }
+
+    private static bool[] BuildNonEnglishOffsets(TextDocument document, Paragraph paragraph, int textLength)
+    {
+        var offsets = new bool[textLength];
+        var inheritedLanguage = ResolveStyleLanguage(document, paragraph.StyleId)
+            ?? NormalizeLanguageTag(document.DefaultRun.LanguageTag);
+        var paragraphOffset = 0;
+        foreach (var run in paragraph.Runs)
+        {
+            var language = NormalizeLanguageTag(run.Formatting.LanguageTag) ?? inheritedLanguage;
+            if (!GrammarRuleEngine.IsEnglish(language))
+            {
+                var end = Math.Min(textLength, paragraphOffset + run.Text.Length);
+                for (var offset = paragraphOffset; offset < end; offset++)
+                    offsets[offset] = true;
+            }
+
+            paragraphOffset += run.Text.Length;
+        }
+
+        return offsets;
+    }
+
+    private static string? ResolveStyleLanguage(TextDocument document, string? styleId)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        while (!string.IsNullOrEmpty(styleId)
+            && seen.Add(styleId)
+            && document.Styles.TryGetValue(styleId, out var style))
+        {
+            if (NormalizeLanguageTag(style.Run.LanguageTag) is { } language)
+                return language;
+            styleId = style.BasedOnStyleId;
+        }
+
+        return null;
     }
 
     private static bool[] BuildNoProofOffsets(TextDocument document, Paragraph paragraph, int textLength)
@@ -238,7 +366,9 @@ public static class ProofingDiagnosticPlanner
         Paragraph paragraph,
         string? defaultLanguageTag,
         ProofingToken token,
-        ProofingDiagnosticKind kind)
+        ProofingDiagnosticKind kind,
+        string? ruleId,
+        IReadOnlyList<ProofingSuggestion> suggestions)
     {
         var (runIndex, runOffset, languageTag) = LocateRun(paragraph, token.Start, defaultLanguageTag);
 
@@ -251,7 +381,9 @@ public static class ProofingDiagnosticPlanner
             token.Word,
             token.Normalized,
             languageTag,
-            kind));
+            kind,
+            ruleId,
+            suggestions));
     }
 
     private static bool IsAdjacentRepeatedWord(ProofingToken previous, ProofingToken current, string text)

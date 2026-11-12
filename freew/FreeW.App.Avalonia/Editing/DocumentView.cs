@@ -12159,8 +12159,13 @@ public sealed partial class DocumentView : Control
             DrawRevisionDecoration(context, positionedPc, revisionDecision, revisionColorHex);
             if (formatRevisionHighlighted)
                 DrawFormatRevisionDecoration(context, positionedPc, ReviewRevisionColorPlanner.ResolveColorHex(revisionColors, pc.FormatRevisionAuthor));
-            if (!pc.IsCell && proofingOffsets.Contains((pc.Block, pc.Offset)))
-                DrawProofingSquiggle(context, positionedPc);
+            if (!pc.IsCell && proofingOffsets.TryGetValue((pc.Block, pc.Offset), out var proofingKind))
+            {
+                if (proofingKind == ProofingDiagnosticKind.Grammar)
+                    DrawGrammarUnderline(context, positionedPc);
+                else
+                    DrawProofingSquiggle(context, positionedPc);
+            }
         }
 
         foreach (var glyph in _automaticHyphenGlyphs)
@@ -16724,6 +16729,17 @@ public sealed partial class DocumentView : Control
         context.DrawLine(new Pen(BrushFor(colorHex), 1.0, new DashStyle([1, 2], 0)), new Point(pc.X, y), new Point(pc.X + pc.W, y));
     }
 
+    // Word's grammar indicator: a blue double underline (spelling keeps the red squiggle).
+    private static void DrawGrammarUnderline(DrawingContext context, PlacedChar pc)
+    {
+        if (pc.W <= 0)
+            return;
+
+        var y = Math.Round(pc.Y + pc.LineHeight * 0.92) - 0.5;
+        context.DrawLine(GrammarUnderlinePen, new Point(pc.X, y), new Point(pc.X + pc.W, y));
+        context.DrawLine(GrammarUnderlinePen, new Point(pc.X, y + 2), new Point(pc.X + pc.W, y + 2));
+    }
+
     private static void DrawProofingSquiggle(DrawingContext context, PlacedChar pc)
     {
         if (pc.W <= 0)
@@ -21050,13 +21066,19 @@ public sealed partial class DocumentView : Control
             .Where(diagnostic => !_ignoredProofingWords.Contains(diagnostic.NormalizedWord))
             .ToArray();
 
-    private HashSet<(int Block, int Offset)> BuildProofingOffsetSet()
+    // Each flagged character and the indicator it gets. A misspelling inside a grammar range keeps its
+    // red squiggle; the rest of the range gets the blue double underline.
+    private Dictionary<(int Block, int Offset), ProofingDiagnosticKind> BuildProofingOffsetSet()
     {
-        var offsets = new HashSet<(int Block, int Offset)>();
+        var offsets = new Dictionary<(int Block, int Offset), ProofingDiagnosticKind>();
         foreach (var diagnostic in BuildVisibleProofingDiagnostics())
         {
             for (var offset = diagnostic.ParagraphOffset; offset < diagnostic.ParagraphOffset + diagnostic.Length; offset++)
-                offsets.Add((diagnostic.BlockIndex, offset));
+            {
+                var key = (diagnostic.BlockIndex, offset);
+                if (diagnostic.Kind == ProofingDiagnosticKind.Spelling || !offsets.ContainsKey(key))
+                    offsets[key] = diagnostic.Kind;
+            }
         }
         return offsets;
     }
@@ -21067,11 +21089,14 @@ public sealed partial class DocumentView : Control
             return null;
 
         var caretOffset = Math.Clamp(_caret.Offset, 0, BlockLength(_caret.Block));
+        // A misspelling wins over a grammar issue covering the same caret, so its suggestions stay reachable.
         return BuildProofingDiagnostics()
-            .FirstOrDefault(d =>
+            .Where(d =>
                 d.BlockIndex == _caret.Block
                 && caretOffset >= d.ParagraphOffset
-                && caretOffset <= d.ParagraphOffset + d.Length);
+                && caretOffset <= d.ParagraphOffset + d.Length)
+            .OrderBy(d => d.Kind == ProofingDiagnosticKind.Spelling ? 0 : 1)
+            .FirstOrDefault();
     }
 
     // ── AV-COMMENT: review-comment insert / delete / resolve + introspection ──────────────────────
@@ -27346,6 +27371,7 @@ public sealed partial class DocumentView : Control
     private static ImmutableSolidColorBrush RevisionFallbackBrush { get; } = new ImmutableSolidColorBrush(Color.FromRgb(0xC0, 0x00, 0x40));
     private static readonly ImmutablePen SimpleMarkupChangeBarPen = new(RevisionFallbackBrush, 2.0);
     private static readonly ImmutablePen ProofingSquigglePen = new(new ImmutableSolidColorBrush(Color.FromRgb(0xD1, 0x34, 0x38)), 1.15);
+    private static readonly ImmutablePen GrammarUnderlinePen = new(new ImmutableSolidColorBrush(Color.FromRgb(0x2B, 0x6C, 0xD9)), 1.0);
 
     // ── AV-LINK: hyperlink render colour ──────────────────────────────────────────────────────────
     // Word's default hyperlink character-style colour (a medium blue). A hyperlinked run with no explicit

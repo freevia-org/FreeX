@@ -25,6 +25,7 @@ public sealed class FreeWApplicationCommandRouterTests
             Track(FreeWKeyboardCommand.Undo),
             Track(FreeWKeyboardCommand.Redo),
             Track(FreeWKeyboardCommand.RevealFormatting),
+            Track(FreeWKeyboardCommand.SpellingAndGrammar),
             Track(FreeWKeyboardCommand.Thesaurus),
             Track(FreeWKeyboardCommand.LockCurrentField),
             Track(FreeWKeyboardCommand.UnlockCurrentField),
@@ -46,7 +47,7 @@ public sealed class FreeWApplicationCommandRouterTests
             NoAction, NoAction, NoAction, NoAction, NoAction, NoAction,
             NoAction, NoAction, NoAction, NoAction, NoAction, NoAction,
             NoAction, NoAction, NoAction, NoAction, NoAction, NoAction,
-            NoAction, NoAction, NoAction, NoAction));
+            NoAction, NoAction, NoAction, NoAction, NoAction));
 
         var act = () => router.Execute((FreeWKeyboardCommand)int.MaxValue);
 
@@ -74,6 +75,7 @@ public sealed class FreeWApplicationCommandRouterTests
             Track(FreeWKeyboardCommand.Undo),
             Track(FreeWKeyboardCommand.Redo),
             Track(FreeWKeyboardCommand.RevealFormatting),
+            Track(FreeWKeyboardCommand.SpellingAndGrammar),
             Track(FreeWKeyboardCommand.Thesaurus),
             Track(FreeWKeyboardCommand.LockCurrentField),
             Track(FreeWKeyboardCommand.UnlockCurrentField),

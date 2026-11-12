@@ -54,6 +54,7 @@ public static class RibbonCommandIconSlugAliases
             ["merge-rule-skip-record-if"] = "merge-rule-if", ["merge-rule-next-record-if"] = "merge-next-record",
             ["merge-rule-ask"] = "insert-function", ["merge-rule-fill-in"] = "insert-function", ["merge-rule-set"] = "insert-function",
             ["merge-rule-ref"] = "insert-function", ["theme"] = "themes", ["spellcheck-toggle"] = "spelling",
+            ["spelling-grammar"] = "spelling",
             ["accept-all"] = "accept-change", ["reject-all"] = "reject-change", ["paste-plain"] = "paste-special",
             ["track-formatting"] = "track-changes",
             ["paste-merge"] = "paste-special", ["bullet-list"] = "bullets", ["bulleted-list"] = "bullets",
