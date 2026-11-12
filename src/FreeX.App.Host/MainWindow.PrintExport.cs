@@ -76,6 +76,17 @@ public partial class MainWindow
                 break;
             }
 
+            // Excel's "Print Active Sheets" prints every sheet in the selected tab group, not only
+            // the one on screen.
+            case PrintWhat.ActiveSheets when _groupedSheetIds.Count > 1 && _groupedSheetIds.Contains(_currentSheetId):
+                document = PrintRenderer.RenderWorkbook(
+                    _workbook,
+                    _viewportService,
+                    settings.IgnorePrintArea,
+                    ResolveWorkbookDirectoryForHeaderFooter(),
+                    sheetFilter: _groupedSheetIds);
+                break;
+
             default: // ActiveSheets
                 document = PrintRenderer.RenderWorksheet(
                     _workbook,

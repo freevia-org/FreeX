@@ -1802,7 +1802,9 @@ public sealed partial class MainWindow
             {
                 var current = ReadEditorScope(HeaderFooterEditorScope.Header);
                 var value = PageSetupDialogPlanner.ApplyHeaderPreset(current, choice);
+                editors[new HeaderFooterEditorTarget(HeaderFooterEditorScope.Header, HeaderFooterEditorSection.Left)].Text = value.Left;
                 editors[new HeaderFooterEditorTarget(HeaderFooterEditorScope.Header, HeaderFooterEditorSection.Center)].Text = value.Center;
+                editors[new HeaderFooterEditorTarget(HeaderFooterEditorScope.Header, HeaderFooterEditorSection.Right)].Text = value.Right;
             }
         };
         footerPreset.SelectionChanged += (_, _) =>
@@ -1811,7 +1813,9 @@ public sealed partial class MainWindow
             {
                 var current = ReadEditorScope(HeaderFooterEditorScope.Footer);
                 var value = PageSetupDialogPlanner.ApplyFooterPreset(current, choice);
+                editors[new HeaderFooterEditorTarget(HeaderFooterEditorScope.Footer, HeaderFooterEditorSection.Left)].Text = value.Left;
                 editors[new HeaderFooterEditorTarget(HeaderFooterEditorScope.Footer, HeaderFooterEditorSection.Center)].Text = value.Center;
+                editors[new HeaderFooterEditorTarget(HeaderFooterEditorScope.Footer, HeaderFooterEditorSection.Right)].Text = value.Right;
             }
         };
 

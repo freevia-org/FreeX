@@ -132,12 +132,12 @@ public partial class HeaderFooterDialog : Window
 
     private void HeaderPresetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        ApplyPreset(HeaderCenterBox, HeaderPresetBox.SelectedItem);
+        ApplyPreset(HeaderLeftBox, HeaderCenterBox, HeaderRightBox, HeaderPresetBox.SelectedItem);
     }
 
     private void FooterPresetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        ApplyPreset(FooterCenterBox, FooterPresetBox.SelectedItem);
+        ApplyPreset(FooterLeftBox, FooterCenterBox, FooterRightBox, FooterPresetBox.SelectedItem);
     }
 
     private void HeaderFooterTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)

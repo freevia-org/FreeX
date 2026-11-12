@@ -131,16 +131,25 @@ public static partial class PrintRenderer
         return doc;
     }
 
+    /// <param name="sheetFilter">
+    /// When supplied, only these (visible) sheets are rendered, in workbook order -- Excel's
+    /// "Print Active Sheets" for a group of selected sheet tabs. <see langword="null"/> renders
+    /// every visible sheet ("Print Entire Workbook").
+    /// </param>
     public static FixedDocument RenderWorkbook(
         Workbook workbook,
         IViewportService viewportService,
         bool ignorePrintAreas = false,
-        string workbookDirectory = "")
+        string workbookDirectory = "",
+        IReadOnlySet<SheetId>? sheetFilter = null)
     {
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(viewportService);
 
-        var visibleSheets = workbook.Sheets.Where(sheet => !sheet.IsHidden && !sheet.IsVeryHidden).ToList();
+        var visibleSheets = workbook.Sheets
+            .Where(sheet => !sheet.IsHidden && !sheet.IsVeryHidden)
+            .Where(sheet => sheetFilter is null || sheetFilter.Contains(sheet.Id))
+            .ToList();
         // Excel's default "Auto" First page number keeps &P/&N continuous across the whole Entire
         // Workbook print job instead of restarting at each sheet -- pre-compute every visible
         // sheet's own page count once so each sheet can be rendered with a running offset and the

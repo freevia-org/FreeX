@@ -328,38 +328,52 @@ public static class PageSetupDialogPlanner
     }
 
     public static WorksheetHeaderFooter ApplyHeaderPreset(WorksheetHeaderFooter header, int selectedIndex) =>
-        HeaderFooterEditorPlanner.ApplyCenterPreset(
-            header,
-            PageSetupDialogModel.HeaderFooterPresetValue(
-                PageSetupDialogModel.HeaderPresetChoices,
-                selectedIndex));
+        ApplyPreset(header, PageSetupDialogModel.HeaderPresetChoices, selectedIndex);
 
     public static WorksheetHeaderFooter ApplyHeaderPreset(
         WorksheetHeaderFooter header,
         HeaderFooterPresetChoice choice) =>
-        HeaderFooterEditorPlanner.ApplyCenterPreset(header, choice.Value);
+        choice.Sections;
 
     public static WorksheetHeaderFooter ApplyFooterPreset(WorksheetHeaderFooter footer, int selectedIndex) =>
-        HeaderFooterEditorPlanner.ApplyCenterPreset(
-            footer,
-            PageSetupDialogModel.HeaderFooterPresetValue(
-                PageSetupDialogModel.FooterPresetChoices,
-                selectedIndex));
+        ApplyPreset(footer, PageSetupDialogModel.FooterPresetChoices, selectedIndex);
 
     public static WorksheetHeaderFooter ApplyFooterPreset(
         WorksheetHeaderFooter footer,
         HeaderFooterPresetChoice choice) =>
-        HeaderFooterEditorPlanner.ApplyCenterPreset(footer, choice.Value);
+        choice.Sections;
 
     public static int ResolveHeaderPresetIndex(WorksheetHeaderFooter header) =>
-        PageSetupDialogModel.HeaderFooterPresetExactIndex(
-            PageSetupDialogModel.HeaderPresetChoices,
-            header.Center);
+        ResolvePresetIndex(PageSetupDialogModel.HeaderPresetChoices, header);
 
     public static int ResolveFooterPresetIndex(WorksheetHeaderFooter footer) =>
-        PageSetupDialogModel.HeaderFooterPresetExactIndex(
-            PageSetupDialogModel.FooterPresetChoices,
-            footer.Center);
+        ResolvePresetIndex(PageSetupDialogModel.FooterPresetChoices, footer);
+
+    // Choosing a preset replaces the whole header/footer, as in Excel; an out-of-range selection
+    // (no item chosen) leaves it alone.
+    private static WorksheetHeaderFooter ApplyPreset(
+        WorksheetHeaderFooter current,
+        IReadOnlyList<HeaderFooterPresetChoice> choices,
+        int selectedIndex) =>
+        selectedIndex >= 0 && selectedIndex < choices.Count
+            ? choices[selectedIndex].Sections
+            : current;
+
+    // A preset is shown as selected only when all three sections are exactly what it produces, so a
+    // header with custom left/right text is not mislabelled as the preset its centre happens to match.
+    private static int ResolvePresetIndex(
+        IReadOnlyList<HeaderFooterPresetChoice> choices,
+        WorksheetHeaderFooter value)
+    {
+        var normalized = new WorksheetHeaderFooter(value.Left ?? "", value.Center ?? "", value.Right ?? "");
+        for (var index = 0; index < choices.Count; index++)
+        {
+            if (choices[index].Sections == normalized)
+                return index;
+        }
+
+        return -1;
+    }
 
     public static PageSetupDialogFocusPlan PlanInitialFocus(
         PageSetupDialogOpenPlan openPlan,

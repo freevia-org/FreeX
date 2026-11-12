@@ -666,6 +666,10 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
+        // CUPS has no driver properties sheet to open, so a live preview shows the button disabled
+        // rather than enabled and inert. (The static parity capture keeps the WPF-matching look.)
+        if (interaction is not null)
+            printerPropertiesButton.IsEnabled = false;
 
         // Entire Workbook is backed by the shared workbook page stream, so changing this choice
         // repaginates the live preview instead of merely changing a disabled-looking option.
