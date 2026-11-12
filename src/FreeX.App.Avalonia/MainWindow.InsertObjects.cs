@@ -373,6 +373,10 @@ public sealed partial class MainWindow
             IsCancel = true,
         };
         ApplyInsertObjectFixedButtonChrome(cancelButton, CreateTableDialogPlanner.ButtonWidth);
+        // WPF buttons keep a 1px content padding; the 12px compact padding left the fixed 56px
+        // buttons too little room and clipped the Cancel caption.
+        okButton.Padding = new Thickness(1, okButton.Padding.Top, 1, okButton.Padding.Bottom);
+        cancelButton.Padding = new Thickness(1, cancelButton.Padding.Top, 1, cancelButton.Padding.Bottom);
         okButton.Click += (_, _) => RunGuarded(async () =>
         {
             if (!CreateTableDialogPlanner.TryParse(

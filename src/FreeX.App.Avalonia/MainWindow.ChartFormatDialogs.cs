@@ -1077,6 +1077,10 @@ public sealed partial class MainWindow
             IsDefault = isDefault,
         };
         ApplyChartButtonChrome(button, width, isDefault);
+        // WPF DialogReferencePicker.CreateButton: a 28px glyph button on the native 1px padding. The
+        // compact 12px side padding leaves two pixels for the glyph and clips the ellipsis to a dot.
+        if (width <= ChartColorPickerButtonWidth)
+            button.Padding = new Thickness(1, button.Padding.Top, 1, button.Padding.Bottom);
         return button;
     }
 

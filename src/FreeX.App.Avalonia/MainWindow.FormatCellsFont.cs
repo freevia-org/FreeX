@@ -1,3 +1,9 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Media;
 using FreeX.App.Services;
 
@@ -49,6 +55,144 @@ public sealed partial class MainWindow
         }
 
         return fonts.ToArray();
+    }
+
+    /// <summary>
+    /// WPF FormatCellsDialog.xaml edits the font name and the size in an editable drop-down: one
+    /// 24px field with a drop arrow whose list opens beneath it. The text box stays the value the
+    /// dialog reads; the pick list moves into a light-dismiss popup under the field.
+    /// </summary>
+    private static Control CreateFormatCellsEditableDropDown(TextBox editor, ListBox choices)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        ArgumentNullException.ThrowIfNull(choices);
+
+        const double arrowWidth = 18;
+        editor.MinWidth = 0;
+        editor.HorizontalAlignment = HorizontalAlignment.Stretch;
+        editor.Padding = new Thickness(4, 1, arrowWidth + 2, 1);
+
+        choices.MinWidth = 0;
+        choices.Height = double.NaN;
+        choices.MaxHeight = 220;
+        choices.Margin = new Thickness(0);
+        choices.BorderThickness = new Thickness(0);
+        // The list is reached through the field (arrow, F4, Alt+Down), not by tabbing.
+        KeyboardNavigation.SetIsTabStop(choices, false);
+
+        var popupFrame = new Border
+        {
+            Background = Brushes.White,
+            BorderBrush = Brush(130, 130, 130),
+            BorderThickness = new Thickness(1),
+            Child = choices,
+        };
+        var host = new Grid
+        {
+            Height = 24,
+            VerticalAlignment = VerticalAlignment.Top,
+        };
+        var popup = new Popup
+        {
+            PlacementTarget = host,
+            Placement = PlacementMode.Bottom,
+            IsLightDismissEnabled = true,
+            Child = popupFrame,
+        };
+        var arrow = new Border
+        {
+            Width = arrowWidth,
+            Margin = new Thickness(0, 1, 1, 1),
+            Background = Brushes.Transparent,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            Child = new global::Avalonia.Controls.Shapes.Path
+            {
+                Data = Geometry.Parse("M 0 0 L 3.5 3.5 L 7 0"),
+                Stroke = Brush(96, 96, 96),
+                StrokeThickness = 1,
+                Width = 8,
+                Height = 5,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+        };
+
+        void OpenChoices()
+        {
+            popupFrame.MinWidth = host.Bounds.Width;
+            popup.IsOpen = true;
+            if (choices.SelectedItem is { } selected)
+                choices.ScrollIntoView(selected);
+            choices.Focus();
+        }
+
+        void CloseChoices(bool restoreFocus)
+        {
+            popup.IsOpen = false;
+            if (restoreFocus)
+                editor.Focus();
+        }
+
+        void StepChoice(int delta)
+        {
+            var count = choices.ItemCount;
+            if (count == 0)
+                return;
+
+            var index = choices.SelectedIndex < 0
+                ? (delta > 0 ? 0 : count - 1)
+                : Math.Clamp(choices.SelectedIndex + delta, 0, count - 1);
+            choices.SelectedIndex = index;
+        }
+
+        arrow.PointerPressed += (_, args) =>
+        {
+            if (popup.IsOpen)
+                CloseChoices(restoreFocus: true);
+            else
+                OpenChoices();
+            args.Handled = true;
+        };
+        editor.AddHandler(
+            InputElement.KeyDownEvent,
+            (_, args) =>
+            {
+                var opens = args.Key == Key.F4
+                    || (args.Key == Key.Down && args.KeyModifiers == KeyModifiers.Alt);
+                if (opens)
+                {
+                    OpenChoices();
+                    args.Handled = true;
+                }
+                else if (args.KeyModifiers == KeyModifiers.None && args.Key is Key.Down or Key.Up)
+                {
+                    StepChoice(args.Key == Key.Down ? 1 : -1);
+                    args.Handled = true;
+                }
+            },
+            RoutingStrategies.Tunnel);
+        choices.AddHandler(
+            InputElement.KeyDownEvent,
+            (_, args) =>
+            {
+                if (args.Key is Key.Enter or Key.Escape or Key.F4)
+                {
+                    CloseChoices(restoreFocus: true);
+                    args.Handled = true;
+                }
+            },
+            RoutingStrategies.Tunnel);
+        choices.AddHandler(
+            InputElement.PointerReleasedEvent,
+            (_, _) => CloseChoices(restoreFocus: true),
+            RoutingStrategies.Bubble,
+            handledEventsToo: true);
+
+        host.Children.Add(editor);
+        host.Children.Add(arrow);
+        host.Children.Add(popup);
+        return host;
     }
 
     /// <summary>The same label set the WPF dialog hands the shared planner.</summary>

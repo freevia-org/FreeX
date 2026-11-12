@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -54,12 +55,22 @@ public sealed partial class MainWindow
         var initialStyleId = ChartStylePlanner.Read(chart).StyleId;
         int? selectedStyleId = initialStyleId;
 
-        var gallery = new UniformGrid
+        // WPF ChartStyleDialog: a 230px ListBox whose items panel is a four-column UniformGrid of
+        // 96px tiles (4px item margin), so all four columns fit beside the scroll bar and the selected
+        // tile carries the list selection instead of a radio glyph.
+        var gallery = new ListBox
         {
-            Columns = 4,
-            Rows = 0,
+            SelectionMode = SelectionMode.Single,
+            Height = 230,
+            Margin = new Thickness(0, 0, 0, 16),
+            ItemsPanel = new FuncTemplate<Panel?>(() => new UniformGrid { Columns = 4 }),
         };
+        ScrollViewer.SetHorizontalScrollBarVisibility(gallery, global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled);
+        AvaloniaCompactDialogChrome.ApplyListBox(
+            gallery,
+            MissingParityDialogChromeStyle with { ListBoxItemPadding = new Thickness(0) });
 
+        var styleIds = new List<int?>();
         foreach (var descriptor in descriptors)
         {
             var displayName = descriptor.ResourceValue is { } displayValue
@@ -68,39 +79,27 @@ public sealed partial class MainWindow
             var previewLabel = descriptor.ResourceValue is { } previewValue
                 ? UiText.Format(descriptor.PreviewLabelResourceKey, previewValue)
                 : UiText.Get(descriptor.PreviewLabelResourceKey);
-            var option = new RadioButton
+            var option = new ListBoxItem
             {
-                GroupName = "ChartStyleGallery",
-                IsChecked = descriptor.StyleId == initialStyleId,
-                Margin = new Thickness(2),
-                Padding = new Thickness(2),
-                HorizontalContentAlignment = global::Avalonia.Layout.HorizontalAlignment.Stretch,
                 Content = CreateChartStyleOptionContent(displayName, previewLabel),
             };
-            AvaloniaCompactDialogChrome.ApplyRadioButton(option, MissingParityDialogChromeStyle);
             AutomationProperties.SetAutomationId(
                 option,
                 descriptor.StyleId is { } styleId ? $"ChartStyleOption{styleId}" : "ChartStyleAutomaticOption");
             AutomationProperties.SetName(option, displayName);
-            option.IsCheckedChanged += (_, _) =>
-            {
-                if (option.IsChecked == true)
-                    selectedStyleId = descriptor.StyleId;
-            };
-            gallery.Children.Add(option);
+            styleIds.Add(descriptor.StyleId);
+            gallery.Items.Add(option);
         }
+
+        gallery.SelectedIndex = styleIds.IndexOf(initialStyleId);
+        gallery.SelectionChanged += (_, _) =>
+        {
+            if (gallery.SelectedIndex >= 0 && gallery.SelectedIndex < styleIds.Count)
+                selectedStyleId = styleIds[gallery.SelectedIndex];
+        };
 
         AutomationProperties.SetAutomationId(gallery, "ChartStyleGallery");
         AutomationProperties.SetName(gallery, UiText.Get("ChartStyle_GalleryAutomationName"));
-
-        var scroll = new ScrollViewer
-        {
-            Content = gallery,
-            Height = 230,
-            Focusable = true,
-            HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-        };
 
         var dialog = NewChartDialog(UiText.Get("ChartStyle_Title"), "ChartStyleDialog");
         dialog.Width = 480;
@@ -113,7 +112,6 @@ public sealed partial class MainWindow
 
         // WPF ChartStyleDialog: the label sits 4px above the 230px gallery, which leaves 16px above the
         // button row.
-        scroll.Margin = new Thickness(0, 0, 0, 16);
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
@@ -126,17 +124,19 @@ public sealed partial class MainWindow
                     FontFamily = FormulaBarFontFamily,
                     Margin = new Thickness(0, 0, 0, 4),
                 },
-                scroll,
+                gallery,
                 buttonRow,
             },
         };
-        // WPF focuses the gallery control itself. Focusing a checked child inside the scroll host can
-        // trigger a re-entrant bring-into-view/layout pass while the headless capture is rendering.
-        dialog.Opened += (_, _) => scroll.Focus();
+        // WPF focuses the gallery control itself.
+        dialog.Opened += (_, _) => gallery.Focus();
 
         return await dialog.ShowDialog<ChartStyleDialogSubmission?>(this);
     }
 
+    // WPF ChartStyleDialog.CreateStyleGalleryTemplate: a 96px stack with a 4px margin holding a 42px
+    // white swatch (three 10px bars, 3px apart on each side, 5px above the bottom), the style name
+    // 4px below it and a 10px grey preview caption.
     private static Control CreateChartStyleOptionContent(string displayName, string previewLabel)
     {
         var bars = new StackPanel
@@ -144,16 +144,16 @@ public sealed partial class MainWindow
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center,
             VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Bottom,
-            Spacing = 6,
-            Margin = new Thickness(0, 2),
+            Margin = new Thickness(0, 0, 0, 5),
         };
-        foreach (var height in new[] { 12d, 22d, 17d })
+        foreach (var height in new[] { 18d, 28d, 22d })
         {
             bars.Children.Add(new Border
             {
                 Width = 10,
                 Height = height,
-                Background = Brush(68, 114, 196),
+                Margin = new Thickness(3, 0),
+                Background = Brush(0, 120, 215),
                 VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Bottom,
             });
         }
@@ -161,13 +161,14 @@ public sealed partial class MainWindow
         return new StackPanel
         {
             Width = 96,
+            Margin = new Thickness(4),
             Children =
             {
                 new Border
                 {
-                    Height = 30,
+                    Height = 42,
                     Background = Brushes.White,
-                    BorderBrush = Brush(166, 166, 166),
+                    BorderBrush = Brush(160, 160, 160),
                     BorderThickness = new Thickness(1),
                     Child = bars,
                 },
@@ -175,16 +176,16 @@ public sealed partial class MainWindow
                 {
                     Text = displayName,
                     FontFamily = FormulaBarFontFamily,
-                    FontSize = 10,
+                    FontSize = 12,
                     HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center,
-                    Margin = new Thickness(0, 1, 0, 0),
+                    Margin = new Thickness(0, 4, 0, 0),
                 },
                 new TextBlock
                 {
                     Text = previewLabel,
                     FontFamily = FormulaBarFontFamily,
-                    FontSize = 9,
-                    Foreground = Brush(96, 96, 96),
+                    FontSize = 10,
+                    Foreground = Brush(109, 109, 109),
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center,
                 },

@@ -147,8 +147,10 @@ public sealed class DialogVisualParitySourceTests
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyGroupBox(");
         source.Should().Contain("LastChildFill = false");
         source.Should().Contain("DockPanel.SetDock(buttons, Dock.Bottom)");
-        source.Should().Contain("okButton.Height = okButton.MinHeight = okButton.MaxHeight = 52");
-        source.Should().Contain("cancelButton.Height = cancelButton.MinHeight = cancelButton.MaxHeight = 52");
+        // WPF bottom-aligns the OK/Cancel row at its natural height; the stretched 52px footer
+        // buttons came from a reference capture older than that source.
+        source.Should().NotContain("okButton.Height = okButton.MinHeight = okButton.MaxHeight = 52");
+        source.Should().NotContain("cancelButton.Height = cancelButton.MinHeight = cancelButton.MaxHeight = 52");
         source.Should().NotContain("SortOptionsCheckBoxTemplate");
         source.Should().NotContain("SortOptionsRadioButtonTemplate");
 

@@ -47,13 +47,13 @@ public sealed partial class MainWindow
         {
             Title = UiText.Get("AllowEditRange_Title"),
             // WPF AllowEditRangeDialog is a 430x420 *outer* NoResize window; Avalonia sizes the client
-            // area, so take the Windows caption/frame off the height.
-            Width = 430,
-            Height = 420 - WpfNoResizeFrameHeight,
-            MinWidth = 430,
-            MinHeight = 420 - WpfNoResizeFrameHeight,
-            MaxWidth = 430,
-            MaxHeight = 420 - WpfNoResizeFrameHeight,
+            // area, so take the Windows caption/frame off both axes.
+            Width = 430 - WpfNoResizeFrameWidth,
+            Height = 420 - WpfNoResizeClientFrameHeight,
+            MinWidth = 430 - WpfNoResizeFrameWidth,
+            MinHeight = 420 - WpfNoResizeClientFrameHeight,
+            MaxWidth = 430 - WpfNoResizeFrameWidth,
+            MaxHeight = 420 - WpfNoResizeClientFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,

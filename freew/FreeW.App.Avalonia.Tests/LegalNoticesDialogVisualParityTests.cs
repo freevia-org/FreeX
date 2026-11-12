@@ -127,8 +127,9 @@ public sealed class LegalNoticesDialogVisualParityTests
                 .Single(border => border.Name == "PART_BorderElement");
             ((ISolidColorBrush)focusedDocumentBorder.BorderBrush!)
                 .Color.Should().Be(Color.FromRgb(86, 157, 229));
+            // WPF pins a short notice to the top of its document box: no vertical centring inset.
             ((TextBox)tabItems[0].Content!).Padding.Top
-                .Should().BeGreaterThan(LegalNoticesDialogMetrics.TextPadding);
+                .Should().Be(LegalNoticesDialogMetrics.TextPadding);
 
             foreach (var tab in tabItems)
             {
@@ -147,7 +148,7 @@ public sealed class LegalNoticesDialogVisualParityTests
                     text.LineHeight.Should().Be(14.6);
                 else
                     double.IsNaN(text.LineHeight).Should().BeTrue();
-                text.FontFamily.Should().Be(new FontFamily("Consolas"));
+                text.FontFamily.Should().Be(new FontFamily("Consolas, Menlo, Courier New"));
                 text.VerticalContentAlignment.Should().Be(global::Avalonia.Layout.VerticalAlignment.Top);
                 text.HorizontalContentAlignment.Should().Be(global::Avalonia.Layout.HorizontalAlignment.Left);
                 ((ISolidColorBrush)text.Foreground!).Color.Should().Be(Colors.Black);

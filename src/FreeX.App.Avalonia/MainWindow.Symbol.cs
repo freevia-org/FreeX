@@ -40,16 +40,20 @@ public sealed partial class MainWindow
         var selectedSubset = new TextBlock { FontSize = 12, FontFamily = FormulaBarFontFamily, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) };
         var selectedCode = new TextBox
         {
-            Width = 120,
+            // WPF SymbolPickerDialog.Layout.cs: the character-code box is 96 wide.
+            Width = 96,
         };
         ApplySymbolTextBoxChrome(selectedCode);
         var preview = new TextBlock
         {
+            // WPF SymbolPickerDialog.Layout.cs: 96x82 preview text inside the 116x96 frame.
             FontSize = 44,
-            Width = 116,
-            Height = 96,
+            Width = 96,
+            Height = 82,
             TextAlignment = TextAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
+            // Fallback faces with a short ascent draw marks above the line box; do not crop them.
+            ClipToBounds = false,
         };
 
         var dialog = new Window
@@ -117,26 +121,22 @@ public sealed partial class MainWindow
         {
             ItemsSource = SymbolPickerCatalogPlanner.GetPreferredFontChoices(),
             SelectedIndex = 0,
-            MinWidth = 150,
-            Width = 150,
+            // WPF stretches the chooser fields across their star columns.
+            HorizontalAlignment = HorizontalAlignment.Stretch,
         };
         ApplySymbolComboBoxChrome(fontBox);
         var subsetBox = new ComboBox
         {
             ItemsSource = SymbolPickerCatalogPlanner.GetSubsetNames(),
             SelectedIndex = 0,
-            MinWidth = 150,
-            Width = 150,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
         };
         ApplySymbolComboBoxChrome(subsetBox);
         var searchBox = new TextBox
         {
-            MinWidth = 150,
-            MaxWidth = 200,
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            // Right margin keeps the field inside the tab pane (it sits in the trailing
-            // star column and would otherwise stretch flush to / past the dialog edge).
-            Margin = new Thickness(0, 0, 8, 0),
+            // Small right margin keeps the field inside the tab pane border.
+            Margin = new Thickness(0, 0, 2, 0),
         };
         ApplySymbolTextBoxChrome(searchBox);
         var resultCount = new TextBlock
@@ -144,14 +144,15 @@ public sealed partial class MainWindow
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             Foreground = Brush(96, 96, 96),
-            Margin = new Thickness(0, 4, 0, 6),
+            Margin = new Thickness(0, 0, 0, 6),
         };
 
         var symbolGrid = new WrapPanel
         {
             Orientation = Orientation.Horizontal,
-            ItemWidth = 31,
-            ItemHeight = 31,
+            // WPF SymbolPickerDialog.Layout.cs: SymbolCellSize = 32 slots inside 3px list padding.
+            ItemWidth = 32,
+            ItemHeight = 32,
             Margin = new Thickness(3),
             Focusable = true,
         };
@@ -183,9 +184,10 @@ public sealed partial class MainWindow
         var recentGrid = new WrapPanel
         {
             Orientation = Orientation.Horizontal,
-            ItemWidth = 32,
+            // WPF SymbolPickerDialog.Layout.cs: RecentSymbolCellSize = 30 slots inside 3px list padding.
+            ItemWidth = 30,
             ItemHeight = 30,
-            Margin = new Thickness(4, 0),
+            Margin = new Thickness(3),
         };
         void PopulateRecentSymbols()
         {
@@ -334,7 +336,8 @@ public sealed partial class MainWindow
         var grid = new Grid
         {
             Margin = new Thickness(0, 0, 0, 8),
-            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,*,Auto,*"),
+            // WPF CreateChooserGrid: Auto,*,Auto,1.1*,Auto,*.
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,1.1*,Auto,*"),
         };
         AddSymbolChooserField(
             grid,
@@ -377,21 +380,41 @@ public sealed partial class MainWindow
         bool compact = false,
         FontFamily? fontFamily = null)
     {
+        // WPF SymbolPickerDialog.Layout.cs draws 18px glyphs in 32px cells and 16px glyphs in the
+        // 30px recent cells, each cell inset by a 1px item margin.
+        var cellFontFamily = fontFamily ?? new FontFamily("Segoe UI Symbol");
+        var cellFontSize = compact ? 16d : 18d;
         var button = new Button
         {
-            Content = SymbolPickerCatalogPlanner.CreateDisplaySymbol(entry.Symbol),
-            Width = compact ? 30 : 31,
+            // An explicit, unclipped text block: the default presenter text clips to its line box,
+            // which cut the marks above capital letters when a fallback face with a short ascent
+            // resolved the glyph.
+            Content = new TextBlock
+            {
+                Text = SymbolPickerCatalogPlanner.CreateDisplaySymbol(entry.Symbol),
+                FontSize = cellFontSize,
+                FontFamily = cellFontFamily,
+                TextAlignment = TextAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Padding = new Thickness(0, 3),
+                ClipToBounds = false,
+            },
+            Width = compact ? 28 : 30,
             Height = compact ? 28 : 30,
             Padding = new Thickness(0),
             Margin = new Thickness(0),
-            FontSize = compact ? 14 : 15,
-            FontFamily = fontFamily ?? new FontFamily("Segoe UI Symbol"),
+            ClipToBounds = false,
+            FontSize = cellFontSize,
+            FontFamily = cellFontFamily,
             Background = Brushes.Transparent,
             BorderBrush = Brushes.Transparent,
             BorderThickness = new Thickness(1),
             HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center,
         };
+        // The glyph is no longer plain string content, so publish it as the accessible name.
+        AutomationProperties.SetName(button, SymbolPickerCatalogPlanner.CreateDisplaySymbol(entry.Symbol));
         button.Click += (_, _) => select(entry);
         button.DoubleTapped += (_, _) =>
         {
@@ -412,7 +435,7 @@ public sealed partial class MainWindow
         var codeRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 12, 0, 0),
+            Margin = new Thickness(0, 12, 0, 4),
             Children =
             {
                 new TextBlock { Text = StripDisplayMnemonic(UiText.Get("SymbolPicker_CharacterCodeLabel")), FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = VerticalAlignment.Center },
@@ -422,9 +445,17 @@ public sealed partial class MainWindow
         {
             Content = StripDisplayMnemonic(UiText.Get("SymbolPicker_GoButton")),
             MinWidth = 64,
-            Margin = new Thickness(0, 6, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 8, 0, 0),
         };
         ApplySymbolButtonChrome(goButton, 64);
+        // WPF SymbolPickerDialog.Layout.cs: an auto-height 64px button (20px for one 12px line),
+        // not the 24px dialog command-button height.
+        goButton.Height = 20;
+        goButton.MinHeight = 20;
+        goButton.MaxHeight = 20;
+        goButton.Padding = new Thickness(goButton.Padding.Left, 0, goButton.Padding.Right, 0);
+        goButton.VerticalContentAlignment = VerticalAlignment.Center;
         goButton.Click += (_, _) =>
         {
             if (SymbolPickerCatalogPlanner.TryParseCharacterCode(selectedCode.Text, out var symbol))
@@ -434,6 +465,9 @@ public sealed partial class MainWindow
         var panel = new StackPanel
         {
             Margin = new Thickness(12, 0, 0, 0),
+            // WPF docks the details stack at its natural width, so the 96px code box centres
+            // under the widest detail line instead of the whole column.
+            HorizontalAlignment = HorizontalAlignment.Left,
             Children =
             {
                 new Border
@@ -442,16 +476,16 @@ public sealed partial class MainWindow
                     BorderThickness = new Thickness(1),
                     Background = Brushes.White,
                     Width = 116,
-                    Height = 94,
+                    Height = 96,
                     HorizontalAlignment = HorizontalAlignment.Left,
                     Child = preview,
                 },
                 selectedName,
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("SymbolPicker_SubsetLabel")), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = Brush(96, 96, 96), Margin = new Thickness(0, 14, 0, 0) },
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("SymbolPicker_SubsetLabel")), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = Brush(96, 96, 96), Margin = new Thickness(0, 12, 0, 0) },
                 selectedSubset,
                 codeRow,
                 selectedCode,
-                new TextBlock { Text = UiText.Get("SymbolPicker_FromUnicodeHex"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = Brush(96, 96, 96), Margin = new Thickness(0, 6, 0, 0) },
+                new TextBlock { Text = UiText.Get("SymbolPicker_FromUnicodeHex"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = Brush(96, 96, 96), Margin = new Thickness(0, 4, 0, 0) },
                 goButton,
             },
         };

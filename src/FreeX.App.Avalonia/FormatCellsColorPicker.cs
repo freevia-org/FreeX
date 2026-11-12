@@ -118,8 +118,9 @@ internal sealed class FormatCellsColorPicker : Button
         MinWidth = 54;
         Height = 24;
         MinHeight = 24;
-        Padding = new Thickness(6, 1);
+        Padding = new Thickness(6, 0);
         HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
         Background = new SolidColorBrush(Color.FromRgb(221, 221, 221));
         BorderBrush = new SolidColorBrush(Color.FromRgb(128, 128, 128));
         BorderThickness = new Thickness(1);

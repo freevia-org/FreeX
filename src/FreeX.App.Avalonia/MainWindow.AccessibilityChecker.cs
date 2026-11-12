@@ -2,7 +2,11 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
+using Avalonia.Data;
+using Avalonia.Data.Converters;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -11,6 +15,7 @@ using FreeX.App.Presentation.Accessibility;
 using FreeX.Core.Commands;
 using Free.Shared.Shell.Avalonia;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -395,6 +400,7 @@ public sealed partial class MainWindow
     {
         var node = new TreeViewItem
         {
+            Template = AccessibilityCheckerTreeItemTemplate,
             Header = plan.Header,
             FontWeight = plan.Kind == AccessibilityCheckerTreeNodeKind.Section
                 ? FontWeight.SemiBold
@@ -411,6 +417,101 @@ public sealed partial class MainWindow
 
         return node;
     }
+
+    // WPF TreeView rows: a small chevron (hidden but still reserving its slot on leaves) before the
+    // header, each level indented about 12px. The Fluent item template uses a 36px chevron slot and
+    // 16px levels, and its chevron is a Button that the shared dialog chrome later widens to the
+    // command-button minimum, which pushed group captions far to the right of their leaves. This
+    // template draws the chevron as a plain shape so the row geometry stays the WPF one.
+    private const double AccessibilityCheckerTreeIndent = 12;
+
+    private static readonly FuncControlTemplate<TreeViewItem> AccessibilityCheckerTreeItemTemplate =
+        new((item, scope) =>
+        {
+            var chevronPath = new global::Avalonia.Controls.Shapes.Path
+            {
+                Stroke = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+                StrokeThickness = 1,
+                Width = 8,
+                Height = 8,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            };
+            chevronPath.Bind(
+                global::Avalonia.Controls.Shapes.Path.DataProperty,
+                new Binding(nameof(TreeViewItem.IsExpanded))
+                {
+                    Source = item,
+                    Converter = new FuncValueConverter<bool, Geometry>(expanded =>
+                        Geometry.Parse(expanded ? "M 0,2 L 4,6 L 8,2" : "M 2,0 L 6,4 L 2,8")),
+                });
+            var chevron = new Border
+            {
+                Width = 12,
+                Height = 12,
+                Margin = new Thickness(5, 0, 2, 0),
+                Background = Brushes.Transparent,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                Child = chevronPath,
+            };
+            chevronPath.Bind(
+                Visual.IsVisibleProperty,
+                new Binding(nameof(ItemsControl.ItemCount))
+                {
+                    Source = item,
+                    Converter = new FuncValueConverter<int, bool>(count => count > 0),
+                });
+            chevron.PointerPressed += (_, args) =>
+            {
+                if (item.ItemCount == 0)
+                    return;
+                item.IsExpanded = !item.IsExpanded;
+                args.Handled = true;
+            };
+
+            var headerPresenter = new ContentPresenter
+            {
+                Name = "PART_HeaderPresenter",
+                Padding = new Thickness(2, 0),
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+            };
+            headerPresenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(HeaderedItemsControl.Header)) { Source = item });
+            scope.Register("PART_HeaderPresenter", headerPresenter);
+
+            var header = new Grid
+            {
+                Name = "PART_Header",
+                ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+                Children = { chevron, headerPresenter },
+            };
+            Grid.SetColumn(headerPresenter, 1);
+            header.Bind(
+                Layoutable.MarginProperty,
+                new Binding(nameof(TreeViewItem.Level))
+                {
+                    Source = item,
+                    Converter = new FuncValueConverter<int, Thickness>(level =>
+                        new Thickness(level * AccessibilityCheckerTreeIndent, 0, 0, 0)),
+                });
+            scope.Register("PART_Header", header);
+
+            var layoutRoot = new Border
+            {
+                Name = "PART_LayoutRoot",
+                MinHeight = 20,
+                Child = header,
+            };
+            scope.Register("PART_LayoutRoot", layoutRoot);
+
+            var itemsPresenter = new ItemsPresenter { Name = "PART_ItemsPresenter" };
+            itemsPresenter.Bind(
+                Visual.IsVisibleProperty,
+                new Binding(nameof(TreeViewItem.IsExpanded)) { Source = item });
+            scope.Register("PART_ItemsPresenter", itemsPresenter);
+
+            return new StackPanel { Children = { layoutRoot, itemsPresenter } };
+        });
 
     private static void ApplyAction(Button button, AccessibilityCheckerActionSpec action)
     {

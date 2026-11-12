@@ -488,6 +488,10 @@ public sealed partial class MainWindow
                 FontSize = 12,
                 FontFamily = FormulaBarFontFamily,
                 Height = 22,
+                // The theme's 32px text-box minimum outgrew the 22px row slot and left the name at
+                // the top of the row; WPF centres it on the check box and type label.
+                MinHeight = 0,
+                VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
                 Padding = new Thickness(0),
                 Margin = new Thickness(8, 0, 0, 0),
             };

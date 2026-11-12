@@ -92,13 +92,13 @@ public sealed partial class MainWindow
         {
             Title = UiText.Get("ShellLoc_SpellingTitle"),
             // WPF SpellCheckDialog is a 480x330 *outer* NoResize window. Avalonia sizes the client
-            // area, so take the Windows caption/frame off the height.
-            Width = 480,
-            Height = 330 - WpfNoResizeFrameHeight,
-            MinWidth = 480,
-            MinHeight = 330 - WpfNoResizeFrameHeight,
-            MaxWidth = 480,
-            MaxHeight = 330 - WpfNoResizeFrameHeight,
+            // area, so take the Windows caption/frame off both axes.
+            Width = 480 - WpfNoResizeFrameWidth,
+            Height = 330 - WpfNoResizeClientFrameHeight,
+            MinWidth = 480 - WpfNoResizeFrameWidth,
+            MinHeight = 330 - WpfNoResizeClientFrameHeight,
+            MaxWidth = 480 - WpfNoResizeFrameWidth,
+            MaxHeight = 330 - WpfNoResizeClientFrameHeight,
             CanResize = false,
             FontFamily = FormulaBarFontFamily,
             FontSize = 12,

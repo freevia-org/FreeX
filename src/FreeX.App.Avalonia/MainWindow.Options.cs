@@ -199,7 +199,7 @@ public sealed partial class MainWindow
             maxChangeBox.IsEnabled = enabled;
         };
 
-        var r1c1Box = new CheckBox { Content = UiText.Get("Options_R1C1ReferenceStyle"), IsChecked = current.UseR1C1ReferenceStyle };
+        var r1c1Box = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("Options_UseR1C1ReferenceStyle")), IsChecked = current.UseR1C1ReferenceStyle };
         ApplyOptionsCheckBoxChrome(r1c1Box);
         AutomationProperties.SetAutomationId(r1c1Box, "OptionsR1C1ReferenceStyleCheckBox");
 
@@ -897,13 +897,16 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(exportItem, FreeXAutomationIdCatalog.QuickAccessToolbarExportCustomizationMenuItem);
         exportItem.Click += (_, _) => RunGuarded(ExportQuickAccessCustomizationAsync);
         var quickAccessImportExportMenu = new ContextMenu { Items = { importItem, exportItem } };
+        AvaloniaContextMenuChrome.Apply(quickAccessImportExportMenu);
         quickAccessImportExportButton.Click += (_, _) => quickAccessImportExportMenu.Open(quickAccessImportExportButton);
 
         var quickAccessGrid = new Grid
         {
             Width = 469,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
-            ColumnDefinitions = new ColumnDefinitions("128,10,92,10,127,10,92"),
+            // WPF OptionsDialog.xaml: *,Auto,*,Auto with the button stacks carrying the 10px gaps,
+            // which resolves to the 128 / 112 / 127 / 102 split of the 469px page.
+            ColumnDefinitions = new ColumnDefinitions("*,Auto,*,Auto"),
             RowDefinitions = new RowDefinitions("Auto,Auto,180"),
         };
         var availableLabel = new TextBlock { Text = OptionsText("Options_AvailableCommands"), FontSize = 12, Margin = new Thickness(0, 0, 0, 4) };
@@ -926,12 +929,12 @@ public sealed partial class MainWindow
             VerticalAlignment = AvaloniaVerticalAlignment.Top,
             Children = { quickAccessAddButton, quickAccessRemoveButton },
         };
-        Grid.SetColumn(addRemovePanel, 2);
+        Grid.SetColumn(addRemovePanel, 1);
         Grid.SetRow(addRemovePanel, 2);
         var selectedLabel = new TextBlock { Text = OptionsText("Options_QuickAccessToolbarCommands"), FontSize = 12, Margin = new Thickness(0, 0, 0, 4) };
-        Grid.SetColumn(selectedLabel, 4);
+        Grid.SetColumn(selectedLabel, 2);
         Grid.SetRow(selectedLabel, 0);
-        Grid.SetColumn(quickAccessSelectedList, 4);
+        Grid.SetColumn(quickAccessSelectedList, 2);
         Grid.SetRow(quickAccessSelectedList, 2);
         var reorderPanel = new StackPanel
         {
@@ -940,7 +943,7 @@ public sealed partial class MainWindow
             VerticalAlignment = AvaloniaVerticalAlignment.Top,
             Children = { quickAccessMoveUpButton, quickAccessMoveDownButton, quickAccessResetButton },
         };
-        Grid.SetColumn(reorderPanel, 6);
+        Grid.SetColumn(reorderPanel, 3);
         Grid.SetRow(reorderPanel, 2);
         quickAccessGrid.Children.Add(availableLabel);
         quickAccessGrid.Children.Add(searchRow);
@@ -1018,8 +1021,10 @@ public sealed partial class MainWindow
                 FontSize = 12,
                 Margin = new Thickness(0, 8, 0, 5),
             },
+            // WPF shows this prose in a plain TextBlock, so an underscore in it (the environment
+            // variable name) is literal text, not an access-key marker: do not strip it.
             OptionsHint(
-                OptionsText("Options_FreeXWritesLocalUsageEventsAndCrashFilesToLOCALAPPDATAFr"),
+                UiText.Get("Options_FreeXWritesLocalUsageEventsAndCrashFilesToLOCALAPPDATAFr"),
                 new Thickness(0, 0, 0, 12)),
             trustCenterSettingsButton);
         trustCenterPanel.Width = OptionsDialogPlanner.GeneralContentWidth;

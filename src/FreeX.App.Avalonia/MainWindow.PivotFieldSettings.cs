@@ -448,11 +448,14 @@ public sealed partial class MainWindow
         var labelDescending = new RadioButton { Content = PivotSortPlanner.GetOption(PivotSortOptionMode.LabelDescending).Text.Resolve(UiText.Get), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
         var valueAscending = new RadioButton { Content = PivotSortPlanner.GetOption(PivotSortOptionMode.ValueAscending).Text.Resolve(UiText.Get), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
         var valueDescending = new RadioButton { Content = PivotSortPlanner.GetOption(PivotSortOptionMode.ValueDescending).Text.Resolve(UiText.Get), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
-        // WPF radios are 16px rows with a 6px bottom margin (22px pitch); the compact radio is 20px.
+        // WPF radios are 16px rows with a 6px bottom margin (22px pitch). The compact radio chrome
+        // leaves the row unsized (a 16px pitch with the old 2px margin), so pin the WPF row height.
         foreach (var modeButton in new[] { labelAscending, labelDescending, valueAscending, valueDescending })
         {
             ApplyPivotRadioButtonChrome(modeButton);
-            modeButton.Margin = new Thickness(0, 0, 0, 2);
+            modeButton.MinHeight = 16;
+            modeButton.MaxHeight = 16;
+            modeButton.Margin = new Thickness(0, 0, 0, 6);
         }
 
         AutomationProperties.SetAutomationId(labelAscending, PivotSortPlanner.GetOption(PivotSortOptionMode.LabelAscending).AutomationId);
@@ -505,11 +508,12 @@ public sealed partial class MainWindow
         {
             Title = UiText.Format("PivotSort_Title", caption),
             // WPF PivotSortOptionsDialog: 360x300 outer, NoResize, so the app-wide dialog sizing makes
-            // 300 the minimum and lets the height follow the content.
-            Width = 360,
-            MinWidth = 360,
-            MaxWidth = 360,
-            MinHeight = 300 - WpfNoResizeFrameHeight,
+            // 300 the minimum and lets the height follow the content. The client area drops the
+            // Windows caption/frame on both axes.
+            Width = 360 - WpfNoResizeFrameWidth,
+            MinWidth = 360 - WpfNoResizeFrameWidth,
+            MaxWidth = 360 - WpfNoResizeFrameWidth,
+            MinHeight = 300 - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,

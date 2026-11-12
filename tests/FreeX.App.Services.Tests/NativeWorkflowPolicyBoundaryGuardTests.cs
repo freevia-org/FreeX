@@ -127,7 +127,9 @@ public sealed class NativeWorkflowPolicyBoundaryGuardTests
         avaloniaPrintSource.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(");
         avaloniaParitySource.Should().Contain("WorkbookFileDialogSurfacePlanner.CreateOpenPlan(");
         avaloniaParitySource.Should().Contain("WorkbookFileDialogSurfacePlanner.CreateSaveAsPlan(");
-        avaloniaParitySource.Should().Contain("ExportOptionsDialogSurfacePlanner.CreateFormatAvailability(");
+        // The Export Options capture renders the production dialog, which owns the shared planner call.
+        avaloniaParitySource.Should().Contain("ShowExportOptionsDialogAsync(");
+        avaloniaExportOptionsSource.Should().Contain("ExportOptionsDialogSurfacePlanner.CreateFormatAvailability(");
 
         wpfBackstageSource.Should().NotContain("WorkbookSaveExecutionCoordinator.Begin(");
         wpfBackstageSource.Should().Contain(

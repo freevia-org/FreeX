@@ -231,10 +231,14 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = existingRule is null ? UiText.Get("ConditionalFormat_NewRuleTitle") : UiText.Get("ConditionalFormat_EditRuleTitle"),
+            // WPF ConditionalFormatDialog is a 650 *outer* wide NoResize window that sizes its height
+            // to the content (SizeToContent.Height), so the colour-scale and top/bottom editors grow
+            // the window instead of scrolling under the OK/Cancel row. The capture height stays the
+            // floor for the shorter rule types.
             Width = ConditionalFormatDialogCatalog.RuleEditorCaptureWidth,
-            Height = ConditionalFormatDialogCatalog.RuleEditorCaptureHeight,
             MinWidth = ConditionalFormatDialogCatalog.RuleEditorMinWidth,
-            MinHeight = ConditionalFormatDialogCatalog.RuleEditorMinHeight,
+            MinHeight = ConditionalFormatDialogCatalog.RuleEditorCaptureHeight,
+            SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             // WPF ConditionalFormatDialog labels use the 12px dialog font; without this the field
@@ -356,8 +360,8 @@ public sealed partial class MainWindow
             }
         });
 
-        var operatorField = CreateDataValidationField(UiText.Get("ConditionalFormat_OperatorLabel"), operatorBox);
-        var value1Field = CreateDataValidationField(UiText.Get("ConditionalFormat_ValueLabel"), value1Box);
+        var operatorField = CreateDataValidationField(UiText.Get("ConditionalFormatDialog_OperatorLabel"), operatorBox);
+        var value1Field = CreateDataValidationField(UiText.Get("ConditionalFormatDialog_ValueLabel"), value1Box);
         var value2Field = CreateDataValidationField(UiText.Get("ConditionalFormat_MaximumLabel"), value2Box);
         var formulaField = CreateDataValidationField(UiText.Get("ConditionalFormat_FormulaLabel"), formulaBox);
         var textField = CreateDataValidationField(UiText.Get("ConditionalFormat_TextLabel"), textBox);
@@ -372,7 +376,7 @@ public sealed partial class MainWindow
             Spacing = 6,
             Children = { highlightBox, formatButton },
         };
-        var highlightField = CreateDataValidationField(UiText.Get("ConditionalFormat_FormatLabel"), highlightRow);
+        var highlightField = CreateDataValidationField(UiText.Get("ConditionalFormatDialog_FormatLabel"), highlightRow);
         var presetField = CreateDataValidationField(UiText.Get("ConditionalFormat_PresetLabel"), presetBox);
 
         // The WPF editor gives its rule description controls the full right-column width. Keep the
@@ -1014,16 +1018,6 @@ public sealed partial class MainWindow
             manageDialogChrome with { ListBoxItemPadding = new Thickness(2, 0) });
         AutomationProperties.SetAutomationId(listBox, "ManageConditionalFormatsListBox");
         AutomationProperties.SetName(listBox, UiText.Get("ManageConditionalFormats_ConditionalFormattingRules"));
-        // Render each rule as a #/Rule-type/Format-swatch/Applies-to/Stop-if row matching the header
-        // columns (the WPF GridView), instead of the default single-string row. Toggling Stop If
-        // True mutates the matching rule directly in the working copy (mirroring the WPF grid's
-        // two-way-bound checkbox column) — it never touches the live sheet until Commit().
-        listBox.ItemTemplate = new FuncDataTemplate<ManageConditionalFormatRuleProjection>(
-            (item, _) => BuildManageConditionalFormatRow(item, isChecked =>
-            {
-                manageSession.SetStopIfTrue(item.Id, isChecked);
-            }),
-            supportsRecycling: true);
 
         var emptyText = new TextBlock
         {
@@ -1060,6 +1054,26 @@ public sealed partial class MainWindow
         appliesToRow.Children.Add(appliesToBox);
         AvaloniaGrid.SetColumn(appliesToPicker, 1);
         appliesToRow.Children.Add(appliesToPicker);
+
+        // Render each rule as a #/Rule-type/Format-swatch/Applies-to/Stop-if row matching the header
+        // columns (the WPF GridView), instead of the default single-string row. Toggling Stop If
+        // True mutates the matching rule directly in the working copy (mirroring the WPF grid's
+        // two-way-bound checkbox column) — it never touches the live sheet until Commit().
+        listBox.ItemTemplate = new FuncDataTemplate<ManageConditionalFormatRuleProjection>(
+            (item, _) => BuildManageConditionalFormatRow(
+                item,
+                isChecked =>
+                {
+                    manageSession.SetStopIfTrue(item.Id, isChecked);
+                },
+                () =>
+                {
+                    // WPF puts a range picker in every Applies To cell; it acts on that row, so
+                    // select the row first and then run the dialog's shared picker for it.
+                    listBox.SelectedItem = item;
+                    appliesToPicker.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                }),
+            supportsRecycling: true);
 
         // Shared with the WPF host: builds Sheet/Table/Selection options, adding "This Table"
         // only when the current selection sits inside a structured table (FindSelectionTableRange).
@@ -1129,11 +1143,15 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(deleteButton, "ManageConditionalFormatsDeleteButton");
         var moveUpButton = new Button { Content = "\u25B2", Width = 32, Margin = new Thickness(0, 0, 4, 0), IsEnabled = false };
         ApplyCfButtonChrome(moveUpButton, 32, style: manageDialogChrome);
+        // The compact 12px side padding left the 32px arrow buttons a 6px content box that clipped
+        // the triangle glyphs; WPF centres them in the full button.
+        moveUpButton.Padding = new Thickness(0);
         AutomationProperties.SetAutomationId(moveUpButton, "ManageConditionalFormatsMoveUpButton");
         AutomationProperties.SetName(moveUpButton, UiText.Get("ManageConditionalFormats_MoveUp"));
         ToolTip.SetTip(moveUpButton, UiText.Get("ManageConditionalFormats_MoveSelectedRuleUp"));
         var moveDownButton = new Button { Content = "\u25BC", Width = 32, IsEnabled = false };
         ApplyCfButtonChrome(moveDownButton, 32, style: manageDialogChrome);
+        moveDownButton.Padding = new Thickness(0);
         AutomationProperties.SetAutomationId(moveDownButton, "ManageConditionalFormatsMoveDownButton");
         AutomationProperties.SetName(moveDownButton, UiText.Get("ManageConditionalFormats_MoveDown"));
         ToolTip.SetTip(moveDownButton, UiText.Get("ManageConditionalFormats_MoveSelectedRuleDown"));
@@ -1429,13 +1447,15 @@ public sealed partial class MainWindow
     /// </summary>
     private Control BuildManageConditionalFormatRow(
         ManageConditionalFormatRuleProjection item,
-        Action<bool> onStopIfTrueToggled)
+        Action<bool> onStopIfTrueToggled,
+        Action onPickAppliesTo)
     {
         var rule = item.Rule;
         var grid = new AvaloniaGrid
         {
             ColumnDefinitions = new ColumnDefinitions(ManageCfRuleColumns),
-            Height = 22,
+            // WPF ListView rows are about 28px: the 24px Applies To editor plus the item chrome.
+            Height = 28,
         };
 
         void AddCell(Control control, int column)
@@ -1457,7 +1477,46 @@ public sealed partial class MainWindow
         AddCell(RowText(rule.Priority.ToString(global::System.Globalization.CultureInfo.InvariantCulture)), 0);
         AddCell(RowText(ManageConditionalFormatsPlanner.ResolveDescription(item.Description, ManageConditionalFormatsText)), 1);
         AddCell(BuildConditionalFormatPreviewSwatch(rule), 2);
-        AddCell(RowText(FormatRangeReference(rule.AppliesTo)), 3);
+        // WPF Applies To cell: the absolute reference in a 2px-padded text box with a 24px range
+        // picker docked 4px to its right. Editing goes through the dialog's Applies To box below.
+        var appliesToPickerCell = new Button
+        {
+            Content = "...",
+            Width = 24,
+            Margin = new Thickness(4, 0, 0, 0),
+        };
+        ApplyCfButtonChrome(appliesToPickerCell, 24, style: ConditionalFormatDialogChromeStyle with { ButtonHeight = 22 });
+        appliesToPickerCell.Padding = new Thickness(0);
+        AutomationProperties.SetName(appliesToPickerCell, UiText.Get("ManageConditionalFormats_SelectAppliesToRange"));
+        ToolTip.SetTip(appliesToPickerCell, UiText.Get("ManageConditionalFormats_CollapseDialogAndSelectAppliesToRange"));
+        appliesToPickerCell.Click += (_, _) => onPickAppliesTo();
+        DockPanel.SetDock(appliesToPickerCell, Dock.Right);
+        var appliesToCell = new DockPanel
+        {
+            Margin = new Thickness(5, 0, 5, 0),
+            Height = 22,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Children =
+            {
+                appliesToPickerCell,
+                new Border
+                {
+                    BorderBrush = Brush(171, 173, 179),
+                    BorderThickness = new Thickness(1),
+                    Background = Brushes.White,
+                    Padding = new Thickness(2, 0),
+                    Child = new TextBlock
+                    {
+                        Text = ManageConditionalFormatsPlanner.FormatAppliesToRange(rule.AppliesTo),
+                        FontSize = 12,
+                        FontFamily = FormulaBarFontFamily,
+                        VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                        TextTrimming = global::Avalonia.Media.TextTrimming.CharacterEllipsis,
+                    },
+                },
+            },
+        };
+        AddCell(appliesToCell, 3);
         // Stop-If-True: an interactive checkbox that mutates the working-copy rule directly
         // (mirroring the WPF grid's two-way-bound column), not just a display of the current value.
         var stopBox = new CheckBox
@@ -1473,73 +1532,71 @@ public sealed partial class MainWindow
         return grid;
     }
 
-    /// <summary>A compact preview of a rule's effect for the Format column (mirrors the WPF swatch).</summary>
+    /// <summary>
+    /// The Format column preview (WPF <c>CreateFormatPreviewColumn</c>): an 82x20 swatch with a 0.5px
+    /// dark-grey frame, filled and lettered from the shared <c>ManageConditionalFormatsPlanner.CreatePreviewPlan</c>
+    /// so data bars, colour scales and icon sets read the same as the cell-value rules.
+    /// </summary>
     private Control BuildConditionalFormatPreviewSwatch(ConditionalFormat rule)
     {
-        static IBrush RgbBrush(RgbColor c) => new SolidColorBrush(Color.FromRgb(c.R, c.G, c.B));
-        static IBrush CellBrush(CellColor c) => new SolidColorBrush(Color.FromRgb(c.R, c.G, c.B));
+        static Color ToColor(PresentationRgb color) => Color.FromRgb(color.R, color.G, color.B);
+
+        var preview = ManageConditionalFormatsPlanner.CreatePreviewPlan(rule);
+        IBrush background;
+        if (preview.Fill.IsGradient)
+        {
+            var gradient = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0.5, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 0.5, RelativeUnit.Relative),
+            };
+            for (var index = 0; index < preview.Fill.Stops.Count; index++)
+            {
+                var offset = preview.Fill.Stops.Count == 1 ? 0 : (double)index / (preview.Fill.Stops.Count - 1);
+                gradient.GradientStops.Add(new GradientStop(ToColor(preview.Fill.Stops[index]), offset));
+            }
+
+            background = gradient;
+        }
+        else
+        {
+            background = preview.Fill.Stops.Count > 0
+                ? new SolidColorBrush(ToColor(preview.Fill.Stops[0]))
+                : Brushes.LightGray;
+        }
+
+        TextDecorationCollection? decorations = null;
+        if (preview.Underline || preview.Strikethrough)
+        {
+            decorations = new TextDecorationCollection();
+            if (preview.Underline)
+                decorations.Add(new TextDecoration { Location = global::Avalonia.Media.TextDecorationLocation.Underline });
+            if (preview.Strikethrough)
+                decorations.Add(new TextDecoration { Location = global::Avalonia.Media.TextDecorationLocation.Strikethrough });
+        }
 
         var swatch = new Border
         {
-            Width = 78,
-            Height = 16,
-            Margin = new Thickness(3, 0),
-            BorderBrush = Brush(150, 150, 150),
+            Width = 82,
+            Height = 20,
+            Margin = new Thickness(0, 2),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            BorderBrush = Brushes.DarkGray,
             BorderThickness = new Thickness(0.5),
-            Background = Brushes.White,
+            Background = background,
+            Child = new TextBlock
+            {
+                Text = UiText.Get(preview.SampleTextKey),
+                FontSize = 10,
+                FontFamily = FormulaBarFontFamily,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                Foreground = new SolidColorBrush(ToColor(preview.Foreground)),
+                FontWeight = preview.Bold ? FontWeight.Bold : FontWeight.Normal,
+                FontStyle = preview.Italic ? global::Avalonia.Media.FontStyle.Italic : global::Avalonia.Media.FontStyle.Normal,
+                TextDecorations = decorations,
+            },
         };
-
-        switch (rule.RuleType)
-        {
-            case CfRuleType.DataBar:
-                swatch.Child = new Border
-                {
-                    Background = RgbBrush(rule.DataBarColor),
-                    Width = 46,
-                    Margin = new Thickness(1),
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
-                };
-                break;
-            case CfRuleType.ColorScale:
-                var gradient = new LinearGradientBrush
-                {
-                    StartPoint = new RelativePoint(0, 0.5, RelativeUnit.Relative),
-                    EndPoint = new RelativePoint(1, 0.5, RelativeUnit.Relative),
-                };
-                gradient.GradientStops.Add(new GradientStop(Color.FromRgb(rule.MinColor.R, rule.MinColor.G, rule.MinColor.B), 0));
-                if (rule.UseThreeColorScale)
-                    gradient.GradientStops.Add(new GradientStop(Color.FromRgb(rule.MidColor.R, rule.MidColor.G, rule.MidColor.B), 0.5));
-                gradient.GradientStops.Add(new GradientStop(Color.FromRgb(rule.MaxColor.R, rule.MaxColor.G, rule.MaxColor.B), 1));
-                swatch.Background = gradient;
-                break;
-            case CfRuleType.IconSet:
-                swatch.Child = new TextBlock
-                {
-                    Text = "▲ ◆ ▼",
-                    FontSize = 9,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
-                    VerticalAlignment = AvaloniaVerticalAlignment.Center,
-                };
-                break;
-            default:
-                var format = rule.FormatIfTrue;
-                if (format?.FillColor is { } fill)
-                    swatch.Background = CellBrush(fill);
-                swatch.Child = new TextBlock
-                {
-                    Text = UiText.Get("ManageConditionalFormats_FormatPreviewSample"),
-                    FontSize = 10,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
-                    VerticalAlignment = AvaloniaVerticalAlignment.Center,
-                    Foreground = format is null ? Brushes.Black : CellBrush(format.FontColor),
-                    FontWeight = format?.Bold == true ? FontWeight.Bold : FontWeight.Normal,
-                    FontStyle = format?.Italic == true ? global::Avalonia.Media.FontStyle.Italic : global::Avalonia.Media.FontStyle.Normal,
-                    TextDecorations = format?.Underline == true
-                        ? CreateTextDecorations(global::Avalonia.Media.TextDecorationLocation.Underline)
-                        : null,
-                };
-                break;
-        }
 
         return swatch;
     }

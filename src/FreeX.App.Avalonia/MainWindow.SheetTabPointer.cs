@@ -293,9 +293,9 @@ public sealed partial class MainWindow
             var dialog = new Window
             {
                 Title = UiText.Get("ActivateSheet_Title"),
-                // WPF: 352x380 NoResize (outer size); the client height drops the caption/frame.
-                Width = 352,
-                Height = 380 - WpfNoResizeFrameHeight,
+                // WPF: 352x380 NoResize (outer size); the client area drops the caption/frame.
+                Width = 352 - WpfNoResizeFrameWidth,
+                Height = 380 - WpfNoResizeClientFrameHeight,
                 CanResize = false,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 ShowInTaskbar = false,

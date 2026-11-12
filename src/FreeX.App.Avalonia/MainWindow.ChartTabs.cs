@@ -148,7 +148,16 @@ public sealed partial class MainWindow
     {
         // The category list, subtype gallery and preview are the shared All Charts body, which the
         // Insert Chart dialog hosts on its second tab.
-        var (bodyGrid, _, subtypeGallery) = BuildAllChartsPickerBody(currentType, "ChangeChartType");
+        var (bodyGrid, categoryList, subtypeGallery) = BuildAllChartsPickerBody(currentType, "ChangeChartType");
+        // WPF docks the heading and the picker at the top and the button row at the bottom of the
+        // 640x390 dialog. Let the picker fill what is left between them (never more than the WPF
+        // panel height) and its lists fill the picker's star row, so nothing is pushed past the
+        // bottom edge when the help line wraps.
+        bodyGrid.Height = double.NaN;
+        bodyGrid.MaxHeight = ChartTypeChangePlanner.PickerPanelHeight;
+        bodyGrid.VerticalAlignment = AvaloniaVerticalAlignment.Top;
+        categoryList.Height = double.NaN;
+        subtypeGallery.Height = double.NaN;
 
         var dialog = NewChartDialog(UiText.Get("ChangeChartType_Title"), "ChangeChartTypeDialog");
         dialog.Width = ChartTypeChangePlanner.DialogWidth;
@@ -164,25 +173,22 @@ public sealed partial class MainWindow
         cancelButton.Click += (_, _) => dialog.Close((ChartType?)null);
         buttonRow.Margin = new Thickness(0, 8, 0, 0);
 
-        dialog.Content = new StackPanel
+        // WPF "Choose a chart type" heading.
+        var chooseHeading = new TextBlock
         {
-            Margin = new Thickness(16),
-            Spacing = 0,
-            Children =
-            {
-                // WPF "Choose a chart type" heading.
-                new TextBlock
-                {
-                    Text = UiText.Get(ChartTypePickerPlanner.ChooseChartTypeHeadingKey),
-                    FontSize = 12,
-                    FontFamily = FormulaBarFontFamily,
-                    FontWeight = FontWeight.SemiBold,
-                    Margin = new Thickness(0, 0, 0, 8),
-                },
-                bodyGrid,
-                buttonRow,
-            },
+            Text = UiText.Get(ChartTypePickerPlanner.ChooseChartTypeHeadingKey),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8),
         };
+        var root = new DockPanel { Margin = new Thickness(16) };
+        DockPanel.SetDock(chooseHeading, Dock.Top);
+        DockPanel.SetDock(buttonRow, Dock.Bottom);
+        root.Children.Add(chooseHeading);
+        root.Children.Add(buttonRow);
+        root.Children.Add(bodyGrid);
+        dialog.Content = root;
         AvaloniaCompactDialogChrome.ApplyWindow(dialog, ChartDialogChromeStyle);
         ConfigureChartDialogKeyboardLifecycle(dialog, subtypeGallery);
 
@@ -293,7 +299,11 @@ public sealed partial class MainWindow
                 },
             },
         };
-        Grid.SetColumnSpan(pickerHeading, 3);
+        // The preview spans both rows and starts 24px below the top of the grid, beside this
+        // heading. Keep the heading over the two list columns so its help line wraps in front of
+        // the preview instead of running underneath the preview border.
+        Grid.SetColumnSpan(pickerHeading, 2);
+        pickerHeading.Margin = new Thickness(0, 0, ChartTypeChangePlanner.PickerColumnGap, 0);
         bodyGrid.Children.Add(pickerHeading);
 
         categoryList.Margin = new Thickness(0, ChartTypeChangePlanner.PickerColumnGap * 2, ChartTypeChangePlanner.PickerColumnGap, 0);
@@ -396,6 +406,7 @@ public sealed partial class MainWindow
             ButtonHeight = 22,
             ButtonPadding = new Thickness(8, 1),
             ListBoxItemMinHeight = 22,
+            KeepListRowMinHeight = true,
         };
 
     private async Task ShowSelectChartDataDialog()
