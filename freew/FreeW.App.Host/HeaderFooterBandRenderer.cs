@@ -29,6 +29,37 @@ internal readonly record struct HeaderFooterBandContext(
 internal sealed record HeaderFooterBandMetrics(double HeightDip, IReadOnlyList<double> FrameTopsDip);
 
 /// <summary>
+/// A header/footer slot's anchored drawings in page coordinates, split into the layer drawn behind the
+/// page text and the layer drawn in front of it. <paramref name="Retainer"/> keeps the paginated text-box
+/// flows alive for as long as the layers are shown.
+/// </summary>
+internal sealed record HeaderFooterAnchoredLayers(Visual? Behind, Visual? Front, object Retainer);
+
+/// <summary>Hosts one page-space <see cref="Visual"/> layer in a WPF layout tree (no hit testing).</summary>
+internal sealed class PageVisualLayerElement : FrameworkElement
+{
+    private readonly Visual _visual;
+    private readonly object _retainer;
+
+    internal PageVisualLayerElement(Visual visual, object retainer)
+    {
+        _visual = visual;
+        _retainer = retainer;
+        IsHitTestVisible = false;
+        AddVisualChild(visual);
+    }
+
+    internal Visual Layer => _visual;
+
+    internal object Retainer => _retainer;
+
+    protected override int VisualChildrenCount => 1;
+
+    protected override Visual GetVisualChild(int index) =>
+        index == 0 ? _visual : throw new ArgumentOutOfRangeException(nameof(index));
+}
+
+/// <summary>
 /// Renders a header or footer slot for Print / Print Preview / PDF / XPS the way the body is rendered:
 /// through the same model-to-FlowDocument mapping (<see cref="DocumentView"/>), so every paragraph, its
 /// alignment, indents and spacing, tab stops (including the Header/Footer styles' centre and right
@@ -182,9 +213,73 @@ internal static class HeaderFooterBandRenderer
         }
 
         if (page is not null)
-            AddFloatingObjects(band, model, slot, inFlow, isHeader, context, page, bandOriginDip, widthDip, maxHeightDip);
+        {
+            var (behind, front) = BuildFloatingLayers(
+                band, model, slot, inFlow, isHeader, context, page, bandOriginDip, widthDip, maxHeightDip);
+            if (behind is not null)
+                band.Children.Insert(0, behind);
+            if (front is not null)
+                band.Children.Add(front);
+        }
 
         return band.Children.Count == 0 ? null : band;
+    }
+
+    /// <summary>True when the slot holds anything <see cref="BuildFloatingLayers"/> draws.</summary>
+    internal static bool HasAnchoredObjects(HeaderFooter? slot) =>
+        slot is { Table: null }
+        && slot.Paragraphs.Any(paragraph =>
+            paragraph.LegacyTextBoxFrame is not null || paragraph.Runs.Any(IsFloatingRun));
+
+    /// <summary>
+    /// The slot's anchored drawings (positioned legacy VML text boxes and DrawingML floating objects),
+    /// in page coordinates, for a page surface that lays out the slot's in-flow text itself -- the live
+    /// editor's page view, whose header/footer sub-editors show only the in-flow paragraphs. The band
+    /// is placed exactly where Print / Print Preview place it (header distance from the top edge;
+    /// footer distance from the bottom edge), so the drawings land where they print. Null when the slot
+    /// has nothing anchored.
+    /// </summary>
+    internal static HeaderFooterAnchoredLayers? RenderAnchoredObjects(
+        TextDocument model,
+        HeaderFooter? slot,
+        bool isHeader,
+        HeaderFooterBandContext context,
+        PageSettings page)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        ArgumentNullException.ThrowIfNull(page);
+        if (slot is null || slot.IsEmpty || !HasAnchoredObjects(slot))
+            return null;
+
+        var (contentWidth, _) = PageLayout.ContentAreaDip(page);
+        if (contentWidth <= 0)
+            return null;
+        var (marginLeft, _, _, _) = PageLayout.MarginsDip(page);
+        var (_, pageHeight) = PageLayout.PageSizeDip(page);
+        var maxHeight = MaxBandHeightDip(page);
+        var metrics = Measure(model, slot, isHeader, contentWidth, maxHeight);
+        var origin = isHeader
+            ? new Point(marginLeft, HeaderDistanceDip(page))
+            : new Point(marginLeft, Math.Max(0, pageHeight - FooterDistanceDip(page) - metrics.HeightDip));
+
+        var retainer = new BandVisual();
+        var (inFlow, _) = Partition(slot);
+        var (behind, front) = BuildFloatingLayers(
+            retainer, model, slot, inFlow, isHeader, context, page, origin, contentWidth, maxHeight);
+        if (behind is null && front is null)
+            return null;
+
+        // The layers are offset by -origin for a band placed at origin; undo that for page space.
+        ContainerVisual? ToPageSpace(ContainerVisual? layer)
+        {
+            if (layer is null)
+                return null;
+            var pageSpace = new ContainerVisual { Offset = new Vector(origin.X, origin.Y) };
+            pageSpace.Children.Add(layer);
+            return pageSpace;
+        }
+
+        return new HeaderFooterAnchoredLayers(ToPageSpace(behind), ToPageSpace(front), retainer);
     }
 
     /// <summary>
@@ -195,7 +290,7 @@ internal static class HeaderFooterBandRenderer
     /// since the caller places the band at that origin. Behind-text objects go under the band's text,
     /// the rest above it. Fields inside a text box resolve against <paramref name="context"/> (this page).
     /// </summary>
-    private static void AddFloatingObjects(
+    private static (ContainerVisual? Behind, ContainerVisual? Front) BuildFloatingLayers(
         BandVisual band,
         TextDocument model,
         HeaderFooter slot,
@@ -338,10 +433,7 @@ internal static class HeaderFooterBandRenderer
             (frame.BehindText ? behind : front).Children.Add(frameVisual);
         }
 
-        if (behind.Children.Count > 0)
-            band.Children.Insert(0, behind);
-        if (front.Children.Count > 0)
-            band.Children.Add(front);
+        return (behind.Children.Count > 0 ? behind : null, front.Children.Count > 0 ? front : null);
     }
 
     /// <summary>
