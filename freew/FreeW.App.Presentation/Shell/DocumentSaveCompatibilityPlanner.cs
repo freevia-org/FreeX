@@ -21,6 +21,21 @@ public static class DocumentSaveCompatibilityPlanner
         var profile = TargetProfile.From(format, target.Adapter, target.Path);
         var evidence = DocumentSaveFeatureEvidence.From(document);
         var warnings = BuildWarnings(profile, evidence).ToArray();
+        // "Encrypt with Password" only exists for the OOXML package family. Saving an encrypted
+        // document to any other format writes it WITHOUT the password, so say so before writing.
+        if (!string.IsNullOrEmpty(document.EncryptionPassword)
+            && profile.CanSave
+            && target.Adapter is not IPasswordProtectedDocumentFileAdapter)
+        {
+            warnings =
+            [
+                Warning(
+                    DocumentSaveCompatibilityWarningKind.PasswordEncryption,
+                    "This format cannot be encrypted, so the file will be saved without its password.",
+                    "Use a Word document or template (*.docx, *.docm, *.dotx, *.dotm) to keep the document password-protected."),
+                .. warnings,
+            ];
+        }
 
         if (warnings.Length == 0)
             return DocumentSaveCompatibilityPlan.NoWarning(profile.TargetLabel);
@@ -608,4 +623,5 @@ public enum DocumentSaveCompatibilityWarningKind
     HeadersAndFooters,
     RichFormatting,
     TextOnlyTarget,
+    PasswordEncryption,
 }

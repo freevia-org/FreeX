@@ -17,6 +17,15 @@ public sealed class DocumentPasswordRequiredException : Exception
         : base("This document is password-protected. A password is required to open it.")
     {
     }
+
+    public DocumentPasswordRequiredException(string message)
+        : base(message)
+    {
+    }
+
+    /// <summary>For hosts that have no password prompt: says so instead of implying the file is bad.</summary>
+    public static DocumentPasswordRequiredException NotSupportedByHost() =>
+        new("This document is password-protected. Opening password-protected documents is not supported in this build of FreeW.");
 }
 
 /// <summary>

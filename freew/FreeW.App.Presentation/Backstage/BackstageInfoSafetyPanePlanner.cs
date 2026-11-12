@@ -21,7 +21,8 @@ public sealed record BackstageInfoSafetyDocumentState(
     int AccessibilityIssueCount,
     int AccessibilityErrorCount,
     int AccessibilityWarningCount,
-    int AccessibilityTipCount)
+    int AccessibilityTipCount,
+    bool IsEncrypted = false)
 {
     public static BackstageInfoSafetyDocumentState FromDocument(TextDocument document)
     {
@@ -38,7 +39,8 @@ public sealed record BackstageInfoSafetyDocumentState(
             accessibility.Issues.Count,
             accessibility.ErrorCount,
             accessibility.WarningCount,
-            accessibility.TipCount);
+            accessibility.TipCount,
+            !string.IsNullOrEmpty(document.EncryptionPassword));
     }
 }
 
@@ -47,7 +49,8 @@ public enum BackstageInfoSafetyActionKind
     MarkAsFinal,
     RestrictEditing,
     InspectDocument,
-    CheckAccessibility
+    CheckAccessibility,
+    EncryptWithPassword
 }
 
 public sealed record BackstageInfoSafetyText(
@@ -86,7 +89,19 @@ public sealed record BackstageInfoSafetyText(
     string InspectorCompletedStatus,
     string NoAccessibilityIssuesStatus,
     string AccessibilityIssueCountStatusFormat,
-    string MarkedAsFinalBanner);
+    string MarkedAsFinalBanner,
+    string EncryptWithPasswordLabel,
+    string EncryptDescription,
+    string EncryptedDescription,
+    string EncryptDialogTitle,
+    string EncryptDialogPrompt,
+    string EncryptDialogConfirmPrompt,
+    string EncryptDialogCaution,
+    string EncryptDialogMismatch,
+    string EncryptDialogTooLongFormat,
+    string OpenPasswordTitle,
+    string OpenPasswordPromptFormat,
+    string OpenPasswordRetryPromptFormat);
 
 public static class BackstageInfoSafetyPanePlanner
 {
@@ -128,6 +143,18 @@ public static class BackstageInfoSafetyPanePlanner
         Text("Backstage_Safety_NoAccessibilityIssues_Status", "No accessibility issues found."),
         Text("Backstage_Safety_AccessibilityIssueCount_Status_Format", "{0} accessibility issue(s) found."),
         Text("Backstage_Safety_MarkedAsFinal_Banner", "Marked as Final  An author has marked this document as final to discourage editing."),
+        Text("Backstage_Safety_Encrypt_Label", "Encrypt with Password"),
+        Text("Backstage_Safety_Encrypt_Description", "Require a password to open this document. The password is applied the next time the document is saved."),
+        Text("Backstage_Safety_Encrypted_Description", "A password is required to open this document. Change or remove the password."),
+        Text("Backstage_Safety_Encrypt_Dialog_Title", "Encrypt Document"),
+        Text("Backstage_Safety_Encrypt_Dialog_Prompt", "Encrypt the contents of this file. Leave the password empty to remove encryption. Password:"),
+        Text("Backstage_Safety_Encrypt_Dialog_Confirm_Prompt", "Reenter password:"),
+        Text("Backstage_Safety_Encrypt_Dialog_Caution", "Caution: If you lose or forget the password, it cannot be recovered. Passwords are case-sensitive."),
+        Text("Backstage_Safety_Encrypt_Dialog_Mismatch", "The passwords do not match."),
+        Text("Backstage_Safety_Encrypt_Dialog_TooLong_Format", "The password cannot be longer than {0} characters."),
+        Text("Backstage_Safety_OpenPassword_Title", "Password"),
+        Text("Backstage_Safety_OpenPassword_Prompt_Format", "Enter the password to open {0}"),
+        Text("Backstage_Safety_OpenPassword_Retry_Prompt_Format", "The password is incorrect. Enter the password to open {0}"),
     ];
 
     public static IReadOnlyList<string> RequiredResourceKeys =>
@@ -141,7 +168,9 @@ public static class BackstageInfoSafetyPanePlanner
             values[8], values[9], values[10], values[11], values[12], values[13], values[14], values[15],
             values[16], values[17], values[18], values[19], values[20], values[21], values[22], values[23],
             values[24], values[25], values[26], values[27], values[28], values[29], values[30], values[31],
-            values[32], values[33], values[34], values[35]);
+            values[32], values[33], values[34], values[35], values[36], values[37], values[38], values[39],
+            values[40], values[41], values[42], values[43], values[44], values[45],
+            values[46], values[47]);
     }
 
     public static IReadOnlyList<BackstageInfoSafetyGroup> Build(
@@ -168,6 +197,10 @@ public static class BackstageInfoSafetyPanePlanner
                 BackstageInfoSafetyActionKind.RestrictEditing,
                 text.RestrictEditingLabel,
                 FormatProtectionDescription(state, text)),
+            new(
+                BackstageInfoSafetyActionKind.EncryptWithPassword,
+                text.EncryptWithPasswordLabel,
+                state?.IsEncrypted == true ? text.EncryptedDescription : text.EncryptDescription),
         ]),
         new(text.InspectDocumentHeading,
         [

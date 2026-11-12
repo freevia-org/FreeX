@@ -36,6 +36,7 @@ public sealed class BackstageInfoSafetyPanePlannerTests
             .Should().Equal(
                 BackstageInfoSafetyActionKind.MarkAsFinal,
                 BackstageInfoSafetyActionKind.RestrictEditing,
+                BackstageInfoSafetyActionKind.EncryptWithPassword,
                 BackstageInfoSafetyActionKind.InspectDocument,
                 BackstageInfoSafetyActionKind.CheckAccessibility);
     }

@@ -62,7 +62,18 @@ internal sealed class FileCommands
         _window = window;
         _editor = editor;
         _options = options ?? new FreeWOptions();
-        _persistence = new DocumentPersistenceWorkflow(adapters);
+        _persistence = new DocumentPersistenceWorkflow(adapters)
+        {
+            // Password-protected documents: prompt (and re-prompt after a wrong password) on open.
+            RequestPassword = request =>
+            {
+                var text = BackstageInfoSafetyPanePlanner.ResolveText(UiText.Get);
+                return PasswordPromptDialog.Ask(
+                    _window,
+                    text.OpenPasswordTitle,
+                    EncryptDocumentDialogPlanner.FormatOpenPrompt(request, text));
+            },
+        };
         _promptPdfImportPath = promptPdfImportPath ?? PromptPdfImportPath;
         _workflow = new SisterWpfFileCommandWorkflow(
             "FreeW",

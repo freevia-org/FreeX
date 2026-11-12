@@ -127,7 +127,8 @@ public static class BackstagePaneSurfacePlanner
         Action? inspectDocument,
         Action? checkAccessibility,
         TextDocument? document = null,
-        Func<string, string?>? getText = null)
+        Func<string, string?>? getText = null,
+        Action? encryptWithPassword = null)
     {
         ArgumentNullException.ThrowIfNull(documentFields);
 
@@ -138,7 +139,11 @@ public static class BackstagePaneSurfacePlanner
             BackstageInfoSafetyPanePlanner.Build(document, getText)
                 .Select(group => new BackstageSurfaceActionGroup(
                     group.Heading,
-                    group.Actions.Select(action => new BackstageSurfaceActionRow(
+                    group.Actions
+                        // Offered only by hosts that can prompt for the password.
+                        .Where(action => action.Kind != BackstageInfoSafetyActionKind.EncryptWithPassword
+                            || encryptWithPassword is not null)
+                        .Select(action => new BackstageSurfaceActionRow(
                         action.Label,
                         action.Description,
                         "InfoAction_" + action.Kind,
@@ -147,7 +152,8 @@ public static class BackstagePaneSurfacePlanner
                             markAsFinal,
                             restrictEditing,
                             inspectDocument,
-                            checkAccessibility))).ToArray()))
+                            checkAccessibility,
+                            encryptWithPassword))).ToArray()))
                 .ToArray());
     }
 
@@ -351,13 +357,15 @@ public static class BackstagePaneSurfacePlanner
         Action? markAsFinal,
         Action? restrictEditing,
         Action? inspectDocument,
-        Action? checkAccessibility) =>
+        Action? checkAccessibility,
+        Action? encryptWithPassword) =>
         kind switch
         {
             BackstageInfoSafetyActionKind.MarkAsFinal => markAsFinal,
             BackstageInfoSafetyActionKind.RestrictEditing => restrictEditing,
             BackstageInfoSafetyActionKind.InspectDocument => inspectDocument,
             BackstageInfoSafetyActionKind.CheckAccessibility => checkAccessibility,
+            BackstageInfoSafetyActionKind.EncryptWithPassword => encryptWithPassword,
             _ => null
         };
 }

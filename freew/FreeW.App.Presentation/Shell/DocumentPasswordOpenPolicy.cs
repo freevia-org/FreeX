@@ -54,7 +54,7 @@ public static class DocumentPasswordOpenPolicy
 
         // No way to ask (a host that has not wired a prompt): fail with the truthful message.
         if (requestPassword is null)
-            throw new DocumentPasswordRequiredException();
+            throw DocumentPasswordRequiredException.NotSupportedByHost();
 
         var start = stream.Position;
         var previousWasIncorrect = false;
