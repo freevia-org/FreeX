@@ -326,12 +326,15 @@ internal static class XlsxRecipientReader
         using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
         try
         {
-            while (reader.Read())
+            reader.Read();
+            while (!reader.EOF)
             {
-                if (reader.NodeType != XmlNodeType.Element || reader.LocalName != "si")
-                    continue;
-                using var item = reader.ReadSubtree();
-                strings.Add(ReadStringItem(XElement.Load(item)));
+                // XNode.ReadFrom consumes the element from the capped reader and leaves it positioned
+                // on the node after it, so only advance manually when no item was read.
+                if (reader.NodeType == XmlNodeType.Element && reader.LocalName == "si")
+                    strings.Add(ReadStringItem((XElement)XNode.ReadFrom(reader)));
+                else
+                    reader.Read();
             }
         }
         catch (XmlException exception)
