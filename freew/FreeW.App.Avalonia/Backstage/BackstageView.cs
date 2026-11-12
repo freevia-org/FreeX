@@ -36,7 +36,8 @@ internal sealed partial class BackstageView : Window
     // uses padded action buttons, which changes the whole Backstage family at once.
     internal static readonly IBrush PrimaryInk = new ImmutableSolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33));
     internal static readonly IBrush SecondaryInk = new ImmutableSolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70));
-    private static readonly FontFamily BackstageFontFamily = new("Segoe UI");
+    private static readonly FontFamily BackstageFontFamily =
+        AvaloniaCompactDialogChrome.ResolveUiFontFamily("Segoe UI");
     private readonly AvaloniaSisterBackstageTheme BackstageTheme;
     private readonly IBrush LinkBrush;
     private static readonly IBrush TileBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xD0, 0xD7, 0xE5));

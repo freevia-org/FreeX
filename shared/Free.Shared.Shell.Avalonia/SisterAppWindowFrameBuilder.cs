@@ -130,7 +130,7 @@ public static class SisterAppWindowFrameBuilder
                 {
                     Text = badgeLetter,
                     Foreground = Brushes.White,
-                    FontFamily = new FontFamily("Segoe UI"),
+                    FontFamily = AvaloniaCompactDialogChrome.ResolveUiFontFamily("Segoe UI"),
                     FontSize = 13,
                     FontWeight = FontWeight.Bold,
                     HorizontalAlignment = HorizontalAlignment.Center,
