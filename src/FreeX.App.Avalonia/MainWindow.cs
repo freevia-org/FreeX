@@ -27361,8 +27361,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // the process — and it sits behind EVERY keystroke, fanning out to save/close/print-preview/
     // paste-special/help-link/go-to/hyperlink paths. A single throwing shortcut (a browser launch
     // that fails, a malformed hyperlink, a paste edge case) would take the app down mid-edit.
-    private void MainWindow_KeyDown(object? sender, KeyEventArgs e) =>
+    private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
+    {
+        // Keys typed into the File screen's own text boxes reach here unhandled (so X11 still
+        // delivers their characters); they must not drive worksheet shortcuts underneath.
+        if (IsKeyForOpenBackstage())
+            return;
+
         RunGuarded(() => MainWindow_KeyDownAsync(e));
+    }
 
     private async Task MainWindow_KeyDownAsync(KeyEventArgs e)
     {

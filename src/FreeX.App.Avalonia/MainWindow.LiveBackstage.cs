@@ -119,14 +119,10 @@ public sealed partial class MainWindow
             InputElement.KeyDownEvent,
             BlockWorksheetKeyboardShortcutsWhileBackstageVisible,
             RoutingStrategies.Tunnel);
-        // Keys typed into a pane's own text box (File > Print's Copies and Pages) must reach that box,
-        // so the tunnel handler lets them through; this bubble handler then stops them going any
-        // further once the box has used them, so they still never reach the worksheet underneath.
-        _backstageOverlay.AddHandler(
-            InputElement.KeyDownEvent,
-            StopBackstageTextEntryKeysFromReachingWorksheet,
-            RoutingStrategies.Bubble,
-            handledEventsToo: true);
+        // Keys typed into a pane's own text box (File > Print's Copies and Pages) are let through by
+        // the tunnel handler and must NOT be marked handled afterwards: on X11 a handled KeyDown
+        // suppresses the TextInput event that carries the typed character. MainWindow_KeyDown
+        // ignores them instead (IsKeyForOpenBackstage), so they still never reach the worksheet.
 
         return _backstageOverlay;
     }
@@ -137,11 +133,9 @@ public sealed partial class MainWindow
             e.Handled = true;
     }
 
-    private void StopBackstageTextEntryKeysFromReachingWorksheet(object? sender, KeyEventArgs e)
-    {
-        if (_backstageOverlay.IsVisible)
-            e.Handled = true;
-    }
+    // True while the File screen is open: every key then belongs to it, never to the worksheet.
+    private bool IsKeyForOpenBackstage() =>
+        _backstageOverlay is not null && _backstageOverlay.IsVisible;
 
     private static bool IsBackstageTextEntryKey(KeyEventArgs e) =>
         e.Source is Visual source &&
