@@ -109,7 +109,7 @@ public sealed class PrintPreviewSurfacePlannerTests
         plan.PrinterPropertiesButtonText.Should().Be("Printer Properties");
         plan.PrintWhatLabelText.Should().Be("Print What:");
         plan.PagesLabelText.Should().Be("Pages:");
-        plan.PageRange.Should().Be(new PrintPreviewPageRangeFieldsPlan("1", "To:", "2", 44));
+        plan.PageRange.Should().Be(new PrintPreviewPageRangeFieldsPlan(string.Empty, "To:", string.Empty, 44));
         plan.SidesSectionText.Should().Be("Print Sides:");
         plan.CollationSectionText.Should().Be("Collation:");
         plan.OrientationLabelText.Should().Be("Orientation:");

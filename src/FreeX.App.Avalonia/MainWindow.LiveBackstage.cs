@@ -11,6 +11,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
@@ -118,15 +119,33 @@ public sealed partial class MainWindow
             InputElement.KeyDownEvent,
             BlockWorksheetKeyboardShortcutsWhileBackstageVisible,
             RoutingStrategies.Tunnel);
+        // Keys typed into a pane's own text box (File > Print's Copies and Pages) must reach that box,
+        // so the tunnel handler lets them through; this bubble handler then stops them going any
+        // further once the box has used them, so they still never reach the worksheet underneath.
+        _backstageOverlay.AddHandler(
+            InputElement.KeyDownEvent,
+            StopBackstageTextEntryKeysFromReachingWorksheet,
+            RoutingStrategies.Bubble,
+            handledEventsToo: true);
 
         return _backstageOverlay;
     }
 
     private void BlockWorksheetKeyboardShortcutsWhileBackstageVisible(object? sender, KeyEventArgs e)
     {
+        if (_backstageOverlay.IsVisible && !IsBackstageTextEntryKey(e))
+            e.Handled = true;
+    }
+
+    private void StopBackstageTextEntryKeysFromReachingWorksheet(object? sender, KeyEventArgs e)
+    {
         if (_backstageOverlay.IsVisible)
             e.Handled = true;
     }
+
+    private static bool IsBackstageTextEntryKey(KeyEventArgs e) =>
+        e.Source is Visual source &&
+        (source is TextBox || source.FindAncestorOfType<TextBox>() is not null);
 
     private SisterBackstageEntryPlan<Control> MapLiveBackstageEntry(
         FreeXBackstageFrameEntryPlan entry)

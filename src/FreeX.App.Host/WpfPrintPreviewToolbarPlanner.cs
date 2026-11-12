@@ -1,4 +1,5 @@
 using System.Printing;
+using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -38,6 +39,19 @@ internal static class WpfPrintPreviewToolbarPlanner
             _ => Duplexing.OneSided
         };
 
+    // Shows each queue by its full name. An explicit template (not DisplayMemberPath) also reaches the
+    // closed selection box, whose look comes from the host's ComboBox template.
+    private static readonly DataTemplate PrinterNameTemplate = CreatePrinterNameTemplate();
+
+    private static DataTemplate CreatePrinterNameTemplate()
+    {
+        var text = new FrameworkElementFactory(typeof(TextBlock));
+        text.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(PrintQueue.FullName)));
+        var template = new DataTemplate(typeof(PrintQueue)) { VisualTree = text };
+        template.Seal();
+        return template;
+    }
+
     public static void PopulatePrinterBox(
         ComboBox printerBox,
         string noInstalledPrintersToolTip,
@@ -57,7 +71,7 @@ internal static class WpfPrintPreviewToolbarPlanner
 
         if (printerBox.Items.Count > 0)
         {
-            printerBox.DisplayMemberPath = nameof(PrintQueue.FullName);
+            printerBox.ItemTemplate = PrinterNameTemplate;
             if (discovery.DefaultQueue is not null)
                 printerBox.SelectedItem = discovery.DefaultQueue;
             else
