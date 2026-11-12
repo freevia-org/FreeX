@@ -36,8 +36,8 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
                 (Key: Key.Decimal, Modifiers: KeyModifiers.Control, Command: KeyboardCommandShortcut.CycleSelectionCorner),
             ])
             .ToArray();
-        applicationRules.Should().HaveCount(50);
-        applicationRules.Select(rule => rule.Command).Distinct().Should().HaveCount(42);
+        applicationRules.Should().HaveCount(49);
+        applicationRules.Select(rule => rule.Command).Distinct().Should().HaveCount(41);
         applicationRules
             .GroupBy(rule => $"{rule.Modifiers}:{rule.Key}", StringComparer.Ordinal)
             .Should().OnlyContain(group => group.Count() == 1);

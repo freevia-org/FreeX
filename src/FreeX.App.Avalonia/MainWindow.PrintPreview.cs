@@ -1,3 +1,4 @@
+using Free.Shared.AppServices.Printing;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
@@ -111,7 +112,23 @@ public sealed partial class MainWindow
         Func<int, Control>? externalPageViewFactory = null)
     {
         var hasExternalPageSource = externalPageViewFactory is not null;
-        var printerName = printerNameOverride ?? PrintPreviewDefaultPrinterName;
+        // A real preview prints to a real queue: list the installed printers so the Print button can
+        // send the job (it used to export a PDF whatever the destination said). Without a spooler the
+        // destination reads "Save as PDF" and Print keeps the print-ready-PDF fallback.
+        var printerDiscovery = printerNameOverride is null && !hasExternalPageSource && _printService.IsSupported
+            ? await _printService.DiscoverAsync()
+            : null;
+        var canSpool = printerDiscovery is { IsAvailable: true };
+        IReadOnlyList<string> printerNames = canSpool
+            ? printerDiscovery!.Printers.Select(printer => printer.Name).ToArray()
+            : [];
+        var defaultPrinterName = canSpool
+            ? printerNames.FirstOrDefault(name => string.Equals(name, printerDiscovery!.DefaultPrinter, StringComparison.Ordinal))
+                ?? printerNames[0]
+            : null;
+        var printerName = printerNameOverride
+            ?? defaultPrinterName
+            ?? UiText.Get("Print_SaveAsPdfButton").Replace("_", string.Empty, StringComparison.Ordinal).TrimEnd('.');
         var pageCount = externalPageCount ?? context.PageCount;
         var navigator = PrintPreviewPageNavigator.Create(pageCount);
         // Ephemeral print-job settings (Print What / Sides / Collation / Copies / Printer / page
@@ -198,7 +215,7 @@ public sealed partial class MainWindow
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
         AutomationProperties.SetAutomationId(exportButton, PrintPreviewDialogPlanner.ExportPdfButtonAutomationId);
-        exportButton.IsEnabled = StorageProvider.CanSave;
+        exportButton.IsEnabled = canSpool || StorageProvider.CanSave;
 
         void Render()
         {
@@ -296,22 +313,34 @@ public sealed partial class MainWindow
         exportButton.Click += (_, _) => RunGuarded(async () =>
         {
             dialog.Close();
-            switch (currentSettings.PrintWhat)
+            var settings = currentSettings;
+            var hasPageRange = settings.PageFrom.HasValue || settings.PageTo.HasValue;
+            var request = BuildPrintJobRequest(
+                settings.PrintWhat switch
+                {
+                    PrintWhat.EntireWorkbook => WorkbookExportPrintScope.VisibleWorkbook,
+                    PrintWhat.Selection => WorkbookExportPrintScope.SelectedRange,
+                    _ => WorkbookExportPrintScope.ActiveSheet,
+                },
+                hasPageRange ? PrintJobPageRangeKind.PageRange : PrintJobPageRangeKind.AllPages,
+                hasPageRange ? settings.PageFrom : null,
+                hasPageRange ? settings.PageTo : null,
+                PrintSettingsPlanner.ClampCopies(settings.Copies),
+                settings.Collated) with
             {
-                case PrintWhat.EntireWorkbook:
-                    await ExportWorkbookPdfAsync(
-                        WorkbookExportPrintScope.VisibleWorkbook,
-                        WorkbookExportPrintOutputKind.Pdf);
-                    break;
-                case PrintWhat.Selection:
-                    await ExportWorkbookPdfAsync(
-                        WorkbookExportPrintScope.SelectedRange,
-                        WorkbookExportPrintOutputKind.Pdf);
-                    break;
-                default:
-                    await ExportActiveSheetPdfAsync();
-                    break;
-            }
+                IgnorePrintAreas = settings.IgnorePrintArea,
+                Sides = settings.Sides switch
+                {
+                    PrintPreviewSidesMode.TwoSidedLongEdge => PrintSides.TwoSidedLongEdge,
+                    PrintPreviewSidesMode.TwoSidedShortEdge => PrintSides.TwoSidedShortEdge,
+                    _ => PrintSides.OneSided,
+                },
+            };
+            var targetPrinter = canSpool
+                ? printerNames.FirstOrDefault(name => string.Equals(name, settings.PrinterName, StringComparison.Ordinal))
+                    ?? defaultPrinterName
+                : null;
+            await ExecutePrintJobAsync(request, targetPrinter, canSpool);
         });
         dialog.KeyDown += (_, e) =>
         {
@@ -369,7 +398,8 @@ public sealed partial class MainWindow
                     _session.ActiveSheet.Id,
                     () => currentSettings,
                     updated => currentSettings = updated,
-                    RepaginateAndRender));
+                    RepaginateAndRender),
+            printerNames);
         var topToolbar = CreatePrintPreviewTopToolbar(
             topToolbarPlan,
             exportButton,
@@ -543,7 +573,8 @@ public sealed partial class MainWindow
 
     private ScrollViewer CreatePrintPreviewSettingsRail(
         PrintPreviewSettingsRailPlan plan,
-        PrintPreviewSettingsRailInteraction? interaction)
+        PrintPreviewSettingsRailInteraction? interaction,
+        IReadOnlyList<string>? printerNames = null)
     {
         void ApplyAction(PrintPreviewSettingsPanelActionPlan action)
         {
@@ -605,6 +636,14 @@ public sealed partial class MainWindow
         }
 
         var printerBox = CreatePreviewComboBox(plan.PrinterComboWidth, plan.PrinterName);
+        if (printerNames is { Count: > 0 })
+        {
+            printerBox.ItemsSource = printerNames;
+            printerBox.SelectedItem = printerNames.Contains(plan.PrinterName, StringComparer.Ordinal)
+                ? plan.PrinterName
+                : printerNames[0];
+        }
+
         if (interaction is not null)
         {
             printerBox.SelectionChanged += (_, _) => ApplyAction(

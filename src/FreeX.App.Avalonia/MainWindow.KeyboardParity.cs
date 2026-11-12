@@ -281,9 +281,6 @@ public sealed partial class MainWindow
             case KeyboardCommandShortcut.NewThreadedComment:
                 await ShowNewThreadedCommentDialogAsync();
                 break;
-            case KeyboardCommandShortcut.EditInFormulaBar:
-                BeginFormulaEdit(_session.ActiveCell);
-                break;
             case KeyboardCommandShortcut.ZoomIn:
                 ApplyZoomPercent(_session.ZoomPercent + StatusBarZoomSliderPlanner.ZoomStepPercent, UiText.Get("InsertLoc_ZoomFailed"));
                 break;

@@ -86,7 +86,6 @@ public partial class MainWindow
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.MinimizeWorkbookWindow, MinimizeBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.MaximizeOrRestoreWorkbookWindow, MaxRestoreBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenContextMenu, (_, _) => OpenKeyboardContextMenu());
-        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.EditInFormulaBar, (_, _) => EditActiveCellInFormulaBar());
         RegisterPortableKeyboardCommand(KeyboardCommandShortcut.InsertWorksheet, WorkbookShortcutRoute.InsertWorksheet);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ZoomIn, ZoomInBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ZoomOut, ZoomOutBtn_Click);

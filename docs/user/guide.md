@@ -502,7 +502,7 @@ If a workbook contains features FreeX cannot fully model (VBA, Power Query, embe
 | Shortcut | Action |
 |---|---|
 | F2 | Edit active cell |
-| Ctrl+F2 | Focus formula bar |
+| Ctrl+F2 | Print preview (File > Print) |
 | Delete | Clear cell contents |
 | Alt+Enter | Insert line break in cell |
 | Ctrl+Enter | Fill selection with entry |

@@ -90,7 +90,7 @@ public sealed partial class KeyboardShortcutMatcherTests
     [InlineData(Key.F10, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.MaximizeOrRestoreWorkbookWindow)]
     [InlineData(Key.F10, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.OpenContextMenu)]
     [InlineData(Key.Apps, Key.None, ModifierKeys.None, KeyboardCommandShortcut.OpenContextMenu)]
-    [InlineData(Key.F2, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.EditInFormulaBar)]
+    [InlineData(Key.F2, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.OpenPrintPreview)]
     [InlineData(Key.F11, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.InsertWorksheet)]
     [InlineData(Key.None, Key.F1, ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.InsertWorksheet)]
     [InlineData(Key.OemPlus, Key.None, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomIn)]

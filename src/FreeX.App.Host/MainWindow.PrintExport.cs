@@ -46,7 +46,8 @@ public partial class MainWindow
             refreshPreviewWithSettings: BuildActiveSheetPrintPreview,
             sheetId: _currentSheetId,
             sheet: sheet,
-            executeCommand: cmd => TryExecuteCommand(cmd, "Print Settings"))
+            executeCommand: cmd => TryExecuteCommand(cmd, "Print Settings"),
+            hasSelection: SheetGrid.SelectedRange is not null)
         {
             Owner = this
         };
