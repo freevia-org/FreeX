@@ -10432,6 +10432,23 @@ public sealed partial class DocumentView : RichTextBox
                             0,
                             Math.Max(0, borderedCellMargins.RightPt * PxPerPoint - WpfTableCellContentInsetDip),
                             0);
+                        if (rowHeightPx is null)
+                        {
+                            // Without an authored row height the border chrome is only as tall as its
+                            // content host, so the vertical cell margins and the last paragraph's
+                            // space-after belong inside it rather than outside as cell padding.
+                            var trailingAfterDip = contentStack.Children.Count > 0
+                                && contentStack.Children[^1] is System.Windows.Controls.RichTextBox lastEditor
+                                && lastEditor.Document.Blocks.LastBlock is WpfParagraph { Margin.Bottom: > 0 } lastParagraph
+                                    ? lastParagraph.Margin.Bottom
+                                    : 0;
+                            contentStack.Margin = new Thickness(
+                                contentStack.Margin.Left,
+                                wpfCell.Padding.Top,
+                                contentStack.Margin.Right,
+                                wpfCell.Padding.Bottom + trailingAfterDip);
+                            wpfCell.Padding = new Thickness(0);
+                        }
                     }
                     wpfCell.Blocks.Add(new BlockUIContainer(cellContentHost));
                 }
@@ -10542,6 +10559,7 @@ public sealed partial class DocumentView : RichTextBox
                 // (A row with an authored height already contains that space inside its minimum.)
                 if (!isPaginationSegment
                     && rowHeightPx is null
+                    && !hasPlannedCellBorders
                     && TrailingCellParagraphSpaceAfterDip(wpfCell) is > 0 and var trailingSpaceAfterDip)
                 {
                     wpfCell.Padding = new Thickness(

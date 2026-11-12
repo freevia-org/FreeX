@@ -1841,8 +1841,11 @@ public sealed class DocumentViewRoundTripTests
         RenderedCellParagraphs(cells[0]).Single().Margin.Bottom.Should().BeApproximately(expected, 0.001);
         cells[0].Padding.Bottom.Should().BeApproximately(expected, 0.001,
             "WPF collapses the trailing block margin against the cell edge; Word does not");
-        cells[1].Padding.Bottom.Should().BeApproximately(expected, 0.001,
-            "a cell with its own borders hosts its paragraphs in nested editors and needs the same reserve");
+        // A cell with its own borders keeps the reserve INSIDE its border chrome host.
+        cells[1].Padding.Bottom.Should().Be(0);
+        ((System.Windows.Controls.Grid)cells[1].Blocks.OfType<BlockUIContainer>().Single().Child)
+            .Children.OfType<System.Windows.Controls.StackPanel>().Single()
+            .Margin.Bottom.Should().BeApproximately(expected, 0.001);
     }
 
     [StaFact]
