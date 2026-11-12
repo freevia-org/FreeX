@@ -275,11 +275,11 @@ public partial class MainWindow
             CreatePageLayoutCommandSession().PlanPaperSizePreset(preset));
     }
 
-    private void SizeExecutive_Click(object sender, RoutedEventArgs e) => OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ExtendedPaperSize);
-    private void SizeStatement_Click(object sender, RoutedEventArgs e) => OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ExtendedPaperSize);
-    private void SizeTabloid_Click(object sender, RoutedEventArgs e) => OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ExtendedPaperSize);
-    private void SizeA3_Click(object sender, RoutedEventArgs e) => OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ExtendedPaperSize);
-    private void SizeA5_Click(object sender, RoutedEventArgs e) => OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ExtendedPaperSize);
+    private void SizeExecutive_Click(object sender, RoutedEventArgs e) => ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.Executive);
+    private void SizeStatement_Click(object sender, RoutedEventArgs e) => ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.Statement);
+    private void SizeTabloid_Click(object sender, RoutedEventArgs e) => ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.Tabloid);
+    private void SizeA3_Click(object sender, RoutedEventArgs e) => ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.A3);
+    private void SizeA5_Click(object sender, RoutedEventArgs e) => ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.A5);
     private void SizeB4_Click(object sender, RoutedEventArgs e) => ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.B4);
     private void SizeB5_Click(object sender, RoutedEventArgs e) => ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.B5);
 

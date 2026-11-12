@@ -24,7 +24,7 @@
   Docker image to use. Default: ubuntu:24.04.
 
 .PARAMETER TimeoutSeconds
-  Docker run timeout in seconds. Default: 300.
+  Docker run timeout in seconds. Default: 900.
 
 .EXAMPLE
   # Normal run from the repo root:
@@ -40,7 +40,7 @@ param(
     [string]$TempPublishDir = "",
     [switch]$SkipPublish,
     [string]$Image = "ubuntu:24.04",
-    [int]$TimeoutSeconds = 300
+    [int]$TimeoutSeconds = 900
 )
 
 $ErrorActionPreference = "Stop"

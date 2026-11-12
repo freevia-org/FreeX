@@ -26,7 +26,8 @@ public sealed partial class PrintPreviewDialog : Window
         SheetId sheetId = default,
         Sheet? sheet = null,
         Action<IWorkbookCommand>? executeCommand = null,
-        string? fixturePrinterName = null)
+        string? fixturePrinterName = null,
+        bool hasSelection = false)
     {
         ConfigurePrintPreviewWindow(workbookName);
 
@@ -122,9 +123,21 @@ public sealed partial class PrintPreviewDialog : Window
             executeCommand,
             RefreshPreviewDocument,
             refreshPreviewWithSettings is not null
-                ? settings => currentPrintPreviewSettings = settings
+                ? settings =>
+                {
+                    currentPrintPreviewSettings = settings;
+                    // The settings rail is what the user edits (as in Excel's Print pane); keep the
+                    // toolbar's print controls -- the values the Print button sends -- in step with it.
+                    ApplyRailSettingsToPrintControls(settings, printControls);
+                }
                 : null,
-            fixturePrinterName);
+            fixturePrinterName,
+            hasSelection,
+            showPageSetup: () =>
+            {
+                showPageSetup?.Invoke();
+                RefreshPreviewDocument();
+            });
         AddPreviewSurfaceToRoot(root, toolbar, settingsScroll, viewer);
 
         Content = root;
@@ -617,7 +630,9 @@ public sealed partial class PrintPreviewDialog : Window
         Action<IWorkbookCommand>? executeCommand,
         Action refreshPreview,
         Action<PrintPreviewSettings>? updateSettings,
-        string? fixturePrinterName = null)
+        string? fixturePrinterName = null,
+        bool hasSelection = false,
+        Action? showPageSetup = null)
     {
         var settingsScroll = new ScrollViewer
         {
@@ -631,9 +646,40 @@ public sealed partial class PrintPreviewDialog : Window
             executeCommand,
             refreshPreview,
             updateSettings,
+            hasSelection,
+            showPageSetup,
+            showCustomMargins: showPageSetup,
             fixturePrinterName: fixturePrinterName);
 
         return settingsScroll;
+    }
+
+    private static void ApplyRailSettingsToPrintControls(PrintPreviewSettings settings, PrintControls controls)
+    {
+        var copiesText = PrintSettingsPlanner.ClampCopies(settings.Copies).ToString(CultureInfo.InvariantCulture);
+        if (!string.Equals(controls.CopiesBox.Text, copiesText, StringComparison.Ordinal))
+            controls.CopiesBox.Text = copiesText;
+
+        controls.CollatedBox.IsChecked = settings.Collated;
+        controls.SidesBox.SelectedIndex = PrintPreviewToolbarStatePlanner.SidesModeToIndex(settings.Sides);
+
+        if (string.IsNullOrWhiteSpace(settings.PrinterName))
+            return;
+
+        foreach (var item in controls.PrinterBox.Items)
+        {
+            var itemName = item switch
+            {
+                PrintQueue queue => queue.FullName,
+                string name => name,
+                _ => null
+            };
+            if (!string.Equals(itemName, settings.PrinterName, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            controls.PrinterBox.SelectedItem = item;
+            return;
+        }
     }
 
     private static void AddPreviewSurfaceToRoot(Grid root, ToolBar toolbar, ScrollViewer settingsScroll, DocumentViewer viewer)

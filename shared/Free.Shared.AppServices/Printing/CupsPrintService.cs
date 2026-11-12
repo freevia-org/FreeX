@@ -39,6 +39,15 @@ public static class CupsPrintCommandPlanner
             var requested = selection.Orientation == PrintOrientation.Portrait ? "3" : "4";
             arguments.AddRange(["-o", $"orientation-requested={requested}"]);
         }
+        var sides = selection.Sides switch
+        {
+            PrintSides.OneSided => "one-sided",
+            PrintSides.TwoSidedLongEdge => "two-sided-long-edge",
+            PrintSides.TwoSidedShortEdge => "two-sided-short-edge",
+            _ => null,
+        };
+        if (sides is not null)
+            arguments.AddRange(["-o", $"sides={sides}"]);
         if (!string.IsNullOrWhiteSpace(selection.JobTitle))
             arguments.AddRange(["-t", selection.JobTitle.Trim()]);
 

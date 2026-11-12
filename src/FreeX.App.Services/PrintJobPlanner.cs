@@ -1,3 +1,4 @@
+using Free.Shared.AppServices.Printing;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -47,7 +48,8 @@ public sealed record PrintJobRequest(
     int? ToPage = null,
     int? ActiveSheetIndex = null,
     GridRange? SelectedRange = null,
-    bool IgnorePrintAreas = false);
+    bool IgnorePrintAreas = false,
+    PrintSides Sides = PrintSides.PrinterDefault);
 
 /// <summary>
 /// The validated, ready-to-spool plan for a print job. Carries the underlying page plan (so the shell

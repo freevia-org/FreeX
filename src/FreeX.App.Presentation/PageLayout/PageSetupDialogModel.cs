@@ -168,6 +168,7 @@ public static class PageSetupDialogModel
         new(WorksheetPaperSize.A5,        "PageSetup_A5148X210Mm"),
         new(WorksheetPaperSize.B4,        "PageSetup_B4257X364Mm"),
         new(WorksheetPaperSize.B5,        "PageSetup_B5176X250Mm"),
+        new(WorksheetPaperSize.Statement, "PageSetup_Statement55X85"),
     ];
 
     /// <summary>The paper sizes the dialog offers, in display order.</summary>

@@ -97,6 +97,7 @@ public sealed partial class KeyboardShortcutMatcherTests
             WorkbookShortcutKey.Delete => Key.Delete,
             WorkbookShortcutKey.E => Key.E,
             WorkbookShortcutKey.F => Key.F,
+            WorkbookShortcutKey.F2 => Key.F2,
             WorkbookShortcutKey.F3 => Key.F3,
             WorkbookShortcutKey.F5 => Key.F5,
             WorkbookShortcutKey.F11 => Key.F11,

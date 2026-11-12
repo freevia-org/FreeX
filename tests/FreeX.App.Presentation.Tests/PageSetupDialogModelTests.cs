@@ -36,7 +36,8 @@ public sealed class PageSetupDialogModelTests
                 WorksheetPaperSize.A3,
                 WorksheetPaperSize.A5,
                 WorksheetPaperSize.B4,
-                WorksheetPaperSize.B5);
+                WorksheetPaperSize.B5,
+                WorksheetPaperSize.Statement);
         PageSetupDialogModel.PaperSizes.Should().Equal(
             PageSetupDialogModel.PaperSizeChoices.Select(choice => choice.Value));
         PageSetupDialogModel.PageOrderChoices.Select(choice => choice.Value)

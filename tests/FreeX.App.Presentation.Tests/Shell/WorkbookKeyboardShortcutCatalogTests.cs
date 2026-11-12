@@ -36,7 +36,6 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
         KeyboardCommandShortcut.OpenFormatCellsFont,
         KeyboardCommandShortcut.NewNote,
         KeyboardCommandShortcut.NewThreadedComment,
-        KeyboardCommandShortcut.EditInFormulaBar,
         KeyboardCommandShortcut.ZoomIn,
         KeyboardCommandShortcut.ZoomOut,
         KeyboardCommandShortcut.CopyFormulaFromAbove,
@@ -126,7 +125,7 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
     [Fact]
     public void ApplicationCommandCatalog_OwnsAllFortyTwoCrossRendererRoutes()
     {
-        WorkbookKeyboardShortcutCatalog.ApplicationCommandShortcuts.Should().HaveCount(47);
+        WorkbookKeyboardShortcutCatalog.ApplicationCommandShortcuts.Should().HaveCount(46);
         WorkbookKeyboardShortcutCatalog.ApplicationCommandShortcuts
             .Select(shortcut => shortcut.Command)
             .Distinct()
@@ -220,6 +219,7 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
     [InlineData(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.SaveWorkbook)]
     [InlineData(WorkbookShortcutKey.P, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.PrintWorkbook)]
     [InlineData(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.PrintWorkbook)]
+    [InlineData(WorkbookShortcutKey.F2, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.PrintWorkbook)]
     [InlineData(WorkbookShortcutKey.C, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Copy)]
     [InlineData(WorkbookShortcutKey.Insert, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Copy)]
     [InlineData(WorkbookShortcutKey.X, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Cut)]

@@ -12,10 +12,22 @@ namespace FreeX.App.Host;
 
 internal static class NativePrintDialogService
 {
-    public static void ShowPrinterOptionsDialog(Window? owner = null)
+    /// <summary>
+    /// Opens the selected printer's own properties sheet (Excel's "Printer Properties" / Page Setup
+    /// "Options..."). Falls back to the system print dialog only when no printer can be resolved.
+    /// </summary>
+    public static void ShowPrinterOptionsDialog(Window? owner = null, string? printerName = null)
     {
         try
         {
+            var resolvedPrinterName = NativePrinterDeviceSettings.ResolvePrinterName(printerName);
+            if (resolvedPrinterName is not null)
+            {
+                var ownerHandle = owner is null ? IntPtr.Zero : new WindowInteropHelper(owner).Handle;
+                NativePrinterDeviceSettings.ShowPropertySheet(resolvedPrinterName, ownerHandle);
+                return;
+            }
+
             using var document = CreatePrinterSelectionDocument(null, copies: 1, collated: true, PrintPreviewSidesMode.OneSided);
             using var dialog = CreatePrinterSelectionDialog(document);
             ShowDialog(dialog, owner);
@@ -53,8 +65,16 @@ internal static class NativePrintDialogService
             if (selectedQueue is not null)
                 documentPrinter.PrintQueue = selectedQueue;
 
+            // Carry the driver settings chosen in the dialog's Preferences (or earlier through
+            // Printer Properties) into the WPF print job; without this they were silently dropped.
+            if (NativePrinterDeviceSettings.TryCreatePrintTicket(dialog.PrinterSettings) is { } deviceTicket)
+                documentPrinter.PrintTicket = deviceTicket;
+
             if (documentPrinter.PrintTicket is not null)
             {
+                NativePrinterDeviceSettings.ApplyPageGeometry(
+                    documentPrinter.PrintTicket,
+                    ResolveFirstPageSize(paginator));
                 documentPrinter.PrintTicket.CopyCount = Math.Clamp((int)dialog.PrinterSettings.Copies, 1, 999);
                 documentPrinter.PrintTicket.Collation = dialog.PrinterSettings.Collate
                     ? Collation.Collated
@@ -67,6 +87,44 @@ internal static class NativePrintDialogService
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             ShowPrintFailedMessage(ex, owner);
+        }
+    }
+
+    /// <summary>
+    /// Sends the job straight to <paramref name="printQueue"/> with the settings chosen in the Print
+    /// pane, as Excel's File &gt; Print button does -- no second system dialog in between.
+    /// </summary>
+    public static bool PrintDirect(
+        DocumentPaginator paginator,
+        PrintQueue printQueue,
+        int copies,
+        bool collated,
+        PrintPreviewSidesMode sidesMode,
+        Window? owner = null)
+    {
+        try
+        {
+            var directPrinter = new PrintDialog { PrintQueue = printQueue };
+            if (NativePrinterDeviceSettings.TryCreateSessionPrintTicket(printQueue.FullName) is { } sessionTicket)
+                directPrinter.PrintTicket = sessionTicket;
+
+            if (directPrinter.PrintTicket is not null)
+            {
+                NativePrinterDeviceSettings.ApplyPageGeometry(
+                    directPrinter.PrintTicket,
+                    ResolveFirstPageSize(paginator));
+                directPrinter.PrintTicket.CopyCount = Math.Clamp(copies, 1, 999);
+                directPrinter.PrintTicket.Collation = collated ? Collation.Collated : Collation.Uncollated;
+                directPrinter.PrintTicket.Duplexing = PrintPreviewDialog.ResolvePrintTicketDuplexing(sidesMode);
+            }
+
+            directPrinter.PrintDocument(paginator, "FreeX worksheet");
+            return true;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            ShowPrintFailedMessage(ex, owner);
+            return false;
         }
     }
 
@@ -90,14 +148,15 @@ internal static class NativePrintDialogService
         PrintPreviewSidesMode sidesMode,
         DocumentPaginator? previewPaginator = null)
     {
-        var settings = new PrinterSettings
-        {
-            Copies = (short)Math.Clamp(copies, 1, 999),
-            Collate = collated,
-            Duplex = ToPrinterSettingsDuplex(sidesMode)
-        };
+        var settings = new PrinterSettings();
         if (printQueue is not null)
             settings.PrinterName = printQueue.FullName;
+
+        // Remembered driver settings go in first; the explicit FreeX choices below win over them.
+        NativePrinterDeviceSettings.ApplySessionDevMode(settings);
+        settings.Copies = (short)Math.Clamp(copies, 1, 999);
+        settings.Collate = collated;
+        settings.Duplex = ToPrinterSettingsDuplex(sidesMode);
 
         var document = new PrintDocument
         {
@@ -112,6 +171,24 @@ internal static class NativePrintDialogService
             WirePreviewRendering(document, previewPaginator);
 
         return document;
+    }
+
+    private static System.Windows.Size ResolveFirstPageSize(DocumentPaginator paginator)
+    {
+        try
+        {
+            if (paginator.IsPageCountValid && paginator.PageCount == 0)
+                return paginator.PageSize;
+
+            var firstPage = paginator.GetPage(0);
+            return firstPage is null || firstPage == DocumentPage.Missing
+                ? paginator.PageSize
+                : firstPage.Size;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return paginator.PageSize;
+        }
     }
 
     private static void WirePreviewRendering(PrintDocument document, DocumentPaginator paginator)

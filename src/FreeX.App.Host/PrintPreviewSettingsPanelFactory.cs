@@ -173,7 +173,9 @@ internal static class PrintPreviewSettingsPanelFactory
         AutomationProperties.SetName(printerPropertiesBtn, UiText.Get("PrintPreview_PrinterPropertiesAutomationName"));
         AutomationProperties.SetHelpText(printerPropertiesBtn, UiText.Get("PrintPreview_PrinterPropertiesHelpText"));
         printerPropertiesBtn.Click += (_, _) =>
-            NativePrintDialogService.ShowPrinterOptionsDialog();
+            NativePrintDialogService.ShowPrinterOptionsDialog(
+                Window.GetWindow(panel),
+                (printerBox.SelectedItem as PrintQueue)?.FullName);
         panel.Children.Add(printerPropertiesBtn);
 
         // 3. Print what

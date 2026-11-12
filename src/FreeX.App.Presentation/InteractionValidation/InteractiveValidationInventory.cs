@@ -83,7 +83,7 @@ public static class InteractiveValidationInventory
         Shortcut("shortcut.file.open", "File", "WorkbookLifecycle", "Ctrl+O / Ctrl+F12", "Opens the workbook file picker.", ["Ctrl+F12"], isNative: true),
         Shortcut("shortcut.file.save", "File", "WorkbookLifecycle", "Ctrl+S / Shift+F12", "Saves to the current path or opens Save As when a path cannot be reused.", ["Shift+F12"]),
         Shortcut("shortcut.file.close-workbook", "File", "WorkbookLifecycle", "Ctrl+W / Ctrl+F4", "Closes the current workbook window.", ["Ctrl+F4"]),
-        Shortcut("shortcut.file.print", "File", "PrintWorkflow", "Ctrl+P / Ctrl+Shift+F12", "Opens FreeX print preview with keyboard-accessible print settings and Page Setup controls.", ["Ctrl+Shift+F12"]),
+        Shortcut("shortcut.file.print", "File", "PrintWorkflow", "Ctrl+P / Ctrl+Shift+F12 / Ctrl+F2", "Opens FreeX print preview with keyboard-accessible print settings and Page Setup controls.", ["Ctrl+Shift+F12", "Ctrl+F2"]),
 
         Shortcut("shortcut.edit.undo", "Edit", "CommandHistory", "Ctrl+Z / Alt+Backspace", "Undoes the last command-bus action.", ["Alt+Backspace"]),
         Shortcut("shortcut.edit.redo", "Edit", "CommandHistory", "Ctrl+Y / Ctrl+Shift+Z", "Redoes the last undone command-bus action.", ["Ctrl+Shift+Z"]),
@@ -125,7 +125,6 @@ public static class InteractiveValidationInventory
         Shortcut("shortcut.selection.cycle-active-corner", "Selection", "WorksheetSelection", "Ctrl+.", "Cycles the active corner of the selection clockwise."),
 
         Shortcut("shortcut.editing.cell-editor", "Editing", "WorksheetEditing", "F2", "Enters cell edit mode."),
-        Shortcut("shortcut.editing.formula-bar", "Editing", "WorksheetEditing", "Ctrl+F2", "Moves editing focus to the formula bar."),
         Shortcut("shortcut.editing.clear-contents", "Editing", "WorksheetEditing", "Delete", "Clears the selected cells' contents."),
         Shortcut("shortcut.editing.clear-and-edit", "Editing", "WorksheetEditing", "Backspace / Shift+Backspace", "Clears the active cell and enters inline editing.", ["Shift+Backspace"]),
         Shortcut("shortcut.editing.insert-delete", "Editing", "WorksheetStructure", "Ctrl++ / Ctrl+-", "Inserts or deletes selected rows, columns, or shifted cells through the appropriate prompt.", ["Ctrl+Shift+=", "Ctrl+-"]),
@@ -277,7 +276,7 @@ public static class InteractiveValidationInventory
         "shortcut.file.open" => [K("Ctrl+O", Workbook, "O", Ctrl), K("Ctrl+F12", Workbook, "F12", Ctrl)],
         "shortcut.file.save" => [K("Ctrl+S", Workbook, "S", Ctrl), K("Shift+F12", Workbook, "F12", Shift)],
         "shortcut.file.close-workbook" => [K("Ctrl+W", Workbook, "W", Ctrl), K("Ctrl+F4", Workbook, "F4", Ctrl)],
-        "shortcut.file.print" => [K("Ctrl+P", Workbook, "P", Ctrl), K("Ctrl+Shift+F12", Workbook, "F12", CtrlShift)],
+        "shortcut.file.print" => [K("Ctrl+P", Workbook, "P", Ctrl), K("Ctrl+Shift+F12", Workbook, "F12", CtrlShift), K("Ctrl+F2", Workbook, "F2", Ctrl)],
 
         "shortcut.edit.undo" => [K("Ctrl+Z", Workbook, "Z", Ctrl), K("Alt+Backspace", Workbook, "Backspace", Alt)],
         "shortcut.edit.redo" => [K("Ctrl+Y", Workbook, "Y", Ctrl), K("Ctrl+Shift+Z", Workbook, "Z", CtrlShift)],
@@ -328,7 +327,6 @@ public static class InteractiveValidationInventory
         "shortcut.selection.cycle-active-corner" => [K("Ctrl+.", WorksheetSelection, "Period", Ctrl), K("Ctrl+Numpad Decimal", WorksheetSelection, "Decimal", Ctrl)],
 
         "shortcut.editing.cell-editor" => [K("F2", Worksheet, "F2")],
-        "shortcut.editing.formula-bar" => [K("Ctrl+F2", Worksheet, "F2", Ctrl)],
         "shortcut.editing.clear-contents" => [K("Delete", WorksheetSelection, "Delete")],
         "shortcut.editing.clear-and-edit" => [K("Backspace", Worksheet, "Backspace"), K("Shift+Backspace", Worksheet, "Backspace", Shift)],
         "shortcut.editing.insert-delete" =>
