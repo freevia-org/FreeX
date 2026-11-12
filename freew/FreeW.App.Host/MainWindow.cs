@@ -331,6 +331,7 @@ public sealed partial class MainWindow : Window
             TogglePagedEditView = TogglePagedEditView,
             ToggleNotesPane = ToggleNotesPane,
             IsNotesPaneVisible = () => _notesPaneVisible,
+            OpenNotesPaneAtNote = OpenNotesPaneAtNote,
             OpenHeaderFooterPane = OpenHeaderFooterPane,
             CloseHeaderFooterPane = CloseHeaderFooterPane,
             AcceptThisChange = AcceptSelectedRevision,
@@ -502,8 +503,16 @@ public sealed partial class MainWindow : Window
         _applicationCommands = new FreeWApplicationCommandRouter(new FreeWApplicationCommandActions(
             NewDocument: () => _file.New(),
             OpenDocument: () => _file.Open(),
-            SaveDocument: () => _file.Save(),
-            SaveDocumentAs: () => _file.SaveAs(),
+            SaveDocument: () =>
+            {
+                CommitPendingPaneEdits();
+                _file.Save();
+            },
+            SaveDocumentAs: () =>
+            {
+                CommitPendingPaneEdits();
+                _file.SaveAs();
+            },
             PrintDocument: Print,
             Find: () => OpenFindReplace(FindReplaceOpenMode.Find),
             Replace: () => OpenFindReplace(FindReplaceOpenMode.Replace),
@@ -2181,12 +2190,16 @@ public sealed partial class MainWindow : Window
         // Selecting a stub loads the note's content into the sub-editor.
         _notesList.SelectionChanged += OnNoteSelectionChanged;
 
+        var filterSelector = BuildNotesFilterSelector();
+
         var layout = new DockPanel();
         DockPanel.SetDock(header, Dock.Top);
+        DockPanel.SetDock(filterSelector, Dock.Top);
         DockPanel.SetDock(_notesList, Dock.Top);
         DockPanel.SetDock(_notesSelectedLabel, Dock.Top);
         DockPanel.SetDock(toolbar, Dock.Bottom);
         layout.Children.Add(header);
+        layout.Children.Add(filterSelector);
         layout.Children.Add(_notesList);
         layout.Children.Add(_notesSelectedLabel);
         layout.Children.Add(toolbar);
@@ -2206,6 +2219,8 @@ public sealed partial class MainWindow : Window
     // Toggle the Notes pane, keeping freew.show-notes ribbon state in sync.
     private void ToggleNotesPane()
     {
+        if (_notesPaneVisible)
+            ApplyPendingNoteEdit(); // closing the pane keeps what was typed (one undoable edit)
         _notesPaneVisible = !_notesPaneVisible;
         _notesPane.Visibility = _notesPaneVisible ? Visibility.Visible : Visibility.Collapsed;
         _stateStore.SetChecked("freew.show-notes", _notesPaneVisible);
@@ -2226,6 +2241,15 @@ public sealed partial class MainWindow : Window
     // Load the note selected in the stub list into the sub-editor.
     private void OnNoteSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        // Moving to another note first commits the one being edited. Applying refreshes the list, so
+        // re-resolve the requested note by key rather than by its (possibly stale) index.
+        var requested = _notesList.SelectedItem as DocumentNoteProjection;
+        if (ApplyPendingNoteEdit() && requested is not null)
+        {
+            RenderNotesOutcome(_documentNotesPaneSession.ShowAndSelect(requested.Key.IsFootnote, requested.Key.Id));
+            return;
+        }
+
         RenderNotesOutcome(_documentNotesPaneSession.SelectIndex(_notesList.SelectedIndex));
     }
 
@@ -2242,17 +2266,18 @@ public sealed partial class MainWindow : Window
         _notesSubEditor.Visibility = state.HasSelection ? Visibility.Visible : Visibility.Collapsed;
         _notesApplyButton.Visibility = state.CanApply ? Visibility.Visible : Visibility.Collapsed;
         _notesDeleteButton.Visibility = state.CanDelete ? Visibility.Visible : Visibility.Collapsed;
+        SyncNotesFilterSelector(state.Filter);
         if (state.EditorDocument is { } editorDocument)
-        {
-            ConfigureFieldEvaluationContext(_notesSubEditor);
-            _notesSubEditor.LoadModel(editorDocument);
-        }
+            LoadNoteIntoSubEditor(editorDocument);
+        else
+            _notesEditPending = false;
     }
 
     // Apply edits from the sub-editor back to the selected note's Content, then re-render the main editor
     // so marker tooltips (which show the note's plain text) refresh.
     private void ApplySelectedNote()
     {
+        _notesEditPending = false;
         _notesSubEditor.CommitToModel();
         var outcome = _documentNotesPaneSession.Apply(_notesSubEditor.Model.Blocks);
         if (outcome.MutationApplied)

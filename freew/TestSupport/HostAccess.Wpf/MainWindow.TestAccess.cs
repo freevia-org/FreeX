@@ -52,4 +52,14 @@ public sealed partial class MainWindow
     internal void ToggleReadModeForTests() => ToggleReadMode();
     internal void ApplyReadModeColumnWidthForTests(string token) => ApplyReadModeColumnWidth(token);
     internal void ApplyReadModePageColorForTests(string token) => ApplyReadModePageColor(token);
+
+    internal DocumentView BodyEditorForTests => _editor;
+    internal DocumentView NotesSubEditorForTests => _notesSubEditor;
+    internal bool IsNotesPaneVisibleForTests => _notesPaneVisible;
+    internal FreeW.App.Presentation.Panes.DocumentNotesPaneViewState NotesPaneStateForTests =>
+        _documentNotesPaneSession.State;
+    internal void OpenNotesPaneAtNoteForTests(bool footnote, int id) => OpenNotesPaneAtNote(footnote, id);
+    internal bool ApplyPendingNoteEditForTests() => ApplyPendingNoteEdit();
+    internal void SelectNotesFilterForTests(int index) => _notesFilterBox.SelectedIndex = index;
+    internal void ToggleNotesPaneForTests() => ToggleNotesPane();
 }

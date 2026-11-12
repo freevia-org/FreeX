@@ -123,6 +123,10 @@
   <data name="Pane_Notes_DeleteToolTip" xml:space="preserve"><value>Supprimer cette note et son rep&#232;re</value></data>
   <data name="Pane_Notes_FootnoteFormat" xml:space="preserve"><value>Note de bas de page {0}</value></data>
   <data name="Pane_Notes_EndnoteFormat" xml:space="preserve"><value>Note de fin {0}</value></data>
+  <data name="Pane_Notes_FilterName" xml:space="preserve"><value>Notes &#224; afficher</value></data>
+  <data name="Pane_Notes_FilterAll" xml:space="preserve"><value>Toutes les notes</value></data>
+  <data name="Pane_Notes_FilterFootnotes" xml:space="preserve"><value>Toutes les notes de bas de page</value></data>
+  <data name="Pane_Notes_FilterEndnotes" xml:space="preserve"><value>Toutes les notes de fin</value></data>
   <data name="Dialog_Note_InsertFootnoteTitle" xml:space="preserve"><value>Ins&#233;rer une note de bas de page</value></data>
   <data name="Dialog_Note_InsertEndnoteTitle" xml:space="preserve"><value>Ins&#233;rer une note de fin</value></data>
   <data name="Dialog_Note_FootnoteTextLabel" xml:space="preserve"><value>Texte de la note de bas de page :</value></data>

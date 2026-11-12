@@ -585,6 +585,10 @@
   <data name="Pane_Notes_DeleteToolTip" xml:space="preserve"><value>Delete this note and its marker</value></data>
   <data name="Pane_Notes_FootnoteFormat" xml:space="preserve"><value>Footnote {0}</value></data>
   <data name="Pane_Notes_EndnoteFormat" xml:space="preserve"><value>Endnote {0}</value></data>
+  <data name="Pane_Notes_FilterName" xml:space="preserve"><value>Notes to show</value></data>
+  <data name="Pane_Notes_FilterAll" xml:space="preserve"><value>All Notes</value></data>
+  <data name="Pane_Notes_FilterFootnotes" xml:space="preserve"><value>All Footnotes</value></data>
+  <data name="Pane_Notes_FilterEndnotes" xml:space="preserve"><value>All Endnotes</value></data>
   <data name="Dialog_Note_InsertFootnoteTitle" xml:space="preserve"><value>Insert Footnote</value></data>
   <data name="Dialog_Note_InsertEndnoteTitle" xml:space="preserve"><value>Insert Endnote</value></data>
   <data name="Dialog_Note_FootnoteTextLabel" xml:space="preserve"><value>Footnote text:</value></data>

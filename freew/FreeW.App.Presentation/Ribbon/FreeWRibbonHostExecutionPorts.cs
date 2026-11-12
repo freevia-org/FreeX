@@ -151,6 +151,7 @@ public sealed record FreeWRibbonHostExecutionPorts(
     Action? OpenEndnoteDialog = null,
     Action? ToggleNotesPane = null,
     Func<bool>? IsNotesPaneVisible = null,
+    Action<bool, int>? OpenNotesPaneAtNote = null,
     Action? OpenFootnoteEndnoteOptionsDialog = null,
     Action? OpenBookmarkManagerDialog = null,
     Action? ShowTableOfAuthoritiesDialog = null,

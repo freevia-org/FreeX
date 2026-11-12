@@ -249,6 +249,79 @@ public sealed class DocumentNotesPaneSessionTests
         deleted.State.CanApply.Should().BeTrue();
     }
 
+    [Fact]
+    public void Selector_filters_by_note_kind_and_keeps_the_selected_note_when_still_listed()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Footnotes[1] = new Footnote(1, "foot one");
+        document.Footnotes[2] = new Footnote(2, "foot two");
+        document.Endnotes[1] = new Endnote(1, "end one");
+        var session = new DocumentNotesPaneSession(
+            () => document,
+            new DocumentNotesPaneMutationActions((_, _, _) => true, (_, _) => true));
+
+        session.ShowAndSelect(footnote: true, id: 2).State.Filter.Should().Be(DocumentNotesPaneFilter.All);
+
+        var footnotes = session.SetFilter(DocumentNotesPaneFilter.Footnotes).State;
+        footnotes.Items.Select(item => item.Key).Should().Equal(
+            new DocumentNoteKey(true, 1),
+            new DocumentNoteKey(true, 2));
+        footnotes.SelectedNote!.Key.Should().Be(new DocumentNoteKey(true, 2), "the edited note stays selected");
+
+        var endnotes = session.SetFilter(DocumentNotesPaneFilter.Endnotes).State;
+        endnotes.Items.Select(item => item.Key).Should().Equal(new DocumentNoteKey(false, 1));
+        endnotes.SelectedNote!.Key.Should().Be(new DocumentNoteKey(false, 1));
+        endnotes.EditorDocument!.Blocks.OfType<Paragraph>().Single().PlainText.Should().Be("end one");
+
+        session.Refresh().State.Filter.Should().Be(DocumentNotesPaneFilter.Endnotes);
+    }
+
+    [Fact]
+    public void Opening_the_pane_at_a_note_the_selector_hides_switches_to_that_note_kind()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Footnotes[3] = new Footnote(3, "foot three");
+        document.Endnotes[1] = new Endnote(1, "end one");
+        var session = new DocumentNotesPaneSession(
+            () => document,
+            new DocumentNotesPaneMutationActions((_, _, _) => true, (_, _) => true));
+        session.SetFilter(DocumentNotesPaneFilter.Endnotes);
+
+        var opened = session.ShowAndSelect(footnote: true, id: 3).State;
+
+        opened.Filter.Should().Be(DocumentNotesPaneFilter.Footnotes);
+        opened.SelectedNote!.Key.Should().Be(new DocumentNoteKey(true, 3));
+        opened.EditorDocument!.Blocks.OfType<Paragraph>().Single().PlainText.Should().Be("foot three");
+    }
+
+    [Fact]
+    public void A_newly_inserted_empty_note_opens_with_one_editable_paragraph_and_applies_rich_content()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Footnotes[1] = new Footnote(1);
+        IReadOnlyList<Paragraph>? written = null;
+        var session = new DocumentNotesPaneSession(
+            () => document,
+            new DocumentNotesPaneMutationActions(
+                (_, _, paragraphs) =>
+                {
+                    written = paragraphs;
+                    return true;
+                },
+                (_, _) => true));
+
+        var opened = session.ShowAndSelect(footnote: true, id: 1).State;
+        opened.EditorDocument!.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>();
+
+        var bold = new Paragraph();
+        bold.Runs.Add(new Run("typed") { Formatting = RunFormatting.Default with { Bold = true } });
+        session.Apply([bold, new Paragraph("second paragraph")]).MutationApplied.Should().BeTrue();
+
+        written!.Select(paragraph => paragraph.PlainText).Should().Equal("typed", "second paragraph");
+        written![0].Runs.Single().Formatting.Bold.Should().BeTrue();
+        written[0].Should().NotBeSameAs(bold, "the pane hands the document a clone, not the editor's instance");
+    }
+
     private static bool Replace(
         TextDocument document,
         int id,

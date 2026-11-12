@@ -72,6 +72,10 @@ public static class FreeWUiTextCatalog
         "Pane_Notes_DeleteToolTip",
         "Pane_Notes_FootnoteFormat",
         "Pane_Notes_EndnoteFormat",
+        "Pane_Notes_FilterName",
+        "Pane_Notes_FilterAll",
+        "Pane_Notes_FilterFootnotes",
+        "Pane_Notes_FilterEndnotes",
         "Dialog_Note_InsertFootnoteTitle",
         "Dialog_Note_InsertEndnoteTitle",
         "Dialog_Note_FootnoteTextLabel",
@@ -173,6 +177,13 @@ public static class FreeWUiTextCatalog
     public static string NotesDeleteToolTip => Text("Pane_Notes_DeleteToolTip");
     public static string FootnoteLabel(int id) => Format("Pane_Notes_FootnoteFormat", id);
     public static string EndnoteLabel(int id) => Format("Pane_Notes_EndnoteFormat", id);
+    public static string NotesFilterName => Text("Pane_Notes_FilterName");
+    public static string NotesFilterLabel(Panes.DocumentNotesPaneFilter filter) => filter switch
+    {
+        Panes.DocumentNotesPaneFilter.Footnotes => Text("Pane_Notes_FilterFootnotes"),
+        Panes.DocumentNotesPaneFilter.Endnotes => Text("Pane_Notes_FilterEndnotes"),
+        _ => Text("Pane_Notes_FilterAll"),
+    };
     public static string InsertFootnoteTitle => Text("Dialog_Note_InsertFootnoteTitle");
     public static string InsertEndnoteTitle => Text("Dialog_Note_InsertEndnoteTitle");
     public static string FootnoteTextLabel => Text("Dialog_Note_FootnoteTextLabel");

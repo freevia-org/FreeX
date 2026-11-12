@@ -553,9 +553,10 @@ internal static class FreeWRibbonCommands
                 }),
                 EmbeddedObject: new InsertEmbeddedObjectCommand(editor)));
         // Insert tab — References: prompt for footnote text and insert a footnote reference at the caret.
-        var insertFootnote = new InsertFootnoteCommand(editor);
+        var openNotesPaneAtNote = hostPorts?.OpenNotesPaneAtNote;
+        var insertFootnote = new InsertFootnoteCommand(editor, openNotesPaneAtNote);
         // Insert tab — References: prompt for endnote text and insert an endnote reference at the caret.
-        var insertEndnote = new InsertEndnoteCommand(editor);
+        var insertEndnote = new InsertEndnoteCommand(editor, openNotesPaneAtNote);
         var nextFootnote = new NavigateNoteCommand(editor, footnote: true, previous: false);
         var previousFootnote = new NavigateNoteCommand(editor, footnote: true, previous: true);
         var nextEndnote = new NavigateNoteCommand(editor, footnote: false, previous: false);
@@ -3097,10 +3098,14 @@ internal static class FreeWRibbonCommands
 
     // Insert > References > Footnote: prompt for the footnote text, then insert a footnote reference
     // at the caret. The view allocates the next id, stores the content and drops a superscript marker.
-    private sealed class InsertFootnoteCommand(DocumentView editor) : IRibbonCommand
+    private sealed class InsertFootnoteCommand(
+        DocumentView editor,
+        Action<bool, int>? openNotesPaneAtNote = null) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            if (TryInsertNoteForPaneEditing(editor, footnote: true, openNotesPaneAtNote))
+                return;
             editor.Focus();
             var text = TextPrompt.Ask(
                 Window.GetWindow(editor),
@@ -3116,10 +3121,42 @@ internal static class FreeWRibbonCommands
 
     // Insert > References > Endnote: prompt for the endnote text, then insert an endnote reference
     // at the caret. The view allocates the next id, stores the content and drops a superscript marker.
-    private sealed class InsertEndnoteCommand(DocumentView editor) : IRibbonCommand
+    // Word's behaviour when the shell has a notes editing surface: place the reference mark with an
+    // empty note, then hand the caret to the notes pane so the note is typed there with full formatting
+    // (no single-line prompt). Returns false when no pane is wired, so callers fall back to the prompt.
+    internal static bool TryInsertNoteForPaneEditing(
+        DocumentView editor,
+        bool footnote,
+        Action<bool, int>? openNotesPaneAtNote)
+    {
+        if (openNotesPaneAtNote is null)
+            return false;
+
+        editor.Focus();
+        editor.CommitToModel();
+        var existing = NoteIds(editor.Model, footnote).ToHashSet();
+        if (footnote)
+            editor.InsertFootnote(string.Empty);
+        else
+            editor.InsertEndnote(string.Empty);
+
+        var added = NoteIds(editor.Model, footnote).Where(id => !existing.Contains(id)).ToArray();
+        if (added.Length == 1)
+            openNotesPaneAtNote(footnote, added[0]);
+        return true; // nothing added means editing is restricted here; do not prompt either
+
+        static IEnumerable<int> NoteIds(TextDocument document, bool footnote) =>
+            footnote ? document.Footnotes.Keys : document.Endnotes.Keys;
+    }
+
+    private sealed class InsertEndnoteCommand(
+        DocumentView editor,
+        Action<bool, int>? openNotesPaneAtNote = null) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            if (TryInsertNoteForPaneEditing(editor, footnote: false, openNotesPaneAtNote))
+                return;
             editor.Focus();
             var text = TextPrompt.Ask(
                 Window.GetWindow(editor),
