@@ -654,15 +654,33 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, PageSetupDialogPlanner.DialogAutomationId);
 
         // --- Page tab ---
-        var orientationChoices = PageSetupDialogPlanner.OrientationChoices;
-        var orientationBox = new ComboBox
+        // Orientation and page order are radio buttons, as in Excel; index 0 is the first choice.
+        RadioButton CreateChoiceRadio(string labelKey, string groupName, bool isChecked, string automationId)
         {
-            ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(orientationChoices, UiText.Get),
-            SelectedIndex = surface.ChoiceIndexes.Orientation,
-            MinWidth = PageSetupDialogPlanner.FieldMinWidth,
+            var radio = new RadioButton
+            {
+                Content = StripDisplayMnemonic(UiText.Get(labelKey)),
+                GroupName = groupName,
+                IsChecked = isChecked,
+            };
+            ApplyPageLayoutRadioButtonChrome(radio);
+            AutomationProperties.SetAutomationId(radio, automationId);
+            return radio;
+        }
+
+        var portraitRadio = CreateChoiceRadio(
+            "PageSetup_Portrait", "PageSetupOrientation", surface.ChoiceIndexes.Orientation != 1,
+            PageSetupDialogPlanner.PortraitRadioAutomationId);
+        var landscapeRadio = CreateChoiceRadio(
+            "PageSetup_Landscape", "PageSetupOrientation", surface.ChoiceIndexes.Orientation == 1,
+            PageSetupDialogPlanner.LandscapeRadioAutomationId);
+        landscapeRadio.Margin = new Thickness(24, 0, 0, 0);
+        var orientationPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Children = { portraitRadio, landscapeRadio },
         };
-        ApplyPageLayoutComboBoxChrome(orientationBox);
-        AutomationProperties.SetAutomationId(orientationBox, PageSetupDialogPlanner.OrientationBoxAutomationId);
+        AutomationProperties.SetAutomationId(orientationPanel, PageSetupDialogPlanner.OrientationBoxAutomationId);
 
         var paperSizeChoices = PageSetupDialogPlanner.PaperSizeChoices;
         var paperBox = new ComboBox
@@ -954,15 +972,15 @@ public sealed partial class MainWindow
         ApplyPageLayoutCheckBoxChrome(draftQualityCheck);
         AutomationProperties.SetAutomationId(draftQualityCheck, "PageSetupDraftQualityCheck");
 
-        var pageOrderChoices = PageSetupDialogPlanner.PageOrderChoices;
-        var pageOrderBox = new ComboBox
-        {
-            ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(pageOrderChoices, UiText.Get),
-            SelectedIndex = surface.ChoiceIndexes.PageOrder,
-            MinWidth = PageSetupDialogPlanner.FieldMinWidth,
-        };
-        ApplyPageLayoutComboBoxChrome(pageOrderBox);
-        AutomationProperties.SetAutomationId(pageOrderBox, PageSetupDialogPlanner.PageOrderBoxAutomationId);
+        var downThenOverRadio = CreateChoiceRadio(
+            "PageSetup_DownThenOver", "PageSetupPageOrder", surface.ChoiceIndexes.PageOrder != 1,
+            PageSetupDialogPlanner.DownThenOverRadioAutomationId);
+        var overThenDownRadio = CreateChoiceRadio(
+            "PageSetup_OverThenDown", "PageSetupPageOrder", surface.ChoiceIndexes.PageOrder == 1,
+            PageSetupDialogPlanner.OverThenDownRadioAutomationId);
+        overThenDownRadio.Margin = new Thickness(0, 4, 0, 0);
+        var pageOrderPanel = new StackPanel { Children = { downThenOverRadio, overThenDownRadio } };
+        AutomationProperties.SetAutomationId(pageOrderPanel, PageSetupDialogPlanner.PageOrderBoxAutomationId);
 
         var printErrorValueChoices = PageSetupDialogPlanner.PrintErrorValueChoices;
         var cellErrorsBox = new ComboBox
@@ -1016,7 +1034,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(optionsButton, PageSetupDialogPlanner.OptionsButtonAutomationId);
         PageSetupDialogFields ReadFields() => PageSetupDialogPlanner.BuildFields(initial, new PageSetupDialogSurfaceInput
         {
-            OrientationIndex = orientationBox.SelectedIndex,
+            OrientationIndex = landscapeRadio.IsChecked == true ? 1 : 0,
             PaperSizeIndex = paperBox.SelectedIndex,
             LeftMarginText = leftMarginBox.Text ?? "",
             RightMarginText = rightMarginBox.Text ?? "",
@@ -1043,7 +1061,7 @@ public sealed partial class MainWindow
             PrintDraftQuality = draftQualityCheck.IsChecked == true,
             PrintErrorValueIndex = cellErrorsBox.SelectedIndex,
             PrintCommentsIndex = commentsBox.SelectedIndex,
-            PageOrderIndex = pageOrderBox.SelectedIndex,
+            PageOrderIndex = overThenDownRadio.IsChecked == true ? 1 : 0,
             HeaderFooter = CaptureHeaderFooterEditorState(),
         });
 
@@ -1147,7 +1165,7 @@ public sealed partial class MainWindow
         Grid.SetRow(scalingGroup, 2);
         Grid.SetColumnSpan(scalingGroup, 2);
 
-        AddPageField(0, UiText.Get("PageSetup_Orientation"), orientationBox);
+        AddPageField(0, UiText.Get("PageSetup_Orientation"), orientationPanel);
         AddPageField(1, UiText.Get("PageSetup_PaperSize"), paperBox);
         pageGrid.Children.Add(scalingGroup);
         AddPageField(3, UiText.Get("PageSetup_FirstPageNumber"), firstPageNumberBox);
@@ -1364,7 +1382,7 @@ public sealed partial class MainWindow
         AddSheetValue(3, gridlinesCheck, margin: new Thickness(0, 0, 0, 8));
         AddSheetValue(4, headingsCheck, margin: new Thickness(0, 0, 0, 8));
         AddSheetLabel(5, UiText.Get("PageSetup_PageOrder"), new Thickness(0, 0, 8, 0));
-        AddSheetValue(5, pageOrderBox, margin: new Thickness(0));
+        AddSheetValue(5, pageOrderPanel, margin: new Thickness(0));
         AddSheetValue(6, blackAndWhiteCheck, margin: new Thickness(0, 8, 0, 8));
         AddSheetValue(7, draftQualityCheck, margin: new Thickness(0));
         AddSheetLabel(8, UiText.Get("PageSetup_CellErrorsAs"), new Thickness(0, 8, 8, 0));
@@ -1419,10 +1437,10 @@ public sealed partial class MainWindow
                 PageSetupDialogFocusTarget.PrintArea => printAreaBox,
                 PageSetupDialogFocusTarget.RepeatRows => repeatRowsBox,
                 PageSetupDialogFocusTarget.RepeatColumns => repeatColumnsBox,
-                PageSetupDialogFocusTarget.PageOrder => pageOrderBox,
+                PageSetupDialogFocusTarget.PageOrder => overThenDownRadio.IsChecked == true ? overThenDownRadio : downThenOverRadio,
                 PageSetupDialogFocusTarget.PrintErrorValue => cellErrorsBox,
                 PageSetupDialogFocusTarget.PrintComments => commentsBox,
-                _ => orientationBox,
+                _ => landscapeRadio.IsChecked == true ? landscapeRadio : portraitRadio,
             };
 
         void FocusDialogTarget(PageSetupDialogFocusPlan plan)

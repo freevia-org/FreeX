@@ -36,7 +36,7 @@ public sealed class DialogTabCycleFocusGraphTests
         await AssertPageSetupGraphAsync(
             DialogRoute.PageSetup,
             initialTabIndex: 0,
-            initialAutomationId: "PageSetupOrientationBox");
+            initialAutomationId: "PageSetupPortraitRadio");
 
     [Fact]
     public async Task HeaderFooterRoute_UsesDedicatedEditorScope_AndEscapeCloses() =>

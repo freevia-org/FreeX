@@ -146,6 +146,10 @@ public static class PageSetupDialogPlanner
     public const string TabsAutomationId = "PageSetupTabs";
 
     public const string OrientationBoxAutomationId = "PageSetupOrientationBox";
+    public const string PortraitRadioAutomationId = "PageSetupPortraitRadio";
+    public const string LandscapeRadioAutomationId = "PageSetupLandscapeRadio";
+    public const string DownThenOverRadioAutomationId = "PageSetupDownThenOverRadio";
+    public const string OverThenDownRadioAutomationId = "PageSetupOverThenDownRadio";
     public const string PaperSizeBoxAutomationId = "PageSetupPaperSizeBox";
     public const string LeftMarginBoxAutomationId = "PageSetupLeftMarginBox";
     public const string RightMarginBoxAutomationId = "PageSetupRightMarginBox";
