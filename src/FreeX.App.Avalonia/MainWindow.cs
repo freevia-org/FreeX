@@ -13088,12 +13088,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("Zoom_Zoom"),
+            // WPF ZoomDialog is a 300x240 *outer* NoResize window; Avalonia sizes the client area, so
+            // take the Windows caption/frame off the height.
             Width = ZoomDialogPlanner.Width,
-            Height = ZoomDialogPlanner.Height,
+            Height = ZoomDialogPlanner.Height - WpfNoResizeFrameHeight,
             MinWidth = ZoomDialogPlanner.Width,
             MaxWidth = ZoomDialogPlanner.Width,
-            MinHeight = ZoomDialogPlanner.Height,
-            MaxHeight = ZoomDialogPlanner.Height,
+            MinHeight = ZoomDialogPlanner.Height - WpfNoResizeFrameHeight,
+            MaxHeight = ZoomDialogPlanner.Height - WpfNoResizeFrameHeight,
             SizeToContent = SizeToContent.Manual,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -13120,9 +13122,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 Content = ZoomDialogPlanner.FormatPresetLabel(zoom),
                 GroupName = "ZoomDialogOptions",
                 IsChecked = currentZoom == zoom,
-                Margin = new Thickness(0, 0, 0, index < ZoomDialogPlanner.Presets.Count - 1
-                    ? ZoomDialogPlanner.PresetItemBottomMargin
-                    : 0),
+                // WPF: every preset radio button carries Margin = (0, 0, 0, 4).
+                Margin = new Thickness(0, 0, 0, ZoomDialogPlanner.PresetItemBottomMargin),
             };
             AvaloniaCompactDialogChrome.ApplyCompactRadioButton(button, zoomDialogChrome);
             AutomationProperties.SetAutomationId(button, $"ZoomPreset{zoom}Button");
@@ -13206,7 +13207,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (!ZoomDialogPlanner.TryCreateResult(customBox.Text, out var customResult, out var validationError))
             {
                 errorText.Text = ResolveZoomDialogValidationError(validationError);
-                errorText.IsVisible = true;
+                if (!errorText.IsVisible)
+                {
+                    // WPF reports an invalid percentage in a warning box. This shell keeps its inline
+                    // message; the fixed-size window grows by one band to make room for it.
+                    errorText.IsVisible = true;
+                    const double zoomErrorBandHeight = 40;
+                    errorText.Height = zoomErrorBandHeight - 8;
+                    errorText.Margin = new Thickness(0, 0, 0, 8);
+                    var grownHeight = dialog.Height + zoomErrorBandHeight;
+                    dialog.MaxHeight = grownHeight;
+                    dialog.Height = grownHeight;
+                    dialog.MinHeight = grownHeight;
+                }
+
                 customButton.IsChecked = true;
                 customBox.Focus();
                 customBox.SelectAll();
@@ -13302,14 +13316,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         dialog.Opened += (_, _) =>
         {
-            if (customButton.IsChecked == true)
+            // WPF ZoomDialog.FocusInitialKeyboardTarget: the checked preset owns the keyboard, or the
+            // custom percentage box (selected) when the current zoom is not a preset.
+            if (presetButtons.FirstOrDefault(button => button.IsChecked == true) is { } checkedPreset)
             {
-                customBox.Focus();
-                customBox.SelectAll();
+                checkedPreset.Focus();
             }
             else
             {
-                okButton.Focus();
+                customBox.Focus();
+                customBox.SelectAll();
             }
         };
 
@@ -13822,10 +13838,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = FindReplaceText(FindReplaceDialogText.Title),
-            Width = FindReplaceDialogPlanner.Width,
-            Height = FindReplaceDialogPlanner.Height,
-            MinWidth = FindReplaceDialogPlanner.MinWidth,
-            MinHeight = FindReplaceDialogPlanner.MinHeight,
+            // WPF FindReplaceDialog.xaml: Width/Height/MinWidth/MinHeight are *outer* sizes of a
+            // resizable window; Avalonia sizes the client area, so take the Windows caption/frame off.
+            Width = FindReplaceDialogPlanner.Width - WpfResizableFrameWidth,
+            Height = FindReplaceDialogPlanner.Height - WpfResizableFrameHeight,
+            MinWidth = FindReplaceDialogPlanner.MinWidth - WpfResizableFrameWidth,
+            MinHeight = FindReplaceDialogPlanner.MinHeight - WpfResizableFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -14382,13 +14400,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             };
         };
 
+        // WPF: <Grid Margin="12">. The planner's Avalonia right/bottom margins were measured against a
+        // client area as large as the WPF *outer* window, so they carry the Windows frame on top of
+        // that 12px margin; the window is now sized to the client area, so the frame share comes off.
+        const double findReplaceFrameShareOfRightMargin =
+            FindReplaceDialogPlanner.AvaloniaRootRightMargin - FindReplaceDialogPlanner.RootMargin;
+        const double findReplaceFrameShareOfBottomMargin =
+            FindReplaceDialogPlanner.AvaloniaRootBottomMargin - FindReplaceDialogPlanner.RootMargin;
         var root = new Grid
         {
             Margin = new Thickness(
                 FindReplaceDialogPlanner.RootMargin,
                 FindReplaceDialogPlanner.RootMargin,
-                FindReplaceDialogPlanner.AvaloniaRootRightMargin,
-                FindReplaceDialogPlanner.AvaloniaRootBottomMargin),
+                FindReplaceDialogPlanner.AvaloniaRootRightMargin - findReplaceFrameShareOfRightMargin,
+                FindReplaceDialogPlanner.AvaloniaRootBottomMargin - findReplaceFrameShareOfBottomMargin),
             RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto,Auto"),
         };
         ConfigureDialogTabCycle(dialog, root);
@@ -14848,12 +14873,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("GoTo_GoTo"),
+            // WPF GoToDialog is a 420x320 *outer* NoResize window; Avalonia sizes the client area, so
+            // take the Windows caption/frame off the height (the history list owns the star row).
             Width = 420,
-            Height = 320,
+            Height = 320 - WpfNoResizeFrameHeight,
             MinWidth = 420,
-            MinHeight = 320,
+            MinHeight = 320 - WpfNoResizeFrameHeight,
             MaxWidth = 420,
-            MaxHeight = 320,
+            MaxHeight = 320 - WpfNoResizeFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -15124,12 +15151,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("GoToSpecial_GoToSpecial"),
+            // WPF GoToSpecialDialog is a 430x438 *outer* NoResize window; Avalonia sizes the client
+            // area, so take the Windows caption/frame off the height.
             Width = GoToSpecialDialogPlanner.Width,
-            Height = GoToSpecialDialogPlanner.Height,
+            Height = GoToSpecialDialogPlanner.Height - WpfNoResizeFrameHeight,
             MinWidth = GoToSpecialDialogPlanner.Width,
-            MinHeight = GoToSpecialDialogPlanner.Height,
+            MinHeight = GoToSpecialDialogPlanner.Height - WpfNoResizeFrameHeight,
             MaxWidth = GoToSpecialDialogPlanner.Width,
-            MaxHeight = GoToSpecialDialogPlanner.Height,
+            MaxHeight = GoToSpecialDialogPlanner.Height - WpfNoResizeFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -15254,13 +15283,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             },
         };
 
+        // The planner's right/bottom margins were measured against a client area as large as the WPF
+        // *outer* window, so they carry the Windows frame on top of the WPF 12px content margin
+        // (DockPanel { Margin = GoToSpecialDialogPlanner.ContentMargin }). The window is now sized to
+        // the client area, so that frame share comes back off and the gutters match the left/top ones.
+        const double goToSpecialFrameShareOfRightMargin =
+            GoToSpecialDialogPlanner.AvaloniaContentRightMargin - GoToSpecialDialogPlanner.AvaloniaContentLeftMargin;
+        const double goToSpecialFrameShareOfBottomMargin =
+            GoToSpecialDialogPlanner.ActionRowBottomMargin - GoToSpecialDialogPlanner.ContentMargin;
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
             [okButton, cancelButton],
             new Thickness(
                 0,
                 GoToSpecialDialogPlanner.ActionRowTopMargin,
-                GoToSpecialDialogPlanner.ActionRowRightMargin,
-                GoToSpecialDialogPlanner.ActionRowBottomMargin));
+                GoToSpecialDialogPlanner.ActionRowRightMargin - goToSpecialFrameShareOfRightMargin,
+                GoToSpecialDialogPlanner.ActionRowBottomMargin - goToSpecialFrameShareOfBottomMargin));
 
         var availableGroup = new GroupBox
         {
@@ -15293,7 +15330,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Margin = new Thickness(
                 GoToSpecialDialogPlanner.AvaloniaContentLeftMargin,
                 GoToSpecialDialogPlanner.AvaloniaContentTopMargin,
-                GoToSpecialDialogPlanner.AvaloniaContentRightMargin,
+                GoToSpecialDialogPlanner.AvaloniaContentRightMargin - goToSpecialFrameShareOfRightMargin,
                 0),
             Children =
             {
@@ -15962,10 +15999,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("MainWindow_Content_WorkbookStatistics"),
-            Width = WorkbookStatisticsDialogPlanner.Width,
-            Height = WorkbookStatisticsDialogPlanner.Height,
-            MinWidth = WorkbookStatisticsDialogPlanner.MinWidth,
-            MinHeight = WorkbookStatisticsDialogPlanner.MinHeight,
+            // WPF WorkbookStatisticsDialog is a resizable window whose Width/Height are *outer*
+            // sizes; Avalonia sizes the client area, so take the Windows caption/frame off.
+            Width = WorkbookStatisticsDialogPlanner.Width - WpfResizableFrameWidth,
+            Height = WorkbookStatisticsDialogPlanner.Height - WpfResizableFrameHeight,
+            MinWidth = WorkbookStatisticsDialogPlanner.MinWidth - WpfResizableFrameWidth,
+            MinHeight = WorkbookStatisticsDialogPlanner.MinHeight - WpfResizableFrameHeight,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -15974,10 +16015,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var okButton = new Button
         {
             Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            // WPF: OK MinWidth = 76 (default and cancel), Copy to Clipboard MinWidth = 132, 8px apart.
+            // Enter/Escape are routed by the dialog's own key handler below.
+            MinWidth = 76,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
         };
+        ApplyDialogButtonChrome(okButton, isDefault: true);
+        okButton.Padding = new Thickness(10, 1);
         AutomationProperties.SetName(okButton, UiText.CreateAutomationName(UiText.Get("Common_Ok")));
         AutomationProperties.SetAutomationId(okButton, "WorkbookStatisticsOkButton");
         AutomationProperties.SetHelpText(okButton, UiText.Get("WorkbookStatistics_CloseHelpText"));
@@ -15985,8 +16029,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var copyToClipboardButton = new Button
         {
             Content = UiText.Get("WorkbookStatistics_CopyToClipboard"),
-            MinWidth = 120,
-            Padding = new Thickness(10, 4),
+            MinWidth = 132,
         };
         AutomationProperties.SetName(copyToClipboardButton, UiText.Get("WorkbookStatistics_CopyToClipboard"));
         AutomationProperties.SetAutomationId(
@@ -15994,6 +16037,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FreeXAutomationIdCatalog.WorkbookStatisticsCopyButton);
         AutomationProperties.SetHelpText(copyToClipboardButton, UiText.Get("WorkbookStatistics_CopyToClipboardHelpText"));
         ApplyDialogButtonChrome(copyToClipboardButton);
+        copyToClipboardButton.Padding = new Thickness(10, 1);
 
         var statsText = FormatWorkbookStatistics(statistics);
         copyToClipboardButton.Click += (_, _) => RunGuarded(async () =>
@@ -16026,9 +16070,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
             Background = Brushes.White,
-            BorderBrush = Brush(171, 171, 171),
+            // WPF: SystemColors.ControlDarkBrush border, Padding = 8, MinHeight = 260.
+            BorderBrush = Brush(160, 160, 160),
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(6, 4),
+            CornerRadius = new CornerRadius(0),
+            Padding = new Thickness(8),
+            MinHeight = 260,
+            FontSize = 12,
             VerticalContentAlignment = AvaloniaVerticalAlignment.Top,
         };
         AutomationProperties.SetName(statisticsBlock, UiText.Get("WorkbookStatistics_WorkbookStatistics"));
@@ -16073,10 +16121,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("WorkbookPerformance_Title"),
-            Width = 560,
-            Height = 460,
-            MinWidth = 420,
-            MinHeight = 300,
+            // WPF WorkbookPerformanceDialog: 560x460 *outer* resizable window (min 420x300).
+            // Avalonia sizes the client area, so take the Windows caption/frame off.
+            Width = 560 - WpfResizableFrameWidth,
+            Height = 460 - WpfResizableFrameHeight,
+            MinWidth = 420 - WpfResizableFrameWidth,
+            MinHeight = 300 - WpfResizableFrameHeight,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -16091,7 +16143,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Background = Brushes.White,
             BorderBrush = Brush(171, 171, 171),
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(6, 4),
+            CornerRadius = new CornerRadius(0),
+            // WPF: Padding = 8, MinHeight = 220.
+            Padding = new Thickness(8),
+            MinHeight = 220,
+            FontSize = 12,
             VerticalContentAlignment = AvaloniaVerticalAlignment.Top,
         };
         AutomationProperties.SetName(reportBlock, UiText.Get("WorkbookPerformance_ReportAutomationName"));
@@ -16101,10 +16157,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var okButton = new Button
         {
             Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            // WPF: OK MinWidth = 76, right-aligned, 12px below the report. Enter/Escape are routed
+            // by the dialog's own key handler below.
+            MinWidth = 76,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0),
         };
+        ApplyDialogButtonChrome(okButton, isDefault: true);
+        okButton.Padding = new Thickness(10, 1);
         okButton.Click += (_, _) => dialog.Close();
         dialog.KeyDown += (_, e) =>
         {
@@ -19616,10 +19676,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("Sort_CustomSort"),
-            Width = 760,
-            Height = 500,
-            MinWidth = 680,
-            MinHeight = 420,
+            // WPF SortDialog: 760x500 (min 680x420) are *outer* sizes of a resizable window; Avalonia
+            // sizes the client area, so take the Windows caption/frame off.
+            Width = 760 - WpfResizableFrameWidth,
+            Height = 500 - WpfResizableFrameHeight,
+            MinWidth = 680 - WpfResizableFrameWidth,
+            MinHeight = 420 - WpfResizableFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -20433,12 +20495,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = presentation.Title,
+            // WPF SortOptionsDialog is a 330x260 *outer* NoResize window; Avalonia sizes the client
+            // area, so take the Windows caption/frame off the height.
             Width = 330,
-            Height = 260,
+            Height = 260 - WpfNoResizeFrameHeight,
             MinWidth = 330,
-            MinHeight = 260,
+            MinHeight = 260 - WpfNoResizeFrameHeight,
             MaxWidth = 330,
-            MaxHeight = 260,
+            MaxHeight = 260 - WpfNoResizeFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -20572,7 +20636,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         dialog.Opened += (_, _) =>
         {
             // The shared chrome supplies the Windows control language; these measured footer dimensions
-            // preserve the authoritative WPF Sort Options capture inside the fixed 330x260 frame.
+            // preserve the authoritative WPF Sort Options capture (its OK/Cancel row is the DockPanel's
+            // fill child, so the buttons stretch) inside the client area of the 330x260 window.
             AvaloniaCompactDialogChrome.ApplyButton(okButton, AvaloniaCompactDialogChrome.WindowsStyle, 75, isDefault: true);
             AvaloniaCompactDialogChrome.ApplyButton(cancelButton, AvaloniaCompactDialogChrome.WindowsStyle, 75);
             okButton.Height = okButton.MinHeight = okButton.MaxHeight = 52;
@@ -21676,10 +21741,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetAutomationId(summaryBelowBox, "SubtotalSummaryBelowBox");
         AutomationProperties.SetHelpText(summaryBelowBox, UiText.Get("Subtotal_SummaryBelowDataHelpText"));
 
+        // WPF reports an invalid choice in a warning box. This shell keeps its inline message, which
+        // only takes up room once there is something to say.
         var errorText = new TextBlock
         {
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
+            IsVisible = false,
+            Margin = new Thickness(0, 4, 0, 0),
         };
         AutomationProperties.SetName(errorText, UiText.Get("Subtotal_ValidationAutomationName"));
         AutomationProperties.SetAutomationId(errorText, "SubtotalErrorText");
@@ -21729,6 +21798,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     .DescribeIssue(SubtotalDialogInputParseIssue.InvalidGroupColumnOffset)
                     .Message
                     .Resolve(UiText.Get, UiText.Format);
+                errorText.IsVisible = true;
                 groupColumnBox.Focus();
                 return;
             }
@@ -21739,6 +21809,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     .DescribeIssue(SubtotalDialogInputParseIssue.InvalidSubtotalColumnOffsets)
                     .Message
                     .Resolve(UiText.Get, UiText.Format);
+                errorText.IsVisible = true;
                 columnsList.Focus();
                 return;
             }
@@ -21757,6 +21828,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     .DescribeIssue(issue)
                     .Message
                     .Resolve(UiText.Get, UiText.Format);
+                errorText.IsVisible = true;
                 functionBox.Focus();
                 return;
             }
@@ -21799,10 +21871,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 cancelButton,
             },
         };
+        // WPF CreateSubtotalButtonRow: Grid { Margin = (0, 12, 0, 0) } stacked right under the options.
         var buttonRow = new Grid
         {
             Height = 22,
-            Margin = new Thickness(0, 0, 0, 76),
+            Margin = new Thickness(0, 12, 0, 0),
             ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
             Children =
             {
@@ -21822,30 +21895,24 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AvaloniaCompactDialogChrome.ApplyGroupBox(columnsGroup, SubtotalDialogChromeStyle);
 
-        dialog.Content = new DockPanel
+        // WPF SubtotalDialog: root StackPanel { Margin = 12 } -- the fields, the options and then the
+        // button row, so the fields also precede Remove All / OK / Cancel in the tab order.
+        dialog.Content = new StackPanel
         {
-            Margin = new Thickness(12, 12, 27, 12),
+            Margin = new Thickness(12),
             Children =
             {
+                CreateSubtotalField(UiText.Get("Subtotal_AtEachChangeIn"), groupColumnBox),
+                CreateSubtotalField(UiText.Get("Subtotal_UseFunction"), functionBox, topMargin: 7),
+                CreateSubtotalLabel(UiText.Get("Subtotal_AddSubtotalTo"), columnsList, topMargin: 10),
+                columnsGroup,
+                replaceBox,
+                pageBreakBox,
+                summaryBelowBox,
+                errorText,
                 buttonRow,
-                new StackPanel
-                {
-                    Spacing = 0,
-                    Children =
-                    {
-                        CreateSubtotalField(UiText.Get("Subtotal_AtEachChangeIn"), groupColumnBox),
-                        CreateSubtotalField(UiText.Get("Subtotal_UseFunction"), functionBox, topMargin: 7),
-                        CreateSubtotalLabel(UiText.Get("Subtotal_AddSubtotalTo"), columnsList, topMargin: 10),
-                        columnsGroup,
-                        replaceBox,
-                        pageBreakBox,
-                        summaryBelowBox,
-                        errorText,
-                    },
-                },
             },
         };
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
         dialog.Opened += (_, _) =>
         {
             // ApplyWindow normalizes descendants for every dialog. Reapply this route's measured

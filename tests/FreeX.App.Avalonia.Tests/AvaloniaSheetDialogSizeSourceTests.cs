@@ -44,7 +44,7 @@ public sealed class AvaloniaSheetDialogSizeSourceTests
         rendererSource.Should().Contain("private const int ForecastSheetDialogWidth = 320;");
         rendererSource.Should().Contain("private const int ForecastSheetDialogHeight = 150 - WpfNoResizeFrameHeight;");
         rendererSource.Should().Contain("private const int SubtotalDialogWidth = 380;");
-        rendererSource.Should().Contain("private const int SubtotalDialogHeight = 390;");
+        rendererSource.Should().Contain("private const int SubtotalDialogHeight = 390 - WpfNoResizeFrameHeight;");
         rendererSource.Should().Contain(
             "private const int TextToColumnsDialogWidth = (int)TextToColumnsDialogMetrics.WindowWidth - WpfResizableFrameWidth;");
         rendererSource.Should().Contain(

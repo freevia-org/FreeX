@@ -107,8 +107,31 @@ public sealed partial class MainWindow
         var source = _session.ActiveCell;
         var cellText = FormatEditText(_session.ActiveSheet.GetCell(source), source);
 
-        var layout = new StackPanel { Margin = new Thickness(16), Spacing = 10, Width = 380 };
-        layout.Children.Add(new TextBlock { Text = UiText.Get("WfTranslate_Title"), FontWeight = FontWeight.SemiBold });
+        // WPF TranslateDialog: a 440x470 *outer* resizable window (min 400x420). Avalonia sizes the
+        // client area, so the Windows caption/frame comes off both dimensions.
+        var dialog = new Window
+        {
+            Title = UiText.Get("WfTranslate_Title"),
+            Width = 440 - WpfResizableFrameWidth,
+            Height = 470 - WpfResizableFrameHeight,
+            MinWidth = 400 - WpfResizableFrameWidth,
+            MinHeight = 420 - WpfResizableFrameHeight,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, ProofingDialogChromeStyle);
+        AutomationProperties.SetAutomationId(dialog, "WfTranslateDialog");
+
+        // WPF AddLabeledControl: a SemiBold label 4px above its control.
+        static Label CreateTranslateLabel(string resourceKey, Control target) =>
+            new()
+            {
+                Content = UiText.Get(resourceKey),
+                Target = target,
+                Padding = new Thickness(0),
+                FontWeight = FontWeight.SemiBold,
+                Margin = new Thickness(0, 0, 0, 4),
+            };
 
         // From / To language pickers (the planner owns the language list; we resolve display labels).
         var languages = TranslateDialogPlanner.Languages;
@@ -116,66 +139,84 @@ public sealed partial class MainWindow
         var toBox = CreateTranslateLanguageBox("WfTranslateToLanguage", languages, TranslateDialogPlanner.DefaultToCode);
         AvaloniaCompactDialogChrome.ApplyComboBox(fromBox, ProofingDialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(toBox, ProofingDialogChromeStyle);
-        var languagesRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
-        languagesRow.Children.Add(new StackPanel
+        AutomationProperties.SetName(fromBox, UiText.Get("WfTranslate_FromLabel"));
+        AutomationProperties.SetName(toBox, UiText.Get("WfTranslate_ToLabel"));
+        // WPF: Grid { Margin = (0, 0, 0, 10) } with * / 12 / * columns; each picker fills its column.
+        var fromPanel = new StackPanel { Children = { CreateTranslateLabel("WfTranslate_FromLabel", fromBox), fromBox } };
+        var toPanel = new StackPanel { Children = { CreateTranslateLabel("WfTranslate_ToLabel", toBox), toBox } };
+        var languagesRow = new Grid
         {
-            Spacing = 2,
-            Children = { new TextBlock { Text = UiText.Get("WfTranslate_FromLabel") }, fromBox },
-        });
-        languagesRow.Children.Add(new StackPanel
-        {
-            Spacing = 2,
-            Children = { new TextBlock { Text = UiText.Get("WfTranslate_ToLabel") }, toBox },
-        });
-        layout.Children.Add(languagesRow);
+            Margin = new Thickness(0, 0, 0, 10),
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                new ColumnDefinition { Width = new GridLength(12) },
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+            },
+            Children = { fromPanel, toPanel },
+        };
+        Grid.SetColumn(toPanel, 2);
 
-        layout.Children.Add(new TextBlock { Text = UiText.Get("WfTranslate_SourceLabel") });
-        layout.Children.Add(new SelectableTextBlock
+        // WPF: a read-only wrapping box, 46..84px tall, 10px above the next label.
+        var sourceBox = new TextBox
         {
             Text = string.IsNullOrEmpty(cellText) ? UiText.Get("WfTranslate_EmptyCell") : cellText,
+            IsReadOnly = true,
             TextWrapping = TextWrapping.Wrap,
-        });
+            MinHeight = 46,
+            MaxHeight = 84,
+            Margin = new Thickness(0, 0, 0, 10),
+        };
+        AvaloniaCompactDialogChrome.ApplyTextBox(sourceBox, ProofingDialogChromeStyle, fixedHeight: false);
+        sourceBox.VerticalContentAlignment = global::Avalonia.Layout.VerticalAlignment.Top;
+        AutomationProperties.SetAutomationId(sourceBox, "WfTranslateSourceBox");
+        AutomationProperties.SetName(sourceBox, UiText.Get("WfTranslate_SourceLabel"));
 
-        layout.Children.Add(new TextBlock { Text = UiText.Get("WfTranslate_TranslationLabel") });
         var translationBox = new TextBox
         {
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
-            Height = 70,
-            PlaceholderText = UiText.Get("WfTranslate_TranslationWatermark"),
+            // WPF: MinHeight = 70, Height = 82, Margin = (0, 0, 0, 10).
+            MinHeight = 70,
+            Height = 82,
+            Margin = new Thickness(0, 0, 0, 10),
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(translationBox, ProofingDialogChromeStyle, fixedHeight: false);
+        translationBox.VerticalContentAlignment = global::Avalonia.Layout.VerticalAlignment.Top;
         AutomationProperties.SetAutomationId(translationBox, "WfTranslateTranslationBox");
         AutomationProperties.SetName(translationBox, UiText.Get("WfTranslate_TranslationLabel"));
-        layout.Children.Add(translationBox);
 
-        layout.Children.Add(new TextBlock { Text = UiText.Get("WfTranslate_TargetLabel") });
         var targetBox = new TextBox { Text = TranslateDialogPlanner.SuggestTargetReference(source) };
         AvaloniaCompactDialogChrome.ApplyTextBox(targetBox, ProofingDialogChromeStyle);
         AutomationProperties.SetAutomationId(targetBox, "WfTranslateTargetBox");
         AutomationProperties.SetName(targetBox, UiText.Get("WfTranslate_TargetLabel"));
-        layout.Children.Add(targetBox);
 
-        layout.Children.Add(new TextBlock
+        // WPF: the grey manual-translation note leads the body, 12px above the language pickers.
+        var body = new StackPanel
         {
-            Text = UiText.Get("WfTranslate_ManualNote"),
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = Brush(120, 120, 120),
-        });
-
-        var dialog = new Window
-        {
-            Title = UiText.Get("WfTranslate_Title"),
-            Width = 420,
-            Height = 380,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = UiText.Get("WfTranslate_ManualNote"),
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = Brush(109, 109, 109),
+                    Margin = new Thickness(0, 0, 0, 12),
+                },
+                languagesRow,
+                CreateTranslateLabel("WfTranslate_SourceLabel", sourceBox),
+                sourceBox,
+                CreateTranslateLabel("WfTranslate_TranslationLabel", translationBox),
+                translationBox,
+                CreateTranslateLabel("WfTranslate_TargetLabel", targetBox),
+                targetBox,
+            },
         };
-        AutomationProperties.SetAutomationId(dialog, "WfTranslateDialog");
 
         var insert = new Button { Content = UiText.Get("WfTranslate_InsertButton"), IsDefault = true };
         var close = new Button { Content = UiText.Get("WfTranslate_CloseButton"), IsCancel = true };
-        AvaloniaCompactDialogChrome.ApplyButton(insert, ProofingDialogChromeStyle, 110, isDefault: true);
+        // WPF: Insert MinWidth = 130, Close MinWidth = 90, 8px apart.
+        AvaloniaCompactDialogChrome.ApplyButton(insert, ProofingDialogChromeStyle, 130, isDefault: true);
         AvaloniaCompactDialogChrome.ApplyButton(close, ProofingDialogChromeStyle, 90);
         AutomationProperties.SetAutomationId(insert, "WfTranslateInsertButton");
         AutomationProperties.SetAutomationId(close, "WfTranslateCloseButton");
@@ -187,9 +228,26 @@ public sealed partial class MainWindow
                 dialog.Close();
         };
         close.Click += (_, _) => dialog.Close();
-        layout.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([insert, close]));
 
-        dialog.Content = layout;
+        // WPF TranslateDialog: DockPanel { Margin = 16 }; the action row is docked to the bottom with
+        // a 12px top margin and is the first child, so it also leads the tab order as in WPF.
+        var actions = AvaloniaCompactDialogChrome.CreateActionRow([insert, close]);
+        actions.Margin = new Thickness(0, 12, 0, 0);
+        DockPanel.SetDock(actions, Dock.Bottom);
+        dialog.Content = new DockPanel
+        {
+            Margin = new Thickness(16),
+            Children = { actions, body },
+        };
+        // WPF: Loaded += DialogFocus.Focus(_translationBox).
+        dialog.Opened += (_, _) =>
+        {
+            // The shared descendant chrome pass (run on Opened by ApplyWindow) centres text box
+            // content; multi-line boxes start at the top as in WPF.
+            sourceBox.VerticalContentAlignment = global::Avalonia.Layout.VerticalAlignment.Top;
+            translationBox.VerticalContentAlignment = global::Avalonia.Layout.VerticalAlignment.Top;
+            translationBox.Focus();
+        };
         await dialog.ShowDialog(this);
     }
 
@@ -201,7 +259,7 @@ public sealed partial class MainWindow
         var items = options
             .Select(o => new TranslateLanguageItem(o.Code, UiText.Get(o.DisplayKey)))
             .ToList();
-        var box = new ComboBox { ItemsSource = items, Width = 150 };
+        var box = new ComboBox { ItemsSource = items, HorizontalAlignment = AvaloniaProofingHorizontalAlignment.Stretch };
         box.SelectedItem = items.FirstOrDefault(i => i.Code == defaultCode) ?? items.FirstOrDefault();
         AutomationProperties.SetAutomationId(box, automationId);
         return box;

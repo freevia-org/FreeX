@@ -5955,7 +5955,7 @@ public sealed class AvaloniaShellSourceTests
         customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(deleteButton, \"CustomViewsDeleteButton\");");
         customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"CustomViewAddDialog\");");
         customViewsSource.Should().Contain("AutomationProperties.SetAutomationId(nameBox, \"CustomViewNameBox\");");
-        customViewsSource.Should().Contain("Width = 640,");
+        customViewsSource.Should().Contain("Width = 640 - WpfResizableFrameWidth,");
         customViewsSource.Should().Contain("CreateCustomViewsHeader()");
         customViewsSource.Should().Contain("AddCustomViewsHeaderCell(header, 1, UiText.Get(\"CustomViews_Sheets\"));");
         customViewsSource.Should().Contain("new ColumnDefinitions(\"200,70,110,210\")");

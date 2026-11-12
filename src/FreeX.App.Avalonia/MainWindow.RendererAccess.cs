@@ -16,7 +16,8 @@ public sealed partial class MainWindow
     private const int ForecastSheetDialogHeight = 150 - WpfNoResizeFrameHeight;
     private const int ForecastSheetErrorBandHeight = 40;
     private const int SubtotalDialogWidth = 380;
-    private const int SubtotalDialogHeight = 390;
+    // WPF SubtotalDialog is a 380x390 *outer* NoResize window (see the frame note below).
+    private const int SubtotalDialogHeight = 390 - WpfNoResizeFrameHeight;
     // WPF Window.Width/Height are OUTER sizes (caption and frame included); Avalonia's are client
     // sizes. A WPF dialog size copied verbatim is therefore too large here by the Windows frame:
     // 16 x 39 for a resizable window, 6 x 29 for ResizeMode.NoResize. Subtract the allowance so the

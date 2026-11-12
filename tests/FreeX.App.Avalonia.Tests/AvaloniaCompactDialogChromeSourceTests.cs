@@ -326,7 +326,7 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         definedNamesSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow(");
         definedNamesSource.Should().Contain("[okButton, cancelButton]");
 
-        protectionSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 10, 0, 0));");
+        protectionSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 12, 0, 0));");
         selectionPaneSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);");
         selectionPaneSource.Should().NotContain("Children = { ok, cancel }");
         tableResizeSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0))");
@@ -380,7 +380,7 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         protectionSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, ProtectionDialogChromeStyle, minWidth, isDefault);");
         protectionSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, ProtectionDialogChromeStyle);");
         protectionSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, ProtectionDialogChromeStyle);");
-        protectionSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 10, 0, 0));");
+        protectionSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 12, 0, 0));");
 
         moveCopySource.Should().Contain("private static AvaloniaCompactDialogChromeStyle MoveCopySheetDialogChromeStyle => new(FormulaBarFontFamily);");
         moveCopySource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, MoveCopySheetDialogChromeStyle, minWidth, isDefault);");
