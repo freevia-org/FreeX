@@ -565,6 +565,11 @@ public sealed partial class MainWindow
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
+        // WPF ConditionalFormatDialog.RuleShell.cs: a default-template ListBox whose 12pt rows are 20px.
+        ruleTypeShellList.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
+        {
+            Setters = { new Setter(Layoutable.MinHeightProperty, 20d) },
+        });
         AutomationProperties.SetAutomationId(ruleTypeShellList, "ConditionalFormatRuleShellList");
         AutomationProperties.SetName(ruleTypeShellList, UiText.Get("ConditionalFormatDialog_RuleTypeAutomationName"));
 

@@ -30,6 +30,10 @@ public sealed partial class MainWindow
 {
     private static AvaloniaCompactDialogChromeStyle ProtectionDialogChromeStyle => new(FormulaBarFontFamily);
 
+    // WPF PasswordProtectionDialog (ProtectionDialogs.cs) uses a default-template PasswordBox, which
+    // renders 18px tall at the 12px dialog font; the buttons keep the shared control height.
+    private const double ProtectWpfPasswordBoxHeight = 18;
+
     // ── Review ▸ Protect menu entry points ─────────────────────────────────────
     private void ProtectSheet() => RunGuarded(ShowProtectSheetDialogAsync);
 
@@ -535,10 +539,16 @@ public sealed partial class MainWindow
         => AvaloniaCompactDialogChrome.ApplyButton(button, ProtectionDialogChromeStyle, minWidth, isDefault);
 
     /// <summary>
-    /// Applies standard Protection-dialog text-box chrome (Height=24, Padding=(4,1), FontSize=12, grey border).
+    /// Applies standard Protection-dialog text-box chrome (Height=18 like the WPF PasswordBox, FontSize=12, grey border).
     /// </summary>
     private static void ApplyProtectTextBoxChrome(TextBox textBox)
-        => AvaloniaCompactDialogChrome.ApplyTextBox(textBox, ProtectionDialogChromeStyle);
+    {
+        AvaloniaCompactDialogChrome.ApplyTextBox(textBox, ProtectionDialogChromeStyle);
+        textBox.Height = ProtectWpfPasswordBoxHeight;
+        textBox.MinHeight = ProtectWpfPasswordBoxHeight;
+        textBox.MaxHeight = ProtectWpfPasswordBoxHeight;
+        textBox.Padding = new Thickness(3, 0);
+    }
 
     /// <summary>
     /// Applies standard Protection-dialog check-box chrome (MinHeight=20, MaxHeight=20, FontSize=12).

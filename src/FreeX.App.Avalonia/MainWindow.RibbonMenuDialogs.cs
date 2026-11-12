@@ -403,7 +403,10 @@ public sealed partial class MainWindow
                 Text = values[i],
                 FontSize = 12,
                 FontFamily = FormulaBarFontFamily,
-                Margin = new Thickness(6, 1),
+                // WPF GridView cells inset their text 6px from the column's leading edge but only
+                // clip it at the trailing column edge, so a cell keeps the full column width minus
+                // that leading inset before the text is cut.
+                Margin = new Thickness(6, 1, 0, 1),
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
             };

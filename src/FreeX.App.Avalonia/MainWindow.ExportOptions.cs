@@ -193,16 +193,16 @@ public sealed partial class MainWindow
         stack.Children.Add(CreateExportOptionsSectionLabel("ExportOptions_PageRange", topMargin: 12));
         stack.Children.Add(allPagesButton);
 
+        // WPF: Pages, then each Label with Margin (8, 0, 6, 0) before its 56px box.
         var pageRangePanel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Margin = new Thickness(0, 4, 0, 0),
-            Spacing = 6
         };
         pageRangePanel.Children.Add(pagesButton);
-        pageRangePanel.Children.Add(new Label { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_From")), Target = fromPageBox, VerticalAlignment = AvaloniaVerticalAlignment.Center });
+        pageRangePanel.Children.Add(CreateExportOptionsLabel("ExportOptions_From", fromPageBox, new Thickness(8, 0, 6, 0)));
         pageRangePanel.Children.Add(fromPageBox);
-        pageRangePanel.Children.Add(new Label { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_To")), Target = toPageBox, VerticalAlignment = AvaloniaVerticalAlignment.Center });
+        pageRangePanel.Children.Add(CreateExportOptionsLabel("ExportOptions_To", toPageBox, new Thickness(8, 0, 6, 0)));
         pageRangePanel.Children.Add(toPageBox);
         stack.Children.Add(pageRangePanel);
 
@@ -211,7 +211,7 @@ public sealed partial class MainWindow
         stack.Children.Add(ignorePrintAreasBox);
         stack.Children.Add(bookmarksBox);
         stack.Children.Add(CreateExportOptionsLabeledControl("ExportOptions_BookmarkMode", bookmarkModeBox, leftIndent: 22));
-        stack.Children.Add(CreateExportOptionsLabeledControl("ExportOptions_InitialView", initialViewBox));
+        stack.Children.Add(CreateExportOptionsLabeledControl("ExportOptions_InitialView", initialViewBox, topMargin: 4));
         stack.Children.Add(CreateExportOptionsLabeledControl("ExportOptions_OpenMode", openModeBox));
         stack.Children.Add(CreateExportOptionsLabeledControl("ExportOptions_PdfLanguage", pdfLanguageBox));
         stack.Children.Add(bitmapTextBox);
@@ -221,6 +221,18 @@ public sealed partial class MainWindow
         stack.Children.Add(minimumSizeButton);
         stack.Children.Add(openAfterPublishBox);
         stack.Children.Add(errorBlock);
+        foreach (var toggle in new ToggleButton[]
+                 {
+                     activeSheetButton, selectionButton, workbookButton, allPagesButton, pagesButton,
+                     documentPropertiesBox, ignorePrintAreasBox, bookmarksBox, bitmapTextBox, pdfABox,
+                     structureTagsBox, standardQualityButton, minimumSizeButton, openAfterPublishBox,
+                 })
+        {
+            // The compact toggle template is only as tall as its 12px text line (14px); WPF's
+            // default CheckBox / RadioButton rows are 15px, which sets the option pitch here.
+            toggle.MinHeight = ExportOptionsWpfToggleHeight;
+            toggle.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        }
 
         var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), IsDefault = true };
         var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true };

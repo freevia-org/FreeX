@@ -50,26 +50,44 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, topMargin, 0, topMargin == 0 ? 6 : 4),
         };
 
+    // WPF ExportOptionsDialog: each labelled row is a horizontal StackPanel whose default-template
+    // Label (5px padding, so 26px tall at the 12px font) sits 6px left of its control; the rows are
+    // 2px apart except Initial view, which is 4px below the bookmark row.
     private static StackPanel CreateExportOptionsLabeledControl(
         string resourceKey,
         Control control,
-        double leftIndent = 0) =>
+        double leftIndent = 0,
+        double topMargin = 2) =>
         new()
         {
             Orientation = Orientation.Horizontal,
-            Margin = new Thickness(leftIndent, 2, 0, 0),
+            Margin = new Thickness(leftIndent, topMargin, 0, 0),
             Spacing = 6,
             Children =
             {
-                new Label
-                {
-                    Content = StripDisplayMnemonic(UiText.Get(resourceKey)),
-                    Target = control,
-                    VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
-                },
+                CreateExportOptionsLabel(resourceKey, control, new Thickness(0)),
                 control,
             },
         };
+
+    private static Label CreateExportOptionsLabel(string resourceKey, Control target, Thickness margin) =>
+        new()
+        {
+            Content = StripDisplayMnemonic(UiText.Get(resourceKey)),
+            Target = target,
+            Padding = new Thickness(ExportOptionsWpfLabelPadding),
+            // Pinned rather than a minimum: Avalonia's line box at this font is taller than WPF's.
+            Height = ExportOptionsWpfLabelHeight,
+            Margin = margin,
+            VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+            VerticalContentAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+        };
+
+    // WPF default Label padding and the resulting row height at the 12px dialog font.
+    private const double ExportOptionsWpfLabelPadding = 5;
+    private const double ExportOptionsWpfLabelHeight = 26;
+    // WPF default CheckBox / RadioButton row height at the 12px dialog font.
+    private const double ExportOptionsWpfToggleHeight = 15;
 
     private static bool IsFocusInside(Window dialog, IInputElement? element) =>
         element is Visual visual && ReferenceEquals(TopLevel.GetTopLevel(visual), dialog);
