@@ -46,7 +46,7 @@ public sealed class DialogVisualParitySourceTests
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
-        source.Should().Contain("numbersBox.Opacity = enabled ? 1 : 0.7;");
+        source.Should().NotContain("numbersBox.Opacity = enabled ? 1 : 0.7;");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyCompactRadioButton(button, AvaloniaCompactDialogChrome.WindowsStyle);");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyCompactCheckBox(numbersBox, AvaloniaCompactDialogChrome.WindowsStyle);");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyGroupBox(availableGroup, borderBrush: Brush(213, 223, 229));");
@@ -86,7 +86,8 @@ public sealed class DialogVisualParitySourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, dialogChrome);");
-        source.Should().Contain("ButtonHeight = 24,");
+        source.Should().Contain("ButtonHeight = GoToDialogPlanner.ActionButtonHeight,");
+        source.Should().Contain("TextBoxHeight = 18,");
         source.Should().Contain("MinHeight = 130,");
         source.Should().Contain("Margin = new Thickness(0, 24, 0, 0),");
         source.Should().Contain("new GridLength(1, GridUnitType.Star)");

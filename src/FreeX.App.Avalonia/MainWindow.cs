@@ -15213,9 +15213,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
+        // WPF GoToDialog leaves its reference TextBox and buttons at their native 12 px heights:
+        // an 18 px box (16 px text area inside the 1 px frame) and 20 px buttons.
         var dialogChrome = AvaloniaCompactDialogChrome.WindowsStyle with
         {
-            ButtonHeight = 24,
+            ButtonHeight = GoToDialogPlanner.ActionButtonHeight,
+            TextBoxHeight = 18,
+            TextBoxPadding = new Thickness(2, 0),
             FontFamily = FormulaBarFontFamily,
         };
         AvaloniaCompactDialogChrome.ApplyWindow(dialog, dialogChrome);
@@ -15546,10 +15550,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             textBox.IsEnabled = enabled;
             logicalsBox.IsEnabled = enabled;
             errorsBox.IsEnabled = enabled;
-            numbersBox.Opacity = enabled ? 1 : 0.7;
-            textBox.Opacity = enabled ? 1 : 0.7;
-            logicalsBox.Opacity = enabled ? 1 : 0.7;
-            errorsBox.Opacity = enabled ? 1 : 0.7;
+            // WPF GoToSpecialDialog only toggles IsEnabled: the disabled check boxes grey their
+            // glyphs while the labels keep their ink, so no extra fade is applied here.
         }
 
         GoToSpecialValueTypes GetValueTypes()
@@ -22407,14 +22409,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var selectedOffsets = initialSubtotalColumnOffsets.ToHashSet();
         // WPF SubtotalDialog: a borderless ListBox inside the GroupBox, so the group frame is the only
-        // frame, with the first row inset 4px below the frame's top edge (98 = 94 list + 4 inset).
+        // frame. The list starts right under the frame's top edge; its first check box sits 4px below
+        // that edge, as in WPF.
         var columnsList = new ListBox
         {
             ItemsSource = columns,
             Height = 94,
             MinHeight = 94,
             MaxHeight = 94,
-            Margin = new Thickness(0, 4, 0, 0),
+            Margin = new Thickness(0),
             Padding = new Thickness(0),
             BorderThickness = new Thickness(0),
         };
@@ -22619,15 +22622,37 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         Grid.SetColumn(actionButtons, 2);
 
+        // WPF SubtotalDialog: new GroupBox { Content = _subtotalColumnList } with no header. The WPF
+        // frame is a 99px rounded rectangle 1px inside the 12px root margin, with the rows inset 14px
+        // from its left edge. The themed GroupBox template reserved a header gap in the top edge and
+        // let the list paint over the bottom edge, so this header-less group draws one plain frame
+        // around a presenter that cannot exceed it.
         var columnsGroup = new GroupBox
         {
             Content = columnsList,
-            Height = 100,
-            MinHeight = 100,
-            MaxHeight = 100,
-            Padding = new Thickness(3, 0, 3, 0),
+            Height = 99,
+            MinHeight = 99,
+            MaxHeight = 99,
+            Margin = new Thickness(1, 0, 1, 0),
+            Padding = new Thickness(8, 0, 1, 0),
         };
         AvaloniaCompactDialogChrome.ApplyGroupBox(columnsGroup, SubtotalDialogChromeStyle);
+        columnsGroup.Template = new FuncControlTemplate<GroupBox>((groupHost, _) =>
+        {
+            var groupPresenter = new ContentPresenter { Name = "PART_ContentPresenter" };
+            groupPresenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = groupHost });
+            groupPresenter.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ContentControl.ContentTemplate)) { Source = groupHost });
+            groupPresenter.Bind(ContentPresenter.PaddingProperty, new Binding(nameof(TemplatedControl.Padding)) { Source = groupHost });
+            var groupFrame = new Border
+            {
+                CornerRadius = new CornerRadius(3),
+                ClipToBounds = true,
+                Child = groupPresenter,
+            };
+            groupFrame.Bind(Border.BorderBrushProperty, new Binding(nameof(TemplatedControl.BorderBrush)) { Source = groupHost });
+            groupFrame.Bind(Border.BorderThicknessProperty, new Binding(nameof(TemplatedControl.BorderThickness)) { Source = groupHost });
+            return groupFrame;
+        });
 
         // WPF SubtotalDialog: root StackPanel { Margin = 12 } -- the fields, the options and then the
         // button row, so the fields also precede Remove All / OK / Cancel in the tab order.
@@ -26620,8 +26645,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = presentation.Title,
-            Width = 460,
-            Height = 240,
+            // WPF ShowMergeCellsContentWarningDialog: a 460x240 NoResize window, an OUTER size, so
+            // the Avalonia client area drops the WPF frame.
+            Width = 460 - WpfNoResizeFrameWidth,
+            Height = 240 - WpfNoResizeClientFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false
         };

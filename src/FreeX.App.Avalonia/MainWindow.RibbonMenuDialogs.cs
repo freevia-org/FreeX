@@ -392,6 +392,9 @@ public sealed partial class MainWindow
     private Control BuildWatchWindowRowGrid(WatchWindowRowPlan row)
     {
         var grid = CreateWatchWindowColumnGrid();
+        // WPF GridView rows are 22px at the 12px dialog font; with the item's 1px top and bottom
+        // padding the cells need a 20px row (the text alone made 18px rows).
+        grid.MinHeight = 20;
         var values = new[] { row.Book, row.Sheet, row.Name, row.Cell, row.Value, row.Formula };
         for (var i = 0; i < values.Length; i++)
         {

@@ -229,7 +229,9 @@ public sealed partial class MainWindow
     private static AvaloniaGrid CreateCustomViewsRow(CustomViewsPlanner.Row row)
     {
         var viewRow = CreateCustomViewsColumnsGrid();
-        viewRow.MinHeight = 24;
+        // WPF CustomViewsDialog.xaml: GridView rows are 22px at the 12px dialog font; the list item's
+        // 1px top and bottom padding makes up the rest of that height.
+        viewRow.MinHeight = 20;
         AddCustomViewsRowCell(viewRow, 0, row.Name);
         AddCustomViewsRowCell(viewRow, 1, row.SheetCount.ToString(System.Globalization.CultureInfo.CurrentCulture));
         AddCustomViewsRowCell(viewRow, 2, IncludedIndicator(row.IncludePrintSettings));

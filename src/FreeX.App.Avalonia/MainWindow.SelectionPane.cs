@@ -492,7 +492,8 @@ public sealed partial class MainWindow
                 // the top of the row; WPF centres it on the check box and type label.
                 MinHeight = 0,
                 VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
-                Padding = new Thickness(0),
+                // The WPF text box view keeps a 2px left text margin inside the borderless box.
+                Padding = new Thickness(2, 0, 0, 0),
                 Margin = new Thickness(8, 0, 0, 0),
             };
             AutomationProperties.SetAutomationId(
@@ -518,10 +519,14 @@ public sealed partial class MainWindow
             var rowGrid = new Grid
             {
                 MinHeight = 24,
+                // WPF item template: Border { Padding = 0,2,0,2 } around the 24px row panel.
+                Margin = new Thickness(0, 2, 0, 2),
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 ColumnDefinitions =
                 {
-                    new ColumnDefinition { Width = new GridLength(32) },
+                    // WPF: the check box is 24px wide; the item's 4px padding now carries the inset
+                    // that the wider column used to stand in for.
+                    new ColumnDefinition { Width = new GridLength(24) },
                     new ColumnDefinition { Width = new GridLength(160) },
                     new ColumnDefinition { Width = GridLength.Auto },
                     new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
@@ -534,15 +539,9 @@ public sealed partial class MainWindow
             rowGrid.Children.Add(nameBox);
             rowGrid.Children.Add(kindText);
 
+            // WPF rows have no separator line; only the selected item's frame is drawn.
             var rowSurface = new Grid { MinHeight = 24 };
             rowSurface.Children.Add(rowGrid);
-            rowSurface.Children.Add(new Border
-            {
-                Background = Brush(218, 218, 218),
-                Height = 1,
-                VerticalAlignment = AvaloniaVerticalAlignment.Bottom,
-                IsHitTestVisible = false,
-            });
             var beforeCue = new Border
             {
                 Background = Brush(32, 122, 197),
@@ -662,16 +661,21 @@ public sealed partial class MainWindow
     private static void ApplySelectionPaneListStyle(ListBox listBox)
     {
         AvaloniaCompactDialogChrome.ApplyListBox(listBox, SelectionPaneDialogChromeStyle);
+        // WPF SelectionPaneDialog keeps the default list chrome: a 1px list padding and 4,1-padded
+        // items with a 1px frame that only the selected row paints (#DADADA around #F6F6F6 while the
+        // list is not focused). Rows carry no separators; with the item template's 2px vertical
+        // padding and 24px row panel every row is 32px tall.
+        listBox.Padding = new Thickness(1);
         listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
         {
             Setters =
             {
                 new Setter(TemplatedControl.BackgroundProperty, Brushes.White),
                 new Setter(TemplatedControl.ForegroundProperty, Brushes.Black),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
-                new Setter(TemplatedControl.BorderBrushProperty, Brush(218, 218, 218)),
-                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 1)),
-                new Setter(Layoutable.MinHeightProperty, 28d),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(4, 1)),
+                new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(1)),
+                new Setter(Layoutable.MinHeightProperty, 32d),
                 new Setter(ContentControl.HorizontalContentAlignmentProperty, AvaloniaHorizontalAlignment.Stretch),
             },
         });
@@ -682,7 +686,7 @@ public sealed partial class MainWindow
                 new Setter(TemplatedControl.BackgroundProperty, Brush(246, 246, 246)),
                 new Setter(TemplatedControl.ForegroundProperty, Brushes.Black),
                 new Setter(TemplatedControl.BorderBrushProperty, Brush(218, 218, 218)),
-                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 1)),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(1)),
             },
         });
         listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>().Class(":selected").Template().OfType<Border>())
@@ -691,7 +695,7 @@ public sealed partial class MainWindow
             {
                 new Setter(Border.BackgroundProperty, Brush(246, 246, 246)),
                 new Setter(Border.BorderBrushProperty, Brush(218, 218, 218)),
-                new Setter(Border.BorderThicknessProperty, new Thickness(0, 0, 0, 1)),
+                new Setter(Border.BorderThicknessProperty, new Thickness(1)),
             },
         });
     }

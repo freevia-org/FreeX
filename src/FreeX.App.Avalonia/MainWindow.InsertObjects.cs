@@ -323,13 +323,13 @@ public sealed partial class MainWindow
         var dialog = new FreeXDialogWindow(chrome)
         {
             Title = UiText.Get(CreateTableDialogPlanner.TitleKey),
-            // WPF CreateTableDialog is a Width x Height (224x144) NoResize window: an OUTER size, whose
-            // client area the content just fills. The Avalonia controls are a few pixels taller per
-            // row, so the height follows the content rather than CreateTableDialogPlanner.Height.
-            Width = CreateTableDialogPlanner.Width,
-            MinWidth = CreateTableDialogPlanner.Width,
-            MaxWidth = CreateTableDialogPlanner.Width,
-            SizeToContent = SizeToContent.Height,
+            // WPF CreateTableDialog is a Width x Height (224x144) NoResize window: an OUTER size. The
+            // Avalonia window sets the client area, so both lose the WPF frame (16 x 39) like the
+            // other fixed-size dialogs; the text stays at the 12 px dialog default.
+            Width = CreateTableDialogPlanner.Width - WpfNoResizeFrameWidth,
+            MinWidth = CreateTableDialogPlanner.Width - WpfNoResizeFrameWidth,
+            MaxWidth = CreateTableDialogPlanner.Width - WpfNoResizeFrameWidth,
+            Height = CreateTableDialogPlanner.Height - WpfNoResizeClientFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
