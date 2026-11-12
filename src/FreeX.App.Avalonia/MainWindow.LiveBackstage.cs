@@ -30,6 +30,19 @@ public sealed partial class MainWindow
         FreeXBackstageHomePanePlanner.Build();
     private AvaloniaBackstageFrame _backstageOverlay = null!;
 
+    // WPF File-screen rail (src/FreeX.App.Host/MainWindow.BackstageFrame.cs, InitializeBackstageFrame):
+    // a quiet neutral rail with dark ink, independent of the active brand theme. Keep these literals
+    // byte-identical to the WPF BackstageAccent.
+    private static readonly AvaloniaBackstageAccent LiveBackstageRailAccent = new(
+        Sidebar: Color.FromRgb(0xF3, 0xF4, 0xF6),
+        Hover: Color.FromRgb(0xE5, 0xE9, 0xED),
+        Selected: Color.FromRgb(0xD8, 0xE5, 0xE9),
+        Separator: Color.FromRgb(0xD7, 0xDC, 0xE2),
+        Foreground: Color.FromRgb(0x24, 0x2A, 0x31))
+    {
+        FlatRailChrome = true,
+    };
+
     // WPF File-screen pane metrics (src/FreeX.App.Host/MainWindow.xaml, SsHomeView/SsInfoView/SsPrintView).
     // The shared frame already insets pane content by BackstageVisualContract.Frame.ContentPadding (40,28),
     // so the panes only add the difference to WPF's own 30 (Home) / 36 (Info, Print) heading top margin.
@@ -75,12 +88,8 @@ public sealed partial class MainWindow
     private Control BuildBackstageOverlay()
     {
         var entries = LiveBackstageFramePlan.Entries.Select(MapLiveBackstageEntry).ToArray();
-        var backstageTheme = AvaloniaSisterBackstageTheme.FromTheme(
-            App.ActiveTheme,
-            tileWidth: 150,
-            tileHeight: 190);
         _backstageOverlay = new AvaloniaBackstageFrame(
-            backstageTheme.Accent,
+            LiveBackstageRailAccent,
             entries,
             AvaloniaBackstageRibbonChrome.Create(
                 Free.Shared.Ribbon.RibbonCommandIconKind.WindowClose))

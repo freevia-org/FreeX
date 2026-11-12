@@ -230,6 +230,33 @@ public sealed class BackstageProjectionSourceTests
         sharedFrameSource.Should().Contain("ToolTip.SetTip(button, tooltip)");
     }
 
+    [Fact]
+    public void LiveBackstageRail_UsesTheWpfNeutralRailAccentThroughTheSharedFrameContract()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.LiveBackstage.cs"));
+        var wpfSource = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "MainWindow.BackstageFrame.cs"));
+
+        // The WPF host is the authority for the File-screen rail; the Avalonia host must carry the same
+        // literals and hand them to the shared frame rather than restyling rail buttons itself.
+        foreach (var literal in new[]
+                 {
+                     "Sidebar: Color.FromRgb(0xF3, 0xF4, 0xF6)",
+                     "Hover: Color.FromRgb(0xE5, 0xE9, 0xED)",
+                     "Selected: Color.FromRgb(0xD8, 0xE5, 0xE9)",
+                     "Separator: Color.FromRgb(0xD7, 0xDC, 0xE2)",
+                     "Foreground: Color.FromRgb(0x24, 0x2A, 0x31)",
+                 })
+        {
+            wpfSource.Should().Contain(literal);
+            source.Should().Contain(literal);
+        }
+
+        source.Should().Contain("LiveBackstageRailAccent = new(");
+        source.Should().Contain("FlatRailChrome = true");
+        source.Should().Contain("LiveBackstageRailAccent,");
+        source.Should().NotContain("AvaloniaSisterBackstageTheme.FromTheme(");
+    }
+
     private static string RepoFile(params string[] parts) =>
         Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }
