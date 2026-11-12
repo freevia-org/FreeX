@@ -15774,9 +15774,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             },
         };
 
-        // WPF shows the workbook's folder in a read-only "Look in:" box with a Browse... button and a
-        // list naming the current folder and file. This shell has no file-browse action for
-        // hyperlinks, so the row carries the read-only folder box and the list without the button.
+        // WPF shows the workbook's folder in a read-only look-in box with a browse button in the
+        // trailing column and a list naming the current folder, the current file and a browse hint.
         var currentFilePath = _session.CurrentFilePath;
         var currentFolder = string.IsNullOrWhiteSpace(currentFilePath) ? null : System.IO.Path.GetDirectoryName(currentFilePath);
         var currentFileName = string.IsNullOrWhiteSpace(currentFilePath) ? null : System.IO.Path.GetFileName(currentFilePath);
@@ -15792,15 +15791,37 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         folderBox.Height = HyperlinkDialogPlanner.FieldHeight;
         AutomationProperties.SetName(folderBox, UiText.Get("Hyperlink_CurrentFolder"));
         AutomationProperties.SetAutomationId(folderBox, "HyperlinkCurrentFolderText");
+        var browseButton = new Button { Content = StripDisplayMnemonic(UiText.Get("Hyperlink_Browse")) };
+        ApplyDialogButtonChrome(browseButton, width: HyperlinkDialogPlanner.SecondaryButtonWidth);
+        AutomationProperties.SetName(browseButton, UiText.Get("Hyperlink_BrowseForAFile"));
+        AutomationProperties.SetAutomationId(browseButton, "HyperlinkBrowseButton");
+        AutomationProperties.SetHelpText(browseButton, UiText.Get("Hyperlink_ChooseALocalFileForThisHyperlink"));
+        // WPF BrowseButton_Click: an any-file open picker; the chosen path becomes the address and
+        // the address box takes focus with its text selected.
+        browseButton.Click += (_, _) => RunGuarded(async () =>
+        {
+            var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
+                dialog.StorageProvider,
+                AvaloniaFilePickerOpenRequest.FromFileTypes(
+                    UiText.Get("Hyperlink_BrowseForAFile"),
+                    [AnyFileType]));
+            if (file is null)
+                return;
+
+            ApplyHyperlinkBrowseResult(targetBox, file.TryGetLocalPath() ?? file.Name);
+        });
         var lookInRow = CreateHyperlinkFieldRow(
             new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Hyperlink_LookIn")) },
             folderBox,
-            null,
+            browseButton,
             new Thickness(0, 0, 0, 4));
 
+        // The WPF list ends with a browse hint line whose text is not a localized resource there;
+        // the browse button's localized help text carries the same guidance here.
         var currentFolderItems = new List<string> { UiText.Get("Hyperlink_CurrentFolder") };
         if (!string.IsNullOrWhiteSpace(currentFileName))
             currentFolderItems.Add(currentFileName);
+        currentFolderItems.Add(UiText.Get("Hyperlink_ChooseALocalFileForThisHyperlink"));
         var currentFolderList = new ListBox
         {
             ItemsSource = currentFolderItems,
@@ -15875,6 +15896,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         await dialog.ShowDialog(this);
         return result;
+    }
+
+    internal static void ApplyHyperlinkBrowseResult(TextBox targetBox, string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        targetBox.Text = path;
+        AvaloniaCompactDialogChrome.FocusAndSelect(targetBox);
     }
 
     // Small modal prompt used by the Insert Hyperlink "ScreenTip..." / "Bookmark..."
@@ -20817,15 +20847,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var firstKeySelection = SortOptionsPolicy.ResolveFirstKeyOrderSelection(
             current.FirstKeySortOrder,
             presentation.FirstKeySortOrders,
-            preserveUnlistedEditorText: false);
+            preserveUnlistedEditorText: true);
+        // WPF SortOptionsDialog makes this combo editable so a user-authored custom list (comma
+        // separated) can be typed straight into the box and flow through to the sort unchanged.
         var firstKeyBox = new ComboBox
         {
             ItemsSource = presentation.FirstKeySortOrders,
+            IsEditable = true,
             SelectedItem = firstKeySelection.SelectedChoice,
             Margin = new Thickness(0, 0, 0, 10),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
         AvaloniaCompactDialogChrome.ApplyComboBox(firstKeyBox, AvaloniaCompactDialogChrome.WindowsStyle);
+        // A previously authored custom list is not a catalog choice: show its literal text in the
+        // editable box instead of silently reverting the choice to the normal order.
+        firstKeyBox.Text = firstKeySelection.SelectedChoice?.Label ?? firstKeySelection.EditorText;
         AutomationProperties.SetAutomationId(firstKeyBox, "SortOptionsFirstKeySortOrderBox");
 
         var topToBottomButton = new RadioButton
@@ -20857,11 +20893,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         okButton.Click += (_, _) =>
         {
+            // The editor text is authoritative: it names a catalog choice (by label or value) or
+            // carries a typed custom list. An empty box keeps whatever choice is selected.
+            var selectedFirstKeyChoice = firstKeyBox.SelectedItem as SortOptionsFirstKeyOrderChoice;
+            var firstKeyEditorText = firstKeyBox.Text;
+            if (!string.IsNullOrWhiteSpace(firstKeyEditorText))
+            {
+                var typedSelection = SortOptionsPolicy.ResolveFirstKeyOrderSelection(
+                    firstKeyEditorText.Trim(),
+                    presentation.FirstKeySortOrders,
+                    preserveUnlistedEditorText: true);
+                selectedFirstKeyChoice = typedSelection.SelectedChoice;
+                firstKeyEditorText = typedSelection.EditorText;
+            }
+
             result = SortOptionsPolicy.CreateResult(
                 caseSensitiveBox.IsChecked == true,
                 leftToRightButton.IsChecked == true,
-                firstKeyBox.SelectedItem as SortOptionsFirstKeyOrderChoice,
-                editorText: null);
+                selectedFirstKeyChoice,
+                firstKeyEditorText);
             dialog.Close();
         };
         cancelButton.Click += (_, _) => dialog.Close();
@@ -23959,9 +24009,24 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             UiText.CreateAutomationName(UiText.Get("DataValidation_Value")));
         AutomationProperties.SetAutomationId(formula1Box, "DataValidationFormula1Box");
         ApplyDialogTextBoxChrome(formula1Box);
-        // AttachInventoryDialogRangePickers replaces the formula box with a "box + ..." row inside the
-        // box's parent panel, so each formula box gets its own host panel in the control column.
-        var formula1Field = CreateDataValidationFormRow(formula1Label, new Panel { Children = { formula1Box } });
+        // WPF DataValidationDialog.xaml docks the reference picker and the use-selection button to the
+        // right of each formula box (box, use-selection, picker). The pickers carry the registered
+        // automation ids, so AttachInventoryDialogRangePickers wires them instead of creating its own.
+        var selectionSource = DataValidationService.FormatListSourceRange(
+            _session.SelectedRange,
+            _session.ActiveSheet.Name,
+            _session.ActiveSheet.Name);
+        var useSelectionButton = CreateDataValidationUseSelectionButton(
+            "DataValidation_UseSelection",
+            "DataValidationUseSelectionButton");
+        var sourcePickerButton = CreateDataValidationSourcePickerButton(
+            "DataValidationSourcePickerButton",
+            "DataValidation_SelectSourceRange",
+            "DataValidation_CollapseDialogAndSelectAWorksheetRangeForTheValidationSo",
+            "DataValidation_CollapseDialogAndSelectSourceRange");
+        var formula1Field = CreateDataValidationFormRow(
+            formula1Label,
+            CreateDataValidationSourceRow(formula1Box, useSelectionButton, sourcePickerButton));
 
         var formula2Label = new TextBlock();
         var formula2Box = new TextBox
@@ -23973,7 +24038,31 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             UiText.CreateAutomationName(UiText.Get("DataValidation_Maximum")));
         AutomationProperties.SetAutomationId(formula2Box, "DataValidationFormula2Box");
         ApplyDialogTextBoxChrome(formula2Box);
-        var formula2Field = CreateDataValidationFormRow(formula2Label, new Panel { Children = { formula2Box } });
+        var useSelection2Button = CreateDataValidationUseSelectionButton(
+            "DataValidation_UseSelection2",
+            "DataValidationUseSelection2Button");
+        var sourcePicker2Button = CreateDataValidationSourcePickerButton(
+            "DataValidationSourcePicker2Button",
+            "DataValidation_SelectMaximumRange",
+            "DataValidation_CollapseDialogAndSelectAWorksheetRangeForTheValidationMa",
+            "DataValidation_CollapseDialogAndSelectMaximumRange");
+        var formula2Field = CreateDataValidationFormRow(
+            formula2Label,
+            CreateDataValidationSourceRow(formula2Box, useSelection2Button, sourcePicker2Button));
+
+        // WPF ApplySelectionSourceTo: the current worksheet selection replaces the box text and the
+        // box takes focus with its text selected.
+        void ApplySelectionSourceTo(TextBox textBox)
+        {
+            if (string.IsNullOrWhiteSpace(selectionSource))
+                return;
+
+            textBox.Text = selectionSource.Trim();
+            AvaloniaCompactDialogChrome.FocusAndSelect(textBox);
+        }
+
+        useSelectionButton.Click += (_, _) => ApplySelectionSourceTo(formula1Box);
+        useSelection2Button.Click += (_, _) => ApplySelectionSourceTo(formula2Box);
 
         var allowBlankBox = new CheckBox
         {
@@ -24156,7 +24245,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var plan = DataValidationDialogPlanner.CreateVisibilityPlan(
                 SelectedType(),
                 SelectedOperator(),
-                hasSelectionSource: false);
+                hasSelectionSource: !string.IsNullOrWhiteSpace(selectionSource));
 
             var formula1Descriptor = DataValidationDialogPlanner.GetFormula1FieldDescriptor(plan.Formula1Label);
             formula1Label.Text = StripDisplayMnemonic(UiText.Get(formula1Descriptor.LabelResourceKey));
@@ -24167,6 +24256,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             operatorField.IsVisible = plan.ShowOperator;
             formula1Field.IsVisible = plan.ShowFormula1;
             formula2Field.IsVisible = plan.ShowFormula2;
+            sourcePickerButton.IsVisible = plan.ShowFormula1RangePicker;
+            useSelectionButton.IsVisible = plan.ShowFormula1UseSelection;
+            sourcePicker2Button.IsVisible = plan.ShowFormula2RangePicker;
+            useSelection2Button.IsVisible = plan.ShowFormula2UseSelection;
             showDropdownBox.IsVisible = plan.ShowDropdown;
         }
 
@@ -24553,6 +24646,55 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 control,
             },
         };
+
+    /// <summary>
+    /// WPF DataValidationDialog.xaml use-selection button: 104 wide with a 6px gap, docked between
+    /// the formula box and its reference picker.
+    /// </summary>
+    private static Button CreateDataValidationUseSelectionButton(string labelResourceKey, string automationId)
+    {
+        var button = new Button
+        {
+            Content = StripDisplayMnemonic(UiText.Get(labelResourceKey)),
+            Margin = new Thickness(6, 0, 0, 0),
+        };
+        ApplyDialogButtonChrome(button, 104);
+        button.Height = DialogRangePickerButtonHeight;
+        button.MinHeight = DialogRangePickerButtonHeight;
+        button.MaxHeight = DialogRangePickerButtonHeight;
+        button.Padding = new Thickness(0);
+        button.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        AutomationProperties.SetAutomationId(button, automationId);
+        AutomationProperties.SetName(button, UiText.CreateAutomationName(UiText.Get(labelResourceKey)));
+        return button;
+    }
+
+    private static Button CreateDataValidationSourcePickerButton(
+        string automationId,
+        string nameResourceKey,
+        string helpTextResourceKey,
+        string toolTipResourceKey)
+    {
+        var picker = CreateDialogRangePickerButton(automationId, UiText.Get(nameResourceKey));
+        AutomationProperties.SetHelpText(picker, UiText.Get(helpTextResourceKey));
+        ToolTip.SetTip(picker, UiText.Get(toolTipResourceKey));
+        return picker;
+    }
+
+    private static AvaloniaGrid CreateDataValidationSourceRow(TextBox box, Button useSelection, Button picker)
+    {
+        var row = new AvaloniaGrid();
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(box, 0);
+        Grid.SetColumn(useSelection, 1);
+        Grid.SetColumn(picker, 2);
+        row.Children.Add(box);
+        row.Children.Add(useSelection);
+        row.Children.Add(picker);
+        return row;
+    }
 
     // DataValidationDialog.xaml: every tab page uses <ColumnDefinition Width="120"/> for its labels.
     private const double DataValidationLabelColumnWidth = 120;

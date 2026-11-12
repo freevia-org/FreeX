@@ -874,6 +874,18 @@ public sealed partial class MainWindow
 
     internal Task ShowDataValidationDialogForTestAsync() => ShowDataValidationDialogAsync();
 
+    internal Task ShowPageBreakDialogForTestAsync() => ShowPageBreaksMenuAsync();
+
+    internal Task<FreeX.App.Services.SortDialogOptions?> ShowSortOptionsDialogForTestAsync(
+        FreeX.App.Services.SortDialogOptions current) =>
+        ShowSortOptionsDialogAsync(current);
+
+    internal async Task ShowInsertFunctionPickerDialogForTestAsync() =>
+        _ = await ShowInsertFunctionPickerDialogAsync();
+
+    internal async Task ShowInsertHyperlinkInputDialogForTestAsync() =>
+        _ = await ShowInsertHyperlinkInputDialogAsync();
+
     internal Task ShowFindReplaceTabbedDialogForTestAsync(bool replaceMode = false) =>
         ShowFindReplaceTabbedDialogAsync(replaceMode);
 

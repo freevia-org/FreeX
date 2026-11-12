@@ -33,9 +33,11 @@ public sealed class AvaloniaWorksheetStructureOwnershipSourceTests
         var source = ReadAppSource("MainWindow.InsertDeleteCells.cs");
 
         source.Should().Contain("CellShiftDialogPlanner.GetSurface(mode)");
-        source.Should().Contain("CellShiftDialogPlanner.GetCellSelectionChoices(mode)");
+        source.Should().Contain("foreach (var option in surface.Options)");
+        source.Should().Contain("KeyboardInsertDeleteDialogChoice.EntireRow");
+        source.Should().Contain("KeyboardInsertDeleteDialogChoice.EntireColumn");
         source.Should().Contain("CellShiftDialogPlanner.ToKeyboardChoice(");
-        source.Should().Contain("ApplyCellShiftAutomation(first, firstOption)");
+        source.Should().Contain("ApplyCellShiftAutomation(button, option)");
         source.Should().NotContain("ShowShiftDirectionAsync(string title");
         source.Should().NotContain("\"Shift cells right\"");
         source.Should().NotContain("\"Shift cells left\"");

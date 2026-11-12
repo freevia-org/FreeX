@@ -50,13 +50,35 @@ public sealed partial class MainWindow
         var choice = await ShowShiftDirectionAsync(CellShiftDialogMode.Insert);
         if (choice is null)
             return;
-        var direction = CellShiftDialogPlanner.ToKeyboardChoice(CellShiftDialogMode.Insert, choice.Value) == KeyboardInsertDeleteDialogChoice.ShiftDown
-            ? InsertCellsShiftDirection.Down
-            : InsertCellsShiftDirection.Right;
-        ApplyWorksheetStructureResult(
-            () => _session.InsertSelectedCells(direction),
-            $"Inserted cells ({(direction == InsertCellsShiftDirection.Right ? "shift right" : "shift down")})",
-            "Could not insert cells.");
+        // WPF InsertCellsMenuItem_Click: the entire-row/entire-column choices route to the whole-band
+        // session operations, the shift choices to the band-scoped cell insert.
+        switch (CellShiftDialogPlanner.ToKeyboardChoice(CellShiftDialogMode.Insert, choice.Value))
+        {
+            case KeyboardInsertDeleteDialogChoice.EntireRow:
+                ApplyWorksheetStructureResult(
+                    () => _session.InsertSelectedRows(),
+                    "Inserted rows",
+                    "Could not insert rows.");
+                return;
+            case KeyboardInsertDeleteDialogChoice.EntireColumn:
+                ApplyWorksheetStructureResult(
+                    () => _session.InsertSelectedColumns(),
+                    "Inserted columns",
+                    "Could not insert columns.");
+                return;
+            case KeyboardInsertDeleteDialogChoice.ShiftDown:
+                ApplyWorksheetStructureResult(
+                    () => _session.InsertSelectedCells(InsertCellsShiftDirection.Down),
+                    "Inserted cells (shift down)",
+                    "Could not insert cells.");
+                return;
+            default:
+                ApplyWorksheetStructureResult(
+                    () => _session.InsertSelectedCells(InsertCellsShiftDirection.Right),
+                    "Inserted cells (shift right)",
+                    "Could not insert cells.");
+                return;
+        }
     }
 
     private async Task ShowDeleteCellsDialogAsync()
@@ -82,13 +104,33 @@ public sealed partial class MainWindow
         var choice = await ShowShiftDirectionAsync(CellShiftDialogMode.Delete);
         if (choice is null)
             return;
-        var direction = CellShiftDialogPlanner.ToKeyboardChoice(CellShiftDialogMode.Delete, choice.Value) == KeyboardInsertDeleteDialogChoice.ShiftUp
-            ? DeleteCellsShiftDirection.Up
-            : DeleteCellsShiftDirection.Left;
-        ApplyWorksheetStructureResult(
-            () => _session.DeleteSelectedCells(direction),
-            $"Deleted cells ({(direction == DeleteCellsShiftDirection.Left ? "shift left" : "shift up")})",
-            "Could not delete cells.");
+        switch (CellShiftDialogPlanner.ToKeyboardChoice(CellShiftDialogMode.Delete, choice.Value))
+        {
+            case KeyboardInsertDeleteDialogChoice.EntireRow:
+                ApplyWorksheetStructureResult(
+                    () => _session.DeleteSelectedRows(),
+                    "Deleted rows",
+                    "Could not delete rows.");
+                return;
+            case KeyboardInsertDeleteDialogChoice.EntireColumn:
+                ApplyWorksheetStructureResult(
+                    () => _session.DeleteSelectedColumns(),
+                    "Deleted columns",
+                    "Could not delete columns.");
+                return;
+            case KeyboardInsertDeleteDialogChoice.ShiftUp:
+                ApplyWorksheetStructureResult(
+                    () => _session.DeleteSelectedCells(DeleteCellsShiftDirection.Up),
+                    "Deleted cells (shift up)",
+                    "Could not delete cells.");
+                return;
+            default:
+                ApplyWorksheetStructureResult(
+                    () => _session.DeleteSelectedCells(DeleteCellsShiftDirection.Left),
+                    "Deleted cells (shift left)",
+                    "Could not delete cells.");
+                return;
+        }
     }
 
     /// <summary>
@@ -137,20 +179,30 @@ public sealed partial class MainWindow
     private async Task<CellShiftDialogChoice?> ShowShiftDirectionAsync(CellShiftDialogMode mode)
     {
         var surface = CellShiftDialogPlanner.GetSurface(mode);
-        var options = CellShiftDialogPlanner.GetCellSelectionChoices(mode);
-        var firstOption = options[0];
-        var secondOption = options[1];
-        var first = new RadioButton { Content = StripDisplayMnemonic(UiText.Get(firstOption.LabelKey)), GroupName = "shift", IsChecked = true, Margin = new Thickness(0, 0, 0, 2) };
-        var second = new RadioButton { Content = StripDisplayMnemonic(UiText.Get(secondOption.LabelKey)), GroupName = "shift", Margin = new Thickness(0, 0, 0, 2) };
+        // WPF CellShiftDialog lists every surface option: the two shift directions followed by the
+        // entire-row and entire-column choices, the first one checked.
+        var optionButtons = new List<RadioButton>();
+        var optionPanel = new StackPanel { Margin = new Thickness(8, 6, 8, 8) };
+        foreach (var option in surface.Options)
+        {
+            var button = new RadioButton
+            {
+                Content = StripDisplayMnemonic(UiText.Get(option.LabelKey)),
+                GroupName = "shift",
+                IsChecked = optionButtons.Count == 0,
+                Tag = option.Choice,
+                Margin = new Thickness(0, 0, 0, 2),
+            };
+            ApplyCellShiftAutomation(button, option);
+            AvaloniaCompactDialogChrome.ApplyRadioButton(button, InsertDeleteCellsDialogChromeStyle);
+            // WPF radios are ~16px rows with a 6px bottom margin; a 20px compact row plus 2px keeps the pitch.
+            button.MinHeight = 20;
+            button.MaxHeight = 20;
+            optionButtons.Add(button);
+            optionPanel.Children.Add(button);
+        }
         var ok = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")), IsDefault = true };
         var cancel = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")), IsCancel = true };
-        ApplyCellShiftAutomation(first, firstOption);
-        ApplyCellShiftAutomation(second, secondOption);
-        AvaloniaCompactDialogChrome.ApplyRadioButton(first, InsertDeleteCellsDialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyRadioButton(second, InsertDeleteCellsDialogChromeStyle);
-        // WPF radios are ~16px rows with a 6px bottom margin; a 20px compact row plus 2px keeps the pitch.
-        first.MinHeight = second.MinHeight = 20;
-        first.MaxHeight = second.MaxHeight = 20;
         // WPF DialogButtonRowFactory.Create(Accept, buttonWidth: 72).
         AvaloniaCompactDialogChrome.ApplyButton(ok, InsertDeleteCellsDialogChromeStyle, 72, isDefault: true);
         AvaloniaCompactDialogChrome.ApplyButton(cancel, InsertDeleteCellsDialogChromeStyle, 72);
@@ -173,11 +225,7 @@ public sealed partial class MainWindow
             Header = UiText.Get(surface.GroupHeaderKey),
             Padding = new Thickness(0),
             Margin = new Thickness(0),
-            Content = new StackPanel
-            {
-                Margin = new Thickness(8, 6, 8, 8),
-                Children = { first, second },
-            },
+            Content = optionPanel,
         };
         ApplyPlainWindowGroupBoxChrome(optionGroup, InsertDeleteCellsDialogChromeStyle);
         DockPanel.SetDock(optionGroup, Dock.Top);
@@ -207,7 +255,14 @@ public sealed partial class MainWindow
             },
         };
 
-        ok.Click += (_, _) => dialog.Close(second.IsChecked == true ? secondOption.Choice : firstOption.Choice);
+        ok.Click += (_, _) =>
+        {
+            var selected = optionButtons.FirstOrDefault(button => button.IsChecked == true);
+            dialog.Close(selected?.Tag is CellShiftDialogChoice selectedChoice
+                ? selectedChoice
+                : (CellShiftDialogChoice?)surface.Options[0].Choice);
+        };
+        dialog.Opened += (_, _) => optionButtons[0].Focus();
         cancel.Click += (_, _) => dialog.Close((CellShiftDialogChoice?)null);
         return await dialog.ShowDialog<CellShiftDialogChoice?>(this);
     }

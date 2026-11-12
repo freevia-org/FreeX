@@ -359,14 +359,14 @@ public sealed partial class MainWindow
         };
 
         // WPF places the content kinds by PasteSpecialChoiceDescriptor.WpfPlacement (column 0 top to
-        // bottom, then column 1). This shell has no "All using source theme" kind, so each column is
-        // packed in WPF order without leaving that row empty.
+        // bottom, then column 1). Every WPF content kind is listed, including the source-theme one,
+        // which pastes through the shared PasteSpecialContentKind the plan carries.
         var radios = new List<RadioButton>();
         var pasteGrid = new Grid();
         pasteGrid.ColumnDefinitions.Add(new ColumnDefinition());
         pasteGrid.ColumnDefinitions.Add(new ColumnDefinition());
         var nextPasteRow = new int[2];
-        foreach (var choice in surface.AvaloniaChoices
+        foreach (var choice in surface.WpfChoices
             .OrderBy(descriptor => descriptor.WpfPlacement.Column)
             .ThenBy(descriptor => descriptor.WpfPlacement.Row))
         {
