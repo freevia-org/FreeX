@@ -409,9 +409,14 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
-      # Fifteen release-test entries get runner priority; five speculative package jobs
-      # still overlap them without exceeding the observed 20-job account concurrency cap.
-      max-parallel: 5
+      # Every lane starts at once; the runner pools (macOS 5, Linux 5, ~20 aggregate) do the queueing,
+      # and the matrix is ordered longest-first so the short lanes absorb it. This used to be 5, which
+      # was meant to leave the fifteen release-test entries their runners -- but those are already
+      # running (or the package jobs are parked at the public-preview approval, which a person grants
+      # after the tests have mostly finished) before any package slot matters. In release 43047602424
+      # it serialized fifteen jobs through five slots: FreeW osx-x64 waited 7 minutes for a slot, and
+      # the last package finished 18 minutes after the first started, against a 16 minute longest job.
+      max-parallel: 15
       matrix: ${{ fromJSON(needs.prepare.outputs.package_matrix) }}
     steps:
       - name: Checkout

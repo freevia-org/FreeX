@@ -8,11 +8,17 @@
     build. Authentication is provided by DefaultAzureCredential in the Artifact
     Signing client (for example, Azure CLI locally or workload identity in CI).
 #>
-[CmdletBinding()]
+[CmdletBinding(PositionalBinding = $false)]
 param(
     [Parameter(Mandatory = $true)]
     [Alias("File")]
     [string[]]$Files,
+
+    # `pwsh -File` binds only the first value after -Files to an array parameter; the rest arrive
+    # as unnamed arguments. Velopack's multi-file sign template (`{{file...}}`) expands to
+    # `-Files "a" "b" "c"`, so collect the rest here and treat them as part of -Files.
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$AdditionalFiles,
 
     [string]$MetadataPath = (Join-Path $PSScriptRoot "signing/metadata.json"),
 
@@ -24,6 +30,11 @@ param(
 
     [ValidateRange(1, 5)]
     [int]$MaxAttempts = 3,
+
+    # Files signed at the same time within one call. Signing is a network round trip to Azure, so this
+    # is bounded by the service rather than the runner; failed files already retry with backoff.
+    [ValidateRange(1, 32)]
+    [int]$ThrottleLimit = 8,
 
     [switch]$VerifyOnly
 )
@@ -107,8 +118,9 @@ $dlibRoots = @(
 )
 
 $resolvedSignTool = Resolve-UniqueSigningTool -DisplayName "x64 SignTool" -FileName "signtool.exe" -ExplicitPath $SignToolPath -SearchRoots $signToolRoots -RequireX64Path
+$resolvedDlib = $null
 if (-not $VerifyOnly) {
-    $resolvedDlib = Resolve-UniqueSigningTool -DisplayName "x64 Artifact Signing dlib" -FileName "Azure.CodeSigning.Dlib.dll" -ExplicitPath $DlibPath -SearchRoots $dlibRoots
+    $resolvedDlib =Resolve-UniqueSigningTool -DisplayName "x64 Artifact Signing dlib" -FileName "Azure.CodeSigning.Dlib.dll" -ExplicitPath $DlibPath -SearchRoots $dlibRoots
 }
 
 $azureCliDirectory = Join-Path $programFiles "Microsoft SDKs/Azure/CLI2/wbin"
@@ -118,7 +130,7 @@ if ((Test-Path -LiteralPath $azureCliDirectory -PathType Container) -and
 }
 
 $resolvedFiles = @(
-    foreach ($path in $Files) {
+    foreach ($path in @($Files) + @($AdditionalFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })) {
         (Resolve-Path -LiteralPath $path -ErrorAction Stop).Path
     }
 )
@@ -126,25 +138,72 @@ if ($resolvedFiles.Count -eq 0) {
     throw "At least one file is required."
 }
 
-foreach ($path in $resolvedFiles) {
-    if (-not $VerifyOnly) {
-        for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
-            Write-Host "Artifact Signing (attempt $attempt/$MaxAttempts): $path"
-            & $resolvedSignTool sign /v /fd SHA256 /tr $TimestampUrl /td SHA256 /dlib $resolvedDlib /dmdf $MetadataPath $path
+# One file's sign (with retries) and verify. Output is collected rather than written so that files
+# signed concurrently do not interleave their SignTool transcripts; the caller replays each one whole.
+# Every file still gets exactly the same SignTool sign and verify commands as before, and a failure
+# is still reported per file after every in-flight file has finished.
+$signOneFile = {
+    param($Path, $SignTool, $Dlib, $Metadata, $Timestamp, $Attempts, $SkipSigning)
+
+    # SignTool writes progress to stderr; merging it must not abort on Windows PowerShell's Stop preference.
+    $ErrorActionPreference = "Continue"
+    $transcript = New-Object System.Collections.Generic.List[string]
+    $failure = $null
+
+    if (-not $SkipSigning) {
+        for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+            $transcript.Add("Artifact Signing (attempt $attempt/${Attempts}): $Path")
+            foreach ($line in @(& $SignTool sign /v /fd SHA256 /tr $Timestamp /td SHA256 /dlib $Dlib /dmdf $Metadata $Path 2>&1)) {
+                $transcript.Add([string]$line)
+            }
             if ($LASTEXITCODE -eq 0) {
                 break
             }
-            if ($attempt -eq $MaxAttempts) {
-                throw "Artifact Signing failed for '$path' after $MaxAttempts attempts (last exit code $LASTEXITCODE)."
+            if ($attempt -eq $Attempts) {
+                $failure = "Artifact Signing failed for '$Path' after $Attempts attempts (last exit code $LASTEXITCODE)."
+                break
             }
             Start-Sleep -Seconds ([Math]::Pow(2, $attempt))
         }
     }
 
-    & $resolvedSignTool verify /v /pa /all $path
-    if ($LASTEXITCODE -ne 0) {
-        throw "Authenticode verification failed for '$path' with exit code $LASTEXITCODE."
+    if ($null -eq $failure) {
+        foreach ($line in @(& $SignTool verify /v /pa /all $Path 2>&1)) {
+            $transcript.Add([string]$line)
+        }
+        if ($LASTEXITCODE -ne 0) {
+            $failure = "Authenticode verification failed for '$Path' with exit code $LASTEXITCODE."
+        }
     }
+
+    [pscustomobject]@{ Path = $Path; Transcript = $transcript.ToArray(); Failure = $failure }
+}
+
+# Velopack hands this script a whole batch (--signParallel) per call. The Azure signing round trip is
+# network latency, not CPU, so a batch signs concurrently; one file, or Windows PowerShell, signs in line.
+$results = if ($resolvedFiles.Count -gt 1 -and $PSVersionTable.PSVersion.Major -ge 7) {
+    # A script block cannot cross into a -Parallel runspace, so it travels as text and is rebuilt there.
+    $signOneFileText = $signOneFile.ToString()
+    $resolvedFiles | ForEach-Object -ThrottleLimit $ThrottleLimit -Parallel {
+        & ([scriptblock]::Create($using:signOneFileText)) $_ $using:resolvedSignTool $using:resolvedDlib $using:MetadataPath $using:TimestampUrl $using:MaxAttempts ([bool]$using:VerifyOnly)
+    }
+} else {
+    foreach ($path in $resolvedFiles) {
+        & $signOneFile $path $resolvedSignTool $resolvedDlib $MetadataPath $TimestampUrl $MaxAttempts ([bool]$VerifyOnly)
+    }
+}
+
+$failures = @()
+foreach ($result in @($results)) {
+    foreach ($line in $result.Transcript) {
+        Write-Host $line
+    }
+    if ($null -ne $result.Failure) {
+        $failures += $result.Failure
+    }
+}
+if ($failures.Count -gt 0) {
+    throw ($failures -join [Environment]::NewLine)
 }
 
 Write-Host "Verified $($resolvedFiles.Count) signed Windows artifact(s)."

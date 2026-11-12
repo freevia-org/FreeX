@@ -194,9 +194,13 @@ if (-not [string]::IsNullOrWhiteSpace($ArtifactSigningMetadataPath)) {
 
     $powerShellPath = Get-ToolPowerShellPath
     $signingScriptPath = Join-Path $PSScriptRoot "Invoke-WindowsArtifactSigning.ps1"
-    $signingTemplate = '"{0}" -NoProfile -File "{1}" -Files {{{{file}}}} -MetadataPath "{2}"' -f `
+    # `{{file...}}` (not `{{file}}`) lets Velopack pass --signParallel files per call. With the single-file
+    # form it signs strictly one file per process launch, which cost ~3.5 s per file and ~10 minutes of
+    # the FreeX package job (158 unsigned files). The wrapper signs each batch concurrently, with the
+    # same per-file sign, retry and verify. Velopack still skips files that are already trusted-signed.
+    $signingTemplate = '"{0}" -NoProfile -File "{1}" -Files {{{{file...}}}} -MetadataPath "{2}"' -f `
         $powerShellPath, $signingScriptPath, $metadataPath
-    $vpkArguments += @("--signTemplate", $signingTemplate)
+    $vpkArguments += @("--signTemplate", $signingTemplate, "--signParallel", "8")
 }
 
 & $VpkPath @vpkArguments
