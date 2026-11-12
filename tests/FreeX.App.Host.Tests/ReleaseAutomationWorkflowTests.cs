@@ -249,6 +249,26 @@ public sealed class ReleaseAutomationWorkflowTests
     }
 
     [Fact]
+    public void FullReleaseWorkflow_GatesOnlyWindowsSigningLegsBehindThePublicPreviewEnvironment()
+    {
+        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "full-release.yml");
+
+        // The Azure federated credential trusts only environment:public-preview and the AZURE_* values live
+        // only in that environment, so exactly the Windows legs of the two signing job families need it.
+        // Linux and macOS legs run without the approval wait. The non-empty value sits on the true side
+        // because an empty string is falsy in && / || chains; a dry run still resolves to no environment.
+        const string scoped = "environment: ${{ !inputs.dry_run && matrix.platform == 'windows' && 'public-preview' || '' }}";
+        Regex.Matches(workflow, Regex.Escape(scoped)).Count.Should().Be(2,
+            "only the package and suite-package matrix jobs scope the approval to Windows signing legs");
+        workflow.Should().NotContain("environment: ${{ !inputs.dry_run && 'public-preview' || '' }}");
+
+        // Publication stays behind the protected environment on the job that creates the release.
+        Regex.Matches(workflow, @"(?m)^    environment: public-preview\r?$").Count.Should().Be(2);
+        workflow.Should().Contain("needs: [prepare, publication-gate]");
+        // Every Azure login step is Windows-only, so no ungated leg needs the environment secrets.
+        Regex.Matches(workflow, @"(?s)if: matrix\.platform == 'windows' && !inputs\.dry_run\s+uses: azure/login").Count.Should().Be(2);
+    }
+    [Fact]
     public void FullReleaseWorkflow_UsesOneAppVersionTagAndIndependentPlatformPackages()
     {
         var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "full-release.yml");
