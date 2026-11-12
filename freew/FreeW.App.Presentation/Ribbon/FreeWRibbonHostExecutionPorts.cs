@@ -190,7 +190,8 @@ public sealed record FreeWRibbonHostExecutionPorts(
     Func<string, bool>? OpenMailDraft = null,
     Action? OpenChangeCaseDialog = null,
     Action? NewComment = null,
-    Action? OpenSpellingAndGrammar = null)
+    Action? OpenSpellingAndGrammar = null,
+    Action<Action<string>>? OpenShapeGalleryDialog = null)
 {
     public Func<bool>? ResolvePrintLayoutActive(Func<bool>? fallback = null) =>
         ResolveDocumentViewCheck(IsPrintLayoutActive, static plan => plan.PrintLayout, fallback);

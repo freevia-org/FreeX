@@ -40,6 +40,7 @@ internal static class FreeWRibbonIcons
             ["freew.shape-ellipse"] = RibbonCommandIconKind.Ellipse,
             ["freew.screen-clipping"] = RibbonCommandIconKind.Picture,
 
+            ["freew.shapes-gallery"] = RibbonCommandIconKind.Shapes,
             ["freew.shape-change-rectangle"] = RibbonCommandIconKind.Rectangle,
             ["freew.shape-change-rounded"] = RibbonCommandIconKind.Rectangle,
             ["freew.shape-change-ellipse"] = RibbonCommandIconKind.Ellipse,

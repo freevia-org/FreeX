@@ -455,6 +455,9 @@ internal static partial class FreeWCanonicalRibbonTabs
                             m.Item("freew.shape-rounded", "Rounded Rectangle", "O");
                             m.Item("freew.shape-ellipse", "Ellipse", "E");
                             m.Item("freew.shape-textbox", "Text Box", "T");
+                            // The full Word-style gallery (Lines, Rectangles, Basic Shapes, Block Arrows,
+                            // Equation Shapes, Flowchart, Stars and Banners, Callouts) with drawn thumbnails.
+                            m.Item("freew.shapes-gallery", "More Shapes…", "M");
                         });
                         g.Medium("freew.smartart", "SmartArt", RibbonCommandIconKind.SmartArt);
                         g.RowBreak();
@@ -1154,6 +1157,7 @@ internal static partial class FreeWCanonicalRibbonTabs
             new("Rounded Rectangle", new RibbonCommandId("freew.shape-rounded")),
             new("Ellipse", new RibbonCommandId("freew.shape-ellipse")),
             new("Text Box", new RibbonCommandId("freew.shape-textbox")),
+            new("More Shapes…", new RibbonCommandId("freew.shapes-gallery")),
         });
 
     private static RibbonMenu BuildTextBoxMenu() =>

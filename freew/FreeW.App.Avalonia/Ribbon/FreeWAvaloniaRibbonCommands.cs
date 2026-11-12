@@ -206,7 +206,7 @@ internal static class FreeWAvaloniaRibbonCommands
         // Shape / Text Box — floating drawing objects at the caret.
         InsertDrawingGalleryWorkflow.Register(
             r,
-            new InsertDrawingGalleryPorts(editor.InsertShape));
+            new InsertDrawingGalleryPorts(editor.InsertShape, callbacks.OpenShapeGalleryDialog));
 
         SymbolRibbonWorkflow.Register(
             r,

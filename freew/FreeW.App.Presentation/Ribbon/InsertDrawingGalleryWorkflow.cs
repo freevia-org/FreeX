@@ -17,7 +17,15 @@ public sealed record InsertDrawingGalleryChoice(
     RibbonCommandId CommandId,
     InsertDrawingPreset Preset);
 
-public sealed record InsertDrawingGalleryPorts(Action<Shape> InsertShape);
+/// <param name="InsertShape">The host's undoable shape insertion adapter.</param>
+/// <param name="OpenShapeGallery">
+/// Opens the host's grouped shape gallery and reports the chosen <see cref="PresetShapeCatalogItem.Id"/>
+/// through the supplied callback (not invoked on cancel). Null in headless registries, where the
+/// gallery command is registered but disabled.
+/// </param>
+public sealed record InsertDrawingGalleryPorts(
+    Action<Shape> InsertShape,
+    Action<Action<string>>? OpenShapeGallery = null);
 
 /// <summary>
 /// Owns Insert &gt; Shapes and Text Box gallery policy for both renderers. Hosts provide only the
@@ -39,6 +47,9 @@ public static class InsertDrawingGalleryWorkflow
         new("freew.textbox-sidebar", InsertDrawingPreset.SidebarTextBox),
         new("freew.textbox-quote", InsertDrawingPreset.QuoteTextBox),
     ];
+
+    /// <summary>Insert &gt; Shapes &gt; More Shapes: opens the grouped preset-shape gallery.</summary>
+    public const string ShapeGalleryCommandId = "freew.shapes-gallery";
 
     public static IReadOnlyList<InsertDrawingGalleryChoice> ShapeChoices => ShapeChoiceItems;
     public static IReadOnlyList<InsertDrawingGalleryChoice> TextBoxChoices => TextBoxChoiceItems;
@@ -66,6 +77,7 @@ public static class InsertDrawingGalleryWorkflow
             bindings.Register(choice.CommandId, command);
         }
 
+        bindings.Register(ShapeGalleryCommandId, new ShapeGalleryCommand(ports));
         bindings.Register("freew.shape", commands[InsertDrawingPreset.Rectangle]);
         bindings.Register("freew.text-box", commands[InsertDrawingPreset.SimpleTextBox]);
     }
@@ -84,6 +96,27 @@ public static class InsertDrawingGalleryWorkflow
         InsertDrawingPreset.QuoteTextBox => CreateQuoteTextBox(),
         _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null),
     };
+
+    /// <summary>
+    /// Inserts the gallery entry with the given id through the host's insertion adapter. Returns false
+    /// (and inserts nothing) for an unknown id.
+    /// </summary>
+    public static bool InsertGalleryShape(InsertDrawingGalleryPorts ports, string? itemId)
+    {
+        ArgumentNullException.ThrowIfNull(ports);
+        if (!PresetShapeCatalog.TryGetItem(itemId, out var item))
+            return false;
+        ports.InsertShape(PresetShapeCatalog.CreateShape(item));
+        return true;
+    }
+
+    private sealed class ShapeGalleryCommand(InsertDrawingGalleryPorts ports) : IRibbonStatefulCommand
+    {
+        public RibbonCommandState GetState() => new(IsEnabled: ports.OpenShapeGallery is not null);
+
+        public void Execute(RibbonCommandContext context) =>
+            ports.OpenShapeGallery?.Invoke(itemId => InsertGalleryShape(ports, itemId));
+    }
 
     private static Shape CreateSidebarTextBox()
     {

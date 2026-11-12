@@ -476,11 +476,17 @@ internal static class FreeWRibbonCommands
         // DocxWriter/Reader). The top-level "freew.shapes" id only opens the menu (no direct insert).
         InsertDrawingGalleryWorkflow.Register(
             registry,
-            new InsertDrawingGalleryPorts(shape =>
-            {
-                editor.Focus();
-                editor.InsertShape(shape);
-            }));
+            new InsertDrawingGalleryPorts(
+                shape =>
+                {
+                    editor.Focus();
+                    editor.InsertShape(shape);
+                },
+                OpenShapeGallery: choose =>
+                {
+                    if (ShapeGalleryDialog.Prompt(Window.GetWindow(editor)) is { } itemId)
+                        choose(itemId);
+                }));
         // Insert tab — Media: drop a sample equation / chart / WordArt / SmartArt / OLE object at the caret.
         // Each routes through the editor's undoable insert path (mirroring InsertShape) and round-trips
         // through docx (the model + IO already exist; this surfaces them in the ribbon). Sample content is a

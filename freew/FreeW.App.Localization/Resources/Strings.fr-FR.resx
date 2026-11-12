@@ -154,6 +154,158 @@
   <data name="InsertChart_AddRow_Label" xml:space="preserve"><value>Ajouter une ligne</value></data>
   <data name="InsertChart_RemoveRow_Label" xml:space="preserve"><value>Supprimer la ligne</value></data>
   <data name="InsertChart_EmptyRows_Validation" xml:space="preserve"><value>Saisissez au moins une ligne de données.</value></data>
+  <data name="ShapeGallery_Dialog_Title" xml:space="preserve"><value>Formes</value></data>
+  <data name="ShapeGallery_Group_Lines" xml:space="preserve"><value>Lignes</value></data>
+  <data name="ShapeGallery_Group_Rectangles" xml:space="preserve"><value>Rectangles</value></data>
+  <data name="ShapeGallery_Group_BasicShapes" xml:space="preserve"><value>Formes de base</value></data>
+  <data name="ShapeGallery_Group_BlockArrows" xml:space="preserve"><value>Flèches pleines</value></data>
+  <data name="ShapeGallery_Group_EquationShapes" xml:space="preserve"><value>Formes d&apos;équation</value></data>
+  <data name="ShapeGallery_Group_Flowchart" xml:space="preserve"><value>Organigramme</value></data>
+  <data name="ShapeGallery_Group_StarsAndBanners" xml:space="preserve"><value>Étoiles et bannières</value></data>
+  <data name="ShapeGallery_Group_Callouts" xml:space="preserve"><value>Bulles et légendes</value></data>
+  <data name="ShapeGallery_Shape_Line" xml:space="preserve"><value>Trait</value></data>
+  <data name="ShapeGallery_Shape_LineArrow" xml:space="preserve"><value>Flèche</value></data>
+  <data name="ShapeGallery_Shape_LineDoubleArrow" xml:space="preserve"><value>Flèche à deux pointes</value></data>
+  <data name="ShapeGallery_Shape_ElbowConnector" xml:space="preserve"><value>Connecteur en angle</value></data>
+  <data name="ShapeGallery_Shape_ElbowArrow" xml:space="preserve"><value>Connecteur en angle avec flèche</value></data>
+  <data name="ShapeGallery_Shape_ElbowDoubleArrow" xml:space="preserve"><value>Connecteur en angle à deux flèches</value></data>
+  <data name="ShapeGallery_Shape_CurvedConnector" xml:space="preserve"><value>Connecteur en arc</value></data>
+  <data name="ShapeGallery_Shape_CurvedArrow" xml:space="preserve"><value>Connecteur en arc avec flèche</value></data>
+  <data name="ShapeGallery_Shape_CurvedDoubleArrow" xml:space="preserve"><value>Connecteur en arc à deux flèches</value></data>
+  <data name="ShapeGallery_Shape_Rectangle" xml:space="preserve"><value>Rectangle</value></data>
+  <data name="ShapeGallery_Shape_RoundedRectangle" xml:space="preserve"><value>Rectangle à coins arrondis</value></data>
+  <data name="ShapeGallery_Shape_Snip1Rect" xml:space="preserve"><value>Rectangle à un coin rogné</value></data>
+  <data name="ShapeGallery_Shape_Snip2SameRect" xml:space="preserve"><value>Rectangle à deux coins du même côté rognés</value></data>
+  <data name="ShapeGallery_Shape_Snip2DiagRect" xml:space="preserve"><value>Rectangle à deux coins diagonaux rognés</value></data>
+  <data name="ShapeGallery_Shape_SnipRoundRect" xml:space="preserve"><value>Rectangle à un coin arrondi et un coin rogné</value></data>
+  <data name="ShapeGallery_Shape_Round1Rect" xml:space="preserve"><value>Rectangle à un coin arrondi</value></data>
+  <data name="ShapeGallery_Shape_Round2SameRect" xml:space="preserve"><value>Rectangle à deux coins du même côté arrondis</value></data>
+  <data name="ShapeGallery_Shape_Round2DiagRect" xml:space="preserve"><value>Rectangle à deux coins diagonaux arrondis</value></data>
+  <data name="ShapeGallery_Shape_Oval" xml:space="preserve"><value>Ellipse</value></data>
+  <data name="ShapeGallery_Shape_Triangle" xml:space="preserve"><value>Triangle isocèle</value></data>
+  <data name="ShapeGallery_Shape_RightTriangle" xml:space="preserve"><value>Triangle rectangle</value></data>
+  <data name="ShapeGallery_Shape_Parallelogram" xml:space="preserve"><value>Parallélogramme</value></data>
+  <data name="ShapeGallery_Shape_Trapezoid" xml:space="preserve"><value>Trapèze</value></data>
+  <data name="ShapeGallery_Shape_Diamond" xml:space="preserve"><value>Losange</value></data>
+  <data name="ShapeGallery_Shape_Pentagon" xml:space="preserve"><value>Pentagone</value></data>
+  <data name="ShapeGallery_Shape_Hexagon" xml:space="preserve"><value>Hexagone</value></data>
+  <data name="ShapeGallery_Shape_Heptagon" xml:space="preserve"><value>Heptagone</value></data>
+  <data name="ShapeGallery_Shape_Octagon" xml:space="preserve"><value>Octogone</value></data>
+  <data name="ShapeGallery_Shape_Decagon" xml:space="preserve"><value>Décagone</value></data>
+  <data name="ShapeGallery_Shape_Dodecagon" xml:space="preserve"><value>Dodécagone</value></data>
+  <data name="ShapeGallery_Shape_Pie" xml:space="preserve"><value>Cercle partiel</value></data>
+  <data name="ShapeGallery_Shape_Chord" xml:space="preserve"><value>Corde</value></data>
+  <data name="ShapeGallery_Shape_Teardrop" xml:space="preserve"><value>Larme</value></data>
+  <data name="ShapeGallery_Shape_Frame" xml:space="preserve"><value>Cadre</value></data>
+  <data name="ShapeGallery_Shape_HalfFrame" xml:space="preserve"><value>Demi-cadre</value></data>
+  <data name="ShapeGallery_Shape_LShape" xml:space="preserve"><value>Forme en L</value></data>
+  <data name="ShapeGallery_Shape_DiagonalStripe" xml:space="preserve"><value>Bande diagonale</value></data>
+  <data name="ShapeGallery_Shape_Cross" xml:space="preserve"><value>Croix</value></data>
+  <data name="ShapeGallery_Shape_Plaque" xml:space="preserve"><value>Plaque</value></data>
+  <data name="ShapeGallery_Shape_Cylinder" xml:space="preserve"><value>Cylindre</value></data>
+  <data name="ShapeGallery_Shape_Cube" xml:space="preserve"><value>Cube</value></data>
+  <data name="ShapeGallery_Shape_Bevel" xml:space="preserve"><value>Rectangle biseauté</value></data>
+  <data name="ShapeGallery_Shape_Donut" xml:space="preserve"><value>Anneau</value></data>
+  <data name="ShapeGallery_Shape_BlockArc" xml:space="preserve"><value>Arc plein</value></data>
+  <data name="ShapeGallery_Shape_FoldedCorner" xml:space="preserve"><value>Rectangle à coin plié</value></data>
+  <data name="ShapeGallery_Shape_SmileyFace" xml:space="preserve"><value>Émoticône</value></data>
+  <data name="ShapeGallery_Shape_Heart" xml:space="preserve"><value>Cœur</value></data>
+  <data name="ShapeGallery_Shape_LightningBolt" xml:space="preserve"><value>Éclair</value></data>
+  <data name="ShapeGallery_Shape_Sun" xml:space="preserve"><value>Soleil</value></data>
+  <data name="ShapeGallery_Shape_Moon" xml:space="preserve"><value>Lune</value></data>
+  <data name="ShapeGallery_Shape_Cloud" xml:space="preserve"><value>Nuage</value></data>
+  <data name="ShapeGallery_Shape_Arc" xml:space="preserve"><value>Arc</value></data>
+  <data name="ShapeGallery_Shape_DoubleBracket" xml:space="preserve"><value>Double crochet</value></data>
+  <data name="ShapeGallery_Shape_DoubleBrace" xml:space="preserve"><value>Double accolade</value></data>
+  <data name="ShapeGallery_Shape_LeftBracket" xml:space="preserve"><value>Crochet ouvrant</value></data>
+  <data name="ShapeGallery_Shape_RightBracket" xml:space="preserve"><value>Crochet fermant</value></data>
+  <data name="ShapeGallery_Shape_LeftBrace" xml:space="preserve"><value>Accolade ouvrante</value></data>
+  <data name="ShapeGallery_Shape_RightBrace" xml:space="preserve"><value>Accolade fermante</value></data>
+  <data name="ShapeGallery_Shape_RightArrow" xml:space="preserve"><value>Flèche droite</value></data>
+  <data name="ShapeGallery_Shape_LeftArrow" xml:space="preserve"><value>Flèche gauche</value></data>
+  <data name="ShapeGallery_Shape_UpArrow" xml:space="preserve"><value>Flèche vers le haut</value></data>
+  <data name="ShapeGallery_Shape_DownArrow" xml:space="preserve"><value>Flèche vers le bas</value></data>
+  <data name="ShapeGallery_Shape_LeftRightArrow" xml:space="preserve"><value>Flèche gauche-droite</value></data>
+  <data name="ShapeGallery_Shape_UpDownArrow" xml:space="preserve"><value>Flèche haut-bas</value></data>
+  <data name="ShapeGallery_Shape_QuadArrow" xml:space="preserve"><value>Flèche à quatre pointes</value></data>
+  <data name="ShapeGallery_Shape_LeftRightUpArrow" xml:space="preserve"><value>Flèche gauche-droite-haut</value></data>
+  <data name="ShapeGallery_Shape_BentArrow" xml:space="preserve"><value>Flèche courbée</value></data>
+  <data name="ShapeGallery_Shape_UTurnArrow" xml:space="preserve"><value>Flèche demi-tour</value></data>
+  <data name="ShapeGallery_Shape_LeftUpArrow" xml:space="preserve"><value>Flèche gauche-haut</value></data>
+  <data name="ShapeGallery_Shape_BentUpArrow" xml:space="preserve"><value>Flèche en angle vers le haut</value></data>
+  <data name="ShapeGallery_Shape_StripedRightArrow" xml:space="preserve"><value>Flèche droite rayée</value></data>
+  <data name="ShapeGallery_Shape_NotchedRightArrow" xml:space="preserve"><value>Flèche droite à entaille</value></data>
+  <data name="ShapeGallery_Shape_PentagonArrow" xml:space="preserve"><value>Flèche pentagone</value></data>
+  <data name="ShapeGallery_Shape_Chevron" xml:space="preserve"><value>Chevron</value></data>
+  <data name="ShapeGallery_Shape_RightArrowCallout" xml:space="preserve"><value>Légende flèche droite</value></data>
+  <data name="ShapeGallery_Shape_DownArrowCallout" xml:space="preserve"><value>Légende flèche vers le bas</value></data>
+  <data name="ShapeGallery_Shape_LeftArrowCallout" xml:space="preserve"><value>Légende flèche gauche</value></data>
+  <data name="ShapeGallery_Shape_UpArrowCallout" xml:space="preserve"><value>Légende flèche vers le haut</value></data>
+  <data name="ShapeGallery_Shape_MathPlus" xml:space="preserve"><value>Signe plus</value></data>
+  <data name="ShapeGallery_Shape_MathMinus" xml:space="preserve"><value>Signe moins</value></data>
+  <data name="ShapeGallery_Shape_MathMultiply" xml:space="preserve"><value>Signe de multiplication</value></data>
+  <data name="ShapeGallery_Shape_MathDivide" xml:space="preserve"><value>Signe de division</value></data>
+  <data name="ShapeGallery_Shape_MathEqual" xml:space="preserve"><value>Signe égal</value></data>
+  <data name="ShapeGallery_Shape_MathNotEqual" xml:space="preserve"><value>Signe différent</value></data>
+  <data name="ShapeGallery_Shape_FlowProcess" xml:space="preserve"><value>Organigramme : Processus</value></data>
+  <data name="ShapeGallery_Shape_FlowAlternateProcess" xml:space="preserve"><value>Organigramme : Alternative</value></data>
+  <data name="ShapeGallery_Shape_FlowDecision" xml:space="preserve"><value>Organigramme : Décision</value></data>
+  <data name="ShapeGallery_Shape_FlowData" xml:space="preserve"><value>Organigramme : Données</value></data>
+  <data name="ShapeGallery_Shape_FlowPredefinedProcess" xml:space="preserve"><value>Organigramme : Processus prédéfini</value></data>
+  <data name="ShapeGallery_Shape_FlowInternalStorage" xml:space="preserve"><value>Organigramme : Stockage interne</value></data>
+  <data name="ShapeGallery_Shape_FlowDocument" xml:space="preserve"><value>Organigramme : Document</value></data>
+  <data name="ShapeGallery_Shape_FlowMultidocument" xml:space="preserve"><value>Organigramme : Documents multiples</value></data>
+  <data name="ShapeGallery_Shape_FlowTerminator" xml:space="preserve"><value>Organigramme : Terminaison</value></data>
+  <data name="ShapeGallery_Shape_FlowPreparation" xml:space="preserve"><value>Organigramme : Préparation</value></data>
+  <data name="ShapeGallery_Shape_FlowManualInput" xml:space="preserve"><value>Organigramme : Entrée manuelle</value></data>
+  <data name="ShapeGallery_Shape_FlowManualOperation" xml:space="preserve"><value>Organigramme : Opération manuelle</value></data>
+  <data name="ShapeGallery_Shape_FlowConnector" xml:space="preserve"><value>Organigramme : Connecteur</value></data>
+  <data name="ShapeGallery_Shape_FlowOffpageConnector" xml:space="preserve"><value>Organigramme : Renvoi vers une autre page</value></data>
+  <data name="ShapeGallery_Shape_FlowCard" xml:space="preserve"><value>Organigramme : Carte</value></data>
+  <data name="ShapeGallery_Shape_FlowPunchedTape" xml:space="preserve"><value>Organigramme : Bande perforée</value></data>
+  <data name="ShapeGallery_Shape_FlowSummingJunction" xml:space="preserve"><value>Organigramme : Jonction de sommaire</value></data>
+  <data name="ShapeGallery_Shape_FlowOr" xml:space="preserve"><value>Organigramme : Ou</value></data>
+  <data name="ShapeGallery_Shape_FlowCollate" xml:space="preserve"><value>Organigramme : Assemblage</value></data>
+  <data name="ShapeGallery_Shape_FlowSort" xml:space="preserve"><value>Organigramme : Tri</value></data>
+  <data name="ShapeGallery_Shape_FlowExtract" xml:space="preserve"><value>Organigramme : Extraction</value></data>
+  <data name="ShapeGallery_Shape_FlowMerge" xml:space="preserve"><value>Organigramme : Fusion</value></data>
+  <data name="ShapeGallery_Shape_FlowStoredData" xml:space="preserve"><value>Organigramme : Données stockées</value></data>
+  <data name="ShapeGallery_Shape_FlowDelay" xml:space="preserve"><value>Organigramme : Délai</value></data>
+  <data name="ShapeGallery_Shape_FlowSequentialAccess" xml:space="preserve"><value>Organigramme : Stockage à accès séquentiel</value></data>
+  <data name="ShapeGallery_Shape_FlowMagneticDisk" xml:space="preserve"><value>Organigramme : Disque magnétique</value></data>
+  <data name="ShapeGallery_Shape_FlowDirectAccess" xml:space="preserve"><value>Organigramme : Stockage à accès direct</value></data>
+  <data name="ShapeGallery_Shape_FlowDisplay" xml:space="preserve"><value>Organigramme : Affichage</value></data>
+  <data name="ShapeGallery_Shape_Explosion8" xml:space="preserve"><value>Explosion à 8 pointes</value></data>
+  <data name="ShapeGallery_Shape_Explosion14" xml:space="preserve"><value>Explosion à 14 pointes</value></data>
+  <data name="ShapeGallery_Shape_Star4" xml:space="preserve"><value>Étoile à 4 branches</value></data>
+  <data name="ShapeGallery_Shape_Star5" xml:space="preserve"><value>Étoile à 5 branches</value></data>
+  <data name="ShapeGallery_Shape_Star6" xml:space="preserve"><value>Étoile à 6 branches</value></data>
+  <data name="ShapeGallery_Shape_Star7" xml:space="preserve"><value>Étoile à 7 branches</value></data>
+  <data name="ShapeGallery_Shape_Star8" xml:space="preserve"><value>Étoile à 8 branches</value></data>
+  <data name="ShapeGallery_Shape_Star10" xml:space="preserve"><value>Étoile à 10 branches</value></data>
+  <data name="ShapeGallery_Shape_Star12" xml:space="preserve"><value>Étoile à 12 branches</value></data>
+  <data name="ShapeGallery_Shape_Star16" xml:space="preserve"><value>Étoile à 16 branches</value></data>
+  <data name="ShapeGallery_Shape_Star24" xml:space="preserve"><value>Étoile à 24 branches</value></data>
+  <data name="ShapeGallery_Shape_Star32" xml:space="preserve"><value>Étoile à 32 branches</value></data>
+  <data name="ShapeGallery_Shape_RibbonUp" xml:space="preserve"><value>Ruban vers le haut</value></data>
+  <data name="ShapeGallery_Shape_RibbonDown" xml:space="preserve"><value>Ruban vers le bas</value></data>
+  <data name="ShapeGallery_Shape_Wave" xml:space="preserve"><value>Vague</value></data>
+  <data name="ShapeGallery_Shape_SpeechRectangle" xml:space="preserve"><value>Bulle rectangulaire</value></data>
+  <data name="ShapeGallery_Shape_SpeechRoundedRectangle" xml:space="preserve"><value>Bulle rectangulaire à coins arrondis</value></data>
+  <data name="ShapeGallery_Shape_SpeechOval" xml:space="preserve"><value>Bulle ronde</value></data>
+  <data name="ShapeGallery_Shape_ThoughtCloud" xml:space="preserve"><value>Pensées</value></data>
+  <data name="ShapeGallery_Shape_CalloutLine" xml:space="preserve"><value>Légende : trait</value></data>
+  <data name="ShapeGallery_Shape_CalloutBentLine" xml:space="preserve"><value>Légende : trait coudé</value></data>
+  <data name="ShapeGallery_Shape_CalloutDoubleBentLine" xml:space="preserve"><value>Légende : trait à double coude</value></data>
+  <data name="ShapeGallery_Shape_CalloutAccentLine" xml:space="preserve"><value>Légende : trait avec barre</value></data>
+  <data name="ShapeGallery_Shape_CalloutAccentBentLine" xml:space="preserve"><value>Légende : trait coudé avec barre</value></data>
+  <data name="ShapeGallery_Shape_CalloutAccentDoubleBentLine" xml:space="preserve"><value>Légende : trait à double coude avec barre</value></data>
+  <data name="ShapeGallery_Shape_CalloutNoBorderLine" xml:space="preserve"><value>Légende : trait sans bordure</value></data>
+  <data name="ShapeGallery_Shape_CalloutNoBorderBentLine" xml:space="preserve"><value>Légende : trait coudé sans bordure</value></data>
+  <data name="ShapeGallery_Shape_CalloutNoBorderDoubleBentLine" xml:space="preserve"><value>Légende : trait à double coude sans bordure</value></data>
+  <data name="ShapeGallery_Shape_CalloutBorderAccentLine" xml:space="preserve"><value>Légende : trait avec bordure et barre</value></data>
+  <data name="ShapeGallery_Shape_CalloutBorderAccentBentLine" xml:space="preserve"><value>Légende : trait coudé avec bordure et barre</value></data>
+  <data name="ShapeGallery_Shape_CalloutBorderAccentDoubleBentLine" xml:space="preserve"><value>Légende : trait à double coude avec bordure et barre</value></data>
   <data name="ChartTitle_Dialog_Title" xml:space="preserve"><value>Titre du graphique</value></data>
   <data name="ChartTitle_Title_Label" xml:space="preserve"><value>Titre :</value></data>
   <data name="ChartAxisTitles_Dialog_Title" xml:space="preserve"><value>Titres des axes</value></data>
