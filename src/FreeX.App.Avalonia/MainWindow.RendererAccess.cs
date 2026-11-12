@@ -13,11 +13,19 @@ public sealed partial class MainWindow
     internal const int NameBoxDropdownWidth = 208;
     internal const int NameBoxDropdownHeight = 136;
     private const int ForecastSheetDialogWidth = 320;
-    private const int ForecastSheetDialogHeight = 150;
+    private const int ForecastSheetDialogHeight = 150 - WpfNoResizeFrameHeight;
+    private const int ForecastSheetErrorBandHeight = 40;
     private const int SubtotalDialogWidth = 380;
     private const int SubtotalDialogHeight = 390;
-    private const int TextToColumnsDialogWidth = (int)TextToColumnsDialogMetrics.WindowWidth;
-    private const int TextToColumnsDialogHeight = (int)TextToColumnsDialogMetrics.WindowHeight;
+    // WPF Window.Width/Height are OUTER sizes (caption and frame included); Avalonia's are client
+    // sizes. A WPF dialog size copied verbatim is therefore too large here by the Windows frame:
+    // 16 x 39 for a resizable window, 6 x 29 for ResizeMode.NoResize. Subtract the allowance so the
+    // client area matches what the WPF dialog actually lays its content out in.
+    private const int WpfResizableFrameWidth = 16;
+    private const int WpfResizableFrameHeight = 39;
+    private const int WpfNoResizeFrameHeight = 29;
+    private const int TextToColumnsDialogWidth = (int)TextToColumnsDialogMetrics.WindowWidth - WpfResizableFrameWidth;
+    private const int TextToColumnsDialogHeight = (int)TextToColumnsDialogMetrics.WindowHeight - WpfResizableFrameHeight;
 
     private static TextBlock CreateExportOptionsSectionLabel(string resourceKey, double topMargin = 0) =>
         new()

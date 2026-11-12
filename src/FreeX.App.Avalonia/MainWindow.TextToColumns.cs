@@ -95,7 +95,9 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = UiText.Format("TableLoc_TtcWizardTitle", 1, 3),
+            // WPF TextToColumnsDialog keeps the fixed "Text to Columns" caption; the step indicator
+            // lives in the body header ("Text Wizard - Step N of 3"), not in the title bar.
+            Title = UiText.Get("TextToColumns_TextToColumns"),
             Width = TextToColumnsDialogWidth,
             Height = TextToColumnsDialogHeight,
             MinWidth = TextToColumnsDialogMetrics.MinimumWindowWidth,
@@ -136,7 +138,8 @@ public sealed partial class MainWindow
         var otherBox = new CheckBox { Content = UiText.Get("TableLoc_TtcDelimOther") };
         ApplyDataOpsCheckBoxChrome(otherBox);
         AutomationProperties.SetAutomationId(otherBox, "TextToColumnsOtherBox");
-        var otherCharBox = new TextBox { Width = 44, MaxLength = 1 };
+        // WPF: _customBox Width = 48, Margin = (6, 0, 0, 0) beside the "Other:" check box.
+        var otherCharBox = new TextBox { Width = 48, MaxLength = 1 };
         ApplyDataOpsTextBoxChrome(otherCharBox);
         AutomationProperties.SetAutomationId(otherCharBox, "TextToColumnsOtherCharBox");
 
@@ -148,16 +151,19 @@ public sealed partial class MainWindow
         {
             ItemsSource = new[] { "\"", "'", UiText.Get("TableLoc_TtcQualifierNone") },
             SelectedIndex = 0,
-            MinWidth = 90,
+            // WPF: _textQualifierBox Width = 130, Margin = (8, 0, 0, 0).
+            Width = 130,
         };
         ApplyDataOpsComboBoxChrome(qualifierBox);
         AutomationProperties.SetAutomationId(qualifierBox, "TextToColumnsQualifierBox");
 
-        var breaksBox = new TextBox { PlaceholderText = UiText.Get("TableLoc_TtcBreaksPlaceholder"), MinWidth = 160 };
+        // WPF: _fixedWidthBreaksBox.Width = 160.
+        var breaksBox = new TextBox { PlaceholderText = UiText.Get("TableLoc_TtcBreaksPlaceholder"), Width = 160 };
         ApplyDataOpsTextBoxChrome(breaksBox);
         AutomationProperties.SetAutomationId(breaksBox, "TextToColumnsBreaksBox");
 
-        var formatColumnBox = new ComboBox { MinWidth = 110 };
+        // WPF: _formatColumnBox Width = 110, Margin = (0, 0, 10, 0).
+        var formatColumnBox = new ComboBox { Width = 110 };
         ApplyDataOpsComboBoxChrome(formatColumnBox);
         AutomationProperties.SetAutomationId(formatColumnBox, "TextToColumnsFormatColumnBox");
         var formatBox = new ComboBox
@@ -172,7 +178,9 @@ public sealed partial class MainWindow
         var destinationBox = new TextBox
         {
             Text = FormatCellReference(range.Start),
-            MinWidth = 160,
+            // WPF: _destinationBox Width = 120.
+            Width = 120,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
         ApplyDataOpsTextBoxChrome(destinationBox);
         AutomationProperties.SetAutomationId(destinationBox, "TextToColumnsDestinationBox");
@@ -194,32 +202,30 @@ public sealed partial class MainWindow
         ApplyDataOpsCheckBoxChrome(trailingMinusBox);
         AutomationProperties.SetAutomationId(trailingMinusBox, "TextToColumnsTrailingMinusBox");
 
+        // WPF: one ListView { Height = 88 } shared by all three steps (body order: step panels,
+        // "Data preview" caption, preview, column format, destination). The frame is the default
+        // WPF list border (#ABADB3), not a heavy ink rule.
         var previewHost = new Border
         {
-            BorderBrush = HeaderForeground,
+            BorderBrush = Brush(171, 173, 179),
             BorderThickness = new Thickness(1),
+            Background = Brushes.White,
             Height = 88,
             MinHeight = 88,
             Padding = new Thickness(0),
         };
         AutomationProperties.SetAutomationId(previewHost, "TextToColumnsPreviewGrid");
-        // Step-1 preview is a separate host (Avalonia controls can only have one parent)
-        var previewHost1 = new Border
-        {
-            BorderBrush = HeaderForeground,
-            BorderThickness = new Thickness(1),
-            Height = 88,
-            MinHeight = 88,
-            Padding = new Thickness(0),
-        };
-        AutomationProperties.SetAutomationId(previewHost1, "TextToColumnsPreviewGrid1");
 
+        // WPF has no status line under the wizard; this one only appears while the current options
+        // cannot produce a preview (WPF silently falls back to a comma split there).
         var statusText = new TextBlock
         {
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
+            IsVisible = false,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 8, 0, 0),
         };
         var warningText = new TextBlock
         {
@@ -228,6 +234,7 @@ public sealed partial class MainWindow
             IsVisible = false,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 8, 0, 0),
         };
         AutomationProperties.SetAutomationId(warningText, "TextToColumnsWarningText");
 
@@ -271,10 +278,10 @@ public sealed partial class MainWindow
             if (!TextToColumnsDialogPlanner.TryBuildOptions(BuildState(), out var options, out var previewIssue))
             {
                 previewHost.Child = null;
-                previewHost1.Child = null;
                 statusText.Text = TextToColumnsDialogPlanner
                     .DescribeValidationIssue(previewIssue)
                     .Message.Resolve(UiText.Get, UiText.Format);
+                statusText.IsVisible = true;
                 return;
             }
 
@@ -284,10 +291,9 @@ public sealed partial class MainWindow
                 TextToColumnsDialogMetrics.PreviewRowLimit);
             previewColumnCount = Math.Max(1, preview.ColumnCount);
             statusText.Text = UiText.Format("TableLoc_TtcSplittingStatus", sources.Count, previewColumnCount);
+            statusText.IsVisible = false;
 
             previewHost.Child = BuildTextToColumnsPreviewGrid(preview, previewColumnCount, columnFormats);
-            // Step-1 preview mirrors the main preview (separate control instance required)
-            previewHost1.Child = BuildTextToColumnsPreviewGrid(preview, previewColumnCount, columnFormats);
             RefreshFormatColumnChoices();
         }
 
@@ -319,21 +325,6 @@ public sealed partial class MainWindow
             formatBox.SelectedIndex = 0;
         }
 
-        void UpdateModeVisibility()
-        {
-            var delimited = fixedWidthButton.IsChecked != true;
-            tabBox.IsVisible = delimited;
-            semicolonBox.IsVisible = delimited;
-            commaBox.IsVisible = delimited;
-            spaceBox.IsVisible = delimited;
-            otherBox.IsVisible = delimited;
-            otherCharBox.IsVisible = delimited;
-            treatConsecutiveBox.IsVisible = delimited;
-            qualifierBox.IsVisible = delimited;
-            breaksBox.IsVisible = !delimited;
-            RefreshPreview();
-        }
-
         foreach (var box in new[] { tabBox, semicolonBox, commaBox, spaceBox, otherBox })
         {
             box.IsCheckedChanged += (_, _) => RefreshPreview();
@@ -344,8 +335,6 @@ public sealed partial class MainWindow
         qualifierBox.SelectionChanged += (_, _) => RefreshPreview();
         breaksBox.TextChanged += (_, _) => RefreshPreview();
         destinationBox.TextChanged += (_, _) => overwriteConfirmed = false;
-        delimitedButton.IsCheckedChanged += (_, _) => UpdateModeVisibility();
-        fixedWidthButton.IsCheckedChanged += (_, _) => UpdateModeVisibility();
         formatColumnBox.SelectionChanged += (_, _) => SyncFormatBoxToSelectedColumn();
         formatBox.SelectionChanged += (_, _) =>
         {
@@ -369,24 +358,35 @@ public sealed partial class MainWindow
         ApplyDataOpsButtonChrome(cancelButton);
         AutomationProperties.SetAutomationId(cancelButton, "TextToColumnsCancelButton");
 
-        // Wizard step header — the bold "Text Wizard - Step N of 3" banner the Windows dialog shows at the
-        // top of the body (the window title bar isn't captured, so the step indicator must live in-body).
+        // Wizard header (WPF TextToColumnsDialog.cs: _wizardHeader / _wizardInstruction) -- a SemiBold
+        // "Text Wizard - Step N of 3" line (bottom margin 8) over the wrapped per-step instruction
+        // (bottom margin 10), both at the dialog's normal 12px size and outside the scrolling body.
         var wizardStepHeader = new TextBlock
         {
-            Text = UiText.Format("TableLoc_TtcWizardTitle", 1, 3),
-            FontWeight = FontWeight.Bold,
-            FontSize = 13,
+            Text = UiText.Format(TextToColumnsWizardSurfacePlanner.HeaderFormatKey, 1),
+            FontWeight = FontWeight.SemiBold,
+            FontSize = 12,
             FontFamily = FormulaBarFontFamily,
-            Margin = new Thickness(0, 0, 0, 2),
+            Margin = new Thickness(0, 0, 0, 8),
         };
         AutomationProperties.SetAutomationId(wizardStepHeader, "TextToColumnsWizardStepHeader");
+        var wizardInstruction = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 0, 0, 10),
+        };
+        AutomationProperties.SetAutomationId(wizardInstruction, "TextToColumnsWizardInstruction");
 
         // Wizard step tracking — declare forward refs for SyncWizardNavigation closure
         var currentStep = 1;
         const int totalSteps = 3;
-        StackPanel? step1Content = null;
-        StackPanel? step2Content = null;
-        StackPanel? step3Content = null;
+        Control? originalDataTypePanel = null;
+        Control? delimiterPanel = null;
+        Control? fixedWidthPanel = null;
+        Control? columnFormatPanel = null;
+        Control? destinationPanel = null;
 
         // Match the WPF wizard's keyboard entry point on every step. The generic owned-dialog
         // policy is intentionally a fallback; this wizard changes its visible focus scope as the
@@ -416,6 +416,7 @@ public sealed partial class MainWindow
             {
                 currentStep = 3;
                 SyncWizardNavigation();
+                dialog.UpdateLayout();
                 warningText.Text = TextToColumnsDialogPlanner
                     .DescribeValidationIssue(TextToColumnsDialogValidationIssue.InvalidDestination)
                     .Message.Resolve(UiText.Get, UiText.Format);
@@ -490,16 +491,31 @@ public sealed partial class MainWindow
 
         void SyncWizardNavigation()
         {
-            var wizardTitle = UiText.Format("TableLoc_TtcWizardTitle", currentStep, totalSteps);
-            dialog.Title = wizardTitle;
-            wizardStepHeader.Text = wizardTitle;
-            backButton.IsEnabled = currentStep > 1;
-            nextButton.IsEnabled = currentStep < totalSteps;
-            // Step visibility (step*Content assigned after this function definition)
-            if (step1Content is not null) step1Content.IsVisible = currentStep == 1;
-            if (step2Content is not null) step2Content.IsVisible = currentStep == 2;
-            if (step3Content is not null) step3Content.IsVisible = currentStep == 3;
+            // Same shared step plan the WPF wizard's UpdateWizardStep consumes: header/instruction
+            // text and which panels a step shows (the preview stays visible on every step).
+            var stepPlan = TextToColumnsWizardSurfacePlanner.CreateStepPlan(
+                currentStep,
+                fixedWidthButton.IsChecked == true);
+            wizardStepHeader.Text = UiText.Format(TextToColumnsWizardSurfacePlanner.HeaderFormatKey, stepPlan.Step);
+            wizardInstruction.Text = UiText.Get(stepPlan.InstructionKey);
+            backButton.IsEnabled = stepPlan.BackEnabled;
+            nextButton.IsEnabled = stepPlan.NextEnabled;
+            // Panel visibility (panels are assigned after this function definition)
+            if (originalDataTypePanel is not null) originalDataTypePanel.IsVisible = stepPlan.ShowOriginalDataTypePanel;
+            if (delimiterPanel is not null) delimiterPanel.IsVisible = stepPlan.ShowDelimiterPanel;
+            if (fixedWidthPanel is not null) fixedWidthPanel.IsVisible = stepPlan.ShowFixedWidthPanel;
+            if (columnFormatPanel is not null) columnFormatPanel.IsVisible = stepPlan.ShowColumnFormatPanel;
+            if (destinationPanel is not null) destinationPanel.IsVisible = stepPlan.ShowDestinationPanel;
         }
+
+        void HandleSplitModeChanged()
+        {
+            SyncWizardNavigation();
+            RefreshPreview();
+        }
+
+        delimitedButton.IsCheckedChanged += (_, _) => HandleSplitModeChanged();
+        fixedWidthButton.IsCheckedChanged += (_, _) => HandleSplitModeChanged();
 
         applyButton.Click += (_, _) => ApplyWizardStep();
         cancelButton.Click += (_, _) => dialog.Close();
@@ -509,6 +525,10 @@ public sealed partial class MainWindow
             {
                 currentStep--;
                 SyncWizardNavigation();
+                // The step panels are GroupBoxes: a group that has never been visible has no applied
+                // template yet, so its content is not in the visual tree and cannot take focus.
+                // Lay the newly shown step out first (WPF MoveWizardStep calls UpdateLayout too).
+                dialog.UpdateLayout();
                 FocusCurrentWizardStepTarget();
             }
         };
@@ -518,65 +538,123 @@ public sealed partial class MainWindow
             {
                 currentStep++;
                 SyncWizardNavigation();
+                // The step panels are GroupBoxes: a group that has never been visible has no applied
+                // template yet, so its content is not in the visual tree and cannot take focus.
+                // Lay the newly shown step out first (WPF MoveWizardStep calls UpdateLayout too).
+                dialog.UpdateLayout();
                 FocusCurrentWizardStepTarget();
             }
         };
 
+        TextBlock CreateFieldLabel(string resourceKey, Thickness margin) =>
+            new()
+            {
+                Text = StripDisplayMnemonic(UiText.Get(resourceKey)),
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
+                Margin = margin,
+            };
+
+        // Step 1 -- WPF CreateOriginalDataTypePanel: GroupBox { Padding = 8, Margin = (0, 0, 0, 8) }
+        // holding the two stacked radio buttons.
+        var originalDataTypeGroup = new GroupBox
+        {
+            Header = UiText.Get("TextToColumns_OriginalDataTypeGroup"),
+            Padding = new Thickness(8),
+            Margin = new Thickness(0, 0, 0, 8),
+            Content = new StackPanel
+            {
+                Children = { delimitedButton, fixedWidthButton },
+            },
+        };
+        ApplyTextToColumnsGroupBoxChrome(originalDataTypeGroup);
+        originalDataTypePanel = originalDataTypeGroup;
+
+        // Step 2 (delimited) -- WPF CreateDelimiterPanel: a wrapping row of delimiter check boxes with
+        // the "Other:" box and its 48px field kept together, the text-qualifier row 8px below, then
+        // "Treat consecutive delimiters as one" another 8px below. WPF packs the check boxes with no
+        // gap at all; an 8px gap is kept here so adjacent captions stay readable.
+        otherCharBox.Margin = new Thickness(6, 0, 0, 0);
+        var otherPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Children = { otherBox, otherCharBox },
+        };
         var delimiterRow = new WrapPanel
         {
             Orientation = Orientation.Horizontal,
-            Children = { tabBox, semicolonBox, commaBox, spaceBox, otherBox, otherCharBox },
+            Children = { tabBox, semicolonBox, commaBox, spaceBox, otherPanel },
         };
-        foreach (var child in delimiterRow.Children)
-            child.Margin = new Thickness(0, 0, 12, 4);
+        foreach (var child in new Control[] { tabBox, semicolonBox, commaBox, spaceBox })
+            child.Margin = new Thickness(0, 0, 8, 0);
 
+        qualifierBox.Margin = new Thickness(8, 0, 0, 0);
         var qualifierRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Children = { new TextBlock { Text = UiText.Get("TableLoc_TtcTextQualifierLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily }, qualifierBox },
+            Margin = new Thickness(0, 8, 0, 0),
+            Children =
+            {
+                CreateFieldLabel("TextToColumns_TextQualifierLabel", new Thickness(0)),
+                qualifierBox,
+            },
         };
+        treatConsecutiveBox.Margin = new Thickness(0, 8, 0, 0);
 
+        var delimiterGroup = new GroupBox
+        {
+            Header = UiText.Get("TextToColumns_DelimitersGroup"),
+            Padding = new Thickness(8),
+            Margin = new Thickness(0, 0, 0, 8),
+            Content = new StackPanel
+            {
+                Children = { delimiterRow, qualifierRow, treatConsecutiveBox },
+            },
+        };
+        ApplyTextToColumnsGroupBoxChrome(delimiterGroup);
+        delimiterPanel = delimiterGroup;
+
+        // Step 2 (fixed width) -- WPF CreateFixedWidthPanel. The interactive break-line ruler is not
+        // implemented in this shell, so the group carries only the "Breaks:" row (label 8px before a
+        // 160px field).
         var breaksRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Children = { new TextBlock { Text = UiText.Get("TableLoc_TtcBreakPositionsLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily }, breaksBox },
-        };
-
-        var formatRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
             Children =
             {
-                new TextBlock { Text = UiText.Get("TableLoc_TtcColumnFormatLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily },
-                formatColumnBox,
-                formatBox,
+                CreateFieldLabel("TextToColumns_Breaks", new Thickness(0, 0, 8, 0)),
+                breaksBox,
             },
         };
-
-        var destinationRow = new StackPanel
+        var fixedWidthGroup = new GroupBox
         {
-            Spacing = 4,
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = StripDisplayMnemonic(UiText.Get("TextToColumns_DestinationLabel")),
-                    FontSize = 12,
-                    FontFamily = FormulaBarFontFamily,
-                },
-                BuildDialogRangePickerRow(destinationBox, destinationPicker),
-            },
+            Header = UiText.Get("TextToColumns_FixedWidth2"),
+            Padding = new Thickness(8),
+            Margin = new Thickness(0, 0, 0, 8),
+            Content = breaksRow,
+        };
+        ApplyTextToColumnsGroupBoxChrome(fixedWidthGroup);
+        fixedWidthPanel = fixedWidthGroup;
+
+        // WPF: _dataPreviewLabel -- "Data preview" in regular weight, Margin = (0, 10, 0, 4).
+        var dataPreviewLabel = new TextBlock
+        {
+            Text = UiText.Get("TextToColumns_DataPreview"),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 10, 0, 4),
         };
 
         // Advanced options group (WPF parity: TextToColumnsDialog.ColumnFormats.cs's
         // CreateAdvancedOptionsPanel) -- decimal/thousands separator overrides + trailing-minus checkbox.
+        // Labels sit 6px before their 42px field, fields are followed by a 12px gap, and the check box
+        // is 8px below the row.
+        decimalSeparatorBox.Margin = new Thickness(0, 0, 12, 0);
+        thousandsSeparatorBox.Margin = new Thickness(0, 0, 12, 0);
         var advancedSeparatorsRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
             Children =
             {
                 new Label
@@ -584,6 +662,7 @@ public sealed partial class MainWindow
                     Content = UiText.Get("TextToColumns_DecimalSeparatorLabel"),
                     Target = decimalSeparatorBox,
                     Padding = new Thickness(0),
+                    Margin = new Thickness(0, 0, 6, 0),
                     VerticalAlignment = AvaloniaVerticalAlignment.Center,
                     FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
@@ -594,6 +673,7 @@ public sealed partial class MainWindow
                     Content = UiText.Get("TextToColumns_ThousandsSeparatorLabel"),
                     Target = thousandsSeparatorBox,
                     Padding = new Thickness(0),
+                    Margin = new Thickness(0, 0, 6, 0),
                     VerticalAlignment = AvaloniaVerticalAlignment.Center,
                     FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
@@ -601,127 +681,112 @@ public sealed partial class MainWindow
                 thousandsSeparatorBox,
             },
         };
+        trailingMinusBox.Margin = new Thickness(0, 8, 0, 0);
 
         var advancedOptionsGroup = new GroupBox
         {
             Header = UiText.Get("TextToColumns_AdvancedGroup"),
+            Padding = new Thickness(8),
+            Margin = new Thickness(0, 8, 0, 0),
             Content = new StackPanel
             {
-                Spacing = 8,
-                Margin = new Thickness(4),
                 Children = { advancedSeparatorsRow, trailingMinusBox },
             },
-            Margin = new Thickness(0, 8, 0, 0),
         };
+        ApplyTextToColumnsGroupBoxChrome(advancedOptionsGroup);
 
-        var originalDataTypeGroup = new GroupBox
+        // Step 3 -- WPF CreateColumnFormatPanel: GroupBox { Padding = 8, Margin = (0, 10, 0, 0) } with
+        // the "Column:" label 8px before the 110px column picker (10px gap after it), the per-column
+        // format choice, then the nested Advanced group. WPF lists the format as radio buttons; this
+        // shell keeps its single format drop-down in that position.
+        formatColumnBox.Margin = new Thickness(0, 0, 10, 0);
+        var formatRow = new StackPanel
         {
-            Header = UiText.Get("TableLoc_TtcOriginalDataType"),
-            Padding = new Thickness(8, 2),
-            Margin = new Thickness(0, 0, 0, 8),
+            Orientation = Orientation.Horizontal,
+            Children =
+            {
+                CreateFieldLabel("TextToColumns_ColumnLabel", new Thickness(0, 0, 8, 0)),
+                formatColumnBox,
+                formatBox,
+            },
+        };
+        var columnFormatGroup = new GroupBox
+        {
+            Header = UiText.Get("TextToColumns_ColumnDataFormatGroup"),
+            Padding = new Thickness(8),
+            Margin = new Thickness(0, 10, 0, 0),
             Content = new StackPanel
             {
-                Children = { delimitedButton, fixedWidthButton },
+                Children = { formatRow, advancedOptionsGroup },
             },
         };
-        AvaloniaCompactDialogChrome.ApplyGroupBox(originalDataTypeGroup);
+        ApplyTextToColumnsGroupBoxChrome(columnFormatGroup);
+        columnFormatPanel = columnFormatGroup;
 
-        // Step 1: Choose the file type / original data type + preview (assigns forward-declared var)
-        step1Content = new StackPanel
+        // Step 3 -- WPF CreateDestinationPanel: one row, Margin = (0, 10, 0, 0), with the label 8px
+        // before the reference editor. DialogReferencePicker.CreateEditor docks its 28px "..." picker
+        // on the LEFT of the box (6px gap). The box stays first in the logical order so the existing
+        // Tab order (box, then picker) is unchanged.
+        destinationPicker.Margin = new Thickness(0, 0, 6, 0);
+        var destinationRow = new AvaloniaGrid
         {
-            Spacing = 0,
-            Children =
+            Margin = new Thickness(0, 10, 0, 0),
+            ColumnDefinitions =
             {
-                new TextBlock
-                {
-                    Text = UiText.Get("TableLoc_TtcStep1Description"),
-                    TextWrapping = TextWrapping.Wrap,
-                    FontSize = 12,
-                    FontFamily = FormulaBarFontFamily,
-                    Margin = new Thickness(0, 0, 0, 11),
-                },
-                originalDataTypeGroup,
-                new TextBlock
-                {
-                    Text = UiText.Get("TableLoc_TtcPreviewLabel"),
-                    FontWeight = FontWeight.SemiBold,
-                    FontSize = 12,
-                    FontFamily = FormulaBarFontFamily,
-                    Margin = new Thickness(0, 9, 0, 7),
-                },
-                previewHost1,
+                new ColumnDefinition { Width = GridLength.Auto },
+                new ColumnDefinition { Width = GridLength.Auto },
+                new ColumnDefinition { Width = GridLength.Star },
             },
         };
+        var destinationLabel = CreateFieldLabel("TextToColumns_DestinationLabel", new Thickness(0, 0, 8, 0));
+        AvaloniaGrid.SetColumn(destinationLabel, 0);
+        AvaloniaGrid.SetColumn(destinationBox, 2);
+        AvaloniaGrid.SetColumn(destinationPicker, 1);
+        destinationRow.Children.Add(destinationLabel);
+        destinationRow.Children.Add(destinationBox);
+        destinationRow.Children.Add(destinationPicker);
+        destinationPanel = destinationRow;
 
-        // Step 2: Delimiters / Fixed-width break positions + preview
-        step2Content = new StackPanel
-        {
-            Spacing = 8,
-            IsVisible = false,
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = UiText.Format("TableLoc_TtcSourceLabel", FormatRangeReference(range)),
-                    Foreground = HeaderForeground,
-                    TextWrapping = TextWrapping.Wrap,
-                    FontSize = 12,
-                    FontFamily = FormulaBarFontFamily,
-                },
-                delimiterRow,
-                treatConsecutiveBox,
-                qualifierRow,
-                breaksRow,
-                new TextBlock
-                {
-                    Text = UiText.Get("TableLoc_TtcPreviewLabel"),
-                    FontWeight = FontWeight.SemiBold,
-                    FontSize = 12,
-                    FontFamily = FormulaBarFontFamily,
-                    Margin = new Thickness(0, 9, 0, 7),
-                },
-                previewHost,
-            },
-        };
-
-        // Step 3: Column format options
-        step3Content = new StackPanel
-        {
-            Spacing = 8,
-            IsVisible = false,
-            Children =
-            {
-                formatRow,
-                destinationRow,
-                advancedOptionsGroup,
-                statusText,
-                warningText,
-            },
-        };
-
-        // WPF wizard nav button order: [< Back][Next >][Finish][Cancel]
+        // WPF wizard nav button order: [< Back][Next >][Finish][Cancel], 72px wide, 12px above.
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
             [backButton, nextButton, applyButton, cancelButton],
             new Thickness(0, 12, 0, 0));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
+        var wizardHeaderPanel = new StackPanel
+        {
+            Children = { wizardStepHeader, wizardInstruction },
+        };
+        DockPanel.SetDock(wizardHeaderPanel, Dock.Top);
+
+        // WPF root: Grid { Margin = 12 } with rows header / scrolling body / buttons, and the body a
+        // single StackPanel in this order. The button row stays the first logical child so the
+        // existing Tab cycle is unchanged.
         dialog.Content = new DockPanel
         {
             Margin = new Thickness(12),
             Children =
             {
                 buttonRow,
+                wizardHeaderPanel,
                 new ScrollViewer
                 {
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                     Content = new StackPanel
                     {
                         Spacing = 0,
                         Children =
                         {
-                            wizardStepHeader,
-                            step1Content,
-                            step2Content,
-                            step3Content,
+                            originalDataTypeGroup,
+                            delimiterGroup,
+                            fixedWidthGroup,
+                            dataPreviewLabel,
+                            previewHost,
+                            columnFormatGroup,
+                            destinationRow,
+                            statusText,
+                            warningText,
                         },
                     },
                 },
@@ -772,7 +837,7 @@ public sealed partial class MainWindow
         ConfigureDeferredDialogCancel(dialog, cancelButton);
 
         SyncWizardNavigation();
-        UpdateModeVisibility();
+        RefreshPreview();
         await dialog.ShowDialog(this);
     }
 
@@ -859,6 +924,13 @@ public sealed partial class MainWindow
         };
     }
 
+    /// <summary>
+    /// The WPF wizard is a plain <c>Window</c>, so its group captions are normal ink rather than the
+    /// accent tint of the shared compact chrome (see <see cref="ApplyPlainWindowGroupBoxChrome"/>).
+    /// </summary>
+    private static void ApplyTextToColumnsGroupBoxChrome(GroupBox groupBox) =>
+        ApplyPlainWindowGroupBoxChrome(groupBox, DataOpsDialogChromeStyle);
+
     private static void AddTextToColumnsPreviewCell(
         AvaloniaGrid grid,
         string text,
@@ -867,15 +939,17 @@ public sealed partial class MainWindow
         bool isHeader,
         bool isSkipped)
     {
+        // WPF renders the preview as a GridView: a regular-weight, centred column header strip with
+        // hairline column separators, and plain rows without cell grid lines.
         var border = new Border
         {
-            BorderBrush = Brush(214, 214, 214),
-            BorderThickness = new Thickness(0, 0, 1, 1),
-            Padding = new Thickness(6, 2.5),
+            BorderBrush = Brush(229, 229, 229),
+            BorderThickness = isHeader ? new Thickness(0, 0, 1, 1) : new Thickness(0),
+            Padding = isHeader ? new Thickness(6, 3) : new Thickness(6, 2.5),
             Child = new TextBlock
             {
                 Text = text,
-                FontWeight = isHeader ? FontWeight.SemiBold : FontWeight.Normal,
+                FontWeight = FontWeight.Normal,
                 Foreground = isSkipped ? HeaderForeground : Brushes.Black,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 FontSize = 12,

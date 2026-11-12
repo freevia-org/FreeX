@@ -20311,6 +20311,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         rb.FontSize = 12; rb.FontFamily = FormulaBarFontFamily;
     }
 
+    /// <summary>
+    /// Several WPF data-tool dialogs are plain <c>Window</c>s (they do not merge the shared dialog
+    /// theme), so their group boxes carry normal-ink captions rather than the accent-tinted ones the
+    /// shared compact chrome applies. Keeps the shared frame/typography and only restores the ink.
+    /// </summary>
+    private static void ApplyPlainWindowGroupBoxChrome(GroupBox groupBox, AvaloniaCompactDialogChromeStyle style)
+    {
+        AvaloniaCompactDialogChrome.ApplyGroupBox(groupBox, style);
+        groupBox.Foreground = HeaderForeground;
+        groupBox.HeaderTemplate = new FuncDataTemplate<object>((header, _) => new TextBlock
+        {
+            Text = header?.ToString() ?? string.Empty,
+            FontFamily = style.FontFamily,
+            FontSize = style.FontSize,
+            Foreground = HeaderForeground,
+            TextWrapping = TextWrapping.NoWrap,
+        });
+    }
+
     private async Task<SortDialogOptions?> ShowSortOptionsDialogAsync(SortDialogOptions current)
     {
         SortDialogOptions? result = null;
@@ -20509,14 +20528,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("GoalSeek_GoalSeek"),
+            // WPF GoalSeekDialog.xaml is a 380x210 *outer* NoResize window; its client area is the
+            // outer height minus the Windows caption/frame, and the star row above OK/Cancel absorbs
+            // what the three field rows leave. Avalonia sizes the client area, so take the frame off.
             Width = 380,
-            Height = 210,
+            Height = 210 - WpfNoResizeFrameHeight,
             MinWidth = 380,
-            MinHeight = 210,
+            MinHeight = 210 - WpfNoResizeFrameHeight,
             MaxWidth = 380,
-            MaxHeight = 210,
+            MaxHeight = 210 - WpfNoResizeFrameHeight,
             CanResize = false,
             FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -20638,14 +20661,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             },
         };
 
+        // WPF GoalSeekDialog.xaml: <Grid Margin="12"> with a 140 / * / 34 column split. Each field
+        // row is as tall as its WPF Label (26) plus the 4px top/bottom margins, i.e. 34.
         var body = new AvaloniaGrid
         {
-            Margin = new Thickness(16),
+            Margin = new Thickness(12),
             RowDefinitions =
             {
-                new RowDefinition { Height = GridLength.Auto },
-                new RowDefinition { Height = GridLength.Auto },
-                new RowDefinition { Height = GridLength.Auto },
+                new RowDefinition { Height = GridLength.Auto, MinHeight = 34 },
+                new RowDefinition { Height = GridLength.Auto, MinHeight = 34 },
+                new RowDefinition { Height = GridLength.Auto, MinHeight = 34 },
                 new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
                 new RowDefinition { Height = GridLength.Auto },
             },
@@ -20653,9 +20678,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(34) });
-        AddGoalSeekField(body, row: 0, "Set cell:", setCellBox, CreateGoalSeekPickerButton(setCellBox, "GoalSeekSetCellPickerButton"));
-        AddGoalSeekField(body, row: 1, "To value:", targetValueBox, pickerButton: null);
-        AddGoalSeekField(body, row: 2, "By changing cell:", changingCellBox, CreateGoalSeekPickerButton(changingCellBox, "GoalSeekChangingCellPickerButton"));
+        AddGoalSeekField(body, row: 0, UiText.Get("GoalSeek_SetCell"), setCellBox, CreateGoalSeekPickerButton(setCellBox, "GoalSeekSetCellPickerButton"));
+        AddGoalSeekField(body, row: 1, UiText.Get("GoalSeek_ToValue"), targetValueBox, pickerButton: null);
+        AddGoalSeekField(body, row: 2, UiText.Get("GoalSeek_ByChangingCell"), changingCellBox, CreateGoalSeekPickerButton(changingCellBox, "GoalSeekChangingCellPickerButton"));
         AddGridChild(body, errorText, 3, 0);
         AvaloniaGrid.SetColumnSpan(errorText, 3);
         AddGridChild(body, buttonRow, 4, 0);
@@ -20968,12 +20993,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("MainWindow_TooltipTitle_AdvancedFilter"),
+            // WPF AdvancedFilterDialog is a 420x340 *outer* window whose client area (340 minus the
+            // Windows caption/frame) is exactly filled by the content. Avalonia's Width/Height are
+            // client sizes, so a 340 client height left an empty band under OK/Cancel (most visible
+            // on macOS). Size the height to the content instead of guessing a caption allowance.
             Width = 420,
-            Height = 340,
             MinWidth = 420,
-            MinHeight = 340,
             MaxWidth = 420,
-            MaxHeight = 340,
+            SizeToContent = SizeToContent.Height,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -20983,11 +21010,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         static void ApplyAdvancedFilterPickerButtonChrome(Button button)
         {
+            // WPF DialogReferencePicker.CreateButton: 28 wide, 6px gap to the reference box, and the
+            // DockPanel stretches it to the reference box height (24 here).
             button.Width = 28;
             button.MinWidth = 28;
-            button.Height = 20;
-            button.MinHeight = 20;
-            button.MaxHeight = 20;
+            button.Height = 24;
+            button.MinHeight = 24;
+            button.MaxHeight = 24;
             button.Padding = new Thickness(0);
             button.Margin = new Thickness(0, 0, 6, 0);
             button.FontSize = 11;
@@ -21063,7 +21092,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var uniqueBox = new CheckBox
         {
             Content = UiText.Get("AdvancedFilter_UniqueRecordsOnlyAutomationName"),
-            Margin = new Thickness(0, 8, 0, 0),
+            Margin = new Thickness(0, 10, 0, 0),
         };
         ApplyDialogCheckBoxChrome(uniqueBox);
         AutomationProperties.SetName(uniqueBox, UiText.CreateAutomationName(UiText.Get("AdvancedFilter_UniqueRecordsOnlyAutomationName")));
@@ -21125,17 +21154,30 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 sheetName => _session.Workbook.GetSheet(sheetName)?.Id);
         }
 
-        (AvaloniaGrid Row, Button PickerButton, TextBlock Label) CreateReferenceRow(
+        // WPF SystemColors.GrayTextBrush (#6D6D6D): hint text and the disabled "Copy to" label.
+        var grayText = Brush(109, 109, 109);
+
+        // WPF AdvancedFilterDialog lays the three reference rows out in ONE grid (label column Auto,
+        // editor column *), so the label column takes the widest label and every "..." picker starts
+        // at the same x. Per-row grids gave each row its own label width and staggered the pickers.
+        var rangesGrid = new AvaloniaGrid();
+        rangesGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        rangesGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        rangesGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        (Button PickerButton, TextBlock Label) AddReferenceRow(
             string label,
             TextBox textBox,
-            string pickerAutomationId,
-            bool isFirstRow = false)
+            string pickerAutomationId)
         {
+            var row = rangesGrid.RowDefinitions.Count;
+            rangesGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var rowTop = row == 0 ? 0 : 8;
             var labelBlock = new TextBlock
             {
                 Text = StripDisplayMnemonic(label),
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 8, 0),
+                Margin = new Thickness(0, rowTop, 8, 0),
                 FontSize = 12,
                 FontFamily = FormulaBarFontFamily,
             };
@@ -21144,43 +21186,43 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 Content = "...",
             };
             ApplyAdvancedFilterPickerButtonChrome(pickerButton);
+            pickerButton.Margin = new Thickness(0, rowTop, 6, 0);
             AutomationProperties.SetAutomationId(pickerButton, pickerAutomationId);
             pickerButton.Click += (_, _) =>
             {
                 textBox.Focus();
                 textBox.SelectAll();
             };
+            textBox.Margin = new Thickness(0, rowTop, 0, 0);
 
-            var row = new AvaloniaGrid { Margin = new Thickness(0, isFirstRow ? 0 : 8, 0, 0) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            Grid.SetRow(labelBlock, row);
             Grid.SetColumn(labelBlock, 0);
+            Grid.SetRow(pickerButton, row);
             Grid.SetColumn(pickerButton, 1);
+            Grid.SetRow(textBox, row);
             Grid.SetColumn(textBox, 2);
-            row.Children.Add(labelBlock);
-            row.Children.Add(pickerButton);
-            row.Children.Add(textBox);
-            return (row, pickerButton, labelBlock);
+            rangesGrid.Children.Add(labelBlock);
+            rangesGrid.Children.Add(pickerButton);
+            rangesGrid.Children.Add(textBox);
+            return (pickerButton, labelBlock);
         }
 
-        var listRangeRow = CreateReferenceRow(
+        AddReferenceRow(
             StripDisplayMnemonic(UiText.Get("AdvancedFilter_ListRange")) + ":",
             listRangeBox,
-            FreeXAutomationIdCatalog.AdvancedFilter.SelectListRangeButton,
-            isFirstRow: true);
-        var criteriaRangeRow = CreateReferenceRow(
+            FreeXAutomationIdCatalog.AdvancedFilter.SelectListRangeButton);
+        AddReferenceRow(
             StripDisplayMnemonic(UiText.Get("AdvancedFilter_CriteriaRange")) + ":",
             criteriaRangeBox,
             FreeXAutomationIdCatalog.AdvancedFilter.SelectCriteriaRangeButton);
-        var copyToRow = CreateReferenceRow(
+        var copyToRow = AddReferenceRow(
             StripDisplayMnemonic(UiText.Get("AdvancedFilter_CopyTo")) + ":",
             copyToBox,
             FreeXAutomationIdCatalog.AdvancedFilter.SelectCopyToButton);
         var copyToHint = new TextBlock
         {
             Text = UiText.Get("AdvancedFilter_CopyToIsAvailableWhenCopyToAnotherLocationIsSelected"),
-            Foreground = SecondaryInk,
+            Foreground = grayText,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 2, 0, 0),
             FontSize = 12,
@@ -21189,9 +21231,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var criteriaHint = new TextBlock
         {
             Text = UiText.Get("AdvancedFilter_CriteriaShouldIncludeColumnLabelsInTheFirstRowMatchingExcelAdvancedFilte"),
-            Foreground = SecondaryInk,
+            Foreground = grayText,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 8, 0, 0),
+            Margin = new Thickness(0, 10, 0, 0),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
@@ -21211,7 +21253,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         void RefreshCopyToState(bool showInvalid = false)
         {
             var isCopyToEnabled = copyToAnotherLocationButton.IsChecked == true;
-            copyToRow.Row.IsEnabled = isCopyToEnabled;
+            copyToRow.Label.IsEnabled = isCopyToEnabled;
+            if (isCopyToEnabled)
+                copyToRow.Label.ClearValue(TextBlock.ForegroundProperty);
+            else
+                copyToRow.Label.Foreground = grayText;
+            copyToRow.PickerButton.IsEnabled = isCopyToEnabled;
             copyToBox.IsEnabled = isCopyToEnabled;
             copyToHint.IsVisible = !isCopyToEnabled;
             RefreshPlanStatus(showInvalid);
@@ -21273,29 +21320,33 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 8, 0, 0),
+            Margin = new Thickness(0, 14, 0, 0),
             Children =
             {
                 okButton,
                 cancelButton,
             },
         };
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         RefreshCopyToState();
+        // WPF: GroupBox { Margin = 0,0,0,10 } hosting a StackPanel { Margin = 8,6,8,8 } with a 4px gap
+        // between the two radios. The Aero2 GroupBox template adds a ~17px header row whose lower half
+        // carries the 1px rounded frame, a 6px left inset and a 6px bottom row, i.e. 17 + 6 + 16 + 4 +
+        // 16 + 8 + 6 = 73 tall. Avalonia's compact radio is a 20px row (a 16px WPF radio plus its 4px
+        // gap), so the two rows are stacked without an extra margin and offset 2px up to keep the
+        // glyph centres on the WPF positions.
         var actionPanel = new StackPanel
         {
-            Margin = new Thickness(14, 17, 8, 0),
+            Margin = new Thickness(14, 21, 8, 0),
             Children =
             {
                 inPlaceButton,
                 copyToAnotherLocationButton,
             },
         };
-        inPlaceButton.Margin = new Thickness(0, 0, 0, 4);
         var actionGroup = new AvaloniaGrid
         {
-            Height = 60,
+            Height = 73,
             Margin = new Thickness(0, 0, 0, 10),
             Children =
             {
@@ -21303,7 +21354,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 {
                     BorderBrush = Brush(209, 218, 224),
                     BorderThickness = new Thickness(1),
-                    Margin = new Thickness(0, 7, 0, 0),
+                    CornerRadius = new CornerRadius(4),
+                    Margin = new Thickness(0, 8, 0, 0),
                 },
                 new TextBlock
                 {
@@ -21312,7 +21364,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     FontFamily = FormulaBarFontFamily,
                     Background = Brushes.White,
                     Padding = new Thickness(3, 0),
-                    Margin = new Thickness(8, 0, 0, 0),
+                    Margin = new Thickness(6, 0, 0, 0),
                     HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
                     VerticalAlignment = AvaloniaVerticalAlignment.Top,
                 },
@@ -21326,9 +21378,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Children =
             {
                 actionGroup,
-                listRangeRow.Row,
-                criteriaRangeRow.Row,
-                copyToRow.Row,
+                rangesGrid,
                 copyToHint,
                 uniqueBox,
                 criteriaHint,
@@ -21790,14 +21840,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("MainWindowMessage_RemoveDuplicatesTitle"),
+            // WPF RemoveDuplicatesDialog is a 360x360 *outer* NoResize window whose stacked content
+            // (12px margin, header check box, "Columns:" label, bulk buttons, 160px column list,
+            // OK/Cancel) ends right at the bottom of its client area. Avalonia's Height is a client
+            // size, so 360 left an empty band under OK/Cancel; size the height to the content.
             Width = 360,
-            Height = 360,
             MinWidth = 360,
-            MinHeight = 360,
             MaxWidth = 360,
-            MaxHeight = 360,
+            SizeToContent = SizeToContent.Height,
             CanResize = false,
             FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -21814,10 +21867,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetHelpText(hasHeadersBox, UiText.Get("RemoveDuplicates_MyDataHasHeadersHelpText"));
         ApplyDialogCheckBoxChrome(hasHeadersBox);
 
-        var columnsPanel = new StackPanel
-        {
-            Spacing = 4,
-        };
+        // WPF: a plain StackPanel; each column check box carries Margin = (0, 0, 0, 4), so rows are
+        // 4px apart (panel spacing on top of that doubled the gap).
+        var columnsPanel = new StackPanel();
         AutomationProperties.SetName(columnsPanel, UiText.CreateAutomationName(UiText.Get("RemoveDuplicates_ColumnsAutomationName")));
         AutomationProperties.SetAutomationId(columnsPanel, "RemoveDuplicatesColumnsPanel");
         AutomationProperties.SetHelpText(columnsPanel, UiText.Get("RemoveDuplicates_ColumnsHelpText"));
@@ -22600,7 +22652,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Padding = new Thickness(8),
             Content = fields,
         };
-        AvaloniaCompactDialogChrome.ApplyGroupBox(addEditGroup, dialogChrome);
+        // WPF ScenarioManagerDialog is a plain Window: the "Add/Edit Scenario" caption is normal ink.
+        ApplyPlainWindowGroupBoxChrome(addEditGroup, dialogChrome);
 
         var body = new AvaloniaGrid
         {
@@ -22763,12 +22816,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("DataTable_Title"),
+            // WPF DataTableDialog is a 360x210 *outer* NoResize window; the content is top-stacked and
+            // the rest of the client area stays empty. Avalonia sizes the client area, so take the
+            // Windows caption/frame off the height to keep the same band under OK/Cancel.
             Width = 360,
-            Height = 210,
+            Height = 210 - WpfNoResizeFrameHeight,
             MinWidth = 360,
-            MinHeight = 210,
+            MinHeight = 210 - WpfNoResizeFrameHeight,
             MaxWidth = 360,
-            MaxHeight = 210,
+            MaxHeight = 210 - WpfNoResizeFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -22845,9 +22901,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var fields = new Grid
         {
             Margin = new Thickness(0, 0, 0, 10),
+            // WPF: label column Auto (each label carries an 8px right margin), editor column *.
             ColumnDefinitions =
             {
-                new ColumnDefinition { Width = new GridLength(110) },
+                new ColumnDefinition { Width = GridLength.Auto },
                 new ColumnDefinition { Width = GridLength.Star },
             },
         };
@@ -22950,10 +23007,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         dialog.Content = new StackPanel
         {
-            // WPF's non-client frame leaves a narrower content area inside the same
-            // 360x210 logical authority surface. Keep the Avalonia client controls on
-            // that authority without changing the window size or interaction contract.
-            Margin = new Thickness(12, 12, 27, 12),
+            // WPF: root StackPanel { Margin = 12 }; the "..." pickers end 12px from the right edge.
+            Margin = new Thickness(12),
             Children =
             {
                 new StackPanel { Children = { fields, errorText } },
@@ -23087,6 +23142,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AutomationProperties.SetAutomationId(dialog, "ForecastSheetCompactDialog");
 
+        // The WPF ForecastSheetDialog shows only the periods label, the box and Create/Cancel
+        // (ObjectSizeDialog.CreateSingleInputContent). The source-range summary stays in the tree for
+        // assistive tech but is collapsed so the visible layout matches.
         var sourceRangeText = new TextBlock
         {
             Text = UiText.Format(
@@ -23094,6 +23152,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 FormatRangeReference(_session.SelectedRange)),
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
+            IsVisible = false,
         };
         AutomationProperties.SetName(sourceRangeText, UiText.Get("ForecastSheet_SourceRangeAutomationName"));
         AutomationProperties.SetAutomationId(sourceRangeText, "ForecastSheetSourceRangeSummaryText");
@@ -23103,16 +23162,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Text = ForecastSheetPlanner.DefaultForecastPeriods.ToString(CultureInfo.InvariantCulture),
             MinWidth = 160,
+            // WPF: box.Margin = (0, 0, 0, 12) above the button row.
+            Margin = new Thickness(0, 0, 0, 12),
         };
         ApplyDataToolsTextBoxChrome(periodsBox);
         AutomationProperties.SetName(periodsBox, UiText.CreateAutomationName(UiText.Get("ForecastSheet_PeriodsAutomationName")));
         AutomationProperties.SetAutomationId(periodsBox, "ForecastPeriodsBox");
         AutomationProperties.SetHelpText(periodsBox, UiText.Get("ForecastSheet_PeriodsHelpText"));
 
+        // WPF reports an invalid period count in a warning box. This shell keeps its inline message,
+        // but only while the plan is invalid; the window grows by a fixed band to make room for it.
         var errorText = new TextBlock
         {
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
+            IsVisible = false,
+            Height = ForecastSheetErrorBandHeight - 8,
+            Margin = new Thickness(0, 0, 0, 8),
         };
         AutomationProperties.SetName(errorText, UiText.Get("ForecastSheet_ValidationAutomationName"));
         AutomationProperties.SetAutomationId(errorText, "ForecastSheetErrorText");
@@ -23121,11 +23187,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var createButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ForecastSheet_CreateButton")),
-            Width = 76,
-            MinWidth = 76,
+            // WPF: DialogButtonRowFactory.Create(accept, 72, ...) -- 72px buttons, 8px apart.
+            Width = 72,
+            MinWidth = 72,
             IsDefault = true,
         };
-        ApplyDataToolsButtonChrome(createButton, 76, isDefault: true);
+        ApplyDataToolsButtonChrome(createButton, 72, isDefault: true);
         AutomationProperties.SetName(
             createButton,
             UiText.CreateAutomationName(UiText.Get("ForecastSheet_CreateButton")));
@@ -23135,11 +23202,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var cancelButton = new Button
         {
             Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
-            Width = 76,
-            MinWidth = 76,
+            Width = 72,
+            MinWidth = 72,
             IsCancel = true,
         };
-        ApplyDataToolsButtonChrome(cancelButton, 76);
+        ApplyDataToolsButtonChrome(cancelButton, 72);
         AutomationProperties.SetName(cancelButton, UiText.CreateAutomationName(UiText.Get("Common_Cancel")));
         AutomationProperties.SetAutomationId(cancelButton, "ForecastSheetCancelButton");
         AutomationProperties.SetHelpText(cancelButton, UiText.Get("ForecastSheet_CancelHelpText"));
@@ -23150,12 +23217,27 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 _session.SelectedRange,
                 periodsBox.Text);
 
+        void ShowForecastSheetError(bool visible)
+        {
+            if (errorText.IsVisible == visible)
+                return;
+
+            errorText.IsVisible = visible;
+            double height = ForecastSheetDialogHeight + (visible ? ForecastSheetErrorBandHeight : 0);
+            dialog.MaxHeight = Math.Max(dialog.MaxHeight, height);
+            dialog.MinHeight = Math.Min(dialog.MinHeight, height);
+            dialog.Height = height;
+            dialog.MinHeight = height;
+            dialog.MaxHeight = height;
+        }
+
         void RefreshPlanStatus()
         {
             var forecastPlan = CreatePlan();
             errorText.Text = forecastPlan.IsReady
                 ? forecastPlan.StatusText
                 : FormatForecastSheetPlanError(forecastPlan);
+            ShowForecastSheetError(!forecastPlan.IsReady);
         }
 
         void Accept()
@@ -23164,6 +23246,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (!forecastPlan.IsReady)
             {
                 errorText.Text = FormatForecastSheetPlanError(forecastPlan);
+                ShowForecastSheetError(true);
                 periodsBox.Focus();
                 periodsBox.SelectAll();
                 return;
@@ -23195,34 +23278,28 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
             Children =
             {
                 createButton,
                 cancelButton,
             },
         };
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         RefreshPlanStatus();
-        dialog.Content = new DockPanel
+        // WPF ObjectSizeDialog.CreateSingleInputContent: StackPanel { Margin = 16 } stacking the
+        // label (4px above the box), the box (12px above the buttons) and the right-aligned button
+        // row. The periods box stays ahead of the buttons in the logical order, as in WPF.
+        dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
             Children =
             {
+                sourceRangeText,
+                CreateForecastSheetField(
+                    StripDisplayMnemonic(UiText.Get("ForecastSheet_PeriodsLabel")),
+                    periodsBox),
+                errorText,
                 buttonRow,
-                new StackPanel
-                {
-                    Spacing = 10,
-                    Children =
-                    {
-                        sourceRangeText,
-                        CreateForecastSheetField(
-                            StripDisplayMnemonic(UiText.Get("ForecastSheet_PeriodsLabel")),
-                            periodsBox),
-                        errorText,
-                    },
-                },
             },
         };
         dialog.Opened += (_, _) =>
@@ -23373,11 +23450,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var existingNativeContainerAttributes = activeRule?.NativeContainerAttributes;
         var existingNativeContainerChildXmls = activeRule?.NativeContainerChildXmls;
 
+        // WPF DataValidationDialog.xaml has no selection-summary line above the tabs. The element is
+        // kept (collapsed) only because the macOS launch smoke probes its automation id.
         var summaryText = new TextBlock
         {
             Text = summary.Text,
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
+            IsVisible = false,
         };
         AutomationProperties.SetAutomationId(summaryText, "DataValidationSelectionSummaryText");
 
@@ -23385,6 +23465,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             ItemsSource = typeChoices,
             MinWidth = 220,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
         AutomationProperties.SetName(
             typeBox,
@@ -23396,13 +23477,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             ItemsSource = operatorChoices,
             MinWidth = 220,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
         AutomationProperties.SetName(
             operatorBox,
             UiText.CreateAutomationName(UiText.Get("DataValidation_Data")));
         AutomationProperties.SetAutomationId(operatorBox, "DataValidationOperatorBox");
         ApplyDialogComboBoxChrome(operatorBox);
-        var operatorField = CreateDataValidationField(UiText.Get("DataValidation_Data"), operatorBox);
+        var operatorField = CreateDataValidationFormRow(
+            new TextBlock { Text = StripDisplayMnemonic(UiText.Get("DataValidation_Data")) },
+            operatorBox);
 
         var formula1Label = new TextBlock();
         var formula1Box = new TextBox
@@ -23414,7 +23498,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             UiText.CreateAutomationName(UiText.Get("DataValidation_Value")));
         AutomationProperties.SetAutomationId(formula1Box, "DataValidationFormula1Box");
         ApplyDialogTextBoxChrome(formula1Box);
-        var formula1Field = CreateDataValidationField(formula1Label, formula1Box);
+        // AttachInventoryDialogRangePickers replaces the formula box with a "box + ..." row inside the
+        // box's parent panel, so each formula box gets its own host panel in the control column.
+        var formula1Field = CreateDataValidationFormRow(formula1Label, new Panel { Children = { formula1Box } });
 
         var formula2Label = new TextBlock();
         var formula2Box = new TextBox
@@ -23426,7 +23512,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             UiText.CreateAutomationName(UiText.Get("DataValidation_Maximum")));
         AutomationProperties.SetAutomationId(formula2Box, "DataValidationFormula2Box");
         ApplyDialogTextBoxChrome(formula2Box);
-        var formula2Field = CreateDataValidationField(formula2Label, formula2Box);
+        var formula2Field = CreateDataValidationFormRow(formula2Label, new Panel { Children = { formula2Box } });
 
         var allowBlankBox = new CheckBox
         {
@@ -23493,6 +23579,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             ItemsSource = alertStyleChoices,
             MinWidth = 220,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
         AutomationProperties.SetName(
             alertStyleBox,
@@ -23530,13 +23617,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8),
+            IsVisible = false,
         };
         AutomationProperties.SetAutomationId(errorText, "DataValidationErrorText");
 
+        // WPF button row: Clear All 78 wide + 16 gap, OK 72 wide + 8 gap, Cancel 72 wide.
         var applyButton = new Button
         {
             Content = UiText.Get("Common_Ok"),
-            MinWidth = 84,
+            MinWidth = 72,
+            Margin = new Thickness(0, 0, 8, 0),
             Padding = new Thickness(10, 4),
         };
         AutomationProperties.SetAutomationId(applyButton, "DataValidationApplyButton");
@@ -23545,7 +23636,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var clearButton = new Button
         {
             Content = UiText.Get("DataValidation_ClearAll"),
-            MinWidth = 84,
+            MinWidth = 78,
+            Margin = new Thickness(0, 0, 16, 0),
             Padding = new Thickness(10, 4),
         };
         AutomationProperties.SetAutomationId(clearButton, "DataValidationClearButton");
@@ -23555,7 +23647,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Content = UiText.Get("Common_Cancel"),
             IsCancel = true,
-            MinWidth = 84,
+            MinWidth = 72,
             Padding = new Thickness(10, 4),
         };
         AutomationProperties.SetAutomationId(cancelButton, "DataValidationCancelButton");
@@ -23639,6 +23731,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (!validation.IsValid)
             {
                 errorText.Text = DataValidationValidationErrorText(validation.FirstError);
+                errorText.IsVisible = !string.IsNullOrEmpty(errorText.Text);
                 return;
             }
 
@@ -23712,19 +23805,93 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 RefreshMessageEditorStates();
         };
 
+        // Layout mirrors DataValidationDialog.xaml: a 12px root margin, the tab control filling the
+        // dialog down to the button row (12px gap), and every tab page a two-column form with a 120px
+        // label column, 8px label gap and 8px row gap inside a 12px page margin.
+        const double labelColumnWidth = DataValidationLabelColumnWidth;
+        // WPF SystemColors.GrayTextBrush (#6D6D6D).
+        var grayText = Brush(109, 109, 109);
+        // WPF check boxes are ~16px rows with an 8px bottom margin; the compact Avalonia check box is a
+        // 20px row, so 4px keeps the same 24px pitch.
+        var controlColumnCheckBoxMargin = new Thickness(labelColumnWidth, 0, 0, 4);
+
+        static TabItem CreateValidationTab(string header, string automationId, Control content)
+        {
+            // No ScrollViewer wrapper (unlike CreateFormatCellsTab): the page must take the tab's full
+            // height so the "*" row of the message editors can stretch as it does in WPF.
+            var tab = new TabItem
+            {
+                Header = StripDisplayMnemonic(header),
+                Content = content,
+            };
+            AutomationProperties.SetAutomationId(tab, automationId);
+            return tab;
+        }
+
+        static TextBlock CreateFormLabel(string resourceKey, bool topAligned = false) =>
+            new()
+            {
+                Text = StripDisplayMnemonic(UiText.Get(resourceKey)),
+                VerticalAlignment = topAligned ? AvaloniaVerticalAlignment.Top : AvaloniaVerticalAlignment.Center,
+                Margin = topAligned ? new Thickness(0, 3, 8, 8) : new Thickness(0, 0, 8, 8),
+            };
+
+        static AvaloniaGrid CreateMessagePage(int rowCount)
+        {
+            var page = new AvaloniaGrid { Margin = new Thickness(12) };
+            page.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(DataValidationLabelColumnWidth) });
+            page.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            for (var row = 0; row < rowCount; row++)
+            {
+                page.RowDefinitions.Add(new RowDefinition
+                {
+                    Height = row == rowCount - 1 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto,
+                });
+            }
+
+            return page;
+        }
+
+        static void AddToPage(AvaloniaGrid page, Control control, int row, int column)
+        {
+            Grid.SetRow(control, row);
+            Grid.SetColumn(control, column);
+            page.Children.Add(control);
+        }
+
+        StackPanel CreateMessageToggle(CheckBox toggle, string hintResourceKey) =>
+            new()
+            {
+                Children =
+                {
+                    toggle,
+                    new TextBlock
+                    {
+                        Text = UiText.Get(hintResourceKey),
+                        Foreground = grayText,
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(22, 4, 0, 12),
+                    },
+                },
+            };
+
         var criteriaHeader = new TextBlock
         {
             Text = UiText.Get("DataValidation_ValidationCriteria"),
             FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(0, 0, 0, 10),
         };
+        showDropdownBox.Margin = controlColumnCheckBoxMargin;
+        allowBlankBox.Margin = controlColumnCheckBoxMargin;
+        sameSettingsBox.Margin = controlColumnCheckBoxMargin;
 
         var settingsContent = new StackPanel
         {
-            Spacing = 8,
+            Margin = new Thickness(12),
             Children =
             {
                 criteriaHeader,
-                CreateDataValidationField(UiText.Get("DataValidation_Allow"), typeBox),
+                CreateDataValidationFormRow(CreateFormLabel("DataValidation_Allow"), typeBox),
                 operatorField,
                 formula1Field,
                 formula2Field,
@@ -23734,38 +23901,46 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             },
         };
 
-        var inputMessageContent = new StackPanel
-        {
-            Spacing = 8,
-            Children =
-            {
-                showInputMessageBox,
-                CreateDataValidationField(UiText.Get("DataValidation_InputTitle"), promptTitleBox),
-                CreateDataValidationField(UiText.Get("DataValidation_InputMessage2"), promptMessageBox),
-            },
-        };
+        promptTitleBox.Margin = new Thickness(0, 0, 0, 8);
+        promptMessageBox.Margin = new Thickness(0, 0, 0, 8);
+        promptMessageBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Top;
+        var inputMessageContent = CreateMessagePage(rowCount: 3);
+        AddToPage(
+            inputMessageContent,
+            CreateMessageToggle(showInputMessageBox, "DataValidation_WhenSelectingCellShowThisInputMessage"),
+            row: 0,
+            column: 1);
+        AddToPage(inputMessageContent, CreateFormLabel("DataValidation_InputTitle"), row: 1, column: 0);
+        AddToPage(inputMessageContent, promptTitleBox, row: 1, column: 1);
+        AddToPage(inputMessageContent, CreateFormLabel("DataValidation_InputMessage2", topAligned: true), row: 2, column: 0);
+        AddToPage(inputMessageContent, promptMessageBox, row: 2, column: 1);
 
-        var errorAlertContent = new StackPanel
-        {
-            Spacing = 8,
-            Children =
-            {
-                showErrorMessageBox,
-                CreateDataValidationField(UiText.Get("DataValidation_AlertStyle"), alertStyleBox),
-                CreateDataValidationField(UiText.Get("DataValidation_ErrorTitle"), errorTitleBox),
-                CreateDataValidationField(UiText.Get("DataValidation_ErrorMessage"), errorMessageBox),
-            },
-        };
+        alertStyleBox.Margin = new Thickness(0, 0, 0, 8);
+        errorTitleBox.Margin = new Thickness(0, 0, 0, 8);
+        errorMessageBox.Margin = new Thickness(0, 0, 0, 8);
+        errorMessageBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Top;
+        var errorAlertContent = CreateMessagePage(rowCount: 4);
+        AddToPage(
+            errorAlertContent,
+            CreateMessageToggle(showErrorMessageBox, "DataValidation_WhenUserEntersInvalidDataShowThisErrorAlert"),
+            row: 0,
+            column: 1);
+        AddToPage(errorAlertContent, CreateFormLabel("DataValidation_AlertStyle"), row: 1, column: 0);
+        AddToPage(errorAlertContent, alertStyleBox, row: 1, column: 1);
+        AddToPage(errorAlertContent, CreateFormLabel("DataValidation_ErrorTitle"), row: 2, column: 0);
+        AddToPage(errorAlertContent, errorTitleBox, row: 2, column: 1);
+        AddToPage(errorAlertContent, CreateFormLabel("DataValidation_ErrorMessage", topAligned: true), row: 3, column: 0);
+        AddToPage(errorAlertContent, errorMessageBox, row: 3, column: 1);
 
-        var settingsTab = CreateFormatCellsTab(
+        var settingsTab = CreateValidationTab(
             UiText.Get("DataValidation_Settings"),
             "DataValidationSettingsTab",
             settingsContent);
-        var inputMessageTab = CreateFormatCellsTab(
+        var inputMessageTab = CreateValidationTab(
             UiText.Get("DataValidation_InputMessage"),
             "DataValidationInputMessageTab",
             inputMessageContent);
-        var errorAlertTab = CreateFormatCellsTab(
+        var errorAlertTab = CreateValidationTab(
             UiText.Get("DataValidation_ErrorAlert"),
             "DataValidationErrorAlertTab",
             errorAlertContent);
@@ -23774,6 +23949,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             SelectedIndex = 0,
             Padding = new Thickness(0),
+            Margin = new Thickness(0, 0, 0, 12),
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Stretch,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Stretch,
             ItemsSource = new[]
             {
                 settingsTab,
@@ -23787,9 +23965,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
             Children =
             {
                 clearButton,
@@ -23798,18 +23974,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             },
         };
 
-        var root = new StackPanel
-        {
-            Margin = new Thickness(16),
-            Spacing = 10,
-            Children =
-            {
-                summaryText,
-                tabStrip,
-                errorText,
-                buttonRow,
-            },
-        };
+        // WPF root: Grid { Margin = 12 } with rows "*" (tabs) and "Auto" (buttons). The extra Auto row
+        // only hosts the Avalonia inline validation text, which is collapsed until Accept fails.
+        var root = new AvaloniaGrid { Margin = new Thickness(12) };
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetRow(summaryText, 0);
+        Grid.SetRow(tabStrip, 0);
+        Grid.SetRow(errorText, 1);
+        Grid.SetRow(buttonRow, 2);
+        root.Children.Add(summaryText);
+        root.Children.Add(tabStrip);
+        root.Children.Add(errorText);
+        root.Children.Add(buttonRow);
         ConfigureDialogTabCycle(dialog, root);
         dialog.Content = root;
         dialog.Opened += (_, _) => typeBox.Focus();
@@ -23914,6 +24092,28 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 control,
             },
         };
+
+    // DataValidationDialog.xaml: every tab page uses <ColumnDefinition Width="120"/> for its labels.
+    private const double DataValidationLabelColumnWidth = 120;
+
+    /// <summary>
+    /// One row of the WPF Data Validation two-column form: a vertically centred label in the 120px
+    /// label column (8px gap) and the editor stretched across the remaining width, with the 8px row
+    /// gap carried by the row so a collapsed row leaves no hole.
+    /// </summary>
+    private static AvaloniaGrid CreateDataValidationFormRow(TextBlock label, Control control)
+    {
+        label.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        label.Margin = new Thickness(0, 0, 8, 0);
+        var row = new AvaloniaGrid { Margin = new Thickness(0, 0, 0, 8) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(DataValidationLabelColumnWidth) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        Grid.SetColumn(label, 0);
+        Grid.SetColumn(control, 1);
+        row.Children.Add(label);
+        row.Children.Add(control);
+        return row;
+    }
 
     private void BoldButton_Click(object? sender, RoutedEventArgs e)
     {

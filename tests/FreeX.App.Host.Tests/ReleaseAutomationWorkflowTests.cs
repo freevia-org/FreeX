@@ -289,7 +289,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("needs: [prepare, candidate]");
         workflow.Should().Contain("fromJSON(needs.prepare.outputs.package_matrix)");
         workflow.Should().Contain("fromJSON(needs.prepare.outputs.suite_matrix)");
-        workflow.Should().Contain("max-parallel: 5");
+        workflow.Should().Contain("max-parallel: 15");
         workflow.Should().NotContain("fetch-depth: 0");
         workflow.Should().NotContain("inputs.platform == 'all' || inputs.platform == matrix.platform");
         workflow.Should().Contain("group: full-signed-release-${{ inputs.release_version }}");
