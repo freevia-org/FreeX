@@ -83,7 +83,8 @@ internal static class Program
         var view = new DocumentView();
         view.LoadModel(model);
 
-        if (model.Sections.Count > 1 && NeedsSectionAwareRendering(model))
+        if ((model.Sections.Count > 1 && NeedsSectionAwareRendering(model))
+            || PrintLayout.UsesPerPageFootnoteReserve(view, PrintLayout.ResolvePrintBalloonSources(view)))
             return RenderSectionAwareDocument(view, outDir, baseName, dpi);
 
         // Paginate the editor's *live* FlowDocument directly rather than via PrintLayout.BuildPaginator.

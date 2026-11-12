@@ -119,6 +119,41 @@ public sealed class DocumentParagraphFormattingResolverTests
     }
 
     [Fact]
+    public void Resolve_inherits_the_style_automatic_spacing_tokens_with_its_spacing()
+    {
+        // drawing.docx: "Normal (Web)" carries w:before/afterAutospacing; a paragraph that only adds direct
+        // formatting of its own (here a hidden mark / alignment) still uses the style's automatic spacing.
+        var document = TextDocument.CreateEmpty();
+        document.Styles["NormalWeb"] = new DocumentStyle
+        {
+            Id = "NormalWeb",
+            Name = "Normal (Web)",
+            Paragraph = ParagraphFormatting.Default with
+            {
+                SpaceBeforePt = 14,
+                SpaceAfterPt = 14,
+                SpaceBeforeIsSet = true,
+                SpaceAfterIsSet = true,
+                BeforeAutoSpacing = true,
+                AfterAutoSpacing = true,
+            },
+        };
+        var paragraph = new Paragraph
+        {
+            StyleId = "NormalWeb",
+            Formatting = ParagraphFormatting.Default with { Alignment = TextAlignment.Justify },
+        };
+
+        var resolved = DocumentParagraphFormattingResolver.Resolve(document, paragraph);
+        resolved.BeforeAutoSpacing.Should().BeTrue();
+        resolved.AfterAutoSpacing.Should().BeTrue();
+
+        paragraph.Formatting = paragraph.Formatting with { SpaceAfterPt = 0, SpaceAfterIsSet = true };
+        DocumentParagraphFormattingResolver.Resolve(document, paragraph).AfterAutoSpacing.Should().BeFalse(
+            "a direct numeric after-spacing replaces the style's automatic token");
+    }
+
+    [Fact]
     public void Resolve_preserves_style_intrinsics_when_paragraph_has_no_direct_formatting()
     {
         var document = TextDocument.CreateEmpty();

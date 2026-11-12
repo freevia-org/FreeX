@@ -409,7 +409,69 @@ internal sealed class PageBox : Border
             stack.Children.Add(footerStrip);
         }
 
-        Child = stack;
+        Child = AddAnchoredLayers(stack, sourceModel, page, new HeaderFooterBandContext(
+            pageNumber, pageNumberText, pageCount, sectionOrdinal, sectionPageCount));
+    }
+
+    /// <summary>
+    /// The page's header/footer drawings that are anchored rather than in the text flow -- positioned
+    /// legacy VML text boxes (a circled PAGE number in the margin) and DrawingML floating pictures and
+    /// shapes -- drawn at their page positions through the same <see cref="HeaderFooterBandRenderer"/>
+    /// layout Print / Print Preview / PDF use, behind or in front of the page text as authored. The
+    /// fixed-height header/footer sub-editors cannot host them.
+    /// </summary>
+    internal IReadOnlyList<PageVisualLayerElement> AnchoredHeaderFooterLayers { get; private set; } = [];
+
+    private UIElement AddAnchoredLayers(
+        Grid stack,
+        TextDocument? sourceModel,
+        PageSettings page,
+        HeaderFooterBandContext context)
+    {
+        if (sourceModel is null)
+            return stack;
+
+        var layers = new List<HeaderFooterAnchoredLayers>(2);
+        if (HeaderSlot is not null
+            && HeaderFooterBandRenderer.RenderAnchoredObjects(sourceModel, HeaderSlotContent, isHeader: true, context, page)
+                is { } headerLayers)
+        {
+            layers.Add(headerLayers);
+        }
+
+        if (FooterSlot is not null
+            && HeaderFooterBandRenderer.RenderAnchoredObjects(sourceModel, FooterSlotContent, isHeader: false, context, page)
+                is { } footerLayers)
+        {
+            layers.Add(footerLayers);
+        }
+
+        if (layers.Count == 0)
+            return stack;
+
+        var root = new Grid();
+        var hosts = new List<PageVisualLayerElement>();
+        foreach (var layer in layers)
+        {
+            if (layer.Behind is { } behind)
+                hosts.Add(new PageVisualLayerElement(behind, layer.Retainer));
+        }
+
+        foreach (var host in hosts)
+            root.Children.Add(host);
+        root.Children.Add(stack);
+        foreach (var layer in layers)
+        {
+            if (layer.Front is { } front)
+            {
+                var host = new PageVisualLayerElement(front, layer.Retainer);
+                hosts.Add(host);
+                root.Children.Add(host);
+            }
+        }
+
+        AnchoredHeaderFooterLayers = hosts;
+        return root;
     }
 
     // ── Phase 4: wrapper-document sub-editor builder ──────────────────────────────────────────────
@@ -482,8 +544,14 @@ internal sealed class PageBox : Border
             }
             else
             {
+                // A positioned legacy text box (e.g. Word's circled PAGE number in the margin) is drawn
+                // at its own page position by the page's anchored layer (see AddAnchoredLayers), not as
+                // a line of the strip; CommitOneSlot splices those paragraphs back unchanged.
                 foreach (var para in slot.Paragraphs)
-                    wrapper.Blocks.Add(para);
+                {
+                    if (para.LegacyTextBoxFrame is null)
+                        wrapper.Blocks.Add(para);
+                }
             }
         }
         if (wrapper.Blocks.Count == 0)
@@ -552,7 +620,7 @@ internal sealed class PageBox : Border
     /// commit.</para>
     /// </summary>
     internal void CommitHeaderSlot(DocumentView helper, SectionHeadersFooters hf) =>
-        CommitOneSlot(HeaderSubEditor, HeaderSlot, helper, hf);
+        CommitOneSlot(HeaderSubEditor, HeaderSlot, HeaderSlotContent, helper, hf);
 
     /// <summary>
     /// Commits the footer sub-editor back to the appropriate slot on <paramref name="hf"/> -- the real
@@ -561,11 +629,12 @@ internal sealed class PageBox : Border
     /// <see cref="CommitHeaderSlot"/> for the dedup contract.
     /// </summary>
     internal void CommitFooterSlot(DocumentView helper, SectionHeadersFooters hf) =>
-        CommitOneSlot(FooterSubEditor, FooterSlot, helper, hf);
+        CommitOneSlot(FooterSubEditor, FooterSlot, FooterSlotContent, helper, hf);
 
     private static void CommitOneSlot(
         DocumentView? subEditor,
         HeaderFooterSlotKind? slot,
+        HeaderFooter? original,
         DocumentView helper,
         SectionHeadersFooters hf)
     {
@@ -595,9 +664,40 @@ internal sealed class PageBox : Border
         {
             foreach (var block in subEditor.Model.Blocks.OfType<FreeW.Core.Model.Paragraph>())
                 hfOut.Paragraphs.Add(block);
+            SpliceLegacyTextBoxParagraphs(original, hfOut.Paragraphs);
         }
 
         HeaderFooterDialogPlanner.SetSlot(hf, slot.Value, hfOut);
+    }
+
+    /// <summary>
+    /// Puts the positioned legacy text-box paragraphs that <see cref="BuildHfSubEditor"/> kept out of the
+    /// strip back into the committed story at their original positions, unchanged. When the slot held
+    /// nothing but text boxes, the empty placeholder line the strip needed is dropped again.
+    /// </summary>
+    internal static void SpliceLegacyTextBoxParagraphs(
+        HeaderFooter? original,
+        IList<FreeW.Core.Model.Paragraph> committed)
+    {
+        if (original is null || original.Table is not null
+            || !original.Paragraphs.Any(paragraph => paragraph.LegacyTextBoxFrame is not null))
+        {
+            return;
+        }
+
+        if (original.Paragraphs.All(paragraph => paragraph.LegacyTextBoxFrame is not null)
+            && committed.Count == 1
+            && committed[0].Runs.Count == 0)
+        {
+            committed.Clear();
+        }
+
+        for (var index = 0; index < original.Paragraphs.Count; index++)
+        {
+            var paragraph = original.Paragraphs[index];
+            if (paragraph.LegacyTextBoxFrame is not null)
+                committed.Insert(Math.Min(index, committed.Count), paragraph);
+        }
     }
 
     // ── cross-page caret routing ──────────────────────────────────────────────────────────────────

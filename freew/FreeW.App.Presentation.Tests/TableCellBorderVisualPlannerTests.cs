@@ -200,4 +200,34 @@ public sealed class TableCellBorderVisualPlannerTests
         TableCellBorderVisualPlanner.BuildStrokeSegments(
             edge, 10, 20, 40, 50, waveRegistrationDip: 0).Should().BeEmpty();
     }
+
+    [Theory]
+    [InlineData(BorderLineStyle.Single, true, 2.0, 2.0)]
+    [InlineData(BorderLineStyle.Thick, true, 2.0, 2.0)]
+    [InlineData(BorderLineStyle.Double, true, 2.0, 6.0)]
+    [InlineData(BorderLineStyle.Wave, true, 2.0, 0.0)]
+    [InlineData(BorderLineStyle.Single, false, 2.0, 0.0)]
+    public void StrokeExtentDip_CoversEveryStrokeTheEdgeDraws(
+        BorderLineStyle style,
+        bool visible,
+        double widthDip,
+        double expectedExtentDip)
+    {
+        var edge = new TableCellBorderEdgeVisualPlan(
+            TableCellBorderVisualEdge.Top, visible, style, "#000000", widthDip, FallbackNote: null);
+
+        var extent = TableCellBorderVisualPlanner.StrokeExtentDip(edge);
+
+        extent.Should().BeApproximately(expectedExtentDip, 1e-9);
+        if (visible && style != BorderLineStyle.Wave)
+        {
+            // Every stroke drawn on an edge centred half the extent inside the cell stays in the cell.
+            foreach (var segment in TableCellBorderVisualPlanner.BuildStrokeSegments(
+                         edge, 0, extent / 2, 100, 100, waveRegistrationDip: 0))
+            {
+                (segment.Y1Dip - widthDip / 2).Should().BeGreaterThanOrEqualTo(-1e-9);
+                (segment.Y1Dip + widthDip / 2).Should().BeLessThanOrEqualTo(extent + 1e-9);
+            }
+        }
+    }
 }

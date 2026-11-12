@@ -73,7 +73,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
             harness.SelectedRange.Should().Be(new GridRange(
                 new CellAddress(harness.CurrentSheetId, 2, 2),
                 new CellAddress(harness.CurrentSheetId, 3, 3)));
-            harness.CellAddressBoxText.Should().Be("B2:C3");
+            harness.CellAddressBoxText.Should().Be("B2", "like Excel, the Name Box shows the active cell of an unnamed range selection");
             harness.FormulaBarText.Should().Be("range start");
             harness.SheetGridFocused.Should().BeTrue();
         });
@@ -255,7 +255,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
             harness.PressCellAddressBoxKey(Key.Escape).Should().BeTrue();
 
             harness.SelectedRange.Should().Be(expectedRange);
-            harness.CellAddressBoxText.Should().Be("B2:C3");
+            harness.CellAddressBoxText.Should().Be("B2", "like Excel, the Name Box shows the active cell of an unnamed range selection");
             harness.SheetGridFocused.Should().BeTrue();
         });
     }

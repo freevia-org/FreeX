@@ -69,6 +69,13 @@ public static class DocumentParagraphFormattingResolver
                     : direct.SpaceAfterPt,
             SpaceBeforeIsSet = direct.SpaceBeforeIsSet || style.SpaceBeforeIsSet,
             SpaceAfterIsSet = direct.SpaceAfterIsSet || style.SpaceAfterIsSet,
+            // The automatic-spacing token travels with the spacing value it qualifies.
+            BeforeAutoSpacing = direct.SpaceBeforeIsSet
+                ? direct.BeforeAutoSpacing
+                : style.SpaceBeforeIsSet ? style.BeforeAutoSpacing : direct.BeforeAutoSpacing,
+            AfterAutoSpacing = direct.SpaceAfterIsSet
+                ? direct.AfterAutoSpacing
+                : style.SpaceAfterIsSet ? style.AfterAutoSpacing : direct.AfterAutoSpacing,
             LineSpacing = lineFrom.LineSpacing,
             LineRule = lineFrom.LineRule,
             LineHeightPt = lineFrom.LineHeightPt,
