@@ -128,6 +128,13 @@ public sealed record MathRun
     public string Text { get; init; } = string.Empty;
 
     /// <summary>
+    /// Whether this text is set upright ("plain" math style, OMML m:rPr/m:sty "p" or m:nor) instead of
+    /// Word's default math italic. Only meaningful for <see cref="MathRunKind.Text"/>; function names are
+    /// always written and drawn upright regardless.
+    /// </summary>
+    public bool IsUpright { get; init; }
+
+    /// <summary>
     /// The base/operand: the base of a sub/superscript, the radicand of a radical, the operand of an
     /// n-ary operator, or the content of a delimiter.
     /// </summary>

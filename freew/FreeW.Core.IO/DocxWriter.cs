@@ -4461,7 +4461,7 @@ public static partial class DocxWriter
             BuildMathSlot(M + "e", run.ScriptBaseEquation, run.Base, depth),
             BuildMathSlot(M + "lim", run.ScriptSupEquation, run.Sup, depth)),
         MathRunKind.Preserved => BuildPreservedMath(run),
-        _ => MathText(run.Text)
+        _ => MathText(run.Text, run.IsUpright)
     };
 
     /// <summary>
@@ -4685,7 +4685,7 @@ public static partial class DocxWriter
     /// </summary>
     private static XElement BuildFunctionApply(MathRun run, int depth) =>
         new(M + "func",
-            BuildMathSlot(M + "fName", run.FunctionNameEquation, run.FuncName, depth),
+            BuildFunctionNameSlot(run, depth),
             BuildMathSlot(M + "e", run.FunctionArgumentEquation, run.Base, depth));
 
     /// <summary>
@@ -4700,10 +4700,57 @@ public static partial class DocxWriter
                 new XElement(M + "pos", new XAttribute(M + "val", run.GroupChrPos))),
             BuildMathSlot(M + "e", run.DecoratorBaseEquation, run.Base, depth));
 
-    /// <summary>Builds an m:r run carrying <paramref name="text"/> in an m:t (xml:space preserved).</summary>
-    private static XElement MathText(string text) =>
-        new(M + "r",
-            new XElement(M + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), text));
+    /// <summary>
+    /// Builds m:fName the way Word writes function names (sin, cos, log, lim…): every text run of the name —
+    /// and the base of a limit or script that carries the name, as in lim below x→0 or cos² — is a "plain"
+    /// (m:sty "p") run, so Word draws it upright. Limits and exponents keep the default math italic.
+    /// </summary>
+    private static XElement BuildFunctionNameSlot(MathRun run, int depth)
+    {
+        var slot = BuildMathSlot(M + "fName", run.FunctionNameEquation, run.FuncName, depth);
+        MarkFunctionNameUpright(slot);
+        return slot;
+    }
+
+    private static void MarkFunctionNameUpright(XElement slot)
+    {
+        foreach (var child in slot.Elements())
+        {
+            if (child.Name == M + "r")
+            {
+                MarkMathRunUpright(child);
+            }
+            else if (child.Element(M + "e") is { } nameBase
+                     && (child.Name == M + "limLow" || child.Name == M + "limUpp" || child.Name == M + "sSup"
+                         || child.Name == M + "sSub" || child.Name == M + "sSubSup"))
+            {
+                MarkFunctionNameUpright(nameBase);
+            }
+        }
+    }
+
+    private static void MarkMathRunUpright(XElement mathRun)
+    {
+        if (mathRun.Element(M + "rPr") is not null)
+            return;
+        mathRun.AddFirst(MathUprightRunProperties());
+    }
+
+    private static XElement MathUprightRunProperties() =>
+        new(M + "rPr", new XElement(M + "sty", new XAttribute(M + "val", "p")));
+
+    /// <summary>
+    /// Builds an m:r run carrying <paramref name="text"/> in an m:t (xml:space preserved). Upright text
+    /// carries m:rPr/m:sty "p" exactly as Word writes plain-style math text.
+    /// </summary>
+    private static XElement MathText(string text, bool upright = false)
+    {
+        var run = new XElement(M + "r");
+        if (upright)
+            run.Add(MathUprightRunProperties());
+        run.Add(new XElement(M + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), text));
+        return run;
+    }
 
     /// <summary>
     /// Builds the picture drawing for an image part. An inline image (the default) emits

@@ -3469,7 +3469,7 @@ public static partial class DocxReader
         foreach (var child in elements)
         {
             if (child.Name == M + "r")
-                yield return MathRun.PlainText(MathTextOf(child));
+                yield return MathRun.PlainText(MathTextOf(child)) with { IsUpright = IsUprightMathRun(child) };
             else if (child.Name == M + "sSup")
                 yield return ReadSuperscript(child);
             else if (child.Name == M + "sSub")
@@ -3651,6 +3651,20 @@ public static partial class DocxReader
         element.Name == M + "box" ||
         element.Name == M + "borderBox" ||
         element.Name == M + "phant";
+
+    /// <summary>
+    /// Whether an m:r is set upright: m:rPr/m:nor (normal text) or a plain/bold style (m:sty "p"/"b").
+    /// Absent m:sty means Word's default bold-italic-by-character math style.
+    /// </summary>
+    private static bool IsUprightMathRun(XElement mathRun)
+    {
+        var properties = mathRun.Element(M + "rPr");
+        if (properties is null)
+            return false;
+        if (properties.Element(M + "nor") is { } normal && ReadOnOffValue(normal.Attribute(M + "val")?.Value, defaultValue: true))
+            return true;
+        return properties.Element(M + "sty")?.Attribute(M + "val")?.Value is "p" or "b";
+    }
 
     private static Equation ReadMathSlot(XElement? slot) =>
         slot is null ? new Equation() : new Equation(ReadMathRuns(slot.Elements()));

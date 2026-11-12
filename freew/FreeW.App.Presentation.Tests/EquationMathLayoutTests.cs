@@ -276,6 +276,14 @@ public sealed class EquationMathLayoutTests
     }
 
     [Fact]
+    public void PlainStyleText_IsDrawnUpright()
+    {
+        var items = Texts(Layout(new Equation([MathRun.PlainText("dx") with { IsUpright = true }, MathRun.PlainText("y")])));
+
+        items.Select(item => item.Text).Should().Equal("dx", "\U0001D466");
+    }
+
+    [Fact]
     public void DeeplyNestedEquation_DoesNotThrow()
     {
         var equation = Equation.FromText("x");

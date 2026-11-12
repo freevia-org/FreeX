@@ -316,7 +316,7 @@ public static class EquationMathLayout
             switch (run.Kind)
             {
                 case MathRunKind.Text:
-                    AddText(run.Text, ctx, items);
+                    AddText(run.Text, run.IsUpright ? ctx with { Upright = true } : ctx, items);
                     break;
                 case MathRunKind.Preserved:
                     AddText(string.IsNullOrEmpty(run.Text) ? run.LinearText : run.Text, ctx, items);
