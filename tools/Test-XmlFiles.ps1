@@ -26,15 +26,18 @@ if ($normalizedExtensions.Count -eq 0) {
 $xmlPaths = New-Object System.Collections.Generic.List[string]
 if ($XmlRoots.Count -eq 0) {
     foreach ($trackedPath in (Get-ToolTrackedRepositoryFiles -RepoRoot $repoRoot)) {
+        # Cheap extension filter first: the exclusion/Test-Path helpers are expensive per path and
+        # only the few hundred XML-backed files need them.
+        if (-not $normalizedExtensions.Contains([System.IO.Path]::GetExtension($trackedPath))) {
+            continue
+        }
+
         $resolvedTrackedPath = Join-Path $repoRoot $trackedPath
         if ((Test-ToolExcludedPath -Path $trackedPath -RepoRoot $repoRoot) -or -not (Test-Path -LiteralPath $resolvedTrackedPath -PathType Leaf)) {
             continue
         }
 
-        $extension = [System.IO.Path]::GetExtension($trackedPath)
-        if ($normalizedExtensions.Contains($extension)) {
-            $xmlPaths.Add($resolvedTrackedPath)
-        }
+        $xmlPaths.Add($resolvedTrackedPath)
     }
 }
 else {

@@ -11,14 +11,18 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $jsonPaths = New-Object System.Collections.Generic.List[string]
 if ($JsonRoots.Count -eq 0) {
     foreach ($trackedPath in (Get-ToolTrackedRepositoryFiles -RepoRoot $repoRoot)) {
+        # Cheap extension filter first: the exclusion/Test-Path helpers are expensive per path and
+        # only the few hundred .json files need them.
+        if ([System.IO.Path]::GetExtension($trackedPath) -ine ".json") {
+            continue
+        }
+
         $resolvedTrackedPath = Join-Path $repoRoot $trackedPath
         if ((Test-ToolExcludedPath -Path $trackedPath -RepoRoot $repoRoot) -or -not (Test-Path -LiteralPath $resolvedTrackedPath -PathType Leaf)) {
             continue
         }
 
-        if ([System.IO.Path]::GetExtension($trackedPath) -ieq ".json") {
-            $jsonPaths.Add($resolvedTrackedPath)
-        }
+        $jsonPaths.Add($resolvedTrackedPath)
     }
 }
 else {
