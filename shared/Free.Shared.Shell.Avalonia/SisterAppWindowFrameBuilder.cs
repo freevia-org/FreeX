@@ -33,6 +33,26 @@ public sealed record SisterAppWindowFrameBuildResult(
 /// </summary>
 public static class SisterAppWindowFrameBuilder
 {
+    /// <summary>
+    /// Width reserved at the leading edge of an extended-client-area window on macOS for the native
+    /// close/minimize/zoom buttons, which the OS draws over the client title surface.
+    /// </summary>
+    public const double MacOsTrafficLightInset = 78;
+
+    /// <summary>
+    /// Extra leading offset applied to the title-bar content on macOS so nothing sits underneath the
+    /// native traffic-light buttons. Windows/Linux reserve <paramref name="nativeLeadingInset"/> for the
+    /// native window icon (or the app badge drawn in its place); macOS has no window icon there, so an
+    /// app badge is shifted past the traffic lights and, without a badge, the Quick Access Toolbar
+    /// starts directly after them.
+    /// </summary>
+    public static double ResolveLeadingContentOffset(bool isMacOs, bool hasAppBadge, double nativeLeadingInset) =>
+        !isMacOs
+            ? 0
+            : hasAppBadge
+                ? MacOsTrafficLightInset
+                : Math.Max(0, MacOsTrafficLightInset - nativeLeadingInset);
+
     public static SisterAppWindowFrameBuildResult Build(SisterAppWindowFrameSpec spec)
     {
         ArgumentNullException.ThrowIfNull(spec);
@@ -48,6 +68,10 @@ public static class SisterAppWindowFrameBuilder
 
         spec.Window.ExtendClientAreaToDecorationsHint = true;
         spec.Window.ExtendClientAreaTitleBarHeightHint = spec.TitleBarHeight;
+        var leadingContentOffset = ResolveLeadingContentOffset(
+            OperatingSystem.IsMacOS(),
+            spec.AppBadgeLetter is not null,
+            spec.NativeLeadingInset);
 
         var titleText = new TextBlock
         {
@@ -75,6 +99,11 @@ public static class SisterAppWindowFrameBuilder
         WindowDecorationProperties.SetElementRole(qatHost, WindowDecorationsElementRole.User);
 
         var titleSurface = new Grid();
+        // macOS: shift the whole title surface (badge, QAT, caption lane) past the native traffic
+        // lights. The title-bar Border still paints its background underneath them, and the badge/QAT
+        // keep their platform-neutral margins.
+        if (leadingContentOffset > 0)
+            titleSurface.Margin = new Thickness(leadingContentOffset, 0, 0, 0);
         titleSurface.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
         titleSurface.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
         titleSurface.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(spec.NativeTrailingInset)));
@@ -101,7 +130,7 @@ public static class SisterAppWindowFrameBuilder
                 {
                     Text = badgeLetter,
                     Foreground = Brushes.White,
-                    FontFamily = new FontFamily("Segoe UI"),
+                    FontFamily = AvaloniaCompactDialogChrome.ResolveUiFontFamily("Segoe UI"),
                     FontSize = 13,
                     FontWeight = FontWeight.Bold,
                     HorizontalAlignment = HorizontalAlignment.Center,

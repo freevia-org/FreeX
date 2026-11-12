@@ -358,6 +358,7 @@ public sealed class RibbonWpfSplitButtonTests
                 registry);
             var window = new Window { Content = root, Width = 420, Height = 130 };
             window.Show();
+            window.Activate();
             try
             {
                 Layout(root, 420, 130);
@@ -386,18 +387,12 @@ public sealed class RibbonWpfSplitButtonTests
                 RaiseKey(child, Key.Left, PresentationSource.FromVisual(window));
                 parent.IsSubmenuOpen.Should().BeFalse();
                 menu.IsOpen.Should().BeTrue();
-                window.Dispatcher.Invoke(
-                    static () => { },
-                    System.Windows.Threading.DispatcherPriority.ApplicationIdle);
-                FocusManager.GetFocusedElement(menu).Should().BeSameAs(parent);
+                AssertFocusSettlesOn(window, menu, parent);
                 parent.IsSubmenuOpen = true;
                 child.Focus();
                 RaiseKey(child, Key.Escape, PresentationSource.FromVisual(window));
                 parent.IsSubmenuOpen.Should().BeFalse();
-                window.Dispatcher.Invoke(
-                    static () => { },
-                    System.Windows.Threading.DispatcherPriority.ApplicationIdle);
-                FocusManager.GetFocusedElement(menu).Should().BeSameAs(parent);
+                AssertFocusSettlesOn(window, menu, parent);
                 menu.IsOpen = false;
             }
             finally
@@ -767,6 +762,24 @@ public sealed class RibbonWpfSplitButtonTests
         root.Measure(new Size(width, height));
         root.Arrange(new Rect(0, 0, width, height));
         root.UpdateLayout();
+    }
+
+    private static void AssertFocusSettlesOn(Window window, DependencyObject scope, IInputElement expected)
+    {
+        // Focus restoration is dispatcher-asynchronous and slower on headless CI runners,
+        // so pump idle priority a bounded number of times before asserting.
+        for (var attempt = 0; attempt < 20 && !ReferenceEquals(FocusManager.GetFocusedElement(scope), expected); attempt++)
+        {
+            window.Dispatcher.Invoke(
+                static () => { },
+                System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            if (attempt > 0)
+            {
+                System.Threading.Thread.Sleep(25);
+            }
+        }
+
+        FocusManager.GetFocusedElement(scope).Should().BeSameAs(expected);
     }
 
     private static void RaiseKey(UIElement target, Key key, PresentationSource? inputSource = null)
