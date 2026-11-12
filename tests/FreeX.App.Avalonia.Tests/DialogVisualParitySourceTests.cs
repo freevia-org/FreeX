@@ -86,7 +86,7 @@ public sealed class DialogVisualParitySourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, dialogChrome);");
-        source.Should().Contain("ButtonHeight = GoToDialogPlanner.ActionButtonHeight,");
+        source.Should().Contain("ButtonHeight = 20,");
         source.Should().Contain("TextBoxHeight = 18,");
         source.Should().Contain("MinHeight = 130,");
         source.Should().Contain("Margin = new Thickness(0, 24, 0, 0),");

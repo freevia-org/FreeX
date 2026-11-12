@@ -15217,7 +15217,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // an 18 px box (16 px text area inside the 1 px frame) and 20 px buttons.
         var dialogChrome = AvaloniaCompactDialogChrome.WindowsStyle with
         {
-            ButtonHeight = GoToDialogPlanner.ActionButtonHeight,
+            ButtonHeight = 20,
             TextBoxHeight = 18,
             TextBoxPadding = new Thickness(2, 0),
             FontFamily = FormulaBarFontFamily,
