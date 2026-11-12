@@ -27443,6 +27443,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
+        // Excel: while a copied range is outlined (marching ants), a plain Enter pastes it into the
+        // selection and ends copy mode instead of moving the selection.
+        if (e.Key == Key.Enter &&
+            e.KeyModifiers == KeyModifiers.None &&
+            _clipboardMarqueeRange is not null &&
+            _inlineCellEditAddress is null &&
+            !_formulaBox.IsFocused &&
+            !IsTextEditingEventSource(e))
+        {
+            e.Handled = true;
+            await PasteClipboardTextAsync();
+            SetClipboardMarquee(null, isCut: false);
+            return;
+        }
+
         if (IsAutoSumShortcut(e))
         {
             e.Handled = true;
