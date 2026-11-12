@@ -104,14 +104,29 @@ public static class SisterAvaloniaProgramRunner
             BeforeRun = spec.BeforeRun,
             AfterRun = spec.AfterRun,
             CompletedExitCode = spec.CompletedExitCode,
-            StartupCrashSource = spec.CrashSource
+            StartupCrashSource = spec.CrashSource,
+            WaitForDisplay = runtime.WaitForDisplay,
+            RecoverFromUiLoopFault = runtime.RecoverFromUiLoopFault
         });
     }
 }
 
 internal sealed class SisterAvaloniaProgramRuntime
 {
-    public static SisterAvaloniaProgramRuntime Default { get; } = new();
+    public static SisterAvaloniaProgramRuntime Default { get; } = new()
+    {
+        WaitForDisplay = SisterAvaloniaDisplayReadinessGate.WaitForDisplayIfNeeded,
+        RecoverFromUiLoopFault = SisterAvaloniaUiLoopRecovery.TryResumeAfterFault
+    };
+
+    /// <summary>
+    /// Pre-start display gate. Only <see cref="Default"/> installs the real macOS probe; test runtimes
+    /// built with <c>new()</c> skip it so they never block on the host's display state.
+    /// </summary>
+    public Func<SisterAvaloniaDisplayGateOutcome>? WaitForDisplay { get; init; }
+
+    /// <summary>macOS UI-loop fault recovery; like the display gate, only <see cref="Default"/> installs it.</summary>
+    public Func<Exception, Action<Exception, string>, int?>? RecoverFromUiLoopFault { get; init; }
 
     public Func<string> ResolveVersion { get; init; } = EntryAssemblyVersion.Resolve;
 
