@@ -1355,7 +1355,7 @@ public static class EquationLinearFormat
         }
 
         /// <summary>An operand in a position where parentheses would be kept as a delimiter.</summary>
-        private string KeptOperand(List<MathRun> runs, bool compact, bool allowFunctionName)
+        private string KeptOperand(List<MathRun> runs, bool compact, bool allowFunctionName, bool allowScripts = false)
         {
             if (EquationStructure.IsPlainText(runs, out var text))
             {
@@ -1365,8 +1365,12 @@ public static class EquationLinearFormat
                     return text;
             }
 
-            if (compact && runs.Count == 1 && (IsSelfDelimited(runs[0]) || runs[0].Kind == MathRunKind.Delimiter))
+            if (compact
+                && runs.Count == 1
+                && (IsSelfDelimited(runs[0]) || runs[0].Kind == MathRunKind.Delimiter || (allowScripts && IsScript(runs[0]))))
+            {
                 return Fragment(runs[0]);
+            }
 
             return Invisible(runs);
         }
@@ -1423,7 +1427,11 @@ public static class EquationLinearFormat
                     if (upper.Count > 0)
                         builder.Append('^').Append(StrippedOperand(upper, compact, allowScripts: false));
                     builder.Append(Symbols.Of)
-                        .Append(KeptOperand(EquationStructure.SlotRuns(run.NAryOperandEquation, run.Base), compact, allowFunctionName: false));
+                        .Append(KeptOperand(
+                            EquationStructure.SlotRuns(run.NAryOperandEquation, run.Base),
+                            compact,
+                            allowFunctionName: false,
+                            allowScripts: true));
                     return builder.ToString();
                 }
 
@@ -1554,7 +1562,11 @@ public static class EquationLinearFormat
 
             return name
                 + Symbols.FunctionApply
-                + KeptOperand(EquationStructure.SlotRuns(run.FunctionArgumentEquation, run.Base), compact, allowFunctionName: false);
+                + KeptOperand(
+                    EquationStructure.SlotRuns(run.FunctionArgumentEquation, run.Base),
+                    compact,
+                    allowFunctionName: false,
+                    allowScripts: true);
         }
     }
 }
