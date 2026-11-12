@@ -53,8 +53,20 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = state.IsProtected ? UiText.Get("ShellLoc_UnprotectSheetTitle") : UiText.Get("ShellLoc_ProtectSheetTitle"),
-            Width = state.IsProtected ? ProtectionDialogPlanner.UnprotectSheetWidth : ProtectionDialogPlanner.ProtectSheetWidth,
-            Height = state.IsProtected ? ProtectionDialogPlanner.UnprotectSheetHeight : ProtectionDialogPlanner.ProtectSheetHeight,
+            // WPF PasswordProtectionDialog: DialogSizing.ApplyContentHeight(width, minHeight) -- a
+            // NoResize window of fixed width whose height follows its content, never below the *outer*
+            // minimum (540 for Protect Sheet, 250 for the password-only prompt). Avalonia sizes the
+            // client area, so the Windows caption/frame comes off the minimum.
+            Width = state.IsProtected ? ProtectionDialogPlanner.ProtectWorkbookCaptureWidth : ProtectionDialogPlanner.ProtectSheetWidth,
+            // Height seeds the size for hosts that do not apply SizeToContent (headless capture).
+            Height = (state.IsProtected ? ProtectionDialogPlanner.ProtectWorkbookCaptureHeight : ProtectionDialogPlanner.ProtectSheetHeight)
+                - WpfNoResizeFrameHeight,
+            MinHeight = (state.IsProtected ? ProtectionDialogPlanner.ProtectWorkbookCaptureHeight : ProtectionDialogPlanner.ProtectSheetHeight)
+                - WpfNoResizeFrameHeight,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -74,14 +86,15 @@ public sealed partial class MainWindow
             IsVisible = false,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 8, 0, 0),
         };
         AutomationProperties.SetAutomationId(warningText, "ProtectSheetWarningText");
 
-        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
-        ApplyProtectButtonChrome(okButton, 84, isDefault: true);
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 72 };
+        ApplyProtectButtonChrome(okButton, 72, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "ProtectSheetOkButton");
-        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
-        ApplyProtectButtonChrome(cancelButton, 84);
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 72 };
+        ApplyProtectButtonChrome(cancelButton, 72);
         AutomationProperties.SetAutomationId(cancelButton, "ProtectSheetCancelButton");
         cancelButton.Click += (_, _) => dialog.Close();
 
@@ -97,7 +110,6 @@ public sealed partial class MainWindow
         {
             var unprotectPanel = new StackPanel
             {
-                Spacing = 6,
                 Children =
                 {
                     new TextBlock
@@ -115,14 +127,15 @@ public sealed partial class MainWindow
 
             if (state.HasPassword)
             {
-                unprotectPanel.Children.Add(ProtectionLabeledField(UiText.Get("ShellLoc_PasswordLabel"), passwordBox));
+                unprotectPanel.Children.Add(ProtectionLabeledField(UiText.Get("ShellLoc_PasswordLabel"), passwordBox, topMargin: 8));
                 unprotectPanel.Children.Add(new TextBlock
                 {
                     Text = UiText.Get("ShellLoc_CautionPasswordsCannotBeRecovered"),
-                    Foreground = Brush(110, 110, 110),
+                    Foreground = Brush(109, 109, 109),
                     TextWrapping = TextWrapping.Wrap,
-                    FontSize = 11,
+                    FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
+                    Margin = new Thickness(0, 8, 0, 0),
                 });
             }
 
@@ -149,7 +162,8 @@ public sealed partial class MainWindow
         else
         {
             var permissionBoxes = new List<(SheetProtectionPermission Permission, CheckBox Box)>();
-            var checklist = new StackPanel { Spacing = 4 };
+            // WPF: each permission check box carries Margin = (0, 0, 0, 4).
+            var checklist = new StackPanel();
             var index = 0;
             foreach (var option in SheetProtectionOptions.All)
             {
@@ -157,6 +171,7 @@ public sealed partial class MainWindow
                 {
                     Content = UiText.Get(option.LabelKey),
                     IsChecked = option.DefaultEnabled,
+                    Margin = new Thickness(0, 0, 0, 4),
                 };
                 ApplyProtectCheckBoxChrome(box);
                 AutomationProperties.SetAutomationId(box, $"ProtectSheetPermission{index}Box");
@@ -170,32 +185,36 @@ public sealed partial class MainWindow
                 Text = UiText.Get("ShellLoc_ProtectWorksheetContentsHeader"),
                 Foreground = HeaderForeground,
                 FontWeight = FontWeight.SemiBold,
-                Margin = new Thickness(0, 0, 0, 4),
+                Margin = new Thickness(0, 0, 0, 8),
                 FontSize = 12,
                 FontFamily = FormulaBarFontFamily,
             });
 
             var passwordPanel = new StackPanel
             {
-                Spacing = 6,
                 Children =
                 {
                     ProtectionLabeledField(UiText.Get("ShellLoc_PasswordOptionalLabel"), passwordBox),
-                    ProtectionLabeledField(UiText.Get("ShellLoc_ConfirmPasswordLabel"), confirmBox),
+                    ProtectionLabeledField(UiText.Get("ShellLoc_ConfirmPasswordLabel"), confirmBox, topMargin: 8),
                     new TextBlock
                     {
                         Text = UiText.Get("ShellLoc_CautionPasswordsCannotBeRecovered"),
-                        Foreground = Brush(110, 110, 110),
+                        Foreground = Brush(109, 109, 109),
                         TextWrapping = TextWrapping.Wrap,
-                        FontSize = 11,
+                        FontSize = 12,
                         FontFamily = FormulaBarFontFamily,
+                        Margin = new Thickness(0, 8, 0, 0),
                     },
                 },
             };
             contentChildren.Add(ProtectionGroupBox(UiText.Get("ShellLoc_PasswordGroupHeader"), passwordPanel));
-            contentChildren.Add(ProtectionGroupBox(
+            // WPF: the checklist scrolls inside a fixed 230px viewport and its group has no bottom margin.
+            var checklistGroup = ProtectionGroupBox(
                 UiText.Get("ShellLoc_AllowAllUsersToLabel"),
-                new ScrollViewer { Content = checklist, MaxHeight = 280 }));
+                new ScrollViewer { Content = checklist, Height = 230 },
+                contentMargin: new Thickness(6, 4, 2, 4));
+            checklistGroup.Margin = new Thickness(0);
+            contentChildren.Add(checklistGroup);
 
             okButton.Click += (_, _) =>
             {
@@ -247,8 +266,15 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = state.IsStructureProtected ? UiText.Get("ShellLoc_UnprotectWorkbookTitle") : UiText.Get("ShellLoc_ProtectWorkbookTitle"),
+            // WPF PasswordProtectionDialog: 380 wide, height follows the content with a 250 *outer*
+            // minimum (see ShowProtectSheetDialogAsync).
             Width = ProtectionDialogPlanner.ProtectWorkbookCaptureWidth,
-            Height = state.IsStructureProtected ? ProtectionDialogPlanner.ProtectWorkbookCaptureHeight : 320,
+            Height = ProtectionDialogPlanner.ProtectWorkbookCaptureHeight - WpfNoResizeFrameHeight,
+            MinHeight = ProtectionDialogPlanner.ProtectWorkbookCaptureHeight - WpfNoResizeFrameHeight,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -275,14 +301,15 @@ public sealed partial class MainWindow
             IsVisible = false,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 8, 0, 0),
         };
         AutomationProperties.SetAutomationId(warningText, "ProtectWorkbookWarningText");
 
-        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
-        ApplyProtectButtonChrome(okButton, 84, isDefault: true);
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 72 };
+        ApplyProtectButtonChrome(okButton, 72, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "ProtectWorkbookOkButton");
-        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
-        ApplyProtectButtonChrome(cancelButton, 84);
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 72 };
+        ApplyProtectButtonChrome(cancelButton, 72);
         AutomationProperties.SetAutomationId(cancelButton, "ProtectWorkbookCancelButton");
         cancelButton.Click += (_, _) => dialog.Close();
 
@@ -298,7 +325,6 @@ public sealed partial class MainWindow
         {
             var unprotectPanel = new StackPanel
             {
-                Spacing = 6,
                 Children =
                 {
                     new TextBlock
@@ -316,14 +342,15 @@ public sealed partial class MainWindow
 
             if (state.HasPassword)
             {
-                unprotectPanel.Children.Add(ProtectionLabeledField(UiText.Get("ShellLoc_PasswordLabel"), passwordBox));
+                unprotectPanel.Children.Add(ProtectionLabeledField(UiText.Get("ShellLoc_PasswordLabel"), passwordBox, topMargin: 8));
                 unprotectPanel.Children.Add(new TextBlock
                 {
                     Text = UiText.Get("ShellLoc_CautionPasswordsCannotBeRecovered"),
-                    Foreground = Brush(110, 110, 110),
+                    Foreground = Brush(109, 109, 109),
                     TextWrapping = TextWrapping.Wrap,
-                    FontSize = 11,
+                    FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
+                    Margin = new Thickness(0, 8, 0, 0),
                 });
             }
 
@@ -349,17 +376,41 @@ public sealed partial class MainWindow
         }
         else
         {
+            // WPF PasswordProtectionDialog: a SemiBold heading 8px above the "Password" group, which
+            // holds the labelled password box and the grey caution line. The Structure / Windows
+            // toggles and the confirmation field are this shell's additions and follow the same rhythm.
             contentChildren.Add(new TextBlock
             {
                 Text = UiText.Get("ShellLoc_ProtectWorkbookForLabel"),
                 Foreground = HeaderForeground,
+                FontWeight = FontWeight.SemiBold,
+                Margin = new Thickness(0, 0, 0, 8),
                 FontSize = 12,
                 FontFamily = FormulaBarFontFamily,
             });
+            structureBox.Margin = new Thickness(0, 0, 0, 4);
+            windowsBox.Margin = new Thickness(0, 0, 0, 8);
             contentChildren.Add(structureBox);
             contentChildren.Add(windowsBox);
-            contentChildren.Add(ProtectionLabeledField(UiText.Get("ShellLoc_PasswordOptionalLabel"), passwordBox));
-            contentChildren.Add(ProtectionLabeledField(UiText.Get("ShellLoc_ConfirmPasswordLabel"), confirmBox));
+            contentChildren.Add(ProtectionGroupBox(
+                UiText.Get("ShellLoc_PasswordGroupHeader"),
+                new StackPanel
+                {
+                    Children =
+                    {
+                        ProtectionLabeledField(UiText.Get("ShellLoc_PasswordOptionalLabel"), passwordBox),
+                        ProtectionLabeledField(UiText.Get("ShellLoc_ConfirmPasswordLabel"), confirmBox, topMargin: 8),
+                        new TextBlock
+                        {
+                            Text = UiText.Get("ShellLoc_CautionPasswordsCannotBeRecovered"),
+                            Foreground = Brush(109, 109, 109),
+                            TextWrapping = TextWrapping.Wrap,
+                            FontSize = 12,
+                            FontFamily = FormulaBarFontFamily,
+                            Margin = new Thickness(0, 8, 0, 0),
+                        },
+                    },
+                }));
 
             okButton.Click += (_, _) =>
             {
@@ -406,66 +457,57 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// A bordered group with a header label — the Avalonia equivalent of the WPF <c>GroupBox</c> used by the
-    /// Protect dialogs to frame the Password area and the "Allow all users of this worksheet to:" checklist.
-    /// Matches the Windows reference, which draws a thin grey border around each section with a caption.
+    /// The WPF <c>GroupBox</c> the Protect dialogs use to frame the Password area and the "Allow all
+    /// users of this worksheet to:" checklist: a thin grey frame with the caption on its top edge. WPF
+    /// <c>PasswordProtectionDialog</c> is a plain <c>Window</c>, so the caption is normal ink, and the
+    /// group sits 10px above whatever follows it. The content keeps the WPF inner panel margin.
     /// </summary>
-    private static Border ProtectionGroupBox(string header, Control content)
+    private static GroupBox ProtectionGroupBox(string header, Control content, Thickness? contentMargin = null)
     {
-        content.Margin = new Thickness(8, 6, 8, 8);
-        return new Border
+        content.Margin = contentMargin ?? new Thickness(8, 6, 8, 8);
+        var groupBox = new GroupBox
         {
-            BorderBrush = FormulaBarControlBorder,
-            BorderThickness = new Thickness(1),
+            Header = StripDisplayMnemonic(header),
+            Content = content,
+            Margin = new Thickness(0, 0, 0, 10),
             Padding = new Thickness(0),
-            Child = new StackPanel
-            {
-                Spacing = 0,
-                Children =
-                {
-                    new TextBlock
-                    {
-                        Text = StripDisplayMnemonic(header),
-                        Foreground = HeaderForeground,
-                        FontSize = 12,
-                        FontFamily = FormulaBarFontFamily,
-                        Margin = new Thickness(8, 4, 8, 0),
-                    },
-                    content,
-                },
-            },
         };
+        ApplyPlainWindowGroupBoxChrome(groupBox, ProtectionDialogChromeStyle);
+        return groupBox;
     }
 
-    private static StackPanel ProtectionLabeledField(string label, Control field)
+    private static StackPanel ProtectionLabeledField(string label, Control field, double topMargin = 0)
     {
-        field.Margin = new Thickness(0, 2, 0, 0);
+        // WPF: Label { Margin = (0, 0, 0, 4) } directly above its password box.
         return new StackPanel
         {
-            Spacing = 2,
+            Margin = new Thickness(0, topMargin, 0, 0),
             Children =
             {
-                new TextBlock { Text = StripDisplayMnemonic(label), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TextBlock
+                {
+                    Text = StripDisplayMnemonic(label),
+                    Foreground = HeaderForeground,
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    Margin = new Thickness(0, 0, 0, 4),
+                },
                 field,
             },
         };
     }
 
-    private static DockPanel ProtectionDialogLayout(Controls bodyChildren, Button cancelButton, Button okButton)
+    private static StackPanel ProtectionDialogLayout(Controls bodyChildren, Button cancelButton, Button okButton)
     {
-        // WPF order: [OK] [Cancel] — primary button on the left
-        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 10, 0, 0));
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
+        // WPF: root StackPanel { Margin = 12 } with the [OK] [Cancel] row (72px buttons, 8px apart)
+        // stacked 12px below the content, so the fields precede the buttons in the tab order too.
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 12, 0, 0));
 
-        var body = new StackPanel { Spacing = 8 };
+        var root = new StackPanel { Margin = new Thickness(12) };
         foreach (var child in bodyChildren)
-            body.Children.Add(child);
-
-        return new DockPanel
-        {
-            Margin = new Thickness(16),
-            Children = { buttonRow, body },
-        };
+            root.Children.Add(child);
+        root.Children.Add(buttonRow);
+        return root;
     }
 
     // ── Visual chrome helpers (Protection dialogs) ───────────────────────────

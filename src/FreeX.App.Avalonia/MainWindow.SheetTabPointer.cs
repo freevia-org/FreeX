@@ -270,7 +270,9 @@ public sealed partial class MainWindow
                 ItemsSource = targets,
                 SelectedItem = selected,
                 SelectionMode = SelectionMode.Single,
-                MinHeight = 240,
+                // WPF ActivateSheetDialog: the list is exactly 260 tall, 16px above OK/Cancel.
+                Height = 260,
+                Margin = new Thickness(0, 0, 0, 16),
                 Background = Brushes.White,
             };
             AutomationProperties.SetName(list, UiText.Get("ActivateSheet_ListAutomationName"));
@@ -291,11 +293,15 @@ public sealed partial class MainWindow
             var dialog = new Window
             {
                 Title = UiText.Get("ActivateSheet_Title"),
+                // WPF: 352x380 NoResize (outer size); the client height drops the caption/frame.
                 Width = 352,
-                Height = 380,
+                Height = 380 - WpfNoResizeFrameHeight,
                 CanResize = false,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 ShowInTaskbar = false,
+                // WPF dialogs inherit the 12px UI font; the Avalonia window default is 14px.
+                FontFamily = FormulaBarFontFamily,
+                FontSize = 12,
             };
             void Accept()
             {
@@ -319,12 +325,11 @@ public sealed partial class MainWindow
             dialog.Content = new StackPanel
             {
                 Margin = new Thickness(10, 8, 10, 10),
-                Spacing = 6,
                 Children =
                 {
-                    new TextBlock { Text = UiText.Get("ActivateSheet_Title") + ":" },
+                    new TextBlock { Text = UiText.Get("ActivateSheet_Title") + ":", Margin = new Thickness(0, 0, 0, 4) },
                     list,
-                    AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 10, 0, 0)),
+                    AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]),
                 },
             };
             dialog.Opened += (_, _) => list.Focus();

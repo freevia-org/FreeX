@@ -44,10 +44,14 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("CustomViews_Title"),
-            Width = 640,
-            Height = 360,
+            // WPF CustomViewsDialog.xaml: Width="640" Height="360" are *outer* sizes of a resizable
+            // window; Avalonia sizes the client area, so take the Windows caption/frame off.
+            Width = 640 - WpfResizableFrameWidth,
+            Height = 360 - WpfResizableFrameHeight,
             MinWidth = 460,
             MinHeight = 280,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -66,7 +70,7 @@ public sealed partial class MainWindow
         var deleteButton = new Button { Content = UiText.Get("CustomViews_Delete"), Width = 72, IsEnabled = false };
         ApplyDataOpsButtonChrome(deleteButton);
         AutomationProperties.SetAutomationId(deleteButton, "CustomViewsDeleteButton");
-        var closeButton = new Button { Content = UiText.Get("Common_Close"), IsCancel = true, Width = 72 };
+        var closeButton = new Button { Content = UiText.Get("CustomViews_Close"), IsCancel = true, Width = 72 };
         ApplyDataOpsButtonChrome(closeButton);
         AutomationProperties.SetAutomationId(closeButton, "CustomViewsCloseButton");
 
@@ -179,7 +183,10 @@ public sealed partial class MainWindow
         {
             Header = StripDisplayMnemonic(UiText.Get("CustomViews_ListLabel")),
             Content = listFrame,
+            Margin = new Thickness(0),
         };
+        // WPF CustomViewsDialog is a plain Window: a thin grey group frame with a normal-ink caption.
+        ApplyPlainWindowGroupBoxChrome(viewsGroup, DataOpsDialogChromeStyle);
 
         var commandButtons = new StackPanel
         {
@@ -201,6 +208,8 @@ public sealed partial class MainWindow
         Grid.SetRow(warningText, 2);
         root.Children.Add(warningText);
         dialog.Content = root;
+        // WPF: Loaded += FocusViewsList().
+        dialog.Opened += (_, _) => viewsList.Focus();
 
         await dialog.ShowDialog(this);
     }
@@ -283,10 +292,18 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("CustomViews_AddTitle"),
-            Width = 380,
-            Height = 240,
+            // WPF CustomViewNameDialog is a 320x190 *outer* NoResize window. Avalonia sizes the client
+            // area, so the caption/frame comes off the height; the height then follows the content so
+            // the inline validation message (a warning box in WPF) has room when it appears.
+            Width = 320,
             MinWidth = 320,
-            MinHeight = 200,
+            MaxWidth = 320,
+            Height = 190 - WpfNoResizeFrameHeight,
+            MinHeight = 190 - WpfNoResizeFrameHeight,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -315,13 +332,15 @@ public sealed partial class MainWindow
             IsVisible = false,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 4, 0, 0),
         };
         AutomationProperties.SetAutomationId(warningText, "CustomViewAddWarningText");
 
-        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
+        // WPF: OK and Cancel are 72 wide, OK first, 8px apart.
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 72 };
         ApplyDataOpsButtonChrome(okButton, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "CustomViewAddOkButton");
-        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 72 };
         ApplyDataOpsButtonChrome(cancelButton);
         AutomationProperties.SetAutomationId(cancelButton, "CustomViewAddCancelButton");
 
@@ -374,56 +393,40 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close();
 
-        var form = new AvaloniaGrid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        form.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-
-        var nameLabel = new TextBlock
+        // WPF CustomViewNameDialog: Grid { Margin = 12 } of stacked rows -- the "Name:" label 4px
+        // above the box, "Print settings" (8px above, 4px below), "Hidden rows, columns and filter
+        // settings" (4px below), then the [OK][Cancel] row 12px lower.
+        var nameLabel = new Label
         {
-            Text = UiText.Get("CustomViews_NameLabel"),
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 8, 8),
+            Content = new global::Avalonia.Controls.Primitives.AccessText { Text = UiText.Get("CustomViewName_NameLabel") },
+            Target = nameBox,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 0, 0, 4),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
-        AvaloniaGrid.SetRow(nameLabel, 0);
-        AvaloniaGrid.SetColumn(nameLabel, 0);
-        nameBox.Margin = new Thickness(0, 0, 0, 8);
-        AvaloniaGrid.SetRow(nameBox, 0);
-        AvaloniaGrid.SetColumn(nameBox, 1);
-        form.Children.Add(nameLabel);
-        form.Children.Add(nameBox);
-
-        var includeHeader = new TextBlock
-        {
-            Text = UiText.Get("CustomViews_IncludeHeader"),
-            Foreground = HeaderForeground,
-            Margin = new Thickness(0, 4, 0, 0),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-        };
+        printSettingsBox.Margin = new Thickness(0, 8, 0, 4);
+        hiddenFilterBox.Margin = new Thickness(0, 0, 0, 4);
 
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
-            Children = { cancelButton, okButton },
+            Margin = new Thickness(0, 12, 0, 0),
+            Children = { okButton, cancelButton },
         };
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
 
-        dialog.Content = new DockPanel
+        dialog.Content = new StackPanel
         {
-            Margin = new Thickness(16),
-            Children =
-            {
-                buttonRow,
-                new StackPanel
-                {
-                    Spacing = 8,
-                    Children = { form, includeHeader, printSettingsBox, hiddenFilterBox, warningText },
-                },
-            },
+            Margin = new Thickness(12),
+            Children = { nameLabel, nameBox, printSettingsBox, hiddenFilterBox, warningText, buttonRow },
+        };
+        // WPF: Loaded += DialogFocus.FocusAndSelect(_nameBox).
+        dialog.Opened += (_, _) =>
+        {
+            nameBox.Focus();
+            nameBox.SelectAll();
         };
 
         await dialog.ShowDialog(this);

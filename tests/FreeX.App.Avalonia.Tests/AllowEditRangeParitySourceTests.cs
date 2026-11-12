@@ -23,13 +23,14 @@ public sealed class AllowEditRangeParitySourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.AllowEditRange.cs"));
 
         source.Should().Contain("Width = 430");
-        source.Should().Contain("Height = 420");
+        source.Should().Contain("Height = 420 - WpfNoResizeFrameHeight");
         source.Should().Contain("initialRangeText ?? FormatRangeReference(_session.SelectedRange)");
         source.Should().Contain("AllowEditRangePasswordBox");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, AllowEditRangeDialogChromeStyle)");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyGroupBox(existingRangesGroup, AllowEditRangeDialogChromeStyle)");
         source.Should().Contain("HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left");
-        source.Should().Contain("Width = 390");
+        source.Should().NotContain("Width = 390");
+        source.Should().Contain("Margin = new Thickness(12),");
         source.Should().Contain("new StackPanel");
         source.Should().Contain("existingRangesGroup");
         source.Should().Contain("rangeGroup");

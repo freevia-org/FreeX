@@ -41,8 +41,10 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = plan.Title,
-            Width = AccessibilityCheckerDialogMetrics.Width,
-            Height = AccessibilityCheckerDialogMetrics.Height,
+            // WPF AccessibilityCheckerDialog: Width/Height are *outer* sizes of a resizable window;
+            // Avalonia sizes the client area, so take the Windows caption/frame off.
+            Width = AccessibilityCheckerDialogMetrics.Width - WpfResizableFrameWidth,
+            Height = AccessibilityCheckerDialogMetrics.Height - WpfResizableFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             CanResize = true,
@@ -67,7 +69,6 @@ public sealed partial class MainWindow
             BorderThickness = new Thickness(0),
             Background = Brushes.Transparent,
             Padding = new Thickness(0),
-            Margin = new Thickness(0, 0, 0, 16),
         };
         messageBlock.SetValue(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Auto);
         ApplyAutomation(messageBlock, plan.ResultAutomation);
@@ -76,12 +77,14 @@ public sealed partial class MainWindow
         {
             Text = plan.StatusText,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 16),
+            // WPF: _statusText.Margin = (0, 8, 0, 0), docked above the 12px-offset button row.
+            Margin = new Thickness(0, 8, 0, 0),
         };
 
         var closeButton = new Button
         {
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0),
         };
         ApplyAction(closeButton, plan.CloseAction);
         AvaloniaCompactDialogChrome.ApplyButton(
@@ -120,8 +123,10 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = plan.Title,
-            Width = AccessibilityCheckerDialogMetrics.Width,
-            Height = AccessibilityCheckerDialogMetrics.Height,
+            // WPF AccessibilityCheckerDialog: Width/Height are *outer* sizes of a resizable window;
+            // Avalonia sizes the client area, so take the Windows caption/frame off.
+            Width = AccessibilityCheckerDialogMetrics.Width - WpfResizableFrameWidth,
+            Height = AccessibilityCheckerDialogMetrics.Height - WpfResizableFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             CanResize = true,
@@ -176,11 +181,10 @@ public sealed partial class MainWindow
         });
         ApplyAutomation(resultsTree, plan.IssueListAutomation);
 
+        // WPF: the results tree owns the star row between the "Inspection Results" header and the
+        // additional-information block, so it takes whatever height the window leaves.
         var resultsBorder = new Border
         {
-            Height = AccessibilityCheckerDialogMetrics.ResultsTreeHeight,
-            MinHeight = AccessibilityCheckerDialogMetrics.ResultsTreeHeight,
-            MaxHeight = AccessibilityCheckerDialogMetrics.ResultsTreeHeight,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xAB, 0xAB, 0xAB)),
             BorderThickness = new Thickness(1),
@@ -327,7 +331,8 @@ public sealed partial class MainWindow
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = AccessibilityCheckerDialogMetrics.ActionButtonSpacing,
+            // WPF: DialogButtonRowFactory.Create(goTo, close, (0, 12, 0, 0)) -- 8px apart, no rule.
+            Spacing = 8,
             Children =
             {
                 goToButton,
@@ -337,9 +342,7 @@ public sealed partial class MainWindow
 
         var buttonBar = new Border
         {
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD7, 0xDE)),
-            BorderThickness = new Thickness(0, 1, 0, 0),
-            Padding = new Thickness(0, 15, 0, 4),
+            Padding = new Thickness(0, 12, 0, 0),
             Child = buttonRow,
         };
 

@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Media;
 
@@ -12,6 +13,7 @@ using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaGrid = Avalonia.Controls.Grid;
+using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
@@ -51,10 +53,13 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("InsertLoc_NameManagerTitle"),
-            Width = 620,
-            Height = 460,
+            // WPF NamedRangeDialog.xaml: Width="720" Height="440" (outer, resizable).
+            Width = 720 - WpfResizableFrameWidth,
+            Height = 440 - WpfResizableFrameHeight,
             MinWidth = 520,
             MinHeight = 360,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -66,12 +71,18 @@ public sealed partial class MainWindow
                 .Select(descriptor => UiText.Get(descriptor.LabelResourceKey))
                 .ToList(),
             SelectedIndex = 0,
-            MinWidth = 160,
+            // WPF: <ComboBox x:Name="FilterBox" Width="190">.
+            Width = 190,
         };
         ApplyNamesComboBoxChrome(filterBox);
         AutomationProperties.SetAutomationId(filterBox, "NameManagerFilterBox");
 
-        var namesList = new ListBox { MinHeight = 220 };
+        // WPF: a GridView with Name | Value | Refers To | Scope | Comment columns.
+        var namesList = new ListBox
+        {
+            ItemTemplate = new FuncDataTemplate<DefinedNameRow>(
+                (row, _) => BuildNameManagerRowGrid(row), supportsRecycling: false),
+        };
         ApplyNamesListBoxStyle(namesList);
         AutomationProperties.SetAutomationId(namesList, "NameManagerNamesList");
 
@@ -84,26 +95,31 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(selectedRefersToBox, "NameManagerSelectedRefersToBox");
         AutomationProperties.SetName(selectedRefersToBox, UiText.Get("InsertLoc_RefersToFieldLabel"));
 
+        // WPF: RefersToPickerButton is 26px wide with a 4px left margin in a 32px column.
         var selectedRefersToPicker = new Button
         {
             Content = "...",
-            Width = 30,
-            MinWidth = 30,
+            Width = 26,
+            MinWidth = 26,
             IsEnabled = false,
-            Margin = new Thickness(6, 0, 0, 0),
+            Margin = new Thickness(4, 0, 0, 0),
+            Padding = new Thickness(0),
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
         };
-        ApplyNamesButtonChrome(selectedRefersToPicker, minWidth: 30);
+        ApplyNamesButtonChrome(selectedRefersToPicker, minWidth: 26);
+        selectedRefersToPicker.Padding = new Thickness(0);
         AutomationProperties.SetAutomationId(selectedRefersToPicker, "NameManagerSelectedRefersToPickerButton");
         AutomationProperties.SetName(selectedRefersToPicker, UiText.Get("NameDefinition_RangePickerAutomationName"));
 
-        var newButton = new Button { Content = UiText.Get("InsertLoc_NewButton"), MinWidth = 84 };
-        ApplyNamesButtonChrome(newButton, minWidth: 84);
+        // WPF: New / Edit / Delete are Width="72", 8px apart.
+        var newButton = new Button { Content = UiText.Get("InsertLoc_NewButton"), Width = 72, MinWidth = 72 };
+        ApplyNamesButtonChrome(newButton, minWidth: 72);
         AutomationProperties.SetAutomationId(newButton, "NameManagerNewButton");
-        var editButton = new Button { Content = UiText.Get("InsertLoc_EditButton"), MinWidth = 84, IsEnabled = false };
-        ApplyNamesButtonChrome(editButton, minWidth: 84);
+        var editButton = new Button { Content = UiText.Get("InsertLoc_EditButton"), Width = 72, MinWidth = 72, IsEnabled = false };
+        ApplyNamesButtonChrome(editButton, minWidth: 72);
         AutomationProperties.SetAutomationId(editButton, "NameManagerEditButton");
-        var deleteButton = new Button { Content = UiText.Get("InsertLoc_DeleteButton"), MinWidth = 84, IsEnabled = false };
-        ApplyNamesButtonChrome(deleteButton, minWidth: 84);
+        var deleteButton = new Button { Content = UiText.Get("InsertLoc_DeleteButton"), Width = 72, MinWidth = 72, IsEnabled = false };
+        ApplyNamesButtonChrome(deleteButton, minWidth: 72);
         AutomationProperties.SetAutomationId(deleteButton, "NameManagerDeleteButton");
 
         var warningText = new TextBlock
@@ -122,7 +138,7 @@ public sealed partial class MainWindow
             var filter = DefinedNameUiPolicy.ResolveFilter(filterBox.SelectedIndex);
             rows.Clear();
             rows.AddRange(definedNames.ProjectRows(filter));
-            namesList.ItemsSource = rows.Select(DefinedNameUiPolicy.FormatNameManagerRow).ToList();
+            namesList.ItemsSource = rows.ToList();
             ApplySelectionPlan(DefinedNameUiPolicy.PlanManagerSelection(
                 selectedRow: null,
                 profile: DefinedNameUiProfile.Avalonia));
@@ -192,8 +208,9 @@ public sealed partial class MainWindow
             RefreshRows();
         };
 
-        var closeButton = new Button { Content = UiText.Get("InsertLoc_CloseButton"), IsCancel = true, MinWidth = 84 };
-        ApplyNamesButtonChrome(closeButton, minWidth: 84);
+        // WPF: the cancel (close) button is 64px wide.
+        var closeButton = new Button { Content = UiText.Get("InsertLoc_CloseButton"), IsCancel = true, Width = 64, MinWidth = 64 };
+        ApplyNamesButtonChrome(closeButton, minWidth: 64);
         AutomationProperties.SetAutomationId(closeButton, "NameManagerCloseButton");
         closeButton.Click += (_, _) => dialog.Close();
 
@@ -205,57 +222,83 @@ public sealed partial class MainWindow
             Spacing = 8,
             Children = { newButton, editButton, deleteButton },
         };
+        DockPanel.SetDock(commandButtons, Dock.Left);
 
-        var bottomRow = AvaloniaCompactDialogChrome.CreateActionRow([closeButton], new Thickness(0, 10, 0, 0));
-        DockPanel.SetDock(bottomRow, Dock.Bottom);
+        // WPF: the refers-to row carries Margin="0,0,0,8" and the Close row follows it directly.
+        var bottomRow = AvaloniaCompactDialogChrome.CreateActionRow([closeButton], new Thickness(0, 8, 0, 0));
 
+        // WPF: the filter label (5px Label padding) sits directly left of the 190px combo, right-aligned.
         var filterRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Children =
             {
-                new TextBlock { Text = UiText.Get("InsertLoc_FilterLabel"), FontSize = 12, VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBlock
+                {
+                    Text = StripDisplayMnemonic(UiText.Get("InsertLoc_FilterLabel")),
+                    FontSize = 12,
+                    VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                    Margin = new Thickness(5, 0, 5, 0),
+                },
                 filterBox,
             },
         };
 
-        var selectedRefersToRow = new Grid
+        var topRow = new DockPanel
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
-            Margin = new Thickness(0, 8, 0, 0),
+            Margin = new Thickness(0, 0, 0, 8),
+            Children = { commandButtons, filterRow },
+        };
+
+        // WPF: a group box around the list (a plain Window, so a black caption).
+        var namesHeader = BuildNameManagerColumnHeader();
+        DockPanel.SetDock(namesHeader, Dock.Top);
+        var namesGroup = new GroupBox
+        {
+            Header = StripDisplayMnemonic(UiText.Get("NamedRange_DefinedNames")),
+            Margin = new Thickness(0),
+            Content = new DockPanel { Children = { namesHeader, namesList } },
+        };
+        ApplyPlainWindowGroupBoxChrome(namesGroup, NamesDialogChromeStyle);
+        AvaloniaGrid.SetRow(namesGroup, 1);
+
+        AvaloniaGrid.SetRow(warningText, 2);
+        warningText.Margin = new Thickness(0, 8, 0, 0);
+
+        // WPF: 70 / * / 32 columns; the row sits 8px under the group box.
+        var selectedRefersToRow = new AvaloniaGrid
+        {
+            ColumnDefinitions = new ColumnDefinitions("70,*,32"),
         };
         var selectedRefersToLabel = new TextBlock
         {
             Text = StripDisplayMnemonic(UiText.Get("InsertLoc_RefersToFieldLabel")),
             FontSize = 12,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 8, 0),
+            Margin = new Thickness(5, 0, 5, 0),
         };
         selectedRefersToRow.Children.Add(selectedRefersToLabel);
         AvaloniaGrid.SetColumn(selectedRefersToBox, 1);
         selectedRefersToRow.Children.Add(selectedRefersToBox);
         AvaloniaGrid.SetColumn(selectedRefersToPicker, 2);
         selectedRefersToRow.Children.Add(selectedRefersToPicker);
-        DockPanel.SetDock(selectedRefersToRow, Dock.Bottom);
+        AvaloniaGrid.SetRow(selectedRefersToRow, 4);
+        AvaloniaGrid.SetRow(bottomRow, 5);
 
-        dialog.Content = new DockPanel
+        // WPF: <Grid Margin="12"> with rows Auto / * / 8 / Auto / Auto / Auto. Children are added in
+        // the WPF tab order: New, Edit, Delete, Filter, list, refers-to, picker, Close.
+        dialog.Content = new AvaloniaGrid
         {
-            Margin = new Thickness(16),
+            Margin = new Thickness(12),
+            RowDefinitions = new RowDefinitions("Auto,*,Auto,8,Auto,Auto"),
             Children =
             {
+                topRow,
+                namesGroup,
+                warningText,
+                selectedRefersToRow,
                 bottomRow,
-                new DockPanel
-                {
-                    Children =
-                    {
-                        WithDock(commandButtons, Dock.Top, new Thickness(0, 0, 0, 8)),
-                        WithDock(filterRow, Dock.Top, new Thickness(0, 0, 0, 8)),
-                        WithDock(warningText, Dock.Bottom, new Thickness(0, 8, 0, 0)),
-                        selectedRefersToRow,
-                        namesList,
-                    },
-                },
             },
         };
         AttachDialogRangePicker(
@@ -265,6 +308,75 @@ public sealed partial class MainWindow
             "range.named-ranges.selected-refers-to");
 
         await dialog.ShowDialog(this);
+    }
+
+    // Name Manager list columns mirror the WPF GridView (Name 130 | Value 120 | Refers To 210 |
+    // Scope 100 | Comment 120); the last column takes the remaining width instead of scrolling.
+    private static readonly (string Key, GridLength Width)[] NameManagerColumns =
+    [
+        ("NamedRange_Name", new GridLength(130)),
+        ("NamedRange_Value", new GridLength(120)),
+        ("NamedRange_RefersTo", new GridLength(210)),
+        ("NamedRange_Scope", new GridLength(100)),
+        ("NamedRange_Comment", new GridLength(1, GridUnitType.Star)),
+    ];
+
+    private static AvaloniaGrid CreateNameManagerColumnGrid()
+    {
+        var grid = new AvaloniaGrid();
+        foreach (var column in NameManagerColumns)
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = column.Width, MinWidth = 0 });
+        return grid;
+    }
+
+    private static Border BuildNameManagerColumnHeader()
+    {
+        var grid = CreateNameManagerColumnGrid();
+        for (var i = 0; i < NameManagerColumns.Length; i++)
+        {
+            var header = new TextBlock
+            {
+                Text = StripDisplayMnemonic(UiText.Get(NameManagerColumns[i].Key)),
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
+                Margin = new Thickness(6, 3),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+            AvaloniaGrid.SetColumn(header, i);
+            grid.Children.Add(header);
+        }
+
+        return new Border
+        {
+            Background = Brushes.White,
+            BorderBrush = Brush(213, 213, 213),
+            BorderThickness = new Thickness(1, 1, 1, 0),
+            Child = grid,
+        };
+    }
+
+    private static Control BuildNameManagerRowGrid(DefinedNameRow row)
+    {
+        var grid = CreateNameManagerColumnGrid();
+        AutomationProperties.SetName(grid, DefinedNameUiPolicy.FormatNameManagerRow(row));
+        var values = new[] { row.Name, row.Value, row.RefersTo, row.ScopeLabel, row.Comment };
+        for (var i = 0; i < values.Length; i++)
+        {
+            var cell = new TextBlock
+            {
+                Text = values[i],
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
+                // The shared list chrome pads each item by 4px; 4 + 2 lines the text up with the header.
+                Margin = new Thickness(2, 0, 6, 0),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            };
+            AvaloniaGrid.SetColumn(cell, i);
+            grid.Children.Add(cell);
+        }
+
+        return grid;
     }
 
     /// <summary>
@@ -283,8 +395,14 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = isEdit ? UiText.Get("InsertLoc_EditNameTitle") : UiText.Get("InsertLoc_NewNameTitle"),
+            // WPF NameDefinitionDialog: Width = 460, Height = 300 (outer), ResizeMode.NoResize. The
+            // content is top-stacked; the rest of the client area stays empty (and holds the inline
+            // validation line this shell shows instead of a warning box).
             Width = 460,
-            Height = 300,
+            Height = 300 - WpfNoResizeFrameHeight,
+            CanResize = false,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -292,7 +410,7 @@ public sealed partial class MainWindow
 
         var scopeOptions = DefinedNameUiPolicy.BuildScopeOptions(definedNames.ScopeChoices);
 
-        var nameBox = new TextBox { Text = seed?.Name ?? string.Empty, MinWidth = 240 };
+        var nameBox = new TextBox { Text = seed?.Name ?? string.Empty };
         ApplyNamesTextBoxChrome(nameBox);
         AutomationProperties.SetAutomationId(nameBox, "DefineNameNameBox");
 
@@ -300,7 +418,8 @@ public sealed partial class MainWindow
         {
             ItemsSource = scopeOptions,
             SelectedIndex = definedNames.FindScopeIndex(seed?.Scope),
-            MinWidth = 200,
+            // WPF: the Scope combo spans the editor columns like the text boxes.
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
         ApplyNamesComboBoxChrome(scopeBox);
         AutomationProperties.SetAutomationId(scopeBox, "DefineNameScopeBox");
@@ -308,31 +427,29 @@ public sealed partial class MainWindow
         var refersToBox = new TextBox
         {
             Text = seed?.RefersTo ?? definedNames.FormatRefersTo(_session.SelectedRange),
-            MinWidth = 240,
         };
         ApplyNamesTextBoxChrome(refersToBox);
         AutomationProperties.SetAutomationId(refersToBox, "DefineNameRefersToBox");
 
+        // WPF: _rangePickerButton is 26px wide, 4px right of the box.
         var refersToPicker = new Button
         {
             Content = "...",
-            Width = 30,
-            MinWidth = 30,
-            Margin = new Thickness(6, 0, 0, 0),
+            Width = 26,
+            MinWidth = 26,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
         };
-        ApplyNamesButtonChrome(refersToPicker, minWidth: 30);
+        ApplyNamesButtonChrome(refersToPicker, minWidth: 26);
+        refersToPicker.Padding = new Thickness(0);
         AutomationProperties.SetAutomationId(refersToPicker, "DefineNameRefersToPickerButton");
         AutomationProperties.SetName(refersToPicker, UiText.Get("NameDefinition_RangePickerAutomationName"));
 
+        // WPF: the Comment editor is a plain single-line TextBox like Name.
         var commentBox = new TextBox
         {
             Text = seed?.Comment ?? string.Empty,
-            MinWidth = 240,
-            AcceptsReturn = true,
-            MinHeight = 48,
-            TextWrapping = TextWrapping.Wrap,
         };
-        ApplyNamesTextBoxChrome(commentBox, fixedHeight: false);
+        ApplyNamesTextBoxChrome(commentBox);
         AutomationProperties.SetAutomationId(commentBox, "DefineNameCommentBox");
 
         var warningText = new TextBlock
@@ -344,11 +461,12 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(warningText, "DefineNameWarningText");
 
-        var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), IsDefault = true, MinWidth = 84 };
-        ApplyNamesButtonChrome(okButton, minWidth: 84, isDefault: true);
+        // WPF: DialogButtonRowFactory.Create(Accept, 72) -- OK then Cancel, 72px wide, 8px apart.
+        var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), IsDefault = true, MinWidth = 72 };
+        ApplyNamesButtonChrome(okButton, minWidth: 72, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "DefineNameOkButton");
-        var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true, MinWidth = 84 };
-        ApplyNamesButtonChrome(cancelButton, minWidth: 84);
+        var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true, MinWidth = 72 };
+        ApplyNamesButtonChrome(cancelButton, minWidth: 72);
         AutomationProperties.SetAutomationId(cancelButton, "DefineNameCancelButton");
 
         void ShowWarning(string message)
@@ -439,36 +557,37 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close();
 
-        var form = new AvaloniaGrid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        // WPF CreateContent: Grid { Margin = 16 } with an 82 / * / Auto column split; Name, Scope and
+        // Comment span the two editor columns, Refers to shares its row with the "..." picker.
+        var form = new AvaloniaGrid { ColumnDefinitions = new ColumnDefinitions("82,*,Auto") };
         for (var i = 0; i < 4; i++)
             form.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
 
         AddDefineNameRow(form, 0, UiText.Get("InsertLoc_NameFieldLabel"), nameBox);
         AddDefineNameRow(form, 1, UiText.Get("InsertLoc_ScopeFieldLabel"), scopeBox);
         AddDefineNameRow(form, 2, UiText.Get("InsertLoc_CommentFieldLabel"), commentBox);
-        var refersToRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        refersToRow.Children.Add(refersToBox);
-        AvaloniaGrid.SetColumn(refersToPicker, 1);
-        refersToRow.Children.Add(refersToPicker);
-        AddDefineNameRow(form, 3, UiText.Get("InsertLoc_RefersToFieldLabel"), refersToRow);
+        AddDefineNameRow(form, 3, UiText.Get("InsertLoc_RefersToFieldLabel"), refersToBox, columnSpan: 1);
+        refersToBox.Margin = new Thickness(0, 0, 4, 8);
+        refersToPicker.Margin = new Thickness(0, 0, 0, 8);
+        AvaloniaGrid.SetRow(refersToPicker, 3);
+        AvaloniaGrid.SetColumn(refersToPicker, 2);
+        form.Children.Add(refersToPicker);
 
+        // WPF: buttons.Margin = (0, 8, 0, 0) under the last field row.
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
-            [cancelButton, okButton],
-            new Thickness(0, 10, 0, 0));
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
+            [okButton, cancelButton],
+            new Thickness(0, 8, 0, 0));
 
-        dialog.Content = new DockPanel
+        dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
-            Children =
-            {
-                buttonRow,
-                new StackPanel
-                {
-                    Spacing = 8,
-                    Children = { form, warningText },
-                },
-            },
+            Children = { form, warningText, buttonRow },
+        };
+        // WPF: Loaded focuses the Name box with its text selected.
+        dialog.Opened += (_, _) =>
+        {
+            nameBox.Focus();
+            nameBox.SelectAll();
         };
         AttachDialogRangePicker(
             dialog,
@@ -497,8 +616,15 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("InsertLoc_CreateNamesTitle"),
+            // WPF CreateNamesFromSelectionDialog: Width = 280, ResizeMode.NoResize, a top-stacked
+            // StackPanel { Margin = 16 }. The height follows the content so OK/Cancel are never cut.
             Width = 280,
-            Height = 230,
+            MinWidth = 280,
+            MaxWidth = 280,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -591,37 +717,56 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close();
 
-        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
-            [cancelButton, okButton],
-            new Thickness(0, 10, 0, 0));
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
+        // WPF: DialogButtonRowFactory.Create(Accept, buttonWidth: 76) -- OK then Cancel.
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]);
 
-        dialog.Content = new DockPanel
+        // WPF: each check box carries Margin = (0, 4, 0, 0) inside StackPanel { Margin = (8, 4, 8, 8) }.
+        foreach (var box in new[] { topRowBox, leftColumnBox, bottomRowBox, rightColumnBox })
+            box.Margin = new Thickness(0, 4, 0, 0);
+        var optionsGroup = new GroupBox
+        {
+            Header = UiText.Get("CreateNamesFromSelection_GroupHeader"),
+            Margin = new Thickness(0, 0, 0, 10),
+            Padding = new Thickness(0),
+            Content = new StackPanel
+            {
+                Margin = new Thickness(8, 4, 8, 8),
+                Children = { topRowBox, leftColumnBox, bottomRowBox, rightColumnBox },
+            },
+        };
+        ApplyPlainWindowGroupBoxChrome(optionsGroup, NamesDialogChromeStyle);
+        AutomationProperties.SetName(optionsGroup, UiText.Get("CreateNamesFromSelection_GroupAutomationName"));
+        warningText.Margin = new Thickness(0, 0, 0, 10);
+
+        // WPF: intro text (6px above the group), the options group box (10px), a grey
+        // explanatory line (10px) and the right-aligned button row.
+        dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
             Children =
             {
-                buttonRow,
-                new StackPanel
+                new TextBlock
                 {
-                    Spacing = 8,
-                    Children =
-                    {
-                        new TextBlock
-                        {
-                            Text = UiText.Get("InsertLoc_CreateNamesFromValuesIn"),
-                            FontSize = 12,
-                            Foreground = HeaderForeground,
-                        },
-                        topRowBox,
-                        leftColumnBox,
-                        bottomRowBox,
-                        rightColumnBox,
-                        warningText,
-                    },
+                    Text = UiText.Get("InsertLoc_CreateNamesFromValuesIn"),
+                    FontSize = 12,
+                    Foreground = HeaderForeground,
+                    Margin = new Thickness(0, 0, 0, 6),
                 },
+                optionsGroup,
+                new TextBlock
+                {
+                    Text = UiText.Get("CreateNamesFromSelection_BodyText"),
+                    FontSize = 12,
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = Brush(109, 109, 109),
+                    Margin = new Thickness(0, 0, 0, 10),
+                },
+                warningText,
+                buttonRow,
             },
         };
+        // WPF: Loaded focuses the first check box.
+        dialog.Opened += (_, _) => topRowBox.Focus();
 
         await dialog.ShowDialog(this);
     }
@@ -640,7 +785,7 @@ public sealed partial class MainWindow
     private bool TryParseDefinedNameRange(string text, out GridRange range) =>
         new DefinedNamesSession(_session.Workbook, _session.ActiveSheet.Id).TryParseRange(text, out range);
 
-    private static void AddDefineNameRow(AvaloniaGrid grid, int row, string label, Control field)
+    private static void AddDefineNameRow(AvaloniaGrid grid, int row, string label, Control field, int columnSpan = 2)
     {
         var labelBlock = new TextBlock
         {
@@ -656,14 +801,8 @@ public sealed partial class MainWindow
         field.Margin = new Thickness(0, 0, 0, 8);
         AvaloniaGrid.SetRow(field, row);
         AvaloniaGrid.SetColumn(field, 1);
+        AvaloniaGrid.SetColumnSpan(field, columnSpan);
         grid.Children.Add(field);
-    }
-
-    private static Control WithDock(Control control, Dock dock, Thickness margin)
-    {
-        DockPanel.SetDock(control, dock);
-        control.Margin = margin;
-        return control;
     }
 
     /// <summary>A minimal <see cref="IObserver{T}"/> that forwards values to an action; used for live validation.</summary>

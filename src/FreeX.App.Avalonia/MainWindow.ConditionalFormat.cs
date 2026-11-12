@@ -237,6 +237,10 @@ public sealed partial class MainWindow
             MinHeight = ConditionalFormatDialogCatalog.RuleEditorMinHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
+            // WPF ConditionalFormatDialog labels use the 12px dialog font; without this the field
+            // labels fall back to the 14px Avalonia window default.
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
         };
         AutomationProperties.SetAutomationId(dialog, "ConditionalFormatRuleDialog");
 
@@ -984,10 +988,13 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("ManageConditionalFormats_ConditionalFormattingRulesManager"),
+            // WPF ManageConditionalFormatsDialog is a 560x420 NoResize window; Height is an OUTER size
+            // there, so the client area drops the caption/frame.
             Width = 560,
-            Height = 420,
+            Height = 420 - WpfNoResizeFrameHeight,
             MinWidth = 480,
             MinHeight = 360,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -996,7 +1003,9 @@ public sealed partial class MainWindow
 
         var listBox = new ListBox
         {
-            MinHeight = 210,
+            // The list fills whatever the fixed client area leaves between the header and the rows
+            // docked below it; the floor only has to keep a few rules visible.
+            MinHeight = 180,
             Background = Brushes.White,
             BorderThickness = new Thickness(0),
         };
@@ -1298,7 +1307,9 @@ public sealed partial class MainWindow
             new()
             {
                 Text = text,
-                FontWeight = FontWeight.SemiBold,
+                // WPF GridView column headers: regular weight, centred captions.
+                FontWeight = FontWeight.Normal,
+                TextAlignment = global::Avalonia.Media.TextAlignment.Center,
                 FontSize = 12,
                 FontFamily = FormulaBarFontFamily,
                 Padding = new Thickness(5, 3),

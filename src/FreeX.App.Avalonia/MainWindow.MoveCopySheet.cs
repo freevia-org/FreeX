@@ -47,12 +47,28 @@ public sealed partial class MainWindow
         {
             ItemsSource = targets.Select(target => target.DisplayName).ToList(),
             SelectedIndex = initialIndex,
-            MinHeight = 132,
+            // WPF: MinHeight = 112, 10px above the "Create a copy" box.
+            Height = 112,
+            Margin = new Thickness(0, 0, 0, 10),
         };
         ApplySheetListBoxStyle(beforeSheetList);
         AutomationProperties.SetAutomationId(beforeSheetList, "MoveCopySheetBeforeSheetList");
 
-        var createCopyBox = new CheckBox { Content = UiText.Get("MoveCopySheet_CreateACopy") };
+        // WPF "To book:" combo: disabled, listing only the current workbook.
+        var toBookBox = new ComboBox
+        {
+            ItemsSource = new[] { _session.Workbook.Name },
+            SelectedIndex = 0,
+            IsEnabled = false,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 0, 0, 8),
+        };
+        AvaloniaCompactDialogChrome.ApplyComboBox(toBookBox, MoveCopySheetDialogChromeStyle);
+        AutomationProperties.SetName(toBookBox, UiText.Get("MoveOrCopySheet_ToBookAutomationName"));
+        AutomationProperties.SetAutomationId(toBookBox, "MoveCopySheetToBookBox");
+
+        // WPF: a ~16px check box with a 14px bottom margin; the compact check box is a 20px row.
+        var createCopyBox = new CheckBox { Content = UiText.Get("MoveCopySheet_CreateACopy"), Margin = new Thickness(0, 0, 0, 10) };
         ApplySheetCheckBoxChrome(createCopyBox);
         AutomationProperties.SetAutomationId(createCopyBox, "MoveCopySheetCreateCopyCheckBox");
 
@@ -60,24 +76,28 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("Common_OkText"),
             IsDefault = true,
-            MinWidth = 84,
+            MinWidth = 72,
         };
-        ApplySheetButtonChrome(okButton, 84, isDefault: true);
+        ApplySheetButtonChrome(okButton, 72, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "MoveCopySheetOkButton");
         var cancelButton = new Button
         {
             Content = UiText.Get("Common_CancelText"),
             IsCancel = true,
-            MinWidth = 84,
+            MinWidth = 72,
         };
-        ApplySheetButtonChrome(cancelButton, 84);
+        ApplySheetButtonChrome(cancelButton, 72);
         AutomationProperties.SetAutomationId(cancelButton, "MoveCopySheetCancelButton");
 
         var dialog = new Window
         {
             Title = UiText.Get("MoveCopySheet_Title"),
-            Width = 340,
-            Height = 320,
+            // WPF MoveOrCopySheetDialog is a 360x310 NoResize window; the height is
+            // sized to the content instead of guessing a caption allowance.
+            Width = 360,
+            MinWidth = 360,
+            MaxWidth = 360,
+            SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             CanResize = false,
@@ -92,16 +112,19 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close();
 
-        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 12, 0, 0));
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]);
 
+        // WPF CreateContent: 16px root margin; intro line 12px above the first label; regular-weight
+        // labels 4px above their control; 10px between the controls; OK/Cancel 72 wide.
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
-            Spacing = 8,
             Children =
             {
-                new TextBlock { Text = UiText.Get("MoveCopySheet_MoveSelectedSheets"), FontSize = 12, FontFamily = FormulaBarFontFamily },
-                new TextBlock { Text = UiText.Get("MoveCopySheet_BeforeSheet"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TextBlock { Text = UiText.Get("MoveCopySheet_MoveSelectedSheets"), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 0, 0, 12) },
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("MoveOrCopySheet_ToBook")), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 0, 0, 4) },
+                toBookBox,
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("MoveCopySheet_BeforeSheet")), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 0, 0, 4) },
                 beforeSheetList,
                 createCopyBox,
                 buttonRow,

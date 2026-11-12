@@ -337,11 +337,17 @@ public sealed partial class MainWindow
         PasteSpecialDialogSelection? result = null;
         var surface = PasteSpecialPlanner.Surface;
 
+        // Layout mirrors WPF PasteSpecialDialog: a 470x550 NoResize window with a
+        // 16px root margin, a "Paste" group holding the content kinds in two columns, the three
+        // toggles, an "Operation" group in two columns and a right-aligned Paste Link / OK / Cancel row.
+        // The height is sized to the content instead of guessing a caption allowance.
         var dialog = new Window
         {
             Title = surface.Title.ResolveAvalonia(UiText.Get),
-            Width = 420,
-            Height = 600,
+            Width = 470,
+            MinWidth = 470,
+            MaxWidth = 470,
+            SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
         };
@@ -350,61 +356,69 @@ public sealed partial class MainWindow
         var root = new StackPanel
         {
             Margin = new Thickness(16),
-            Spacing = 8,
         };
 
-        root.Children.Add(new TextBlock
-        {
-            Text = surface.PasteGroup.ResolveAvalonia(UiText.Get),
-            FontWeight = FontWeight.SemiBold,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-        });
-
+        // WPF places the content kinds by PasteSpecialChoiceDescriptor.WpfPlacement (column 0 top to
+        // bottom, then column 1). This shell has no "All using source theme" kind, so each column is
+        // packed in WPF order without leaving that row empty.
         var radios = new List<RadioButton>();
-        var optionsPanel = new StackPanel { Spacing = 4 };
-        foreach (var choice in surface.AvaloniaChoices)
+        var pasteGrid = new Grid();
+        pasteGrid.ColumnDefinitions.Add(new ColumnDefinition());
+        pasteGrid.ColumnDefinitions.Add(new ColumnDefinition());
+        var nextPasteRow = new int[2];
+        foreach (var choice in surface.AvaloniaChoices
+            .OrderBy(descriptor => descriptor.WpfPlacement.Column)
+            .ThenBy(descriptor => descriptor.WpfPlacement.Row))
         {
             var radio = new RadioButton
             {
-                Content = choice.AvaloniaLabel,
+                Content = UiText.Get(choice.WpfLabelTextKey),
                 GroupName = "PasteSpecialMode",
                 IsChecked = choice.IsDefault,
                 IsEnabled = choice.IsEnabled,
                 Tag = choice,
+                // WPF: a ~16px radio with a 6px bottom margin; the compact radio here is a 20px row.
+                Margin = new Thickness(0, 0, 0, 2),
             };
             ApplyDataOpsRadioButtonChrome(radio);
             AutomationProperties.SetAutomationId(radio, choice.AvaloniaAutomationId);
+            var column = Math.Clamp(choice.WpfPlacement.Column, 0, 1);
+            var row = nextPasteRow[column]++;
+            while (pasteGrid.RowDefinitions.Count <= row)
+                pasteGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Grid.SetRow(radio, row);
+            Grid.SetColumn(radio, column);
             radios.Add(radio);
-            optionsPanel.Children.Add(radio);
+            pasteGrid.Children.Add(radio);
         }
 
-        root.Children.Add(new ScrollViewer
+        var pasteGroup = new GroupBox
         {
-            MaxHeight = 230,
-            Content = optionsPanel,
-        });
+            Header = surface.PasteGroup.ResolveAvalonia(UiText.Get),
+            Content = pasteGrid,
+            Padding = new Thickness(8),
+            Margin = new Thickness(0, 0, 0, 10),
+        };
+        ApplyPlainWindowGroupBoxChrome(pasteGroup, DataOpsDialogChromeStyle);
+        root.Children.Add(pasteGroup);
 
         var skipBlanksBox = CreateAvaloniaToggle(surface.GetToggle(PasteSpecialToggleKind.SkipBlanks));
         var transposeBox = CreateAvaloniaToggle(surface.GetToggle(PasteSpecialToggleKind.Transpose));
         var keepColumnWidthsBox = CreateAvaloniaToggle(surface.GetToggle(PasteSpecialToggleKind.KeepColumnWidths));
 
-        var checkboxPanel = new StackPanel { Spacing = 4 };
+        // WPF toggle margins are (0,0,0,8) / (0,4,0,8) / (0,0,0,8) around ~16px check boxes; the
+        // compact check box here is a 20px row, so 4px keeps the same 24px pitch.
+        skipBlanksBox.Margin = new Thickness(0, 0, 0, 4);
+        transposeBox.Margin = new Thickness(0, 4, 0, 4);
+        keepColumnWidthsBox.Margin = new Thickness(0, 0, 0, 4);
+        var checkboxPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
         checkboxPanel.Children.Add(skipBlanksBox);
         checkboxPanel.Children.Add(transposeBox);
         checkboxPanel.Children.Add(keepColumnWidthsBox);
         root.Children.Add(checkboxPanel);
 
-        root.Children.Add(new TextBlock
-        {
-            Text = surface.OperationGroup.ResolveAvalonia(UiText.Get),
-            FontWeight = FontWeight.SemiBold,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-        });
-
         var operationRadios = new List<RadioButton>();
-        var operationGrid = new Grid();
+        var operationGrid = new Grid { Margin = new Thickness(0, 0, 0, 12) };
         operationGrid.ColumnDefinitions.Add(new ColumnDefinition());
         operationGrid.ColumnDefinitions.Add(new ColumnDefinition());
         for (var i = 0; i < 3; i++)
@@ -414,11 +428,12 @@ public sealed partial class MainWindow
         {
             var radio = new RadioButton
             {
-                Content = operation.AvaloniaLabel,
+                Content = UiText.Get(operation.WpfLabelTextKey),
                 GroupName = "PasteSpecialOperation",
                 IsChecked = operation.IsDefault,
                 IsEnabled = operation.IsEnabled,
                 Tag = operation.Operation,
+                Margin = new Thickness(0, 0, 12, 2),
             };
             ApplyDataOpsRadioButtonChrome(radio);
             AutomationProperties.SetAutomationId(radio, operation.AvaloniaAutomationId);
@@ -428,13 +443,22 @@ public sealed partial class MainWindow
             operationGrid.Children.Add(radio);
         }
 
-        root.Children.Add(operationGrid);
+        var operationGroup = new GroupBox
+        {
+            Header = surface.OperationGroup.ResolveAvalonia(UiText.Get),
+            Content = operationGrid,
+            Padding = new Thickness(8),
+            Margin = new Thickness(0, 0, 0, 12),
+        };
+        ApplyPlainWindowGroupBoxChrome(operationGroup, DataOpsDialogChromeStyle);
+        root.Children.Add(operationGroup);
 
         var pasteLinkAction = surface.GetAction(PasteSpecialDialogActionKind.PasteLink);
         var pasteLinkButton = new Button
         {
             Content = pasteLinkAction.ResolveAvaloniaLabel(UiText.Get),
-            MinWidth = 82,
+            // WPF footer: Paste Link 96 wide, OK and Cancel 80 wide, 8px apart.
+            MinWidth = 96,
             IsEnabled = pasteLinkAction.IsEnabled,
         };
         ApplyDataOpsButtonChrome(pasteLinkButton);
@@ -449,7 +473,7 @@ public sealed partial class MainWindow
         var okButton = new Button
         {
             Content = acceptAction.ResolveAvaloniaLabel(UiText.Get),
-            MinWidth = 82,
+            MinWidth = 80,
             IsDefault = acceptAction.IsDefault,
             IsEnabled = acceptAction.IsEnabled,
         };
@@ -479,7 +503,7 @@ public sealed partial class MainWindow
         var cancelButton = new Button
         {
             Content = cancelAction.ResolveAvaloniaLabel(UiText.Get),
-            MinWidth = 82,
+            MinWidth = 80,
             IsCancel = cancelAction.IsCancel,
             IsEnabled = cancelAction.IsEnabled,
         };
@@ -496,7 +520,6 @@ public sealed partial class MainWindow
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0),
         };
         buttonRow.Children.Add(pasteLinkButton);
         buttonRow.Children.Add(okButton);
@@ -524,7 +547,7 @@ public sealed partial class MainWindow
     {
         var checkBox = new CheckBox
         {
-            Content = toggle.AvaloniaLabel,
+            Content = UiText.Get(toggle.WpfLabelTextKey),
             IsChecked = toggle.IsCheckedByDefault,
             IsEnabled = toggle.IsEnabled,
         };
