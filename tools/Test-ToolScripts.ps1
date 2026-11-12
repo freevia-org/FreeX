@@ -1654,9 +1654,9 @@ function Assert-PortableDialogPngAnalyzer {
 
     Add-Type -TypeDefinition $analyzer
 
-    $rgbaPath = Join-Path $RepoRoot "docs/parity/dialog-visual-assets/wpf-capture/dialog.AdvancedFilter.png"
-    $rgbPath = Join-Path $RepoRoot "docs/parity/dialog-visual-assets/avalonia-capture/dialog.FormatCells.Fill.png"
-    $straightAlphaPath = Join-Path $RepoRoot "docs/parity/dialog-visual-assets/avalonia-capture/dialog.AutoFilter.png"
+    $rgbaPath = Join-Path $RepoRoot "tools/fixtures/dialog-png-analyzer/rgba-dialog.png"
+    $rgbPath = Join-Path $RepoRoot "tools/fixtures/dialog-png-analyzer/rgb-dialog.png"
+    $straightAlphaPath = Join-Path $RepoRoot "tools/fixtures/dialog-png-analyzer/straight-alpha-dialog.png"
     $rgbaMetrics = [DialogPngAnalyzer]::Analyze($rgbaPath)
     $rgbMetrics = [DialogPngAnalyzer]::Analyze($rgbPath)
     $straightAlphaMetrics = [DialogPngAnalyzer]::Analyze($straightAlphaPath)

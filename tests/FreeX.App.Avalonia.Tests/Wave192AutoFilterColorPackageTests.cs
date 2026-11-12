@@ -13,64 +13,14 @@ public sealed class Wave192AutoFilterColorPackageTests
         "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
     [Theory]
-    [InlineData(
-        "wave191-freex-autofilter-color-20260823",
-        "saved-color-filter.xlsx",
-        true)]
-    [InlineData(
-        "wave192-freex-autofilter-font-color-20260823",
-        "saved-font-color.xlsx",
-        false)]
-    public void CommittedEvidencePackage_ContainsExactColorFilterDxfSemantics(
-        string evidenceDirectoryName,
-        string packageName,
-        bool cellColor)
-    {
-        var packagePath = TestWorkspaceFileLocator.FindFromWorkspaceRoot(
-            "docs", "parity", "evidence", evidenceDirectoryName, packageName);
-
-        using var package = ZipFile.OpenRead(packagePath);
-        var worksheet = LoadXml(package, "xl/worksheets/sheet1.xml");
-        var styles = LoadXml(package, "xl/styles.xml");
-        var colorFilter = worksheet.Root!
-            .Element(MainNs + "autoFilter")!
-            .Element(MainNs + "filterColumn")!
-            .Element(MainNs + "colorFilter");
-
-        colorFilter.Should().NotBeNull();
-        colorFilter!.Attribute("cellColor")!.Value.Should().Be(cellColor ? "1" : "0");
-        var dxfId = int.Parse(colorFilter.Attribute("dxfId")!.Value);
-        var dxf = styles.Root!
-            .Element(MainNs + "dxfs")!
-            .Elements(MainNs + "dxf")
-            .ElementAt(dxfId);
-
-        if (cellColor)
-        {
-            dxf.Element(MainNs + "fill")!
-                .Element(MainNs + "patternFill")!
-                .Element(MainNs + "fgColor")!
-                .Attribute("rgb")!.Value
-                .Should().Be("FF00B050");
-        }
-        else
-        {
-            dxf.Element(MainNs + "font")!
-                .Element(MainNs + "color")!
-                .Attribute("rgb")!.Value
-                .Should().Be("FF00B050");
-        }
-    }
-
-    [Theory]
-    [InlineData("wave191-freex-autofilter-color-20260823", true)]
-    [InlineData("wave192-freex-autofilter-font-color-20260823", false)]
+    [InlineData("fill-color-fixture-input.xlsx", true)]
+    [InlineData("font-color-fixture-input.xlsx", false)]
     public void LoadedFixture_ApplyColorFilter_SavesAndReloadsExactPackageSemantics(
-        string evidenceDirectoryName,
+        string fixtureName,
         bool cellColor)
     {
         var fixturePath = TestWorkspaceFileLocator.FindFromWorkspaceRoot(
-            "docs", "parity", "evidence", evidenceDirectoryName, "fixture-input.xlsx");
+            "tests", "FreeX.App.Avalonia.Tests", "Fixtures", "AutoFilterColor", fixtureName);
 
         var adapter = new XlsxFileAdapter();
         using var source = File.OpenRead(fixturePath);

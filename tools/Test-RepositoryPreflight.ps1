@@ -15,6 +15,7 @@ param(
     [string]$MacOsAppReadinessScriptPath = "tools/Test-MacOsAppReadiness.ps1",
     [string]$GeneratedDocsScriptPath = "tools/Test-GeneratedDocs.ps1",
     [string]$ConflictMarkersScriptPath = "tools/Test-ConflictMarkers.ps1",
+    [string]$LocalOnlyEvidencePathsScriptPath = "tools/Test-LocalOnlyEvidencePaths.ps1",
     [string]$LinuxPackagingScriptsScriptPath = "tools/Test-LinuxPackagingScripts.ps1",
 
     [ValidateRange(1, 32)]
@@ -110,6 +111,7 @@ if ($Mode -in @("All", "Static")) {
         }
         Resolve-RepositoryPreflightEntry -Label "generated docs" -ScriptPath $GeneratedDocsScriptPath -Priority 1
         Resolve-RepositoryPreflightEntry -Label "Git conflict markers" -ScriptPath $ConflictMarkersScriptPath
+        Resolve-RepositoryPreflightEntry -Label "local-only evidence paths" -ScriptPath $LocalOnlyEvidencePathsScriptPath
     )
 }
 

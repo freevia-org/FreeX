@@ -21,7 +21,12 @@ param(
     [string]$FreeWDialogVisualEvidenceCheckScriptPath = "tools/Test-FreeWDialogVisualEvidence.ps1",
 
     [ValidateRange(1, 32)]
-    [int]$ThrottleLimit = 8
+    [int]$ThrottleLimit = 8,
+
+    # Screenshots, capture manifests and the other raw parity evidence are kept out of Git (see
+    # .gitignore), so the checks that re-derive a summary from that evidence can only run on a
+    # machine that still holds a local copy. They are opt-in; the default gate runs everywhere.
+    [switch]$IncludeLocalEvidenceChecks
 )
 
 $ErrorActionPreference = "Stop"
@@ -123,24 +128,33 @@ function Write-GeneratedDocsResults {
 # concurrently with the parallel batch below.
 $parallelEntries = @(
     Resolve-GeneratedDocsCheckEntry -Label "command inventory" -ScriptPath $CommandInventoryScriptPath
-    Resolve-GeneratedDocsCheckEntry -Label "dialog parity inventory" -ScriptPath $DialogParityInventoryScriptPath
-    Resolve-GeneratedDocsCheckEntry -Label "dialog visual evidence summary" -ScriptPath $DialogVisualEvidenceSummaryScriptPath
-    Resolve-GeneratedDocsCheckEntry -Label "conditional-format opened-state evidence" -ScriptPath $ConditionalFormatOpenedStateEvidenceScriptPath
     Resolve-GeneratedDocsCheckEntry -Label "FreeP dialog/pane parity inventory" -ScriptPath $FreePDialogPaneParityInventoryScriptPath
-    Resolve-GeneratedDocsCheckEntry -Label "FreeP dialog/pane visual evidence" -ScriptPath $FreePDialogPaneVisualEvidenceManifestScriptPath
-    Resolve-GeneratedDocsCheckEntry -Label "FreeP whole-window visual evidence" -ScriptPath $FreePWholeWindowVisualEvidenceManifestScriptPath
-    Resolve-GeneratedDocsCheckEntry -Label "FreeP PowerPoint chrome evidence" -ScriptPath $FreePPowerPointChromeEvidenceScriptPath
-    Resolve-GeneratedDocsCheckEntry -Label "FreeW shell visual evidence" -ScriptPath $FreeWShellVisualEvidenceScriptPath
-    Resolve-GeneratedDocsCheckEntry -Label "FreeW Word chrome evidence" -ScriptPath $FreeWWordChromeEvidenceScriptPath
     Resolve-GeneratedDocsCheckEntry -Label "FreeW editing/reference parity evidence" -ScriptPath $FreeWEditingReferenceParityEvidenceScriptPath
     Resolve-GeneratedDocsCheckEntry -Label "FreeW design-dialog parity evidence" -ScriptPath $FreeWDesignDialogParityEvidenceScriptPath
     Resolve-GeneratedDocsCheckEntry -Label "FreeW mail-merge dialog parity evidence" -ScriptPath $FreeWMailMergeDialogParityEvidenceScriptPath
     Resolve-GeneratedDocsCheckEntry -Label "FreeW media-dialog parity evidence" -ScriptPath $FreeWMediaDialogParityEvidenceScriptPath
     Resolve-GeneratedDocsCheckEntry -Label "FreeW page-layout dialog parity evidence" -ScriptPath $FreeWPageLayoutDialogParityEvidenceScriptPath
     Resolve-GeneratedDocsCheckEntry -Label "FreeW shell platform parity evidence" -ScriptPath $FreeWShellPlatformParityEvidenceScriptPath
+)
+
+$localEvidenceEntries = @(
+    Resolve-GeneratedDocsCheckEntry -Label "dialog parity inventory" -ScriptPath $DialogParityInventoryScriptPath
+    Resolve-GeneratedDocsCheckEntry -Label "dialog visual evidence summary" -ScriptPath $DialogVisualEvidenceSummaryScriptPath
+    Resolve-GeneratedDocsCheckEntry -Label "conditional-format opened-state evidence" -ScriptPath $ConditionalFormatOpenedStateEvidenceScriptPath
+    Resolve-GeneratedDocsCheckEntry -Label "FreeP dialog/pane visual evidence" -ScriptPath $FreePDialogPaneVisualEvidenceManifestScriptPath
+    Resolve-GeneratedDocsCheckEntry -Label "FreeP whole-window visual evidence" -ScriptPath $FreePWholeWindowVisualEvidenceManifestScriptPath
+    Resolve-GeneratedDocsCheckEntry -Label "FreeP PowerPoint chrome evidence" -ScriptPath $FreePPowerPointChromeEvidenceScriptPath
+    Resolve-GeneratedDocsCheckEntry -Label "FreeW shell visual evidence" -ScriptPath $FreeWShellVisualEvidenceScriptPath
+    Resolve-GeneratedDocsCheckEntry -Label "FreeW Word chrome evidence" -ScriptPath $FreeWWordChromeEvidenceScriptPath
     Resolve-GeneratedDocsCheckEntry -Label "cross-app parity dashboard aggregation guards" -ScriptPath $CrossAppParityDashboardBehaviorScriptPath -ScriptArguments @()
     Resolve-GeneratedDocsCheckEntry -Label "FreeW canonical dialog evidence counts and scope" -ScriptPath $FreeWDialogVisualEvidenceCheckScriptPath
 )
+if ($IncludeLocalEvidenceChecks) {
+    $parallelEntries += $localEvidenceEntries
+}
+else {
+    Write-Host "Skipping $($localEvidenceEntries.Count) local-evidence checks (pass -IncludeLocalEvidenceChecks on a machine that holds the captures)."
+}
 
 $buildBasedEntries = @(
     Resolve-GeneratedDocsCheckEntry -Label "FreeP command parity inventory" -ScriptPath $FreePCommandParityInventoryScriptPath
