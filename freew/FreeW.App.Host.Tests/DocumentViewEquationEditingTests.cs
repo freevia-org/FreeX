@@ -244,11 +244,14 @@ public sealed class DocumentViewEquationEditingTests
         var window = new EquationEditorWindow(EquationEditorSession.ForExisting(equation));
 
         window.LinearTextBox.Text.Should().Be("a/b");
-        window.PreviewContent.Should().BeAssignableTo<StackPanel>("a fraction is drawn built up, not as text");
+        window.PreviewContent.Should().BeOfType<EquationMathVisual>()
+            .Which.Layout.Items.OfType<FreeW.App.Presentation.DocumentView.MathLayout.MathRuleDrawItem>()
+            .Should().ContainSingle("a fraction is drawn built up, with its bar, not as text");
 
         window.LinearTextBox.Text = "x+1";
         window.Session.Text.Should().Be("x+1");
-        window.PreviewContent.Should().BeOfType<TextBlock>();
+        window.PreviewContent.Should().BeOfType<EquationMathVisual>()
+            .Which.Equation.LinearText.Should().Be("x+1");
 
         window.LinearTextBox.Text = string.Empty;
         window.PreviewContent.Should().BeOfType<TextBlock>()

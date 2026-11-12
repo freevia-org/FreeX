@@ -3469,7 +3469,7 @@ public static partial class DocxReader
         foreach (var child in elements)
         {
             if (child.Name == M + "r")
-                yield return MathRun.PlainText(MathTextOf(child));
+                yield return MathRun.PlainText(MathTextOf(child)) with { IsUpright = IsUprightMathRun(child) };
             else if (child.Name == M + "sSup")
                 yield return ReadSuperscript(child);
             else if (child.Name == M + "sSub")
@@ -3652,6 +3652,20 @@ public static partial class DocxReader
         element.Name == M + "borderBox" ||
         element.Name == M + "phant";
 
+    /// <summary>
+    /// Whether an m:r is set upright: m:rPr/m:nor (normal text) or a plain/bold style (m:sty "p"/"b").
+    /// Absent m:sty means Word's default bold-italic-by-character math style.
+    /// </summary>
+    private static bool IsUprightMathRun(XElement mathRun)
+    {
+        var properties = mathRun.Element(M + "rPr");
+        if (properties is null)
+            return false;
+        if (properties.Element(M + "nor") is { } normal && ReadOnOffValue(normal.Attribute(M + "val")?.Value, defaultValue: true))
+            return true;
+        return properties.Element(M + "sty")?.Attribute(M + "val")?.Value is "p" or "b";
+    }
+
     private static Equation ReadMathSlot(XElement? slot) =>
         slot is null ? new Equation() : new Equation(ReadMathRuns(slot.Elements()));
 
@@ -3720,8 +3734,14 @@ public static partial class DocxReader
         var hasNestedSup = HasStructuredMathSlot(sup);
         var hasNestedOperand = HasStructuredMathSlot(operand);
         var op = string.IsNullOrEmpty(chr) ? "∫" : chr;
+        var limitLocation = nary.Element(M + "naryPr")?.Element(M + "limLoc")?.Attribute(M + "val")?.Value switch
+        {
+            "undOvr" => MathLimitLocation.UnderOver,
+            "subSup" => MathLimitLocation.SubSup,
+            _ => (MathLimitLocation?)null
+        };
 
-        return hasNestedSub || hasNestedSup || hasNestedOperand
+        var run = hasNestedSub || hasNestedSup || hasNestedOperand
             ? new MathRun
             {
                 Kind = MathRunKind.NAry,
@@ -3734,6 +3754,7 @@ public static partial class DocxReader
                 NAryOperandEquation = hasNestedOperand ? ReadMathSlot(operand) : null
             }
             : MathRun.NAry(op, subText, supText, operandText);
+        return run with { NAryLimitLocation = limitLocation };
     }
 
     /// <summary>
@@ -3883,9 +3904,15 @@ public static partial class DocxReader
         var pr = groupChr.Element(M + "groupChrPr");
         var chr = pr?.Element(M + "chr")?.Attribute(M + "val")?.Value;
         var pos = pr?.Element(M + "pos")?.Attribute(M + "val")?.Value;
+        var vertJc = pr?.Element(M + "vertJc")?.Attribute(M + "val")?.Value switch
+        {
+            "top" => "top",
+            "bot" => "bot",
+            _ => string.Empty
+        };
         var baseSlot = groupChr.Element(M + "e");
         var baseText = MathTextOf(baseSlot);
-        return HasStructuredMathSlot(baseSlot)
+        var run = HasStructuredMathSlot(baseSlot)
             ? new MathRun
             {
                 Kind = MathRunKind.GroupChar,
@@ -3898,6 +3925,7 @@ public static partial class DocxReader
                 baseText,
                 string.IsNullOrEmpty(chr) ? "⏞" : chr,
                 string.IsNullOrEmpty(pos) ? "top" : pos);
+        return run with { GroupChrVerticalJustification = vertJc };
     }
 
     /// <summary>The concatenated text of all descendant m:t runs under <paramref name="element"/> (empty if null).</summary>

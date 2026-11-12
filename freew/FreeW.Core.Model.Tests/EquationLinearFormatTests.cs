@@ -29,7 +29,8 @@ public class EquationLinearFormatTests
     [Fact]
     public void Parse_PlainText_StaysOneTextRun()
     {
-        ShouldParseTo("x + 1 = y", MathRun.PlainText("x + 1 = y"));
+        // Typed spaces only trigger build-up and are consumed, as in Word.
+        ShouldParseTo("x + 1 = y", MathRun.PlainText("x+1=y"));
         EquationLinearFormat.Parse(null).Runs.Should().BeEmpty();
         EquationLinearFormat.Parse(string.Empty).Runs.Should().BeEmpty();
     }
@@ -115,7 +116,7 @@ public class EquationLinearFormatTests
     {
         ShouldParseTo("^2", MathRun.PlainText("^2"));
         ShouldParseTo("x^", MathRun.PlainText("x^"));
-        ShouldParseTo("a _ b", MathRun.PlainText("a _ b"));
+        ShouldParseTo("a _ b", MathRun.PlainText("a_b"));
     }
 
     [Fact]
@@ -192,7 +193,7 @@ public class EquationLinearFormatTests
             Operator = "∑",
             Sub = "i=1",
             Sup = "n",
-            NAryOperandEquation = Eq(MathRun.Subscript("a", "i"), MathRun.PlainText(" "), MathRun.Subscript("b", "i"))
+            NAryOperandEquation = Eq(MathRun.Subscript("a", "i"), MathRun.Subscript("b", "i"))
         });
         ShouldParseTo(@"\int\of x", MathRun.NAry("∫", string.Empty, string.Empty, "x"));
         ShouldParseTo(@"\sum_i", MathRun.NAry("∑", "i", string.Empty, string.Empty));
@@ -201,7 +202,7 @@ public class EquationLinearFormatTests
     [Fact]
     public void Parse_BareNAryGlyph_IsText()
     {
-        ShouldParseTo("∑ x", MathRun.PlainText("∑ x"));
+        ShouldParseTo("∑ x", MathRun.PlainText("∑x"));
     }
 
     [Fact]
@@ -222,9 +223,9 @@ public class EquationLinearFormatTests
     public void Parse_FunctionNames_OnlyAsWholeWords()
     {
         ShouldParseTo("sinx", MathRun.PlainText("sinx"));
-        ShouldParseTo("asin x", MathRun.PlainText("asin x"));
+        ShouldParseTo("asin x", MathRun.PlainText("asinx"));
         ShouldParseTo("sin", MathRun.PlainText("sin"));
-        ShouldParseTo("sin + x", MathRun.PlainText("sin + x"));
+        ShouldParseTo("sin + x", MathRun.PlainText("sin+x"));
     }
 
     [Fact]
@@ -308,8 +309,10 @@ public class EquationLinearFormatTests
     public void Parse_NameSwallowsOneFollowingSpace_AndUnknownNamesStayLiteral()
     {
         ShouldParseTo(@"\alpha x", MathRun.PlainText("αx"));
-        ShouldParseTo(@"\alpha  x", MathRun.PlainText("α x"));
-        ShouldParseTo(@"\foo x", MathRun.PlainText(@"\foo x"));
+        ShouldParseTo(@"\alpha  x", MathRun.PlainText("αx"));
+        ShouldParseTo(@"\alpha\ x", MathRun.PlainText("α x"));
+        ShouldParseTo(@"\foo x", MathRun.PlainText(@"\foox"));
+        ShouldParseTo(@"\foo\ x", MathRun.PlainText(@"\foo x"));
         ShouldParseTo(@"x\", MathRun.PlainText(@"x\"));
     }
 
@@ -320,7 +323,8 @@ public class EquationLinearFormatTests
         ShouldParseTo(@"x\^2", MathRun.PlainText("x^2"));
         ShouldParseTo(@"f\(x\)", MathRun.PlainText("f(x)"));
         ShouldParseTo("\"sin x\"", MathRun.PlainText("sin x"));
-        ShouldParseTo("\"a/b\" c", MathRun.PlainText("a/b c"));
+        ShouldParseTo("\"a/b\" c", MathRun.PlainText("a/bc"));
+        ShouldParseTo("\"a/b \"c", MathRun.PlainText("a/b c"));
         ShouldParseTo("\"say \\\"hi\\\"\"", MathRun.PlainText("say \"hi\""));
         ShouldParseTo("a\"b", MathRun.PlainText("a\"b"));
         ShouldParseTo(@"\\alpha", MathRun.PlainText(@"\alpha"));
@@ -447,20 +451,20 @@ public class EquationLinearFormatTests
         EquationLinearFormat.ToLinear(Eq(MathRun.Radical("x", "n"))).Text.Should().Be("√(n&x)");
         EquationLinearFormat.ToLinear(Eq(MathRun.NAry("∑", "i=1", "n", "i"))).Text.Should().Be("∑_(i=1)^n▒i");
         EquationLinearFormat.ToLinear(Eq(MathRun.MatrixOf(MathMatrix.Identity2x2()))).Text.Should().Be("■(1&0@0&1)");
-        EquationLinearFormat.ToLinear(Eq(MathRun.PlainText("E = m"), MathRun.Superscript("c", "2"))).Text.Should().Be("E = mc^2");
+        EquationLinearFormat.ToLinear(Eq(MathRun.PlainText("E = m"), MathRun.Superscript("c", "2"))).Text.Should().Be(@"E\ =\ mc^2");
     }
 
     [Fact]
     public void ToLinear_EscapesTextThatWouldOtherwiseBuildUp()
     {
         ShouldRoundTrip(Text("a/b")).Should().Be(@"a\/b");
-        ShouldRoundTrip(Text("f(x) dx")).Should().Be(@"f\(x\) dx");
+        ShouldRoundTrip(Text("f(x) dx")).Should().Be(@"f\(x\)\ dx");
         ShouldRoundTrip(Text("x^2")).Should().Be(@"x\^2");
-        ShouldRoundTrip(Text("sin x")).Should().Be("\"sin x\"");
+        ShouldRoundTrip(Text("sin x")).Should().Be(@"sin\ x");
         ShouldRoundTrip(Text("a->b")).Should().Be("\"a->b\"");
         ShouldRoundTrip(Text(@"\alpha")).Should().Be(@"\\alpha");
         ShouldRoundTrip(Text("a&b@c")).Should().Be(@"a\&b\@c");
-        ShouldRoundTrip(Text("say \"hi\"")).Should().Be("say \\\"hi\\\"");
+        ShouldRoundTrip(Text("say \"hi\"")).Should().Be("say\\ \\\"hi\\\"");
     }
 
     [Fact]

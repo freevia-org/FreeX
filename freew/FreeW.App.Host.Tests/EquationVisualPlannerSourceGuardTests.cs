@@ -6,24 +6,21 @@ namespace FreeW.App.Host.Tests;
 public sealed class EquationVisualPlannerSourceGuardTests
 {
     [Fact]
-    public void WpfEquationVisual_UsesSharedPlannerAndStyledSegments()
+    public void WpfEquationVisual_UsesSharedMathLayoutEngine()
     {
-        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "DocumentView.cs"));
+        var rendering = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "DocumentView.EquationRendering.cs"));
+        var visual = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "EquationMathVisual.cs"));
+        var documentView = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "DocumentView.cs"));
 
-        source.Should().Contain("EquationVisualPlanner.Build(equation)");
-        source.Should().Contain("AppendEquationVisualSegment");
-        source.Should().Contain("BuildEquationVisualElement");
-        source.Should().Contain("EquationVisualElementKind.Fraction");
-        source.Should().Contain("EquationVisualElementKind.Radical");
-        source.Should().Contain("EquationVisualElementKind.NAry");
-        source.Should().Contain("EquationVisualElementKind.Matrix");
-        source.Should().Contain("EquationVisualElementKind.Accent");
-        source.Should().Contain("EquationVisualElementKind.Bar");
-        source.Should().Contain("EquationVisualElementKind.Delimiter");
-        source.Should().Contain("EquationVisualElementKind.GroupChar");
-        source.Should().Contain("EquationVisualElementKind.FunctionApply");
-        source.Should().Contain("EquationVisualBaselineRole.Superscript");
-        source.Should().NotContain("Text = equation.LinearText");
+        rendering.Should().Contain("new EquationMathVisual(equation");
+        rendering.Should().Contain("BaselineAlignment = BaselineAlignment.Baseline");
+        visual.Should().Contain("EquationMathLayout.Layout(equation, WpfMathLayoutFont.Instance");
+        visual.Should().Contain("TextBlock.SetBaselineOffset(this, Layout.BoxAscent)");
+        visual.Should().Contain("DrawGlyphRun");
+        documentView.Should().Contain("BuildEquationRun(equation, run.Formatting.FontSizePt, document)");
+        documentView.Should().NotContain("Text = equation.LinearText");
+        documentView.Should().NotContain("BuildEquationFractionElement",
+            "the per-structure StackPanel approximations were replaced by the shared box-layout engine");
     }
 
     private static string RepositoryFile(params string[] parts) =>

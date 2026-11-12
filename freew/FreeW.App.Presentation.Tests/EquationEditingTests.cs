@@ -32,12 +32,13 @@ public sealed class EquationEditingTests
         var equation = new Equation([MathRun.PlainText("E = m"), MathRun.Superscript("c", "2")]);
         var session = EquationEditorSession.ForExisting(equation);
 
-        session.Text.Should().Be("E = mc^2");
-        session.InitialText.Should().Be("E = mc^2");
+        // Literal spaces in the model are written as "\ " (a typed space only triggers build-up).
+        session.Text.Should().Be(@"E\ =\ mc^2");
+        session.InitialText.Should().Be(@"E\ =\ mc^2");
         session.HasOpaqueParts.Should().BeFalse();
         session.Commit().Should().BeNull("an untouched equation must not add an undo step");
 
-        session.SetText("E = mc^3");
+        session.SetText(@"E\ =\ mc^3");
         var commit = session.Commit();
         commit!.Original.Should().BeSameAs(equation);
         commit.Equation.Runs[1].Sup.Should().Be("3");
