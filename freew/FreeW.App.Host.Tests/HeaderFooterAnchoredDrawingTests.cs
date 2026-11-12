@@ -141,6 +141,53 @@ public sealed class HeaderFooterAnchoredDrawingTests
         Assert.True(outside.B < 100 || outside.R > 200, $"expected no picture left of its anchor, got {outside}");
     }
 
+    /// <summary>A header rule drawn as a zero-height connector (stress004) is a line, not an 80pt box.</summary>
+    [StaFact]
+    public void ZeroHeightConnector_InHeader_IsDrawnAsALine()
+    {
+        var model = TextDocument.CreateEmpty();
+        var shape = new Shape
+        {
+            Kind = ShapeKind.Rectangle,
+            WidthPt = 200,
+            HeightPt = 0,
+            OutlineColorHex = "#000000",
+            OutlineWidthPt = 3,
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.InFront,
+                HorizontalAnchor = HorizontalAnchor.Page,
+                HorizontalOffsetPt = 100,
+                VerticalAnchor = VerticalAnchor.Page,
+                VerticalOffsetPt = 100,
+            },
+        };
+        var header = new HeaderFooter();
+        var paragraph = new ModelParagraph();
+        paragraph.Runs.Add(ModelRun.FromShape(shape));
+        paragraph.Runs.Add(new ModelRun("Header text"));
+        header.Paragraphs.Add(paragraph);
+        model.Header = header;
+
+        var page = model.Page;
+        var (contentWidth, _) = PageLayout.ContentAreaDip(page);
+        var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
+        var (marginLeft, _, _, _) = PageLayout.MarginsDip(page);
+        var maxHeight = HeaderFooterBandRenderer.MaxBandHeightDip(page);
+        var metrics = HeaderFooterBandRenderer.Measure(model, header, isHeader: true, contentWidth, maxHeight);
+        var origin = new Point(marginLeft, HeaderFooterBandRenderer.HeaderDistanceDip(page));
+        var band = HeaderFooterBandRenderer.Render(
+            model, header, isHeader: true, new HeaderFooterBandContext(1, null, 1), contentWidth, metrics, maxHeight, page, origin);
+
+        Assert.NotNull(band);
+        band!.Offset = new Vector(origin.X, origin.Y);
+        var pixels = Rasterize(band, pageWidth, pageHeight);
+        var onLine = pixels(PageLayout.PointsToDip(200), PageLayout.PointsToDip(100));
+        Assert.True(onLine.R < 80, $"expected the black rule, got {onLine}");
+        var belowLine = pixels(PageLayout.PointsToDip(200), PageLayout.PointsToDip(140));
+        Assert.True(belowLine.R > 200, $"expected blank paper below the rule, got {belowLine}");
+    }
+
     [StaFact]
     public void PrintPaginator_FooterPageField_HonoursSectionPageNumberStart()
     {

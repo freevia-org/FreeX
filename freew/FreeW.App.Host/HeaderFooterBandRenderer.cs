@@ -265,7 +265,10 @@ internal static class HeaderFooterBandRenderer
             using (var dc = drawing.RenderOpen())
             {
                 foreach (var (snapshot, run) in ordered)
-                    HeaderFooterPaginator.DrawFloatingRun(dc, snapshot, run);
+                {
+                    if (!TryDrawConnectorLine(dc, snapshot, run))
+                        HeaderFooterPaginator.DrawFloatingRun(dc, snapshot, run);
+                }
             }
 
             (behindText ? behind : front).Children.Add(drawing);
@@ -339,6 +342,26 @@ internal static class HeaderFooterBandRenderer
             band.Children.Insert(0, behind);
         if (front.Children.Count > 0)
             band.Children.Add(front);
+    }
+
+    /// <summary>
+    /// A straight connector (<c>prst="line"</c>, e.g. the rule under a header) has a zero-height or
+    /// zero-width extent; the snapshot sizes it with the 80pt placeholder default, which would draw a
+    /// large box. Draw it as the line it is, in its outline colour and weight.
+    /// </summary>
+    private static bool TryDrawConnectorLine(DrawingContext dc, DocumentFloatingObjectSnapshot snapshot, FreeW.Core.Model.Run run)
+    {
+        if (run.Shape is not { } shape || (shape.WidthPt > 0 && shape.HeightPt > 0))
+            return false;
+
+        var brush = BrushFromHex(shape.OutlineColorHex ?? "#000000");
+        var pen = new Pen(brush, Math.Max(0.75, PageLayout.PointsToDip(shape.OutlineWidthPt > 0 ? shape.OutlineWidthPt : 0.75)));
+        var start = new Point(snapshot.Rect.XDip, snapshot.Rect.YDip);
+        var end = shape.HeightPt > 0
+            ? new Point(start.X, start.Y + PageLayout.PointsToDip(shape.HeightPt))
+            : new Point(start.X + PageLayout.PointsToDip(Math.Max(0, shape.WidthPt)), start.Y);
+        dc.DrawLine(pen, start, end);
+        return true;
     }
 
     private static bool IsFloatingRun(FreeW.Core.Model.Run run) =>
