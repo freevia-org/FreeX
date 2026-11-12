@@ -2966,7 +2966,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("dialogResult.Value.RequestedAction);");
         source.Should().Contain("PageSetupDialogSurfacePlan surface,");
         source.Should().Contain("var portraitRadio = CreateChoiceRadio(");
-        source.Should().Contain("ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(orientationChoices, UiText.Get)");
+        source.Should().Contain("PageSetupDialogPlanner.LandscapeRadioAutomationId");
         source.Should().Contain("surface.ChoiceIndexes.Orientation == 1");
         source.Should().Contain("SelectedIndex = surface.ChoiceIndexes.PaperSize");
         source.Should().Contain("PageSetupDialogPlanner.BuildFields(initial, new PageSetupDialogSurfaceInput");
