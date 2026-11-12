@@ -8624,7 +8624,11 @@ public sealed partial class DocumentView : RichTextBox
     /// the model (the outline definition lives in <c>numbering.xml</c>, regenerated on save). Marker text
     /// inherits the paragraph's leading run formatting so it tracks the list's font size/colour.
     /// </summary>
-    private static void PrependMultiLevelMarker(WpfParagraph paragraph, string markerText, TextDocument document)
+    private static void PrependMultiLevelMarker(
+        WpfParagraph paragraph,
+        string markerText,
+        TextDocument document,
+        string? fontFamily = null)
     {
         // Mirrors the footnote/endnote marker convention: a plain run carrying a Tag that ReadInline drops
         // on commit. The marker text is regenerated on every Render, so even if the user edits over it the
@@ -8633,6 +8637,12 @@ public sealed partial class DocumentView : RichTextBox
         {
             Tag = MultiLevelMarker.Instance
         };
+        // The numbering level's own font (w:lvl/w:rPr/w:rFonts) draws the marker: Word's Symbol and
+        // Wingdings bullets are private-use code points (U+F0B7) that only that font maps to a glyph.
+        // A modelled list does not carry that font, so it is recovered from the numbering definitions.
+        fontFamily ??= SymbolMarkerFontPlanner.ResolveMarkerFont(document, markerText);
+        if (!string.IsNullOrWhiteSpace(fontFamily))
+            marker.FontFamily = new FontFamily(fontFamily);
         // Match the paragraph's font size so the marker scales with the list text (fall back to default).
         var firstRun = paragraph.Inlines.OfType<WpfRun>().FirstOrDefault();
         if (firstRun is not null && firstRun.FontSize > 0)
@@ -9676,7 +9686,8 @@ public sealed partial class DocumentView : RichTextBox
             leadingWrapReservations,
             suppressedFloatingWrapRuns,
             preservedNumberingMarker?.Text,
-            splitInlineFlowBreaksForPagination),
+            splitInlineFlowBreaksForPagination,
+            preservedNumberingMarker?.FontFamily),
         _ => [BuildParagraph(new ModelParagraph(), document)]
     };
 
@@ -9687,7 +9698,8 @@ public sealed partial class DocumentView : RichTextBox
         IReadOnlyList<LeadingWrapReservation>? leadingWrapReservations,
         IReadOnlySet<ModelRun>? suppressedFloatingWrapRuns,
         string? preservedNumberingMarker,
-        bool splitInlineFlowBreaksForPagination)
+        bool splitInlineFlowBreaksForPagination,
+        string? preservedNumberingMarkerFont = null)
     {
         var rendered = BuildParagraph(
             paragraph,
@@ -9695,7 +9707,8 @@ public sealed partial class DocumentView : RichTextBox
             sourceBlockIndex: sourceBlockIndex,
             leadingWrapReservations: leadingWrapReservations,
             suppressedFloatingWrapRuns: suppressedFloatingWrapRuns,
-            preservedNumberingMarker: preservedNumberingMarker);
+            preservedNumberingMarker: preservedNumberingMarker,
+            preservedNumberingMarkerFont: preservedNumberingMarkerFont);
         if (!splitInlineFlowBreaksForPagination
             || !paragraph.Runs.Any(run => run.IsPageBreak || run.IsColumnBreak))
         {
@@ -10758,7 +10771,8 @@ public sealed partial class DocumentView : RichTextBox
                 inTableCell: true,
                 preservedNumberingMarker: preservedNumberingMarkers.TryGetValue(modelParagraph, out var marker)
                     ? marker.Text
-                    : null);
+                    : null,
+                preservedNumberingMarkerFont: marker.FontFamily);
             if (previousModelParagraph is not null
                 && previousWpfParagraph is not null
                 && SuppressesContextualSpacing(previousModelParagraph, modelParagraph, document))
@@ -11238,7 +11252,8 @@ public sealed partial class DocumentView : RichTextBox
         int? sourceBlockIndex = null,
         IReadOnlyList<LeadingWrapReservation>? leadingWrapReservations = null,
         IReadOnlySet<ModelRun>? suppressedFloatingWrapRuns = null,
-        string? preservedNumberingMarker = null)
+        string? preservedNumberingMarker = null,
+        string? preservedNumberingMarkerFont = null)
     {
         var paraFmt = Resolve(paragraph, document);
         // Inside a table cell, paragraphs that don't set their own spacing follow the table style rather than
@@ -11548,7 +11563,7 @@ public sealed partial class DocumentView : RichTextBox
         }
 
         if (!string.IsNullOrWhiteSpace(preservedNumberingMarker))
-            PrependMultiLevelMarker(wpf, preservedNumberingMarker, document);
+            PrependMultiLevelMarker(wpf, preservedNumberingMarker, document, preservedNumberingMarkerFont);
 
         return wpf;
     }

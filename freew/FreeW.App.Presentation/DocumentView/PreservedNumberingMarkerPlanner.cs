@@ -71,7 +71,7 @@ public static class PreservedNumberingMarkerPlanner
 
             var marker = FormatMarker(levelDefinition.LevelText, definition, state, level);
             if (!string.IsNullOrEmpty(marker))
-                result[paragraph] = new PreservedNumberingMarkerPlan(marker, level);
+                result[paragraph] = new PreservedNumberingMarkerPlan(marker, level, levelDefinition.FontFamily);
         }
 
         return result;
@@ -176,7 +176,11 @@ public static class PreservedNumberingMarkerPlanner
             : 1;
         var numberFormat = level.Element(W + "numFmt")?.Attribute(W + "val")?.Value ?? "decimal";
         var levelText = level.Element(W + "lvlText")?.Attribute(W + "val")?.Value ?? "%" + (levelIndex + 1);
-        definition = new NumberingLevelDefinition(startAt, numberFormat, levelText);
+        // The level's own run font (w:lvl/w:rPr/w:rFonts) draws the marker: a Symbol/Wingdings bullet is a
+        // private-use code point (U+F0B7) that only that font maps to a glyph.
+        var fonts = level.Element(W + "rPr")?.Element(W + "rFonts");
+        var fontFamily = fonts?.Attribute(W + "ascii")?.Value ?? fonts?.Attribute(W + "hAnsi")?.Value;
+        definition = new NumberingLevelDefinition(startAt, numberFormat, levelText, string.IsNullOrWhiteSpace(fontFamily) ? null : fontFamily);
         return true;
     }
 
@@ -195,7 +199,7 @@ public static class PreservedNumberingMarkerPlanner
 
             var level = definition.Levels.TryGetValue(referencedLevel, out var referencedDefinition)
                 ? referencedDefinition
-                : new NumberingLevelDefinition(1, "decimal", token);
+                : new NumberingLevelDefinition(1, "decimal", token, null);
             var value = referencedLevel > currentLevel || counters[referencedLevel] == 0
                 ? level.StartAt
                 : counters[referencedLevel];
@@ -223,7 +227,8 @@ public static class PreservedNumberingMarkerPlanner
 
     private sealed record NumberingDefinition(IReadOnlyDictionary<int, NumberingLevelDefinition> Levels);
 
-    private readonly record struct NumberingLevelDefinition(int StartAt, string NumberFormat, string LevelText);
+    private readonly record struct NumberingLevelDefinition(int StartAt, string NumberFormat, string LevelText, string? FontFamily);
 }
 
-public readonly record struct PreservedNumberingMarkerPlan(string Text, int Level);
+/// <param name="FontFamily">The numbering level's own font (<c>w:lvl/w:rPr/w:rFonts</c>), or null to use the paragraph's.</param>
+public readonly record struct PreservedNumberingMarkerPlan(string Text, int Level, string? FontFamily = null);

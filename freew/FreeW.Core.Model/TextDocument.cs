@@ -2587,6 +2587,12 @@ public sealed class Paragraph : Block
     public TextAlignment? FrameHorizontalAlignment { get; set; }
 
     /// <summary>
+    /// The positioned legacy VML text box this header/footer paragraph was flattened out of, or null for
+    /// an ordinary paragraph. Render-only (see <see cref="Model.LegacyTextBoxFrame"/>); never written.
+    /// </summary>
+    public LegacyTextBoxFrame? LegacyTextBoxFrame { get; set; }
+
+    /// <summary>
     /// Optional bookmark name marking this paragraph as a navigation target. When non-null the
     /// paragraph is bracketed by w:bookmarkStart/w:bookmarkEnd on save, and runs elsewhere can point
     /// to it via <see cref="Run.HyperlinkAnchor"/>. Bookmarks are invisible markers (no glyphs).
@@ -4285,6 +4291,13 @@ public sealed class TextDocument
     /// (<see cref="DocumentTheme.Apply"/>); this property records which theme is in effect.
     /// </summary>
     public DocumentTheme Theme { get; set; } = DocumentTheme.Default;
+
+    /// <summary>
+    /// The opened package theme's East Asian / complex-script font slots, used to resolve run theme-font
+    /// tokens at render time (see <see cref="ThemeFontTokenResolver"/>). Render-only; null when the
+    /// package had no theme.
+    /// </summary>
+    public ThemeScriptFonts? ThemeScriptFonts { get; set; }
 
     /// <summary>
     /// The document's footnotes, keyed by footnote id (matching <see cref="Run.FootnoteId"/> on the

@@ -246,6 +246,7 @@ public static class DocumentModelCloner
             EndsSpanningField = source.EndsSpanningField,
             DropCap = source.DropCap,
             FrameHorizontalAlignment = source.FrameHorizontalAlignment,
+            LegacyTextBoxFrame = source.LegacyTextBoxFrame,
             SectionBreak = source.SectionBreak is { } section
                 ? CloneSection(section, preserveRevisions)
                 : null,

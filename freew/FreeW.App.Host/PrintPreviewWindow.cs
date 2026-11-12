@@ -1817,6 +1817,16 @@ internal sealed class HeaderFooterPaginator(
             || snapshot.RunIndex < 0 || snapshot.RunIndex >= paragraph.Runs.Count)
             return;
 
+        DrawFloatingRun(dc, snapshot, paragraph.Runs[snapshot.RunIndex]);
+    }
+
+    /// <summary>
+    /// Draws one floating object's <paramref name="run"/> at <paramref name="snapshot"/>'s page-space rect.
+    /// Shared with header/footer composition (<see cref="HeaderFooterBandRenderer"/>), whose anchored
+    /// drawings belong to the slot's paragraphs rather than the body blocks.
+    /// </summary>
+    internal static void DrawFloatingRun(DrawingContext dc, DocumentFloatingObjectSnapshot snapshot, FreeW.Core.Model.Run run)
+    {
         var rect = new Rect(
             snapshot.Rect.XDip,
             snapshot.Rect.YDip,
@@ -1825,7 +1835,6 @@ internal sealed class HeaderFooterPaginator(
         if (rect.Width <= 0 || rect.Height <= 0)
             return;
 
-        var run = paragraph.Runs[snapshot.RunIndex];
         var pushedTransform = snapshot.RotationAngle != 0 || snapshot.FlipH || snapshot.FlipV;
         if (pushedTransform)
         {
@@ -2010,9 +2019,12 @@ internal sealed class HeaderFooterPaginator(
         if (contentWidth <= 0)
             return;
 
+        // PAGE resolves to the logical number: the section's w:pgNumType start and number format apply
+        // (as in the section-aware paginator); slot selection below stays on the physical page.
+        var logicalPageNumber = Math.Max(1, page.PageNumberStartAt ?? 1) + zeroBasedPageNumber;
         var context = new HeaderFooterBandContext(
-            zeroBasedPageNumber + 1,
-            PageNumberText: null,
+            logicalPageNumber,
+            FreeW.App.Presentation.Dialogs.PageNumberFormatDialogPlanner.FormatPageNumber(logicalPageNumber, page.PageNumberFormat),
             Math.Max(1, PageCount));
         var maxHeight = HeaderFooterBandRenderer.MaxBandHeightDip(page);
         // Different-first-page and different-odd-and-even select the slot per page, as in Word; a
@@ -2026,9 +2038,10 @@ internal sealed class HeaderFooterPaginator(
         if (slots.Header is { IsEmpty: false } header)
         {
             var metrics = ResolveBandMetrics(header, isHeader: true, contentWidth, maxHeight);
-            if (HeaderFooterBandRenderer.Render(model, header, true, context, contentWidth, metrics, maxHeight) is { } band)
+            var origin = new Point(marginLeft, HeaderFooterBandRenderer.HeaderDistanceDip(page));
+            if (HeaderFooterBandRenderer.Render(model, header, true, context, contentWidth, metrics, maxHeight, page, origin) is { } band)
             {
-                band.Offset = new Vector(marginLeft, HeaderFooterBandRenderer.HeaderDistanceDip(page));
+                band.Offset = new Vector(origin.X, origin.Y);
                 visual.Children.Add(band);
             }
         }
@@ -2036,10 +2049,11 @@ internal sealed class HeaderFooterPaginator(
         if (slots.Footer is { IsEmpty: false } footer)
         {
             var metrics = ResolveBandMetrics(footer, isHeader: false, contentWidth, maxHeight);
-            if (HeaderFooterBandRenderer.Render(model, footer, false, context, contentWidth, metrics, maxHeight) is { } band)
+            var top = size.Height - HeaderFooterBandRenderer.FooterDistanceDip(page) - metrics.HeightDip;
+            var origin = new Point(marginLeft, Math.Max(0, top));
+            if (HeaderFooterBandRenderer.Render(model, footer, false, context, contentWidth, metrics, maxHeight, page, origin) is { } band)
             {
-                var top = size.Height - HeaderFooterBandRenderer.FooterDistanceDip(page) - metrics.HeightDip;
-                band.Offset = new Vector(marginLeft, Math.Max(0, top));
+                band.Offset = new Vector(origin.X, origin.Y);
                 visual.Children.Add(band);
             }
         }
