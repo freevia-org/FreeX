@@ -77,11 +77,16 @@ public sealed class R164_PwshCallerMarkingContractTests
     [Fact]
     public void EveryPwshCallingTest_IsMarkedWithTheExternalToolAttribute()
     {
-        var testDirectory = Path.GetDirectoryName(
-            WorkspaceFileLocator.Find("tests", "FreeX.App.Host.Tests", "PowerShellScriptRunner.cs"))!;
+        // The runner lives in FreeX.Tools.Tests but is compiled into the host assembly as well, and
+        // both assemblies have callers, so both directories are scanned.
+        var testDirectories = new[]
+        {
+            Path.GetDirectoryName(WorkspaceFileLocator.Find("tests", "FreeX.Tools.Tests", "PowerShellScriptRunner.cs"))!,
+            Path.GetDirectoryName(WorkspaceFileLocator.Find("tests", "FreeX.App.Host.Tests", "FormulaEditingUiE2eTests.cs"))!,
+        };
 
         var unmarked = new List<string>();
-        foreach (var file in Directory.GetFiles(testDirectory, "*.cs"))
+        foreach (var file in testDirectories.SelectMany(directory => Directory.GetFiles(directory, "*.cs")))
         {
             // The runner itself declares the method, and this file names it in the scan below --
             // neither is a caller.

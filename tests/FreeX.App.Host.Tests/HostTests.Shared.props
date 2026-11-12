@@ -43,6 +43,10 @@
 
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)../CommandTestInfrastructure/TestCommandContext.cs" Link="TestCommandContext.cs" />
+    <!-- Owned by FreeX.Tools.Tests (the non-WPF commit-gate project that split out of this assembly); compiled into the host assembly too because WPF tests still use them. -->
+    <Compile Include="$(MSBuildThisFileDirectory)../FreeX.Tools.Tests/PowerShellScriptRunner.cs" Link="TestSupport/PowerShellScriptRunner.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../FreeX.Tools.Tests/WorkspaceFileLocator.cs" Link="TestSupport/WorkspaceFileLocator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../FreeX.Tools.Tests/ExternalToolPreconditions.cs" Link="TestSupport/ExternalToolPreconditions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../SharedTestInfrastructure/FreeX/InMemoryPlatformClipboard.cs" Link="TestSupport/InMemoryPlatformClipboard.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../SharedTestInfrastructure/FreeX/TestFileAdapter.cs" Link="TestFileAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../SharedTestInfrastructure/Ribbon/RibbonDefinitionValidator.cs"

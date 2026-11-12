@@ -43,12 +43,4 @@
     <Using Include="FreeX.App.Localization.LocalizedUiText" Alias="UiText" />
   </ItemGroup>
 
-  <!-- Helpers the host suite still uses too; compiled into both assemblies instead of duplicated. -->
-  <ItemGroup>
-    <Compile Include="../FreeX.App.Host.Tests/PowerShellScriptRunner.cs" Link="Shared/PowerShellScriptRunner.cs" />
-    <Compile Include="../FreeX.App.Host.Tests/WorkspaceFileLocator.cs" Link="Shared/WorkspaceFileLocator.cs" />
-    <Compile Include="../FreeX.App.Host.Tests/ExternalToolPreconditions.cs" Link="Shared/ExternalToolPreconditions.cs" />
-    <Compile Include="../FreeX.App.Host.Tests/LocalizationResourceTestSupport.cs" Link="Shared/LocalizationResourceTestSupport.cs" />
-  </ItemGroup>
-
 </Project>
