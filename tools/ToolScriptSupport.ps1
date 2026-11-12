@@ -363,9 +363,17 @@ function Invoke-ToolGeneratedProject {
 "@)
         [IO.File]::WriteAllText($programPath, $Options.Source)
         $outputPaths = @($Options.Outputs.GetEnumerator() | ForEach-Object { [pscustomobject]@{ TempPath = Join-Path $tempRoot (Split-Path -Leaf $_.Key); DestinationPath = $_.Key; Label = $_.Value } })
+        # -nodeReuse:false keeps this scratch build's MSBuild worker nodes private to it. With
+        # the default (reuse on) the build borrows idle nodes that belong to some other session's
+        # process tree and lends its own in return; when either tree is killed mid-build (a
+        # timeout, a cancelled gate) the other build loses workers it is still using. Repository
+        # preflight now kills the whole process tree of a check that exceeds its time budget, so
+        # this build must not be holding another session's workers, nor lending out its own, when
+        # that happens. Private nodes exit with the build and cannot be taken away from it.
         $buildArguments = @(
             "build", $projectPath,
-            "--configuration", "Release"
+            "--configuration", "Release",
+            "-nodeReuse:false"
         )
         & $Options.DotNetPath $buildArguments
         if ($LASTEXITCODE -ne 0) {

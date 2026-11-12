@@ -66,6 +66,16 @@ public sealed class LocalOnlyEvidencePathsPreflightTests
         result.ExitCode.Should().Be(0, result.CombinedOutput);
     }
 
+    [Fact]
+    public void Guard_RejectsBranchesThatStillCarryThePreRewriteHistory()
+    {
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Test-LocalOnlyEvidencePaths.ps1");
+
+        script.Should().Contain("$preRewriteCommit = \"ed45d43fe7486bebeaa78dbfc286b43d6cd5d267\"");
+        script.Should().Contain("merge-base --is-ancestor $preRewriteCommit HEAD");
+        script.Should().Contain("HEAD still carries the history from before the 2026-11-12 rewrite");
+    }
+
     private static void AddGitIndexEntry(string repositoryPath, string fileName)
     {
         const string EmptyBlobSha = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391";
