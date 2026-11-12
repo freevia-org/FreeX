@@ -51,6 +51,9 @@ public sealed class TestWorkspaceFileLocatorSourceGuardTests
         EnumerateTestSourceFiles(workspaceRoot)
             .Where(file => !string.Equals(file, sharedLocator, StringComparison.OrdinalIgnoreCase))
             .Where(file => !string.Equals(file, sourceGuard, StringComparison.OrdinalIgnoreCase))
+            // Thousands of independent file reads + regex scans: parallel and ordered (stable failure message).
+            .AsParallel()
+            .AsOrdered()
             .Select(file => new
             {
                 File = Path.GetRelativePath(workspaceRoot, file),
@@ -58,6 +61,7 @@ public sealed class TestWorkspaceFileLocatorSourceGuardTests
             })
             .Where(sourceFile => manualWalkers.Any(pattern => pattern.IsMatch(sourceFile.Source)))
             .Select(sourceFile => sourceFile.File)
+            .ToList()
             .Should()
             .BeEmpty("workspace traversal belongs in TestWorkspaceFileLocator");
     }
@@ -71,8 +75,11 @@ public sealed class TestWorkspaceFileLocatorSourceGuardTests
             RegexOptions.Compiled | RegexOptions.Singleline);
 
         EnumerateTestSourceFiles(workspaceRoot)
+            .AsParallel()
+            .AsOrdered()
             .Where(file => selfForwardingMethodGroup.IsMatch(File.ReadAllText(file)))
             .Select(file => Path.GetRelativePath(workspaceRoot, file))
+            .ToList()
             .Should()
             .BeEmpty("thin locator wrappers must forward their params array, not their own method group");
     }
