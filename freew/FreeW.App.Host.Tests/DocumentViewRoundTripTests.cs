@@ -2671,6 +2671,37 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void PageOnlyRender_KeepsInWordSolidusTogetherLikeWord_EditorTextUntouched()
+    {
+        static TextDocument SlashDocument()
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Blocks.Add(new Paragraph("column flow, and header/footer composition"));
+            return document;
+        }
+
+        static string RenderedText(DocumentView view) => string.Concat(view.Document.Blocks
+            .OfType<System.Windows.Documents.Paragraph>()
+            .SelectMany(paragraph => paragraph.Inlines.OfType<System.Windows.Documents.Run>())
+            .Select(run => run.Text));
+
+        // A print/preview/fidelity render (no editor chrome) suppresses WPF's break after the solidus.
+        var pageView = new DocumentView { RenderPageBreakMarkers = false };
+        pageView.LoadModel(SlashDocument());
+        RenderedText(pageView).Should().Be("column flow, and header/⁠footer composition");
+        pageView.CommitToModel();
+        pageView.Model.Paragraphs.Single().Runs.Single().Text
+            .Should().Be("column flow, and header/footer composition", "the joiner is display-only");
+
+        // The interactive editor never receives the joiner (no invisible caret stop), even on the same
+        // thread right after a page-only render.
+        var editor = new DocumentView();
+        editor.LoadModel(SlashDocument());
+        RenderedText(editor).Should().Be("column flow, and header/footer composition");
+    }
+
+    [StaFact]
     public void HiddenText_CollapsesInTheEditorAndSurvivesRoundTrip()
     {
         var document = TextDocument.CreateEmpty();

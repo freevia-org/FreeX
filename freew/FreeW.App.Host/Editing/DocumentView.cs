@@ -116,6 +116,12 @@ public sealed partial class DocumentView : RichTextBox
     [ThreadStatic]
     private static bool _renderPageBreakMarkers = true;
 
+    // True only inside Render() of a non-interactive page render (RenderPageBreakMarkers == false: print
+    // preview, fidelity capture), which never reads its text back or places a caret in it; see
+    // SlashLineBreakDisplayPlanner. Reset at the end of the pass so an editor's own runs never get it.
+    [ThreadStatic]
+    private static bool _renderJoinSlashes;
+
     /// <summary>
     /// Collects a message for every embedded image the current <see cref="Render"/> pass could not
     /// decode (see <see cref="DecodeImage"/>), so <see cref="ImageDecodeDiagnostics"/> reflects the
@@ -5669,6 +5675,7 @@ public sealed partial class DocumentView : RichTextBox
         _renderFieldEvaluationFileName = FieldEvaluationFileName;
         _renderReviewDisplayPolicy = CurrentReviewDisplayPolicy;
         _renderPageBreakMarkers = RenderPageBreakMarkers;
+        _renderJoinSlashes = !RenderPageBreakMarkers;
         _renderViewMode = ViewMode;
         _renderImageDiagnostics = new List<string>();
         var flow = new FlowDocument { PagePadding = new Thickness(0) };
@@ -5904,6 +5911,7 @@ public sealed partial class DocumentView : RichTextBox
         // Snapshot this pass's image-decode losses onto the instance so ImageDecodeDiagnostics reflects
         // what is actually showing in the document right now (see the field's doc comment).
         _imageDecodeDiagnostics = (IReadOnlyList<string>?)_renderImageDiagnostics ?? Array.Empty<string>();
+        _renderJoinSlashes = false;
 
         // See SpellCheckDocumentAssignmentGate: serialize the Document swap (and the WPF spell-checker
         // initialization it can trigger) across all DocumentView instances to avoid a native COM race
@@ -11883,8 +11891,11 @@ public sealed partial class DocumentView : RichTextBox
 
     // Remove the display-only soft hyphens (U+00AD) the renderer inserts for automatic hyphenation, so a run
     // read back on commit carries exactly the model text. A no-op for text without soft hyphens.
-    internal static string StripSoftHyphens(string text) =>
-        text.IndexOf(Hyphenator.SoftHyphen) < 0 ? text : text.Replace(Hyphenator.SoftHyphen.ToString(), string.Empty);
+    internal static string StripSoftHyphens(string text)
+    {
+        text = SlashLineBreakDisplayPlanner.Strip(text);
+        return text.IndexOf(Hyphenator.SoftHyphen) < 0 ? text : text.Replace(Hyphenator.SoftHyphen.ToString(), string.Empty);
+    }
 
     // Word's w:smallCaps and w:caps are two independent run flags, but WPF's Typography.Capitals is a
     // single value that can show at most one "caps mode" at a time -- BuildRun below maps AllCaps=true to
@@ -12024,6 +12035,10 @@ public sealed partial class DocumentView : RichTextBox
         var runText = run.Text;
         if (document.Page.AutoHyphenation && !paragraph.Formatting.SuppressAutoHyphens && runText.Length > 0)
             runText = HyphenateForDisplay(runText, document.Page.DoNotHyphenateCaps);
+        // Word does not wrap after a solidus inside a word ("header/footer"); WPF does. Page-only renders
+        // suppress that break with a display-only joiner (stripped on commit like the soft hyphens).
+        if (_renderJoinSlashes)
+            runText = SlashLineBreakDisplayPlanner.Join(runText);
         var wpf = new WpfRun(runText)
         {
             FontWeight = fmt.Bold ? FontWeights.Bold : FontWeights.Normal,
