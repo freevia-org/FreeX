@@ -115,19 +115,13 @@ public sealed partial class MainWindow
         // A real preview prints to a real queue: list the installed printers so the Print button can
         // send the job (it used to export a PDF whatever the destination said). Without a spooler the
         // destination reads "Save as PDF" and Print keeps the print-ready-PDF fallback.
-        var printerDiscovery = printerNameOverride is null && !hasExternalPageSource && _printService.IsSupported
-            ? await _printService.DiscoverAsync()
-            : null;
-        var canSpool = printerDiscovery is { IsAvailable: true };
-        IReadOnlyList<string> printerNames = canSpool
-            ? printerDiscovery!.Printers.Select(printer => printer.Name).ToArray()
-            : [];
-        var defaultPrinterName = canSpool
-            ? printerNames.FirstOrDefault(name => string.Equals(name, printerDiscovery!.DefaultPrinter, StringComparison.Ordinal))
-                ?? printerNames[0]
-            : null;
+        // Discovery shells out to the spooler (lpstat), so it must never delay the window: the preview
+        // opens at once on the Save-as-PDF destination and the printers fill in when discovery returns.
+        var canSpool = false;
+        IReadOnlyList<string> printerNames = [];
+        string? defaultPrinterName = null;
+        var printerBoxes = new List<ComboBox>();
         var printerName = printerNameOverride
-            ?? defaultPrinterName
             ?? UiText.Get("Print_SaveAsPdfButton").Replace("_", string.Empty, StringComparison.Ordinal).TrimEnd('.');
         var pageCount = externalPageCount ?? context.PageCount;
         var navigator = PrintPreviewPageNavigator.Create(pageCount);
@@ -399,11 +393,12 @@ public sealed partial class MainWindow
                     () => currentSettings,
                     updated => currentSettings = updated,
                     RepaginateAndRender),
-            printerNames);
+            printerBoxes.Add);
         var topToolbar = CreatePrintPreviewTopToolbar(
             topToolbarPlan,
             exportButton,
-            () => dialog.Close());
+            () => dialog.Close(),
+            printerBoxes.Add);
 
         var layout = new Grid
         {
@@ -433,6 +428,28 @@ public sealed partial class MainWindow
             Render();
             if (PrintPreviewDialogPlanner.InitialFocusCommand == PrintPreviewToolbarCommand.Print)
                 exportButton.Focus();
+
+            if (printerNameOverride is not null || hasExternalPageSource || !_printService.IsSupported)
+                return;
+
+            RunGuarded(async () =>
+            {
+                var discovery = await _printService.DiscoverAsync();
+                if (!discovery.IsAvailable)
+                    return;
+
+                printerNames = discovery.Printers.Select(printer => printer.Name).ToArray();
+                defaultPrinterName = printerNames.FirstOrDefault(
+                        name => string.Equals(name, discovery.DefaultPrinter, StringComparison.Ordinal))
+                    ?? printerNames[0];
+                canSpool = true;
+                exportButton.IsEnabled = true;
+                foreach (var printerBox in printerBoxes)
+                {
+                    printerBox.ItemsSource = printerNames;
+                    printerBox.SelectedItem = defaultPrinterName;
+                }
+            });
         };
 
         await dialog.ShowDialog(this);
@@ -441,8 +458,11 @@ public sealed partial class MainWindow
     private static Border CreatePrintPreviewTopToolbar(
         PrintPreviewTopToolbarPlan plan,
         Button printButton,
-        Action close)
+        Action close,
+        Action<ComboBox>? registerPrinterBox = null)
     {
+        var toolbarPrinterBox = CreatePreviewComboBox(plan.PrinterComboWidth, plan.PrinterName);
+        registerPrinterBox?.Invoke(toolbarPrinterBox);
         var toolbar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -453,7 +473,7 @@ public sealed partial class MainWindow
             {
                 printButton,
                 new TextBlock { Text = plan.PrinterLabelText, FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
-                CreatePreviewComboBox(plan.PrinterComboWidth, plan.PrinterName),
+                toolbarPrinterBox,
                 new TextBlock { Text = plan.CopiesLabelText, FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
                 new TextBox
                 {
@@ -574,7 +594,7 @@ public sealed partial class MainWindow
     private ScrollViewer CreatePrintPreviewSettingsRail(
         PrintPreviewSettingsRailPlan plan,
         PrintPreviewSettingsRailInteraction? interaction,
-        IReadOnlyList<string>? printerNames = null)
+        Action<ComboBox>? registerPrinterBox = null)
     {
         void ApplyAction(PrintPreviewSettingsPanelActionPlan action)
         {
@@ -636,13 +656,7 @@ public sealed partial class MainWindow
         }
 
         var printerBox = CreatePreviewComboBox(plan.PrinterComboWidth, plan.PrinterName);
-        if (printerNames is { Count: > 0 })
-        {
-            printerBox.ItemsSource = printerNames;
-            printerBox.SelectedItem = printerNames.Contains(plan.PrinterName, StringComparer.Ordinal)
-                ? plan.PrinterName
-                : printerNames[0];
-        }
+        registerPrinterBox?.Invoke(printerBox);
 
         if (interaction is not null)
         {
