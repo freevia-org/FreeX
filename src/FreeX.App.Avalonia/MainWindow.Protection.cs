@@ -56,13 +56,14 @@ public sealed partial class MainWindow
             // WPF PasswordProtectionDialog: DialogSizing.ApplyContentHeight(width, minHeight) -- a
             // NoResize window of fixed width whose height follows its content, never below the *outer*
             // minimum (540 for Protect Sheet, 250 for the password-only prompt). Avalonia sizes the
-            // client area, so the Windows caption/frame comes off the minimum.
-            Width = state.IsProtected ? ProtectionDialogPlanner.ProtectWorkbookCaptureWidth : ProtectionDialogPlanner.ProtectSheetWidth,
+            // client area, so the measured Windows frame comes off the width and the minimum.
+            Width = (state.IsProtected ? ProtectionDialogPlanner.ProtectWorkbookCaptureWidth : ProtectionDialogPlanner.ProtectSheetWidth)
+                - WpfNoResizeFrameWidth,
             // Height seeds the size for hosts that do not apply SizeToContent (headless capture).
             Height = (state.IsProtected ? ProtectionDialogPlanner.ProtectWorkbookCaptureHeight : ProtectionDialogPlanner.ProtectSheetHeight)
-                - WpfNoResizeFrameHeight,
+                - WpfNoResizeClientFrameHeight,
             MinHeight = (state.IsProtected ? ProtectionDialogPlanner.ProtectWorkbookCaptureHeight : ProtectionDialogPlanner.ProtectSheetHeight)
-                - WpfNoResizeFrameHeight,
+                - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Height,
             CanResize = false,
             FontFamily = FormulaBarFontFamily,
@@ -174,6 +175,10 @@ public sealed partial class MainWindow
                     Margin = new Thickness(0, 0, 0, 4),
                 };
                 ApplyProtectCheckBoxChrome(box);
+                // WPF lists these as natural-height (16px) check boxes with a 4px bottom margin, a
+                // 20px pitch; the shared 20px dialog check row made the pitch 24.
+                box.MinHeight = 16;
+                box.MaxHeight = 16;
                 AutomationProperties.SetAutomationId(box, $"ProtectSheetPermission{index}Box");
                 permissionBoxes.Add((option.Permission, box));
                 checklist.Children.Add(box);
@@ -266,11 +271,12 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = state.IsStructureProtected ? UiText.Get("ShellLoc_UnprotectWorkbookTitle") : UiText.Get("ShellLoc_ProtectWorkbookTitle"),
-            // WPF PasswordProtectionDialog: 380 wide, height follows the content with a 250 *outer*
-            // minimum (see ShowProtectSheetDialogAsync).
-            Width = ProtectionDialogPlanner.ProtectWorkbookCaptureWidth,
-            Height = ProtectionDialogPlanner.ProtectWorkbookCaptureHeight - WpfNoResizeFrameHeight,
-            MinHeight = ProtectionDialogPlanner.ProtectWorkbookCaptureHeight - WpfNoResizeFrameHeight,
+            // WPF PasswordProtectionDialog: a 380 *outer* width, height follows the content with a 250
+            // *outer* minimum (DialogSizing.ApplyContentHeight). Avalonia sizes the client area, so the
+            // Windows caption/frame comes off both.
+            Width = ProtectionDialogPlanner.ProtectWorkbookCaptureWidth - WpfNoResizeFrameWidth,
+            Height = ProtectionDialogPlanner.ProtectWorkbookCaptureHeight - WpfNoResizeClientFrameHeight,
+            MinHeight = ProtectionDialogPlanner.ProtectWorkbookCaptureHeight - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Height,
             CanResize = false,
             FontFamily = FormulaBarFontFamily,
@@ -323,26 +329,23 @@ public sealed partial class MainWindow
 
         if (state.IsStructureProtected)
         {
-            var unprotectPanel = new StackPanel
-            {
-                Children =
-                {
-                    new TextBlock
-                    {
-                        Text = state.HasPassword
-                            ? UiText.Get("ShellLoc_WorkbookProtectedEnterPassword")
-                            : UiText.Get("ShellLoc_WorkbookProtectedClickOk"),
-                        Foreground = HeaderForeground,
-                        TextWrapping = TextWrapping.Wrap,
-                        FontSize = 12,
-                        FontFamily = FormulaBarFontFamily,
-                    },
-                },
-            };
+            var unprotectPanel = new StackPanel();
 
             if (state.HasPassword)
             {
-                unprotectPanel.Children.Add(ProtectionLabeledField(UiText.Get("ShellLoc_PasswordLabel"), passwordBox, topMargin: 8));
+                // WPF TryConfirmUnprotectPassword opens PasswordProtectionDialog with the password
+                // prompt as both the SemiBold heading above the group and the label inside it,
+                // followed by the password box and the grey caution line.
+                contentChildren.Add(new TextBlock
+                {
+                    Text = StripDisplayMnemonic(UiText.Get("Protection_Password2")),
+                    Foreground = HeaderForeground,
+                    FontWeight = FontWeight.SemiBold,
+                    Margin = new Thickness(0, 0, 0, 8),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                });
+                unprotectPanel.Children.Add(ProtectionLabeledField(UiText.Get("Protection_Password2"), passwordBox));
                 unprotectPanel.Children.Add(new TextBlock
                 {
                     Text = UiText.Get("ShellLoc_CautionPasswordsCannotBeRecovered"),
@@ -351,6 +354,17 @@ public sealed partial class MainWindow
                     FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
                     Margin = new Thickness(0, 8, 0, 0),
+                });
+            }
+            else
+            {
+                unprotectPanel.Children.Add(new TextBlock
+                {
+                    Text = UiText.Get("ShellLoc_WorkbookProtectedClickOk"),
+                    Foreground = HeaderForeground,
+                    TextWrapping = TextWrapping.Wrap,
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
                 });
             }
 

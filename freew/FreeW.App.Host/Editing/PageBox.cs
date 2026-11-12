@@ -459,6 +459,7 @@ internal sealed class PageBox : Border
             foreach (var (styleId, style) in sourceModel.Styles)
                 wrapper.Styles[styleId] = style;
             wrapper.Theme = sourceModel.Theme;
+            wrapper.ThemeScriptFonts = sourceModel.ThemeScriptFonts;
             wrapper.Page.DefaultTabStopPt = sourceModel.Page.DefaultTabStopPt;
         }
         wrapper.Blocks.Clear();

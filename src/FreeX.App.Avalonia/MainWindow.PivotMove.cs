@@ -54,10 +54,10 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("MovePivotTable_Title"),
-            Width = 420,
-            MinWidth = 420,
-            MaxWidth = 420,
-            MinHeight = 160 - WpfNoResizeFrameHeight,
+            Width = 420 - WpfNoResizeFrameWidth,
+            MinWidth = 420 - WpfNoResizeFrameWidth,
+            MaxWidth = 420 - WpfNoResizeFrameWidth,
+            MinHeight = 160 - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,

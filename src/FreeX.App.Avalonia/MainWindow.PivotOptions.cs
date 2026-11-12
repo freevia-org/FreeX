@@ -97,14 +97,14 @@ public sealed partial class MainWindow
 
         var rowGrandTotalsBox = new CheckBox
         {
-            Content = UiText.Get("PivotOptions_ShowRowGrandTotals"),
+            Content = StripDisplayMnemonic(UiText.Get("PivotTableOptions_ShowRowGrandTotals")),
             IsChecked = values.ShowRowGrandTotals,
         };
         ApplyPivotCheckBoxChrome(rowGrandTotalsBox);
         AutomationProperties.SetAutomationId(rowGrandTotalsBox, "PivotOptionsRowGrandTotalsBox");
         var columnGrandTotalsBox = new CheckBox
         {
-            Content = UiText.Get("PivotOptions_ShowColumnGrandTotals"),
+            Content = StripDisplayMnemonic(UiText.Get("PivotTableOptions_ShowColumnGrandTotals")),
             IsChecked = values.ShowColumnGrandTotals,
         };
         ApplyPivotCheckBoxChrome(columnGrandTotalsBox);
@@ -131,14 +131,15 @@ public sealed partial class MainWindow
 
         var subtotalsBox = new CheckBox
         {
-            Content = UiText.Get("PivotOptions_ShowSubtotals"),
+            Content = StripDisplayMnemonic(UiText.Get("PivotTableOptions_ShowSubtotals")),
             IsChecked = values.ShowSubtotals,
         };
         ApplyPivotCheckBoxChrome(subtotalsBox);
         AutomationProperties.SetAutomationId(subtotalsBox, "PivotOptionsSubtotalsBox");
 
+        // WPF PivotTableOptionsDialog lists the PivotSubtotalPlacement values themselves.
         var subtotalPlacementBox = OptionComboBox(
-            PivotOptionsPlanner.SubtotalPlacements.Select(item => (string?)item.Label).ToArray(),
+            PivotOptionsPlanner.SubtotalPlacements.Select(item => (string?)item.Value.ToString()).ToArray(),
             PivotOptionsPlanner.FindSubtotalPlacementIndex(values.SubtotalPlacement));
         AutomationProperties.SetAutomationId(subtotalPlacementBox, "PivotOptionsSubtotalPlacementBox");
         AutomationProperties.SetName(
@@ -147,7 +148,7 @@ public sealed partial class MainWindow
 
         var repeatLabelsBox = new CheckBox
         {
-            Content = UiText.Get("PivotOptions_RepeatItemLabels"),
+            Content = StripDisplayMnemonic(UiText.Get("PivotTableOptions_RepeatItemLabels")),
             IsChecked = values.RepeatItemLabels,
         };
         ApplyPivotCheckBoxChrome(repeatLabelsBox);
@@ -155,7 +156,7 @@ public sealed partial class MainWindow
 
         var blankRowBox = new CheckBox
         {
-            Content = UiText.Get("PivotOptions_InsertBlankRow"),
+            Content = StripDisplayMnemonic(UiText.Get("PivotTableOptions_InsertBlankLineAfterEachItem")),
             IsChecked = values.BlankLineAfterItems,
         };
         ApplyPivotCheckBoxChrome(blankRowBox);
@@ -163,7 +164,7 @@ public sealed partial class MainWindow
 
         var mergeLabelsBox = new CheckBox
         {
-            Content = UiText.Get("PivotOptions_MergeAndCenterLabels"),
+            Content = StripDisplayMnemonic(UiText.Get("PivotTableOptions_MergeAndCenterCellsWithLabels")),
             IsChecked = values.MergeAndCenterLabels,
         };
         ApplyPivotCheckBoxChrome(mergeLabelsBox);
@@ -180,9 +181,11 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("PivotTableOptions_PivotTableOptions"),
-            Width = PivotOptionsPlanner.DialogWidth,
-            Height = PivotOptionsPlanner.LayoutAndFormatCaptureHeight,
-            MinHeight = PivotOptionsPlanner.DialogMinHeight,
+            // WPF sizes are the outer NoResize window; Avalonia sizes the client area, so the
+            // measured Windows frame comes off both (see WpfResizableFrameWidth/Height).
+            Width = PivotOptionsPlanner.DialogWidth - WpfNoResizeFrameWidth,
+            Height = PivotOptionsPlanner.LayoutAndFormatCaptureHeight - WpfNoResizeClientFrameHeight,
+            MinHeight = PivotOptionsPlanner.DialogMinHeight - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Manual,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
@@ -235,18 +238,14 @@ public sealed partial class MainWindow
             pageWrapBox,
             UiText.CreateAutomationName(UiText.Get("PivotTableOptions_ReportFilterFieldsPerColumnLabel")));
 
-        var layoutSection = new StackPanel { Spacing = 6 };
-        layoutSection.Children.Add(OptionLabel(UiText.Get("PivotTableOptions_ReportLayoutLabel")));
-        layoutSection.Children.Add(reportLayoutBox);
-        layoutSection.Children.Add(OptionLabel(UiText.Get("PivotTableOptions_CompactIndentLabel")));
-        layoutSection.Children.Add(compactIndentBox);
-        layoutSection.Children.Add(OptionLabel(UiText.Get("PivotTableOptions_ReportFilterAreaLabel")));
-        layoutSection.Children.Add(pageFieldLayoutBox);
-        layoutSection.Children.Add(OptionLabel(UiText.Get("PivotTableOptions_ReportFilterFieldsPerColumnLabel")));
-        layoutSection.Children.Add(pageWrapBox);
-        layoutSection.Children.Add(repeatLabelsBox);
-        layoutSection.Children.Add(blankRowBox);
-        layoutSection.Children.Add(mergeLabelsBox);
+        var layoutSection = WpfPivotOptionsGroupPanel();
+        AddWpfPivotLabeledControl(layoutSection, UiText.Get("PivotTableOptions_ReportLayoutLabel"), reportLayoutBox);
+        AddWpfPivotLabeledControl(layoutSection, UiText.Get("PivotTableOptions_CompactIndentLabel"), compactIndentBox);
+        AddWpfPivotLabeledControl(layoutSection, UiText.Get("PivotTableOptions_ReportFilterAreaLabel"), pageFieldLayoutBox);
+        AddWpfPivotLabeledControl(layoutSection, UiText.Get("PivotTableOptions_ReportFilterFieldsPerColumnLabel"), pageWrapBox);
+        AddWpfPivotCheckBox(layoutSection, repeatLabelsBox);
+        AddWpfPivotCheckBox(layoutSection, blankRowBox);
+        AddWpfPivotCheckBox(layoutSection, mergeLabelsBox);
 
         var emptyCellsBox = OptionTextBox(values.EmptyValueText ?? string.Empty, 160);
         emptyCellsBox.Width = 120;
@@ -264,13 +263,11 @@ public sealed partial class MainWindow
         var preserveFormattingBox = OptionCheckBox(
             UiText.Get("PivotTableOptions_PreserveCellFormattingOnUpdate"), values.PreserveFormattingOnUpdate);
         AutomationProperties.SetAutomationId(preserveFormattingBox, "PivotOptionsPreserveFormattingBox");
-        var formatSection = new StackPanel { Spacing = 6 };
-        formatSection.Children.Add(OptionLabel(UiText.Get("PivotTableOptions_EmptyCellsLabel")));
-        formatSection.Children.Add(emptyCellsBox);
-        formatSection.Children.Add(OptionLabel(UiText.Get("PivotTableOptions_ErrorValuesLabel")));
-        formatSection.Children.Add(errorValuesBox);
-        formatSection.Children.Add(autofitColumnsBox);
-        formatSection.Children.Add(preserveFormattingBox);
+        var formatSection = WpfPivotOptionsGroupPanel();
+        AddWpfPivotLabeledControl(formatSection, UiText.Get("PivotTableOptions_EmptyCellsLabel"), emptyCellsBox);
+        AddWpfPivotLabeledControl(formatSection, UiText.Get("PivotTableOptions_ErrorValuesLabel"), errorValuesBox);
+        AddWpfPivotCheckBox(formatSection, autofitColumnsBox);
+        AddWpfPivotCheckBox(formatSection, preserveFormattingBox);
 
         var layoutTab = new StackPanel { Spacing = 10, Margin = new Thickness(12) };
         layoutTab.Children.Add(MakeSectionGroupBox(UiText.Get("PivotTableOptions_LayoutSectionGroup"), layoutSection));
@@ -278,13 +275,13 @@ public sealed partial class MainWindow
         layoutTab.Children.Add(new Border { Height = PivotOptionsPlanner.LayoutAndFormatAvaloniaSpacerHeight });
 
         // ── Tab: Totals & Filters ──────────────────────────────────────────────
-        var grandTotalsSection = new StackPanel { Spacing = 4 };
-        grandTotalsSection.Children.Add(rowGrandTotalsBox);
-        grandTotalsSection.Children.Add(columnGrandTotalsBox);
+        var grandTotalsSection = WpfPivotOptionsGroupPanel();
+        AddWpfPivotCheckBox(grandTotalsSection, rowGrandTotalsBox);
+        AddWpfPivotCheckBox(grandTotalsSection, columnGrandTotalsBox);
 
-        var subtotalsSection = new StackPanel { Spacing = 6 };
-        subtotalsSection.Children.Add(subtotalsBox);
-        subtotalsSection.Children.Add(subtotalPlacementBox);
+        var subtotalsSection = WpfPivotOptionsGroupPanel();
+        AddWpfPivotCheckBox(subtotalsSection, subtotalsBox);
+        AddWpfPivotLabeledControl(subtotalsSection, UiText.Get("PivotTableOptions_SubtotalPlacementLabel"), subtotalPlacementBox);
 
         var totalsTab = new StackPanel { Spacing = 10, Margin = new Thickness(12) };
         totalsTab.Children.Add(MakeSectionGroupBox(UiText.Get("PivotTableOptions_GrandTotalsGroup"), grandTotalsSection));
@@ -411,14 +408,16 @@ public sealed partial class MainWindow
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
         tabs.SelectionChanged += (_, _) =>
         {
-            dialog.Height = tabs.SelectedIndex == 0
+            dialog.Height = (tabs.SelectedIndex == 0
                 ? PivotOptionsPlanner.LayoutAndFormatCaptureHeight
-                : PivotOptionsPlanner.DialogMinHeight;
+                : PivotOptionsPlanner.DialogMinHeight) - WpfNoResizeClientFrameHeight;
         };
 
-        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 0, 0, 37));
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);
 
-        var content = new DockPanel { Margin = new Thickness(16, 16, 31, 16) };
+        // The window is the WPF client area, so the content keeps the WPF 16px margin on every side
+        // (it no longer pads out the Windows frame band on the right and bottom).
+        var content = new DockPanel { Margin = new Thickness(16) };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         content.Children.Add(buttonRow);
         content.Children.Add(tabs);
@@ -488,6 +487,28 @@ public sealed partial class MainWindow
     }
 
     // ── Pivot option control factories ────────────────────────────────────────
+    // WPF PivotDialogLayout.CreateGroupPanel insets the group content 10,8,10,10; MakeSectionGroupBox
+    // already pads 8 on every side.
+    private static StackPanel WpfPivotOptionsGroupPanel() => new() { Margin = new Thickness(2, 0, 2, 2) };
+
+    // WPF PivotTableOptionsDialog.AddLabeledControl: a label 3px below the previous row and 4px above
+    // its control, which keeps an 8px bottom margin.
+    private static void AddWpfPivotLabeledControl(Panel panel, string label, Control control)
+    {
+        var labelBlock = OptionLabel(label);
+        labelBlock.Margin = new Thickness(0, 3, 0, 4);
+        control.Margin = new Thickness(0, 0, 0, 8);
+        panel.Children.Add(labelBlock);
+        panel.Children.Add(control);
+    }
+
+    // WPF PivotTableOptionsDialog.AddCheckBox: 6px under each check box.
+    private static void AddWpfPivotCheckBox(Panel panel, CheckBox checkBox)
+    {
+        checkBox.Margin = new Thickness(0, 0, 0, 6);
+        panel.Children.Add(checkBox);
+    }
+
     private static TextBlock OptionLabel(string text) => new()
     {
         Text = StripDisplayMnemonic(text),

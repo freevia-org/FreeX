@@ -381,6 +381,7 @@ public sealed partial class MainWindow
 
         foreach (var (surfaceId, opener) in dialogOpeners)
         {
+            ResetParityDialogCaptureSession();
             results.Add(await CaptureModalSurfaceAsync(
                 outputDirectory,
                 surfaceId,
@@ -408,6 +409,7 @@ public sealed partial class MainWindow
 
         foreach (var (surfaceId, opener, tabNames) in tabDialogs)
         {
+            ResetParityDialogCaptureSession();
             results.AddRange(await CaptureModalTabsAsync(
                 outputDirectory,
                 surfaceId,
@@ -485,6 +487,26 @@ public sealed partial class MainWindow
         return results;
     }
 
+    /// <summary>
+    /// Gives every paired dialog capture the same starting document the WPF capture builds for its
+    /// dialogs: a fresh parity demo workbook, the Demo sheet active, A1 selected. Without this the
+    /// dialogs inherited whatever the earlier surfaces left behind (20 overflow sheets, seeded names,
+    /// charts, validation rules), so data-bound dialogs such as Rename Sheet, Subtotal, Page Setup and
+    /// Workbook Statistics showed different content from the WPF shell for harness-only reasons.
+    /// </summary>
+    private void ResetParityDialogCaptureSession()
+    {
+        var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
+        ReplaceSession(ParityCaptureWorkbookSessionFactory.Create(
+            _sessionFactory,
+            viewportHeight,
+            viewportWidth,
+            includeObjects: true));
+        RefreshViewportSizeForZoom();
+        ClearSelectedDrawingObject();
+        RefreshShell("Ready");
+    }
+
     private static Task ReleaseCompletedDialogCaptureResourcesAsync()
     {
         // Closed Avalonia windows can retain sizeable visual/native graphs until a full collection.
@@ -507,13 +529,13 @@ public sealed partial class MainWindow
         ("dialog.GoToSpecial", () => ShowGoToSpecialDialogAsync()),
         ("dialog.CreateTable", () => ShowCreateTableParityDialogAsync()),
         ("dialog.RecommendedPivotTables", async () => { await ShowRecommendedPivotTablesDialogAsync(); }),
-        ("dialog.Sort", () => ShowSortDialogAsync()),
+        ("dialog.Sort", async () =>
+        {
+            await ShowSortInputDialogAsync(SortDialogParityFixture.CreateRange(_session.ActiveSheet.Id));
+        }),
         ("dialog.SortOptions", async () =>
         {
-            await ShowSortOptionsDialogAsync(new SortDialogOptions(
-                CaseSensitive: true,
-                LeftToRight: true,
-                FirstKeySortOrder: "Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec"));
+            await ShowSortOptionsDialogAsync(SortDialogParityFixture.CreateOptions());
         }),
         ("dialog.AutoFilter", () => ShowAutoFilterParityDialogAsync()),
         ("dialog.TextToColumns", () => ShowTextToColumnsParityDialogAsync()),
@@ -992,8 +1014,13 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = plan.Title,
-            Width = WorkbookFileDialogSurfacePlanner.Width,
-            Height = WorkbookFileDialogSurfacePlanner.Height,
+            // The WPF surface is a NoResize Width x Height window (an outer size) in the 12px
+            // dialog font; Avalonia sizes the client area, so the measured Windows frame comes off both.
+            Width = WorkbookFileDialogSurfacePlanner.Width - WpfNoResizeFrameWidth,
+            Height = WorkbookFileDialogSurfacePlanner.Height - WpfNoResizeClientFrameHeight,
+            CanResize = false,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -1020,21 +1047,27 @@ public sealed partial class MainWindow
             },
         };
 
+        // WPF: a 300px file-name box and file-type drop-down at the default 22px control height.
         var fileNameBox = new TextBox
         {
             Text = plan.FileName,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
-            Height = 26,
-            MinHeight = 26,
-            Padding = new Thickness(4, 3, 4, 3),
+            Width = 300,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            Height = 22,
+            MinHeight = 22,
+            Padding = new Thickness(3, 0, 3, 0),
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
         AutomationProperties.SetAutomationId(fileNameBox, WorkbookFileDialogSurfacePlanner.FileNameBoxAutomationId);
 
         var fileTypeBox = new ComboBox
         {
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
-            Height = 26,
-            MinHeight = 26,
+            Width = 300,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            Height = 22,
+            MinHeight = 22,
+            Padding = new Thickness(6, 0, 4, 0),
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             ItemsSource = plan.FileTypes.Select(type => $"{type.DisplayName} ({string.Join("; ", type.Patterns)})").ToArray(),
             SelectedIndex = 0,
         };
@@ -1051,8 +1084,9 @@ public sealed partial class MainWindow
 
         var primaryButton = new Button { Content = plan.PrimaryCommandText, IsDefault = true };
         var cancelFileButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true };
-        ApplyDialogButtonChrome(primaryButton, 84, isDefault: true);
-        ApplyDialogButtonChrome(cancelFileButton, 84);
+        // WPF surface: 82px Save/Open and Cancel buttons.
+        ApplyDialogButtonChrome(primaryButton, 82, isDefault: true);
+        ApplyDialogButtonChrome(cancelFileButton, 82);
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -1097,130 +1131,10 @@ public sealed partial class MainWindow
         form.Children.Add(control);
     }
 
-    private async Task ShowExportOptionsParityDialogAsync()
-    {
-        var availability = ExportOptionsDialogSurfacePlanner.CreateFormatAvailability(ExportFileFormat.Pdf);
-        var dialog = new Window
-        {
-            Title = UiText.Get(ExportOptionsDialogSurfacePlanner.TitleResourceKey),
-            Width = ExportOptionsDialogSurfacePlanner.Width,
-            SizeToContent = SizeToContent.Height,
-            MaxHeight = ExportOptionsDialogSurfacePlanner.MaxHeight,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-        };
-        AutomationProperties.SetAutomationId(dialog, ExportOptionsDialogSurfacePlanner.DialogAutomationId);
-
-        var activeSheetButton = new RadioButton { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_ActiveSheetS")), IsChecked = true };
-        var selectionButton = new RadioButton { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_SelectedRange")) };
-        var workbookButton = new RadioButton { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_Workbook")) };
-        var allPagesButton = new RadioButton { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_All")), GroupName = "PageRange", IsChecked = true };
-        var pagesButton = new RadioButton { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_Pages")), GroupName = "PageRange" };
-        var fromPageBox = new TextBox { Width = 56, Height = 24, MinHeight = 24, Padding = new Thickness(4, 2, 4, 2), IsEnabled = false };
-        var toPageBox = new TextBox { Width = 56, Height = 24, MinHeight = 24, Padding = new Thickness(4, 2, 4, 2), IsEnabled = false };
-        var documentPropertiesBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_IncludeDocumentProperties")) };
-        var ignorePrintAreasBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_IgnorePrintAreas")) };
-        var bookmarksBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_CreatePdfBookmarks")) };
-        var bookmarkModeBox = new ComboBox { Width = 180, Height = 28, MinHeight = 28, VerticalContentAlignment = AvaloniaVerticalAlignment.Center, IsEnabled = false };
-        bookmarkModeBox.Items.Add(UiText.Get("ExportOptions_SheetNames"));
-        bookmarkModeBox.Items.Add(UiText.Get("ExportOptions_PrintTitles"));
-        bookmarkModeBox.Items.Add(UiText.Get("ExportOptions_PageNumbers"));
-        bookmarkModeBox.SelectedIndex = 0;
-        var initialViewBox = new ComboBox { Width = 180, Height = 28, MinHeight = 28, VerticalContentAlignment = AvaloniaVerticalAlignment.Center, IsEnabled = availability.PdfInitialViewEnabled };
-        initialViewBox.Items.Add(UiText.Get("ExportOptions_SinglePage"));
-        initialViewBox.Items.Add(UiText.Get("ExportOptions_OneContinuousColumn"));
-        initialViewBox.Items.Add(UiText.Get("ExportOptions_TwoColumnsOddPagesLeft"));
-        initialViewBox.Items.Add(UiText.Get("ExportOptions_TwoColumnsOddPagesRight"));
-        initialViewBox.SelectedIndex = 0;
-        var openModeBox = new ComboBox { Width = 180, Height = 28, MinHeight = 28, VerticalContentAlignment = AvaloniaVerticalAlignment.Center, IsEnabled = availability.PdfOpenModeEnabled };
-        openModeBox.Items.Add(UiText.Get("ExportOptions_Normal"));
-        openModeBox.Items.Add(UiText.Get("ExportOptions_BookmarksVisible"));
-        openModeBox.Items.Add(UiText.Get("ExportOptions_FullScreen"));
-        openModeBox.SelectedIndex = 0;
-        var pdfLanguageBox = new TextBox { Width = 88, Height = 24, MinHeight = 24, Padding = new Thickness(4, 2, 4, 2), Text = "en-US", IsEnabled = availability.PdfLanguageEnabled };
-        var bitmapTextBox = new CheckBox
-        {
-            Content = StripDisplayMnemonic(UiText.Get("ExportOptions_BitmapTextWhenFontsMayNotBeEmbedded")),
-            IsEnabled = availability.PdfBitmapTextEnabled,
-        };
-        var pdfABox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_PdfACompliantNotSupported")), IsEnabled = false };
-        var structureTagsBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_DocumentStructureTagsNotSupported")), IsEnabled = false };
-        var standardQualityButton = new RadioButton { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_Standard")), IsChecked = true };
-        var minimumSizeButton = new RadioButton { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_MinimumSize")), IsEnabled = availability.MinimumSizeEnabled };
-        var openAfterPublishBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_OpenAfterPublishing")), Margin = new Thickness(0, 8, 0, 0) };
-
-        bookmarksBox.IsEnabled = availability.PdfBookmarksEnabled;
-        bookmarksBox.IsCheckedChanged += (_, _) => bookmarkModeBox.IsEnabled = bookmarksBox.IsChecked == true && availability.PdfBookmarksEnabled;
-        pagesButton.IsCheckedChanged += (_, _) =>
-        {
-            var enabled = pagesButton.IsChecked == true;
-            fromPageBox.IsEnabled = enabled;
-            toPageBox.IsEnabled = enabled;
-        };
-
-        var stack = new StackPanel { Margin = new Thickness(16), Spacing = 2 };
-        stack.Children.Add(CreateExportOptionsSectionLabel("ExportOptions_PublishWhat"));
-        stack.Children.Add(activeSheetButton);
-        stack.Children.Add(selectionButton);
-        stack.Children.Add(workbookButton);
-        stack.Children.Add(CreateExportOptionsSectionLabel("ExportOptions_PageRange", topMargin: 12));
-        stack.Children.Add(allPagesButton);
-
-        var pageRangePanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0), Spacing = 6 };
-        pageRangePanel.Children.Add(pagesButton);
-        pageRangePanel.Children.Add(new Label { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_From")), Target = fromPageBox, VerticalAlignment = AvaloniaVerticalAlignment.Center });
-        pageRangePanel.Children.Add(fromPageBox);
-        pageRangePanel.Children.Add(new Label { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_To")), Target = toPageBox, VerticalAlignment = AvaloniaVerticalAlignment.Center });
-        pageRangePanel.Children.Add(toPageBox);
-        stack.Children.Add(pageRangePanel);
-
-        stack.Children.Add(CreateExportOptionsSectionLabel("ExportOptions_PdfXpsOptions", topMargin: 14));
-        stack.Children.Add(documentPropertiesBox);
-        stack.Children.Add(ignorePrintAreasBox);
-        stack.Children.Add(bookmarksBox);
-        stack.Children.Add(CreateExportOptionsLabeledControl("ExportOptions_BookmarkMode", bookmarkModeBox, leftIndent: 22));
-        stack.Children.Add(CreateExportOptionsLabeledControl("ExportOptions_InitialView", initialViewBox));
-        stack.Children.Add(CreateExportOptionsLabeledControl("ExportOptions_OpenMode", openModeBox));
-        stack.Children.Add(CreateExportOptionsLabeledControl("ExportOptions_PdfLanguage", pdfLanguageBox));
-        stack.Children.Add(bitmapTextBox);
-        stack.Children.Add(pdfABox);
-        stack.Children.Add(structureTagsBox);
-        stack.Children.Add(standardQualityButton);
-        stack.Children.Add(minimumSizeButton);
-        stack.Children.Add(openAfterPublishBox);
-
-        var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), IsDefault = true };
-        var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true };
-        ApplyDialogButtonChrome(okButton, 84, isDefault: true);
-        ApplyDialogButtonChrome(cancelButton, 84);
-        okButton.Click += (_, _) => dialog.Close();
-        cancelButton.Click += (_, _) => dialog.Close();
-
-        // Buttons live in their own row docked to the bottom of the dialog so they stay fully
-        // visible even when the option list is tall — mirrors the compact WPF layout where the
-        // whole dialog sizes to content and OK/Cancel are never clipped.
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(16, 8, 16, 12),
-            Spacing = 8,
-            Children = { okButton, cancelButton },
-        };
-
-        var root = new DockPanel();
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
-        root.Children.Add(buttonRow);
-        root.Children.Add(new ScrollViewer
-        {
-            Content = stack,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-        });
-
-        dialog.Content = root;
-        dialog.Opened += (_, _) => activeSheetButton.Focus();
-        await dialog.ShowDialog(this);
-    }
+    // The capture renders the production Export Options dialog (the WPF reference is the production
+    // ExportOptionsDialog too), so its fonts, control heights and spacing are the shipped ones.
+    private async Task ShowExportOptionsParityDialogAsync() =>
+        _ = await ShowExportOptionsDialogAsync(ExportContentScope.ActiveSheet, ExportFormat.Pdf);
 
     private Task ShowTextToColumnsParityDialogAsync()
     {
@@ -1300,6 +1214,9 @@ public sealed partial class MainWindow
             SizeToContent = SizeToContent.Manual,
             MaxHeight = 560,
             Background = Brushes.White,
+            // WPF AutoFilterDialog renders every row in the 12px dialog font.
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             WindowDecorations = global::Avalonia.Controls.WindowDecorations.None,
             CanResize = false,
@@ -1333,27 +1250,38 @@ public sealed partial class MainWindow
                 case AutoFilterMenuItemKind.FilterByColor:
                 case AutoFilterMenuItemKind.FilterFamily:
                 case AutoFilterMenuItemKind.FilterFamilyCommand:
-                    stack.Children.Add(CreateAutoFilterParityMenuButton(item.Label, item.IsEnabled));
+                    var menuButton = CreateAutoFilterParityMenuButton(item);
+                    // WPF AutoFilterDialog: the filter-family rows sit 4px below the row above.
+                    if (item.Kind is AutoFilterMenuItemKind.FilterFamily or AutoFilterMenuItemKind.FilterFamilyCommand)
+                        menuButton.Margin = new Thickness(0, 4, 0, 0);
+                    stack.Children.Add(menuButton);
                     break;
                 case AutoFilterMenuItemKind.Search:
-                    stack.Children.Add(new TextBox
+                    // WPF AutoFilterDialog: a 22px search box, 4px above and below, with the
+                    // watermark 9px in and vertically centred.
+                    var searchBox = new TextBox
                     {
                         PlaceholderText = item.Label,
-                        Height = 24,
-                        MinHeight = 24,
-                        Margin = new Thickness(0, 2, 0, 4),
+                        Height = 22,
+                        MinHeight = 22,
+                        MaxHeight = 22,
+                        Margin = new Thickness(0, 4, 0, 4),
+                        Padding = new Thickness(8, 0, 4, 0),
+                        VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+                        FontSize = 12,
                         FontFamily = FormulaBarFontFamily,
-                    });
+                    };
+                    stack.Children.Add(searchBox);
                     break;
                 case AutoFilterMenuItemKind.SelectAll:
-                    stack.Children.Add(new CheckBox
+                    var selectAllBox = new CheckBox
                     {
                         Content = item.Label,
                         IsChecked = true,
                         Margin = new Thickness(0, 0, 0, 4),
-                        FontSize = 12,
-                        FontFamily = FormulaBarFontFamily,
-                    });
+                    };
+                    ApplyDialogCheckBoxChrome(selectAllBox);
+                    stack.Children.Add(selectAllBox);
                     break;
                 case AutoFilterMenuItemKind.ChecklistItem:
                     var box = new CheckBox
@@ -1361,9 +1289,12 @@ public sealed partial class MainWindow
                         Content = item.Label,
                         IsChecked = true,
                         Tag = item.Value,
-                        FontSize = 12,
-                        FontFamily = FormulaBarFontFamily,
+                        // WPF list rows: a 16px check box inside a list item with (4,1) padding.
+                        Margin = new Thickness(5, 1, 4, 2),
                     };
+                    ApplyDialogCheckBoxChrome(box);
+                    box.MinHeight = 16;
+                    box.MaxHeight = 16;
                     checkBoxes.Add(box);
                     break;
                 case AutoFilterMenuItemKind.Separator:
@@ -1377,13 +1308,28 @@ public sealed partial class MainWindow
             var checklistPanel = new StackPanel();
             foreach (var box in checkBoxes)
                 checklistPanel.Children.Add(box);
-            stack.Children.Add(new ScrollViewer { Content = checklistPanel, Height = 180 });
+            // WPF hosts the values in a bordered 176px list box with 4px below.
+            stack.Children.Add(new Border
+            {
+                Height = 176,
+                Margin = new Thickness(0, 0, 0, 4),
+                Background = Brushes.White,
+                BorderBrush = Brush(0xAB, 0xAD, 0xB3),
+                BorderThickness = new Thickness(1),
+                Child = new ScrollViewer
+                {
+                    Content = checklistPanel,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                },
+            });
         }
 
         var okButton = new Button { Content = "OK", IsDefault = true };
         var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true };
-        ApplyDialogButtonChrome(okButton, 72, isDefault: true);
-        ApplyDialogButtonChrome(cancelButton, 72);
+        // WPF AutoFilterDialog: 76px OK and Cancel buttons.
+        ApplyDialogButtonChrome(okButton, 76, isDefault: true);
+        ApplyDialogButtonChrome(cancelButton, 76);
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 8, 0, 0));
 
         var root = new DockPanel { Margin = new Thickness(10), LastChildFill = true };
@@ -1398,27 +1344,65 @@ public sealed partial class MainWindow
         return root;
     }
 
-    private static Button CreateAutoFilterParityMenuButton(string label, bool isEnabled)
+    /// <summary>
+    /// WPF AutoFilterDialog.CreateMenuCommandButton / SetMenuCommandButtonContent: a borderless
+    /// 22px row with (5,2) padding holding the 12px access-key label and, for the filter
+    /// families, a continuation chevron at the far right. The captured WPF dialog draws no icon
+    /// in front of the label, so the row carries none.
+    /// </summary>
+    private static Button CreateAutoFilterParityMenuButton(AutoFilterMenuItem item)
     {
-        var button = new Button
+        var content = new AvaloniaGrid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
+
+        // WPF hosts the label in an AccessText: the access-key marker is consumed, not drawn.
+        var label = new AccessText
         {
-            Content = label,
+            Text = item.Label,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 0, item.ShowsContinuation ? 8 : 0, 0),
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        AvaloniaGrid.SetColumn(label, 1);
+        content.Children.Add(label);
+
+        if (item.ShowsContinuation)
+        {
+            var cascade = new TextBlock
+            {
+                Text = "\u203A",
+                FontSize = 18,
+                FontFamily = FormulaBarFontFamily,
+                Margin = new Thickness(0, -2, 1, 0),
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            };
+            AvaloniaGrid.SetColumn(cascade, 2);
+            content.Children.Add(cascade);
+        }
+
+        return new Button
+        {
+            Content = content,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Stretch,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+            Padding = new Thickness(5, 2),
+            MinHeight = 22,
             Background = Brushes.Transparent,
             BorderThickness = new Thickness(0),
-            IsEnabled = isEnabled,
+            IsEnabled = item.IsEnabled,
+            FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
-        return button;
     }
 
+    // WPF AutoFilterDialog.AddFilterMenuSeparator: a separator with 4px above and below.
     private static void AddAutoFilterParitySeparator(StackPanel stack) =>
         stack.Children.Add(new Border
         {
             Height = 1,
             Background = Brush(0xDA, 0xDC, 0xDF),
-            Margin = new Thickness(0, 3),
+            Margin = new Thickness(0, 4),
         });
 
     private sealed class AvaloniaAutoFilterParityTextProvider : IAutoFilterMenuTextProvider
@@ -1665,8 +1649,13 @@ public sealed partial class MainWindow
     private async Task ShowChangeChartTypeParityDialogAsync() =>
         await ShowWithSelectedParityChartAsync(ShowChangeChartTypeDialog);
 
-    private async Task ShowFormatChartAreaParityDialogAsync() =>
+    private async Task ShowFormatChartAreaParityDialogAsync()
+    {
+        if (EnsureParityChart() is { } chart)
+            ChartAreaParityFixture.Apply(chart);
+
         await ShowWithSelectedParityChartAsync(ShowFormatChartAreaDialog);
+    }
 
     private async Task ShowShapeEffectsParityDialogAsync() =>
         await ShowWithSelectedParityShapeAsync(async () =>
@@ -1864,8 +1853,9 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = title,
-            Width = PivotSlicerTimelineDialogContract.Width,
-            Height = PivotSlicerTimelineDialogContract.Height,
+            // The contract is the WPF outer NoResize window; this window is its client area.
+            Width = PivotSlicerTimelineDialogContract.Width - WpfNoResizeFrameWidth,
+            Height = PivotSlicerTimelineDialogContract.Height - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Manual,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
@@ -1873,84 +1863,44 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, automationId);
 
+        // The content is built with the production Insert Slicer / Insert Timeline helpers
+        // (ShowInsertPivotControlDialogAsync), so the capture shows the WPF group-box caption on the
+        // frame and the shared pivot label/row/button metrics rather than a bold heading in a card.
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, PivotDialogChromeStyle);
+
         var fieldBox = new ComboBox
         {
+            IsEditable = true,
             ItemsSource = headers,
             SelectedIndex = Math.Max(0, Array.IndexOf(headers, selectedField)),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
-            Height = 24,
-            MinHeight = 24,
-            // Without explicit padding + vertical-centering the Fluent ComboBox's default content
-            // padding pushes the selected item out of the forced 24px clip, leaving it visibly cut off.
-            // Match the proven chart/drawing combo chrome so the selected field reads fully (win.png).
-            Padding = new Thickness(5, 0, 4, 0),
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        ApplyPivotComboBoxChrome(fieldBox);
+        fieldBox.Text = headers[Math.Max(0, Array.IndexOf(headers, selectedField))];
         AutomationProperties.SetAutomationId(fieldBox, fieldListAutomationId);
 
-        var captionBox = new TextBox
-        {
-            Text = captionText,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
-            Height = 24,
-            MinHeight = 24,
-            Padding = new Thickness(4, 2, 4, 2),
-        };
+        var captionBox = new TextBox { Text = captionText };
+        ApplyPivotTextBoxChrome(captionBox);
 
-        var groupBody = new StackPanel { Spacing = 4 };
-        groupBody.Children.Add(new TextBlock
-        {
-            Text = UiText.Get(groupResourceKey).Replace("_", string.Empty),
-            FontWeight = FontWeight.SemiBold,
-            Margin = new Thickness(0, 0, 0, 6),
-        });
-        groupBody.Children.Add(new Label
-        {
-            Content = UiText.Get(fieldLabelResourceKey),
-            Target = fieldBox,
-            Padding = new Thickness(0, 0, 0, 2),
-        });
-        groupBody.Children.Add(fieldBox);
-        groupBody.Children.Add(new Label
-        {
-            Content = UiText.Get(captionLabelResourceKey),
-            Target = captionBox,
-            Margin = new Thickness(0, 8, 0, 0),
-            Padding = new Thickness(0, 0, 0, 2),
-        });
-        groupBody.Children.Add(captionBox);
-
-        var group = new Border
-        {
-            Child = groupBody,
-            BorderBrush = Brush(200, 200, 200),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(2),
-            Padding = new Thickness(12, 10, 12, 12),
-        };
+        var groupContent = new StackPanel();
+        AddPivotDialogLabeledControl(groupContent, UiText.Get(fieldLabelResourceKey), fieldBox);
+        AddPivotDialogLabeledControl(groupContent, UiText.Get(captionLabelResourceKey), captionBox);
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
+        ApplyPivotButtonChrome(okButton, PivotDialogButtonMinWidth, isDefault: true);
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
-        ApplyDialogButtonChrome(okButton, 84, isDefault: true);
-        ApplyDialogButtonChrome(cancelButton, 84);
+        ApplyPivotButtonChrome(cancelButton, PivotDialogButtonMinWidth);
         okButton.Click += (_, _) => dialog.Close();
         cancelButton.Click += (_, _) => dialog.Close();
 
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
-            Spacing = 12,
             Children =
             {
-                group,
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 8,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    // WPF order: [OK] [Cancel]
-                    Children = { okButton, cancelButton },
-                },
+                CreatePivotDialogGroupBox(UiText.Get(groupResourceKey), groupContent),
+                // WPF order: [OK] [Cancel]
+                CreatePivotDialogButtonRow(okButton, cancelButton),
             },
         };
 
@@ -2565,9 +2515,17 @@ public sealed partial class MainWindow
     {
         (width, height) = surfaceId switch
         {
-            "dialog.ExportOptions" => (ExportOptionsDialogSurfacePlanner.CaptureWidth, ExportOptionsDialogSurfacePlanner.CaptureHeight),
-            "dialog.ProtectWorkbook" => (ProtectionDialogPlanner.ProtectWorkbookCaptureWidth, ProtectionDialogPlanner.ProtectWorkbookCaptureHeight),
-            "dialog.Sparkline" => (SparklinePlanner.InsertDialogCaptureWidth, SparklinePlanner.InsertDialogCaptureHeight),
+            // The WPF captures pin these as OUTER window sizes; the Avalonia window is the client
+            // area, so it is captured at the same size minus the measured Windows frame.
+            "dialog.ExportOptions" => (
+                ExportOptionsDialogSurfacePlanner.CaptureWidth - WpfNoResizeFrameWidth,
+                ExportOptionsDialogSurfacePlanner.CaptureHeight - WpfNoResizeClientFrameHeight),
+            "dialog.ProtectWorkbook" => (
+                ProtectionDialogPlanner.ProtectWorkbookCaptureWidth - WpfNoResizeFrameWidth,
+                ProtectionDialogPlanner.ProtectWorkbookCaptureHeight - WpfNoResizeClientFrameHeight),
+            "dialog.Sparkline" => (
+                SparklinePlanner.InsertDialogCaptureWidth - WpfNoResizeFrameWidth,
+                SparklinePlanner.InsertDialogCaptureHeight - WpfNoResizeClientFrameHeight),
             _ => (0, 0)
         };
 

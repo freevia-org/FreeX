@@ -8,8 +8,10 @@ using Avalonia.Media;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using Free.Shared.Shell.Avalonia;
 
 using AvaloniaGrid = Avalonia.Controls.Grid;
+using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
@@ -28,11 +30,16 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
-    private const double PivotPaneWidth = 248;
+    // WPF PivotFieldListPane: Width=320, Background=#F7F7F7, BorderBrush=#C8C8C8 on the leading edge.
+    private const double PivotPaneWidth = 320;
+    private const double PivotPaneControlHeight = 24;
 
-    private static readonly IBrush PivotPaneBackground = Brush(247, 248, 250);
+    private static readonly IBrush PivotPaneBackground = Brush(0xF7, 0xF7, 0xF7);
+    private static readonly IBrush PivotPaneBorderBrush = Brush(0xC8, 0xC8, 0xC8);
     private static readonly IBrush PivotBucketBackground = Brushes.White;
-    private static readonly IBrush PivotFieldChipBackground = Brush(236, 240, 244);
+    // The WPF ListBox border and selected-row fill.
+    private static readonly IBrush PivotListBorderBrush = Brush(0xAB, 0xAD, 0xB3);
+    private static readonly IBrush PivotFieldSelectedBackground = Brush(0xCB, 0xE8, 0xF6);
     private static readonly IBrush PivotDropHighlight = Brush(225, 244, 242);
 
     private readonly Border _pivotFieldPaneHost = new();
@@ -48,11 +55,15 @@ public sealed partial class MainWindow
     private PivotPaneDragItem? _pivotPaneDragItem;
     private readonly List<PivotDropZone> _pivotDropZones = [];
 
+    // The rendered field rows and the row the move buttons act on.
+    private readonly List<(Border Row, PivotFieldListItemModel Field)> _pivotPaneFieldRows = [];
+    private PivotFieldListItemModel? _pivotPaneSelectedField;
+
     private Control BuildPivotFieldPaneChrome()
     {
         _pivotFieldPaneHost.Width = PivotPaneWidth;
         _pivotFieldPaneHost.Background = PivotPaneBackground;
-        _pivotFieldPaneHost.BorderBrush = ToolbarBorder;
+        _pivotFieldPaneHost.BorderBrush = PivotPaneBorderBrush;
         _pivotFieldPaneHost.BorderThickness = new Thickness(1, 0, 0, 0);
         _pivotFieldPaneHost.Focusable = true;
         _pivotFieldPaneHost.IsVisible = false;
@@ -80,6 +91,8 @@ public sealed partial class MainWindow
                 _pivotFieldPaneSearchBox = null;
                 _pivotPaneSignature = null;
                 _pivotPaneSearchText = string.Empty;
+                _pivotPaneSelectedField = null;
+                _pivotPaneFieldRows.Clear();
             }
 
             ObservePivotRuntimeState("pane-hidden");
@@ -164,29 +177,49 @@ public sealed partial class MainWindow
     {
         _pivotFieldPaneBuildCount++;
         _pivotDropZones.Clear();
+        _pivotPaneFieldRows.Clear();
         var model = PivotFieldListPaneBuilder.Build(pivot, headers);
 
-        var layout = new DockPanel { Margin = new Thickness(8) };
-
-        var title = new TextBlock
+        // WPF: Grid Margin=10 with rows Auto, Auto, Auto, 0.85*, Auto, 1.25*.
+        var layout = new AvaloniaGrid
         {
-            Text = UiText.Get("PivotLoc_FieldsPaneTitle"),
-            FontWeight = FontWeight.SemiBold,
-            Foreground = HeaderForeground,
-            Margin = new Thickness(2, 0, 0, 6),
+            Margin = new Thickness(10),
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,0.85*,Auto,1.25*"),
         };
-        DockPanel.SetDock(title, Dock.Top);
-        layout.Children.Add(title);
 
+        AddGridChild(layout, BuildPivotPaneHeader(), 0, 0);
+
+        // WPF: FontSize=12 Margin=0,8,0,3.
+        AddGridChild(
+            layout,
+            new TextBlock
+            {
+                Text = UiText.Get("MainWindow_Text_ChooseFieldsToAddToReport"),
+                FontSize = 12,
+                Foreground = HeaderForeground,
+                Margin = new Thickness(0, 8, 0, 3),
+            },
+            1,
+            0);
+
+        // WPF: Height=24 Margin=0,0,0,4, vertically centered text.
         var searchBox = new TextBox
         {
-            PlaceholderText = UiText.Get("PivotLoc_SearchFields"),
             Text = _pivotPaneSearchText,
-            Margin = new Thickness(0, 0, 0, 8),
+            Height = PivotPaneControlHeight,
+            MinHeight = PivotPaneControlHeight,
+            FontSize = 12,
+            Padding = new Thickness(4, 0, 4, 0),
+            Margin = new Thickness(0, 0, 0, 4),
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+            CornerRadius = new CornerRadius(0),
+            Background = PivotBucketBackground,
+            BorderBrush = PivotListBorderBrush,
+            BorderThickness = new Thickness(1),
         };
         _pivotFieldPaneSearchBox = searchBox;
         AutomationProperties.SetAutomationId(searchBox, "PivotFieldListSearchBox");
-        AutomationProperties.SetName(searchBox, UiText.Get("PivotLoc_SearchFields"));
+        AutomationProperties.SetName(searchBox, UiText.Get("MainWindow_AutomationName_SearchPivotTableFields"));
         searchBox.TextChanged += (_, _) =>
         {
             var searchText = searchBox.Text ?? string.Empty;
@@ -199,110 +232,216 @@ public sealed partial class MainWindow
             _pivotPaneSearchText = searchText;
             _pivotFieldPaneHost.Child = BuildPivotFieldPaneBody(pivot, headers);
         };
-        DockPanel.SetDock(searchBox, Dock.Top);
-        layout.Children.Add(searchBox);
+        AddGridChild(layout, searchBox, 2, 0);
 
-        var stack = new StackPanel { Spacing = 8 };
-        stack.Children.Add(BuildPivotAvailableBucket(pivot, headers, model.Available));
-        stack.Children.Add(BuildPivotBucket(pivot, headers, UiText.Get("PivotLoc_BucketFilters"), model.Filters));
-        stack.Children.Add(BuildPivotBucket(pivot, headers, UiText.Get("PivotLoc_BucketColumns"), model.Columns));
-        stack.Children.Add(BuildPivotBucket(pivot, headers, UiText.Get("PivotLoc_BucketRows"), model.Rows));
-        stack.Children.Add(BuildPivotBucket(pivot, headers, UiText.Get("PivotLoc_BucketValues"), model.Values));
-
-        layout.Children.Add(new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Content = stack,
-        });
-
+        AddGridChild(layout, BuildPivotAvailableBucket(pivot, headers), 3, 0);
+        AddGridChild(layout, BuildPivotMoveButtons(pivot, headers), 4, 0);
+        AddGridChild(layout, BuildPivotAreaGrid(pivot, headers, model), 5, 0);
         return layout;
     }
 
-    private Control BuildPivotAvailableBucket(
+    // WPF: a 22x22 close button docked right of a SemiBold 14px title.
+    private Control BuildPivotPaneHeader()
+    {
+        var closeButton = new Button { Content = "X" };
+        AvaloniaCompactDialogChrome.ApplyButton(
+            closeButton,
+            AvaloniaCompactDialogChrome.WindowsStyle,
+            minWidth: 0,
+            fixedHeight: false);
+        closeButton.Width = 22;
+        closeButton.Height = 22;
+        closeButton.MinHeight = 0;
+        closeButton.Padding = new Thickness(0);
+        AutomationProperties.SetAutomationId(closeButton, "PivotFieldListCloseBtn");
+        AutomationProperties.SetName(closeButton, UiText.Get("MainWindow_AutomationName_ClosePivotTableFields"));
+        // The pane is only visible while it is not user-hidden, so the toggle closes it and keeps
+        // the ribbon field-list state in step.
+        closeButton.Click += (_, _) => TogglePivotFieldList();
+        DockPanel.SetDock(closeButton, Dock.Right);
+
+        var title = new TextBlock
+        {
+            Text = UiText.Get("PivotLoc_FieldsPaneTitle"),
+            FontWeight = FontWeight.SemiBold,
+            FontSize = 14,
+            Foreground = HeaderForeground,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        return new DockPanel { LastChildFill = true, Children = { closeButton, title } };
+    }
+
+    // WPF lists every source field with a check box that is ticked while the field is in the layout.
+    private Control BuildPivotAvailableBucket(PivotTableModel pivot, IReadOnlyList<string> headers)
+    {
+        var available = PivotFieldListPaneBuilder.FilterAvailableFields(
+            PivotFieldListPaneBuilder.BuildAvailableFields(headers, PivotFieldLayoutPlanner.Capture(pivot)),
+            _pivotPaneSearchText);
+        var fields = available
+            .Select(item => new PivotFieldListItemModel(
+                item.SourceFieldIndex,
+                item.Caption,
+                PivotFieldBucket.Available))
+            .ToList();
+        var body = new StackPanel();
+        for (var index = 0; index < fields.Count; index++)
+        {
+            body.Children.Add(BuildPivotFieldChip(
+                pivot,
+                headers,
+                fields[index],
+                showMenu: false,
+                isChecked: available[index].IsChecked));
+        }
+
+        var container = BuildPivotBucketContainer(PivotFieldBucket.Available, fields, body);
+        container.MinHeight = 96;
+        AutomationProperties.SetAutomationId(container, "PivotAvailableFieldsList");
+        AutomationProperties.SetName(container, UiText.Get("MainWindow_AutomationName_AvailablePivotTableFields"));
+        return container;
+    }
+
+    private Border BuildPivotBucket(
         PivotTableModel pivot,
         IReadOnlyList<string> headers,
         PivotFieldListBucketModel bucket)
     {
-        var filtered = PivotFieldListPaneBuilder.FilterByCaption(bucket.Fields, _pivotPaneSearchText);
-        var body = new StackPanel { Spacing = 2 };
-        if (filtered.Count == 0)
-            body.Children.Add(BuildPivotPlaceholder(UiText.Get("PivotLoc_NoFields")));
-        else
-            foreach (var field in filtered)
-                body.Children.Add(BuildPivotFieldChip(pivot, headers, field, showMenu: false));
+        var body = new StackPanel();
+        foreach (var field in bucket.Fields)
+            body.Children.Add(BuildPivotFieldChip(pivot, headers, field, showMenu: true));
 
-        return BuildPivotBucketContainer(
-            pivot,
-            headers,
-            UiText.Get("PivotLoc_ChooseFields"),
-            PivotFieldBucket.Available,
-            filtered,
-            body);
+        return BuildPivotBucketContainer(bucket.Bucket, bucket.Fields, body);
     }
 
-    private Control BuildPivotBucket(
-        PivotTableModel pivot,
-        IReadOnlyList<string> headers,
-        string title,
-        PivotFieldListBucketModel bucket)
-    {
-        var body = new StackPanel { Spacing = 2 };
-        if (bucket.IsEmpty)
-            body.Children.Add(BuildPivotPlaceholder(UiText.Get("PivotLoc_DropFieldsHere")));
-        else
-            foreach (var field in bucket.Fields)
-                body.Children.Add(BuildPivotFieldChip(pivot, headers, field, showMenu: true));
-
-        return BuildPivotBucketContainer(pivot, headers, title, bucket.Bucket, bucket.Fields, body);
-    }
-
+    // A WPF ListBox surface: white, square, one-pixel #ABADB3 border, scrolling its rows.
     private Border BuildPivotBucketContainer(
-        PivotTableModel pivot,
-        IReadOnlyList<string> headers,
-        string title,
         PivotFieldBucket bucketKind,
         IReadOnlyList<PivotFieldListItemModel> fields,
         StackPanel body)
     {
-        var header = new TextBlock
-        {
-            Text = title,
-            FontWeight = FontWeight.SemiBold,
-            FontSize = 11,
-            Foreground = HeaderForeground,
-            Margin = new Thickness(2, 0, 0, 4),
-        };
-
         var container = new Border
         {
             Background = PivotBucketBackground,
-            BorderBrush = ToolbarBorder,
+            BorderBrush = PivotListBorderBrush,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(6),
-            MinHeight = 44,
-            Child = new StackPanel { Children = { header, body } },
+            Child = new ScrollViewer
+            {
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Content = body,
+            },
         };
 
         _pivotDropZones.Add(new PivotDropZone(container, bucketKind, body.Children.ToList(), fields));
         return container;
     }
 
-    private static Control BuildPivotPlaceholder(string text) => new TextBlock
+    // WPF: a five-column UniformGrid (Margin=0,6,0,6) of buttons with Margin=1 and MinHeight=24 that
+    // act on the selected field.
+    private Control BuildPivotMoveButtons(PivotTableModel pivot, IReadOnlyList<string> headers)
     {
-        Text = text,
-        FontSize = 11,
-        Foreground = HeaderForeground,
-        Opacity = 0.6,
-        Margin = new Thickness(2, 2, 0, 2),
-    };
+        var buttons = new UniformGrid { Columns = 5, Margin = new Thickness(0, 6, 0, 6) };
+        buttons.Children.Add(CreatePivotPaneMoveButton(
+            "MainWindow_Content_Rows",
+            "MainWindow_AutomationName_AddSelectedPivotTableFieldToRows",
+            () => MoveSelectedPivotPaneField(pivot, headers, PivotFieldBucket.Rows)));
+        buttons.Children.Add(CreatePivotPaneMoveButton(
+            "MainWindow_Content_Columns",
+            "MainWindow_AutomationName_AddSelectedPivotTableFieldToColumns",
+            () => MoveSelectedPivotPaneField(pivot, headers, PivotFieldBucket.Columns)));
+        buttons.Children.Add(CreatePivotPaneMoveButton(
+            "MainWindow_Content_Values",
+            "MainWindow_AutomationName_AddSelectedPivotTableFieldToValues",
+            () => MoveSelectedPivotPaneField(pivot, headers, PivotFieldBucket.Values)));
+        buttons.Children.Add(CreatePivotPaneMoveButton(
+            "MainWindow_Content_Filters",
+            "MainWindow_AutomationName_AddSelectedPivotTableFieldToFilters",
+            () => MoveSelectedPivotPaneField(pivot, headers, PivotFieldBucket.Filters)));
+        buttons.Children.Add(CreatePivotPaneMoveButton(
+            "MainWindow_Content_Remove",
+            "MainWindow_AutomationName_RemoveSelectedPivotTableField",
+            () => MoveSelectedPivotPaneField(pivot, headers, PivotFieldBucket.Available)));
+        return buttons;
+    }
 
+    private static Button CreatePivotPaneMoveButton(string contentKey, string automationNameKey, Action action)
+    {
+        var button = new Button
+        {
+            Content = UiText.Get(contentKey),
+            Margin = new Thickness(1),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+        };
+        AvaloniaCompactDialogChrome.ApplyButton(
+            button,
+            AvaloniaCompactDialogChrome.WindowsStyle,
+            minWidth: 0,
+            fixedHeight: false);
+        button.MinHeight = PivotPaneControlHeight;
+        button.Padding = new Thickness(2, 1, 2, 1);
+        AutomationProperties.SetName(button, UiText.Get(automationNameKey));
+        button.Click += (_, _) => action();
+        return button;
+    }
+
+    // WPF: Filters and Columns above Rows and Values, an 8px gutter, a SemiBold heading over each
+    // list (Margin=0,0,0,3 on the first row, 0,8,0,3 on the second) and MinHeight=80 lists.
+    private Control BuildPivotAreaGrid(
+        PivotTableModel pivot,
+        IReadOnlyList<string> headers,
+        PivotFieldListPaneModel model)
+    {
+        var grid = new AvaloniaGrid
+        {
+            RowDefinitions = new RowDefinitions("Auto,*,Auto,*"),
+            ColumnDefinitions = new ColumnDefinitions("*,8,*"),
+        };
+        AddPivotArea(grid, pivot, headers, model.Filters, "MainWindow_Text_Filters", "PivotFiltersList", "MainWindow_AutomationName_PivotTableFiltersArea", 0, 0);
+        AddPivotArea(grid, pivot, headers, model.Columns, "MainWindow_Text_Columns", "PivotColumnsList", "MainWindow_AutomationName_PivotTableColumnsArea", 0, 2);
+        AddPivotArea(grid, pivot, headers, model.Rows, "MainWindow_Text_Rows", "PivotRowsList", "MainWindow_AutomationName_PivotTableRowsArea", 2, 0);
+        AddPivotArea(grid, pivot, headers, model.Values, "MainWindow_Text_Values", "PivotValuesList", "MainWindow_AutomationName_PivotTableValuesArea", 2, 2);
+        return grid;
+    }
+
+    private void AddPivotArea(
+        AvaloniaGrid grid,
+        PivotTableModel pivot,
+        IReadOnlyList<string> headers,
+        PivotFieldListBucketModel bucket,
+        string headingKey,
+        string automationId,
+        string automationNameKey,
+        int headingRow,
+        int column)
+    {
+        AddGridChild(
+            grid,
+            new TextBlock
+            {
+                Text = UiText.Get(headingKey),
+                FontWeight = FontWeight.SemiBold,
+                FontSize = 12,
+                Foreground = HeaderForeground,
+                Margin = new Thickness(0, headingRow == 0 ? 0 : 8, 0, 3),
+            },
+            headingRow,
+            column);
+
+        var list = BuildPivotBucket(pivot, headers, bucket);
+        list.MinHeight = 80;
+        AutomationProperties.SetAutomationId(list, automationId);
+        AutomationProperties.SetName(list, UiText.Get(automationNameKey));
+        AddGridChild(grid, list, headingRow + 1, column);
+    }
+
+    // One list row. An available field carries the WPF check box (ticked while the field is placed);
+    // the caption sits beside the box so the row still starts a drag.
     private Control BuildPivotFieldChip(
         PivotTableModel pivot,
         IReadOnlyList<string> headers,
         PivotFieldListItemModel field,
-        bool showMenu)
+        bool showMenu,
+        bool? isChecked = null)
     {
         var caption = new TextBlock
         {
@@ -310,18 +449,36 @@ public sealed partial class MainWindow
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Foreground = HeaderForeground,
             FontSize = 12,
+            TextTrimming = TextTrimming.CharacterEllipsis,
         };
 
         var row = new AvaloniaGrid
         {
             ColumnDefinitions =
             {
-                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
                 new ColumnDefinition { Width = GridLength.Auto },
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
                 new ColumnDefinition { Width = GridLength.Auto },
             },
         };
-        AddGridChild(row, caption, 0, 0);
+        AddGridChild(row, caption, 0, 1);
+
+        if (isChecked is { } placed)
+        {
+            var checkBox = new CheckBox
+            {
+                IsChecked = placed,
+                Margin = new Thickness(0, 0, 4, 0),
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            };
+            AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, AvaloniaCompactDialogChrome.WindowsStyle);
+            AutomationProperties.SetName(checkBox, field.Caption);
+            ToolTip.SetTip(
+                checkBox,
+                UiText.Get("MainWindow_TooltipDescription_AddOrRemoveThisFieldFromTheActivePivotTableLayout"));
+            checkBox.Click += (_, _) => TogglePivotAvailableField(pivot, headers, field, checkBox.IsChecked == true);
+            AddGridChild(row, checkBox, 0, 0);
+        }
 
         if (showMenu)
         {
@@ -331,38 +488,25 @@ public sealed partial class MainWindow
                 FontSize = 10,
                 Padding = new Thickness(4, 0, 4, 0),
                 Margin = new Thickness(2, 0, 0, 0),
+                MinHeight = 0,
                 Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
             };
             menuButton.Click += (_, _) => ShowPivotHeaderDropdown(pivot, headers, field, menuButton);
-            AddGridChild(row, menuButton, 0, 1);
+            AddGridChild(row, menuButton, 0, 2);
         }
 
-        if (field.Bucket != PivotFieldBucket.Available)
-        {
-            var removeButton = new Button
-            {
-                Content = "×",
-                FontSize = 11,
-                Padding = new Thickness(4, 0, 4, 0),
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-            };
-            removeButton.Click += (_, _) => ApplyPivotFieldDrop(
-                pivot,
-                headers,
-                new PivotFieldDropRequest(field.SourceFieldIndex, PivotFieldBucket.Available));
-            AddGridChild(row, removeButton, 0, 2);
-        }
-
+        // A WPF ListBoxItem row: flat, 12px text, about 20px tall.
         var chip = new Border
         {
-            Background = PivotFieldChipBackground,
-            CornerRadius = new CornerRadius(3),
-            Padding = new Thickness(6, 3, 4, 3),
+            Background = field == _pivotPaneSelectedField ? PivotFieldSelectedBackground : Brushes.Transparent,
+            Padding = new Thickness(4, 2, 2, 2),
+            MinHeight = 20,
             Child = row,
         };
+        _pivotPaneFieldRows.Add((chip, field));
 
+        chip.PointerPressed += (_, _) => SelectPivotPaneField(field);
         chip.PointerPressed += (_, e) => BeginPivotFieldDrag(field, e);
         chip.PointerMoved += PivotFieldDrag_PointerMoved;
         chip.PointerReleased += (_, e) => CompletePivotFieldDrag(pivot, headers, e);
@@ -381,6 +525,54 @@ public sealed partial class MainWindow
         };
         AttachPivotFieldContextMenu(chip, pivot, headers, field);
         return chip;
+    }
+
+    // The selected row is the target of the move buttons, as the selected ListBox item is in WPF.
+    private void SelectPivotPaneField(PivotFieldListItemModel field)
+    {
+        _pivotPaneSelectedField = field;
+        foreach (var (row, item) in _pivotPaneFieldRows)
+            row.Background = item == field ? PivotFieldSelectedBackground : Brushes.Transparent;
+    }
+
+    private void MoveSelectedPivotPaneField(
+        PivotTableModel pivot,
+        IReadOnlyList<string> headers,
+        PivotFieldBucket target)
+    {
+        if (_pivotPaneSelectedField is not { } field || field.Bucket == target)
+            return;
+
+        ApplyPivotFieldDrop(
+            pivot,
+            headers,
+            field.Bucket == PivotFieldBucket.Available
+                ? new PivotFieldDropRequest(field.SourceFieldIndex, target)
+                : new PivotFieldDropRequest(
+                    field.SourceFieldIndex,
+                    target,
+                    SourceBucket: field.Bucket,
+                    SourceItemIndex: field.DataFieldIndex ?? -1));
+    }
+
+    // WPF: ticking a field adds it to Values when its source column is numeric and to Rows
+    // otherwise; clearing the tick removes it from the layout.
+    private void TogglePivotAvailableField(
+        PivotTableModel pivot,
+        IReadOnlyList<string> headers,
+        PivotFieldListItemModel field,
+        bool isChecked)
+    {
+        var target = !isChecked
+            ? PivotFieldBucket.Available
+            : PivotSourceContext.IsNumericSourceColumn(_session.Workbook, pivot, field.SourceFieldIndex)
+                ? PivotFieldBucket.Values
+                : PivotFieldBucket.Rows;
+        ApplyPivotFieldDrop(pivot, headers, new PivotFieldDropRequest(field.SourceFieldIndex, target));
+
+        // A rejected move leaves the layout unchanged, so the ticks are re-read from the model.
+        _pivotPaneSignature = null;
+        RefreshPivotFieldPane();
     }
 
     // ── Pointer-capture drag gesture (no platform DnD dependency) ─────────────
@@ -567,6 +759,8 @@ public sealed partial class MainWindow
         }
 
         var menu = new ContextMenu { ItemsSource = items };
+        // The WPF menu chrome; a checked row keeps its tick in the icon column.
+        AvaloniaContextMenuChrome.Apply(menu);
         menu.Open(anchor);
     }
 
@@ -606,6 +800,8 @@ public sealed partial class MainWindow
             items.Add(itemFilter);
         }
         var menu = new ContextMenu { ItemsSource = items };
+        // The WPF menu chrome; a checked row keeps its tick in the icon column.
+        AvaloniaContextMenuChrome.Apply(menu);
         menu.Open(anchor);
     }
 

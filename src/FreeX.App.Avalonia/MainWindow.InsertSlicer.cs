@@ -5,6 +5,8 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 
+using Free.Shared.Shell.Avalonia;
+
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.Core.Model;
@@ -149,17 +151,21 @@ public sealed partial class MainWindow
         {
             // WPF: a NoResize window of PivotSlicerTimelineDialogContract size, so the app-wide dialog
             // sizing makes the contract height the minimum and lets the height follow the content.
+            // Both are outer sizes, so the client area drops the Windows caption/frame.
             Title = UiText.Get(text.TitleKey),
-            Width = PivotSlicerTimelineDialogContract.Width,
-            MinWidth = PivotSlicerTimelineDialogContract.Width,
-            MaxWidth = PivotSlicerTimelineDialogContract.Width,
-            MinHeight = PivotSlicerTimelineDialogContract.Height - WpfNoResizeFrameHeight,
+            Width = PivotSlicerTimelineDialogContract.Width - WpfNoResizeFrameWidth,
+            MinWidth = PivotSlicerTimelineDialogContract.Width - WpfNoResizeFrameWidth,
+            MaxWidth = PivotSlicerTimelineDialogContract.Width - WpfNoResizeFrameWidth,
+            MinHeight = PivotSlicerTimelineDialogContract.Height - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Height,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, automationPrefix + "Dialog");
+        // The shared dialog chrome gives the window the 12px dialog font and the plain WPF group-box
+        // caption (as PivotTable Options does) instead of the toolkit's 14px bold card header.
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, PivotDialogChromeStyle);
 
         var fieldBox = new ComboBox
         {

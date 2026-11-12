@@ -1482,6 +1482,63 @@ public sealed class DocumentViewLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildParagraphAnchoredWrapPlan_PositionsWrapAtTheAuthoredOffsetAndTrimsColumnOverhang()
+    {
+        var page = new PageSettings();
+        var columnWidthDip = DocumentViewLayoutPlanner.BuildFloatingWrapReservationTextWidthDip(page);
+        var square = Run.FromShape(new Shape(ShapeKind.Rectangle, 90, 45)
+        {
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.Square,
+                WrapTextSide = FloatingWrapTextSide.Left,
+                HorizontalAnchor = HorizontalAnchor.Margin,
+                HorizontalOffsetPt = 36,
+                VerticalAnchor = VerticalAnchor.Paragraph,
+                VerticalOffsetPt = 18,
+            },
+        });
+        DocumentViewLayoutPlanner.BuildParagraphAnchoredWrapPlan(square, page).Should().Be(
+            new DocumentParagraphAnchoredWrapPlan(
+                DocumentFloatingObjectKind.Shape,
+                WidthDip: 120,
+                HeightDip: 60,
+                ColumnOffsetDip: 48,
+                ParagraphOffsetDip: 24,
+                ImageWrapping.Square,
+                FloatingWrapTextSide.Left));
+
+        // Overhanging the right margin keeps the left edge; only the in-column part excludes text.
+        var overhang = Run.FromImage(new InlineImage([], widthPt: 200, heightPt: 50)
+        {
+            Wrapping = ImageWrapping.Tight,
+            HorizontalAnchor = HorizontalAnchor.Column,
+            HorizontalOffsetPt = 400,
+            VerticalAnchor = VerticalAnchor.Paragraph,
+            VerticalOffsetPt = 0,
+        });
+        var overhangPlan = DocumentViewLayoutPlanner.BuildParagraphAnchoredWrapPlan(overhang, page)!;
+        overhangPlan.ColumnOffsetDip.Should().BeApproximately(400 * 4.0 / 3.0, 0.01);
+        overhangPlan.WidthDip.Should().BeApproximately(columnWidthDip - 400 * 4.0 / 3.0, 0.01);
+
+        // Page-relative frames, wrapNone and multi-column pages keep their existing reservation path.
+        var pageAnchored = Run.FromImage(new InlineImage([], widthPt: 72, heightPt: 54)
+        {
+            Wrapping = ImageWrapping.Square,
+            VerticalAnchor = VerticalAnchor.Page,
+        });
+        var inFront = Run.FromImage(new InlineImage([], widthPt: 72, heightPt: 54)
+        {
+            Wrapping = ImageWrapping.InFront,
+            VerticalAnchor = VerticalAnchor.Paragraph,
+        });
+        DocumentViewLayoutPlanner.BuildParagraphAnchoredWrapPlan(pageAnchored, page).Should().BeNull();
+        DocumentViewLayoutPlanner.BuildParagraphAnchoredWrapPlan(inFront, page).Should().BeNull();
+        DocumentViewLayoutPlanner.BuildParagraphAnchoredWrapPlan(square, new PageSettings { ColumnCount = 2 })
+            .Should().BeNull();
+    }
+
+    [Fact]
     public void BuildFloatingObjectDrawOrder_OrdersMergedKindsInsideEachBand()
     {
         var surface = DocumentViewLayoutPlanner.BuildSurfacePlan(

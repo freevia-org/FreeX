@@ -47,8 +47,8 @@ public sealed class AvaloniaChartFormatDialogSourceTests
         combined.Should().Contain("private bool TryGetSelectedChart(ChartWorkflowCommandDescriptor command");
         combined.Should().Contain("private void ApplyChartLayout(ChartWorkflowCommandDescriptor command");
         combined.Should().Contain("ChartWorkflowCommandCatalog.ChangeChartType");
-        combined.Should().Contain("dialog.Width = ChartTypeChangePlanner.DialogWidth;");
-        combined.Should().Contain("dialog.Height = ChartTypeChangePlanner.DialogHeight;");
+        combined.Should().Contain("dialog.Width = ChartTypeChangePlanner.DialogWidth - WpfNoResizeFrameWidth;");
+        combined.Should().Contain("dialog.Height = ChartTypeChangePlanner.DialogHeight - WpfNoResizeClientFrameHeight;");
         combined.Should().Contain("dialog.SizeToContent = SizeToContent.Manual;");
         combined.Should().Contain("ChartTypeChangePlanner.PickerCategoryColumnWidth");
         combined.Should().Contain("ChartTypeChangePlanner.PickerSubtypeColumnWidth");
@@ -135,8 +135,8 @@ public sealed class AvaloniaChartFormatDialogSourceTests
         source.Should().Contain("ChartAreaFormatPlanner.GetLegendSection()");
         source.Should().Contain(".GetLegendPositionChoices()");
         source.Should().Contain("ChartAreaFormatPlanner.TryParseDialogInput(");
-        source.Should().Contain("dialog.Width = ChartAreaFormatPlanner.DialogWidth;");
-        source.Should().Contain("dialog.Height = ChartAreaFormatPlanner.DialogHeight;");
+        source.Should().Contain("dialog.Width = ChartAreaFormatPlanner.DialogWidth - WpfNoResizeFrameWidth;");
+        source.Should().Contain("dialog.Height = ChartAreaFormatPlanner.DialogHeight - WpfNoResizeClientFrameHeight;");
         source.Should().Contain("MakeAreaDescriptorCheck(ChartAreaFormatDialogFieldId.ShowLegend");
         source.Should().Contain("MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.LegendFontSize");
         source.Should().Contain("MakeAreaColorEditor(ChartAreaFormatDialogFieldId.ChartAreaFillColor");

@@ -88,8 +88,9 @@ public sealed class ConsolidateDialogLifecycleRegressionTests
 
                     var pngPath = Path.Combine(outputDirectory, result.PngFileName);
                     using var bitmap = new Bitmap(pngPath);
-                    bitmap.PixelSize.Width.Should().Be((int)ConsolidateDialogPlanner.CaptureWidth);
-                    bitmap.PixelSize.Height.Should().Be((int)ConsolidateDialogPlanner.CaptureHeight);
+                    // The 380x420 WPF outer capture size minus the 16x39 Windows frame.
+                    bitmap.PixelSize.Width.Should().Be((int)ConsolidateDialogPlanner.CaptureWidth - 16);
+                    bitmap.PixelSize.Height.Should().Be((int)ConsolidateDialogPlanner.CaptureHeight - 39);
                     bitmap.Dpi.X.Should().Be(96);
                     bitmap.Dpi.Y.Should().Be(96);
                     ConsolidateParityFixture.SourceReference.Should().Be("A1:C4");

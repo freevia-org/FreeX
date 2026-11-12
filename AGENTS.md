@@ -63,3 +63,12 @@ Every session must leave the machine as clean as it found it. Leftover Windows h
 - Kill stale `testhost.exe` from your own runs (they can hold `bin\...Tests.dll` and cause `MSB3027` file-locked failures) by PID, not by image name.
 - Subagents/implementers that build or test inherit all of the above; every prompt that grants build/test access must restate: no machine-wide kills, no orphaned background builds, prefer dedicated search tools over shell filters, and `build-server shutdown` when done.
 - Clean up temp/scratch files, throwaway probe projects, and stray app instances the session created, in addition to the branch/worktree cleanup covered above.
+
+## Local-Only Evidence And The 2026-11-12 History Rewrite
+
+- Screenshots, capture manifests, per-machine metrics and raw parity evidence are local-only. They are ignored by `.gitignore` and must never be committed (`git add -f` included). This covers `screenshots/`, `screenshots_excel/`, `tools/screenshots*/`, `tools/foreground-captures/`, `artifacts/`, `.metrics-data/`, `docs/ribbonshot-breaks/`, every sub-folder of `docs/parity/`, and `freew/docs/parity/evidence/`. Markdown and JSON documents directly under `docs/parity/` are still tracked.
+- A test that needs a binary input keeps it as a fixture next to the test (for example `tests/<Project>/Fixtures/` or `tools/fixtures/`), never in an evidence folder.
+- Repository preflight runs `tools/Test-LocalOnlyEvidencePaths.ps1`, which fails when any of these paths is tracked or when the branch still carries the pre-rewrite history.
+- On 2026-11-12 the whole repository history was rewritten to purge that evidence. Almost every commit hash changed, so most commit hashes quoted in older documents no longer resolve.
+- A branch or worktree created before the rewrite is based on the old history. Never merge it into `main`, never merge or rebase `main` into it, and never push it. Move the work instead: create a fresh branch from the current `origin/main` and cherry-pick only your own commits onto it (`git cherry-pick <first>^..<last>`), or run `git rebase --onto origin/main <old-base-commit> <branch>` naming the exact old commit your work started from.
+- To test a branch: `git merge-base --is-ancestor ed45d43fe7486bebeaa78dbfc286b43d6cd5d267 HEAD` succeeding means it still carries the old history and must be moved as above before any integration.

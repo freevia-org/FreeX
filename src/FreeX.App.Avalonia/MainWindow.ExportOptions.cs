@@ -28,11 +28,17 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get(ExportOptionsDialogSurfacePlanner.TitleResourceKey),
-            Width = ExportOptionsDialogSurfacePlanner.Width,
+            // WPF Width/MaxHeight are outer sizes; Avalonia sizes the client, so the measured Windows
+            // frame comes off both.
+            Width = ExportOptionsDialogSurfacePlanner.Width - WpfNoResizeFrameWidth,
             SizeToContent = SizeToContent.Height,
-            MaxHeight = ExportOptionsDialogSurfacePlanner.MaxHeight,
+            MaxHeight = ExportOptionsDialogSurfacePlanner.MaxHeight - WpfNoResizeClientFrameHeight,
             // WPF ExportOptionsDialog is ResizeMode.NoResize.
             CanResize = false,
+            // WPF renders every caption, option and field in the 12px dialog font; without this the
+            // radio buttons, labels and drop-downs fell back to the 14px theme default.
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -352,9 +358,11 @@ public sealed partial class MainWindow
         new()
         {
             Width = width,
-            // WPF's combo boxes share the 24px control row of the text boxes beside them.
-            Height = global::Free.Shared.Shell.CompactDialogVisualTokens.ControlHeight,
-            MinHeight = global::Free.Shared.Shell.CompactDialogVisualTokens.ControlHeight,
+            // WPF's default combo boxes are 22px tall at the 12px dialog font.
+            Height = 22,
+            MinHeight = 22,
+            Padding = new Thickness(6, 0, 4, 0),
+            FontSize = 12,
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             IsEnabled = isEnabled,
             SelectedIndex = 0

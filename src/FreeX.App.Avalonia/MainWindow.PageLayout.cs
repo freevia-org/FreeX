@@ -46,8 +46,14 @@ public sealed partial class MainWindow
     private static readonly IBrush PageBreakWatermarkBrush = Brush(60, 11, 112, 116);
     private static AvaloniaCompactDialogChromeStyle PageLayoutDialogChromeStyle => new(FormulaBarFontFamily);
 
+    // A custom header/footer matches no preset, so the combo's selection box is templated with a null
+    // choice; dereferencing it threw during layout, blanking the Page Setup Header/Footer tab and
+    // crashing the Header & Footer editor for every sheet with custom header/footer text.
     private static FuncDataTemplate<HeaderFooterPresetChoice> HeaderFooterPresetTemplate() =>
-        new((choice, _) => new TextBlock { Text = UiText.Get(choice.LabelResourceKey) }, supportsRecycling: true);
+        new((choice, _) => new TextBlock
+        {
+            Text = choice is null ? string.Empty : UiText.Get(choice.LabelResourceKey),
+        }, supportsRecycling: true);
 
     private async Task ShowPageSetupDialogAsync(
         PageLayoutPageSetupOpenSource source = PageLayoutPageSetupOpenSource.DialogButton,
@@ -613,6 +619,32 @@ public sealed partial class MainWindow
         AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, PageLayoutDialogChromeStyle);
     }
 
+    // PageSetupDialog.xaml leaves its fields at the WPF defaults: an 18px single-line TextBox and a
+    // 22px ComboBox, so its rows sit 26px (margins) and 30px (combo rows) apart.
+    private static AvaloniaCompactDialogChromeStyle PageSetupFieldChromeStyle => new(FormulaBarFontFamily)
+    {
+        TextBoxHeight = 18,
+        TextBoxPadding = new Thickness(3, 0),
+        ComboBoxHeight = 22,
+    };
+
+    private static void ApplyPageSetupTextBoxChrome(TextBox textBox)
+    {
+        AvaloniaCompactDialogChrome.ApplyTextBox(textBox, PageSetupFieldChromeStyle);
+    }
+
+    private static void ApplyPageSetupComboBoxChrome(ComboBox comboBox)
+    {
+        AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, PageSetupFieldChromeStyle);
+    }
+
+    // A WPF CheckBox in these forms is 15px tall; the shared 20px row made the stacked options drift.
+    private static void ApplyPageSetupCheckBoxRowHeight(CheckBox checkBox)
+    {
+        checkBox.MinHeight = 16;
+        checkBox.MaxHeight = 16;
+    }
+
     private static void ApplyPageLayoutCheckBoxChrome(CheckBox checkBox)
     {
         StripContentMnemonic(checkBox);
@@ -641,10 +673,10 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get(PageSetupDialogPlanner.TitleResourceKey),
-            // WPF PageSetupDialog.xaml is a 600x560 NoResize window; Height is an OUTER size there, so
-            // the client area drops the caption/frame.
-            Width = PageSetupDialogPlanner.WindowWidth,
-            Height = PageSetupDialogPlanner.WindowHeight - WpfNoResizeFrameHeight,
+            // WPF PageSetupDialog.xaml is a 600x560 NoResize window; Width/Height are OUTER sizes there,
+            // so the client area drops the caption/frame on both axes.
+            Width = PageSetupDialogPlanner.WindowWidth - WpfNoResizeFrameWidth,
+            Height = PageSetupDialogPlanner.WindowHeight - WpfNoResizeClientFrameHeight,
             MinWidth = PageSetupDialogPlanner.MinWindowWidth,
             MinHeight = PageSetupDialogPlanner.MinWindowHeight,
             CanResize = false,
@@ -689,7 +721,7 @@ public sealed partial class MainWindow
             SelectedIndex = surface.ChoiceIndexes.PaperSize,
             MinWidth = PageSetupDialogPlanner.FieldMinWidth,
         };
-        ApplyPageLayoutComboBoxChrome(paperBox);
+        ApplyPageSetupComboBoxChrome(paperBox);
         AutomationProperties.SetAutomationId(paperBox, PageSetupDialogPlanner.PaperSizeBoxAutomationId);
 
         var adjustRadio = new RadioButton
@@ -701,7 +733,7 @@ public sealed partial class MainWindow
         ApplyPageLayoutRadioButtonChrome(adjustRadio);
         AutomationProperties.SetAutomationId(adjustRadio, "PageSetupAdjustToRadio");
         var scalePercentBox = new TextBox { Text = surface.Scaling.ScalePercentText, MinWidth = 90 };
-        ApplyPageLayoutTextBoxChrome(scalePercentBox);
+        ApplyPageSetupTextBoxChrome(scalePercentBox);
         AutomationProperties.SetAutomationId(scalePercentBox, "PageSetupScalePercentBox");
 
         var fitRadio = new RadioButton
@@ -713,49 +745,47 @@ public sealed partial class MainWindow
         ApplyPageLayoutRadioButtonChrome(fitRadio);
         AutomationProperties.SetAutomationId(fitRadio, "PageSetupFitToRadio");
         var fitWideBox = new TextBox { Text = surface.Scaling.FitToWideText, MinWidth = 70 };
-        ApplyPageLayoutTextBoxChrome(fitWideBox);
+        ApplyPageSetupTextBoxChrome(fitWideBox);
         AutomationProperties.SetAutomationId(fitWideBox, "PageSetupFitWideBox");
         var fitTallBox = new TextBox { Text = surface.Scaling.FitToTallText, MinWidth = 70 };
-        ApplyPageLayoutTextBoxChrome(fitTallBox);
+        ApplyPageSetupTextBoxChrome(fitTallBox);
         AutomationProperties.SetAutomationId(fitTallBox, "PageSetupFitTallBox");
 
         var firstPageNumberBox = new TextBox
         {
             Text = surface.FirstPageNumberText,
             MinWidth = 220,
-            PlaceholderText = UiText.Get("PageSetup_Auto"),
         };
-        ApplyPageLayoutTextBoxChrome(firstPageNumberBox);
+        ApplyPageSetupTextBoxChrome(firstPageNumberBox);
         AutomationProperties.SetAutomationId(firstPageNumberBox, "PageSetupFirstPageNumberBox");
 
         var printQualityBox = new TextBox
         {
             Text = surface.PrintQualityDpiText,
             MinWidth = 220,
-            PlaceholderText = UiText.Get("PageSetup_Auto"),
         };
-        ApplyPageLayoutTextBoxChrome(printQualityBox);
+        ApplyPageSetupTextBoxChrome(printQualityBox);
         AutomationProperties.SetAutomationId(printQualityBox, "PageSetupPrintQualityBox");
         AutomationProperties.SetHelpText(printQualityBox, UiText.Get("PageSetup_PrintQualityHelp"));
 
         // --- Margins tab ---
         var leftMarginBox = new TextBox { Text = surface.Margins.Left, MinWidth = PageSetupDialogPlanner.FieldMinWidth };
-        ApplyPageLayoutTextBoxChrome(leftMarginBox);
+        ApplyPageSetupTextBoxChrome(leftMarginBox);
         AutomationProperties.SetAutomationId(leftMarginBox, PageSetupDialogPlanner.LeftMarginBoxAutomationId);
         var rightMarginBox = new TextBox { Text = surface.Margins.Right, MinWidth = PageSetupDialogPlanner.FieldMinWidth };
-        ApplyPageLayoutTextBoxChrome(rightMarginBox);
+        ApplyPageSetupTextBoxChrome(rightMarginBox);
         AutomationProperties.SetAutomationId(rightMarginBox, PageSetupDialogPlanner.RightMarginBoxAutomationId);
         var topMarginBox = new TextBox { Text = surface.Margins.Top, MinWidth = PageSetupDialogPlanner.FieldMinWidth };
-        ApplyPageLayoutTextBoxChrome(topMarginBox);
+        ApplyPageSetupTextBoxChrome(topMarginBox);
         AutomationProperties.SetAutomationId(topMarginBox, PageSetupDialogPlanner.TopMarginBoxAutomationId);
         var bottomMarginBox = new TextBox { Text = surface.Margins.Bottom, MinWidth = PageSetupDialogPlanner.FieldMinWidth };
-        ApplyPageLayoutTextBoxChrome(bottomMarginBox);
+        ApplyPageSetupTextBoxChrome(bottomMarginBox);
         AutomationProperties.SetAutomationId(bottomMarginBox, PageSetupDialogPlanner.BottomMarginBoxAutomationId);
         var headerMarginBox = new TextBox { Text = surface.HeaderMarginText, MinWidth = 220 };
-        ApplyPageLayoutTextBoxChrome(headerMarginBox);
+        ApplyPageSetupTextBoxChrome(headerMarginBox);
         AutomationProperties.SetAutomationId(headerMarginBox, PageSetupDialogPlanner.HeaderMarginBoxAutomationId);
         var footerMarginBox = new TextBox { Text = surface.FooterMarginText, MinWidth = 220 };
-        ApplyPageLayoutTextBoxChrome(footerMarginBox);
+        ApplyPageSetupTextBoxChrome(footerMarginBox);
         AutomationProperties.SetAutomationId(footerMarginBox, PageSetupDialogPlanner.FooterMarginBoxAutomationId);
         var centerHorizontallyCheck = new CheckBox
         {
@@ -793,7 +823,7 @@ public sealed partial class MainWindow
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
         headerPresetBox.ItemTemplate = HeaderFooterPresetTemplate();
-        ApplyPageLayoutComboBoxChrome(headerPresetBox);
+        ApplyPageSetupComboBoxChrome(headerPresetBox);
         AutomationProperties.SetAutomationId(headerPresetBox, PageSetupDialogPlanner.HeaderPresetBoxAutomationId);
         var footerPresetBox = new ComboBox
         {
@@ -803,7 +833,7 @@ public sealed partial class MainWindow
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
         footerPresetBox.ItemTemplate = HeaderFooterPresetTemplate();
-        ApplyPageLayoutComboBoxChrome(footerPresetBox);
+        ApplyPageSetupComboBoxChrome(footerPresetBox);
         AutomationProperties.SetAutomationId(footerPresetBox, PageSetupDialogPlanner.FooterPresetBoxAutomationId);
 
         var headerPreviewText = new TextBlock { TextTrimming = TextTrimming.CharacterEllipsis };
@@ -929,17 +959,17 @@ public sealed partial class MainWindow
 
         // --- Sheet tab ---
         var printAreaBox = new TextBox { Text = surface.PrintAreaText, MinWidth = 220 };
-        ApplyPageLayoutTextBoxChrome(printAreaBox);
+        ApplyPageSetupTextBoxChrome(printAreaBox);
         AutomationProperties.SetAutomationId(printAreaBox, "PageSetupPrintAreaBox");
         AutomationProperties.SetHelpText(printAreaBox, UiText.Get("PageSetup_PrintAreaHelp"));
 
         var repeatRowsBox = new TextBox { Text = surface.RepeatRowsText, MinWidth = 220 };
-        ApplyPageLayoutTextBoxChrome(repeatRowsBox);
+        ApplyPageSetupTextBoxChrome(repeatRowsBox);
         AutomationProperties.SetAutomationId(repeatRowsBox, "PageSetupRepeatRowsBox");
         AutomationProperties.SetHelpText(repeatRowsBox, UiText.Get("PageSetup_RepeatRowsHelp"));
 
         var repeatColumnsBox = new TextBox { Text = surface.RepeatColumnsText, MinWidth = 220 };
-        ApplyPageLayoutTextBoxChrome(repeatColumnsBox);
+        ApplyPageSetupTextBoxChrome(repeatColumnsBox);
         AutomationProperties.SetAutomationId(repeatColumnsBox, "PageSetupRepeatColumnsBox");
         AutomationProperties.SetHelpText(repeatColumnsBox, UiText.Get("PageSetup_RepeatColumnsHelp"));
 
@@ -989,7 +1019,7 @@ public sealed partial class MainWindow
             SelectedIndex = surface.ChoiceIndexes.PrintErrorValue,
             MinWidth = PageSetupDialogPlanner.FieldMinWidth,
         };
-        ApplyPageLayoutComboBoxChrome(cellErrorsBox);
+        ApplyPageSetupComboBoxChrome(cellErrorsBox);
         AutomationProperties.SetAutomationId(cellErrorsBox, PageSetupDialogPlanner.CellErrorsBoxAutomationId);
 
         var printCommentChoices = PageSetupDialogPlanner.PrintCommentChoices;
@@ -999,7 +1029,7 @@ public sealed partial class MainWindow
             SelectedIndex = surface.ChoiceIndexes.PrintComments,
             MinWidth = PageSetupDialogPlanner.FieldMinWidth,
         };
-        ApplyPageLayoutComboBoxChrome(commentsBox);
+        ApplyPageSetupComboBoxChrome(commentsBox);
         AutomationProperties.SetAutomationId(commentsBox, PageSetupDialogPlanner.CommentsBoxAutomationId);
 
         var validationText = new TextBlock
@@ -1210,6 +1240,8 @@ public sealed partial class MainWindow
         Grid.SetRow(centerHorizontallyCheck, 6);
         Grid.SetColumn(centerHorizontallyCheck, 1);
         centerHorizontallyCheck.Margin = new Thickness(0, 4, 0, 8);
+        ApplyPageSetupCheckBoxRowHeight(centerHorizontallyCheck);
+        ApplyPageSetupCheckBoxRowHeight(centerVerticallyCheck);
         Grid.SetRow(centerVerticallyCheck, 7);
         Grid.SetColumn(centerVerticallyCheck, 1);
         marginsGrid.Children.Add(centerHorizontallyCheck);
@@ -1278,7 +1310,7 @@ public sealed partial class MainWindow
         var customButtons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 6,
+            Spacing = 8,
             Margin = new Thickness(0, 0, 0, 12),
             Children = { customHeaderButton, customFooterButton },
         };
@@ -1299,9 +1331,10 @@ public sealed partial class MainWindow
         alignWithMarginsCheck.Margin = new Thickness(0);
         scaleAlignOptions.Spacing = 5;
 
+        // PageSetupDialog.xaml: the Header/Footer tab grid has the same 10px margin as the other tabs.
         var headerFooterGrid = new Grid
         {
-            Margin = new Thickness(14, 4, 14, 14),
+            Margin = new Thickness(10),
             ColumnDefinitions = new ColumnDefinitions("120,*"),
             RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto,Auto"),
         };
@@ -1363,9 +1396,10 @@ public sealed partial class MainWindow
             picker.Width = 24;
             picker.MinWidth = 24;
             picker.MaxWidth = 24;
-            picker.Height = 24;
-            picker.MinHeight = 24;
-            picker.MaxHeight = 24;
+            // PageSetupDialog.xaml range pickers are 24x22.
+            picker.Height = 22;
+            picker.MinHeight = 22;
+            picker.MaxHeight = 22;
             picker.Margin = new Thickness(0, 0, 0, 8);
             Grid.SetRow(picker, row);
             Grid.SetColumn(picker, 2);
@@ -1374,9 +1408,9 @@ public sealed partial class MainWindow
 
         AddSheetLabel(0, UiText.Get("PageSetup_PrintArea"), new Thickness(0, 0, 8, 8));
         AddSheetValue(0, printAreaBox, printAreaPicker);
-        AddSheetLabel(1, UiText.Get("PageSetup_RepeatRows"), new Thickness(0, 0, 8, 8));
+        AddSheetLabel(1, UiText.Get("PageSetup_RowsToRepeatAtTop"), new Thickness(0, 0, 8, 8));
         AddSheetValue(1, repeatRowsBox, repeatRowsPicker);
-        AddSheetLabel(2, UiText.Get("PageSetup_RepeatColumns"), new Thickness(0, 0, 8, 8));
+        AddSheetLabel(2, UiText.Get("PageSetup_ColumnsToRepeatAtLeft"), new Thickness(0, 0, 8, 8));
         AddSheetValue(2, repeatColumnsBox, repeatColumnsPicker);
 
         AddSheetValue(3, gridlinesCheck, margin: new Thickness(0, 0, 0, 8));
@@ -1389,6 +1423,8 @@ public sealed partial class MainWindow
         AddSheetValue(8, cellErrorsBox, margin: new Thickness(0, 8, 0, 0));
         AddSheetLabel(9, UiText.Get("PageSetup_Comments"), new Thickness(0, 8, 8, 0));
         AddSheetValue(9, commentsBox, margin: new Thickness(0, 8, 0, 0));
+        foreach (var check in new[] { gridlinesCheck, headingsCheck, blackAndWhiteCheck, draftQualityCheck })
+            ApplyPageSetupCheckBoxRowHeight(check);
 
         var sheetTab = new TabItem
         {
@@ -1565,8 +1601,10 @@ public sealed partial class MainWindow
 
         TextBox CreateEditor(HeaderFooterEditorTarget target, string text)
         {
-            var box = new TextBox { Text = text, MinHeight = 24 };
-            ApplyPageLayoutTextBoxChrome(box);
+            // HeaderFooterDialog.xaml leaves these TextBoxes at the WPF default height (18px at the
+            // 12px dialog font), like the Page Setup fields.
+            var box = new TextBox { Text = text };
+            ApplyPageSetupTextBoxChrome(box);
             AutomationProperties.SetAutomationId(box, $"HeaderFooter{target.Scope}{target.Section}Box");
             box.GotFocus += (_, _) =>
             {
@@ -1838,12 +1876,14 @@ public sealed partial class MainWindow
         };
 
         var tokenButtons = new WrapPanel { Orientation = Orientation.Horizontal };
+        // HeaderFooterDialog.xaml gives its buttons no Height: the WPF default at the 12px dialog
+        // font is 20px.
         void ApplyTokenButtonChrome(Button button, double minWidth)
         {
             ApplyPageLayoutButtonChrome(button, minWidth);
-            button.Height = 22;
-            button.MinHeight = 22;
-            button.MaxHeight = 22;
+            button.Height = 20;
+            button.MinHeight = 20;
+            button.MaxHeight = 20;
         }
         foreach (var token in new[]
         {
@@ -1969,6 +2009,8 @@ public sealed partial class MainWindow
         {
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brush(128, 128, 128),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         RefreshPictureTargetState();
 
@@ -1976,12 +2018,12 @@ public sealed partial class MainWindow
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
         ApplyPageLayoutButtonChrome(okButton, 72, isDefault: true);
         ApplyPageLayoutButtonChrome(cancelButton, 72);
-        okButton.Height = 22;
-        okButton.MinHeight = 22;
-        okButton.MaxHeight = 22;
-        cancelButton.Height = 22;
-        cancelButton.MinHeight = 22;
-        cancelButton.MaxHeight = 22;
+        okButton.Height = 20;
+        okButton.MinHeight = 20;
+        okButton.MaxHeight = 20;
+        cancelButton.Height = 20;
+        cancelButton.MinHeight = 20;
+        cancelButton.MaxHeight = 20;
         AutomationProperties.SetAutomationId(okButton, "HeaderFooterEditorOkButton");
         AutomationProperties.SetAutomationId(cancelButton, "HeaderFooterEditorCancelButton");
 

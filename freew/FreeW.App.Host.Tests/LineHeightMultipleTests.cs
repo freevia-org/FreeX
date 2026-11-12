@@ -155,6 +155,51 @@ public sealed class LineHeightMultipleTests
         Assert.Equal(expected, wpf.LineHeight, 1);
     }
 
+    [StaFact]
+    public void MultipleRule_ScalesTheParagraphsOwnFontLine_NotTheDocumentDefault()
+    {
+        // stress008: Times New Roman body text in a Calibri-default document. Word's 1.15 lines are
+        // 1.15 x the Times line (~1.15 em), not x Calibri's ~1.22 em, and a 16pt run's multiple scales
+        // its 16pt line. The multiple must still read back exactly on commit.
+        var doc = TextDocument.CreateEmpty();
+        doc.DefaultRun = doc.DefaultRun with { FontFamily = "Calibri", FontSizePt = 11 };
+        doc.DefaultParagraph = ParagraphFormatting.Default with
+        {
+            LineSpacing = 1.15,
+            LineRule = LineSpacingRule.Multiple,
+            LineSpacingIsSet = true,
+        };
+        doc.Blocks.Clear();
+        var body = new Paragraph("Times body");
+        body.Runs[0].Formatting = RunFormatting.Default with { FontFamily = "Times New Roman" };
+        // A lone larger space run (seen in stress008) must not stretch every line of the paragraph.
+        body.Runs.Add(new Run(" ", RunFormatting.Default with { FontFamily = "Times New Roman", FontSizePt = 14 }));
+        body.Runs.Add(new Run("continues", RunFormatting.Default with { FontFamily = "Times New Roman" }));
+        doc.Blocks.Add(body);
+        var title = new Paragraph("Big title");
+        title.Runs[0].Formatting = RunFormatting.Default with { FontFamily = "Times New Roman", FontSizePt = 16 };
+        doc.Blocks.Add(title);
+        var empty = new Paragraph(string.Empty)
+        {
+            MarkFormatting = RunFormatting.Default with { FontFamily = "Times New Roman", FontSizePt = 16 }
+        };
+        doc.Blocks.Add(empty);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var paragraphs = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().ToList();
+        var times = new System.Windows.Media.FontFamily("Times New Roman").LineSpacing;
+        Assert.Equal(1.15 * times * 11 * PxPerPoint, paragraphs[0].LineHeight, 1);
+        Assert.Equal(1.15 * times * 16 * PxPerPoint, paragraphs[1].LineHeight, 1);
+        Assert.Equal(1.15 * times * 16 * PxPerPoint, paragraphs[2].LineHeight, 1);
+
+        view.CommitToModel();
+        var committed = view.Model.Blocks.OfType<Paragraph>().ToList();
+        Assert.Equal(1.15, committed[0].Formatting.LineSpacing, 6);
+        Assert.Equal(1.15, committed[1].Formatting.LineSpacing, 6);
+    }
+
     [StaTheory]
     [InlineData("Heading1", 3.0)]
     [InlineData("Title", 4.5)]

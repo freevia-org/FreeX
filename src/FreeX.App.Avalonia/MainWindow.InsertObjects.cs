@@ -24,6 +24,18 @@ public sealed partial class MainWindow
 {
     private static AvaloniaCompactDialogChromeStyle InsertObjectDialogChromeStyle => new(FormulaBarFontFamily);
 
+    // WPF CreateTableDialog leaves its TextBox, DialogReferencePicker button and DialogButtonRowFactory
+    // buttons at their native 12 px heights (about 20 px), not the generic 24/26 px compact family.
+    private static AvaloniaCompactDialogChromeStyle CreateTableDialogChromeStyle =>
+        new(FormulaBarFontFamily)
+        {
+            ControlHeight = 20,
+            TextBoxHeight = 20,
+            ButtonHeight = 20,
+            ButtonPadding = new Thickness(1),
+            TextBoxPadding = new Thickness(2, 0),
+        };
+
     private static void ApplyInsertObjectFixedButtonChrome(Button button, double width, bool isDefault = false)
     {
         button.Width = width;
@@ -307,16 +319,17 @@ public sealed partial class MainWindow
     private async Task<CreateTableDialogPlan?> ShowCreateTableDialogAsync(string defaultRangeText, string tableStyleName)
     {
         CreateTableDialogPlan? result = null;
-        var dialog = new FreeXDialogWindow(InsertObjectDialogChromeStyle)
+        var chrome = CreateTableDialogChromeStyle;
+        var dialog = new FreeXDialogWindow(chrome)
         {
             Title = UiText.Get(CreateTableDialogPlanner.TitleKey),
-            // WPF CreateTableDialog is a Width x Height (224x144) NoResize window: an OUTER size, whose
-            // client area the content just fills. The Avalonia controls are a few pixels taller per
-            // row, so the height follows the content rather than CreateTableDialogPlanner.Height.
-            Width = CreateTableDialogPlanner.Width,
-            MinWidth = CreateTableDialogPlanner.Width,
-            MaxWidth = CreateTableDialogPlanner.Width,
-            SizeToContent = SizeToContent.Height,
+            // WPF CreateTableDialog is a Width x Height (224x144) NoResize window: an OUTER size. The
+            // Avalonia window sets the client area, so both lose the WPF frame (16 x 39) like the
+            // other fixed-size dialogs; the text stays at the 12 px dialog default.
+            Width = CreateTableDialogPlanner.Width - WpfNoResizeFrameWidth,
+            MinWidth = CreateTableDialogPlanner.Width - WpfNoResizeFrameWidth,
+            MaxWidth = CreateTableDialogPlanner.Width - WpfNoResizeFrameWidth,
+            Height = CreateTableDialogPlanner.Height - WpfNoResizeClientFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -328,7 +341,7 @@ public sealed partial class MainWindow
             Text = defaultRangeText,
             MinWidth = CreateTableDialogPlanner.RangeBoxMinimumWidth
         };
-        ApplyInsertObjectTextBoxChrome(rangeBox);
+        AvaloniaCompactDialogChrome.ApplyTextBox(rangeBox, chrome);
         // Lighter selection highlight so the (auto-selected) range text stays readable in black —
         // Avalonia's default accent selection is too dark for black text (matches Windows' lighter selection).
         rangeBox.SelectionBrush = Brush(173, 214, 255);
@@ -345,7 +358,8 @@ public sealed partial class MainWindow
             Padding = new Thickness(0),
         };
         DockPanel.SetDock(rangePicker, Dock.Right);
-        ApplyInsertObjectFixedButtonChrome(rangePicker, CreateTableDialogPlanner.RangePickerWidth);
+        rangePicker.Width = CreateTableDialogPlanner.RangePickerWidth;
+        AvaloniaCompactDialogChrome.ApplyButton(rangePicker, chrome, CreateTableDialogPlanner.RangePickerWidth);
         rangePicker.Padding = new Thickness(0);
         AutomationProperties.SetName(rangePicker, UiText.Get(CreateTableDialogPlanner.RangePickerAutomationNameKey));
         AutomationProperties.SetAutomationId(rangePicker, "CreateTableRangePicker");
@@ -356,7 +370,7 @@ public sealed partial class MainWindow
             IsChecked = CreateTableDialogPlanner.DefaultFirstRowHasHeaders,
             Margin = new Thickness(0, 0, 0, CreateTableDialogPlanner.HeadersBottomMargin),
         };
-        ApplyInsertObjectCheckBoxChrome(headersBox);
+        AvaloniaCompactDialogChrome.ApplyCheckBox(headersBox, chrome);
         AutomationProperties.SetName(headersBox, UiText.Get(CreateTableDialogPlanner.HeadersAutomationNameKey));
         AutomationProperties.SetAutomationId(headersBox, CreateTableDialogPlanner.HeadersBoxAutomationId);
         AutomationProperties.SetHelpText(headersBox, UiText.Get(CreateTableDialogPlanner.HeadersAutomationHelpTextKey));
@@ -366,13 +380,17 @@ public sealed partial class MainWindow
             Content = UiText.Get("Common_Ok"),
             IsDefault = true,
         };
-        ApplyInsertObjectFixedButtonChrome(okButton, CreateTableDialogPlanner.ButtonWidth, isDefault: true);
+        okButton.Width = CreateTableDialogPlanner.ButtonWidth;
+        AvaloniaCompactDialogChrome.ApplyButton(okButton, chrome, CreateTableDialogPlanner.ButtonWidth, isDefault: true);
         var cancelButton = new Button
         {
             Content = UiText.Get("Common_Cancel"),
             IsCancel = true,
         };
-        ApplyInsertObjectFixedButtonChrome(cancelButton, CreateTableDialogPlanner.ButtonWidth);
+        cancelButton.Width = CreateTableDialogPlanner.ButtonWidth;
+        // WPF buttons keep a 1px content padding (the CreateTable chrome's ButtonPadding), so the
+        // fixed 56px buttons do not clip the Cancel caption.
+        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, chrome, CreateTableDialogPlanner.ButtonWidth);
         okButton.Click += (_, _) => RunGuarded(async () =>
         {
             if (!CreateTableDialogPlanner.TryParse(

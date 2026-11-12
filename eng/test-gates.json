@@ -61,7 +61,7 @@
       "costHintMinutes": 4,
       "app": "FreeX",
       "gate": "commit",
-      "platforms": ["linux", "macos"],
+      "platforms": ["linux"],
       "partitions": 2,
       "projects": [
         "tests/Free.Shared.AppServices.Tests/Free.Shared.AppServices.Tests.csproj",
@@ -93,7 +93,7 @@
       "partitionProjects": [
         "tests/FreeX.App.Avalonia.Tests/FreeX.App.Avalonia.Tests.csproj"
       ],
-      "platforms": ["windows", "linux", "macos"],
+      "platforms": ["windows", "linux"],
       "impactPaths": ["src/FreeX.App.Avalonia/**"],
       "projects": [
         "tests/Free.Shared.Shell.Avalonia.Tests/Free.Shared.Shell.Avalonia.Tests.csproj",
@@ -319,6 +319,40 @@
         "tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch2.csproj",
         "tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch4.csproj",
         "tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch6.csproj"
+      ]
+    },
+    {
+      "id": "freex-portable-unix-macos",
+      "costHintMinutes": 8,
+      "app": "FreeX",
+      "gate": "release",
+      "platforms": ["macos"],
+      "projects": [
+        "tests/Free.Shared.AppServices.Tests/Free.Shared.AppServices.Tests.csproj",
+        "tests/FreeX.Core.Formula.Tests/FreeX.Core.Formula.Tests.csproj",
+        "tests/FreeX.Core.IO.Tests/FreeX.Core.IO.Tests.csproj",
+        "tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj",
+        "tests/FreeX.App.Localization.Tests/FreeX.App.Localization.Tests.csproj",
+        "tests/FreeX.App.Presentation.Tests/FreeX.App.Presentation.Tests.csproj",
+        "tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj",
+        "tests/FreeX.Integration.Tests/FreeX.Integration.Tests.csproj",
+        "tests/FreeX.ParityCompare.Tests/FreeX.ParityCompare.Tests.csproj"
+      ]
+    },
+    {
+      "id": "freex-avalonia-macos",
+      "costHintMinutes": 6,
+      "app": "FreeX",
+      "gate": "release",
+      "requiresFullHistory": true,
+      "partitions": 2,
+      "partitionProjects": [
+        "tests/FreeX.App.Avalonia.Tests/FreeX.App.Avalonia.Tests.csproj"
+      ],
+      "platforms": ["macos"],
+      "projects": [
+        "tests/Free.Shared.Shell.Avalonia.Tests/Free.Shared.Shell.Avalonia.Tests.csproj",
+        "tests/FreeX.App.Avalonia.Tests/FreeX.App.Avalonia.Tests.csproj"
       ]
     },
     {

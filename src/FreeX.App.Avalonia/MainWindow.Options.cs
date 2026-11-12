@@ -199,7 +199,7 @@ public sealed partial class MainWindow
             maxChangeBox.IsEnabled = enabled;
         };
 
-        var r1c1Box = new CheckBox { Content = UiText.Get("Options_R1C1ReferenceStyle"), IsChecked = current.UseR1C1ReferenceStyle };
+        var r1c1Box = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("Options_UseR1C1ReferenceStyle")), IsChecked = current.UseR1C1ReferenceStyle };
         ApplyOptionsCheckBoxChrome(r1c1Box);
         AutomationProperties.SetAutomationId(r1c1Box, "OptionsR1C1ReferenceStyleCheckBox");
 
@@ -480,6 +480,10 @@ public sealed partial class MainWindow
             minWidth: 0);
         recentFilesPathBox.FontSize = 11;
         recentFilesPathBox.Foreground = Brush(102, 102, 102);
+        // WPF lays the box out in the star column right of the 230px label, so it ends at the page
+        // edge and scrolls a long path inside itself. The Avalonia box measured to the full path and
+        // widened that column past the page, which clipped its right border; cap it at the column.
+        recentFilesPathBox.MaxWidth = OptionsDialogPlanner.GeneralContentWidth - OptionsDialogPlanner.GeneralLabelWidth;
 
         var savePanel = OptionsCategoryPanel(
             OptionsSectionHeader(
@@ -897,13 +901,19 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(exportItem, FreeXAutomationIdCatalog.QuickAccessToolbarExportCustomizationMenuItem);
         exportItem.Click += (_, _) => RunGuarded(ExportQuickAccessCustomizationAsync);
         var quickAccessImportExportMenu = new ContextMenu { Items = { importItem, exportItem } };
+        AvaloniaContextMenuChrome.Apply(quickAccessImportExportMenu);
         quickAccessImportExportButton.Click += (_, _) => quickAccessImportExportMenu.Open(quickAccessImportExportButton);
 
         var quickAccessGrid = new Grid
         {
-            Width = 469,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
-            ColumnDefinitions = new ColumnDefinitions("128,10,92,10,127,10,92"),
+            // WPF OptionsDialog.xaml: *,Auto,*,Auto with the button stacks carrying the 10px gaps,
+            // which resolves to the 128 / 112 / 127 / 102 split of the page. Left to stretch, the
+            // star columns took the widths of their content (the right list grew to 154 px and
+            // pushed Move Up / Move Down / Reset past the page edge), so the grid is pinned to the
+            // page viewport width, which keeps both star columns equal as in WPF.
+            Width = OptionsDialogPlanner.GeneralContentWidth,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            ColumnDefinitions = new ColumnDefinitions("*,Auto,*,Auto"),
             RowDefinitions = new RowDefinitions("Auto,Auto,180"),
         };
         var availableLabel = new TextBlock { Text = OptionsText("Options_AvailableCommands"), FontSize = 12, Margin = new Thickness(0, 0, 0, 4) };
@@ -926,12 +936,12 @@ public sealed partial class MainWindow
             VerticalAlignment = AvaloniaVerticalAlignment.Top,
             Children = { quickAccessAddButton, quickAccessRemoveButton },
         };
-        Grid.SetColumn(addRemovePanel, 2);
+        Grid.SetColumn(addRemovePanel, 1);
         Grid.SetRow(addRemovePanel, 2);
         var selectedLabel = new TextBlock { Text = OptionsText("Options_QuickAccessToolbarCommands"), FontSize = 12, Margin = new Thickness(0, 0, 0, 4) };
-        Grid.SetColumn(selectedLabel, 4);
+        Grid.SetColumn(selectedLabel, 2);
         Grid.SetRow(selectedLabel, 0);
-        Grid.SetColumn(quickAccessSelectedList, 4);
+        Grid.SetColumn(quickAccessSelectedList, 2);
         Grid.SetRow(quickAccessSelectedList, 2);
         var reorderPanel = new StackPanel
         {
@@ -940,7 +950,7 @@ public sealed partial class MainWindow
             VerticalAlignment = AvaloniaVerticalAlignment.Top,
             Children = { quickAccessMoveUpButton, quickAccessMoveDownButton, quickAccessResetButton },
         };
-        Grid.SetColumn(reorderPanel, 6);
+        Grid.SetColumn(reorderPanel, 3);
         Grid.SetRow(reorderPanel, 2);
         quickAccessGrid.Children.Add(availableLabel);
         quickAccessGrid.Children.Add(searchRow);
@@ -1018,8 +1028,10 @@ public sealed partial class MainWindow
                 FontSize = 12,
                 Margin = new Thickness(0, 8, 0, 5),
             },
+            // WPF shows this prose in a plain TextBlock, so an underscore in it (the environment
+            // variable name) is literal text, not an access-key marker: do not strip it.
             OptionsHint(
-                OptionsText("Options_FreeXWritesLocalUsageEventsAndCrashFilesToLOCALAPPDATAFr"),
+                UiText.Get("Options_FreeXWritesLocalUsageEventsAndCrashFilesToLOCALAPPDATAFr"),
                 new Thickness(0, 0, 0, 12)),
             trustCenterSettingsButton);
         trustCenterPanel.Width = OptionsDialogPlanner.GeneralContentWidth;
@@ -1346,7 +1358,11 @@ public sealed partial class MainWindow
                 OptionsDialogPlanner.ContentPaddingHorizontal,
                 OptionsDialogPlanner.ContentPaddingVertical),
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
+            // WPF's ScrollViewer leaves horizontal scrolling Disabled, so a page is laid out at the
+            // viewport width. Hidden measured pages at an unbounded width, which let the stretching
+            // recent-files path box and the Quick Access Toolbar columns run past the right padding,
+            // where the viewport clipped their right borders.
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             HorizontalContentAlignment = AvaloniaHorizontalAlignment.Stretch,
             VerticalContentAlignment = AvaloniaVerticalAlignment.Top,
         };

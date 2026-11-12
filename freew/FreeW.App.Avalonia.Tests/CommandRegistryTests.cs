@@ -210,7 +210,8 @@ public sealed class CommandRegistryTests
             "freew.cc-checkbox",
             "freew.cc-date",
             "freew.cc-dropdown",
-            "freew.cc-combo");
+            "freew.cc-combo",
+            "freew.legacy-tools");
 
         foreach (var id in commands)
             registry.TryGet(new RibbonCommandId(id), out _)
@@ -244,6 +245,25 @@ public sealed class CommandRegistryTests
         paragraph.Runs.Should().ContainSingle();
         paragraph.Runs[0].Control.Should().NotBeNull();
         paragraph.Runs[0].Control!.Kind.Should().Be(kind);
+    }
+
+    [Theory]
+    [InlineData("freew.ff-text", LegacyFormFieldKind.Text, "Text1")]
+    [InlineData("freew.ff-checkbox", LegacyFormFieldKind.CheckBox, "Check1")]
+    [InlineData("freew.ff-dropdown", LegacyFormFieldKind.DropDown, "Dropdown1")]
+    public void Legacy_tools_insert_shared_form_field_runs(string commandId, LegacyFormFieldKind kind, string name)
+    {
+        var view = new DocumentView();
+        view.LoadDocument(MakeDoc(string.Empty));
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+
+        Execute(registry, commandId);
+
+        var field = view.Document.Blocks.OfType<Paragraph>().Single().Runs
+            .Single(run => run.ComplexField is not null).ComplexField!;
+        field.FormField!.Kind.Should().Be(kind);
+        field.FormField.Name.Should().Be(name);
+        field.Keyword.Should().Be(LegacyFormField.KeywordFor(kind));
     }
 
     [Fact]

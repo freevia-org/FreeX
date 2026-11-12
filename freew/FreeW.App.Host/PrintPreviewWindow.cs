@@ -597,10 +597,17 @@ internal static class PrintLayout
         // Word prints a comment's range only together with its margin balloon; without the balloon
         // strip the printed page shows no comment highlight at all.
         using (balloonSources is { Count: > 0 } ? null : DocumentView.SuspendCommentRangeHighlights(cloneSource))
+        // Form-field shading is screen-only in Word: it never reaches the printed page.
+        using (DocumentView.SuspendLegacyFormFieldShading(cloneSource))
         {
             foreach (var block in CloneBlocks(cloneSource))
                 flow.Blocks.Add(block);
         }
+
+        // Outline / shadow / glow / reflection: tag the cloned effect runs so each page can draw them.
+        TextEffectsPrintPaginator.Remember(
+            flow,
+            DocumentView.TagTextEffectsForPrint(cloneSource, flow.Blocks, editor.Model.Theme.ColorScheme));
 
         // XAML cloning strips the private paragraph tags that carry model section breaks. Restore
         // page-type break ownership here so every consumer of this print/preview document sees the
@@ -766,7 +773,7 @@ internal static class PrintLayout
         var (contentWidthForChangeBarsDip, _) = PageLayout.ContentAreaDip(page);
         var changeBarBands = ResolveChangeBarBands(editor, paginator, contentWidthForChangeBarsDip, lineHeightDip);
         var floatingObjectsByPage = ResolveFloatingObjectsByPage(editor, paginator, contentWidthForChangeBarsDip, lineHeightDip);
-        return new HeaderFooterPaginator(
+        return TextEffectsPrintPaginator.Wrap(new HeaderFooterPaginator(
             paginator,
             editor.Model,
             page,
@@ -775,7 +782,7 @@ internal static class PrintLayout
             balloonSources: balloonSources,
             changeBarBands: changeBarBands,
             floatingObjectsByPage: floatingObjectsByPage,
-            changedLineRules: !editor.CurrentReviewDisplayPolicy.ShouldShowSimpleMarkupChangeBar);
+            changedLineRules: !editor.CurrentReviewDisplayPolicy.ShouldShowSimpleMarkupChangeBar), flow);
     }
 
     private static bool NeedsSectionAwareRendering(TextDocument document) =>
@@ -1810,6 +1817,16 @@ internal sealed class HeaderFooterPaginator(
             || snapshot.RunIndex < 0 || snapshot.RunIndex >= paragraph.Runs.Count)
             return;
 
+        DrawFloatingRun(dc, snapshot, paragraph.Runs[snapshot.RunIndex]);
+    }
+
+    /// <summary>
+    /// Draws one floating object's <paramref name="run"/> at <paramref name="snapshot"/>'s page-space rect.
+    /// Shared with header/footer composition (<see cref="HeaderFooterBandRenderer"/>), whose anchored
+    /// drawings belong to the slot's paragraphs rather than the body blocks.
+    /// </summary>
+    internal static void DrawFloatingRun(DrawingContext dc, DocumentFloatingObjectSnapshot snapshot, FreeW.Core.Model.Run run)
+    {
         var rect = new Rect(
             snapshot.Rect.XDip,
             snapshot.Rect.YDip,
@@ -1818,7 +1835,6 @@ internal sealed class HeaderFooterPaginator(
         if (rect.Width <= 0 || rect.Height <= 0)
             return;
 
-        var run = paragraph.Runs[snapshot.RunIndex];
         var pushedTransform = snapshot.RotationAngle != 0 || snapshot.FlipH || snapshot.FlipV;
         if (pushedTransform)
         {
@@ -2003,9 +2019,12 @@ internal sealed class HeaderFooterPaginator(
         if (contentWidth <= 0)
             return;
 
+        // PAGE resolves to the logical number: the section's w:pgNumType start and number format apply
+        // (as in the section-aware paginator); slot selection below stays on the physical page.
+        var logicalPageNumber = Math.Max(1, page.PageNumberStartAt ?? 1) + zeroBasedPageNumber;
         var context = new HeaderFooterBandContext(
-            zeroBasedPageNumber + 1,
-            PageNumberText: null,
+            logicalPageNumber,
+            FreeW.App.Presentation.Dialogs.PageNumberFormatDialogPlanner.FormatPageNumber(logicalPageNumber, page.PageNumberFormat),
             Math.Max(1, PageCount));
         var maxHeight = HeaderFooterBandRenderer.MaxBandHeightDip(page);
         // Different-first-page and different-odd-and-even select the slot per page, as in Word; a
@@ -2019,9 +2038,10 @@ internal sealed class HeaderFooterPaginator(
         if (slots.Header is { IsEmpty: false } header)
         {
             var metrics = ResolveBandMetrics(header, isHeader: true, contentWidth, maxHeight);
-            if (HeaderFooterBandRenderer.Render(model, header, true, context, contentWidth, metrics, maxHeight) is { } band)
+            var origin = new Point(marginLeft, HeaderFooterBandRenderer.HeaderDistanceDip(page));
+            if (HeaderFooterBandRenderer.Render(model, header, true, context, contentWidth, metrics, maxHeight, page, origin) is { } band)
             {
-                band.Offset = new Vector(marginLeft, HeaderFooterBandRenderer.HeaderDistanceDip(page));
+                band.Offset = new Vector(origin.X, origin.Y);
                 visual.Children.Add(band);
             }
         }
@@ -2029,10 +2049,11 @@ internal sealed class HeaderFooterPaginator(
         if (slots.Footer is { IsEmpty: false } footer)
         {
             var metrics = ResolveBandMetrics(footer, isHeader: false, contentWidth, maxHeight);
-            if (HeaderFooterBandRenderer.Render(model, footer, false, context, contentWidth, metrics, maxHeight) is { } band)
+            var top = size.Height - HeaderFooterBandRenderer.FooterDistanceDip(page) - metrics.HeightDip;
+            var origin = new Point(marginLeft, Math.Max(0, top));
+            if (HeaderFooterBandRenderer.Render(model, footer, false, context, contentWidth, metrics, maxHeight, page, origin) is { } band)
             {
-                var top = size.Height - HeaderFooterBandRenderer.FooterDistanceDip(page) - metrics.HeightDip;
-                band.Offset = new Vector(marginLeft, Math.Max(0, top));
+                band.Offset = new Vector(origin.X, origin.Y);
                 visual.Children.Add(band);
             }
         }

@@ -312,6 +312,18 @@ public static partial class DocxReader
             sharedTheme.FontScheme.MajorLatinTypeface ?? string.Empty,
             sharedTheme.FontScheme.MinorLatinTypeface ?? string.Empty,
             sharedTheme.FormatSchemeName);
+
+        // Render-only: the non-Latin theme slots run theme-font tokens resolve against.
+        if (ResolveDocumentThemeFonts(archive) is { } fonts)
+        {
+            document.ThemeScriptFonts = new ThemeScriptFonts(
+                fonts.MajorEastAsia,
+                fonts.MinorEastAsia,
+                fonts.MajorComplexScript,
+                fonts.MinorComplexScript,
+                fonts.MajorBidiScript,
+                fonts.MinorBidiScript);
+        }
     }
 
     /// <summary>
@@ -1554,8 +1566,10 @@ public static partial class DocxReader
         // alongside real paragraph text) still flatten here — mixed table+paragraph header/footer layout is
         // a much rarer pattern than the single all-encompassing layout table and is out of scope for the
         // table-preservation path above; leave legacy VML text boxes on their existing path too.
+        var legacyFrames = new Dictionary<XElement, LegacyTextBoxFrame?>();
         foreach (var p in ReadStoryParagraphs(root))
         {
+            var legacyFrame = ResolveLegacyTextBoxFrame(p, legacyFrames);
             // FreeW's page watermark is stored in a VML-only paragraph in the header. It is also
             // represented by custom document properties. Remove only the known watermark run: Word
             // commonly appends it to a real header paragraph, so dropping the whole paragraph loses
@@ -1573,7 +1587,7 @@ public static partial class DocxReader
             if (!preservedParagraph.Descendants(W + "r").Any())
                 continue;
 
-            result.Paragraphs.Add(ReadParagraph(
+            var storyParagraph = ReadParagraph(
                 preservedParagraph,
                 archive,
                 partRelationships,
@@ -1581,9 +1595,162 @@ public static partial class DocxReader
                 numbering,
                 capturePreservedNumbering: true,
                 preservedDrawingTarget: document,
-                preservedDrawingRelationshipTargets: partRelationships));
+                preservedDrawingRelationshipTargets: partRelationships);
+            storyParagraph.LegacyTextBoxFrame = legacyFrame;
+            result.Paragraphs.Add(storyParagraph);
         }
         return result;
+    }
+
+    /// <summary>
+    /// The render-only frame of the positioned legacy VML text box <paramref name="paragraph"/> lives in
+    /// (<c>v:oval|v:rect|.../v:textbox/w:txbxContent/w:p</c>), or null when it is not inside one. One frame
+    /// instance is shared by every paragraph of the same shape.
+    /// </summary>
+    private static LegacyTextBoxFrame? ResolveLegacyTextBoxFrame(
+        XElement paragraph,
+        Dictionary<XElement, LegacyTextBoxFrame?> cache)
+    {
+        var content = paragraph.Ancestors(W + "txbxContent").FirstOrDefault();
+        if (content?.Parent is not { } textBox || textBox.Name != V + "textbox"
+            || textBox.Parent is not { } shape || shape.Name.Namespace != V)
+            return null;
+
+        if (!cache.TryGetValue(shape, out var frame))
+            cache[shape] = frame = ReadLegacyTextBoxFrame(shape, textBox);
+        return frame;
+    }
+
+    private static LegacyTextBoxFrame? ReadLegacyTextBoxFrame(XElement shape, XElement textBox)
+    {
+        var style = shape.Attribute("style")?.Value;
+        if (style is null
+            || !string.Equals(ReadVmlCssValue(style, "position"), "absolute", StringComparison.OrdinalIgnoreCase)
+            || shape.Parent?.Name == V + "group")
+            return null;
+
+        var (widthPt, heightPt) = ParseVmlShapeSize(style);
+        if (widthPt <= 0 || heightPt <= 0)
+            return null;
+
+        static bool IsOff(string? value) => value is "f" or "false" or "0";
+
+        static string? VmlColor(string? value, string? fallback)
+        {
+            // "#365f91 [2404]" carries a theme-index hint after the RGB value.
+            var token = value?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            if (token is null)
+                return fallback;
+            if (token.Length == 7 && token[0] == '#')
+                return token.ToUpperInvariant();
+            if (token.Length == 4 && token[0] == '#')
+                return string.Concat("#", token[1], token[1], token[2], token[2], token[3], token[3]).ToUpperInvariant();
+            return token.ToLowerInvariant() switch
+            {
+                "white" => "#FFFFFF",
+                "black" => "#000000",
+                "red" => "#FF0000",
+                "blue" => "#0000FF",
+                "green" => "#008000",
+                "yellow" => "#FFFF00",
+                "gray" or "grey" => "#808080",
+                _ => fallback
+            };
+        }
+
+        var fill = IsOff(shape.Attribute("filled")?.Value)
+            ? null
+            : VmlColor(shape.Attribute("fillcolor")?.Value, "#FFFFFF");
+        var stroke = IsOff(shape.Attribute("stroked")?.Value)
+            ? null
+            : VmlColor(shape.Attribute("strokecolor")?.Value, "#000000");
+        var strokeWidth = ParseVmlLengthPt(shape.Attribute("strokeweight")?.Value) ?? 0.75;
+
+        var horizontal = ReadVmlCssValue(style, "mso-position-horizontal")?.ToLowerInvariant() switch
+        {
+            "left" or "inside" => LegacyFrameHorizontalAlignment.Left,
+            "center" => LegacyFrameHorizontalAlignment.Center,
+            "right" or "outside" => LegacyFrameHorizontalAlignment.Right,
+            _ => LegacyFrameHorizontalAlignment.None
+        };
+        var vertical = ReadVmlCssValue(style, "mso-position-vertical")?.ToLowerInvariant() switch
+        {
+            "top" or "inside" => LegacyFrameVerticalAlignment.Top,
+            "center" => LegacyFrameVerticalAlignment.Center,
+            "bottom" or "outside" => LegacyFrameVerticalAlignment.Bottom,
+            _ => LegacyFrameVerticalAlignment.None
+        };
+        var horizontalReference = ReadVmlCssValue(style, "mso-position-horizontal-relative")?.ToLowerInvariant() switch
+        {
+            "margin" => LegacyFrameReference.Margin,
+            "page" => LegacyFrameReference.Page,
+            "left-margin-area" or "inner-margin-area" => LegacyFrameReference.LeftMarginArea,
+            "right-margin-area" or "outer-margin-area" => LegacyFrameReference.RightMarginArea,
+            _ => LegacyFrameReference.Text
+        };
+        var verticalReference = ReadVmlCssValue(style, "mso-position-vertical-relative")?.ToLowerInvariant() switch
+        {
+            "margin" => LegacyFrameReference.Margin,
+            "page" => LegacyFrameReference.Page,
+            "top-margin-area" => LegacyFrameReference.TopMarginArea,
+            "bottom-margin-area" => LegacyFrameReference.BottomMarginArea,
+            _ => LegacyFrameReference.Text
+        };
+
+        var zIndex = int.TryParse(ReadVmlCssValue(style, "z-index"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var z) ? z : 0;
+        var textAnchor = ReadVmlCssValue(style, "v-text-anchor")?.ToLowerInvariant() switch
+        {
+            { } anchor when anchor.StartsWith("middle", StringComparison.Ordinal) => LegacyFrameTextAnchor.Middle,
+            { } anchor when anchor.StartsWith("bottom", StringComparison.Ordinal) => LegacyFrameTextAnchor.Bottom,
+            _ => LegacyFrameTextAnchor.Top
+        };
+
+        // v:textbox/@inset is "left,top,right,bottom"; an omitted entry keeps VML's 0.1in/0.05in default.
+        var insets = (textBox.Attribute("inset")?.Value ?? string.Empty).Split(',');
+        double Inset(int index, double fallback) =>
+            index < insets.Length && ParseVmlLengthPt(insets[index]) is { } value ? value : fallback;
+
+        return new LegacyTextBoxFrame(
+            shape.Name == V + "oval",
+            widthPt,
+            heightPt,
+            fill,
+            stroke,
+            strokeWidth,
+            horizontal,
+            ParseVmlLengthPt(ReadVmlCssValue(style, "margin-left")) ?? 0,
+            horizontalReference,
+            vertical,
+            ParseVmlLengthPt(ReadVmlCssValue(style, "margin-top")) ?? 0,
+            verticalReference,
+            zIndex < 0,
+            textAnchor,
+            Inset(0, 7.2),
+            Inset(1, 3.6),
+            Inset(2, 7.2),
+            Inset(3, 3.6));
+    }
+
+    /// <summary>Parses a VML/CSS length ("1pt", "0.05in", "2mm", "12px", "0") into points.</summary>
+    private static double? ParseVmlLengthPt(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+        var text = value.Trim().ToLowerInvariant();
+        var factor = 0.75; // a bare VML number is in pixels
+        foreach (var (suffix, unitFactor) in new[] { ("pt", 1.0), ("in", 72.0), ("mm", 72.0 / 25.4), ("cm", 72.0 / 2.54), ("px", 0.75), ("pc", 12.0) })
+        {
+            if (text.EndsWith(suffix, StringComparison.Ordinal))
+            {
+                text = text[..^suffix.Length].Trim();
+                factor = unitFactor;
+                break;
+            }
+        }
+
+        return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) && double.IsFinite(number)
+            ? number * factor
+            : null;
     }
 
     /// <summary>Backing (always-empty) dictionaries for a fresh, no-context <see cref="NumberingRestartState"/>
@@ -1702,7 +1869,8 @@ public static partial class DocxReader
         string Result,
         RunFormatting? Formatting,
         ComplexFieldSequenceMetadata? Sequence,
-        IReadOnlyList<NestedComplexField>? NestedFields);
+        IReadOnlyList<NestedComplexField>? NestedFields,
+        LegacyFormField? FormField = null);
 
     /// <summary>
     /// Builds a semantic stack for nested complex fields. Each level owns its own instruction, cached
@@ -1712,12 +1880,14 @@ public static partial class DocxReader
     /// </summary>
     private sealed class ComplexFieldReadAccumulator
     {
-        private sealed class Frame(ComplexFieldSequenceMetadata? sequence)
+        private sealed class Frame(ComplexFieldSequenceMetadata? sequence, LegacyFormField? formField = null, XElement? beginRun = null)
         {
             public System.Text.StringBuilder Instruction { get; } = new();
             public System.Text.StringBuilder Result { get; } = new();
             public List<NestedComplexField> NestedFields { get; } = new();
             public ComplexFieldSequenceMetadata? Sequence { get; } = sequence;
+            public LegacyFormField? FormField { get; } = formField;
+            public XElement? BeginRun { get; } = beginRun;
             public bool PastSeparate { get; set; }
             public XElement? FormattingSource { get; set; }
         }
@@ -1731,19 +1901,19 @@ public static partial class DocxReader
             completed = null;
             var fieldCharacter = run.Element(W + "fldChar");
             var kind = fieldCharacter?.Attribute(W + "fldCharType")?.Value;
-            if (!IsActive)
+            if (kind == "begin")
             {
-                if (kind != "begin" || fieldCharacter?.Element(W + "ffData") is not null)
-                    return false;
-                _stack.Add(new Frame(ReadComplexFieldSequenceMetadata(fieldCharacter)));
+                // A legacy form field (w:ffData on the begin character) is a complex field like any other;
+                // its ffData becomes the field's LegacyFormField model.
+                _stack.Add(new Frame(
+                    ReadComplexFieldSequenceMetadata(fieldCharacter),
+                    ReadLegacyFormField(fieldCharacter),
+                    run));
                 return true;
             }
 
-            if (kind == "begin")
-            {
-                _stack.Add(new Frame(ReadComplexFieldSequenceMetadata(fieldCharacter)));
-                return true;
-            }
+            if (!IsActive)
+                return false;
 
             var current = _stack[^1];
             if (kind == "separate")
@@ -1760,12 +1930,18 @@ public static partial class DocxReader
                 var nestedFields = current.NestedFields.Count == 0 ? null : current.NestedFields.ToArray();
                 if (_stack.Count == 0)
                 {
+                    // A check box / drop-down form field has no result runs: its formatting (the box size
+                    // and font) lives on the begin run instead.
+                    var formattingSource = current.FormField is null
+                        ? current.FormattingSource
+                        : current.FormattingSource ?? current.BeginRun;
                     completed = new CompletedComplexFieldRead(
                         instruction,
-                        result,
-                        ReadRunFormatting(current.FormattingSource?.Element(W + "rPr")),
+                        current.FormField is { } formField ? LegacyFormFieldResultText(formField, result) : result,
+                        ReadRunFormatting(formattingSource?.Element(W + "rPr")),
                         current.Sequence,
-                        nestedFields);
+                        nestedFields,
+                        current.FormField);
                     return true;
                 }
 
@@ -1777,7 +1953,7 @@ public static partial class DocxReader
                 var offset = parentBuffer.Length;
                 parentBuffer.Append(result);
                 parent.NestedFields.Add(new NestedComplexField(
-                    new ComplexField(instruction, Sequence: current.Sequence, NestedFields: nestedFields),
+                    new ComplexField(instruction, Sequence: current.Sequence, NestedFields: nestedFields, FormField: current.FormField),
                     result,
                     placement,
                     offset,
@@ -1894,7 +2070,8 @@ public static partial class DocxReader
                         hyperlinkAnchor: null,
                         hyperlinkTooltip: null,
                         completedField.Sequence,
-                        completedField.NestedFields);
+                        completedField.NestedFields,
+                        completedField.FormField);
                 }
             }
             else if (fieldAccumulator.IsActive && child.Name == W + "hyperlink")
@@ -1920,7 +2097,69 @@ public static partial class DocxReader
                             hyperlinkAnchor: null,
                             hyperlinkTooltip: null,
                             completedHyperlinkField.Sequence,
-                            completedHyperlinkField.NestedFields);
+                            completedHyperlinkField.NestedFields,
+                            completedHyperlinkField.FormField);
+                    }
+                }
+            }
+            else if ((child.Name == W + "ins" || child.Name == W + "moveTo")
+                     && (fieldAccumulator.IsActive
+                         || child.Elements(W + "r").Any(run => run.Element(W + "fldChar") is not null)))
+            {
+                // A complex field whose fldChar runs sit inside tracked insertions (Word writes
+                // <w:ins><w:r><w:fldChar begin/>...</w:ins> result <w:ins>...<w:fldChar end/></w:ins> when a
+                // PAGE field is inserted under Track Changes) is still one field. Routing those runs past the
+                // accumulator dropped the begin/instruction/end and left only the cached result as plain
+                // text, so a footer PAGE field printed its stale "1" on every page.
+                var wrapperRevision = new RevisionInfo(
+                    RevisionKind.Inserted,
+                    child.Attribute(W + "author")?.Value,
+                    child.Attribute(W + "date")?.Value,
+                    child.Name == W + "moveTo"
+                        && int.TryParse(child.Attribute(W + "id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var wrapperMoveId)
+                        ? wrapperMoveId
+                        : null);
+                foreach (var wrapped in child.Elements())
+                {
+                    if (wrapped.Name == W + "r"
+                        && fieldAccumulator.TryConsumeRun(wrapped, out var completedWrappedField))
+                    {
+                        if (completedWrappedField is not null)
+                        {
+                            AddComplexFieldRun(
+                                paragraph,
+                                completedWrappedField.Instruction,
+                                completedWrappedField.Result,
+                                completedWrappedField.Formatting,
+                                activeCommentId,
+                                wrapperRevision,
+                                inheritedControl,
+                                hyperlinkUrl: null,
+                                hyperlinkAnchor: null,
+                                hyperlinkTooltip: null,
+                                completedWrappedField.Sequence,
+                                completedWrappedField.NestedFields,
+                                completedWrappedField.FormField);
+                        }
+                    }
+                    else
+                    {
+                        AddParagraphContentElement(
+                            paragraph,
+                            wrapped,
+                            archive,
+                            imageRelationships,
+                            hyperlinkRelationships,
+                            numbering,
+                            activeCommentId,
+                            wrapperRevision,
+                            control: inheritedControl,
+                            hyperlinkUrl: null,
+                            hyperlinkAnchor: null,
+                            hyperlinkTooltip: null,
+                            preservedDrawingTarget,
+                            preservedDrawingRelationshipTargets,
+                            subDocumentRelationships);
                     }
                 }
             }
@@ -2752,7 +2991,8 @@ public static partial class DocxReader
                         hyperlinkAnchor,
                         hyperlinkTooltip,
                         completedField.Sequence,
-                        completedField.NestedFields);
+                        completedField.NestedFields,
+                        completedField.FormField);
                 }
 
                 continue;
@@ -2774,9 +3014,10 @@ public static partial class DocxReader
         string? hyperlinkAnchor,
         string? hyperlinkTooltip,
         ComplexFieldSequenceMetadata? sequenceMetadata,
-        IReadOnlyList<NestedComplexField>? nestedFields)
+        IReadOnlyList<NestedComplexField>? nestedFields,
+        LegacyFormField? formField = null)
     {
-        if (CitationFor(instruction) is { } citation)
+        if (formField is null && CitationFor(instruction) is { } citation)
         {
             var citationRun = Run.CitationMark(citation);
             citationRun.CommentId = commentId;
@@ -2804,6 +3045,8 @@ public static partial class DocxReader
             formatting,
             sequenceMetadata,
             nestedFields);
+        if (formField is not null)
+            run.ComplexField = run.ComplexField! with { FormField = formField };
         run.CommentId = commentId;
         run.Control = control;
         run.HyperlinkUrl = hyperlinkUrl;
@@ -4282,6 +4525,27 @@ public static partial class DocxReader
             return;
         }
 
+        // Legacy VML art with no picture payload (w:pict holding WordArt v:textpath shapes, v:textbox
+        // text boxes or an o:hr horizontal rule) used to vanish; map it onto the nearest modelled object.
+        if (r.Element(W + "pict") is { } legacyPict)
+        {
+            var legacyRuns = ReadLegacyVmlArt(
+                legacyPict, paragraph, archive, imageRelationships, hyperlinkRelationships, numbering);
+            if (legacyRuns.Count > 0)
+            {
+                foreach (var legacyRun in legacyRuns)
+                {
+                    legacyRun.HyperlinkUrl = hyperlinkUrl;
+                    legacyRun.HyperlinkAnchor = hyperlinkAnchor;
+                    legacyRun.HyperlinkTooltip = hyperlinkTooltip;
+                    legacyRun.CommentId = commentId;
+                    ApplyRevision(legacyRun);
+                    paragraph.Runs.Add(legacyRun);
+                }
+                return;
+            }
+        }
+
         // A body run wrapping a w:object (VML v:shape + o:OLEObject) becomes a modelled embedded OLE object.
         var embedded = ReadEmbeddedObject(r, archive, imageRelationships);
         if (embedded is not null)
@@ -4447,6 +4711,18 @@ public static partial class DocxReader
                 text.Append('\t');
             else if (child.Name == W + "cr")
                 text.Append('\n');
+            else if (child.Name == W + "sym" && ReadSymbolCharacter(child) is { } symbol)
+            {
+                // w:sym w:font="Symbol" w:char="F0B7": a glyph of a symbol font addressed by its
+                // private-use code point. It becomes its own run carrying the symbol font (used to be
+                // dropped); renderers draw it in that font and the writer emits w:sym again.
+                AddTextFragment();
+                var symbolFormatting = formatting;
+                formatting = formatting with { SymbolFont = symbol.Font ?? formatting.FontFamily ?? "Symbol" };
+                text.Append(symbol.Character);
+                AddTextFragment();
+                formatting = symbolFormatting;
+            }
             else if (child.Name == W + "br")
             {
                 switch (child.Attribute(W + "type")?.Value)
@@ -4465,6 +4741,25 @@ public static partial class DocxReader
         }
 
         AddTextFragment();
+    }
+
+    /// <summary>
+    /// Reads <c>w:sym</c> (<c>w:font</c>, hex <c>w:char</c>). Word addresses symbol-font glyphs in the
+    /// U+F000 private-use block; a value below U+0100 is the same glyph by its legacy 8-bit code.
+    /// </summary>
+    private static (string Character, string? Font)? ReadSymbolCharacter(XElement symbol)
+    {
+        if (!int.TryParse(symbol.Attribute(W + "char")?.Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var code)
+            || code <= 0
+            || code > 0xFFFF)
+            return null;
+
+        if (code < 0x100)
+            code += 0xF000;
+        if (char.IsSurrogate((char)code))
+            return null;
+        var font = symbol.Attribute(W + "font")?.Value;
+        return (((char)code).ToString(), string.IsNullOrWhiteSpace(font) ? null : font);
     }
 
     private static void ResolveAlternateContent(XElement run)
@@ -4821,6 +5116,7 @@ public static partial class DocxReader
                         // A table nested directly inside this cell (as opposed to one dropped on the floor):
                         // recurse with the same relationship/numbering context so the nested table's own
                         // cells, drawings and fields resolve exactly like a top-level table's would.
+                        cell.NestedTableParagraphOffsets.Add(cell.Paragraphs.Count);
                         cell.NestedTables.Add(ReadTable(
                             child,
                             archive,
@@ -6075,6 +6371,130 @@ public static partial class DocxReader
     }
 
     /// <summary>
+    /// Maps picture-less legacy VML (<c>w:pict</c>) onto modelled objects: a <c>v:textpath</c> shape becomes
+    /// inline WordArt (text, face and the shape's box; the VML fill is approximated by the nearest style
+    /// preset), a <c>v:textbox</c> shape becomes an inline text-box shape holding its <c>w:txbxContent</c>
+    /// paragraphs, and an <c>o:hr</c> rule becomes the host paragraph's bottom border. Returns the runs to
+    /// add (empty when the pict holds nothing recognised, or only a rule).
+    /// </summary>
+    private static List<Run> ReadLegacyVmlArt(
+        XElement pict,
+        Paragraph paragraph,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<int, ListKind> numbering)
+    {
+        var runs = new List<Run>();
+        if (pict.Descendants(V + "imagedata").Any())
+            return runs;
+
+        // Only in-line art is mapped: an absolutely positioned VML object (a floating stamp, Word's own
+        // PowerPlus watermark, which has its dedicated reader) would be misplaced as an inline run.
+        if (pict.Elements().Any(element =>
+                element.Name.Namespace == V
+                && element.Name != V + "shapetype"
+                && (element.Attribute("style")?.Value.Contains("position:absolute", StringComparison.OrdinalIgnoreCase) == true
+                    || element.Attribute("id")?.Value.StartsWith("PowerPlus", StringComparison.Ordinal) == true)))
+        {
+            return runs;
+        }
+
+        foreach (var shape in pict.Descendants().Where(element => element.Name.Namespace == V))
+        {
+            var style = shape.Attribute("style")?.Value;
+            if (shape.Attribute(O + "hr")?.Value is "t" or "true")
+            {
+                var (_, ruleHeightPt) = ParseVmlShapeSize(style);
+                var ruleColor = shape.Attribute("fillcolor")?.Value;
+                paragraph.Formatting = paragraph.Formatting with
+                {
+                    Border = new ParagraphBorder(
+                        ruleColor is { Length: 7 } && ruleColor[0] == '#' ? ruleColor.ToUpperInvariant() : "#A0A0A0",
+                        ruleHeightPt > 0 ? ruleHeightPt : 1.5,
+                        BottomOnly: true)
+                };
+                continue;
+            }
+
+            if (shape.Element(V + "textpath") is { } textPath
+                && textPath.Attribute("string")?.Value is { Length: > 0 } artText)
+            {
+                var (artWidthPt, artHeightPt) = ParseVmlShapeSize(style);
+                var fill = shape.Element(V + "fill");
+                var wordArt = new WordArt(
+                    artText.Trim(),
+                    fill?.Attribute("colors") is not null
+                        ? WordArtStyle.GradFillMulti
+                        : fill?.Attribute("type")?.Value == "gradient"
+                            ? WordArtStyle.ChromeOne
+                            : shape.Element(V + "shadow") is not null
+                                ? WordArtStyle.Shadow
+                                : WordArtStyle.FillBlue,
+                    // v:textpath fitpath stretches the text to the shape box, so the box height sets the size.
+                    artHeightPt > 0 ? Math.Round(artHeightPt * 0.85, 1) : 36)
+                {
+                    FontFamily = ReadVmlCssValue(textPath.Attribute("style")?.Value, "font-family")?.Trim('"', '\''),
+                    WidthPt = artWidthPt > 0 ? artWidthPt : null,
+                    HeightPt = artHeightPt > 0 ? artHeightPt : null,
+                };
+                runs.Add(Run.FromWordArt(wordArt));
+                continue;
+            }
+
+            if (shape.Element(V + "textbox")?.Element(W + "txbxContent") is { } textBoxContent)
+            {
+                var (boxWidthPt, boxHeightPt) = ParseVmlShapeSize(style);
+                // Inside a v:group the child box is in group coordinates; scale by the group's own size.
+                if (shape.Parent is { } group && group.Name == V + "group"
+                    && ParseVmlShapeSize(group.Attribute("style")?.Value) is var (groupWidthPt, groupHeightPt)
+                    && groupWidthPt > 0 && groupHeightPt > 0
+                    && group.Attribute("coordsize")?.Value.Split(',') is { Length: 2 } coordSize
+                    && double.TryParse(coordSize[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var coordWidth)
+                    && double.TryParse(coordSize[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var coordHeight)
+                    && coordWidth > 0 && coordHeight > 0)
+                {
+                    boxWidthPt *= groupWidthPt / coordWidth;
+                    boxHeightPt *= groupHeightPt / coordHeight;
+                }
+                if (boxWidthPt <= 0 || boxHeightPt <= 0)
+                    continue;
+
+                var textBox = new Shape
+                {
+                    Kind = ShapeKind.TextBox,
+                    WidthPt = boxWidthPt,
+                    HeightPt = boxHeightPt,
+                    FillColorHex = "#FFFFFF",
+                    OutlineColorHex = "#000000",
+                    OutlineWidthPt = 0.75,
+                };
+                foreach (var boxParagraph in textBoxContent.Elements(W + "p"))
+                {
+                    textBox.TextParagraphs.Add(ReadParagraph(
+                        boxParagraph, archive, imageRelationships, hyperlinkRelationships, numbering));
+                }
+                runs.Add(Run.FromShape(textBox));
+            }
+        }
+
+        return runs;
+    }
+
+    private static string? ReadVmlCssValue(string? style, string key)
+    {
+        if (string.IsNullOrEmpty(style))
+            return null;
+        foreach (var part in style.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var colon = part.IndexOf(':');
+            if (colon > 0 && part[..colon].Trim().Equals(key, StringComparison.OrdinalIgnoreCase))
+                return part[(colon + 1)..].Trim();
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Parses a VML shape @style ("width:96pt;height:96pt") into its width/height in points. Missing or
     /// unparseable dimensions read back as 0 (the caller keeps the model default in that case).
     /// </summary>
@@ -7258,6 +7678,8 @@ public static partial class DocxReader
                 "both" or "justify" => TextAlignment.Justify,
                 _ => TextAlignment.Left
             },
+            // An explicit w:jc="left"/"start" must be able to override a justified style.
+            AlignmentIsSet = jc is "left" or "start",
             IndentLeftPt = DxaToPoints(indent?.Attribute(W + "left")?.Value ?? indent?.Attribute(W + "start")?.Value),
             IndentRightPt = DxaToPoints(indent?.Attribute(W + "right")?.Value ?? indent?.Attribute(W + "end")?.Value),
             // w:hanging (a positive twips value) is mutually exclusive with w:firstLine in OOXML; the model
@@ -7987,7 +8409,8 @@ public static partial class DocxReader
     internal readonly record struct ThemeFontResolution(
         string? MajorLatin, string? MinorLatin,
         string? MajorEastAsia, string? MinorEastAsia,
-        string? MajorComplexScript, string? MinorComplexScript);
+        string? MajorComplexScript, string? MinorComplexScript,
+        string? MajorBidiScript = null, string? MinorBidiScript = null);
 
     /// <summary>
     /// Resolves the package's theme part (via the same relationship/fallback lookup as
@@ -8011,13 +8434,39 @@ public static partial class DocxReader
             fontScheme?.Element(drawing + fontElementName)?.Element(drawing + scriptElementName)
                 ?.Attribute("typeface")?.Value;
 
+        // Word's own theme leaves a:cs empty and lists per-script fonts instead; a "Bidi" theme token
+        // then takes the script font for the document's theme bidi language (w:themeFontLang/@w:bidi,
+        // e.g. ar-SA -> Arab -> Times New Roman for the major font).
+        var bidiScript = BidiScriptCode(LoadPart(archive, "word/settings.xml")?.Root
+            ?.Element(W + "themeFontLang")?.Attribute(W + "bidi")?.Value);
+        string? BidiScriptTypeface(string fontElementName) =>
+            fontScheme?.Element(drawing + fontElementName)?.Elements(drawing + "font")
+                .FirstOrDefault(font => string.Equals(font.Attribute("script")?.Value, bidiScript, StringComparison.Ordinal))
+                ?.Attribute("typeface")?.Value;
+
         return new ThemeFontResolution(
             MajorLatin: theme.FontScheme.MajorLatinTypeface,
             MinorLatin: theme.FontScheme.MinorLatinTypeface,
             MajorEastAsia: ScriptTypeface("majorFont", "ea"),
             MinorEastAsia: ScriptTypeface("minorFont", "ea"),
             MajorComplexScript: ScriptTypeface("majorFont", "cs"),
-            MinorComplexScript: ScriptTypeface("minorFont", "cs"));
+            MinorComplexScript: ScriptTypeface("minorFont", "cs"),
+            MajorBidiScript: BidiScriptTypeface("majorFont"),
+            MinorBidiScript: BidiScriptTypeface("minorFont"));
+    }
+
+    /// <summary>The theme-font script code for a bidi language tag (Arabic script when unknown).</summary>
+    private static string BidiScriptCode(string? languageTag)
+    {
+        var language = languageTag?.Split('-')[0].ToLowerInvariant();
+        return language switch
+        {
+            "he" or "yi" => "Hebr",
+            "th" => "Thai",
+            "syr" => "Syrc",
+            "dv" => "Thaa",
+            _ => "Arab"
+        };
     }
 
     /// <summary>
@@ -8036,11 +8485,33 @@ public static partial class DocxReader
         if (!isMajor && !isMinor)
             return null;
 
-        if (eastAsia)
-            return isMajor ? resolved.MajorEastAsia : resolved.MinorEastAsia;
-        if (complexScript)
-            return isMajor ? resolved.MajorComplexScript : resolved.MinorComplexScript;
-        return isMajor ? resolved.MajorLatin : resolved.MinorLatin;
+        // The token's own suffix names the theme font it binds, whichever attribute carries it:
+        // w:asciiTheme="majorBidi" puts the complex-script theme font in the ascii slot (stress015).
+        var suffix = themeToken[5..];
+        string? typeface;
+        if (suffix.Equals("EastAsia", StringComparison.OrdinalIgnoreCase))
+            typeface = isMajor ? resolved.MajorEastAsia : resolved.MinorEastAsia;
+        else if (suffix.Equals("Bidi", StringComparison.OrdinalIgnoreCase))
+            typeface = BidiTypeface(isMajor);
+        else if (suffix.Equals("Ascii", StringComparison.OrdinalIgnoreCase) || suffix.Equals("HAnsi", StringComparison.OrdinalIgnoreCase))
+            typeface = isMajor ? resolved.MajorLatin : resolved.MinorLatin;
+        else if (eastAsia)
+            typeface = isMajor ? resolved.MajorEastAsia : resolved.MinorEastAsia;
+        else if (complexScript)
+            typeface = BidiTypeface(isMajor);
+        else
+            typeface = isMajor ? resolved.MajorLatin : resolved.MinorLatin;
+
+        // An empty theme typeface (a:ea typeface="") is "not specified", never a font named "".
+        return string.IsNullOrWhiteSpace(typeface) ? null : typeface;
+
+        string? BidiTypeface(bool major)
+        {
+            var complexScriptFont = major ? resolved.MajorComplexScript : resolved.MinorComplexScript;
+            return string.IsNullOrWhiteSpace(complexScriptFont)
+                ? (major ? resolved.MajorBidiScript : resolved.MinorBidiScript)
+                : complexScriptFont;
+        }
     }
 
     internal static RunFormatting ReadRunFormatting(XElement? rPr, ThemeFontResolution? themeFonts = null)
@@ -8125,8 +8596,41 @@ public static partial class DocxReader
         if (string.IsNullOrEmpty(complexScriptFont))
             complexScriptFont = ResolveThemeFontToken(rFontsElement?.Attribute(W + "cstheme")?.Value, themeFonts, eastAsia: false, complexScript: true);
 
+        // A run's own theme tokens (no theme passed: only w:docDefaults/styles resolve at read) stay tokens
+        // in the model -- written back on save, resolved against the current theme by the renderers
+        // (ThemeFontTokenResolver) -- so a later theme change still re-fonts the run.
+        RunThemeFontTokens? themeTokens = null;
+        if (themeFonts is null && rFontsElement is not null)
+        {
+            var tokens = new RunThemeFontTokens(
+                rFontsElement.Attribute(W + "asciiTheme")?.Value,
+                rFontsElement.Attribute(W + "hAnsiTheme")?.Value,
+                rFontsElement.Attribute(W + "eastAsiaTheme")?.Value,
+                rFontsElement.Attribute(W + "cstheme")?.Value);
+            themeTokens = tokens.IsEmpty ? null : tokens;
+        }
+
+        // Toggles authored OFF (<w:b w:val="0"/>, <w:u w:val="none"/>) must override an inherited "on"
+        // from the paragraph/character style chain; record them so the cascade can tell them from unset.
+        var explicitlyOff = RunToggleOverrides.None;
+        void NoteOff(string localName, RunToggleOverrides flag)
+        {
+            if (rPr.Element(W + localName) is not null && !ReadToggle(rPr, localName))
+                explicitlyOff |= flag;
+        }
+        NoteOff("b", RunToggleOverrides.Bold);
+        NoteOff("i", RunToggleOverrides.Italic);
+        NoteOff("strike", RunToggleOverrides.Strikethrough);
+
+        NoteOff("caps", RunToggleOverrides.AllCaps);
+        NoteOff("smallCaps", RunToggleOverrides.SmallCaps);
+
+        if (underline is not null && underline.Attribute(W + "val")?.Value == "none")
+            explicitlyOff |= RunToggleOverrides.Underline;
+
         return new RunFormatting
         {
+            ExplicitlyOff = explicitlyOff,
             Bold = ReadToggle(rPr, "b"),
             Italic = ReadToggle(rPr, "i"),
             Underline = underline is not null && (underline.Attribute(W + "val")?.Value ?? "single") != "none",
@@ -8141,7 +8645,14 @@ public static partial class DocxReader
             FontFamily = asciiFont,
             EastAsiaFontFamily = string.IsNullOrEmpty(eastAsiaFont) ? null : eastAsiaFont,
             ComplexScriptFontFamily = string.IsNullOrEmpty(complexScriptFont) ? null : complexScriptFont,
+            ThemeFonts = themeTokens,
             FontSizePt = HalfPointsToPoints(rPr.Element(W + "sz")?.Attribute(W + "val")?.Value),
+            // Only a w:szCs that differs from w:sz is modeled; the common sz == szCs pair stays null.
+            ComplexScriptFontSizePt =
+                rPr.Element(W + "szCs")?.Attribute(W + "val")?.Value is { } szCs
+                && szCs != rPr.Element(W + "sz")?.Attribute(W + "val")?.Value
+                    ? HalfPointsToPoints(szCs)
+                    : null,
             ColorHex = color is null or "auto" ? null : "#" + color.TrimStart('#'),
             ThemeColor = string.IsNullOrWhiteSpace(themeColorToken)
                 ? null
@@ -8517,6 +9028,12 @@ public static partial class DocxReader
         // rendered at 0 space-after / 1.15 line regardless of the document — drifting vs Word down the page.
         var docDefaults = stylesXml.Root?.Element(W + "docDefaults");
         var ddPr = docDefaults?.Element(W + "pPrDefault")?.Element(W + "pPr");
+        // A serialized w:docDefaults root is authoritative even when its paragraph defaults are empty
+        // (<w:pPrDefault/> or none at all, as Word 2007 writes for converted documents): Word then lays
+        // such a package out at the specification default (single line, no spacing), never at the
+        // application/template 1.15 cadence reserved for packages with no document defaults whatsoever.
+        if (docDefaults is not null)
+            document.UseWordApplicationDefaultLineSpacing = false;
         if (ddPr is not null)
         {
             // A package-authored paragraph-default root is authoritative even when it omits w:line:
@@ -8543,7 +9060,10 @@ public static partial class DocxReader
                 FontFamily = defaultRun.FontFamily ?? document.DefaultRun.FontFamily,
                 EastAsiaFontFamily = defaultRun.EastAsiaFontFamily ?? document.DefaultRun.EastAsiaFontFamily,
                 ComplexScriptFontFamily = defaultRun.ComplexScriptFontFamily ?? document.DefaultRun.ComplexScriptFontFamily,
-                FontSizePt = defaultRun.FontSizePt ?? document.DefaultRun.FontSizePt,
+                // A serialized rPrDefault without w:sz means the specification default of 10pt (sz=20),
+                // not the application/template 11pt a package with no run defaults falls back to.
+                FontSizePt = defaultRun.FontSizePt ?? 10,
+                ComplexScriptFontSizePt = defaultRun.ComplexScriptFontSizePt,
                 ColorHex = defaultRun.ColorHex ?? document.DefaultRun.ColorHex,
                 ThemeColor = defaultRun.ColorHex is not null || defaultRun.ThemeColor is not null
                     ? defaultRun.ThemeColor

@@ -12,5 +12,10 @@ public static class OptionsDialogParityFixture
         // Keep the capture semantically aligned with the production default.
         ShowFormulaBar = true,
         FormulaBarExpanded = false,
+        // The default is Environment.UserName, which differs between the Windows capture host and
+        // the Linux container ("root"); pin it so Options > General compares identical text.
+        UserName = ParityUserName,
     };
+
+    public const string ParityUserName = "FreeX User";
 }

@@ -92,6 +92,12 @@ internal static class FreeWRibbonText
     public static readonly RibbonText ChangeCaseCompactCommand = new(
         "Ribbon_Command_ChangeCaseCompact_Label");
 
+    public static readonly RibbonText TextEffectsCommand = new(
+        "Ribbon_Command_TextEffects_Label");
+
+    public static readonly RibbonText LegacyToolsCommand = new(
+        "Ribbon_Command_LegacyTools_Label");
+
     public static readonly RibbonText SmallCapsCommand = new(
         "Ribbon_Command_SmallCaps_Label");
 

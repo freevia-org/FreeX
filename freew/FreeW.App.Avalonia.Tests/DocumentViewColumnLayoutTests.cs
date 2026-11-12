@@ -382,43 +382,115 @@ public sealed class DocumentViewColumnLayoutTests
     }
 
     [Fact]
-    public async Task Explicit_widow_control_on_still_keeps_an_ordinary_wrapped_paragraph_on_one_page()
+    public async Task Explicit_widow_control_on_paginates_the_same_as_the_omitted_default()
     {
-        // Sibling/no-regression: a source document that explicitly turns widowControl ON (rather than
-        // merely omitting the token) still keeps the paragraph together — the fix only stops the
-        // OMITTED/default case from being over-widened, it must not also strip the explicit-on mapping.
+        // Word treats an omitted w:widowControl as on, so an explicit on token must paginate exactly
+        // like the omitted default: both apply the two-line widow/orphan guard and neither holds the
+        // whole paragraph together the way keep-lines-together does.
         double[] explicitOnY = [];
+        double[] omittedY = [];
         var ran = await OnUiThread(() =>
         {
-            var doc = TextDocument.CreateEmpty();
-            doc.Blocks.Clear();
-            doc.Page.WidthPt = 360;
-            doc.Page.HeightPt = 216;
-            doc.Page.MarginLeftPt = 36;
-            doc.Page.MarginRightPt = 36;
-            doc.Page.MarginTopPt = 36;
-            doc.Page.MarginBottomPt = 36;
-
-            for (var index = 0; index < 8; index++)
-                doc.Blocks.Add(new Paragraph($"Filler paragraph {index + 1}."));
-
-            doc.Blocks.Add(new Paragraph(
-                "A wrapped paragraph that has enough words to span several measured lines and must " +
-                "move as one unit when Word's default widow control is active at a page boundary.")
+            static double[] LineYs(ParagraphFormatting formatting)
             {
-                Formatting = ParagraphFormatting.Default with { WidowControl = true, WidowControlIsSet = true }
-            });
+                var doc = TextDocument.CreateEmpty();
+                doc.Blocks.Clear();
+                doc.Page.WidthPt = 360;
+                doc.Page.HeightPt = 216;
+                doc.Page.MarginLeftPt = 36;
+                doc.Page.MarginRightPt = 36;
+                doc.Page.MarginTopPt = 36;
+                doc.Page.MarginBottomPt = 36;
 
-            var view = new DocumentView();
-            view.LoadDocument(doc);
-            view.Measure(new Size(600, 3000));
-            explicitOnY = view.GetPlacedForBlock(8).Select(glyph => glyph.Y).Distinct().ToArray();
+                for (var index = 0; index < 8; index++)
+                    doc.Blocks.Add(new Paragraph($"Filler paragraph {index + 1}."));
+
+                doc.Blocks.Add(new Paragraph(
+                    "A wrapped paragraph that has enough words to span several measured lines and must " +
+                    "move as one unit when Word's default widow control is active at a page boundary.")
+                {
+                    Formatting = formatting
+                });
+
+                var view = new DocumentView();
+                view.LoadDocument(doc);
+                view.Measure(new Size(600, 3000));
+                return view.GetPlacedForBlock(8).Select(glyph => glyph.Y).Distinct().OrderBy(y => y).ToArray();
+            }
+
+            explicitOnY = LineYs(ParagraphFormatting.Default with { WidowControl = true, WidowControlIsSet = true });
+            omittedY = LineYs(ParagraphFormatting.Default);
         });
 
         if (!ran) return;
 
-        (explicitOnY.Max() - explicitOnY.Min()).Should().BeLessThan(150,
-            "an explicit w:widowControl=1 token still keeps the complete ordinary paragraph together");
+        explicitOnY.Should().Equal(omittedY);
+    }
+
+    [Fact]
+    public async Task Default_widow_control_never_strands_a_single_line_at_a_page_boundary()
+    {
+        // Word's default widow/orphan control (omitted w:widowControl) never leaves one line of a
+        // paragraph alone at the bottom (orphan) or top (widow) of a page. Sweep the amount of filler
+        // ahead of a multi-line paragraph until widow-control-off strands a single line, then require
+        // the default policy to keep at least two lines on each side of that same boundary.
+        var strandedWithoutWidowControl = false;
+        int[] defaultLinesPerPage = [];
+        var ran = await OnUiThread(() =>
+        {
+            static int[] LinesPerPage(int fillerCount, ParagraphFormatting formatting)
+            {
+                var doc = TextDocument.CreateEmpty();
+                doc.Blocks.Clear();
+                doc.Page.WidthPt = 360;
+                doc.Page.HeightPt = 216;
+                doc.Page.MarginLeftPt = 36;
+                doc.Page.MarginRightPt = 36;
+                doc.Page.MarginTopPt = 36;
+                doc.Page.MarginBottomPt = 36;
+
+                for (var index = 0; index < fillerCount; index++)
+                    doc.Blocks.Add(new Paragraph($"Filler paragraph {index + 1}."));
+
+                doc.Blocks.Add(new Paragraph(string.Join(" ", Enumerable.Repeat(
+                    "Widow and orphan control keeps two lines together on both sides of a break.", 4)))
+                {
+                    Formatting = formatting
+                });
+
+                var view = new DocumentView();
+                view.LoadDocument(doc);
+                view.Measure(new Size(600, 3000));
+                var ys = view.GetPlacedForBlock(fillerCount).Select(glyph => glyph.Y).Distinct().OrderBy(y => y).ToArray();
+                var groups = new List<int> { 1 };
+                for (var index = 1; index < ys.Length; index++)
+                {
+                    if (ys[index] - ys[index - 1] > 60)
+                        groups.Add(1);
+                    else
+                        groups[^1]++;
+                }
+                return [.. groups];
+            }
+
+            var widowOff = ParagraphFormatting.Default with { WidowControl = false, WidowControlIsSet = true };
+            for (var fillerCount = 1; fillerCount < 16; fillerCount++)
+            {
+                var offPages = LinesPerPage(fillerCount, widowOff);
+                if (offPages.Length == 2 && (offPages[0] == 1 || offPages[1] == 1))
+                {
+                    strandedWithoutWidowControl = true;
+                    defaultLinesPerPage = LinesPerPage(fillerCount, ParagraphFormatting.Default);
+                    break;
+                }
+            }
+        });
+
+        if (!ran) return;
+
+        strandedWithoutWidowControl.Should().BeTrue("the sweep must reach a boundary that strands one line without widow control");
+        defaultLinesPerPage.Should().OnlyContain(lines => lines >= 2,
+            "default widow/orphan control never leaves a single line of the paragraph alone on a page");
     }
 
     // R137: KeepWithNext must keep a heading and its following body paragraph on the same page.

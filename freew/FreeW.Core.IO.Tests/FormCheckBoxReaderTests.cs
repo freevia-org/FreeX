@@ -7,8 +7,8 @@ namespace FreeW.Core.IO.Tests;
 
 /// <summary>
 /// Reader coverage for legacy form-field checkboxes (w:fldChar/w:ffData/w:checkBox + FORMCHECKBOX), which
-/// FreeW previously dropped entirely (the field's runs carry no w:t). They now map to a checkbox content
-/// control so they render and round-trip.
+/// FreeW once dropped entirely (the field's runs carry no w:t). They read as a FORMCHECKBOX complex field
+/// carrying its <see cref="LegacyFormField"/>, showing the box glyph for its state.
 /// </summary>
 public class FormCheckBoxReaderTests
 {
@@ -33,22 +33,25 @@ public class FormCheckBoxReaderTests
         "<w:r><w:instrText xml:space=\"preserve\"> FORMCHECKBOX </w:instrText></w:r>" +
         "<w:r><w:fldChar w:fldCharType=\"end\"/></w:r></w:p>";
 
+    private static Run FieldRun(TextDocument doc) =>
+        doc.Blocks.OfType<Paragraph>().First().Runs.Single(r => r.ComplexField?.FormField is not null);
+
     [Fact]
-    public void FormCheckBox_DefaultChecked_ReadsAsCheckedControl()
+    public void FormCheckBox_DefaultChecked_ReadsAsCheckedField()
     {
-        var doc = ReadBody(FormCheckbox(1));
-        var run = doc.Blocks.OfType<Paragraph>().First().Runs.First(r => r.Control is not null);
-        Assert.Equal(ContentControlKind.CheckBox, run.Control!.Kind);
-        Assert.True(run.Control.Checked);
+        var run = FieldRun(ReadBody(FormCheckbox(1)));
+        Assert.Equal(LegacyFormFieldKind.CheckBox, run.ComplexField!.FormField!.Kind);
+        Assert.True(run.ComplexField.FormField.IsChecked);
+        Assert.Equal(ContentControl.CheckedGlyph, run.Text);
+        Assert.Equal("C", run.ComplexField.FormField.Name);
     }
 
     [Fact]
-    public void FormCheckBox_DefaultUnchecked_ReadsAsUncheckedControl()
+    public void FormCheckBox_DefaultUnchecked_ReadsAsUncheckedField()
     {
-        var doc = ReadBody(FormCheckbox(0));
-        var run = doc.Blocks.OfType<Paragraph>().First().Runs.First(r => r.Control is not null);
-        Assert.Equal(ContentControlKind.CheckBox, run.Control!.Kind);
-        Assert.False(run.Control.Checked);
+        var run = FieldRun(ReadBody(FormCheckbox(0)));
+        Assert.False(run.ComplexField!.FormField!.IsChecked);
+        Assert.Equal(ContentControl.UncheckedGlyph, run.Text);
     }
 
     [Fact]
@@ -59,8 +62,8 @@ public class FormCheckBoxReaderTests
             "<w:checkBox><w:default w:val=\"0\"/><w:checked/></w:checkBox></w:ffData></w:fldChar></w:r>" +
             "<w:r><w:instrText xml:space=\"preserve\"> FORMCHECKBOX </w:instrText></w:r>" +
             "<w:r><w:fldChar w:fldCharType=\"end\"/></w:r></w:p>";
-        var doc = ReadBody(body);
-        var run = doc.Blocks.OfType<Paragraph>().First().Runs.First(r => r.Control is not null);
-        Assert.True(run.Control!.Checked);
+        var field = FieldRun(ReadBody(body)).ComplexField!.FormField!;
+        Assert.True(field.IsChecked);
+        Assert.False(field.DefaultChecked);
     }
 }

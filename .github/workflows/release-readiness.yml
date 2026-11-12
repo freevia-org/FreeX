@@ -2,8 +2,8 @@ name: Release Readiness
 
 # Why this exists.
 #
-# eng/test-gates.json declares 11 release-only gates -- the seven WPF host batches, the WPF shell
-# lane, and three render-evidence lanes. None of them run on push, so between releases they rot
+# eng/test-gates.json declares 13 release-only gates -- the seven WPF host batches, the WPF shell
+# lane, three render-evidence lanes, and the two FreeX macOS legs moved off push. None of them run on push, so between releases they rot
 # invisibly on a green main, and every release attempt then has to pay off however much debt has
 # accumulated. That is not hypothetical: releasing 0.8.187 surfaced a stale `bash -n` source pin, a
 # stale generated-docs pin, and two scripts that had been broken under Windows PowerShell 5.1 for

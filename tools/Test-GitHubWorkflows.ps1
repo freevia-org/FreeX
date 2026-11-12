@@ -378,7 +378,7 @@ foreach ($workflow in $workflows) {
     $triggerNames = @($inlineTriggerNames + $blockTriggerNames)
     $hasWorkflowDispatch = $triggerNames -contains "workflow_dispatch"
     $nonManualTriggerNames = @($triggerNames | Where-Object { $_ -ne "workflow_dispatch" })
-    # release-readiness.yml is scheduled on purpose. The 11 release-only gates in eng/test-gates.json
+    # release-readiness.yml is scheduled on purpose. The 13 release-only gates in eng/test-gates.json
     # never run on push, so between releases they rot invisibly on a green main and the next release
     # pays the accumulated debt (releasing 0.8.187 surfaced four such regressions). They cannot join
     # the commit gate -- runner concurrency is capped and the commit matrix already saturates it --

@@ -46,7 +46,7 @@ public sealed class DialogVisualParitySourceTests
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
-        source.Should().Contain("numbersBox.Opacity = enabled ? 1 : 0.7;");
+        source.Should().NotContain("numbersBox.Opacity = enabled ? 1 : 0.7;");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyCompactRadioButton(button, AvaloniaCompactDialogChrome.WindowsStyle);");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyCompactCheckBox(numbersBox, AvaloniaCompactDialogChrome.WindowsStyle);");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyGroupBox(availableGroup, borderBrush: Brush(213, 223, 229));");
@@ -86,7 +86,8 @@ public sealed class DialogVisualParitySourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, dialogChrome);");
-        source.Should().Contain("ButtonHeight = 24,");
+        source.Should().Contain("ButtonHeight = 20,");
+        source.Should().Contain("TextBoxHeight = 18,");
         source.Should().Contain("MinHeight = 130,");
         source.Should().Contain("Margin = new Thickness(0, 24, 0, 0),");
         source.Should().Contain("new GridLength(1, GridUnitType.Star)");
@@ -147,14 +148,24 @@ public sealed class DialogVisualParitySourceTests
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyGroupBox(");
         source.Should().Contain("LastChildFill = false");
         source.Should().Contain("DockPanel.SetDock(buttons, Dock.Bottom)");
-        source.Should().Contain("okButton.Height = okButton.MinHeight = okButton.MaxHeight = 52");
-        source.Should().Contain("cancelButton.Height = cancelButton.MinHeight = cancelButton.MaxHeight = 52");
+        // WPF bottom-aligns the OK/Cancel row at its natural height; the stretched 52px footer
+        // buttons came from a reference capture older than that source.
+        source.Should().NotContain("okButton.Height = okButton.MinHeight = okButton.MaxHeight = 52");
+        source.Should().NotContain("cancelButton.Height = cancelButton.MinHeight = cancelButton.MaxHeight = 52");
         source.Should().NotContain("SortOptionsCheckBoxTemplate");
         source.Should().NotContain("SortOptionsRadioButtonTemplate");
 
-        captureSource.Should().Contain("CaseSensitive: true");
-        captureSource.Should().Contain("LeftToRight: true");
-        captureSource.Should().Contain("FirstKeySortOrder: \"Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec\"");
+        // The seeded Sort Options state lives in one shared fixture that BOTH capture hosts consume,
+        // so the paired screenshots cannot drift apart again (the WPF host used plain defaults).
+        var fixtureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Support", "Services", "DialogSeedParityFixtures.cs"));
+        var wpfCaptureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs"));
+        fixtureSource.Should().Contain("CaseSensitive: true");
+        fixtureSource.Should().Contain("LeftToRight: true");
+        fixtureSource.Should().Contain("FirstKeySortOrder: \"Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec\"");
+        captureSource.Should().Contain("ShowSortOptionsDialogAsync(SortDialogParityFixture.CreateOptions())");
+        wpfCaptureSource.Should().Contain("new SortOptionsDialog(SortDialogParityFixture.CreateOptions())");
+        captureSource.Should().Contain("ShowSortInputDialogAsync(SortDialogParityFixture.CreateRange(_session.ActiveSheet.Id))");
+        wpfCaptureSource.Should().Contain("var sortRange = SortDialogParityFixture.CreateRange(sheet.Id);");
     }
 
     [Fact]

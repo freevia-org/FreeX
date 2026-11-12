@@ -48,8 +48,10 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("TableLoc_ConsolidateDialogTitle"),
-            Width = ConsolidateDialogPlanner.CaptureWidth,
-            Height = ConsolidateDialogPlanner.CaptureHeight,
+            // The WPF reference is captured as a 380x420 outer window; its client area (and this
+            // window) loses the measured Windows frame.
+            Width = ConsolidateDialogPlanner.CaptureWidth - WpfNoResizeFrameWidth,
+            Height = ConsolidateDialogPlanner.CaptureHeight - WpfNoResizeClientFrameHeight,
             MinWidth = ConsolidateDialogPlanner.MinWidth,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,

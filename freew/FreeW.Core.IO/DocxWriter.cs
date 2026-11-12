@@ -3582,8 +3582,9 @@ public static partial class DocxWriter
                 {
                     var elements = new List<XElement>
                     {
-                        WithProps(BuildComplexFieldCharacter("begin", field.Sequence))
+                        WithProps(BuildComplexFieldCharacter("begin", field.Sequence, field.FormField))
                     };
+                    cachedResult = LegacyFormFieldCachedResult(field, cachedResult);
                     AddFieldBuffer(
                         elements,
                         field.Instruction,
@@ -3903,6 +3904,8 @@ public static partial class DocxWriter
         if (f.ContextualSpacing is { } contextualSpacing)
             pPr.Add(new XElement(W + "contextualSpacing",
                 contextualSpacing ? null : new XAttribute(W + "val", "0")));
+        if (f.Alignment == TextAlignment.Left && f.AlignmentIsSet)
+            pPr.Add(new XElement(W + "jc", new XAttribute(W + "val", "left")));
         if (f.Alignment != TextAlignment.Left)
             pPr.Add(new XElement(W + "jc", new XAttribute(W + "val", f.Alignment switch
             {
@@ -4120,13 +4123,16 @@ public static partial class DocxWriter
 
     private static XElement BuildComplexFieldCharacter(
         string type,
-        ComplexFieldSequenceMetadata? metadata = null)
+        ComplexFieldSequenceMetadata? metadata = null,
+        LegacyFormField? formField = null)
     {
         var element = new XElement(W + "fldChar", new XAttribute(W + "fldCharType", type));
         if (type == "begin" && metadata?.IsLocked == true)
             element.Add(new XAttribute(W + "fldLock", "1"));
         if (type == "begin" && metadata?.IsDirty == true)
             element.Add(new XAttribute(W + "dirty", "1"));
+        if (type == "begin" && formField is not null)
+            element.Add(BuildLegacyFormFieldData(formField));
         return element;
     }
 
@@ -4352,7 +4358,20 @@ public static partial class DocxWriter
             // A tracked deletion stores its text in w:delText (so Word renders it as deleted content);
             // all other runs use the ordinary w:t element.
             var textElement = run.Revision == RevisionKind.Deleted ? "delText" : "t";
-            r.Add(BuildRunTextContent(run.Text, textElement));
+            if (run.Formatting.SymbolFont is { Length: > 0 } symbolFont && run.Text.Length > 0)
+            {
+                // Word symbol characters go back out as w:sym (font + hex code point), as read.
+                foreach (var symbol in run.Text)
+                {
+                    r.Add(new XElement(W + "sym",
+                        new XAttribute(W + "font", symbolFont),
+                        new XAttribute(W + "char", ((int)symbol).ToString("X4", CultureInfo.InvariantCulture))));
+                }
+            }
+            else
+            {
+                r.Add(BuildRunTextContent(run.Text, textElement));
+            }
         }
         return r;
     }
@@ -8289,9 +8308,11 @@ public static partial class DocxWriter
     // none of the three typefaces is set, so untouched runs emit no w:rFonts at all.
     private static XElement? BuildRunFontsElement(RunFormatting f)
     {
+        var tokens = f.ThemeFonts is { IsEmpty: false } themeTokens ? themeTokens : null;
         if (f.FontFamily is not { Length: > 0 }
             && f.EastAsiaFontFamily is not { Length: > 0 }
-            && f.ComplexScriptFontFamily is not { Length: > 0 })
+            && f.ComplexScriptFontFamily is not { Length: > 0 }
+            && tokens is null)
             return null;
 
         var element = new XElement(W + "rFonts");
@@ -8304,6 +8325,15 @@ public static partial class DocxWriter
             element.Add(new XAttribute(W + "eastAsia", eastAsia));
         if (f.ComplexScriptFontFamily is { Length: > 0 } complexScript)
             element.Add(new XAttribute(W + "cs", complexScript));
+        // Theme-font tokens round-trip as tokens, so the run keeps following the document theme in Word.
+        if (tokens?.Ascii is { Length: > 0 } asciiTheme)
+            element.Add(new XAttribute(W + "asciiTheme", asciiTheme));
+        if (tokens?.EastAsia is { Length: > 0 } eastAsiaTheme)
+            element.Add(new XAttribute(W + "eastAsiaTheme", eastAsiaTheme));
+        if (tokens?.HAnsi is { Length: > 0 } hAnsiTheme)
+            element.Add(new XAttribute(W + "hAnsiTheme", hAnsiTheme));
+        if (tokens?.ComplexScript is { Length: > 0 } complexScriptTheme)
+            element.Add(new XAttribute(W + "cstheme", complexScriptTheme));
         return element;
     }
 
@@ -8326,6 +8356,18 @@ public static partial class DocxWriter
         if (f.BidiLanguageTag is { Length: > 0 } bidi)
             element.Add(new XAttribute(W + "bidi", bidi));
         return element;
+    }
+
+    /// <summary>
+    /// Emits a run toggle: the bare element when on, or <c>w:val="0"</c> when the formatting switches an
+    /// inherited toggle off explicitly (<see cref="RunFormatting.ExplicitlyOff"/>). Unset toggles emit nothing.
+    /// </summary>
+    private static void AddRunToggle(XElement rPr, string localName, bool on, RunFormatting f, RunToggleOverrides flag)
+    {
+        if (on)
+            rPr.Add(new XElement(W + localName));
+        else if ((f.ExplicitlyOff & flag) != 0)
+            rPr.Add(new XElement(W + localName, new XAttribute(W + "val", "0")));
     }
 
     private static XElement? BuildRunProperties(RunFormatting f, string? styleId = null)
@@ -8352,16 +8394,11 @@ public static partial class DocxWriter
         // East Asian, complex-script/RTL), the same shape as w:lang below. See BuildRunFontsElement.
         if (BuildRunFontsElement(f) is { } rFontsEl)
             rPr.Add(rFontsEl);
-        if (f.Bold)
-            rPr.Add(new XElement(W + "b"));
-        if (f.Italic)
-            rPr.Add(new XElement(W + "i"));
-        if (f.AllCaps)
-            rPr.Add(new XElement(W + "caps"));
-        if (f.SmallCaps)
-            rPr.Add(new XElement(W + "smallCaps"));
-        if (f.Strikethrough)
-            rPr.Add(new XElement(W + "strike"));
+        AddRunToggle(rPr, "b", f.Bold, f, RunToggleOverrides.Bold);
+        AddRunToggle(rPr, "i", f.Italic, f, RunToggleOverrides.Italic);
+        AddRunToggle(rPr, "caps", f.AllCaps, f, RunToggleOverrides.AllCaps);
+        AddRunToggle(rPr, "smallCaps", f.SmallCaps, f, RunToggleOverrides.SmallCaps);
+        AddRunToggle(rPr, "strike", f.Strikethrough, f, RunToggleOverrides.Strikethrough);
         if (f.DoubleStrikethrough)
             rPr.Add(new XElement(W + "dstrike"));
         if (f.NoProof)
@@ -8388,7 +8425,12 @@ public static partial class DocxWriter
         {
             var halfPoints = PointsToHalfPoints(size);
             rPr.Add(new XElement(W + "sz", new XAttribute(W + "val", halfPoints)));
-            rPr.Add(new XElement(W + "szCs", new XAttribute(W + "val", halfPoints)));
+            rPr.Add(new XElement(W + "szCs", new XAttribute(W + "val",
+                f.ComplexScriptFontSizePt is { } complexSize ? PointsToHalfPoints(complexSize) : halfPoints)));
+        }
+        else if (f.ComplexScriptFontSizePt is { } complexOnlySize)
+        {
+            rPr.Add(new XElement(W + "szCs", new XAttribute(W + "val", PointsToHalfPoints(complexOnlySize))));
         }
         // w:highlight (Word's highlighter) precedes w:u in CT_RPr (EG_RPrBase). Emitted whenever
         // HighlightColorHex maps to a named gallery token — independently of CharacterShadingHex, which
@@ -8403,6 +8445,8 @@ public static partial class DocxWriter
             rPr.Add(new XElement(W + "highlight", new XAttribute(W + "val", namedHighlight)));
         if (f.Underline)
             rPr.Add(new XElement(W + "u", new XAttribute(W + "val", "single")));
+        else if ((f.ExplicitlyOff & RunToggleOverrides.Underline) != 0)
+            rPr.Add(new XElement(W + "u", new XAttribute(W + "val", "none")));
         // w:bdr (character border) — a box around the run's glyphs (rPr/w:bdr). EG_RPrBase schema order
         // places w:bdr BEFORE w:shd (and after w:u/w:effect), so we emit it here. Emitted only when set so
         // existing runs round-trip byte-unchanged. Reuses the same edge encoding as w:pBdr (per-edge
@@ -10256,7 +10300,12 @@ public static partial class DocxWriter
         {
             var halfPoints = PointsToHalfPoints(size);
             rPr.Add(new XElement(W + "sz", new XAttribute(W + "val", halfPoints)));
-            rPr.Add(new XElement(W + "szCs", new XAttribute(W + "val", halfPoints)));
+            rPr.Add(new XElement(W + "szCs", new XAttribute(W + "val",
+                f.ComplexScriptFontSizePt is { } complexSize ? PointsToHalfPoints(complexSize) : halfPoints)));
+        }
+        else if (f.ComplexScriptFontSizePt is { } complexOnlySize)
+        {
+            rPr.Add(new XElement(W + "szCs", new XAttribute(W + "val", PointsToHalfPoints(complexOnlySize))));
         }
         // See BuildRunProperties above: w:highlight is independent of the CharacterShadingHex/w:shd slot.
         if (f.HighlightColorHex is { Length: > 0 } highlightToken
@@ -10467,6 +10516,8 @@ public static partial class DocxWriter
         if (f.ContextualSpacing is { } contextualSpacing)
             pPr.Add(new XElement(W + "contextualSpacing",
                 contextualSpacing ? null : new XAttribute(W + "val", "0")));
+        if (f.Alignment == TextAlignment.Left && f.AlignmentIsSet)
+            pPr.Add(new XElement(W + "jc", new XAttribute(W + "val", "left")));
         if (f.Alignment != TextAlignment.Left)
             pPr.Add(new XElement(W + "jc", new XAttribute(W + "val", f.Alignment switch
             {

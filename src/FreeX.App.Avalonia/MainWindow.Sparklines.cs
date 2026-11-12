@@ -116,10 +116,10 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("Sparkline_InsertTitle"),
-            Width = SparklinePlanner.InsertDialogCaptureWidth,
-            // The shared 380x280 size is the WPF *outer* NoResize window; Avalonia heights are client
-            // heights, so drop the Windows caption/frame allowance.
-            Height = SparklinePlanner.InsertDialogCaptureHeight - WpfNoResizeFrameHeight,
+            // The shared 380x280 size is the WPF *outer* NoResize window; Avalonia sizes the client
+            // area, so drop the measured Windows frame from both.
+            Width = SparklinePlanner.InsertDialogCaptureWidth - WpfNoResizeFrameWidth,
+            Height = SparklinePlanner.InsertDialogCaptureHeight - WpfNoResizeClientFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             ShowInTaskbar = false,

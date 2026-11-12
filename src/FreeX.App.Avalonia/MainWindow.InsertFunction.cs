@@ -308,8 +308,8 @@ public sealed partial class MainWindow
             Title = UiText.Get("FunctionArguments_Title"),
             // WPF FunctionArgumentsDialog: Width = 520, Height = clamp(220 + 58 per argument, 300, 620)
             // (outer), ResizeMode.NoResize.
-            Width = 520,
-            Height = Math.Max(300, Math.Min(620, 220 + (arguments.Count * 58))) - WpfNoResizeFrameHeight,
+            Width = 520 - WpfNoResizeFrameWidth,
+            Height = Math.Max(300, Math.Min(620, 220 + (arguments.Count * 58))) - WpfNoResizeClientFrameHeight,
             CanResize = false,
             FontFamily = FormulaBarFontFamily,
             FontSize = 12,

@@ -659,11 +659,25 @@ internal static class ParityCapture
         CaptureDialog(results, "dialog.RecommendedPivotTables", outDir, () =>
             new RecommendedPivotTablesDialog());
 
+        // Mirror the production Custom Sort construction (SortCustomButton_Click) over the shared
+        // demo block so the column choices and header auto-detection match the Avalonia capture.
+        var sortRange = SortDialogParityFixture.CreateRange(sheet.Id);
+        var sortHasHeaders = QuickSortRangePlanner.HasLikelyHeaderRow(sheet, sortRange);
         CaptureDialog(results, "dialog.Sort", outDir, () =>
-            new SortDialog());
+            new SortDialog(
+                columnChoices: SortDialogPlanner.BuildColumnChoices(sheet, sortRange, hasHeaders: true, SortDialog.PlannerText),
+                genericColumnChoices: SortDialogPlanner.BuildColumnChoices(sheet, sortRange, hasHeaders: false, SortDialog.PlannerText),
+                rowChoices: SortDialogPlanner.BuildRowChoices(sortRange, SortDialog.PlannerText),
+                colorChoices: SortDialogPlanner.BuildColorChoices(workbook, sheet, sortRange),
+                cellColorChoices: SortDialogPlanner.BuildColorChoices(workbook, sheet, sortRange, SortOn.CellColor),
+                fontColorChoices: SortDialogPlanner.BuildColorChoices(workbook, sheet, sortRange, SortOn.FontColor),
+                hasHeaders: sortHasHeaders,
+                iconWorkbook: workbook,
+                iconSheet: sheet,
+                iconRange: sortRange));
 
         CaptureDialog(results, "dialog.SortOptions", outDir, () =>
-            new SortOptionsDialog(new SortDialogOptions()));
+            new SortOptionsDialog(SortDialogParityFixture.CreateOptions()));
 
         CaptureDialog(results, "dialog.AutoFilter", outDir, () =>
             CreateAutoFilterDialog(workbook, sheet));
@@ -711,7 +725,7 @@ internal static class ParityCapture
             new SparklineDialog("Sheet1!$D$2:$D$5", "Sheet1!$H$2:$H$5", SparklineKind.Line, sheetId: sheet.Id));
 
         CaptureDialog(results, "dialog.InsertHyperlink", outDir, () =>
-            new HyperlinkDialog("https://freex.local/report", "Quarterly report"));
+            new HyperlinkDialog(HyperlinkDialogParityFixture.Target, HyperlinkDialogParityFixture.DisplayText));
 
         CaptureDialog(results, "dialog.SymbolPicker", outDir, () =>
             new SymbolPickerDialog());
@@ -725,7 +739,9 @@ internal static class ParityCapture
         CaptureDialog(results, "dialog.WatchWindow", outDir, () =>
             new WatchWindowDialog(
                 () => CreateWatchEntries(sheet.Id),
-                addWatch: null,
+                // Production always supplies the Add Watch callback; a null one disables the button
+                // and made the capture disagree with the Avalonia shell's enabled state.
+                addWatch: () => { },
                 getSelectionText: () => "Sheet1!$D$2",
                 navigateTo: _ => { },
                 removeWatch: _ => { }));
@@ -816,10 +832,10 @@ internal static class ParityCapture
             ["SummarizeValuesBy", "ShowValuesAs", "NumberFormat"]);
 
         CaptureDialog(results, "dialog.InsertSlicer", outDir, () =>
-            new InsertSlicerDialog(CreatePivotHeaders(), selectedField: "Region"));
+            new InsertSlicerDialog(CreatePivotHeaders(), selectedField: PivotControlPickerParityFixture.SelectedField));
 
         CaptureDialog(results, "dialog.InsertTimeline", outDir, () =>
-            new InsertTimelineDialog(CreatePivotHeaders(), selectedField: "Date"));
+            new InsertTimelineDialog(CreatePivotHeaders(), selectedField: PivotControlPickerParityFixture.SelectedField));
 
         CaptureDialog(results, "dialog.AllowEditRanges", outDir, () =>
             new AllowEditRangeDialog(sheet.Id, "Sheet1!$B$2:$D$5", [range]));
@@ -1087,8 +1103,9 @@ internal static class ParityCapture
         new WatchWindowEntry(sheetId, "Demo", new CellAddress(sheetId, 3, 3), "85", null),
     ];
 
-    private static ChartModel CreateChart(SheetId sheetId) =>
-        new()
+    private static ChartModel CreateChart(SheetId sheetId)
+    {
+        var chart = new ChartModel
         {
             Name = "Revenue Chart",
             Type = ChartType.Column,
@@ -1096,17 +1113,16 @@ internal static class ParityCapture
             Title = "Revenue by region",
             XAxisTitle = "Region",
             YAxisTitle = "Revenue",
-            ShowLegend = true,
-            LegendPosition = ChartLegendPosition.Right,
-            ChartAreaFillColor = new CellColor(255, 255, 255),
-            PlotAreaFillColor = new CellColor(248, 250, 252),
         };
+        ChartAreaParityFixture.Apply(chart);
+        return chart;
+    }
 
     private static IReadOnlyList<SelectionPaneItem> CreateSelectionPaneItems() =>
         SelectionPaneParityFixture.CreateDialogItems(Guid.NewGuid(), Guid.NewGuid());
 
     private static string[] CreatePivotHeaders() =>
-        ["Region", "Product", "Date", "Units", "Revenue"];
+        [.. PivotControlPickerParityFixture.Headers];
 
     private static (PivotTableModel Pivot, PivotCacheModel Cache, IReadOnlyList<string> Headers) CreatePivotModels(SheetId sheetId)
     {

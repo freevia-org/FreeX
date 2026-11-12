@@ -27,8 +27,8 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
-    private const double PivotFieldFilterWindowWidth = 380;
-    private const double PivotFieldFilterWindowHeight = 470;
+    // WPF PivotFieldFilterDialog is a 380x470 outer NoResize window; its client area (and this
+    // window) is 364x431.
     private const double PivotFieldFilterClientWidth = 364;
     private const double PivotFieldFilterClientHeight = 431;
 
@@ -206,12 +206,12 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Format("MainWindowMessage_PivotFieldFilterTitle", caption),
-            Width = PivotFieldFilterWindowWidth,
-            Height = PivotFieldFilterWindowHeight,
-            MinWidth = PivotFieldFilterWindowWidth,
-            MinHeight = PivotFieldFilterWindowHeight,
-            MaxWidth = PivotFieldFilterWindowWidth,
-            MaxHeight = PivotFieldFilterWindowHeight,
+            Width = PivotFieldFilterClientWidth,
+            Height = PivotFieldFilterClientHeight,
+            MinWidth = PivotFieldFilterClientWidth,
+            MinHeight = PivotFieldFilterClientHeight,
+            MaxWidth = PivotFieldFilterClientWidth,
+            MaxHeight = PivotFieldFilterClientHeight,
             Background = Brushes.Transparent,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
@@ -655,10 +655,10 @@ public sealed partial class MainWindow
             // WPF: 380x260 outer, NoResize, so the app-wide dialog sizing makes 260 the minimum and
             // lets the height follow the content.
             Title = UiText.Get("PivotLabelFilter_LabelFilter"),
-            Width = 380,
-            MinWidth = 380,
-            MaxWidth = 380,
-            MinHeight = 260 - WpfNoResizeFrameHeight,
+            Width = 380 - WpfNoResizeFrameWidth,
+            MinWidth = 380 - WpfNoResizeFrameWidth,
+            MaxWidth = 380 - WpfNoResizeFrameWidth,
+            MinHeight = 260 - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
@@ -792,10 +792,10 @@ public sealed partial class MainWindow
             // WPF: 380x260 outer, NoResize, so the app-wide dialog sizing makes 260 the minimum and
             // lets the height follow the content.
             Title = UiText.Get("PivotValueFilter_ValueFilter"),
-            Width = 380,
-            MinWidth = 380,
-            MaxWidth = 380,
-            MinHeight = 260 - WpfNoResizeFrameHeight,
+            Width = 380 - WpfNoResizeFrameWidth,
+            MinWidth = 380 - WpfNoResizeFrameWidth,
+            MaxWidth = 380 - WpfNoResizeFrameWidth,
+            MinHeight = 260 - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,

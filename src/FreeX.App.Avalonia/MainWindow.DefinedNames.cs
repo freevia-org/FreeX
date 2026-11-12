@@ -398,8 +398,8 @@ public sealed partial class MainWindow
             // WPF NameDefinitionDialog: Width = 460, Height = 300 (outer), ResizeMode.NoResize. The
             // content is top-stacked; the rest of the client area stays empty (and holds the inline
             // validation line this shell shows instead of a warning box).
-            Width = 460,
-            Height = 300 - WpfNoResizeFrameHeight,
+            Width = 460 - WpfNoResizeFrameWidth,
+            Height = 300 - WpfNoResizeClientFrameHeight,
             CanResize = false,
             FontFamily = FormulaBarFontFamily,
             FontSize = 12,

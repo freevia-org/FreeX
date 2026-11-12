@@ -13,8 +13,8 @@ public sealed class DataTableDialogParitySourceTests
 
         wpf.Should().Contain("Width = 360;");
         wpf.Should().Contain("Height = 210;");
-        avalonia.Should().Contain("Width = 360,");
-        avalonia.Should().Contain("Height = 210 - WpfNoResizeFrameHeight,");
+        avalonia.Should().Contain("Width = 360 - WpfNoResizeFrameWidth,");
+        avalonia.Should().Contain("Height = 210 - WpfNoResizeClientFrameHeight,");
         avalonia.Should().Contain("UiText.Get(\"DataTable_Title\")");
         avalonia.Should().Contain("initialRowInputCellText");
         avalonia.Should().Contain("initialColumnInputCellText");

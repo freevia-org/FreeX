@@ -367,12 +367,14 @@ public sealed partial class MainWindow
         var grid = CreateWatchWindowColumnGrid();
         for (var i = 0; i < WatchWindowColumns.Length; i++)
         {
+            // WPF GridView column headers centre their captions.
             var header = new TextBlock
             {
                 Text = UiText.Get(WatchWindowColumns[i].Key),
                 FontSize = 12,
                 FontFamily = FormulaBarFontFamily,
                 Margin = new Thickness(6, 2),
+                TextAlignment = global::Avalonia.Media.TextAlignment.Center,
             };
             Grid.SetColumn(header, i);
             grid.Children.Add(header);
@@ -390,6 +392,9 @@ public sealed partial class MainWindow
     private Control BuildWatchWindowRowGrid(WatchWindowRowPlan row)
     {
         var grid = CreateWatchWindowColumnGrid();
+        // WPF GridView rows are 22px at the 12px dialog font; with the item's 1px top and bottom
+        // padding the cells need a 20px row (the text alone made 18px rows).
+        grid.MinHeight = 20;
         var values = new[] { row.Book, row.Sheet, row.Name, row.Cell, row.Value, row.Formula };
         for (var i = 0; i < values.Length; i++)
         {
@@ -414,9 +419,9 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get(AddWatchDialogPlanner.TitleKey),
-            Width = AddWatchDialogPlanner.Width,
             // WPF AddWatchDialog is a 360x170 *outer* NoResize window; Avalonia sizes the client area.
-            Height = AddWatchDialogPlanner.Height - WpfNoResizeFrameHeight,
+            Width = AddWatchDialogPlanner.Width - WpfNoResizeFrameWidth,
+            Height = AddWatchDialogPlanner.Height - WpfNoResizeClientFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,

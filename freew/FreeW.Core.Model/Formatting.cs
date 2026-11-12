@@ -214,8 +214,30 @@ public sealed record WordThemeColor(
 /// Immutable character formatting for a run. Null members inherit from the paragraph style /
 /// document default, mirroring how Word resolves run properties (rPr).
 /// </summary>
+[Flags]
+public enum RunToggleOverrides
+{
+    None = 0,
+    Bold = 1 << 0,
+    Italic = 1 << 1,
+    Underline = 1 << 2,
+    Strikethrough = 1 << 3,
+    AllCaps = 1 << 4,
+    SmallCaps = 1 << 5,
+}
+
 public sealed record RunFormatting
 {
+    /// <summary>
+    /// Toggle properties this formatting switches OFF explicitly (<c>&lt;w:b w:val="0"/&gt;</c>,
+    /// <c>&lt;w:u w:val="none"/&gt;</c>, ...), as distinct from leaving them unset. The boolean toggles
+    /// below inherit with logical OR, so without this an authored "not bold" on a run inside a bold
+    /// heading style could not be told apart from "inherit" and rendered bold. A flag is only meaningful
+    /// while its boolean is false; defaults to <see cref="RunToggleOverrides.None"/> so runs that never
+    /// switch a toggle off are unaffected and round-trip byte-unchanged.
+    /// </summary>
+    public RunToggleOverrides ExplicitlyOff { get; init; }
+
     public bool Bold { get; init; }
     public bool Italic { get; init; }
     public bool Underline { get; init; }
@@ -265,7 +287,30 @@ public sealed record RunFormatting
     /// </summary>
     public string? ComplexScriptFontFamily { get; init; }
 
+    /// <summary>
+    /// The run's <c>w:rFonts</c> theme-font tokens (<c>w:asciiTheme="majorBidi"</c> ...), kept as tokens so
+    /// a save writes them back and a theme change still re-fonts the run. Renderers resolve them per view
+    /// (<see cref="ThemeFontTokenResolver"/>); a literal <see cref="FontFamily"/> on the same run still wins.
+    /// </summary>
+    public RunThemeFontTokens? ThemeFonts { get; init; }
+
+    /// <summary>
+    /// Set when the run is Word symbol characters (<c>w:sym w:font w:char</c>): its text holds the
+    /// private-use code points (U+F0xx) and this names the symbol font that draws them. Saved back as
+    /// <c>w:sym</c> elements, not as text in a literal font.
+    /// </summary>
+    public string? SymbolFont { get; init; }
+
     public double? FontSizePt { get; init; }
+
+    /// <summary>
+    /// Complex-script (Arabic/Hebrew) font size (<c>rPr/w:szCs</c>) when it differs from
+    /// <see cref="FontSizePt"/>. Word sizes right-to-left script text from w:szCs, not w:sz, so a style
+    /// that sets only w:szCs (common in Arabic documents) enlarges the Arabic text alone. Null means
+    /// "same as <see cref="FontSizePt"/>", which keeps ordinary runs unchanged.
+    /// </summary>
+    public double? ComplexScriptFontSizePt { get; init; }
+
     public string? ColorHex { get; init; }
 
     /// <summary>
@@ -427,6 +472,13 @@ public sealed record RunFormatting
 public sealed record ParagraphFormatting
 {
     public TextAlignment Alignment { get; init; } = TextAlignment.Left;
+
+    /// <summary>
+    /// True when the alignment was authored explicitly (<c>w:jc</c> present) even though it equals the
+    /// default. Lets an explicit <c>w:jc="left"</c> override a justified/centered style; without it the
+    /// default value is indistinguishable from "inherit".
+    /// </summary>
+    public bool AlignmentIsSet { get; init; }
 
     /// <summary>
     /// Right-to-left paragraph direction (pPr/w:bidi). When true the paragraph lays out right-to-left

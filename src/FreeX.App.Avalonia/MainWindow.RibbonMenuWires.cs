@@ -66,34 +66,75 @@ public sealed partial class MainWindow
         }
 
         Window? picked = null;
+        var labels = windows
+            .Select((window, index) => string.IsNullOrWhiteSpace(window.Title)
+                ? UiText.Format("InsertLoc_WindowLabel", index + 1)
+                : window.Title!)
+            .ToList();
+        // The chooser follows the WPF ActivateSheetDialog chooser it is captured against: a labelled
+        // 260px list above an [OK][Cancel] row in a 352x380 *outer* NoResize window (the client
+        // area drops the Windows caption/frame), all in the 12px dialog font.
+        var list = new ListBox
+        {
+            ItemsSource = labels,
+            SelectedIndex = Math.Max(0, windows.FindIndex(window => ReferenceEquals(window, this))),
+            SelectionMode = SelectionMode.Single,
+            Height = 260,
+            Margin = new Thickness(0, 0, 0, 16),
+            Background = global::Avalonia.Media.Brushes.White,
+        };
+        AutomationProperties.SetName(list, UiText.Get("RibbonWire_SwitchWindowsTitle"));
+        AutomationProperties.SetAutomationId(list, "SwitchWindowsList");
+
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
+        ApplyDialogButtonChrome(ok, width: 90, isDefault: true);
+        ApplyDialogButtonChrome(cancel, width: 90);
+        AutomationProperties.SetAutomationId(ok, "SwitchWindowsOkButton");
+        AutomationProperties.SetAutomationId(cancel, "SwitchWindowsCancelButton");
+
         var dialog = new Window
         {
             Title = UiText.Get("RibbonWire_SwitchWindowsTitle"),
-            Width = 360,
-            Height = 260,
+            Width = 352 - WpfNoResizeFrameWidth,
+            Height = 380 - WpfNoResizeClientFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             CanResize = false,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
         };
         AutomationProperties.SetAutomationId(dialog, "SwitchWindowsDialog");
 
-        var panel = new StackPanel { Margin = new Thickness(12), Spacing = 6 };
-        for (var index = 0; index < windows.Count; index++)
+        void Accept()
         {
-            var window = windows[index];
-            var label = string.IsNullOrWhiteSpace(window.Title) ? UiText.Format("InsertLoc_WindowLabel", index + 1) : window.Title!;
-            var button = new Button
-            {
-                Content = label,
-                MinWidth = 320,
-                Padding = new Thickness(8, 6),
-                IsDefault = ReferenceEquals(window, this),
-            };
-            button.Click += (_, _) => { picked = window; dialog.Close(); };
-            panel.Children.Add(button);
+            if (list.SelectedIndex < 0 || list.SelectedIndex >= windows.Count)
+                return;
+
+            picked = windows[list.SelectedIndex];
+            dialog.Close();
         }
 
-        dialog.Content = new ScrollViewer { Content = panel };
+        list.SelectionChanged += (_, _) => ok.IsEnabled = list.SelectedIndex >= 0;
+        list.DoubleTapped += (_, args) =>
+        {
+            Accept();
+            args.Handled = true;
+        };
+        ok.Click += (_, _) => Accept();
+        cancel.Click += (_, _) => dialog.Close();
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(10, 8, 10, 10),
+            Children =
+            {
+                new TextBlock { Text = UiText.Get("RibbonWire_SwitchWindowsTitle") + ":", Margin = new Thickness(0, 0, 0, 4) },
+                list,
+                AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]),
+            },
+        };
+        dialog.Opened += (_, _) => list.Focus();
         await dialog.ShowDialog(this);
 
         if (picked is null)

@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -27,6 +28,7 @@ internal sealed class FormatCellsFillEditor
     private readonly WorkbookTheme _theme;
     private readonly Border _samplePreview;
     private readonly Border _patternPreview;
+    private readonly Border _backgroundPreview;
     private readonly TextBox _fillColorText;
     private readonly TextBox _patternColorText;
     private bool _syncingClearCheck;
@@ -113,51 +115,79 @@ internal sealed class FormatCellsFillEditor
                 RefreshTextAndPreview();
         };
 
-        var fillPaletteField = CreateField(
+        // Layout mirrors WPF FormatCellsDialog.xaml (Fill tab): a 2.4* / 1.1* grid inset 8px. The
+        // left column stacks the stretched 10x3 swatch grid, the colour inputs (background on the
+        // left half with its own preview strip, pattern colour on the right half) and the
+        // pattern-style row with its 150px pattern sample; the right column holds the sample.
+        var fillPaletteHeading = CreateHeading(
             getText("FormatCells_BackgroundColor"),
-            fillPalette);
+            new Thickness(0, 4, 0, 4));
+        fillPalette.Margin = new Thickness(0, 0, 0, 8);
 
-        var fillInputField = CreateField(
-            getText("FormatCells_BackgroundColor2"),
-            CreateColorInputRow(_fillColorText, FillColorPicker, textWidth: 115));
-
-        var patternField = new StackPanel
+        _backgroundPreview = new Border
         {
-            Spacing = 4,
+            Height = 22,
+            Margin = new Thickness(0, 4, 60, 0),
+            Background = Brushes.White,
+            BorderBrush = Brushes.Gray,
+            BorderThickness = new Thickness(1),
+        };
+        AutomationProperties.SetAutomationId(_backgroundPreview, "FormatCellsFillBackgroundPreview");
+        var fillInputField = new StackPanel
+        {
+            Margin = new Thickness(0, 0, 10, 0),
             Children =
             {
-                new TextBlock
-                {
-                    Text = StripMnemonic(getText("FormatCells_PatternColor")),
-                    FontWeight = FontWeight.SemiBold,
-                },
+                CreateLabel(
+                    getText("FormatCells_BackgroundColor2"),
+                    new Thickness(0, 0, 0, 2)),
+                CreateColorInputRow(_fillColorText, FillColorPicker),
+                _backgroundPreview,
+            },
+        };
+
+        patternPalette.Margin = new Thickness(0, 0, 0, 6);
+        var patternField = new StackPanel
+        {
+            Children =
+            {
+                CreateHeading(
+                    getText("FormatCells_PatternColor"),
+                    new Thickness(0, 0, 0, 4)),
                 patternPalette,
-                CreateField(
+                CreateLabel(
                     getText("FormatCells_PatternColor2"),
-                    CreateColorInputRow(_patternColorText, PatternColorPicker)),
+                    new Thickness(0, 0, 0, 2)),
+                CreateColorInputRow(_patternColorText, PatternColorPicker),
             },
         };
 
         _patternPreview = CreatePreview("FormatCellsPatternPreview", getText("FormatCells_Pattern"), large: false);
-        _patternPreview.Margin = new Thickness(-7, 15, 0, 0);
+        _patternPreview.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _samplePreview = CreatePreview("FormatCellsFillSamplePreview", getText("FormatCells_Sample"), large: true);
 
-        var patternStyleField = CreateField(
-            getText("FormatCells_PatternStyle"),
-            new StackPanel
+        FillPatternStyleBox.Width = double.NaN;
+        FillPatternStyleBox.MinWidth = 0;
+        ClearFillCheckBox.Margin = new Thickness(0, 12, 0, 0);
+        var patternStyleField = new StackPanel
+        {
+            Margin = new Thickness(0, 0, 10, 0),
+            Children =
             {
-                Spacing = 4,
-                Children =
-                {
-                    FillPatternStyleBox,
-                    ClearFillCheckBox,
-                },
-            });
+                CreateHeading(
+                    getText("FormatCells_PatternStyle"),
+                    new Thickness(0, 0, 0, 2)),
+                CreateLabel(
+                    getText("FormatCells_PatternStyle2"),
+                    new Thickness(0, 0, 0, 2)),
+                FillPatternStyleBox,
+                ClearFillCheckBox,
+            },
+        };
 
         var inputGrid = new AvaloniaGrid
         {
-            ColumnDefinitions = new ColumnDefinitions("174,*"),
-            ColumnSpacing = 10,
+            ColumnDefinitions = new ColumnDefinitions("*,*"),
             Children = { fillInputField, patternField },
         };
         AvaloniaGrid.SetColumn(fillInputField, 0);
@@ -165,8 +195,8 @@ internal sealed class FormatCellsFillEditor
 
         var styleGrid = new AvaloniaGrid
         {
-            ColumnDefinitions = new ColumnDefinitions("211,*"),
-            ColumnSpacing = 10,
+            Margin = new Thickness(0, 8, 0, 0),
+            ColumnDefinitions = new ColumnDefinitions("*,150"),
             Children = { patternStyleField, _patternPreview },
         };
         AvaloniaGrid.SetColumn(patternStyleField, 0);
@@ -174,22 +204,23 @@ internal sealed class FormatCellsFillEditor
 
         var left = new AvaloniaGrid
         {
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto"),
-            Width = 382,
-            RowSpacing = 8,
-            Children = { fillPaletteField, inputGrid, styleGrid },
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto"),
+            Margin = new Thickness(0, 0, 16, 0),
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            Children = { fillPaletteHeading, fillPalette, inputGrid, styleGrid },
         };
-        AvaloniaGrid.SetRow(fillPaletteField, 0);
-        AvaloniaGrid.SetRow(inputGrid, 1);
-        AvaloniaGrid.SetRow(styleGrid, 2);
+        AvaloniaGrid.SetRow(fillPaletteHeading, 0);
+        AvaloniaGrid.SetRow(fillPalette, 1);
+        AvaloniaGrid.SetRow(inputGrid, 2);
+        AvaloniaGrid.SetRow(styleGrid, 3);
 
         var right = new StackPanel
         {
-            Width = 177,
-            Spacing = 4,
             Children =
             {
-                new TextBlock { Text = StripMnemonic(getText("FormatCells_Sample")), FontWeight = FontWeight.SemiBold },
+                CreateHeading(
+                    getText("FormatCells_Sample"),
+                    new Thickness(0, 4, 0, 2)),
                 _samplePreview,
             },
         };
@@ -197,8 +228,7 @@ internal sealed class FormatCellsFillEditor
         View = new AvaloniaGrid
         {
             Margin = new Thickness(8),
-            ColumnDefinitions = new ColumnDefinitions("*,177"),
-            ColumnSpacing = 9,
+            ColumnDefinitions = new ColumnDefinitions("2.4*,1.1*"),
             Children = { left, right },
         };
         AvaloniaGrid.SetColumn(left, 0);
@@ -292,36 +322,34 @@ internal sealed class FormatCellsFillEditor
         return box;
     }
 
-    private StackPanel CreateColorInputRow(
-        TextBox textBox,
-        FormatCellsColorPicker picker,
-        double textWidth = 125) =>
-        new()
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 6,
-            Children =
-            {
-                SetWidth(textBox, textWidth),
-                picker,
-            },
-        };
-
-    private static TextBox SetWidth(TextBox textBox, double width)
+    /// <summary>WPF docks the 54px pick button right (6px gap) and lets the RGB box fill the rest.</summary>
+    private static DockPanel CreateColorInputRow(TextBox textBox, FormatCellsColorPicker picker)
     {
-        textBox.Width = width;
-        return textBox;
+        textBox.Width = double.NaN;
+        textBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+        picker.Margin = new Thickness(6, 0, 0, 0);
+        var row = new DockPanel();
+        DockPanel.SetDock(picker, Dock.Right);
+        row.Children.Add(picker);
+        row.Children.Add(textBox);
+        return row;
     }
 
-    private StackPanel CreateField(string label, Control content) =>
+    /// <summary>A semi-bold section heading (WPF TextBlock FontWeight=SemiBold).</summary>
+    private static TextBlock CreateHeading(string text, Thickness margin) =>
         new()
         {
-            Spacing = 4,
-            Children =
-            {
-                new TextBlock { Text = StripMnemonic(label), FontWeight = FontWeight.SemiBold },
-                content,
-            },
+            Text = StripMnemonic(text),
+            FontWeight = FontWeight.SemiBold,
+            Margin = margin,
+        };
+
+    /// <summary>A regular-weight field label (WPF Label with zero padding).</summary>
+    private static TextBlock CreateLabel(string text, Thickness margin) =>
+        new()
+        {
+            Text = StripMnemonic(text),
+            Margin = margin,
         };
 
     public bool TryCommitInput(out string message, out Control? invalidControl)
@@ -364,13 +392,13 @@ internal sealed class FormatCellsFillEditor
         double cellWidth,
         double cellHeight)
     {
-        var panel = new WrapPanel
+        // WPF hosts the swatches in a UniformGrid stretched across the column, so each
+        // fixed-size swatch is centred in an evenly spaced cell.
+        var panel = new UniformGrid
         {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
-            MaxWidth = columns * cellWidth,
-            ItemWidth = cellWidth,
-            ItemHeight = cellHeight,
+            Columns = columns,
+            Rows = (entries.Count + columns - 1) / columns,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
         AutomationProperties.SetAutomationId(panel, automationId);
         for (var index = 0; index < entries.Count; index++)
@@ -387,6 +415,10 @@ internal sealed class FormatCellsFillEditor
             {
                 Width = cellWidth,
                 Height = cellHeight,
+                MinWidth = 0,
+                MinHeight = 0,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 Margin = new Thickness(0),
                 Padding = new Thickness(0),
                 Background = entry.Color is { } color
@@ -423,6 +455,12 @@ internal sealed class FormatCellsFillEditor
             Content = "...",
             Width = cellWidth,
             Height = cellHeight,
+            MinWidth = 0,
+            MinHeight = 0,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             Margin = new Thickness(0),
             Padding = new Thickness(0),
         };
@@ -439,8 +477,9 @@ internal sealed class FormatCellsFillEditor
             Background = Brushes.White,
             BorderBrush = Brushes.Gray,
             BorderThickness = new Thickness(1),
+            // WPF: 146px sample and 62px pattern sample, both as wide as their grid column.
             Height = large ? 146 : 62,
-            Width = large ? 177 : 150,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
             Padding = new Thickness(8),
         };
         var content = new AvaloniaGrid();
@@ -518,6 +557,8 @@ internal sealed class FormatCellsFillEditor
         var patternBrush = ClearFill ? null : CellPatternFill.Build(style, _theme);
         SetPreview(_samplePreview, background, patternBrush, ClearFill ? _getText("FormatCells_NoFill") : _getText("FormatCells_Sample"));
         SetPreview(_patternPreview, background, patternBrush, _getText("FormatCells_Pattern"));
+        // WPF UpdateFillPreview paints the strip under the background colour box with the fill.
+        _backgroundPreview.Background = background;
     }
 
     private static void SetPreview(Border preview, IBrush background, IBrush? pattern, string label)

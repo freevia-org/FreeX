@@ -77,6 +77,8 @@ public sealed class AvaloniaSemanticLocalizationConvergenceTests
             [("FreeX.App.Avalonia/MainWindow.cs", "A+")] = 1,
             [("FreeX.App.Avalonia/MainWindow.cs", "A-")] = 1,
             [("FreeX.App.Avalonia/MainWindow.cs", "A")] = 1,
+            // The PivotTable Fields pane close glyph, as in the WPF PivotFieldListCloseBtn.
+            [("FreeX.App.Avalonia/MainWindow.Pivot.cs", "X")] = 1,
             [("FreeX.App.Avalonia/MainWindow.SlicerTimelinePane.cs", "X")] = 1,
             // Fixed metadata-only analytics self-test payload; this is not rendered UI text.
             [("FreeX.App.Host/SentryCrashAnalytics.cs", "User-requested crash analytics test report. No document data is included.")] = 1,

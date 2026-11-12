@@ -180,6 +180,24 @@ internal static class FreeWAvaloniaRibbonCommands
                 CancelNamedStylePreview: editor.CancelParagraphStylePreview,
                 CommitNamedStylePreview: editor.CommitParagraphStylePreview));
 
+        // Home > Font > Text Effects and Typography — same catalog, menu and edits as the WPF ribbon.
+        TextEffectsRibbonWorkflow.Register(
+            r,
+            new TextEffectsRibbonPorts(
+                PrepareExecution: () => editor.Focus(),
+                ApplyRunFormatting: editor.ApplyTextEffectFormatting));
+
+        // Developer > Controls > Legacy Tools — insert and reset are shared; the Options dialog and
+        // form-field shading are WPF-only for now, so those entries do nothing here.
+        LegacyFormFieldRibbonWorkflow.Register(
+            r,
+            new LegacyFormFieldRibbonPorts(
+                PrepareExecution: () => editor.Focus(),
+                InsertFormField: editor.InsertLegacyFormField,
+                ShowFormFieldOptions: () => { },
+                ToggleFormFieldShading: () => { },
+                ResetFormFields: editor.ResetLegacyFormFields));
+
         // Clear style — revert the paragraph to the document default (Word's paragraph-level reset).
         r.Bind(FreeWRibbonCommandAction.StyleClear, new ActionRibbonCommand(editor.ClearParagraphStyle));
 

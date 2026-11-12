@@ -38,6 +38,10 @@ public static class AvaloniaContextMenuRenderer
                 if (args.Source is MenuItem)
                     return;
 
+                // An editor hosted in the menu owns the caret keys; only Escape dismisses from it.
+                if (args.Source is TextBox && args.Key != Key.Escape)
+                    return;
+
                 var key = args.Key switch
                 {
                     Key.Escape => RibbonPopupKeyboardKey.Escape,

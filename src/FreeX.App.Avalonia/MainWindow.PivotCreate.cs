@@ -48,12 +48,13 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             // WPF PivotTableDialog: Create PivotTable, a 500px NoResize window whose height follows the
-            // content with a 320px outer minimum.
+            // content with a 320px outer minimum. Both are outer sizes, so the client area drops the
+            // Windows caption/frame.
             Title = UiText.Get("PivotTable_CreatePivotTable"),
-            Width = 500,
-            MinWidth = 500,
-            MaxWidth = 500,
-            MinHeight = 320 - WpfNoResizeFrameHeight,
+            Width = 500 - WpfNoResizeFrameWidth,
+            MinWidth = 500 - WpfNoResizeFrameWidth,
+            MaxWidth = 500 - WpfNoResizeFrameWidth,
+            MinHeight = 320 - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Height,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -178,8 +179,8 @@ public sealed partial class MainWindow
         {
             Content = StripDisplayMnemonic(UiText.Get("PivotTable_OpenPivotTableFieldsPane")),
             IsChecked = true,
-            MinHeight = 20,
-            MaxHeight = 20,
+            MinHeight = 16,
+            MaxHeight = 16,
         };
         ApplyPivotCheckBoxChrome(openFieldListBox);
         AutomationProperties.SetAutomationId(openFieldListBox, "PivotOpenFieldListBox");
@@ -264,8 +265,8 @@ public sealed partial class MainWindow
         // the source radio (6px below); labels and reference editors indented 22px under their radio
         // with a 4px label gap; the two destination radios 4px apart; the location editor 12px above
         // the field-pane check box, which sits 16px above the Create/Cancel row (no extra top margin).
-        // A WPF radio or check box is a 16px row where the compact Avalonia one is 20px, so those gaps
-        // drop 4px to keep the pitch.
+        // The radios and the check box keep the 16px WPF row, so the WPF margins apply unchanged
+        // (the unsized Avalonia radios otherwise collapsed to a 14px pitch).
         TextBlock CreateSectionHeader(string text) => new()
         {
             Text = text,
@@ -275,8 +276,15 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 0, 0, 6),
         };
 
-        selectTableRangeButton.Margin = new Thickness(0, 0, 0, 2);
-        openFieldListBox.Margin = new Thickness(0, 0, 0, 12);
+        foreach (var radio in new[] { selectTableRangeButton, newSheetBox, existingSheetBox })
+        {
+            radio.MinHeight = 16;
+            radio.MaxHeight = 16;
+        }
+
+        selectTableRangeButton.Margin = new Thickness(0, 0, 0, 6);
+        newSheetBox.Margin = new Thickness(0, 0, 0, 4);
+        openFieldListBox.Margin = new Thickness(0, 0, 0, 16);
         errorText.Margin = new Thickness(0, 0, 0, 8);
         var buttonRow = CreatePivotDialogButtonRow(okButton, cancelButton, new Thickness(0));
 

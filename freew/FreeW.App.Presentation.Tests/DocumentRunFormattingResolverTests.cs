@@ -333,4 +333,94 @@ public sealed class DocumentRunFormattingResolverTests
 
     private static string Read(string root, params string[] parts) =>
         File.ReadAllText(Path.Combine([root, .. parts])).ReplaceLineEndings("\n");
+
+    [Fact]
+    public void Resolve_lets_an_explicit_toggle_off_override_a_bold_style()
+    {
+        // <w:b w:val="0"/> on a run inside a bold heading style must render regular, not bold.
+        var document = TextDocument.CreateEmpty();
+        document.Styles["Heading3"] = new DocumentStyle
+        {
+            Id = "Heading3",
+            Name = "heading 3",
+            Run = new RunFormatting { Bold = true, Italic = true, Underline = true }
+        };
+        var paragraph = new Paragraph { StyleId = "Heading3" };
+
+        var off = DocumentRunFormattingResolver.Resolve(
+            document,
+            paragraph,
+            new RunFormatting { ExplicitlyOff = RunToggleOverrides.Bold | RunToggleOverrides.Underline });
+        var inherit = DocumentRunFormattingResolver.Resolve(document, paragraph, RunFormatting.Default);
+
+        off.Bold.Should().BeFalse();
+        off.Underline.Should().BeFalse();
+        off.Italic.Should().BeTrue();
+        inherit.Bold.Should().BeTrue();
+        inherit.Underline.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ProjectForScript_uses_complex_script_face_and_size_for_right_to_left_text()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.DefaultRun = new RunFormatting
+        {
+            FontFamily = "Times New Roman",
+            ComplexScriptFontFamily = "Traditional Arabic",
+            FontSizePt = 10,
+        };
+        document.Styles["Normal"] = new DocumentStyle
+        {
+            Id = "Normal",
+            Name = "Normal",
+            Run = new RunFormatting { ComplexScriptFontSizePt = 15 }
+        };
+        var resolved = DocumentRunFormattingResolver.Resolve(
+            document, new Paragraph { StyleId = "Normal" }, RunFormatting.Default);
+
+        resolved.FontSizePt.Should().Be(10);
+        resolved.ComplexScriptFontSizePt.Should().Be(15);
+
+        var latin = DocumentRunFormattingResolver.ProjectForScript(resolved, "CEDAW", _ => true);
+        var arabic = DocumentRunFormattingResolver.ProjectForScript(resolved, "\u0645\u0642\u062F\u0645\u0629", _ => true);
+        var missing = DocumentRunFormattingResolver.ProjectForScript(resolved, "\u0645\u0642\u062F\u0645\u0629", _ => false);
+
+        latin.Should().BeSameAs(resolved);
+        arabic.FontFamily.Should().Be("Traditional Arabic");
+        arabic.FontSizePt.Should().Be(15);
+        // A missing Arabic face falls back to Times New Roman, scaled to the missing face's advances.
+        missing.FontFamily.Should().Be(DocumentRunFormattingResolver.ComplexScriptFallbackFontFamily);
+        missing.FontSizePt.Should().BeLessThan(15);
+    }
+
+    [Fact]
+    public void Paragraph_resolver_honours_explicit_left_alignment_and_style_bidi()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Styles["Normal"] = new DocumentStyle
+        {
+            Id = "Normal",
+            Name = "Normal",
+            Paragraph = ParagraphFormatting.Default with { Alignment = TextAlignment.Justify, Rtl = true }
+        };
+        var explicitLeft = new Paragraph
+        {
+            StyleId = "Normal",
+            Formatting = ParagraphFormatting.Default with { AlignmentIsSet = true, SpaceAfterPt = 6, SpaceAfterIsSet = true }
+        };
+        var inherits = new Paragraph
+        {
+            StyleId = "Normal",
+            Formatting = ParagraphFormatting.Default with { SpaceAfterPt = 6, SpaceAfterIsSet = true }
+        };
+
+        var left = DocumentParagraphFormattingResolver.Resolve(document, explicitLeft);
+        var justified = DocumentParagraphFormattingResolver.Resolve(document, inherits);
+
+        left.Alignment.Should().Be(TextAlignment.Left);
+        left.Rtl.Should().BeTrue();
+        justified.Alignment.Should().Be(TextAlignment.Justify);
+        justified.Rtl.Should().BeTrue();
+    }
 }

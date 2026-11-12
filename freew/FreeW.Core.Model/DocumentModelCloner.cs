@@ -246,6 +246,7 @@ public static class DocumentModelCloner
             EndsSpanningField = source.EndsSpanningField,
             DropCap = source.DropCap,
             FrameHorizontalAlignment = source.FrameHorizontalAlignment,
+            LegacyTextBoxFrame = source.LegacyTextBoxFrame,
             SectionBreak = source.SectionBreak is { } section
                 ? CloneSection(section, preserveRevisions)
                 : null,
@@ -486,6 +487,7 @@ public static class DocumentModelCloner
             clone.Paragraphs.Add(CloneParagraphCore(paragraph, preserveRevisions));
         foreach (var nestedTable in source.NestedTables)
             clone.NestedTables.Add(CloneTable(nestedTable, preserveRevisions));
+        clone.NestedTableParagraphOffsets.AddRange(source.NestedTableParagraphOffsets);
         return clone;
     }
 

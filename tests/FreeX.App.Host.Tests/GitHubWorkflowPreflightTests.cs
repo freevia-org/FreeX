@@ -21,6 +21,10 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().Contain("-Coverage ${{ steps.coverage.outputs.mode || 'full' }}");
         workflow.Should().Contain("name: \"CI coverage: ${{ needs.prepare.outputs.coverage }}\"");
         workflow.Should().Contain("needs: [prepare, coverage, tests]");
+        // Burst debounce: the matrix-selecting job must wait on the cheap debounce job so a superseded push
+        // is cancelled by the concurrency group before any expensive job starts.
+        workflow.Should().Contain("  debounce:");
+        workflow.Should().Contain("needs: debounce");
         workflow.Should().Contain("permissions:");
         workflow.Should().Contain("contents: read");
         workflow.Should().NotContain("contents: write");

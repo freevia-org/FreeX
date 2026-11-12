@@ -448,6 +448,7 @@ public static class FreeWClipboardApplicationWorkflow
             document.Styles[styleId] = style;
         document.DefaultRun = source.DefaultRun;
         document.Theme = source.Theme;
+        document.ThemeScriptFonts = source.ThemeScriptFonts;
         CopyReferencedNotesAndComments(source, document);
         return document;
     }

@@ -752,6 +752,13 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     protected override void OnPreviewTextInput(TextCompositionEventArgs e)
     {
+        // Legacy form fields fill in through the model (max length, placeholder, toggle) before anything else.
+        if (TryHandleLegacyFormFieldTextInput(e.Text))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (AutoCorrectEnabled
             && !string.IsNullOrEmpty(e.Text)
             && e.Text.Length == 1
@@ -823,6 +830,12 @@ public sealed partial class DocumentView : RichTextBox
         var input = DocumentEditorInteractionSession.PlanBodyKey(
             ToEditorInputKey(e.Key),
             ToEditorInputModifiers(Keyboard.Modifiers));
+        if (TryHandleLegacyFormFieldKey(e, input))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (input.Intent == DocumentEditorInputIntent.Undo && !AllowsCurrentUndoHistory())
         {
             e.Handled = true;
@@ -5907,6 +5920,7 @@ public sealed partial class DocumentView : RichTextBox
         SyncPageBorderAdorner();
         SyncLineNumberAdorner();
         SyncChangeBarAdorner();
+        SyncTextEffectsAdorner();
         SyncPageGridlinesAdorner();
         SyncShapeEditPointsAdorner();
         SyncFloatingObjectsCanvas();
@@ -8610,7 +8624,11 @@ public sealed partial class DocumentView : RichTextBox
     /// the model (the outline definition lives in <c>numbering.xml</c>, regenerated on save). Marker text
     /// inherits the paragraph's leading run formatting so it tracks the list's font size/colour.
     /// </summary>
-    private static void PrependMultiLevelMarker(WpfParagraph paragraph, string markerText, TextDocument document)
+    private static void PrependMultiLevelMarker(
+        WpfParagraph paragraph,
+        string markerText,
+        TextDocument document,
+        string? fontFamily = null)
     {
         // Mirrors the footnote/endnote marker convention: a plain run carrying a Tag that ReadInline drops
         // on commit. The marker text is regenerated on every Render, so even if the user edits over it the
@@ -8619,6 +8637,12 @@ public sealed partial class DocumentView : RichTextBox
         {
             Tag = MultiLevelMarker.Instance
         };
+        // The numbering level's own font (w:lvl/w:rPr/w:rFonts) draws the marker: Word's Symbol and
+        // Wingdings bullets are private-use code points (U+F0B7) that only that font maps to a glyph.
+        // A modelled list does not carry that font, so it is recovered from the numbering definitions.
+        fontFamily ??= SymbolMarkerFontPlanner.ResolveMarkerFont(document, markerText);
+        if (!string.IsNullOrWhiteSpace(fontFamily))
+            marker.FontFamily = new FontFamily(fontFamily);
         // Match the paragraph's font size so the marker scales with the list text (fall back to default).
         var firstRun = paragraph.Inlines.OfType<WpfRun>().FirstOrDefault();
         if (firstRun is not null && firstRun.FontSize > 0)
@@ -8761,7 +8785,20 @@ public sealed partial class DocumentView : RichTextBox
     /// <see cref="TryEvaluateContentControlLock"/> to enforce a block-level <c>w:lock="sdtContentLocked"</c>
     /// the same way run-level <see cref="RunMarkers.Control"/> already is.
     /// </para>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, bool SuppressAutoHyphensIsSet = false, bool SuppressLineNumbers = false, bool SuppressLineNumbersIsSet = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false, int? ListStartOverride = null, ComplexField? SpanningFieldStart = null, ComplexField? SpanningFieldOwner = null, bool EndsSpanningField = false, RevisionKind MarkRevision = RevisionKind.None, string? MarkRevisionAuthor = null, string? MarkRevisionDateXml = null, FreeW.Core.Model.BlockContentControl? BlockContentControl = null, FreeW.Core.Model.PreservedNumbering? PreservedNumbering = null);
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, bool SuppressAutoHyphensIsSet = false, bool SuppressLineNumbers = false, bool SuppressLineNumbersIsSet = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false, int? ListStartOverride = null, ComplexField? SpanningFieldStart = null, ComplexField? SpanningFieldOwner = null, bool EndsSpanningField = false, RevisionKind MarkRevision = RevisionKind.None, string? MarkRevisionAuthor = null, string? MarkRevisionDateXml = null, FreeW.Core.Model.BlockContentControl? BlockContentControl = null, FreeW.Core.Model.PreservedNumbering? PreservedNumbering = null)
+    {
+        /// <summary>The paragraph authored an explicit start alignment (w:jc="left").</summary>
+        public bool AlignmentIsSet { get; init; }
+
+        /// <summary>
+        /// The one-line height (DIP) BuildParagraph scaled by the Multiple line rule, from the paragraph's
+        /// own font. ReadLineSpacing divides by the same basis so the multiple round-trips exactly.
+        /// </summary>
+        public double MultipleLineBasisPx { get; init; } = double.NaN;
+
+        /// <summary>A justified paragraph rendered start-aligned because its lines are tab-positioned.</summary>
+        public bool RenderedJustifyAsStart { get; init; }
+    }
 
     private sealed record RenderedBookmarkBoundary(BookmarkBoundary Boundary);
 
@@ -9228,6 +9265,8 @@ public sealed partial class DocumentView : RichTextBox
                 var complexFormatting = ReadRunFormatting(complexFieldRun);
                 if (complexMarker.Field.ShowCode)
                     complexFormatting = complexFormatting with { ColorHex = complexMarker.Formatting.ColorHex };
+                if (complexMarker.Field.FormField is not null)
+                    complexFormatting = WithoutLegacyFormFieldChrome(complexFormatting, complexMarker.Formatting);
                 modelParagraph.Runs.Add(new ModelRun(complexCached, complexFormatting)
                 {
                     HyperlinkUrl = hyperlinkUrl,
@@ -9556,7 +9595,11 @@ public sealed partial class DocumentView : RichTextBox
                         VerticalAlignment = cellTag?.VerticalAlignment ?? TableCellVerticalAlignment.Top
                     };
                     if (cellTag?.NestedTables is { Count: > 0 } nestedTables)
+                    {
                         cell.NestedTables.AddRange(nestedTables);
+                        if (cellTag.NestedTableParagraphOffsets is { } nestedOffsets)
+                            cell.NestedTableParagraphOffsets.AddRange(nestedOffsets);
+                    }
                     foreach (var cellBlock in wpfCell.Blocks)
                         AddCellBlockParagraphs(cell, cellBlock, document);
                     if (cell.Paragraphs.Count == 0)
@@ -9643,7 +9686,8 @@ public sealed partial class DocumentView : RichTextBox
             leadingWrapReservations,
             suppressedFloatingWrapRuns,
             preservedNumberingMarker?.Text,
-            splitInlineFlowBreaksForPagination),
+            splitInlineFlowBreaksForPagination,
+            preservedNumberingMarker?.FontFamily),
         _ => [BuildParagraph(new ModelParagraph(), document)]
     };
 
@@ -9654,7 +9698,8 @@ public sealed partial class DocumentView : RichTextBox
         IReadOnlyList<LeadingWrapReservation>? leadingWrapReservations,
         IReadOnlySet<ModelRun>? suppressedFloatingWrapRuns,
         string? preservedNumberingMarker,
-        bool splitInlineFlowBreaksForPagination)
+        bool splitInlineFlowBreaksForPagination,
+        string? preservedNumberingMarkerFont = null)
     {
         var rendered = BuildParagraph(
             paragraph,
@@ -9662,7 +9707,8 @@ public sealed partial class DocumentView : RichTextBox
             sourceBlockIndex: sourceBlockIndex,
             leadingWrapReservations: leadingWrapReservations,
             suppressedFloatingWrapRuns: suppressedFloatingWrapRuns,
-            preservedNumberingMarker: preservedNumberingMarker);
+            preservedNumberingMarker: preservedNumberingMarker,
+            preservedNumberingMarkerFont: preservedNumberingMarkerFont);
         if (!splitInlineFlowBreaksForPagination
             || !paragraph.Runs.Any(run => run.IsPageBreak || run.IsColumnBreak))
         {
@@ -9899,7 +9945,8 @@ public sealed partial class DocumentView : RichTextBox
         CellTextDirection TextDirection = CellTextDirection.Horizontal,
         TableCellVerticalAlignment VerticalAlignment = TableCellVerticalAlignment.Top,
         VerticalMergeState VerticalMerge = VerticalMergeState.None,
-        IReadOnlyList<ModelTable>? NestedTables = null);
+        IReadOnlyList<ModelTable>? NestedTables = null,
+        IReadOnlyList<int>? NestedTableParagraphOffsets = null);
 
     /// <summary>
     /// Carried on a rendered <see cref="WpfTable"/>'s Tag so <see cref="ReadTable"/> can recover values
@@ -10304,12 +10351,15 @@ public sealed partial class DocumentView : RichTextBox
                 var ordinaryCellMargins = !isPaginationSegment
                     ? modelCell.Margins ?? table.DefaultCellMargins ?? TableCellMargins.Default
                     : null;
+                // The 4-DIP horizontal inset stands in for Word's default 5.4pt cell margin; an authored
+                // margin tighter than that (layout tables with w:tblCellMar left/right = 0) must not be
+                // widened, or the cell text sits visibly right of Word's.
                 var wpfCell = new WpfTableCell
                 {
                     Padding = new Thickness(
-                        4,
+                        Math.Min(4, ordinaryCellMargins?.LeftPt * PxPerPoint ?? 4),
                         (ordinaryCellMargins?.TopPt * PxPerPoint ?? 2) + paginationVerticalCellSpacingDip,
-                        4,
+                        Math.Min(4, ordinaryCellMargins?.RightPt * PxPerPoint ?? 4),
                         (ordinaryCellMargins?.BottomPt * PxPerPoint ?? 2) + paginationVerticalCellSpacingDip)
                 };
                 if (span > 1)
@@ -10330,7 +10380,20 @@ public sealed partial class DocumentView : RichTextBox
                     modelCell.TextDirection, modelCell.VerticalAlignment, modelCell.VerticalMerge,
                     modelCell.NestedTables
                         .Select(nested => (ModelTable)DocumentMerge.CloneBlock(nested))
-                        .ToArray());
+                        .ToArray(),
+                    modelCell.NestedTableParagraphOffsets.ToArray());
+
+                // Tab stops inside this cell clamp to its text width (see AppendRunsWithTabPlans).
+                double? cellTextWidthDip = 0;
+                for (var spanned = gridColumn; spanned < gridColumn + span && cellTextWidthDip is not null; spanned++)
+                {
+                    cellTextWidthDip = spanned < columns && columnWidthsDip[spanned] is { } spannedWidthDip
+                        ? cellTextWidthDip + spannedWidthDip
+                        : null;
+                }
+                t_cellTextWidthDip = cellTextWidthDip is > 0
+                    ? Math.Max(0, cellTextWidthDip.Value - wpfCell.Padding.Left - wpfCell.Padding.Right - 2)
+                    : null;
 
                 var cellBorderPlan = TableCellBorderVisualPlanner.Build(modelCell.Borders, PxPerPoint);
                 if (cellBorderPlan.HasVisibleEdges)
@@ -10573,6 +10636,9 @@ public sealed partial class DocumentView : RichTextBox
                     foreach (var paraBlock in BuildTableCellParagraphs(modelCell, document, preservedNumberingMarkers))
                         wpfCell.Blocks.Add(paraBlock);
                 }
+                t_cellTextWidthDip = null;
+                if (modelCell.NestedTables.Count > 0)
+                    InsertNestedTableBlocks(wpfCell, modelCell, document);
                 if (styleBold || styleTextColorHex is not null)
                     ApplyTableStyleRunOverlay(wpfCell, styleBold, styleTextColorHex);
                 // Word keeps the space-after of a cell's last paragraph inside the cell; WPF collapses
@@ -10620,6 +10686,68 @@ public sealed partial class DocumentView : RichTextBox
         return wpf;
     }
 
+    /// <summary>
+    /// Renders the tables nested inside a cell (<c>w:tc/w:tbl</c>) at their authored position between
+    /// the cell's paragraphs. Each nested table is hosted in a read-only nested editor -- the same idiom
+    /// the bordered/rotated/repeated-header cells use -- so the outer editor never places a caret in it:
+    /// the model copy stashed on the cell Tag stays authoritative on commit, and a nested table can no
+    /// longer vanish from the page the way it did while it was carried on the Tag alone.
+    /// </summary>
+    private static void InsertNestedTableBlocks(WpfTableCell wpfCell, ModelTableCell modelCell, TextDocument document)
+    {
+        // Every level is a hosted editor inside the previous one; WPF measures them recursively, so a
+        // pathologically deep nest (dozens of levels) would overflow the stack. Deeper levels stay
+        // model-only, exactly as every nested table was before.
+        if (t_nestedTableRenderDepth >= MaxNestedTableRenderDepth)
+            return;
+        t_nestedTableRenderDepth++;
+        try
+        {
+            InsertNestedTableBlocksCore(wpfCell, modelCell, document);
+        }
+        finally
+        {
+            t_nestedTableRenderDepth--;
+        }
+    }
+
+    private const int MaxNestedTableRenderDepth = 6;
+
+    [ThreadStatic]
+    private static int t_nestedTableRenderDepth;
+
+    private static void InsertNestedTableBlocksCore(WpfTableCell wpfCell, ModelTableCell modelCell, TextDocument document)
+    {
+        var paragraphBlocks = wpfCell.Blocks.OfType<WpfParagraph>().ToList();
+        var interleave = paragraphBlocks.Count == modelCell.Paragraphs.Count
+            && paragraphBlocks.Count == wpfCell.Blocks.Count;
+        for (var index = 0; index < modelCell.NestedTables.Count; index++)
+        {
+            var nestedTable = BuildTable(modelCell.NestedTables[index], document);
+            nestedTable.Margin = new Thickness(0);
+            var host = new BlockUIContainer(new System.Windows.Controls.RichTextBox
+            {
+                Document = new System.Windows.Documents.FlowDocument(nestedTable)
+                {
+                    PagePadding = new Thickness(0)
+                },
+                IsReadOnly = true,
+                // Keep deeper nesting levels (hosted editors inside this one) enabled, not greyed out.
+                IsDocumentEnabled = true,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(0),
+                Background = System.Windows.Media.Brushes.Transparent
+            });
+            var offset = index < modelCell.NestedTableParagraphOffsets.Count
+                ? Math.Clamp(modelCell.NestedTableParagraphOffsets[index], 0, paragraphBlocks.Count)
+                : 0;
+            if (interleave && offset < paragraphBlocks.Count)
+                wpfCell.Blocks.InsertBefore(paragraphBlocks[offset], host);
+            else
+                wpfCell.Blocks.Add(host);
+        }
+    }
+
     // Word suppresses the shared before/after spacing only for adjacent paragraphs in the same
     // cell that resolve to the same contextual style. Keep this sequence local to the cell: table
     // boundaries and the rotated TextBlock path have different layout ownership.
@@ -10643,7 +10771,8 @@ public sealed partial class DocumentView : RichTextBox
                 inTableCell: true,
                 preservedNumberingMarker: preservedNumberingMarkers.TryGetValue(modelParagraph, out var marker)
                     ? marker.Text
-                    : null);
+                    : null,
+                preservedNumberingMarkerFont: marker.FontFamily);
             if (previousModelParagraph is not null
                 && previousWpfParagraph is not null
                 && SuppressesContextualSpacing(previousModelParagraph, modelParagraph, document))
@@ -11123,7 +11252,8 @@ public sealed partial class DocumentView : RichTextBox
         int? sourceBlockIndex = null,
         IReadOnlyList<LeadingWrapReservation>? leadingWrapReservations = null,
         IReadOnlySet<ModelRun>? suppressedFloatingWrapRuns = null,
-        string? preservedNumberingMarker = null)
+        string? preservedNumberingMarker = null,
+        string? preservedNumberingMarkerFont = null)
     {
         var paraFmt = Resolve(paragraph, document);
         // Inside a table cell, paragraphs that don't set their own spacing follow the table style rather than
@@ -11207,6 +11337,7 @@ public sealed partial class DocumentView : RichTextBox
         var hasExplicitMultipleLineSpacing = paraFmt.LineSpacingIsSet ||
             Math.Abs(paraFmt.LineSpacing - ParagraphFormatting.Default.LineSpacing) > 0.0001 ||
             usesWordApplicationDefaultLineSpacing;
+        var multipleLineBasisPx = ParagraphMultipleLineBasisPx(paragraph, document);
         var wpf = new WpfParagraph
         {
             // Right-to-left paragraph direction (w:bidi). WPF lays the inline content out RTL and, because
@@ -11243,13 +11374,16 @@ public sealed partial class DocumentView : RichTextBox
             // height in points; WPF only does absolute LineHeight, so both map to that height — and Exact
             // additionally forces BlockLineHeight so the height is honoured even for taller content (AtLeast is
             // approximated as exact, the closest FlowDocument behaviour).
+            // The "line" a multiple scales is the natural line of the paragraph's OWN font (its dominant
+            // text run, or the paragraph mark for an empty paragraph), not the document default font: a
+            // Times New Roman paragraph in a Calibri-default document is ~1.15 em per line, not Calibri's
+            // ~1.22 em, and a 16pt paragraph's 1.15 lines are 1.15 x its 16pt line, not x 11pt.
             LineHeight = paraFmt.LineRule == LineSpacingRule.Multiple && hasExplicitMultipleLineSpacing
                 ? (paraFmt.LineSpacing > 0
-                    ? paraFmt.LineSpacing * DefaultLineHeightRatio(document) *
+                    ? paraFmt.LineSpacing * multipleLineBasisPx *
                       (ImportedWordLineSpacingPlanner.UsesApplicationDefaultRunLineHeightCalibration(document, paraFmt)
                           ? ImportedWordApplicationLineHeightScale
-                          : 1.0) *
-                      (document.DefaultRun.FontSizePt ?? 11) * PxPerPoint
+                          : 1.0)
                     : double.NaN)
                 : (paraFmt.LineHeightPt > 0 ? paraFmt.LineHeightPt * PxPerPoint : double.NaN),
             LineStackingStrategy = paraFmt.LineRule == LineSpacingRule.Exact
@@ -11259,15 +11393,18 @@ public sealed partial class DocumentView : RichTextBox
             // they survive an edit/commit cycle without a Tag. WidowControl has no FlowDocument slot and
             // is carried on the Tag instead (see below).
             KeepWithNext = paraFmt.KeepWithNext,
-            // WPF has no widow/orphan setting. Use the shared Word pagination policy for ordinary
-            // paragraphs; its keep-together primitive is the closest native representation of the
-            // default two-line widow/orphan guard. Table-cell and non-text-object paths retain their
-            // existing ownership so this policy only changes ordinary body composition.
+            // Keep-lines-together (and the table-cell/non-text-object ownership) comes from the shared
+            // Word pagination planner. Word's widow/orphan control is NOT keep-together: it only forbids a
+            // single stranded first/last line, so it maps onto PTS's native MinOrphanLines/MinWidowLines
+            // below, which split the paragraph exactly where Word does (pulling one line forward, or moving
+            // a 2-3 line paragraph whole) instead of moving every long paragraph wholesale.
             KeepTogether = DocumentParagraphPaginationPlanner.ShouldKeepParagraphTogether(
                 paraFmt,
                 isTableCell: inTableCell,
                 hasNonTextLayoutObject: hasNonTextLayoutObject) ||
-                hasNonTextLayoutObject
+                hasNonTextLayoutObject,
+            MinOrphanLines = DocumentParagraphPaginationPlanner.ResolveMinimumWidowOrphanLines(paraFmt),
+            MinWidowLines = DocumentParagraphPaginationPlanner.ResolveMinimumWidowOrphanLines(paraFmt)
         };
         // Word default: no pair kerning. Set on the paragraph (not only the editor FlowDocument) so
         // synthetic marker/field runs inherit it wherever the block is re-hosted (page boxes, print).
@@ -11338,7 +11475,23 @@ public sealed partial class DocumentView : RichTextBox
             paragraph.MarkRevisionAuthor,
             paragraph.MarkRevisionDateXml,
             paragraph.BlockContentControl,
-            paragraph.PreservedNumbering);
+            paragraph.PreservedNumbering)
+        {
+            AlignmentIsSet = paraFmt.AlignmentIsSet,
+            MultipleLineBasisPx = multipleLineBasisPx
+        };
+
+        // Word never justifies the part of a line that is positioned by tab stops; WPF would stretch the
+        // inter-word gaps of such a line past the planned tab advances and push a right-aligned leader
+        // (TOC page number) onto a line of its own. Render tabbed, tab-stopped paragraphs start-aligned.
+        // (A paragraph that only starts with tabs -- a manual first-line indent -- stays justified.)
+        if (wpf.TextAlignment == WpfTextAlignment.Justify
+            && paraFmt.TabStops.Count > 0
+            && string.Concat(paragraph.Runs.Select(run => run.Text)).TrimStart('\t', ' ').Contains('\t', StringComparison.Ordinal))
+        {
+            wpf.TextAlignment = WpfTextAlignment.Left;
+            wpf.Tag = ((ParagraphTag)wpf.Tag) with { RenderedJustifyAsStart = true };
+        }
 
         var runs = paragraph.Runs;
         var dropCapPlan = !inTableCell
@@ -11410,10 +11563,14 @@ public sealed partial class DocumentView : RichTextBox
         }
 
         if (!string.IsNullOrWhiteSpace(preservedNumberingMarker))
-            PrependMultiLevelMarker(wpf, preservedNumberingMarker, document);
+            PrependMultiLevelMarker(wpf, preservedNumberingMarker, document, preservedNumberingMarkerFont);
 
         return wpf;
     }
+
+    /// <summary>Text width of the table cell whose paragraphs are being built (null outside a cell).</summary>
+    [ThreadStatic]
+    private static double? t_cellTextWidthDip;
 
     private static void AppendRunsWithTabPlans(
         WpfParagraph wpf,
@@ -11464,6 +11621,17 @@ public sealed partial class DocumentView : RichTextBox
                     document.Page.DefaultTabStopPt,
                     PxPerPoint,
                     following.DecimalAlignmentOffsetDip);
+                // A tab stop at (or past) the cell's text edge ends at that edge in Word; an unclamped
+                // advance would not fit the line and wrap the leader onto a line of its own.
+                if (t_cellTextWidthDip is { } cellTextWidthDip)
+                {
+                    var roomDip = cellTextWidthDip
+                        - Math.Max(0, paraFmt.IndentRightPt * PxPerPoint)
+                        - penPositionDip
+                        - following.WidthDip;
+                    if (plan.AdvanceDip > roomDip && roomDip >= ParagraphTabStopLayoutPlanner.MinimumAdvanceDip)
+                        plan = plan with { AdvanceDip = roomDip, SegmentStartDip = penPositionDip + roomDip };
+                }
 
                 var tabInline = BuildRenderedTabStopInline(plan, run, paragraph, document);
                 wpf.Inlines.Add(WrapHyperlinkIfNeeded(run, tabInline));
@@ -11615,7 +11783,7 @@ public sealed partial class DocumentView : RichTextBox
         if (string.IsNullOrEmpty(text))
             return 0;
 
-        var fmt = Resolve(run, paragraph, document);
+        var fmt = ProjectForScript(Resolve(run, paragraph, document), text);
         var displayText = text;
         if (document.Page.AutoHyphenation && !paragraph.Formatting.SuppressAutoHyphens)
             displayText = HyphenateForDisplay(displayText, document.Page.DoNotHyphenateCaps);
@@ -11865,7 +12033,8 @@ public sealed partial class DocumentView : RichTextBox
         if (run.IsColumnBreak)
             return new WpfRun(string.Empty) { Tag = new ColumnBreakMarker() };
 
-        var fmt = effectiveFormatting;
+        // Right-to-left script text takes its typeface/size from the complex-script properties.
+        var fmt = ProjectForScript(effectiveFormatting, run.Text);
         // Automatic hyphenation: when the document has it on and this paragraph is not suppressed, insert
         // soft hyphens (U+00AD) at the pure helper's break points so the layout engine can break long words
         // at line ends. Soft hyphens are zero-width unless a line break lands on one, and are stripped on
@@ -11906,6 +12075,7 @@ public sealed partial class DocumentView : RichTextBox
         ApplyBaselinePositionPresentation(wpf, fmt);
         if (TryParseColor(fmt.ColorHex, out var color))
             wpf.Foreground = new SolidColorBrush(color);
+        ApplyTextEffectPresentation(wpf, fmt, document);
         var decorationPlan = RunDecorationVisualPlanner.Build(fmt, PxPerPoint);
         // Character shading (pattern-aware) takes precedence over plain highlight for the background.
         // Both map to wpf.Background since WPF Run has no separate shading slot; the CharacterFormatMarker
@@ -12098,27 +12268,6 @@ public sealed partial class DocumentView : RichTextBox
 
     private static Inline BuildFloatingAnchorRun(ModelRun run, TextDocument document, AnchorMarker marker)
     {
-        if (marker.Image is
-            {
-                AltText: "Square wrapped sample picture with glow reflection soft edge and artistic effect",
-                WidthPt: 132,
-                HeightPt: 84,
-                Wrapping: ImageWrapping.Square,
-                HorizontalAnchor: HorizontalAnchor.Margin,
-                VerticalAnchor: VerticalAnchor.Paragraph,
-                HorizontalOffsetPt: 174,
-                VerticalOffsetPt: 60,
-                ShadowPreset: 3,
-                GlowSizePt: 6,
-                ReflectionPreset: 2,
-                SoftEdgePt: 2,
-                BevelPreset: 1,
-                ArtisticEffect: ImageArtisticEffect.GlowDiffused
-            } image)
-        {
-            return BuildFloatingImageWrapFigure(marker, run, image);
-        }
-
         if (marker.Shape is
             {
                 IsFloating: true,
@@ -12152,12 +12301,60 @@ public sealed partial class DocumentView : RichTextBox
             return BuildFloatingWordArtWrapFigure(marker, run, wordArt);
         }
 
+        // A paragraph-anchored wrapping object excludes text where Word draws it — at its authored
+        // offset below the anchor paragraph's top — not as an inline Floater at the anchor run, which
+        // reserves the object's band immediately and stacks several floaters on top of each other.
+        if (DocumentViewLayoutPlanner.BuildParagraphAnchoredWrapPlan(run, document.Page) is { } anchoredPlan)
+            return BuildParagraphAnchoredWrapFigure(marker, run, anchoredPlan);
+
         var topAndBottomWidthDip = FloatingWrapReservationTextWidthDip(document);
         var reservation = DocumentViewLayoutPlanner.BuildFloatingWrapReservation(run, topAndBottomWidthDip);
         if (reservation is not null)
             return BuildFloatingWrapReservationFloater(marker, run, reservation, document);
 
         return WrapHyperlinkIfNeeded(run, new WpfRun(string.Empty) { Tag = marker });
+    }
+
+    private static Figure BuildParagraphAnchoredWrapFigure(
+        AnchorMarker marker,
+        ModelRun run,
+        DocumentParagraphAnchoredWrapPlan plan)
+    {
+        var reservationMarker = new FloatingWrapReservationMarker(
+            marker,
+            run.HyperlinkUrl,
+            run.HyperlinkAnchor,
+            run.HyperlinkTooltip);
+        var placeholder = new Border
+        {
+            Width = plan.WidthDip,
+            Height = plan.HeightDip,
+            Background = Brushes.Transparent,
+            Opacity = 0,
+            IsHitTestVisible = false,
+            Focusable = false,
+            Tag = reservationMarker,
+        };
+
+        return new Figure(new BlockUIContainer(placeholder) { Margin = new Thickness(0) })
+        {
+            Width = new FigureLength(plan.WidthDip, FigureUnitType.Pixel),
+            Height = new FigureLength(plan.HeightDip, FigureUnitType.Pixel),
+            HorizontalAnchor = FigureHorizontalAnchor.ContentLeft,
+            VerticalAnchor = FigureVerticalAnchor.ParagraphTop,
+            HorizontalOffset = plan.ColumnOffsetDip,
+            VerticalOffset = plan.ParagraphOffsetDip,
+            WrapDirection = plan.Wrapping == ImageWrapping.TopAndBottom
+                ? WrapDirection.None
+                : plan.WrapTextSide switch
+                {
+                    FloatingWrapTextSide.Left => WrapDirection.Left,
+                    FloatingWrapTextSide.Right => WrapDirection.Right,
+                    _ => WrapDirection.Both,
+                },
+            Margin = new Thickness(0),
+            Tag = reservationMarker,
+        };
     }
 
     private static double FloatingWrapReservationTextWidthDip(TextDocument document)
@@ -12198,54 +12395,6 @@ public sealed partial class DocumentView : RichTextBox
             HorizontalAlignment = reservation.Wrapping == ImageWrapping.TopAndBottom
                 ? HorizontalAlignment.Center
                 : BuildFloatingWrapHorizontalAlignment(run, document),
-            Tag = reservationMarker,
-        };
-    }
-
-    private static Figure BuildFloatingImageWrapFigure(AnchorMarker marker, ModelRun run, InlineImage image)
-    {
-        var isObjectFormatSquareImage = image is
-        {
-            AltText: "Square wrapped sample picture with glow reflection soft edge and artistic effect",
-            WidthPt: 132,
-            HeightPt: 84,
-            Wrapping: ImageWrapping.Square,
-            HorizontalAnchor: HorizontalAnchor.Margin,
-            VerticalAnchor: VerticalAnchor.Paragraph,
-            HorizontalOffsetPt: 174,
-            VerticalOffsetPt: 60
-        };
-        var reservationMarker = new FloatingWrapReservationMarker(
-            marker,
-            run.HyperlinkUrl,
-            run.HyperlinkAnchor,
-            run.HyperlinkTooltip);
-        var widthDip = Math.Max(1, image.WidthPt * PxPerPoint);
-        var heightDip = Math.Max(1, image.HeightPt * PxPerPoint - FloatingFigureWrapHeightInsetDip);
-        var placeholder = new Border
-        {
-            Width = widthDip,
-            Height = heightDip,
-            Background = Brushes.Transparent,
-            Opacity = 0,
-            IsHitTestVisible = false,
-            Focusable = false,
-            Tag = reservationMarker,
-        };
-
-        return new Figure(new BlockUIContainer(placeholder) { Margin = new Thickness(0) })
-        {
-            Width = new FigureLength(widthDip, FigureUnitType.Pixel),
-            Height = new FigureLength(heightDip, FigureUnitType.Pixel),
-            HorizontalAnchor = FigureHorizontalAnchor.ContentLeft,
-            VerticalAnchor = FigureVerticalAnchor.ParagraphTop,
-            HorizontalOffset = image.HorizontalOffsetPt * PxPerPoint,
-            // WPF applies the Figure's wrap band above the matching Word paragraph-relative band.
-            // Keep the overlay anchor unchanged and calibrate only this exact invisible reservation.
-            VerticalOffset = image.VerticalOffsetPt * PxPerPoint
-                + (isObjectFormatSquareImage ? 24 : 0),
-            WrapDirection = WrapDirection.Both,
-            Margin = new Thickness(0),
             Tag = reservationMarker,
         };
     }
@@ -13524,6 +13673,8 @@ public sealed partial class DocumentView : RichTextBox
         else if (TryParseColor(fmt.ColorHex, out var color))
             wpf.Foreground = new SolidColorBrush(color);
         wpf.ToolTip = (field.Keyword.Length > 0 ? field.Keyword : "Field") + " field: " + field.Instruction.Trim();
+        if (field.FormField is not null && !displayPlan.IsFieldCode)
+            ApplyLegacyFormFieldChrome(wpf, field);
         return wpf;
     }
 
@@ -15909,7 +16060,9 @@ public sealed partial class DocumentView : RichTextBox
         // The icon bytes are nominally PNG but real OLE objects carry icons in formats WIC cannot decode
         // (WMF/EMF/uncommon codecs); decode defensively so a bad icon falls back to the ProgID placeholder
         // instead of throwing NotSupportedException and blanking the whole document.
-        var iconSource = plan.Icon is { } icon ? TryDecodeRaster(icon.PngBytes) : null;
+        // The cached preview of a real OLE object is usually a WMF/EMF metafile; DecodeImage routes those
+        // through GDI+ so the object shows the picture Word shows instead of its ProgID.
+        var iconSource = plan.Icon is { } icon ? DecodeImage(icon) : null;
         if (iconSource is not null)
         {
             content = new Image
@@ -15935,9 +16088,12 @@ public sealed partial class DocumentView : RichTextBox
         {
             Width = widthPx,
             Height = heightPx,
-            Background = new SolidColorBrush(ParseColor(plan.BackgroundColorHex, Colors.White)),
+            // A cached preview is the object's whole appearance in Word: no placeholder chrome around it.
+            Background = iconSource is not null
+                ? Brushes.Transparent
+                : new SolidColorBrush(ParseColor(plan.BackgroundColorHex, Colors.White)),
             BorderBrush = new SolidColorBrush(ParseColor(plan.BorderColorHex, Colors.Gray)),
-            BorderThickness = new Thickness(1),
+            BorderThickness = new Thickness(iconSource is not null ? 0 : 1),
             Child = content,
             Tag = embedded // carries the model object so CommitToModel can round-trip it
         };
@@ -16905,10 +17061,11 @@ public sealed partial class DocumentView : RichTextBox
         foreach (var inline in inlines)
         {
             if (inline is WpfRun run
-                && run.Tag is RunMarkers { Control: { } marker }
-                && ContentControlInteractionPlanner.CanEditContentControlText(
-                    new ModelRun(string.Empty) { Control = marker.Control },
-                    RestrictEditingPolicy))
+                && ((run.Tag is RunMarkers { Control: { } marker }
+                     && ContentControlInteractionPlanner.CanEditContentControlText(
+                         new ModelRun(string.Empty) { Control = marker.Control },
+                         RestrictEditingPolicy))
+                    || IsLegacyFormFieldTabStop(run)))
             {
                 yield return run;
             }
@@ -18916,9 +19073,7 @@ public sealed partial class DocumentView : RichTextBox
         double? localFontSizePt = run.ReadLocalValue(TextElement.FontSizeProperty) is double localFontSize
             ? localFontSize / PxPerPoint / (verticalAlign == VerticalAlign.Baseline ? 1 : SuperSubScale)
             : null;
-        var localForegroundHex = run.ReadLocalValue(TextElement.ForegroundProperty) is SolidColorBrush localForeground
-            ? ToHex(localForeground.Color)
-            : null;
+        var localForegroundHex = ReadObservedForegroundHex(run, rendered);
 
         var observed = rendered with
         {
@@ -19024,7 +19179,10 @@ public sealed partial class DocumentView : RichTextBox
             SuppressAutoHyphensIsSet = suppressAutoHyphensIsSet,
             SuppressLineNumbers = suppressLineNumbers,
             SuppressLineNumbersIsSet = suppressLineNumbersIsSet,
-            Alignment = FromWpfAlignment(paragraph.TextAlignment),
+            Alignment = tag is { RenderedJustifyAsStart: true } && paragraph.TextAlignment == WpfTextAlignment.Left
+                ? ModelTextAlignment.Justify
+                : FromWpfAlignment(paragraph.TextAlignment),
+            AlignmentIsSet = tag is { AlignmentIsSet: true } && paragraph.TextAlignment == WpfTextAlignment.Left,
             // Right-to-left direction reads straight back off the WPF Paragraph's FlowDirection (set in
             // BuildParagraph), so an RTL paragraph survives an edit/commit cycle.
             Rtl = paragraph.FlowDirection == System.Windows.FlowDirection.RightToLeft,
@@ -19045,7 +19203,10 @@ public sealed partial class DocumentView : RichTextBox
                 : 0,
             LineSpacing = paragraph.LineStackingStrategy == LineStackingStrategy.BlockLineHeight
                 ? ParagraphFormatting.Default.LineSpacing
-                : ReadLineSpacing(paragraph.LineHeight, document),
+                : ReadLineSpacing(
+                    paragraph.LineHeight,
+                    document,
+                    (paragraph.Tag as ParagraphTag)?.MultipleLineBasisPx ?? double.NaN),
             IndentLeftPt = paragraph.Margin.Left / PxPerPoint,
             IndentRightPt = paragraph.Margin.Right / PxPerPoint,
             FirstLineIndentPt = paragraph.TextIndent / PxPerPoint,
@@ -19089,13 +19250,13 @@ public sealed partial class DocumentView : RichTextBox
     // default font's natural line height). Must use the SAME ratio as the forward path or an edit/commit
     // cycle would shift every paragraph's spacing. An unset LineHeight is NaN; fall back to the model default
     // so editing text never silently flattens a paragraph's spacing.
-    private static double ReadLineSpacing(double lineHeight, TextDocument document)
+    private static double ReadLineSpacing(double lineHeight, TextDocument document, double basisPx = double.NaN)
     {
-        var fontPt = document.DefaultRun.FontSizePt ?? 11;
-        var ratio = DefaultLineHeightRatio(document);
-        if (double.IsNaN(lineHeight) || lineHeight <= 0 || fontPt <= 0 || ratio <= 0)
+        if (double.IsNaN(basisPx) || basisPx <= 0)
+            basisPx = (document.DefaultRun.FontSizePt ?? 11) * PxPerPoint * DefaultLineHeightRatio(document);
+        if (double.IsNaN(lineHeight) || lineHeight <= 0 || double.IsNaN(basisPx) || basisPx <= 0)
             return ParagraphFormatting.Default.LineSpacing;
-        var spacing = lineHeight / (fontPt * PxPerPoint * ratio);
+        var spacing = lineHeight / basisPx;
         // BuildParagraph also multiplies by the run-metric calibration, and its predicate applies that
         // factor ONLY to the implicit default multiple (it requires the paragraph to carry no explicit
         // spacing). Divide the same factor back out for exactly that case so the forward and inverse
@@ -19118,9 +19279,67 @@ public sealed partial class DocumentView : RichTextBox
     // default font and cached, since BuildParagraph runs this for every paragraph on load. Forward and
     // inverse line-spacing math both call this so they stay exactly invertible.
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, double> LineHeightRatioCache = new();
-    private static double DefaultLineHeightRatio(TextDocument document)
+    private static double DefaultLineHeightRatio(TextDocument document) =>
+        FontLineHeightRatio(document.DefaultRun.FontFamily);
+
+    /// <summary>
+    /// The one-line height (DIP) that Word's Multiple line rule scales for this paragraph: the natural
+    /// line height (FontFamily.LineSpacing x size) of the font carrying most of its visible text, or of the paragraph
+    /// mark when it has no text. Falls back to the document default font and size.
+    /// </summary>
+    internal static double ParagraphMultipleLineBasisPx(ModelParagraph paragraph, TextDocument document)
     {
-        var name = document.DefaultRun.FontFamily;
+        var defaultFamily = document.DefaultRun.FontFamily;
+        var defaultSizePt = document.DefaultRun.FontSizePt ?? 11;
+        double LineOf(RunFormatting formatting) =>
+            FontLineHeightRatio(formatting.FontFamily is { Length: > 0 } family ? family : defaultFamily) *
+            (formatting.FontSizePt is > 0 and var size ? size : defaultSizePt);
+
+        var documentDefaultLine = FontLineHeightRatio(defaultFamily) * defaultSizePt;
+        // WPF has one LineHeight per paragraph while Word sizes each line by its own tallest run, so use
+        // the line of the font that carries most of the paragraph's visible characters. A lone 14pt space
+        // run inside 12pt body text must not stretch every line of the paragraph.
+        var weightByLine = new Dictionary<double, int>();
+        var hasNonTextContent = false;
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.Image is not null || run.Chart is not null || run.Shape is not null ||
+                run.WordArt is not null || run.SmartArt is not null || run.Equation is not null ||
+                run.EmbeddedObject is not null)
+            {
+                hasNonTextContent = true;
+                continue;
+            }
+            if (string.IsNullOrEmpty(run.Text))
+                continue;
+            var visibleCharacters = run.Text.Count(character => !char.IsWhiteSpace(character));
+            if (visibleCharacters == 0)
+                continue;
+            var formatting = Resolve(run, paragraph, document);
+            if (formatting.Hidden)
+                continue;
+            var line = LineOf(formatting);
+            weightByLine[line] = weightByLine.GetValueOrDefault(line) + visibleCharacters;
+        }
+
+        var best = weightByLine.Count == 0
+            ? 0.0
+            : weightByLine.OrderByDescending(entry => entry.Value).ThenByDescending(entry => entry.Key).First().Key;
+        if (best <= 0)
+        {
+            // No visible text: an empty paragraph takes its line from the paragraph mark, as in Word. An
+            // object-only paragraph or one whose mark is hidden keeps the document-default line (the object
+            // or the collapsed mark owns its height, not a text line).
+            var mark = DocumentRunFormattingResolver.Resolve(
+                document, paragraph, paragraph.MarkFormatting ?? RunFormatting.Default, null);
+            best = hasNonTextContent || mark.Hidden ? documentDefaultLine : LineOf(mark);
+        }
+
+        return best * PxPerPoint;
+    }
+
+    private static double FontLineHeightRatio(string? name)
+    {
         if (string.IsNullOrEmpty(name))
             name = "Calibri";
         return LineHeightRatioCache.GetOrAdd(name, static n =>
@@ -19141,6 +19360,22 @@ public sealed partial class DocumentView : RichTextBox
 
     private static RunFormatting Resolve(ModelRun run, ModelParagraph paragraph, TextDocument document)
         => DocumentRunFormattingResolver.Resolve(document, paragraph, run.Formatting, run.StyleId);
+
+    private static readonly Lazy<HashSet<string>> s_installedFontFamilies = new(() =>
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var family in Fonts.SystemFontFamilies)
+        {
+            names.Add(family.Source);
+            foreach (var localized in family.FamilyNames.Values)
+                names.Add(localized);
+        }
+        return names;
+    });
+
+    private static RunFormatting ProjectForScript(RunFormatting resolved, string? text) =>
+        DocumentRunFormattingResolver.ProjectForScript(
+            resolved, text, family => s_installedFontFamilies.Value.Contains(family));
 
     private static ParagraphFormatting Resolve(ModelParagraph paragraph, TextDocument document) =>
         DocumentParagraphFormattingResolver.Resolve(document, paragraph);
