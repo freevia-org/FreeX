@@ -17,7 +17,8 @@ public sealed class InsertDrawingGalleryProfileParityTests
                 ("freew.shape-rectangle", "Rectangle"),
                 ("freew.shape-rounded", "Rounded Rectangle"),
                 ("freew.shape-ellipse", "Ellipse"),
-                ("freew.shape-textbox", "Text Box"));
+                ("freew.shape-textbox", "Text Box"),
+                ("freew.shapes-gallery", "More Shapes…"));
 
         CommandItems(Dropdown(wpf, "text", "freew.shape-textbox"))
             .Should().Equal(CommandItems(Dropdown(avalonia, "text", "freew.shape-textbox")));

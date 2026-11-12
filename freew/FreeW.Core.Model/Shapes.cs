@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 using Free.Shared.Drawing;
 
@@ -400,6 +400,15 @@ public sealed class ShapeStylePreset
     }
 }
 
+/// <summary>One preset adjust value: <c>&lt;a:gd name="adj1" fmla="val 25000"/&gt;</c>.</summary>
+public sealed record ShapeAdjustment(string Name, string Formula);
+
+/// <summary>
+/// A line-end decoration (<c>a:headEnd</c> / <c>a:tailEnd</c>): the DrawingML type token
+/// (<c>triangle</c>, <c>stealth</c>, <c>arrow</c>, <c>diamond</c>, <c>oval</c>, <c>none</c>) and the
+/// optional width / length size tokens (<c>sm</c>, <c>med</c>, <c>lg</c>).
+/// </summary>
+public sealed record ShapeLineEnd(string Type, string? Width = null, string? Length = null);
 // MODEL-DESIGN CHOICE (roadmap item W2, basic DrawingML shapes & text boxes):
 // A shape is modelled as an OPTIONAL INLINE RUN MARK (Run.Shape) exactly like Run.Equation / Run.Image.
 // This is the established FreeW pattern for every inline feature, so shapes flow through the existing run
@@ -552,6 +561,50 @@ public sealed class Shape
     /// Mirror the shape vertically (<c>a:xfrm/@flipV="1"</c>). Defaults to false.
     /// </summary>
     public bool FlipV { get; set; }
+
+    // ── Preset geometry identity (a:prstGeom) ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The DrawingML preset geometry token (<c>a:prstGeom/@prst</c>, e.g. <c>"star5"</c>,
+    /// <c>"rightArrow"</c>, <c>"flowChartDecision"</c>) this shape was created or imported with, for every
+    /// preset beyond the three named <see cref="Kind"/> values (and for those three when they carry
+    /// adjust values). Null for a plain rect / roundRect / ellipse. The outline FreeW draws for the
+    /// preset is cached in <see cref="CustomGeometry"/>; the writer still emits <c>a:prstGeom</c> while
+    /// <see cref="HasIntactPresetGeometry"/> holds, so a Word shape saves back as the same preset.
+    /// </summary>
+    public string? PresetName { get; set; }
+
+    /// <summary>
+    /// The preset's adjust values (<c>a:prstGeom/a:avLst/a:gd</c>) in document order, kept verbatim so
+    /// they round-trip even for presets whose outline FreeW only approximates.
+    /// </summary>
+    public List<ShapeAdjustment> PresetAdjustments { get; } = [];
+
+    /// <summary>
+    /// Signature of the <see cref="CustomGeometry"/> outline that was synthesized for
+    /// <see cref="PresetName"/> (see <see cref="PresetShapeGeometry.Signature"/>). When the current
+    /// outline no longer matches (the user edited points or converted to freeform) the shape is no
+    /// longer the preset and is written as <c>a:custGeom</c>.
+    /// </summary>
+    public string? PresetOutlineSignature { get; set; }
+
+    /// <summary>Line-start decoration (<c>a:ln/a:headEnd</c>). Null means none.</summary>
+    public ShapeLineEnd? HeadEnd { get; set; }
+
+    /// <summary>Line-end decoration (<c>a:ln/a:tailEnd</c>). Null means none.</summary>
+    public ShapeLineEnd? TailEnd { get; set; }
+
+    /// <summary>
+    /// True while this shape is still its <see cref="PresetName"/> preset: either it has no cached
+    /// outline (a preset FreeW draws as a plain rectangle) or the cached outline is exactly the one that
+    /// was synthesized for the preset.
+    /// </summary>
+    public bool HasIntactPresetGeometry =>
+        !string.IsNullOrEmpty(PresetName)
+        && (HasCustomGeometry
+            ? PresetOutlineSignature is not null
+              && string.Equals(PresetShapeGeometry.Signature(CustomGeometry!), PresetOutlineSignature, StringComparison.Ordinal)
+            : PresetOutlineSignature is null);
 
     public Shape() { }
 

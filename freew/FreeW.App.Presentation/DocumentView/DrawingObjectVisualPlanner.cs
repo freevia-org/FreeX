@@ -572,7 +572,8 @@ public static class DrawingObjectVisualPlanner
             shape.FlipH,
             shape.FlipV,
             shape.HasCustomGeometry ? DrawingObjectGeometryKind.Custom : ToGeometryKind(shape.Kind),
-            shape.HasCustomGeometry ? shape.CustomGeometry : null,
+            // An intact DrawingML preset is re-synthesized for the shape's current size and outline.
+            PresetShapeGeometry.ResolveRenderGeometry(shape),
             BuildFillPlan(shape),
             BuildOutlinePlan(shape),
             shape.HasText ? DrawingObjectTextLayoutPlanner.BuildTextPlan(shape) : null,

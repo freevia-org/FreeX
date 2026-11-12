@@ -460,6 +460,14 @@ internal static partial class FreeWCanonicalRibbonTabs
                             menu.Item("freew.chart-type-scatter", "Scatter", "X");
                             menu.Item("freew.chart-type-area", "Area", "A");
                             menu.Item("freew.chart-type-doughnut", "Doughnut", "D");
+                            menu.Item("freew.chart-type-radar", "Radar", "R");
+                            menu.Item("freew.chart-type-bubble", "Bubble", "U");
+                            menu.Item("freew.chart-type-stock", "Stock", "S");
+                            menu.Item("freew.chart-type-combo", "Combo", "M");
+                            // Grouping of the current column / bar / line / area chart.
+                            menu.Item("freew.chart-grouping-standard", "Clustered", "K");
+                            menu.Item("freew.chart-grouping-stacked", "Stacked", "T");
+                            menu.Item("freew.chart-grouping-percent", "100% Stacked", "1");
                         })),
                     tab => tab.Group("chart-type", "Type", null, 100, group =>
                         group.Dropdown("freew.chart-type", "Change Chart Type", BuildChartTypeMenu())));
@@ -1202,6 +1210,12 @@ internal static partial class FreeWCanonicalRibbonTabs
             .Select(kind => new RibbonMenuItem(
                 kind.ToString(),
                 new RibbonCommandId($"freew.chart-type-{kind.ToString().ToLowerInvariant()}")))
+            .Concat(
+            [
+                new RibbonMenuItem("Clustered", new RibbonCommandId("freew.chart-grouping-standard")),
+                new RibbonMenuItem("Stacked", new RibbonCommandId("freew.chart-grouping-stacked")),
+                new RibbonMenuItem("100% Stacked", new RibbonCommandId("freew.chart-grouping-percent")),
+            ])
             .ToArray());
 
     private static RibbonMenu BuildChartStyleMenu() =>

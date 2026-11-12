@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
@@ -14685,19 +14685,9 @@ public sealed partial class DocumentView : RichTextBox
             : strokeThickness;
 
         FrameworkElement element;
-        if (shape.HasCustomGeometry && shape.CustomGeometry is { } cg)
+        if (PresetShapeGeometry.ResolveRenderGeometry(shape) is { } cg)
         {
-            var geo = CustomShapePathWpfAdapter.Build(cg, 0, 0, widthPx, heightPx);
-            element = new System.Windows.Shapes.Path
-            {
-                Width = widthPx,
-                Height = heightPx,
-                Data = geo,
-                Fill = fill,
-                Stroke = stroke,
-                StrokeThickness = outlineThickness,
-                Stretch = System.Windows.Media.Stretch.None,
-            };
+            element = PresetShapeInlineVisual.Build(shape, cg, widthPx, heightPx, fill, stroke, outlineThickness);
         }
         else if (shape.Kind == ShapeKind.Ellipse)
         {

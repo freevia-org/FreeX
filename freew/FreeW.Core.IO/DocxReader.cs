@@ -17,7 +17,7 @@ namespace FreeW.Core.IO;
 /// run formatting (bold/italic/underline/strike, size, colour, font), paragraph formatting
 /// (alignment, spacing, indents, style ref) and styles.xml.
 /// </summary>
-public static class DocxReader
+public static partial class DocxReader
 {
     private static readonly XNamespace Mc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
     private static readonly XNamespace A14 = "http://schemas.microsoft.com/office/drawing/2010/main";
@@ -5729,15 +5729,16 @@ public static class DocxReader
         // and render it via the same freeform-polygon path FreeW already uses for "Convert to Freeform"
         // shapes (see DocumentView shape rendering: HasCustomGeometry is checked before falling back to
         // the 3-case ShapeKind switch).
-        if (!shape.HasCustomGeometry && kind == ShapeKind.Rectangle && !string.IsNullOrEmpty(preset)
-            && Free.Shared.Drawing.DrawingMlPresetGeometryMap.TryGetShapeKind(preset, out var sharedPresetKind)
-            && sharedPresetKind is not (Free.Shared.Drawing.DrawingShapeKind.Rectangle
-                or Free.Shared.Drawing.DrawingShapeKind.RoundedRectangle
-                or Free.Shared.Drawing.DrawingShapeKind.Ellipse))
+        //
+        // The preset token and its adjust values (a:avLst/a:gd) are kept on the shape as its identity so
+        // the writer emits the same a:prstGeom again; the synthesized outline (built further down, once
+        // the outline width and line ends are known) is only the drawing cache.
+        var presetAdjustments = ReadPresetAdjustments(spPr?.Element(A + "prstGeom"));
+        if (!shape.HasCustomGeometry && IsPreservablePresetToken(preset)
+            && !(PresetShapeGeometry.IsNamedKindPreset(preset) && presetAdjustments.Count == 0))
         {
-            var synthesized = BuildCustomGeometryFromPreset(sharedPresetKind);
-            if (synthesized is not null)
-                shape.CustomGeometry = synthesized;
+            shape.PresetName = preset;
+            shape.PresetAdjustments.AddRange(presetAdjustments);
         }
 
         // Fill: extended fills (gradient / pattern / no-fill) take priority over solid.
@@ -5792,7 +5793,13 @@ public static class DocxReader
                     shape.OutlineWidthPt = widthEmu / 12700.0;
                 shape.OutlineDash = ln.Element(A + "prstDash")?.Attribute("val")?.Value;
             }
+
+            shape.HeadEnd = ReadShapeLineEnd(ln.Element(A + "headEnd"));
+            shape.TailEnd = ReadShapeLineEnd(ln.Element(A + "tailEnd"));
         }
+
+        if (shape.PresetName is not null && !PresetShapeGeometry.IsNamedKindPreset(shape.PresetName))
+            PresetShapeGeometry.ApplyPresetOutline(shape);
 
         // Effects: a:effectLst (shadow / glow / soft-edge / reflection) and a:sp3d (bevel).
         var effectLstEl = spPr?.Element(A + "effectLst");
@@ -5905,61 +5912,41 @@ public static class DocxReader
     };
 
     /// <summary>
-    /// Synthesizes a freeform <see cref="CustomGeometry"/> polygon for a DrawingML preset that
-    /// <see cref="ShapeKindFromPreset"/> has no dedicated <see cref="ShapeKind"/> for (anything beyond
-    /// rect/roundRect/ellipse — FreeW's inline Shape model deliberately stops at those three named kinds).
-    /// Routes preset resolution through the shared 45-preset geometry tier
-    /// (<see cref="Free.Shared.Drawing.ShapeGeometryBuilder"/>, the same engine FreeX/FreeP use for their
-    /// own drawing objects) instead of leaving the shape a plain rectangle. The vertex/segment geometry is
-    /// converted into FreeW's own 21600×21600-grid freeform format (matching
-    /// <see cref="CustomGeometry.RectanglePoly"/>) so it renders via the SAME tested freeform-polygon path
-    /// both shells already use for "Convert to Freeform" shapes — no new drawing code needed.
-    /// <para>
-    /// Returns null when the shared builder has no contours for the preset, or when any contour uses an
-    /// elliptical arc segment: FreeW's freeform model has only MoveTo/LineTo/CubicBezierTo/Close (no arc
-    /// primitive). A minority of the 45 shared presets are arc-based (e.g. Cylinder and OvalCallout build
-    /// directly on the shared Ellipse contour; RoundedRectangularCallout builds on the shared rounded-
-    /// rectangle contour, which uses arcs for its corners); those presets keep importing as a plain
-    /// rectangle exactly as they did before this fix, a small and deliberate scope limit rather than a
-    /// silent gap.
-    /// </para>
+    /// A preset token is kept as shape identity only when it looks like a DrawingML ST_ShapeType name
+    /// (letters and digits, bounded length), so a hostile attribute value is never echoed back out.
     /// </summary>
-    private static CustomGeometry? BuildCustomGeometryFromPreset(Free.Shared.Drawing.DrawingShapeKind presetKind)
-    {
-        const long Grid = 21600;
-        var geometry = Free.Shared.Drawing.ShapeGeometryBuilder.Build(
-            presetKind,
-            new Free.Shared.Drawing.LayoutRect(0, 0, Grid, Grid));
-        if (geometry.Contours.Count == 0)
-            return null;
-        if (geometry.Contours.Any(contour =>
-                contour.Segments.Any(segment => segment.Kind == Free.Shared.Drawing.ShapeSegmentKind.Arc)))
-            return null;
+    private static bool IsPreservablePresetToken([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] string? preset) =>
+        preset is { Length: > 0 and <= 64 } && preset.All(static c => char.IsAsciiLetterOrDigit(c));
 
-        var result = new CustomGeometry { Width = Grid, Height = Grid };
-        foreach (var contour in geometry.Contours)
+    /// <summary>Reads a:prstGeom/a:avLst/a:gd adjust values verbatim (bounded count and length).</summary>
+    private static List<ShapeAdjustment> ReadPresetAdjustments(XElement? prstGeom)
+    {
+        var adjustments = new List<ShapeAdjustment>();
+        if (prstGeom?.Element(A + "avLst") is not { } avLst)
+            return adjustments;
+        foreach (var gd in avLst.Elements(A + "gd"))
         {
-            result.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, ToCustomPoint(contour.Start)));
-            foreach (var segment in contour.Segments)
-            {
-                result.Segments.Add(segment.Kind switch
-                {
-                    Free.Shared.Drawing.ShapeSegmentKind.CubicBezier => new CustomSegment(
-                        CustomSegmentKind.CubicBezierTo,
-                        ToCustomPoint(segment.End),
-                        ToCustomPoint(segment.Control1),
-                        ToCustomPoint(segment.Control2)),
-                    _ => new CustomSegment(CustomSegmentKind.LineTo, ToCustomPoint(segment.End)),
-                });
-            }
-            if (contour.Closed)
-                result.Segments.Add(new CustomSegment(CustomSegmentKind.Close));
+            if (adjustments.Count >= 16)
+                break;
+            var gdName = gd.Attribute("name")?.Value;
+            var formula = gd.Attribute("fmla")?.Value;
+            if (gdName is { Length: > 0 and <= 32 } && formula is { Length: > 0 and <= 64 })
+                adjustments.Add(new ShapeAdjustment(gdName, formula));
         }
-        return result.Segments.Count > 0 ? result : null;
+
+        return adjustments;
     }
 
-    private static CustomPoint ToCustomPoint(Free.Shared.Drawing.LayoutPoint point) =>
-        new((long)Math.Round(point.X), (long)Math.Round(point.Y));
+    private static ShapeLineEnd? ReadShapeLineEnd(XElement? element)
+    {
+        static string? Token(string? value) => value is "sm" or "med" or "lg" ? value : null;
+        return element?.Attribute("type")?.Value is "triangle" or "stealth" or "diamond" or "oval" or "arrow"
+            ? new ShapeLineEnd(
+                element.Attribute("type")!.Value,
+                Token(element.Attribute("w")?.Value),
+                Token(element.Attribute("len")?.Value))
+            : null;
+    }
 
     /// <summary>
     /// Reads an embedded OLE object (a w:object wrapping a VML v:shape + o:OLEObject) from a run into an
@@ -6078,11 +6065,14 @@ public static class DocxReader
 
         // Find the single chart-type element and map it to a ChartKind. barChart's c:barDir distinguishes
         // column (vertical) from bar (horizontal); anything else falls back to Column.
-        var (typeElement, kind) = ResolveChartType(plotArea);
-        if (typeElement is null)
+        // A plot the model cannot represent faithfully (3-D, surface, open-high-low-close, a combination
+        // other than column + line, ...) is not modelled at all: the caller preserves it verbatim.
+        if (ResolveChartLayout(plotArea) is not { } layout)
             return null;
+        var typeElement = layout.Primary;
+        var kind = layout.Kind;
 
-        var chart = new Chart { Kind = kind };
+        var chart = new Chart { Kind = kind, Grouping = layout.Grouping, RadarFilled = layout.RadarFilled };
 
         // Title: the first c:title's concatenated a:t text (when present and not auto-deleted).
         var titleText = string.Concat(
@@ -6101,26 +6091,8 @@ public static class DocxReader
 
         // Categories: read once from the first series, shared across series. Scatter has no c:cat — its
         // categories live in c:xVal (a number cache), so read those as their invariant string form.
-        var firstSeries = typeElement.Elements(C + "ser").FirstOrDefault();
-        if (firstSeries is not null)
-        {
-            if (kind == ChartKind.Scatter)
-                foreach (var x in ReadNumberCache(firstSeries.Element(C + "xVal")))
-                    chart.Categories.Add(x.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            else
-                foreach (var value in ReadStringCache(firstSeries.Element(C + "cat")))
-                    chart.Categories.Add(value);
-        }
-
-        // Series: name (c:tx string cache) + values (c:val number cache, or c:yVal for scatter).
-        var valueElementName = kind == ChartKind.Scatter ? "yVal" : "val";
-        foreach (var ser in typeElement.Elements(C + "ser"))
-        {
-            var name = ReadStringCache(ser.Element(C + "tx")).FirstOrDefault();
-            var series = new ChartSeries { Name = string.IsNullOrEmpty(name) ? null : name };
-            series.Values.AddRange(ReadNumberCache(ser.Element(C + valueElementName)));
-            chart.Series.Add(series);
-        }
+        // Series: name (c:tx string cache) + values (c:val number cache, or c:yVal for scatter / bubble).
+        ReadChartSeries(layout, chart);
 
         // Size: the inline or anchor extent (EMU) maps back to points.
         var extent = container.Element(Wp + "extent");
@@ -6604,31 +6576,6 @@ public static class DocxReader
                 relationship => relationship.Key,
                 relationship => (Type: relationship.Value.Type, Target: relationship.Value.Target),
                 StringComparer.Ordinal);
-
-    /// <summary>
-    /// Finds the plot area's single chart-type element and maps it to a <see cref="ChartKind"/>:
-    /// c:barChart → Column/Bar (by c:barDir), c:lineChart → Line, c:areaChart → Area, c:pieChart → Pie,
-    /// c:doughnutChart → Doughnut, c:scatterChart → Scatter. Returns (null, Column) when none is present.
-    /// </summary>
-    private static (XElement? Element, ChartKind Kind) ResolveChartType(XElement plotArea)
-    {
-        if (plotArea.Element(C + "barChart") is { } bar)
-        {
-            var dir = bar.Element(C + "barDir")?.Attribute("val")?.Value;
-            return (bar, dir == "bar" ? ChartKind.Bar : ChartKind.Column);
-        }
-        if (plotArea.Element(C + "lineChart") is { } line)
-            return (line, ChartKind.Line);
-        if (plotArea.Element(C + "areaChart") is { } area)
-            return (area, ChartKind.Area);
-        if (plotArea.Element(C + "pieChart") is { } pie)
-            return (pie, ChartKind.Pie);
-        if (plotArea.Element(C + "doughnutChart") is { } doughnut)
-            return (doughnut, ChartKind.Doughnut);
-        if (plotArea.Element(C + "scatterChart") is { } scatter)
-            return (scatter, ChartKind.Scatter);
-        return (null, ChartKind.Column);
-    }
 
     /// <summary>
     /// Reads the bottom (category/x) and left (value/y) axis titles from a plot area by axis position. The

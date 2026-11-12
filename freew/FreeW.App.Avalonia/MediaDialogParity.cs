@@ -493,9 +493,11 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
     private readonly IReadOnlyList<string> _seriesNames;
     private readonly TextBlock _status = new();
     private readonly InsertChartDialogText _text;
+    private readonly Chart? _seed;
 
     private InsertChartDialog(Chart? seed)
     {
+        _seed = seed;
         _text = InsertChartDialogPlanner.ResolveText(UiText.Get);
         Title = _text.Title;
         Width = 500;
@@ -508,8 +510,9 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
         _seriesNames = state.SeriesNames;
         _kind = new ComboBox
         {
-            ItemsSource = Enum.GetValues<ChartKind>(),
-            SelectedItem = state.Kind,
+            // Kinds plus their stacked / 100% stacked variants, from the shared planner.
+            ItemsSource = InsertChartDialogPlanner.BuildChartTypeChoices(UiText.Get).Select(choice => choice.Label).ToArray(),
+            SelectedIndex = InsertChartDialogPlanner.FindChartTypeChoiceIndex(state.Kind, state.Grouping),
             HorizontalAlignment = HorizontalAlignment.Stretch,
         };
         AvaloniaCompactDialogChrome.ApplyComboBox(_kind, Chrome.Style);
@@ -648,15 +651,17 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
 
     private void Accept()
     {
-        var kind = _kind.SelectedItem is ChartKind selected ? selected : ChartKind.Column;
+        var chartType = InsertChartDialogPlanner.ChartTypeChoiceAt(_kind.SelectedIndex, UiText.Get);
         var rows = _rows.Select(row => new InsertChartDialogRow(row.Category.Text ?? string.Empty, row.Values.Select(box => box.Text ?? string.Empty).ToArray()));
         if (InsertChartDialogPlanner.TryBuildResult(
-                kind,
+                chartType.Kind,
+                chartType.Grouping,
                 _title.Text,
                 _seriesNames,
                 rows,
                 CultureInfo.CurrentCulture,
                 UiText.Get,
+                _seed,
                 out var result,
                 out var errorMessage))
         {

@@ -1,4 +1,4 @@
-﻿namespace FreeW.Core.Model;
+namespace FreeW.Core.Model;
 
 /// <summary>Insert a block (paragraph or table) at an index in the document body.</summary>
 public sealed class InsertBlockCommand(int index, Block block) : IDocumentCommand
@@ -2682,19 +2682,24 @@ public sealed class SetShapeKindCommand(
     IReadOnlyList<int>? childPath = null) : IDocumentCommand
 {
     private ShapeKind _previous;
+    private ShapePresetState? _previousPreset;
     private bool _applied;
 
     public string Label => "Change Shape";
 
     // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    // Changing to a named kind also drops a DrawingML preset identity (star, arrow, ...), so a shape
+    // that still carries one is affected even when its underlying Kind already matches.
     public bool HasEffect(IDocumentCommandContext context) =>
-        ShapeAt(context) is { } shape && shape.Kind != kind;
+        ShapeAt(context) is { } shape && (shape.Kind != kind || shape.PresetName is not null);
 
     public void Apply(IDocumentCommandContext context)
     {
         if (ShapeAt(context) is not { } shape) return;
         _previous = shape.Kind;
+        _previousPreset = ShapePresetState.Capture(shape);
         shape.Kind = kind;
+        ShapePresetState.Clear(shape);
         _applied = true;
     }
 
@@ -2702,6 +2707,7 @@ public sealed class SetShapeKindCommand(
     {
         if (!_applied || ShapeAt(context) is not { } shape) return;
         shape.Kind = _previous;
+        _previousPreset?.Restore(shape);
         _applied = false;
     }
 
@@ -5253,7 +5259,7 @@ internal static class ChartSmartArtCommandHelpers
 /// </summary>
 public sealed class SetChartKindCommand(int paragraphIndex, int runIndex, ChartKind kind) : IDocumentCommand
 {
-    private ChartKind _previous;
+    private ChartDataShapeSnapshot? _previous;
     private bool _applied;
 
     public string Label => "Change Chart Type";
@@ -5267,15 +5273,18 @@ public sealed class SetChartKindCommand(int paragraphIndex, int runIndex, ChartK
     public void Apply(IDocumentCommandContext context)
     {
         if (ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart) return;
-        _previous = chart.Kind;
+        // Some kinds need a particular data shape (stock = High/Low/Close, combo = at least one line), so the
+        // whole kind-dependent state is captured here and restored exactly on undo.
+        _previous = ChartDataShapeSnapshot.Capture(chart);
         chart.Kind = kind;
+        ChartKindNormalizer.Normalize(chart);
         _applied = true;
     }
 
     public void Revert(IDocumentCommandContext context)
     {
         if (!_applied || ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart) return;
-        chart.Kind = _previous;
+        _previous?.Restore(chart);
         _applied = false;
     }
 }
@@ -5549,6 +5558,8 @@ public sealed class ReplaceChartDataCommand(int paragraphIndex, int runIndex, Ch
     private static void Copy(Chart source, Chart target)
     {
         target.Kind = source.Kind;
+        target.Grouping = source.Grouping;
+        target.RadarFilled = source.RadarFilled;
         target.Title = source.Title;
         target.ShowLegend = source.ShowLegend;
         target.CategoryAxisTitle = source.CategoryAxisTitle;
@@ -5561,7 +5572,7 @@ public sealed class ReplaceChartDataCommand(int paragraphIndex, int runIndex, Ch
         target.Categories.AddRange(source.Categories);
         target.Series.Clear();
         foreach (var series in source.Series)
-            target.Series.Add(new ChartSeries(series.Name, series.Values));
+            target.Series.Add(series.Clone());
     }
 }
 

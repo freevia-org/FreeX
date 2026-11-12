@@ -19,6 +19,7 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly ComboBox _kindBox;
     private readonly TextBox _titleBox;
     private readonly DataGrid _dataGrid;
+    private readonly Chart? _seed;
     private Chart? _result;
 
     // ── Default seed data ────────────────────────────────────────────────────────────────────────
@@ -26,6 +27,7 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private InsertChartDialog(Window? owner, Chart? seed)
     {
         var surface = InsertChartDialogPlanner.BuildSurface(UiText.Get);
+        _seed = seed;
         Owner = owner;
         Title = surface.Title;
         Width = 500;
@@ -43,9 +45,10 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         // ── Chart type picker ────────────────────────────────────────────────────────────────────
         panel.Children.Add(new TextBlock { Text = surface.Field(InsertChartDialogField.ChartType).Label, Margin = new Thickness(0, 0, 0, 4) });
         _kindBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
-        foreach (ChartKind kind in Enum.GetValues<ChartKind>())
-            _kindBox.Items.Add(kind.ToString());
-        _kindBox.SelectedItem = state.Kind.ToString();
+        // Kinds plus their stacked / 100% stacked variants, from the shared planner.
+        foreach (var choice in InsertChartDialogPlanner.BuildChartTypeChoices(UiText.Get))
+            _kindBox.Items.Add(choice.Label);
+        _kindBox.SelectedIndex = InsertChartDialogPlanner.FindChartTypeChoiceIndex(state.Kind, state.Grouping);
         WpfDialogSurfaceSemantics.Apply(_kindBox, surface.Field(InsertChartDialogField.ChartType));
         panel.Children.Add(_kindBox);
 
@@ -133,16 +136,18 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     {
         _dataGrid.CommitEdit(DataGridEditingUnit.Row, exitEditingMode: true);
 
-        var kind = Enum.Parse<ChartKind>(_kindBox.SelectedItem?.ToString() ?? nameof(ChartKind.Column));
+        var chartType = InsertChartDialogPlanner.ChartTypeChoiceAt(_kindBox.SelectedIndex, UiText.Get);
         var rows = (_dataGrid.ItemsSource as IEnumerable<ChartRowViewModel>)?.ToList() ?? [];
         var seriesNames = _dataGrid.Columns.Skip(1).Select(c => c.Header?.ToString() ?? string.Empty).ToArray();
         if (!InsertChartDialogPlanner.TryBuildResult(
-                kind,
+                chartType.Kind,
+                chartType.Grouping,
                 _titleBox.Text,
                 seriesNames,
                 rows.Select(row => new InsertChartDialogRow(row.Category, row.SeriesValues)),
                 CultureInfo.CurrentCulture,
                 UiText.Get,
+                _seed,
                 out var chart,
                 out var errorMessage))
         {

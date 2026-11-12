@@ -58,6 +58,7 @@ public sealed class LocalizationKeyIntegrityTests
             .Concat(AltTextDialogPlanner.RequiredResourceKeys)
             .Concat(QuickPartCommandPlanner.RequiredResourceKeys)
             .Concat(InsertChartDialogPlanner.RequiredResourceKeys)
+            .Concat(PresetShapeCatalog.RequiredResourceKeys)
             .Concat(ChartTitleDialogPlanner.RequiredResourceKeys)
             .Concat(ChartAxisTitlesDialogPlanner.RequiredResourceKeys)
             .Concat(ChartSizeDialogPlanner.RequiredResourceKeys)

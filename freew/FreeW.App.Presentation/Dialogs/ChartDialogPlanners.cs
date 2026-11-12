@@ -95,7 +95,18 @@ public sealed record InsertChartDialogInitialState(
     ChartKind Kind,
     string Title,
     IReadOnlyList<string> SeriesNames,
-    IReadOnlyList<InsertChartDialogRow> Rows);
+    IReadOnlyList<InsertChartDialogRow> Rows,
+    ChartGrouping Grouping = ChartGrouping.Standard);
+
+/// <summary>
+/// One entry of the Insert Chart / Edit Data chart-type picker: a chart kind plus, for column, bar, line
+/// and area, its grouping (clustered, stacked, 100% stacked).
+/// </summary>
+public sealed record InsertChartTypeChoice(
+    string Id,
+    ChartKind Kind,
+    ChartGrouping Grouping,
+    string Label);
 
 public enum InsertChartDialogField
 {
@@ -137,8 +148,57 @@ public static class InsertChartDialogPlanner
         new("Common_Cancel", "Cancel"),
     ];
 
+    /// <summary>
+    /// The chart-type picker entries: every chart kind first (in <see cref="ChartKind"/> order, keeping the
+    /// labels the picker always showed), then the stacked and 100% stacked variants.
+    /// </summary>
+    private static readonly (ChartKind Kind, ChartGrouping Grouping, ResourceTextDescriptor Text)[] ChartTypes =
+    [
+        .. Enum.GetValues<ChartKind>().Select(kind =>
+            (kind, ChartGrouping.Standard, new ResourceTextDescriptor("InsertChart_Type_" + kind, kind.ToString()))),
+        (ChartKind.Column, ChartGrouping.Stacked, new("InsertChart_Type_ColumnStacked", "Stacked Column")),
+        (ChartKind.Column, ChartGrouping.PercentStacked, new("InsertChart_Type_ColumnPercentStacked", "100% Stacked Column")),
+        (ChartKind.Bar, ChartGrouping.Stacked, new("InsertChart_Type_BarStacked", "Stacked Bar")),
+        (ChartKind.Bar, ChartGrouping.PercentStacked, new("InsertChart_Type_BarPercentStacked", "100% Stacked Bar")),
+        (ChartKind.Line, ChartGrouping.Stacked, new("InsertChart_Type_LineStacked", "Stacked Line")),
+        (ChartKind.Line, ChartGrouping.PercentStacked, new("InsertChart_Type_LinePercentStacked", "100% Stacked Line")),
+        (ChartKind.Area, ChartGrouping.Stacked, new("InsertChart_Type_AreaStacked", "Stacked Area")),
+        (ChartKind.Area, ChartGrouping.PercentStacked, new("InsertChart_Type_AreaPercentStacked", "100% Stacked Area")),
+    ];
+
     public static IReadOnlyList<string> RequiredResourceKeys =>
-        Texts.Select(text => text.ResourceKey).ToArray();
+        Texts.Select(text => text.ResourceKey)
+            .Concat(ChartTypes.Select(type => type.Text.ResourceKey))
+            .ToArray();
+
+    /// <summary>The chart-type picker entries with localized labels.</summary>
+    public static IReadOnlyList<InsertChartTypeChoice> BuildChartTypeChoices(Func<string, string?>? getText = null) =>
+        ChartTypes
+            .Select(type => new InsertChartTypeChoice(
+                type.Text.ResourceKey["InsertChart_Type_".Length..],
+                type.Kind,
+                type.Grouping,
+                type.Text.Resolve(getText)))
+            .ToArray();
+
+    /// <summary>
+    /// The picker index for a chart's kind and grouping. A grouping the kind does not support selects the
+    /// plain kind entry; the result is always a valid index.
+    /// </summary>
+    public static int FindChartTypeChoiceIndex(ChartKind kind, ChartGrouping grouping)
+    {
+        var exact = Array.FindIndex(ChartTypes, type => type.Kind == kind && type.Grouping == grouping);
+        if (exact >= 0)
+            return exact;
+        return Math.Max(0, Array.FindIndex(ChartTypes, type => type.Kind == kind));
+    }
+
+    /// <summary>The picker entry at <paramref name="index"/>, falling back to the first for a stray index.</summary>
+    public static InsertChartTypeChoice ChartTypeChoiceAt(int index, Func<string, string?>? getText = null)
+    {
+        var choices = BuildChartTypeChoices(getText);
+        return choices[index >= 0 && index < choices.Count ? index : 0];
+    }
 
     public static InsertChartDialogText ResolveText(Func<string, string?>? getText = null) =>
         new(
@@ -229,7 +289,7 @@ public static class InsertChartDialogPlanner
                 [fallback.Series[0].Values[0].ToString("G", culture)]));
         }
 
-        return new InsertChartDialogInitialState(kind, title, seriesNames, rows);
+        return new InsertChartDialogInitialState(kind, title, seriesNames, rows, source.EffectiveGrouping);
     }
 
     public static bool TryBuildResult(
@@ -257,6 +317,35 @@ public static class InsertChartDialogPlanner
         IEnumerable<InsertChartDialogRow> inputRows,
         CultureInfo culture,
         Func<string, string?>? getText,
+        out Chart? result,
+        out string? errorMessage)
+        => TryBuildResult(
+            kind,
+            ChartGrouping.Standard,
+            titleText,
+            seriesNames,
+            inputRows,
+            culture,
+            getText,
+            seed: null,
+            out result,
+            out errorMessage);
+
+    /// <summary>
+    /// Builds the chart for a picked kind + grouping. Settings the data grid cannot express (which combo
+    /// series are lines / on the secondary axis, bubble sizes, a filled radar) are carried over from
+    /// <paramref name="seed"/> — the chart being edited — and the result is brought into the shape its
+    /// kind needs (see <see cref="ChartKindNormalizer"/>).
+    /// </summary>
+    public static bool TryBuildResult(
+        ChartKind kind,
+        ChartGrouping grouping,
+        string? titleText,
+        IReadOnlyList<string> seriesNames,
+        IEnumerable<InsertChartDialogRow> inputRows,
+        CultureInfo culture,
+        Func<string, string?>? getText,
+        Chart? seed,
         out Chart? result,
         out string? errorMessage)
     {
@@ -307,6 +396,21 @@ public static class InsertChartDialogPlanner
             chart.Series.Add(series);
         }
 
+        chart.Grouping = grouping;
+        if (seed is not null && seed.Kind == kind)
+        {
+            chart.RadarFilled = seed.RadarFilled;
+            for (var seriesIndex = 0; seriesIndex < Math.Min(chart.Series.Count, seed.Series.Count); seriesIndex++)
+            {
+                var source = seed.Series[seriesIndex];
+                var target = chart.Series[seriesIndex];
+                target.PlotAsLine = source.PlotAsLine;
+                target.UseSecondaryAxis = source.UseSecondaryAxis;
+                target.BubbleSizes.AddRange(source.BubbleSizes.Take(target.Values.Count));
+            }
+        }
+
+        ChartKindNormalizer.Normalize(chart);
         result = chart;
         return true;
     }

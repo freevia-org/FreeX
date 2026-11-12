@@ -40,6 +40,7 @@ internal static class FreeWRibbonIcons
             ["freew.shape-ellipse"] = RibbonCommandIconKind.Ellipse,
             ["freew.screen-clipping"] = RibbonCommandIconKind.Picture,
 
+            ["freew.shapes-gallery"] = RibbonCommandIconKind.Shapes,
             ["freew.shape-change-rectangle"] = RibbonCommandIconKind.Rectangle,
             ["freew.shape-change-rounded"] = RibbonCommandIconKind.Rectangle,
             ["freew.shape-change-ellipse"] = RibbonCommandIconKind.Ellipse,
@@ -98,6 +99,13 @@ internal static class FreeWRibbonIcons
             ["freew.chart-type-scatter"] = RibbonCommandIconKind.ChartColumn,
             ["freew.chart-type-area"] = RibbonCommandIconKind.ChartColumn,
             ["freew.chart-type-doughnut"] = RibbonCommandIconKind.ChartColumn,
+            ["freew.chart-type-radar"] = RibbonCommandIconKind.ChartColumn,
+            ["freew.chart-type-bubble"] = RibbonCommandIconKind.ChartColumn,
+            ["freew.chart-type-stock"] = RibbonCommandIconKind.ChartColumn,
+            ["freew.chart-type-combo"] = RibbonCommandIconKind.ChartColumn,
+            ["freew.chart-grouping-standard"] = RibbonCommandIconKind.ChartColumn,
+            ["freew.chart-grouping-stacked"] = RibbonCommandIconKind.ChartColumn,
+            ["freew.chart-grouping-percent"] = RibbonCommandIconKind.ChartColumn,
 
             [EquationPresetCatalog.Get(EquationPresetKind.Fraction).CommandId] = RibbonCommandIconKind.Equation,
             [EquationPresetCatalog.Get(EquationPresetKind.Script).CommandId] = RibbonCommandIconKind.Equation,

@@ -2158,6 +2158,12 @@ public sealed partial class MainWindow : Window
             ShowChartSizeDialogAsync: ShowChartSizeDialogAsync,
             OpenInsertSmartArtDialog: () => RunUiTask(OpenInsertSmartArtDialogAsync),
             OpenIconPickerDialog: () => RunUiTask(OpenIconPickerDialogAsync),
+            OpenShapeGalleryDialog: choose => RunUiTask(async () =>
+            {
+                if (await ShapeGalleryDialog.ShowAsync(this) is { } itemId)
+                    choose(itemId);
+                _editor.Focus();
+            }),
             OpenTextToTableDialog: () => RunUiTask(OpenTextToTableDialogAsync),
             ShowTableToTextDialogAsync: ShowTableToTextDialogAsync,
             ShowSmartArtEditDialogAsync: ShowSmartArtEditDialogAsync,
