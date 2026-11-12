@@ -115,6 +115,9 @@ public static class PageLayoutRibbonActionPlanner
             PaperSizePreset: PageLayoutPaperSizePreset.B4),
         new(FreeXRibbonCommandIds.PageLayoutPaperSizeB5Jis, PageLayoutRibbonActionKind.ApplyPaperSizePreset,
             PaperSizePreset: PageLayoutPaperSizePreset.B5),
+        // Excel's "More Paper Sizes..." opens Page Setup with the paper size list focused.
+        new(FreeXRibbonCommandIds.PageLayoutPaperSizeMore, PageLayoutRibbonActionKind.OpenPageSetupDialog,
+            PageSetupOpenSource: PageLayoutPageSetupOpenSource.ExtendedPaperSize),
 
         new(FreeXRibbonCommandIds.PageLayoutPrintAreaSet, PageLayoutRibbonActionKind.SetPrintArea),
         new(FreeXRibbonCommandIds.PageLayoutPrintAreaClear, PageLayoutRibbonActionKind.ClearPrintArea),

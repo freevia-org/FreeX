@@ -42,18 +42,4 @@ public sealed class ReadingOrderPaneVisualParitySourceTests
         wpfSource.Should().Contain("Width = PresentationReadingOrderPaneVisualMetrics.PaneWidth");
     }
 
-    [Fact]
-    public void Checked_in_reading_order_target_retains_the_Wpf_authority_dimensions()
-    {
-        var repo = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
-        var report = File.ReadAllText(Path.Combine(
-            repo,
-            "docs",
-            "parity",
-            "freep-dialog-pane-visual-evidence",
-            "report.md"));
-
-        report.Should().Contain("review.reading-order-pane.seeded");
-        report.Should().Contain("320x578/320x578");
-    }
 }

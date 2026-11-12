@@ -33,19 +33,13 @@ tests/FreeX.Core.IO.Tests/R89_AutoFilterColorDxfTests.cs text eol=lf
 tests/FreeX.Core.IO.Tests/XlsxAutoFilterAndLeafCodecTests.cs text eol=lf
 tests/FreeX.App.Avalonia.Tests/Wave191AutoFilterColorPhysicalSourceTests.cs text eol=lf
 docs/parity/avalonia-parity-wave191-freex-autofilter-color-20260823.md text eol=lf
-docs/parity/evidence/wave191-freex-autofilter-color-20260823/*.json text eol=lf
-docs/parity/evidence/wave191-freex-autofilter-color-20260823/*.txt text eol=lf
 
 # Wave192 font-color evidence/provenance hashes must be identical across Windows and Linux checkouts.
 tools/LinuxInteractiveDocker/New-FreeXWave192AutoFilterFontColorFixture.ps1 text eol=lf
 tests/FreeX.App.Avalonia.Tests/Wave192AutoFilterFontColorPhysicalSourceTests.cs text eol=lf
-docs/parity/evidence/wave192-freex-autofilter-font-color-20260823/*.json text eol=lf
-docs/parity/evidence/wave192-freex-autofilter-font-color-20260823/*.txt text eol=lf
 docs/parity/avalonia-parity-wave192-freex-autofilter-font-color-20260823.md text eol=lf
 
 # Wave193 No Fill evidence/provenance hashes must be identical across Windows and Linux checkouts.
 tools/LinuxInteractiveDocker/New-FreeXWave193AutoFilterNoFillFixture.ps1 text eol=lf
 tests/FreeX.App.Avalonia.Tests/Wave193AutoFilterNoFillPhysicalSourceTests.cs text eol=lf
-docs/parity/evidence/wave193-freex-autofilter-no-fill-20260823/*.json text eol=lf
-docs/parity/evidence/wave193-freex-autofilter-no-fill-20260823/*.txt text eol=lf
 docs/parity/avalonia-parity-wave193-freex-autofilter-no-fill-20260823.md text eol=lf

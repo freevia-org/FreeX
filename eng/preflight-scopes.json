@@ -112,6 +112,14 @@
         "tools/LinuxInteractiveDocker/**"
       ],
       "sample": "tools/packaging/linux/freex.conf"
+    },
+    "local-only evidence paths": {
+      "triggers": [
+        "screenshots/**", "screenshots_excel/**", "tools/screenshots/**", "tools/screenshots_excel/**",
+        "tools/screenshots_avalonia_ribbon/**", "tools/foreground-captures/**", "artifacts/**",
+        ".metrics-data/**", "docs/ribbonshot-breaks/**", "docs/parity/*/**", "freew/docs/parity/evidence/**"
+      ],
+      "sample": "screenshots/tour/capture.png"
     }
   }
 }
