@@ -2,6 +2,8 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.ThemeUI;
 using FreeX.Core.Model;
 
@@ -19,26 +21,47 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("Common_Themes"),
-            Width = 280,
-            Height = 200,
+            // The WPF WorkbookThemeDialog heading and preset row: 14px root margin, an 18px semibold
+            // heading 10px above a horizontal row of 92 / 126 / 92 px preset buttons 8px apart.
+            Width = 14 + 92 + 8 + 126 + 8 + 92 + 14,
+            Height = 14 + 24 + 10 + global::Free.Shared.Shell.CompactDialogVisualTokens.ButtonHeight + 14,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             CanResize = false,
         };
 
-        var panel = new StackPanel { Margin = new Thickness(14), Spacing = 6 };
+        var presetRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        double[] presetWidths = [92, 126, 92];
         foreach (var option in WorkbookThemeCatalog.ThemePresets.Where(option => !option.IsCustomizeAction))
         {
             var local = option.CreateTheme();
+            var width = presetRow.Children.Count < presetWidths.Length ? presetWidths[presetRow.Children.Count] : 92;
             var button = new Button
             {
-                Content = UiText.Get(option.LabelResourceKey),
-                Width = 230,
-                Padding = new Thickness(8, 6),
+                Content = StripDisplayMnemonic(UiText.Get(option.LabelResourceKey)),
+                Width = width,
             };
+            AvaloniaCompactDialogChrome.ApplyButton(button, AvaloniaCompactDialogChrome.WindowsStyle, width);
             button.Click += (_, _) => { picked = local; dialog.Close(); };
-            panel.Children.Add(button);
+            presetRow.Children.Add(button);
         }
+
+        var panel = new StackPanel
+        {
+            Margin = new Thickness(14),
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = StripDisplayMnemonic(UiText.Get("WorkbookTheme_Theme")),
+                    FontSize = 18,
+                    FontWeight = FontWeight.SemiBold,
+                    Height = 24,
+                    Margin = new Thickness(0, 0, 0, 10),
+                },
+                presetRow,
+            },
+        };
 
         dialog.Content = panel;
         await dialog.ShowDialog(this);

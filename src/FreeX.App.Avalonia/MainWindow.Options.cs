@@ -207,9 +207,11 @@ public sealed partial class MainWindow
         var errorRulesPanel = new StackPanel { Spacing = 0 };
         foreach (var rule in FormulaErrorCheckingRuleCatalog.SupportedRules)
         {
-            var ruleBox = OptionsCheckBox(
-                rule.Label,
-                isChecked: !workbook.DisabledFormulaErrorCodes.Contains(rule.ErrorCode));
+            var ruleBox = OptionsToggleRow(
+                OptionsCheckBox(
+                    rule.Label,
+                    isChecked: !workbook.DisabledFormulaErrorCodes.Contains(rule.ErrorCode)),
+                new Thickness(0, 0, 0, 6));
             ToolTip.SetTip(ruleBox, rule.Description);
             AutomationProperties.SetAutomationId(
                 ruleBox,
@@ -218,32 +220,61 @@ public sealed partial class MainWindow
             errorRulesPanel.Children.Add(ruleBox);
         }
 
+        // The WPF iteration row is a five-column grid indented 18 px: caption, an 80 px box, a
+        // 16 px gap, caption, a 90 px box, with 6 px between each caption and its box.
+        var iterationLimitsRow = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,80,16,Auto,90"),
+            Margin = new Thickness(18, 0, 0, 0),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+        };
+        var maxIterationsLabel = new TextBlock
+        {
+            Text = OptionsText("Options_MaximumIterations"),
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            FontSize = 12,
+            Margin = new Thickness(0, 0, 6, 0),
+        };
+        var maxChangeLabel = new TextBlock
+        {
+            Text = OptionsText("Options_MaximumChange"),
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            FontSize = 12,
+            Margin = new Thickness(0, 0, 6, 0),
+        };
+        Grid.SetColumn(maxIterationsLabel, 0);
+        Grid.SetColumn(maxIterationsBox, 1);
+        Grid.SetColumn(maxChangeLabel, 3);
+        Grid.SetColumn(maxChangeBox, 4);
+        iterationLimitsRow.Children.Add(maxIterationsLabel);
+        iterationLimitsRow.Children.Add(maxIterationsBox);
+        iterationLimitsRow.Children.Add(maxChangeLabel);
+        iterationLimitsRow.Children.Add(maxChangeBox);
+
         var formulasPanel = OptionsCategoryPanel(
-            OptionsSectionHeader(OptionsText("Options_CalculationOptions")),
-            new TextBlock { Text = OptionsText("Options_WorkbookCalculation"), FontWeight = FontWeight.SemiBold, FontSize = 12 },
-            calcAutoButton,
-            calcManualButton,
-            OptionsDescription(OptionsText("Options_InManualModePressF9ToRecalculateTheWorkbook"), leftMargin: 18),
-            iterativeBox,
-            new StackPanel
+            OptionsSectionHeader(OptionsText("Options_CalculationOptions"), topMargin: 0),
+            new TextBlock
             {
-                Orientation = Orientation.Horizontal,
-                Spacing = 8,
-                Margin = new Thickness(18, 0, 0, 0),
-                Children =
-                {
-                    new TextBlock { Text = OptionsText("Options_MaximumIterations"), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12 },
-                    maxIterationsBox,
-                    new TextBlock { Text = OptionsText("Options_MaximumChange"), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12 },
-                    maxChangeBox,
-                },
+                Text = OptionsText("Options_WorkbookCalculation"),
+                FontWeight = FontWeight.SemiBold,
+                FontSize = 12,
+                Margin = new Thickness(0, 0, 0, 8),
             },
-            OptionsSectionHeader(OptionsText("Options_WorkingWithFormulas")),
-            r1c1Box,
-            OptionsCheckBox(OptionsText("Options_EnableAutoCompleteForCellValues"), isChecked: true, isEnabled: false),
-            OptionsSectionHeader(OptionsText("Options_ErrorCheckingRules")),
-            OptionsDescription(OptionsText("Options_EnableBackgroundErrorChecksFor")),
+            OptionsToggleRow(calcAutoButton, new Thickness(0, 0, 0, 6)),
+            OptionsToggleRow(calcManualButton, new Thickness(0, 0, 0, 4)),
+            OptionsHint(OptionsText("Options_InManualModePressF9ToRecalculateTheWorkbook"), new Thickness(18, 4, 0, 0)),
+            OptionsToggleRow(iterativeBox, new Thickness(0, 12, 0, 6)),
+            iterationLimitsRow,
+            OptionsSectionHeader(OptionsText("Options_WorkingWithFormulas"), topMargin: 18),
+            OptionsToggleRow(r1c1Box, new Thickness(0, 0, 0, 6)),
+            OptionsToggleRow(
+                OptionsCheckBox(OptionsText("Options_EnableAutoCompleteForCellValues"), isChecked: true, isEnabled: false),
+                new Thickness(0, 0, 0, 4)),
+            OptionsSectionHeader(OptionsText("Options_ErrorCheckingRules"), topMargin: 18),
+            OptionsDescription(OptionsText("Options_EnableBackgroundErrorChecksFor"), bottomMargin: 8),
             errorRulesPanel);
+        // Every row above carries its own WPF margin, so the generic category gap must not add to it.
+        formulasPanel.Spacing = 0;
 
         // ── Proofing ────────────────────────────────────────────────────────────
         var proofingWordsList = new ListBox
@@ -367,7 +398,7 @@ public sealed partial class MainWindow
         };
         var proofingWordsSection = new StackPanel
         {
-            Spacing = 6,
+            Spacing = 4,
             Children =
             {
                 new TextBlock { Text = OptionsText("Options_CustomDictionaryWords"), FontSize = 12 },
@@ -380,21 +411,29 @@ public sealed partial class MainWindow
             AvaloniaPlannerTextResources.Text);
         autoCorrectButton.Click += (_, _) => ShowOptionsWarning(autoCorrectMessage.Body);
 
+        // Three 15 px WPF check boxes 6 px apart; the last one's 12 px bottom margin is folded into
+        // the next section header's top margin below.
         var proofingChecks = new StackPanel
         {
-            Spacing = 2,
+            Spacing = 6,
             Children =
             {
-                OptionsCheckBox(OptionsText("Options_CheckSpellingAsYouType"), isChecked: true, isEnabled: false),
-                OptionsCheckBox(OptionsText("Options_IgnoreWordsInUPPERCASE"), isChecked: current.ProofingIgnoreUppercase, isEnabled: false),
-                OptionsCheckBox(OptionsText("Options_FlagRepeatedWords"), isEnabled: false),
+                OptionsToggleRow(
+                    OptionsCheckBox(OptionsText("Options_CheckSpellingAsYouType"), isChecked: true, isEnabled: false),
+                    new Thickness(0)),
+                OptionsToggleRow(
+                    OptionsCheckBox(OptionsText("Options_IgnoreWordsInUPPERCASE"), isChecked: current.ProofingIgnoreUppercase, isEnabled: false),
+                    new Thickness(0)),
+                OptionsToggleRow(
+                    OptionsCheckBox(OptionsText("Options_FlagRepeatedWords"), isEnabled: false),
+                    new Thickness(0)),
             },
         };
         var proofingPanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_AutoCorrectOptions"), topMargin: 0),
             proofingChecks,
-            OptionsSectionHeader(OptionsText("Options_CustomDictionary"), topMargin: 30, bottomMargin: 8),
-            OptionsDescription(OptionsText("Options_CustomDictionaryDescription"), bottomMargin: 8),
+            OptionsSectionHeader(OptionsText("Options_CustomDictionary"), topMargin: 30, bottomMargin: 12),
+            OptionsHint(OptionsText("Options_CustomDictionaryDescription"), new Thickness(0, 0, 0, 8)),
             proofingWordsSection,
             proofingAddRow,
             proofingActionRow,
@@ -416,8 +455,10 @@ public sealed partial class MainWindow
 
         var viewPanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_WorkbookViewOptions"), topMargin: 0, bottomMargin: 12),
-            showFormulaBarBox,
-            OptionsCheckBox(OptionsText("Options_ExpandFormulaBar"), isEnabled: showFormulaBarBox.IsChecked == true));
+            OptionsToggleRow(showFormulaBarBox, new Thickness(0, 0, 0, 6)),
+            OptionsToggleRow(
+                OptionsCheckBox(OptionsText("Options_ExpandFormulaBar"), isEnabled: showFormulaBarBox.IsChecked == true),
+                new Thickness(0, 0, 0, 4)));
         viewPanel.Spacing = 0;
 
         // ── Save ────────────────────────────────────────────────────────────────
@@ -429,6 +470,16 @@ public sealed partial class MainWindow
         };
         ApplyOptionsComboBoxChrome(defaultFormatBox);
         AutomationProperties.SetAutomationId(defaultFormatBox, "OptionsDefaultFormatComboBox");
+
+        // The WPF recent-files path box is read-only, 11 px and dark grey.
+        var recentFilesPathBox = OptionsReadOnlyTextBox(
+            System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "FreeX",
+                "recent.json"),
+            minWidth: 0);
+        recentFilesPathBox.FontSize = 11;
+        recentFilesPathBox.Foreground = Brush(102, 102, 102);
 
         var savePanel = OptionsCategoryPanel(
             OptionsSectionHeader(
@@ -446,12 +497,7 @@ public sealed partial class MainWindow
                 OptionsText("Options_FileLocations"),
                 topMargin: OptionsDialogPlanner.GeneralSectionTopMargin,
                 bottomMargin: OptionsDialogPlanner.GeneralSectionBottomMargin),
-            OptionsLabeled(OptionsText("Options_RecentFilesLocation"), OptionsReadOnlyTextBox(
-                System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "FreeX",
-                    "recent.json"),
-                minWidth: 0),
+            OptionsLabeled(OptionsText("Options_RecentFilesLocation"), recentFilesPathBox,
                 labelWidth: OptionsDialogPlanner.GeneralLabelWidth,
                 stretchField: true,
                 margin: new Thickness(0, 0, 0, OptionsDialogPlanner.GeneralFieldBottomMargin)));
@@ -486,9 +532,9 @@ public sealed partial class MainWindow
                 fieldWidth: OptionsDialogPlanner.LanguageFieldWidth,
                 spacing: OptionsDialogPlanner.GeneralFieldSpacing,
                 margin: new Thickness(0, 0, 0, OptionsDialogPlanner.LanguageFieldBottomMargin)),
-            OptionsDescription(
+            OptionsHint(
                 OptionsText("Options_AppLanguageRestartNotice"),
-                topMargin: OptionsDialogPlanner.LanguageDescriptionTopMargin));
+                new Thickness(0, OptionsDialogPlanner.LanguageDescriptionTopMargin, 0, 0)));
         languagePanel.Spacing = 0;
 
         var easePanel = OptionsCategoryPanel(
@@ -578,13 +624,13 @@ public sealed partial class MainWindow
 
         var advancedPanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_EditingOptions"), topMargin: 0),
-            WithMargin(moveAfterEnterBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedMoveAfterEnterBottomMargin)),
+            OptionsToggleRow(moveAfterEnterBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedMoveAfterEnterBottomMargin)),
             advancedDirectionRow,
-            WithMargin(advancedFillHandleBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedDisabledFillHandleBottomMargin)),
-            WithMargin(advancedAutoCompleteBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedAutoCompleteBottomMargin)),
+            OptionsToggleRow(advancedFillHandleBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedDisabledFillHandleBottomMargin)),
+            OptionsToggleRow(advancedAutoCompleteBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedAutoCompleteBottomMargin)),
             OptionsSectionHeader(OptionsText("Options_DisplayOptionsForThisWorkbook"), topMargin: OptionsDialogPlanner.AdvancedDisplaySectionTopMargin),
-            WithMargin(showGridlinesBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedGridlinesBottomMargin)),
-            WithMargin(showHeadingsBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedHeadingsBottomMargin)),
+            OptionsToggleRow(showGridlinesBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedGridlinesBottomMargin)),
+            OptionsToggleRow(showHeadingsBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedHeadingsBottomMargin)),
             advancedObjectsRow);
         advancedPanel.Spacing = 0;
 
@@ -596,10 +642,16 @@ public sealed partial class MainWindow
                 UiText.Get("DeferredCommand_RibbonCustomization_Body"),
                 UiText.Get("DeferredCommand_RibbonCustomization_Title")));
 
+        // WPF draws this line in the default text ink, 8 px above the button.
+        var customizeRibbonDescription = OptionsDescription(
+            OptionsText("Options_ChooseCommandsFromPopularCommands"),
+            bottomMargin: 8);
+        customizeRibbonDescription.Foreground = Brushes.Black;
         var customizeRibbonPanel = OptionsCategoryPanel(
-            OptionsSectionHeader(OptionsText("Options_CustomizeTheRibbon")),
-            OptionsDescription(OptionsText("Options_ChooseCommandsFromPopularCommands")),
+            OptionsSectionHeader(OptionsText("Options_CustomizeTheRibbon"), topMargin: 0),
+            customizeRibbonDescription,
             customizeRibbonImportExportButton);
+        customizeRibbonPanel.Spacing = 0;
 
         var quickAccessBelowRibbonBox = new CheckBox
         {
@@ -901,9 +953,12 @@ public sealed partial class MainWindow
 
         var quickAccessPanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_CustomizeTheQuickAccessToolbar"), topMargin: 0),
-            quickAccessBelowRibbonBox,
+            OptionsToggleRow(quickAccessBelowRibbonBox, new Thickness(0, 0, 0, 10)),
             quickAccessGrid,
-            quickAccessImportExportButton);
+            WithMargin(quickAccessImportExportButton, new Thickness(0, 12, 0, 0)));
+        // WPF spaces this page with control margins only: 10 px under the check box and 12 px
+        // above the import and export button.
+        quickAccessPanel.Spacing = 0;
 
         var addInsGoButton = OptionsButton(
             OptionsText("Options_Go"),
@@ -949,14 +1004,26 @@ public sealed partial class MainWindow
                 UiText.Get("DeferredCommand_TrustCenter_Title")));
 
         var trustCenterPanel = OptionsCategoryPanel(
-            OptionsSectionHeader(OptionsText("Options_TrustCenter2")),
-            OptionsDescription(OptionsText("Options_SecurityAndPrivacySettingsForFreeX")),
-            crashAnalyticsBox,
-            OptionsDescription(OptionsText("Options_CrashReportsAreSentOnlyWhenThisOptionIsEnabledAndTheTest")),
-            OptionsSectionHeader(OptionsText("Options_LocalTesterDiagnostics")),
-            OptionsDescription(OptionsText("Options_FreeXWritesLocalUsageEventsAndCrashFilesToLOCALAPPDATAFr")),
+            OptionsSectionHeader(OptionsText("Options_TrustCenter2"), topMargin: 0),
+            OptionsDescription(OptionsText("Options_SecurityAndPrivacySettingsForFreeX"), bottomMargin: 12),
+            OptionsToggleRow(crashAnalyticsBox, new Thickness(0, 0, 0, 6)),
+            OptionsHint(
+                OptionsText("Options_CrashReportsAreSentOnlyWhenThisOptionIsEnabledAndTheTest"),
+                new Thickness(18, 0, 0, 12)),
+            // The WPF diagnostics caption is a plain 12 px semibold line with no rule under it.
+            new TextBlock
+            {
+                Text = OptionsText("Options_LocalTesterDiagnostics"),
+                FontWeight = FontWeight.SemiBold,
+                FontSize = 12,
+                Margin = new Thickness(0, 8, 0, 5),
+            },
+            OptionsHint(
+                OptionsText("Options_FreeXWritesLocalUsageEventsAndCrashFilesToLOCALAPPDATAFr"),
+                new Thickness(0, 0, 0, 12)),
             trustCenterSettingsButton);
         trustCenterPanel.Width = OptionsDialogPlanner.GeneralContentWidth;
+        trustCenterPanel.Spacing = 0;
 
         // ── Category list + content host ──────────────────────────────────────────
         var panels = new[]
@@ -1062,7 +1129,7 @@ public sealed partial class MainWindow
             row.PointerEntered += (_, _) =>
             {
                 if (selectedCategoryIndex != index)
-                    row.Background = Brush(232, 232, 232);
+                    row.Background = Brush(220, 220, 220);
             };
             row.PointerExited += (_, _) =>
             {
@@ -1431,10 +1498,37 @@ public sealed partial class MainWindow
         public override string ToString() => Label;
     }
 
+    // A WPF check box or radio button at the 12 px dialog font is 15 px tall (13 px glyph plus its
+    // 1 px template margin). Rows that carry the WPF margins verbatim need that height too,
+    // otherwise every row drifts by the difference to the 20 px shared default.
+    private const double OptionsToggleHeight = OptionsDialogPlanner.EaseCheckBoxHeight;
+
+    private static T OptionsToggleRow<T>(T toggle, Thickness margin)
+        where T : Control
+    {
+        toggle.Height = OptionsToggleHeight;
+        toggle.MinHeight = OptionsToggleHeight;
+        toggle.MaxHeight = OptionsToggleHeight;
+        toggle.Margin = margin;
+        return toggle;
+    }
+
+    // The small grey explanatory note the WPF pages put under an option: 11 px, mid grey, wrapping.
+    private static TextBlock OptionsHint(string text, Thickness margin) =>
+        new()
+        {
+            Text = text,
+            FontSize = 11,
+            Foreground = Brush(119, 119, 119),
+            Margin = margin,
+            TextWrapping = TextWrapping.Wrap,
+        };
+
+    // Defaults follow the WPF section header: caption, 5 px, hairline rule, 12 px.
     private static Control OptionsSectionHeader(
         string text,
         double topMargin = 10,
-        double bottomMargin = 4,
+        double bottomMargin = 12,
         double ruleTopMargin = 5,
         double ruleBottomMargin = 0) =>
         new StackPanel

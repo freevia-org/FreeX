@@ -43,16 +43,20 @@ public sealed partial class MainWindow
         var nameBox = new TextBox
         {
             Text = PivotNamePlanner.Capture(pivot),
-            MinWidth = 280,
         };
         ApplyPivotTextBoxChrome(nameBox);
         AutomationProperties.SetAutomationId(nameBox, "PivotNameBox");
         AutomationProperties.SetName(nameBox, UiText.Get("PivotName_NameAutomation"));
 
+        // WPF PivotTableNameDialog: a 360px NoResize window whose height follows the content, with a
+        // 150px outer minimum.
         var dialog = new Window
         {
-            Title = UiText.Get("PivotName_Title"),
+            Title = UiText.Get("PivotTableName_Title"),
             Width = 360,
+            MinWidth = 360,
+            MaxWidth = 360,
+            MinHeight = 150 - WpfNoResizeFrameHeight,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
@@ -61,10 +65,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "PivotNameDialog");
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
-        ApplyPivotButtonChrome(ok, 80, isDefault: true);
+        ApplyPivotButtonChrome(ok, PivotDialogButtonMinWidth, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "PivotNameOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
-        ApplyPivotButtonChrome(cancel, 80);
+        ApplyPivotButtonChrome(cancel, PivotDialogButtonMinWidth);
         AutomationProperties.SetAutomationId(cancel, "PivotNameCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
 
@@ -80,18 +84,19 @@ public sealed partial class MainWindow
             dialog.Close(true);
         };
 
-        var content = new StackPanel { Spacing = 6, Margin = new Thickness(16) };
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotName_Label"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
+        // WPF: StackPanel { Margin = 16 } with the label (0,3,0,4), the name box (16px below it to the
+        // button row's own 12px top margin) and the shared pivot OK/Cancel row.
+        nameBox.Margin = new Thickness(0, 0, 0, 16);
+        var content = new StackPanel { Margin = new Thickness(16) };
+        content.Children.Add(CreatePivotDialogLabel(UiText.Get("PivotTableName_NameLabel")));
         content.Children.Add(nameBox);
-        content.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 12, 0, 0),
-            Children = { ok, cancel },
-        });
+        content.Children.Add(CreatePivotDialogButtonRow(ok, cancel));
         dialog.Content = content;
+        dialog.Opened += (_, _) =>
+        {
+            nameBox.Focus();
+            nameBox.SelectAll();
+        };
 
         var confirmed = await dialog.ShowDialog<bool>(this);
         if (!confirmed)

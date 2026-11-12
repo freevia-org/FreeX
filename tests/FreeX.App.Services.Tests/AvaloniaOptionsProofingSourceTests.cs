@@ -72,7 +72,7 @@ public sealed class AvaloniaOptionsProofingSourceTests
         var initialRefresh = source.IndexOf("RefreshQuickAccessLists();", StringComparison.Ordinal);
         initialRefresh.Should().BeGreaterThanOrEqualTo(0);
         source[initialRefresh..].Should().Contain("var quickAccessPanel");
-        source.Should().Contain("OptionsSectionHeader(OptionsText(\"Options_CustomDictionary\"), topMargin: 30, bottomMargin: 8)");
+        source.Should().Contain("OptionsSectionHeader(OptionsText(\"Options_CustomDictionary\"), topMargin: 30, bottomMargin: 12)");
         source.Should().NotContain("Options_IgnoreNumbers");
     }
 }

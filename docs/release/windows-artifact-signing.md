@@ -95,7 +95,11 @@ no client secret or PFX. Its only federated subject is
 
 The `public-preview` GitHub environment stores `AZURE_CLIENT_ID`,
 `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID`. They identify the OIDC login;
-none is a credential. `full-release.yml` grants `id-token: write`, runs the
+none is a credential. Because the federated subject is that environment, only the
+Windows legs of the `package` and `suite-package` jobs run in it (and so wait for
+its approval); the Linux and macOS legs run without the environment and start
+immediately, and dry runs use no environment at all. The `publish` job still
+requires it. `full-release.yml` grants `id-token: write`, runs the
 commit-pinned Azure Login action, and installs the pinned signing client. Its
 Windows jobs sign and verify each standalone executable and each app's
 Velopack payload/installer before hashing. The suite job then embeds those

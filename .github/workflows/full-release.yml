@@ -402,7 +402,11 @@ jobs:
     # federated credential (both of which belong to PUBLISHING). The expression is written with the
     # non-empty value on the TRUE side because an empty string is falsy in && / || chains. Without this the weekly rehearsal parked
     # at the gate forever and exercised nothing past the tests.
-    environment: ${{ !inputs.dry_run && 'public-preview' || '' }}
+    # Only Windows legs sign, and only the public-preview environment holds the AZURE_* values and the
+    # Azure federated subject (environment:public-preview). Linux and macOS legs sign nothing through
+    # Azure, so they run without the approval gate and start immediately. Publication stays behind the
+    # publication-gate and the public-preview environment on the publish job.
+    environment: ${{ !inputs.dry_run && matrix.platform == 'windows' && 'public-preview' || '' }}
     timeout-minutes: 45
     permissions:
       contents: read
@@ -593,7 +597,11 @@ jobs:
     # federated credential (both of which belong to PUBLISHING). The expression is written with the
     # non-empty value on the TRUE side because an empty string is falsy in && / || chains. Without this the weekly rehearsal parked
     # at the gate forever and exercised nothing past the tests.
-    environment: ${{ !inputs.dry_run && 'public-preview' || '' }}
+    # Only Windows legs sign, and only the public-preview environment holds the AZURE_* values and the
+    # Azure federated subject (environment:public-preview). Linux and macOS legs sign nothing through
+    # Azure, so they run without the approval gate and start immediately. Publication stays behind the
+    # publication-gate and the public-preview environment on the publish job.
+    environment: ${{ !inputs.dry_run && matrix.platform == 'windows' && 'public-preview' || '' }}
     timeout-minutes: 120
     permissions:
       # The artifact-download fallback lists this run's artifacts through gh.

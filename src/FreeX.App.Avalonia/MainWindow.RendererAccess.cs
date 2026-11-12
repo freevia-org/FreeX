@@ -33,7 +33,8 @@ public sealed partial class MainWindow
         {
             Text = StripDisplayMnemonic(UiText.Get(resourceKey)),
             FontWeight = FontWeight.SemiBold,
-            Margin = new Thickness(0, topMargin, 0, 4),
+            // WPF: the first section caption sits 6px above its options, the later ones 4px.
+            Margin = new Thickness(0, topMargin, 0, topMargin == 0 ? 6 : 4),
         };
 
     private static StackPanel CreateExportOptionsLabeledControl(

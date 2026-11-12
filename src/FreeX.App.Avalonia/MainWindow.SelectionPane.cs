@@ -570,10 +570,12 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("SelectionPane_Title"),
-            Width = 520,
-            Height = 440,
-            MinWidth = 460,
-            MinHeight = 360,
+            // WPF SelectionPaneDialog is a resizable 520x440 *outer* window (minimum 460x360);
+            // Avalonia sizes are client sizes, so both lose the Windows frame allowance.
+            Width = 520 - WpfResizableFrameWidth,
+            Height = 440 - WpfResizableFrameHeight,
+            MinWidth = 460 - WpfResizableFrameWidth,
+            MinHeight = 360 - WpfResizableFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -624,9 +626,6 @@ public sealed partial class MainWindow
         content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        // WPF's fixed 520x440 capture reserves the native title-bar/client-area delta below the action row;
-        // preserve that same visual baseline in Avalonia's borderless dialog client area.
-        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(37) });
         AddGridChild(content, searchRow, 0, isRow: true);
         AddGridChild(content, listBox, 1, isRow: true);
         AddGridChild(content, renameRow, 2, isRow: true);

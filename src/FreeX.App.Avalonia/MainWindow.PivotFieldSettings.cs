@@ -448,12 +448,19 @@ public sealed partial class MainWindow
         var labelDescending = new RadioButton { Content = PivotSortPlanner.GetOption(PivotSortOptionMode.LabelDescending).Text.Resolve(UiText.Get), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
         var valueAscending = new RadioButton { Content = PivotSortPlanner.GetOption(PivotSortOptionMode.ValueAscending).Text.Resolve(UiText.Get), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
         var valueDescending = new RadioButton { Content = PivotSortPlanner.GetOption(PivotSortOptionMode.ValueDescending).Text.Resolve(UiText.Get), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
+        // WPF radios are 16px rows with a 6px bottom margin (22px pitch); the compact radio is 20px.
+        foreach (var modeButton in new[] { labelAscending, labelDescending, valueAscending, valueDescending })
+        {
+            ApplyPivotRadioButtonChrome(modeButton);
+            modeButton.Margin = new Thickness(0, 0, 0, 2);
+        }
+
         AutomationProperties.SetAutomationId(labelAscending, PivotSortPlanner.GetOption(PivotSortOptionMode.LabelAscending).AutomationId);
         AutomationProperties.SetAutomationId(labelDescending, PivotSortPlanner.GetOption(PivotSortOptionMode.LabelDescending).AutomationId);
         AutomationProperties.SetAutomationId(valueAscending, PivotSortPlanner.GetOption(PivotSortOptionMode.ValueAscending).AutomationId);
         AutomationProperties.SetAutomationId(valueDescending, PivotSortPlanner.GetOption(PivotSortOptionMode.ValueDescending).AutomationId);
 
-        var valueFieldBox = new ComboBox { MinWidth = 220 };
+        var valueFieldBox = new ComboBox { MinWidth = 220, HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch };
         foreach (var dataField in pivot.DataFields)
             valueFieldBox.Items.Add(dataField.Name);
         ApplyPivotComboBoxChrome(valueFieldBox);
@@ -497,20 +504,26 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Format("PivotSort_Title", caption),
+            // WPF PivotSortOptionsDialog: 360x300 outer, NoResize, so the app-wide dialog sizing makes
+            // 300 the minimum and lets the height follow the content.
             Width = 360,
-            Height = 300,
             MinWidth = 360,
-            MinHeight = 300,
+            MaxWidth = 360,
+            MinHeight = 300 - WpfNoResizeFrameHeight,
+            SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
         };
         AutomationProperties.SetAutomationId(dialog, "PivotSortOptionsDialog");
 
-        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
-        ApplyPivotButtonChrome(ok, 80, isDefault: true);
+        // WPF: OK and Cancel are 74 wide with an 8px gap.
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
+        ApplyPivotButtonChrome(ok, 74, isDefault: true);
+        ok.Width = 74;
         AutomationProperties.SetAutomationId(ok, "PivotSortOptionsOkButton");
-        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
-        ApplyPivotButtonChrome(cancel, 80);
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
+        ApplyPivotButtonChrome(cancel, 74);
+        cancel.Width = 74;
         AutomationProperties.SetAutomationId(cancel, "PivotSortOptionsCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -524,30 +537,43 @@ public sealed partial class MainWindow
             dialog.Close(true);
         };
 
-        var content = new StackPanel { Spacing = 6, Margin = new Thickness(12) };
-        content.Children.Add(new TextBlock
+        // Layout mirrors PivotSortOptionsDialog: a 12px root margin, a semi-bold heading 10px above the
+        // four radios, the value-field label + combo indented 18px and 8px below them (4px label gap),
+        // and the button row docked to the bottom with a 14px top margin.
+        var optionsPanel = new StackPanel();
+        optionsPanel.Children.Add(new TextBlock
         {
             Text = UiText.Format("PivotSort_Heading", caption),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             FontWeight = FontWeight.SemiBold,
-            Foreground = HeaderForeground,
-            Margin = new Thickness(0, 0, 0, 4),
+            Margin = new Thickness(0, 0, 0, 10),
         });
-        content.Children.Add(labelAscending);
-        content.Children.Add(labelDescending);
-        content.Children.Add(valueAscending);
-        content.Children.Add(valueDescending);
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotSort_ValueField"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground, Margin = new Thickness(18, 4, 0, 0) });
-        content.Children.Add(new StackPanel { Margin = new Thickness(18, 0, 0, 0), Children = { valueFieldBox } });
-        content.Children.Add(new StackPanel
+        optionsPanel.Children.Add(labelAscending);
+        optionsPanel.Children.Add(labelDescending);
+        optionsPanel.Children.Add(valueAscending);
+        optionsPanel.Children.Add(valueDescending);
+        optionsPanel.Children.Add(new StackPanel
         {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0),
-            Children = { ok, cancel },
+            Margin = new Thickness(18, 8, 0, 0),
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = StripDisplayMnemonic(UiText.Get("PivotSort_ValueField")),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    Margin = new Thickness(0, 0, 0, 4),
+                },
+                valueFieldBox,
+            },
         });
+
+        var buttonRow = CreatePivotDialogButtonRow(ok, cancel, new Thickness(0, 14, 0, 0));
+        DockPanel.SetDock(buttonRow, Dock.Bottom);
+        var content = new DockPanel { Margin = new Thickness(12) };
+        content.Children.Add(buttonRow);
+        content.Children.Add(optionsPanel);
         dialog.Content = content;
         ConfigurePivotDialogLifecycle(dialog, labelAscending);
 

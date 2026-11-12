@@ -92,7 +92,8 @@ public sealed class FormatCellsBorderVisualParityTests
                 var dialogTask = window.ShowFormatCellsInputDialogAsync(probe =>
                 {
                     probe.TabStrip.SelectedIndex = 3;
-                    probe.Dialog.ClientSize.Should().Be(new Size(620, 596.5));
+                    // Client size: the 620x596.5 WPF outer reference less its 14x38 window frame.
+                    probe.Dialog.ClientSize.Should().Be(new Size(606, 558.5));
                     var renderSize = MainWindow.ResolveParityDialogCaptureSize(
                         probe.Dialog.Width,
                         probe.Dialog.Height,

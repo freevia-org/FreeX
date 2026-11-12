@@ -45,7 +45,7 @@ public sealed partial class MainWindow
         var gallery = new ListBox
         {
             SelectionMode = SelectionMode.Single,
-            MinHeight = 280,
+            MinHeight = 260,
             ItemsSource = styleNames,
             SelectedIndex = PivotStyleGalleryPlanner.FindStyleIndex(styleNames, values.StyleName),
         };
@@ -55,9 +55,12 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = UiText.Get("PivotStyleGallery_Title"),
+            // WPF PivotStyleGalleryDialog is 360x430 OUTER; Avalonia sizes are client sizes.
+            Title = UiText.Get("PivotStyleGallery_PivotTableStyles"),
             Width = 360,
-            Height = 430,
+            MinWidth = 360,
+            MaxWidth = 360,
+            Height = 430 - WpfNoResizeFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             ShowInTaskbar = false,
@@ -65,10 +68,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "PivotStyleGalleryDialog");
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
-        ApplyPivotButtonChrome(ok, 80, isDefault: true);
+        ApplyPivotButtonChrome(ok, PivotDialogButtonMinWidth, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "PivotStyleGalleryOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
-        ApplyPivotButtonChrome(cancel, 80);
+        ApplyPivotButtonChrome(cancel, PivotDialogButtonMinWidth);
         AutomationProperties.SetAutomationId(cancel, "PivotStyleGalleryCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) => dialog.Close(true);
@@ -77,11 +80,10 @@ public sealed partial class MainWindow
 
         var label = new TextBlock
         {
-            Text = UiText.Get("PivotStyleGallery_StyleLabel"),
+            Text = StripDisplayMnemonic(UiText.Get("PivotStyleGallery_PivotTableStyle")),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
-            Foreground = HeaderForeground,
-            Margin = new Thickness(0, 0, 0, 6),
+            Margin = new Thickness(0, 0, 0, 4),
         };
         DockPanel.SetDock(label, Dock.Top);
         content.Children.Add(label);

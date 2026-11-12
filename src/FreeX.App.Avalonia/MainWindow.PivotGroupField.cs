@@ -76,7 +76,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        var fieldBox = new ComboBox { MinWidth = 240 };
+        var fieldBox = new ComboBox { HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch };
         foreach (var option in layoutFields)
             fieldBox.Items.Add(option.Caption);
         fieldBox.SelectedIndex = 0;
@@ -84,33 +84,32 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(fieldBox, "PivotGroupFieldBox");
         AutomationProperties.SetName(fieldBox, UiText.Get("PivotGroup_FieldLabel"));
 
-        var groupingBox = new ComboBox { MinWidth = 240 };
+        var groupingBox = new ComboBox { HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch };
         foreach (var (label, _) in PivotGroupFieldPlanner.Groupings)
             groupingBox.Items.Add(label);
         ApplyPivotComboBoxChrome(groupingBox);
         AutomationProperties.SetAutomationId(groupingBox, "PivotGroupByBox");
         AutomationProperties.SetName(groupingBox, UiText.Get("PivotGroup_GroupByLabel"));
 
-        var startBox = new TextBox { MinWidth = 120 };
+        var startBox = new TextBox();
         ApplyPivotTextBoxChrome(startBox);
         AutomationProperties.SetAutomationId(startBox, "PivotGroupStartBox");
         AutomationProperties.SetName(startBox, UiText.Get("PivotGroup_StartingAtLabel"));
-        var endBox = new TextBox { MinWidth = 120 };
+        var endBox = new TextBox();
         ApplyPivotTextBoxChrome(endBox);
         AutomationProperties.SetAutomationId(endBox, "PivotGroupEndBox");
         AutomationProperties.SetName(endBox, UiText.Get("PivotGroup_EndingAtLabel"));
-        var intervalBox = new TextBox { MinWidth = 120 };
+        var intervalBox = new TextBox();
         ApplyPivotTextBoxChrome(intervalBox);
         AutomationProperties.SetAutomationId(intervalBox, "PivotGroupByValueBox");
         AutomationProperties.SetName(intervalBox, UiText.Get("PivotGroup_ByLabel"));
 
-        var rangePanel = new StackPanel { Spacing = 6 };
-        rangePanel.Children.Add(new TextBlock { Text = UiText.Get("PivotGroup_StartingAtLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
-        rangePanel.Children.Add(startBox);
-        rangePanel.Children.Add(new TextBlock { Text = UiText.Get("PivotGroup_EndingAtLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
-        rangePanel.Children.Add(endBox);
-        rangePanel.Children.Add(new TextBlock { Text = UiText.Get("PivotGroup_ByLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
-        rangePanel.Children.Add(intervalBox);
+        // WPF keeps the Range group on screen for every group-by mode; only a number range reads it,
+        // so the group is disabled (not removed) for the date modes.
+        var rangePanel = new StackPanel();
+        AddPivotDialogLabeledControl(rangePanel, UiText.Get("PivotFieldGrouping_StartingAtLabel"), startBox);
+        AddPivotDialogLabeledControl(rangePanel, UiText.Get("PivotFieldGrouping_EndingAtLabel"), endBox);
+        AddPivotDialogLabeledControl(rangePanel, UiText.Get("PivotFieldGrouping_ByLabel"), intervalBox);
 
         void LoadFromField(PivotGroupFieldOption option)
         {
@@ -124,7 +123,7 @@ public sealed partial class MainWindow
         void SyncRangeState()
         {
             var grouping = PivotGroupFieldPlanner.GroupingFromIndex(groupingBox.SelectedIndex);
-            rangePanel.IsVisible = PivotGroupFieldPlanner.GroupingUsesNumberRange(grouping);
+            rangePanel.IsEnabled = PivotGroupFieldPlanner.GroupingUsesNumberRange(grouping);
         }
 
         fieldBox.SelectionChanged += (_, _) =>
@@ -138,22 +137,25 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = UiText.Format("PivotGroup_Title", pivot.Name),
+            // WPF PivotFieldGroupingDialog: 420x430 outer, NoResize, so the app-wide dialog sizing makes
+            // 430 the minimum and lets the height follow the content.
+            Title = UiText.Get("PivotFieldGrouping_GroupPivotField"),
             Width = 420,
-            Height = 430,
             MinWidth = 420,
-            MinHeight = 430,
+            MaxWidth = 420,
+            MinHeight = 430 - WpfNoResizeFrameHeight,
+            SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "PivotGroupFieldDialog");
 
-        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
-        ApplyPivotButtonChrome(ok, 80, isDefault: true);
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
+        ApplyPivotButtonChrome(ok, PivotDialogButtonMinWidth, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "PivotGroupFieldOkButton");
-        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
-        ApplyPivotButtonChrome(cancel, 80);
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
+        ApplyPivotButtonChrome(cancel, PivotDialogButtonMinWidth);
         AutomationProperties.SetAutomationId(cancel, "PivotGroupFieldCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -170,20 +172,22 @@ public sealed partial class MainWindow
             dialog.Close(true);
         };
 
-        var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotGroup_FieldLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
-        content.Children.Add(fieldBox);
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotGroup_GroupByLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
-        content.Children.Add(groupingBox);
-        content.Children.Add(rangePanel);
-        content.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0),
-            Children = { ok, cancel },
-        });
+        // Layout mirrors PivotFieldGroupingDialog: a 16px root margin and three group boxes (Selection,
+        // Group by, Range), each 12px above the next block with content inset 10,8,10,10 and labels
+        // above their controls, then the shared pivot OK/Cancel row.
+        var selectionPanel = new StackPanel();
+        AddPivotDialogLabeledControl(selectionPanel, UiText.Get("PivotFieldGrouping_FieldLabel"), fieldBox);
+        var groupingPanel = new StackPanel();
+        AddPivotDialogLabeledControl(groupingPanel, UiText.Get("PivotFieldGrouping_GroupByLabel"), groupingBox);
+
+        var content = new StackPanel { Margin = new Thickness(16) };
+        content.Children.Add(CreatePivotDialogGroupBox(UiText.Get("PivotFieldGrouping_SelectionGroup"), selectionPanel));
+        content.Children.Add(CreatePivotDialogGroupBox(UiText.Get("PivotFieldGrouping_GroupByGroup"), groupingPanel));
+        content.Children.Add(CreatePivotDialogGroupBox(
+            UiText.Get("PivotFieldGrouping_RangeGroup"),
+            rangePanel,
+            new Thickness(0, 0, 0, 4)));
+        content.Children.Add(CreatePivotDialogButtonRow(ok, cancel));
         dialog.Content = content;
         ConfigurePivotDialogLifecycle(dialog, fieldBox);
 

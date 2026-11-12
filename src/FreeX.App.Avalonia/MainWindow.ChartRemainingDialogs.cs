@@ -130,6 +130,7 @@ public sealed partial class MainWindow
             dialog.Close((ChartComboInput?)new ChartComboInput(edited));
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartComboInput?)null);
+        buttonRow.Margin = new Thickness(0, 8, 0, 0);
 
         dialog.Content = new StackPanel
         {
@@ -236,20 +237,27 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartMoveInput?)null);
 
-        dialog.Content = new StackPanel
-        {
-            Margin = new Thickness(16),
-            Spacing = 8,
-            MinWidth = 300,
-            Children =
+        // WPF MoveChartDialog (340x210): the second radio carries a 0,4,0,8 margin, the label sits 4px
+        // above a full-width name box, and the button row follows the box directly. The content is
+        // shorter than the window, so the WPF client height is kept.
+        newSheetRadio.Margin = new Thickness(0, 4, 0, 8);
+        targetBox.Width = double.NaN;
+        targetBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+        HostChartDialogContent(
+            dialog,
+            340,
+            new StackPanel
             {
-                objectRadio,
-                newSheetRadio,
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get(targetField.LabelResourceKey)), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 6, 0, 0) },
-                targetBox,
-                buttonRow,
+                Children =
+                {
+                    objectRadio,
+                    newSheetRadio,
+                    new TextBlock { Text = StripDisplayMnemonic(UiText.Get(targetField.LabelResourceKey)), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 0, 0, 4) },
+                    targetBox,
+                },
             },
-        };
+            buttonRow,
+            fixedWpfHeight: 210);
 
         return await dialog.ShowDialog<ChartMoveInput?>(this);
     }
@@ -290,7 +298,8 @@ public sealed partial class MainWindow
         // border width, font size) — followed by an [OK][Cancel] row (primary on the left).
         var state = current;
 
-        // Button width matches WPF inner content area (~380px dialog → 300px control width).
+        // Nominal editor width; ApplyWpfChartFieldMetrics stretches every editor across its group, as
+        // the WPF stack does.
         const int ControlWidth = 300;
 
         var fillLineSection = ChartAreaFormatPlanner.GetFillLineSection();
@@ -341,31 +350,22 @@ public sealed partial class MainWindow
 
         // "Fill & Line" group box — matches WPF CreateGroupBox(ChartDialog_FillLineGroup, ...) with
         // the inline help paragraph at the top (ChartAreaLegend_FillLineHelpText).
-        var fillLineStack = new StackPanel
+        var fillLineStack = ApplyWpfChartFieldMetrics(new StackPanel
         {
-            Margin = new Thickness(10, 8, 10, 10),
-            Spacing = 6,
             Children =
             {
-                new TextBlock
-                {
-                    Text = UiText.Get(fillLineSection.HelpResourceKey ?? throw new InvalidOperationException("Fill-line section requires help text.")),
-                    FontSize = 12,
-                    FontFamily = FormulaBarFontFamily,
-                    TextWrapping = TextWrapping.Wrap,
-                    Foreground = new SolidColorBrush(Color.FromRgb(96, 96, 96)),
-                    Margin = new Thickness(0, 0, 0, 4),
-                },
+                CreateChartDialogInlineHelp(
+                    UiText.Get(fillLineSection.HelpResourceKey ?? throw new InvalidOperationException("Fill-line section requires help text."))),
                 MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.ChartAreaFillColor),
                 chartAreaButton,
                 MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.PlotAreaFillColor),
                 plotAreaButton,
-                MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.PlotAreaBorderColor, new Thickness(0, 4, 0, 0)),
+                MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.PlotAreaBorderColor),
                 plotBorderButton,
                 MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.PlotAreaBorderThickness),
                 borderWidthBox,
             },
-        };
+        });
 
         var fillLineGroup = MakeAreaDescriptorGroup(fillLineSection, fillLineStack);
 
@@ -414,10 +414,8 @@ public sealed partial class MainWindow
             current.LegendFontSize.ToString(CultureInfo.InvariantCulture),
             ControlWidth);
 
-        var legendStack = new StackPanel
+        var legendStack = ApplyWpfChartFieldMetrics(new StackPanel
         {
-            Margin = new Thickness(10, 8, 10, 10),
-            Spacing = 6,
             Children =
             {
                 showLegendCheck,
@@ -435,7 +433,7 @@ public sealed partial class MainWindow
                 MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.LegendFontSize),
                 legendFontSizeBox,
             },
-        };
+        });
 
         var legendGroup = MakeAreaDescriptorGroup(legendSection, legendStack);
 
@@ -496,16 +494,17 @@ public sealed partial class MainWindow
         };
         Grid.SetRow(scrollContent, 0);
         Grid.SetRow(buttonRow, 1);
+        buttonRow.Margin = new Thickness(0, ChartDialogScrollButtonGap, 0, 0);
 
         var contentGrid = new Grid
         {
-            Margin = new Thickness(16),
-            MinWidth = 380,
+            Margin = new Thickness(ChartDialogMargin),
             RowDefinitions = new RowDefinitions("*,Auto"),
             Children = { scrollContent, buttonRow },
         };
 
         dialog.Content = contentGrid;
+        ApplyChartDialogTypography(dialog);
 
         return await dialog.ShowDialog<ChartAreaFormatInput?>(this);
 
@@ -531,13 +530,12 @@ public sealed partial class MainWindow
             return checkBox;
         }
 
-        TextBlock MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId fieldId, Thickness? margin = null) =>
+        TextBlock MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId fieldId) =>
             new()
             {
                 Text = AreaFieldLabel(fieldId),
                 FontSize = 12,
                 FontFamily = FormulaBarFontFamily,
-                Margin = margin ?? new Thickness(0),
             };
 
         Button MakeAreaColorButton(ChartAreaFormatDialogFieldId fieldId, CellColor? color)
@@ -556,12 +554,6 @@ public sealed partial class MainWindow
         }
 
         GroupBox MakeAreaDescriptorGroup(ChartAreaFormatDialogSectionDescriptor section, Control content) =>
-            new()
-            {
-                Header = StripDisplayMnemonic(UiText.Get(section.HeaderResourceKey)),
-                Content = content,
-                Padding = new Thickness(0),
-                Margin = new Thickness(0, 0, 0, 10),
-            };
+            CreateChartDialogGroupBox(UiText.Get(section.HeaderResourceKey), content);
     }
 }

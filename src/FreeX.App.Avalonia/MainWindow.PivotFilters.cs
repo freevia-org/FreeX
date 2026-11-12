@@ -384,6 +384,7 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 12),
             IsVisible = pivot.DataFields.Count == 0,
         };
         valueFiltersPanel.Children.Add(valueFilterUnavailable);
@@ -539,6 +540,73 @@ public sealed partial class MainWindow
                 new PivotApplicationTarget(_session.ActiveSheet, pivot),
                 sourceFieldIndex));
 
+    // ── WPF PivotLabelFilterDialog / PivotValueFilterDialog form layout ──────
+    // Both WPF dialogs are a 14px-margin DockPanel: the button row docked to the bottom (12px top
+    // margin, 74px buttons, 8px gap) and a two-column grid (104px label column) whose labels are WPF
+    // Labels (5px padding, vertically centred, 8px right margin) beside their editors.
+    private static Grid CreatePivotFilterFormGrid() => new()
+    {
+        ColumnDefinitions = new ColumnDefinitions("104,*"),
+        VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Top,
+    };
+
+    private static TextBlock AddPivotFilterFormHeading(Grid grid, string text)
+    {
+        var heading = new TextBlock
+        {
+            Text = text,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 0, 0, 10),
+        };
+        grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        Grid.SetRow(heading, grid.RowDefinitions.Count - 1);
+        Grid.SetColumnSpan(heading, 2);
+        grid.Children.Add(heading);
+        return heading;
+    }
+
+    private static TextBlock AddPivotFilterFormRow(Grid grid, string label, Control editor, double top = 0, double bottom = 0)
+    {
+        var row = grid.RowDefinitions.Count;
+        grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        var labelBlock = new TextBlock
+        {
+            Text = StripDisplayMnemonic(label),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+            Margin = new Thickness(5, 5 + top, 13, 5 + bottom),
+        };
+        editor.Margin = new Thickness(0, top, 0, bottom);
+        editor.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+        editor.VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center;
+        Grid.SetRow(labelBlock, row);
+        Grid.SetRow(editor, row);
+        Grid.SetColumn(editor, 1);
+        grid.Children.Add(labelBlock);
+        grid.Children.Add(editor);
+        return labelBlock;
+    }
+
+    private static DockPanel CreatePivotFilterFormContent(Grid form, Button ok, Button clear, Button cancel)
+    {
+        ok.Margin = new Thickness(0, 0, 8, 0);
+        clear.Margin = new Thickness(0, 0, 8, 0);
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0),
+            Children = { ok, clear, cancel },
+        };
+        DockPanel.SetDock(buttonRow, Dock.Bottom);
+        var content = new DockPanel { Margin = new Thickness(14) };
+        content.Children.Add(buttonRow);
+        content.Children.Add(form);
+        return content;
+    }
+
     // ── Label filter (Equals / Contains / Begins With / …) ─────────────────────
     private async Task OpenPivotLabelFilterDialogAsync(PivotTableModel pivot, PivotHeaderDropdownTargetModel target)
     {
@@ -547,7 +615,7 @@ public sealed partial class MainWindow
 
         var existing = pivot.LabelFilters.FirstOrDefault(filter => filter.SourceFieldIndex == target.SourceFieldIndex);
 
-        var kindBox = new ComboBox { MinWidth = 200 };
+        var kindBox = new ComboBox();
         foreach (var (label, _) in PivotFieldFilterPlanner.LabelFilterKinds)
             kindBox.Items.Add(label);
         kindBox.SelectedIndex = PivotFieldFilterPlanner.FindLabelKindIndex(existing?.Kind ?? PivotLabelFilterKind.Equals);
@@ -555,19 +623,28 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(kindBox, "PivotLabelFilterKindBox");
         AutomationProperties.SetName(kindBox, UiText.Get("PivotFieldFilter_LabelFilterKindAutomationName"));
 
-        var value1 = new TextBox { MinWidth = 200, Text = existing?.Value ?? string.Empty, PlaceholderText = UiText.Get("PivotLoc_ValuePlaceholder") };
+        var value1 = new TextBox { Text = existing?.Value ?? string.Empty };
         ApplyPivotTextBoxChrome(value1);
         AutomationProperties.SetAutomationId(value1, "PivotLabelFilterValueBox");
         AutomationProperties.SetName(value1, UiText.Get("NamedRange_Value"));
-        var value2 = new TextBox { MinWidth = 200, Text = existing?.Value2 ?? string.Empty, PlaceholderText = UiText.Get("PivotLoc_SecondValuePlaceholder") };
+        var value2 = new TextBox { Text = existing?.Value2 ?? string.Empty };
         ApplyPivotTextBoxChrome(value2);
         AutomationProperties.SetAutomationId(value2, "PivotLabelFilterValue2Box");
         AutomationProperties.SetName(value2, UiText.Get("PivotFieldFilter_SecondValueAutomationName"));
+
+        // Layout mirrors PivotLabelFilterDialog.xaml: heading (10px below), then Operator, Value and
+        // And rows with 8px row gaps; the And row (label and box) only shows for the between kinds.
+        var form = CreatePivotFilterFormGrid();
+        AddPivotFilterFormHeading(form, UiText.Get("PivotLabelFilter_ShowItemsForWhichTheLabel"));
+        AddPivotFilterFormRow(form, UiText.Get("PivotLabelFilter_Operator"), kindBox, bottom: 8);
+        AddPivotFilterFormRow(form, UiText.Get("PivotLabelFilter_Value"), value1);
+        var value2Label = AddPivotFilterFormRow(form, UiText.Get("PivotLabelFilter_And"), value2, top: 8);
 
         void SyncSecond()
         {
             var kind = PivotFieldFilterPlanner.LabelKindFromIndex(kindBox.SelectedIndex);
             value2.IsVisible = PivotFieldFilterPlanner.LabelKindNeedsSecondValue(kind);
+            value2Label.IsVisible = value2.IsVisible;
         }
 
         kindBox.SelectionChanged += (_, _) => SyncSecond();
@@ -575,24 +652,30 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = UiText.Format("PivotFilter_LabelTitle", target.FieldCaption),
+            // WPF: 380x260 outer, NoResize, so the app-wide dialog sizing makes 260 the minimum and
+            // lets the height follow the content.
+            Title = UiText.Get("PivotLabelFilter_LabelFilter"),
             Width = 380,
-            Height = 260,
             MinWidth = 380,
-            MinHeight = 260,
+            MaxWidth = 380,
+            MinHeight = 260 - WpfNoResizeFrameHeight,
+            SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
         };
         AutomationProperties.SetAutomationId(dialog, "PivotLabelFilterDialog");
 
-        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
-        ApplyPivotButtonChrome(ok, 80, isDefault: true);
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
+        ApplyPivotButtonChrome(ok, 74, isDefault: true);
+        ok.Width = 74;
         AutomationProperties.SetAutomationId(ok, "PivotLabelFilterOkButton");
-        var clear = new Button { Content = UiText.Get("Common_Clear"), MinWidth = 80, IsEnabled = existing is not null };
-        ApplyPivotButtonChrome(clear, 80);
+        var clear = new Button { Content = UiText.Get("Common_Clear"), IsEnabled = existing is not null };
+        ApplyPivotButtonChrome(clear, 74);
+        clear.Width = 74;
         AutomationProperties.SetAutomationId(clear, "PivotLabelFilterClearButton");
-        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
-        ApplyPivotButtonChrome(cancel, 80);
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
+        ApplyPivotButtonChrome(cancel, 74);
+        cancel.Width = 74;
         AutomationProperties.SetAutomationId(cancel, "PivotLabelFilterCancelButton");
         cancel.Click += (_, _) => dialog.Close(0);
         ok.Click += (_, _) =>
@@ -609,24 +692,7 @@ public sealed partial class MainWindow
         };
         clear.Click += (_, _) => dialog.Close(2);
 
-        var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
-        content.Children.Add(new TextBlock
-        {
-            Text = UiText.Get("PivotFilter_LabelHeading"),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            Foreground = HeaderForeground,
-        });
-        content.Children.Add(kindBox);
-        content.Children.Add(value1);
-        content.Children.Add(value2);
-        content.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Children = { ok, clear, cancel },
-        });
+        var content = CreatePivotFilterFormContent(form, ok, clear, cancel);
         dialog.Content = content;
         ConfigurePivotDialogLifecycle(dialog, kindBox);
 
@@ -668,7 +734,7 @@ public sealed partial class MainWindow
         var existing = pivot.ValueFilters
             .FirstOrDefault(filter => PivotFilterOwnership.BelongsToSourceField(filter, target.SourceFieldIndex));
 
-        var kindBox = new ComboBox { MinWidth = 200 };
+        var kindBox = new ComboBox();
         foreach (var (label, _) in PivotFieldFilterPlanner.ValueFilterKinds)
             kindBox.Items.Add(label);
         kindBox.SelectedIndex = PivotFieldFilterPlanner.FindValueKindIndex(existing?.Kind ?? PivotValueFilterKind.GreaterThan);
@@ -676,7 +742,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(kindBox, "PivotValueFilterKindBox");
         AutomationProperties.SetName(kindBox, UiText.Get("PivotFieldFilter_ValueFilterKindAutomationName"));
 
-        var dataFieldBox = new ComboBox { MinWidth = 200 };
+        var dataFieldBox = new ComboBox();
         for (var index = 0; index < pivot.DataFields.Count; index++)
             dataFieldBox.Items.Add(pivot.DataFields[index].Name);
         dataFieldBox.SelectedIndex = PivotFieldFilterPlanner.InitialDataFieldIndex(existing, pivot.DataFields.Count);
@@ -686,8 +752,6 @@ public sealed partial class MainWindow
 
         var primary = new TextBox
         {
-            MinWidth = 200,
-            PlaceholderText = UiText.Get("PivotLoc_CountOrValuePlaceholder"),
             Text = PivotFieldFilterPlanner.PrimaryInputText(existing),
         };
         ApplyPivotTextBoxChrome(primary);
@@ -695,19 +759,29 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(primary, UiText.Get("PivotFieldFilter_CountOrValueAutomationName"));
         var secondary = new TextBox
         {
-            MinWidth = 200,
-            PlaceholderText = UiText.Get("PivotLoc_SecondValuePlaceholder"),
             Text = PivotFieldFilterPlanner.SecondaryInputText(existing),
         };
         ApplyPivotTextBoxChrome(secondary);
         AutomationProperties.SetAutomationId(secondary, "PivotValueFilterSecondaryBox");
         AutomationProperties.SetName(secondary, UiText.Get("PivotFieldFilter_SecondValueAutomationName"));
 
+        // Layout mirrors PivotValueFilterDialog.xaml: heading (10px below), then Operator, Value and
+        // And rows with 8px row gaps; a value row (label and box) only shows when the kind reads it.
+        // The value-field row above Operator is Avalonia-only.
+        var form = CreatePivotFilterFormGrid();
+        AddPivotFilterFormHeading(form, UiText.Get("PivotValueFilter_ShowItemsForWhichTheValue"));
+        AddPivotFilterFormRow(form, UiText.Get("PivotFilter_SummarizeBy"), dataFieldBox, bottom: 8);
+        AddPivotFilterFormRow(form, UiText.Get("PivotValueFilter_Operator"), kindBox, bottom: 8);
+        var primaryLabel = AddPivotFilterFormRow(form, UiText.Get("PivotValueFilter_Value"), primary);
+        var secondaryLabel = AddPivotFilterFormRow(form, UiText.Get("PivotValueFilter_And"), secondary, top: 8);
+
         void SyncInputs()
         {
             var kind = PivotFieldFilterPlanner.ValueKindFromIndex(kindBox.SelectedIndex);
             primary.IsVisible = PivotFieldFilterPlanner.ValueKindNeedsPrimaryInput(kind);
+            primaryLabel.IsVisible = primary.IsVisible;
             secondary.IsVisible = PivotFieldFilterPlanner.ValueKindNeedsSecondValue(kind);
+            secondaryLabel.IsVisible = secondary.IsVisible;
         }
 
         kindBox.SelectionChanged += (_, _) => SyncInputs();
@@ -715,24 +789,30 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = UiText.Format("PivotFilter_ValueTitle", target.FieldCaption),
+            // WPF: 380x260 outer, NoResize, so the app-wide dialog sizing makes 260 the minimum and
+            // lets the height follow the content.
+            Title = UiText.Get("PivotValueFilter_ValueFilter"),
             Width = 380,
-            Height = 260,
             MinWidth = 380,
-            MinHeight = 260,
+            MaxWidth = 380,
+            MinHeight = 260 - WpfNoResizeFrameHeight,
+            SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
         };
         AutomationProperties.SetAutomationId(dialog, "PivotValueFilterDialog");
 
-        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
-        ApplyPivotButtonChrome(ok, 80, isDefault: true);
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
+        ApplyPivotButtonChrome(ok, 74, isDefault: true);
+        ok.Width = 74;
         AutomationProperties.SetAutomationId(ok, "PivotValueFilterOkButton");
-        var clear = new Button { Content = UiText.Get("Common_Clear"), MinWidth = 80, IsEnabled = existing is not null };
-        ApplyPivotButtonChrome(clear, 80);
+        var clear = new Button { Content = UiText.Get("Common_Clear"), IsEnabled = existing is not null };
+        ApplyPivotButtonChrome(clear, 74);
+        clear.Width = 74;
         AutomationProperties.SetAutomationId(clear, "PivotValueFilterClearButton");
-        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
-        ApplyPivotButtonChrome(cancel, 80);
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
+        ApplyPivotButtonChrome(cancel, 74);
+        cancel.Width = 74;
         AutomationProperties.SetAutomationId(cancel, "PivotValueFilterCancelButton");
         cancel.Click += (_, _) => dialog.Close(0);
         ok.Click += (_, _) =>
@@ -755,20 +835,7 @@ public sealed partial class MainWindow
         };
         clear.Click += (_, _) => dialog.Close(2);
 
-        var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotFilter_SummarizeBy"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
-        content.Children.Add(dataFieldBox);
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotFilter_WhereValueIs"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
-        content.Children.Add(kindBox);
-        content.Children.Add(primary);
-        content.Children.Add(secondary);
-        content.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Children = { ok, clear, cancel },
-        });
+        var content = CreatePivotFilterFormContent(form, ok, clear, cancel);
         dialog.Content = content;
         ConfigurePivotDialogLifecycle(dialog, kindBox);
 
