@@ -1019,7 +1019,7 @@ public sealed class DocumentViewRoundTripTests
         exponent.FontSize.Should().BeLessThan(baseC.FontSize);
         exponent.BaselineY.Should().BeLessThan(baseC.BaselineY, "the exponent is raised above the base");
         exponent.X.Should().BeGreaterThan(baseC.X);
-        TextBlock.GetBaselineOffset(visual).Should().BeApproximately(visual.Layout.Ascent, 0.001,
+        TextBlock.GetBaselineOffset(visual).Should().BeApproximately(visual.Layout.BoxAscent, 0.001,
             "the equation reports its math baseline so it sits on the text baseline");
 
         view.CommitToModel();

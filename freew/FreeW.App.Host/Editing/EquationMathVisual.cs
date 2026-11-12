@@ -20,7 +20,7 @@ internal sealed class EquationMathVisual : FrameworkElement
     {
         Equation = equation;
         Layout = EquationMathLayout.Layout(equation, WpfMathLayoutFont.Instance, fontSize, display, settings);
-        TextBlock.SetBaselineOffset(this, Layout.Ascent);
+        TextBlock.SetBaselineOffset(this, Layout.BoxAscent);
         SnapsToDevicePixels = false;
 
         // Math is laid out left to right even inside a right-to-left paragraph (Word's default).
@@ -34,7 +34,7 @@ internal sealed class EquationMathVisual : FrameworkElement
     public MathLayoutResult Layout { get; }
 
     protected override Size MeasureOverride(Size availableSize) =>
-        new(Math.Max(0, Layout.Width), Math.Max(0, Layout.Height));
+        new(Math.Max(0, Layout.Width), Math.Max(0, Layout.BoxAscent + Layout.BoxDescent));
 
     protected override Size ArrangeOverride(Size finalSize) => finalSize;
 
@@ -43,7 +43,7 @@ internal sealed class EquationMathVisual : FrameworkElement
         var brush = TextElement.GetForeground(this) ?? Brushes.Black;
         var pixelsPerDip = (float)VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var font = WpfMathLayoutFont.Instance;
-        drawingContext.PushTransform(new TranslateTransform(0, Layout.Ascent));
+        drawingContext.PushTransform(new TranslateTransform(0, Layout.BoxAscent));
         foreach (var item in Layout.Items)
         {
             switch (item)

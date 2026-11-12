@@ -46,6 +46,21 @@ public sealed record MathLayoutResult(
     IReadOnlyList<MathDrawItem> Items)
 {
     public double Height => Ascent + Descent;
+
+    /// <summary>
+    /// Extent above the baseline the equation claims in its line: its ink plus half the font's MathLeading.
+    /// Word sizes a line holding a tall inline equation this way (lines measured against Word renders).
+    /// </summary>
+    public double LineAscent { get; init; } = double.NaN;
+
+    /// <summary>Extent below the baseline the equation claims in its line; see <see cref="LineAscent"/>.</summary>
+    public double LineDescent { get; init; } = double.NaN;
+
+    /// <summary><see cref="LineAscent"/>, or the ink ascent when no line box was computed.</summary>
+    public double BoxAscent => double.IsNaN(LineAscent) ? Ascent : Math.Max(Ascent, LineAscent);
+
+    /// <summary><see cref="LineDescent"/>, or the ink descent when no line box was computed.</summary>
+    public double BoxDescent => double.IsNaN(LineDescent) ? Descent : Math.Max(Descent, LineDescent);
 }
 
 /// <summary>
@@ -83,7 +98,14 @@ public static class EquationMathLayout
         var style = (display ?? equation.IsDisplayMath) && settings.DisplayDefaults ? MathLayoutStyle.Display : MathLayoutStyle.Text;
         var engine = new Engine(font, fontSize <= 0 ? 14.6667 : fontSize, settings);
         var box = engine.Row(equation.Runs, new Ctx(style, Cramped: false, Upright: false), depth: 0);
-        return new MathLayoutResult(box.Width, box.Ascent, box.Descent, style, box.Items);
+        // Word keeps the font's MathLeading of white space around an equation when it sizes the line, half
+        // above and half below its ink, so a line grown by a tall inline equation gets that leading too.
+        var leading = font.Constants.MathLeading * (fontSize <= 0 ? 14.6667 : fontSize) / 2;
+        return new MathLayoutResult(box.Width, box.Ascent, box.Descent, style, box.Items)
+        {
+            LineAscent = box.Ascent + leading,
+            LineDescent = box.Descent + leading
+        };
     }
 
     private readonly record struct Ctx(MathLayoutStyle Style, bool Cramped, bool Upright)

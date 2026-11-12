@@ -340,6 +340,16 @@ public sealed class EquationMathLayoutTests
     }
 
     [Fact]
+    public void LineBox_AddsHalfTheMathLeadingAboveAndBelowTheInk()
+    {
+        var layout = Layout("a/b");
+        var half = K.MathLeading * Size / 2;
+
+        layout.BoxAscent.Should().BeApproximately(layout.Ascent + half, 1e-9);
+        layout.BoxDescent.Should().BeApproximately(layout.Descent + half, 1e-9);
+    }
+
+    [Fact]
     public void PlainStyleText_IsDrawnUpright()
     {
         var items = Texts(Layout(new Equation([MathRun.PlainText("dx") with { IsUpright = true }, MathRun.PlainText("y")])));

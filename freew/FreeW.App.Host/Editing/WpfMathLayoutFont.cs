@@ -37,7 +37,6 @@ internal sealed class WpfMathLayoutFont : IMathLayoutFont
     public MathFontConstants Constants => _math?.Constants ?? MathFontConstants.CambriaMath;
 
     public double MinConnectorOverlap => _math?.MinConnectorOverlap ?? _estimated.MinConnectorOverlap;
-
     private static WpfMathLayoutFont Create()
     {
         try

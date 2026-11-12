@@ -15,7 +15,7 @@ public sealed class EquationVisualPlannerSourceGuardTests
         rendering.Should().Contain("new EquationMathVisual(equation");
         rendering.Should().Contain("BaselineAlignment = BaselineAlignment.Baseline");
         visual.Should().Contain("EquationMathLayout.Layout(equation, WpfMathLayoutFont.Instance");
-        visual.Should().Contain("TextBlock.SetBaselineOffset(this, Layout.Ascent)");
+        visual.Should().Contain("TextBlock.SetBaselineOffset(this, Layout.BoxAscent)");
         visual.Should().Contain("DrawGlyphRun");
         documentView.Should().Contain("BuildEquationRun(equation, run.Formatting.FontSizePt, document)");
         documentView.Should().NotContain("Text = equation.LinearText");

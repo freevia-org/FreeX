@@ -202,7 +202,6 @@ public interface IMathLayoutFont
 
     /// <summary>Minimum overlap between connecting assembly parts (OpenType MinConnectorOverlap).</summary>
     double MinConnectorOverlap { get; }
-
     /// <summary>Measures text drawn with the math font.</summary>
     MathTextMetrics MeasureText(string text);
 
