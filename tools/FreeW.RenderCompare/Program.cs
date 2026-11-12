@@ -163,9 +163,46 @@ internal static class Program
             var outPath = Path.Combine(outDir, $"{baseName}-p{i + 1}.png");
             using var fs = new FileStream(outPath, FileMode.Create, FileAccess.Write);
             encoder.Save(fs);
+            WritePageText(page.Visual, outDir, baseName, i + 1);
         }
 
         return pageCount;
+    }
+
+    /// <summary>
+    /// Writes the page's drawn characters (glyph-run order) to &lt;basename&gt;-p&lt;N&gt;.txt so a page
+    /// can be aligned against the text of the matching Word PDF page when hunting pagination drift.
+    /// </summary>
+    private static void WritePageText(Visual visual, string outDir, string baseName, int pageNumber)
+    {
+        var text = new StringBuilder();
+        CollectText(visual, text);
+        File.WriteAllText(Path.Combine(outDir, $"{baseName}-p{pageNumber}.txt"), text.ToString());
+    }
+
+    private static void CollectText(Visual visual, StringBuilder text)
+    {
+        if (VisualTreeHelper.GetDrawing(visual) is { } drawing)
+            CollectText(drawing, text);
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(visual); index++)
+        {
+            if (VisualTreeHelper.GetChild(visual, index) is Visual child)
+                CollectText(child, text);
+        }
+    }
+
+    private static void CollectText(Drawing drawing, StringBuilder text)
+    {
+        switch (drawing)
+        {
+            case GlyphRunDrawing { GlyphRun.Characters: { } characters }:
+                text.Append(characters.ToArray()).Append(' ');
+                break;
+            case System.Windows.Media.DrawingGroup group:
+                foreach (var child in group.Children)
+                    CollectText(child, text);
+                break;
+        }
     }
 
     private static DrawingVisual? RasterizeFloatingObjects(Canvas canvas, double pageWidth, double pageHeight)
@@ -231,6 +268,7 @@ internal static class Program
             var outPath = Path.Combine(outDir, $"{baseName}-p{index + 1}.png");
             using var fs = new FileStream(outPath, FileMode.Create, FileAccess.Write);
             encoder.Save(fs);
+            WritePageText(page.Visual, outDir, baseName, index + 1);
         }
 
         return pageCount;

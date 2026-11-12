@@ -361,17 +361,56 @@ internal static class PaginationEngine
         var segments = BuildPageSegments(modelBlocks, editor.Model.Page);
         var assignment = new int[modelBlocks.Count];
 
+        // The scratch flow is not always one block per model block: a table that pre-splits across
+        // pages renders as several top-level blocks and a run of list paragraphs coalesces into one
+        // WPF List. Segment by RENDERED block, or every section after such a block starts one block
+        // early -- on the previous section's (empty) section-break paragraph, which then sits alone on
+        // a blank page ahead of the BreakPageBefore that opens the real section.
+        var renderedStart = MapModelBlocksToRenderedBlocks(editor.Model, scratchBlocks.Length);
+        IReadOnlyList<FreeW.Core.Model.Block> segmentBlocks = modelBlocks;
+        var segmentAssignment = assignment;
+        if (renderedStart is not null && !IsIdentityMap(renderedStart, scratchBlocks.Length))
+        {
+            int RenderedBoundary(int modelIndex) =>
+                modelIndex < renderedStart.Length ? renderedStart[modelIndex] : scratchBlocks.Length;
+
+            var renderedOwners = new FreeW.Core.Model.Block[scratchBlocks.Length];
+            for (var modelIndex = 0; modelIndex < modelBlocks.Count; modelIndex++)
+            {
+                for (var rendered = renderedStart[modelIndex]; rendered < RenderedBoundary(modelIndex + 1); rendered++)
+                    renderedOwners[rendered] = modelBlocks[modelIndex];
+            }
+            segmentBlocks = renderedOwners;
+            segmentAssignment = new int[scratchBlocks.Length];
+            segments = segments
+                .Select(segment => segment with
+                {
+                    Start = RenderedBoundary(segment.Start),
+                    End = RenderedBoundary(segment.End),
+                })
+                .ToList();
+        }
+
         try
         {
             var pageOffset = 0;
             foreach (var segment in segments)
             {
                 pageOffset += ComputeSegmentPageAssignment(
-                    flow, scratchBlocks, modelBlocks, editor.Model, segment, pageOffset, assignment,
+                    flow, scratchBlocks, segmentBlocks, editor.Model, segment, pageOffset, segmentAssignment,
                     segmentPaginations);
             }
 
             totalPageCount = Math.Max(1, pageOffset);
+            if (!ReferenceEquals(segmentAssignment, assignment))
+            {
+                for (var modelIndex = 0; modelIndex < modelBlocks.Count; modelIndex++)
+                {
+                    assignment[modelIndex] = renderedStart![modelIndex] < segmentAssignment.Length
+                        ? segmentAssignment[renderedStart[modelIndex]]
+                        : Math.Max(0, totalPageCount - 1);
+                }
+            }
         }
         catch
         {
@@ -1146,57 +1185,80 @@ internal static class PaginationEngine
     private static void ApplyTableSectionBreakFlags(TextDocument document, FlowDocument flow)
     {
         var renderedBlocks = flow.Blocks.ToList();
-        var firstRenderedBlockByTableIndex = new Dictionary<int, int>();
-        var renderedIndex = 0;
-
-        for (var modelIndex = 0; modelIndex < document.Blocks.Count; modelIndex++)
-        {
-            if (document.Blocks[modelIndex] is FreeW.Core.Model.Paragraph
-                {
-                    Formatting.ListKind: not ListKind.None
-                } firstListParagraph)
-            {
-                var kind = firstListParagraph.Formatting.ListKind;
-                while (modelIndex + 1 < document.Blocks.Count
-                       && document.Blocks[modelIndex + 1] is FreeW.Core.Model.Paragraph
-                       {
-                           Formatting.ListKind: var nextKind
-                       }
-                       && nextKind == kind)
-                {
-                    modelIndex++;
-                }
-
-                renderedIndex++;
-                continue;
-            }
-
-            if (document.Blocks[modelIndex] is FreeW.Core.Model.Table table)
-            {
-                firstRenderedBlockByTableIndex[modelIndex] = renderedIndex;
-                renderedIndex += RenderedTopLevelBlockCount(document, table, modelIndex);
-                continue;
-            }
-
-            renderedIndex++;
-        }
-
         // Outline-collapsed or unsupported blocks can change the rendered sequence. Refuse to apply
         // any table boundary unless the renderer-neutral count reproduces the cloned flow exactly.
-        if (renderedIndex != renderedBlocks.Count)
+        if (MapModelBlocksToRenderedBlocks(document, renderedBlocks.Count) is not { } renderedStart)
             return;
 
-        foreach (var (modelIndex, firstRenderedIndex) in firstRenderedBlockByTableIndex)
+        for (var modelIndex = 1; modelIndex < document.Blocks.Count; modelIndex++)
         {
-            if (modelIndex == 0
+            if (document.Blocks[modelIndex] is not FreeW.Core.Model.Table
                 || document.Blocks[modelIndex - 1] is not FreeW.Core.Model.Paragraph previous
                 || !IsPageTypeSectionBreak(previous.SectionBreak))
             {
                 continue;
             }
 
-            ApplyBreakBefore(flow, renderedBlocks[firstRenderedIndex]);
+            ApplyBreakBefore(flow, renderedBlocks[renderedStart[modelIndex]]);
         }
+    }
+
+    /// <summary>
+    /// The index of the first top-level rendered block of every model block, mirroring how the body
+    /// renders: a run of same-kind list paragraphs coalesces into one WPF List (each paragraph maps to
+    /// it) and a table that pre-splits across pages renders as one block per page piece. Null when the
+    /// predicted sequence does not reproduce <paramref name="renderedCount"/> exactly (outline-collapsed
+    /// or unsupported blocks), so callers fall back rather than act on an uncertain mapping.
+    /// </summary>
+    internal static int[]? MapModelBlocksToRenderedBlocks(TextDocument document, int renderedCount)
+    {
+        var blocks = document.Blocks;
+        var renderedStart = new int[blocks.Count];
+        var renderedIndex = 0;
+
+        for (var modelIndex = 0; modelIndex < blocks.Count; modelIndex++)
+        {
+            if (blocks[modelIndex] is FreeW.Core.Model.Paragraph
+                {
+                    Formatting.ListKind: not ListKind.None
+                } firstListParagraph)
+            {
+                var kind = firstListParagraph.Formatting.ListKind;
+                renderedStart[modelIndex] = renderedIndex;
+                while (modelIndex + 1 < blocks.Count
+                       && blocks[modelIndex + 1] is FreeW.Core.Model.Paragraph
+                       {
+                           Formatting.ListKind: var nextKind
+                       }
+                       && nextKind == kind)
+                {
+                    modelIndex++;
+                    renderedStart[modelIndex] = renderedIndex;
+                }
+
+                renderedIndex++;
+                continue;
+            }
+
+            renderedStart[modelIndex] = renderedIndex;
+            renderedIndex += blocks[modelIndex] is FreeW.Core.Model.Table table
+                ? RenderedTopLevelBlockCount(document, table, modelIndex)
+                : 1;
+        }
+
+        return renderedIndex == renderedCount ? renderedStart : null;
+    }
+
+    private static bool IsIdentityMap(int[] renderedStart, int renderedCount)
+    {
+        if (renderedStart.Length != renderedCount)
+            return false;
+        for (var index = 0; index < renderedStart.Length; index++)
+        {
+            if (renderedStart[index] != index)
+                return false;
+        }
+        return true;
     }
 
     private static void ApplyBreakBefore(FlowDocument flow, System.Windows.Documents.Block target)
