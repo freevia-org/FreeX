@@ -356,8 +356,8 @@ internal static class DialogWindowDefaults
                 button.Classes.Set(DefaultedButtonClass, defaulted && button.IsEffectivelyEnabled);
         }
 
-        dialog.AddHandler(InputElement.GotFocusEvent, (_, _) => Update(), handledEventsToo: true);
-        dialog.AddHandler(InputElement.LostFocusEvent, (_, _) => Update(), handledEventsToo: true);
+        dialog.AddHandler(global::Avalonia.Input.InputElement.GotFocusEvent, (_, _) => Update(), handledEventsToo: true);
+        dialog.AddHandler(global::Avalonia.Input.InputElement.LostFocusEvent, (_, _) => Update(), handledEventsToo: true);
         Update();
         // Dialogs move the initial focus from their own Opened handlers or a posted callback.
         Dispatcher.UIThread.Post(Update, DispatcherPriority.Input);
