@@ -33,6 +33,7 @@ public sealed class TestLaneSolutionTests
             "tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj",
             "tests/FreeX.Fixtures/FreeX.Fixtures.csproj",
             "tests/FreeX.Integration.Tests/FreeX.Integration.Tests.csproj",
+            "tests/FreeX.Tools.Tests/FreeX.Tools.Tests.csproj",
             "tests/FreeX.ParityCompare.Tests/FreeX.ParityCompare.Tests.csproj",
             "tests/Free.Shared.AppServices.Tests/Free.Shared.AppServices.Tests.csproj",
             "tests/Free.Shared.Pdf.Tests/Free.Shared.Pdf.Tests.csproj",
