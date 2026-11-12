@@ -96,9 +96,9 @@ public class DefaultParagraphStyleRoundTripTests
 
         var styles = Part(written, "word/styles.xml").Root!.Elements(W + "style").ToList();
         styles.Single(s => s.Attribute(W + "styleId")!.Value == "a")
-            .Attribute(W + "default")?.Value.Should().Be("1");
+            .Attribute(W + "default")!.Value.Should().Be("1");
         styles.Single(s => s.Attribute(W + "styleId")!.Value == "a0")
-            .Attribute(W + "default")?.Value.Should().Be("1");
+            .Attribute(W + "default")!.Value.Should().Be("1");
         styles.Single(s => s.Attribute(W + "styleId")!.Value == "Plain")
             .Attribute(W + "default").Should().BeNull();
 
