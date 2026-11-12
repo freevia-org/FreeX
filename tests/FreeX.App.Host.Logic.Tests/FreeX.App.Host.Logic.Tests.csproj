@@ -38,7 +38,7 @@
   <ItemGroup>
     <Compile Include="../CommandTestInfrastructure/TestCommandContext.cs" Link="TestCommandContext.cs" />
     <Compile Include="../FreeX.App.Host.Tests/DialogSourceTestSupport.cs" Link="DialogSourceTestSupport.cs" />
-    <Compile Include="../FreeX.App.Host.Tests/LocalizationResourceTestSupport.cs" Link="LocalizationResourceTestSupport.cs" />
+    <Compile Include="../FreeX.Tools.Tests/LocalizationResourceTestSupport.cs" Link="LocalizationResourceTestSupport.cs" />
     <Compile Include="../FreeX.App.Host.Tests/LocalizedXamlTestSupport.cs" Link="LocalizedXamlTestSupport.cs" />
     <Compile Include="../FreeX.App.Host.Tests/SourceMethodExtractor.cs" Link="SourceMethodExtractor.cs" />
     <Compile Include="../FreeX.App.Host.Tests/RibbonXamlCatalogSnapshotReader.cs" Link="RibbonXamlCatalogSnapshotReader.cs" />
@@ -47,7 +47,7 @@
     <Compile Include="../SharedTestInfrastructure/FreeX/InMemoryPlatformClipboard.cs" Link="TestSupport/InMemoryPlatformClipboard.cs" />
     <Compile Include="../SharedTestInfrastructure/FreeX/TestFileAdapter.cs" Link="TestFileAdapter.cs" />
     <Compile Include="../SharedTestInfrastructure/FreeX/RibbonRuntimeCatalogPlanner.cs" Link="TestSupport/RibbonRuntimeCatalogPlanner.cs" />
-    <Compile Include="../FreeX.App.Host.Tests/WorkspaceFileLocator.cs" Link="WorkspaceFileLocator.cs" />
+    <Compile Include="../FreeX.Tools.Tests/WorkspaceFileLocator.cs" Link="WorkspaceFileLocator.cs" />
     <Compile Include="../FreeX.App.Host.Tests/FileAssociations/WindowsFileAssociationServiceTests.cs" Link="FileAssociations/WindowsFileAssociationServiceTests.cs" />
   </ItemGroup>
 

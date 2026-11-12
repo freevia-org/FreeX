@@ -436,11 +436,11 @@ foreach ($script in $toolScripts) {
 $managedSourceFiles = @($trackedPaths | Where-Object { $_ -match '(?i)\.(?:cs|csx|fs|fsx|vb)$' })
 $managedPathFixtureExceptions = @(
     # These fixtures deliberately feed Windows-separated project files into cross-platform parsers.
-    'tests/FreeX.App.Host.Tests/DotNetProjectReferencesPreflightTests.cs',
-    'tests/FreeX.App.Host.Tests/MacOsAppReadinessPreflightTests.cs',
+    'tests/FreeX.Tools.Tests/DotNetProjectReferencesPreflightTests.cs',
+    'tests/FreeX.Tools.Tests/MacOsAppReadinessPreflightTests.cs',
     # These source-contract tests target explicitly Windows-only evidence scripts.
     'freew/FreeW.App.Presentation.Tests/VisualEvidenceRunnerScriptTests.cs',
-    'tests/FreeX.App.Host.Tests/ScreenshotHarnessScriptTests.cs'
+    'tests/FreeX.Tools.Tests/ScreenshotHarnessScriptTests.cs'
 )
 $managedPathSpecs = @('*.cs', '*.csx', '*.fs', '*.fsx', '*.vb')
 $managedSourceCandidateSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
