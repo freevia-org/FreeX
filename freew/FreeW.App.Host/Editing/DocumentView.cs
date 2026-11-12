@@ -10521,10 +10521,11 @@ public sealed partial class DocumentView : RichTextBox
                     wpfCell.Padding = new Thickness(0);
                     if (modelRow.HeightRule == TableRowHeightRule.Exact && modelRow.HeightPt is > 0)
                     {
-                        // w:hRule="exact": the cell box is the authored height (the cell margins now
-                        // sit inside it) and Word clips text that does not fit instead of growing the
-                        // row. Only the text is clipped, never the border chrome.
-                        cellContentHost.Height = modelRow.HeightPt.Value * PxPerPoint;
+                        // w:hRule="exact": Word clips text that does not fit instead of growing the
+                        // row, and lays the cell box out at the authored height plus the cell's top
+                        // margin (see ExactRowCellBoxHeightDip). Only the text is clipped, never the
+                        // border chrome.
+                        cellContentHost.Height = ExactRowCellBoxHeightDip(modelRow, ordinaryCellMargins, flowCellSpacingDip, isHeaderRow: rowIndex == 0 && table.Formatting.RepeatHeaderRow);
                         contentStack.MaxHeight = Math.Max(
                             0,
                             cellContentHost.Height - contentStack.Margin.Top - contentStack.Margin.Bottom);
@@ -10536,13 +10537,33 @@ public sealed partial class DocumentView : RichTextBox
                 {
                     // Keep the authored row height around its content. Appending a separate spacer
                     // below the content makes WPF add the two heights together.
-                    wpfCell.Blocks.Add(new BlockUIContainer(BuildCellContentHost(
+                    var heightHost = BuildCellContentHost(
                         modelCell,
                         document,
                         vAlign,
                         rowHeightPx,
                         cellBorderPlan,
-                        preservedNumberingMarkers)));
+                        preservedNumberingMarkers);
+                    if (modelRow.HeightRule == TableRowHeightRule.Exact && modelRow.HeightPt is > 0)
+                    {
+                        // Same exact-row box as a bordered cell: the vertical margins sit inside the
+                        // fixed box instead of growing it as cell padding. FlowDocument adds ~1 DIP of
+                        // cell chrome (the shared grid line) around the host, measured on the fixtures.
+                        var heightStack = heightHost.Children.OfType<System.Windows.Controls.StackPanel>().First();
+                        heightStack.Margin = new Thickness(
+                            heightStack.Margin.Left,
+                            wpfCell.Padding.Top,
+                            heightStack.Margin.Right,
+                            wpfCell.Padding.Bottom);
+                        wpfCell.Padding = new Thickness(wpfCell.Padding.Left, 0, wpfCell.Padding.Right, 0);
+                        heightHost.Height = Math.Max(0, ExactRowCellBoxHeightDip(modelRow, ordinaryCellMargins, flowCellSpacingDip, isHeaderRow: rowIndex == 0 && table.Formatting.RepeatHeaderRow) - 1);
+                        heightHost.MinHeight = 0;
+                        heightStack.MaxHeight = Math.Max(
+                            0,
+                            heightHost.Height - heightStack.Margin.Top - heightStack.Margin.Bottom);
+                        heightStack.ClipToBounds = true;
+                    }
+                    wpfCell.Blocks.Add(new BlockUIContainer(heightHost));
                 }
                 else if (modelCell.TextDirection != CellTextDirection.Horizontal)
                 {
@@ -11004,6 +11025,25 @@ public sealed partial class DocumentView : RichTextBox
         }
 
         return textBlocks;
+    }
+
+    /// <summary>
+    /// The laid-out cell box of a w:hRule="exact" row, fitted to Word's own rendering of the table
+    /// fixtures (row pitch measured per row in pixels): an exact row's pitch is the authored height plus
+    /// the cell's top margin -- 54pt body rows with 2pt tcMar pitch 74.6px (72 + 2.67) and 30pt header
+    /// rows 43-43.5px (40 + 2.67). In a table with cell spacing, body rows add the spacing gap on top
+    /// (58pt rows pitch 84.3px = 77.3 + 2.67 + 4.8) while a w:tblHeader row keeps the same 43px pitch,
+    /// its box giving up the gap (38px). WPF adds <paramref name="cellSpacingDip"/> itself, so the box
+    /// returned here is the pitch less that gap.
+    /// </summary>
+    internal static double ExactRowCellBoxHeightDip(
+        ModelTableRow row,
+        TableCellMargins margins,
+        double cellSpacingDip = 0,
+        bool isHeaderRow = false)
+    {
+        var pitchDip = ((row.HeightPt ?? 0) + Math.Max(0, margins.TopPt)) * PxPerPoint;
+        return Math.Max(0, isHeaderRow || row.IsRepeatingHeader ? pitchDip - cellSpacingDip : pitchDip);
     }
 
     private static double TrailingCellParagraphSpaceAfterDip(WpfTableCell cell)

@@ -204,7 +204,7 @@ public sealed class TableCellBorderVisualPlannerTests
     [Theory]
     [InlineData(BorderLineStyle.Single, true, 2.0, 2.0)]
     [InlineData(BorderLineStyle.Thick, true, 2.0, 2.0)]
-    [InlineData(BorderLineStyle.Double, true, 2.0, 5.0)]
+    [InlineData(BorderLineStyle.Double, true, 2.0, 6.0)]
     [InlineData(BorderLineStyle.Wave, true, 2.0, 0.0)]
     [InlineData(BorderLineStyle.Single, false, 2.0, 0.0)]
     public void StrokeExtentDip_CoversEveryStrokeTheEdgeDraws(

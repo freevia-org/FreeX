@@ -1710,7 +1710,9 @@ public sealed class DocumentViewRoundTripTests
             .RowGroups.Single().Rows.Single().Cells.Single();
         var host = wpfCell.Blocks.OfType<BlockUIContainer>().Single();
         var grid = host.Child.Should().BeOfType<System.Windows.Controls.Grid>().Subject;
-        grid.MinHeight.Should().BeApproximately(heightPt * pxPerPt - 2, 0.01,
+        // Default cell margins have no top margin, so the fixed box is the authored height less the
+        // ~1 DIP grid line FlowDocument draws around the host.
+        grid.Height.Should().BeApproximately(heightPt * pxPerPt - 1, 0.01,
             "exact row heights include the surrounding FlowDocument cell chrome");
     }
 
@@ -2102,15 +2104,21 @@ public sealed class DocumentViewRoundTripTests
         tableSections[1].BreakPageBefore.Should().BeTrue();
         wpfTables[0].RowGroups.SelectMany(group => group.Rows).Should().HaveCount(5);
         wpfTables[1].RowGroups.SelectMany(group => group.Rows).Should().HaveCount(5);
-        wpfTables[1].RowGroups[0].Rows[1].Cells[0].Padding.Top.Should().BeApproximately(
+        wpfTables[1].RowGroups[0].Rows[1].Cells[0].Padding.Top.Should().Be(0,
+            "an exact-height row keeps its vertical cell margin inside the fixed row box");
+        CellContentStack(wpfTables[1].RowGroups[0].Rows[1].Cells[0]).Margin.Top.Should().BeApproximately(
             (modelTable.Rows[5].Cells[0].Margins ?? modelTable.DefaultCellMargins!).TopPt * (96.0 / 72.0),
             0.001,
-            "a page segment honours the authored w:tblCellMar exactly like an unsplit flow table");
+            "a page segment honours the authored tcMar exactly like an unsplit flow table");
         wpfTables.Should().OnlyContain(table => table.CellSpacing == 0,
             "Word collapses cell borders unless w:tblCellSpacing is authored, on every page segment");
         CellContentStack(wpfTables[1].RowGroups[0].Rows[1].Cells[0]).RenderTransform
             .Should().BeSameAs(System.Windows.Media.Transform.Identity,
                 "the no-cell-spacing pagination control keeps its existing content baseline");
+        // Word pitches these 54pt exact rows at 74.6px (authored height + 2pt top margin); FlowDocument
+        // adds ~1 DIP of grid line around the host.
+        var bodyHost = (System.Windows.Controls.Grid)CellContentStack(wpfTables[1].RowGroups[0].Rows[1].Cells[0]).Parent;
+        (bodyHost.Height + 1).Should().BeApproximately(74.6, 0.5);
 
         var renderedRows = wpfTables.SelectMany(table => table.RowGroups.SelectMany(group => group.Rows)).ToList();
         renderedRows.Should().HaveCount(modelTable.Rows.Count + repeatedPage.RepeatedHeaderRowIndexes.Count);
@@ -2644,8 +2652,14 @@ public sealed class DocumentViewRoundTripTests
                 + TableCellBorderVisualPlanner.StrokeExtentDip(borderPlan.Edge(TableCellBorderVisualEdge.Top)),
             0.01);
         var exactRowHost = (System.Windows.Controls.Grid)contentStack.Parent;
-        exactRowHost.Height.Should().BeApproximately(sourceTable.Rows[3].HeightPt!.Value * (96.0 / 72.0), 0.01,
-            "an exact-height row is exactly its authored height, margins included");
+        // Fitted to Word's rendering of this fixture: an exact body row pitches at the authored height
+        // plus the cell's top margin plus the spacing gap (58pt + 2pt tcMar + 2 x 1.8pt = 84.3px).
+        exactRowHost.Height.Should().BeApproximately(
+            (sourceTable.Rows[3].HeightPt!.Value + resolvedMargins.TopPt) * (96.0 / 72.0), 0.01);
+        (exactRowHost.Height + tables[1].CellSpacing).Should().BeApproximately(84.3, 0.6);
+        var headerHost = (System.Windows.Controls.Grid)CellContentStack(tables[1].RowGroups[0].Rows[0].Cells[0]).Parent;
+        (headerHost.Height + tables[1].CellSpacing).Should().BeApproximately(43, 0.6,
+            "a w:tblHeader row keeps Word's unspaced 43px pitch in a spaced table");
         contentStack.ClipToBounds.Should().BeTrue("Word clips text that overflows an exact-height row");
         RenderedRowText(pageRows[0][0]).Should().Contain("Page area");
         RenderedRowText(pageRows[0][1]).Should().Contain("Segment 1");

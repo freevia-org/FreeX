@@ -169,8 +169,10 @@ public static class TableCellBorderVisualPlanner
         ArgumentNullException.ThrowIfNull(edge);
         if (!edge.IsVisible || edge.IsWave)
             return 0;
+        // Word's double rule is line + gap + line, each the authored width, so it occupies three
+        // widths; the two strokes BuildStrokeSegments draws stay inside that band.
         return edge.IsDouble
-            ? Math.Max(1.0, edge.WidthDip * 1.5) + edge.WidthDip
+            ? Math.Max(Math.Max(1.0, edge.WidthDip * 1.5) + edge.WidthDip, edge.WidthDip * 3)
             : edge.WidthDip;
     }
 
