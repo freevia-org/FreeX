@@ -409,4 +409,113 @@ public class EquationLinearOmmlFidelityTests
         string.Concat(DocumentXml(package).Descendants(M + "oMath").Single().Descendants(M + "t").Select(t => t.Value))
             .Should().Be("fallback");
     }
+
+    private static string? RunStyle(XElement mathRun) =>
+        mathRun.Element(M + "rPr")?.Element(M + "sty")?.Attribute(M + "val")?.Value;
+
+    [Theory]
+    [InlineData("sin x", "sin")]
+    [InlineData(@"cos\funcapply(x)", "cos")]
+    [InlineData("log x", "log")]
+    public void FunctionNames_AreWrittenAsPlainStyleRuns_AsWordWritesThem(string linear, string name)
+    {
+        var package = Write(DocumentWith(EquationLinearFormat.Parse(linear)));
+
+        AssertValid(package, "plain-style function names must be schema-valid");
+        var function = DocumentXml(package).Descendants(M + "func").Single();
+        var nameRun = function.Element(M + "fName")!.Elements(M + "r").Single();
+        nameRun.Element(M + "t")!.Value.Should().Be(name);
+        RunStyle(nameRun).Should().Be("p", "Word draws m:sty p text upright");
+        function.Element(M + "e")!.Descendants(M + "r").Should().OnlyContain(run => RunStyle(run) == null,
+            "the argument keeps the default math italic");
+    }
+
+    [Fact]
+    public void LimitAndExponentFunctionNames_KeepOnlyTheNameUpright()
+    {
+        var package = Write(DocumentWith(EquationLinearFormat.Parse("lim_(x->0) f+cos^2 x")));
+
+        var functions = DocumentXml(package).Descendants(M + "func").ToList();
+        functions.Should().HaveCount(2);
+        var limit = functions[0].Element(M + "fName")!.Element(M + "limLow")!;
+        limit.Element(M + "e")!.Elements(M + "r").Should().OnlyContain(run => RunStyle(run) == "p");
+        limit.Element(M + "lim")!.Descendants(M + "r").Should().OnlyContain(run => RunStyle(run) == null);
+        var power = functions[1].Element(M + "fName")!.Element(M + "sSup")!;
+        power.Element(M + "e")!.Elements(M + "r").Should().OnlyContain(run => RunStyle(run) == "p");
+        power.Element(M + "sup")!.Descendants(M + "r").Should().OnlyContain(run => RunStyle(run) == null);
+    }
+
+    [Fact]
+    public void PlainStyleOmml_RoundTripsStably()
+    {
+        var equation = EquationLinearFormat.Parse(@"lim_(x->0) (sin x)+cos^2 x+f\funcapply(x)");
+        equation.Runs.Add(MathRun.PlainText("d") with { IsUpright = true });
+
+        var first = Write(DocumentWith(equation));
+        var reread = Read(first).Paragraphs.Single().Runs.Single(run => run.Equation is not null).Equation!;
+        var second = Write(DocumentWith(reread));
+
+        reread.Runs.Last().IsUpright.Should().BeTrue();
+        XNode.DeepEquals(
+                Normalize(DocumentXml(first).Descendants(M + "oMath").Single()),
+                Normalize(DocumentXml(second).Descendants(M + "oMath").Single()))
+            .Should().BeTrue("writing what was read must reproduce the same OMML");
+    }
+
+    [Theory]
+    [InlineData("undOvr", MathLimitLocation.UnderOver)]
+    [InlineData("subSup", MathLimitLocation.SubSup)]
+    public void ExplicitNAryLimitLocation_RoundTrips(string value, MathLimitLocation expected)
+    {
+        var equation = ReadSingleEquation(
+            "<m:oMath><m:nary><m:naryPr><m:chr m:val=\"∫\"/><m:limLoc m:val=\"" + value + "\"/></m:naryPr>"
+            + "<m:sub>" + WordRun("0") + "</m:sub><m:sup>" + WordRun("1") + "</m:sup><m:e>" + WordRun("x") + "</m:e></m:nary></m:oMath>");
+        equation.Runs.Single().NAryLimitLocation.Should().Be(expected);
+
+        var package = Write(DocumentWith(equation));
+
+        AssertValid(package, "m:limLoc must be written in schema order");
+        DocumentXml(package).Descendants(M + "limLoc").Single().Attribute(M + "val")!.Value.Should().Be(value);
+        Read(package).Paragraphs.Single().Runs.Single(run => run.Equation is not null).Equation!.Runs.Single()
+            .NAryLimitLocation.Should().Be(expected);
+    }
+
+    [Fact]
+    public void NAryWithoutLimitLocation_StillWritesNone()
+    {
+        var package = Write(DocumentWith(EquationLinearFormat.Parse(@"\sum_(i=1)^n i")));
+
+        DocumentXml(package).Descendants(M + "limLoc").Should().BeEmpty("the document default (m:naryLim) applies");
+    }
+
+    [Fact]
+    public void GroupCharacterVerticalJustification_RoundTrips_AndOverbraceIsWrittenAsWordDoes()
+    {
+        var read = ReadSingleEquation(
+            "<m:oMath><m:groupChr><m:groupChrPr><m:chr m:val=\"⏞\"/><m:pos m:val=\"top\"/><m:vertJc m:val=\"bot\"/></m:groupChrPr>"
+            + "<m:e>" + WordRun("x+y") + "</m:e></m:groupChr></m:oMath>");
+        read.Runs.Single().GroupChrVerticalJustification.Should().Be("bot");
+
+        var package = Write(DocumentWith(EquationLinearFormat.Parse(@"\overbrace(x+y)+\underbrace(a)")));
+
+        AssertValid(package, "m:vertJc must be written in schema order");
+        var groups = DocumentXml(package).Descendants(M + "groupChrPr").ToList();
+        groups[0].Element(M + "vertJc")!.Attribute(M + "val")!.Value.Should().Be("bot",
+            "Word's over-brace keeps its base on the baseline with m:vertJc bot");
+        groups[1].Element(M + "vertJc").Should().BeNull();
+        Read(package).Paragraphs.Single().Runs.Single(run => run.Equation is not null).Equation!.Runs[0]
+            .GroupChrVerticalJustification.Should().Be("bot");
+    }
+
+    [Theory]
+    [InlineData("<m:rPr><m:sty m:val=\"p\"/></m:rPr>", true)]
+    [InlineData("<m:rPr><m:nor/></m:rPr>", true)]
+    [InlineData("<m:rPr><m:sty m:val=\"i\"/></m:rPr>", false)]
+    [InlineData("", false)]
+    public void WordAuthoredRunStyle_ReadsAsUprightText(string properties, bool upright)
+    {
+        var equation = ReadSingleEquation("<m:oMath><m:r>" + properties + "<m:t>dx</m:t></m:r></m:oMath>");
+
+        equation.Runs.Single().IsUpright.Should().Be(upright);
+    }
 }

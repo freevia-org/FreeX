@@ -33,7 +33,8 @@ public sealed partial class DocumentView
     internal static FrameworkElement BuildEquationPreview(Equation equation)
     {
         ArgumentNullException.ThrowIfNull(equation);
-        return BuildEquationVisualContent(EquationVisualPlanner.Build(equation));
+        // The editor preview is read at a comfortable 20 DIP (15 pt) regardless of the document's size.
+        return BuildEquationMathVisual(equation, fontSizePt: 15);
     }
 
     /// <summary>
@@ -58,7 +59,7 @@ public sealed partial class DocumentView
             Document.Blocks.Add(paragraph);
         }
 
-        InsertInlineAt(paragraph, caret, BuildEquationRun(equation));
+        InsertInlineAt(paragraph, caret, BuildEquationRun(equation, document: _model));
         CommitToModel();
         if (equation.IsDisplayMath && !IsOnItsOwnLine(equation))
             EquationEditPlanner.TryReplace(_model, equation, equation);

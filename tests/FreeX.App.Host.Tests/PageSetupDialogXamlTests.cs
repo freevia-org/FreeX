@@ -74,7 +74,7 @@ public sealed class PageSetupDialogXamlTests
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("PageSetupDialogPlanner.PlanInitialFocus(");
         source.Should().Contain("FocusDialogTarget(plan);");
-        source.Should().Contain("_ => OrientationBox");
+        source.Should().Contain("_ => CheckedChoiceRadio(PortraitRadioButton, LandscapeRadioButton)");
         source.Should().Contain("Keyboard.Focus(target);");
     }
 
@@ -173,7 +173,7 @@ public sealed class PageSetupDialogXamlTests
     {
         var source = ReadPageSetupDialogSource();
 
-        source.Should().Contain("PopulateChoiceBox(OrientationBox, PageSetupDialogPlanner.OrientationChoices)");
+        source.Should().Contain("SetChoiceRadios(surface.ChoiceIndexes.Orientation, PortraitRadioButton, LandscapeRadioButton)");
         source.Should().Contain("PageSetupDialogPlanner.PlanSurface(_sourceSheet, Fields)");
         source.Should().Contain("surface.ChoiceIndexes.Orientation");
         source.Should().Contain("PageSetupDialogPlanner.BuildFields(Fields, new PageSetupDialogSurfaceInput");
@@ -199,9 +199,7 @@ public sealed class PageSetupDialogXamlTests
 
         foreach (var comboBoxName in new[]
         {
-            "OrientationBox",
             "PaperSizeBox",
-            "PageOrderBox",
             "PrintErrorValueBox",
             "PrintCommentsBox"
         })
@@ -212,7 +210,7 @@ public sealed class PageSetupDialogXamlTests
         }
 
         source.Should().Contain("PopulateChoiceBox(PaperSizeBox, PageSetupDialogPlanner.PaperSizeChoices)");
-        source.Should().Contain("PopulateChoiceBox(PageOrderBox, PageSetupDialogPlanner.PageOrderChoices)");
+        source.Should().Contain("SetChoiceRadios(surface.ChoiceIndexes.PageOrder, DownThenOverRadioButton, OverThenDownRadioButton)");
         source.Should().Contain("PopulateChoiceBox(PrintErrorValueBox, PageSetupDialogPlanner.PrintErrorValueChoices)");
         source.Should().Contain("PopulateChoiceBox(PrintCommentsBox, PageSetupDialogPlanner.PrintCommentChoices)");
     }
@@ -226,15 +224,17 @@ public sealed class PageSetupDialogXamlTests
             var dialog = new PageSetupDialog(sheet);
             try
             {
-                ComboItemTags((ComboBox)dialog.FindName("OrientationBox"))
-                    .Should()
-                    .Equal(PageSetupDialogPlanner.OrientationChoices.Choices.Select(choice => choice.Value.ToString()));
+                // Orientation and page order are Excel-style radio pairs in the planner's choice order.
+                PageSetupDialogPlanner.OrientationChoices.Choices.Select(choice => choice.Value.ToString())
+                    .Should().Equal("Portrait", "Landscape");
+                ((RadioButton)dialog.FindName("PortraitRadioButton")).IsChecked.Should().BeTrue();
+                ((RadioButton)dialog.FindName("LandscapeRadioButton")).IsChecked.Should().BeFalse();
+                PageSetupDialogPlanner.PageOrderChoices.Choices.Select(choice => choice.Value.ToString())
+                    .Should().Equal("DownThenOver", "OverThenDown");
+                ((RadioButton)dialog.FindName("DownThenOverRadioButton")).IsChecked.Should().BeTrue();
                 ComboItemTags((ComboBox)dialog.FindName("PaperSizeBox"))
                     .Should()
                     .Equal(PageSetupDialogPlanner.PaperSizeChoices.Choices.Select(choice => choice.Value.ToString()));
-                ComboItemTags((ComboBox)dialog.FindName("PageOrderBox"))
-                    .Should()
-                    .Equal(PageSetupDialogPlanner.PageOrderChoices.Choices.Select(choice => choice.Value.ToString()));
                 ComboItemTags((ComboBox)dialog.FindName("PrintErrorValueBox"))
                     .Should()
                     .Equal(PageSetupDialogPlanner.PrintErrorValueChoices.Choices.Select(choice => choice.Value.ToString()));
@@ -585,7 +585,8 @@ public sealed class PageSetupDialogXamlTests
             {
                 ((CheckBox)dialog.FindName("CenterHorizontallyBox")).IsChecked = true;
                 ((CheckBox)dialog.FindName("CenterVerticallyBox")).IsChecked = true;
-                SelectComboItemByTag((ComboBox)dialog.FindName("PageOrderBox"), "OverThenDown");
+                ((RadioButton)dialog.FindName("OverThenDownRadioButton")).IsChecked = true;
+                ((RadioButton)dialog.FindName("LandscapeRadioButton")).IsChecked = true;
 
                 InvokePrivateAllowingNonModalDialogResult(dialog, "OkButton_Click");
                 var build = PageSetupSubmissionPlanner.TryBuild(sheet, dialog.Fields);
@@ -596,6 +597,7 @@ public sealed class PageSetupDialogXamlTests
                 sheet.CenterHorizontallyOnPage.Should().BeTrue();
                 sheet.CenterVerticallyOnPage.Should().BeTrue();
                 sheet.PageOrder.Should().Be(WorksheetPageOrder.OverThenDown);
+                sheet.PageOrientation.Should().Be(WorksheetPageOrientation.Landscape);
             }
             finally
             {
@@ -640,13 +642,6 @@ public sealed class PageSetupDialogXamlTests
             .OfType<ComboBoxItem>()
             .Select(item => item.Tag as string ?? "")
             .ToList();
-
-    private static void SelectComboItemByTag(ComboBox comboBox, string tag)
-    {
-        comboBox.SelectedItem = comboBox.Items
-            .OfType<ComboBoxItem>()
-            .Single(item => string.Equals(item.Tag as string, tag, StringComparison.Ordinal));
-    }
 
     private static void InvokePrivateAllowingNonModalDialogResult(PageSetupDialog dialog, string methodName)
         => DialogSourceTestSupport.InvokePrivateHandlerAllowingNonModalDialogResult(dialog, methodName);

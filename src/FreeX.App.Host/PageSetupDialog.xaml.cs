@@ -123,7 +123,7 @@ public partial class PageSetupDialog : Window
 
         return PageSetupDialogPlanner.BuildFields(Fields, new PageSetupDialogSurfaceInput
         {
-            OrientationIndex = OrientationBox.SelectedIndex,
+            OrientationIndex = ReadChoiceRadios(LandscapeRadioButton),
             PaperSizeIndex = PaperSizeBox.SelectedIndex,
             MarginsText = PageSetupDialogPlanner.BuildMarginsText(margins),
             HeaderMarginText = HeaderMarginBox.Text,
@@ -147,7 +147,7 @@ public partial class PageSetupDialog : Window
             PrintDraftQuality = PrintDraftQualityBox.IsChecked == true,
             PrintErrorValueIndex = PrintErrorValueBox.SelectedIndex,
             PrintCommentsIndex = PrintCommentsBox.SelectedIndex,
-            PageOrderIndex = PageOrderBox.SelectedIndex,
+            PageOrderIndex = ReadChoiceRadios(OverThenDownRadioButton),
             HeaderFooter = new HeaderFooterEditorState(
                 Header,
                 Footer,

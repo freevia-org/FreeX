@@ -1349,14 +1349,18 @@ public sealed partial class MainWindow
             Child = categoryList,
         };
         Grid.SetColumn(categoryFrame, 0);
+        // OptionsDialog.xaml pads the page by 28,20 inside its ScrollViewer. The padding is a margin on
+        // the scrolled content here: Avalonia leaves a ScrollViewer's Padding out of the scroll extent,
+        // so a page that overflowed only into the bottom padding (Formulas) was clipped there with no
+        // scrollbar. As content margin it counts toward the extent and the page scrolls as in WPF.
+        contentHost.Margin = new Thickness(
+            OptionsDialogPlanner.ContentPaddingHorizontal,
+            OptionsDialogPlanner.ContentPaddingVertical,
+            OptionsDialogPlanner.ContentPaddingHorizontal,
+            OptionsDialogPlanner.ContentPaddingVertical);
         var scrollHost = new ScrollViewer
         {
             Content = contentHost,
-            Padding = new Thickness(
-                OptionsDialogPlanner.ContentPaddingHorizontal,
-                OptionsDialogPlanner.ContentPaddingVertical,
-                OptionsDialogPlanner.ContentPaddingHorizontal,
-                OptionsDialogPlanner.ContentPaddingVertical),
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             // WPF's ScrollViewer leaves horizontal scrolling Disabled, so a page is laid out at the
             // viewport width. Hidden measured pages at an unbounded width, which let the stretching

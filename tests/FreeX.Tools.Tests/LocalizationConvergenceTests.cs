@@ -12,6 +12,7 @@ namespace FreeX.App.Host.Tests;
 /// and the Host resx files have been deleted). These tests now prove the Loc catalog is a
 /// complete superset with valid content, and that all 43 satellite locales are loadable.
 /// </summary>
+[Collection(ToolsTestCollections.Serial)]
 public sealed class LocalizationConvergenceTests
 {
     // The 43 satellite locales in the shared Loc catalog.

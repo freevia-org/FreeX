@@ -1573,6 +1573,26 @@ exec pwsh -NoProfile -File "$(dirname "$0")/capture-process.ps1" "$@"
     Write-Host "Validated synthetic tool process forwarding and failure behavior."
 }
 
+function Assert-InvokeThrottledContract {
+    param([Parameter(Mandatory = $true)][string]$ToolRoot)
+
+    # Real child processes against a private slot namespace: exit-code pass-through, slot release on
+    # failure and on a killed holder, the slot limit, and the FREEX_THROTTLE_DISABLE / GITHUB_ACTIONS bypasses.
+    $selfTest = Join-Path $ToolRoot "Test-InvokeThrottled.ps1"
+    # The throttle scripts require PowerShell 7 (#requires), while this validator is also run under
+    # Windows PowerShell 5.1 (the repository tests launch it through powershell.exe), where
+    # [Environment]::ProcessPath does not exist and the host could not run them anyway. Always run
+    # the self-test under pwsh; hosted runners and the documented local setup both provide it.
+    $pwshCommand = Get-Command pwsh -ErrorAction SilentlyContinue
+    if ($null -eq $pwshCommand) {
+        Write-Host "Skipping the Invoke-Throttled contract self-test: pwsh (PowerShell 7) is not installed on this machine."
+        return
+    }
+    & $pwshCommand.Source -NoProfile -File $selfTest
+    if ($LASTEXITCODE -ne 0) {
+        throw "Test-InvokeThrottled.ps1 failed with exit code $LASTEXITCODE."
+    }
+}
 function Assert-GeneratedDocCheckNewlineSemantics {
     param([Parameter(Mandatory = $true)][string]$ToolRoot)
 
@@ -1841,6 +1861,7 @@ if ($resolvedDirectory.Equals($toolsRoot, [System.StringComparison]::OrdinalIgno
     Assert-GeneratedDocCheckNewlineSemantics -ToolRoot $resolvedDirectory
     Assert-PortableDialogPngAnalyzer -RepoRoot $repoRoot -ToolRoot $resolvedDirectory
     Assert-FidelityCorpusDownloaderBehavior -ToolRoot $resolvedDirectory
+    Assert-InvokeThrottledContract -ToolRoot $resolvedDirectory
     Assert-WindowsArtifactSigningContract -ToolRoot $resolvedDirectory
 }
 

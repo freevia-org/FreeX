@@ -101,6 +101,23 @@
       ]
     },
     {
+      "id": "freex-tools",
+      "costHintMinutes": 7,
+      "app": "FreeX",
+      "gate": "commit",
+      "platforms": ["windows"],
+      "impactPaths": [
+        ".github/**",
+        "eng/**",
+        "tools/**",
+        "src/FreeX.App.Localization/**",
+        "shared/Free.Shared.Localization/**"
+      ],
+      "projects": [
+        "tests/FreeX.Tools.Tests/FreeX.Tools.Tests.csproj"
+      ]
+    },
+    {
       "id": "freex-wpf-shell",
       "costHintMinutes": 7,
       "app": "FreeX",

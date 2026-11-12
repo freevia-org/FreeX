@@ -52,8 +52,12 @@ public sealed class FreeXR14T11Tests
             window.BeginFormulaEditForTest(address, "hello");
             window.RaiseFormulaBoxKeyDownForTest(new KeyEventArgs { Key = Key.Enter, KeyModifiers = KeyModifiers.None });
 
+            // macOS deliberately skips the live region (Avalonia 12.0.4 native raiseLiveRegionChanged
+            // abort, see MainWindow.StatusBar.EnsureStatusTextLiveRegion).
             global::Avalonia.Automation.AutomationProperties.GetLiveSetting(window.StatusTextForTest)
-                .Should().Be(global::Avalonia.Automation.AutomationLiveSetting.Polite,
+                .Should().Be(OperatingSystem.IsMacOS()
+                    ? global::Avalonia.Automation.AutomationLiveSetting.Off
+                    : global::Avalonia.Automation.AutomationLiveSetting.Polite,
                     "a rejected formula-bar commit must mark _statusText as a Polite live region so a " +
                     "screen reader announces the rejection — previously CommitFormulaBox's failure " +
                     "branch bypassed EnsureStatusTextLiveRegion entirely");

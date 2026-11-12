@@ -922,9 +922,9 @@ public sealed class AvaloniaMainWindowChromeSourceTests
             "PageLayout",
             "PageLayoutCommandSession.cs"));
 
-        source.Should().Contain("PageSetupDialogPlanner.OrientationChoices");
+        source.Should().Contain("PageSetupDialogPlanner.PortraitRadioAutomationId");
         source.Should().Contain("PageSetupDialogPlanner.PaperSizeChoices");
-        source.Should().Contain("PageSetupDialogPlanner.PageOrderChoices");
+        source.Should().Contain("PageSetupDialogPlanner.OverThenDownRadioAutomationId");
         source.Should().Contain("PageSetupDialogPlanner.PrintErrorValueChoices");
         source.Should().Contain("PageSetupDialogPlanner.PrintCommentChoices");
         source.Should().Contain("PageSetupDialogPlanner.ResolveChoiceLabels(");

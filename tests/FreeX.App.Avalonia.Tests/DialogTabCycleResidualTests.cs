@@ -26,7 +26,7 @@ public sealed class DialogTabCycleResidualTests
     private static readonly IReadOnlyDictionary<string, string> ExpectedInitialFocus =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["dialog.PageSetup"] = "passed:ComboBox#PageSetupOrientationBox",
+            ["dialog.PageSetup"] = "passed:RadioButton#PageSetupPortraitRadio",
             ["dialog.LegalNotices"] = "passed:TextBox#LegalNoticesProjectLicenseText",
             ["dialog.PivotFieldFilter"] = "passed:TextBox#PivotItemFilterSearchBox",
             ["dialog.PivotValueFieldSettings"] = "passed:TextBox#PivotValueFieldSettingsNameBox",
