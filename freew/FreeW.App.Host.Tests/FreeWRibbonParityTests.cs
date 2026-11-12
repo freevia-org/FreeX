@@ -1262,6 +1262,8 @@ public sealed class FreeWRibbonParityTests
                 // Start Mail Merge group
                 "freew.start-mail-merge",
                 "freew.merge-data",
+                "freew.merge-type-new-list",
+                "freew.merge-use-existing-list",
                 "freew.merge-edit-recipients",
                 "freew.merge-filter-sort",
                 // Write & Insert Fields group
@@ -1288,6 +1290,8 @@ public sealed class FreeWRibbonParityTests
                 "Labels",
                 "Start Mail Merge",
                 "Select Recipients",
+                "Type a New List",
+                "Use an Existing List",
                 "Edit Recipient List",
                 "Filter & Sort Recipients",
                 "Address Block",

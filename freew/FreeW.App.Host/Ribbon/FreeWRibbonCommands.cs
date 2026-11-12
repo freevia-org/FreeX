@@ -1295,6 +1295,9 @@ internal static class FreeWRibbonCommands
                     emailDocuments: indexes => emailMergeCommand.Execute(indexes)),
                 SendEmail: emailMergeCommand,
                 FindRecipient: new FindMergeRecipientCommand(editor, mergeSession),
+                TypeNewList: new TypeNewRecipientListCommand(editor, mergeSession),
+                UseExistingList: new UseExistingRecipientListCommand(editor, mergeSession),
+                EditRecipients: new EditRecipientListCommand(editor, mergeSession),
                 CheckErrors: new CheckMergeErrorsCommand(
                     editor,
                     mergeSession,

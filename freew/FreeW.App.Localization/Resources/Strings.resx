@@ -1031,4 +1031,67 @@
   <data name="StyleGallery_Context_Modify" xml:space="preserve"><value>Modify…</value></data>
   <data name="StyleGallery_Context_RemoveFromGallery" xml:space="preserve"><value>Remove from Style Gallery</value></data>
   <data name="StyleGallery_Context_DeleteFormat" xml:space="preserve"><value>Delete {0}…</value></data>
+  <data name="MailMerge_Source_SelectTitle" xml:space="preserve"><value>Select Data Source</value></data>
+  <data name="MailMerge_Source_Filter_All" xml:space="preserve"><value>All Data Sources</value></data>
+  <data name="MailMerge_Source_Filter_Excel" xml:space="preserve"><value>Excel Workbooks</value></data>
+  <data name="MailMerge_Source_Filter_Text" xml:space="preserve"><value>Text Files</value></data>
+  <data name="MailMerge_Source_Filter_Word" xml:space="preserve"><value>Word Documents</value></data>
+  <data name="MailMerge_Source_ImportTitle" xml:space="preserve"><value>Select Table</value></data>
+  <data name="MailMerge_Source_FileLabelFormat" xml:space="preserve"><value>Data source: {0}</value></data>
+  <data name="MailMerge_Source_TableLabel" xml:space="preserve"><value>Use this list:</value></data>
+  <data name="MailMerge_Source_Table_WorksheetFormat" xml:space="preserve"><value>{0} (worksheet)</value></data>
+  <data name="MailMerge_Source_Table_NamedRangeFormat" xml:space="preserve"><value>{0} (named range)</value></data>
+  <data name="MailMerge_Source_Table_TableFormat" xml:space="preserve"><value>{0} (table)</value></data>
+  <data name="MailMerge_Source_DelimiterLabel" xml:space="preserve"><value>Field delimiter:</value></data>
+  <data name="MailMerge_Source_Delimiter_Comma" xml:space="preserve"><value>Comma (,)</value></data>
+  <data name="MailMerge_Source_Delimiter_Tab" xml:space="preserve"><value>Tab</value></data>
+  <data name="MailMerge_Source_Delimiter_Semicolon" xml:space="preserve"><value>Semicolon (;)</value></data>
+  <data name="MailMerge_Source_Delimiter_Pipe" xml:space="preserve"><value>Vertical bar (|)</value></data>
+  <data name="MailMerge_Source_EncodingFormat" xml:space="preserve"><value>Detected text encoding: {0}</value></data>
+  <data name="MailMerge_Source_FirstRowHeaders" xml:space="preserve"><value>First row of data contains column headers</value></data>
+  <data name="MailMerge_Source_PreviewLabel" xml:space="preserve"><value>Preview:</value></data>
+  <data name="MailMerge_Source_PreviewCountFormat" xml:space="preserve"><value>Showing {0} of {1} record(s).</value></data>
+  <data name="MailMerge_Source_DocumentHint" xml:space="preserve"><value>The first table in the document is used as the recipient list.</value></data>
+  <data name="MailMerge_Source_Error_Unsupported" xml:space="preserve"><value>This file type cannot be used as a recipient list. Choose an Excel workbook (.xlsx, .xlsm), a text file (.csv, .tsv, .txt) or a Word document (.docx, .rtf) that contains a table.</value></data>
+  <data name="MailMerge_Source_Error_Unreadable" xml:space="preserve"><value>The file could not be read. It may be damaged, open exclusively in another program, or not in the format its name suggests.</value></data>
+  <data name="MailMerge_Source_Error_NoTable" xml:space="preserve"><value>No list was found. A workbook needs at least one worksheet, and a document must contain a table.</value></data>
+  <data name="MailMerge_Source_Error_Empty" xml:space="preserve"><value>The selected list does not contain any data.</value></data>
+  <data name="MailMerge_Source_Error_TooLarge" xml:space="preserve"><value>The file is too large to use as a recipient list.</value></data>
+  <data name="MailMerge_NewList_Title" xml:space="preserve"><value>New Address List</value></data>
+  <data name="MailMerge_NewList_Hint" xml:space="preserve"><value>Type recipient information in the table. To add more entries, click New Entry.</value></data>
+  <data name="MailMerge_NewList_NewEntry" xml:space="preserve"><value>New Entry</value></data>
+  <data name="MailMerge_NewList_DeleteEntry" xml:space="preserve"><value>Delete Entry</value></data>
+  <data name="MailMerge_NewList_AddColumn" xml:space="preserve"><value>Add Column…</value></data>
+  <data name="MailMerge_NewList_RemoveColumn" xml:space="preserve"><value>Delete Column</value></data>
+  <data name="MailMerge_NewList_RenameColumn" xml:space="preserve"><value>Rename Column…</value></data>
+  <data name="MailMerge_NewList_ColumnNamePrompt" xml:space="preserve"><value>Type a name for the field:</value></data>
+  <data name="MailMerge_NewList_ColumnNameTitle" xml:space="preserve"><value>Customize Address List</value></data>
+  <data name="MailMerge_NewList_SaveTitle" xml:space="preserve"><value>Save Address List</value></data>
+  <data name="MailMerge_NewList_SaveFilter_Csv" xml:space="preserve"><value>CSV (Comma delimited)</value></data>
+  <data name="MailMerge_NewList_SaveFilter_Text" xml:space="preserve"><value>Text (Tab delimited)</value></data>
+  <data name="MailMerge_NewList_DefaultFileName" xml:space="preserve"><value>Address List</value></data>
+  <data name="MailMerge_NewList_Error_ColumnName" xml:space="preserve"><value>Type a name for the field.</value></data>
+  <data name="MailMerge_NewList_Error_DuplicateColumnFormat" xml:space="preserve"><value>A field named “{0}” already exists. Field names must be unique.</value></data>
+  <data name="MailMerge_NewList_Error_LastColumn" xml:space="preserve"><value>The list must keep at least one column.</value></data>
+  <data name="MailMerge_NewList_Error_SaveFormat" xml:space="preserve"><value>The address list could not be saved. {0}</value></data>
+  <data name="MailMerge_EditList_Title" xml:space="preserve"><value>Mail Merge Recipients</value></data>
+  <data name="MailMerge_EditList_Hint" xml:space="preserve"><value>This is the list of recipients that will be used in your merge. Use the check boxes to add or remove recipients from the merge.</value></data>
+  <data name="MailMerge_EditList_NoRecipients" xml:space="preserve"><value>Select recipients first (Mailings &gt; Select Recipients), then edit the recipient list.</value></data>
+  <data name="MailMerge_EditList_IncludeColumn" xml:space="preserve"><value>Include</value></data>
+  <data name="MailMerge_EditList_SortLabel" xml:space="preserve"><value>Sort by:</value></data>
+  <data name="MailMerge_EditList_Sort_None" xml:space="preserve"><value>(none)</value></data>
+  <data name="MailMerge_EditList_Sort_Ascending" xml:space="preserve"><value>Ascending</value></data>
+  <data name="MailMerge_EditList_Sort_Descending" xml:space="preserve"><value>Descending</value></data>
+  <data name="MailMerge_EditList_FilterLabel" xml:space="preserve"><value>Filter:</value></data>
+  <data name="MailMerge_EditList_Filter_AllFields" xml:space="preserve"><value>(any field)</value></data>
+  <data name="MailMerge_EditList_Filter_Equals" xml:space="preserve"><value>Equal to</value></data>
+  <data name="MailMerge_EditList_Filter_NotEquals" xml:space="preserve"><value>Not equal to</value></data>
+  <data name="MailMerge_EditList_Filter_Contains" xml:space="preserve"><value>Contains</value></data>
+  <data name="MailMerge_EditList_Filter_NotContains" xml:space="preserve"><value>Does not contain</value></data>
+  <data name="MailMerge_EditList_Filter_IsBlank" xml:space="preserve"><value>Is blank</value></data>
+  <data name="MailMerge_EditList_Filter_IsNotBlank" xml:space="preserve"><value>Is not blank</value></data>
+  <data name="MailMerge_EditList_ClearFilter" xml:space="preserve"><value>Clear Filter</value></data>
+  <data name="MailMerge_EditList_SelectAll" xml:space="preserve"><value>Select All</value></data>
+  <data name="MailMerge_EditList_ClearAll" xml:space="preserve"><value>Clear All</value></data>
+  <data name="MailMerge_EditList_SummaryFormat" xml:space="preserve"><value>{0} of {1} recipient(s) will be merged.</value></data>
 </root>

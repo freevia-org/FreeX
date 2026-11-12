@@ -10,6 +10,13 @@ public sealed class MailMergeSession
 {
     public MergeData? Data { get; set; }
 
+    /// <summary>
+    /// The complete recipient list as it was loaded, before any recipient was excluded, filtered out or
+    /// re-ordered. <see cref="Data"/> is the working subset the merge runs over; Edit Recipient List
+    /// works from this full list so an excluded recipient can be included again. Null with no list.
+    /// </summary>
+    public MergeData? SourceData { get; private set; }
+
     public MailMergeOutputMode Mode { get; set; } = MailMergeOutputMode.Letters;
 
     public TextDocument? Template { get; set; }
@@ -49,6 +56,7 @@ public sealed class MailMergeSession
         ArgumentNullException.ThrowIfNull(data);
 
         Data = data;
+        SourceData = data;
         Mapping = MailMerge.AutoMatchFields(data.Header);
         Template = null;
         CurrentIndex = 0;
@@ -70,6 +78,7 @@ public sealed class MailMergeSession
     public void Clear()
     {
         Data = null;
+        SourceData = null;
         Template = null;
         CurrentIndex = 0;
         Mode = MailMergeOutputMode.Letters;
