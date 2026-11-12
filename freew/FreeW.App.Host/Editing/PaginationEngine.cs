@@ -729,9 +729,10 @@ internal static class PaginationEngine
             return count;
         }
 
-        // A long note continues on the next pages (Word): each band is capped and the overflow carried.
+        // A note that does not fit continues on the next pages (Word); the overflow is carried.
         var bodyHeightDip = Math.Max(0, pageSize.Height - padding.Top - padding.Bottom);
-        var maxBandDip = bodyHeightDip * DocumentNoteRegionPlanner.MaxFootnoteBandShareOfBody;
+        // Separator line box plus one note line: the least of a note Word keeps with its reference.
+        const double minimumSplitBandDip = 36.0;
         var carriedNoteDip = 0.0;
 
         // The notes a page carries are those whose reference mark lands on it (Word keeps a reference and
@@ -805,11 +806,46 @@ internal static class PaginationEngine
             var demand = NoteDemandFor(blockCount);
             return demand <= 0
                 ? 0
-                : ClampFootnoteReserveDip(Math.Min(demand, maxBandDip) + footnoteFrameClearanceDip, segment.Page);
+                : ClampFootnoteReserveDip(Math.Min(demand, bodyHeightDip) + footnoteFrameClearanceDip, segment.Page);
         }
 
         void SetReserve(double reserveDip) =>
             work.PagePadding = new Thickness(padding.Left, padding.Top, padding.Right, padding.Bottom + reserveDip);
+
+        // The last of the first blockCount entries that carries its own footnote reference, or -1.
+        int LastReferencingEntry(int blockCount)
+        {
+            for (var index = Math.Min(blockCount, pending.Count) - 1; index >= 0; index--)
+            {
+                if (!pending[index].IsContinuation
+                    && FootnoteIdsInModelBlock(modelBlocks[pending[index].ModelIndex]).Any())
+                    return index;
+            }
+            return -1;
+        }
+
+        // The largest band (at most upperDip) under which entry lastReferencing still starts on the page,
+        // or 0 when even the separator plus one note line would push it off.
+        double LargestReserveKeeping(int lastReferencing, double upperDip)
+        {
+            var minimumDip = Math.Min(upperDip, minimumSplitBandDip);
+            SetReserve(minimumDip);
+            if (CountBlocksStartingOnFirstPage() <= lastReferencing)
+                return 0;
+
+            var low = minimumDip;
+            var high = upperDip;
+            for (var step = 0; step < 10 && high - low > 1; step++)
+            {
+                var middle = (low + high) / 2;
+                SetReserve(middle);
+                if (CountBlocksStartingOnFirstPage() > lastReferencing)
+                    low = middle;
+                else
+                    high = middle;
+            }
+            return Math.Floor(low);
+        }
 
         var localPage = 0;
         while (pending.Count > 0)
@@ -823,18 +859,34 @@ internal static class PaginationEngine
             // reserve fewer blocks fit, so try the smaller reserve they need and keep it only if it
             // still covers the page it produces.
             SetReserve(0);
-            var reserveDip = ReserveFor(CountBlocksStartingOnFirstPage());
+            var countWithoutReserve = CountBlocksStartingOnFirstPage();
+            var reserveDip = ReserveFor(countWithoutReserve);
             if (reserveDip > 0)
             {
                 SetReserve(reserveDip);
-                var smaller = ReserveFor(CountBlocksStartingOnFirstPage());
-                if (smaller < reserveDip)
+                var lastReferencing = LastReferencingEntry(countWithoutReserve);
+                if (lastReferencing >= 0 && CountBlocksStartingOnFirstPage() <= lastReferencing)
                 {
-                    SetReserve(smaller);
-                    if (ReserveFor(CountBlocksStartingOnFirstPage()) <= smaller)
-                        reserveDip = smaller;
+                    // Word keeps a note with its reference line: when the whole note band would push the
+                    // referencing text off the page, the band shrinks to what still leaves that reference
+                    // on the page and the rest of the note continues on the next page. Only when not even
+                    // the separator and a first note line fit does the reference move on.
+                    var keptReserve = LargestReserveKeeping(lastReferencing, reserveDip);
+                    if (keptReserve > 0)
+                    {
+                        reserveDip = keptReserve;
+                    }
                     else
-                        SetReserve(reserveDip);
+                    {
+                        var smaller = ReserveFor(CountBlocksStartingOnFirstPage());
+                        if (smaller < reserveDip)
+                        {
+                            SetReserve(smaller);
+                            if (ReserveFor(CountBlocksStartingOnFirstPage()) <= smaller)
+                                reserveDip = smaller;
+                        }
+                    }
+                    SetReserve(reserveDip);
                 }
             }
 
@@ -908,6 +960,36 @@ internal static class PaginationEngine
                 chunkFootnoteIds));
             localPage += chunkPages;
             pending.RemoveRange(0, take);
+        }
+
+        // Note text still continuing after the last body line gets pages of its own, as in Word: an
+        // empty body and a band holding the continuation, until every note character is placed.
+        for (var guard = 0; carriedNoteDip > 0.5 && guard < 200; guard++)
+        {
+            var reserveDip = ClampFootnoteReserveDip(Math.Min(carriedNoteDip, bodyHeightDip), segment.Page);
+            if (reserveDip <= 0)
+                break;
+            var continuationFlow = NewFlow(reserveDip);
+            continuationFlow.Blocks.Add(new System.Windows.Documents.Paragraph
+            {
+                Margin = new Thickness(0),
+                LineHeight = 0.01,
+                LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+            });
+            var continuationPaginator = ((IDocumentPaginatorSource)continuationFlow).DocumentPaginator;
+            continuationPaginator.PageSize = pageSize;
+            continuationPaginator.ComputePageCount();
+            UpdateCarry(Array.Empty<int>(), reserveDip, 0);
+            segmentPaginations?.Add(new SegmentPagination(
+                pageOffset + localPage,
+                1,
+                segment.Page,
+                continuationPaginator,
+                topInsetDip,
+                bottomInsetDip,
+                reserveDip,
+                Array.Empty<int>()));
+            localPage++;
         }
 
         return Math.Max(1, localPage);

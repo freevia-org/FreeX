@@ -155,12 +155,6 @@ public static class DocumentNoteRegionPlanner
     }
 
     /// <summary>
-    /// Word lets a long footnote continue on the following pages instead of taking over the reference
-    /// page: a page's note band never grows past this share of its body height.
-    /// </summary>
-    public const double MaxFootnoteBandShareOfBody = 1.0 / 3.0;
-
-    /// <summary>
     /// Lays out the footnote bands of consecutive body pages. Each page has the band height its
     /// pagination reserved and the notes referenced on it; what does not fit in a band continues at the
     /// top of the next page's band (after a continuation separator), word by word, ahead of that page's

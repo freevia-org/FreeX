@@ -109,14 +109,8 @@ public sealed class SectionAwarePaginationTests
         var footnoted = segments.Where(segment => segment.PageOffset >= 1).ToList();
         Assert.True(footnoted.Count >= 3, $"expected one segment per page, got {footnoted.Count}");
         Assert.True(footnoted[0].FootnoteReserveDip > 0);
-        // Six long notes overflow one band: like Word, the rest continues in the next pages' bands
-        // (each capped), and once the notes are exhausted the pages keep their whole body.
-        var (pageWidth, pageHeight) = PageLayout.PageSizeDip(LandscapePage());
-        var (_, top, _, bottom) = PageLayout.MarginsDip(LandscapePage());
-        var bodyHeight = Math.Max(pageWidth, pageHeight) - top - bottom;
-        Assert.All(footnoted, segment => Assert.True(
-            segment.FootnoteReserveDip <= bodyHeight * FreeW.App.Presentation.DocumentView.DocumentNoteRegionPlanner.MaxFootnoteBandShareOfBody + 1));
-        Assert.Equal(0, footnoted[^1].FootnoteReserveDip);
+        Assert.Contains(footnoted[0].PageFootnoteIds!, id => id == 1);
+        Assert.All(footnoted.Skip(1), segment => Assert.Equal(0, segment.FootnoteReserveDip));
         Assert.Equal(totalPages, segments.Sum(segment => segment.PageCount));
 
         var paginator = PrintLayout.BuildPaginator(editor);
@@ -129,6 +123,83 @@ public sealed class SectionAwarePaginationTests
             Assert.Contains($"word{i:0000}", text);
         Assert.Contains("word1600", text);
         Assert.Equal(1600, System.Text.RegularExpressions.Regex.Matches(text, @"word\d{4}").Count);
+        AssertEveryNoteCharacterPrinted(doc, text);
+    }
+
+    /// <summary>
+    /// A note whose continuation outlasts the body text gets continuation-only pages (Word) instead of
+    /// losing its tail: every character of every note reaches the printed pages, in order.
+    /// </summary>
+    [StaFact]
+    public void NoteContinuationOutlastingTheBody_AddsContinuationPages_AndLosesNoCharacter()
+    {
+        // Three notes, each shorter than a page, together well over a page, all referenced by the only
+        // body line.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var referencing = new Paragraph();
+        referencing.Runs.Add(new Run("Only body line"));
+        for (var id = 1; id <= 3; id++)
+        {
+            doc.Footnotes[id] = new Footnote(id, string.Join(" ", Enumerable.Range(1, 330).Select(i => $"t{id}w{i:000}")));
+            referencing.Runs.Add(Run.FootnoteReference(id));
+        }
+        doc.Blocks.Add(referencing);
+        doc.Blocks.Add(new Paragraph("Second short paragraph"));
+
+        var editor = new DocumentView();
+        editor.LoadModel(doc);
+        Assert.True(PrintLayout.UsesPerPageFootnoteReserve(editor, PrintLayout.ResolvePrintBalloonSources(editor)));
+        var paginator = PrintLayout.BuildPaginator(editor);
+        Assert.IsType<SectionAwareDocumentPaginator>(paginator);
+        paginator.ComputePageCount();
+
+        Assert.True(paginator.PageCount >= 2, $"the note needs continuation pages, got {paginator.PageCount}");
+        var text = string.Concat(Enumerable.Range(0, paginator.PageCount)
+            .Select(index => ExtractDrawnText(paginator.GetPage(index).Visual)));
+        Assert.Contains("Only body line", text);
+        AssertEveryNoteCharacterPrinted(doc, text);
+    }
+
+    /// <summary>
+    /// The single-flow continuation compositor (a note taller than a page) keeps every character too.
+    /// </summary>
+    [StaFact]
+    public void PageTallNote_OnTheContinuationCompositor_LosesNoCharacter()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Footnotes[1] = new Footnote(1, string.Join(" ", Enumerable.Range(1, 900).Select(i => $"long{i:000}")));
+        var referencing = new Paragraph();
+        referencing.Runs.Add(new Run("Reference here"));
+        referencing.Runs.Add(Run.FootnoteReference(1));
+        doc.Blocks.Add(referencing);
+        for (var index = 1; index <= 10; index++)
+            doc.Blocks.Add(new Paragraph($"Filler paragraph {index} with ordinary body text."));
+
+        var editor = new DocumentView();
+        editor.LoadModel(doc);
+        var paginator = PrintLayout.BuildPaginator(editor);
+        paginator.ComputePageCount();
+        var text = string.Concat(Enumerable.Range(0, paginator.PageCount)
+            .Select(index => ExtractDrawnText(paginator.GetPage(index).Visual)));
+        AssertEveryNoteCharacterPrinted(doc, text);
+    }
+
+    // Every word of every note appears in the printed text, in order (body text may sit between a
+    // note's fragments on different pages).
+    private static void AssertEveryNoteCharacterPrinted(TextDocument doc, string printed)
+    {
+        foreach (var footnote in doc.Footnotes.Values)
+        {
+            var position = 0;
+            foreach (var word in footnote.PlainText.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var found = printed.IndexOf(word, position, StringComparison.Ordinal);
+                Assert.True(found >= 0, $"note {footnote.Id}: '{word}' missing from the printed pages");
+                position = found + word.Length;
+            }
+        }
     }
 
     /// <summary>
@@ -208,6 +279,9 @@ public sealed class SectionAwarePaginationTests
         doc.Blocks.Add(breakParagraph);
         var longNote = string.Join(" ", Enumerable.Range(1, 600).Select(i => $"n{i:000}"));
         doc.Footnotes[1] = new Footnote(1, longNote);
+        // Body above the reference fills half the page, so the note cannot fit beside its reference:
+        // Word keeps the reference line and continues the note on the next page.
+        doc.Blocks.Add(new Paragraph(string.Join(" ", Enumerable.Range(1, 300).Select(i => $"pre{i:000}"))));
         var referencing = new Paragraph();
         referencing.Runs.Add(new Run("Referencing paragraph"));
         referencing.Runs.Add(Run.FootnoteReference(1));
