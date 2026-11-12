@@ -236,12 +236,13 @@ public static class PrintPreviewSurfacePlanner
         PrintSettingsTextResolver? textResolver,
         bool stripMnemonics)
     {
-        var normalizedTotalPages = Math.Max(1, totalPages);
-
+        // Excel leaves both Pages boxes empty, meaning every page; showing "1 to 1" for a
+        // multi-page sheet suggested only the first page would print.
+        _ = totalPages;
         return new PrintPreviewPageRangeFieldsPlan(
-            "1",
+            string.Empty,
             Text(textResolver, "PrintPreview_PageRangeToText", "To:", stripMnemonics),
-            normalizedTotalPages.ToString(CultureInfo.InvariantCulture),
+            string.Empty,
             SettingsPageRangeBoxWidth);
     }
 

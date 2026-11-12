@@ -104,6 +104,57 @@ public sealed class BackstageWorksheetShortcutLeakTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task PrintPaneCopiesBox_AcceptsTyping_WithoutKeysReachingTheWorksheet()
+    {
+        // The overlay's shortcut blocker used to swallow every key, so File > Print's Copies and
+        // Pages boxes could not be edited at all. Keys aimed at a pane text box must reach it, and
+        // must still stop there instead of editing the hidden worksheet.
+        await Session.Dispatch(async () =>
+        {
+            var window = CreateShownWindow();
+            try
+            {
+                var address = window.Session.ActiveCell;
+                Edit(window, address, "keep-me");
+
+                typeof(MainWindow)
+                    .GetMethod("ShowBackstagePrintPane", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                    .Invoke(window, null);
+                window.Measure(new Size(1120, 720));
+                window.Arrange(new Rect(0, 0, 1120, 720));
+                await DrainInputAsync();
+                window.IsBackstageOverlayVisibleForTest.Should().BeTrue();
+
+                var copiesBox = global::Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window)
+                    .OfType<global::Avalonia.Controls.TextBox>()
+                    .First(box => box.IsEffectivelyVisible && box.Text == "1");
+                copiesBox.Focus().Should().BeTrue();
+                copiesBox.SelectAll();
+
+                window.KeyPress(Key.D3, RawInputModifiers.None, PhysicalKey.Digit3, "3");
+                window.KeyRelease(Key.D3, RawInputModifiers.None, PhysicalKey.Digit3, "3");
+                window.KeyTextInput("3");
+                await DrainInputAsync();
+                copiesBox.Text.Should().Be("3", "typing into File > Print's Copies box must change it");
+
+                copiesBox.SelectAll();
+                PressDelete(window);
+                await DrainInputAsync();
+                copiesBox.Text.Should().BeEmpty("Delete in the Copies box must edit the box");
+                window.Session.ActiveSheet.GetValue(address).Should().Be(new TextValue("keep-me"),
+                    "keys typed into a File > Print text box must not reach the hidden worksheet");
+            }
+            finally
+            {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+                window.Close();
+            }
+
+            return true;
+        }, CancellationToken.None);
+    }
+
     private static MainWindow CreateShownWindow()
     {
         var window = new MainWindow([]);
