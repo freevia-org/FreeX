@@ -1835,84 +1835,44 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, automationId);
 
+        // The content is built with the production Insert Slicer / Insert Timeline helpers
+        // (ShowInsertPivotControlDialogAsync), so the capture shows the WPF group-box caption on the
+        // frame and the shared pivot label/row/button metrics rather than a bold heading in a card.
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, PivotDialogChromeStyle);
+
         var fieldBox = new ComboBox
         {
+            IsEditable = true,
             ItemsSource = headers,
             SelectedIndex = Math.Max(0, Array.IndexOf(headers, selectedField)),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
-            Height = 24,
-            MinHeight = 24,
-            // Without explicit padding + vertical-centering the Fluent ComboBox's default content
-            // padding pushes the selected item out of the forced 24px clip, leaving it visibly cut off.
-            // Match the proven chart/drawing combo chrome so the selected field reads fully (win.png).
-            Padding = new Thickness(5, 0, 4, 0),
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        ApplyPivotComboBoxChrome(fieldBox);
+        fieldBox.Text = headers[Math.Max(0, Array.IndexOf(headers, selectedField))];
         AutomationProperties.SetAutomationId(fieldBox, fieldListAutomationId);
 
-        var captionBox = new TextBox
-        {
-            Text = captionText,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
-            Height = 24,
-            MinHeight = 24,
-            Padding = new Thickness(4, 2, 4, 2),
-        };
+        var captionBox = new TextBox { Text = captionText };
+        ApplyPivotTextBoxChrome(captionBox);
 
-        var groupBody = new StackPanel { Spacing = 4 };
-        groupBody.Children.Add(new TextBlock
-        {
-            Text = UiText.Get(groupResourceKey).Replace("_", string.Empty),
-            FontWeight = FontWeight.SemiBold,
-            Margin = new Thickness(0, 0, 0, 6),
-        });
-        groupBody.Children.Add(new Label
-        {
-            Content = UiText.Get(fieldLabelResourceKey),
-            Target = fieldBox,
-            Padding = new Thickness(0, 0, 0, 2),
-        });
-        groupBody.Children.Add(fieldBox);
-        groupBody.Children.Add(new Label
-        {
-            Content = UiText.Get(captionLabelResourceKey),
-            Target = captionBox,
-            Margin = new Thickness(0, 8, 0, 0),
-            Padding = new Thickness(0, 0, 0, 2),
-        });
-        groupBody.Children.Add(captionBox);
-
-        var group = new Border
-        {
-            Child = groupBody,
-            BorderBrush = Brush(200, 200, 200),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(2),
-            Padding = new Thickness(12, 10, 12, 12),
-        };
+        var groupContent = new StackPanel();
+        AddPivotDialogLabeledControl(groupContent, UiText.Get(fieldLabelResourceKey), fieldBox);
+        AddPivotDialogLabeledControl(groupContent, UiText.Get(captionLabelResourceKey), captionBox);
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
+        ApplyPivotButtonChrome(okButton, PivotDialogButtonMinWidth, isDefault: true);
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
-        ApplyDialogButtonChrome(okButton, 84, isDefault: true);
-        ApplyDialogButtonChrome(cancelButton, 84);
+        ApplyPivotButtonChrome(cancelButton, PivotDialogButtonMinWidth);
         okButton.Click += (_, _) => dialog.Close();
         cancelButton.Click += (_, _) => dialog.Close();
 
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
-            Spacing = 12,
             Children =
             {
-                group,
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 8,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    // WPF order: [OK] [Cancel]
-                    Children = { okButton, cancelButton },
-                },
+                CreatePivotDialogGroupBox(UiText.Get(groupResourceKey), groupContent),
+                // WPF order: [OK] [Cancel]
+                CreatePivotDialogButtonRow(okButton, cancelButton),
             },
         };
 

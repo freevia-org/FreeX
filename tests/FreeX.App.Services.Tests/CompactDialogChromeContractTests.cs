@@ -30,7 +30,7 @@ public sealed class CompactDialogChromeContractTests
         CompactDialogVisualTokens.CheckBoxCheckMarkWidth.Should().Be(12);
         CompactDialogVisualTokens.CheckBoxCheckMarkHeight.Should().Be(10);
         CompactDialogVisualTokens.CheckBoxIndeterminateMarkWidth.Should().Be(7);
-        CompactDialogVisualTokens.CheckBoxIndeterminateMarkHeight.Should().Be(2);
+        CompactDialogVisualTokens.CheckBoxIndeterminateMarkHeight.Should().Be(7);
         CompactDialogVisualTokens.RadioButtonIndicatorSize.Should().Be(13);
         CompactDialogVisualTokens.RadioButtonDotSize.Should().Be(6);
         CompactDialogVisualTokens.TabHeaderHeight.Should().Be(24);

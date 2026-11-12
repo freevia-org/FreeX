@@ -756,11 +756,14 @@ public sealed partial class MainWindow
         var startColor = values.StartColor;
         var endColor = values.EndColor;
 
+        // WPF ShapeGradientDialog.AddPreviewRow: a SystemColors.ControlDarkBrush (#A0A0A0) frame with
+        // 2px rounded corners, not a black one.
         var preview = new Border
         {
             Height = 42,
-            BorderBrush = HeaderForeground,
+            BorderBrush = Brush(160, 160, 160),
             BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(2),
         };
         AutomationProperties.SetAutomationId(preview, "ShapeGradientPreview");
         AutomationProperties.SetName(preview, UiText.Get("ShapeGradient_PreviewLabel"));

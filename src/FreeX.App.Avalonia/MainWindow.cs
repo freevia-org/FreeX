@@ -13451,7 +13451,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Text = currentZoom.ToString(CultureInfo.InvariantCulture),
             Width = ZoomDialogPlanner.CustomPercentBoxWidth,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Right,
+            // WPF ZoomDialog leaves the percent box at the TextBox default: left-aligned text.
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left,
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(customBox, zoomDialogChrome);
         AutomationProperties.SetAutomationId(customBox, "ZoomCustomPercentBox");
@@ -14765,6 +14766,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         dialog.Content = root;
         dialog.Opened += (_, _) => resultsList.Background = Brush(242, 242, 242);
+        // The shared descendant pass (ApplyWindow, on Opened) re-centres every button's content. WPF's
+        // Expander header starts at the left edge, so keep the glyph and caption left-aligned.
+        dialog.Opened += (_, _) => optionsHeader.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left;
         _findReplaceDialog = dialog;
         _switchFindReplaceMode = requestedReplaceMode =>
         {
@@ -15847,10 +15851,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             ItemsSource = linkTypeChoices,
             SelectedItem = selectedLinkType,
+            // WPF sizes this column to HyperlinkDialogPlanner.LinkTypeColumnWidth, which fits the
+            // four link types in Segoe UI. The macOS fallback face is wider, so the list keeps that
+            // width as its minimum and grows to its longest entry instead of cutting the entries off
+            // (the body grid's first column is Auto for the same reason).
             MinWidth = HyperlinkDialogPlanner.LinkTypeColumnWidth,
-            Width = HyperlinkDialogPlanner.LinkTypeColumnWidth,
             Height = HyperlinkDialogPlanner.LinkTypeListHeight,
         };
+        ScrollViewer.SetHorizontalScrollBarVisibility(linkTypeBox, ScrollBarVisibility.Disabled);
         AvaloniaCompactDialogChrome.ApplyListBox(
             linkTypeBox,
             AvaloniaCompactDialogChrome.WindowsStyle with
@@ -16173,7 +16181,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             ColumnDefinitions = new ColumnDefinitions
             {
-                new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LinkTypeColumnWidth) },
+                new ColumnDefinition { Width = GridLength.Auto, MinWidth = HyperlinkDialogPlanner.LinkTypeColumnWidth },
                 new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LinkTypeColumnGap) },
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
             },
@@ -22392,12 +22400,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetHelpText(functionBox, UiText.Get("Subtotal_UseFunctionHelpText"));
 
         var selectedOffsets = initialSubtotalColumnOffsets.ToHashSet();
+        // WPF SubtotalDialog: a borderless ListBox inside the GroupBox, so the group frame is the only
+        // frame, with the first row inset 4px below the frame's top edge (98 = 94 list + 4 inset).
         var columnsList = new ListBox
         {
             ItemsSource = columns,
-            Height = 98,
-            MinHeight = 98,
-            MaxHeight = 98,
+            Height = 94,
+            MinHeight = 94,
+            MaxHeight = 94,
+            Margin = new Thickness(0, 4, 0, 0),
             Padding = new Thickness(0),
             BorderThickness = new Thickness(0),
         };
@@ -22408,7 +22419,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             {
                 Content = column.Header,
                 IsChecked = selectedOffsets.Contains(column.Offset),
-                Margin = new Thickness(0, 0, 0, 4),
+                // WPF row pitch is 23px; four rows fit the 94px list without a scrollbar.
+                Margin = new Thickness(0, 0, 0, 3),
             };
             ApplySubtotalCheckBoxChrome(box);
             AutomationProperties.SetName(box, UiText.Format("Subtotal_ColumnAutomationNameFormat", column.Header));
@@ -22638,6 +22650,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             AvaloniaCompactDialogChrome.ApplyButton(okButton, SubtotalDialogChromeStyle, 72, isDefault: true);
             AvaloniaCompactDialogChrome.ApplyButton(removeAllButton, SubtotalDialogChromeStyle, 92);
             AvaloniaCompactDialogChrome.ApplyButton(cancelButton, SubtotalDialogChromeStyle, 72);
+            // The generic list pass gives every list a 1px frame; inside this group box that drew a
+            // second frame nested in the group border.
+            columnsList.BorderThickness = new Thickness(0);
             groupColumnBox.Focus();
         };
 

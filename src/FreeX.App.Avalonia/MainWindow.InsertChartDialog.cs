@@ -73,6 +73,9 @@ public sealed partial class MainWindow
 
         var recommendedHeading = new StackPanel
         {
+            // Same as the shared All Charts body: the heading keeps the picker column gap on its right
+            // so the help line ends before the preview border instead of running into it.
+            Margin = new Thickness(0, 0, ChartTypeChangePlanner.PickerColumnGap, 0),
             Children =
             {
                 new TextBlock

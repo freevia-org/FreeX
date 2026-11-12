@@ -2943,7 +2943,10 @@ public sealed class AvaloniaShellSourceTests
         System.Text.RegularExpressions.Regex.Matches(
                 source,
                 "new FreeXDialogWindow\\(InsertObjectDialogChromeStyle\\)")
-            .Should().HaveCount(2);
+            .Should().HaveCount(1);
+        // Create Table keeps WPF's native 20 px control heights on its own chrome style.
+        source.Should().Contain("var chrome = CreateTableDialogChromeStyle;")
+            .And.Contain("new FreeXDialogWindow(chrome)");
         source.Should().NotContain("new Window")
             .And.Contain("IsDefault = true")
             .And.Contain("IsCancel = true");

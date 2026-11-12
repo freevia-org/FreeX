@@ -28,8 +28,10 @@ public static class CompactDialogVisualTokens
     public const double CheckBoxIndicatorHeight = 13;
     public const double CheckBoxCheckMarkWidth = 12;
     public const double CheckBoxCheckMarkHeight = 10;
+    // The stock WPF (Aero2) check box that the FreeX, FreeW and FreeP Windows hosts all use paints
+    // the indeterminate state as a filled square inset 2px inside the 13px box, not a bar.
     public const double CheckBoxIndeterminateMarkWidth = 7;
-    public const double CheckBoxIndeterminateMarkHeight = 2;
+    public const double CheckBoxIndeterminateMarkHeight = 7;
     public const double RadioButtonIndicatorSize = 13;
     public const double RadioButtonDotSize = 6;
     public const double TabHeaderHeight = 24;

@@ -1346,7 +1346,7 @@ public static class AvaloniaCompactDialogChrome
                     // IsChecked is bool?, and IsVisible is bool. Without an explicit conversion the
                     // indeterminate (null) state produces no bool, so the binding falls back to
                     // IsVisibleProperty's default of true and paints the tick on top of the
-                    // indeterminate bar. Convert null to false so only the bar survives.
+                    // indeterminate mark. Convert null to false so only that mark survives.
                     Converter = IsCheckedTrueConverter,
                 });
 
