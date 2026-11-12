@@ -50,7 +50,24 @@ public static class CellEntryParser
             // FormulaParseException catches exist for the DIFFERENT case of a cell whose formula
             // text was already committed (e.g. loaded from a file whose formula this parser can't
             // handle, such as an external-workbook reference), not for a fresh interactive entry.
-            var parsedFormula = FormulaEvaluator.ParseFormula(formula);
+            // Excel tidies a committed formula: function names and cell references are
+            // upper-cased, and closing parentheses missing only at the very end are added
+            // ("=sum(a1:a3" commits as "=SUM(A1:A3)"). Anything still malformed after that is
+            // rejected below exactly as before.
+            formula = FormulaEntryNormalizer.NormalizeCasing(formula);
+            FreeX.Core.Formula.FormulaNode parsedFormula;
+            try
+            {
+                parsedFormula = FormulaEvaluator.ParseFormula(formula);
+            }
+            catch (FormulaParseException) when (
+                FormulaEntryNormalizer.CloseMissingParentheses(formula) is var closed &&
+                !string.Equals(closed, formula, StringComparison.Ordinal) &&
+                TryParseFormula(closed, out var closedFormula))
+            {
+                formula = closed;
+                parsedFormula = closedFormula!;
+            }
 
             // Real Excel additionally refuses to leave edit mode for a well-known built-in
             // function called with the wrong number of arguments -- e.g. "=IF(A1>0)" (1 argument;
@@ -90,6 +107,20 @@ public static class CellEntryParser
         }
 
         return cell;
+    }
+
+    private static bool TryParseFormula(string formula, out FreeX.Core.Formula.FormulaNode? parsed)
+    {
+        try
+        {
+            parsed = FormulaEvaluator.ParseFormula(formula);
+            return true;
+        }
+        catch (FormulaParseException)
+        {
+            parsed = null;
+            return false;
+        }
     }
 
     private static StyleId GetTargetStyleId(Workbook workbook, CellAddress address)
@@ -133,6 +164,7 @@ public static class CellEntryParser
 
         if (TryParseFiniteNumber(text, out var number))
         {
+            inferredNumberFormat = InferPlainNumberFormat(text);
             return new NumberValue(number);
         }
 
@@ -149,13 +181,13 @@ public static class CellEntryParser
         // date - claim the unambiguous fraction shape first.
         if (TryParsePercent(text, out var percentValue))
         {
-            inferredNumberFormat = "0%";
+            inferredNumberFormat = HasDecimalDigits(text) ? "0.00%" : "0%";
             return new NumberValue(percentValue);
         }
 
         if (TryParseCurrency(text, out var currencyValue))
         {
-            inferredNumberFormat = NumberFormatShortcutService.GetFormat(NumberFormatShortcut.Currency);
+            inferredNumberFormat = HasDecimalDigits(text) ? "$#,##0.00" : "$#,##0";
             return new NumberValue(currencyValue);
         }
 
@@ -262,6 +294,31 @@ public static class CellEntryParser
     }
 
     // Trailing '%' (e.g. "50%") -> Excel stores the underlying fraction (0.5), not the literal 50.
+    // Excel keeps how a plain number was typed: "1,234" gets "#,##0", "1,234.5" gets "#,##0.00",
+    // "1E3" gets "0.00E+00"; a plain "1234" or "12.5" stays General.
+    private static string? InferPlainNumberFormat(string text)
+    {
+        var culture = CultureInfo.CurrentCulture.NumberFormat;
+        if (text.Contains('E', StringComparison.OrdinalIgnoreCase))
+            return "0.00E+00";
+
+        if (!string.IsNullOrEmpty(culture.NumberGroupSeparator) &&
+            text.Contains(culture.NumberGroupSeparator, StringComparison.Ordinal))
+        {
+            return HasDecimalDigits(text) ? "#,##0.00" : "#,##0";
+        }
+
+        return null;
+    }
+
+    private static bool HasDecimalDigits(string text)
+    {
+        var separator = CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator;
+        var index = text.IndexOf(separator, StringComparison.Ordinal);
+        return index >= 0 && index + separator.Length < text.Length &&
+            char.IsAsciiDigit(text[index + separator.Length]);
+    }
+
     private static bool TryParsePercent(string text, out double value)
     {
         value = default;
