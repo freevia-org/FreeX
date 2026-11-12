@@ -11962,7 +11962,7 @@ public sealed partial class DocumentView : RichTextBox
         }
 
         if (run.Equation is { } equation)
-            return WrapHyperlinkIfNeeded(run, BuildEquationRun(equation, run.Formatting.FontSizePt));
+            return WrapHyperlinkIfNeeded(run, BuildEquationRun(equation, run.Formatting.FontSizePt, document));
 
         if (run.SmartArt is { } smartArt)
         {

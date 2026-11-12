@@ -67,13 +67,21 @@ public static class EquationMathLayout
     private const double DisplayIntegralHeightFactor = 1.7;
 
     /// <summary>Lays out an equation at <paramref name="fontSize"/> (DIPs per em).</summary>
-    public static MathLayoutResult Layout(Equation equation, IMathLayoutFont font, double fontSize, bool? display = null)
+    public static MathLayoutResult Layout(
+        Equation equation,
+        IMathLayoutFont font,
+        double fontSize,
+        bool? display = null,
+        MathDocumentSettings? settings = null)
     {
         ArgumentNullException.ThrowIfNull(equation);
         ArgumentNullException.ThrowIfNull(font);
 
-        var style = display ?? equation.IsDisplayMath ? MathLayoutStyle.Display : MathLayoutStyle.Text;
-        var engine = new Engine(font, fontSize <= 0 ? 14.6667 : fontSize);
+        settings ??= MathDocumentSettings.Default;
+
+        // m:dispDef off lays display equations out with the inline (text-style) rules.
+        var style = (display ?? equation.IsDisplayMath) && settings.DisplayDefaults ? MathLayoutStyle.Display : MathLayoutStyle.Text;
+        var engine = new Engine(font, fontSize <= 0 ? 14.6667 : fontSize, settings);
         var box = engine.Row(equation.Runs, new Ctx(style, Cramped: false, Upright: false), depth: 0);
         return new MathLayoutResult(box.Width, box.Ascent, box.Descent, style, box.Items);
     }
@@ -154,7 +162,7 @@ public static class EquationMathLayout
         }
     }
 
-    private sealed class Engine(IMathLayoutFont font, double baseSize)
+    private sealed class Engine(IMathLayoutFont font, double baseSize, MathDocumentSettings settings)
     {
         private readonly MathFontConstants _k = font.Constants;
 
@@ -505,9 +513,13 @@ public static class EquationMathLayout
                 return Join(parts, ctx);
             }
 
-            var display = ctx.Style == MathLayoutStyle.Display;
-            var numerator = Slot(run.NumeratorEquation, run.Numerator, ctx.FractionPart(denominator: false), depth);
-            var denominator = Slot(run.DenominatorEquation, run.Denominator, ctx.FractionPart(denominator: true), depth);
+            // m:smallFrac sets display fractions with the reduced, inline (text-style) rules.
+            var partCtx = settings.SmallFractions && ctx.Style == MathLayoutStyle.Display
+                ? ctx with { Style = MathLayoutStyle.Text }
+                : ctx;
+            var display = partCtx.Style == MathLayoutStyle.Display;
+            var numerator = Slot(run.NumeratorEquation, run.Numerator, partCtx.FractionPart(denominator: false), depth);
+            var denominator = Slot(run.DenominatorEquation, run.Denominator, partCtx.FractionPart(denominator: true), depth);
             var axis = _k.AxisHeight * size;
 
             if (run.FractionType == MathFractionType.Skewed)
@@ -654,8 +666,10 @@ public static class EquationMathLayout
             {
                 opBox = centred;
             }
-            else if (display && !integral)
+            else if (display && (run.NAryLimitLocation ?? (integral ? settings.IntegralLimitLocation : settings.NAryLimitLocation)) == MathLimitLocation.UnderOver)
             {
+                // Explicit m:limLoc, else the document's m:naryLim / m:intLim; inline operators always
+                // take side limits, as Word compresses them.
                 opBox = StackLimits(centred, upper, lower, ctx, centred.Italic);
             }
             else
@@ -791,9 +805,24 @@ public static class EquationMathLayout
         private Box GroupChar(MathRun run, Ctx ctx, int depth)
         {
             var size = Size(ctx);
-            var baseBox = Slot(run.DecoratorBaseEquation, run.Base, ctx.Plain(), depth);
             var top = !string.Equals(run.GroupChrPos, "bot", StringComparison.OrdinalIgnoreCase);
             var text = string.IsNullOrEmpty(run.GroupChr) ? "⏟" : run.GroupChr;
+
+            // m:vertJc picks which element sits on the baseline; Word keeps the upper one there when the
+            // document says nothing. When that is the character itself, the base hangs from it like a
+            // limit, in script size (Word's look for an over-brace written without m:vertJc "bot").
+            var justification = string.IsNullOrEmpty(run.GroupChrVerticalJustification) ? "top" : run.GroupChrVerticalJustification;
+            var markOnBaseline = top == string.Equals(justification, "top", StringComparison.OrdinalIgnoreCase);
+            if (markOnBaseline)
+            {
+                var limit = Slot(run.DecoratorBaseEquation, run.Base, ctx.ScriptStyle(cramped: top), depth);
+                var stretched = Stretch(text.EnumerateRunes().First().Value, limit.Width, ctx, vertical: false);
+                var limitBox = StackLimits(stretched, top ? null : limit, top ? limit : null, ctx, italic: 0);
+                limitBox.Class = MathAtomClass.Op;
+                return limitBox;
+            }
+
+            var baseBox = Slot(run.DecoratorBaseEquation, run.Base, ctx.Plain(), depth);
             var mark = Stretch(text.EnumerateRunes().First().Value, baseBox.Width, ctx, vertical: false);
             var width = Math.Max(baseBox.Width, mark.Width);
             var box = new Box();

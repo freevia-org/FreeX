@@ -1191,7 +1191,17 @@ public static class EquationLinearFormat
             if (accent is not null)
                 run = run with { Accent = accent };
             if (groupChr is not null)
-                run = run with { GroupChr = groupChr, GroupChrPos = groupChrPos ?? "top" };
+            {
+                // Word writes an over-brace with m:vertJc "bot" so its base stays on the baseline; an
+                // under-brace needs no justification (its base is already the upper element).
+                var position = groupChrPos ?? "top";
+                run = run with
+                {
+                    GroupChr = groupChr,
+                    GroupChrPos = position,
+                    GroupChrVerticalJustification = string.Equals(position, "top", StringComparison.OrdinalIgnoreCase) ? "bot" : string.Empty
+                };
+            }
             return run;
         }
     }

@@ -59,7 +59,7 @@ public sealed partial class DocumentView
             Document.Blocks.Add(paragraph);
         }
 
-        InsertInlineAt(paragraph, caret, BuildEquationRun(equation));
+        InsertInlineAt(paragraph, caret, BuildEquationRun(equation, document: _model));
         CommitToModel();
         if (equation.IsDisplayMath && !IsOnItsOwnLine(equation))
             EquationEditPlanner.TryReplace(_model, equation, equation);

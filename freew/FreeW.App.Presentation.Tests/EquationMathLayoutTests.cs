@@ -275,6 +275,70 @@ public sealed class EquationMathLayoutTests
         items[1].X.Should().BeApproximately(items[0].X + (1.5 * Size) + (3.0 / 18 * Size), 0.01);
     }
 
+    private static bool LimitsCentred(MathLayoutResult layout, string op)
+    {
+        var opItem = Texts(layout).First(item => item.Text == op);
+        var opRight = opItem.X + (EstimatedMathLayoutFont.Instance.MeasureText(op).Width * opItem.FontSize);
+        return Text(layout, "1").X < opRight - 0.01;
+    }
+
+    [Fact]
+    public void ExplicitLimitLocation_OverridesTheOperatorDefault()
+    {
+        var sum = new Equation([MathRun.NAry("∑", "0", "1", "f") with { NAryLimitLocation = MathLimitLocation.SubSup }]);
+        var integral = new Equation([MathRun.NAry("∫", "0", "1", "f") with { NAryLimitLocation = MathLimitLocation.UnderOver }]);
+
+        LimitsCentred(Layout(sum, display: true), "∑").Should().BeFalse();
+        LimitsCentred(Layout(integral, display: true), "∫").Should().BeTrue();
+        LimitsCentred(Layout(integral, display: false), "∫").Should().BeFalse("inline operators keep side limits");
+    }
+
+    [Fact]
+    public void DocumentLimitDefaults_ComeFromMathProperties()
+    {
+        var settings = new MathDocumentSettings
+        {
+            NAryLimitLocation = MathLimitLocation.SubSup,
+            IntegralLimitLocation = MathLimitLocation.UnderOver
+        };
+        MathLayoutResult LayoutWith(string op) => EquationMathLayout.Layout(
+            new Equation([MathRun.NAry(op, "0", "1", "f")]), EstimatedMathLayoutFont.Instance, Size, display: true, settings);
+
+        LimitsCentred(LayoutWith("∑"), "∑").Should().BeFalse();
+        LimitsCentred(LayoutWith("∫"), "∫").Should().BeTrue();
+    }
+
+    [Fact]
+    public void DisplayDefaultsOff_AndSmallFractions_UseInlineFractionSizes()
+    {
+        var equation = EquationLinearFormat.Parse("a/b");
+        equation.IsDisplayMath = true;
+
+        var noDisplayDefaults = EquationMathLayout.Layout(equation, EstimatedMathLayoutFont.Instance, Size, settings: new MathDocumentSettings { DisplayDefaults = false });
+        noDisplayDefaults.Style.Should().Be(MathLayoutStyle.Text);
+        Text(noDisplayDefaults, "\U0001D44E").FontSize.Should().BeApproximately(Size * 0.73, 0.001);
+
+        var smallFractions = EquationMathLayout.Layout(equation, EstimatedMathLayoutFont.Instance, Size, settings: new MathDocumentSettings { SmallFractions = true });
+        smallFractions.Style.Should().Be(MathLayoutStyle.Display);
+        Text(smallFractions, "\U0001D44E").FontSize.Should().BeApproximately(Size * 0.73, 0.001);
+    }
+
+    [Fact]
+    public void OverBraceWithoutVerticalJustification_HangsItsBaseBelowInScriptSize_AsWordDoes()
+    {
+        var unspecified = Layout(new Equation([MathRun.GroupCharOf("u", "⏞", "top")]));
+        var bottomJustified = Layout(new Equation([MathRun.GroupCharOf("u", "⏞", "top") with { GroupChrVerticalJustification = "bot" }]));
+
+        var hanging = Text(unspecified, "\U0001D462");
+        hanging.FontSize.Should().BeApproximately(Size * 0.73, 0.001);
+        hanging.BaselineY.Should().BeGreaterThan(0);
+
+        var onBaseline = Text(bottomJustified, "\U0001D462");
+        onBaseline.FontSize.Should().Be(Size);
+        onBaseline.BaselineY.Should().Be(0);
+        Texts(bottomJustified).Single(item => item.Text == "⏞").BaselineY.Should().BeLessThan(0);
+    }
+
     [Fact]
     public void PlainStyleText_IsDrawnUpright()
     {

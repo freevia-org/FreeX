@@ -4563,6 +4563,8 @@ public static partial class DocxWriter
         var pr = new XElement(M + "naryPr");
         if (!string.IsNullOrEmpty(run.Operator))
             pr.Add(new XElement(M + "chr", new XAttribute(M + "val", run.Operator)));
+        if (run.NAryLimitLocation is { } limitLocation)
+            pr.Add(new XElement(M + "limLoc", new XAttribute(M + "val", limitLocation == MathLimitLocation.UnderOver ? "undOvr" : "subSup")));
         pr.Add(new XElement(M + "subHide", new XAttribute(M + "val", IsMathSlotHidden(run.NAryLowerLimitEquation, run.Sub, depth) ? "1" : "0")));
         pr.Add(new XElement(M + "supHide", new XAttribute(M + "val", IsMathSlotHidden(run.NAryUpperLimitEquation, run.Sup, depth) ? "1" : "0")));
         return new XElement(M + "nary",
@@ -4697,7 +4699,10 @@ public static partial class DocxWriter
         new(M + "groupChr",
             new XElement(M + "groupChrPr",
                 new XElement(M + "chr", new XAttribute(M + "val", run.GroupChr)),
-                new XElement(M + "pos", new XAttribute(M + "val", run.GroupChrPos))),
+                new XElement(M + "pos", new XAttribute(M + "val", run.GroupChrPos)),
+                run.GroupChrVerticalJustification is "top" or "bot"
+                    ? new XElement(M + "vertJc", new XAttribute(M + "val", run.GroupChrVerticalJustification))
+                    : null),
             BuildMathSlot(M + "e", run.DecoratorBaseEquation, run.Base, depth));
 
     /// <summary>

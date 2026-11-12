@@ -83,6 +83,76 @@ public enum MathFractionType
     Linear
 }
 
+/// <summary>Where an n-ary operator's limits go (OMML m:limLoc / m:naryLim / m:intLim).</summary>
+public enum MathLimitLocation
+{
+    /// <summary>Centred under and over the operator ("undOvr").</summary>
+    UnderOver,
+
+    /// <summary>As subscript and superscript beside the operator ("subSup").</summary>
+    SubSup
+}
+
+/// <summary>
+/// The document-wide math settings of <c>w:settings/m:mathPr</c> that affect layout. Word's defaults: n-ary
+/// limits under/over, integral limits as scripts, display equations in display style, full-size fractions.
+/// The settings part itself is preserved verbatim, so these are read-only views of it.
+/// </summary>
+public sealed record MathDocumentSettings
+{
+    public static MathDocumentSettings Default { get; } = new();
+
+    private static readonly System.Xml.Linq.XNamespace M = "http://schemas.openxmlformats.org/officeDocument/2006/math";
+
+    /// <summary>m:naryLim: default limit placement of n-ary operators other than integrals.</summary>
+    public MathLimitLocation NAryLimitLocation { get; init; } = MathLimitLocation.UnderOver;
+
+    /// <summary>m:intLim: default limit placement of integrals.</summary>
+    public MathLimitLocation IntegralLimitLocation { get; init; } = MathLimitLocation.SubSup;
+
+    /// <summary>m:dispDef: display equations use display style (false lays them out like inline math).</summary>
+    public bool DisplayDefaults { get; init; } = true;
+
+    /// <summary>m:smallFrac: fractions are set at reduced (inline) size even in display equations.</summary>
+    public bool SmallFractions { get; init; }
+
+    /// <summary>Reads m:mathPr from a <c>w:settings</c> element (null or absent → Word's defaults).</summary>
+    public static MathDocumentSettings FromSettings(System.Xml.Linq.XElement? settings)
+    {
+        var mathPr = settings?.Element(M + "mathPr");
+        if (mathPr is null)
+            return Default;
+
+        string? Value(string name) => mathPr.Element(M + name)?.Attribute(M + "val")?.Value;
+        bool OnOff(string name, bool absent)
+        {
+            var element = mathPr.Element(M + name);
+            if (element is null)
+                return absent;
+            return Value(name) switch
+            {
+                null or "1" or "on" or "true" => true,
+                _ => false
+            };
+        }
+
+        static MathLimitLocation Location(string? value, MathLimitLocation fallback) => value switch
+        {
+            "undOvr" => MathLimitLocation.UnderOver,
+            "subSup" => MathLimitLocation.SubSup,
+            _ => fallback
+        };
+
+        return new MathDocumentSettings
+        {
+            NAryLimitLocation = Location(Value("naryLim"), MathLimitLocation.UnderOver),
+            IntegralLimitLocation = Location(Value("intLim"), MathLimitLocation.SubSup),
+            DisplayDefaults = OnOff("dispDef", absent: true),
+            SmallFractions = OnOff("smallFrac", absent: false)
+        };
+    }
+}
+
 /// <summary>Justification of a display equation (OMML m:oMathParaPr/m:jc).</summary>
 public enum MathJustification
 {
@@ -264,6 +334,19 @@ public sealed record MathRun
 
     /// <summary>The grouping character position: "top" or "bot" (only meaningful for <see cref="MathRunKind.GroupChar"/>).</summary>
     public string GroupChrPos { get; init; } = "top";
+
+    /// <summary>
+    /// The group character's vertical justification (m:groupChrPr/m:vertJc): "top" puts the upper element
+    /// on the baseline, "bot" the lower one; empty when the document does not say (Word then keeps the upper
+    /// element on the baseline). Only meaningful for <see cref="MathRunKind.GroupChar"/>.
+    /// </summary>
+    public string GroupChrVerticalJustification { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Explicit n-ary limit placement (m:naryPr/m:limLoc), or null to follow the document's m:mathPr
+    /// defaults (m:naryLim / m:intLim). Only meaningful for <see cref="MathRunKind.NAry"/>.
+    /// </summary>
+    public MathLimitLocation? NAryLimitLocation { get; init; }
 
     /// <summary>Creates a plain math-text fragment (m:r/m:t).</summary>
     public static MathRun PlainText(string text) => new() { Kind = MathRunKind.Text, Text = text };

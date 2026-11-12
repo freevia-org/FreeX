@@ -463,6 +463,51 @@ public class EquationLinearOmmlFidelityTests
     }
 
     [Theory]
+    [InlineData("undOvr", MathLimitLocation.UnderOver)]
+    [InlineData("subSup", MathLimitLocation.SubSup)]
+    public void ExplicitNAryLimitLocation_RoundTrips(string value, MathLimitLocation expected)
+    {
+        var equation = ReadSingleEquation(
+            "<m:oMath><m:nary><m:naryPr><m:chr m:val=\"∫\"/><m:limLoc m:val=\"" + value + "\"/></m:naryPr>"
+            + "<m:sub>" + WordRun("0") + "</m:sub><m:sup>" + WordRun("1") + "</m:sup><m:e>" + WordRun("x") + "</m:e></m:nary></m:oMath>");
+        equation.Runs.Single().NAryLimitLocation.Should().Be(expected);
+
+        var package = Write(DocumentWith(equation));
+
+        AssertValid(package, "m:limLoc must be written in schema order");
+        DocumentXml(package).Descendants(M + "limLoc").Single().Attribute(M + "val")!.Value.Should().Be(value);
+        Read(package).Paragraphs.Single().Runs.Single(run => run.Equation is not null).Equation!.Runs.Single()
+            .NAryLimitLocation.Should().Be(expected);
+    }
+
+    [Fact]
+    public void NAryWithoutLimitLocation_StillWritesNone()
+    {
+        var package = Write(DocumentWith(EquationLinearFormat.Parse(@"\sum_(i=1)^n i")));
+
+        DocumentXml(package).Descendants(M + "limLoc").Should().BeEmpty("the document default (m:naryLim) applies");
+    }
+
+    [Fact]
+    public void GroupCharacterVerticalJustification_RoundTrips_AndOverbraceIsWrittenAsWordDoes()
+    {
+        var read = ReadSingleEquation(
+            "<m:oMath><m:groupChr><m:groupChrPr><m:chr m:val=\"⏞\"/><m:pos m:val=\"top\"/><m:vertJc m:val=\"bot\"/></m:groupChrPr>"
+            + "<m:e>" + WordRun("x+y") + "</m:e></m:groupChr></m:oMath>");
+        read.Runs.Single().GroupChrVerticalJustification.Should().Be("bot");
+
+        var package = Write(DocumentWith(EquationLinearFormat.Parse(@"\overbrace(x+y)+\underbrace(a)")));
+
+        AssertValid(package, "m:vertJc must be written in schema order");
+        var groups = DocumentXml(package).Descendants(M + "groupChrPr").ToList();
+        groups[0].Element(M + "vertJc")!.Attribute(M + "val")!.Value.Should().Be("bot",
+            "Word's over-brace keeps its base on the baseline with m:vertJc bot");
+        groups[1].Element(M + "vertJc").Should().BeNull();
+        Read(package).Paragraphs.Single().Runs.Single(run => run.Equation is not null).Equation!.Runs[0]
+            .GroupChrVerticalJustification.Should().Be("bot");
+    }
+
+    [Theory]
     [InlineData("<m:rPr><m:sty m:val=\"p\"/></m:rPr>", true)]
     [InlineData("<m:rPr><m:nor/></m:rPr>", true)]
     [InlineData("<m:rPr><m:sty m:val=\"i\"/></m:rPr>", false)]

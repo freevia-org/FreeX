@@ -16,10 +16,10 @@ namespace FreeW.App.Host.Editing;
 /// </summary>
 internal sealed class EquationMathVisual : FrameworkElement
 {
-    public EquationMathVisual(Equation equation, double fontSize, bool? display = null)
+    public EquationMathVisual(Equation equation, double fontSize, bool? display = null, MathDocumentSettings? settings = null)
     {
         Equation = equation;
-        Layout = EquationMathLayout.Layout(equation, WpfMathLayoutFont.Instance, fontSize, display);
+        Layout = EquationMathLayout.Layout(equation, WpfMathLayoutFont.Instance, fontSize, display, settings);
         TextBlock.SetBaselineOffset(this, Layout.Ascent);
         SnapsToDevicePixels = false;
 

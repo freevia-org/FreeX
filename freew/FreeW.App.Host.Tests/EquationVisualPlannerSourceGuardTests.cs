@@ -17,7 +17,7 @@ public sealed class EquationVisualPlannerSourceGuardTests
         visual.Should().Contain("EquationMathLayout.Layout(equation, WpfMathLayoutFont.Instance");
         visual.Should().Contain("TextBlock.SetBaselineOffset(this, Layout.Ascent)");
         visual.Should().Contain("DrawGlyphRun");
-        documentView.Should().Contain("BuildEquationRun(equation, run.Formatting.FontSizePt)");
+        documentView.Should().Contain("BuildEquationRun(equation, run.Formatting.FontSizePt, document)");
         documentView.Should().NotContain("Text = equation.LinearText");
         documentView.Should().NotContain("BuildEquationFractionElement",
             "the per-structure StackPanel approximations were replaced by the shared box-layout engine");

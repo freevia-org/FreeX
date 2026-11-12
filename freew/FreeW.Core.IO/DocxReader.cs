@@ -3734,8 +3734,14 @@ public static partial class DocxReader
         var hasNestedSup = HasStructuredMathSlot(sup);
         var hasNestedOperand = HasStructuredMathSlot(operand);
         var op = string.IsNullOrEmpty(chr) ? "∫" : chr;
+        var limitLocation = nary.Element(M + "naryPr")?.Element(M + "limLoc")?.Attribute(M + "val")?.Value switch
+        {
+            "undOvr" => MathLimitLocation.UnderOver,
+            "subSup" => MathLimitLocation.SubSup,
+            _ => (MathLimitLocation?)null
+        };
 
-        return hasNestedSub || hasNestedSup || hasNestedOperand
+        var run = hasNestedSub || hasNestedSup || hasNestedOperand
             ? new MathRun
             {
                 Kind = MathRunKind.NAry,
@@ -3748,6 +3754,7 @@ public static partial class DocxReader
                 NAryOperandEquation = hasNestedOperand ? ReadMathSlot(operand) : null
             }
             : MathRun.NAry(op, subText, supText, operandText);
+        return run with { NAryLimitLocation = limitLocation };
     }
 
     /// <summary>
@@ -3897,9 +3904,15 @@ public static partial class DocxReader
         var pr = groupChr.Element(M + "groupChrPr");
         var chr = pr?.Element(M + "chr")?.Attribute(M + "val")?.Value;
         var pos = pr?.Element(M + "pos")?.Attribute(M + "val")?.Value;
+        var vertJc = pr?.Element(M + "vertJc")?.Attribute(M + "val")?.Value switch
+        {
+            "top" => "top",
+            "bot" => "bot",
+            _ => string.Empty
+        };
         var baseSlot = groupChr.Element(M + "e");
         var baseText = MathTextOf(baseSlot);
-        return HasStructuredMathSlot(baseSlot)
+        var run = HasStructuredMathSlot(baseSlot)
             ? new MathRun
             {
                 Kind = MathRunKind.GroupChar,
@@ -3912,6 +3925,7 @@ public static partial class DocxReader
                 baseText,
                 string.IsNullOrEmpty(chr) ? "⏞" : chr,
                 string.IsNullOrEmpty(pos) ? "top" : pos);
+        return run with { GroupChrVerticalJustification = vertJc };
     }
 
     /// <summary>The concatenated text of all descendant m:t runs under <paramref name="element"/> (empty if null).</summary>
