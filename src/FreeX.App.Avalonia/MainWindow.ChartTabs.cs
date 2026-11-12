@@ -396,6 +396,7 @@ public sealed partial class MainWindow
             ButtonHeight = 22,
             ButtonPadding = new Thickness(8, 1),
             ListBoxItemMinHeight = 22,
+            KeepListRowMinHeight = true,
         };
 
     private async Task ShowSelectChartDataDialog()

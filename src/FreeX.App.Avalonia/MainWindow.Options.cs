@@ -1018,8 +1018,10 @@ public sealed partial class MainWindow
                 FontSize = 12,
                 Margin = new Thickness(0, 8, 0, 5),
             },
+            // WPF shows this prose in a plain TextBlock, so an underscore in it (the environment
+            // variable name) is literal text, not an access-key marker: do not strip it.
             OptionsHint(
-                OptionsText("Options_FreeXWritesLocalUsageEventsAndCrashFilesToLOCALAPPDATAFr"),
+                UiText.Get("Options_FreeXWritesLocalUsageEventsAndCrashFilesToLOCALAPPDATAFr"),
                 new Thickness(0, 0, 0, 12)),
             trustCenterSettingsButton);
         trustCenterPanel.Width = OptionsDialogPlanner.GeneralContentWidth;

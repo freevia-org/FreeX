@@ -54,6 +54,11 @@ public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
         CompactDialogVisualTokens.GroupBoxPaddingVertical);
     public Thickness ListBoxItemPadding { get; init; } = new(4, 1);
     public double ListBoxItemMinHeight { get; init; } = CompactDialogVisualTokens.ListBoxItemMinHeight;
+    /// <summary>
+    /// True when the row floor above was measured for this dialog and happens to equal the shared
+    /// token, so a product-wide default row floor must not replace it.
+    /// </summary>
+    public bool KeepListRowMinHeight { get; init; }
     public double ActionSpacing { get; init; } = 8;
     public CornerRadius ButtonCornerRadius { get; init; } = new(CompactDialogVisualTokens.ButtonCornerRadius);
     public IBrush? ButtonBackgroundBrush { get; init; }
@@ -74,6 +79,27 @@ public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
     public IBrush? DialogInactiveTabBorderBrush { get; init; }
     public IBrush? DialogInactiveTabBackgroundBrush { get; init; }
     public bool RemoveFocusAdorner { get; init; }
+}
+
+/// <summary>
+/// Product-wide push-button colours for <see cref="AvaloniaCompactDialogChrome.ApplyButton"/>. A product
+/// whose WPF dialogs use the native button look installs one through
+/// <see cref="AvaloniaCompactDialogChrome.DefaultButtonPalette"/>; an explicit brush on the
+/// <see cref="AvaloniaCompactDialogChromeStyle"/> passed to a call still wins.
+/// </summary>
+public sealed record AvaloniaCompactDialogButtonPalette(
+    IBrush Background,
+    IBrush BorderBrush,
+    IBrush DefaultBorderBrush,
+    IBrush HoverBackground,
+    IBrush HoverBorderBrush,
+    IBrush PressedBackground,
+    IBrush PressedBorderBrush,
+    IBrush DisabledBackground,
+    IBrush DisabledBorderBrush,
+    IBrush DisabledForeground)
+{
+    public CornerRadius CornerRadius { get; init; }
 }
 
 /// <summary>
@@ -140,6 +166,27 @@ public static class AvaloniaCompactDialogChrome
 
     public static AvaloniaCompactDialogChromeStyle WindowsStyle { get; } = new(WindowsUiFontFamily);
     public static IBrush NeutralButtonBorderBrush => ButtonBorderBrush;
+
+    /// <summary>
+    /// Product-wide push-button palette. Null keeps the themed compact look (FreeW/FreeP); FreeX
+    /// installs the native WPF button colours at startup because its WPF dialogs use them.
+    /// </summary>
+    public static AvaloniaCompactDialogButtonPalette? DefaultButtonPalette { get; set; }
+
+    /// <summary>
+    /// Product-wide text-box selection highlight and the ink drawn on top of it. Null keeps the
+    /// shared solid highlight; a chrome style that names its own selection brush still wins.
+    /// </summary>
+    public static IBrush? DefaultTextSelectionBrush { get; set; }
+
+    public static IBrush? DefaultTextSelectionForegroundBrush { get; set; }
+
+    /// <summary>
+    /// Product-wide list row floor used when a chrome style leaves the shared token default in place
+    /// and does not set <see cref="AvaloniaCompactDialogChromeStyle.KeepListRowMinHeight"/>.
+    /// Null keeps the token for every caller.
+    /// </summary>
+    public static double? DefaultListRowMinHeight { get; set; }
     public static IBrush DialogSeparatorBrush => DialogTabPaneBorderBrush;
 
     private static readonly IBrush ButtonBorderBrush = new ImmutableSolidColorBrush(
@@ -243,7 +290,10 @@ public static class AvaloniaCompactDialogChrome
                     textBlock.FontFamily = style.FontFamily;
                 if (!textBlock.IsSet(TextBlock.FontSizeProperty))
                     textBlock.FontSize = style.FontSize;
-                if (!textBlock.IsSet(TextBlock.ForegroundProperty))
+                // A caption inside a push button has to keep inheriting the button's ink: a local
+                // brush here outranks the template's disabled/hover foreground, which left the
+                // caption of a disabled button painted in enabled ink.
+                if (!textBlock.IsSet(TextBlock.ForegroundProperty) && !IsPushButtonCaption(textBlock))
                     textBlock.Foreground = ThemeTextBrush(style);
             }
 
@@ -323,6 +373,19 @@ public static class AvaloniaCompactDialogChrome
         }
     }
 
+    private static bool IsPushButtonCaption(TextBlock textBlock)
+    {
+        foreach (var ancestor in textBlock.GetVisualAncestors())
+        {
+            if (ancestor is ToggleButton)
+                return false;
+            if (ancestor is Button)
+                return true;
+        }
+
+        return false;
+    }
+
     public static void ApplyButton(
         Button button,
         AvaloniaCompactDialogChromeStyle style,
@@ -342,6 +405,9 @@ public static class AvaloniaCompactDialogChrome
             button.Padding = style.ButtonPadding;
         }
         button.CornerRadius = style.ButtonCornerRadius;
+        var productPalette = DefaultButtonPalette;
+        if (productPalette is not null)
+            button.CornerRadius = productPalette.CornerRadius;
         button.BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness);
         button.FontSize = style.FontSize;
         button.FontFamily = style.FontFamily;
@@ -359,6 +425,14 @@ public static class AvaloniaCompactDialogChrome
         var restingBorder = isDefault
             ? style.DefaultButtonBorderBrush ?? accentBrush
             : style.ButtonBorderBrush ?? ButtonBorderBrush;
+        if (productPalette is not null)
+        {
+            if (style.ButtonBackgroundBrush is null)
+                restingBackground = productPalette.Background;
+            restingBorder = isDefault
+                ? style.DefaultButtonBorderBrush ?? productPalette.DefaultBorderBrush
+                : style.ButtonBorderBrush ?? productPalette.BorderBrush;
+        }
         button.Styles.Add(new Style(selector => selector.OfType<Button>())
         {
             Setters =
@@ -374,8 +448,9 @@ public static class AvaloniaCompactDialogChrome
             Setters =
             {
                 new Setter(Button.BackgroundProperty, style.ButtonHoverBackgroundBrush
+                    ?? productPalette?.HoverBackground
                     ?? ThemeBrush("ThemeAccentSoftBrush", ButtonHoverBackgroundBrush)),
-                new Setter(Button.BorderBrushProperty, accentBrush),
+                new Setter(Button.BorderBrushProperty, productPalette?.HoverBorderBrush ?? accentBrush),
             },
         });
         button.Styles.Add(new Style(selector => selector.OfType<Button>().Class(":pressed"))
@@ -383,18 +458,20 @@ public static class AvaloniaCompactDialogChrome
             Setters =
             {
                 new Setter(Button.BackgroundProperty, style.ButtonPressedBackgroundBrush
+                    ?? productPalette?.PressedBackground
                     ?? ThemeBrush("ThemeAccentPressedBrush", ButtonPressedBackgroundBrush)),
-                new Setter(Button.BorderBrushProperty, accentBrush),
+                new Setter(Button.BorderBrushProperty, productPalette?.PressedBorderBrush ?? accentBrush),
             },
         });
         button.Styles.Add(new Style(selector => selector.OfType<Button>().Class(":disabled"))
         {
             Setters =
             {
-                new Setter(Button.ForegroundProperty, DisabledButtonForegroundBrush),
+                new Setter(Button.ForegroundProperty, productPalette?.DisabledForeground ?? DisabledButtonForegroundBrush),
                 new Setter(Button.BackgroundProperty,
-                    ThemeBrush("ThemeNeutralSheetSurfaceBrush", new ImmutableSolidColorBrush(Color.FromRgb(0xf3, 0xf3, 0xf3)))),
-                new Setter(Button.BorderBrushProperty, DisabledButtonBorderBrush),
+                    productPalette?.DisabledBackground
+                    ?? ThemeBrush("ThemeNeutralSheetSurfaceBrush", new ImmutableSolidColorBrush(Color.FromRgb(0xf3, 0xf3, 0xf3)))),
+                new Setter(Button.BorderBrushProperty, productPalette?.DisabledBorderBrush ?? DisabledButtonBorderBrush),
             },
         });
     }
@@ -426,9 +503,11 @@ public static class AvaloniaCompactDialogChrome
         // painting the enabled shade.
         textBox.BorderBrush = textBox.IsEnabled ? inputBorder : disabledInputBorder;
         textBox.BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness);
-        textBox.SelectionBrush = style.TextSelectionBrush ?? TextSelectionBrush;
+        textBox.SelectionBrush = style.TextSelectionBrush ?? DefaultTextSelectionBrush ?? TextSelectionBrush;
         if (style.TextSelectionBrush is not null)
             textBox.SelectionForegroundBrush = Brushes.Black;
+        else if (DefaultTextSelectionBrush is not null)
+            textBox.SelectionForegroundBrush = DefaultTextSelectionForegroundBrush ?? ThemeTextBrush(style);
         textBox.VerticalContentAlignment = VerticalAlignment.Center;
         // A read-only document box owns its own WPF-authority focus blue through the :focus styles
         // installed alongside ReadOnlyDocumentClass. The styles added below are registered later on
@@ -504,9 +583,12 @@ public static class AvaloniaCompactDialogChrome
         if (fixedHeight)
         {
             borderStyle.Setters.Add(new Setter(Layoutable.MinHeightProperty, 0d));
+            // Follow the box's own height instead of pinning the style height: route helpers apply
+            // this chrome and then shrink the box (22 -> 20/18), and a frame pinned taller than its
+            // box is centred over it, so its top and bottom edges fall outside and are clipped.
             borderStyle.Setters.Add(new Setter(
                 Layoutable.HeightProperty,
-                style.TextBoxHeight ?? style.ControlHeight));
+                new Binding(nameof(Layoutable.Height)) { Source = textBox }));
         }
         textBox.Styles.Add(borderStyle);
         textBox.Styles.Add(new Style(selector => selector
@@ -560,6 +642,12 @@ public static class AvaloniaCompactDialogChrome
             QueueRenderedTextBoxChrome(textBox, style, fixedHeight);
         textBox.PropertyChanged += (_, args) =>
         {
+            if (fixedHeight && args.Property == Layoutable.HeightProperty)
+            {
+                QueueRenderedTextBoxChrome(textBox, style, fixedHeight);
+                return;
+            }
+
             if (args.Property != InputElement.IsEnabledProperty)
                 return;
             textBox.BorderBrush = textBox.IsEnabled ? inputBorder : disabledInputBorder;
@@ -606,7 +694,10 @@ public static class AvaloniaCompactDialogChrome
             if (fixedHeight)
             {
                 borderElement.MinHeight = 0;
-                borderElement.Height = style.TextBoxHeight ?? style.ControlHeight;
+                // The box's own height is the authority (see the border style in ApplyTextBox).
+                borderElement.Height = double.IsNaN(textBox.Height)
+                    ? style.TextBoxHeight ?? style.ControlHeight
+                    : textBox.Height;
             }
             borderElement.BorderBrush = border;
             borderElement.BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness);
@@ -698,7 +789,7 @@ public static class AvaloniaCompactDialogChrome
     {
         ArgumentNullException.ThrowIfNull(button);
 
-        button.BorderBrush = ButtonBorderBrush;
+        button.BorderBrush = DefaultButtonPalette?.BorderBrush ?? ButtonBorderBrush;
         button.BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness);
     }
 
@@ -1447,6 +1538,13 @@ public static class AvaloniaCompactDialogChrome
     {
         ArgumentNullException.ThrowIfNull(listBox);
         ArgumentNullException.ThrowIfNull(style);
+
+        if (DefaultListRowMinHeight is { } productRowHeight
+            && !style.KeepListRowMinHeight
+            && style.ListBoxItemMinHeight == CompactDialogVisualTokens.ListBoxItemMinHeight)
+        {
+            style = style with { ListBoxItemMinHeight = productRowHeight };
+        }
 
         listBox.FontSize = style.FontSize;
         listBox.Background = ThemeWhiteBrush();

@@ -273,6 +273,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ComboBoxPadding = new Thickness(4, 0, 4, 0),
             ListBoxItemPadding = new Thickness(0, 1),
             ListBoxItemMinHeight = 22,
+            KeepListRowMinHeight = true,
         };
     // WPF ScenarioManagerDialog uses the shared 12px dialog typography with compact
     // 22px controls. Keep this override app-local so other dialogs retain their
@@ -287,6 +288,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             TextBoxPadding = new Thickness(4, 0),
             ListBoxItemPadding = new Thickness(4, 1),
             ListBoxItemMinHeight = 22,
+            KeepListRowMinHeight = true,
         };
 
     private static readonly IBrush ChromeSurface =

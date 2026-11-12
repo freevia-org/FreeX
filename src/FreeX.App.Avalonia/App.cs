@@ -83,6 +83,10 @@ public sealed class App : Application
         // FreeX's WPF dialogs caption every group box in ordinary text ink, not the accent.
         AvaloniaCompactDialogChrome.DefaultGroupBoxCaptionBrush = global::Avalonia.Media.Brushes.Black;
 
+        // FreeX's WPF dialogs use the native control look throughout: one push-button style,
+        // 12 px text, the system selection colours. Installed for dialog windows only.
+        DialogWindowDefaults.Install();
+
         // macOS only (empty elsewhere): context menus and menu flyouts otherwise fall back to the
         // platform default face instead of the chain the ribbon and dialogs resolve to.
         foreach (var style in AvaloniaCompactDialogChrome.BuildPlatformMenuFontStyles())
