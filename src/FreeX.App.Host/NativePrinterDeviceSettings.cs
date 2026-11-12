@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Drawing.Printing;
 using System.Printing;
@@ -24,7 +25,7 @@ internal static class NativePrinterDeviceSettings
     private const int DmSizeOffset = 68;
     private const int DmDriverExtraOffset = 70;
 
-    private static readonly Dictionary<string, byte[]> SessionDevModes = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, byte[]> SessionDevModes = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Returns the requested printer, or the Windows default printer when none is named.</summary>
     public static string? ResolvePrinterName(string? requestedPrinterName)
@@ -113,7 +114,7 @@ internal static class NativePrinterDeviceSettings
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             // A remembered DEVMODE the driver no longer accepts must not block printing.
-            SessionDevModes.Remove(settings.PrinterName);
+            SessionDevModes.TryRemove(settings.PrinterName, out _);
         }
         finally
         {
