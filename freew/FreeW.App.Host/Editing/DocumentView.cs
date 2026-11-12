@@ -11368,15 +11368,18 @@ public sealed partial class DocumentView : RichTextBox
             // they survive an edit/commit cycle without a Tag. WidowControl has no FlowDocument slot and
             // is carried on the Tag instead (see below).
             KeepWithNext = paraFmt.KeepWithNext,
-            // WPF has no widow/orphan setting. Use the shared Word pagination policy for ordinary
-            // paragraphs; its keep-together primitive is the closest native representation of the
-            // default two-line widow/orphan guard. Table-cell and non-text-object paths retain their
-            // existing ownership so this policy only changes ordinary body composition.
+            // Keep-lines-together (and the table-cell/non-text-object ownership) comes from the shared
+            // Word pagination planner. Word's widow/orphan control is NOT keep-together: it only forbids a
+            // single stranded first/last line, so it maps onto PTS's native MinOrphanLines/MinWidowLines
+            // below, which split the paragraph exactly where Word does (pulling one line forward, or moving
+            // a 2-3 line paragraph whole) instead of moving every long paragraph wholesale.
             KeepTogether = DocumentParagraphPaginationPlanner.ShouldKeepParagraphTogether(
                 paraFmt,
                 isTableCell: inTableCell,
                 hasNonTextLayoutObject: hasNonTextLayoutObject) ||
-                hasNonTextLayoutObject
+                hasNonTextLayoutObject,
+            MinOrphanLines = DocumentParagraphPaginationPlanner.ResolveMinimumWidowOrphanLines(paraFmt),
+            MinWidowLines = DocumentParagraphPaginationPlanner.ResolveMinimumWidowOrphanLines(paraFmt)
         };
         // Word default: no pair kerning. Set on the paragraph (not only the editor FlowDocument) so
         // synthetic marker/field runs inherit it wherever the block is re-hosted (page boxes, print).

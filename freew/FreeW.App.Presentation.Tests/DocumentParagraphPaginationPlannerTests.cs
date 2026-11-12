@@ -18,8 +18,9 @@ public sealed class DocumentParagraphPaginationPlannerTests
     }
 
     [Fact]
-    public void ExplicitWidowControlOn_StillKeepsOrdinaryParagraphTogether()
+    public void ExplicitWidowControlOn_DoesNotKeepOrdinaryParagraphTogether()
     {
+        // Widow control guards single lines (MinWidow/MinOrphan lines), not the whole paragraph.
         var formatting = ParagraphFormatting.Default with
         {
             WidowControl = true,
@@ -28,7 +29,43 @@ public sealed class DocumentParagraphPaginationPlannerTests
 
         DocumentParagraphPaginationPlanner
             .ShouldKeepParagraphTogether(formatting)
-            .Should().BeTrue();
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void WidowOrphanMinimumLines_DefaultOnWhenOmittedOrExplicitOn_OffOnlyWhenExplicitOff()
+    {
+        DocumentParagraphPaginationPlanner
+            .ResolveMinimumWidowOrphanLines(ParagraphFormatting.Default)
+            .Should().Be(2);
+        DocumentParagraphPaginationPlanner
+            .ResolveMinimumWidowOrphanLines(ParagraphFormatting.Default with { WidowControl = true, WidowControlIsSet = true })
+            .Should().Be(2);
+        DocumentParagraphPaginationPlanner
+            .ResolveMinimumWidowOrphanLines(ParagraphFormatting.Default with { WidowControl = false, WidowControlIsSet = true })
+            .Should().Be(0);
+    }
+
+    [Theory]
+    // total, fit, widow, keepLines, atTop, expected
+    [InlineData(5, 5, true, false, false, 5)]   // fits entirely
+    [InlineData(5, 4, true, false, false, 3)]   // one widow line: pull a second line forward
+    [InlineData(5, 3, true, false, false, 3)]   // two lines carry over: fine
+    [InlineData(5, 1, true, false, false, 0)]   // single orphan line: move the paragraph
+    [InlineData(5, 0, true, false, false, 0)]
+    [InlineData(3, 2, true, false, false, 0)]   // 3 lines: pulling the widow would orphan one line
+    [InlineData(2, 1, true, false, false, 0)]
+    [InlineData(4, 2, true, false, false, 2)]
+    [InlineData(5, 4, false, false, false, 4)]  // widow control off: whatever fits
+    [InlineData(5, 1, false, false, false, 1)]
+    [InlineData(5, 4, true, true, false, 0)]    // keep-lines: move whole
+    [InlineData(50, 40, true, true, true, 40)]  // at page top a too-tall paragraph still splits
+    public void PlanLinesOnCurrentPage_FollowsWordWidowOrphanRule(
+        int total, int fit, bool widow, bool keepLines, bool atTop, int expected)
+    {
+        DocumentParagraphPaginationPlanner
+            .PlanLinesOnCurrentPage(total, fit, widow, keepLines, atTop)
+            .Should().Be(expected);
     }
 
     [Fact]
@@ -81,6 +118,8 @@ public sealed class DocumentParagraphPaginationPlannerTests
 
         hostSource.Should().Contain("DocumentParagraphPaginationPlanner.ShouldKeepParagraphTogether(");
         avaloniaSource.Should().Contain("DocumentParagraphPaginationPlanner.ShouldKeepParagraphTogether(");
+        hostSource.Should().Contain("DocumentParagraphPaginationPlanner.ResolveMinimumWidowOrphanLines(");
+        avaloniaSource.Should().Contain("DocumentParagraphPaginationPlanner.PlanLinesOnCurrentPage(");
     }
 
     private static string ReadSource(params string[] relativeParts)

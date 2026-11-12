@@ -8704,15 +8704,15 @@ public sealed partial class DocumentView : Control
     /// other unsupported combination.
     /// <para>
     /// When the following paragraph itself falls under this paginator's own keep-together policy
-    /// (<see cref="DocumentParagraphPaginationPlanner.ShouldKeepParagraphTogether"/> -- the default
-    /// for ordinary body paragraphs; see the R132 note above), that paragraph will refuse to start
-    /// unless its COMPLETE height fits on the page, not merely its first line. Reserving only a
-    /// first-line estimate here would under-count in that (common) case: the combined reservation
+    /// (<see cref="DocumentParagraphPaginationPlanner.ShouldKeepParagraphTogether"/>), that paragraph
+    /// will refuse to start unless its COMPLETE height fits on the page; under widow control it refuses
+    /// to start with a single orphaned line (a paragraph of up to three lines moves whole). Reserving
+    /// only a first-line estimate here would under-count in those cases: the combined reservation
     /// would appear to fit, so the heading would stay put, and the next paragraph would then still
     /// jump to the next page alone when its own reservation runs -- reproducing the exact split this
-    /// fix exists to prevent. So the full paragraph height is used whenever that policy applies, and
-    /// only a first-line estimate otherwise (matching Word's real KeepWithNext semantics, which never
-    /// requires more than adjacency of the two paragraphs' boundary lines).
+    /// fix exists to prevent. So the full height (keep-lines) or the widow-protected leading lines are
+    /// used, and only a first-line estimate otherwise (matching Word's real KeepWithNext semantics,
+    /// which never requires more than adjacency of the two paragraphs' boundary lines).
     /// </para>
     /// </summary>
     private double MeasureKeepWithNextFollowOnHeight(int blockIndex, double textWidth)
@@ -8738,7 +8738,9 @@ public sealed partial class DocumentView : Control
             && nextCells.All(cell =>
                 !cell.IsPageBreak && !cell.IsColumnBreak && cell.Ch != '\t' && cell.EquationElement is null);
 
-        if (DocumentParagraphPaginationPlanner.ShouldKeepParagraphTogether(nextPf) && nextSupportsCompleteParagraphPlanning)
+        var nextKeepsTogether = DocumentParagraphPaginationPlanner.ShouldKeepParagraphTogether(nextPf);
+        var nextWidowControl = DocumentParagraphPaginationPlanner.IsWidowControlEffective(nextPf);
+        if ((nextKeepsTogether || nextWidowControl) && nextSupportsCompleteParagraphPlanning)
         {
             var nextIndentLeft  = nextPf.IndentLeftPt  * PxPerPoint;
             var nextIndentRight = nextPf.IndentRightPt * PxPerPoint;
@@ -8771,10 +8773,17 @@ public sealed partial class DocumentView : Control
                     offset => offset,
                     offset => BuildForLayout("-", nextCells[offset - 1].Fmt).WidthIncludingTrailingWhitespace);
 
-            var nextParagraphHeight = MeasurePlainParagraphHeight(
+            var nextLineHeights = MeasurePlainParagraphLineHeights(
                 nextCells, nextMeasured, nextHeights, nextAvailableWidth, nextPf, _doc.Page,
                 nextNaturalLineHeightScale, nextAutomaticHyphenationText, nextAutomaticHyphenWidths);
-            return nextPf.SpaceBeforePt * PxPerPoint + nextParagraphHeight;
+            // Keep-lines needs the whole paragraph; widow control needs the lines the planner would keep
+            // with the boundary: all of a paragraph of up to three lines, otherwise its first two lines.
+            var reservedLines = nextKeepsTogether
+                ? nextLineHeights.Count
+                : nextLineHeights.Count <= DocumentParagraphPaginationPlanner.WordWidowOrphanMinimumLines + 1
+                    ? nextLineHeights.Count
+                    : DocumentParagraphPaginationPlanner.WordWidowOrphanMinimumLines;
+            return nextPf.SpaceBeforePt * PxPerPoint + nextLineHeights.Take(reservedLines).Sum();
         }
 
         // The next paragraph is free to split (or has content this fast path does not model beyond
@@ -8806,12 +8815,30 @@ public sealed partial class DocumentView : Control
         PageSettings page,
         double naturalLineHeightScale,
         string automaticHyphenationText,
+        IReadOnlyDictionary<int, double> automaticHyphenWidths) =>
+        MeasurePlainParagraphLineHeights(
+            cells, measured, heights, availableWidth, pf, page,
+            naturalLineHeightScale, automaticHyphenationText, automaticHyphenWidths).Sum();
+
+    /// <summary>
+    /// Returns the height of every wrapped line of an ordinary paragraph, in emission order, using the
+    /// same wrapping and line-spacing rules as <see cref="LayoutParagraphPaged"/>'s line loop.
+    /// </summary>
+    private static List<double> MeasurePlainParagraphLineHeights(
+        IReadOnlyList<Cell> cells,
+        IReadOnlyList<double> measured,
+        IReadOnlyList<double> heights,
+        double availableWidth,
+        ParagraphFormatting pf,
+        PageSettings page,
+        double naturalLineHeightScale,
+        string automaticHyphenationText,
         IReadOnlyDictionary<int, double> automaticHyphenWidths)
     {
         if (cells.Count == 0)
-            return ApplyLineSpacing(DefaultFontSizePt * PxPerPoint * 1.3 * naturalLineHeightScale, pf);
+            return [ApplyLineSpacing(DefaultFontSizePt * PxPerPoint * 1.3 * naturalLineHeightScale, pf)];
 
-        var totalHeight = 0.0;
+        var lineHeights = new List<double>();
         var lineStart = 0;
         var lineWidth = 0.0;
         var lastBreak = -1;
@@ -8822,7 +8849,7 @@ public sealed partial class DocumentView : Control
             var naturalHeight = DefaultFontSizePt * PxPerPoint * 1.3;
             for (var index = from; index < to; index++)
                 naturalHeight = Math.Max(naturalHeight, heights[index]);
-            totalHeight += ApplyLineSpacing(naturalHeight * naturalLineHeightScale, pf);
+            lineHeights.Add(ApplyLineSpacing(naturalHeight * naturalLineHeightScale, pf));
         }
 
         for (var index = 0; index < cells.Count; index++)
@@ -8866,7 +8893,62 @@ public sealed partial class DocumentView : Control
         }
 
         AddLine(lineStart, cells.Count);
-        return totalHeight;
+        return lineHeights;
+    }
+
+    /// <summary>
+    /// Applies Word's widow/orphan rule to an ordinary paragraph about to be laid out line by line.
+    /// Counts how many of its <paramref name="lineHeights"/> fit in the current page/column slot and asks
+    /// the shared <see cref="DocumentParagraphPaginationPlanner.PlanLinesOnCurrentPage"/> how many to keep
+    /// there. Moves the whole paragraph to the next slot when the planner keeps none, and returns the line
+    /// index before which the line loop must break to the next slot (-1 when no forced break applies).
+    /// </summary>
+    private int PlanWidowOrphanBreak(IReadOnlyList<double> lineHeights)
+    {
+        if (lineHeights.Count < 2 || _layoutTextAreaHeight <= 0)
+            return -1;
+
+        var posInPage = _layoutContentY % _layoutTextAreaHeight;
+        if (posInPage <= 0)
+            return -1;
+
+        var slot = (int)(_layoutContentY / _layoutTextAreaHeight);
+        var pageIndex = slot / _colCount;
+        var bandReservation = _footnoteBandHeightByPage.TryGetValue(pageIndex, out var bh) ? bh : 0.0;
+        var effectiveHeight = Math.Max(1, _layoutTextAreaHeight - bandReservation);
+
+        var linesThatFit = 0;
+        var used = posInPage;
+        foreach (var lineHeight in lineHeights)
+        {
+            if (used + lineHeight > effectiveHeight)
+                break;
+            used += lineHeight;
+            linesThatFit++;
+        }
+
+        var keep = DocumentParagraphPaginationPlanner.PlanLinesOnCurrentPage(
+            lineHeights.Count, linesThatFit, widowControl: true);
+        if (keep >= lineHeights.Count)
+            return -1;
+        if (keep == 0)
+        {
+            _layoutContentY += _layoutTextAreaHeight - posInPage;
+            return -1;
+        }
+
+        return keep;
+    }
+
+    /// <summary>Moves layout to the top of the next page/column slot when the widow plan breaks here.</summary>
+    private void BreakForWidowOrphanPlan(int lineIndex, int widowBreakBeforeLine)
+    {
+        if (widowBreakBeforeLine <= 0 || lineIndex != widowBreakBeforeLine || _layoutTextAreaHeight <= 0)
+            return;
+
+        var posInPage = _layoutContentY % _layoutTextAreaHeight;
+        if (posInPage > 0)
+            _layoutContentY += _layoutTextAreaHeight - posInPage;
     }
 
     internal static bool ShouldUseAutomaticHyphenBreak(
@@ -9142,17 +9224,15 @@ public sealed partial class DocumentView : Control
                 offset => offset,
                 offset => BuildForLayout("-", cells[offset - 1].Fmt).WidthIncludingTrailingWhitespace);
 
-        // Keep the full paragraph together for the ordinary text path. This mirrors the WPF host's
-        // default-on widow policy without changing tabs, equations, drop caps, or wrapped float layout.
+        // Keep the full paragraph together for the ordinary text path when keep-lines-together applies,
+        // without changing tabs, equations, drop caps, or wrapped float layout.
         //
-        // R132: the policy itself lives in the shared planner, which treats an OMITTED w:widowControl as
-        // splittable (Word's widowControl guards only a stranded first/last line and never moves a whole
-        // paragraph as one unit) while an explicit widowControl=on still keeps the paragraph together.
-        // The blank-page emission that once blocked that distinction -- a page carrying only the
-        // watermark and the page border -- no longer occurs;
-        // DocumentViewColumnLayoutTests.Omitted_widow_control_allows_an_ordinary_wrapped_paragraph_to_split_like_explicit_off
-        // and the watermark-on-every-page export test both pass.
+        // R132: the policy itself lives in the shared planner. Word's widowControl (omitted = default on,
+        // or explicit on) never moves a whole long paragraph as one unit; it only forbids a single
+        // stranded first/last line, which PlanWidowOrphanBreak applies below through the same planner
+        // the WPF host feeds into FlowDocument's MinOrphanLines/MinWidowLines.
         var keepParagraphTogether = DocumentParagraphPaginationPlanner.ShouldKeepParagraphTogether(pf);
+        var widowBreakBeforeLine = -1;
         // R137 fix: WPF maps Paragraph.KeepWithNext straight onto FlowDocument's Paragraph.KeepWithNext,
         // so the framework's own pagination engine never lets a page break fall between this paragraph
         // and the next one (the classic "heading stays with its body text" rule). This custom paginator
@@ -9178,6 +9258,12 @@ public sealed partial class DocumentView : Control
                     paragraphHeight += spaceAfter + followOnHeight;
             }
             ReserveCompleteParagraph(paragraphHeight);
+        }
+        else if (supportsCompleteParagraphPlanning && DocumentParagraphPaginationPlanner.IsWidowControlEffective(pf))
+        {
+            widowBreakBeforeLine = PlanWidowOrphanBreak(MeasurePlainParagraphLineHeights(
+                cells, measured, heights, availableWidth, pf, _doc.Page,
+                naturalLineHeightScale, automaticHyphenationText, automaticHyphenWidths));
         }
 
         var lineIndex = 0;
@@ -9306,6 +9392,7 @@ public sealed partial class DocumentView : Control
                 // AV-WRAP: push past any TopAndBottom exclusion zones before emitting.
                 if (_wrapExclusions.Count > 0)
                     AdvancePastTopAndBottomExclusions(lineH2, lineAlignWidth);
+                BreakForWidowOrphanPlan(lineIndex, widowBreakBeforeLine);
                 EmitLinePaged(blockIndex, cells, measured, heights, lineStart, breakAt, alignment,
                     lineAlignWidth, paraLeftInset + lineExtraInset, pf,
                     naturalLineHeightScale: naturalLineHeightScale,
@@ -9356,6 +9443,7 @@ public sealed partial class DocumentView : Control
                     if (heights[c2] > lineH) lineH = heights[c2];
                 AdvancePastTopAndBottomExclusions(lineH, lineAlignWidth);
             }
+            BreakForWidowOrphanPlan(lineIndex, widowBreakBeforeLine);
             EmitLinePaged(blockIndex, cells, measured, heights, lineStart, cells.Count, alignment,
                 lineAlignWidth, paraLeftInset + lineExtraInset, pf, isLast: true,
                 naturalLineHeightScale: naturalLineHeightScale,
