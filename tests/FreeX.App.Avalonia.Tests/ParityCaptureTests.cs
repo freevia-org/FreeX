@@ -138,7 +138,9 @@ public sealed class ParityCaptureTests
 
                     var pngPath = Path.Combine(outputDirectory, result.PngFileName);
                     AssertCapturedPng(outputDirectory, result);
-                    ReadPngDimensions(pngPath).Should().Be((380, 190));
+                    // The WPF 380x190 outer window minus the 16px frame width; the height keeps the
+                    // overflowing status lines inside the window.
+                    ReadPngDimensions(pngPath).Should().Be((364, 190));
                     new FileInfo(pngPath).Length.Should().BeGreaterThan(1000,
                         "the targeted dialog PNG must contain rendered content, not only a minimal blank frame");
                 }

@@ -993,9 +993,9 @@ public sealed partial class MainWindow
         {
             Title = plan.Title,
             // The WPF surface is a NoResize Width x Height window (an outer size) in the 12px
-            // dialog font; Avalonia sizes the client area.
-            Width = WorkbookFileDialogSurfacePlanner.Width,
-            Height = WorkbookFileDialogSurfacePlanner.Height - WpfNoResizeFrameHeight,
+            // dialog font; Avalonia sizes the client area, so the measured Windows frame comes off both.
+            Width = WorkbookFileDialogSurfacePlanner.Width - WpfNoResizeFrameWidth,
+            Height = WorkbookFileDialogSurfacePlanner.Height - WpfNoResizeClientFrameHeight,
             CanResize = false,
             FontFamily = FormulaBarFontFamily,
             FontSize = 12,
@@ -1324,22 +1324,21 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// WPF AutoFilterDialog.CreateMenuCommandButton / SetMenuCommandButtonContent: a borderless
-    /// 22px row with (5,2) padding holding a 14px icon, the 12px label 7px to its right and, for
-    /// the filter families, a continuation chevron at the far right.
+    /// 22px row with (5,2) padding holding the 12px access-key label and, for the filter
+    /// families, a continuation chevron at the far right. The captured WPF dialog draws no icon
+    /// in front of the label, so the row carries none.
     /// </summary>
     private static Button CreateAutoFilterParityMenuButton(AutoFilterMenuItem item)
     {
         var content = new AvaloniaGrid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        var icon = AvaloniaRibbonIcons.BuildMonochrome(item.IconKind, 14, null, Brush(0x21, 0x21, 0x21));
-        icon.VerticalAlignment = AvaloniaVerticalAlignment.Center;
-        content.Children.Add(icon);
 
-        var label = new TextBlock
+        // WPF hosts the label in an AccessText: the access-key marker is consumed, not drawn.
+        var label = new AccessText
         {
             Text = item.Label,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
-            Margin = new Thickness(7, 0, item.ShowsContinuation ? 8 : 0, 0),
+            Margin = new Thickness(0, 0, item.ShowsContinuation ? 8 : 0, 0),
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
         };
         AvaloniaGrid.SetColumn(label, 1);
@@ -1827,8 +1826,9 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = title,
-            Width = PivotSlicerTimelineDialogContract.Width,
-            Height = PivotSlicerTimelineDialogContract.Height,
+            // The contract is the WPF outer NoResize window; this window is its client area.
+            Width = PivotSlicerTimelineDialogContract.Width - WpfNoResizeFrameWidth,
+            Height = PivotSlicerTimelineDialogContract.Height - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Manual,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
@@ -1836,84 +1836,44 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, automationId);
 
+        // The content is built with the production Insert Slicer / Insert Timeline helpers
+        // (ShowInsertPivotControlDialogAsync), so the capture shows the WPF group-box caption on the
+        // frame and the shared pivot label/row/button metrics rather than a bold heading in a card.
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, PivotDialogChromeStyle);
+
         var fieldBox = new ComboBox
         {
+            IsEditable = true,
             ItemsSource = headers,
             SelectedIndex = Math.Max(0, Array.IndexOf(headers, selectedField)),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
-            Height = 24,
-            MinHeight = 24,
-            // Without explicit padding + vertical-centering the Fluent ComboBox's default content
-            // padding pushes the selected item out of the forced 24px clip, leaving it visibly cut off.
-            // Match the proven chart/drawing combo chrome so the selected field reads fully (win.png).
-            Padding = new Thickness(5, 0, 4, 0),
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        ApplyPivotComboBoxChrome(fieldBox);
+        fieldBox.Text = headers[Math.Max(0, Array.IndexOf(headers, selectedField))];
         AutomationProperties.SetAutomationId(fieldBox, fieldListAutomationId);
 
-        var captionBox = new TextBox
-        {
-            Text = captionText,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
-            Height = 24,
-            MinHeight = 24,
-            Padding = new Thickness(4, 2, 4, 2),
-        };
+        var captionBox = new TextBox { Text = captionText };
+        ApplyPivotTextBoxChrome(captionBox);
 
-        var groupBody = new StackPanel { Spacing = 4 };
-        groupBody.Children.Add(new TextBlock
-        {
-            Text = UiText.Get(groupResourceKey).Replace("_", string.Empty),
-            FontWeight = FontWeight.SemiBold,
-            Margin = new Thickness(0, 0, 0, 6),
-        });
-        groupBody.Children.Add(new Label
-        {
-            Content = UiText.Get(fieldLabelResourceKey),
-            Target = fieldBox,
-            Padding = new Thickness(0, 0, 0, 2),
-        });
-        groupBody.Children.Add(fieldBox);
-        groupBody.Children.Add(new Label
-        {
-            Content = UiText.Get(captionLabelResourceKey),
-            Target = captionBox,
-            Margin = new Thickness(0, 8, 0, 0),
-            Padding = new Thickness(0, 0, 0, 2),
-        });
-        groupBody.Children.Add(captionBox);
-
-        var group = new Border
-        {
-            Child = groupBody,
-            BorderBrush = Brush(200, 200, 200),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(2),
-            Padding = new Thickness(12, 10, 12, 12),
-        };
+        var groupContent = new StackPanel();
+        AddPivotDialogLabeledControl(groupContent, UiText.Get(fieldLabelResourceKey), fieldBox);
+        AddPivotDialogLabeledControl(groupContent, UiText.Get(captionLabelResourceKey), captionBox);
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
+        ApplyPivotButtonChrome(okButton, PivotDialogButtonMinWidth, isDefault: true);
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
-        ApplyDialogButtonChrome(okButton, 84, isDefault: true);
-        ApplyDialogButtonChrome(cancelButton, 84);
+        ApplyPivotButtonChrome(cancelButton, PivotDialogButtonMinWidth);
         okButton.Click += (_, _) => dialog.Close();
         cancelButton.Click += (_, _) => dialog.Close();
 
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
-            Spacing = 12,
             Children =
             {
-                group,
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 8,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    // WPF order: [OK] [Cancel]
-                    Children = { okButton, cancelButton },
-                },
+                CreatePivotDialogGroupBox(UiText.Get(groupResourceKey), groupContent),
+                // WPF order: [OK] [Cancel]
+                CreatePivotDialogButtonRow(okButton, cancelButton),
             },
         };
 
@@ -2528,9 +2488,17 @@ public sealed partial class MainWindow
     {
         (width, height) = surfaceId switch
         {
-            "dialog.ExportOptions" => (ExportOptionsDialogSurfacePlanner.CaptureWidth, ExportOptionsDialogSurfacePlanner.CaptureHeight),
-            "dialog.ProtectWorkbook" => (ProtectionDialogPlanner.ProtectWorkbookCaptureWidth, ProtectionDialogPlanner.ProtectWorkbookCaptureHeight),
-            "dialog.Sparkline" => (SparklinePlanner.InsertDialogCaptureWidth, SparklinePlanner.InsertDialogCaptureHeight),
+            // The WPF captures pin these as OUTER window sizes; the Avalonia window is the client
+            // area, so it is captured at the same size minus the measured Windows frame.
+            "dialog.ExportOptions" => (
+                ExportOptionsDialogSurfacePlanner.CaptureWidth - WpfNoResizeFrameWidth,
+                ExportOptionsDialogSurfacePlanner.CaptureHeight - WpfNoResizeClientFrameHeight),
+            "dialog.ProtectWorkbook" => (
+                ProtectionDialogPlanner.ProtectWorkbookCaptureWidth - WpfNoResizeFrameWidth,
+                ProtectionDialogPlanner.ProtectWorkbookCaptureHeight - WpfNoResizeClientFrameHeight),
+            "dialog.Sparkline" => (
+                SparklinePlanner.InsertDialogCaptureWidth - WpfNoResizeFrameWidth,
+                SparklinePlanner.InsertDialogCaptureHeight - WpfNoResizeClientFrameHeight),
             _ => (0, 0)
         };
 

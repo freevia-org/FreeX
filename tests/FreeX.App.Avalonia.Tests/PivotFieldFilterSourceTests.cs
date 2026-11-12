@@ -75,8 +75,9 @@ public sealed class PivotFieldFilterSourceTests
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFilters.cs"));
 
-        source.Should().Contain("PivotFieldFilterWindowWidth = 380");
-        source.Should().Contain("PivotFieldFilterWindowHeight = 470");
+        // The window is the WPF 380x470 outer window's client area.
+        source.Should().Contain("MaxWidth = PivotFieldFilterClientWidth,");
+        source.Should().Contain("MaxHeight = PivotFieldFilterClientHeight,");
         source.Should().Contain("PivotFieldFilterClientWidth = 364");
         source.Should().Contain("PivotFieldFilterClientHeight = 431");
         source.Should().Contain("new Thickness(12)");

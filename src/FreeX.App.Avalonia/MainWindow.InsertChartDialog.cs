@@ -73,6 +73,9 @@ public sealed partial class MainWindow
 
         var recommendedHeading = new StackPanel
         {
+            // Same as the shared All Charts body: the heading keeps the picker column gap on its right
+            // so the help line ends before the preview border instead of running into it.
+            Margin = new Thickness(0, 0, ChartTypeChangePlanner.PickerColumnGap, 0),
             Children =
             {
                 new TextBlock
@@ -150,11 +153,14 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(recommendedLayoutCheck, "InsertChartUseRecommendedLayoutCheck");
 
         var dialog = NewChartDialog(UiText.Get("InsertChart_Title"), "InsertChartDialog");
-        dialog.SizeToContent = SizeToContent.Manual;
-        dialog.Width = InsertChartDialogWidth;
-        dialog.Height = InsertChartDialogHeight - WpfNoResizeFrameHeight;
-        dialog.MinWidth = InsertChartDialogWidth;
-        dialog.MinHeight = InsertChartDialogHeight - WpfNoResizeFrameHeight;
+        // WPF InsertChartDialog is a 660x430 outer NoResize window. The width loses the measured
+        // Windows frame; its 310px tab control, check row and button row need more than the 391px
+        // Windows client height, so the height follows the content with that client height as the
+        // minimum rather than cutting the button row.
+        dialog.SizeToContent = SizeToContent.Height;
+        dialog.Width = InsertChartDialogWidth - WpfNoResizeFrameWidth;
+        dialog.MinWidth = InsertChartDialogWidth - WpfNoResizeFrameWidth;
+        dialog.MinHeight = InsertChartDialogHeight - WpfNoResizeClientFrameHeight;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons(
             "InsertChart",

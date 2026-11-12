@@ -516,12 +516,12 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = title,
-            Width = 500,
-            Height = 560 - WpfNoResizeFrameHeight,
-            MinWidth = 500,
-            MinHeight = 560 - WpfNoResizeFrameHeight,
-            MaxWidth = 500,
-            MaxHeight = 560 - WpfNoResizeFrameHeight,
+            Width = 500 - WpfNoResizeFrameWidth,
+            Height = 560 - WpfNoResizeClientFrameHeight,
+            MinWidth = 500 - WpfNoResizeFrameWidth,
+            MinHeight = 560 - WpfNoResizeClientFrameHeight,
+            MaxWidth = 500 - WpfNoResizeFrameWidth,
+            MaxHeight = 560 - WpfNoResizeClientFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,

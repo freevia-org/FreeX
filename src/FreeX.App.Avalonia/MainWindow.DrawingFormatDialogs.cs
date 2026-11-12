@@ -185,12 +185,12 @@ public sealed partial class MainWindow
                 : UiText.Get("FormatPicture_ShapeTitle"),
             // WPF FormatPictureDialog is a 480x440 *outer* NoResize window; Avalonia sizes are client
             // sizes, so the height loses the Windows caption/frame allowance.
-            Width = 480,
-            Height = 440 - WpfNoResizeFrameHeight,
-            MinWidth = 480,
-            MinHeight = 440 - WpfNoResizeFrameHeight,
-            MaxWidth = 480,
-            MaxHeight = 440 - WpfNoResizeFrameHeight,
+            Width = 480 - WpfNoResizeFrameWidth,
+            Height = 440 - WpfNoResizeClientFrameHeight,
+            MinWidth = 480 - WpfNoResizeFrameWidth,
+            MinHeight = 440 - WpfNoResizeClientFrameHeight,
+            MaxWidth = 480 - WpfNoResizeFrameWidth,
+            MaxHeight = 440 - WpfNoResizeClientFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             ShowInTaskbar = false,
@@ -756,11 +756,14 @@ public sealed partial class MainWindow
         var startColor = values.StartColor;
         var endColor = values.EndColor;
 
+        // WPF ShapeGradientDialog.AddPreviewRow: a SystemColors.ControlDarkBrush (#A0A0A0) frame with
+        // 2px rounded corners, not a black one.
         var preview = new Border
         {
             Height = 42,
-            BorderBrush = HeaderForeground,
+            BorderBrush = Brush(160, 160, 160),
             BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(2),
         };
         AutomationProperties.SetAutomationId(preview, "ShapeGradientPreview");
         AutomationProperties.SetName(preview, UiText.Get("ShapeGradient_PreviewLabel"));
@@ -832,9 +835,12 @@ public sealed partial class MainWindow
         var dialog = new FreeXDialogWindow(DrawingDialogChromeStyle)
         {
             Title = UiText.Get("ShapeGradient_Title"),
-            Width = ShapeGradientPlanner.DialogWidth,
+            // WPF ShapeGradientDialog is a 500x300 outer NoResize window: the client loses the 16px
+            // frame width. Its content overflows the 39px-shorter Windows client (the capture shows
+            // the buttons reaching y=277), so the height stays at the WPF value to keep them inside.
+            Width = ShapeGradientPlanner.DialogWidth - WpfNoResizeFrameWidth,
             Height = ShapeGradientPlanner.DialogHeight,
-            MinWidth = ShapeGradientPlanner.DialogWidth,
+            MinWidth = ShapeGradientPlanner.DialogWidth - WpfNoResizeFrameWidth,
             Background = Brushes.White,
             FontFamily = FormulaBarFontFamily,
             FontSize = 12,

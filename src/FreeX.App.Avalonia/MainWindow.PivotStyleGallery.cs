@@ -57,10 +57,10 @@ public sealed partial class MainWindow
         {
             // WPF PivotStyleGalleryDialog is 360x430 OUTER; Avalonia sizes are client sizes.
             Title = UiText.Get("PivotStyleGallery_PivotTableStyles"),
-            Width = 360,
-            MinWidth = 360,
-            MaxWidth = 360,
-            Height = 430 - WpfNoResizeFrameHeight,
+            Width = 360 - WpfNoResizeFrameWidth,
+            MinWidth = 360 - WpfNoResizeFrameWidth,
+            MaxWidth = 360 - WpfNoResizeFrameWidth,
+            Height = 430 - WpfNoResizeClientFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             ShowInTaskbar = false,

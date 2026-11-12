@@ -202,10 +202,10 @@ public sealed partial class MainWindow
             // WPF PivotCalculatedItemDialog: 500x560 outer, NoResize, so the app-wide dialog sizing
             // makes 560 the minimum and lets the height follow the content.
             Title = UiText.Get("PivotCalculated_CalculatedItem"),
-            Width = 500,
-            MinWidth = 500,
-            MaxWidth = 500,
-            MinHeight = 560 - WpfNoResizeFrameHeight,
+            Width = 500 - WpfNoResizeFrameWidth,
+            MinWidth = 500 - WpfNoResizeFrameWidth,
+            MaxWidth = 500 - WpfNoResizeFrameWidth,
+            MinHeight = 560 - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,

@@ -928,10 +928,11 @@ public sealed partial class MainWindow
         ApplyCfTextBoxChrome(valueBox);
         AutomationProperties.SetAutomationId(valueBox, "ConditionalFormatValuePromptBox");
 
-        var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), IsDefault = true, MinWidth = 84 };
-        ApplyCfButtonChrome(okButton, 84, isDefault: true);
-        var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true, MinWidth = 84 };
-        ApplyCfButtonChrome(cancelButton, 84);
+        // WPF ConditionalFormatThresholdDialog uses ObjectSizeDialog.CreateSingleInputContent: 72px buttons.
+        var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), IsDefault = true, MinWidth = 72 };
+        ApplyCfButtonChrome(okButton, 72, isDefault: true);
+        var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true, MinWidth = 72 };
+        ApplyCfButtonChrome(cancelButton, 72);
         okButton.Click += (_, _) =>
         {
             result = valueBox.Text ?? string.Empty;
@@ -940,20 +941,27 @@ public sealed partial class MainWindow
         cancelButton.Click += (_, _) => dialog.Close();
 
         // WPF button order: [OK][Cancel] — primary on left
-        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 10, 0, 0));
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]);
 
-        dialog.Content = new DockPanel
+        // WPF CreateSingleInputContent: one top-down stack (margin 16) of the prompt 4px above the
+        // value box and the button row 12px below it, so the buttons follow the field instead of
+        // being docked to the window bottom.
+        valueBox.Margin = new Thickness(0, 0, 0, 12);
+        dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
             Children =
             {
-                buttonRow,
-                new StackPanel
+                new TextBlock
                 {
-                    Spacing = 8,
-                    Children = { new TextBlock { Text = prompt, TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = FormulaBarFontFamily }, valueBox },
+                    Text = prompt,
+                    TextWrapping = TextWrapping.Wrap,
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    Margin = new Thickness(0, 0, 0, 4),
                 },
+                valueBox,
+                buttonRow,
             },
         };
         dialog.Opened += (_, _) =>
@@ -992,10 +1000,10 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("ManageConditionalFormats_ConditionalFormattingRulesManager"),
-            // WPF ManageConditionalFormatsDialog is a 560x420 NoResize window; Height is an OUTER size
-            // there, so the client area drops the caption/frame.
-            Width = 560,
-            Height = 420 - WpfNoResizeFrameHeight,
+            // WPF ManageConditionalFormatsDialog is a 560x420 NoResize window; both are OUTER sizes
+            // there, so the client area drops the measured Windows frame.
+            Width = 560 - WpfNoResizeFrameWidth,
+            Height = 420 - WpfNoResizeClientFrameHeight,
             MinWidth = 480,
             MinHeight = 360,
             CanResize = false,

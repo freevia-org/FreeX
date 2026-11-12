@@ -213,12 +213,13 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("PivotValueFieldSettings_ValueFieldSettings"),
-            Width = PivotValueFieldSettingsVisual.WindowWidth,
-            Height = PivotValueFieldSettingsVisual.WindowHeight,
-            MinWidth = PivotValueFieldSettingsVisual.WindowWidth,
-            MinHeight = PivotValueFieldSettingsVisual.WindowHeight,
-            MaxWidth = PivotValueFieldSettingsVisual.WindowWidth,
-            MaxHeight = PivotValueFieldSettingsVisual.WindowHeight,
+            // WPF's 430x430 is the outer NoResize window; its client area (and this window) is 414x391.
+            Width = PivotValueFieldSettingsVisual.ClientWidth,
+            Height = PivotValueFieldSettingsVisual.ClientHeight,
+            MinWidth = PivotValueFieldSettingsVisual.ClientWidth,
+            MinHeight = PivotValueFieldSettingsVisual.ClientHeight,
+            MaxWidth = PivotValueFieldSettingsVisual.ClientWidth,
+            MaxHeight = PivotValueFieldSettingsVisual.ClientHeight,
             Background = Brushes.Transparent,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,

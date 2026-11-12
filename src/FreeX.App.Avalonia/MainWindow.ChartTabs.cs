@@ -160,10 +160,12 @@ public sealed partial class MainWindow
         subtypeGallery.Height = double.NaN;
 
         var dialog = NewChartDialog(UiText.Get("ChangeChartType_Title"), "ChangeChartTypeDialog");
-        dialog.Width = ChartTypeChangePlanner.DialogWidth;
-        dialog.Height = ChartTypeChangePlanner.DialogHeight;
-        dialog.MinWidth = ChartTypeChangePlanner.DialogWidth;
-        dialog.MinHeight = ChartTypeChangePlanner.DialogHeight;
+        // WPF ChangeChartTypeDialog is a 640x390 outer NoResize window; Avalonia sizes the client
+        // area, so the measured Windows frame comes off both. The picker body flexes to the height.
+        dialog.Width = ChartTypeChangePlanner.DialogWidth - WpfNoResizeFrameWidth;
+        dialog.Height = ChartTypeChangePlanner.DialogHeight - WpfNoResizeClientFrameHeight;
+        dialog.MinWidth = ChartTypeChangePlanner.DialogWidth - WpfNoResizeFrameWidth;
+        dialog.MinHeight = ChartTypeChangePlanner.DialogHeight - WpfNoResizeClientFrameHeight;
         dialog.SizeToContent = SizeToContent.Manual;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons(
@@ -701,10 +703,10 @@ public sealed partial class MainWindow
         AvaloniaCompactDialogChrome.ApplyWindow(dialog, SelectDataSourceDialogChromeStyle);
         // WPF SelectDataSourceDialog is a 620x500 outer window; Avalonia sizes are client sizes.
         dialog.SizeToContent = SizeToContent.Manual;
-        dialog.Width = 620;
-        dialog.Height = 500 - WpfNoResizeFrameHeight;
-        dialog.MinWidth = 620;
-        dialog.MinHeight = 500 - WpfNoResizeFrameHeight;
+        dialog.Width = 620 - WpfNoResizeFrameWidth;
+        dialog.Height = 500 - WpfNoResizeClientFrameHeight;
+        dialog.MinWidth = 620 - WpfNoResizeFrameWidth;
+        dialog.MinHeight = 500 - WpfNoResizeClientFrameHeight;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("SelectChartData");
         okButton.Click += (_, _) => RunGuarded(async () =>

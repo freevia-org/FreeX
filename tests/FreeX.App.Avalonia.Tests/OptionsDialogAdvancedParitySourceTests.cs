@@ -84,7 +84,7 @@ public sealed class OptionsDialogAdvancedParitySourceTests
         source.Should().Contain("Width = OptionsDialogPlanner.ProofingContentWidth");
         source.Should().Contain("Height = OptionsDialogPlanner.ProofingWordsListHeight");
         source.Should().Contain("proofingPanel.Spacing = 0;");
-        source.Should().Contain("HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden");
+        source.Should().Contain("HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled");
         source.Should().Contain("VerticalContentAlignment = AvaloniaVerticalAlignment.Top");
         source.Should().Contain("Width = OptionsDialogPlanner.FooterButtonWidth");
         source.Should().Contain("dialog.Opened += (_, _) => categoryRows[0].Focus();");

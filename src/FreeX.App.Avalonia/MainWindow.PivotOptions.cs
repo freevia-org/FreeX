@@ -181,9 +181,11 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("PivotTableOptions_PivotTableOptions"),
-            Width = PivotOptionsPlanner.DialogWidth,
-            Height = PivotOptionsPlanner.LayoutAndFormatCaptureHeight,
-            MinHeight = PivotOptionsPlanner.DialogMinHeight,
+            // WPF sizes are the outer NoResize window; Avalonia sizes the client area, so the
+            // measured Windows frame comes off both (see WpfResizableFrameWidth/Height).
+            Width = PivotOptionsPlanner.DialogWidth - WpfNoResizeFrameWidth,
+            Height = PivotOptionsPlanner.LayoutAndFormatCaptureHeight - WpfNoResizeClientFrameHeight,
+            MinHeight = PivotOptionsPlanner.DialogMinHeight - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Manual,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
@@ -406,14 +408,16 @@ public sealed partial class MainWindow
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
         tabs.SelectionChanged += (_, _) =>
         {
-            dialog.Height = tabs.SelectedIndex == 0
+            dialog.Height = (tabs.SelectedIndex == 0
                 ? PivotOptionsPlanner.LayoutAndFormatCaptureHeight
-                : PivotOptionsPlanner.DialogMinHeight;
+                : PivotOptionsPlanner.DialogMinHeight) - WpfNoResizeClientFrameHeight;
         };
 
-        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 0, 0, 37));
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);
 
-        var content = new DockPanel { Margin = new Thickness(16, 16, 31, 16) };
+        // The window is the WPF client area, so the content keeps the WPF 16px margin on every side
+        // (it no longer pads out the Windows frame band on the right and bottom).
+        var content = new DockPanel { Margin = new Thickness(16) };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         content.Children.Add(buttonRow);
         content.Children.Add(tabs);

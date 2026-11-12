@@ -32,12 +32,12 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("WorkbookTheme_CustomizeTheme"),
-            Width = 760,
-            Height = 600 - WpfNoResizeFrameHeight,
-            MinWidth = 760,
-            MinHeight = 600 - WpfNoResizeFrameHeight,
-            MaxWidth = 760,
-            MaxHeight = 600 - WpfNoResizeFrameHeight,
+            Width = 760 - WpfNoResizeFrameWidth,
+            Height = 600 - WpfNoResizeClientFrameHeight,
+            MinWidth = 760 - WpfNoResizeFrameWidth,
+            MinHeight = 600 - WpfNoResizeClientFrameHeight,
+            MaxWidth = 760 - WpfNoResizeFrameWidth,
+            MaxHeight = 600 - WpfNoResizeClientFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,

@@ -107,8 +107,8 @@ public sealed class ColorPickerFontThemeDialogFeatureSourceTests
 
         source.Should().Contain("private async Task<WorkbookTheme?> ShowWorkbookThemeDialogAsync(WorkbookTheme initialTheme)");
         source.Should().Contain("Title = UiText.Get(\"WorkbookTheme_CustomizeTheme\")");
-        source.Should().Contain("Width = 760,");
-        source.Should().Contain("Height = 600 - WpfNoResizeFrameHeight,");
+        source.Should().Contain("Width = 760 - WpfNoResizeFrameWidth,");
+        source.Should().Contain("Height = 600 - WpfNoResizeClientFrameHeight,");
         source.Should().Contain("WorkbookThemeDialogPlanner.TryCreateTheme(");
         source.Should().Contain("WorkbookThemeDialogPlanner.PreviewColorOrBlack(");
         source.Should().Contain("WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(field.Slot))");

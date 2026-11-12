@@ -59,6 +59,11 @@ public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
     /// token, so a product-wide default row floor must not replace it.
     /// </summary>
     public bool KeepListRowMinHeight { get; init; }
+    /// <summary>
+    /// True when <see cref="ButtonHeight"/> was measured for this dialog and happens to equal the
+    /// shared token, so a product-wide default button height must not replace it.
+    /// </summary>
+    public bool KeepButtonHeight { get; init; }
     public double ActionSpacing { get; init; } = 8;
     public CornerRadius ButtonCornerRadius { get; init; } = new(CompactDialogVisualTokens.ButtonCornerRadius);
     public IBrush? ButtonBackgroundBrush { get; init; }
@@ -100,6 +105,55 @@ public sealed record AvaloniaCompactDialogButtonPalette(
     IBrush DisabledForeground)
 {
     public CornerRadius CornerRadius { get; init; }
+
+    /// <summary>
+    /// Fixed push-button height for a chrome style that keeps the shared button-height token and
+    /// does not set <see cref="AvaloniaCompactDialogChromeStyle.KeepButtonHeight"/>; the vertical
+    /// padding then shrinks to 1 px so the caption line still fits. Null keeps the token.
+    /// </summary>
+    public double? Height { get; init; }
+}
+
+/// <summary>
+/// Product-wide drop-down colours for <see cref="AvaloniaCompactDialogChrome.ApplyComboBox"/>. A product
+/// whose WPF dialogs use the native combo box (a bordered gradient face, a white editable field and a
+/// greyed disabled face) installs one through <see cref="AvaloniaCompactDialogChrome.DefaultComboBoxPalette"/>.
+/// The face and border then come from styles on the combo box instead of local values, so the
+/// hover, focus and disabled states can replace them. An explicit
+/// <see cref="AvaloniaCompactDialogChromeStyle.ComboBoxBackgroundBrush"/> still wins for the face.
+/// </summary>
+public sealed record AvaloniaCompactDialogComboBoxPalette(
+    IBrush Background,
+    IBrush EditableBackground,
+    IBrush BorderBrush,
+    IBrush HoverBackground,
+    IBrush HoverBorderBrush,
+    IBrush DisabledBackground,
+    IBrush DisabledBorderBrush,
+    IBrush DisabledForeground)
+{
+    /// <summary>
+    /// Fixed height for a combo box whose chrome style keeps the shared control-height token and
+    /// names no combo height of its own. Null keeps the token.
+    /// </summary>
+    public double? Height { get; init; }
+}
+
+/// <summary>
+/// Product-wide colours and geometry for <see cref="AvaloniaCompactDialogChrome.ApplyClassicTabChrome"/>.
+/// Brushes on the <see cref="AvaloniaCompactDialogChromeStyle"/> passed to a call still win.
+/// </summary>
+public sealed record AvaloniaCompactDialogTabPalette(
+    IBrush InactiveBackground,
+    IBrush InactiveBorderBrush,
+    IBrush PaneBorderBrush)
+{
+    /// <summary>
+    /// How far the selected header's frame reaches above and beside its slot, as the WPF Aero2
+    /// selected tab does (2 px). The header strip keeps its height; the first header is inset by
+    /// the same amount so its raised frame stays on the pane's left edge. Zero keeps the flat look.
+    /// </summary>
+    public double SelectedTabRise { get; init; }
 }
 
 /// <summary>
@@ -172,6 +226,18 @@ public static class AvaloniaCompactDialogChrome
     /// installs the native WPF button colours at startup because its WPF dialogs use them.
     /// </summary>
     public static AvaloniaCompactDialogButtonPalette? DefaultButtonPalette { get; set; }
+
+    /// <summary>
+    /// Product-wide drop-down palette. Null keeps the flat compact combo face (FreeW/FreeP); FreeX
+    /// installs the native WPF combo colours at startup.
+    /// </summary>
+    public static AvaloniaCompactDialogComboBoxPalette? DefaultComboBoxPalette { get; set; }
+
+    /// <summary>
+    /// Product-wide classic tab palette. Null keeps the shared classic tab colours and the flat
+    /// selected header (FreeW/FreeP); FreeX installs the WPF Aero2 tab look at startup.
+    /// </summary>
+    public static AvaloniaCompactDialogTabPalette? DefaultTabPalette { get; set; }
 
     /// <summary>
     /// Product-wide text-box selection highlight and the ink drawn on top of it. Null keeps the
@@ -417,6 +483,21 @@ public static class AvaloniaCompactDialogChrome
     {
         ArgumentNullException.ThrowIfNull(button);
         ArgumentNullException.ThrowIfNull(style);
+
+        if (DefaultButtonPalette?.Height is { } productButtonHeight
+            && !style.KeepButtonHeight
+            && style.ButtonHeight == CompactDialogVisualTokens.ButtonHeight)
+        {
+            style = style with
+            {
+                ButtonHeight = productButtonHeight,
+                ButtonPadding = new Thickness(
+                    style.ButtonPadding.Left,
+                    Math.Min(style.ButtonPadding.Top, 1),
+                    style.ButtonPadding.Right,
+                    Math.Min(style.ButtonPadding.Bottom, 1)),
+            };
+        }
 
         button.MinWidth = minWidth;
         if (fixedHeight)
@@ -850,9 +931,16 @@ public static class AvaloniaCompactDialogChrome
         ArgumentNullException.ThrowIfNull(comboBox);
         ArgumentNullException.ThrowIfNull(style);
 
+        var palette = DefaultComboBoxPalette;
         if (fixedHeight)
         {
             var height = style.ComboBoxHeight ?? style.ControlHeight;
+            if (style.ComboBoxHeight is null
+                && palette?.Height is { } productHeight
+                && style.ControlHeight == CompactDialogVisualTokens.ControlHeight)
+            {
+                height = productHeight;
+            }
             comboBox.Height = height;
             comboBox.MinHeight = height;
             comboBox.MaxHeight = height;
@@ -862,15 +950,27 @@ public static class AvaloniaCompactDialogChrome
         comboBox.FontSize = style.FontSize;
         comboBox.FontFamily = style.FontFamily;
         var foreground = ThemeTextBrush(style);
-        comboBox.Foreground = foreground;
         comboBox.HorizontalAlignment = HorizontalAlignment.Stretch;
         // Fluent's editable ComboBox template hosts the text presenter separately from
         // the arrow. Stretch the content slot so an editable field remains a full-width
         // WPF-style input instead of collapsing to the text's desired width.
         comboBox.HorizontalContentAlignment = HorizontalAlignment.Stretch;
-        var comboBackground = style.ComboBoxBackgroundBrush ?? ComboBoxBackgroundBrush;
-        comboBox.Background = comboBackground;
-        comboBox.BorderBrush = style.InputBorderBrush ?? InputBorderBrush;
+        var comboBackground = style.ComboBoxBackgroundBrush ?? palette?.Background ?? ComboBoxBackgroundBrush;
+        var comboBorder = palette?.BorderBrush ?? style.InputBorderBrush ?? InputBorderBrush;
+        if (palette is null)
+        {
+            comboBox.Foreground = foreground;
+            comboBox.Background = comboBackground;
+            comboBox.BorderBrush = comboBorder;
+        }
+        else
+        {
+            // The product palette paints the face, frame and ink from the styles added below, so
+            // the hover and disabled states can replace them; a local value would outrank them.
+            comboBox.ClearValue(TemplatedControl.ForegroundProperty);
+            comboBox.ClearValue(TemplatedControl.BackgroundProperty);
+            comboBox.ClearValue(TemplatedControl.BorderBrushProperty);
+        }
         comboBox.BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness);
         comboBox.VerticalContentAlignment = VerticalAlignment.Center;
         if (comboBox.IsEditable)
@@ -883,27 +983,94 @@ public static class AvaloniaCompactDialogChrome
 
         comboBox.Classes.Add(CompactComboBoxClass);
         var focusedBorder = style.FocusedInputBorderBrush ?? ThemeAccentBrush(style);
+        if (palette is not null)
+            AddProductPaletteComboStyles(comboBox, style, palette, foreground, focusedBorder);
+        else
+        {
+            comboBox.Styles.Add(new Style(selector => selector.OfType<ComboBox>().Class(":pointerover"))
+            {
+                Setters = { new Setter(ComboBox.BorderBrushProperty, focusedBorder) },
+            });
+            comboBox.Styles.Add(new Style(selector => selector.OfType<ComboBox>().Class(":focus-visible"))
+            {
+                Setters = { new Setter(ComboBox.BorderBrushProperty, focusedBorder) },
+            });
+            comboBox.Styles.Add(new Style(selector => selector.OfType<ComboBox>().Class(":disabled"))
+            {
+                Setters =
+                {
+                    new Setter(ComboBox.ForegroundProperty, DisabledButtonForegroundBrush),
+                    new Setter(ComboBox.BorderBrushProperty, DisabledButtonBorderBrush),
+                },
+            });
+        }
+
+        // Own the compact template instead of repairing private Fluent-theme parts after attach.
+        // The required Avalonia ComboBox parts retain native selection, editable text, popup,
+        // keyboard, and automation behavior while their geometry is now stable across theme updates.
+        comboBox.Template = CreateCompactComboBoxTemplate(
+            style,
+            comboBackground,
+            foreground,
+            paintFaceOnFrameOnly: palette is not null);
+    }
+
+    /// <summary>
+    /// State styles for a combo box on the product palette, in rising precedence: resting face,
+    /// editable field, hover, keyboard focus, disabled (a disabled combo keeps its grey face even
+    /// inside a selected list row).
+    /// </summary>
+    private static void AddProductPaletteComboStyles(
+        ComboBox comboBox,
+        AvaloniaCompactDialogChromeStyle style,
+        AvaloniaCompactDialogComboBoxPalette palette,
+        IBrush foreground,
+        IBrush focusedBorder)
+    {
+        var explicitFace = style.ComboBoxBackgroundBrush;
+        comboBox.Styles.Add(new Style(selector => selector.OfType<ComboBox>())
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.ForegroundProperty, foreground),
+                new Setter(TemplatedControl.BackgroundProperty, explicitFace ?? palette.Background),
+                new Setter(TemplatedControl.BorderBrushProperty, palette.BorderBrush),
+            },
+        });
+        comboBox.Styles.Add(new Style(selector => selector
+            .OfType<ComboBox>()
+            .PropertyEquals(ComboBox.IsEditableProperty, true))
+        {
+            Setters = { new Setter(TemplatedControl.BackgroundProperty, explicitFace ?? palette.EditableBackground) },
+        });
         comboBox.Styles.Add(new Style(selector => selector.OfType<ComboBox>().Class(":pointerover"))
         {
-            Setters = { new Setter(ComboBox.BorderBrushProperty, focusedBorder) },
+            Setters =
+            {
+                new Setter(TemplatedControl.BackgroundProperty, explicitFace ?? palette.HoverBackground),
+                new Setter(TemplatedControl.BorderBrushProperty, palette.HoverBorderBrush),
+            },
+        });
+        comboBox.Styles.Add(new Style(selector => selector
+            .OfType<ComboBox>()
+            .Class(":pointerover")
+            .PropertyEquals(ComboBox.IsEditableProperty, true))
+        {
+            Setters = { new Setter(TemplatedControl.BackgroundProperty, explicitFace ?? palette.EditableBackground) },
         });
         comboBox.Styles.Add(new Style(selector => selector.OfType<ComboBox>().Class(":focus-visible"))
         {
-            Setters = { new Setter(ComboBox.BorderBrushProperty, focusedBorder) },
+            Setters = { new Setter(TemplatedControl.BorderBrushProperty, focusedBorder) },
         });
         comboBox.Styles.Add(new Style(selector => selector.OfType<ComboBox>().Class(":disabled"))
         {
             Setters =
             {
-                new Setter(ComboBox.ForegroundProperty, DisabledButtonForegroundBrush),
-                new Setter(ComboBox.BorderBrushProperty, DisabledButtonBorderBrush),
+                new Setter(TemplatedControl.ForegroundProperty, palette.DisabledForeground),
+                new Setter(TemplatedControl.BackgroundProperty, palette.DisabledBackground),
+                new Setter(TemplatedControl.BorderBrushProperty, palette.DisabledBorderBrush),
             },
         });
-
-        // Own the compact template instead of repairing private Fluent-theme parts after attach.
-        // The required Avalonia ComboBox parts retain native selection, editable text, popup,
-        // keyboard, and automation behavior while their geometry is now stable across theme updates.
-        comboBox.Template = CreateCompactComboBoxTemplate(style, comboBackground, foreground);
     }
 
     public static void ApplyWpfDisabledComboSurface(ComboBox comboBox)
@@ -917,7 +1084,8 @@ public static class AvaloniaCompactDialogChrome
     private static FuncControlTemplate<ComboBox> CreateCompactComboBoxTemplate(
         AvaloniaCompactDialogChromeStyle style,
         IBrush backgroundBrush,
-        IBrush foregroundBrush) => new((comboBox, nameScope) =>
+        IBrush foregroundBrush,
+        bool paintFaceOnFrameOnly = false) => new((comboBox, nameScope) =>
     {
         var field = new Border
         {
@@ -936,7 +1104,13 @@ public static class AvaloniaCompactDialogChrome
             Foreground = foregroundBrush,
             VerticalContentAlignment = VerticalAlignment.Center,
         };
-        selection.Bind(ContentPresenter.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = comboBox });
+        // The selection presenter spans the frame's full height, so a painted presenter covers the
+        // frame's top, left and bottom edges and leaves only the arrow cell outlined. On the
+        // product palette the frame alone paints the face (one continuous gradient as well).
+        if (paintFaceOnFrameOnly)
+            selection.Background = Brushes.Transparent;
+        else
+            selection.Bind(ContentPresenter.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = comboBox });
         selection.Bind(ContentPresenter.ForegroundProperty, new Binding(nameof(TemplatedControl.Foreground)) { Source = comboBox });
         selection.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ComboBox.SelectionBoxItem)) { Source = comboBox });
         selection.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ComboBox.SelectionBoxItemTemplate)) { Source = comboBox });
@@ -986,7 +1160,10 @@ public static class AvaloniaCompactDialogChrome
             VerticalAlignment = VerticalAlignment.Center,
         };
         placeholder.Bind(TextBlock.TextProperty, new Binding(nameof(ComboBox.PlaceholderText)) { Source = comboBox });
-        placeholder.Bind(TextBlock.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = comboBox });
+        if (paintFaceOnFrameOnly)
+            placeholder.Background = Brushes.Transparent;
+        else
+            placeholder.Bind(TextBlock.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = comboBox });
         placeholder.Bind(TextBlock.ForegroundProperty, new Binding(nameof(ComboBox.PlaceholderForeground)) { Source = comboBox });
         placeholder.Bind(TextBlock.PaddingProperty, new Binding(nameof(TemplatedControl.Padding)) { Source = comboBox });
         placeholder.Bind(Visual.IsVisibleProperty, new MultiBinding
@@ -1171,7 +1348,7 @@ public static class AvaloniaCompactDialogChrome
                     // IsChecked is bool?, and IsVisible is bool. Without an explicit conversion the
                     // indeterminate (null) state produces no bool, so the binding falls back to
                     // IsVisibleProperty's default of true and paints the tick on top of the
-                    // indeterminate bar. Convert null to false so only the bar survives.
+                    // indeterminate mark. Convert null to false so only that mark survives.
                     Converter = IsCheckedTrueConverter,
                 });
 
@@ -1635,12 +1812,19 @@ public static class AvaloniaCompactDialogChrome
             return;
         tabControl.Classes.Add(ClassicTabClass);
 
+        var palette = DefaultTabPalette;
+        var selectedTabRise = Math.Max(0, palette?.SelectedTabRise ?? 0);
         var headerPresenterStyle = new Style(s => s
             .OfType<TabControl>()
             .Template()
             .OfType<ItemsPresenter>()
             .Name("PART_ItemsPresenter"));
-        headerPresenterStyle.Setters.Add(new Setter(Layoutable.MarginProperty, new Thickness(0)));
+        // A raised selected header reaches out by the rise on both sides; inset the strip by the
+        // same amount so the first header's raised frame stays on the pane's left edge (WPF's
+        // TabPanel keeps the same side inset).
+        headerPresenterStyle.Setters.Add(new Setter(
+            Layoutable.MarginProperty,
+            new Thickness(selectedTabRise, 0, selectedTabRise, 0)));
         tabControl.Styles.Add(headerPresenterStyle);
 
         var contentPaneStyle = new Style(s => s
@@ -1648,7 +1832,9 @@ public static class AvaloniaCompactDialogChrome
             .Template()
             .OfType<ContentPresenter>()
             .Name("PART_SelectedContentHost"));
-        var tabPaneBorder = style.DialogTabPaneBorderBrush ?? DialogTabPaneBorderBrush;
+        var tabPaneBorder = style.DialogTabPaneBorderBrush is null && palette is not null
+            ? palette.PaneBorderBrush
+            : style.DialogTabPaneBorderBrush ?? DialogTabPaneBorderBrush;
         contentPaneStyle.Setters.Add(new Setter(Border.BorderBrushProperty, tabPaneBorder));
         contentPaneStyle.Setters.Add(new Setter(
             Border.BorderThicknessProperty,
@@ -1696,7 +1882,9 @@ public static class AvaloniaCompactDialogChrome
         Dispatcher.UIThread.Post(ApplyAuthorityPaneMargin, DispatcherPriority.Render);
 
         var tabStyle = new Style(s => s.OfType<TabItem>());
-        tabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, style.DialogInactiveTabBorderBrush ?? DialogInactiveTabBorderBrush));
+        tabStyle.Setters.Add(new Setter(
+            TabItem.BorderBrushProperty,
+            style.DialogInactiveTabBorderBrush ?? palette?.InactiveBorderBrush ?? DialogInactiveTabBorderBrush));
         tabStyle.Setters.Add(new Setter(
             TabItem.BorderThicknessProperty,
             new Thickness(
@@ -1704,7 +1892,9 @@ public static class AvaloniaCompactDialogChrome
                 DialogTabChromeMetrics.PaneBorderThickness,
                 DialogTabChromeMetrics.PaneBorderThickness,
                 0)));
-        tabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, style.DialogInactiveTabBackgroundBrush ?? DialogInactiveTabBackgroundBrush));
+        tabStyle.Setters.Add(new Setter(
+            TabItem.BackgroundProperty,
+            style.DialogInactiveTabBackgroundBrush ?? palette?.InactiveBackground ?? DialogInactiveTabBackgroundBrush));
         tabStyle.Setters.Add(new Setter(TemplatedControl.ForegroundProperty, Brushes.Black));
         tabStyle.Setters.Add(new Setter(TemplatedControl.FontFamilyProperty, style.FontFamily));
         tabStyle.Setters.Add(new Setter(TemplatedControl.FontSizeProperty, style.FontSize));
@@ -1769,6 +1959,17 @@ public static class AvaloniaCompactDialogChrome
             root.Bind(Border.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = tab });
             root.Bind(Border.BorderBrushProperty, new Binding(nameof(TemplatedControl.BorderBrush)) { Source = tab });
             root.Bind(Border.BorderThicknessProperty, new Binding(nameof(TemplatedControl.BorderThickness)) { Source = tab });
+            if (selectedTabRise > 0)
+            {
+                // WPF raises the selected header's frame above and beside its slot without moving
+                // the strip; the header keeps its slot and only its frame reaches out.
+                var raisedFrame = new Thickness(-selectedTabRise, -selectedTabRise, -selectedTabRise, 0);
+                root.Bind(Layoutable.MarginProperty, new Binding(nameof(TabItem.IsSelected))
+                {
+                    Source = tab,
+                    Converter = new FuncValueConverter<bool, Thickness>(isSelected => isSelected ? raisedFrame : default),
+                });
+            }
             root.Child = presenter;
             return root;
         });

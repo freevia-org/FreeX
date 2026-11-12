@@ -2001,38 +2001,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
     }
 
-    // WPF's worksheet scrollbars are the classic system bars: 17px thick, a #F0F0F0 track, a
-    // square #CDCDCD thumb (#A6A6A6 hover, #606060 pressed) and #606060 arrow glyphs on buttons
-    // that share the track colour. Fluent draws a 12px bar with a rounded translucent thumb, so the
-    // bar's own resource scope carries the classic colours and thickness.
-    private const double WorksheetScrollBarThickness = 17;
+    // WPF's worksheet scrollbars are the classic system bars (ClassicScrollBarChrome, shared with
+    // the dialog windows); the bar's own resource scope carries the classic colours and thickness.
+    private const double WorksheetScrollBarThickness = ClassicScrollBarChrome.BarThickness;
 
-    private static void ApplyWorksheetScrollBarChrome(ScrollBar scrollBar)
-    {
-        var track = Brush(0xF0, 0xF0, 0xF0);
-        var thumb = Brush(0xCD, 0xCD, 0xCD);
-        var thumbHover = Brush(0xA6, 0xA6, 0xA6);
-        var thumbPressed = Brush(0x60, 0x60, 0x60);
-        var glyph = Brush(0x60, 0x60, 0x60);
-        var buttonHover = Brush(0xDA, 0xDA, 0xDA);
-        var resources = scrollBar.Resources;
-        resources["ScrollBarSize"] = WorksheetScrollBarThickness;
-        resources["ScrollBarBackground"] = track;
-        resources["ScrollBarBackgroundPointerOver"] = track;
-        resources["ScrollBarTrackFill"] = track;
-        resources["ScrollBarTrackFillPointerOver"] = track;
-        resources["ScrollBarTrackStroke"] = Brushes.Transparent;
-        resources["ScrollBarTrackStrokePointerOver"] = Brushes.Transparent;
-        resources["ScrollBarPanningThumbBackground"] = thumb;
-        resources["ScrollBarThumbFillPointerOver"] = thumbHover;
-        resources["ScrollBarThumbFillPressed"] = thumbPressed;
-        resources["ScrollBarButtonBackground"] = track;
-        resources["ScrollBarButtonBackgroundPointerOver"] = buttonHover;
-        resources["ScrollBarButtonBackgroundPressed"] = thumbPressed;
-        resources["ScrollBarButtonArrowForeground"] = glyph;
-        resources["ScrollBarButtonArrowForegroundPointerOver"] = Brushes.Black;
-        resources["ScrollBarButtonArrowForegroundPressed"] = Brushes.White;
-    }
+    private static void ApplyWorksheetScrollBarChrome(ScrollBar scrollBar) =>
+        ClassicScrollBarChrome.ApplyResources(scrollBar.Resources);
 
     private void ConfigureSheetTabNavigationButton(Button button, string glyph, string automationName, int direction)
     {
@@ -13412,14 +13386,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("Zoom_Zoom"),
-            // WPF ZoomDialog is a 300x240 *outer* NoResize window; Avalonia sizes the client area, so
-            // take the Windows caption/frame off the height.
+            // The WPF Zoom reference is captured with its CLIENT area pinned to 300x240
+            // (TryGetFixedDialogClientCaptureSize), so the reference canvas is the client size: the
+            // 16x39 Windows frame is not subtracted here. A 284x201 client would also cut the action
+            // row, which ends at y=202 in this top-down layout.
             Width = ZoomDialogPlanner.Width,
-            Height = ZoomDialogPlanner.Height - WpfNoResizeFrameHeight,
+            Height = ZoomDialogPlanner.Height,
             MinWidth = ZoomDialogPlanner.Width,
             MaxWidth = ZoomDialogPlanner.Width,
-            MinHeight = ZoomDialogPlanner.Height - WpfNoResizeFrameHeight,
-            MaxHeight = ZoomDialogPlanner.Height - WpfNoResizeFrameHeight,
+            MinHeight = ZoomDialogPlanner.Height,
+            MaxHeight = ZoomDialogPlanner.Height,
             SizeToContent = SizeToContent.Manual,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -13477,7 +13453,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Text = currentZoom.ToString(CultureInfo.InvariantCulture),
             Width = ZoomDialogPlanner.CustomPercentBoxWidth,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Right,
+            // WPF ZoomDialog leaves the percent box at the TextBox default: left-aligned text.
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left,
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(customBox, zoomDialogChrome);
         AutomationProperties.SetAutomationId(customBox, "ZoomCustomPercentBox");
@@ -14791,6 +14768,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         dialog.Content = root;
         dialog.Opened += (_, _) => resultsList.Background = Brush(242, 242, 242);
+        // The shared descendant pass (ApplyWindow, on Opened) re-centres every button's content. WPF's
+        // Expander header starts at the left edge, so keep the glyph and caption left-aligned.
+        dialog.Opened += (_, _) => optionsHeader.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left;
         _findReplaceDialog = dialog;
         _switchFindReplaceMode = requestedReplaceMode =>
         {
@@ -15873,10 +15853,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             ItemsSource = linkTypeChoices,
             SelectedItem = selectedLinkType,
+            // WPF sizes this column to HyperlinkDialogPlanner.LinkTypeColumnWidth, which fits the
+            // four link types in Segoe UI. The macOS fallback face is wider, so the list keeps that
+            // width as its minimum and grows to its longest entry instead of cutting the entries off
+            // (the body grid's first column is Auto for the same reason).
             MinWidth = HyperlinkDialogPlanner.LinkTypeColumnWidth,
-            Width = HyperlinkDialogPlanner.LinkTypeColumnWidth,
             Height = HyperlinkDialogPlanner.LinkTypeListHeight,
         };
+        ScrollViewer.SetHorizontalScrollBarVisibility(linkTypeBox, ScrollBarVisibility.Disabled);
         AvaloniaCompactDialogChrome.ApplyListBox(
             linkTypeBox,
             AvaloniaCompactDialogChrome.WindowsStyle with
@@ -16199,7 +16183,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             ColumnDefinitions = new ColumnDefinitions
             {
-                new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LinkTypeColumnWidth) },
+                new ColumnDefinition { Width = GridLength.Auto, MinWidth = HyperlinkDialogPlanner.LinkTypeColumnWidth },
                 new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LinkTypeColumnGap) },
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
             },
@@ -16271,12 +16255,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // WPF ScreenTipDialog / BookmarkDialog (TextEntryDialog) are 420x170 *outer* NoResize
             // windows (client height 141): a 16px margin, the label 4px above the stretched box,
             // 12px above the 72px OK/Cancel row.
-            Width = 420,
-            Height = 170 - WpfNoResizeFrameHeight,
-            MinWidth = 420,
-            MinHeight = 170 - WpfNoResizeFrameHeight,
-            MaxWidth = 420,
-            MaxHeight = 170 - WpfNoResizeFrameHeight,
+            Width = 420 - WpfNoResizeFrameWidth,
+            Height = 170 - WpfNoResizeClientFrameHeight,
+            MinWidth = 420 - WpfNoResizeFrameWidth,
+            MinHeight = 170 - WpfNoResizeClientFrameHeight,
+            MaxWidth = 420 - WpfNoResizeFrameWidth,
+            MaxHeight = 170 - WpfNoResizeClientFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -19117,12 +19101,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Title = title,
             // WPF TextEntryDialog is a 420x170 *outer* NoResize window (client height 141): a 16px
             // margin, the label 4px above the stretched box, 12px above the 72px button row.
-            Width = 420,
-            Height = 170 - WpfNoResizeFrameHeight,
-            MinWidth = 420,
-            MinHeight = 170 - WpfNoResizeFrameHeight,
-            MaxWidth = 420,
-            MaxHeight = 170 - WpfNoResizeFrameHeight,
+            Width = 420 - WpfNoResizeFrameWidth,
+            Height = 170 - WpfNoResizeClientFrameHeight,
+            MinWidth = 420 - WpfNoResizeFrameWidth,
+            MinHeight = 170 - WpfNoResizeClientFrameHeight,
+            MaxWidth = 420 - WpfNoResizeFrameWidth,
+            MaxHeight = 170 - WpfNoResizeClientFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -21135,6 +21119,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         button.Padding = new Thickness(4, 1);
         button.Background = Brushes.White;
         button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        // These dialogs route Enter themselves instead of through Button.IsDefault; the class lets
+        // the dialog defaults still draw the WPF default-button cue on the WPF default button.
+        if (isDefault)
+            button.Classes.Add(DialogWindowDefaults.DefaultButtonCueClass);
         button.BorderThickness = new Thickness(1);
         button.FontSize = 12; button.FontFamily = FormulaBarFontFamily;
         button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
@@ -21596,11 +21584,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("GoalSeekStatus_GoalSeekStatus"),
-            Width = GoalSeekStatusDialogPlanner.WindowWidth,
+            // WPF GoalSeekStatusDialog is an outer NoResize window: the client loses the 16px frame
+            // width. Its status lines and buttons overflow the 39px-shorter client on Windows (the
+            // capture shows them reaching y=164), so the height stays at the WPF value to keep them
+            // inside the window here.
+            Width = GoalSeekStatusDialogPlanner.WindowWidth - WpfNoResizeFrameWidth,
             Height = GoalSeekStatusDialogPlanner.WindowHeight(result.Converged),
-            MinWidth = GoalSeekStatusDialogPlanner.WindowWidth,
+            MinWidth = GoalSeekStatusDialogPlanner.WindowWidth - WpfNoResizeFrameWidth,
             MinHeight = GoalSeekStatusDialogPlanner.WindowHeight(result.Converged),
-            MaxWidth = GoalSeekStatusDialogPlanner.WindowWidth,
+            MaxWidth = GoalSeekStatusDialogPlanner.WindowWidth - WpfNoResizeFrameWidth,
             MaxHeight = GoalSeekStatusDialogPlanner.WindowHeight(result.Converged),
             CanResize = false,
             FontFamily = FormulaBarFontFamily,
@@ -22414,12 +22406,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetHelpText(functionBox, UiText.Get("Subtotal_UseFunctionHelpText"));
 
         var selectedOffsets = initialSubtotalColumnOffsets.ToHashSet();
+        // WPF SubtotalDialog: a borderless ListBox inside the GroupBox, so the group frame is the only
+        // frame, with the first row inset 4px below the frame's top edge (98 = 94 list + 4 inset).
         var columnsList = new ListBox
         {
             ItemsSource = columns,
-            Height = 98,
-            MinHeight = 98,
-            MaxHeight = 98,
+            Height = 94,
+            MinHeight = 94,
+            MaxHeight = 94,
+            Margin = new Thickness(0, 4, 0, 0),
             Padding = new Thickness(0),
             BorderThickness = new Thickness(0),
         };
@@ -22430,7 +22425,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             {
                 Content = column.Header,
                 IsChecked = selectedOffsets.Contains(column.Offset),
-                Margin = new Thickness(0, 0, 0, 4),
+                // WPF row pitch is 23px; four rows fit the 94px list without a scrollbar.
+                Margin = new Thickness(0, 0, 0, 3),
             };
             ApplySubtotalCheckBoxChrome(box);
             AutomationProperties.SetName(box, UiText.Format("Subtotal_ColumnAutomationNameFormat", column.Header));
@@ -22660,6 +22656,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             AvaloniaCompactDialogChrome.ApplyButton(okButton, SubtotalDialogChromeStyle, 72, isDefault: true);
             AvaloniaCompactDialogChrome.ApplyButton(removeAllButton, SubtotalDialogChromeStyle, 92);
             AvaloniaCompactDialogChrome.ApplyButton(cancelButton, SubtotalDialogChromeStyle, 72);
+            // The generic list pass gives every list a 1px frame; inside this group box that drew a
+            // second frame nested in the group border.
+            columnsList.BorderThickness = new Thickness(0);
             groupColumnBox.Focus();
         };
 
@@ -24329,8 +24328,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("DataValidation_DataValidation"),
-            Width = 520,
-            Height = 560,
+            // WPF DataValidationDialog is a 520x560 outer NoResize window; Avalonia sizes the client.
+            Width = 520 - WpfNoResizeFrameWidth,
+            Height = 560 - WpfNoResizeClientFrameHeight,
             MinWidth = 480,
             MinHeight = 460,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,

@@ -56,13 +56,14 @@ public sealed partial class MainWindow
             // WPF PasswordProtectionDialog: DialogSizing.ApplyContentHeight(width, minHeight) -- a
             // NoResize window of fixed width whose height follows its content, never below the *outer*
             // minimum (540 for Protect Sheet, 250 for the password-only prompt). Avalonia sizes the
-            // client area, so the Windows caption/frame comes off the minimum.
-            Width = state.IsProtected ? ProtectionDialogPlanner.ProtectWorkbookCaptureWidth : ProtectionDialogPlanner.ProtectSheetWidth,
+            // client area, so the measured Windows frame comes off the width and the minimum.
+            Width = (state.IsProtected ? ProtectionDialogPlanner.ProtectWorkbookCaptureWidth : ProtectionDialogPlanner.ProtectSheetWidth)
+                - WpfNoResizeFrameWidth,
             // Height seeds the size for hosts that do not apply SizeToContent (headless capture).
             Height = (state.IsProtected ? ProtectionDialogPlanner.ProtectWorkbookCaptureHeight : ProtectionDialogPlanner.ProtectSheetHeight)
-                - WpfNoResizeFrameHeight,
+                - WpfNoResizeClientFrameHeight,
             MinHeight = (state.IsProtected ? ProtectionDialogPlanner.ProtectWorkbookCaptureHeight : ProtectionDialogPlanner.ProtectSheetHeight)
-                - WpfNoResizeFrameHeight,
+                - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Height,
             CanResize = false,
             FontFamily = FormulaBarFontFamily,

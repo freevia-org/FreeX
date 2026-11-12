@@ -295,11 +295,11 @@ public sealed partial class MainWindow
             // WPF CustomViewNameDialog is a 320x190 *outer* NoResize window. Avalonia sizes the client
             // area, so the caption/frame comes off the height; the height then follows the content so
             // the inline validation message (a warning box in WPF) has room when it appears.
-            Width = 320,
-            MinWidth = 320,
-            MaxWidth = 320,
-            Height = 190 - WpfNoResizeFrameHeight,
-            MinHeight = 190 - WpfNoResizeFrameHeight,
+            Width = 320 - WpfNoResizeFrameWidth,
+            MinWidth = 320 - WpfNoResizeFrameWidth,
+            MaxWidth = 320 - WpfNoResizeFrameWidth,
+            Height = 190 - WpfNoResizeClientFrameHeight,
+            MinHeight = 190 - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Height,
             CanResize = false,
             FontFamily = FormulaBarFontFamily,

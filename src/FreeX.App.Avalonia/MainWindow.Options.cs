@@ -902,10 +902,11 @@ public sealed partial class MainWindow
 
         var quickAccessGrid = new Grid
         {
-            Width = 469,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
             // WPF OptionsDialog.xaml: *,Auto,*,Auto with the button stacks carrying the 10px gaps,
-            // which resolves to the 128 / 112 / 127 / 102 split of the 469px page.
+            // which resolves to the 128 / 112 / 127 / 102 split of the page. The grid stretches to
+            // the page width instead of a fixed 469px, one pixel wider than this viewport, which
+            // pushed the Move Up / Move Down / Reset column past the clip edge.
             ColumnDefinitions = new ColumnDefinitions("*,Auto,*,Auto"),
             RowDefinitions = new RowDefinitions("Auto,Auto,180"),
         };
@@ -1351,7 +1352,11 @@ public sealed partial class MainWindow
                 OptionsDialogPlanner.ContentPaddingHorizontal,
                 OptionsDialogPlanner.ContentPaddingVertical),
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
+            // WPF's ScrollViewer leaves horizontal scrolling Disabled, so a page is laid out at the
+            // viewport width. Hidden measured pages at an unbounded width, which let the stretching
+            // recent-files path box and the Quick Access Toolbar columns run past the right padding,
+            // where the viewport clipped their right borders.
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             HorizontalContentAlignment = AvaloniaHorizontalAlignment.Stretch,
             VerticalContentAlignment = AvaloniaVerticalAlignment.Top,
         };
