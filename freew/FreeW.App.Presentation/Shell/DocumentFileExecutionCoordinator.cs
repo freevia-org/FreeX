@@ -80,6 +80,11 @@ public sealed class DocumentFileExecutionCoordinator
         {
             return DocumentOpenExecutionResult.Canceled(ex);
         }
+        catch (DocumentPasswordCanceledException ex)
+        {
+            // The user dismissed the password prompt: a cancel, not a failed open.
+            return DocumentOpenExecutionResult.Canceled(ex);
+        }
         catch (Exception ex)
         {
             return DocumentOpenExecutionResult.Failed(ex);

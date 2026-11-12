@@ -90,6 +90,11 @@ public static partial class DocxReader
             if (bytesRead >= CompoundFileBinarySignature.Length
                 && header[..CompoundFileBinarySignature.Length].SequenceEqual(CompoundFileBinarySignature))
             {
+                // "Encrypt with Password" wraps the package in a compound file too; say so instead of
+                // guessing "legacy .doc". Password-aware callers decrypt before reaching this reader.
+                if (EncryptedDocumentPackage.IsEncryptedPackage(stream))
+                    throw new DocumentPasswordRequiredException();
+
                 throw new InvalidDataException(
                     "Could not read this as a Word document (.docx/.docm/.dotx/.dotm). The file appears to be " +
                     "a legacy Word 97-2003 (.doc/.dot) binary document, or another OLE compound-file document, " +

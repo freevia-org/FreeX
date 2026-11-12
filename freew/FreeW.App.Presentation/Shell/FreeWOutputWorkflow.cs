@@ -437,6 +437,8 @@ public static class FreeWDocumentSnapshot
         using var buffer = new MemoryStream();
         DocxWriter.Write(document, buffer);
         buffer.Position = 0;
-        return DocxReader.Read(buffer);
+        var clone = DocxReader.Read(buffer);
+        clone.EncryptionPassword = document.EncryptionPassword;
+        return clone;
     }
 }

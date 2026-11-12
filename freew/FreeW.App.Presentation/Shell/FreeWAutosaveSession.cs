@@ -25,8 +25,25 @@ public sealed class FreeWAutosaveSession : IDisposable
 {
     private static readonly AutosaveDocumentSessionOptions<TextDocument> SessionOptions = new(
         Interval: TimeSpan.FromSeconds(30),
-        WriteSnapshot: (document, path) => DocxWriter.Write(document, path),
+        WriteSnapshot: WriteSnapshot,
         ReadSnapshot: DocxReader.Read);
+
+    /// <summary>
+    /// A password-protected document's recovery copy is encrypted with the same password, so
+    /// "Encrypt with Password" never leaves a plaintext copy in the autosave folder. Recovering it
+    /// asks for the password again (<see cref="DocumentPersistenceWorkflow.OpenSnapshot"/>).
+    /// </summary>
+    private static void WriteSnapshot(TextDocument document, string path)
+    {
+        if (string.IsNullOrEmpty(document.EncryptionPassword))
+        {
+            DocxWriter.Write(document, path);
+            return;
+        }
+
+        using var stream = File.Create(path);
+        new DocxFileAdapter().Save(document, stream);
+    }
 
     private readonly AutosaveSnapshotStore _store;
     private readonly AutosaveDocumentSession<TextDocument> _session;

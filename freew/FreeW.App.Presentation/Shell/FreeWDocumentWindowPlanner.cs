@@ -36,6 +36,8 @@ public sealed class FreeWDocumentWindowPlanner
         DocxWriter.Write(document, buffer);
         buffer.Position = 0;
         var snapshot = DocxReader.Read(buffer);
+        // The new window saves to the same file, so it must keep encrypting it.
+        snapshot.EncryptionPassword = document.EncryptionPassword;
 
         var windowNumber = Interlocked.Increment(ref _lastWindowNumber);
         return new FreeWDocumentWindowPlan(
