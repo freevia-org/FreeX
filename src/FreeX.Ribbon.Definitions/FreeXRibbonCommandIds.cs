@@ -59,6 +59,7 @@ public static class FreeXRibbonCommandIds
     public const string PageLayoutPaperSizeA5 = "pageLayout.paperSize.a5";
     public const string PageLayoutPaperSizeB4Jis = "pageLayout.paperSize.b4Jis";
     public const string PageLayoutPaperSizeB5Jis = "pageLayout.paperSize.b5Jis";
+    public const string PageLayoutPaperSizeMore = "pageLayout.paperSize.more";
     public const string PageLayoutPrintAreaSet = "pageLayout.printArea.set";
     public const string PageLayoutPrintAreaClear = "pageLayout.printArea.clear";
     public const string PageLayoutBreakInsert = "pageLayout.break.insert";
