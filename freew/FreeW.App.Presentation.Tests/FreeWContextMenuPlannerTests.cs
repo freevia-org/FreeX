@@ -18,7 +18,8 @@ public sealed class FreeWContextMenuPlannerTests
     [Fact]
     public void FixedCatalogs_HaveAuthoritativeCommandCounts()
     {
-        CommandCount(FreeWContextMenuPlanner.BuildFindSpecial()).Should().Be(9);
+        // Word's Find what special list: 14 caret codes (see FindReplaceDialogPlanner.BuildSpecialItems).
+        CommandCount(FreeWContextMenuPlanner.BuildFindSpecial()).Should().Be(14);
         CommandCount(FreeWContextMenuPlanner.BuildParagraphSpacing()).Should().Be(6);
         CommandCount(FreeWContextMenuPlanner.BuildEffects()).Should().Be(4);
         CommandCount(FreeWContextMenuPlanner.BuildTableStyles()).Should().Be(21);

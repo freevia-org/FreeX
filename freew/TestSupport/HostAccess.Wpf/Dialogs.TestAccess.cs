@@ -21,6 +21,48 @@ internal sealed partial class FindReplaceDialog
     internal void ReplaceForTest() => Execute(FindReplaceDialogActionKind.Replace);
     internal void ReplaceAllForTest() => Execute(FindReplaceDialogActionKind.ReplaceAll);
     internal string StatusForTest => _status.Text;
+    internal void FindNextForTest() => Execute(FindReplaceDialogActionKind.FindNext);
+
+    internal void SetOptionForTest(FindReplaceOptionKind kind, bool isChecked) =>
+        _options[kind].IsChecked = isChecked;
+
+    internal bool IsOptionEnabledForTest(FindReplaceOptionKind kind) => _options[kind].IsEnabled;
+
+    internal IReadOnlyList<string> OptionLabelsForTest =>
+        _options.Values.Select(box => box.Content?.ToString() ?? string.Empty).ToList();
+
+    internal void SetFormatForTest(FindReplaceDialogFieldKind field, FindFormat? format) =>
+        ShowFormatState(_session.SetFormat(field, format));
+
+    internal void ClearFormatForTest(FindReplaceDialogFieldKind field) =>
+        ShowFormatState(_session.ClearFormat(field));
+
+    internal (string Text, bool IsVisible) FormatSummaryForTest(FindReplaceDialogFieldKind field)
+    {
+        var summary = field == FindReplaceDialogFieldKind.Find ? _findFormatSummary : _replaceFormatSummary;
+        return (summary.Text, summary.Visibility == Visibility.Visible);
+    }
+
+    internal void FocusFieldForTest(FindReplaceDialogFieldKind field) =>
+        _lastFocusedBox = field == FindReplaceDialogFieldKind.Replace ? _replaceBox : _findBox;
+
+    internal IReadOnlyList<FindReplaceSpecialItem> SpecialItemsForTest()
+    {
+        SyncSessionInput();
+        return _session.BuildSpecialItems(LastFocusedField);
+    }
+
+    internal void InsertSpecialForTest(string code) => InsertSpecial(code);
+
+    internal string FindTextForTest => _findBox.Text;
+    internal string ReplaceTextForTest => _replaceBox.Text;
+}
+
+internal sealed partial class FindFormatDialog
+{
+    internal void ApplyForTest(FindFormatDialogInput input) => Apply(input);
+    internal bool TryAcceptForTest() => TryAccept();
+    internal string StatusForTest => _status.Visibility == Visibility.Visible ? _status.Text : string.Empty;
 }
 
 internal sealed partial class BookmarkManagerDialog

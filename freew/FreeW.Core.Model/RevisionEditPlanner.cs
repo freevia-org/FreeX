@@ -537,4 +537,49 @@ public static class RevisionEditPlanner
         BookmarkBoundaryMapper.Restore(paragraph, bookmarkPositions);
         return true;
     }
+
+    /// <summary>
+    /// Splits <paramref name="paragraph"/> at a plain-text offset: the runs after the offset move to
+    /// a new paragraph, which is returned (the caller inserts it after the original). Both halves
+    /// share the style and formatting; the section break stays with the half that keeps the original
+    /// paragraph mark, and bookmark boundaries stay with the first half.
+    /// </summary>
+    public static Paragraph SplitParagraph(Paragraph paragraph, int offset)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+
+        var tail = new Paragraph
+        {
+            Formatting = paragraph.Formatting,
+            StyleId = paragraph.StyleId,
+            MarkFormatting = paragraph.MarkFormatting,
+            SectionBreak = paragraph.SectionBreak,
+            PreservedNumbering = paragraph.PreservedNumbering,
+        };
+        paragraph.SectionBreak = null;
+
+        var bookmarks = BookmarkBoundaryMapper.Capture(paragraph);
+        var consumed = 0;
+        var keep = new List<Run>();
+        foreach (var run in paragraph.Runs)
+        {
+            var length = run.Text.Length;
+            if (consumed >= offset)
+                tail.Runs.Add(run);
+            else if (consumed + length <= offset)
+                keep.Add(run);
+            else
+            {
+                keep.Add(CloneRunWithText(run, run.Text[..(offset - consumed)]));
+                tail.Runs.Add(CloneRunWithText(run, run.Text[(offset - consumed)..]));
+            }
+
+            consumed += length;
+        }
+
+        paragraph.Runs.Clear();
+        paragraph.Runs.AddRange(keep);
+        BookmarkBoundaryMapper.Restore(paragraph, bookmarks);
+        return tail;
+    }
 }

@@ -8,7 +8,11 @@ public enum FindReplaceOptionKind
 {
     MatchCase,
     WholeWord,
-    UseWildcards
+    UseWildcards,
+    MatchPrefix,
+    MatchSuffix,
+    IgnorePunctuation,
+    IgnoreWhiteSpace
 }
 
 public enum FindReplaceDialogFieldKind
@@ -27,7 +31,10 @@ public enum FindReplaceDialogActionKind
 
 public enum FindReplaceValidationError
 {
-    SearchTermRequired
+    SearchTermRequired,
+
+    /// <summary>A formatting-only search needs replacement text or replacement formatting.</summary>
+    ReplacementRequired
 }
 
 public readonly record struct FindReplaceOptionChoice(
@@ -90,16 +97,85 @@ public readonly record struct FindReplaceOptionPlan(
 public readonly record struct FindReplaceSearchOptions(
     bool MatchCase,
     bool WholeWord,
-    bool UseWildcards);
+    bool UseWildcards,
+    bool MatchPrefix = false,
+    bool MatchSuffix = false,
+    bool IgnorePunctuation = false,
+    bool IgnoreWhiteSpace = false)
+{
+    public TextSearchOptions ToTextSearchOptions() =>
+        new(MatchCase, WholeWord, UseWildcards, MatchPrefix, MatchSuffix, IgnorePunctuation, IgnoreWhiteSpace);
+}
 
+/// <summary>
+/// A validated search. <see cref="Term"/> may be empty only when <see cref="Format"/> carries
+/// criteria -- Word's formatting-only search.
+/// </summary>
 public sealed record FindReplaceSearchRequest(
     string Term,
-    FindReplaceSearchOptions Options);
+    FindReplaceSearchOptions Options,
+    FindFormat? Format = null)
+{
+    public FindCriteria ToCriteria() => new(Term, Options.ToTextSearchOptions(), Format);
+}
 
 public sealed record FindReplaceReplaceRequest(
     string Term,
     string Replacement,
-    FindReplaceSearchOptions Options);
+    FindReplaceSearchOptions Options,
+    FindFormat? FindFormat = null,
+    FindFormat? ReplaceFormat = null)
+{
+    public FindReplaceSearchRequest ToSearchRequest() => new(Term, Options, FindFormat);
+
+    public FindCriteria ToCriteria() => new(Term, Options.ToTextSearchOptions(), FindFormat);
+}
+
+/// <summary>
+/// What replacing one match does, following Word: replacement text (possibly empty, which deletes
+/// the match) replaces the found text, except that an empty Replace with box that carries formatting
+/// keeps the found text and only reformats it.
+/// </summary>
+/// <param name="ReplacesText">False when the found text is kept and only <paramref name="Format"/> applies.</param>
+/// <param name="Text">The expanded replacement text; a paragraph mark is <see cref="FindSpecialCodes.ParagraphMark"/>.</param>
+/// <param name="Format">Formatting to apply to the result, or null.</param>
+public readonly record struct FindReplaceReplacementPlan(bool ReplacesText, string Text, FindFormat? Format)
+{
+    public bool InsertsParagraphMark => ReplacesText && Text.Contains(FindSpecialCodes.ParagraphMark);
+}
+
+/// <summary>
+/// Raw field values of the Format dialog. A null toggle means "not part of the criteria"; blank text
+/// means the same for the text fields.
+/// </summary>
+public readonly record struct FindFormatDialogInput(
+    bool? Bold = null,
+    bool? Italic = null,
+    bool? Underline = null,
+    string? FontFamily = null,
+    string? FontSizeText = null,
+    string? ColorText = null,
+    bool? Highlight = null,
+    string? HighlightColorText = null,
+    string? ParagraphStyleId = null)
+{
+    public static FindFormatDialogInput From(FindFormat? format) =>
+        format is null
+            ? default
+            : new FindFormatDialogInput(
+                format.Bold,
+                format.Italic,
+                format.Underline,
+                format.FontFamily,
+                format.FontSizePt?.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture),
+                format.ColorHex,
+                format.Highlight,
+                format.HighlightColorHex,
+                format.ParagraphStyleId);
+}
+
+/// <summary>One entry of the Special drop-down: a label and the code it inserts.</summary>
+public readonly record struct FindReplaceSpecialItem(string Label, string Insert);
 
 /// <summary>
 /// A located Find/Replace hit. <see cref="Block"/> is always a top-level <c>document.Blocks</c> index
@@ -175,6 +251,7 @@ public static class FindReplaceDialogPlanner
         PolicyTextDescriptor.MatchFormat.ResourceKey,
         PolicyTextDescriptor.ReplacedOccurrencesFormat.ResourceKey,
         PolicyTextDescriptor.ReplacementsMadeFormat.ResourceKey,
+        .. FindReplaceDialogText.RequiredResourceKeys,
     ];
 
     public static FindReplacePolicyTextSpec ResolvePolicyText(Func<string, string?>? getText = null) =>
@@ -184,8 +261,86 @@ public static class FindReplaceDialogPlanner
     [
         new(FindReplaceOptionKind.MatchCase, "Match case", "FindReplaceMatchCaseCheckBox"),
         new(FindReplaceOptionKind.WholeWord, "Whole word", "FindReplaceWholeWordCheckBox"),
-        new(FindReplaceOptionKind.UseWildcards, "Use wildcards  (* ? [ ] < >)", "FindReplaceUseWildcardsCheckBox")
+        new(FindReplaceOptionKind.UseWildcards, "Use wildcards  (* ? [ ] < >)", "FindReplaceUseWildcardsCheckBox"),
+        new(FindReplaceOptionKind.MatchPrefix, "Match prefix", "FindReplaceMatchPrefixCheckBox"),
+        new(FindReplaceOptionKind.MatchSuffix, "Match suffix", "FindReplaceMatchSuffixCheckBox"),
+        new(FindReplaceOptionKind.IgnorePunctuation, "Ignore punctuation characters", "FindReplaceIgnorePunctuationCheckBox"),
+        new(FindReplaceOptionKind.IgnoreWhiteSpace, "Ignore white-space characters", "FindReplaceIgnoreWhiteSpaceCheckBox")
     ];
+
+    public const string FormatButtonAutomationId = "FindReplaceFormatButton";
+    public const string NoFormattingButtonAutomationId = "FindReplaceNoFormattingButton";
+    public const string FindFormatSummaryAutomationId = "FindReplaceFindFormatSummary";
+    public const string ReplaceFormatSummaryAutomationId = "FindReplaceReplaceFormatSummary";
+
+    /// <summary>
+    /// The localized label for an option. The three historical options keep their neutral surface
+    /// label; the Word-parity options resolve through <paramref name="text"/>.
+    /// </summary>
+    public static string LabelFor(FindReplaceOptionKind kind, FindReplaceDialogText text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return kind switch
+        {
+            FindReplaceOptionKind.MatchPrefix => text.Get(FindReplaceTextId.OptionMatchPrefix),
+            FindReplaceOptionKind.MatchSuffix => text.Get(FindReplaceTextId.OptionMatchSuffix),
+            FindReplaceOptionKind.IgnorePunctuation => text.Get(FindReplaceTextId.OptionIgnorePunctuation),
+            FindReplaceOptionKind.IgnoreWhiteSpace => text.Get(FindReplaceTextId.OptionIgnoreWhiteSpace),
+            _ => LabelFor(kind),
+        };
+    }
+
+    private static readonly (FindReplaceTextId Label, string Code, bool Find, bool Replace)[] SpecialCodeValues =
+    [
+        (FindReplaceTextId.SpecialParagraphMark, "^p", true, true),
+        (FindReplaceTextId.SpecialTabCharacter, "^t", true, true),
+        (FindReplaceTextId.SpecialAnyCharacter, "^?", true, false),
+        (FindReplaceTextId.SpecialAnyDigit, "^#", true, false),
+        (FindReplaceTextId.SpecialAnyLetter, "^$", true, false),
+        (FindReplaceTextId.SpecialCaretCharacter, "^^", true, true),
+        (FindReplaceTextId.SpecialEmDash, "^+", true, true),
+        (FindReplaceTextId.SpecialEnDash, "^=", true, true),
+        (FindReplaceTextId.SpecialFindWhatText, "^&", false, true),
+        (FindReplaceTextId.SpecialManualLineBreak, "^l", true, true),
+        (FindReplaceTextId.SpecialManualPageBreak, "^m", true, false),
+        (FindReplaceTextId.SpecialNonbreakingHyphen, "^~", true, true),
+        (FindReplaceTextId.SpecialNonbreakingSpace, "^s", true, true),
+        (FindReplaceTextId.SpecialOptionalHyphen, "^-", true, true),
+        (FindReplaceTextId.SpecialWhiteSpace, "^w", true, false),
+    ];
+
+    private static readonly (FindReplaceTextId Label, string Code)[] WildcardSpecialValues =
+    [
+        (FindReplaceTextId.SpecialAnyCharacter, "?"),
+        (FindReplaceTextId.SpecialAnyDigit, "[0-9]"),
+        (FindReplaceTextId.SpecialAnyLetter, "[A-Za-z]"),
+        (FindReplaceTextId.SpecialBeginningOfWord, "<"),
+        (FindReplaceTextId.SpecialEndOfWord, ">"),
+    ];
+
+    /// <summary>
+    /// The Special drop-down for one box, as Word builds it: the Find what list offers every search
+    /// code, the Replace with list only the codes that can be inserted (plus Find What Text), and
+    /// with wildcards on the Find what list offers wildcard operators instead of caret codes.
+    /// </summary>
+    public static IReadOnlyList<FindReplaceSpecialItem> BuildSpecialItems(
+        FindReplaceDialogFieldKind field,
+        bool useWildcards,
+        FindReplaceDialogText? text = null)
+    {
+        text ??= FindReplaceDialogText.NeutralEnglish;
+        if (field == FindReplaceDialogFieldKind.Find && useWildcards)
+        {
+            return WildcardSpecialValues
+                .Select(item => new FindReplaceSpecialItem($"{text.Get(item.Label)}  ({item.Code})", item.Code))
+                .ToArray();
+        }
+
+        return SpecialCodeValues
+            .Where(item => field == FindReplaceDialogFieldKind.Find ? item.Find : item.Replace)
+            .Select(item => new FindReplaceSpecialItem($"{text.Get(item.Label)}  ({item.Code})", item.Code))
+            .ToArray();
+    }
 
     public static FindReplaceDialogSurfaceSpec Surface { get; } = new(
         "Find & Replace",
@@ -230,12 +385,24 @@ public static class FindReplaceDialogPlanner
     public static string LabelFor(FindReplaceOptionKind kind) =>
         OptionChoiceValues.First(choice => choice.Kind == kind).Label;
 
+    /// <summary>
+    /// Wildcards disable every option except Match case, exactly as Word greys them out: a wildcard
+    /// pattern expresses word boundaries itself (&lt; and &gt;) and matches punctuation literally.
+    /// </summary>
     public static bool IsOptionEnabled(FindReplaceOptionKind kind, FindReplaceSearchOptions options) =>
-        kind != FindReplaceOptionKind.WholeWord || !options.UseWildcards;
+        kind is FindReplaceOptionKind.MatchCase or FindReplaceOptionKind.UseWildcards
+        || !options.UseWildcards;
 
     public static FindReplaceSearchOptions NormalizeOptions(FindReplaceSearchOptions options) =>
         options.UseWildcards
-            ? options with { WholeWord = false }
+            ? options with
+            {
+                WholeWord = false,
+                MatchPrefix = false,
+                MatchSuffix = false,
+                IgnorePunctuation = false,
+                IgnoreWhiteSpace = false,
+            }
             : options;
 
     public static IReadOnlyList<FindReplaceGoToTarget> BuildGoToTargets(TextDocument document)
@@ -290,24 +457,43 @@ public static class FindReplaceDialogPlanner
     public static bool ShouldUsePlainEditorSearch(FindReplaceSearchOptions options)
     {
         var effective = NormalizeOptions(options);
-        return !effective.MatchCase && !effective.WholeWord && !effective.UseWildcards;
+        return !effective.MatchCase
+            && !effective.WholeWord
+            && !effective.UseWildcards
+            && !effective.MatchPrefix
+            && !effective.MatchSuffix
+            && !effective.IgnorePunctuation
+            && !effective.IgnoreWhiteSpace;
     }
 
     public static bool TryCreateSearchRequest(
         string? term,
         FindReplaceSearchOptions options,
         out FindReplaceSearchRequest? request,
+        out FindReplaceValidationError? error) =>
+        TryCreateSearchRequest(term, options, findFormat: null, out request, out error);
+
+    /// <summary>
+    /// A search needs text or formatting: an empty Find what box is valid when
+    /// <paramref name="findFormat"/> carries criteria (Word's formatting-only search).
+    /// </summary>
+    public static bool TryCreateSearchRequest(
+        string? term,
+        FindReplaceSearchOptions options,
+        FindFormat? findFormat,
+        out FindReplaceSearchRequest? request,
         out FindReplaceValidationError? error)
     {
         request = null;
         error = null;
 
-        if (!TryValidateSearchTerm(term, out error))
+        var format = NormalizeFormat(findFormat);
+        if (format is null && !TryValidateSearchTerm(term, out error))
         {
             return false;
         }
 
-        request = new FindReplaceSearchRequest(term, NormalizeOptions(options));
+        request = new FindReplaceSearchRequest(term ?? string.Empty, NormalizeOptions(options), format);
         return true;
     }
 
@@ -316,54 +502,180 @@ public static class FindReplaceDialogPlanner
         string? replacement,
         FindReplaceSearchOptions options,
         out FindReplaceReplaceRequest? request,
+        out FindReplaceValidationError? error) =>
+        TryCreateReplaceRequest(term, replacement, options, null, null, out request, out error);
+
+    public static bool TryCreateReplaceRequest(
+        string? term,
+        string? replacement,
+        FindReplaceSearchOptions options,
+        FindFormat? findFormat,
+        FindFormat? replaceFormat,
+        out FindReplaceReplaceRequest? request,
         out FindReplaceValidationError? error)
     {
         request = null;
         error = null;
 
-        if (!TryValidateSearchTerm(term, out error))
+        var normalizedFind = NormalizeFormat(findFormat);
+        var normalizedReplace = NormalizeFormat(replaceFormat);
+        if (normalizedFind is null && !TryValidateSearchTerm(term, out error))
         {
             return false;
         }
 
-        request = new FindReplaceReplaceRequest(term, replacement ?? string.Empty, NormalizeOptions(options));
+        // A formatting-only search has no text to delete, so replacing it with nothing at all would
+        // strip every formatted stretch out of the document. Word refuses that combination too.
+        if (string.IsNullOrEmpty(term) && string.IsNullOrEmpty(replacement) && normalizedReplace is null)
+        {
+            error = FindReplaceValidationError.ReplacementRequired;
+            return false;
+        }
+
+        request = new FindReplaceReplaceRequest(
+            term ?? string.Empty,
+            replacement ?? string.Empty,
+            NormalizeOptions(options),
+            normalizedFind,
+            normalizedReplace);
         return true;
     }
+
+    private static FindFormat? NormalizeFormat(FindFormat? format) =>
+        format is { IsEmpty: false } ? format : null;
 
     public static string ValidationMessageFor(
         FindReplaceValidationError? error,
         FindReplacePolicyTextSpec? text = null) =>
         FindReplaceDialogPolicy.ValidationMessageFor(ToSharedValidationError(error), text);
 
+    public static string ValidationMessageFor(
+        FindReplaceValidationError? error,
+        FindReplacePolicyTextSpec? text,
+        FindReplaceDialogText dialogText) =>
+        error == FindReplaceValidationError.ReplacementRequired
+            ? dialogText.Get(FindReplaceTextId.FormatRequiresReplacement)
+            : ValidationMessageFor(error, text);
+
     public static string BuildFindStatus(
         FindReplaceSearchRequest request,
         bool found,
-        FindReplacePolicyTextSpec? text = null)
+        FindReplacePolicyTextSpec? text = null,
+        FindReplaceDialogText? dialogText = null)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return FindReplaceDialogPolicy.BuildFindStatus(request.Term, found, text);
+        return FindReplaceDialogPolicy.BuildFindStatus(StatusTerm(request.Term, dialogText), found, text);
     }
 
     public static string BuildReplaceStatus(
         FindReplaceReplaceRequest request,
         bool replaced,
-        FindReplacePolicyTextSpec? text = null)
+        FindReplacePolicyTextSpec? text = null,
+        FindReplaceDialogText? dialogText = null)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return FindReplaceDialogPolicy.BuildReplaceStatus(request.Term, replaced, text);
+        return FindReplaceDialogPolicy.BuildReplaceStatus(StatusTerm(request.Term, dialogText), replaced, text);
     }
 
     public static string BuildReplaceAllStatus(
         FindReplaceReplaceRequest request,
         int replacementCount,
         bool inSelection = false,
-        FindReplacePolicyTextSpec? text = null)
+        FindReplacePolicyTextSpec? text = null,
+        FindReplaceDialogText? dialogText = null)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var status = FindReplaceDialogPolicy.BuildReplaceAllOccurrenceStatus(request.Term, replacementCount, text);
+        var status = FindReplaceDialogPolicy.BuildReplaceAllOccurrenceStatus(
+            StatusTerm(request.Term, dialogText), replacementCount, text);
         return inSelection && replacementCount > 0
             ? status[..^1] + " in selection."
             : status;
+    }
+
+    /// <summary>A formatting-only search has no term to quote in a status line.</summary>
+    private static string StatusTerm(string term, FindReplaceDialogText? dialogText) =>
+        term.Length > 0
+            ? term
+            : (dialogText ?? FindReplaceDialogText.NeutralEnglish).Get(FindReplaceTextId.FormattedTextLabel);
+
+    /// <summary>Expands the Replace with box for one match; see <see cref="FindReplaceReplacementPlan"/>.</summary>
+    public static FindReplaceReplacementPlan PlanReplacement(FindReplaceReplaceRequest request, string? foundText)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var format = NormalizeFormat(request.ReplaceFormat);
+        return request.Replacement.Length == 0 && format is not null
+            ? new FindReplaceReplacementPlan(ReplacesText: false, foundText ?? string.Empty, format)
+            : new FindReplaceReplacementPlan(
+                ReplacesText: true,
+                FindSpecialCodes.ExpandReplacement(request.Replacement, foundText),
+                format);
+    }
+
+    /// <summary>
+    /// Text-and-formatting matches over a host-projected haystack (see <see cref="FindTextSegment"/>),
+    /// as spans over the concatenated segment text.
+    /// </summary>
+    public static IReadOnlyList<(int Start, int Length)> FindAllInSegments(
+        IReadOnlyList<FindTextSegment> segments,
+        FindReplaceSearchRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return FormattedTextSearch.FindAll(segments, request.ToCriteria());
+    }
+
+    /// <summary>
+    /// The summary line shown under a box that has formatting set, e.g.
+    /// "Format: Font: Arial, 12 pt, Bold, Not Italic, Style: Heading 1". Empty when nothing is set.
+    /// </summary>
+    public static string DescribeFormat(
+        FindFormat? format,
+        FindReplaceDialogText? text = null,
+        TextDocument? document = null)
+    {
+        if (format is not { IsEmpty: false })
+            return string.Empty;
+
+        text ??= FindReplaceDialogText.NeutralEnglish;
+        var parts = new List<string>();
+        var font = new List<string>();
+        if (format.FontFamily is { Length: > 0 } family)
+            font.Add(family);
+        if (format.FontSizePt is { } size)
+        {
+            font.Add(text.Format(
+                FindReplaceTextId.DescribeSizeFormat,
+                size.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture)));
+        }
+
+        if (format.Bold is { } bold)
+            font.Add(text.Get(bold ? FindReplaceTextId.DescribeBold : FindReplaceTextId.DescribeNotBold));
+        if (format.Italic is { } italic)
+            font.Add(text.Get(italic ? FindReplaceTextId.DescribeItalic : FindReplaceTextId.DescribeNotItalic));
+        if (format.Underline is { } underline)
+            font.Add(text.Get(underline ? FindReplaceTextId.DescribeUnderline : FindReplaceTextId.DescribeNoUnderline));
+        if (FindFormat.NormalizeColor(format.ColorHex) is { } color)
+            font.Add(text.Format(FindReplaceTextId.DescribeFontColorFormat, color));
+        if (font.Count > 0)
+            parts.Add(text.Format(FindReplaceTextId.DescribeFontFormat, string.Join(", ", font)));
+
+        if (format.Highlight is { } highlight)
+        {
+            parts.Add(!highlight
+                ? text.Get(FindReplaceTextId.DescribeNotHighlight)
+                : FindFormat.NormalizeColor(format.HighlightColorHex) is { } highlightColor
+                    ? text.Format(FindReplaceTextId.DescribeHighlightColorFormat, highlightColor)
+                    : text.Get(FindReplaceTextId.DescribeHighlight));
+        }
+
+        if (format.ParagraphStyleId is { Length: > 0 } styleId)
+        {
+            var styleName = document is not null && document.Styles.TryGetValue(styleId, out var style)
+                ? style.Name
+                : styleId;
+            parts.Add(text.Format(FindReplaceTextId.DescribeStyleFormat, styleName));
+        }
+
+        return text.Format(FindReplaceTextId.FormatSummaryFormat, string.Join(", ", parts));
     }
 
     private static ResourceTextDescriptor Text(string resourceKey, string fallbackText) =>
@@ -372,7 +684,7 @@ public static class FindReplaceDialogPlanner
     public static bool DocumentContains(TextDocument document, FindReplaceSearchRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return CountMatches(document, request.Term, request.Options) > 0;
+        return CountMatches(document, request) > 0;
     }
 
     public static IReadOnlyList<(int Start, int Length)> FindAll(
@@ -389,13 +701,7 @@ public static class FindReplaceDialogPlanner
         if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(term))
             return [];
 
-        var effective = NormalizeOptions(options);
-        return TextSearch.FindAll(
-            text,
-            term,
-            effective.MatchCase,
-            effective.WholeWord,
-            effective.UseWildcards);
+        return TextSearch.FindAll(text, term, NormalizeOptions(options).ToTextSearchOptions());
     }
 
     public static bool MatchesExactly(
@@ -581,35 +887,39 @@ public static class FindReplaceDialogPlanner
         if (string.IsNullOrEmpty(term))
             return 0;
 
-        var effective = NormalizeOptions(options);
-        var count = 0;
-        foreach (var block in document.Blocks)
-        {
-            switch (block)
-            {
-                case Paragraph paragraph:
-                    count += EnumerateMatches(paragraph.PlainText, term, effective).Count();
-                    break;
-                case Table table:
-                    count += EnumerateTableMatches(table, term, effective).Count();
-                    break;
-            }
-        }
-
         // document.Blocks is only the body story. Every section's Header/Footer (and, on a
         // different-odd-even or different-first-page layout, its EvenHeader/EvenFooter/
         // FirstHeader/FirstFooter) is a separate paragraph store that a plain block walk never
         // sees -- without this, a term that appears only in a header/footer is invisible to
         // CountMatches/DocumentContains even though the user can plainly see it on every page.
-        // TextDocumentStoryTraversal.HeadersFooters already flattens a header/footer's optional
-        // side-by-side layout Table into the same Paragraphs list (see HeaderFooter.Table), so no
-        // separate table walk is needed here the way there is for the body.
-        foreach (var paragraph in TextDocumentStoryTraversal.EnumerateParagraphs(
-                     document, TextDocumentStorySubset.HeadersFooters))
-            count += EnumerateMatches(paragraph.PlainText, term, effective).Count();
-
-        return count;
+        // The same holds for footnotes, endnotes, comments and text boxes, which Replace All now
+        // reaches too (FindReplaceStoryPlanner), so the count has to cover them to stay consistent
+        // with it. DocumentStories walks all of them; a header/footer's optional side-by-side layout
+        // Table is already flattened into its Paragraphs list (see HeaderFooter.Table).
+        return CountMatches(document, new FindReplaceSearchRequest(term, NormalizeOptions(options)));
     }
+
+    /// <summary>
+    /// Every match Replace All would visit: the body (top-level paragraphs and table cells) plus
+    /// every non-body story, honouring formatting criteria.
+    /// </summary>
+    public static int CountMatches(TextDocument document, FindReplaceSearchRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(request);
+
+        var criteria = request.ToCriteria();
+        if (criteria.IsEmpty)
+            return 0;
+
+        // One projection per flow, exactly as Replace All sees the body (so a match that spans a
+        // paragraph mark, or sits in a nested table, is counted too).
+        return FindReplaceBodyPlanner.CountMatches(document, request) + CountStoryMatches(document, criteria);
+    }
+
+    private static int CountStoryMatches(TextDocument document, FindCriteria criteria) =>
+        DocumentStories.Enumerate(document)
+            .Sum(story => FormattedTextSearch.FindAll(document, story.Paragraph, criteria).Count);
 
     private readonly record struct TableTextMatch(int Row, int Col, int ParagraphIndex, int Start, int Length);
 
@@ -699,4 +1009,74 @@ public static class FindReplaceDialogPlanner
             FindReplaceValidationError.SearchTermRequired => FindReplaceValidationErrorKind.SearchTermRequired,
             _ => FindReplaceValidationErrorKind.SearchTermRequired
         };
+
+    /// <summary>Builds formatting criteria from the Format dialog's raw field values.</summary>
+    public static bool TryBuildFormat(
+        FindFormatDialogInput input,
+        out FindFormat format,
+        out FindReplaceTextId? error)
+    {
+        format = FindFormat.None;
+        error = null;
+
+        double? size = null;
+        if (!string.IsNullOrWhiteSpace(input.FontSizeText))
+        {
+            var sizeText = input.FontSizeText.Trim();
+            if ((!double.TryParse(sizeText, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.CurrentCulture, out var parsed)
+                    && !double.TryParse(sizeText, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out parsed))
+                || parsed < 1
+                || parsed > 1638)
+            {
+                error = FindReplaceTextId.FormatDialogInvalidSize;
+                return false;
+            }
+
+            size = parsed;
+        }
+
+        string? color = null;
+        if (!string.IsNullOrWhiteSpace(input.ColorText)
+            && (color = FindFormat.NormalizeColor(input.ColorText)) is null)
+        {
+            error = FindReplaceTextId.FormatDialogInvalidColor;
+            return false;
+        }
+
+        string? highlightColor = null;
+        if (input.Highlight == true
+            && !string.IsNullOrWhiteSpace(input.HighlightColorText)
+            && (highlightColor = FindFormat.NormalizeColor(input.HighlightColorText)) is null)
+        {
+            error = FindReplaceTextId.FormatDialogInvalidColor;
+            return false;
+        }
+
+        format = new FindFormat
+        {
+            Bold = input.Bold,
+            Italic = input.Italic,
+            Underline = input.Underline,
+            FontFamily = string.IsNullOrWhiteSpace(input.FontFamily) ? null : input.FontFamily.Trim(),
+            FontSizePt = size,
+            ColorHex = color,
+            Highlight = input.Highlight,
+            HighlightColorHex = highlightColor,
+            ParagraphStyleId = string.IsNullOrWhiteSpace(input.ParagraphStyleId) ? null : input.ParagraphStyleId,
+        };
+        return true;
+    }
+
+    /// <summary>The paragraph styles the Format dialog offers, by display name.</summary>
+    public static IReadOnlyList<(string Id, string Name)> BuildFormatStyleChoices(TextDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        var styles = document.Styles.Values
+            .Where(style => style.Type == StyleType.Paragraph)
+            .Select(style => (style.Id, style.Name))
+            .ToList();
+        if (!styles.Any(style => FindFormat.SameStyle(style.Id, FindFormat.DefaultParagraphStyleId)))
+            styles.Add((FindFormat.DefaultParagraphStyleId, FindFormat.DefaultParagraphStyleId));
+        return styles.OrderBy(style => style.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
+    }
 }

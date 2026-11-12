@@ -34,10 +34,21 @@ public sealed class FindReplaceDialogPlannerTests
             .Should().Equal(
                 FindReplaceOptionKind.MatchCase,
                 FindReplaceOptionKind.WholeWord,
-                FindReplaceOptionKind.UseWildcards);
+                FindReplaceOptionKind.UseWildcards,
+                FindReplaceOptionKind.MatchPrefix,
+                FindReplaceOptionKind.MatchSuffix,
+                FindReplaceOptionKind.IgnorePunctuation,
+                FindReplaceOptionKind.IgnoreWhiteSpace);
 
         FindReplaceDialogPlanner.OptionChoices.Select(choice => choice.Label)
-            .Should().Equal("Match case", "Whole word", "Use wildcards  (* ? [ ] < >)");
+            .Should().Equal(
+                "Match case",
+                "Whole word",
+                "Use wildcards  (* ? [ ] < >)",
+                "Match prefix",
+                "Match suffix",
+                "Ignore punctuation characters",
+                "Ignore white-space characters");
     }
 
     [Fact]
@@ -52,8 +63,9 @@ public sealed class FindReplaceDialogPlannerTests
             plan.Kind == FindReplaceOptionKind.WholeWord &&
             plan.Label == "Whole word" &&
             !plan.IsEnabled);
-        plans.Where(plan => plan.Kind != FindReplaceOptionKind.WholeWord)
-            .Should().OnlyContain(plan => plan.IsEnabled);
+        // Wildcards leave only Match case (and the wildcard toggle itself) available, as in Word.
+        plans.Where(plan => plan.IsEnabled).Select(plan => plan.Kind)
+            .Should().Equal(FindReplaceOptionKind.MatchCase, FindReplaceOptionKind.UseWildcards);
     }
 
     [Fact]

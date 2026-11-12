@@ -10,6 +10,13 @@ public interface IFindReplaceDialogCommandHost
     bool ReplaceNext(FindReplaceReplaceRequest request);
 
     FindReplaceAllExecutionResult ReplaceAll(FindReplaceReplaceRequest request);
+
+    /// <summary>
+    /// A status line for the match the last <see cref="FindNext"/> / <see cref="ReplaceNext"/> landed
+    /// on, when the host could not show it as a selection -- a match in a header, a note, a comment or
+    /// a text box. Null (the default) when the match is selected on the editing surface.
+    /// </summary>
+    string? LastMatchStatus => null;
 }
 
 public readonly record struct FindReplaceAllExecutionResult(
@@ -22,14 +29,46 @@ public sealed record FindReplaceDialogState(
     string Replacement,
     FindReplaceSearchOptions Options,
     bool WholeWordEnabled,
-    string StatusText);
+    string StatusText)
+{
+    /// <summary>Formatting criteria for Find what, or null when none is set.</summary>
+    public FindFormat? FindFormat { get; init; }
+
+    /// <summary>Formatting applied by Replace with, or null when none is set.</summary>
+    public FindFormat? ReplaceFormat { get; init; }
+
+    /// <summary>The "Format: ..." line under Find what; empty when no formatting is set.</summary>
+    public string FindFormatSummary { get; init; } = string.Empty;
+
+    /// <summary>The "Format: ..." line under Replace with; empty when no formatting is set.</summary>
+    public string ReplaceFormatSummary { get; init; } = string.Empty;
+
+    public bool IsOptionEnabled(FindReplaceOptionKind kind) =>
+        FindReplaceDialogPlanner.IsOptionEnabled(kind, Options);
+
+    public bool IsOptionChecked(FindReplaceOptionKind kind) => kind switch
+    {
+        FindReplaceOptionKind.MatchCase => Options.MatchCase,
+        FindReplaceOptionKind.WholeWord => Options.WholeWord,
+        FindReplaceOptionKind.UseWildcards => Options.UseWildcards,
+        FindReplaceOptionKind.MatchPrefix => Options.MatchPrefix,
+        FindReplaceOptionKind.MatchSuffix => Options.MatchSuffix,
+        FindReplaceOptionKind.IgnorePunctuation => Options.IgnorePunctuation,
+        FindReplaceOptionKind.IgnoreWhiteSpace => Options.IgnoreWhiteSpace,
+        _ => false,
+    };
+}
 
 public readonly record struct FindReplaceDialogInput(
     string? Query,
     string? Replacement,
     bool MatchCase,
     bool WholeWord,
-    bool UseWildcards);
+    bool UseWildcards,
+    bool MatchPrefix = false,
+    bool MatchSuffix = false,
+    bool IgnorePunctuation = false,
+    bool IgnoreWhiteSpace = false);
 
 public sealed record FindReplaceTextInsertionPlan(
     string Text,
@@ -47,23 +86,33 @@ public sealed class FindReplaceDialogSession
 {
     private readonly IFindReplaceDialogCommandHost _commandHost;
     private readonly FindReplacePolicyTextSpec _policyText;
+    private readonly FindReplaceDialogText _dialogText;
+    private readonly Func<TextDocument?>? _document;
     private FindReplaceOpenMode _openMode;
     private string _query = string.Empty;
     private string _replacement = string.Empty;
     private FindReplaceSearchOptions _options;
+    private FindFormat? _findFormat;
+    private FindFormat? _replaceFormat;
     private string _statusText = string.Empty;
 
     public FindReplaceDialogSession(
         IFindReplaceDialogCommandHost commandHost,
         FindReplaceOpenMode openMode = FindReplaceOpenMode.Find,
-        FindReplacePolicyTextSpec? policyText = null)
+        FindReplacePolicyTextSpec? policyText = null,
+        FindReplaceDialogText? dialogText = null,
+        Func<TextDocument?>? document = null)
     {
         _commandHost = commandHost ?? throw new ArgumentNullException(nameof(commandHost));
         _openMode = openMode;
         _policyText = policyText ?? FindReplacePolicyTextSpec.NeutralEnglish;
+        _dialogText = dialogText ?? FindReplaceDialogText.NeutralEnglish;
+        _document = document;
     }
 
     public FindReplaceDialogState State => BuildState();
+
+    public FindReplaceDialogText Text => _dialogText;
 
     public FindReplaceDialogState ActivateFor(FindReplaceOpenMode openMode)
     {
@@ -76,24 +125,45 @@ public sealed class FindReplaceDialogSession
         string? replacement,
         bool matchCase,
         bool wholeWord,
-        bool useWildcards)
+        bool useWildcards) =>
+        SetInput(new FindReplaceDialogInput(query, replacement, matchCase, wholeWord, useWildcards));
+
+    public FindReplaceDialogState SetInput(FindReplaceDialogInput input)
     {
-        _query = query ?? string.Empty;
-        _replacement = replacement ?? string.Empty;
+        _query = input.Query ?? string.Empty;
+        _replacement = input.Replacement ?? string.Empty;
         _options = FindReplaceDialogPlanner.NormalizeOptions(new FindReplaceSearchOptions(
-            matchCase,
-            wholeWord,
-            useWildcards));
+            input.MatchCase,
+            input.WholeWord,
+            input.UseWildcards,
+            input.MatchPrefix,
+            input.MatchSuffix,
+            input.IgnorePunctuation,
+            input.IgnoreWhiteSpace));
         return BuildState();
     }
 
-    public FindReplaceDialogState SetInput(FindReplaceDialogInput input) =>
-        SetInput(
-            input.Query,
-            input.Replacement,
-            input.MatchCase,
-            input.WholeWord,
-            input.UseWildcards);
+    /// <summary>The formatting currently set for a box, for seeding the Format dialog.</summary>
+    public FindFormat? FormatFor(FindReplaceDialogFieldKind field) =>
+        field == FindReplaceDialogFieldKind.Find ? _findFormat : _replaceFormat;
+
+    /// <summary>Sets (or, with null / empty formatting, clears) the formatting for one box.</summary>
+    public FindReplaceDialogState SetFormat(FindReplaceDialogFieldKind field, FindFormat? format)
+    {
+        var normalized = format is { IsEmpty: false } ? format : null;
+        if (field == FindReplaceDialogFieldKind.Find)
+            _findFormat = normalized;
+        else
+            _replaceFormat = normalized;
+        return BuildState();
+    }
+
+    /// <summary>Word's No Formatting button: clears the formatting of the given box.</summary>
+    public FindReplaceDialogState ClearFormat(FindReplaceDialogFieldKind field) => SetFormat(field, null);
+
+    /// <summary>The Special drop-down for a box under the current options.</summary>
+    public IReadOnlyList<FindReplaceSpecialItem> BuildSpecialItems(FindReplaceDialogFieldKind field) =>
+        FindReplaceDialogPlanner.BuildSpecialItems(field, _options.UseWildcards, _dialogText);
 
     public FindReplaceDialogState Execute(
         FindReplaceDialogActionKind action,
@@ -114,36 +184,42 @@ public sealed class FindReplaceDialogSession
         if (!FindReplaceDialogPlanner.TryCreateSearchRequest(
                 _query,
                 _options,
+                _findFormat,
                 out var request,
                 out var error))
         {
-            return SetStatus(FindReplaceDialogPlanner.ValidationMessageFor(error, _policyText));
+            return SetStatus(FindReplaceDialogPlanner.ValidationMessageFor(error, _policyText, _dialogText));
         }
 
         var found = _commandHost.FindNext(request!);
-        return SetStatus(FindReplaceDialogPlanner.BuildFindStatus(request!, found, _policyText));
+        return SetStatus(found && _commandHost.LastMatchStatus is { Length: > 0 } hostStatus
+            ? hostStatus
+            : FindReplaceDialogPlanner.BuildFindStatus(request!, found, _policyText, _dialogText));
     }
 
     public FindReplaceDialogState ReplaceNext()
     {
         if (!TryCreateReplaceRequest(out var request, out var error))
-            return SetStatus(FindReplaceDialogPlanner.ValidationMessageFor(error, _policyText));
+            return SetStatus(FindReplaceDialogPlanner.ValidationMessageFor(error, _policyText, _dialogText));
 
         var found = _commandHost.ReplaceNext(request!);
-        return SetStatus(FindReplaceDialogPlanner.BuildReplaceStatus(request!, found, _policyText));
+        return SetStatus(found && _commandHost.LastMatchStatus is { Length: > 0 } hostStatus
+            ? hostStatus
+            : FindReplaceDialogPlanner.BuildReplaceStatus(request!, found, _policyText, _dialogText));
     }
 
     public FindReplaceDialogState ReplaceAll()
     {
         if (!TryCreateReplaceRequest(out var request, out var error))
-            return SetStatus(FindReplaceDialogPlanner.ValidationMessageFor(error, _policyText));
+            return SetStatus(FindReplaceDialogPlanner.ValidationMessageFor(error, _policyText, _dialogText));
 
         var result = _commandHost.ReplaceAll(request!);
         return SetStatus(FindReplaceDialogPlanner.BuildReplaceAllStatus(
             request!,
             result.ReplacementCount,
             result.InSelection,
-            _policyText));
+            _policyText,
+            _dialogText));
     }
 
     public FindReplaceDialogState SetStatus(string? statusText)
@@ -193,14 +269,26 @@ public sealed class FindReplaceDialogSession
             _query,
             _replacement,
             _options,
+            _findFormat,
+            _replaceFormat,
             out request,
             out error);
 
-    private FindReplaceDialogState BuildState() => new(
-        _openMode,
-        _query,
-        _replacement,
-        _options,
-        FindReplaceDialogPlanner.IsOptionEnabled(FindReplaceOptionKind.WholeWord, _options),
-        _statusText);
+    private FindReplaceDialogState BuildState()
+    {
+        var document = _document?.Invoke();
+        return new FindReplaceDialogState(
+            _openMode,
+            _query,
+            _replacement,
+            _options,
+            FindReplaceDialogPlanner.IsOptionEnabled(FindReplaceOptionKind.WholeWord, _options),
+            _statusText)
+        {
+            FindFormat = _findFormat,
+            ReplaceFormat = _replaceFormat,
+            FindFormatSummary = FindReplaceDialogPlanner.DescribeFormat(_findFormat, _dialogText, document),
+            ReplaceFormatSummary = FindReplaceDialogPlanner.DescribeFormat(_replaceFormat, _dialogText, document),
+        };
+    }
 }

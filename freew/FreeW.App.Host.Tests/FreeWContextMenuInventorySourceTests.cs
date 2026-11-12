@@ -25,8 +25,12 @@ public sealed class FreeWContextMenuInventorySourceTests
         Read("Editing", "DocumentView.cs").Should().Contain("FreeWContextMenuPlanner.BuildContentControl");
         ReadPresentation("Panes", "NavigationPaneSession.cs")
             .Should().Contain("FreeWContextMenuPlanner.BuildOutline");
-        Read("FindReplaceDialog.cs").Should().Contain("FreeWContextMenuPlanner.FindSpecialCharacters")
+        // The Special list is per box and wildcard-aware, so the dialog asks its session, which
+        // builds it from the same catalog FreeWContextMenuPlanner.FindSpecialCharacters exposes.
+        Read("FindReplaceDialog.cs").Should().Contain("_session.BuildSpecialItems(")
             .And.NotContain("SpecialChars =");
+        ReadPresentation("ContextMenus", "FreeWContextMenuPlanner.cs")
+            .Should().Contain("FindReplaceDialogPlanner");
         Read("Ribbon", "ThemeGallery.cs").Should()
             .Contain("FreeWContextMenuPlanner.BuildParagraphSpacing")
             .And.Contain("FreeWContextMenuPlanner.BuildEffects");
