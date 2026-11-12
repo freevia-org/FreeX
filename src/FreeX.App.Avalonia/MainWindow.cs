@@ -14023,6 +14023,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = 72,
             Padding = new Thickness(10, 4),
         };
+        // The name box routes Enter itself; OK is still the WPF default button and shows its cue.
+        okButton.Classes.Add(DialogWindowDefaults.DefaultButtonCueClass);
         var cancelButton = new Button
         {
             Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
