@@ -13861,10 +13861,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Title = UiText.Get("UnhideSheet_UnhideSheet"),
             // WPF UnhideSheetDialog is a 340x160 NoResize window. That outer height leaves a client
             // area shorter than its own content (label + 64px list + OK/Cancel), so the WPF button
-            // row is cut off; size the height to the content here so the buttons stay visible.
-            Width = 340,
-            MinWidth = 340,
-            MaxWidth = 340,
+            // row is cut off; size the height to the content here so the buttons stay visible. The
+            // 340 outer width loses the Windows frame like every other WPF outer size.
+            Width = 340 - WpfNoResizeFrameWidth,
+            MinWidth = 340 - WpfNoResizeFrameWidth,
+            MaxWidth = 340 - WpfNoResizeFrameWidth,
             SizeToContent = SizeToContent.Height,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -13968,12 +13969,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // WPF SheetNameDialog is a 340x150 NoResize window (outer size); the client area is 150
             // minus the caption/frame. The inline validation line (WPF uses a message box) grows the
             // dialog while it is shown -- see ShowValidation below.
-            Width = 340,
-            Height = 150 - WpfNoResizeFrameHeight,
-            MinWidth = 340,
-            MinHeight = 150 - WpfNoResizeFrameHeight,
-            MaxWidth = 340,
-            MaxHeight = 150 - WpfNoResizeFrameHeight,
+            Width = 340 - WpfNoResizeFrameWidth,
+            Height = 150 - WpfNoResizeClientFrameHeight,
+            MinWidth = 340 - WpfNoResizeFrameWidth,
+            MinHeight = 150 - WpfNoResizeClientFrameHeight,
+            MaxWidth = 340 - WpfNoResizeFrameWidth,
+            MaxHeight = 150 - WpfNoResizeClientFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -13987,6 +13988,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Text = currentName,
             MinWidth = 280,
+            // WPF's single-line box is 22px tall here; the Fluent default (32px minimum) pushed
+            // OK/Cancel past the bottom margin of the frame-corrected client area.
+            Height = 22,
+            MinHeight = 22,
+            Padding = new Thickness(4, 2),
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
         AutomationProperties.SetName(nameBox, UiText.Get("SheetName_SheetName"));
         AutomationProperties.SetAutomationId(nameBox, "RenameSheetNameBox");
@@ -14021,7 +14028,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
 
             validationText.IsVisible = true;
-            double height = 150 - WpfNoResizeFrameHeight + RenameSheetValidationBandHeight;
+            double height = 150 - WpfNoResizeClientFrameHeight + RenameSheetValidationBandHeight;
             dialog.MaxHeight = height;
             dialog.Height = height;
             dialog.MinHeight = height;
@@ -14249,6 +14256,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         replaceWithRow.Children.Add(replaceWithChooseFormatButton);
         Grid.SetRow(replaceFindRow, 0);
         Grid.SetRow(replaceWithRow, 1);
+        // WPF FindReplaceDialog.xaml gives ReplaceRow an 8px top margin.
+        replaceWithRow.Margin = new Thickness(0, 8, 0, 0);
         replaceTabPanel.Children.Add(replaceFindRow);
         replaceTabPanel.Children.Add(replaceWithRow);
 
@@ -14452,8 +14461,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             button.Background = Brush(221, 221, 221);
             button.BorderBrush = button.IsDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
         }
+        // WPF stretches the format buttons to their field row: a 26px button beside each search box.
+        foreach (var button in new[] { findFormatButton, findFormatClearButton, findChooseFormatButton,
+                                       replaceFindFormatButton, replaceFindFormatClearButton, replaceFindChooseFormatButton,
+                                       replaceWithFormatButton, replaceWithFormatClearButton, replaceWithChooseFormatButton })
+        {
+            button.Height = 26;
+            button.MinHeight = 26;
+            button.MaxHeight = 26;
+        }
         foreach (var textBox in new[] { findBox, replaceFindBox, replaceWithBox })
+        {
             textBox.CornerRadius = new CornerRadius(0);
+            // The search boxes share the 26px WPF field row with their format buttons (34px pitch).
+            textBox.Height = 26;
+            textBox.MinHeight = 26;
+            textBox.MaxHeight = 26;
+        }
 
         // The selected TabItem is this renderer's rendering of the cross-app FindReplaceOpenMode;
         // every mode-dependent decision below is resolved through the shared planner projection.
@@ -15166,13 +15190,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Title = UiText.Get("GoTo_GoTo"),
             // WPF GoToDialog is a 420x320 *outer* NoResize window; Avalonia sizes the client area, so
-            // take the Windows caption/frame off the height (the history list owns the star row).
-            Width = 420,
-            Height = 320 - WpfNoResizeFrameHeight,
-            MinWidth = 420,
-            MinHeight = 320 - WpfNoResizeFrameHeight,
-            MaxWidth = 420,
-            MaxHeight = 320 - WpfNoResizeFrameHeight,
+            // take the Windows caption/frame off both axes (the history list owns the star row).
+            Width = 420 - WpfNoResizeFrameWidth,
+            Height = 320 - WpfNoResizeClientFrameHeight,
+            MinWidth = 420 - WpfNoResizeFrameWidth,
+            MinHeight = 320 - WpfNoResizeClientFrameHeight,
+            MaxWidth = 420 - WpfNoResizeFrameWidth,
+            MaxHeight = 320 - WpfNoResizeClientFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -15196,10 +15220,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetHelpText(historyList, UiText.Get("GoTo_RecentReferencesAndDefinedNames"));
         AutomationProperties.SetAutomationId(historyList, "GoToHistoryList");
 
+        // WPF GoToDialog leaves the reference box to the star column (no minimum width); a 330px
+        // minimum pushed it past the right margin.
         var inputBox = new TextBox
         {
             Text = defaultReference,
-            MinWidth = 330,
         };
         AutomationProperties.SetName(inputBox, UiText.CreateAutomationName(UiText.Get("GoTo_Reference2")));
         AutomationProperties.SetAutomationId(inputBox, "GoToReferenceBox");
@@ -15444,13 +15469,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Title = UiText.Get("GoToSpecial_GoToSpecial"),
             // WPF GoToSpecialDialog is a 430x438 *outer* NoResize window; Avalonia sizes the client
-            // area, so take the Windows caption/frame off the height.
-            Width = GoToSpecialDialogPlanner.Width,
-            Height = GoToSpecialDialogPlanner.Height - WpfNoResizeFrameHeight,
-            MinWidth = GoToSpecialDialogPlanner.Width,
-            MinHeight = GoToSpecialDialogPlanner.Height - WpfNoResizeFrameHeight,
-            MaxWidth = GoToSpecialDialogPlanner.Width,
-            MaxHeight = GoToSpecialDialogPlanner.Height - WpfNoResizeFrameHeight,
+            // area, so take the Windows caption/frame off both axes.
+            Width = GoToSpecialDialogPlanner.Width - WpfNoResizeFrameWidth,
+            Height = GoToSpecialDialogPlanner.Height - WpfNoResizeClientFrameHeight,
+            MinWidth = GoToSpecialDialogPlanner.Width - WpfNoResizeFrameWidth,
+            MinHeight = GoToSpecialDialogPlanner.Height - WpfNoResizeClientFrameHeight,
+            MaxWidth = GoToSpecialDialogPlanner.Width - WpfNoResizeFrameWidth,
+            MaxHeight = GoToSpecialDialogPlanner.Height - WpfNoResizeClientFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -15797,12 +15822,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("Hyperlink_InsertHyperlink"),
-            // WPF HyperlinkDialog is a Width x Height NoResize window; Height is an OUTER size there,
-            // so the client area drops the caption/frame.
-            Width = HyperlinkDialogPlanner.Width,
-            Height = HyperlinkDialogPlanner.Height - WpfNoResizeFrameHeight,
-            MinWidth = HyperlinkDialogPlanner.MinWidth,
-            MinHeight = HyperlinkDialogPlanner.MinHeight - WpfNoResizeFrameHeight,
+            // WPF HyperlinkDialog is a Width x Height NoResize window; both are OUTER sizes there, so
+            // the client area drops the caption/frame on both axes.
+            Width = HyperlinkDialogPlanner.Width - WpfNoResizeFrameWidth,
+            Height = HyperlinkDialogPlanner.Height - WpfNoResizeClientFrameHeight,
+            MinWidth = HyperlinkDialogPlanner.MinWidth - WpfNoResizeFrameWidth,
+            MinHeight = HyperlinkDialogPlanner.MinHeight - WpfNoResizeClientFrameHeight,
             CanResize = false,
             Background = Brushes.White,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -16408,6 +16433,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Padding = new Thickness(8),
             MinHeight = 260,
             FontSize = 12,
+            // WPF lays the summary out on the 16px line pitch of its 12px dialog font.
+            LineHeight = 16,
             VerticalContentAlignment = AvaloniaVerticalAlignment.Top,
         };
         AutomationProperties.SetName(statisticsBlock, UiText.Get("WorkbookStatistics_WorkbookStatistics"));
@@ -16972,10 +16999,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             UiText.CreateAutomationName(UiText.Get("FormatCells_NegativeNumbers")));
         AutomationProperties.SetAutomationId(numberNegativeBox, "FormatCellsNumberNegativeBox");
 
+        // Centred in the 36px WPF sample frame; a 28px minimum made the block taller than the frame's
+        // content area, so its text sat at the top.
         var numberPreview = new TextBlock
         {
             Text = FormatCellsNumberFormatPlanner.PreviewForFormat(currentNumberFormat),
-            MinHeight = 28,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             FontWeight = FontWeight.Bold,
         };
@@ -20595,7 +20623,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 Background = selected ? Brush(0, 120, 215) : Brushes.White,
                 BorderBrush = Brush(190, 190, 190),
                 BorderThickness = new Thickness(0, 0, 1, 1),
-                Padding = new Thickness(3, 1),
+                Padding = new Thickness(3, 0),
             };
             AvaloniaGrid.SetRow(border, row);
             AvaloniaGrid.SetColumn(border, column);
@@ -20631,11 +20659,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
             };
 
+        // WPF SortDialog DataGrid rows are 24px: the cell combo boxes keep the 22px WPF default.
         static void ApplySortComboChrome(ComboBox comboBox)
         {
-            comboBox.Height = 28;
-            comboBox.MinHeight = 28;
-            comboBox.MaxHeight = 28;
+            comboBox.Height = 22;
+            comboBox.MinHeight = 22;
+            comboBox.MaxHeight = 22;
             comboBox.Padding = new Thickness(6, 0, 4, 0);
             comboBox.FontSize = 12;
             comboBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
@@ -20658,7 +20687,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             levelsGrid.RowDefinitions.Clear();
             levelsGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
             for (var i = 0; i < levels.Count; i++)
-                levelsGrid.RowDefinitions.Add(new RowDefinition(new GridLength(28)));
+                levelsGrid.RowDefinitions.Add(new RowDefinition(new GridLength(24)));
 
             levelsGrid.Children.Add(CreateHeaderCell(
                 UiText.Get(optionsState.LeftToRight ? "Sort_SortByRowHeader" : "Sort_SortByHeader"),
@@ -20918,6 +20947,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Text = UiText.Get("Sort_SortLevels"),
             FontWeight = FontWeight.SemiBold,
+            FontSize = 12,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
         });
         AvaloniaGrid.SetRow(headerRow, 0);
@@ -21154,13 +21184,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Title = presentation.Title,
             // WPF SortOptionsDialog is a 330x260 *outer* NoResize window; Avalonia sizes the client
-            // area, so take the Windows caption/frame off the height.
-            Width = 330,
-            Height = 260 - WpfNoResizeFrameHeight,
-            MinWidth = 330,
-            MinHeight = 260 - WpfNoResizeFrameHeight,
-            MaxWidth = 330,
-            MaxHeight = 260 - WpfNoResizeFrameHeight,
+            // area, so take the Windows caption/frame off both axes.
+            Width = 330 - WpfNoResizeFrameWidth,
+            Height = 260 - WpfNoResizeClientFrameHeight,
+            MinWidth = 330 - WpfNoResizeFrameWidth,
+            MinHeight = 260 - WpfNoResizeClientFrameHeight,
+            MaxWidth = 330 - WpfNoResizeFrameWidth,
+            MaxHeight = 260 - WpfNoResizeClientFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -21313,13 +21343,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         dialog.Content = root;
         dialog.Opened += (_, _) =>
         {
-            // The shared chrome supplies the Windows control language; these measured footer dimensions
-            // preserve the authoritative WPF Sort Options capture (its OK/Cancel row is the DockPanel's
-            // fill child, so the buttons stretch) inside the client area of the 330x260 window.
+            // The shared chrome supplies the Windows control language. WPF SortOptionsDialog bottom
+            // aligns its OK/Cancel row (buttons.VerticalAlignment = Bottom), so the buttons keep
+            // their natural height on the bottom margin; the older reference capture, taken before
+            // that alignment, stretched them to fill the space under the group box.
             AvaloniaCompactDialogChrome.ApplyButton(okButton, AvaloniaCompactDialogChrome.WindowsStyle, 75, isDefault: true);
             AvaloniaCompactDialogChrome.ApplyButton(cancelButton, AvaloniaCompactDialogChrome.WindowsStyle, 75);
-            okButton.Height = okButton.MinHeight = okButton.MaxHeight = 52;
-            cancelButton.Height = cancelButton.MinHeight = cancelButton.MaxHeight = 52;
         };
         await dialog.ShowDialog(this);
         return result;
@@ -21370,12 +21399,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // WPF GoalSeekDialog.xaml is a 380x210 *outer* NoResize window; its client area is the
             // outer height minus the Windows caption/frame, and the star row above OK/Cancel absorbs
             // what the three field rows leave. Avalonia sizes the client area, so take the frame off.
-            Width = 380,
-            Height = 210 - WpfNoResizeFrameHeight,
-            MinWidth = 380,
-            MinHeight = 210 - WpfNoResizeFrameHeight,
-            MaxWidth = 380,
-            MaxHeight = 210 - WpfNoResizeFrameHeight,
+            Width = 380 - WpfNoResizeFrameWidth,
+            Height = 210 - WpfNoResizeClientFrameHeight,
+            MinWidth = 380 - WpfNoResizeFrameWidth,
+            MinHeight = 210 - WpfNoResizeClientFrameHeight,
+            MaxWidth = 380 - WpfNoResizeFrameWidth,
+            MaxHeight = 210 - WpfNoResizeClientFrameHeight,
             CanResize = false,
             FontFamily = FormulaBarFontFamily,
             FontSize = 12,
@@ -21840,10 +21869,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // WPF AdvancedFilterDialog is a 420x340 *outer* window whose client area (340 minus the
             // Windows caption/frame) is exactly filled by the content. Avalonia's Width/Height are
             // client sizes, so a 340 client height left an empty band under OK/Cancel (most visible
-            // on macOS). Size the height to the content instead of guessing a caption allowance.
-            Width = 420,
-            MinWidth = 420,
-            MaxWidth = 420,
+            // on macOS). Size the height to the content instead of guessing a caption allowance; the
+            // width drops the frame like every other WPF outer size.
+            Width = 420 - WpfNoResizeFrameWidth,
+            MinWidth = 420 - WpfNoResizeFrameWidth,
+            MaxWidth = 420 - WpfNoResizeFrameWidth,
             SizeToContent = SizeToContent.Height,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -22686,14 +22716,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("MainWindowMessage_RemoveDuplicatesTitle"),
-            // WPF RemoveDuplicatesDialog is a 360x360 *outer* NoResize window whose stacked content
-            // (12px margin, header check box, "Columns:" label, bulk buttons, 160px column list,
-            // OK/Cancel) ends right at the bottom of its client area. Avalonia's Height is a client
-            // size, so 360 left an empty band under OK/Cancel; size the height to the content.
-            Width = 360,
-            MinWidth = 360,
-            MaxWidth = 360,
-            SizeToContent = SizeToContent.Height,
+            // WPF RemoveDuplicatesDialog is a 360x360 *outer* NoResize window with top-stacked content
+            // (12px margin, header check box, columns label, bulk buttons, 160px column list,
+            // OK/Cancel); the rest of its client area stays empty. Avalonia sizes the client area, so
+            // take the Windows caption/frame off both axes.
+            Width = 360 - WpfNoResizeFrameWidth,
+            Height = 360 - WpfNoResizeClientFrameHeight,
+            MinWidth = 360 - WpfNoResizeFrameWidth,
+            MinHeight = 360 - WpfNoResizeClientFrameHeight,
+            MaxWidth = 360 - WpfNoResizeFrameWidth,
+            MaxHeight = 360 - WpfNoResizeClientFrameHeight,
             CanResize = false,
             FontFamily = FormulaBarFontFamily,
             FontSize = 12,
@@ -22743,6 +22775,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 AutomationProperties.SetAutomationId(box, $"RemoveDuplicatesColumn{column.Offset}Box");
                 AutomationProperties.SetHelpText(box, UiText.Get("RemoveDuplicates_ColumnHelpText"));
                 ApplyDialogCheckBoxChrome(box);
+                // WPF column rows sit 19px apart (a 15px check box plus its 4px bottom margin); the
+                // shared 20px check box height made them 24px.
+                box.MinHeight = 16;
+                box.MaxHeight = 16;
+                box.Margin = new Thickness(0, 0, 0, 3);
                 box.PropertyChanged += (_, e) =>
                 {
                     if (e.Property == ToggleButton.IsCheckedProperty)
@@ -23664,13 +23701,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Title = UiText.Get("DataTable_Title"),
             // WPF DataTableDialog is a 360x210 *outer* NoResize window; the content is top-stacked and
             // the rest of the client area stays empty. Avalonia sizes the client area, so take the
-            // Windows caption/frame off the height to keep the same band under OK/Cancel.
-            Width = 360,
-            Height = 210 - WpfNoResizeFrameHeight,
-            MinWidth = 360,
-            MinHeight = 210 - WpfNoResizeFrameHeight,
-            MaxWidth = 360,
-            MaxHeight = 210 - WpfNoResizeFrameHeight,
+            // Windows caption/frame off both axes to keep the same band under OK/Cancel.
+            Width = 360 - WpfNoResizeFrameWidth,
+            Height = 210 - WpfNoResizeClientFrameHeight,
+            MinWidth = 360 - WpfNoResizeFrameWidth,
+            MinHeight = 210 - WpfNoResizeClientFrameHeight,
+            MaxWidth = 360 - WpfNoResizeFrameWidth,
+            MaxHeight = 210 - WpfNoResizeClientFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -23930,18 +23967,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         fields.Children.Add(editor);
     }
 
+    // The WPF reference rows sit 31px apart (a 23px editor plus the 8px row gap); 20px editors
+    // left the second row 2px high.
     private static void ApplyDataTableInputChrome(TextBox input)
     {
-        input.Height = 20;
-        input.MinHeight = 20;
-        input.MaxHeight = 20;
+        input.Height = 23;
+        input.MinHeight = 23;
+        input.MaxHeight = 23;
     }
 
     private static void ApplyDataTablePickerChrome(Button picker)
     {
-        picker.Height = 20;
-        picker.MinHeight = 20;
-        picker.MaxHeight = 20;
+        picker.Height = 23;
+        picker.MinHeight = 23;
+        picker.MaxHeight = 23;
     }
 
     private async Task ShowForecastSheetDialogAsync()
@@ -24335,10 +24374,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             operatorBox);
 
         var formula1Label = new TextBlock();
-        var formula1Box = new TextBox
-        {
-            MinWidth = 240,
-        };
+        // DataValidationDialog.xaml gives the formula boxes no minimum width: they take what the
+        // use-selection button and picker leave. A 240px minimum overflowed the star column and
+        // closed the 6px gap to the use-selection button.
+        var formula1Box = new TextBox();
         AutomationProperties.SetName(
             formula1Box,
             UiText.CreateAutomationName(UiText.Get("DataValidation_Value")));
@@ -24364,10 +24403,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             CreateDataValidationSourceRow(formula1Box, useSelectionButton, sourcePickerButton));
 
         var formula2Label = new TextBlock();
-        var formula2Box = new TextBox
-        {
-            MinWidth = 240,
-        };
+        var formula2Box = new TextBox();
         AutomationProperties.SetName(
             formula2Box,
             UiText.CreateAutomationName(UiText.Get("DataValidation_Maximum")));

@@ -16,15 +16,16 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get(RecommendedPivotTablesDialogPlanner.TitleKey),
-            Width = RecommendedPivotTablesDialogPlanner.Width,
             // The WPF dialog sizes to content with a 340px OUTER minimum, and the empty state is far
             // shorter than that, so the window opens at the minimum. Avalonia sizes are client sizes:
-            // take the Windows caption/frame off so no empty band is left under the button row.
-            MinWidth = RecommendedPivotTablesDialogPlanner.Width,
-            MaxWidth = RecommendedPivotTablesDialogPlanner.Width,
-            Height = RecommendedPivotTablesDialogPlanner.MinHeight - WpfNoResizeFrameHeight,
-            MinHeight = RecommendedPivotTablesDialogPlanner.MinHeight - WpfNoResizeFrameHeight,
-            MaxHeight = RecommendedPivotTablesDialogPlanner.MinHeight - WpfNoResizeFrameHeight,
+            // take the Windows caption/frame off both axes so no empty band is left under the button
+            // row and the content is as wide as the WPF client area.
+            Width = RecommendedPivotTablesDialogPlanner.Width - WpfNoResizeFrameWidth,
+            MinWidth = RecommendedPivotTablesDialogPlanner.Width - WpfNoResizeFrameWidth,
+            MaxWidth = RecommendedPivotTablesDialogPlanner.Width - WpfNoResizeFrameWidth,
+            Height = RecommendedPivotTablesDialogPlanner.MinHeight - WpfNoResizeClientFrameHeight,
+            MinHeight = RecommendedPivotTablesDialogPlanner.MinHeight - WpfNoResizeClientFrameHeight,
+            MaxHeight = RecommendedPivotTablesDialogPlanner.MinHeight - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Manual,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,

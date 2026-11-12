@@ -303,6 +303,19 @@ public static class AvaloniaCompactDialogChrome
                 {
                     var explicitFamily = textBox.FontFamily;
                     var isEditableComboTextBox = textBox.Name == "PART_EditableTextBox";
+                    if (isEditableComboTextBox
+                        && textBox.TemplatedParent is ComboBox owner
+                        && owner.Classes.Contains(CompactComboBoxClass))
+                    {
+                        // The compact combo template owns this editor: borderless and transparent
+                        // inside the combo frame, with a gutter for the drop-down glyph. Field
+                        // chrome here painted a second bordered box over the glyph and its 24px
+                        // height pushed the text below a 22px combo.
+                        textBox.MinHeight = 0;
+                        textBox.SelectionBrush = style.TextSelectionBrush ?? TextSelectionBrush;
+                        break;
+                    }
+
                     var hasExplicitHeight = !isEditableComboTextBox
                         && (textBox.IsSet(Layoutable.HeightProperty)
                             || textBox.IsSet(Layoutable.MinHeightProperty)
@@ -930,6 +943,7 @@ public static class AvaloniaCompactDialogChrome
         var editableText = new TextBox
         {
             Name = "PART_EditableTextBox",
+            MinHeight = 0,
             Padding = new Thickness(
                 style.ComboBoxPadding.Left,
                 style.ComboBoxPadding.Top,

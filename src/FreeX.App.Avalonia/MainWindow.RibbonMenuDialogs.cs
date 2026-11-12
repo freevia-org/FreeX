@@ -367,12 +367,14 @@ public sealed partial class MainWindow
         var grid = CreateWatchWindowColumnGrid();
         for (var i = 0; i < WatchWindowColumns.Length; i++)
         {
+            // WPF GridView column headers centre their captions.
             var header = new TextBlock
             {
                 Text = UiText.Get(WatchWindowColumns[i].Key),
                 FontSize = 12,
                 FontFamily = FormulaBarFontFamily,
                 Margin = new Thickness(6, 2),
+                TextAlignment = global::Avalonia.Media.TextAlignment.Center,
             };
             Grid.SetColumn(header, i);
             grid.Children.Add(header);
@@ -414,9 +416,9 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get(AddWatchDialogPlanner.TitleKey),
-            Width = AddWatchDialogPlanner.Width,
             // WPF AddWatchDialog is a 360x170 *outer* NoResize window; Avalonia sizes the client area.
-            Height = AddWatchDialogPlanner.Height - WpfNoResizeFrameHeight,
+            Width = AddWatchDialogPlanner.Width - WpfNoResizeFrameWidth,
+            Height = AddWatchDialogPlanner.Height - WpfNoResizeClientFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,

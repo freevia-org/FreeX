@@ -199,7 +199,7 @@ public sealed partial class MainWindow
             maxChangeBox.IsEnabled = enabled;
         };
 
-        var r1c1Box = new CheckBox { Content = UiText.Get("Options_R1C1ReferenceStyle"), IsChecked = current.UseR1C1ReferenceStyle };
+        var r1c1Box = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("Options_UseR1C1ReferenceStyle")), IsChecked = current.UseR1C1ReferenceStyle };
         ApplyOptionsCheckBoxChrome(r1c1Box);
         AutomationProperties.SetAutomationId(r1c1Box, "OptionsR1C1ReferenceStyleCheckBox");
 

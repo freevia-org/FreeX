@@ -110,19 +110,21 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "TextToColumnsDialog");
         AvaloniaCompactDialogChrome.ApplyWindow(dialog, DataOpsDialogChromeStyle);
 
+        // WPF stacks the two data-type radios at their natural 16px row (no margin), so the group is
+        // 58px tall rather than the 20px compact rows' 69.
         var delimitedButton = new RadioButton { Content = UiText.Get("TableLoc_TtcDelimited"), IsChecked = true, GroupName = "TtcMode" };
         ApplyDataOpsRadioButtonChrome(delimitedButton);
         AvaloniaCompactDialogChrome.ApplyCompactRadioButton(delimitedButton, DataOpsDialogChromeStyle);
-        delimitedButton.Height = 20;
-        delimitedButton.MinHeight = 20;
-        delimitedButton.MaxHeight = 20;
+        delimitedButton.Height = 16;
+        delimitedButton.MinHeight = 16;
+        delimitedButton.MaxHeight = 16;
         AutomationProperties.SetAutomationId(delimitedButton, "TextToColumnsDelimitedButton");
         var fixedWidthButton = new RadioButton { Content = UiText.Get("TableLoc_TtcFixedWidth"), GroupName = "TtcMode" };
         ApplyDataOpsRadioButtonChrome(fixedWidthButton);
         AvaloniaCompactDialogChrome.ApplyCompactRadioButton(fixedWidthButton, DataOpsDialogChromeStyle);
-        fixedWidthButton.Height = 20;
-        fixedWidthButton.MinHeight = 20;
-        fixedWidthButton.MaxHeight = 20;
+        fixedWidthButton.Height = 16;
+        fixedWidthButton.MinHeight = 16;
+        fixedWidthButton.MaxHeight = 16;
         AutomationProperties.SetAutomationId(fixedWidthButton, "TextToColumnsFixedWidthButton");
 
         var tabBox = new CheckBox { Content = UiText.Get("TableLoc_TtcDelimTab") };
@@ -1147,13 +1149,16 @@ public sealed partial class MainWindow
         int columnCount,
         IReadOnlyDictionary<int, TextToColumnsColumnFormat> columnFormats)
     {
+        // WPF's GridView header row runs to the right edge of the list: a trailing star column
+        // carries an empty header cell past the last data column.
         var grid = new AvaloniaGrid
         {
-            Width = 140 + Math.Max(0, columnCount - 1) * 100,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            MinWidth = 140 + Math.Max(0, columnCount - 1) * 100,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
         for (var c = 0; c < columnCount; c++)
             grid.ColumnDefinitions.Add(new ColumnDefinition(c == 0 ? 140 : 100, GridUnitType.Pixel));
+        grid.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
 
         grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         for (var r = 0; r < preview.SampleRows.Count; r++)
@@ -1167,6 +1172,8 @@ public sealed partial class MainWindow
                 : UiText.Format("TableLoc_TtcColumnN", c + 1);
             AddTextToColumnsPreviewCell(grid, header, row: 0, column: c, isHeader: true, isSkipped: skipped);
         }
+
+        AddTextToColumnsPreviewCell(grid, string.Empty, row: 0, column: columnCount, isHeader: true, isSkipped: false);
 
         for (var r = 0; r < preview.SampleRows.Count; r++)
         {

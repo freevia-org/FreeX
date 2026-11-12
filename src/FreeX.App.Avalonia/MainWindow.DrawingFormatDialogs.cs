@@ -668,13 +668,13 @@ public sealed partial class MainWindow
         var dialog = new FreeXDialogWindow(DrawingDialogChromeStyle)
         {
             Title = UiText.Get("ShapeEffects_Title"),
-            // WPF ShapeEffectsDialog is a 380x190 *outer* NoResize window (client height 161).
-            Width = 380,
-            Height = 190 - WpfNoResizeFrameHeight,
-            MinWidth = 380,
-            MinHeight = 190 - WpfNoResizeFrameHeight,
-            MaxWidth = 380,
-            MaxHeight = 190 - WpfNoResizeFrameHeight,
+            // WPF ShapeEffectsDialog is a 380x190 *outer* NoResize window (client area 364x151).
+            Width = 380 - WpfNoResizeFrameWidth,
+            Height = 190 - WpfNoResizeClientFrameHeight,
+            MinWidth = 380 - WpfNoResizeFrameWidth,
+            MinHeight = 190 - WpfNoResizeClientFrameHeight,
+            MaxWidth = 380 - WpfNoResizeFrameWidth,
+            MaxHeight = 190 - WpfNoResizeClientFrameHeight,
             Background = Brushes.White,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,

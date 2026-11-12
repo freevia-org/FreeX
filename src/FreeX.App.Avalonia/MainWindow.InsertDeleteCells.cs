@@ -207,11 +207,11 @@ public sealed partial class MainWindow
         AvaloniaCompactDialogChrome.ApplyButton(ok, InsertDeleteCellsDialogChromeStyle, 72, isDefault: true);
         AvaloniaCompactDialogChrome.ApplyButton(cancel, InsertDeleteCellsDialogChromeStyle, 72);
 
-        // Layout mirrors WPF CellShiftDialog: a 310px-wide NoResize window, a 12px root
+        // Layout mirrors WPF CellShiftDialog: a 310x245 *outer* NoResize window, a 12px root
         // DockPanel whose first child is the semibold prompt (docked left, the DockPanel default),
         // the option group (stack margin 8,6,8,8) docked top beside it and the OK/Cancel row below.
-        // WPF lets the button row fill the leftover height; here the window is sized to the content
-        // and the row keeps standard-height buttons.
+        // WPF lets the button row fill the leftover height; here the row keeps standard-height
+        // buttons on the bottom margin of the frame-corrected client area.
         var prompt = new TextBlock
         {
             Text = UiText.Get(surface.PromptKey),
@@ -236,10 +236,12 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get(surface.TitleKey),
-            Width = 310,
-            MinWidth = 310,
-            MaxWidth = 310,
-            SizeToContent = SizeToContent.Height,
+            Width = 310 - WpfNoResizeFrameWidth,
+            MinWidth = 310 - WpfNoResizeFrameWidth,
+            MaxWidth = 310 - WpfNoResizeFrameWidth,
+            Height = 245 - WpfNoResizeClientFrameHeight,
+            MinHeight = 245 - WpfNoResizeClientFrameHeight,
+            MaxHeight = 245 - WpfNoResizeClientFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             CanResize = false,

@@ -12,19 +12,31 @@ public sealed partial class MainWindow
     // Stable dimensions belong to the live renderer; external validation hosts exercise these same surfaces.
     internal const int NameBoxDropdownWidth = 208;
     internal const int NameBoxDropdownHeight = 136;
-    private const int ForecastSheetDialogWidth = 320;
-    private const int ForecastSheetDialogHeight = 150 - WpfNoResizeFrameHeight;
+    private const int ForecastSheetDialogWidth = 320 - WpfNoResizeFrameWidth;
+    private const int ForecastSheetDialogHeight = 150 - WpfNoResizeClientFrameHeight;
     private const int ForecastSheetErrorBandHeight = 40;
-    private const int SubtotalDialogWidth = 380;
+    private const int SubtotalDialogWidth = 380 - WpfNoResizeFrameWidth;
     // WPF SubtotalDialog is a 380x390 *outer* NoResize window (see the frame note below).
-    private const int SubtotalDialogHeight = 390 - WpfNoResizeFrameHeight;
+    private const int SubtotalDialogHeight = 390 - WpfNoResizeClientFrameHeight;
     // WPF Window.Width/Height are OUTER sizes (caption and frame included); Avalonia's are client
-    // sizes. A WPF dialog size copied verbatim is therefore too large here by the Windows frame:
-    // 16 x 39 for a resizable window, 6 x 29 for ResizeMode.NoResize. Subtract the allowance so the
-    // client area matches what the WPF dialog actually lays its content out in.
+    // sizes. A WPF dialog size copied verbatim is therefore too large here by the Windows frame.
+    // Subtract the allowance so the client area matches what the WPF dialog actually lays its
+    // content out in.
+    //
+    // The WPF parity capture shows each dialog as a real window and renders its content on a canvas
+    // of the outer size, so the uncovered right/bottom band is the real frame. ResizeMode.NoResize
+    // dialogs lose the same 16 x 39 as resizable ones on Windows 10/11: PivotValueFieldSettings
+    // (430x430) and PivotFieldFilter (380x470), both NoResize, fill exactly 414x391 and 364x431;
+    // PageSetup, GoTo, GoToSpecial, GoalSeek, Subtotal, AddWatch and AllowEditRanges show the same
+    // 15 x 37 excess over their content margin as the resizable FindReplace and FormatCells. The thin
+    // 6 x 29 frame of a classic fixed dialog never appears. NoResize dialogs re-measured against the
+    // captures use WpfNoResizeFrameWidth / WpfNoResizeClientFrameHeight; WpfNoResizeFrameHeight keeps
+    // the older 29px allowance only for dialogs that have not been re-measured yet.
     private const int WpfResizableFrameWidth = 16;
     private const int WpfResizableFrameHeight = 39;
     private const int WpfNoResizeFrameHeight = 29;
+    private const int WpfNoResizeFrameWidth = WpfResizableFrameWidth;
+    private const int WpfNoResizeClientFrameHeight = WpfResizableFrameHeight;
     private const int TextToColumnsDialogWidth = (int)TextToColumnsDialogMetrics.WindowWidth - WpfResizableFrameWidth;
     private const int TextToColumnsDialogHeight = (int)TextToColumnsDialogMetrics.WindowHeight - WpfResizableFrameHeight;
 

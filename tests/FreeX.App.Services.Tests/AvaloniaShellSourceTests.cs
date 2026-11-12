@@ -3182,10 +3182,10 @@ public sealed class AvaloniaShellSourceTests
         nextMethodIndex.Should().BeGreaterThan(handlerIndex);
         var routeSource = normalizedSource[handlerIndex..nextMethodIndex];
 
-        routeSource.Should().Contain("Width = 360,");
-        routeSource.Should().Contain("Height = 210 - WpfNoResizeFrameHeight,");
-        routeSource.Should().Contain("MinWidth = 360,");
-        routeSource.Should().Contain("MaxHeight = 210 - WpfNoResizeFrameHeight,");
+        routeSource.Should().Contain("Width = 360 - WpfNoResizeFrameWidth,");
+        routeSource.Should().Contain("Height = 210 - WpfNoResizeClientFrameHeight,");
+        routeSource.Should().Contain("MinWidth = 360 - WpfNoResizeFrameWidth,");
+        routeSource.Should().Contain("MaxHeight = 210 - WpfNoResizeClientFrameHeight,");
         routeSource.Should().NotContain("DataTableRangeSummaryText");
         routeSource.Should().NotContain("Table range:");
         routeSource.Should().NotContain("new OneVariableDataTableCommand");
@@ -5896,7 +5896,9 @@ public sealed class AvaloniaShellSourceTests
         cfSource.Should().Contain("Width = ConditionalFormatDialogCatalog.RuleEditorCaptureWidth");
         cfSource.Should().Contain("Height = ConditionalFormatDialogCatalog.RuleEditorCaptureHeight");
         cfSource.Should().Contain("MinWidth = ConditionalFormatDialogCatalog.RuleEditorMinWidth");
-        cfSource.Should().Contain("MinHeight = ConditionalFormatDialogCatalog.RuleEditorMinHeight");
+        // WPF sizes the rule editor to its content (SizeToContent.Height) above the capture height.
+        cfSource.Should().Contain("MinHeight = ConditionalFormatDialogCatalog.RuleEditorCaptureHeight");
+        cfSource.Should().Contain("SizeToContent = SizeToContent.Height");
         cfSource.Should().Contain("AutomationProperties.SetAutomationId(ruleTypeBox, \"ConditionalFormatRuleTypeBox\");");
         cfSource.Should().Contain("AutomationProperties.SetAutomationId(presetBox, \"ConditionalFormatPresetBox\");");
         cfSource.Should().Contain("AutomationProperties.SetAutomationId(topBottomBox, \"ConditionalFormatTopBottomBox\");");

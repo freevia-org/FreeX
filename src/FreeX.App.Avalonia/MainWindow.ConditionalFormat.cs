@@ -231,10 +231,14 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = existingRule is null ? UiText.Get("ConditionalFormat_NewRuleTitle") : UiText.Get("ConditionalFormat_EditRuleTitle"),
+            // WPF ConditionalFormatDialog is a 650 *outer* wide NoResize window that sizes its height
+            // to the content (SizeToContent.Height), so the colour-scale and top/bottom editors grow
+            // the window instead of scrolling under the OK/Cancel row. The capture height stays the
+            // floor for the shorter rule types.
             Width = ConditionalFormatDialogCatalog.RuleEditorCaptureWidth,
-            Height = ConditionalFormatDialogCatalog.RuleEditorCaptureHeight,
             MinWidth = ConditionalFormatDialogCatalog.RuleEditorMinWidth,
-            MinHeight = ConditionalFormatDialogCatalog.RuleEditorMinHeight,
+            MinHeight = ConditionalFormatDialogCatalog.RuleEditorCaptureHeight,
+            SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             // WPF ConditionalFormatDialog labels use the 12px dialog font; without this the field
@@ -356,8 +360,8 @@ public sealed partial class MainWindow
             }
         });
 
-        var operatorField = CreateDataValidationField(UiText.Get("ConditionalFormat_OperatorLabel"), operatorBox);
-        var value1Field = CreateDataValidationField(UiText.Get("ConditionalFormat_ValueLabel"), value1Box);
+        var operatorField = CreateDataValidationField(UiText.Get("ConditionalFormatDialog_OperatorLabel"), operatorBox);
+        var value1Field = CreateDataValidationField(UiText.Get("ConditionalFormatDialog_ValueLabel"), value1Box);
         var value2Field = CreateDataValidationField(UiText.Get("ConditionalFormat_MaximumLabel"), value2Box);
         var formulaField = CreateDataValidationField(UiText.Get("ConditionalFormat_FormulaLabel"), formulaBox);
         var textField = CreateDataValidationField(UiText.Get("ConditionalFormat_TextLabel"), textBox);
@@ -372,7 +376,7 @@ public sealed partial class MainWindow
             Spacing = 6,
             Children = { highlightBox, formatButton },
         };
-        var highlightField = CreateDataValidationField(UiText.Get("ConditionalFormat_FormatLabel"), highlightRow);
+        var highlightField = CreateDataValidationField(UiText.Get("ConditionalFormatDialog_FormatLabel"), highlightRow);
         var presetField = CreateDataValidationField(UiText.Get("ConditionalFormat_PresetLabel"), presetBox);
 
         // The WPF editor gives its rule description controls the full right-column width. Keep the

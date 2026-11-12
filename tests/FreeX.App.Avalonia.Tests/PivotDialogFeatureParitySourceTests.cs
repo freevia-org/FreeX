@@ -112,7 +112,7 @@ public sealed class PivotDialogFeatureParitySourceTests
             source.Should().Contain($"\"{key}\"");
         }
 
-        source.Should().Contain("MinHeight = PivotSlicerTimelineDialogContract.Height - WpfNoResizeFrameHeight,");
+        source.Should().Contain("MinHeight = PivotSlicerTimelineDialogContract.Height - WpfNoResizeClientFrameHeight,");
         source.Should().Contain("PivotApplication.PlanInsertSlicer(");
         source.Should().Contain("PivotApplication.PlanInsertTimeline(");
         source.Should().Contain("dialog.UpdateLayout();");
