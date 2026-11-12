@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "description": "Which changed paths can change the outcome of each repository preflight check. Used ONLY by the local pre-merge gate (tools/Test-BranchForIntegration.ps1 -> Test-RepositoryPreflight.ps1 -ScopeBaseRef); CI, tester-release and a bare preflight run every check, as does -Full. Patterns are repository-relative globs (** crosses directories, * does not), evaluated in order with last match winning and a leading ! removing a path; the token {ciInertDocs} expands to the docs directories in eng/test-gates.json ciImpact.inertDocsDirectories. Rules: a changed path (added, deleted, modified, or either side of a rename) that matches a global trigger, or matches no check and is not ignorable, runs EVERY check; a check with no entry always runs (and tools/Test-PreflightScopes.ps1 fails). Each check also depends on its own script, which the selector adds automatically. When in doubt a trigger must be broader, never narrower.",
+  "globalTriggers": [
+    "tools/Test-RepositoryPreflight.ps1",
+    "tools/ToolScriptSupport.ps1",
+    "tools/PreflightScopeSupport.ps1",
+    "eng/preflight-scopes.json",
+    "global.json",
+    "Directory.Build.props",
+    "Directory.Build.targets",
+    "Directory.Packages.props",
+    "NuGet.config",
+    ".gitattributes",
+    ".editorconfig",
+    ".gitignore"
+  ],
+  "ignorablePaths": [
+    "{ciInertDocs}"
+  ],
+  "checks": {
+    "JSON files": {
+      "triggers": ["**/*.json"],
+      "sample": "eng/anything.json"
+    },
+    "XML files": {
+      "triggers": [
+        "**/*.xml", "**/*.xaml", "**/*.axaml", "**/*.slnx", "**/*.csproj", "**/*.props",
+        "**/*.targets", "**/*.resx", "**/*.config", "**/*.ruleset", "**/*.plist"
+      ],
+      "sample": "src/FreeX.App.Host/MainWindow.xaml"
+    },
+    "GitHub workflows": {
+      "triggers": [".github/**", "tests/**"],
+      "sample": ".github/workflows/ci.yml"
+    },
+    "test-gate contract": {
+      "triggers": ["**", "!docs/**", "docs/testing/test-gates.md"],
+      "sample": "eng/test-gates.json"
+    },
+    ".NET SDK readiness": {
+      "triggers": ["**/*.csproj", "**/*.props", "**/*.targets", ".github/workflows/full-release.yml"],
+      "sample": "src/FreeX.Core.Model/FreeX.Core.Model.csproj"
+    },
+    ".NET project references": {
+      "triggers": ["**/*.csproj", "**/*.props", "**/*.targets", "**/*.slnx"],
+      "sample": "src/FreeX.Core.Model/FreeX.Core.Model.csproj"
+    },
+    "solution projects": {
+      "triggers": ["**/*.csproj", "**/*.slnx"],
+      "sample": "FreeX.slnx"
+    },
+    "CodeQL production solution": {
+      "triggers": ["**/*.csproj", "FreeSuite.CodeQL.slnx"],
+      "sample": "FreeSuite.CodeQL.slnx"
+    },
+    "cross-platform portability": {
+      "triggers": [
+        "**/*.ps1", "**/*.psm1", "**/*.psd1", "**/*.sh", "**/*.py", "**/*.mjs", "**/*.js", "**/*.yml",
+        "**/*.yaml", "**/*.cs", "**/*.csproj", "**/*.props", "**/*.targets", "**/*.slnx", "**/*.xaml",
+        "**/*.xml", "**/*.json", "**/*.resx", "**/*.conf", "**/*.plist", "**/*.desktop"
+      ],
+      "structuralTriggers": ["**"],
+      "sample": "tools/Generate-Anything.ps1"
+    },
+    "default test solution projects": {
+      "triggers": ["**/*.csproj", "**/*.slnx"],
+      "sample": "FreeX.DefaultTests.slnx"
+    },
+    "FreeW solution projects": {
+      "triggers": ["**/*.csproj", "**/*.slnx"],
+      "sample": "FreeW.slnx"
+    },
+    "FreeP solution projects": {
+      "triggers": ["**/*.csproj", "**/*.slnx"],
+      "sample": "FreeP.slnx"
+    },
+    "generated docs": {
+      "triggers": ["**", "!{ciInertDocs}"],
+      "sample": "docs/parity/anything.md"
+    },
+    "Git conflict markers": {
+      "triggers": [
+        "**/*.cs", "**/*.csproj", "**/*.props", "**/*.targets", "**/*.slnx", "**/*.xaml", "**/*.xml",
+        "**/*.resx", "**/*.json", "**/*.md", "**/*.ps1", "**/*.yml", "**/*.yaml", "**/*.config", "**/*.ruleset"
+      ],
+      "sample": "docs/parity/anything.md"
+    },
+    "PowerShell tools": {
+      "triggers": [
+        "tools/**", "freew-fidelity-corpus/tools/**", "freew/build/**",
+        "docs/parity/dialog-visual-assets/**", ".github/**"
+      ],
+      "sample": "tools/Anything.ps1"
+    },
+    "macOS app readiness": {
+      "triggers": [
+        "src/FreeX.App.Avalonia/**", "src/FreeX.App.Presentation/**", "src/FreeX.App.Services/**",
+        "src/FreeX.Core.Calc/**", "src/FreeX.Core.Commands/**", "src/FreeX.Core.IO/**",
+        "shared/Free.Shared.AppServices/**", "shared/Free.Shared.Pdf/**", "shared/Free.Shared.Pdf.Skia/**",
+        "shared/Free.Shared.Shell/**", "shared/Free.Shared.Shell.Avalonia/**", "shared/Free.Shared.Ribbon/**",
+        "shared/Free.Shared.Ribbon.Avalonia/**", "shared/Free.Shared.Drawing/**",
+        "shared/Free.Shared.Drawing.Avalonia/**", "shared/Free.Shared.IO/**",
+        "tools/FreeX.Validation.Avalonia/**", "tools/FreeX.ParityCapture.Support/**",
+        ".github/workflows/macos-app.yml"
+      ],
+      "sample": "src/FreeX.App.Avalonia/Program.cs"
+    },
+    "Linux packaging scripts": {
+      "triggers": [
+        "tools/packaging/linux/**", "**/Packaging/**", "shared/Free.Shared.Shell/Resources/**",
+        "tools/LinuxInteractiveDocker/**"
+      ],
+      "sample": "tools/packaging/linux/freex.conf"
+    }
+  }
+}

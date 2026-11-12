@@ -101,6 +101,33 @@ runs the full matrix so a full attestation exists near every commit and drift ca
 reduced pushes. Scheduled and manual runs use their own concurrency group, so they neither cancel nor
 are cancelled by a push run.
 
+## Diff-Scoped Local Preflight
+
+The local integration gate (`tools/Test-BranchForIntegration.ps1`) does not re-run preflight checks
+whose inputs the branch cannot have changed. `eng/preflight-scopes.json` maps every preflight check
+(by its label in `tools/Test-RepositoryPreflight.ps1`) to the path globs that can change its outcome.
+The gate passes `-ScopeBaseRef <green origin/main SHA>` and a check runs only when the branch diff
+against that commit (committed, uncommitted and untracked; added, deleted and either side of a
+rename) touches its triggers, or an added/deleted path matches its `structuralTriggers` (for
+example the path-collision scan in cross-platform portability). Scoping fails safe and runs EVERY
+check when the base commit is not contained in `HEAD`, the diff or manifest cannot be read, a
+global trigger changes (`Test-RepositoryPreflight.ps1`, `ToolScriptSupport.ps1`, the scopes file,
+`global.json`, `Directory.*`, `.gitattributes`, ...), or a changed path matches no check and is not
+declared ignorable. A check with no manifest entry always runs, and the gate contract
+(`tools/Test-PreflightScopes.ps1`) fails until it is mapped.
+
+`-Full` runs every check locally:
+
+```powershell
+pwsh -NoProfile -File tools/Test-BranchForIntegration.ps1 -Full
+```
+
+Hosted CI never scopes: `ci.yml` still runs `Test-RepositoryPreflight.ps1 -Mode Static` once and
+`-Mode Platform` on all three operating systems in full, and the contract test fails if any workflow
+mentions `-ScopeBaseRef`. A bare `Test-RepositoryPreflight.ps1` is also always full. Scoping therefore
+only shortens the pre-merge wait; a missed trigger is caught by the first CI run after the push, and
+`-Full` is the escape hatch before it.
+
 ## Release Gate
 
 The release gate adds WPF UI-host batches and release-only render evidence. `Full Signed Release`

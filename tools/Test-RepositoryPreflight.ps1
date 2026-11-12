@@ -18,7 +18,15 @@ param(
     [string]$LinuxPackagingScriptsScriptPath = "tools/Test-LinuxPackagingScripts.ps1",
 
     [ValidateRange(1, 32)]
-    [int]$ThrottleLimit = 8
+    [int]$ThrottleLimit = 8,
+
+    # Local pre-merge scoping (tools/Test-BranchForIntegration.ps1 only). When set, a check runs only
+    # if the diff against this base ref can change its outcome (eng/preflight-scopes.json); anything
+    # unmapped, or any doubt, runs everything. CI, tester-release and a bare run never set it, so
+    # they always run every check. -Full forces the same locally.
+    [string]$ScopeBaseRef = "",
+
+    [switch]$Full
 )
 
 $ErrorActionPreference = "Stop"
@@ -113,6 +121,34 @@ if ($Mode -in @("All", "Platform")) {
         Resolve-RepositoryPreflightEntry -Label "macOS app readiness" -ScriptPath $MacOsAppReadinessScriptPath -Isolated -Priority 3
         Resolve-RepositoryPreflightEntry -Label "Linux packaging scripts" -ScriptPath $LinuxPackagingScriptsScriptPath -Isolated -Priority 3
     )
+}
+
+if (-not [string]::IsNullOrWhiteSpace($ScopeBaseRef) -and -not $Full) {
+    . (Join-Path $PSScriptRoot "PreflightScopeSupport.ps1")
+    $ownPathsByLabel = @{}
+    foreach ($scopedEntry in $entries) {
+        $ownPathsByLabel[$scopedEntry.Label] = @((Get-ToolRelativePath -RootPath $repoRoot -Path $scopedEntry.ScriptPath).Replace("\", "/"))
+    }
+    $selection = Get-PreflightScopeSelection -RepoRoot $repoRoot -BaseRef $ScopeBaseRef -Labels @($entries | ForEach-Object { $_.Label }) -OwnPathsByLabel $ownPathsByLabel
+    if ($selection.Full) {
+        Write-Host "Scoped preflight: running every check ($($selection.Reason))."
+    }
+    else {
+        $skipped = @($entries | Where-Object { -not $selection.RunLabels.Contains($_.Label) } | ForEach-Object { $_.Label })
+        Write-Host "Scoped preflight against $($selection.BaseSha.Substring(0, 9)): $($selection.ChangedPathCount) changed path(s); running $($selection.RunLabels.Count) of $(@($entries).Count) check(s)."
+        foreach ($label in @($entries | Where-Object { $selection.RunLabels.Contains($_.Label) } | ForEach-Object { $_.Label })) {
+            Write-Host "  run:  $label ($($selection.Reasons[$label]))"
+        }
+        foreach ($label in $skipped) {
+            Write-Host "  skip: $label (no changed path can affect it; use -Full to run it anyway)"
+        }
+        $entries = @($entries | Where-Object { $selection.RunLabels.Contains($_.Label) })
+    }
+}
+
+if (@($entries).Count -eq 0) {
+    Write-Host "Repository preflight: no check is in scope for this change. Mode: $Mode."
+    return
 }
 
 $pwshSource = (Get-Process -Id $PID).Path

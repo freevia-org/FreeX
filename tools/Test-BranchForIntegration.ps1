@@ -10,7 +10,13 @@ param(
 
     [switch]$SkipBuild,
 
-    [switch]$SkipAffectedTests
+    [switch]$SkipAffectedTests,
+
+    # Run every preflight check regardless of what the branch changed. By default the preflight is
+    # scoped to the checks whose inputs the diff against the (green, contained) base can affect
+    # (eng/preflight-scopes.json). Hosted CI always runs every check, so scoping only trims the
+    # local pre-merge wait; use -Full when you want the whole preflight before merging.
+    [switch]$Full
 )
 
 $ErrorActionPreference = "Stop"
@@ -70,7 +76,16 @@ $selection = $selectionJson | ConvertFrom-Json
 Write-Host "Changed paths: $(@($selection.changedPaths).Count); affected local commit gates: $(@($selection.gateIds).Count)."
 
 if (-not $SkipPreflight) {
-    & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'Test-RepositoryPreflight.ps1')
+    $preflightArguments = @()
+    if ($Full) {
+        Write-Host 'Running the full repository preflight (-Full).'
+    }
+    else {
+        # Scoping is only trusted when the branch CONTAINS the exact green base commit checked above;
+        # Test-RepositoryPreflight.ps1 falls back to every check when it does not.
+        $preflightArguments = @('-ScopeBaseRef', $baseSha)
+    }
+    & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'Test-RepositoryPreflight.ps1') @preflightArguments
     if ($LASTEXITCODE -ne 0) {
         throw "Repository preflight failed with exit code $LASTEXITCODE."
     }
@@ -98,4 +113,4 @@ if (-not $SkipAffectedTests) {
     }
 }
 
-Write-Host 'Branch integration gate passed. Full cross-platform integration remains owned by GitHub CI; UI/render/release-only, signing, notarization, and publication gates remain owned by Full Signed Release.'
+Write-Host 'Branch integration gate passed (the preflight is diff-scoped unless -Full is given; hosted CI always runs it in full). Full cross-platform integration remains owned by GitHub CI; UI/render/release-only, signing, notarization, and publication gates remain owned by Full Signed Release.'

@@ -366,6 +366,15 @@ catch {
     $errors.Add($_.Exception.Message)
 }
 
+# The diff-scoped LOCAL preflight must map every preflight check to its trigger paths, and CI must
+# keep running everything.
+try {
+    & (Join-Path $PSScriptRoot "Test-PreflightScopes.ps1") | Out-Host
+}
+catch {
+    $errors.Add($_.Exception.Message)
+}
+
 $gateDocumentation = Get-Content -LiteralPath (Join-Path $repoRoot "docs/testing/test-gates.md") -Raw
 foreach ($requiredHeading in @("Commit gate", "Release gate", "all platforms", "Invoke-TestGate.ps1")) {
     if ($gateDocumentation.IndexOf($requiredHeading, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) {
