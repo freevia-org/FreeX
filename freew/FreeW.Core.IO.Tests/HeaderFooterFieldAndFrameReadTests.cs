@@ -133,6 +133,49 @@ public class HeaderFooterFieldAndFrameReadTests
         run.Formatting.FontFamily.Should().Be("Wingdings");
     }
 
+    /// <summary>
+    /// stress015: body runs carry only <c>w:asciiTheme="majorBidi"</c>. Run-level theme tokens were never
+    /// resolved (only docDefaults/styles were), so those runs fell back to the Normal style's Calibri; and
+    /// the theme's empty <c>a:cs</c> must give way to its script font for the theme bidi language
+    /// (ar-SA -> Arab -> Times New Roman), as Word does.
+    /// </summary>
+    [Theory]
+    [InlineData("majorBidi", "Times New Roman")]
+    [InlineData("minorBidi", "Arial")]
+    [InlineData("majorHAnsi", "Cambria")]
+    public void RunThemeFontToken_ResolvesAgainstTheDocumentTheme(string token, string expected)
+    {
+        var ms = new MemoryStream();
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            void Add(string path, string content)
+            {
+                var entry = zip.CreateEntry(path);
+                using var writer = new StreamWriter(entry.Open(), new UTF8Encoding(false));
+                writer.Write(content);
+            }
+
+            Add("word/document.xml",
+                $"<w:document xmlns:w=\"{Wns}\"><w:body>" +
+                $"<w:p><w:r><w:rPr><w:rFonts w:asciiTheme=\"{token}\" w:hAnsiTheme=\"{token}\" w:cstheme=\"{token}\"/></w:rPr><w:t>themed</w:t></w:r>" +
+                "<w:r><w:t>plain</w:t></w:r></w:p></w:body></w:document>");
+            Add("word/settings.xml", $"<w:settings xmlns:w=\"{Wns}\"><w:themeFontLang w:val=\"fr-FR\" w:bidi=\"ar-SA\"/></w:settings>");
+            Add("word/theme/theme1.xml",
+                "<a:theme xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" name=\"Office\"><a:themeElements>" +
+                "<a:fontScheme name=\"Office\">" +
+                "<a:majorFont><a:latin typeface=\"Cambria\"/><a:ea typeface=\"\"/><a:cs typeface=\"\"/><a:font script=\"Arab\" typeface=\"Times New Roman\"/><a:font script=\"Hebr\" typeface=\"David\"/></a:majorFont>" +
+                "<a:minorFont><a:latin typeface=\"Calibri\"/><a:ea typeface=\"\"/><a:cs typeface=\"\"/><a:font script=\"Arab\" typeface=\"Arial\"/></a:minorFont>" +
+                "</a:fontScheme></a:themeElements></a:theme>");
+        }
+
+        ms.Position = 0;
+        var doc = DocxReader.Read(ms);
+
+        var runs = doc.Blocks.OfType<Paragraph>().Single().Runs;
+        runs[0].Formatting.FontFamily.Should().Be(expected);
+        runs[1].Formatting.FontFamily.Should().BeNull();
+    }
+
     [Fact]
     public void PlainTrackedInsertion_IsUnaffected()
     {

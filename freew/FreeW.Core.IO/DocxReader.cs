@@ -139,6 +139,8 @@ public static partial class DocxReader
     /// </summary>
     public static TextDocument Read(Stream stream)
     {
+        // A nested package read (altChunk) installs its own theme; the outer one is restored after it.
+        var outerRunThemeFonts = _runThemeFonts;
         try
         {
             return ReadCore(stream);
@@ -149,13 +151,27 @@ public static partial class DocxReader
                 "Could not read this as a Word document (.docx/.docm/.dotx/.dotm). The file is not a valid " +
                 "OOXML package -- it may be corrupted or truncated.", ex);
         }
+        finally
+        {
+            _runThemeFonts = outerRunThemeFonts;
+        }
     }
+
+    /// <summary>
+    /// The theme fonts of the package being read, so every run's <c>w:rFonts</c> theme tokens
+    /// (<c>w:asciiTheme="majorBidi"</c> ...) resolve -- not only those in w:docDefaults and styles.
+    /// Set per <see cref="Read(Stream)"/> call (see <see cref="_nestedWordPackageAltChunkDepth"/> for why
+    /// a thread-static rather than a parameter threaded through every run reader).
+    /// </summary>
+    [ThreadStatic]
+    private static ThemeFontResolution? _runThemeFonts;
 
     private static TextDocument ReadCore(Stream stream)
     {
         using var archive = OpenZipArchive(stream);
         // Reject zip-bomb / oversized packages before any decompression-heavy reads (same guard xlsx uses).
         WorkbookOpenSizeGuard.EnsureArchiveWithinLimits(archive);
+        _runThemeFonts = ResolveDocumentThemeFonts(archive);
         var documentXml = LoadPart(archive, "word/document.xml")
             ?? throw new InvalidDataException("Not a Word document: word/document.xml is missing.");
 
@@ -8397,7 +8413,8 @@ public static partial class DocxReader
     internal readonly record struct ThemeFontResolution(
         string? MajorLatin, string? MinorLatin,
         string? MajorEastAsia, string? MinorEastAsia,
-        string? MajorComplexScript, string? MinorComplexScript);
+        string? MajorComplexScript, string? MinorComplexScript,
+        string? MajorBidiScript = null, string? MinorBidiScript = null);
 
     /// <summary>
     /// Resolves the package's theme part (via the same relationship/fallback lookup as
@@ -8421,13 +8438,39 @@ public static partial class DocxReader
             fontScheme?.Element(drawing + fontElementName)?.Element(drawing + scriptElementName)
                 ?.Attribute("typeface")?.Value;
 
+        // Word's own theme leaves a:cs empty and lists per-script fonts instead; a "Bidi" theme token
+        // then takes the script font for the document's theme bidi language (w:themeFontLang/@w:bidi,
+        // e.g. ar-SA -> Arab -> Times New Roman for the major font).
+        var bidiScript = BidiScriptCode(LoadPart(archive, "word/settings.xml")?.Root
+            ?.Element(W + "themeFontLang")?.Attribute(W + "bidi")?.Value);
+        string? BidiScriptTypeface(string fontElementName) =>
+            fontScheme?.Element(drawing + fontElementName)?.Elements(drawing + "font")
+                .FirstOrDefault(font => string.Equals(font.Attribute("script")?.Value, bidiScript, StringComparison.Ordinal))
+                ?.Attribute("typeface")?.Value;
+
         return new ThemeFontResolution(
             MajorLatin: theme.FontScheme.MajorLatinTypeface,
             MinorLatin: theme.FontScheme.MinorLatinTypeface,
             MajorEastAsia: ScriptTypeface("majorFont", "ea"),
             MinorEastAsia: ScriptTypeface("minorFont", "ea"),
             MajorComplexScript: ScriptTypeface("majorFont", "cs"),
-            MinorComplexScript: ScriptTypeface("minorFont", "cs"));
+            MinorComplexScript: ScriptTypeface("minorFont", "cs"),
+            MajorBidiScript: BidiScriptTypeface("majorFont"),
+            MinorBidiScript: BidiScriptTypeface("minorFont"));
+    }
+
+    /// <summary>The theme-font script code for a bidi language tag (Arabic script when unknown).</summary>
+    private static string BidiScriptCode(string? languageTag)
+    {
+        var language = languageTag?.Split('-')[0].ToLowerInvariant();
+        return language switch
+        {
+            "he" or "yi" => "Hebr",
+            "th" => "Thai",
+            "syr" => "Syrc",
+            "dv" => "Thaa",
+            _ => "Arab"
+        };
     }
 
     /// <summary>
@@ -8446,17 +8489,40 @@ public static partial class DocxReader
         if (!isMajor && !isMinor)
             return null;
 
-        if (eastAsia)
-            return isMajor ? resolved.MajorEastAsia : resolved.MinorEastAsia;
-        if (complexScript)
-            return isMajor ? resolved.MajorComplexScript : resolved.MinorComplexScript;
-        return isMajor ? resolved.MajorLatin : resolved.MinorLatin;
+        // The token's own suffix names the theme font it binds, whichever attribute carries it:
+        // w:asciiTheme="majorBidi" puts the complex-script theme font in the ascii slot (stress015).
+        var suffix = themeToken[5..];
+        string? typeface;
+        if (suffix.Equals("EastAsia", StringComparison.OrdinalIgnoreCase))
+            typeface = isMajor ? resolved.MajorEastAsia : resolved.MinorEastAsia;
+        else if (suffix.Equals("Bidi", StringComparison.OrdinalIgnoreCase))
+            typeface = BidiTypeface(isMajor);
+        else if (suffix.Equals("Ascii", StringComparison.OrdinalIgnoreCase) || suffix.Equals("HAnsi", StringComparison.OrdinalIgnoreCase))
+            typeface = isMajor ? resolved.MajorLatin : resolved.MinorLatin;
+        else if (eastAsia)
+            typeface = isMajor ? resolved.MajorEastAsia : resolved.MinorEastAsia;
+        else if (complexScript)
+            typeface = BidiTypeface(isMajor);
+        else
+            typeface = isMajor ? resolved.MajorLatin : resolved.MinorLatin;
+
+        // An empty theme typeface (a:ea typeface="") is "not specified", never a font named "".
+        return string.IsNullOrWhiteSpace(typeface) ? null : typeface;
+
+        string? BidiTypeface(bool major)
+        {
+            var complexScriptFont = major ? resolved.MajorComplexScript : resolved.MinorComplexScript;
+            return string.IsNullOrWhiteSpace(complexScriptFont)
+                ? (major ? resolved.MajorBidiScript : resolved.MinorBidiScript)
+                : complexScriptFont;
+        }
     }
 
     internal static RunFormatting ReadRunFormatting(XElement? rPr, ThemeFontResolution? themeFonts = null)
     {
         if (rPr is null)
             return RunFormatting.Default;
+        themeFonts ??= _runThemeFonts;
 
         var underline = rPr.Element(W + "u");
         var colorElement = rPr.Element(W + "color");
