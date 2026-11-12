@@ -14,7 +14,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
     {
         var routes = FreeWRibbonCommandWorkflow.Routes;
 
-        routes.Should().HaveCount(407);
+        routes.Should().HaveCount(410);
         routes.Select(route => route.CommandId).Should().OnlyHaveUniqueItems();
         routes.Select(route => route.Action).Should().OnlyHaveUniqueItems();
         routes.Select(route => route.Action)
@@ -122,7 +122,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
 
         var result = bindings.Build();
 
-        result.CanonicalCommandIds.Should().HaveCount(407).And.OnlyHaveUniqueItems();
+        result.CanonicalCommandIds.Should().HaveCount(410).And.OnlyHaveUniqueItems();
         result.CanonicalCommandIds.Should().Contain(new RibbonCommandId("freew.test-crash-reporting"));
         result.CanonicalCommandIds.Should().BeEquivalentTo(
             FreeWRibbonCommandWorkflow.Routes.Select(route => new RibbonCommandId(route.CommandId)));
@@ -149,7 +149,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
 
         var result = FreeWRibbonExecutionProfile.Build(bindings);
 
-        result.CanonicalCommandIds.Should().HaveCount(407).And.OnlyHaveUniqueItems();
+        result.CanonicalCommandIds.Should().HaveCount(410).And.OnlyHaveUniqueItems();
         result.Registry.TryGet("freew.bold", out var bold).Should().BeTrue();
         bold.Should().BeSameAs(native);
 

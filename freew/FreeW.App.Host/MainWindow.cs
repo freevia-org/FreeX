@@ -331,8 +331,12 @@ public sealed partial class MainWindow : Window
             TogglePagedEditView = TogglePagedEditView,
             ToggleNotesPane = ToggleNotesPane,
             IsNotesPaneVisible = () => _notesPaneVisible,
+            OpenNotesPaneAtNote = OpenNotesPaneAtNote,
             OpenHeaderFooterPane = OpenHeaderFooterPane,
             CloseHeaderFooterPane = CloseHeaderFooterPane,
+            GetHeaderFooterSectionSlot = CurrentHeaderFooterSectionSlot,
+            MoveHeaderFooterSection = MoveHeaderFooterSection,
+            ToggleHeaderFooterLinkToPrevious = ToggleHeaderFooterLinkToPrevious,
             AcceptThisChange = AcceptSelectedRevision,
             RejectThisChange = RejectSelectedRevision,
             PreviousChange = () => StepRevision(-1),
@@ -502,8 +506,16 @@ public sealed partial class MainWindow : Window
         _applicationCommands = new FreeWApplicationCommandRouter(new FreeWApplicationCommandActions(
             NewDocument: () => _file.New(),
             OpenDocument: () => _file.Open(),
-            SaveDocument: () => _file.Save(),
-            SaveDocumentAs: () => _file.SaveAs(),
+            SaveDocument: () =>
+            {
+                CommitPendingPaneEdits();
+                _file.Save();
+            },
+            SaveDocumentAs: () =>
+            {
+                CommitPendingPaneEdits();
+                _file.SaveAs();
+            },
             PrintDocument: Print,
             Find: () => OpenFindReplace(FindReplaceOpenMode.Find),
             Replace: () => OpenFindReplace(FindReplaceOpenMode.Replace),
@@ -2181,12 +2193,16 @@ public sealed partial class MainWindow : Window
         // Selecting a stub loads the note's content into the sub-editor.
         _notesList.SelectionChanged += OnNoteSelectionChanged;
 
+        var filterSelector = BuildNotesFilterSelector();
+
         var layout = new DockPanel();
         DockPanel.SetDock(header, Dock.Top);
+        DockPanel.SetDock(filterSelector, Dock.Top);
         DockPanel.SetDock(_notesList, Dock.Top);
         DockPanel.SetDock(_notesSelectedLabel, Dock.Top);
         DockPanel.SetDock(toolbar, Dock.Bottom);
         layout.Children.Add(header);
+        layout.Children.Add(filterSelector);
         layout.Children.Add(_notesList);
         layout.Children.Add(_notesSelectedLabel);
         layout.Children.Add(toolbar);
@@ -2206,6 +2222,8 @@ public sealed partial class MainWindow : Window
     // Toggle the Notes pane, keeping freew.show-notes ribbon state in sync.
     private void ToggleNotesPane()
     {
+        if (_notesPaneVisible)
+            ApplyPendingNoteEdit(); // closing the pane keeps what was typed (one undoable edit)
         _notesPaneVisible = !_notesPaneVisible;
         _notesPane.Visibility = _notesPaneVisible ? Visibility.Visible : Visibility.Collapsed;
         _stateStore.SetChecked("freew.show-notes", _notesPaneVisible);
@@ -2226,6 +2244,15 @@ public sealed partial class MainWindow : Window
     // Load the note selected in the stub list into the sub-editor.
     private void OnNoteSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        // Moving to another note first commits the one being edited. Applying refreshes the list, so
+        // re-resolve the requested note by key rather than by its (possibly stale) index.
+        var requested = _notesList.SelectedItem as DocumentNoteProjection;
+        if (ApplyPendingNoteEdit() && requested is not null)
+        {
+            RenderNotesOutcome(_documentNotesPaneSession.ShowAndSelect(requested.Key.IsFootnote, requested.Key.Id));
+            return;
+        }
+
         RenderNotesOutcome(_documentNotesPaneSession.SelectIndex(_notesList.SelectedIndex));
     }
 
@@ -2242,17 +2269,18 @@ public sealed partial class MainWindow : Window
         _notesSubEditor.Visibility = state.HasSelection ? Visibility.Visible : Visibility.Collapsed;
         _notesApplyButton.Visibility = state.CanApply ? Visibility.Visible : Visibility.Collapsed;
         _notesDeleteButton.Visibility = state.CanDelete ? Visibility.Visible : Visibility.Collapsed;
+        SyncNotesFilterSelector(state.Filter);
         if (state.EditorDocument is { } editorDocument)
-        {
-            ConfigureFieldEvaluationContext(_notesSubEditor);
-            _notesSubEditor.LoadModel(editorDocument);
-        }
+            LoadNoteIntoSubEditor(editorDocument);
+        else
+            _notesEditPending = false;
     }
 
     // Apply edits from the sub-editor back to the selected note's Content, then re-render the main editor
     // so marker tooltips (which show the note's plain text) refresh.
     private void ApplySelectedNote()
     {
+        _notesEditPending = false;
         _notesSubEditor.CommitToModel();
         var outcome = _documentNotesPaneSession.Apply(_notesSubEditor.Model.Blocks);
         if (outcome.MutationApplied)
@@ -2299,6 +2327,7 @@ public sealed partial class MainWindow : Window
             HorizontalAlignment = HorizontalAlignment.Left
         };
         closeBtn.Click += (_, _) => CloseHeaderFooterPane();
+        InitializeHeaderFooterPaneEditing();
 
         var layout = new DockPanel();
         DockPanel.SetDock(_hfSlotLabel, Dock.Top);
@@ -2337,32 +2366,12 @@ public sealed partial class MainWindow : Window
             if (_pagedEditPanel.FocusInPageHfRegion(slot))
                 return;
         }
-        _hfActiveSlot = slot;
-
-        var label = HeaderFooterDialogPlanner.LabelFor(slot);
-        _hfSlotLabel.Text = UiText.Format("HeaderFooter_Editing_Status_Format", label);
-
-        var hf = _editor.Model.FinalSectionHeadersFooters;
-        var current = HeaderFooterDialogPlanner.GetSlot(hf, slot);
-
-        // Wrapper document — seeded with the main doc's DefaultRun so fonts match.
-        var wrapper = TextDocument.CreateEmpty();
-        wrapper.DefaultRun       = _editor.Model.DefaultRun;
-        wrapper.DefaultParagraph = _editor.Model.DefaultParagraph;
-        wrapper.Blocks.Clear();
-
-        if (current is not null)
-        {
-            foreach (var para in current.Paragraphs)
-                wrapper.Blocks.Add(para);
-        }
-        if (wrapper.Blocks.Count == 0)
-            wrapper.Blocks.Add(new Paragraph());
-
-        ConfigureFieldEvaluationContext(_hfSubEditor);
-        _hfSubEditor.LoadModel(wrapper);
-
-        _hfPane.Visibility = Visibility.Visible;
+        // Target the section containing the caret (Word edits the header/footer of the page you are
+        // on). While the pane is already open, stay in the section being edited: Go to Header / Go to
+        // Footer and the Edit menus switch slot, not section.
+        var sectionIndex = _hfActiveSlot is null ? _editor.CurrentSectionIndex() : _hfActiveSectionIndex;
+        CommitHeaderFooterPaneEdits();
+        ShowHeaderFooterSlot(sectionIndex, slot);
     }
 
     // Close (commit) the Header/Footer pane: commit the sub-editor's edits back to the slot in the
@@ -2376,24 +2385,13 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        _hfSubEditor.CommitToModel();
-
-        // Build a new HeaderFooter from the sub-editor's blocks.
-        var hfOut = new HeaderFooter();
-        foreach (var block in _hfSubEditor.Model.Blocks.OfType<Paragraph>())
-            hfOut.Paragraphs.Add(block);
-
-        // Write back to the correct slot.
-        var hf = _editor.Model.FinalSectionHeadersFooters;
-        HeaderFooterDialogPlanner.SetSlot(hf, _hfActiveSlot.Value, hfOut);
+        // Write the edited content back to the header/footer the active section displays (its own, or
+        // the shared one it is linked to) and re-render; untouched content is left exactly as it was.
+        CommitHeaderFooterPaneEdits();
 
         _hfActiveSlot  = null;
         _hfPane.Visibility = Visibility.Collapsed;
-
-        // Re-render the main editor and return focus (no-op page-settings commit triggers
-        // CommitToModel + Render inside ApplyPageSettings without changing any setting).
-        _editor.ApplyPageSettings(_ => { });
-        MarkDirtyOutsideBodyUndo();
+        SyncHeaderFooterSectionRibbonState();
         _editor.Focus();
     }
 

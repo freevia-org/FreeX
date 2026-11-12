@@ -4,6 +4,14 @@ namespace FreeW.App.Presentation.Panes;
 
 public readonly record struct DocumentNoteKey(bool IsFootnote, int Id);
 
+/// <summary>The notes-pane selector: Word's "All Footnotes" / "All Endnotes" choice plus a combined view.</summary>
+public enum DocumentNotesPaneFilter
+{
+    All,
+    Footnotes,
+    Endnotes,
+}
+
 public sealed record DocumentNoteProjection(
     DocumentNoteKey Key,
     string Label,
@@ -30,7 +38,8 @@ public sealed record DocumentNotesPaneMutationActions(
 public sealed record DocumentNotesPaneViewState(
     IReadOnlyList<DocumentNoteProjection> Items,
     int SelectedIndex,
-    TextDocument? EditorDocument)
+    TextDocument? EditorDocument,
+    DocumentNotesPaneFilter Filter = DocumentNotesPaneFilter.All)
 {
     public bool HasSelection => SelectedIndex >= 0 && SelectedIndex < Items.Count;
     public bool CanApply => HasSelection;
@@ -64,15 +73,44 @@ public sealed class DocumentNotesPaneSession
 
     public DocumentNotesPaneOutcome Refresh() => Refresh(State.SelectedNote?.Key);
 
-    public DocumentNotesPaneOutcome ShowAndSelect(bool footnote, int id) =>
-        Refresh(new DocumentNoteKey(footnote, id));
+    /// <summary>
+    /// Opens the pane at one note. A selector that currently hides that note kind switches to the
+    /// note's own kind, exactly as Word's notes pane follows the activated reference mark.
+    /// </summary>
+    public DocumentNotesPaneOutcome ShowAndSelect(bool footnote, int id)
+    {
+        if (!Includes(State.Filter, footnote))
+        {
+            State = State with
+            {
+                Filter = footnote ? DocumentNotesPaneFilter.Footnotes : DocumentNotesPaneFilter.Endnotes
+            };
+        }
+
+        return Refresh(new DocumentNoteKey(footnote, id));
+    }
+
+    /// <summary>Switches the Footnotes/Endnotes selector, keeping the selected note when still listed.</summary>
+    public DocumentNotesPaneOutcome SetFilter(DocumentNotesPaneFilter filter)
+    {
+        var selected = State.SelectedNote?.Key;
+        State = State with { Filter = filter };
+        return Refresh(selected);
+    }
 
     public DocumentNotesPaneOutcome SelectIndex(int index)
     {
         var selectedIndex = index >= 0 && index < State.Items.Count ? index : -1;
-        State = BuildState(_document(), State.Items, selectedIndex);
+        State = BuildState(_document(), State.Items, selectedIndex, State.Filter);
         return new DocumentNotesPaneOutcome(State);
     }
+
+    private static bool Includes(DocumentNotesPaneFilter filter, bool footnote) => filter switch
+    {
+        DocumentNotesPaneFilter.Footnotes => footnote,
+        DocumentNotesPaneFilter.Endnotes => !footnote,
+        _ => true,
+    };
 
     public DocumentNotesPaneOutcome Apply(IReadOnlyList<Block> editedBlocks)
     {
@@ -112,13 +150,16 @@ public sealed class DocumentNotesPaneSession
     private DocumentNotesPaneOutcome Refresh(DocumentNoteKey? requested)
     {
         var document = _document();
+        var filter = State.Filter;
         var items = document.Footnotes.Values
+            .Where(_ => Includes(filter, footnote: true))
             .OrderBy(note => note.Id)
             .Select(note => new DocumentNoteProjection(
                 new DocumentNoteKey(IsFootnote: true, note.Id),
                 FreeWUiTextCatalog.FootnoteLabel(note.Id),
                 note.PlainText))
             .Concat(document.Endnotes.Values
+                .Where(_ => Includes(filter, footnote: false))
                 .OrderBy(note => note.Id)
                 .Select(note => new DocumentNoteProjection(
                     new DocumentNoteKey(IsFootnote: false, note.Id),
@@ -130,19 +171,20 @@ public sealed class DocumentNotesPaneSession
             : -1;
         if (selectedIndex < 0 && items.Length > 0)
             selectedIndex = 0;
-        State = BuildState(document, items, selectedIndex);
+        State = BuildState(document, items, selectedIndex, filter);
         return new DocumentNotesPaneOutcome(State);
     }
 
     private static DocumentNotesPaneViewState BuildState(
         TextDocument document,
         IReadOnlyList<DocumentNoteProjection> items,
-        int selectedIndex)
+        int selectedIndex,
+        DocumentNotesPaneFilter filter)
     {
         var editorDocument = selectedIndex >= 0 && selectedIndex < items.Count
             ? BuildEditorDocument(document, items[selectedIndex].Key)
             : null;
-        return new DocumentNotesPaneViewState(items, selectedIndex, editorDocument);
+        return new DocumentNotesPaneViewState(items, selectedIndex, editorDocument, filter);
     }
 
     private static TextDocument BuildEditorDocument(TextDocument document, DocumentNoteKey key)

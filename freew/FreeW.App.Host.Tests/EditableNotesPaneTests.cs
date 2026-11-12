@@ -70,6 +70,93 @@ public sealed class EditableNotesPaneTests
         view.Model.Footnotes[1].PlainText.Should().Be("note text");
         ((Paragraph)view.Model.Blocks[0]).Runs.Should().Contain(run => run.FootnoteId == 1);
     }
+
+    // ── Word-like insert: reference first, note typed in the pane ─────────────────────────────────
+
+    [StaTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void InsertNoteForPaneEditing_PlacesReferenceWithEmptyNote_AndOpensPaneAtIt(bool footnote)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("before after"));
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        view.MoveCaretToBlockForTest(0, 7);
+        (bool Footnote, int Id)? opened = null;
+
+        var handled = FreeW.App.Host.FreeWRibbonCommands.TryInsertNoteForPaneEditing(
+            view,
+            footnote,
+            (isFootnote, id) => opened = (isFootnote, id));
+
+        handled.Should().BeTrue();
+        opened.Should().Be((footnote, 1));
+        var paragraph = (Paragraph)view.Model.Blocks[0];
+        paragraph.Runs.Should().Contain(run => footnote ? run.FootnoteId == 1 : run.EndnoteId == 1);
+        var content = footnote ? view.Model.Footnotes[1].Content : view.Model.Endnotes[1].Content;
+        string.Concat(content.Select(p => p.PlainText)).Should().BeEmpty("the note is typed in the pane");
+
+        // Typing the note in the pane is a second, separate undo unit; undoing twice removes the note.
+        var typed = new Paragraph();
+        typed.Runs.Add(new Run("typed note") { Formatting = RunFormatting.Default with { Italic = true } });
+        view.ReplaceNoteContent(1, footnote, [typed, new Paragraph("second paragraph")]);
+        var edited = footnote ? view.Model.Footnotes[1].Content : view.Model.Endnotes[1].Content;
+        edited.Select(p => p.PlainText).Should().Equal("typed note", "second paragraph");
+        edited[0].Runs.Single().Formatting.Italic.Should().BeTrue();
+
+        view.Undo();
+        var afterUndo = footnote ? view.Model.Footnotes[1].Content : view.Model.Endnotes[1].Content;
+        string.Concat(afterUndo.Select(p => p.PlainText)).Should().BeEmpty();
+        view.Undo();
+        view.Model.Footnotes.Should().BeEmpty();
+        view.Model.Endnotes.Should().BeEmpty();
+        ((Paragraph)view.Model.Blocks[0]).PlainText.Should().Be("before after");
+    }
+
+    [StaFact]
+    public void InsertNoteForPaneEditing_WithoutPane_FallsBackToPrompt()
+    {
+        var view = new DocumentView();
+        view.LoadModel(TextDocument.CreateEmpty());
+
+        FreeW.App.Host.FreeWRibbonCommands
+            .TryInsertNoteForPaneEditing(view, footnote: true, openNotesPaneAtNote: null)
+            .Should().BeFalse();
+        view.Model.Footnotes.Should().BeEmpty();
+    }
+
+    [StaFact]
+    public void TryGetNoteReferenceAt_ResolvesFootnoteAndEndnoteMarks_ButNotOrdinaryText()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("plain text "));
+        body.Runs.Add(Run.FootnoteReference(4));
+        body.Runs.Add(new Run(" middle words "));
+        body.Runs.Add(Run.EndnoteReference(2));
+        doc.Blocks.Add(body);
+        doc.Footnotes[4] = new Footnote(4, "foot");
+        doc.Endnotes[2] = new Endnote(2, "end");
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        var runs = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single()
+            .Inlines.OfType<System.Windows.Documents.Run>().ToList();
+        var plain = runs.First(run => run.Text.StartsWith("plain", System.StringComparison.Ordinal));
+        var middle = runs.First(run => run.Text.Contains("middle", System.StringComparison.Ordinal));
+        var footnoteMark = runs[runs.IndexOf(plain) + 1];
+        var endnoteMark = runs[runs.IndexOf(middle) + 1];
+
+        view.TryGetNoteReferenceAt(footnoteMark.ContentStart, out var isFootnote, out var id).Should().BeTrue();
+        (isFootnote, id).Should().Be((true, 4));
+        view.TryGetNoteReferenceAt(endnoteMark.ContentEnd, out isFootnote, out id).Should().BeTrue();
+        (isFootnote, id).Should().Be((false, 2));
+        view.TryGetNoteReferenceAt(plain.ContentStart.GetPositionAtOffset(2)!, out _, out _).Should().BeFalse();
+        view.TryGetNoteReferenceAt(middle.ContentStart.GetPositionAtOffset(5)!, out _, out _).Should().BeFalse();
+    }
+
     // ── Phase 1A: Notes pane backing — DeleteFootnote / DeleteEndnote ─────────────────────────────
 
     /// <summary>

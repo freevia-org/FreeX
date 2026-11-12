@@ -123,6 +123,10 @@
   <data name="Pane_Notes_DeleteToolTip" xml:space="preserve"><value>Supprimer cette note et son rep&#232;re</value></data>
   <data name="Pane_Notes_FootnoteFormat" xml:space="preserve"><value>Note de bas de page {0}</value></data>
   <data name="Pane_Notes_EndnoteFormat" xml:space="preserve"><value>Note de fin {0}</value></data>
+  <data name="Pane_Notes_FilterName" xml:space="preserve"><value>Notes &#224; afficher</value></data>
+  <data name="Pane_Notes_FilterAll" xml:space="preserve"><value>Toutes les notes</value></data>
+  <data name="Pane_Notes_FilterFootnotes" xml:space="preserve"><value>Toutes les notes de bas de page</value></data>
+  <data name="Pane_Notes_FilterEndnotes" xml:space="preserve"><value>Toutes les notes de fin</value></data>
   <data name="Dialog_Note_InsertFootnoteTitle" xml:space="preserve"><value>Ins&#233;rer une note de bas de page</value></data>
   <data name="Dialog_Note_InsertEndnoteTitle" xml:space="preserve"><value>Ins&#233;rer une note de fin</value></data>
   <data name="Dialog_Note_FootnoteTextLabel" xml:space="preserve"><value>Texte de la note de bas de page :</value></data>
@@ -255,6 +259,8 @@
   <data name="HeaderFooter_Header_Label" xml:space="preserve"><value>En-tête</value></data>
   <data name="HeaderFooter_Footer_Label" xml:space="preserve"><value>Pied de page</value></data>
   <data name="HeaderFooter_Editing_Status_Format" xml:space="preserve"><value>Modification : {0}</value></data>
+  <data name="HeaderFooter_SectionLabel_Format" xml:space="preserve"><value>{0} -Section {1}-</value></data>
+  <data name="HeaderFooter_SameAsPrevious_Format" xml:space="preserve"><value>{0} (Identique au pr&#233;c&#233;dent)</value></data>
   <data name="HeaderFooter_Edit_Title_Format" xml:space="preserve"><value>Modifier {0}</value></data>
   <data name="HeaderFooter_Text_Label_Format" xml:space="preserve"><value>Texte de {0} :</value></data>
   <data name="Window_SecondView_Title_Format" xml:space="preserve"><value>FreeW - {0} (deuxième vue)</value></data>

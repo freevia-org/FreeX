@@ -7,7 +7,7 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class HeaderFooterRibbonWorkflowTests
 {
     [Fact]
-    public void RegistersEveryPrimaryAndContextualActionWithFourStatefulHandles()
+    public void RegistersEveryPrimaryAndContextualActionWithSevenStatefulHandles()
     {
         var events = new List<string>();
         var builder = new FreeWRibbonEditorCommandFamilyBuilder();
@@ -16,7 +16,7 @@ public sealed class HeaderFooterRibbonWorkflowTests
         var result = HeaderFooterRibbonWorkflow.Register(builder, bindings);
         var commands = builder.Build().Commands;
 
-        HeaderFooterRibbonWorkflow.Actions.Should().OnlyHaveUniqueItems().And.HaveCount(25);
+        HeaderFooterRibbonWorkflow.Actions.Should().OnlyHaveUniqueItems().And.HaveCount(28);
         foreach (var action in HeaderFooterRibbonWorkflow.Actions)
         {
             commands.Should().ContainKey(action);
@@ -27,12 +27,94 @@ public sealed class HeaderFooterRibbonWorkflowTests
             "freew.hf-different-first-page",
             "freew.hf-different-odd-even",
             "freew.hf-header-from-top",
-            "freew.hf-footer-from-bottom");
+            "freew.hf-footer-from-bottom",
+            "freew.hf-previous-section",
+            "freew.hf-next-section",
+            "freew.hf-link-to-previous");
         result.StatefulCommands.Select(entry => entry.Command).Should().Equal(
             bindings.DifferentFirstPage,
             bindings.DifferentOddEvenPages,
             bindings.HeaderFromTop,
-            bindings.FooterFromBottom);
+            bindings.FooterFromBottom,
+            bindings.PreviousSection,
+            bindings.NextSection,
+            bindings.LinkToPrevious);
+    }
+
+    [Fact]
+    public void SectionNavigationCommandsOwnEnablementAndLinkCheckedState()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("one") { SectionBreak = new Section(new PageSettings()) });
+        document.Blocks.Add(new Paragraph("two") { SectionBreak = new Section(new PageSettings()) });
+        document.Blocks.Add(new Paragraph("three"));
+        document.Sections[0].HeadersFooters.Header = new HeaderFooter("shared");
+        var sectionIndex = 0;
+        var moves = new List<int>();
+        var commands = HeaderFooterRibbonWorkflow.CreateSectionNavigationCommands(
+            new HeaderFooterSectionNavigationPorts(
+                GetActiveSlot: () => HeaderFooterSectionLinkPlanner.Describe(
+                    document.Sections, sectionIndex, HeaderFooterSlotKind.Header),
+                MoveToAdjacentSection: direction =>
+                {
+                    moves.Add(direction);
+                    sectionIndex += direction;
+                },
+                ToggleLinkToPrevious: () => HeaderFooterSectionLinkPlanner.ToggleLinkToPrevious(
+                    document.Sections, sectionIndex, HeaderFooterSlotKind.Header)));
+
+        commands.PreviousSection.GetState().IsEnabled.Should().BeFalse("section 1 has no previous section");
+        commands.NextSection.GetState().IsEnabled.Should().BeTrue();
+        commands.LinkToPrevious.GetState().Should().BeEquivalentTo(
+            new RibbonCommandState(IsEnabled: false, IsChecked: false));
+        commands.PreviousSection.Execute(RibbonCommandContext.Empty);
+        commands.LinkToPrevious.Execute(RibbonCommandContext.Empty);
+        moves.Should().BeEmpty();
+        document.Sections[0].HeadersFooters.Header!.PlainText.Should().Be("shared");
+
+        commands.NextSection.Execute(RibbonCommandContext.Empty);
+        moves.Should().Equal(1);
+        commands.PreviousSection.GetState().IsEnabled.Should().BeTrue();
+        commands.LinkToPrevious.GetState().Should().BeEquivalentTo(
+            new RibbonCommandState(IsEnabled: true, IsChecked: true));
+
+        commands.LinkToPrevious.Execute(RibbonCommandContext.Empty);
+        commands.LinkToPrevious.GetState().IsChecked.Should().BeFalse();
+        document.Sections[1].HeadersFooters.Header!.PlainText.Should().Be("shared");
+        document.Sections[1].HeadersFooters.Header.Should().NotBeSameAs(document.Sections[0].HeadersFooters.Header);
+
+        commands.NextSection.Execute(RibbonCommandContext.Empty);
+        commands.NextSection.GetState().IsEnabled.Should().BeFalse("section 3 is the last section");
+        commands.NextSection.Execute(RibbonCommandContext.Empty);
+        moves.Should().Equal(1, 1);
+    }
+
+    [Fact]
+    public void SectionNavigationWithoutAMovePortDisablesPreviousAndNextButKeepsLinking()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("one") { SectionBreak = new Section(new PageSettings()) });
+        document.Blocks.Add(new Paragraph("two"));
+        var enabled = true;
+        var commands = HeaderFooterRibbonWorkflow.CreateSectionNavigationCommands(
+            new HeaderFooterSectionNavigationPorts(
+                GetActiveSlot: () => HeaderFooterSectionLinkPlanner.Describe(
+                    document.Sections, 1, HeaderFooterSlotKind.Footer),
+                MoveToAdjacentSection: null,
+                ToggleLinkToPrevious: () => HeaderFooterSectionLinkPlanner.ToggleLinkToPrevious(
+                    document.Sections, 1, HeaderFooterSlotKind.Footer),
+                IsEnabled: () => enabled));
+
+        commands.PreviousSection.GetState().IsEnabled.Should().BeFalse();
+        commands.NextSection.GetState().IsEnabled.Should().BeFalse();
+        commands.LinkToPrevious.GetState().IsEnabled.Should().BeTrue();
+
+        enabled = false;
+        commands.LinkToPrevious.GetState().IsEnabled.Should().BeFalse();
+        commands.LinkToPrevious.Execute(RibbonCommandContext.Empty);
+        document.Sections[1].HeadersFooters.Footer.Should().BeNull("a locked editor must not change linkage");
     }
 
     [Fact]
@@ -166,7 +248,10 @@ public sealed class HeaderFooterRibbonWorkflowTests
             InsertHeaderPageNumber: Command("insert-header-page-number"),
             InsertFooterPageNumber: Command("insert-footer-page-number"),
             InsertDateTime: Command("insert-date-time"),
-            InsertDocumentInfo: Command("insert-document-info"));
+            InsertDocumentInfo: Command("insert-document-info"),
+            PreviousSection: new RecordingStatefulCommand(events, "previous-section"),
+            NextSection: new RecordingStatefulCommand(events, "next-section"),
+            LinkToPrevious: new RecordingStatefulCommand(events, "link-to-previous"));
     }
 
     private static void Execute(
