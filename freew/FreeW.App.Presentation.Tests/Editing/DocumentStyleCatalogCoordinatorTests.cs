@@ -91,6 +91,38 @@ public sealed class DocumentStyleCatalogCoordinatorTests
     }
 
     [Fact]
+    public void CreateStyle_RunsTheRendererApplicationInsideTheSameUndoGroup()
+    {
+        var session = SessionWith("one", "two");
+
+        var created = session.Styles.CreateStyle(
+            Definition("Code", StyleDefinitionKind.Character, basedOn: null),
+            [],
+            style => session.SetParagraphStyles([0, 1], "Normal"));
+
+        ((Paragraph)session.Document.Blocks[1]).StyleId.Should().Be("Normal");
+        UndoAll(session).Should().Be(1);
+        session.Document.Styles.Should().NotContainKey(created!.Id);
+        ((Paragraph)session.Document.Blocks[1]).StyleId.Should().BeNull();
+    }
+
+    [Fact]
+    public void CreateStyle_WhenTheRendererApplicationFails_RollsEverythingBack()
+    {
+        var session = SessionWith("one");
+
+        var act = () => session.Styles.CreateStyle(
+            Definition("Code", StyleDefinitionKind.Character, basedOn: null),
+            [],
+            _ => throw new InvalidOperationException("apply failed"));
+
+        act.Should().Throw<InvalidOperationException>();
+        session.Document.Styles.Values.Should().NotContain(style => style.Name == "Code");
+        session.Commands.IsUndoGroupOpen.Should().BeFalse();
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void CreateStyle_WithBlankName_DoesNothing()
     {
         var session = SessionWith("one");

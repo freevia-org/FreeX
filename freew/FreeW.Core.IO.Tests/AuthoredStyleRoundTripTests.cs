@@ -117,6 +117,84 @@ public sealed class AuthoredStyleRoundTripTests
         RoundTrip(doc).Styles[style.Id].QuickFormat.Should().Be(addToGallery);
     }
 
+    private static MemoryStream WithoutQuickFormat(TextDocument document)
+    {
+        // What FreeW wrote before the gallery flag existed: the same package with no w:qFormat anywhere.
+        var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = zip.GetEntry("word/styles.xml")!;
+            XDocument styles;
+            using (var read = entry.Open())
+                styles = XDocument.Load(read);
+            styles.Descendants(W + "qFormat").Remove();
+            entry.Delete();
+            using var write = zip.CreateEntry("word/styles.xml").Open();
+            styles.Save(write);
+        }
+        stream.Position = 0;
+        return stream;
+    }
+
+    [Fact]
+    public void LegacyDocument_WithNoQFormatAnywhere_KeepsEveryCustomStyleInTheGallery()
+    {
+        var doc = TextDocument.CreateEmpty();
+        var paragraphStyle = StyleManager.CreateStyle(
+            doc, "Legacy Body", null, RunFormatting.Default, ParagraphFormatting.Default, quickFormat: false);
+        var characterStyle = StyleManager.CreateStyle(
+            doc, "Legacy Code", null, RunFormatting.Default, ParagraphFormatting.Default, null, StyleType.Character, quickFormat: false);
+        foreach (var style in doc.Styles.Values.ToArray())
+            doc.Styles[style.Id] = new DocumentStyle(style) { QuickFormat = false };
+        using var legacy = WithoutQuickFormat(doc);
+
+        var reloaded = DocxReader.Read(legacy);
+
+        reloaded.Styles[paragraphStyle.Id].QuickFormat.Should().BeTrue();
+        reloaded.Styles[characterStyle.Id].QuickFormat.Should().BeTrue();
+        reloaded.Styles.Values.Should().OnlyContain(style => style.QuickFormat);
+    }
+
+    [Fact]
+    public void WordAuthoredDocument_WithQFormatOnSomeStyles_ShowsOnlyTheFlaggedOnes()
+    {
+        var doc = TextDocument.CreateEmpty();
+        var shown = StyleManager.CreateStyle(
+            doc, "Shown", null, RunFormatting.Default, ParagraphFormatting.Default, quickFormat: true);
+        var hidden = StyleManager.CreateStyle(
+            doc, "Hidden", null, RunFormatting.Default, ParagraphFormatting.Default, quickFormat: false);
+
+        var reloaded = RoundTrip(doc);
+
+        reloaded.Styles[shown.Id].QuickFormat.Should().BeTrue();
+        reloaded.Styles[hidden.Id].QuickFormat.Should().BeFalse();
+        reloaded.Styles["Normal"].QuickFormat.Should().BeTrue();
+    }
+
+    [Fact]
+    public void LegacyDocument_OnceSavedByTheNewWriter_PreservesVisibilityThroughQFormat()
+    {
+        var doc = TextDocument.CreateEmpty();
+        var kept = StyleManager.CreateStyle(
+            doc, "Kept", null, RunFormatting.Default, ParagraphFormatting.Default);
+        var removed = StyleManager.CreateStyle(
+            doc, "Removed", null, RunFormatting.Default, ParagraphFormatting.Default);
+        using var legacy = WithoutQuickFormat(doc);
+        var opened = DocxReader.Read(legacy);
+        opened.Styles[removed.Id].QuickFormat.Should().BeTrue("a legacy document shows every style");
+
+        // The user removes one style from the gallery, saves, and reopens.
+        StyleManager.ModifyStyle(opened, removed.Id, quickFormat: false);
+        WrittenStyle(opened, kept.Id).Element(W + "qFormat").Should().NotBeNull();
+        WrittenStyle(opened, removed.Id).Element(W + "qFormat").Should().BeNull();
+        var resaved = RoundTrip(opened);
+
+        resaved.Styles[kept.Id].QuickFormat.Should().BeTrue();
+        resaved.Styles[removed.Id].QuickFormat.Should().BeFalse();
+        RoundTrip(resaved).Styles[removed.Id].QuickFormat.Should().BeFalse();
+    }
+
     [Fact]
     public void ParagraphStyle_RoundTripsFlowBorderShadingAndTabs()
     {

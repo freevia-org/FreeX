@@ -26,6 +26,88 @@ public sealed class StyleGalleryPlannerTests
         entries.Should().OnlyContain(entry => !StyleManager.IsBuiltIn(entry.Id));
     }
 
+    private static TextDocument Reload(TextDocument document, bool stripQuickFormat)
+    {
+        using var stream = new MemoryStream();
+        FreeW.Core.IO.DocxWriter.Write(document, stream);
+        if (stripQuickFormat)
+        {
+            System.Xml.Linq.XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+            using var zip = new System.IO.Compression.ZipArchive(
+                stream, System.IO.Compression.ZipArchiveMode.Update, leaveOpen: true);
+            var entry = zip.GetEntry("word/styles.xml")!;
+            System.Xml.Linq.XDocument styles;
+            using (var read = entry.Open())
+                styles = System.Xml.Linq.XDocument.Load(read);
+            System.Xml.Linq.Extensions.Remove(styles.Descendants(w + "qFormat"));
+            entry.Delete();
+            using var write = zip.CreateEntry("word/styles.xml").Open();
+            styles.Save(write);
+        }
+        stream.Position = 0;
+        return FreeW.Core.IO.DocxReader.Read(stream);
+    }
+
+    private static TextDocument DocumentWithShownAndHiddenStyles()
+    {
+        var document = TextDocument.CreateEmpty();
+        StyleManager.CreateStyle(document, "Shown", null, RunFormatting.Default, ParagraphFormatting.Default);
+        StyleManager.CreateStyle(
+            document, "Shown Code", null, RunFormatting.Default, ParagraphFormatting.Default, null, StyleType.Character);
+        StyleManager.CreateLinkedStyle(document, "Shown Linked", null, RunFormatting.Default, ParagraphFormatting.Default);
+        StyleManager.CreateStyle(
+            document, "Hidden", null, RunFormatting.Default, ParagraphFormatting.Default, quickFormat: false);
+        return document;
+    }
+
+    [Fact]
+    public void CustomEntries_NewBlankDocument_KeepsItsDefaultCatalogInTheGallery()
+    {
+        var document = TextDocument.CreateEmpty();
+
+        var expected = document.Styles.Values
+            .Where(style => style.Type == StyleType.Paragraph && !StyleManager.IsBuiltIn(style.Id))
+            .Select(style => style.Id);
+
+        StyleGalleryPlanner.CustomEntries(document).Select(entry => entry.Id).Should().Equal(expected);
+    }
+
+    [Fact]
+    public void CustomEntries_WordAuthoredDocument_ShowsOnlyStylesFlaggedWithQFormat()
+    {
+        var reloaded = Reload(DocumentWithShownAndHiddenStyles(), stripQuickFormat: false);
+
+        var names = StyleGalleryPlanner.CustomEntries(reloaded).Select(entry => entry.Name).ToArray();
+
+        names.Should().Contain(["Shown", "Shown Code", "Shown Linked"]);
+        names.Should().NotContain(["Hidden", "Shown Linked Char"]);
+    }
+
+    [Fact]
+    public void CustomEntries_LegacyDocumentWithoutAnyQFormat_ShowsEveryCustomStyle()
+    {
+        var reloaded = Reload(DocumentWithShownAndHiddenStyles(), stripQuickFormat: true);
+
+        var names = StyleGalleryPlanner.CustomEntries(reloaded).Select(entry => entry.Name).ToArray();
+
+        names.Should().Contain(["Shown", "Shown Code", "Shown Linked", "Hidden"]);
+        names.Should().NotContain("Shown Linked Char", "a linked pair is still one gallery entry");
+    }
+
+    [Fact]
+    public void CustomEntries_LegacyDocumentResaved_KeepsVisibilityThroughQFormat()
+    {
+        var legacy = Reload(DocumentWithShownAndHiddenStyles(), stripQuickFormat: true);
+        var hiddenId = legacy.Styles.Values.Single(style => style.Name == "Shown").Id;
+        StyleManager.ModifyStyle(legacy, hiddenId, quickFormat: false);
+
+        var resaved = Reload(legacy, stripQuickFormat: false);
+
+        var names = StyleGalleryPlanner.CustomEntries(resaved).Select(entry => entry.Name).ToArray();
+        names.Should().Contain(["Shown Code", "Shown Linked", "Hidden"]);
+        names.Should().NotContain("Shown");
+    }
+
     [Fact]
     public void Signature_ChangesWithCatalogEdits_AndIsStableOtherwise()
     {

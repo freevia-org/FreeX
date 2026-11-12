@@ -104,6 +104,11 @@ public sealed class StyleCatalogAuthoringHostTests
         string.Concat(styled.Select(run => run.Text)).Should().Be("Styled");
         styled.Should().OnlyContain(run => run.Formatting.Italic && run.Formatting.HighlightColorHex == "#FFFF00");
         paragraph.Runs.Where(run => run.StyleId != created.Id).Should().OnlyContain(run => !run.Formatting.Italic);
+
+        view.Commands.Undo().Should().BeTrue();
+        view.Model.Styles.Should().NotContainKey(created.Id, "creating and applying are one undo step");
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run => run.StyleId == null && !run.Formatting.Italic);
+        view.Commands.CanUndo.Should().BeFalse();
     }
 
     [StaFact]
