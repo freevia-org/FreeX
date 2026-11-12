@@ -33,7 +33,7 @@ public sealed partial class DocumentView
     internal static FrameworkElement BuildEquationPreview(Equation equation)
     {
         ArgumentNullException.ThrowIfNull(equation);
-        return BuildEquationVisualContent(EquationVisualPlanner.Build(equation));
+        return BuildEquationMathVisual(equation);
     }
 
     /// <summary>

@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.DocumentView.MathLayout;
 using Xunit;
 
 namespace FreeW.App.Host.Tests;
@@ -470,9 +471,6 @@ public sealed class DocumentViewRoundTripTests
         }
         return result;
     }
-
-    private static string TextBlockText(TextBlock textBlock) =>
-        textBlock.Text + string.Concat(textBlock.Inlines.OfType<System.Windows.Documents.Run>().Select(run => run.Text));
 
     [StaFact]
     public void PlainText_RoundTrips()
@@ -1007,28 +1005,22 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
-    public void EquationVisualPlanner_SuperscriptRendersAsStyledInlineSegmentsAndRoundTrips()
+    public void EquationMathLayout_SuperscriptRaisesSmallerScriptAndRoundTrips()
     {
-        var doc = TextDocument.CreateEmpty();
-        doc.Blocks.Clear();
         var equation = new Equation([MathRun.PlainText("E = m"), MathRun.Superscript("c", "2")]);
-        var para = new Paragraph();
-        para.Runs.Add(Run.FromEquation(equation));
-        doc.Blocks.Add(para);
+        var (view, visual) = LoadSingleEquation(equation);
 
-        var view = new DocumentView();
-        view.LoadModel(doc);
-
-        var mathText = LogicalDescendants<TextBlock>(view.Document)
-            .FirstOrDefault(textBlock => textBlock.FontFamily.Source.Contains("Cambria Math", StringComparison.Ordinal));
-
-        mathText.Should().NotBeNull("the WPF equation visual should use the shared math display plan");
-        var visualRuns = mathText!.Inlines.OfType<System.Windows.Documents.Run>().ToList();
-        visualRuns.Select(run => run.Text).Should().Equal("E = m", "c", "2");
-        visualRuns.Should().NotContain(run => run.Text.Contains('^') || run.Text.Contains('_'),
-            "script markers should be represented by WPF baseline styling instead of literal characters");
-        visualRuns[2].BaselineAlignment.Should().Be(BaselineAlignment.Superscript);
-        visualRuns[2].FontSize.Should().BeLessThan(visualRuns[1].FontSize);
+        var texts = TextItems(visual);
+        texts.Select(item => item.Text).Should().Equal("\U0001D438", "=", "\U0001D45A", "\U0001D450", "2");
+        texts.Should().NotContain(item => item.Text.Contains('^') || item.Text.Contains('_'),
+            "script markers are laid out as raised boxes, not literal characters");
+        var baseC = texts.Single(item => item.Text == "\U0001D450");
+        var exponent = texts.Single(item => item.Text == "2");
+        exponent.FontSize.Should().BeLessThan(baseC.FontSize);
+        exponent.BaselineY.Should().BeLessThan(baseC.BaselineY, "the exponent is raised above the base");
+        exponent.X.Should().BeGreaterThan(baseC.X);
+        TextBlock.GetBaselineOffset(visual).Should().BeApproximately(visual.Layout.Ascent, 0.001,
+            "the equation reports its math baseline so it sits on the text baseline");
 
         view.CommitToModel();
         var recovered = FirstRun(view.Model);
@@ -1037,49 +1029,29 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
-    public void EquationVisualPlanner_FractionAndRadicalRenderStructuredElementsAndRoundTrip()
+    public void EquationMathLayout_FractionAndRadicalBuildUpAndRoundTrip()
     {
-        var doc = TextDocument.CreateEmpty();
-        doc.Blocks.Clear();
         var equation = new Equation([
             MathRun.Fraction("a + b", "c"),
             MathRun.Radical("x + 1", "3")
         ]);
-        var para = new Paragraph();
-        para.Runs.Add(Run.FromEquation(equation));
-        doc.Blocks.Add(para);
+        var (view, visual) = LoadSingleEquation(equation);
 
-        var view = new DocumentView();
-        view.LoadModel(doc);
+        var texts = TextItems(visual);
+        var rules = visual.Layout.Items.OfType<MathRuleDrawItem>().ToList();
+        rules.Should().HaveCount(2, "a fraction bar and a radical overbar");
+        var bar = rules.OrderBy(rule => rule.X).First();
+        texts.Single(item => item.Text == "\U0001D44E").BaselineY.Should().BeLessThan(bar.Y, "the numerator sits above the bar");
+        texts.Single(item => item.Text == "\U0001D450").BaselineY.Should().BeGreaterThan(bar.Y, "the denominator sits below the bar");
+        texts.Should().NotContain(item => item.Text.Contains('/'), "a bar fraction is stacked, not linear");
 
-        var structuredKinds = LogicalDescendants<StackPanel>(view.Document)
-            .Where(panel => panel.Tag is EquationVisualElementKind)
-            .Select(panel => (EquationVisualElementKind)panel.Tag)
-            .ToList();
-        structuredKinds.Should().Contain(EquationVisualElementKind.Fraction);
-        structuredKinds.Should().Contain(EquationVisualElementKind.Radical);
-
-        var visualText = LogicalDescendants<TextBlock>(view.Document)
-            .Select(TextBlockText)
-            .Where(text => text.Length > 0)
-            .ToList();
-        visualText.Should().Contain("a + b");
-        visualText.Should().Contain("c");
-        visualText.Should().Contain(EquationVisualPlanner.RadicalSignText);
-        visualText.Should().Contain("3");
-        visualText.Should().Contain("x + 1");
-        visualText.Should().NotContain("a + b/c",
-            "the WPF equation visual should not render fractions as the raw linear fallback");
-        visualText.Should().NotContain($"3{EquationVisualPlanner.RadicalSignText}(x + 1)",
-            "the WPF equation visual should not render radicals as the raw linear fallback");
-
-        var fractionPanel = LogicalDescendants<StackPanel>(view.Document)
-            .Single(panel => Equals(panel.Tag, EquationVisualElementKind.Fraction));
-        LogicalDescendants<Border>(fractionPanel).Should().Contain(border => Math.Abs(border.Height - 1) < 0.01);
-        var radicalPanel = LogicalDescendants<StackPanel>(view.Document)
-            .Single(panel => Equals(panel.Tag, EquationVisualElementKind.Radical));
-        LogicalDescendants<Border>(radicalPanel).Should()
-            .Contain(border => border.BorderThickness.Top > 0 && border.BorderThickness.Bottom == 0);
+        var degree = texts.Single(item => item.Text == "3");
+        var radicand = texts.Single(item => item.Text == "\U0001D465");
+        degree.FontSize.Should().BeLessThan(radicand.FontSize);
+        degree.BaselineY.Should().BeLessThan(radicand.BaselineY);
+        var overbar = rules.OrderBy(rule => rule.X).Last();
+        overbar.Y.Should().BeLessThan(-visual.Layout.Ascent / 2, "the radical overbar runs over the radicand");
+        overbar.X.Should().BeLessThanOrEqualTo(radicand.X);
 
         view.CommitToModel();
         var recovered = FirstRun(view.Model);
@@ -1093,83 +1065,50 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
-    public void EquationVisualPlanner_NAryRendersLargeOperatorWithLimitsAndRoundTrips()
+    public void EquationMathLayout_NAryLimitsAreScriptsInlineAndCentredInDisplay()
     {
-        var doc = TextDocument.CreateEmpty();
-        doc.Blocks.Clear();
-        var equation = new Equation([MathRun.NAry("\u2211", "i=1", "n", "i")]);
-        var para = new Paragraph();
-        para.Runs.Add(Run.FromEquation(equation));
-        doc.Blocks.Add(para);
+        var inline = new Equation([MathRun.NAry("∑", "i=1", "n", "i")]);
+        var (view, inlineVisual) = LoadSingleEquation(inline);
 
-        var view = new DocumentView();
-        view.LoadModel(doc);
-
-        var naryPanel = LogicalDescendants<StackPanel>(view.Document)
-            .Single(panel => Equals(panel.Tag, EquationVisualElementKind.NAry));
-        var visualText = LogicalDescendants<TextBlock>(naryPanel)
-            .Select(TextBlockText)
-            .Where(text => text.Length > 0)
-            .ToList();
-        visualText.Should().Contain("\u2211");
-        visualText.Should().Contain("i=1");
-        visualText.Should().Contain("n");
-        visualText.Should().Contain("i");
-        visualText.Should().NotContain("\u2211(i=1..n) i",
-            "the WPF equation visual should not render n-ary operators as raw linear fallback");
-
-        var operatorText = LogicalDescendants<TextBlock>(naryPanel)
-            .Single(text => TextBlockText(text) == "\u2211");
-        var operandText = LogicalDescendants<TextBlock>(naryPanel)
-            .Single(text => TextBlockText(text) == "i");
-        var operatorRun = operatorText.Inlines.OfType<System.Windows.Documents.Run>().Single();
-        var operandRun = operandText.Inlines.OfType<System.Windows.Documents.Run>().Single();
-        operatorRun.FontSize.Should().BeGreaterThan(operandRun.FontSize);
+        var inlineTexts = TextItems(inlineVisual);
+        var lower = inlineTexts.Single(item => item.Text == "\U0001D456" && item.BaselineY > 0);
+        var upper = inlineTexts.Single(item => item.Text == "\U0001D45B");
+        lower.FontSize.Should().BeLessThan(14, "inline limits are script size");
+        upper.BaselineY.Should().BeLessThan(0);
+        upper.X.Should().BeGreaterThan(0, "inline limits sit to the side of the operator, as in Word");
 
         view.CommitToModel();
         var recovered = FirstRun(view.Model);
         recovered.Equation.Should().NotBeNull();
         var run = recovered.Equation!.Runs.Should().ContainSingle().Subject;
         run.Kind.Should().Be(MathRunKind.NAry);
-        run.Operator.Should().Be("\u2211");
+        run.Operator.Should().Be("∑");
         run.Sub.Should().Be("i=1");
         run.Sup.Should().Be("n");
         run.Base.Should().Be("i");
+
+        var display = new Equation([MathRun.NAry("∑", "i=1", "n", "i")]) { IsDisplayMath = true };
+        var (_, displayVisual) = LoadSingleEquation(display);
+        var displayTexts = TextItems(displayVisual);
+        var displayUpper = displayTexts.Single(item => item.Text == "\U0001D45B");
+        var displayLower = displayTexts.First(item => item.Text == "\U0001D456" && item.BaselineY > 0);
+        displayUpper.BaselineY.Should().BeLessThan(-displayVisual.Layout.Ascent / 2, "display limits are above the operator");
+        displayLower.BaselineY.Should().BeGreaterThan(displayVisual.Layout.Descent / 2, "display limits are below the operator");
+        displayUpper.X.Should().BeLessThan(displayLower.X + 10, "both limits are centred on the operator");
     }
 
     [StaFact]
-    public void EquationVisualPlanner_MatrixRendersBracketedGridAndRoundTrips()
+    public void EquationMathLayout_MatrixLaysCellsOutInRowsAndColumnsWithoutImplicitBracketsAndRoundTrips()
     {
-        var doc = TextDocument.CreateEmpty();
-        doc.Blocks.Clear();
         var equation = new Equation([MathRun.MatrixOf(MathMatrix.Identity2x2())]);
-        var para = new Paragraph();
-        para.Runs.Add(Run.FromEquation(equation));
-        doc.Blocks.Add(para);
+        var (view, visual) = LoadSingleEquation(equation);
 
-        var view = new DocumentView();
-        view.LoadModel(doc);
-
-        var matrixPanel = LogicalDescendants<StackPanel>(view.Document)
-            .Single(panel => Equals(panel.Tag, EquationVisualElementKind.Matrix));
-        var grid = LogicalDescendants<Grid>(matrixPanel).Single();
-        grid.RowDefinitions.Should().HaveCount(2);
-        grid.ColumnDefinitions.Should().HaveCount(2);
-        grid.Children.OfType<TextBlock>()
-            .Select(TextBlockText)
-            .Should().Equal("1", "0", "0", "1");
-        grid.Children.OfType<TextBlock>()
-            .Select(text => text.Margin)
-            .Should().OnlyContain(margin => margin.Left == 2 && margin.Right == 2);
-
-        var visualText = LogicalDescendants<TextBlock>(matrixPanel)
-            .Select(TextBlockText)
-            .Where(text => text.Length > 0)
-            .ToList();
-        visualText.Should().Contain(EquationVisualPlanner.MatrixOpenDelimiterText);
-        visualText.Should().Contain(EquationVisualPlanner.MatrixCloseDelimiterText);
-        visualText.Should().NotContain("[1, 0; 0, 1]",
-            "the WPF equation visual should build a matrix grid instead of the raw linear fallback");
+        var texts = TextItems(visual);
+        texts.Select(item => item.Text).Should().BeEquivalentTo(["1", "0", "0", "1"],
+            "an m:m matrix has no delimiters of its own; Word draws only its cells");
+        texts.Select(item => Math.Round(item.BaselineY, 2)).Distinct().Should().HaveCount(2);
+        texts.Select(item => Math.Round(item.X, 2)).Distinct().Should().HaveCount(2);
+        visual.Layout.Items.OfType<MathGlyphDrawItem>().Should().BeEmpty();
 
         view.CommitToModel();
         var recovered = FirstRun(view.Model);
@@ -1184,78 +1123,28 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
-    public void EquationVisualPlanner_DecoratorsRenderStructuredElementsAndRoundTrip()
+    public void EquationMathLayout_DecoratorsDrawMarksAroundTheirBaseAndRoundTrip()
     {
-        var doc = TextDocument.CreateEmpty();
-        doc.Blocks.Clear();
         var equation = new Equation([
             MathRun.AccentOf("x", "hat"),
             MathRun.BarOf("y"),
             MathRun.BarOf("z", top: false),
             MathRun.Delimiter("a + b", "[", "]"),
-            MathRun.GroupCharOf("n", "\u23DE", "top"),
-            MathRun.GroupCharOf("m", "\u23DF", "bot")
+            MathRun.GroupCharOf("n", "⏞", "top"),
+            MathRun.GroupCharOf("m", "⏟", "bot")
         ]);
-        var para = new Paragraph();
-        para.Runs.Add(Run.FromEquation(equation));
-        doc.Blocks.Add(para);
+        var (view, visual) = LoadSingleEquation(equation);
 
-        var view = new DocumentView();
-        view.LoadModel(doc);
-
-        var structuredKinds = LogicalDescendants<StackPanel>(view.Document)
-            .Where(panel => panel.Tag is EquationVisualElementKind)
-            .Select(panel => (EquationVisualElementKind)panel.Tag)
-            .ToList();
-        structuredKinds.Should().Contain(EquationVisualElementKind.Accent);
-        structuredKinds.Should().Contain(EquationVisualElementKind.Bar);
-        structuredKinds.Should().Contain(EquationVisualElementKind.Delimiter);
-        structuredKinds.Should().Contain(EquationVisualElementKind.GroupChar);
-
-        var accentPanel = LogicalDescendants<StackPanel>(view.Document)
-            .Single(panel => Equals(panel.Tag, EquationVisualElementKind.Accent));
-        LogicalDescendants<TextBlock>(accentPanel)
-            .Select(TextBlockText)
-            .Where(text => text.Length > 0)
-            .Should().Equal("hat", "x");
-
-        var barPanels = LogicalDescendants<StackPanel>(view.Document)
-            .Where(panel => Equals(panel.Tag, EquationVisualElementKind.Bar))
-            .ToList();
-        barPanels.Should().HaveCount(2);
-        barPanels.Should().OnlyContain(panel => LogicalDescendants<Border>(panel)
-            .Count(border => Math.Abs(border.Height - 1) < 0.01) == 1);
-        LogicalDescendants<TextBlock>(barPanels[0]).Select(TextBlockText).Should().Contain("y");
-        LogicalDescendants<TextBlock>(barPanels[1]).Select(TextBlockText).Should().Contain("z");
-
-        var delimiterPanel = LogicalDescendants<StackPanel>(view.Document)
-            .Single(panel => Equals(panel.Tag, EquationVisualElementKind.Delimiter));
-        LogicalDescendants<TextBlock>(delimiterPanel)
-            .Select(TextBlockText)
-            .Where(text => text.Length > 0)
-            .Should().Equal("[", "a + b", "]");
-
-        var groupPanels = LogicalDescendants<StackPanel>(view.Document)
-            .Where(panel => Equals(panel.Tag, EquationVisualElementKind.GroupChar))
-            .ToList();
-        groupPanels.Should().HaveCount(2);
-        LogicalDescendants<TextBlock>(groupPanels[0])
-            .Select(TextBlockText)
-            .Where(text => text.Length > 0)
-            .Should().Equal("\u23DE", "n");
-        LogicalDescendants<TextBlock>(groupPanels[1])
-            .Select(TextBlockText)
-            .Where(text => text.Length > 0)
-            .Should().Equal("m", "\u23DF");
-
-        var allVisualText = LogicalDescendants<TextBlock>(view.Document)
-            .Select(TextBlockText)
-            .Where(text => text.Length > 0)
-            .ToList();
-        allVisualText.Should().NotContain(equation.Runs[0].LinearText,
-            "accent should render as a stacked mark/base pair instead of raw linear fallback");
-        allVisualText.Should().NotContain(equation.Runs[3].LinearText,
-            "delimiters should render as wrapped segments instead of one raw fallback string");
+        var texts = TextItems(visual);
+        var y = texts.Single(item => item.Text == "\U0001D466");
+        var z = texts.Single(item => item.Text == "\U0001D467");
+        var rules = visual.Layout.Items.OfType<MathRuleDrawItem>().ToList();
+        rules.Should().Contain(rule => rule.Y < 0 && rule.X <= y.X + 1, "the overbar sits above y");
+        rules.Should().Contain(rule => rule.Y > 0 && rule.X <= z.X + 1, "the underbar sits below z");
+        visual.Layout.Items.Should().HaveCountGreaterThan(texts.Count + rules.Count - 1,
+            "the accent, brackets and group characters are drawn as marks of their own");
+        texts.Should().NotContain(item => item.Text == "hat" || item.Text.Contains('‾'),
+            "decorators are drawn as marks, not as linear fallback text");
 
         view.CommitToModel();
         var recovered = FirstRun(view.Model);
@@ -1277,42 +1166,25 @@ public sealed class DocumentViewRoundTripTests
         runs[3].Base.Should().Be("a + b");
         runs[3].OpenChar.Should().Be("[");
         runs[3].CloseChar.Should().Be("]");
-        runs[4].GroupChr.Should().Be("\u23DE");
+        runs[4].GroupChr.Should().Be("⏞");
         runs[4].GroupChrPos.Should().Be("top");
-        runs[5].GroupChr.Should().Be("\u23DF");
+        runs[5].GroupChr.Should().Be("⏟");
         runs[5].GroupChrPos.Should().Be("bot");
     }
 
     [StaFact]
-    public void EquationVisualPlanner_FunctionApplyRendersStructuredNameArgumentAndRoundTrips()
+    public void EquationMathLayout_FunctionNameIsUprightWithThinSpaceAndRoundTrips()
     {
-        var doc = TextDocument.CreateEmpty();
-        doc.Blocks.Clear();
         var equation = new Equation([MathRun.FunctionApply("sin", "x + y")]);
-        var para = new Paragraph();
-        para.Runs.Add(Run.FromEquation(equation));
-        doc.Blocks.Add(para);
+        var (view, visual) = LoadSingleEquation(equation);
 
-        var view = new DocumentView();
-        view.LoadModel(doc);
-
-        var functionPanel = LogicalDescendants<StackPanel>(view.Document)
-            .Single(panel => Equals(panel.Tag, EquationVisualElementKind.FunctionApply));
-        var visualText = LogicalDescendants<TextBlock>(functionPanel)
-            .Select(TextBlockText)
-            .Where(text => text.Length > 0)
-            .ToList();
-        visualText.Should().Equal(
-            "sin",
-            "x + y");
-        visualText.Should().NotContain("(",
+        var texts = TextItems(visual);
+        texts.Select(item => item.Text).Should().Equal("sin", "\U0001D465", "+", "\U0001D466");
+        var name = texts[0];
+        var argument = texts[1];
+        argument.X.Should().BeGreaterThan(name.X + 1, "Word separates the function name from its argument");
+        texts.Should().NotContain(item => item.Text.Contains('('),
             "Word OfficeMath functions contain a function name and argument, not display parentheses");
-
-        var visualRuns = LogicalDescendants<TextBlock>(functionPanel)
-            .SelectMany(textBlock => textBlock.Inlines.OfType<System.Windows.Documents.Run>())
-            .ToList();
-        visualRuns.Single(run => run.Text == "sin").FontStyle.Should().Be(FontStyles.Normal);
-        visualRuns.Single(run => run.Text == "x + y").FontStyle.Should().Be(FontStyles.Italic);
 
         view.CommitToModel();
         var recovered = FirstRun(view.Model);
@@ -1322,6 +1194,25 @@ public sealed class DocumentViewRoundTripTests
         run.FuncName.Should().Be("sin");
         run.Base.Should().Be("x + y");
     }
+
+    private static (DocumentView View, EquationMathVisual Visual) LoadSingleEquation(Equation equation)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        var visual = LogicalDescendants<EquationMathVisual>(view.Document).Should().ContainSingle().Subject;
+        visual.Tag.Should().BeSameAs(equation);
+        visual.Layout.Width.Should().BeGreaterThan(0);
+        return (view, visual);
+    }
+
+    private static List<MathTextDrawItem> TextItems(EquationMathVisual visual) =>
+        visual.Layout.Items.OfType<MathTextDrawItem>().ToList();
 
     [StaFact]
     public void InsertEquation_PlacesStructuredEquationAtCaret()
