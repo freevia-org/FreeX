@@ -10474,11 +10474,17 @@ public sealed partial class DocumentView : RichTextBox
                     : null;
                 if (hasPlannedCellBorders)
                 {
+                    // Word lays an "at least" row's own border lines outside the authored height
+                    // (the plain-cell path gets the same from the WPF cell border thickness).
+                    var borderedMinHeightPx = rowHeightPx is { } atLeastHeight
+                        && modelRow.HeightRule != TableRowHeightRule.Exact
+                            ? atLeastHeight + cellBorderPlan.VerticalBorderExtentDip
+                            : rowHeightPx;
                     var cellContentHost = BuildCellContentHost(
                         modelCell,
                         document,
                         vAlign,
-                        rowHeightPx,
+                        borderedMinHeightPx,
                         cellBorderPlan,
                         paginatedContentMargins,
                         preservedNumberingMarkers);
