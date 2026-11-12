@@ -4341,7 +4341,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var result = _session.DecreaseSelectedRangeFontSize();");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? UiText.Get(\"MainLoc_DecreaseFontSizeFailed\"));");
         source.Should().Contain("RefreshShell(UiText.Format(\"MainLoc_DecreasedFontSizeStatusFormat\", rangeReference));");
-        source.Should().Contain("var fontSize = (style?.FontSize ?? CellStyle.Default.FontSize) + WorksheetFontSizeDisplayOffset;");
+        source.Should().Contain("var fontSize = ToWorksheetDisplayFontSize(style?.FontSize);");
+        source.Should().Contain("(pointSize is > 0 ? pointSize.Value : DefaultWorksheetFontSizePoints) * (96.0 / 72.0)");
         source.Should().Contain("var scaledFontSize = Math.Max(1, fontSize * zoomFactor);");
         source.Should().Contain("FontSize = adjustedFontSize,");
     }
@@ -4721,7 +4722,7 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
-        source.Should().Contain("private const double CellIndentLevelWidth = 12;");
+        source.Should().Contain("private const double CellIndentLevelWidth = 8;");
         source.Should().Contain("private readonly Button _decreaseIndentButton = new();");
         source.Should().Contain("private readonly Button _increaseIndentButton = new();");
         source.Should().Contain("_decreaseIndentButton.Content = UiText.Get(\"Toolbar_DecreaseIndentShort\");");
@@ -5214,7 +5215,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private void MoveActiveSheetRight()");
         source.Should().Contain("var result = _session.MoveActiveSheetRight();");
         source.Should().Contain("RefreshShell(UiText.Format(\"SheetTabs_MovedRightStatusFormat\", sheetName));");
-        source.Should().Contain("tab.TabColor is { } tabColor ? Brush(tabColor) : Brushes.Transparent");
+        source.Should().Contain("var tabFill = tab.TabColor is { } tabColor ? CreatePastelSheetTabBrush(tabColor)");
         source.Should().Contain("private NativeMenu CreateNativeSheetTabColorMenu()");
         source.Should().Contain("var clearColorItem = new NativeMenuItem { Header = UiText.Get(\"RibbonWire_TabColorNone\") };");
         source.Should().Contain("clearColorItem.Click += (_, _) => ApplyActiveSheetTabColor(null);");

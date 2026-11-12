@@ -301,8 +301,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
 
         source.Should().Contain("private const double HeaderColumnWidth = 30;");
         source.Should().Contain("private const double HeaderRowHeight = 18;");
-        source.Should().Contain("private const double MinimumDisplayedColumnWidth = 48;");
-        source.Should().Contain("private const double MinimumDisplayedRowHeight = 20;");
+        source.Should().Contain("private const double MinimumDisplayedColumnWidth = 2;");
+        source.Should().Contain("private const double MinimumDisplayedRowHeight = 2;");
 
         source.Should().Contain("Child = _sheetTabLeftNavButton,");
         source.Should().Contain("tabCluster.Children.Add(_sheetTabsScroller);");

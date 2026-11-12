@@ -73,8 +73,7 @@ public sealed partial class MainWindow
         var targetKind = WorksheetContextMenuPlanner.TargetKindForObject(kind);
         var commands = WorksheetContextMenuPlanner.BuildCommands(targetKind);
         var ribbonMenu = WorksheetContextMenuRibbonAdapter.ToRibbonMenu(commands);
-        AvaloniaContextMenuRenderer
-            .BuildContextMenu(ribbonMenu, DispatchDrawingObjectContextMenuCommand)
+        BuildWorksheetContextMenu(ribbonMenu, DispatchDrawingObjectContextMenuCommand)
             .Open(anchor);
     }
 

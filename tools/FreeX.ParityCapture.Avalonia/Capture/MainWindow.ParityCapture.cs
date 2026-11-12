@@ -3371,34 +3371,36 @@ public sealed partial class MainWindow
         {
             Width = 104,
             Height = 4,
-            Background = Brush(218, 222, 228),
-            BorderBrush = Brush(175, 184, 193),
+            Background = Brush(231, 234, 234),
+            BorderBrush = Brush(214, 214, 214),
             BorderThickness = new Thickness(1),
         });
         Canvas.SetLeft(canvas.Children[^1], 8);
-        Canvas.SetTop(canvas.Children[^1], 9);
+        Canvas.SetTop(canvas.Children[^1], 6);
         foreach (var left in new[] { 8d, 60d, 111d })
         {
             canvas.Children.Add(new Border
             {
                 Width = 1,
                 Height = 4,
-                Background = Brush(232, 236, 240),
+                Background = Brush(229, 229, 229),
             });
             Canvas.SetLeft(canvas.Children[^1], left);
-            Canvas.SetTop(canvas.Children[^1], 16);
+            Canvas.SetTop(canvas.Children[^1], 18);
         }
-        canvas.Children.Add(new Border
+        // Same pointer-shaped thumb as MainWindow.BuildStatusZoomSliderHost (the WPF system slider
+        // thumb for TickPlacement=BottomRight).
+        canvas.Children.Add(new global::Avalonia.Controls.Shapes.Path
         {
             Width = 9,
             Height = 16,
-            Background = Brush(248, 249, 250),
-            BorderBrush = Brush(124, 133, 143),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(1),
+            Data = Geometry.Parse("M 0.5,0.5 L 8.5,0.5 L 8.5,11.5 L 4.5,15.5 L 0.5,11.5 Z"),
+            Fill = Brush(240, 240, 240),
+            Stroke = Brush(172, 172, 172),
+            StrokeThickness = 1,
         });
         Canvas.SetLeft(canvas.Children[^1], 55.5);
-        Canvas.SetTop(canvas.Children[^1], 3);
+        Canvas.SetTop(canvas.Children[^1], 0);
         return canvas;
     }
 

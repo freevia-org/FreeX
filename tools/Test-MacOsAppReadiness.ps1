@@ -2016,7 +2016,7 @@ function Test-SourceWiring {
                 "applicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication",
                 "Title = FormatWindowWorkbookTitle();",
                 "var isGroupedTab = tab.IsGrouped && _session.IsWorkbookGrouped;",
-                "tab.TabColor is { } tabColor ? Brush(tabColor) : Brushes.Transparent",
+                "tab.TabColor is { } tabColor ? CreatePastelSheetTabBrush(tabColor)",
                 "Focusable = true,",
                 "Tag = tab.Id,",
                 "button.ContextMenu = CreateSheetTabContextMenu(tab);",

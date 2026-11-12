@@ -140,7 +140,7 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("TryBeginAutofillDrag(args, border, address)");
         source.Should().Contain("GridAutofillPlanner.IsOnHandle(");
         source.Should().NotContain("!_session.SelectedRange.Contains(address)");
-        source.Should().Contain("private const double AutofillHandleSize = 10;");
+        source.Should().Contain("private const double AutofillHandleSize = 8;");
         source.Should().Contain("private const double AutofillHandleHitPadding = 6;");
         source.Should().Contain("if (IsPointerOnAutofillHandle(args))");
         source.Should().Contain("? new Cursor(StandardCursorType.Hand)");

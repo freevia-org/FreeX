@@ -162,11 +162,11 @@ public sealed class AvaloniaMainWindowGridRenderStage1Tests
             pinnedRows.Should().HaveCount(2, "row 2 is hidden and must be dropped from the pinned block");
 
             // Matches GetDisplayedRowHeight (Math.Max(MinimumDisplayedRowHeight, metric.Height) *
-            // zoomFactor): default row height (20) already equals MinimumDisplayedRowHeight (20) and
+            // zoomFactor): the default row height (20) is far above the 2 DIP display floor and
             // zoom is 100% here, so the raw metric heights sum identically — no private-method
             // reflection needed for this scenario.
             var headerHeight = window.Session.ActiveSheet.ShowHeadings ? GetHeaderRowHeight() : 0;
-            var expectedDividerY = headerHeight + pinnedRows.Sum(m => Math.Max(20, m.Height));
+            var expectedDividerY = headerHeight + pinnedRows.Sum(m => m.Height);
             var dividerThickness = GetFreezeDividerThickness();
             var actualTop = Canvas.GetTop(divider);
 
@@ -279,8 +279,9 @@ public sealed class AvaloniaMainWindowGridRenderStage1Tests
 
             Grid.GetRow(handle).Should().Be(3 + headerOffset);
             Grid.GetColumn(handle).Should().Be(3 + headerOffset);
-            handle.Width.Should().Be(10);
-            handle.Height.Should().Be(10);
+            // 8 DIPs: the WPF grid's 6 DIP handle rect plus its 2 DIP selection pen.
+            handle.Width.Should().Be(8);
+            handle.Height.Should().Be(8);
             activeCell.Cursor.Should().BeNull("normal worksheet cells must not force the hand cursor");
 
             window.AllowCloseWithoutDirtyPromptForParityCapture();

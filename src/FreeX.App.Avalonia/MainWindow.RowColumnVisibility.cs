@@ -259,7 +259,7 @@ public sealed partial class MainWindow
     {
         var commands = WorksheetContextMenuPlanner.BuildCommands(WorksheetContextMenuTargetKind.RowSelection);
         var ribbonMenu = WorksheetContextMenuRibbonAdapter.ToRibbonMenu(commands);
-        AvaloniaContextMenuRenderer.BuildContextMenu(ribbonMenu, DispatchWorksheetContextMenuCommand).Open(anchor);
+        BuildWorksheetContextMenu(ribbonMenu, DispatchWorksheetContextMenuCommand).Open(anchor);
     }
 
     /// <summary>
@@ -270,7 +270,7 @@ public sealed partial class MainWindow
     {
         var commands = WorksheetContextMenuPlanner.BuildCommands(WorksheetContextMenuTargetKind.ColumnSelection);
         var ribbonMenu = WorksheetContextMenuRibbonAdapter.ToRibbonMenu(commands);
-        AvaloniaContextMenuRenderer.BuildContextMenu(ribbonMenu, DispatchWorksheetContextMenuCommand).Open(anchor);
+        BuildWorksheetContextMenu(ribbonMenu, DispatchWorksheetContextMenuCommand).Open(anchor);
     }
 
     // Row Height / Column Width / AutoFit (Excel parity: Home ▸ Cells ▸ Format and the row/column

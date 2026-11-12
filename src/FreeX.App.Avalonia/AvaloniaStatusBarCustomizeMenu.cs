@@ -39,6 +39,8 @@ internal static class AvaloniaStatusBarCustomizeMenu
             items.Add(BuildItem(command, getOption, onToggle, registeredItems));
 
         menu.ItemsSource = items;
+        // WPF menu chrome (12px rows). The rows are check-mark toggles, so no icons are seeded.
+        AvaloniaContextMenuChrome.Apply(menu, seedIcons: false);
         return menu;
     }
 
