@@ -657,6 +657,61 @@ public sealed class FloatingImageRenderTests
     }
 
     [StaFact]
+    public void ParagraphAnchoredWrapObjects_ThatShareAVerticalBandAreRecutIntoDisjointFigures()
+    {
+        // drawing-objects-complex: WPF pushes a figure below every earlier figure whose vertical band it
+        // overlaps, even side by side, so a square object beside another one wrapped text ~100 DIPs low.
+        var doc = new TextDocument();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("anchor paragraph text "));
+        var left = new Shape(ShapeKind.Rectangle, 150, 90)
+        {
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalAnchor = HorizontalAnchor.Margin,
+                HorizontalOffsetPt = 0,
+                VerticalAnchor = VerticalAnchor.Paragraph,
+                VerticalOffsetPt = 30,
+            },
+        };
+        var right = new Shape(ShapeKind.Rectangle, 120, 90)
+        {
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalAnchor = HorizontalAnchor.Margin,
+                HorizontalOffsetPt = 300,
+                VerticalAnchor = VerticalAnchor.Paragraph,
+                VerticalOffsetPt = 60,
+            },
+        };
+        paragraph.Runs.Add(Run.FromShape(left));
+        paragraph.Runs.Add(Run.FromShape(right));
+        doc.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var figures = RenderedParagraph(view).Inlines.OfType<Figure>().ToList();
+        figures.Select(figure => (figure.VerticalOffset, figure.Height.Value)).Should().Equal(
+            (40.0, 40.0),
+            (80.0, 80.0),
+            (160.0, 40.0));
+        figures[1].HorizontalOffset.Should().BeApproximately(0, 0.01);
+        figures[1].Width.Value.Should().BeApproximately(560, 0.01, "the shared band spans both objects");
+        figures[2].HorizontalOffset.Should().BeApproximately(400, 0.01);
+        figures.Count(figure => figure.Tag is not null).Should().Be(2, "one tagged figure per object");
+
+        view.CommitToModel();
+        var committed = (Paragraph)view.Model.Blocks[0];
+        committed.Runs.Should().HaveCount(3);
+        committed.Runs[1].Shape.Should().BeSameAs(left);
+        committed.Runs[2].Shape.Should().BeSameAs(right);
+    }
+
+    [StaFact]
     public void FloatingImage_WrapReservationAlignsWithRightHandObject()
     {
         var doc = DocWithFloatingText(

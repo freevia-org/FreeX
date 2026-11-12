@@ -11562,6 +11562,8 @@ public sealed partial class DocumentView : RichTextBox
                 suppressedFloatingWrapRuns);
         }
 
+        SeparateOverlappingParagraphAnchoredWrapFigures(wpf);
+
         if (!string.IsNullOrWhiteSpace(preservedNumberingMarker))
             PrependMultiLevelMarker(wpf, preservedNumberingMarker, document, preservedNumberingMarkerFont);
 
@@ -12355,6 +12357,116 @@ public sealed partial class DocumentView : RichTextBox
             Margin = new Thickness(0),
             Tag = reservationMarker,
         };
+    }
+
+    /// <summary>
+    /// WPF's page layout never lets two figures share a vertical band: a figure whose band overlaps one
+    /// placed before it is pushed below it even when the two sit side by side, so the wrap exclusion of
+    /// an object anchored next to (or inside the band of) another object in the same paragraph lands far
+    /// below where Word draws it. Re-cut those exclusions into vertically disjoint bands (see
+    /// <see cref="DocumentViewLayoutPlanner.BuildVerticallyDisjointParagraphWrapBands"/>): each object's
+    /// figure takes its first band, extra bands become untagged visual-only figures, and an object left
+    /// without a band keeps its round-trip identity as an empty anchor run.
+    /// </summary>
+    private static void SeparateOverlappingParagraphAnchoredWrapFigures(WpfParagraph wpf)
+    {
+        var figures = wpf.Inlines
+            .OfType<Figure>()
+            .Where(figure => figure is
+            {
+                Tag: FloatingWrapReservationMarker,
+                VerticalAnchor: FigureVerticalAnchor.ParagraphTop,
+                HorizontalAnchor: FigureHorizontalAnchor.ContentLeft,
+            }
+                && figure.Width.IsAbsolute
+                && figure.Height.IsAbsolute)
+            .ToList();
+        if (figures.Count < 2)
+            return;
+
+        var rects = figures
+            .Select(figure => new DocumentParagraphWrapRect(
+                figure.HorizontalOffset,
+                figure.Width.Value,
+                figure.VerticalOffset,
+                figure.Height.Value,
+                figure.WrapDirection == WrapDirection.None,
+                figure.WrapDirection switch
+                {
+                    WrapDirection.Left => FloatingWrapTextSide.Left,
+                    WrapDirection.Right => FloatingWrapTextSide.Right,
+                    _ => FloatingWrapTextSide.BothSides,
+                }))
+            .ToList();
+        var bands = DocumentViewLayoutPlanner.BuildVerticallyDisjointParagraphWrapBands(rects);
+        if (bands is null)
+            return;
+
+        for (var index = 0; index < figures.Count; index++)
+        {
+            var figure = figures[index];
+            var owned = bands.Where(band => band.OwnerIndex == index).Select(band => band.Rect).ToList();
+            if (owned.Count == 0)
+            {
+                var reservation = (FloatingWrapReservationMarker)figure.Tag;
+                Inline anchorRun = new WpfRun(string.Empty) { Tag = reservation.Anchor };
+                if (reservation.HyperlinkUrl is { Length: > 0 } url)
+                    anchorRun = BuildHyperlink(anchorRun, url, reservation.HyperlinkTooltip);
+                else if (reservation.HyperlinkAnchor is { Length: > 0 } anchor)
+                    anchorRun = BuildInternalHyperlink(anchorRun, anchor, reservation.HyperlinkTooltip);
+                wpf.Inlines.InsertAfter(figure, anchorRun);
+                wpf.Inlines.Remove(figure);
+                continue;
+            }
+
+            ApplyWrapBand(figure, owned[0]);
+            Inline previous = figure;
+            foreach (var extra in owned.Skip(1))
+            {
+                var placeholder = new Border
+                {
+                    Background = Brushes.Transparent,
+                    Opacity = 0,
+                    IsHitTestVisible = false,
+                    Focusable = false,
+                };
+                var bandFigure = new Figure(new BlockUIContainer(placeholder) { Margin = new Thickness(0) })
+                {
+                    HorizontalAnchor = FigureHorizontalAnchor.ContentLeft,
+                    VerticalAnchor = FigureVerticalAnchor.ParagraphTop,
+                    Margin = new Thickness(0),
+                };
+                ApplyWrapBand(bandFigure, extra);
+                wpf.Inlines.InsertAfter(previous, bandFigure);
+                previous = bandFigure;
+            }
+        }
+
+        static void ApplyWrapBand(Figure figure, DocumentParagraphWrapRect rect)
+        {
+            var width = Math.Max(1, rect.WidthDip);
+            var height = Math.Max(1, rect.HeightDip);
+            figure.Width = new FigureLength(width, FigureUnitType.Pixel);
+            figure.Height = new FigureLength(height, FigureUnitType.Pixel);
+            figure.HorizontalOffset = rect.LeftDip;
+            figure.VerticalOffset = rect.TopDip;
+            figure.WrapDirection = rect.BlocksWholeLine
+                ? WrapDirection.None
+                : rect.WrapTextSide switch
+                {
+                    FloatingWrapTextSide.Left => WrapDirection.Left,
+                    FloatingWrapTextSide.Right => WrapDirection.Right,
+                    _ => WrapDirection.Both,
+                };
+            foreach (var block in figure.Blocks.OfType<BlockUIContainer>())
+            {
+                if (block.Child is FrameworkElement placeholder)
+                {
+                    placeholder.Width = width;
+                    placeholder.Height = height;
+                }
+            }
+        }
     }
 
     private static double FloatingWrapReservationTextWidthDip(TextDocument document)
