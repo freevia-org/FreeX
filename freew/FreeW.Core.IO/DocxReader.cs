@@ -1935,6 +1935,67 @@ public static partial class DocxReader
                     }
                 }
             }
+            else if ((child.Name == W + "ins" || child.Name == W + "moveTo")
+                     && (fieldAccumulator.IsActive
+                         || child.Elements(W + "r").Any(run => run.Element(W + "fldChar") is not null)))
+            {
+                // A complex field whose fldChar runs sit inside tracked insertions (Word writes
+                // <w:ins><w:r><w:fldChar begin/>...</w:ins> result <w:ins>...<w:fldChar end/></w:ins> when a
+                // PAGE field is inserted under Track Changes) is still one field. Routing those runs past the
+                // accumulator dropped the begin/instruction/end and left only the cached result as plain
+                // text, so a footer PAGE field printed its stale "1" on every page.
+                var wrapperRevision = new RevisionInfo(
+                    RevisionKind.Inserted,
+                    child.Attribute(W + "author")?.Value,
+                    child.Attribute(W + "date")?.Value,
+                    child.Name == W + "moveTo"
+                        && int.TryParse(child.Attribute(W + "id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var wrapperMoveId)
+                        ? wrapperMoveId
+                        : null);
+                foreach (var wrapped in child.Elements())
+                {
+                    if (wrapped.Name == W + "r"
+                        && fieldAccumulator.TryConsumeRun(wrapped, out var completedWrappedField))
+                    {
+                        if (completedWrappedField is not null)
+                        {
+                            AddComplexFieldRun(
+                                paragraph,
+                                completedWrappedField.Instruction,
+                                completedWrappedField.Result,
+                                completedWrappedField.Formatting,
+                                activeCommentId,
+                                wrapperRevision,
+                                inheritedControl,
+                                hyperlinkUrl: null,
+                                hyperlinkAnchor: null,
+                                hyperlinkTooltip: null,
+                                completedWrappedField.Sequence,
+                                completedWrappedField.NestedFields,
+                                completedWrappedField.FormField);
+                        }
+                    }
+                    else
+                    {
+                        AddParagraphContentElement(
+                            paragraph,
+                            wrapped,
+                            archive,
+                            imageRelationships,
+                            hyperlinkRelationships,
+                            numbering,
+                            activeCommentId,
+                            wrapperRevision,
+                            control: inheritedControl,
+                            hyperlinkUrl: null,
+                            hyperlinkAnchor: null,
+                            hyperlinkTooltip: null,
+                            preservedDrawingTarget,
+                            preservedDrawingRelationshipTargets,
+                            subDocumentRelationships);
+                    }
+                }
+            }
             else
             {
                 AddParagraphContentElement(
