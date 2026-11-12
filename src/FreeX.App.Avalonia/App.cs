@@ -91,7 +91,12 @@ public sealed class App : Application
         // grey slab. Application.Resources wins over the FluentTheme dictionaries for these keys.
         Resources["ControlCornerRadius"] = new CornerRadius(0);
         Resources["TextControlBackgroundDisabled"] = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.FromRgb(255, 255, 255));
-        Resources["TextControlBorderBrushDisabled"] = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.FromRgb(217, 217, 217));
+        // WPF's disabled push button: #F4F4F4 face, #ADB2B5 border, #838383 text (Fluent paints a
+        // mid-grey slab with no border).
+        Resources["ButtonBackgroundDisabled"] = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.FromRgb(244, 244, 244));
+        Resources["ButtonBorderBrushDisabled"] = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.FromRgb(173, 178, 181));
+        Resources["ButtonForegroundDisabled"] = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.FromRgb(131, 131, 131));
+        Resources["TextControlBorderBrushDisabled"] =new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.FromRgb(217, 217, 217));
 
         // Select the active brand theme and register token brushes into Application.Resources
         // so that chrome surfaces can look them up by key.  FREEX_THEME=midnight swaps in the
