@@ -333,8 +333,13 @@ public static class DocumentModelCloner
             CustomGeometry = source.CustomGeometry is { } geometry ? CloneCustomGeometry(geometry) : null,
             RotationAngle = source.RotationAngle,
             FlipH = source.FlipH,
-            FlipV = source.FlipV
+            FlipV = source.FlipV,
+            PresetName = source.PresetName,
+            PresetOutlineSignature = source.PresetOutlineSignature,
+            HeadEnd = source.HeadEnd,
+            TailEnd = source.TailEnd
         };
+        clone.PresetAdjustments.AddRange(source.PresetAdjustments);
         foreach (var paragraph in source.TextParagraphs)
             clone.TextParagraphs.Add(CloneParagraphCore(paragraph, preserveRevisions));
         return clone;

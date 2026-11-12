@@ -2682,19 +2682,24 @@ public sealed class SetShapeKindCommand(
     IReadOnlyList<int>? childPath = null) : IDocumentCommand
 {
     private ShapeKind _previous;
+    private ShapePresetState? _previousPreset;
     private bool _applied;
 
     public string Label => "Change Shape";
 
     // r203 census, fixed r204: an equal-value setter -- see SetImageAltTextCommand.HasEffect.
+    // Changing to a named kind also drops a DrawingML preset identity (star, arrow, ...), so a shape
+    // that still carries one is affected even when its underlying Kind already matches.
     public bool HasEffect(IDocumentCommandContext context) =>
-        ShapeAt(context) is { } shape && shape.Kind != kind;
+        ShapeAt(context) is { } shape && (shape.Kind != kind || shape.PresetName is not null);
 
     public void Apply(IDocumentCommandContext context)
     {
         if (ShapeAt(context) is not { } shape) return;
         _previous = shape.Kind;
+        _previousPreset = ShapePresetState.Capture(shape);
         shape.Kind = kind;
+        ShapePresetState.Clear(shape);
         _applied = true;
     }
 
@@ -2702,6 +2707,7 @@ public sealed class SetShapeKindCommand(
     {
         if (!_applied || ShapeAt(context) is not { } shape) return;
         shape.Kind = _previous;
+        _previousPreset?.Restore(shape);
         _applied = false;
     }
 

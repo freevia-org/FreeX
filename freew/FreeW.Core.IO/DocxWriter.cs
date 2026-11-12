@@ -5118,6 +5118,38 @@ public static class DocxWriter
     };
 
     /// <summary>
+    /// True when the shape is written as its preserved <see cref="Shape.PresetName"/>: the preset must be
+    /// intact (outline not edited) and consistent with the shape's <see cref="ShapeKind"/>.
+    /// </summary>
+    private static bool UsesPresetIdentity(Shape shape)
+    {
+        if (!shape.HasIntactPresetGeometry)
+            return false;
+        return PresetShapeGeometry.IsNamedKindPreset(shape.PresetName)
+            ? !shape.HasCustomGeometry && string.Equals(PresetGeometry(shape.Kind), shape.PresetName, StringComparison.Ordinal)
+            : shape.Kind is ShapeKind.Rectangle or ShapeKind.TextBox;
+    }
+
+    /// <summary>Appends a:headEnd / a:tailEnd (after fill and dash, per CT_LineProperties order).</summary>
+    private static void AddShapeLineEnds(XElement ln, Shape shape)
+    {
+        static XElement Build(XName name, ShapeLineEnd lineEnd)
+        {
+            var element = new XElement(name, new XAttribute("type", lineEnd.Type));
+            if (lineEnd.Width is { Length: > 0 } width)
+                element.Add(new XAttribute("w", width));
+            if (lineEnd.Length is { Length: > 0 } length)
+                element.Add(new XAttribute("len", length));
+            return element;
+        }
+
+        if (shape.HeadEnd is { } head)
+            ln.Add(Build(A + "headEnd", head));
+        if (shape.TailEnd is { } tail)
+            ln.Add(Build(A + "tailEnd", tail));
+    }
+
+    /// <summary>
     /// Builds an inline DrawingML shape / text box: w:drawing/wp:inline/a:graphic/a:graphicData[uri=wps]/
     /// wps:wsp, carrying a wps:spPr (preset geometry + optional a:solidFill) and, for a text box, a
     /// wps:txbx/w:txbxContent holding the body paragraphs. The shape's wp:docPr id comes from the
@@ -5139,8 +5171,11 @@ public static class DocxWriter
         var name = $"{shape.Kind}{(uint)docPrId}";
 
         // wps:spPr: position/size (a:xfrm), geometry (custGeom or prstGeom), then fill, outline and effects.
+        // A shape that still is its DrawingML preset (see Shape.HasIntactPresetGeometry) is written as
+        // that a:prstGeom plus its adjust values; its cached outline is only FreeW's drawing of it.
+        var presetIdentity = UsesPresetIdentity(shape);
         XElement geometryElement;
-        if (shape.HasCustomGeometry)
+        if (shape.HasCustomGeometry && !presetIdentity)
         {
             var cg = shape.CustomGeometry!;
             // Build a:custGeom/a:pathLst/a:path with the freeform polygon segments.
@@ -5194,8 +5229,13 @@ public static class DocxWriter
         else
         {
             geometryElement = new XElement(A + "prstGeom",
-                new XAttribute("prst", PresetGeometry(shape.Kind)),
-                new XElement(A + "avLst"));
+                new XAttribute("prst", presetIdentity ? shape.PresetName! : PresetGeometry(shape.Kind)),
+                new XElement(A + "avLst",
+                    presetIdentity
+                        ? shape.PresetAdjustments.Select(adjustment => new XElement(A + "gd",
+                            new XAttribute("name", adjustment.Name),
+                            new XAttribute("fmla", adjustment.Formula)))
+                        : null));
         }
 
         // a:xfrm: carry @rot/@flipH/@flipV only when non-default (mirrors picture xfrm handling).
@@ -5231,6 +5271,13 @@ public static class DocxWriter
                 new XElement(A + "srgbClr", new XAttribute("val", outlineColor.TrimStart('#')))));
             if (shape.OutlineDash is { Length: > 0 } dash)
                 ln.Add(new XElement(A + "prstDash", new XAttribute("val", dash)));
+            AddShapeLineEnds(ln, shape);
+            spPr.Add(ln);
+        }
+        else if (shape.HeadEnd is not null || shape.TailEnd is not null)
+        {
+            var ln = new XElement(A + "ln");
+            AddShapeLineEnds(ln, shape);
             spPr.Add(ln);
         }
 
@@ -5238,8 +5285,10 @@ public static class DocxWriter
         if (shape.Effects is { } fx)
             spPr.Add(BuildShapeEffects(fx));
 
+        // Lines and connectors are connection shapes (wps:cNvCnPr), as Word itself writes them.
+        var isConnector = presetIdentity && !shape.HasText && PresetShapeGeometry.IsLinePreset(shape.PresetName);
         var wsp = new XElement(Wps + "wsp",
-            new XElement(Wps + "cNvSpPr"),
+            new XElement(Wps + (isConnector ? "cNvCnPr" : "cNvSpPr")),
             spPr);
 
         // A text box carries its body paragraphs in wps:txbx/w:txbxContent. They share the owning story's
