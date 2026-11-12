@@ -300,7 +300,7 @@ public sealed class StyleDefinitionDialogSessionTests
             basedOnName: "Normal",
             nextStyleName: "Body Text");
 
-        var lines = description.Split(Environment.NewLine);
+        var lines = description.ReplaceLineEndings("\n").Split('\n');
         lines.Should().HaveCount(3);
         lines[0].Should().StartWith("Font: Georgia, 14 pt, Bold, Font color: Red, Highlight: Yellow");
         lines[0].Should().Contain("Centered")
