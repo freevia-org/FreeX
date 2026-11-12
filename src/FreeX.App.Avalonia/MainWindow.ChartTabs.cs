@@ -827,6 +827,8 @@ public sealed partial class MainWindow
             },
         };
         AttachDialogRangePicker(dialog, rangePickButton, rangeBox, "range.chart-data-source.range");
+        // WPF opens with the range text selected, which also leaves OK defaulted.
+        dialog.Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(rangeBox);
 
         return await dialog.ShowDialog<SelectDataSourceResult?>(this);
     }

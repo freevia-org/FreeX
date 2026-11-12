@@ -638,11 +638,19 @@ public sealed partial class MainWindow
         AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, PageSetupFieldChromeStyle);
     }
 
-    // A WPF CheckBox in these forms is 15px tall; the shared 20px row made the stacked options drift.
+    // A WPF CheckBox in these forms is 15px tall (PageSetupDialog.xaml check boxes sit 23px apart
+    // with their 8px bottom margin); the shared 20px row made the stacked options drift.
+    private const double PageSetupCheckBoxHeight = 15;
+    // PageSetupFieldChromeStyle's text-box height (Margins tab) and the 22px picker / combo rows
+    // of the Sheet tab: the tallest control a page-setup label may share its row with.
+    private const double PageSetupMarginBoxHeight = 18;
+    private const double PageSetupFieldRowHeight = 22;
+
     private static void ApplyPageSetupCheckBoxRowHeight(CheckBox checkBox)
     {
-        checkBox.MinHeight = 16;
-        checkBox.MaxHeight = 16;
+        checkBox.Height = PageSetupCheckBoxHeight;
+        checkBox.MinHeight = PageSetupCheckBoxHeight;
+        checkBox.MaxHeight = PageSetupCheckBoxHeight;
     }
 
     private static void ApplyPageLayoutCheckBoxChrome(CheckBox checkBox)
@@ -1221,6 +1229,10 @@ public sealed partial class MainWindow
         {
             var labelControl = PageSetupLabel(label);
             labelControl.Margin = new Thickness(0, 0, 8, 8);
+            // PageSetupDialog.xaml: WPF resolves each Auto row to the 18px box plus its 8px margin
+            // (26px pitch). The label's taller Avalonia line box made alternate rows 27-28px, so
+            // it may not exceed the box it labels.
+            labelControl.MaxHeight = PageSetupMarginBoxHeight;
             value.Margin = new Thickness(0, 0, 0, 8);
             Grid.SetRow(labelControl, row);
             Grid.SetColumn(labelControl, 0);
@@ -1377,6 +1389,9 @@ public sealed partial class MainWindow
         {
             var label = PageSetupLabel(text);
             label.Margin = margin;
+            // WPF resolves these Auto rows from the 22px pickers and combo boxes; the label's
+            // (taller) Avalonia line box must not stretch a row past them.
+            label.MaxHeight = PageSetupFieldRowHeight;
             Grid.SetRow(label, row);
             Grid.SetColumn(label, 0);
             sheetGrid.Children.Add(label);
@@ -1392,6 +1407,14 @@ public sealed partial class MainWindow
 
             if (picker is null)
                 return;
+
+            // WPF: the range TextBox stretches to the 22px picker row it shares.
+            if (value is TextBox rangeBox)
+            {
+                rangeBox.Height = PageSetupFieldRowHeight;
+                rangeBox.MinHeight = PageSetupFieldRowHeight;
+                rangeBox.MaxHeight = PageSetupFieldRowHeight;
+            }
 
             picker.Width = 24;
             picker.MinWidth = 24;

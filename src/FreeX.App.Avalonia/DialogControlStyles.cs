@@ -107,20 +107,54 @@ internal static class ClassicScrollBarChrome
     private const double ThumbInset = 1;
     private const double MinimumThumbLength = 8;
 
+    // Marks the parts of the classic template. A style whose selector carries a class is a
+    // triggered style, and a triggered style outranks every untriggered one, including Fluent's
+    // own triggered theme rules for the same parts (":vertical", "[IsExpanded=true]").
+    private const string ClassicPartClass = "freex-classic-scrollbar-part";
+
+    // The Aero2 arrow glyphs: 7 x 6 chevrons (6 x 7 on a horizontal bar), drawn solid.
+    private const string UpGlyph = "M 0,4 L 0,6 L 3.5,2.5 L 7,6 L 7,4 L 3.5,0.5 Z";
+    private const string DownGlyph = "M 0,2.5 L 0,0.5 L 3.5,4 L 7,0.5 L 7,2.5 L 3.5,6 Z";
+    private const string LeftGlyph = "M 3.18,7 L 5,7 L 1.81,3.5 L 5,0 L 3.18,0 L 0,3.5 Z";
+    private const string RightGlyph = "M 1.81,7 L 0,7 L 3.18,3.5 L 0,0 L 1.81,0 L 5,3.5 Z";
+
     /// <summary>
-    /// Restyles every scroll bar of a dialog with <see cref="ClassicTemplate"/>. Fluent's bar is a
+    /// Restyles every scroll bar of a dialog with the classic template. Fluent's bar is a
     /// collapsed 2 px line that animates to full width (and fades its arrows in) only while it is
     /// expanded, so a capture or a bar whose owner turned auto-hide off late showed a 2–6 px thumb
     /// without arrows; the classic bar has no collapsed state and no animation.
+    /// <para>
+    /// Fluent sets the bar's template from its ":vertical" and ":horizontal" theme rules. Those are
+    /// triggered rules, which outrank an untriggered style whatever its scope, so a plain ScrollBar
+    /// selector lost to them on every bar a list or text box template creates. These styles carry
+    /// the same pseudo-classes and so win as triggered, non-theme styles.
+    /// </para>
     /// </summary>
-    public static IStyle CreateDialogScrollBarStyle() => new Style(x => x.OfType<ScrollBar>())
+    public static IEnumerable<IStyle> CreateDialogScrollBarStyles()
     {
-        Setters =
+        yield return new Style(x => x.OfType<ScrollBar>().Class(":vertical"))
         {
-            new Setter(TemplatedControl.TemplateProperty, ClassicTemplate),
-            new Setter(TemplatedControl.BackgroundProperty, TrackFill),
-        },
-    };
+            Setters =
+            {
+                new Setter(TemplatedControl.TemplateProperty, ClassicVerticalTemplate),
+                new Setter(TemplatedControl.BackgroundProperty, TrackFill),
+            },
+        };
+        yield return new Style(x => x.OfType<ScrollBar>().Class(":horizontal"))
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.TemplateProperty, ClassicHorizontalTemplate),
+                new Setter(TemplatedControl.BackgroundProperty, TrackFill),
+            },
+        };
+    }
+
+    private static readonly FuncControlTemplate<ScrollBar> ClassicVerticalTemplate =
+        new((scrollBar, nameScope) => BuildClassicBar(scrollBar, nameScope, vertical: true));
+
+    private static readonly FuncControlTemplate<ScrollBar> ClassicHorizontalTemplate =
+        new((scrollBar, nameScope) => BuildClassicBar(scrollBar, nameScope, vertical: false));
 
     /// <summary>
     /// The WPF classic bar: a 17 px track, square arrow buttons at both ends and a full-width
@@ -128,12 +162,10 @@ internal static class ClassicScrollBarChrome
     /// up, and their look is set on the parts themselves so the platform theme's collapsed-state
     /// rules for the same names cannot shrink or hide them.
     /// </summary>
-    private static readonly FuncControlTemplate<ScrollBar> ClassicTemplate = new((scrollBar, nameScope) =>
+    private static Control BuildClassicBar(ScrollBar scrollBar, INameScope nameScope, bool vertical)
     {
-        var vertical = scrollBar.Orientation == Orientation.Vertical;
-
-        var lineUp = CreateLineButton("PART_LineUpButton", vertical ? "M 0,4 L 3.5,0 L 7,4 Z" : "M 4,0 L 4,7 L 0,3.5 Z");
-        var lineDown = CreateLineButton("PART_LineDownButton", vertical ? "M 0,0 L 7,0 L 3.5,4 Z" : "M 0,0 L 4,3.5 L 0,7 Z");
+        var lineUp = CreateLineButton("PART_LineUpButton", vertical ? UpGlyph : LeftGlyph);
+        var lineDown = CreateLineButton("PART_LineDownButton", vertical ? DownGlyph : RightGlyph);
         var pageUp = CreatePageButton("PART_PageUpButton");
         var pageDown = CreatePageButton("PART_PageDownButton");
 
@@ -150,19 +182,23 @@ internal static class ClassicScrollBarChrome
             Height = double.NaN,
             MinWidth = vertical ? 0 : MinimumThumbLength,
             MinHeight = vertical ? MinimumThumbLength : 0,
+            // The thumb fills the track across the bar; Fluent pins its own thumb to one edge.
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
             Opacity = 1,
             RenderTransform = null,
             Transitions = null,
         };
-        thumb.Styles.Add(new Style(x => x.OfType<Thumb>())
+        thumb.Classes.Add(ClassicPartClass);
+        thumb.Styles.Add(new Style(x => x.OfType<Thumb>().Class(ClassicPartClass))
         {
             Setters = { new Setter(TemplatedControl.BackgroundProperty, ThumbFill) },
         });
-        thumb.Styles.Add(new Style(x => x.OfType<Thumb>().Class(":pointerover"))
+        thumb.Styles.Add(new Style(x => x.OfType<Thumb>().Class(ClassicPartClass).Class(":pointerover"))
         {
             Setters = { new Setter(TemplatedControl.BackgroundProperty, ThumbHoverFill) },
         });
-        thumb.Styles.Add(new Style(x => x.OfType<Thumb>().Class(":pressed"))
+        thumb.Styles.Add(new Style(x => x.OfType<Thumb>().Class(ClassicPartClass).Class(":pressed"))
         {
             Setters = { new Setter(TemplatedControl.BackgroundProperty, ThumbPressedFill) },
         });
@@ -211,7 +247,7 @@ internal static class ClassicScrollBarChrome
         root.Children.Add(track);
         root.Children.Add(lineDown);
         return root;
-    });
+    }
 
     private static RepeatButton CreateLineButton(string name, string glyphData)
     {
@@ -242,7 +278,10 @@ internal static class ClassicScrollBarChrome
                 return face;
             }),
         };
-        button.Styles.Add(new Style(x => x.OfType<RepeatButton>())
+        // Triggered styles (see ClassicPartClass), so a theme rule for the bar's buttons cannot fade
+        // the glyph; the state styles follow the resting one and win over it.
+        button.Classes.Add(ClassicPartClass);
+        button.Styles.Add(new Style(x => x.OfType<RepeatButton>().Class(ClassicPartClass))
         {
             Setters =
             {
@@ -250,7 +289,7 @@ internal static class ClassicScrollBarChrome
                 new Setter(TemplatedControl.ForegroundProperty, GlyphInk),
             },
         });
-        button.Styles.Add(new Style(x => x.OfType<RepeatButton>().Class(":pointerover"))
+        button.Styles.Add(new Style(x => x.OfType<RepeatButton>().Class(ClassicPartClass).Class(":pointerover"))
         {
             Setters =
             {
@@ -258,7 +297,7 @@ internal static class ClassicScrollBarChrome
                 new Setter(TemplatedControl.ForegroundProperty, Brushes.Black),
             },
         });
-        button.Styles.Add(new Style(x => x.OfType<RepeatButton>().Class(":pressed"))
+        button.Styles.Add(new Style(x => x.OfType<RepeatButton>().Class(ClassicPartClass).Class(":pressed"))
         {
             Setters =
             {
@@ -266,7 +305,7 @@ internal static class ClassicScrollBarChrome
                 new Setter(TemplatedControl.ForegroundProperty, Brushes.White),
             },
         });
-        button.Styles.Add(new Style(x => x.OfType<RepeatButton>().Class(":disabled"))
+        button.Styles.Add(new Style(x => x.OfType<RepeatButton>().Class(ClassicPartClass).Class(":disabled"))
         {
             Setters = { new Setter(TemplatedControl.ForegroundProperty, DisabledGlyph) },
         });
@@ -329,6 +368,19 @@ internal static class DialogWindowDefaults
     // The WPF system highlight (#0078D7) at the text box's 0.4 selection opacity over a white field.
     private static readonly IBrush TextSelection = new ImmutableSolidColorBrush(Color.FromRgb(0x99, 0xC9, 0xEF));
 
+    // WPF list selection: a light blue row in a blue frame while the list has the keyboard focus,
+    // a grey row otherwise.
+    private static readonly IBrush SelectedRowFace = new ImmutableSolidColorBrush(Color.FromRgb(0xCC, 0xE8, 0xFF));
+    private static readonly IBrush SelectedRowFrame = new ImmutableSolidColorBrush(Color.FromRgb(0x99, 0xD1, 0xFF));
+    private static readonly IBrush InactiveRowFace = new ImmutableSolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9));
+    private static readonly IBrush InactiveRowFrame = InactiveRowFace;
+
+    // WPF Aero2 GroupBox frame (light blue-grey) and the focused text box frame (1 px light blue).
+    private static readonly Color SharedGroupBoxFrameColor = Color.Parse(global::Free.Shared.Shell.CompactDialogVisualTokens.BorderHex);
+    private static readonly IBrush GroupBoxFrame = new ImmutableSolidColorBrush(Color.FromRgb(0xD5, 0xDF, 0xE5));
+    private static readonly IBrush FocusedTextBoxFrame = new ImmutableSolidColorBrush(
+        Color.Parse(global::Free.Shared.Shell.CompactDialogVisualTokens.FocusedInputBorderHex));
+
     // WPF's standard push button: a 16 px caption line at the 12 px dialog font, 1 px padding and a
     // 1 px frame. Replaces the shared compact token (26) wherever a dialog's chrome style keeps it.
     private const double PushButtonHeight = 20;
@@ -385,6 +437,27 @@ internal static class DialogWindowDefaults
         "GoToReferenceBoxCancelButton",
     };
 
+    // Buttons whose WPF counterpart is taller than a default push button because the WPF layout
+    // stretches it to its row (no explicit Height in the WPF dialog): the Find and Replace format
+    // buttons on the find/replace field rows (FindReplaceDialog.xaml), the Sort options
+    // button on the level-command row (SortDialog.cs), and the Sparkline range pickers beside their
+    // 24 px range boxes (SparklineDialog.cs). Keyed by automation id; they keep this height.
+    private static readonly Dictionary<string, double> RowStretchedWpfButtonHeights = new(StringComparer.Ordinal)
+    {
+        ["FindReplaceFindFormatButton"] = global::Free.Shared.Shell.CompactDialogVisualTokens.ButtonHeight,
+        ["FindReplaceFindClearFormatButton"] = global::Free.Shared.Shell.CompactDialogVisualTokens.ButtonHeight,
+        ["FindReplaceFindChooseFormatFromCellButton"] = global::Free.Shared.Shell.CompactDialogVisualTokens.ButtonHeight,
+        ["FindReplaceReplaceFindFormatButton"] = global::Free.Shared.Shell.CompactDialogVisualTokens.ButtonHeight,
+        ["FindReplaceReplaceFindClearFormatButton"] = global::Free.Shared.Shell.CompactDialogVisualTokens.ButtonHeight,
+        ["FindReplaceReplaceFindChooseFormatFromCellButton"] = global::Free.Shared.Shell.CompactDialogVisualTokens.ButtonHeight,
+        ["FindReplaceReplaceWithFormatButton"] = global::Free.Shared.Shell.CompactDialogVisualTokens.ButtonHeight,
+        ["FindReplaceReplaceWithClearFormatButton"] = global::Free.Shared.Shell.CompactDialogVisualTokens.ButtonHeight,
+        ["FindReplaceReplaceWithChooseFormatFromCellButton"] = global::Free.Shared.Shell.CompactDialogVisualTokens.ButtonHeight,
+        ["SortOptionsButton"] = global::Free.Shared.Shell.CompactDialogVisualTokens.ButtonHeight,
+        ["SparklineSelectDataRangeButton"] = 24,
+        ["SparklineSelectLocationRangeButton"] = 24,
+    };
+
     // Range-picker and glyph buttons size themselves to the field beside them.
     private const double MinimumNormalizedButtonWidth = 40;
 
@@ -416,6 +489,9 @@ internal static class DialogWindowDefaults
         AvaloniaCompactDialogChrome.DefaultTextSelectionBrush = TextSelection;
         AvaloniaCompactDialogChrome.DefaultTextSelectionForegroundBrush = DialogControlStyles.SelectionForegroundBrush;
         AvaloniaCompactDialogChrome.DefaultListRowMinHeight = DialogListRowMinHeight;
+        AvaloniaCompactDialogChrome.DefaultFocusedInputBorderBrush = FocusedTextBoxFrame;
+        AvaloniaCompactDialogChrome.DefaultInactiveSelectedItemBackgroundBrush = InactiveRowFace;
+        AvaloniaCompactDialogChrome.DefaultInactiveSelectedItemBorderBrush = InactiveRowFrame;
         AvaloniaCompactDialogChrome.CompactEditableComboOwnsEditor = true;
         AvaloniaCompactDialogChrome.DefaultComboBoxPalette = new AvaloniaCompactDialogComboBoxPalette(
             ComboBoxFace,
@@ -536,6 +612,7 @@ internal static class DialogWindowDefaults
             foreach (var button in dialog.GetLogicalDescendants().OfType<Button>().ToArray())
                 FitCaption(button);
 
+            ApplyWpfGroupBoxFrames(dialog);
             InstallDefaultButtonCue(dialog);
         };
     }
@@ -545,6 +622,8 @@ internal static class DialogWindowDefaults
     /// WPF buttons (one caption line, <see cref="PushButtonHeight"/>) unless the dialog's XAML
     /// gives them a height:
     /// <list type="bullet">
+    ///   <item>buttons the WPF layout stretches to their row take that row height
+    ///   (<see cref="RowStretchedWpfButtonHeights"/>), whatever helper chromed them;</item>
     ///   <item>route-helper buttons (a fixed height, minimum and maximum all at the shared 26 px
     ///   token, without the shared compact chrome that already applies the product height), and
     ///   the Go To buttons whose dialog style fixes 24 px, take the WPF default;</item>
@@ -568,7 +647,15 @@ internal static class DialogWindowDefaults
         var dialogId = AutomationProperties.GetAutomationId(dialog) ?? string.Empty;
         var hasSharedChrome = button.Classes.Contains(AvaloniaCompactDialogChrome.CompactButtonClass);
         double target;
-        if (ExplicitWpfButtonHeights.TryGetValue(dialogId, out var wpfHeight))
+        if (RowStretchedWpfButtonHeights.TryGetValue(
+                AutomationProperties.GetAutomationId(button) ?? string.Empty,
+                out var rowHeight))
+        {
+            if (height == rowHeight)
+                return;
+            target = rowHeight;
+        }
+        else if (ExplicitWpfButtonHeights.TryGetValue(dialogId, out var wpfHeight))
         {
             if (!hasSharedChrome || height != PushButtonHeight)
                 return;
@@ -619,7 +706,8 @@ internal static class DialogWindowDefaults
     /// <summary>
     /// WPF draws the default button's blue frame while it is defaulted (Button.IsDefaulted): the
     /// dialog's keyboard focus is on the window itself or on a control that does not take Enter.
-    /// Only a push button (the default button included) and an editable multi-line text box take Enter; a
+    /// Only a push button and an editable multi-line text box take Enter, and a focused default
+    /// button keeps its own cue because Enter still presses it; a
     /// check box, radio button or toggle is not a WPF Button, so the cue stays while it has the
     /// focus. A dialog whose focus is nowhere (not activated yet, or captured unfocused) keeps the
     /// cue as well, as the WPF window then holds its own focus. The default button is found again
@@ -644,9 +732,12 @@ internal static class DialogWindowDefaults
                     continue;
                 if (cued.Add(button))
                     AddDefaultButtonCueStyles(button);
+                // Enter on the focused default button still presses that button, so WPF keeps it
+                // defaulted (its blue frame) while it holds the focus itself.
+                var focusOnThisButton = ReferenceEquals(focused, button);
                 // The resting-frame styles skip a disabled button, so a disabled default button
                 // keeps the disabled frame whatever this class says.
-                button.Classes.Set(DefaultedButtonClass, isDefault && !focusTakesEnter);
+                button.Classes.Set(DefaultedButtonClass, isDefault && (!focusTakesEnter || focusOnThisButton));
             }
         }
 
@@ -728,6 +819,15 @@ internal static class DialogWindowDefaults
         // Fluent disabled ink and frame stay those of an enabled box underneath it.
         resources["TextControlForegroundDisabled"] = DialogControlStyles.SelectionForegroundBrush;
         resources["TextControlBorderBrushDisabled"] = new ImmutableSolidColorBrush(Color.FromRgb(0xAB, 0xAD, 0xB3));
+        // A text box nothing chromed draws Fluent's 2 px accent frame on focus; WPF draws 1 px of
+        // light blue.
+        resources["TextControlBorderBrushFocused"] = FocusedTextBoxFrame;
+        resources["TextControlBorderThemeThicknessFocused"] = new Thickness(1);
+        // Fluent's list items paint the selection from these keys (a translucent accent).
+        resources["ListBoxItemBackgroundSelected"] = SelectedRowFace;
+        resources["ListBoxItemBackgroundSelectedPointerOver"] = SelectedRowFace;
+        resources["ListBoxItemBackgroundSelectedPressed"] = SelectedRowFace;
+        resources["ListBoxItemForegroundSelected"] = DialogControlStyles.SelectionForegroundBrush;
         ClassicScrollBarChrome.ApplyResources(resources);
     }
 
@@ -761,6 +861,12 @@ internal static class DialogWindowDefaults
             {
                 Setters = { new Setter(Layoutable.MinHeightProperty, DialogListRowMinHeight) },
             },
+            // One WPF selection highlight for lists on Fluent's item template, which paints the
+            // selection on its content presenter from a translucent accent (#99C9EF on white).
+            // Lists on the shared item template get the same colours from the shared list chrome
+            // (the inactive pair through the product defaults set in Install).
+            SelectedListRowPresenterStyle(x => x, SelectedRowFace, SelectedRowFrame),
+            SelectedListRowPresenterStyle(InactiveList, InactiveRowFace, InactiveRowFrame),
             // A WPF list box scrolls a row wider than the list horizontally (ScrollViewer default
             // Auto); Fluent disables horizontal scrolling, so long rows were cut off instead.
             new Style(x => x.OfType<ListBox>())
@@ -775,7 +881,7 @@ internal static class DialogWindowDefaults
             // state, no animation); with auto-hide off the scroll viewer also reserves the bar's
             // lane instead of laying the bar over the content. Templated scroll viewers (lists,
             // multi-line text boxes) take the value from their owner, so the owners carry it.
-            ClassicScrollBarChrome.CreateDialogScrollBarStyle(),
+            .. ClassicScrollBarChrome.CreateDialogScrollBarStyles(),
             new Style(x => x.OfType<ScrollViewer>().Not(y => y.Name("PART_ScrollViewer")))
             {
                 Setters = { new Setter(ScrollViewer.AllowAutoHideProperty, false) },
@@ -842,6 +948,31 @@ internal static class DialogWindowDefaults
             dialog.Styles.Insert(index, styles[index]);
     }
 
+    // A list that does not hold the keyboard focus shows WPF's inactive selection.
+    private static Selector? InactiveList(Selector? selector) =>
+        selector.Is<ListBox>().Not(x => x.Class(":focus-within")).Descendant();
+
+    private static Style SelectedListRowPresenterStyle(Func<Selector?, Selector?> scope, IBrush face, IBrush frame) =>
+        new(x => scope(x)
+            .OfType<ListBoxItem>()
+            .Class(":selected")
+            .Template()
+            .OfType<global::Avalonia.Controls.Presenters.ContentPresenter>()
+            .Name("PART_ContentPresenter"))
+        {
+            Setters =
+            {
+                new Setter(global::Avalonia.Controls.Presenters.ContentPresenter.BackgroundProperty, face),
+                new Setter(global::Avalonia.Controls.Presenters.ContentPresenter.BorderBrushProperty, frame),
+                new Setter(
+                    global::Avalonia.Controls.Presenters.ContentPresenter.BorderThicknessProperty,
+                    new Thickness(1)),
+                new Setter(
+                    global::Avalonia.Controls.Presenters.ContentPresenter.ForegroundProperty,
+                    DialogControlStyles.SelectionForegroundBrush),
+            },
+        };
+
     private static Selector SingleLineTextBox(Selector? selector) =>
         selector
             .Is<TextBox>()
@@ -871,13 +1002,32 @@ internal static class DialogWindowDefaults
         AvaloniaCompactDialogChrome.ApplyGroupBox(
             groupBox,
             AvaloniaCompactDialogChrome.WindowsStyle,
-            HasLocalValue(groupBox, TemplatedControl.BorderBrushProperty) ? groupBox.BorderBrush : null,
+            HasLocalValue(groupBox, TemplatedControl.BorderBrushProperty) && !IsSharedGroupBoxFrame(groupBox.BorderBrush)
+                ? groupBox.BorderBrush
+                : GroupBoxFrame,
             HasLocalValue(groupBox, TemplatedControl.ForegroundProperty) ? groupBox.Foreground : null);
         if (!hadMargin)
             groupBox.ClearValue(Layoutable.MarginProperty);
         if (!hadPadding)
             groupBox.ClearValue(TemplatedControl.PaddingProperty);
     }
+
+    /// <summary>
+    /// The shared chrome frames a group box in the neutral control grey when its dialog names no
+    /// colour; WPF frames FreeX group boxes in light blue-grey. Runs after the shared descendant
+    /// pass, so it also reaches group boxes a dialog chromed itself without a colour.
+    /// </summary>
+    private static void ApplyWpfGroupBoxFrames(Window dialog)
+    {
+        foreach (var groupBox in dialog.GetLogicalDescendants().OfType<GroupBox>())
+        {
+            if (IsSharedGroupBoxFrame(groupBox.BorderBrush))
+                groupBox.BorderBrush = GroupBoxFrame;
+        }
+    }
+
+    private static bool IsSharedGroupBoxFrame(IBrush? brush) =>
+        brush is ISolidColorBrush { Opacity: 1 } solid && solid.Color == SharedGroupBoxFrameColor;
 
     /// <summary>
     /// Route helpers that predate the shared chrome paint push buttons with a local white (or

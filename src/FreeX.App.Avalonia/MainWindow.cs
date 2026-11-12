@@ -14023,6 +14023,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = 72,
             Padding = new Thickness(10, 4),
         };
+        // The name box routes Enter itself; OK is still the WPF default button and shows its cue.
+        okButton.Classes.Add(DialogWindowDefaults.DefaultButtonCueClass);
         var cancelButton = new Button
         {
             Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
@@ -15756,6 +15758,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             IsChecked = true,
             Margin = new Thickness(0, 0, 4, 0),
         };
+        // WPF GoToSpecialDialog: a disabled value-type box greys only its glyph (the compact
+        // template's disabled chrome); the label keeps full ink, so cancel the dialog-wide
+        // disabled-toggle fade for these boxes.
+        checkBox.Styles.Add(new Style(x => x.OfType<CheckBox>().Class(":disabled"))
+        {
+            Setters = { new Setter(Visual.OpacityProperty, 1d) },
+        });
         AutomationProperties.SetAutomationId(checkBox, automationId);
         return checkBox;
     }
@@ -16276,7 +16285,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
             Margin = new Thickness(0, 0, 0, 12),
         };
-        ApplyDialogTextBoxChrome(inputBox);
+        // WPF ObjectSizeDialog.CreateSingleInputContent leaves the box at the default 18px template;
+        // the rest of the fixed 141px client stays blank below the buttons, as on Windows.
+        ApplyWpfDefaultDialogTextBoxChrome(inputBox);
         AutomationProperties.SetName(inputBox, label);
 
         var okButton = new Button { Content = UiText.Get("Common_Ok") };
@@ -18719,8 +18730,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             },
         };
         AutomationProperties.SetAutomationId(tabStrip, "FormatCellsTabStrip");
-        foreach (var tab in new[] { numberTab, alignmentTab, fontTab, borderTab, fillTab, protectionTab })
-            tab.MinWidth = FormatCellsDialogAlignmentLayout.TabHeaderMinWidth;
+        // WPF FormatCellsDialog.xaml: plain TabItems sized to their header text (no minimum width).
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
             tabStrip,
             AvaloniaCompactDialogChrome.WindowsStyle with
@@ -19120,7 +19130,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
             Margin = new Thickness(0, 0, 0, 12),
         };
-        ApplyDialogTextBoxChrome(inputBox);
+        // WPF TextEntryDialog (ObjectSizeDialog.CreateSingleInputContent): default 18px TextBox.
+        ApplyWpfDefaultDialogTextBoxChrome(inputBox);
         AutomationProperties.SetName(inputBox, label);
         AutomationProperties.SetAutomationId(inputBox, automationId);
 
@@ -21139,6 +21150,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         tb.BorderBrush = Brush(130, 130, 130);
         tb.BorderThickness = new Thickness(1);
         tb.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    // A default-template WPF TextBox at the 12px dialog font renders 18px tall.
+    private const double WpfDefaultSingleLineTextBoxHeight = 18;
+
+    /// <summary>
+    /// <see cref="ApplyDialogTextBoxChrome"/> for a box the WPF dialog leaves at the default
+    /// TextBox template (no explicit height), such as the single-input prompts.
+    /// </summary>
+    private static void ApplyWpfDefaultDialogTextBoxChrome(TextBox tb)
+    {
+        ApplyDialogTextBoxChrome(tb);
+        tb.Height = WpfDefaultSingleLineTextBoxHeight;
+        tb.MinHeight = WpfDefaultSingleLineTextBoxHeight;
+        tb.MaxHeight = WpfDefaultSingleLineTextBoxHeight;
+        tb.Padding = new Thickness(3, 0);
     }
 
     private static void ApplyDialogComboBoxChrome(ComboBox cb)

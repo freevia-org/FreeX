@@ -257,6 +257,20 @@ public static class AvaloniaCompactDialogChrome
     public static double? DefaultListRowMinHeight { get; set; }
 
     /// <summary>
+    /// Product-wide frame of a focused (and hovered) compact text box. Null keeps the theme accent;
+    /// a chrome style that names its own focused border still wins.
+    /// </summary>
+    public static IBrush? DefaultFocusedInputBorderBrush { get; set; }
+
+    /// <summary>
+    /// Product-wide selected-row face and frame of a compact list while the list does not hold the
+    /// keyboard focus. Null (the default) keeps one selection look whatever the focus.
+    /// </summary>
+    public static IBrush? DefaultInactiveSelectedItemBackgroundBrush { get; set; }
+
+    public static IBrush? DefaultInactiveSelectedItemBorderBrush { get; set; }
+
+    /// <summary>
     /// When true, the editor inside a compact editable combo box keeps the combo template's own
     /// borderless chrome and drops its minimum height. Off by default so sister apps keep the
     /// editor metrics their parity tests measure.
@@ -619,7 +633,7 @@ public static class AvaloniaCompactDialogChrome
         // the same control and would otherwise win, replacing that blue with the brand accent.
         var focusedBorder = textBox.Classes.Contains(ReadOnlyDocumentClass)
             ? ReadOnlyDocumentFocusedBorderBrush
-            : style.FocusedInputBorderBrush ?? ThemeAccentBrush(style);
+            : style.FocusedInputBorderBrush ?? DefaultFocusedInputBorderBrush ?? ThemeAccentBrush(style);
         if (style.RemoveFocusAdorner)
             textBox.FocusAdorner = null;
 
@@ -782,7 +796,7 @@ public static class AvaloniaCompactDialogChrome
         // the brand accent wins on focus.
         var focusedBorder = textBox.Classes.Contains(ReadOnlyDocumentClass)
             ? ReadOnlyDocumentFocusedBorderBrush
-            : style.FocusedInputBorderBrush ?? ThemeAccentBrush(style);
+            : style.FocusedInputBorderBrush ?? DefaultFocusedInputBorderBrush ?? ThemeAccentBrush(style);
         var border = !textBox.IsEnabled
             ? style.DisabledInputBorderBrush ?? DisabledInputBorderBrush
             : textBox.IsFocused
@@ -1796,6 +1810,25 @@ public static class AvaloniaCompactDialogChrome
                 new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(CompactDialogVisualTokens.BorderThickness)),
             },
         });
+        if (DefaultInactiveSelectedItemBackgroundBrush is { } inactiveBackground)
+        {
+            // Declared after the selected style above, so it wins while the list is unfocused.
+            listBox.Styles.Add(new Style(x => x
+                .Is<ListBox>()
+                .Not(y => y.Class(":focus-within"))
+                .Descendant()
+                .OfType<ListBoxItem>()
+                .Class(":selected"))
+            {
+                Setters =
+                {
+                    new Setter(TemplatedControl.BackgroundProperty, inactiveBackground),
+                    new Setter(
+                        TemplatedControl.BorderBrushProperty,
+                        DefaultInactiveSelectedItemBorderBrush ?? inactiveBackground),
+                },
+            });
+        }
     }
 
     /// <summary>

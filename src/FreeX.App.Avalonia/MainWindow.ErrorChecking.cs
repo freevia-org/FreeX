@@ -384,11 +384,12 @@ public sealed partial class MainWindow
     {
         var row = CreateErrorCheckingColumnGrid();
         row.Background = new SolidColorBrush(Color.FromRgb(240, 240, 240));
-        AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.SheetColumnHeaderKey), 0);
-        AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.CellColumnHeaderKey), 1);
-        AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.IssueColumnHeaderKey), 2);
-        AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.FormulaColumnHeaderKey), 3);
-        AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.DescriptionColumnHeaderKey), 4);
+        // WPF GridView column headers centre their captions over the column.
+        AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.SheetColumnHeaderKey), 0, isHeader: true);
+        AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.CellColumnHeaderKey), 1, isHeader: true);
+        AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.IssueColumnHeaderKey), 2, isHeader: true);
+        AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.FormulaColumnHeaderKey), 3, isHeader: true);
+        AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.DescriptionColumnHeaderKey), 4, isHeader: true);
         return row;
     }
 
@@ -404,7 +405,7 @@ public sealed partial class MainWindow
                 $"{ErrorCheckingDialogPlanner.DescriptionColumnWidth}"),
         };
 
-    private static void AddErrorCheckingCell(Grid grid, string text, int column)
+    private static void AddErrorCheckingCell(Grid grid, string text, int column, bool isHeader = false)
     {
         var cell = new TextBlock
         {
@@ -414,8 +415,13 @@ public sealed partial class MainWindow
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            Margin = new Thickness(4, 2),
+            TextAlignment = isHeader ? TextAlignment.Center : TextAlignment.Left,
+            // WPF clips a GridView cell at the column's trailing edge instead of trimming it.
+            TextTrimming = isHeader ? TextTrimming.CharacterEllipsis : TextTrimming.None,
+            ClipToBounds = true,
+            // WPF GridView cells inset their text 6px from the leading column edge and keep the
+            // rest of the column for the text.
+            Margin = isHeader ? new Thickness(4, 2) : new Thickness(6, 2, 0, 2),
         };
         Grid.SetColumn(cell, column);
         grid.Children.Add(cell);
