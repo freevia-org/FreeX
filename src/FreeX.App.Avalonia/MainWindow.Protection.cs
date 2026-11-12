@@ -174,6 +174,10 @@ public sealed partial class MainWindow
                     Margin = new Thickness(0, 0, 0, 4),
                 };
                 ApplyProtectCheckBoxChrome(box);
+                // WPF lists these as natural-height (16px) check boxes with a 4px bottom margin, a
+                // 20px pitch; the shared 20px dialog check row made the pitch 24.
+                box.MinHeight = 16;
+                box.MaxHeight = 16;
                 AutomationProperties.SetAutomationId(box, $"ProtectSheetPermission{index}Box");
                 permissionBoxes.Add((option.Permission, box));
                 checklist.Children.Add(box);

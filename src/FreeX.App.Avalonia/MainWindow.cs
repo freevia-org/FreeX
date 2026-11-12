@@ -17222,9 +17222,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetAutomationId(fontSizeBox, "FormatCellsFontSizeBox");
         ApplyDialogTextBoxChrome(fontSizeBox);
 
-        // Windows shows the font name + size as selectable LISTS. We keep the existing text
-        // boxes as the value sink that feeds the result (FontName/FontSize), and add list
-        // pickers as the primary selectors that write the chosen value into those boxes.
+        // WPF edits the font name + size in editable drop-downs. We keep the existing text
+        // boxes as the value sink that feeds the result (FontName/FontSize), and the pick
+        // lists (opened under each box) write the chosen value into those boxes.
         // WPF lists the installed font families (sorted, de-duplicated, current font first when
         // it is not installed); the curated names below stay available on every platform.
         var fontNameChoices = BuildFormatCellsFontNameChoices(
@@ -18239,36 +18239,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // the font, font-style and size editors in a 108px row, the underline and colour editors
         // under their own labels, and below them the swatch row, the normal-font check box and the
         // effects group on the left with the bordered sample on the right. The font and size text
-        // boxes keep their pick lists directly beneath them (the box is the value the result reads).
-        fontNameBox.MinWidth = 0;
-        fontNameList.MinWidth = 0;
-        fontNameList.Height = 72;
-        fontNameList.Margin = new Thickness(0, -1, 0, 0);
-        fontSizeBox.MinWidth = 0;
-        fontSizeList.MinWidth = 0;
-        fontSizeList.Height = 72;
-        fontSizeList.Margin = new Thickness(0, -1, 0, 0);
-        var fontNameColumn = new StackPanel
-        {
-            Spacing = 0,
-            Margin = new Thickness(0, 0, 8, 0),
-            VerticalAlignment = AvaloniaVerticalAlignment.Top,
-            Children =
-            {
-                fontNameBox,
-                fontNameList,
-            },
-        };
-        var fontSizeColumn = new StackPanel
-        {
-            Spacing = 0,
-            VerticalAlignment = AvaloniaVerticalAlignment.Top,
-            Children =
-            {
-                fontSizeBox,
-                fontSizeList,
-            },
-        };
+        // boxes are the value the result reads; their pick lists drop down from the field.
+        // WPF edits both in an editable drop-down (DlgFontNameBox / DlgFontSizeBox): a single 24px
+        // field at the top of the row whose pick list opens beneath it.
+        var fontNameColumn = CreateFormatCellsEditableDropDown(fontNameBox, fontNameList);
+        fontNameColumn.Margin = new Thickness(0, 0, 8, 0);
+        var fontSizeColumn = CreateFormatCellsEditableDropDown(fontSizeBox, fontSizeList);
 
         var fontColorRow = new DockPanel();
         DockPanel.SetDock(fontColorBox, Dock.Right);
@@ -18287,6 +18263,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             fontEffectBox.Margin = ReferenceEquals(fontEffectBox, subscriptBox)
                 ? new Thickness(0)
                 : new Thickness(0, 0, 12, 6);
+            // The last box has no bottom margin; pin every box to the top of its wrap line so it
+            // does not centre 3px lower than its neighbours.
+            fontEffectBox.VerticalAlignment = AvaloniaVerticalAlignment.Top;
             fontEffectsPanel.Children.Add(fontEffectBox);
         }
         var fontEffectsGroup = new GroupBox
@@ -18562,8 +18541,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             toggle.BorderBrush = Brush(112, 112, 112);
             toggle.BorderThickness = new Thickness(1);
             toggle.CornerRadius = new CornerRadius(0);
+            // WPF FormatCellsDialog.xaml: the edge buttons centre their captions.
+            toggle.Padding = new Thickness(0);
+            toggle.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+            toggle.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
         }
 
+        // WPF FormatCellsDialog.xaml centres the group heading over the 244px diagram.
         var borderGroup = CreateFormatCellsBorderGroup(
             UiText.Get("FormatCells_Border"),
             new StackPanel
@@ -18573,7 +18557,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 {
                     borderDiagramGrid,
                 },
-            });
+            },
+            centerHeader: true);
 
         // "Individual border details": four labeled rows (Top / Right / Bottom / Left), each with a
         // per-edge Style dropdown and a per-edge Color (R,G,B) picker — matching Excel's grid. The
@@ -18599,19 +18584,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             AvaloniaGrid.SetColumn(header, column);
             borderDetailsGrid.Children.Add(header);
         }
-        AddDetailHeader(StripDisplayMnemonic(UiText.Get("FormatCells_Style")), 1);
-        AddDetailHeader(StripDisplayMnemonic(UiText.Get("FormatCells_Color")), 2);
+        // WPF FormatCellsDialog.xaml heads the two detail columns with the colon-less
+        // FormatCells_Style2 / FormatCells_ColorRGB captions.
+        AddDetailHeader(UiText.Get("FormatCells_Style2"), 1);
+        AddDetailHeader(UiText.Get("FormatCells_ColorRGB"), 2);
         void AddDetailRow(int row, string labelKey, ComboBox styleBox, TextBox colorTextBox, FormatCellsColorPicker colorPicker)
         {
             var label = new TextBlock
             {
-                Text = StripDisplayMnemonic(UiText.Get(labelKey)) + ":",
+                // WPF labels the rows with the colon-bearing FormatCells_Top2 / Right2 / Bottom2 / Left2.
+                Text = StripDisplayMnemonic(UiText.Get(labelKey)),
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 Margin = row < 4 ? new Thickness(0, 0, 8, 6) : new Thickness(0, 0, 8, 0),
             };
             styleBox.Width = double.NaN;
             styleBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
-            styleBox.Margin = row < 4 ? new Thickness(2, 0, 8, 6) : new Thickness(2, 0, 8, 0);
+            styleBox.Margin = row < 4 ? new Thickness(0, 0, 8, 6) : new Thickness(0, 0, 8, 0);
             AvaloniaGrid.SetRow(label, row);
             AvaloniaGrid.SetColumn(label, 0);
             borderDetailsGrid.Children.Add(label);
@@ -18629,10 +18617,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             AvaloniaGrid.SetColumn(colorRow, 2);
             borderDetailsGrid.Children.Add(colorRow);
         }
-        AddDetailRow(1, "FormatCells_Top", borderTopStyleBox, borderTopColorTextBox, borderTopColorBox);
-        AddDetailRow(2, "FormatCells_Right", borderRightStyleBox, borderRightColorTextBox, borderRightColorBox);
-        AddDetailRow(3, "FormatCells_Bottom", borderBottomStyleBox, borderBottomColorTextBox, borderBottomColorBox);
-        AddDetailRow(4, "FormatCells_Left", borderLeftStyleBox, borderLeftColorTextBox, borderLeftColorBox);
+        AddDetailRow(1, "FormatCells_Top2", borderTopStyleBox, borderTopColorTextBox, borderTopColorBox);
+        AddDetailRow(2, "FormatCells_Right2", borderRightStyleBox, borderRightColorTextBox, borderRightColorBox);
+        AddDetailRow(3, "FormatCells_Bottom2", borderBottomStyleBox, borderBottomColorTextBox, borderBottomColorBox);
+        AddDetailRow(4, "FormatCells_Left2", borderLeftStyleBox, borderLeftColorTextBox, borderLeftColorBox);
 
         // The three visible buttons are the WPF preset surface. Keep the planner-backed selector
         // in the visual tree for existing automation and Accept() readback without a second row.
@@ -18640,12 +18628,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var borderDetailsExpander = new Expander
         {
-            Margin = new Thickness(4, 14, 0, 0),
+            // Aligned with the Line group above (1px inset). The content must stay inside the
+            // expander: a negative left margin cropped the first glyph of each row label.
+            Margin = new Thickness(1, 14, 0, 0),
             Header = StripDisplayMnemonic(UiText.Get("FormatCells_IndividualBorderDetails")),
             IsExpanded = true,
             Content = new Border
             {
-                Margin = new Thickness(-3, 8, 0, 0),
+                Margin = new Thickness(0, 8, 0, 0),
                 Child = borderDetailsGrid,
             },
         };
@@ -19051,7 +19041,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     // WPF keeps these three sections visually open: a bold label above compact content.
-    private static Control CreateFormatCellsBorderGroup(string header, Control content) =>
+    private static Control CreateFormatCellsBorderGroup(string header, Control content, bool centerHeader = false) =>
         new StackPanel
         {
             Spacing = 0,
@@ -19063,6 +19053,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     Text = StripDisplayMnemonic(header),
                     FontWeight = FontWeight.SemiBold,
                     Margin = new Thickness(0, 4, 0, 4),
+                    HorizontalAlignment = centerHeader
+                        ? AvaloniaHorizontalAlignment.Center
+                        : AvaloniaHorizontalAlignment.Left,
                 },
                 content,
             },

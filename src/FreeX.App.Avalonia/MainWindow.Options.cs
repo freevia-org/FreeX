@@ -903,7 +903,9 @@ public sealed partial class MainWindow
         {
             Width = 469,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
-            ColumnDefinitions = new ColumnDefinitions("128,10,92,10,127,10,92"),
+            // WPF OptionsDialog.xaml: *,Auto,*,Auto with the button stacks carrying the 10px gaps,
+            // which resolves to the 128 / 112 / 127 / 102 split of the 469px page.
+            ColumnDefinitions = new ColumnDefinitions("*,Auto,*,Auto"),
             RowDefinitions = new RowDefinitions("Auto,Auto,180"),
         };
         var availableLabel = new TextBlock { Text = OptionsText("Options_AvailableCommands"), FontSize = 12, Margin = new Thickness(0, 0, 0, 4) };
@@ -926,12 +928,12 @@ public sealed partial class MainWindow
             VerticalAlignment = AvaloniaVerticalAlignment.Top,
             Children = { quickAccessAddButton, quickAccessRemoveButton },
         };
-        Grid.SetColumn(addRemovePanel, 2);
+        Grid.SetColumn(addRemovePanel, 1);
         Grid.SetRow(addRemovePanel, 2);
         var selectedLabel = new TextBlock { Text = OptionsText("Options_QuickAccessToolbarCommands"), FontSize = 12, Margin = new Thickness(0, 0, 0, 4) };
-        Grid.SetColumn(selectedLabel, 4);
+        Grid.SetColumn(selectedLabel, 2);
         Grid.SetRow(selectedLabel, 0);
-        Grid.SetColumn(quickAccessSelectedList, 4);
+        Grid.SetColumn(quickAccessSelectedList, 2);
         Grid.SetRow(quickAccessSelectedList, 2);
         var reorderPanel = new StackPanel
         {
@@ -940,7 +942,7 @@ public sealed partial class MainWindow
             VerticalAlignment = AvaloniaVerticalAlignment.Top,
             Children = { quickAccessMoveUpButton, quickAccessMoveDownButton, quickAccessResetButton },
         };
-        Grid.SetColumn(reorderPanel, 6);
+        Grid.SetColumn(reorderPanel, 3);
         Grid.SetRow(reorderPanel, 2);
         quickAccessGrid.Children.Add(availableLabel);
         quickAccessGrid.Children.Add(searchRow);

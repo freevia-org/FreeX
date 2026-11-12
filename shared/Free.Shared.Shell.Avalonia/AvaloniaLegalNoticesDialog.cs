@@ -26,6 +26,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
     // measured WPF-equivalent line box so long documents expose the same rows.
     private const double ShortDocumentLineHeightCompensation = 14.6;
     private const double OverflowDocumentLineHeightCompensation = 15.0;
+    internal const string DocumentFontFamilyName = "Consolas, Menlo, Courier New";
     private readonly TabControl _tabControl = new();
     private readonly List<TextBox> _noticeTextBoxes = [];
     private readonly Button _closeButton = new();
@@ -174,7 +175,9 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             AcceptsReturn = true,
             AcceptsTab = _acceptsTab,
             TextWrapping = TextWrapping.Wrap,
-            FontFamily = new FontFamily("Consolas"),
+            // WPF renders the notices in Consolas; where it is not installed (macOS, Linux) fall
+            // back to another monospaced face instead of the proportional UI font.
+            FontFamily = new FontFamily(DocumentFontFamilyName),
             FontSize = LegalNoticesDialogMetrics.TextFontSize,
             Padding = new Thickness(LegalNoticesDialogMetrics.TextPadding),
             MinHeight = LegalNoticesDialogMetrics.TextMinHeight,
@@ -368,20 +371,9 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
                 return;
             }
 
-            var inset = AvaloniaCompactDialogChrome.CalculateReadOnlyDocumentInset(
-                scrollViewer.Viewport.Height,
-                presenter.DesiredSize.Height);
-            // Preserve the native-layout inset while closing Avalonia's six-pixel
-            // cumulative baseline shortfall across the short WPF authority document.
+            // WPF keeps a short notice pinned to the top of its document box (no vertical
+            // centring inset); only close Avalonia's cumulative baseline shortfall.
             textBox.LineHeight = ShortDocumentLineHeightCompensation;
-            if (inset > 0)
-            {
-                textBox.Padding = new Thickness(
-                    textBox.Padding.Left,
-                    basePadding + inset,
-                    textBox.Padding.Right,
-                    textBox.Padding.Bottom);
-            }
         };
         textBox.LayoutUpdated += onLayoutUpdated;
     }
