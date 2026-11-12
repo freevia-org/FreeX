@@ -27,6 +27,10 @@ internal sealed class TextEffectsPrintPaginator(
             Tagged.AddOrUpdate(flow, plans);
     }
 
+    /// <summary>The effect brushes recorded for <paramref name="flow"/>, or null when it carries no effect text.</summary>
+    internal static IReadOnlyDictionary<Brush, RunTextEffectVisualPlan>? TryGetPlans(FlowDocument flow) =>
+        Tagged.TryGetValue(flow, out var plans) ? plans : null;
+
     /// <summary>Wraps <paramref name="paginator"/> when <paramref name="flow"/> carries effect text; otherwise returns it as is.</summary>
     internal static DocumentPaginator Wrap(DocumentPaginator paginator, FlowDocument flow) =>
         Tagged.TryGetValue(flow, out var plans) ? new TextEffectsPrintPaginator(paginator, plans) : paginator;

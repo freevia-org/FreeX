@@ -169,6 +169,32 @@ public sealed class TextEffectsRenderingTests
     }
 
     [StaFact]
+    public void MultiSectionPrintedPages_DrawOutlineShadowAndGlow_ThroughTheSectionAwarePaginator()
+    {
+        var document = DocumentWith(new RunFormatting { FontSizePt = 24, TextEffects = ShadowGlowOutline() });
+        var first = document.Blocks.OfType<FreeW.Core.Model.Paragraph>().Single();
+        first.SectionBreak = new FreeW.Core.Model.Section(
+            new PageSettings { WidthPt = 792, HeightPt = 612, Landscape = true },
+            SectionBreakKind.NextPage);
+        var second = new FreeW.Core.Model.Paragraph();
+        second.Runs.Add(new FreeW.Core.Model.Run("Second section effect", new RunFormatting { FontSizePt = 24, TextEffects = ShadowGlowOutline() }));
+        document.Blocks.Add(second);
+        var (view, _) = Hosted(document);
+
+        var paginator = PrintLayout.BuildPaginator(view);
+        paginator.Should().BeOfType<SectionAwareDocumentPaginator>();
+        paginator.ComputePageCount();
+        paginator.PageCount.Should().Be(2);
+
+        for (var index = 0; index < 2; index++)
+        {
+            var blurred = VisualTree(paginator.GetPage(index).Visual).OfType<DrawingVisual>()
+                .Count(visual => visual.Effect is System.Windows.Media.Effects.BlurEffect);
+            blurred.Should().Be(2, $"page {index + 1}'s effect text gets its shadow and glow layers in print");
+        }
+    }
+
+    [StaFact]
     public void PrintWithoutEffectText_IsNotWrapped()
     {
         var (view, _) = Hosted(DocumentWith(new RunFormatting { FontSizePt = 12 }));

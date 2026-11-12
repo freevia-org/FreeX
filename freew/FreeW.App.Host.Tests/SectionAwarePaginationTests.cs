@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Text;
+using System.Windows;
 using System.Windows.Media;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
@@ -108,7 +109,14 @@ public sealed class SectionAwarePaginationTests
         var footnoted = segments.Where(segment => segment.PageOffset >= 1).ToList();
         Assert.True(footnoted.Count >= 3, $"expected one segment per page, got {footnoted.Count}");
         Assert.True(footnoted[0].FootnoteReserveDip > 0);
-        Assert.All(footnoted.Skip(1), segment => Assert.Equal(0, segment.FootnoteReserveDip));
+        // Six long notes overflow one band: like Word, the rest continues in the next pages' bands
+        // (each capped), and once the notes are exhausted the pages keep their whole body.
+        var (pageWidth, pageHeight) = PageLayout.PageSizeDip(LandscapePage());
+        var (_, top, _, bottom) = PageLayout.MarginsDip(LandscapePage());
+        var bodyHeight = Math.Max(pageWidth, pageHeight) - top - bottom;
+        Assert.All(footnoted, segment => Assert.True(
+            segment.FootnoteReserveDip <= bodyHeight * FreeW.App.Presentation.DocumentView.DocumentNoteRegionPlanner.MaxFootnoteBandShareOfBody + 1));
+        Assert.Equal(0, footnoted[^1].FootnoteReserveDip);
         Assert.Equal(totalPages, segments.Sum(segment => segment.PageCount));
 
         var paginator = PrintLayout.BuildPaginator(editor);
@@ -148,6 +156,105 @@ public sealed class SectionAwarePaginationTests
 
         Assert.True(HasStroke(paginator.GetPage(0).Visual, Color.FromRgb(0x11, 0x22, 0x33)));
         Assert.False(HasStroke(paginator.GetPage(1).Visual, Color.FromRgb(0x11, 0x22, 0x33)));
+    }
+
+    /// <summary>
+    /// stress008: a single-section document's footnotes were drawn into the bottom margin while the body
+    /// ran on underneath them, so every footnoted page held more body than Word's. Such a document now
+    /// prints through the per-page reserve, with the notes inside the body area.
+    /// </summary>
+    [StaFact]
+    public void SingleSectionFootnotes_PrintWithAPerPageReserve_AndNotesInsideTheBody()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        for (var id = 1; id <= 3; id++)
+        {
+            doc.Footnotes[id] = new Footnote(id, $"Note{id} text");
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run(string.Join(" ", Enumerable.Repeat($"body{id}", 120))));
+            paragraph.Runs.Add(Run.FootnoteReference(id));
+            doc.Blocks.Add(paragraph);
+        }
+        var editor = new DocumentView();
+        editor.LoadModel(doc);
+
+        Assert.True(PrintLayout.UsesPerPageFootnoteReserve(editor, PrintLayout.ResolvePrintBalloonSources(editor)));
+        var paginator = PrintLayout.BuildPaginator(editor);
+        Assert.IsType<SectionAwareDocumentPaginator>(paginator);
+        paginator.ComputePageCount();
+
+        var page = paginator.GetPage(0);
+        Assert.Contains("Note1", ExtractDrawnText(page.Visual));
+        var (_, _, _, bottomMargin) = PageLayout.MarginsDip(doc.Page);
+        var noteBounds = FindTextBounds(page.Visual, "Note1");
+        Assert.NotNull(noteBounds);
+        Assert.True(noteBounds!.Value.Bottom <= page.Size.Height - bottomMargin + 1,
+            "the notes sit inside the body area, above the bottom margin");
+    }
+
+    /// <summary>
+    /// A long note continues on the next page (Word) instead of reserving most of its reference page,
+    /// and a manual page break in a footnoted document leaves no blank page.
+    /// </summary>
+    [StaFact]
+    public void LongFootnote_ContinuesOnTheNextPage_AndPageBreakLeavesNoBlankPage()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var breakParagraph = new Paragraph();
+        breakParagraph.Runs.Add(new Run("cover"));
+        breakParagraph.Runs.Add(new Run(string.Empty) { IsPageBreak = true });
+        doc.Blocks.Add(breakParagraph);
+        var longNote = string.Join(" ", Enumerable.Range(1, 600).Select(i => $"n{i:000}"));
+        doc.Footnotes[1] = new Footnote(1, longNote);
+        var referencing = new Paragraph();
+        referencing.Runs.Add(new Run("Referencing paragraph"));
+        referencing.Runs.Add(Run.FootnoteReference(1));
+        doc.Blocks.Add(referencing);
+        doc.Blocks.Add(new Paragraph(string.Join(" ", Enumerable.Range(1, 1500).Select(i => $"word{i:0000}"))));
+
+        var editor = new DocumentView();
+        editor.LoadModel(doc);
+        var paginator = PrintLayout.BuildPaginator(editor);
+        Assert.IsType<SectionAwareDocumentPaginator>(paginator);
+        paginator.ComputePageCount();
+
+        var pages = Enumerable.Range(0, paginator.PageCount)
+            .Select(index => ExtractDrawnText(paginator.GetPage(index).Visual))
+            .ToList();
+        Assert.All(pages, text => Assert.False(string.IsNullOrWhiteSpace(text), "no blank page"));
+        Assert.Contains("cover", pages[0]);
+        Assert.Contains("Referencing", pages[1]);
+        Assert.Contains("n001", pages[1]);
+        Assert.DoesNotContain("n600", pages[1]);
+        Assert.Contains("n600", string.Concat(pages.Skip(2)));
+    }
+
+    private static Rect? FindTextBounds(Visual root, string text)
+    {
+        Rect? found = null;
+        void Walk(Visual visual)
+        {
+            if (VisualTreeHelper.GetDrawing(visual) is { } drawing && Contains(drawing))
+            {
+                var bounds = VisualTreeHelper.GetDescendantBounds(visual);
+                if (!bounds.IsEmpty && !ReferenceEquals(visual, root))
+                    bounds = visual.TransformToAncestor(root).TransformBounds(bounds);
+                found = found is { } existing ? Rect.Union(existing, bounds) : bounds;
+            }
+            for (var i = 0; i < VisualTreeHelper.GetChildrenCount(visual); i++)
+                if (VisualTreeHelper.GetChild(visual, i) is Visual child)
+                    Walk(child);
+        }
+        bool Contains(Drawing drawing) => drawing switch
+        {
+            System.Windows.Media.DrawingGroup group => group.Children.Any(Contains),
+            GlyphRunDrawing { GlyphRun.Characters: { } characters } => new string(characters.ToArray()).Contains(text, StringComparison.Ordinal),
+            _ => false,
+        };
+        Walk(root);
+        return found;
     }
 
     private static PageSettings LandscapePage() => new()

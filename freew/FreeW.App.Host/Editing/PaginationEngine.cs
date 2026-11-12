@@ -372,6 +372,14 @@ internal static class PaginationEngine
             }
 
             totalPageCount = Math.Max(1, pageOffset);
+
+            // The scratch clone's effect runs carry the brushes TagTextEffectsForPrint gave them; hand the
+            // plans to every segment so the section-aware print path can paint outline/shadow/glow/reflection.
+            if (segmentPaginations is { Count: > 0 } && TextEffectsPrintPaginator.TryGetPlans(flow) is { } effectPlans)
+            {
+                for (var i = 0; i < segmentPaginations.Count; i++)
+                    segmentPaginations[i] = segmentPaginations[i] with { TextEffectPlans = effectPlans };
+            }
         }
         catch
         {
@@ -397,7 +405,12 @@ internal static class PaginationEngine
         DocumentPaginator Paginator,
         double TopInsetDip,
         double BottomInsetDip,
-        double FootnoteReserveDip);
+        double FootnoteReserveDip,
+        IReadOnlyList<int>? PageFootnoteIds = null)
+    {
+        /// <summary>Text-effect plans keyed by the effect brushes in this segment's runs (print path).</summary>
+        public IReadOnlyDictionary<System.Windows.Media.Brush, FreeW.App.Presentation.DocumentView.RunTextEffectVisualPlan>? TextEffectPlans { get; init; }
+    }
 
     /// <summary>
     /// The default running header and footer in effect for the section that owns
@@ -635,7 +648,9 @@ internal static class PaginationEngine
         double topInsetDip,
         double bottomInsetDip)
     {
-        const double footnoteFrameClearanceDip = 24.0;
+        // The note plan already includes Word's separator line box, which is the only clearance Word keeps
+        // between the last body line and the notes.
+        const double footnoteFrameClearanceDip = 0.0;
         var (contentWidthDip, _) = PageLayout.ContentAreaDip(segment.Page);
 
         FlowDocument NewFlow(double reserveDip)
@@ -658,6 +673,42 @@ internal static class PaginationEngine
         var work = NewFlow(0);
         for (var i = segment.Start; i < end; i++)
         {
+            // A paragraph with a manual page/column break renders as a Section of fragments, the later ones
+            // breaking before themselves. Kept whole it straddles the page boundary and its chunk would
+            // end at the break fragment's page, starting the content after it on yet another page; laid
+            // out as separate blocks, the break simply starts the next page like any other block.
+            if (scratchBlocks[i] is System.Windows.Documents.Section section
+                && section.Blocks.Count > 0
+                && section.Blocks.All(child => child is System.Windows.Documents.Paragraph))
+            {
+                var children = section.Blocks.ToList();
+                section.Blocks.Clear();
+
+                // A break that ends its paragraph keeps the empty paragraph mark on the page it ends
+                // (Word does not start the next page with a blank line): the break moves to the next
+                // block and the empty remainder takes no height.
+                if (children.Count > 1
+                    && children[^1] is System.Windows.Documents.Paragraph { BreakPageBefore: true } remainder
+                    && !HasText(remainder.ContentStart, remainder.ContentEnd)
+                    && !remainder.Inlines.OfType<InlineUIContainer>().Any()
+                    && i + 1 < end
+                    && scratchBlocks[i + 1] is not System.Windows.Documents.Section)
+                {
+                    remainder.BreakPageBefore = false;
+                    remainder.Margin = new Thickness(remainder.Margin.Left, 0, remainder.Margin.Right, 0);
+                    remainder.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+                    remainder.LineHeight = 0.01;
+                    scratchBlocks[i + 1].BreakPageBefore = true;
+                }
+
+                for (var c = 0; c < children.Count; c++)
+                {
+                    pending.Add((children[c], i, c > 0));
+                    work.Blocks.Add(children[c]);
+                }
+                continue;
+            }
+
             pending.Add((scratchBlocks[i], i, false));
             work.Blocks.Add(scratchBlocks[i]);
         }
@@ -678,19 +729,83 @@ internal static class PaginationEngine
             return count;
         }
 
+        // A long note continues on the next pages (Word): each band is capped and the overflow carried.
+        var bodyHeightDip = Math.Max(0, pageSize.Height - padding.Top - padding.Bottom);
+        var maxBandDip = bodyHeightDip * DocumentNoteRegionPlanner.MaxFootnoteBandShareOfBody;
+        var carriedNoteDip = 0.0;
+
+        // The notes a page carries are those whose reference mark lands on it (Word keeps a reference and
+        // its note together), not every note of a paragraph that merely starts on the page.
+        List<int> NoteIdsOnFirstPage(int blockCount)
+        {
+            var ids = new List<int>();
+            foreach (var entry in pending.Take(blockCount))
+            {
+                var markers = DocumentView.CollectFootnoteMarkers([entry.Block]);
+                if (markers.Count == 0)
+                {
+                    if (!entry.IsContinuation)
+                        ids.AddRange(FootnoteIdsInModelBlock(modelBlocks[entry.ModelIndex]));
+                    continue;
+                }
+
+                foreach (var marker in markers)
+                {
+                    int markerPage;
+                    try
+                    {
+                        markerPage = dynamicWork.GetPageNumber(marker.Position);
+                    }
+                    catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException)
+                    {
+                        markerPage = 0;
+                    }
+                    if (markerPage <= 0)
+                        ids.Add(marker.FootnoteId);
+                }
+            }
+            return ids.Distinct().ToList();
+        }
+
+        double NoteDemandFor(int blockCount)
+        {
+            var ids = NoteIdsOnFirstPage(blockCount);
+            if (ids.Count == 0)
+                return carriedNoteDip;
+            var own = DocumentNoteRegionPlanner.BuildFootnoteRegion(document, ids, pageNumber: 1, contentWidthDip);
+            // The carried height already includes a separator line; the page shows only one.
+            return carriedNoteDip <= 0
+                ? own.EstimatedHeightDip
+                : own.EstimatedHeightDip + carriedNoteDip - own.SeparatorHeightDip;
+        }
+
+        // The pages of a run of overflowing notes, composed exactly as the print path draws them
+        // (DocumentNoteRegionPlanner.BuildSequentialFootnoteBands) so the carried height matches the text
+        // that really continues.
+        var carryChain = new List<(IReadOnlyList<int> FootnoteIds, double BandHeightDip, int PageNumber)>();
+        void UpdateCarry(IReadOnlyList<int> pageIds, double reserveDip, int take)
+        {
+            if (carriedNoteDip <= 0 && NoteDemandFor(take) <= reserveDip + 0.5)
+            {
+                carriedNoteDip = 0;
+                carryChain.Clear();
+                return;
+            }
+
+            carryChain.Add((pageIds, reserveDip, carryChain.Count + 1));
+            var probe = carryChain.Append((Array.Empty<int>(), 1_000_000.0, carryChain.Count + 1)).ToList();
+            var bands = DocumentNoteRegionPlanner.BuildSequentialFootnoteBands(document, probe, contentWidthDip);
+            carriedNoteDip = bands.Count > 0 && bands[^1].HasContent ? bands[^1].EstimatedHeightDip : 0;
+            if (carriedNoteDip <= 0)
+                carryChain.Clear();
+        }
+
         double ReserveFor(int blockCount)
         {
-            var ids = pending.Take(blockCount)
-                .Where(entry => !entry.IsContinuation)
-                .SelectMany(entry => FootnoteIdsInModelBlock(modelBlocks[entry.ModelIndex]))
-                .Distinct()
-                .ToList();
-            if (ids.Count == 0)
-                return 0;
-            var plan = DocumentNoteRegionPlanner.BuildFootnoteRegion(document, ids, pageNumber: 1, contentWidthDip);
-            return plan.EstimatedHeightDip <= 0
+            var demand = NoteDemandFor(blockCount);
+            return demand <= 0
                 ? 0
-                : ClampFootnoteReserveDip(plan.EstimatedHeightDip + footnoteFrameClearanceDip, segment.Page);
+                : ClampFootnoteReserveDip(Math.Min(demand, maxBandDip) + footnoteFrameClearanceDip, segment.Page);
         }
 
         void SetReserve(double reserveDip) =>
@@ -699,6 +814,11 @@ internal static class PaginationEngine
         var localPage = 0;
         while (pending.Count > 0)
         {
+            // Each pass starts a fresh page, so a page break before its first block is already honoured;
+            // left set, WPF would emit an empty page ahead of it.
+            if (pending[0].Block.BreakPageBefore)
+                pending[0].Block.BreakPageBefore = false;
+
             // The notes of what fits without a reserve are an upper bound for this page; under that
             // reserve fewer blocks fit, so try the smaller reserve they need and keep it only if it
             // still covers the page it produces.
@@ -752,6 +872,9 @@ internal static class PaginationEngine
                 break;
             }
             take = Math.Clamp(take, 1, pending.Count);
+            // Whatever of this page's notes does not fit in its (capped) band continues on the next page.
+            var chunkFootnoteIds = NoteIdsOnFirstPage(take);
+            UpdateCarry(chunkFootnoteIds, Math.Max(0, reserveDip - footnoteFrameClearanceDip), take);
             var chunk = NewFlow(reserveDip);
             for (var i = 0; i < take; i++)
             {
@@ -781,7 +904,8 @@ internal static class PaginationEngine
                 chunkPaginator,
                 topInsetDip,
                 bottomInsetDip,
-                reserveDip));
+                reserveDip,
+                chunkFootnoteIds));
             localPage += chunkPages;
             pending.RemoveRange(0, take);
         }
