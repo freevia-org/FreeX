@@ -33,6 +33,24 @@ those suites in push CI, including the platform-agnostic managed-core ones (Form
 Presentation, Localization). `Test-TestGateContract.ps1` pins that every one of those projects stays
 assigned on macOS and that the two legs stay release-tier and macOS-only. FreeW and FreeP keep their
 small macOS commit legs: they own the macOS platform preflight and finish in 1.5 to 3 minutes.
+The repository-automation tests (the PowerShell preflight and tool-script runners, the GitHub workflow
+and release-automation source contracts, the macOS readiness/promotion preflights, and the resx
+localization suites) live in `tests/FreeX.Tools.Tests`, run by the Windows-only `freex-tools` commit
+gate. They used to sit inside `FreeX.App.Host.Tests`, a net10.0-windows/WPF assembly that disables
+test parallelization process-wide, so about half of its serial time was non-WPF work that waited for
+the release host batches. `FreeX.Tools.Tests` is a plain net10.0 project with xunit's class-level
+parallelism on; only the timing-sensitive and culture-mutating classes join the `Tools serial`
+collection (`DisableParallelization`). It is Windows-only because those tests launch `powershell.exe`
+against the real repository. The classes kept their `FreeX.App.Host.Tests` namespace, so the fully
+qualified test names are unchanged, and the move was proven lossless by diffing `dotnet test
+--list-tests` before and after (5,421 tests before; 4,883 in the host plus 538 here). The two
+resx classes that need WPF types (`LocalizationResourceTests`, `LocalizationUsageTests`) stay in the
+host. `Test-TestGateContract.ps1` pins that the gate stays a Windows commit gate and that the project
+stays a non-WPF project without an assembly-wide `DisableTestParallelization`. Measured on a shared
+16-core developer machine at 20-28% background load (two runs each): the 538 tests take 389 and 398 seconds
+with class-level parallelism and 528 and 635 seconds with parallelization forced off, which is how the
+host assembly runs them. The gain is capped by the largest class (`GitHubWorkflowPreflightTests`, one
+script launch per test); splitting that class is the next lever.
 The canonical `CI` workflow runs automatically
 for `main` pushes, remains manually dispatchable, and cancels superseded runs for the same ref.
 Branches are integrated after repository preflight and a successful Release build; this repository

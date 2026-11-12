@@ -15,6 +15,7 @@ namespace FreeX.App.Host.Tests;
 /// The timeout is injectable purely so this test can exercise the kill path with a short bound: an
 /// untested timeout path is the one that turns out to be broken the day it first fires.
 /// </summary>
+[Collection(ToolsTestCollections.Serial)]
 public sealed class R164_ScriptRunnerTimeoutTests
 {
     [Fact]

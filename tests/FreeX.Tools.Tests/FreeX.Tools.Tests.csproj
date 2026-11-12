@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Non-WPF repository-automation tests that used to live in FreeX.App.Host.Tests: the PowerShell
+    preflight/tool-script runners, GitHub workflow and release-automation source contracts, the macOS
+    readiness/promotion preflights, and the resx localization suites. None of them touch a WPF window,
+    so they do not need the net10.0-windows/WPF build graph or the host assembly's serial execution
+    (FreeX.App.Host.Tests disables test parallelization process-wide). Here xunit's default
+    parallelism is on at class granularity; classes that mutate process-wide state share a collection.
+
+    The classes keep their original FreeX.App.Host.Tests namespace so their fully qualified test
+    names are unchanged and the move can be proven lossless by diffing the list-tests output.
+  -->
+
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <Nullable>enable</Nullable>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/FreeX.App.Localization/FreeX.App.Localization.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Localization/Free.Shared.Localization.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
+    <ProjectReference Include="../../src/FreeX.App.Services/FreeX.App.Services.csproj" />
+    <ProjectReference Include="../../src/FreeX.Ribbon.Definitions/FreeX.Ribbon.Definitions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="FreeX.App.Services" />
+    <Using Include="FreeX.Ribbon.Definitions" />
+    <Using Include="FreeX.App.Localization.LocalizedUiText" Alias="UiText" />
+  </ItemGroup>
+
+  <!-- Helpers the host suite still uses too; compiled into both assemblies instead of duplicated. -->
+  <ItemGroup>
+    <Compile Include="../FreeX.App.Host.Tests/PowerShellScriptRunner.cs" Link="Shared/PowerShellScriptRunner.cs" />
+    <Compile Include="../FreeX.App.Host.Tests/WorkspaceFileLocator.cs" Link="Shared/WorkspaceFileLocator.cs" />
+    <Compile Include="../FreeX.App.Host.Tests/ExternalToolPreconditions.cs" Link="Shared/ExternalToolPreconditions.cs" />
+    <Compile Include="../FreeX.App.Host.Tests/LocalizationResourceTestSupport.cs" Link="Shared/LocalizationResourceTestSupport.cs" />
+  </ItemGroup>
+
+</Project>

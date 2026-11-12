@@ -317,6 +317,42 @@ foreach ($legId in $macOsReleaseOnlyLegs.Keys) {
     }
 }
 
+# The repository-automation tests (PowerShell preflight/tool-script runners, workflow and release
+# source contracts, macOS preflights, resx suites) were split out of the serial, WPF-bound
+# FreeX.App.Host.Tests into FreeX.Tools.Tests so they run on push, in parallel, without the WPF build
+# graph. Keep that split from quietly eroding: the gate must stay a Windows commit gate, and the
+# project must stay a plain net10.0 project that does not re-serialize the assembly.
+$toolsProject = "tests/FreeX.Tools.Tests/FreeX.Tools.Tests.csproj"
+if (-not $gateById.ContainsKey("freex-tools")) {
+    $errors.Add("Commit gate 'freex-tools' is missing; the repository-automation tests would only run in the release host batches.")
+}
+else {
+    $toolsGate = $gateById["freex-tools"]
+    if ([string]$toolsGate.gate -ne "commit" -or @($toolsGate.platforms) -notcontains "windows") {
+        $errors.Add("Gate 'freex-tools' must be a Windows commit gate: its tests spawn powershell.exe against the real repository.")
+    }
+    if (@($toolsGate.projects) -notcontains $toolsProject) {
+        $errors.Add("Gate 'freex-tools' must run '$toolsProject'.")
+    }
+}
+$toolsProjectPath = Join-Path $repoRoot $toolsProject
+if (-not (Test-Path -LiteralPath $toolsProjectPath -PathType Leaf)) {
+    $errors.Add("Test project '$toolsProject' was not found.")
+}
+else {
+    $toolsProjectText = Get-Content -LiteralPath $toolsProjectPath -Raw
+    if ($toolsProjectText -match "<UseWPF>\s*true" -or $toolsProjectText -match "<TargetFramework>[^<]*windows") {
+        $errors.Add("'$toolsProject' must stay a non-WPF, non-Windows-TFM project; WPF-bound tests belong in FreeX.App.Host.Tests.")
+    }
+    $toolsAssemblyInfo = Get-ChildItem -LiteralPath (Split-Path -Parent $toolsProjectPath) -Recurse -File -Filter "*.cs" |
+        Where-Object { $_.FullName -notmatch "[\\/](obj|bin)[\\/]" } |
+        Select-String -Pattern "DisableTestParallelization\s*=\s*true" -SimpleMatch:$false |
+        Where-Object { $_.Line -match "assembly:" }
+    if (@($toolsAssemblyInfo).Count -gt 0) {
+        $errors.Add("'$toolsProject' must keep xunit's class-level parallelism on; serialize individual classes with a [Collection] instead of an assembly-wide DisableTestParallelization.")
+    }
+}
+
 $testProjects = @(
     Get-ChildItem -LiteralPath $repoRoot -Recurse -File -Filter "*.csproj" |
         Where-Object {

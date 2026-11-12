@@ -68,7 +68,7 @@ public sealed class UxParityScenarioBatchScriptTests
         }
     }
 
-    [Fact]
+    [RequiresRetainedForegroundEvidenceFact]
     public void NativeOutputSuite_CanListScenarioEvidenceContractWithoutLaunchingForegroundCapture()
     {
         var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
@@ -110,7 +110,7 @@ public sealed class UxParityScenarioBatchScriptTests
             record.GetProperty("missingEvidence").EnumerateArray().Any(missing => missing.GetString() == "avaloniaForegroundCapture"));
     }
 
-    [Fact]
+    [RequiresRetainedForegroundEvidenceFact]
     public void NativeOutputSuite_ListScenariosReportsMissingRetainedArtifactsBeforeTrustingCatalogRows()
     {
         var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
