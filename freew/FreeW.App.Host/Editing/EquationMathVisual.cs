@@ -22,6 +22,9 @@ internal sealed class EquationMathVisual : FrameworkElement
         Layout = EquationMathLayout.Layout(equation, WpfMathLayoutFont.Instance, fontSize, display);
         TextBlock.SetBaselineOffset(this, Layout.Ascent);
         SnapsToDevicePixels = false;
+
+        // Math is laid out left to right even inside a right-to-left paragraph (Word's default).
+        FlowDirection = FlowDirection.LeftToRight;
     }
 
     /// <summary>The model equation this visual draws.</summary>

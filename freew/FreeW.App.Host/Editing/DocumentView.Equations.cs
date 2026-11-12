@@ -33,7 +33,8 @@ public sealed partial class DocumentView
     internal static FrameworkElement BuildEquationPreview(Equation equation)
     {
         ArgumentNullException.ThrowIfNull(equation);
-        return BuildEquationMathVisual(equation);
+        // The editor preview is read at a comfortable 20 DIP (15 pt) regardless of the document's size.
+        return BuildEquationMathVisual(equation, fontSizePt: 15);
     }
 
     /// <summary>

@@ -824,9 +824,17 @@ public static class EquationMathLayout
             var extent = Math.Max(maxAscent - axis, maxDescent + axis);
             var target = 2 * extent * 0.95;
 
+            // A bracketed matrix keeps a little air between its cells and the fences (a bare m:m has none).
+            var matrixPadding = run.AdditionalDelimiterArguments.Count == 0
+                && run.DelimiterContentEquation is { Runs: [{ Kind: MathRunKind.Matrix }] }
+                    ? new Box { Width = 0.1 * size, IsSpace = true }
+                    : null;
+
             var parts = new List<Box>();
             if (Fence(run.OpenChar, target, ctx, MathAtomClass.Open) is { } open)
                 parts.Add(open);
+            if (matrixPadding is not null)
+                parts.Add(matrixPadding);
             for (var i = 0; i < arguments.Count; i++)
             {
                 if (i > 0 && Fence(run.DelimiterSeparator, target, ctx, null) is { } separator)
@@ -834,6 +842,8 @@ public static class EquationMathLayout
                 parts.Add(arguments[i]);
             }
 
+            if (matrixPadding is not null)
+                parts.Add(matrixPadding);
             if (Fence(run.CloseChar, target, ctx, MathAtomClass.Close) is { } close)
                 parts.Add(close);
 
