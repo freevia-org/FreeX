@@ -287,12 +287,21 @@ public sealed class ReleaseAutomationWorkflowTests
         // release-readiness.yml already runs the release-only gates, so re-running them held macOS
         // slots the package legs needed. The condition must be exactly the dry_run input: nothing
         // else may switch the real-release tests off.
-        releaseTests.Should().Contain("if: ${{ !inputs.dry_run }}");
+        // The only other way the tests are skipped is verified readiness evidence on this exact
+        // commit, and only the literal 'true' from the candidate job counts (empty runs everything).
+        releaseTests.Should().Contain(
+            "if: ${{ !inputs.dry_run && needs.candidate.outputs.gate_evidence_reuse != 'true' }}");
+        var candidate = ExtractWorkflowJob(workflow, "candidate");
+        candidate.Should().Contain("gate_evidence_reuse: ${{ steps.gate_evidence.outputs.reuse }}");
+        candidate.Should().Contain("pwsh -NoProfile -File tools/Resolve-ReleaseGateEvidence.ps1");
+        candidate.Should().Contain("-CommitSha $env:GITHUB_SHA");
 
-        // 'skipped' is accepted only together with the dry_run input; a real release needs 'success'.
+        // 'skipped' is accepted only together with the dry_run input or verified evidence; a real
+        // release without either needs 'success'.
         releaseGate.Should().Contain("$isDryRun = \"${{ inputs.dry_run }}\" -eq 'true'");
+        releaseGate.Should().Contain("$evidenceReused = \"${{ needs.candidate.outputs.gate_evidence_reuse }}\" -eq 'true'");
         releaseGate.Should().Contain(
-            "$releaseTestsAcceptable = $releaseTestResult -eq 'success' -or ($isDryRun -and $releaseTestResult -eq 'skipped')");
+            "$releaseTestsAcceptable = $releaseTestResult -eq 'success' -or (($isDryRun -or $evidenceReused) -and $releaseTestResult -eq 'skipped')");
         releaseGate.Should().Contain("-not $releaseTestsAcceptable");
         releaseGate.Should().NotContain("$releaseTestResult -ne 'success'",
             "the old unconditional check would reject the skipped tests of a dry run");
