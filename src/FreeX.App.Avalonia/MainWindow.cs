@@ -293,6 +293,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.Brush("ChromeSurface"))
         ?? new ImmutableSolidColorBrush(global::Avalonia.Media.Color.FromRgb(0xF7, 0xF8, 0xF8));
     private static readonly IBrush StatusBarSurface = Brush(23, 50, 77);
+    // WPF: SheetTabsPanelRoot, SheetTabsRowGrid and the tab navigation buttons sit on
+    // FreeXSheetSurfaceBrush (#F3F3F3), not the ribbon chrome surface.
+    private static readonly IBrush SheetTabStripSurface =
+        AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.SheetSurfaceBrush) ?? Brush(243, 243, 243);
+    // WPF: MainWindow.SheetTabs.cs SheetTabSeparatorBrush (#B8BEC4, drawn at 0.68 opacity).
+    private static readonly IBrush SheetTabSeparatorBrush = Brush(0xB8, 0xBE, 0xC4);
+    // WPF: UpdateSheetTabNavigation paints the tab navigation chevrons FreeXAccentDarkBrush when the
+    // strip can scroll that way and FreeXBorderStrongBrush when it cannot.
+    private static readonly IBrush SheetTabNavigationActiveBrush =
+        AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.Brush("AccentDark")) ?? Brush(0x17, 0x32, 0x4D);
+    private static readonly IBrush SheetTabNavigationInactiveBrush =
+        AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.Brush("BorderStrong")) ?? Brush(0xC8, 0xCC, 0xD0);
+    // WPF: the sheet-tab hover / pressed fills (#E6F6FA / #CCEAF2 in MainWindow.xaml) are the
+    // AccentSoft / AccentPressed tokens.
+    private static readonly IBrush SheetTabPressedBackground =
+        AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.Brush("AccentPressed")) ?? Brush(0xCC, 0xEA, 0xF2);
+    // WPF: StatusBarRoot BorderBrush FreeXBorderBrush (#DADCE0), BorderThickness 0,1,0,0.
+    private static readonly IBrush StatusBarBorder =
+        AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.Brush("Border")) ?? Brush(0xDA, 0xDC, 0xE0);
     // WS-G token: FreeXAccentBrush (#0F6D8C) — byte-identical to the literal.
     private static readonly IBrush SheetTabContourBrush =
         AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.Brush("Accent")) ?? Brush(15, 109, 140);
@@ -309,7 +328,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var border = new Border
         {
-            CornerRadius = new CornerRadius(1),
+            // WPF: StatusBarViewToggleButtonStyle Chrome CornerRadius=3.
+            CornerRadius = new CornerRadius(3),
             Child = presenter,
         };
         border.Bind(Border.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = button });
@@ -1820,8 +1840,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             handledEventsToo: true);
 
         _verticalWorksheetScrollBar.Orientation = Orientation.Vertical;
-        _verticalWorksheetScrollBar.Width = 16;
+        _verticalWorksheetScrollBar.Width = WorksheetScrollBarThickness;
         _verticalWorksheetScrollBar.AllowAutoHide = false;
+        ApplyWorksheetScrollBarChrome(_verticalWorksheetScrollBar);
         _verticalWorksheetScrollBar.ValueChanged += WorksheetScrollBar_ValueChanged;
 
         var chrome = new AvaloniaGrid
@@ -1856,6 +1877,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _newSheetButton.Background = Brushes.Transparent;
         _newSheetButton.BorderThickness = new Thickness(0);
         _newSheetButton.Foreground = SheetTabContourBrush;
+        // WPF AddSheetButton template: bottom-rounded hit visual that fills #E6F6FA on hover and
+        // #CCEAF2 when pressed, with the accent plus sign unchanged (Fluent greys both).
+        _newSheetButton.CornerRadius = new CornerRadius(0, 0, 4, 4);
+        _newSheetButton.Resources["ButtonBackgroundPointerOver"] = CheckedCommandBackground;
+        _newSheetButton.Resources["ButtonBackgroundPressed"] = SheetTabPressedBackground;
+        _newSheetButton.Resources["ButtonForegroundPointerOver"] = SheetTabContourBrush;
+        _newSheetButton.Resources["ButtonForegroundPressed"] = SheetTabContourBrush;
+        _newSheetButton.Resources["ButtonBorderBrushPointerOver"] = Brushes.Transparent;
+        _newSheetButton.Resources["ButtonBorderBrushPressed"] = Brushes.Transparent;
         _newSheetButton.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
         _newSheetButton.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
         _newSheetButton.Click += (_, _) => AddNewSheet();
@@ -1866,7 +1896,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _sheetTabsHost.Content = BuildSheetTabs();
 
         _horizontalWorksheetScrollBar.Orientation = Orientation.Horizontal;
-        _horizontalWorksheetScrollBar.Height = 16;
+        _horizontalWorksheetScrollBar.Height = WorksheetScrollBarThickness;
+        _horizontalWorksheetScrollBar.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        ApplyWorksheetScrollBarChrome(_horizontalWorksheetScrollBar);
         _horizontalWorksheetScrollBar.Width = SheetHorizontalScrollbarDefaultWidth;
         _horizontalWorksheetScrollBar.MinWidth = SheetHorizontalScrollbarMinimumWidth;
         _horizontalWorksheetScrollBar.MaxWidth = SheetHorizontalScrollbarMaximumWidth;
@@ -1917,7 +1949,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Width = HeaderColumnWidth,
             Height = 27,
-            Background = ChromeSurface,
+            Background = SheetTabStripSurface,
             Child = _sheetTabLeftNavButton,
             ZIndex = 4,
         };
@@ -1960,38 +1992,90 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         return new Border
         {
-            Background = ChromeSurface,
+            Background = SheetTabStripSurface,
             BorderThickness = new Thickness(0),
             Padding = new Thickness(0),
             Child = shell,
         };
     }
 
+    // WPF's worksheet scrollbars are the classic system bars: 17px thick, a #F0F0F0 track, a
+    // square #CDCDCD thumb (#A6A6A6 hover, #606060 pressed) and #606060 arrow glyphs on buttons
+    // that share the track colour. Fluent draws a 12px bar with a rounded translucent thumb, so the
+    // bar's own resource scope carries the classic colours and thickness.
+    private const double WorksheetScrollBarThickness = 17;
+
+    private static void ApplyWorksheetScrollBarChrome(ScrollBar scrollBar)
+    {
+        var track = Brush(0xF0, 0xF0, 0xF0);
+        var thumb = Brush(0xCD, 0xCD, 0xCD);
+        var thumbHover = Brush(0xA6, 0xA6, 0xA6);
+        var thumbPressed = Brush(0x60, 0x60, 0x60);
+        var glyph = Brush(0x60, 0x60, 0x60);
+        var buttonHover = Brush(0xDA, 0xDA, 0xDA);
+        var resources = scrollBar.Resources;
+        resources["ScrollBarSize"] = WorksheetScrollBarThickness;
+        resources["ScrollBarBackground"] = track;
+        resources["ScrollBarBackgroundPointerOver"] = track;
+        resources["ScrollBarTrackFill"] = track;
+        resources["ScrollBarTrackFillPointerOver"] = track;
+        resources["ScrollBarTrackStroke"] = Brushes.Transparent;
+        resources["ScrollBarTrackStrokePointerOver"] = Brushes.Transparent;
+        resources["ScrollBarPanningThumbBackground"] = thumb;
+        resources["ScrollBarThumbFillPointerOver"] = thumbHover;
+        resources["ScrollBarThumbFillPressed"] = thumbPressed;
+        resources["ScrollBarButtonBackground"] = track;
+        resources["ScrollBarButtonBackgroundPointerOver"] = buttonHover;
+        resources["ScrollBarButtonBackgroundPressed"] = thumbPressed;
+        resources["ScrollBarButtonArrowForeground"] = glyph;
+        resources["ScrollBarButtonArrowForegroundPointerOver"] = Brushes.Black;
+        resources["ScrollBarButtonArrowForegroundPressed"] = Brushes.White;
+    }
+
     private void ConfigureSheetTabNavigationButton(Button button, string glyph, string automationName, int direction)
     {
-        button.Content = glyph;
-        button.Width = 24;
-        button.Height = 27;
+        // WPF SheetNavLeftBtn / SheetNavRightBtn: 28x26, 1px down from the strip top, a 14px
+        // chevron stroked 1.75 in the button foreground, hover #E6F6FA and pressed #CCEAF2 fills.
+        // The text form of the arrow stays on the button for automation dumps.
+        button.Tag = glyph;
+        button.Content = CreateSheetTabNavigationChevron(button, direction);
+        button.Width = 28;
+        button.Height = 26;
         button.Padding = new Thickness(0);
         button.FontSize = 15;
         button.FontWeight = FontWeight.SemiBold;
-        button.Background = ChromeSurface;
+        button.Background = SheetTabStripSurface;
         button.BorderBrush = Brushes.Transparent;
         button.BorderThickness = new Thickness(0);
-        button.Foreground = SheetTabContourBrush;
+        button.Foreground = SheetTabNavigationActiveBrush;
         button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
         button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
         button.VerticalAlignment = AvaloniaVerticalAlignment.Top;
-        button.Margin = new Thickness(0);
+        button.Margin = new Thickness(0, 1, 0, 0);
         button.Focusable = true;
         button.IsVisible = false;
+        button.PointerEntered += (_, _) => button.Background = CheckedCommandBackground;
+        button.PointerExited += (_, _) => button.Background = SheetTabStripSurface;
+        button.AddHandler(
+            InputElement.PointerPressedEvent,
+            (_, args) =>
+            {
+                if (args.GetCurrentPoint(button).Properties.IsLeftButtonPressed)
+                    button.Background = SheetTabPressedBackground;
+            },
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
+        button.AddHandler(
+            InputElement.PointerReleasedEvent,
+            (_, _) => button.Background = button.IsPointerOver ? CheckedCommandBackground : SheetTabStripSurface,
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
         button.Template = new FuncControlTemplate<Button>((control, _) =>
         {
             var presenter = new ContentPresenter
             {
                 HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
-                Margin = new Thickness(0, -2, 0, 0),
             };
             presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = control });
             presenter.Bind(ContentPresenter.ForegroundProperty, new Binding(nameof(ContentControl.Foreground)) { Source = control });
@@ -2009,6 +2093,34 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetHelpText(button, direction < 0
             ? "Scrolls the worksheet tab list to the left."
             : "Scrolls the worksheet tab list to the right.");
+    }
+
+    // WPF: a 14x14 box holding the chevron path (left "M 9,1 L 5,5 L 9,9", right mirrored),
+    // stroked 1.75 in the button foreground with square caps and a miter join.
+    private static Control CreateSheetTabNavigationChevron(Button owner, int direction)
+    {
+        var chevron = new global::Avalonia.Controls.Shapes.Path
+        {
+            Data = Geometry.Parse(direction < 0 ? "M 9,1 L 5,5 L 9,9" : "M 5,1 L 9,5 L 5,9"),
+            StrokeThickness = 1.75,
+            StrokeLineCap = PenLineCap.Square,
+            StrokeJoin = PenLineJoin.Miter,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            IsHitTestVisible = false,
+        };
+        chevron.Bind(
+            global::Avalonia.Controls.Shapes.Shape.StrokeProperty,
+            new Binding(nameof(TemplatedControl.Foreground)) { Source = owner });
+
+        var box = new AvaloniaGrid
+        {
+            Width = 14,
+            Height = 14,
+            IsHitTestVisible = false,
+        };
+        box.Children.Add(chevron);
+        return box;
     }
 
     private void UpdateSheetTabNavigationVisibility()
@@ -2031,11 +2143,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _sheetTabRightNavButton.IsVisible = hasOverflow;
         _sheetTabLeftNavButton.IsEnabled = hasOverflow;
         _sheetTabRightNavButton.IsEnabled = hasOverflow;
-        _sheetTabLeftNavButton.Opacity = SheetTabPointerPlanner.CanScrollLeft(_sheetTabsScroller.Offset.X) ? 1 : 0.45;
-        _sheetTabRightNavButton.Opacity = SheetTabPointerPlanner.CanScrollRight(
+        _sheetTabLeftNavButton.Foreground = SheetTabPointerPlanner.CanScrollLeft(_sheetTabsScroller.Offset.X)
+            ? SheetTabNavigationActiveBrush
+            : SheetTabNavigationInactiveBrush;
+        _sheetTabRightNavButton.Foreground = SheetTabPointerPlanner.CanScrollRight(
             _sheetTabsScroller.Offset.X,
             _sheetTabsScroller.Extent.Width,
-            _sheetTabsScroller.Viewport.Width) ? 1 : 0.45;
+            _sheetTabsScroller.Viewport.Width)
+            ? SheetTabNavigationActiveBrush
+            : SheetTabNavigationInactiveBrush;
         UpdateSheetTabsContourLayer();
     }
 
@@ -3142,11 +3258,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FreeXAutomationIdCatalog.RibbonShellStatusNumLockText);
         AutomationProperties.SetName(_statusNumLockText, UiText.Get("StatusBar_NumLock"));
 
+        // WPF StatusZoomText: status-bar text size, regular weight, 38px wide, left aligned.
         _zoomText.FontSize = 12;
-        _zoomText.FontWeight = FontWeight.SemiBold;
+        _zoomText.FontWeight = FontWeight.Normal;
         _zoomText.Foreground = StatusBarForeground;
-        _zoomText.MinWidth = 44;
-        _zoomText.TextAlignment = TextAlignment.Right;
+        _zoomText.TextAlignment = TextAlignment.Left;
         _zoomText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _zoomText.Focusable = true;
         AutomationProperties.SetName(_zoomText, UiText.CreateAutomationName(UiText.Get("Common_Zoom")));
@@ -3464,17 +3580,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _alignRightButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _alignRightButton.Click += AlignRightButton_Click;
 
-        _cellAddressText.Width = 58;
+        // WPF: 80px box less the 1px border, the 4px text inset and the 18px toggle column (+2).
+        _cellAddressText.Width = 54;
         _cellAddressText.FontFamily = FormulaBarFontFamily;
         _cellAddressText.FontSize = 13;
-        _cellAddressText.FontWeight = FontWeight.SemiBold;
+        // WPF CellAddressBox sets no FontWeight: the name box is regular-weight text.
+        _cellAddressText.FontWeight = FontWeight.Normal;
         if (OperatingSystem.IsMacOS())
-        {
-            // Arial has no semibold face, so SemiBold resolves to full Bold on macOS; the Windows
-            // name box reads as regular-weight text.
             _cellAddressText.FontFamily = MacOsFormulaBarFontFamily;
-            _cellAddressText.FontWeight = FontWeight.Normal;
-        }
         _cellAddressText.Foreground = Brush(28, 38, 48);
         _cellAddressText.TextAlignment = TextAlignment.Left;
         _cellAddressText.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
@@ -3523,14 +3636,31 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var cellAddressChrome = new DockPanel { LastChildFill = true };
         _cellAddressDropDownButton.Content = "";
-        _cellAddressDropDownButton.Width = 16;
-        _cellAddressDropDownButton.MinWidth = 16;
+        // WPF ComboBox template (MainWindowResources.xaml): an 18px toggle column holding a filled
+        // 8x4 #333 triangle. Fluent's DropDownButton draws a stroked chevron instead, so the button
+        // gets the WPF glyph as its whole template; it stays a plain transparent hit target.
+        _cellAddressDropDownButton.Width = 18;
+        _cellAddressDropDownButton.MinWidth = 18;
         _cellAddressDropDownButton.Foreground = HeaderForeground;
         _cellAddressDropDownButton.Background = Brushes.Transparent;
         _cellAddressDropDownButton.BorderThickness = new Thickness(0);
         _cellAddressDropDownButton.Padding = new Thickness(0);
         _cellAddressDropDownButton.HorizontalAlignment = AvaloniaHorizontalAlignment.Center;
-        _cellAddressDropDownButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _cellAddressDropDownButton.VerticalAlignment = AvaloniaVerticalAlignment.Stretch;
+        _cellAddressDropDownButton.Template = new FuncControlTemplate<DropDownButton>((_, _) => new Border
+        {
+            Background = Brushes.Transparent,
+            Child = new global::Avalonia.Controls.Shapes.Path
+            {
+                Data = Geometry.Parse("M 0 0 L 4 4 L 8 0 Z"),
+                Width = 8,
+                Height = 4,
+                Fill = Brush(0x33, 0x33, 0x33),
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                IsHitTestVisible = false,
+            },
+        });
         CreateCellAddressAutocompletePopup();
         // Use an explicit pointer route rather than relying on the DropDownButton template's
         // MenuFlyout hookup, which is not reliable on the Linux X11 backend.
@@ -3560,8 +3690,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Background = Brushes.White,
             BorderBrush = FormulaBarControlBorder,
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(5, 3, 3, 3),
-            Margin = new Thickness(4, 0, 4, 0),
+            // WPF: the editable text sits 4,1 inside the border and the toggle column reaches the
+            // right edge; FormulaBarBorder Padding 4 on the left, the button panel 3px to the right.
+            Padding = new Thickness(3, 1, 0, 1),
+            Margin = new Thickness(4, 0, 3, 0),
             Child = cellAddressChrome,
         };
         DockPanel.SetDock(cellAddressBorder, Dock.Left);
@@ -3578,12 +3710,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Brush(192, 0, 0),
             1.55,
             CancelCellEditAndRestoreCommittedText));
-        formulaButtons.Children.Add(CreateFormulaBarPathButton(
+        var enterEditButton = CreateFormulaBarPathButton(
             FormulaBarChromePlanner.EnterEditButton,
             "M3,8 L6,11 L13,4",
             Brush(0, 128, 0),
             1.65,
-            () => CommitFormulaBox()));
+            () => CommitFormulaBox());
+        // WPF FormulaBarEnterButton Margin 0,0,3,0 (the cancel button keeps 0,0,1,0).
+        enterEditButton.Margin = new Thickness(0, 0, 3, 0);
+        formulaButtons.Children.Add(enterEditButton);
         formulaButtons.Children.Add(CreateFormulaBarTextButton(
             FormulaBarChromePlanner.InsertFunctionButton,
             Brush(68, 68, 68),
@@ -3613,9 +3748,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Child = _formulaReferenceTextOverlay,
         });
 
+        // WPF: the formula box follows the button panel's 2px right margin directly and the expand
+        // button carries its own 2px left margin.
         var formulaFill = new Border
         {
-            Padding = new Thickness(3, 0, 2, 0),
+            Padding = new Thickness(0),
             Child = formulaOverlayHost,
         };
 
@@ -3626,7 +3763,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         formulaDock.Children.Add(formulaFill);
 
         _formulaBarHost.Background = Brushes.White;
-        _formulaBarHost.BorderBrush = ToolbarBorder;
+        // WPF FormulaBarBorder: BorderBrush #D0D0D0, BorderThickness 0,0,0,1.
+        _formulaBarHost.BorderBrush = Brush(0xD0, 0xD0, 0xD0);
         _formulaBarHost.BorderThickness = new Thickness(0, 0, 0, 1);
         _formulaBarHost.Height = collapsedFormulaBarPlan.HostHeight;
         _formulaBarHost.Child = formulaDock;
@@ -3675,7 +3813,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
         };
-        return CreateFormulaBarChromeButton(text, width: 24, height: 22, plan, action);
+        // WPF FormulaBarFxButton: no fixed width, Padding 2,0, Margin 0.
+        var button = CreateFormulaBarChromeButton(text, width: double.NaN, height: 22, plan, action);
+        button.Padding = new Thickness(2, 0);
+        button.Margin = new Thickness(0);
+        button.MinWidth = 0;
+        return button;
     }
 
     private static Button CreateFormulaBarChromeButton(
@@ -3709,7 +3852,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaExpandButton.Width = 18;
         _formulaExpandButton.Height = 18;
         _formulaExpandButton.Padding = new Thickness(0);
-        _formulaExpandButton.Margin = new Thickness(2, 6, 5, 0);
+        // WPF FormulaBarExpandBtn: Margin 2,0,0,0 at the top of FormulaBarBorder's 4,5 padding.
+        _formulaExpandButton.Margin = new Thickness(2, 5, 4, 0);
         _formulaExpandButton.Background = Brushes.Transparent;
         _formulaExpandButton.BorderThickness = new Thickness(0);
         _formulaExpandButton.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
@@ -3748,12 +3892,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private static Control CreateFormulaBarChevron(bool pointsUp)
     {
-        var data = pointsUp ? "M2,6 L5,3 L8,6" : "M2,3 L5,6 L8,3";
+        // WPF FormulaBarExpandBtn glyph: "M2,2 L6,6 L10,2" in a 12x8 box, stroke 1.45.
+        var data = pointsUp ? "M2,6 L6,2 L10,6" : "M2,2 L6,6 L10,2";
         return new global::Avalonia.Controls.Shapes.Path
         {
             Data = Geometry.Parse(data),
-            Width = 10,
-            Height = 7,
+            Width = 12,
+            Height = 8,
             Stroke = Brush(31, 31, 31),
             StrokeThickness = 1.45,
             StrokeLineCap = PenLineCap.Round,
@@ -3949,12 +4094,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var statusBarBackground = AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.StatusSurfaceBrush) ?? StatusBarSurface;
         // Resolve height from token (FreeXStatusBarHeight = 28); falls back to captured literal.
         var statusBarHeight = AvaloniaThemeResourceResolver.ResolveOr(ThemeResources.StatusBarHeight, 28.0);
+        // WPF StatusBarRoot has no explicit height: it is the 24px control row inside Padding 8,3
+        // under a 1px FreeXBorderBrush top rule, 31px in all. A 28px bar squeezes the 24px view and
+        // zoom rows into 22px, so the bar is never shorter than its WPF content.
+        const double statusBarContentHeight = 24 + 3 + 3 + 1;
         return SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
             Background: statusBarBackground,
             LeftContent: leftPanel,
             RightItems: [rightPanel],
-            Height: statusBarHeight,
-            BorderThickness: new Thickness(0),
+            Height: Math.Max(statusBarHeight, statusBarContentHeight),
+            BorderBrush: StatusBarBorder,
+            BorderThickness: new Thickness(0, 1, 0, 0),
             CenterContent: statsViewport,
             Padding: new Thickness(8, 3))).Root;
     }
@@ -3972,30 +4122,46 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var zoomSliderPlan = StatusBarZoomSliderPlanner.Build(_session.ZoomPercent);
         _statusZoomSliderHost.Width = zoomSliderPlan.SliderWidth;
         _statusZoomSliderHost.Height = zoomSliderPlan.SliderHeight;
+        // WPF StatusZoomSliderControls: 22 | 4 | 120 | 4 | 22 columns around the slider.
+        _statusZoomSliderHost.Margin = new Thickness(4, 0);
         _statusZoomSliderHost.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _statusZoomSliderHost.ClipToBounds = true;
         _statusZoomSliderHost.Children.Clear();
+        // WPF ZoomSlider is the system slider with TickPlacement=BottomRight: a 4px #E7EAEA track
+        // outlined #D6D6D6, a downward-pointing #F0F0F0 thumb outlined #ACACAC, and the tick row
+        // below the thumb. The thumb therefore hangs from the top of the slider box and the track
+        // runs through the middle of the thumb, not of the box.
+        var thumbHeight = StatusBarZoomSliderPlanner.ThumbHeight;
+        var thumbWidth = StatusBarZoomSliderPlanner.ThumbWidth;
+        var thumbBodyHeight = Math.Round(thumbHeight * 2 / 3);
         var track = new Border
         {
             Height = 4,
-            Margin = new Thickness(8, 0),
-            Background = Brush(218, 222, 228),
-            BorderBrush = Brush(175, 184, 193),
+            Margin = new Thickness(8, Math.Floor((thumbHeight - 4) / 2), 8, 0),
+            Background = Brush(231, 234, 234),
+            BorderBrush = Brush(214, 214, 214),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(0),
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
         };
         track.ZIndex = 0;
         _statusZoomSliderHost.Children.Add(track);
 
-        _statusZoomSliderThumb.Width = StatusBarZoomSliderPlanner.ThumbWidth;
-        _statusZoomSliderThumb.Height = StatusBarZoomSliderPlanner.ThumbHeight;
-        _statusZoomSliderThumb.Background = Brush(248, 249, 250);
-        _statusZoomSliderThumb.BorderBrush = Brush(124, 133, 143);
-        _statusZoomSliderThumb.BorderThickness = new Thickness(1);
-        _statusZoomSliderThumb.CornerRadius = new CornerRadius(1);
+        _statusZoomSliderThumb.Width = thumbWidth;
+        _statusZoomSliderThumb.Height = thumbHeight;
+        _statusZoomSliderThumb.Background = Brushes.Transparent;
+        _statusZoomSliderThumb.BorderThickness = new Thickness(0);
+        _statusZoomSliderThumb.Child = new global::Avalonia.Controls.Shapes.Path
+        {
+            Data = Geometry.Parse(FormattableString.Invariant(
+                $"M 0.5,0.5 L {thumbWidth - 0.5},0.5 L {thumbWidth - 0.5},{thumbBodyHeight + 0.5} L {thumbWidth / 2},{thumbHeight - 0.5} L 0.5,{thumbBodyHeight + 0.5} Z")),
+            Fill = Brush(240, 240, 240),
+            Stroke = Brush(172, 172, 172),
+            StrokeThickness = 1,
+            IsHitTestVisible = false,
+        };
         _statusZoomSliderThumb.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
-        _statusZoomSliderThumb.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _statusZoomSliderThumb.VerticalAlignment = AvaloniaVerticalAlignment.Top;
         _statusZoomSliderThumb.IsHitTestVisible = false;
         _statusZoomSliderThumb.ZIndex = 10;
         _statusZoomSliderHost.Children.Add(_statusZoomSliderThumb);
@@ -4011,13 +4177,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return _statusZoomSliderHost;
     }
 
+    // WPF: the system slider's TickBar is filled with the slider foreground (#E5E5E5) and sits
+    // directly under the thumb at the bottom of the slider box.
     private static Control BuildStatusZoomTick(double left) =>
         new Border
         {
             Width = 1,
             Height = 4,
-            Margin = new Thickness(left, 0, 0, 2),
-            Background = Brush(232, 236, 240),
+            Margin = new Thickness(left, 0, 0, 0),
+            Background = Brush(229, 229, 229),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
             VerticalAlignment = AvaloniaVerticalAlignment.Bottom,
             IsHitTestVisible = false,
@@ -4077,19 +4245,30 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private Button CreateStatusBarZoomButton(bool isZoomIn)
     {
+        // WPF StatusBarZoomButtonStyle: transparent 1px-bordered chrome with a 3px corner that takes
+        // the RibbonButtonHover fill and BorderStrong outline under the pointer and the AccentPressed
+        // fill while pressed; the glyph keeps the status foreground (Fluent greys the whole button).
         var button = new Button
         {
             Width = 22,
             Height = 22,
             Padding = new Thickness(0),
             Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(3),
             Foreground = StatusBarForeground,
             Content = CreateStatusBarZoomGlyph(isZoomIn),
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        button.Resources["ButtonBackgroundPointerOver"] = StatusBarCheckedViewBackground;
+        button.Resources["ButtonBorderBrushPointerOver"] = StatusBarCheckedViewBorder;
+        button.Resources["ButtonForegroundPointerOver"] = StatusBarForeground;
+        button.Resources["ButtonBackgroundPressed"] = SheetTabPressedBackground;
+        button.Resources["ButtonBorderBrushPressed"] = StatusBarCheckedViewBorder;
+        button.Resources["ButtonForegroundPressed"] = StatusBarForeground;
         button.Click += (_, _) =>
         {
             if (isZoomIn)
@@ -4606,37 +4785,51 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Margin = new Thickness(SheetTabStripLeadingInset, 0, 0, 0),
         };
 
-        foreach (var tab in _session.SheetTabs)
+        var sheetTabs = _session.SheetTabs;
+        for (var tabIndex = 0; tabIndex < sheetTabs.Count; tabIndex++)
         {
+            var tab = sheetTabs[tabIndex];
             var isGroupedTab = tab.IsGrouped && _session.IsWorkbookGrouped;
-            var content = new AvaloniaGrid
-            {
-                RowDefinitions =
-                {
-                    new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
-                    new RowDefinition { Height = new GridLength(2) },
-                },
-            };
+            var content = new AvaloniaGrid();
             var label = new TextBlock
             {
                 Text = tab.Name,
                 FontSize = 13,
-                FontWeight = tab.IsActive || isGroupedTab ? FontWeight.SemiBold : FontWeight.Normal,
+                FontWeight = ResolveSheetTabFontWeight(tab.IsActive || isGroupedTab),
                 Foreground = tab.IsActive ? PrimaryInk : HeaderForeground,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 TextAlignment = TextAlignment.Center,
                 HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
             };
-            var tabColorRule = new Border
-            {
-                Background = tab.TabColor is { } tabColor ? Brush(tabColor) : Brushes.Transparent,
-                IsHitTestVisible = false,
-            };
-            AvaloniaGrid.SetRow(label, 0);
-            AvaloniaGrid.SetRow(tabColorRule, 1);
             content.Children.Add(label);
-            content.Children.Add(tabColorRule);
+
+            // WPF RenderInactiveSheetTab: a short #B8BEC4 rule (14px of the strip height, 0.68
+            // opacity) closes every inactive tab except the one just left of the active tab, whose
+            // edge is the active contour. It sits on the tab edge, outside the label padding.
+            var nextTabIsActive = tabIndex + 1 < sheetTabs.Count && sheetTabs[tabIndex + 1].IsActive;
+            if (!tab.IsActive && !nextTabIsActive)
+            {
+                content.Children.Add(new Border
+                {
+                    Width = 1,
+                    Height = 14,
+                    Margin = new Thickness(0, 0, -8, 0),
+                    Background = SheetTabSeparatorBrush,
+                    Opacity = 0.68,
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+                    VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                    IsHitTestVisible = false,
+                });
+            }
+
+            // WPF UpdateSheetTabsChromeLayer: a coloured tab is filled with the pastel of its tab
+            // colour, a grouped tab with the AccentSoft fill, and the active tab is white unless it
+            // is coloured. There is no separate colour underline.
+            var tabFill = tab.TabColor is { } tabColor ? CreatePastelSheetTabBrush(tabColor)
+                : tab.IsActive ? Brushes.White
+                : isGroupedTab ? CheckedCommandBackground
+                : Brushes.Transparent;
 
             var button = new Button
             {
@@ -4646,17 +4839,33 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 Height = 27,
                 Focusable = true,
                 Padding = new Thickness(8, 0, 8, 0),
-                Background = tab.IsActive
-                    ? Brushes.White
-                    : isGroupedTab
-                        ? Brush(236, 246, 255)
-                        : Brushes.Transparent,
+                Background = tabFill,
                 BorderBrush = Brush(213, 217, 223),
-                BorderThickness = tab.IsActive ? new Thickness(1, 1, 1, 0) : new Thickness(0, 0, 1, 0),
+                BorderThickness = tab.IsActive ? new Thickness(1, 1, 1, 0) : new Thickness(0),
                 Content = content,
                 Tag = tab.Id,
                 Margin = tab.IsActive ? new Thickness(0, -1, 0, 0) : new Thickness(0),
             };
+            if (!tab.IsActive)
+            {
+                // WPF tab template: an inactive tab fills #E6F6FA under the pointer and #CCEAF2
+                // while pressed (Fluent would grey it).
+                button.Resources["ButtonBackgroundPointerOver"] = CheckedCommandBackground;
+                button.Resources["ButtonBackgroundPressed"] = SheetTabPressedBackground;
+                button.Resources["ButtonBorderBrushPointerOver"] = Brushes.Transparent;
+                button.Resources["ButtonBorderBrushPressed"] = Brushes.Transparent;
+            }
+            else
+            {
+                // The active tab does not react to the pointer.
+                button.Resources["ButtonBackgroundPointerOver"] = tabFill;
+                button.Resources["ButtonBackgroundPressed"] = tabFill;
+                button.Resources["ButtonBorderBrushPointerOver"] = button.BorderBrush;
+                button.Resources["ButtonBorderBrushPressed"] = button.BorderBrush;
+            }
+
+            button.Resources["ButtonForegroundPointerOver"] = label.Foreground;
+            button.Resources["ButtonForegroundPressed"] = label.Foreground;
             button.ContextMenu = CreateSheetTabContextMenu(tab);
             button.AddHandler(
                 InputElement.PointerPressedEvent,
@@ -4675,6 +4884,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return panel;
     }
 
+    // WPF: SheetTabNameText is SemiBold on every tab. Segoe UI has a true semibold face; the macOS
+    // UI chain resolves SemiBold to full Bold, so macOS keeps the heavier weight for the active and
+    // grouped tabs only.
+    private static FontWeight ResolveSheetTabFontWeight(bool isActiveOrGrouped) =>
+        OperatingSystem.IsMacOS() && !isActiveOrGrouped ? FontWeight.Normal : FontWeight.SemiBold;
+
+    // WPF: MainWindow.SheetTabs.cs CreatePastelTabBrush -- the tab colour blended 20% into the
+    // strip grey (243).
+    private static IBrush CreatePastelSheetTabBrush(CellColor color)
+    {
+        const double baseComponent = 243;
+        static byte Blend(byte component) =>
+            (byte)Math.Round(baseComponent + (component - baseComponent) * 0.2);
+
+        return Brush(Blend(color.R), Blend(color.G), Blend(color.B));
+    }
+
     private void DetachNewSheetButtonFromParent()
     {
         if (_newSheetButton.Parent is Panel parent)
@@ -4689,7 +4915,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             ItemsSource = CreateSheetTabContextMenuItems(tab, isIdle, sheetTabIndex).ToArray(),
         };
-        return menu;
+        // WPF chrome (12px rows, seeded command icons). No key letters: the WPF tab menu hides
+        // them when it is opened with the mouse (HideSheetTabContextMenuInputGestures).
+        return AvaloniaContextMenuChrome.Apply(menu);
     }
 
     private IEnumerable<Control> CreateSheetTabContextMenuItems(WorkbookSheetTab tab, bool isIdle, int sheetTabIndex)
@@ -4719,21 +4947,28 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         string Header(SheetTabContextMenuAction action) => UiText.Get(Common(action).ResourceKey);
         bool Enabled(SheetTabContextMenuAction action) => isIdle && Common(action).IsEnabled;
 
-        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.Rename), async () => await RenameActiveSheetAsync(), Enabled(SheetTabContextMenuAction.Rename));
+        // Item order and separators follow the WPF sheet-tab menu (SheetTabContextMenuPlanner order,
+        // with the outline settings item spliced in before the select-all block exactly as
+        // MainWindow.SheetTabs.cs RebuildSheetTabContextMenu does). The Avalonia-only commands
+        // (duplicate, move left/right) follow in a trailing block.
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.InsertSheet), () => AddNewSheet(tab.Id), Enabled(SheetTabContextMenuAction.InsertSheet));
-        yield return CreateSheetTabContextMenuItem(tab, UiText.Get("MainWindow_Header_Duplicate"), DuplicateActiveSheet, isIdle);
-        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.MoveOrCopy), ShowMoveOrCopySheetDialog, Enabled(SheetTabContextMenuAction.MoveOrCopy));
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.DeleteSheet), DeleteActiveSheet, Enabled(SheetTabContextMenuAction.DeleteSheet));
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.Rename), async () => await RenameActiveSheetAsync(), Enabled(SheetTabContextMenuAction.Rename));
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.MoveOrCopy), ShowMoveOrCopySheetDialog, Enabled(SheetTabContextMenuAction.MoveOrCopy));
+        yield return new Separator();
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.ViewCode), () => { }, Enabled(SheetTabContextMenuAction.ViewCode));
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.ProtectSheet), async () => await ShowProtectSheetDialogAsync(), Enabled(SheetTabContextMenuAction.ProtectSheet));
+        yield return CreateSheetTabColorContextMenuItem(tab, Header(SheetTabContextMenuAction.TabColor), Enabled(SheetTabContextMenuAction.TabColor));
         yield return new Separator();
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.Hide), HideActiveSheet, Enabled(SheetTabContextMenuAction.Hide));
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.Unhide), async () => await UnhideSheetAsync(), Enabled(SheetTabContextMenuAction.Unhide));
-        yield return CreateSheetTabColorContextMenuItem(tab, Header(SheetTabContextMenuAction.TabColor), Enabled(SheetTabContextMenuAction.TabColor));
         yield return new Separator();
         yield return CreateSheetTabContextMenuItem(tab, UiText.Get("OutlineSettings_MenuItem"), ShowOutlineSettingsDialog, isIdle);
         yield return new Separator();
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.SelectAllSheets), SelectAllVisibleSheets, Enabled(SheetTabContextMenuAction.SelectAllSheets));
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.UngroupSheets), UngroupSheets, Enabled(SheetTabContextMenuAction.UngroupSheets));
         yield return new Separator();
+        yield return CreateSheetTabContextMenuItem(tab, UiText.Get("MainWindow_Header_Duplicate"), DuplicateActiveSheet, isIdle);
         yield return CreateSheetTabContextMenuItem(tab, UiText.Get("MainWindow_Header_MoveLeft"), MoveActiveSheetLeft, isIdle && sheetTabIndex > 0);
         yield return CreateSheetTabContextMenuItem(
             tab,
@@ -11493,8 +11728,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             WorksheetContextMenuTargetKind.Worksheet,
             state);
         var ribbonMenu = WorksheetContextMenuRibbonAdapter.ToRibbonMenu(commands);
-        return AvaloniaContextMenuRenderer.BuildContextMenu(ribbonMenu, DispatchWorksheetContextMenuCommand);
+        return BuildWorksheetContextMenu(ribbonMenu, DispatchWorksheetContextMenuCommand);
     }
+
+    /// <summary>
+    /// Renders a worksheet-family menu (cell, row/column header, drawing object) with the WPF
+    /// host's menu chrome: seeded command icons and a key letter per item, which
+    /// OnGridContextMenuRequested applies to every one of these menus.
+    /// </summary>
+    private static ContextMenu BuildWorksheetContextMenu(RibbonMenu ribbonMenu, Action<RibbonCommandId> dispatch) =>
+        AvaloniaContextMenuChrome.Apply(
+            AvaloniaContextMenuRenderer.BuildContextMenu(ribbonMenu, dispatch),
+            assignKeyTips: true);
 
     /// <summary>
     /// Routes a worksheet context-menu command id back to the matching Avalonia document command.

@@ -5215,7 +5215,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private void MoveActiveSheetRight()");
         source.Should().Contain("var result = _session.MoveActiveSheetRight();");
         source.Should().Contain("RefreshShell(UiText.Format(\"SheetTabs_MovedRightStatusFormat\", sheetName));");
-        source.Should().Contain("tab.TabColor is { } tabColor ? Brush(tabColor) : Brushes.Transparent");
+        source.Should().Contain("var tabFill = tab.TabColor is { } tabColor ? CreatePastelSheetTabBrush(tabColor)");
         source.Should().Contain("private NativeMenu CreateNativeSheetTabColorMenu()");
         source.Should().Contain("var clearColorItem = new NativeMenuItem { Header = UiText.Get(\"RibbonWire_TabColorNone\") };");
         source.Should().Contain("clearColorItem.Click += (_, _) => ApplyActiveSheetTabColor(null);");
