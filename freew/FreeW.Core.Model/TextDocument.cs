@@ -2587,6 +2587,12 @@ public sealed class Paragraph : Block
     public TextAlignment? FrameHorizontalAlignment { get; set; }
 
     /// <summary>
+    /// The positioned legacy VML text box this header/footer paragraph was flattened out of, or null for
+    /// an ordinary paragraph. Render-only (see <see cref="Model.LegacyTextBoxFrame"/>); never written.
+    /// </summary>
+    public LegacyTextBoxFrame? LegacyTextBoxFrame { get; set; }
+
+    /// <summary>
     /// Optional bookmark name marking this paragraph as a navigation target. When non-null the
     /// paragraph is bracketed by w:bookmarkStart/w:bookmarkEnd on save, and runs elsewhere can point
     /// to it via <see cref="Run.HyperlinkAnchor"/>. Bookmarks are invisible markers (no glyphs).

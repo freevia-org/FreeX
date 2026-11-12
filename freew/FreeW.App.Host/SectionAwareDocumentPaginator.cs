@@ -351,12 +351,13 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
             Math.Max(1, box.FieldPageCount),
             Math.Max(1, box.SectionOrdinal),
             Math.Max(1, box.SectionPageCount));
-        if (HeaderFooterBandRenderer.Render(_model, slot, isHeader, context, contentWidth, metrics, maxHeight) is not { } band)
-            return;
-
         var top = isHeader
             ? HeaderFooterBandRenderer.HeaderDistanceDip(page)
             : Math.Max(0, pageHeight - HeaderFooterBandRenderer.FooterDistanceDip(page) - metrics.HeightDip);
+        if (HeaderFooterBandRenderer.Render(
+                _model, slot, isHeader, context, contentWidth, metrics, maxHeight, page, new Point(marginLeft, top)) is not { } band)
+            return;
+
         band.Offset = new Vector(marginLeft, top);
         container.Children.Add(band);
     }

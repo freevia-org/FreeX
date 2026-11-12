@@ -7,6 +7,7 @@ using System.Windows.Documents;
 using System.Windows.Media;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
+using DocumentFloatingObjectSnapshot = FreeW.App.Presentation.DocumentView.DocumentFloatingObjectSnapshot;
 using ModelParagraph = FreeW.Core.Model.Paragraph;
 using ModelTextAlignment = FreeW.Core.Model.TextAlignment;
 
@@ -144,7 +145,9 @@ internal static class HeaderFooterBandRenderer
         HeaderFooterBandContext context,
         double widthDip,
         HeaderFooterBandMetrics metrics,
-        double maxHeightDip)
+        double maxHeightDip,
+        PageSettings? page = null,
+        Point bandOriginDip = default)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(slot);
@@ -158,6 +161,7 @@ internal static class HeaderFooterBandRenderer
         {
             AddFlowPage(
                 band,
+                band,
                 BuildFlow(model, inFlow, slot.Table, isHeader, context, widthDip, null),
                 widthDip,
                 maxHeightDip,
@@ -170,13 +174,240 @@ internal static class HeaderFooterBandRenderer
             var top = index < metrics.FrameTopsDip.Count ? metrics.FrameTopsDip[index] : 0;
             AddFlowPage(
                 band,
+                band,
                 BuildFlow(model, [paragraph], null, isHeader, context, widthDip, paragraph.FrameHorizontalAlignment),
                 widthDip,
                 Math.Max(1, maxHeightDip - top),
                 top);
         }
 
+        if (page is not null)
+            AddFloatingObjects(band, model, slot, inFlow, isHeader, context, page, bandOriginDip, widthDip, maxHeightDip);
+
         return band.Children.Count == 0 ? null : band;
+    }
+
+    /// <summary>
+    /// Draws the slot's anchored drawings -- DrawingML floating pictures/shapes in its paragraphs and
+    /// positioned legacy VML text boxes (<see cref="ModelParagraph.LegacyTextBoxFrame"/>, e.g. Word's
+    /// circled page number in the bottom margin) -- at their page/margin/paragraph-relative positions.
+    /// Positions are computed in page space and the layers are offset by -<paramref name="bandOriginDip"/>,
+    /// since the caller places the band at that origin. Behind-text objects go under the band's text,
+    /// the rest above it. Fields inside a text box resolve against <paramref name="context"/> (this page).
+    /// </summary>
+    private static void AddFloatingObjects(
+        BandVisual band,
+        TextDocument model,
+        HeaderFooter slot,
+        IReadOnlyList<ModelParagraph> inFlow,
+        bool isHeader,
+        HeaderFooterBandContext context,
+        PageSettings page,
+        Point bandOriginDip,
+        double widthDip,
+        double maxHeightDip)
+    {
+        var behind = new ContainerVisual { Offset = new Vector(-bandOriginDip.X, -bandOriginDip.Y) };
+        var front = new ContainerVisual { Offset = new Vector(-bandOriginDip.X, -bandOriginDip.Y) };
+
+        // Paragraph tops inside the band (by in-flow position), measured lazily: only a paragraph that
+        // anchors something needs one.
+        double ParagraphTop(ModelParagraph paragraph)
+        {
+            var index = -1;
+            for (var i = 0; i < inFlow.Count; i++)
+            {
+                if (ReferenceEquals(inFlow[i], paragraph))
+                {
+                    index = i;
+                    break;
+                }
+            }
+
+            return index <= 0
+                ? 0
+                : MeasureFlowHeight(
+                    BuildFlow(model, inFlow.Take(index).ToList(), null, isHeader, context, widthDip, null),
+                    widthDip,
+                    maxHeightDip);
+        }
+
+        // DrawingML anchors (wp:anchor pictures, shapes, charts...) in the slot's own paragraphs.
+        var surface = FreeW.App.Presentation.DocumentView.DocumentViewLayoutPlanner.BuildFloatingOverlaySurfacePlan(
+            page, printLayout: true, plainInsetDip: 0);
+        var snapshots = new List<(DocumentFloatingObjectSnapshot Snapshot, FreeW.Core.Model.Run Run)>();
+        for (var paragraphIndex = 0; paragraphIndex < slot.Paragraphs.Count; paragraphIndex++)
+        {
+            var paragraph = slot.Paragraphs[paragraphIndex];
+            if (paragraph.LegacyTextBoxFrame is not null || !paragraph.Runs.Any(IsFloatingRun))
+                continue;
+
+            var anchorContentY = bandOriginDip.Y + ParagraphTop(paragraph) - surface.MarginTopDip;
+            foreach (var snapshot in FreeW.App.Presentation.DocumentView.DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(
+                         paragraph, paragraphIndex, anchorContentY, surface, columnCount: 1))
+            {
+                snapshots.Add((snapshot, paragraph.Runs[snapshot.RunIndex]));
+            }
+        }
+
+        foreach (var behindText in new[] { true, false })
+        {
+            var ordered = snapshots
+                .Where(entry => entry.Snapshot.BehindText == behindText)
+                .OrderBy(entry => entry.Snapshot.ZOrderIndex)
+                .ThenBy(entry => entry.Snapshot.BlockIndex)
+                .ThenBy(entry => entry.Snapshot.RunIndex)
+                .ToList();
+            if (ordered.Count == 0)
+                continue;
+
+            var drawing = new DrawingVisual();
+            using (var dc = drawing.RenderOpen())
+            {
+                foreach (var (snapshot, run) in ordered)
+                    HeaderFooterPaginator.DrawFloatingRun(dc, snapshot, run);
+            }
+
+            (behindText ? behind : front).Children.Add(drawing);
+        }
+
+        // Positioned legacy VML text boxes: consecutive paragraphs share one frame instance.
+        var groups = new List<(LegacyTextBoxFrame Frame, List<ModelParagraph> Paragraphs)>();
+        foreach (var paragraph in slot.Paragraphs)
+        {
+            if (paragraph.LegacyTextBoxFrame is not { } frame)
+                continue;
+            if (groups.Count > 0 && ReferenceEquals(groups[^1].Frame, frame))
+                groups[^1].Paragraphs.Add(paragraph);
+            else
+                groups.Add((frame, [paragraph]));
+        }
+
+        foreach (var (frame, paragraphs) in groups)
+        {
+            var rect = ResolveLegacyFrameRect(frame, page, bandOriginDip.Y, isHeader ? null : bandOriginDip.Y);
+            if (rect.Width <= 0 || rect.Height <= 0)
+                continue;
+
+            var frameVisual = new ContainerVisual();
+            var shape = new DrawingVisual();
+            using (var dc = shape.RenderOpen())
+            {
+                var fill = BrushFromHex(frame.FillColorHex);
+                var pen = BrushFromHex(frame.StrokeColorHex) is { } strokeBrush
+                    ? new Pen(strokeBrush, Math.Max(0.5, PageLayout.PointsToDip(frame.StrokeWidthPt)))
+                    : null;
+                if (fill is not null || pen is not null)
+                {
+                    if (frame.IsEllipse)
+                        dc.DrawEllipse(fill, pen, new Point(rect.X + rect.Width / 2, rect.Y + rect.Height / 2), rect.Width / 2, rect.Height / 2);
+                    else
+                        dc.DrawRectangle(fill, pen, rect);
+                }
+            }
+
+            frameVisual.Children.Add(shape);
+
+            var insetLeft = PageLayout.PointsToDip(frame.InsetLeftPt);
+            var insetTop = PageLayout.PointsToDip(frame.InsetTopPt);
+            var innerWidth = Math.Max(1, rect.Width - insetLeft - PageLayout.PointsToDip(frame.InsetRightPt));
+            var innerHeight = Math.Max(1, rect.Height - insetTop - PageLayout.PointsToDip(frame.InsetBottomPt));
+            var textHeight = MeasureFlowHeight(
+                BuildFlow(model, paragraphs, null, isHeader, context, innerWidth, null),
+                innerWidth,
+                Math.Max(innerHeight, maxHeightDip));
+            var textTop = frame.TextAnchor switch
+            {
+                LegacyFrameTextAnchor.Middle => rect.Y + insetTop + (innerHeight - textHeight) / 2,
+                LegacyFrameTextAnchor.Bottom => rect.Y + insetTop + innerHeight - textHeight,
+                _ => rect.Y + insetTop
+            };
+            var textHost = new ContainerVisual { Offset = new Vector(rect.X + insetLeft, 0) };
+            AddFlowPage(
+                band,
+                textHost,
+                BuildFlow(model, paragraphs, null, isHeader, context, innerWidth, null),
+                innerWidth,
+                Math.Max(1, Math.Max(innerHeight, textHeight) + 1),
+                textTop);
+            frameVisual.Children.Add(textHost);
+
+            (frame.BehindText ? behind : front).Children.Add(frameVisual);
+        }
+
+        if (behind.Children.Count > 0)
+            band.Children.Insert(0, behind);
+        if (front.Children.Count > 0)
+            band.Children.Add(front);
+    }
+
+    private static bool IsFloatingRun(FreeW.Core.Model.Run run) =>
+        run.Image is { IsFloating: true }
+        || run.Shape is { IsFloating: true }
+        || run.Chart is { IsFloating: true }
+        || run.WordArt is { IsFloating: true }
+        || run.SmartArt is { IsFloating: true }
+        || run.DrawingGroup is not null;
+
+    /// <summary>
+    /// The page-space rectangle of a positioned legacy text box: its alignment (or absolute offset)
+    /// against the margin box, the page, one of the four margin areas, or -- for "text" -- the band.
+    /// </summary>
+    internal static Rect ResolveLegacyFrameRect(
+        LegacyTextBoxFrame frame,
+        PageSettings page,
+        double bandTopDip,
+        double? footerTopDip = null)
+    {
+        var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
+        var (marginLeft, marginTop, marginRight, marginBottom) = PageLayout.MarginsDip(page);
+        var width = PageLayout.PointsToDip(frame.WidthPt);
+        var height = PageLayout.PointsToDip(frame.HeightPt);
+
+        var (left, right) = frame.HorizontalReference switch
+        {
+            LegacyFrameReference.Page => (0.0, pageWidth),
+            LegacyFrameReference.LeftMarginArea => (0.0, marginLeft),
+            LegacyFrameReference.RightMarginArea => (pageWidth - marginRight, pageWidth),
+            _ => (marginLeft, pageWidth - marginRight)
+        };
+        var (top, bottom) = frame.VerticalReference switch
+        {
+            LegacyFrameReference.Page => (0.0, pageHeight),
+            LegacyFrameReference.Margin => (marginTop, pageHeight - marginBottom),
+            LegacyFrameReference.TopMarginArea => (0.0, marginTop),
+            // A footer taller than the bottom margin pushes the body up, and Word's bottom margin area
+            // grows with it: it spans from the footer's top (when higher) to the bottom of the sheet.
+            LegacyFrameReference.BottomMarginArea => (
+                Math.Min(pageHeight - marginBottom, footerTopDip ?? double.MaxValue), pageHeight),
+            _ => (bandTopDip, bandTopDip)
+        };
+
+        var x = frame.HorizontalAlignment switch
+        {
+            LegacyFrameHorizontalAlignment.Left => left,
+            LegacyFrameHorizontalAlignment.Center => left + (right - left - width) / 2,
+            LegacyFrameHorizontalAlignment.Right => right - width,
+            _ => left + PageLayout.PointsToDip(frame.LeftPt)
+        };
+        var y = frame.VerticalAlignment switch
+        {
+            LegacyFrameVerticalAlignment.Top => top,
+            LegacyFrameVerticalAlignment.Center => top + (bottom - top - height) / 2,
+            LegacyFrameVerticalAlignment.Bottom => bottom - height,
+            _ => top + PageLayout.PointsToDip(frame.TopPt)
+        };
+
+        return new Rect(x, y, width, height);
+    }
+
+    private static SolidColorBrush? BrushFromHex(string? hex)
+    {
+        if (string.IsNullOrEmpty(hex))
+            return null;
+        var brush = new SolidColorBrush(WpfRgbColorAdapter.ParseDrawingMlOrDefault(hex, Colors.Black));
+        brush.Freeze();
+        return brush;
     }
 
     private static (List<ModelParagraph> InFlow, List<(ModelParagraph Paragraph, int PrecedingInFlowCount)> Framed) Partition(
@@ -189,6 +420,10 @@ internal static class HeaderFooterBandRenderer
 
         foreach (var paragraph in slot.Paragraphs)
         {
+            // A positioned legacy text box's paragraphs are drawn inside its shape (see
+            // AddFloatingObjects), not in the band's flow.
+            if (paragraph.LegacyTextBoxFrame is not null)
+                continue;
             if (paragraph.FrameHorizontalAlignment is not null && paragraph.Runs.Count > 0)
                 framed.Add((paragraph, inFlow.Count));
             else
@@ -314,7 +549,13 @@ internal static class HeaderFooterBandRenderer
         }
     }
 
-    private static void AddFlowPage(BandVisual band, FlowDocument flow, double widthDip, double heightDip, double topDip)
+    private static void AddFlowPage(
+        BandVisual band,
+        ContainerVisual parent,
+        FlowDocument flow,
+        double widthDip,
+        double heightDip,
+        double topDip)
     {
         flow.PageHeight = heightDip;
         var paginator = ((IDocumentPaginatorSource)flow).DocumentPaginator;
@@ -329,7 +570,7 @@ internal static class HeaderFooterBandRenderer
 
         var host = new ContainerVisual { Offset = new Vector(0, topDip) };
         host.Children.Add(page.Visual);
-        band.Children.Add(host);
+        parent.Children.Add(host);
         band.Retain(flow, page);
     }
 

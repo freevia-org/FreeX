@@ -68,6 +68,39 @@ public class HeaderFooterFieldAndFrameReadTests
             .Should().Equal(" - Footer text");
     }
 
+    internal const string MarginCirclePageNumberFooter =
+        "<w:p><w:r><w:pict><v:oval id=\"_x0000_s2049\" style=\"position:absolute;margin-left:0;margin-top:0;width:49.35pt;height:49.35pt;" +
+        "z-index:251658240;mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;" +
+        "mso-position-vertical-relative:bottom-margin-area;v-text-anchor:middle\" fillcolor=\"#365f91 [2404]\" stroked=\"f\">" +
+        "<v:textbox inset=\",0,,0\"><w:txbxContent><w:p><w:pPr><w:jc w:val=\"center\"/></w:pPr>" +
+        "<w:r><w:fldChar w:fldCharType=\"begin\"/></w:r><w:r><w:instrText xml:space=\"preserve\"> PAGE </w:instrText></w:r>" +
+        "<w:r><w:fldChar w:fldCharType=\"separate\"/></w:r><w:r><w:t>1</w:t></w:r><w:r><w:fldChar w:fldCharType=\"end\"/></w:r>" +
+        "</w:p></w:txbxContent></v:textbox><w10:wrap anchorx=\"margin\" anchory=\"page\"/></v:oval></w:pict></w:r></w:p>" +
+        "<w:p><w:r><w:t>Plain footer</w:t></w:r></w:p>";
+
+    [Fact]
+    public void PositionedVmlTextBox_TagsItsFlattenedParagraphsWithTheShapeFrame()
+    {
+        var doc = ReadWithFooter(MarginCirclePageNumberFooter);
+
+        var paragraphs = doc.FinalSectionHeadersFooters.Footer!.Paragraphs;
+        var framed = paragraphs.Single(paragraph => paragraph.Runs.Any(run => run.ComplexField is not null));
+        var frame = framed.LegacyTextBoxFrame;
+        frame.Should().NotBeNull();
+        frame!.IsEllipse.Should().BeTrue();
+        frame.WidthPt.Should().BeApproximately(49.35, 0.001);
+        frame.FillColorHex.Should().Be("#365F91");
+        frame.StrokeColorHex.Should().BeNull();
+        frame.HorizontalAlignment.Should().Be(LegacyFrameHorizontalAlignment.Center);
+        frame.HorizontalReference.Should().Be(LegacyFrameReference.Margin);
+        frame.VerticalAlignment.Should().Be(LegacyFrameVerticalAlignment.Center);
+        frame.VerticalReference.Should().Be(LegacyFrameReference.BottomMarginArea);
+        frame.TextAnchor.Should().Be(LegacyFrameTextAnchor.Middle);
+        frame.InsetTopPt.Should().Be(0);
+        frame.InsetLeftPt.Should().BeApproximately(7.2, 0.001);
+        paragraphs.Single(paragraph => paragraph.PlainText == "Plain footer").LegacyTextBoxFrame.Should().BeNull();
+    }
+
     [Fact]
     public void PlainTrackedInsertion_IsUnaffected()
     {

@@ -1554,8 +1554,10 @@ public static partial class DocxReader
         // alongside real paragraph text) still flatten here — mixed table+paragraph header/footer layout is
         // a much rarer pattern than the single all-encompassing layout table and is out of scope for the
         // table-preservation path above; leave legacy VML text boxes on their existing path too.
+        var legacyFrames = new Dictionary<XElement, LegacyTextBoxFrame?>();
         foreach (var p in ReadStoryParagraphs(root))
         {
+            var legacyFrame = ResolveLegacyTextBoxFrame(p, legacyFrames);
             // FreeW's page watermark is stored in a VML-only paragraph in the header. It is also
             // represented by custom document properties. Remove only the known watermark run: Word
             // commonly appends it to a real header paragraph, so dropping the whole paragraph loses
@@ -1573,7 +1575,7 @@ public static partial class DocxReader
             if (!preservedParagraph.Descendants(W + "r").Any())
                 continue;
 
-            result.Paragraphs.Add(ReadParagraph(
+            var storyParagraph = ReadParagraph(
                 preservedParagraph,
                 archive,
                 partRelationships,
@@ -1581,9 +1583,162 @@ public static partial class DocxReader
                 numbering,
                 capturePreservedNumbering: true,
                 preservedDrawingTarget: document,
-                preservedDrawingRelationshipTargets: partRelationships));
+                preservedDrawingRelationshipTargets: partRelationships);
+            storyParagraph.LegacyTextBoxFrame = legacyFrame;
+            result.Paragraphs.Add(storyParagraph);
         }
         return result;
+    }
+
+    /// <summary>
+    /// The render-only frame of the positioned legacy VML text box <paramref name="paragraph"/> lives in
+    /// (<c>v:oval|v:rect|.../v:textbox/w:txbxContent/w:p</c>), or null when it is not inside one. One frame
+    /// instance is shared by every paragraph of the same shape.
+    /// </summary>
+    private static LegacyTextBoxFrame? ResolveLegacyTextBoxFrame(
+        XElement paragraph,
+        Dictionary<XElement, LegacyTextBoxFrame?> cache)
+    {
+        var content = paragraph.Ancestors(W + "txbxContent").FirstOrDefault();
+        if (content?.Parent is not { } textBox || textBox.Name != V + "textbox"
+            || textBox.Parent is not { } shape || shape.Name.Namespace != V)
+            return null;
+
+        if (!cache.TryGetValue(shape, out var frame))
+            cache[shape] = frame = ReadLegacyTextBoxFrame(shape, textBox);
+        return frame;
+    }
+
+    private static LegacyTextBoxFrame? ReadLegacyTextBoxFrame(XElement shape, XElement textBox)
+    {
+        var style = shape.Attribute("style")?.Value;
+        if (style is null
+            || !string.Equals(ReadVmlCssValue(style, "position"), "absolute", StringComparison.OrdinalIgnoreCase)
+            || shape.Parent?.Name == V + "group")
+            return null;
+
+        var (widthPt, heightPt) = ParseVmlShapeSize(style);
+        if (widthPt <= 0 || heightPt <= 0)
+            return null;
+
+        static bool IsOff(string? value) => value is "f" or "false" or "0";
+
+        static string? VmlColor(string? value, string? fallback)
+        {
+            // "#365f91 [2404]" carries a theme-index hint after the RGB value.
+            var token = value?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            if (token is null)
+                return fallback;
+            if (token.Length == 7 && token[0] == '#')
+                return token.ToUpperInvariant();
+            if (token.Length == 4 && token[0] == '#')
+                return string.Concat("#", token[1], token[1], token[2], token[2], token[3], token[3]).ToUpperInvariant();
+            return token.ToLowerInvariant() switch
+            {
+                "white" => "#FFFFFF",
+                "black" => "#000000",
+                "red" => "#FF0000",
+                "blue" => "#0000FF",
+                "green" => "#008000",
+                "yellow" => "#FFFF00",
+                "gray" or "grey" => "#808080",
+                _ => fallback
+            };
+        }
+
+        var fill = IsOff(shape.Attribute("filled")?.Value)
+            ? null
+            : VmlColor(shape.Attribute("fillcolor")?.Value, "#FFFFFF");
+        var stroke = IsOff(shape.Attribute("stroked")?.Value)
+            ? null
+            : VmlColor(shape.Attribute("strokecolor")?.Value, "#000000");
+        var strokeWidth = ParseVmlLengthPt(shape.Attribute("strokeweight")?.Value) ?? 0.75;
+
+        var horizontal = ReadVmlCssValue(style, "mso-position-horizontal")?.ToLowerInvariant() switch
+        {
+            "left" or "inside" => LegacyFrameHorizontalAlignment.Left,
+            "center" => LegacyFrameHorizontalAlignment.Center,
+            "right" or "outside" => LegacyFrameHorizontalAlignment.Right,
+            _ => LegacyFrameHorizontalAlignment.None
+        };
+        var vertical = ReadVmlCssValue(style, "mso-position-vertical")?.ToLowerInvariant() switch
+        {
+            "top" or "inside" => LegacyFrameVerticalAlignment.Top,
+            "center" => LegacyFrameVerticalAlignment.Center,
+            "bottom" or "outside" => LegacyFrameVerticalAlignment.Bottom,
+            _ => LegacyFrameVerticalAlignment.None
+        };
+        var horizontalReference = ReadVmlCssValue(style, "mso-position-horizontal-relative")?.ToLowerInvariant() switch
+        {
+            "margin" => LegacyFrameReference.Margin,
+            "page" => LegacyFrameReference.Page,
+            "left-margin-area" or "inner-margin-area" => LegacyFrameReference.LeftMarginArea,
+            "right-margin-area" or "outer-margin-area" => LegacyFrameReference.RightMarginArea,
+            _ => LegacyFrameReference.Text
+        };
+        var verticalReference = ReadVmlCssValue(style, "mso-position-vertical-relative")?.ToLowerInvariant() switch
+        {
+            "margin" => LegacyFrameReference.Margin,
+            "page" => LegacyFrameReference.Page,
+            "top-margin-area" => LegacyFrameReference.TopMarginArea,
+            "bottom-margin-area" => LegacyFrameReference.BottomMarginArea,
+            _ => LegacyFrameReference.Text
+        };
+
+        var zIndex = int.TryParse(ReadVmlCssValue(style, "z-index"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var z) ? z : 0;
+        var textAnchor = ReadVmlCssValue(style, "v-text-anchor")?.ToLowerInvariant() switch
+        {
+            { } anchor when anchor.StartsWith("middle", StringComparison.Ordinal) => LegacyFrameTextAnchor.Middle,
+            { } anchor when anchor.StartsWith("bottom", StringComparison.Ordinal) => LegacyFrameTextAnchor.Bottom,
+            _ => LegacyFrameTextAnchor.Top
+        };
+
+        // v:textbox/@inset is "left,top,right,bottom"; an omitted entry keeps VML's 0.1in/0.05in default.
+        var insets = (textBox.Attribute("inset")?.Value ?? string.Empty).Split(',');
+        double Inset(int index, double fallback) =>
+            index < insets.Length && ParseVmlLengthPt(insets[index]) is { } value ? value : fallback;
+
+        return new LegacyTextBoxFrame(
+            shape.Name == V + "oval",
+            widthPt,
+            heightPt,
+            fill,
+            stroke,
+            strokeWidth,
+            horizontal,
+            ParseVmlLengthPt(ReadVmlCssValue(style, "margin-left")) ?? 0,
+            horizontalReference,
+            vertical,
+            ParseVmlLengthPt(ReadVmlCssValue(style, "margin-top")) ?? 0,
+            verticalReference,
+            zIndex < 0,
+            textAnchor,
+            Inset(0, 7.2),
+            Inset(1, 3.6),
+            Inset(2, 7.2),
+            Inset(3, 3.6));
+    }
+
+    /// <summary>Parses a VML/CSS length ("1pt", "0.05in", "2mm", "12px", "0") into points.</summary>
+    private static double? ParseVmlLengthPt(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+        var text = value.Trim().ToLowerInvariant();
+        var factor = 0.75; // a bare VML number is in pixels
+        foreach (var (suffix, unitFactor) in new[] { ("pt", 1.0), ("in", 72.0), ("mm", 72.0 / 25.4), ("cm", 72.0 / 2.54), ("px", 0.75), ("pc", 12.0) })
+        {
+            if (text.EndsWith(suffix, StringComparison.Ordinal))
+            {
+                text = text[..^suffix.Length].Trim();
+                factor = unitFactor;
+                break;
+            }
+        }
+
+        return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) && double.IsFinite(number)
+            ? number * factor
+            : null;
     }
 
     /// <summary>Backing (always-empty) dictionaries for a fresh, no-context <see cref="NumberingRestartState"/>
