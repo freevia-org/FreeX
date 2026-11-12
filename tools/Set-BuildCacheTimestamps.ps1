@@ -105,6 +105,23 @@ try {
         if ($status -like "D*") { $deletedPaths.Add($path) } else { $changedPaths.Add($path) }
     }
 
+    # The cache tier sits in the future (see above), so anything MSBuild REGENERATES during this build
+    # carries the current time and therefore looks OLDER than the cached outputs it feeds. Source
+    # files are safe because they are stamped into the changed tier, but some inputs only reach the
+    # compiler through such an intermediate: project files feed the generated AssemblyInfo
+    # (InternalsVisibleTo, versions) via an inputs-cache file, and .resx files feed .resources that
+    # are embedded at compile time. MSBuild regenerates those intermediates correctly and then skips
+    # the compile because the cached assembly is "newer" -- a build of the previous commit's
+    # attributes and resources (seen as CS1501 on a newly InternalsVisibleTo-exposed overload and
+    # as missing resource keys). Changes to build definitions or embedded resources therefore take
+    # the clean-build fallback: slower, never wrong.
+    $regeneratedInputPattern = '(?i)(\.(csproj|props|targets|resx|slnx)$)|(^|/)global\.json$'
+    $regeneratedInputs = @($changedPaths + $deletedPaths | Where-Object { $_ -match $regeneratedInputPattern })
+    if ($regeneratedInputs.Count -gt 0) {
+        Invoke-CleanBuildFallback -Reason "$($regeneratedInputs.Count) build-definition or resource file(s) changed since $($cachedCommit.Substring(0, 9)), e.g. '$($regeneratedInputs[0])'"
+        return
+    }
+
     $trackedFiles = @((& git ls-files -z) -join "`n" -split "`0" | Where-Object { $_ -ne "" })
     if ($trackedFiles.Count -eq 0) {
         Invoke-CleanBuildFallback -Reason "git ls-files returned nothing"
