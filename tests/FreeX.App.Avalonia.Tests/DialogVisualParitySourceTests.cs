@@ -155,9 +155,17 @@ public sealed class DialogVisualParitySourceTests
         source.Should().NotContain("SortOptionsCheckBoxTemplate");
         source.Should().NotContain("SortOptionsRadioButtonTemplate");
 
-        captureSource.Should().Contain("CaseSensitive: true");
-        captureSource.Should().Contain("LeftToRight: true");
-        captureSource.Should().Contain("FirstKeySortOrder: \"Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec\"");
+        // The seeded Sort Options state lives in one shared fixture that BOTH capture hosts consume,
+        // so the paired screenshots cannot drift apart again (the WPF host used plain defaults).
+        var fixtureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Support", "Services", "DialogSeedParityFixtures.cs"));
+        var wpfCaptureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs"));
+        fixtureSource.Should().Contain("CaseSensitive: true");
+        fixtureSource.Should().Contain("LeftToRight: true");
+        fixtureSource.Should().Contain("FirstKeySortOrder: \"Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec\"");
+        captureSource.Should().Contain("ShowSortOptionsDialogAsync(SortDialogParityFixture.CreateOptions())");
+        wpfCaptureSource.Should().Contain("new SortOptionsDialog(SortDialogParityFixture.CreateOptions())");
+        captureSource.Should().Contain("ShowSortInputDialogAsync(SortDialogParityFixture.CreateRange(_session.ActiveSheet.Id))");
+        wpfCaptureSource.Should().Contain("var sortRange = SortDialogParityFixture.CreateRange(sheet.Id);");
     }
 
     [Fact]

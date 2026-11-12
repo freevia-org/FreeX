@@ -46,8 +46,14 @@ public sealed partial class MainWindow
     private static readonly IBrush PageBreakWatermarkBrush = Brush(60, 11, 112, 116);
     private static AvaloniaCompactDialogChromeStyle PageLayoutDialogChromeStyle => new(FormulaBarFontFamily);
 
+    // A custom header/footer matches no preset, so the combo's selection box is templated with a null
+    // choice; dereferencing it threw during layout, blanking the Page Setup Header/Footer tab and
+    // crashing the Header & Footer editor for every sheet with custom header/footer text.
     private static FuncDataTemplate<HeaderFooterPresetChoice> HeaderFooterPresetTemplate() =>
-        new((choice, _) => new TextBlock { Text = UiText.Get(choice.LabelResourceKey) }, supportsRecycling: true);
+        new((choice, _) => new TextBlock
+        {
+            Text = choice is null ? string.Empty : UiText.Get(choice.LabelResourceKey),
+        }, supportsRecycling: true);
 
     private async Task ShowPageSetupDialogAsync(
         PageLayoutPageSetupOpenSource source = PageLayoutPageSetupOpenSource.DialogButton,

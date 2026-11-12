@@ -381,6 +381,7 @@ public sealed partial class MainWindow
 
         foreach (var (surfaceId, opener) in dialogOpeners)
         {
+            ResetParityDialogCaptureSession();
             results.Add(await CaptureModalSurfaceAsync(
                 outputDirectory,
                 surfaceId,
@@ -408,6 +409,7 @@ public sealed partial class MainWindow
 
         foreach (var (surfaceId, opener, tabNames) in tabDialogs)
         {
+            ResetParityDialogCaptureSession();
             results.AddRange(await CaptureModalTabsAsync(
                 outputDirectory,
                 surfaceId,
@@ -485,6 +487,26 @@ public sealed partial class MainWindow
         return results;
     }
 
+    /// <summary>
+    /// Gives every paired dialog capture the same starting document the WPF capture builds for its
+    /// dialogs: a fresh parity demo workbook, the Demo sheet active, A1 selected. Without this the
+    /// dialogs inherited whatever the earlier surfaces left behind (20 overflow sheets, seeded names,
+    /// charts, validation rules), so data-bound dialogs such as Rename Sheet, Subtotal, Page Setup and
+    /// Workbook Statistics showed different content from the WPF shell for harness-only reasons.
+    /// </summary>
+    private void ResetParityDialogCaptureSession()
+    {
+        var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
+        ReplaceSession(ParityCaptureWorkbookSessionFactory.Create(
+            _sessionFactory,
+            viewportHeight,
+            viewportWidth,
+            includeObjects: true));
+        RefreshViewportSizeForZoom();
+        ClearSelectedDrawingObject();
+        RefreshShell("Ready");
+    }
+
     private static Task ReleaseCompletedDialogCaptureResourcesAsync()
     {
         // Closed Avalonia windows can retain sizeable visual/native graphs until a full collection.
@@ -507,13 +529,13 @@ public sealed partial class MainWindow
         ("dialog.GoToSpecial", () => ShowGoToSpecialDialogAsync()),
         ("dialog.CreateTable", () => ShowCreateTableParityDialogAsync()),
         ("dialog.RecommendedPivotTables", async () => { await ShowRecommendedPivotTablesDialogAsync(); }),
-        ("dialog.Sort", () => ShowSortDialogAsync()),
+        ("dialog.Sort", async () =>
+        {
+            await ShowSortInputDialogAsync(SortDialogParityFixture.CreateRange(_session.ActiveSheet.Id));
+        }),
         ("dialog.SortOptions", async () =>
         {
-            await ShowSortOptionsDialogAsync(new SortDialogOptions(
-                CaseSensitive: true,
-                LeftToRight: true,
-                FirstKeySortOrder: "Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec"));
+            await ShowSortOptionsDialogAsync(SortDialogParityFixture.CreateOptions());
         }),
         ("dialog.AutoFilter", () => ShowAutoFilterParityDialogAsync()),
         ("dialog.TextToColumns", () => ShowTextToColumnsParityDialogAsync()),
@@ -1627,8 +1649,13 @@ public sealed partial class MainWindow
     private async Task ShowChangeChartTypeParityDialogAsync() =>
         await ShowWithSelectedParityChartAsync(ShowChangeChartTypeDialog);
 
-    private async Task ShowFormatChartAreaParityDialogAsync() =>
+    private async Task ShowFormatChartAreaParityDialogAsync()
+    {
+        if (EnsureParityChart() is { } chart)
+            ChartAreaParityFixture.Apply(chart);
+
         await ShowWithSelectedParityChartAsync(ShowFormatChartAreaDialog);
+    }
 
     private async Task ShowShapeEffectsParityDialogAsync() =>
         await ShowWithSelectedParityShapeAsync(async () =>

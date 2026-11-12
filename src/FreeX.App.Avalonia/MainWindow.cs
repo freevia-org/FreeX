@@ -24370,7 +24370,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var activeTypeChoice = activeRule is null
             ? null
             : FindDataValidationTypeChoice(typeChoices, activeRule.Type);
-        var initialType = activeTypeChoice?.Type ?? DvType.WholeNumber;
+        // A cell with no rule opens on "Any value", as Excel and the WPF DataValidationDialog do;
+        // defaulting to Whole Number 1..100 made OK on an untouched dialog create a rule.
+        var initialType = activeTypeChoice?.Type ?? DvType.Any;
         var initialRule = activeRule is not null && activeTypeChoice is not null
             ? activeRule
             : DataValidationDialogPlanner.CreateDefaultRule(initialType, _session.SelectedRange);

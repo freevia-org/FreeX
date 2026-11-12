@@ -48,6 +48,15 @@ public sealed class MacOsParityDataHomeInsertFormulaDialogFeatureTests
                 await DrainInputAsync();
                 var dialog = window.OwnedWindows.OfType<Window>().Single();
 
+                // A cell with no rule opens on "Any value" (Excel and WPF), which has no criteria
+                // fields; pick Whole Number the way a user would to reach the Minimum/Maximum boxes.
+                var typeBox = Find<ComboBox>(dialog, "DataValidationTypeBox");
+                typeBox.SelectedItem.Should().BeOfType<DataValidationTypeChoice>()
+                    .Which.Type.Should().Be(DvType.Any, "an unvalidated cell must not open on a preset rule");
+                typeBox.SelectedItem = typeBox.Items.OfType<DataValidationTypeChoice>()
+                    .Single(choice => choice.Type == DvType.WholeNumber);
+                await DrainInputAsync();
+
                 var formula1Box = Find<TextBox>(dialog, "DataValidationFormula1Box");
                 var useSelection = Find<Button>(dialog, "DataValidationUseSelectionButton");
                 useSelection.IsVisible.Should().BeTrue();
