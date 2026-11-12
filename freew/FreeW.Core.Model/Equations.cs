@@ -51,7 +51,52 @@ public enum MathRunKind
     Matrix,
     EquationArray,
     FunctionApply,
-    GroupChar
+    GroupChar,
+
+    /// <summary>A base with a limit expression centred below it (m:limLow), e.g. lim with x→0 underneath.</summary>
+    LowerLimit,
+
+    /// <summary>A base with a limit expression centred above it (m:limUpp).</summary>
+    UpperLimit,
+
+    /// <summary>
+    /// An OMML construct FreeW does not model (m:sPre, m:box, m:borderBox, m:phant, …). The original element
+    /// is carried verbatim in <see cref="MathRun.RawOmml"/> and written back unchanged; <see cref="MathRun.Text"/>
+    /// holds its flattened math text for display.
+    /// </summary>
+    Preserved
+}
+
+/// <summary>The presentation of a <see cref="MathRunKind.Fraction"/> (OMML m:fPr/m:type).</summary>
+public enum MathFractionType
+{
+    /// <summary>Stacked with a fraction bar (the default, m:type "bar").</summary>
+    Bar,
+
+    /// <summary>Stacked without a bar, as in a binomial coefficient (m:type "noBar").</summary>
+    NoBar,
+
+    /// <summary>Skewed, numerator and denominator on a diagonal (m:type "skw").</summary>
+    Skewed,
+
+    /// <summary>Linear, numerator and denominator on one line (m:type "lin").</summary>
+    Linear
+}
+
+/// <summary>Justification of a display equation (OMML m:oMathParaPr/m:jc).</summary>
+public enum MathJustification
+{
+    /// <summary>Centred as a group — Word's default for display equations (m:jc "centerGroup").</summary>
+    CenterGroup,
+
+    /// <summary>Centred (m:jc "center").</summary>
+    Center,
+
+    /// <summary>Left aligned (m:jc "left").</summary>
+    Left,
+
+    /// <summary>Right aligned (m:jc "right").</summary>
+    Right
 }
 
 /// <summary>
@@ -190,6 +235,22 @@ public sealed record MathRun
 
     /// <summary>The function name (only meaningful for <see cref="MathRunKind.FunctionApply"/>).</summary>
     public string FuncName { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Optional structured function name for <see cref="MathRunKind.FunctionApply"/> (m:fName holding more
+    /// than plain text — e.g. a limit "lim" with x→0 below it, or sin with an exponent).
+    /// <see cref="FuncName"/> keeps its flattened text.
+    /// </summary>
+    public Equation? FunctionNameEquation { get; init; }
+
+    /// <summary>How a <see cref="MathRunKind.Fraction"/> is presented (bar, no bar, skewed, linear).</summary>
+    public MathFractionType FractionType { get; init; } = MathFractionType.Bar;
+
+    /// <summary>
+    /// The verbatim OMML element of a <see cref="MathRunKind.Preserved"/> fragment (outer XML including its
+    /// namespace declarations). Empty for every other kind.
+    /// </summary>
+    public string RawOmml { get; init; } = string.Empty;
 
     /// <summary>The grouping character (only meaningful for <see cref="MathRunKind.GroupChar"/>).</summary>
     public string GroupChr { get; init; } = "\u23DE";
@@ -499,6 +560,53 @@ public sealed record MathRun
         };
     }
 
+    /// <summary>Creates a lower-limit fragment (m:limLow): <paramref name="@base"/> with <paramref name="limit"/> centred below it.</summary>
+    public static MathRun LowerLimit(string @base, string limit) =>
+        new() { Kind = MathRunKind.LowerLimit, Base = @base, Sub = limit };
+
+    /// <summary>Creates a lower-limit fragment (m:limLow) whose base and limit are structured equations.</summary>
+    public static MathRun LowerLimit(Equation baseEquation, Equation limitEquation)
+    {
+        ArgumentNullException.ThrowIfNull(baseEquation);
+        ArgumentNullException.ThrowIfNull(limitEquation);
+
+        return new()
+        {
+            Kind = MathRunKind.LowerLimit,
+            Base = baseEquation.LinearText,
+            Sub = limitEquation.LinearText,
+            ScriptBaseEquation = baseEquation,
+            ScriptSubEquation = limitEquation
+        };
+    }
+
+    /// <summary>Creates an upper-limit fragment (m:limUpp): <paramref name="@base"/> with <paramref name="limit"/> centred above it.</summary>
+    public static MathRun UpperLimit(string @base, string limit) =>
+        new() { Kind = MathRunKind.UpperLimit, Base = @base, Sup = limit };
+
+    /// <summary>Creates an upper-limit fragment (m:limUpp) whose base and limit are structured equations.</summary>
+    public static MathRun UpperLimit(Equation baseEquation, Equation limitEquation)
+    {
+        ArgumentNullException.ThrowIfNull(baseEquation);
+        ArgumentNullException.ThrowIfNull(limitEquation);
+
+        return new()
+        {
+            Kind = MathRunKind.UpperLimit,
+            Base = baseEquation.LinearText,
+            Sup = limitEquation.LinearText,
+            ScriptBaseEquation = baseEquation,
+            ScriptSupEquation = limitEquation
+        };
+    }
+
+    /// <summary>
+    /// Creates a preserved fragment: an OMML element FreeW does not model, kept verbatim in
+    /// <paramref name="rawOmml"/> with <paramref name="fallbackText"/> as its display text.
+    /// </summary>
+    public static MathRun PreservedOmml(string rawOmml, string fallbackText) =>
+        new() { Kind = MathRunKind.Preserved, RawOmml = rawOmml ?? string.Empty, Text = fallbackText ?? string.Empty };
+
     /// <summary>
     /// A best-effort linear (plain-text) rendering of this fragment, used for the host run's fallback
     /// text and for the editor's lightweight visual stand-in.
@@ -524,13 +632,16 @@ public sealed record MathRun
         MathRunKind.GroupChar => string.Equals(GroupChrPos, "bot", StringComparison.OrdinalIgnoreCase)
             ? $"{SlotLinearText(DecoratorBaseEquation, Base, depth)}{GroupChr}"
             : $"{GroupChr}{SlotLinearText(DecoratorBaseEquation, Base, depth)}",
+        MathRunKind.LowerLimit => $"{SlotLinearText(ScriptBaseEquation, Base, depth)}_{SlotLinearText(ScriptSubEquation, Sub, depth)}",
+        MathRunKind.UpperLimit => $"{SlotLinearText(ScriptBaseEquation, Base, depth)}^{SlotLinearText(ScriptSupEquation, Sup, depth)}",
         _ => Text
     };
 
     private string FunctionLinearText(int depth)
     {
         var argument = SlotLinearText(FunctionArgumentEquation, Base, depth);
-        return string.IsNullOrEmpty(FuncName) ? argument : $"{FuncName}({argument})";
+        var name = SlotLinearText(FunctionNameEquation, FuncName, depth);
+        return string.IsNullOrEmpty(name) ? argument : $"{name}({argument})";
     }
 
     /// <summary>
@@ -688,6 +799,12 @@ public sealed class Equation
     /// </summary>
     public bool IsDisplayMath { get; set; }
 
+    /// <summary>
+    /// Justification of a display equation (<c>m:oMathParaPr/m:jc</c>). Only meaningful when
+    /// <see cref="IsDisplayMath"/> is true; the default is Word's centred-as-a-group layout.
+    /// </summary>
+    public MathJustification Justification { get; set; } = MathJustification.CenterGroup;
+
     public Equation() { }
 
     /// <summary>Creates an equation from an ordered set of fragments.</summary>
@@ -723,7 +840,7 @@ public sealed class Equation
         if (equations.TryGetValue(source, out var existing))
             return existing;
 
-        var clone = new Equation { IsDisplayMath = source.IsDisplayMath };
+        var clone = new Equation { IsDisplayMath = source.IsDisplayMath, Justification = source.Justification };
         equations[source] = clone;
         foreach (var run in source.Runs)
             clone.Runs.Add(CloneRun(run, equations, matrices));
@@ -747,6 +864,7 @@ public sealed class Equation
             ? source.AdditionalDelimiterContentEquations
             : source.AdditionalDelimiterContentEquations.Select(e => CloneOptional(e, equations, matrices)).ToList(),
         FunctionArgumentEquation = CloneOptional(source.FunctionArgumentEquation, equations, matrices),
+        FunctionNameEquation = CloneOptional(source.FunctionNameEquation, equations, matrices),
         NAryLowerLimitEquation = CloneOptional(source.NAryLowerLimitEquation, equations, matrices),
         NAryUpperLimitEquation = CloneOptional(source.NAryUpperLimitEquation, equations, matrices),
         NAryOperandEquation = CloneOptional(source.NAryOperandEquation, equations, matrices),
