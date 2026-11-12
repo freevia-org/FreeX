@@ -214,6 +214,7 @@ public sealed partial class MainWindow
             ChartTypeChangePlanner.PickerButtonWidth);
         okButton.Click += (_, _) => dialog.Close(subtypeGallery.SelectedItem is ChartTypePickerOptionPlan picked ? (ChartType?)picked.Type : null);
         cancelButton.Click += (_, _) => dialog.Close((ChartType?)null);
+        buttonRow.Margin = new Thickness(0, 8, 0, 0);
 
         // WPF keeps the All Charts heading/help in the picker grid's first row. The lists begin in
         // the second row, while the preview spans both rows; preserve that vertical relationship.
@@ -240,13 +241,14 @@ public sealed partial class MainWindow
                     FontWeight = FontWeight.SemiBold,
                     Margin = new Thickness(0, 0, 0, 2),
                 },
+                // WPF CreateInlineHelp: dialog-size grey text with 6px below.
                 new TextBlock
                 {
                     Text = UiText.Get(panel.HelpResourceKey),
-                    FontSize = 11,
+                    FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
                     TextWrapping = TextWrapping.Wrap,
-                    Foreground = Brush(96, 96, 96),
+                    Foreground = ChartDialogHelpBrush,
                     Margin = new Thickness(0, 0, 0, 6),
                 },
             },
@@ -331,7 +333,7 @@ public sealed partial class MainWindow
             BorderBrush = Brush(150, 150, 150),
             BorderThickness = new Thickness(1),
             Padding = new Thickness(14),
-            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            // WPF leaves the preview border stretched down both picker rows.
             Child = new StackPanel
             {
                 Children =
@@ -347,10 +349,9 @@ public sealed partial class MainWindow
                     new TextBlock
                     {
                         Text = UiText.Get(preview.BodyResourceKey),
-                        FontSize = 11,
+                        FontSize = 12,
                         FontFamily = FormulaBarFontFamily,
                         TextWrapping = TextWrapping.Wrap,
-                        Foreground = Brush(96, 96, 96),
                         Margin = new Thickness(0, 0, 0, 14),
                     },
                     new TextBlock
@@ -440,20 +441,29 @@ public sealed partial class MainWindow
 
         // Reference-picker ("...") button to the left of the range box, matching the WPF
         // DialogReferencePicker editor.
-        var rangePickButton = CreateChartButton("...", 30);
+        var rangePickButton = CreateChartButton("...", 28);
         AutomationProperties.SetName(rangePickButton, UiText.Get(SelectDataSourcePlanner.SelectRangeAutomationNameResourceKey));
         AutomationProperties.SetAutomationId(rangePickButton, "SelectChartDataRangePickButton");
 
-        var rangeRow = new StackPanel
+        // WPF DialogReferencePicker.CreateEditor docks the 28px picker left with a 6px gap and lets the
+        // reference box fill the rest of the row.
+        rangePickButton.Margin = new Thickness(0, 0, 6, 0);
+        rangeBox.Width = double.NaN;
+        rangeBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+        Grid.SetColumn(rangeBox, 1);
+        var rangeRow = new Grid
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 6,
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
             Children = { rangePickButton, rangeBox },
         };
 
         // ---- Switch Row/Column checkbox -------------------------------------------------------
         var switchRowColumnCheck = CreateChartCheckBox(StripDisplayMnemonic(UiText.Get(switchField.LabelResourceKey)), switchRowColumn);
-        switchRowColumnCheck.Margin = new Thickness(0, 4, 0, 0);
+        // WPF: a 16px check box with a 0,10,0,8 margin. The Avalonia check row is 20px, so 2px comes off
+        // each side to keep the 34px row pitch.
+        switchRowColumnCheck.MinHeight = 20;
+        switchRowColumnCheck.MaxHeight = 20;
+        switchRowColumnCheck.Margin = new Thickness(0, 8, 0, 6);
         AutomationProperties.SetAutomationId(switchRowColumnCheck, switchField.AutomationId);
 
         // ---- Series ListBox + buttons ---------------------------------------------------------
@@ -497,7 +507,9 @@ public sealed partial class MainWindow
 
         // ---- First column contains category labels checkbox -----------------------------------
         var categoriesCheck = CreateChartCheckBox(StripDisplayMnemonic(UiText.Get(firstColumnField.LabelResourceKey)), firstColumnIsCategories);
-        categoriesCheck.Margin = new Thickness(0, 4, 0, 0);
+        categoriesCheck.MinHeight = 20;
+        categoriesCheck.MaxHeight = 20;
+        categoriesCheck.Margin = new Thickness(0, 8, 0, 6);
         AutomationProperties.SetAutomationId(categoriesCheck, firstColumnField.AutomationId);
 
         // ---- State management helpers --------------------------------------------------------
@@ -598,11 +610,12 @@ public sealed partial class MainWindow
             UiText.Get(SelectDataSourcePlanner.DialogTitleResourceKey),
             SelectDataSourcePlanner.DialogAutomationId);
         AvaloniaCompactDialogChrome.ApplyWindow(dialog, SelectDataSourceDialogChromeStyle);
+        // WPF SelectDataSourceDialog is a 620x500 outer window; Avalonia sizes are client sizes.
         dialog.SizeToContent = SizeToContent.Manual;
         dialog.Width = 620;
-        dialog.Height = 500;
+        dialog.Height = 500 - WpfNoResizeFrameHeight;
         dialog.MinWidth = 620;
-        dialog.MinHeight = 500;
+        dialog.MinHeight = 500 - WpfNoResizeFrameHeight;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("SelectChartData");
         okButton.Click += (_, _) =>
@@ -631,9 +644,10 @@ public sealed partial class MainWindow
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            var header = new StackPanel { Spacing = 2 };
-            header.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get(panel.TitleResourceKey)), FontSize = 12, FontFamily = FormulaBarFontFamily, FontWeight = FontWeight.SemiBold });
-            header.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get(panel.ListField.HelpResourceKey!)), FontSize = 11, FontFamily = FormulaBarFontFamily, Foreground = Brush(96, 96, 96), TextWrapping = TextWrapping.Wrap, MaxWidth = 500 });
+            // WPF: a plain title 2px above grey inline help, which carries 6px below.
+            var header = new StackPanel();
+            header.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get(panel.TitleResourceKey)), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 0, 0, 2) });
+            header.Children.Add(CreateChartDialogInlineHelp(StripDisplayMnemonic(UiText.Get(panel.ListField.HelpResourceKey!))));
             grid.Children.Add(header);
 
             Grid.SetRow(list, 1);
@@ -650,47 +664,47 @@ public sealed partial class MainWindow
         }
 
         // ---- Hidden and Empty Cells info button -----------------------------------------------
-        var hiddenEmptyButton = CreateChartButton(UiText.Get(hiddenEmptyAction.LabelResourceKey), 180);
+        // WPF: 150 wide, left aligned, 16px above the OK/Cancel row. The compact Avalonia button has
+        // wider padding than the WPF one, so 150 is the minimum and a longer caption can still grow it.
+        var hiddenEmptyButton = CreateChartButton(UiText.Get(hiddenEmptyAction.LabelResourceKey), 150);
+        hiddenEmptyButton.Width = double.NaN;
         hiddenEmptyButton.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
-        hiddenEmptyButton.Margin = new Thickness(0, 0, 0, 8);
+        hiddenEmptyButton.Margin = new Thickness(0, 0, 0, 16);
         AutomationProperties.SetAutomationId(hiddenEmptyButton, hiddenEmptyAction.AutomationId);
         hiddenEmptyButton.Click += (_, _) => RunGuarded(async () =>
         {
             var infoDialog = NewChartDialog(
                 UiText.Get(SelectDataSourcePlanner.HiddenEmptyCellsTitleResourceKey),
                 "SelectChartDataHiddenEmptyDialog");
-            var closeBtn = CreateChartButton(UiText.Get("Common_Ok"), 80, isDefault: true);
+            // WPF HiddenEmptyCellSettingsDialog metrics: 360 wide, 16px margin, a 76px button 20px
+            // below the content.
+            var closeBtn = CreateChartButton(UiText.Get("Common_Ok"), ChartTypeChangePlanner.PickerButtonWidth, isDefault: true);
             closeBtn.Click += (_, _) => infoDialog.Close();
-            infoDialog.Content = new StackPanel
-            {
-                Margin = new Thickness(16),
-                Spacing = 12,
-                MinWidth = 300,
-                Children =
+            HostChartDialogContent(
+                infoDialog,
+                360,
+                new TextBlock
                 {
-                    new TextBlock
-                    {
-                        Text = UiText.Get(SelectDataSourcePlanner.HiddenEmptyCellsMessageResourceKey),
-                        FontSize = 12,
-                        FontFamily = FormulaBarFontFamily,
-                        TextWrapping = TextWrapping.Wrap,
-                        MaxWidth = 340,
-                    },
-                    CreateChartDialogActionRow([closeBtn]),
+                    Text = UiText.Get(SelectDataSourcePlanner.HiddenEmptyCellsMessageResourceKey),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    TextWrapping = TextWrapping.Wrap,
                 },
-            };
+                CreateChartDialogActionRow([closeBtn], new Thickness(0, 20, 0, 0)));
             await infoDialog.ShowDialog(dialog);
         });
 
+        // WPF stacks the rows with their own margins (no uniform spacing): label 4px above the range
+        // editor, check boxes 10px below / 8px above their neighbours, list panels 8px apart.
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
-            Spacing = 8,
+            Spacing = 0,
             MinWidth = 588,
             Children =
             {
-                // Range label + ("...") picker button + text box
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get(rangeField.LabelResourceKey)), FontSize = 12, FontFamily = FormulaBarFontFamily },
+                // Range label + picker button + text box
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get(rangeField.LabelResourceKey)), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 0, 0, 4) },
                 rangeRow,
                 switchRowColumnCheck,
                 // Legend Entries (Series) panel
@@ -753,7 +767,7 @@ public sealed partial class MainWindow
         var yAxisBox = CreateChartTextBox(yAxisTitle, 260);
         AutomationProperties.SetAutomationId(yAxisBox, "ChartYAxisTitleBox");
 
-        var dialog = NewChartDialog(UiText.Get("ChartLoc_ChartTitlesTitle"), "ChartTitlesDialog");
+        var dialog = NewChartDialog(UiText.Get("ChartTitles_Title"), "ChartTitlesDialog");
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartTitles");
         okButton.Click += (_, _) => dialog.Close(((string, string, string)?)(
@@ -762,22 +776,28 @@ public sealed partial class MainWindow
             yAxisBox.Text ?? string.Empty));
         cancelButton.Click += (_, _) => dialog.Close(((string, string, string)?)null);
 
-        dialog.Content = new StackPanel
+        // WPF ChartTitlesDialog (380x240): each label sits 4px above a full-width box that leaves 8px
+        // below, and the button row follows the last box directly.
+        var titleFields = new StackPanel();
+        void AddTitleInput(string labelResourceKey, TextBox box)
         {
-            Margin = new Thickness(16),
-            Spacing = 8,
-            MinWidth = 292,
-            Children =
+            titleFields.Children.Add(new TextBlock
             {
-                new TextBlock { Text = UiText.Get("ChartLoc_ChartTitleLabel"), FontSize = 12 },
-                chartTitleBox,
-                new TextBlock { Text = UiText.Get("ChartLoc_HorizontalAxisTitleLabel"), FontSize = 12 },
-                xAxisBox,
-                new TextBlock { Text = UiText.Get("ChartLoc_VerticalAxisTitleLabel"), FontSize = 12 },
-                yAxisBox,
-                buttonRow,
-            },
-        };
+                Text = StripDisplayMnemonic(UiText.Get(labelResourceKey)),
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
+                Margin = new Thickness(0, 0, 0, 4),
+            });
+            box.Width = double.NaN;
+            box.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+            box.Margin = new Thickness(0, 0, 0, 8);
+            titleFields.Children.Add(box);
+        }
+
+        AddTitleInput("ChartTitles_ChartTitleLabel", chartTitleBox);
+        AddTitleInput("ChartTitles_XAxisTitleLabel", xAxisBox);
+        AddTitleInput("ChartTitles_YAxisTitleLabel", yAxisBox);
+        HostChartDialogContent(dialog, 380, titleFields, buttonRow);
 
         return await dialog.ShowDialog<(string, string, string)?>(this);
     }
@@ -836,6 +856,7 @@ public sealed partial class MainWindow
             dialog.Close((ChartLegendInput?)new ChartLegendInput(showCheck.IsChecked == true, chosenPosition));
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartLegendInput?)null);
+        buttonRow.Margin = new Thickness(0, 8, 0, 0);
 
         dialog.Content = new StackPanel
         {

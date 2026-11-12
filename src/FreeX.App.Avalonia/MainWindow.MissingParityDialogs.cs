@@ -111,16 +111,20 @@ public sealed partial class MainWindow
         okButton.Click += (_, _) => dialog.Close(new ChartStyleDialogSubmission(true, selectedStyleId));
         cancelButton.Click += (_, _) => dialog.Close((ChartStyleDialogSubmission?)null);
 
+        // WPF ChartStyleDialog: the label sits 4px above the 230px gallery, which leaves 16px above the
+        // button row.
+        scroll.Margin = new Thickness(0, 0, 0, 16);
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
-            Spacing = 4,
+            Spacing = 0,
             Children =
             {
                 new TextBlock
                 {
-                    Text = UiText.Get("ChartStyle_StyleLabel"),
+                    Text = StripDisplayMnemonic(UiText.Get("ChartStyle_StyleLabel")),
                     FontFamily = FormulaBarFontFamily,
+                    Margin = new Thickness(0, 0, 0, 4),
                 },
                 scroll,
                 buttonRow,

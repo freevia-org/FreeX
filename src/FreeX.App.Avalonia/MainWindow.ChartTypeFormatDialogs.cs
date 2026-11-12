@@ -90,20 +90,23 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartBarFormatInput?)null);
 
-        dialog.Content = new StackPanel
-        {
-            Margin = new Thickness(16),
-            Spacing = 8,
-            MinWidth = 300,
-            Children =
+        // WPF ChartBarFormatDialog: 340 wide, one options group with inline help above the two fields.
+        HostTypeFormatDialogContent(
+            dialog,
+            340,
+            ChartBarFormatPlanner.GetOptionsSection().HeaderResourceKey,
+            "ChartBarFormat_HelpText",
+            new StackPanel
             {
-                TypeFormatDescriptorLabel(gapWidthField.LabelResourceKey),
-                gapWidthBox,
-                TypeFormatDescriptorLabel(overlapField.LabelResourceKey),
-                overlapBox,
-                buttonRow,
+                Children =
+                {
+                    TypeFormatDescriptorLabel(gapWidthField.LabelResourceKey),
+                    gapWidthBox,
+                    TypeFormatDescriptorLabel(overlapField.LabelResourceKey),
+                    overlapBox,
+                },
             },
-        };
+            buttonRow);
 
         return await dialog.ShowDialog<ChartBarFormatInput?>(this);
     }
@@ -184,7 +187,7 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartPieFormatInput?)null);
 
-        var panel = new StackPanel { Margin = new Thickness(16), Spacing = 8, MinWidth = 300 };
+        var panel = new StackPanel();
         panel.Children.Add(TypeFormatDescriptorLabel(angleField.LabelResourceKey));
         panel.Children.Add(angleBox);
         panel.Children.Add(TypeFormatDescriptorLabel(explodedIndexField.LabelResourceKey));
@@ -197,8 +200,14 @@ public sealed partial class MainWindow
             panel.Children.Add(holeBox);
         }
 
-        panel.Children.Add(buttonRow);
-        dialog.Content = panel;
+        // WPF ChartPieFormatDialog: 360 wide, one options group with inline help above the fields.
+        HostTypeFormatDialogContent(
+            dialog,
+            360,
+            ChartPieFormatPlanner.GetOptionsSection().HeaderResourceKey,
+            "ChartPieFormat_HelpText",
+            panel,
+            buttonRow);
 
         return await dialog.ShowDialog<ChartPieFormatInput?>(this);
     }
@@ -279,21 +288,24 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartBubbleFormatInput?)null);
 
-        dialog.Content = new StackPanel
-        {
-            Margin = new Thickness(16),
-            Spacing = 8,
-            MinWidth = 300,
-            Children =
+        // WPF ChartBubbleFormatDialog: 360 wide, one options group with inline help above the fields.
+        HostTypeFormatDialogContent(
+            dialog,
+            360,
+            ChartBubbleFormatPlanner.GetOptionsSection().HeaderResourceKey,
+            "ChartBubbleFormat_HelpText",
+            new StackPanel
             {
-                TypeFormatDescriptorLabel(scaleField.LabelResourceKey),
-                scaleBox,
-                negativeCheck,
-                TypeFormatDescriptorLabel(sizeField.LabelResourceKey),
-                sizeCombo,
-                buttonRow,
+                Children =
+                {
+                    TypeFormatDescriptorLabel(scaleField.LabelResourceKey),
+                    scaleBox,
+                    negativeCheck,
+                    TypeFormatDescriptorLabel(sizeField.LabelResourceKey),
+                    sizeCombo,
+                },
             },
-        };
+            buttonRow);
 
         return await dialog.ShowDialog<ChartBubbleFormatInput?>(this);
     }
@@ -420,27 +432,35 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartStockFormatInput?)null);
 
-        dialog.Content = new StackPanel
-        {
-            Margin = new Thickness(16),
-            Spacing = 8,
-            MinWidth = 300,
-            Children =
+        // WPF ChartStockFormatDialog: 380 wide, one options group in which every field, colors
+        // included, has its own label. The WPF inline help describes typing hex colors into text
+        // boxes, which the More Colors buttons replace here, so it is left out.
+        HostTypeFormatDialogContent(
+            dialog,
+            380,
+            ChartStockFormatPlanner.GetOptionsSection().HeaderResourceKey,
+            helpResourceKey: null,
+            new StackPanel
             {
-                TypeFormatDescriptorLabel(gapWidthField.LabelResourceKey),
-                gapWidthBox,
-                TypeFormatDescriptorLabel(ChartStockFormatPlanner.BarsGroupResourceKey, new Thickness(0, 6, 0, 0)),
-                upFillButton,
-                upBorderButton,
-                downFillButton,
-                downBorderButton,
-                TypeFormatDescriptorLabel(ChartStockFormatPlanner.HighLowGroupResourceKey, new Thickness(0, 6, 0, 0)),
-                highLowButton,
-                TypeFormatDescriptorLabel(thicknessField.LabelResourceKey),
-                thicknessBox,
-                buttonRow,
+                Children =
+                {
+                    TypeFormatDescriptorLabel(gapWidthField.LabelResourceKey),
+                    gapWidthBox,
+                    TypeFormatDescriptorLabel(upFillField.LabelResourceKey),
+                    upFillButton,
+                    TypeFormatDescriptorLabel(upBorderField.LabelResourceKey),
+                    upBorderButton,
+                    TypeFormatDescriptorLabel(downFillField.LabelResourceKey),
+                    downFillButton,
+                    TypeFormatDescriptorLabel(downBorderField.LabelResourceKey),
+                    downBorderButton,
+                    TypeFormatDescriptorLabel(highLowColorField.LabelResourceKey),
+                    highLowButton,
+                    TypeFormatDescriptorLabel(thicknessField.LabelResourceKey),
+                    thicknessBox,
+                },
             },
-        };
+            buttonRow);
 
         return await dialog.ShowDialog<ChartStockFormatInput?>(this);
     }
@@ -448,13 +468,36 @@ public sealed partial class MainWindow
     private static string TypeFormatDescriptorText(string resourceKey) =>
         StripDisplayMnemonic(UiText.Get(resourceKey));
 
-    private static TextBlock TypeFormatDescriptorLabel(string resourceKey, Thickness? margin = null) =>
+    private static TextBlock TypeFormatDescriptorLabel(string resourceKey) =>
         new()
         {
             Text = TypeFormatDescriptorText(resourceKey),
             FontSize = 12,
-            Margin = margin ?? default,
         };
+
+    /// <summary>
+    /// Lays a type-format dialog out like its WPF original: a single options group box holding optional
+    /// grey inline help and the labelled fields (WPF <c>ChartDialogHelpers</c> metrics), then the button
+    /// row. The WPF heights are shorter than the group plus the button row, so the height follows the
+    /// content.
+    /// </summary>
+    private static void HostTypeFormatDialogContent(
+        Window dialog,
+        double wpfWidth,
+        string groupHeaderResourceKey,
+        string? helpResourceKey,
+        StackPanel fields,
+        Control buttonRow)
+    {
+        if (helpResourceKey is not null)
+            fields.Children.Insert(0, CreateChartDialogInlineHelp(UiText.Get(helpResourceKey)));
+
+        HostChartDialogContent(
+            dialog,
+            wpfWidth,
+            CreateChartDialogGroupBox(UiText.Get(groupHeaderResourceKey), ApplyWpfChartFieldMetrics(fields)),
+            buttonRow);
+    }
 
     private static void ApplyTypeFormatDescriptorAutomation(Control control, string labelResourceKey, string automationId)
     {

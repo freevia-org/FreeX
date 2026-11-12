@@ -164,9 +164,8 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartDataLabelsInput?)null);
 
-        var labelOptionPanel = new StackPanel
+        var labelOptionPanel = ApplyWpfChartFieldMetrics(new StackPanel
         {
-            Spacing = 8,
             Children =
             {
                 showCheck,
@@ -183,15 +182,18 @@ public sealed partial class MainWindow
                 numberFormatCombo,
                 calloutsCheck,
             },
-        };
+        });
 
-        var stylePanel = new StackPanel
+        // WPF labels every color editor; the Avalonia editor is the More Colors button.
+        var stylePanel = ApplyWpfChartFieldMetrics(new StackPanel
         {
-            Spacing = 8,
             Children =
             {
+                MakeDescriptorLabel(ChartDataLabelsDialogFieldId.FillColor),
                 fillButton,
+                MakeDescriptorLabel(ChartDataLabelsDialogFieldId.BorderColor),
                 borderButton,
+                MakeDescriptorLabel(ChartDataLabelsDialogFieldId.TextColor),
                 textButton,
                 MakeDescriptorLabel(ChartDataLabelsDialogFieldId.BorderThickness),
                 borderThicknessBox,
@@ -200,27 +202,20 @@ public sealed partial class MainWindow
                 MakeDescriptorLabel(ChartDataLabelsDialogFieldId.TextAngle),
                 angleBox,
             },
-        };
+        });
 
-        var content = new StackPanel
+        var body = new StackPanel
         {
-            Margin = new Thickness(16),
-            Spacing = 8,
-            MinWidth = 300,
             Children =
             {
                 MakeDescriptorGroup(ChartDataLabelsPlanner.GetLabelOptionsSection(), labelOptionPanel),
                 MakeDescriptorGroup(ChartDataLabelsPlanner.GetStyleSection(), stylePanel),
-                buttonRow,
             },
         };
 
-        dialog.Content = new ScrollViewer
-        {
-            MaxHeight = 640,
-            VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-            Content = content,
-        };
+        // WPF ChartDataLabelsDialog is a 420x560 window; its two groups are taller than that, so the body
+        // scrolls inside the WPF height and the button row stays visible.
+        HostChartDialogContent(dialog, 420, body, buttonRow, scrollWpfHeight: 560);
 
         return await dialog.ShowDialog<ChartDataLabelsInput?>(this);
 
@@ -272,13 +267,7 @@ public sealed partial class MainWindow
         }
 
         static GroupBox MakeDescriptorGroup(ChartDataLabelsDialogSectionDescriptor section, Control content) =>
-            new()
-            {
-                Header = StripDisplayMnemonic(UiText.Get(section.HeaderResourceKey)),
-                Content = content,
-                Padding = new Thickness(10, 8),
-                Margin = new Thickness(0, 0, 0, 8),
-            };
+            CreateChartDialogGroupBox(UiText.Get(section.HeaderResourceKey), content);
     }
 
     // ---- Format Axis (real, SetChartLayoutCommand via ChartAxisPlanner) -------------------------------
@@ -417,9 +406,10 @@ public sealed partial class MainWindow
         // equivalent Avalonia target explicit because this dialog's controls are nested in scrollable
         // group boxes and are not reliably discovered by generic first-control focus.
         var dialog = NewChartDialog(commandLabel, "ChartAxisFormatDialog", minimumBox);
+        // WPF ChartAxisFormatDialog is a 430x660 outer window; Avalonia sizes are client sizes.
         dialog.SizeToContent = SizeToContent.Manual;
-        dialog.Width = 432;
-        dialog.Height = 720;
+        dialog.Width = 430;
+        dialog.Height = 660 - WpfNoResizeFrameHeight;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartAxisFormat");
         okButton.Click += (_, _) =>
@@ -465,9 +455,8 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartAxisInput?)null);
 
-        var axisOptionsPanel = new StackPanel
+        var axisOptionsPanel = ApplyWpfChartFieldMetrics(new StackPanel
         {
-            Spacing = 8,
             Children =
             {
                 MakeAxisSectionHelp(axisOptionsSection),
@@ -480,14 +469,13 @@ public sealed partial class MainWindow
                 MakeAxisDescriptorLabel(ChartAxisDialogFieldId.MinorUnit),
                 minorUnitBox,
                 logCheck,
-                MakeAxisDescriptorLabel(ChartAxisDialogFieldId.NumberFormat, new Thickness(0, 6, 0, 0)),
+                MakeAxisDescriptorLabel(ChartAxisDialogFieldId.NumberFormat),
                 numberFormatCombo,
             },
-        };
+        });
 
-        var gridlinePanel = new StackPanel
+        var gridlinePanel = ApplyWpfChartFieldMetrics(new StackPanel
         {
-            Spacing = 8,
             Children =
             {
                 majorGridCheck,
@@ -499,11 +487,10 @@ public sealed partial class MainWindow
                 MakeAxisDescriptorLabel(ChartAxisDialogFieldId.GridlineThickness),
                 gridlineThicknessBox,
             },
-        };
+        });
 
-        var tickMarksPanel = new StackPanel
+        var tickMarksPanel = ApplyWpfChartFieldMetrics(new StackPanel
         {
-            Spacing = 8,
             Children =
             {
                 MakeAxisDescriptorLabel(ChartAxisDialogFieldId.MajorTickMarks),
@@ -522,7 +509,7 @@ public sealed partial class MainWindow
                 MakeAxisDescriptorLabel(ChartAxisDialogFieldId.LineThickness),
                 lineThicknessBox,
             },
-        };
+        });
 
         var body = new StackPanel
         {
@@ -535,23 +522,24 @@ public sealed partial class MainWindow
             },
         };
 
-        dialog.Content = new StackPanel
+        // The three WPF groups are taller than the 660px window, so the body scrolls in the space above
+        // the button row instead of being clipped.
+        var axisScroll = new ScrollViewer
         {
-            Margin = new Thickness(16),
-            Spacing = 0,
-            MinWidth = 380,
-            Children =
-            {
-                new ScrollViewer
-                {
-                    HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
-                    VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-                    MaxHeight = 624,
-                    Content = body,
-                },
-                buttonRow,
-            },
+            HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+            Content = body,
         };
+        Grid.SetRow(axisScroll, 0);
+        Grid.SetRow(buttonRow, 1);
+        buttonRow.Margin = new Thickness(0, ChartDialogScrollButtonGap, 0, 0);
+        dialog.Content = new Grid
+        {
+            Margin = new Thickness(ChartDialogMargin),
+            RowDefinitions = new RowDefinitions("*,Auto"),
+            Children = { axisScroll, buttonRow },
+        };
+        ApplyChartDialogTypography(dialog);
 
         return await dialog.ShowDialog<ChartAxisInput?>(this);
 
@@ -577,12 +565,11 @@ public sealed partial class MainWindow
             return checkBox;
         }
 
-        TextBlock MakeAxisDescriptorLabel(ChartAxisDialogFieldId fieldId, Thickness? margin = null) =>
+        TextBlock MakeAxisDescriptorLabel(ChartAxisDialogFieldId fieldId) =>
             new()
             {
                 Text = AxisFieldLabel(fieldId),
                 FontSize = 12,
-                Margin = margin ?? default,
             };
 
         TextBox MakeAxisDescriptorNumberBox(ChartAxisDialogFieldId fieldId, string text)
@@ -607,26 +594,16 @@ public sealed partial class MainWindow
             return button;
         }
 
-        TextBlock MakeAxisSectionHelp(ChartAxisDialogSectionDescriptor section) =>
-            new()
-            {
-                Text = section.HelpResourceKey is { } helpKey ? UiText.Get(helpKey) : string.Empty,
-                FontSize = 12,
-                FontFamily = FormulaBarFontFamily,
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = new SolidColorBrush(Color.FromRgb(96, 96, 96)),
-                Margin = section.HelpResourceKey is null ? new Thickness(0) : new Thickness(0, 0, 0, 4),
-                IsVisible = section.HelpResourceKey is not null,
-            };
+        TextBlock MakeAxisSectionHelp(ChartAxisDialogSectionDescriptor section)
+        {
+            var help = CreateChartDialogInlineHelp(
+                section.HelpResourceKey is { } helpKey ? UiText.Get(helpKey) : string.Empty);
+            help.IsVisible = section.HelpResourceKey is not null;
+            return help;
+        }
 
         GroupBox MakeAxisDescriptorGroup(ChartAxisDialogSectionDescriptor section, Control content) =>
-            new()
-            {
-                Header = StripDisplayMnemonic(UiText.Get(section.HeaderResourceKey)),
-                Content = content,
-                Padding = new Thickness(10, 8),
-                Margin = new Thickness(0, 0, 0, 8),
-            };
+            CreateChartDialogGroupBox(UiText.Get(section.HeaderResourceKey), content);
     }
 
     // ---- Format Series (real, SetChartLayoutCommand via ChartSeriesFormatPlanner) ---------------------
@@ -739,7 +716,7 @@ public sealed partial class MainWindow
             }
         });
 
-        var dialog = NewChartDialog(UiText.Get("ChartSeries_Title"), "ChartSeriesFormatDialog");
+        var dialog = NewChartDialog(UiText.Get("ChartSeriesFormat_Title"), "ChartSeriesFormatDialog");
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartSeriesFormat");
         okButton.Click += (_, _) =>
@@ -764,22 +741,25 @@ public sealed partial class MainWindow
         cancelButton.Click += (_, _) => dialog.Close((ChartSeriesFormatInput?)null);
 
         var seriesSection = ChartSeriesFormatPlanner.GetSeriesOptionsSection();
-        var seriesPanel = new StackPanel
+        var seriesPanel = ApplyWpfChartFieldMetrics(new StackPanel
         {
-            Spacing = 8,
             Children =
             {
                 MakeSeriesDescriptorLabel(ChartSeriesFormatDialogFieldId.Series),
                 seriesCombo,
             },
-        };
+        });
+        // WPF shows the section help under the series picker.
+        if (seriesSection.HelpResourceKey is { } seriesHelpKey)
+            seriesPanel.Children.Add(CreateChartDialogInlineHelp(UiText.Get(seriesHelpKey)));
 
-        var fillLinePanel = new StackPanel
+        var fillLinePanel = ApplyWpfChartFieldMetrics(new StackPanel
         {
-            Spacing = 8,
             Children =
             {
+                MakeSeriesDescriptorLabel(ChartSeriesFormatDialogFieldId.FillColor),
                 fillButton,
+                MakeSeriesDescriptorLabel(ChartSeriesFormatDialogFieldId.StrokeColor),
                 strokeButton,
                 MakeSeriesDescriptorLabel(ChartSeriesFormatDialogFieldId.StrokeThickness),
                 strokeThicknessBox,
@@ -790,20 +770,22 @@ public sealed partial class MainWindow
                 MakeSeriesDescriptorLabel(ChartSeriesFormatDialogFieldId.MarkerSize),
                 markerSizeBox,
             },
-        };
+        });
 
-        dialog.Content = new StackPanel
-        {
-            Margin = new Thickness(16),
-            Spacing = 8,
-            MinWidth = 300,
-            Children =
+        // WPF ChartSeriesFormatDialog is 380 wide; its 390 height is shorter than the two groups, so the
+        // Avalonia height follows the content.
+        HostChartDialogContent(
+            dialog,
+            380,
+            new StackPanel
             {
-                MakeSeriesDescriptorGroup(seriesSection, seriesPanel),
-                MakeSeriesDescriptorGroup(ChartSeriesFormatPlanner.GetFillLineSection(), fillLinePanel),
-                buttonRow,
+                Children =
+                {
+                    MakeSeriesDescriptorGroup(seriesSection, seriesPanel),
+                    MakeSeriesDescriptorGroup(ChartSeriesFormatPlanner.GetFillLineSection(), fillLinePanel),
+                },
             },
-        };
+            buttonRow);
 
         return await dialog.ShowDialog<ChartSeriesFormatInput?>(this);
 
@@ -851,13 +833,7 @@ public sealed partial class MainWindow
         }
 
         static GroupBox MakeSeriesDescriptorGroup(ChartSeriesFormatDialogSectionDescriptor section, Control content) =>
-            new()
-            {
-                Header = StripDisplayMnemonic(UiText.Get(section.HeaderResourceKey)),
-                Content = content,
-                Padding = new Thickness(10, 8),
-                Margin = new Thickness(0, 0, 0, 8),
-            };
+            CreateChartDialogGroupBox(UiText.Get(section.HeaderResourceKey), content);
     }
 
     // ---- Trendline (real, SetChartLayoutCommand via ChartTrendlinePlanner) ----------------------------
@@ -961,9 +937,8 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartTrendlineInput?)null);
 
-        var optionsPanel = new StackPanel
+        var optionsPanel = ApplyWpfChartFieldMetrics(new StackPanel
         {
-            Spacing = 8,
             Children =
             {
                 showCheck,
@@ -976,33 +951,35 @@ public sealed partial class MainWindow
                 equationCheck,
                 rSquaredCheck,
             },
-        };
+        });
 
-        var linePanel = new StackPanel
+        var linePanel = ApplyWpfChartFieldMetrics(new StackPanel
         {
-            Spacing = 8,
             Children =
             {
+                MakeTrendlineDescriptorLabel(ChartTrendlineDialogFieldId.LineColor),
                 colorButton,
                 MakeTrendlineDescriptorLabel(ChartTrendlineDialogFieldId.LineThickness),
                 thicknessBox,
                 MakeTrendlineDescriptorLabel(ChartTrendlineDialogFieldId.DashStyle),
                 dashCombo,
             },
-        };
+        });
 
-        dialog.Content = new StackPanel
-        {
-            Margin = new Thickness(16),
-            Spacing = 8,
-            MinWidth = 300,
-            Children =
+        // WPF ChartTrendlineOptionsDialog is 380 wide; its 430 height is shorter than the two groups, so
+        // the Avalonia height follows the content.
+        HostChartDialogContent(
+            dialog,
+            380,
+            new StackPanel
             {
-                MakeTrendlineDescriptorGroup(ChartTrendlinePlanner.GetOptionsSection(), optionsPanel),
-                MakeTrendlineDescriptorGroup(ChartTrendlinePlanner.GetLineSection(), linePanel),
-                buttonRow,
+                Children =
+                {
+                    MakeTrendlineDescriptorGroup(ChartTrendlinePlanner.GetOptionsSection(), optionsPanel),
+                    MakeTrendlineDescriptorGroup(ChartTrendlinePlanner.GetLineSection(), linePanel),
+                },
             },
-        };
+            buttonRow);
 
         return await dialog.ShowDialog<ChartTrendlineInput?>(this);
 
@@ -1051,13 +1028,7 @@ public sealed partial class MainWindow
         }
 
         static GroupBox MakeTrendlineDescriptorGroup(ChartTrendlineDialogSectionDescriptor section, Control content) =>
-            new()
-            {
-                Header = StripDisplayMnemonic(UiText.Get(section.HeaderResourceKey)),
-                Content = content,
-                Padding = new Thickness(10, 8),
-                Margin = new Thickness(0, 0, 0, 8),
-            };
+            CreateChartDialogGroupBox(UiText.Get(section.HeaderResourceKey), content);
     }
 
     // ---- Error Bars (real, SetChartLayoutCommand via ChartErrorBarsPlanner) ---------------------------
@@ -1137,9 +1108,8 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartErrorBarsInput?)null);
 
-        var amountPanel = new StackPanel
+        var amountPanel = ApplyWpfChartFieldMetrics(new StackPanel
         {
-            Spacing = 8,
             Children =
             {
                 showCheck,
@@ -1151,19 +1121,15 @@ public sealed partial class MainWindow
                 valueBox,
                 endCapsCheck,
             },
-        };
+        });
 
-        dialog.Content = new StackPanel
-        {
-            Margin = new Thickness(16),
-            Spacing = 8,
-            MinWidth = 300,
-            Children =
-            {
-                MakeErrorBarsDescriptorGroup(ChartErrorBarsPlanner.GetErrorAmountSection(), amountPanel),
-                buttonRow,
-            },
-        };
+        // WPF ChartErrorBarsDialog is 360 wide; its 290 height is shorter than the group plus the button
+        // row, so the Avalonia height follows the content.
+        HostChartDialogContent(
+            dialog,
+            360,
+            MakeErrorBarsDescriptorGroup(ChartErrorBarsPlanner.GetErrorAmountSection(), amountPanel),
+            buttonRow);
 
         return await dialog.ShowDialog<ChartErrorBarsInput?>(this);
 
@@ -1206,13 +1172,7 @@ public sealed partial class MainWindow
         }
 
         static GroupBox MakeErrorBarsDescriptorGroup(ChartErrorBarsDialogSectionDescriptor section, Control content) =>
-            new()
-            {
-                Header = StripDisplayMnemonic(UiText.Get(section.HeaderResourceKey)),
-                Content = content,
-                Padding = new Thickness(10, 8),
-                Margin = new Thickness(0, 0, 0, 8),
-            };
+            CreateChartDialogGroupBox(UiText.Get(section.HeaderResourceKey), content);
     }
 
     // ---- Shared dialog plumbing -----------------------------------------------------------------------
@@ -1314,9 +1274,153 @@ public sealed partial class MainWindow
         return dialog;
     }
 
+    // ---- WPF chart dialog layout metrics ---------------------------------------------------------------
+    // The WPF chart dialogs are all built from ChartDialogHelpers: a 16px root margin, group boxes with
+    // 10px padding and a 10px bottom gap, a label 3px below the previous row and 4px above its editor,
+    // editors that stretch across the group and leave 8px below, check boxes on a 22px pitch, grey
+    // inline help with 6px below, and a right-aligned button row of 76px buttons with no margin of its
+    // own (the gap above it is the bottom margin of whatever precedes it).
+
+    private const double ChartDialogMargin = 16;
+    private const double ChartDialogScrollButtonGap = 8;
+    private const string ChartDialogInlineHelpClass = "chart-dialog-inline-help";
+
+    /// <summary>WPF <c>SystemColors.GrayTextBrush</c>, used by <c>ChartDialogHelpers.CreateInlineHelp</c>.</summary>
+    private static IBrush ChartDialogHelpBrush => Brush(109, 109, 109);
+
+    private static TextBlock CreateChartDialogInlineHelp(string text)
+    {
+        var help = new TextBlock
+        {
+            Text = text,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = ChartDialogHelpBrush,
+            Margin = new Thickness(0, 0, 0, 6),
+        };
+        help.Classes.Add(ChartDialogInlineHelpClass);
+        return help;
+    }
+
+    /// <summary>
+    /// Applies the WPF <c>ChartDialogHelpers</c> row metrics to a section stack: labels sit 3px below the
+    /// previous row and 4px above their editor, editors stretch across the section with 8px below, and
+    /// check boxes keep the WPF 22px pitch. Inline help keeps its own margin.
+    /// </summary>
+    private static StackPanel ApplyWpfChartFieldMetrics(StackPanel stack)
+    {
+        stack.Spacing = 0;
+        foreach (var child in stack.Children)
+        {
+            switch (child)
+            {
+                case TextBlock help when help.Classes.Contains(ChartDialogInlineHelpClass):
+                    break;
+                case TextBlock label:
+                    label.Margin = new Thickness(0, 3, 0, 4);
+                    break;
+                case CheckBox checkBox:
+                    checkBox.MinHeight = 20;
+                    checkBox.MaxHeight = 20;
+                    checkBox.Margin = new Thickness(0, 0, 0, 2);
+                    break;
+                default:
+                    child.Width = double.NaN;
+                    child.MinWidth = 0;
+                    child.HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Stretch;
+                    child.Margin = new Thickness(0, 0, 0, 8);
+                    if (child is Button colorButton)
+                        colorButton.HorizontalContentAlignment = global::Avalonia.Layout.HorizontalAlignment.Left;
+                    break;
+            }
+        }
+
+        return stack;
+    }
+
+    /// <summary>
+    /// Lets labels built without an explicit font inherit the dialog font, as they do from a WPF window,
+    /// so they match the compact controls beside them.
+    /// </summary>
+    private static void ApplyChartDialogTypography(Window dialog)
+    {
+        dialog.FontFamily = FormulaBarFontFamily;
+        dialog.FontSize = 12;
+    }
+
+    private static GroupBox CreateChartDialogGroupBox(string header, Control content)
+    {
+        var groupBox = new GroupBox
+        {
+            Header = StripDisplayMnemonic(header),
+            Content = content,
+            Padding = new Thickness(10),
+            Margin = new Thickness(0, 0, 0, 10),
+        };
+        AvaloniaCompactDialogChrome.ApplyGroupBox(groupBox, ChartDialogChromeStyle);
+        return groupBox;
+    }
+
+    /// <summary>
+    /// Hosts a chart dialog body above its button row with the WPF dialog's 16px margin and outer width.
+    /// WPF sizes are outer sizes, so a height loses the caption/frame. The compact Avalonia controls are a
+    /// few pixels taller than their WPF counterparts, so the height follows the content unless
+    /// <paramref name="fixedWpfHeight"/> (content is shorter than the WPF window) or
+    /// <paramref name="scrollWpfHeight"/> (content is taller: the body scrolls inside the WPF height) is given.
+    /// </summary>
+    private static void HostChartDialogContent(
+        Window dialog,
+        double wpfWidth,
+        Control body,
+        Control buttonRow,
+        double? scrollWpfHeight = null,
+        double? fixedWpfHeight = null)
+    {
+        dialog.Width = wpfWidth;
+        dialog.MinWidth = wpfWidth;
+        dialog.MaxWidth = wpfWidth;
+
+        var bodyHost = body;
+        if (scrollWpfHeight is { } scrollHeight)
+        {
+            // A scrolled body can end mid-row, so the button row keeps its own gap below the viewport.
+            buttonRow.Margin = new Thickness(0, ChartDialogScrollButtonGap, 0, 0);
+            bodyHost = new ScrollViewer
+            {
+                MaxHeight = scrollHeight - WpfNoResizeFrameHeight - (2 * ChartDialogMargin)
+                    - ChartDialogScrollButtonGap - ChartDialogChromeStyle.ButtonHeight,
+                HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+                VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+                Content = body,
+            };
+        }
+
+        if (fixedWpfHeight is { } fixedHeight)
+        {
+            var clientHeight = fixedHeight - WpfNoResizeFrameHeight;
+            dialog.SizeToContent = SizeToContent.Manual;
+            dialog.Height = clientHeight;
+            dialog.MinHeight = clientHeight;
+            dialog.MaxHeight = clientHeight;
+        }
+        else
+        {
+            dialog.SizeToContent = SizeToContent.Height;
+        }
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(ChartDialogMargin),
+            Spacing = 0,
+            Children = { bodyHost, buttonRow },
+        };
+        ApplyChartDialogTypography(dialog);
+    }
+
     private static (Button Ok, Button Cancel, StackPanel Row) CreateChartDialogButtons(
         string idPrefix,
-        double buttonWidth = 80)
+        double buttonWidth = ChartTypeChangePlanner.PickerButtonWidth)
     {
         var okButton = CreateChartButton(UiText.Get("Common_Ok"), buttonWidth, isDefault: true);
         AutomationProperties.SetName(okButton, UiText.CreateAutomationName(UiText.Get("Common_Ok")));
@@ -1325,7 +1429,8 @@ public sealed partial class MainWindow
         cancelButton.IsCancel = true;
         AutomationProperties.SetName(cancelButton, UiText.CreateAutomationName(UiText.Get("Common_Cancel")));
         AutomationProperties.SetAutomationId(cancelButton, $"{idPrefix}CancelButton");
-        var row = CreateChartDialogActionRow([okButton, cancelButton], new Thickness(0, 8, 0, 0));
+        // WPF InsertChartDialog.CreateButtonRow: 76px buttons, 8px apart, no row margin.
+        var row = CreateChartDialogActionRow([okButton, cancelButton]);
         return (okButton, cancelButton, row);
     }
 
