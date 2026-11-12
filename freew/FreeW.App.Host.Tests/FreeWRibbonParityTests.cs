@@ -1695,7 +1695,8 @@ public sealed class FreeWRibbonParityTests
                 "freew.cc-checkbox",
                 "freew.cc-date",
                 "freew.cc-dropdown",
-                "freew.cc-combo");
+                "freew.cc-combo",
+                "freew.legacy-tools");
 
         foreach (var commandId in CommandIds(developer))
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Developer controls group");

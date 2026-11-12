@@ -597,10 +597,17 @@ internal static class PrintLayout
         // Word prints a comment's range only together with its margin balloon; without the balloon
         // strip the printed page shows no comment highlight at all.
         using (balloonSources is { Count: > 0 } ? null : DocumentView.SuspendCommentRangeHighlights(cloneSource))
+        // Form-field shading is screen-only in Word: it never reaches the printed page.
+        using (DocumentView.SuspendLegacyFormFieldShading(cloneSource))
         {
             foreach (var block in CloneBlocks(cloneSource))
                 flow.Blocks.Add(block);
         }
+
+        // Outline / shadow / glow / reflection: tag the cloned effect runs so each page can draw them.
+        TextEffectsPrintPaginator.Remember(
+            flow,
+            DocumentView.TagTextEffectsForPrint(cloneSource, flow.Blocks, editor.Model.Theme.ColorScheme));
 
         // XAML cloning strips the private paragraph tags that carry model section breaks. Restore
         // page-type break ownership here so every consumer of this print/preview document sees the
@@ -766,7 +773,7 @@ internal static class PrintLayout
         var (contentWidthForChangeBarsDip, _) = PageLayout.ContentAreaDip(page);
         var changeBarBands = ResolveChangeBarBands(editor, paginator, contentWidthForChangeBarsDip, lineHeightDip);
         var floatingObjectsByPage = ResolveFloatingObjectsByPage(editor, paginator, contentWidthForChangeBarsDip, lineHeightDip);
-        return new HeaderFooterPaginator(
+        return TextEffectsPrintPaginator.Wrap(new HeaderFooterPaginator(
             paginator,
             editor.Model,
             page,
@@ -775,7 +782,7 @@ internal static class PrintLayout
             balloonSources: balloonSources,
             changeBarBands: changeBarBands,
             floatingObjectsByPage: floatingObjectsByPage,
-            changedLineRules: !editor.CurrentReviewDisplayPolicy.ShouldShowSimpleMarkupChangeBar);
+            changedLineRules: !editor.CurrentReviewDisplayPolicy.ShouldShowSimpleMarkupChangeBar), flow);
     }
 
     private static bool NeedsSectionAwareRendering(TextDocument document) =>

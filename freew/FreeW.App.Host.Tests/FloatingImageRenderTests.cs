@@ -428,21 +428,26 @@ public sealed class FloatingImageRenderTests
     }
 
     [StaFact]
-    public void ObjectFormatSquareImage_UsesItsPositionedFigureForWordWrap()
+    public void ObjectFormatSquareImage_UsesItsAuthoredParagraphOffsetFigureForWordWrap()
     {
         var view = new DocumentView();
         view.LoadModel(FreeWVisualEvidenceDocumentFactory.BuildObjectFormatPositionSizeStyleDocument());
 
-        var figure = view.Document.Blocks.OfType<WpfParagraph>()
+        var figures = view.Document.Blocks.OfType<WpfParagraph>()
             .SelectMany(paragraph => paragraph.Inlines.OfType<Figure>())
-            .Should().ContainSingle().Which;
+            .ToList();
+        // The square-wrapped picture and the top-and-bottom WordArt both exclude text at their authored
+        // paragraph-relative offsets; the behind-text callout reserves nothing.
+        figures.Should().HaveCount(2);
+        var figure = figures.Single(candidate => candidate.WrapDirection == WrapDirection.Both);
         figure.Width.Value.Should().BeApproximately(176, 0.01);
-        figure.Height.Value.Should().BeApproximately(95, 0.01);
+        figure.Height.Value.Should().BeApproximately(112, 0.01);
         figure.HorizontalAnchor.Should().Be(FigureHorizontalAnchor.ContentLeft);
         figure.VerticalAnchor.Should().Be(FigureVerticalAnchor.ParagraphTop);
         figure.HorizontalOffset.Should().BeApproximately(232, 0.01);
-        figure.VerticalOffset.Should().BeApproximately(104, 0.01);
-        figure.WrapDirection.Should().Be(WrapDirection.Both);
+        figure.VerticalOffset.Should().BeApproximately(80, 0.01);
+        figures.Single(candidate => candidate.WrapDirection == WrapDirection.None)
+            .VerticalOffset.Should().BeGreaterThan(figure.VerticalOffset);
     }
 
     [StaFact]
@@ -537,7 +542,7 @@ public sealed class FloatingImageRenderTests
             var view = new DocumentView();
             view.LoadModel(doc);
 
-            RenderedParagraph(view).Inlines.OfType<WpfFloater>()
+            RenderedParagraph(view).Inlines.Where(inline => inline is WpfFloater or Figure)
                 .Should()
                 .ContainSingle("WPF must consume the shared wrap reservation instead of overlay-only rendering");
 
@@ -576,6 +581,79 @@ public sealed class FloatingImageRenderTests
                     surface.ContentLeftDip + surface.ContentWidthDip);
             }
         }
+    }
+
+    [StaFact]
+    public void ParagraphAnchoredWrapObjects_ExcludeTextAtTheirAuthoredOffsetInsteadOfAtTheAnchorRun()
+    {
+        // drawing-objects-complex / object-format: several paragraph-anchored wrapping objects in one
+        // paragraph used to become inline Floaters at the anchor run — the full-width top-and-bottom
+        // floater reserved its band immediately and pushed the square-wrapped figure's text sideways.
+        var doc = new TextDocument();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("anchor paragraph text "));
+        var picture = new InlineImage(MinimalPng(), widthPt: 120, heightPt: 60)
+        {
+            Wrapping = ImageWrapping.Square,
+            WrapTextSide = FloatingWrapTextSide.Right,
+            HorizontalAnchor = HorizontalAnchor.Margin,
+            HorizontalOffsetPt = 30,
+            VerticalAnchor = VerticalAnchor.Paragraph,
+            VerticalOffsetPt = 45,
+        };
+        paragraph.Runs.Add(Run.FromImage(picture));
+        var chart = new Chart
+        {
+            Kind = ChartKind.Column,
+            WidthPt = 150,
+            HeightPt = 90,
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.TopAndBottom,
+                HorizontalAnchor = HorizontalAnchor.Margin,
+                HorizontalOffsetPt = 200,
+                VerticalAnchor = VerticalAnchor.Paragraph,
+                VerticalOffsetPt = 120,
+            },
+        };
+        paragraph.Runs.Add(Run.FromChart(chart));
+        var behind = new InlineImage(MinimalPng(), widthPt: 72, heightPt: 54)
+        {
+            Wrapping = ImageWrapping.Behind,
+            VerticalAnchor = VerticalAnchor.Paragraph,
+        };
+        paragraph.Runs.Add(Run.FromImage(behind));
+        doc.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var rendered = RenderedParagraph(view);
+        rendered.Inlines.OfType<WpfFloater>().Should().BeEmpty("no wrap band may be reserved at the anchor run");
+        var figures = rendered.Inlines.OfType<Figure>().ToList();
+        figures.Should().HaveCount(2, "the behind-text picture reserves nothing");
+
+        var square = figures[0];
+        square.Width.Value.Should().BeApproximately(160, 0.01);
+        square.Height.Value.Should().BeApproximately(80, 0.01);
+        square.HorizontalAnchor.Should().Be(FigureHorizontalAnchor.ContentLeft);
+        square.HorizontalOffset.Should().BeApproximately(40, 0.01);
+        square.VerticalAnchor.Should().Be(FigureVerticalAnchor.ParagraphTop);
+        square.VerticalOffset.Should().BeApproximately(60, 0.01);
+        square.WrapDirection.Should().Be(WrapDirection.Right);
+
+        var topAndBottom = figures[1];
+        topAndBottom.VerticalOffset.Should().BeApproximately(160, 0.01);
+        topAndBottom.Height.Value.Should().BeApproximately(120, 0.01);
+        topAndBottom.WrapDirection.Should().Be(WrapDirection.None);
+
+        view.CommitToModel();
+        var committed = (Paragraph)view.Model.Blocks[0];
+        committed.Runs.Should().HaveCount(4);
+        committed.Runs[1].Image.Should().BeSameAs(picture);
+        committed.Runs[2].Chart.Should().BeSameAs(chart);
+        committed.Runs[3].Image.Should().BeSameAs(behind);
     }
 
     [StaFact]
@@ -646,7 +724,9 @@ public sealed class FloatingImageRenderTests
         var view = new DocumentView();
         view.LoadModel(doc);
 
-        RenderedParagraph(view).Inlines.OfType<WpfFloater>().Should().ContainSingle();
+        // A paragraph-anchored square shape excludes text at its authored offset (a WPF Figure).
+        RenderedParagraph(view).Inlines.OfType<Figure>().Should().ContainSingle()
+            .Which.Tag.Should().NotBeNull();
 
         view.CommitToModel();
 

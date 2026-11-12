@@ -1290,4 +1290,123 @@
   <data name="EquationEditor_Hint" xml:space="preserve"><value>Type the equation in linear format, for example x=(-b\pm\sqrt(b^2-4ac))/(2a). Press Enter to accept or Esc to cancel.</value></data>
   <data name="EquationEditor_OpaqueParts_Notice" xml:space="preserve"><value>Parts shown as a numbered token cannot be edited as text. They are kept exactly as they are.</value></data>
   <data name="EquationEditor_EmptyPreview" xml:space="preserve"><value>Type equation here.</value></data>
+  <data name="Ribbon_Command_TextEffects_Label" xml:space="preserve"><value>Text Effects and Typography</value></data>
+  <data name="TextEffects_Menu_Outline" xml:space="preserve"><value>Outline</value></data>
+  <data name="TextEffects_Menu_Shadow" xml:space="preserve"><value>Shadow</value></data>
+  <data name="TextEffects_Menu_Reflection" xml:space="preserve"><value>Reflection</value></data>
+  <data name="TextEffects_Menu_Glow" xml:space="preserve"><value>Glow</value></data>
+  <data name="TextEffects_Menu_NumberStyles" xml:space="preserve"><value>Number Styles</value></data>
+  <data name="TextEffects_Menu_Ligatures" xml:space="preserve"><value>Ligatures</value></data>
+  <data name="TextEffects_Menu_StylisticSets" xml:space="preserve"><value>Stylistic Sets</value></data>
+  <data name="TextEffects_Clear" xml:space="preserve"><value>Clear Text Effects</value></data>
+  <data name="TextEffects_Preset_1" xml:space="preserve"><value>Fill: Black, Text color 1; Shadow</value></data>
+  <data name="TextEffects_Preset_2" xml:space="preserve"><value>Fill: Blue, Accent color 1; Shadow</value></data>
+  <data name="TextEffects_Preset_3" xml:space="preserve"><value>Fill: Orange, Accent color 2; Outline: Orange, Accent color 2</value></data>
+  <data name="TextEffects_Preset_4" xml:space="preserve"><value>Fill: White; Outline: Blue, Accent color 1; Shadow</value></data>
+  <data name="TextEffects_Preset_5" xml:space="preserve"><value>Fill: Gold, Accent color 4; Soft Bevel</value></data>
+  <data name="TextEffects_Preset_6" xml:space="preserve"><value>Gradient Fill: Gray</value></data>
+  <data name="TextEffects_Preset_7" xml:space="preserve"><value>Gradient Fill: Blue, Accent color 5; Reflection</value></data>
+  <data name="TextEffects_Preset_8" xml:space="preserve"><value>Gradient Fill: Gold, Accent color 4; Outline: Gold, Accent color 4</value></data>
+  <data name="TextEffects_Preset_9" xml:space="preserve"><value>Fill: White; Outline: Blue, Accent color 5; Glow: Blue, Accent color 5</value></data>
+  <data name="TextEffects_Preset_10" xml:space="preserve"><value>Fill: Gray, Accent color 3; Sharp Bevel</value></data>
+  <data name="TextEffects_Preset_11" xml:space="preserve"><value>Fill: Black, Text color 1; Outline: White, Background color 1; Hard Shadow: White, Background color 1</value></data>
+  <data name="TextEffects_Preset_12" xml:space="preserve"><value>Fill: Black, Text color 1; Outline: White, Background color 1; Hard Shadow: Blue, Accent color 5</value></data>
+  <data name="TextEffects_Preset_13" xml:space="preserve"><value>Fill: Blue, Accent color 1; Outline: White, Background color 1; Hard Shadow: Blue, Accent color 1</value></data>
+  <data name="TextEffects_Preset_14" xml:space="preserve"><value>Fill: White; Outline: Orange, Accent color 2; Hard Shadow: Orange, Accent color 2</value></data>
+  <data name="TextEffects_Preset_15" xml:space="preserve"><value>Fill: Gray, Accent color 3; Outline: Gray, Accent color 3; Shadow</value></data>
+  <data name="TextEffects_Color_Accent1" xml:space="preserve"><value>Accent color 1</value></data>
+  <data name="TextEffects_Color_Accent2" xml:space="preserve"><value>Accent color 2</value></data>
+  <data name="TextEffects_Color_Accent3" xml:space="preserve"><value>Accent color 3</value></data>
+  <data name="TextEffects_Color_Accent4" xml:space="preserve"><value>Accent color 4</value></data>
+  <data name="TextEffects_Color_Accent5" xml:space="preserve"><value>Accent color 5</value></data>
+  <data name="TextEffects_Color_Accent6" xml:space="preserve"><value>Accent color 6</value></data>
+  <data name="TextEffects_Outline_None" xml:space="preserve"><value>No Outline</value></data>
+  <data name="TextEffects_Outline_Automatic" xml:space="preserve"><value>Automatic</value></data>
+  <data name="TextEffects_Outline_Weight_Format" xml:space="preserve"><value>Weight: {0} pt</value></data>
+  <data name="TextEffects_Outline_Dash_Solid" xml:space="preserve"><value>Dashes: Solid</value></data>
+  <data name="TextEffects_Outline_Dash_RoundDot" xml:space="preserve"><value>Dashes: Round Dot</value></data>
+  <data name="TextEffects_Outline_Dash_SquareDot" xml:space="preserve"><value>Dashes: Square Dot</value></data>
+  <data name="TextEffects_Outline_Dash_Dash" xml:space="preserve"><value>Dashes: Dash</value></data>
+  <data name="TextEffects_Outline_Dash_DashDot" xml:space="preserve"><value>Dashes: Dash Dot</value></data>
+  <data name="TextEffects_Outline_Dash_LongDash" xml:space="preserve"><value>Dashes: Long Dash</value></data>
+  <data name="TextEffects_Shadow_None" xml:space="preserve"><value>No Shadow</value></data>
+  <data name="TextEffects_Shadow_BottomRight" xml:space="preserve"><value>Offset: Bottom Right</value></data>
+  <data name="TextEffects_Shadow_Bottom" xml:space="preserve"><value>Offset: Bottom</value></data>
+  <data name="TextEffects_Shadow_BottomLeft" xml:space="preserve"><value>Offset: Bottom Left</value></data>
+  <data name="TextEffects_Shadow_Right" xml:space="preserve"><value>Offset: Right</value></data>
+  <data name="TextEffects_Shadow_Center" xml:space="preserve"><value>Offset: Center</value></data>
+  <data name="TextEffects_Shadow_Left" xml:space="preserve"><value>Offset: Left</value></data>
+  <data name="TextEffects_Shadow_TopRight" xml:space="preserve"><value>Offset: Top Right</value></data>
+  <data name="TextEffects_Shadow_Top" xml:space="preserve"><value>Offset: Top</value></data>
+  <data name="TextEffects_Shadow_TopLeft" xml:space="preserve"><value>Offset: Top Left</value></data>
+  <data name="TextEffects_Reflection_None" xml:space="preserve"><value>No Reflection</value></data>
+  <data name="TextEffects_Reflection_Tight_Touching" xml:space="preserve"><value>Tight Reflection: Touching</value></data>
+  <data name="TextEffects_Reflection_Half_Touching" xml:space="preserve"><value>Half Reflection: Touching</value></data>
+  <data name="TextEffects_Reflection_Full_Touching" xml:space="preserve"><value>Full Reflection: Touching</value></data>
+  <data name="TextEffects_Reflection_Tight_4pt" xml:space="preserve"><value>Tight Reflection: 4 point offset</value></data>
+  <data name="TextEffects_Reflection_Half_4pt" xml:space="preserve"><value>Half Reflection: 4 point offset</value></data>
+  <data name="TextEffects_Reflection_Full_4pt" xml:space="preserve"><value>Full Reflection: 4 point offset</value></data>
+  <data name="TextEffects_Reflection_Tight_8pt" xml:space="preserve"><value>Tight Reflection: 8 point offset</value></data>
+  <data name="TextEffects_Reflection_Half_8pt" xml:space="preserve"><value>Half Reflection: 8 point offset</value></data>
+  <data name="TextEffects_Reflection_Full_8pt" xml:space="preserve"><value>Full Reflection: 8 point offset</value></data>
+  <data name="TextEffects_Glow_None" xml:space="preserve"><value>No Glow</value></data>
+  <data name="TextEffects_Glow_Format" xml:space="preserve"><value>Glow: {1} point; {0}</value></data>
+  <data name="TextEffects_Number_Default" xml:space="preserve"><value>Default</value></data>
+  <data name="TextEffects_Number_ProportionalLining" xml:space="preserve"><value>Proportional Lining</value></data>
+  <data name="TextEffects_Number_TabularLining" xml:space="preserve"><value>Tabular Lining</value></data>
+  <data name="TextEffects_Number_ProportionalOldStyle" xml:space="preserve"><value>Proportional Old-style</value></data>
+  <data name="TextEffects_Number_TabularOldStyle" xml:space="preserve"><value>Tabular Old-style</value></data>
+  <data name="TextEffects_Ligatures_None" xml:space="preserve"><value>None</value></data>
+  <data name="TextEffects_Ligatures_Standard" xml:space="preserve"><value>Standard Only</value></data>
+  <data name="TextEffects_Ligatures_StandardContextual" xml:space="preserve"><value>Standard and Contextual</value></data>
+  <data name="TextEffects_Ligatures_HistoricalDiscretionary" xml:space="preserve"><value>Historical and Discretionary</value></data>
+  <data name="TextEffects_Ligatures_All" xml:space="preserve"><value>All Ligatures</value></data>
+  <data name="TextEffects_StylisticSet_Default" xml:space="preserve"><value>Default</value></data>
+  <data name="TextEffects_StylisticSet_Format" xml:space="preserve"><value>Stylistic Set {0}</value></data>
+  <data name="Ribbon_Command_LegacyTools_Label" xml:space="preserve"><value>Legacy Tools</value></data>
+  <data name="LegacyFormField_Menu_Text" xml:space="preserve"><value>Text Form Field</value></data>
+  <data name="LegacyFormField_Menu_CheckBox" xml:space="preserve"><value>Check Box Form Field</value></data>
+  <data name="LegacyFormField_Menu_DropDown" xml:space="preserve"><value>Drop-Down Form Field</value></data>
+  <data name="LegacyFormField_Menu_Options" xml:space="preserve"><value>Form Field Options...</value></data>
+  <data name="LegacyFormField_Menu_Shading" xml:space="preserve"><value>Form Field Shading</value></data>
+  <data name="LegacyFormField_Menu_Reset" xml:space="preserve"><value>Reset Form Fields</value></data>
+  <data name="LegacyFormField_Kind_Text" xml:space="preserve"><value>Text form field</value></data>
+  <data name="LegacyFormField_Kind_CheckBox" xml:space="preserve"><value>Check box form field</value></data>
+  <data name="LegacyFormField_Kind_DropDown" xml:space="preserve"><value>Drop-down form field</value></data>
+  <data name="LegacyFormField_Options_Title_Text" xml:space="preserve"><value>Text Form Field Options</value></data>
+  <data name="LegacyFormField_Options_Title_CheckBox" xml:space="preserve"><value>Check Box Form Field Options</value></data>
+  <data name="LegacyFormField_Options_Title_DropDown" xml:space="preserve"><value>Drop-Down Form Field Options</value></data>
+  <data name="LegacyFormField_Type_Regular" xml:space="preserve"><value>Regular text</value></data>
+  <data name="LegacyFormField_Type_Number" xml:space="preserve"><value>Number</value></data>
+  <data name="LegacyFormField_Type_Date" xml:space="preserve"><value>Date</value></data>
+  <data name="LegacyFormField_Type_CurrentDate" xml:space="preserve"><value>Current date</value></data>
+  <data name="LegacyFormField_Type_CurrentTime" xml:space="preserve"><value>Current time</value></data>
+  <data name="LegacyFormField_Type_Calculated" xml:space="preserve"><value>Calculation</value></data>
+  <data name="LegacyFormField_Options_Type" xml:space="preserve"><value>Type:</value></data>
+  <data name="LegacyFormField_Options_DefaultText" xml:space="preserve"><value>Default text:</value></data>
+  <data name="LegacyFormField_Options_MaxLength" xml:space="preserve"><value>Maximum length (blank = Unlimited):</value></data>
+  <data name="LegacyFormField_Options_TextFormat" xml:space="preserve"><value>Text format:</value></data>
+  <data name="LegacyFormField_Options_EntryMacro" xml:space="preserve"><value>Run macro on entry:</value></data>
+  <data name="LegacyFormField_Options_ExitMacro" xml:space="preserve"><value>Run macro on exit:</value></data>
+  <data name="LegacyFormField_Options_Bookmark" xml:space="preserve"><value>Bookmark:</value></data>
+  <data name="LegacyFormField_Options_Enabled" xml:space="preserve"><value>Fill-in enabled</value></data>
+  <data name="LegacyFormField_Options_CalculateOnExit" xml:space="preserve"><value>Calculate on exit</value></data>
+  <data name="LegacyFormField_Options_StatusText" xml:space="preserve"><value>Status bar help text:</value></data>
+  <data name="LegacyFormField_Options_HelpText" xml:space="preserve"><value>F1 help text:</value></data>
+  <data name="LegacyFormField_Options_SizeAuto" xml:space="preserve"><value>Auto size</value></data>
+  <data name="LegacyFormField_Options_SizeExactly" xml:space="preserve"><value>Exactly (pt):</value></data>
+  <data name="LegacyFormField_Options_DefaultChecked" xml:space="preserve"><value>Checked by default</value></data>
+  <data name="LegacyFormField_Options_ItemText" xml:space="preserve"><value>Drop-down item:</value></data>
+  <data name="LegacyFormField_Options_Items" xml:space="preserve"><value>Items in drop-down list:</value></data>
+  <data name="LegacyFormField_Options_Add" xml:space="preserve"><value>Add</value></data>
+  <data name="LegacyFormField_Options_Remove" xml:space="preserve"><value>Remove</value></data>
+  <data name="LegacyFormField_Options_MoveUp" xml:space="preserve"><value>Move Up</value></data>
+  <data name="LegacyFormField_Options_MoveDown" xml:space="preserve"><value>Move Down</value></data>
+  <data name="LegacyFormField_Error_Name" xml:space="preserve"><value>The bookmark name must be at most 20 characters and contain no spaces.</value></data>
+  <data name="LegacyFormField_Error_MaxLength" xml:space="preserve"><value>Maximum length must be a whole number from 1 to 32767, or blank for Unlimited.</value></data>
+  <data name="LegacyFormField_Error_Size" xml:space="preserve"><value>Check box size must be from 1 to 1638 points.</value></data>
+  <data name="LegacyFormField_Error_Items" xml:space="preserve"><value>A drop-down list holds at most 25 items of up to 50 characters each.</value></data>
+  <data name="LegacyFormField_Error_Number" xml:space="preserve"><value>A number is required.</value></data>
+  <data name="LegacyFormField_Error_Date" xml:space="preserve"><value>A valid date or time is required.</value></data>
+  <data name="LegacyFormField_NoFieldAtCaret" xml:space="preserve"><value>Place the insertion point in a form field to change its options.</value></data>
 </root>

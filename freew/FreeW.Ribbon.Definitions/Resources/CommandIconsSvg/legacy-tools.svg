@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Legacy Tools">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="3" y="6" width="26" height="9" rx="1" fill="#D9D9D9" stroke="#5B5B5B" stroke-width="1.2"/>
+  <path d="M6 9 V12 M5 9 H7 M5 12 H7" stroke="#2E75B6" stroke-width="1.2"/>
+  <rect x="3" y="19" width="8" height="8" fill="#FFFFFF" stroke="#5B5B5B" stroke-width="1.2"/>
+  <path d="M4.8 23 L6.6 25 L9.4 20.8" fill="none" stroke="#2E75B6" stroke-width="1.6"/>
+  <rect x="14" y="19" width="15" height="8" fill="#D9D9D9" stroke="#5B5B5B" stroke-width="1.2"/>
+  <path d="M23.5 22 L25.5 24.5 L27.5 22 Z" fill="#5B5B5B"/>
+</svg>

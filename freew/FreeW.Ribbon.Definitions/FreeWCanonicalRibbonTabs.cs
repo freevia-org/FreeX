@@ -626,6 +626,13 @@ internal static partial class FreeWCanonicalRibbonTabs
                 AddSharedIconButton(group, "freew.cc-date", "Date Picker", RibbonCommandIconKind.Date);
                 AddSharedIconButton(group, "freew.cc-dropdown", "Drop-Down List", RibbonCommandIconKind.List);
                 AddSharedIconButton(group, "freew.cc-combo", "Combo Box", RibbonCommandIconKind.ChevronDown);
+                // Legacy Tools: Word 97-2003 form fields (Text / Check Box / Drop-Down), their Options
+                // dialog, Form Field Shading and Reset Form Fields.
+                group.Dropdown(LegacyFormFieldRibbonWorkflow.RootCommandId, FreeWRibbonText.LegacyToolsCommand.Label, LegacyFormFieldRibbonWorkflow.BuildMenu(), d => d with
+                {
+                    PreferredLayout = RibbonCommandLayoutKind.Small,
+                    Icon = new RibbonCommandIcon(RibbonCommandIconKind.Field)
+                });
             }));
     }
 

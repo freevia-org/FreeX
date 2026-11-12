@@ -1702,7 +1702,8 @@ public static partial class DocxReader
         string Result,
         RunFormatting? Formatting,
         ComplexFieldSequenceMetadata? Sequence,
-        IReadOnlyList<NestedComplexField>? NestedFields);
+        IReadOnlyList<NestedComplexField>? NestedFields,
+        LegacyFormField? FormField = null);
 
     /// <summary>
     /// Builds a semantic stack for nested complex fields. Each level owns its own instruction, cached
@@ -1712,12 +1713,14 @@ public static partial class DocxReader
     /// </summary>
     private sealed class ComplexFieldReadAccumulator
     {
-        private sealed class Frame(ComplexFieldSequenceMetadata? sequence)
+        private sealed class Frame(ComplexFieldSequenceMetadata? sequence, LegacyFormField? formField = null, XElement? beginRun = null)
         {
             public System.Text.StringBuilder Instruction { get; } = new();
             public System.Text.StringBuilder Result { get; } = new();
             public List<NestedComplexField> NestedFields { get; } = new();
             public ComplexFieldSequenceMetadata? Sequence { get; } = sequence;
+            public LegacyFormField? FormField { get; } = formField;
+            public XElement? BeginRun { get; } = beginRun;
             public bool PastSeparate { get; set; }
             public XElement? FormattingSource { get; set; }
         }
@@ -1731,19 +1734,19 @@ public static partial class DocxReader
             completed = null;
             var fieldCharacter = run.Element(W + "fldChar");
             var kind = fieldCharacter?.Attribute(W + "fldCharType")?.Value;
-            if (!IsActive)
+            if (kind == "begin")
             {
-                if (kind != "begin" || fieldCharacter?.Element(W + "ffData") is not null)
-                    return false;
-                _stack.Add(new Frame(ReadComplexFieldSequenceMetadata(fieldCharacter)));
+                // A legacy form field (w:ffData on the begin character) is a complex field like any other;
+                // its ffData becomes the field's LegacyFormField model.
+                _stack.Add(new Frame(
+                    ReadComplexFieldSequenceMetadata(fieldCharacter),
+                    ReadLegacyFormField(fieldCharacter),
+                    run));
                 return true;
             }
 
-            if (kind == "begin")
-            {
-                _stack.Add(new Frame(ReadComplexFieldSequenceMetadata(fieldCharacter)));
-                return true;
-            }
+            if (!IsActive)
+                return false;
 
             var current = _stack[^1];
             if (kind == "separate")
@@ -1760,12 +1763,18 @@ public static partial class DocxReader
                 var nestedFields = current.NestedFields.Count == 0 ? null : current.NestedFields.ToArray();
                 if (_stack.Count == 0)
                 {
+                    // A check box / drop-down form field has no result runs: its formatting (the box size
+                    // and font) lives on the begin run instead.
+                    var formattingSource = current.FormField is null
+                        ? current.FormattingSource
+                        : current.FormattingSource ?? current.BeginRun;
                     completed = new CompletedComplexFieldRead(
                         instruction,
-                        result,
-                        ReadRunFormatting(current.FormattingSource?.Element(W + "rPr")),
+                        current.FormField is { } formField ? LegacyFormFieldResultText(formField, result) : result,
+                        ReadRunFormatting(formattingSource?.Element(W + "rPr")),
                         current.Sequence,
-                        nestedFields);
+                        nestedFields,
+                        current.FormField);
                     return true;
                 }
 
@@ -1777,7 +1786,7 @@ public static partial class DocxReader
                 var offset = parentBuffer.Length;
                 parentBuffer.Append(result);
                 parent.NestedFields.Add(new NestedComplexField(
-                    new ComplexField(instruction, Sequence: current.Sequence, NestedFields: nestedFields),
+                    new ComplexField(instruction, Sequence: current.Sequence, NestedFields: nestedFields, FormField: current.FormField),
                     result,
                     placement,
                     offset,
@@ -1894,7 +1903,8 @@ public static partial class DocxReader
                         hyperlinkAnchor: null,
                         hyperlinkTooltip: null,
                         completedField.Sequence,
-                        completedField.NestedFields);
+                        completedField.NestedFields,
+                        completedField.FormField);
                 }
             }
             else if (fieldAccumulator.IsActive && child.Name == W + "hyperlink")
@@ -1920,7 +1930,8 @@ public static partial class DocxReader
                             hyperlinkAnchor: null,
                             hyperlinkTooltip: null,
                             completedHyperlinkField.Sequence,
-                            completedHyperlinkField.NestedFields);
+                            completedHyperlinkField.NestedFields,
+                            completedHyperlinkField.FormField);
                     }
                 }
             }
@@ -2752,7 +2763,8 @@ public static partial class DocxReader
                         hyperlinkAnchor,
                         hyperlinkTooltip,
                         completedField.Sequence,
-                        completedField.NestedFields);
+                        completedField.NestedFields,
+                        completedField.FormField);
                 }
 
                 continue;
@@ -2774,9 +2786,10 @@ public static partial class DocxReader
         string? hyperlinkAnchor,
         string? hyperlinkTooltip,
         ComplexFieldSequenceMetadata? sequenceMetadata,
-        IReadOnlyList<NestedComplexField>? nestedFields)
+        IReadOnlyList<NestedComplexField>? nestedFields,
+        LegacyFormField? formField = null)
     {
-        if (CitationFor(instruction) is { } citation)
+        if (formField is null && CitationFor(instruction) is { } citation)
         {
             var citationRun = Run.CitationMark(citation);
             citationRun.CommentId = commentId;
@@ -2804,6 +2817,8 @@ public static partial class DocxReader
             formatting,
             sequenceMetadata,
             nestedFields);
+        if (formField is not null)
+            run.ComplexField = run.ComplexField! with { FormField = formField };
         run.CommentId = commentId;
         run.Control = control;
         run.HyperlinkUrl = hyperlinkUrl;
@@ -4282,6 +4297,27 @@ public static partial class DocxReader
             return;
         }
 
+        // Legacy VML art with no picture payload (w:pict holding WordArt v:textpath shapes, v:textbox
+        // text boxes or an o:hr horizontal rule) used to vanish; map it onto the nearest modelled object.
+        if (r.Element(W + "pict") is { } legacyPict)
+        {
+            var legacyRuns = ReadLegacyVmlArt(
+                legacyPict, paragraph, archive, imageRelationships, hyperlinkRelationships, numbering);
+            if (legacyRuns.Count > 0)
+            {
+                foreach (var legacyRun in legacyRuns)
+                {
+                    legacyRun.HyperlinkUrl = hyperlinkUrl;
+                    legacyRun.HyperlinkAnchor = hyperlinkAnchor;
+                    legacyRun.HyperlinkTooltip = hyperlinkTooltip;
+                    legacyRun.CommentId = commentId;
+                    ApplyRevision(legacyRun);
+                    paragraph.Runs.Add(legacyRun);
+                }
+                return;
+            }
+        }
+
         // A body run wrapping a w:object (VML v:shape + o:OLEObject) becomes a modelled embedded OLE object.
         var embedded = ReadEmbeddedObject(r, archive, imageRelationships);
         if (embedded is not null)
@@ -4821,6 +4857,7 @@ public static partial class DocxReader
                         // A table nested directly inside this cell (as opposed to one dropped on the floor):
                         // recurse with the same relationship/numbering context so the nested table's own
                         // cells, drawings and fields resolve exactly like a top-level table's would.
+                        cell.NestedTableParagraphOffsets.Add(cell.Paragraphs.Count);
                         cell.NestedTables.Add(ReadTable(
                             child,
                             archive,
@@ -6075,6 +6112,130 @@ public static partial class DocxReader
     }
 
     /// <summary>
+    /// Maps picture-less legacy VML (<c>w:pict</c>) onto modelled objects: a <c>v:textpath</c> shape becomes
+    /// inline WordArt (text, face and the shape's box; the VML fill is approximated by the nearest style
+    /// preset), a <c>v:textbox</c> shape becomes an inline text-box shape holding its <c>w:txbxContent</c>
+    /// paragraphs, and an <c>o:hr</c> rule becomes the host paragraph's bottom border. Returns the runs to
+    /// add (empty when the pict holds nothing recognised, or only a rule).
+    /// </summary>
+    private static List<Run> ReadLegacyVmlArt(
+        XElement pict,
+        Paragraph paragraph,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> imageRelationships,
+        IReadOnlyDictionary<string, string> hyperlinkRelationships,
+        IReadOnlyDictionary<int, ListKind> numbering)
+    {
+        var runs = new List<Run>();
+        if (pict.Descendants(V + "imagedata").Any())
+            return runs;
+
+        // Only in-line art is mapped: an absolutely positioned VML object (a floating stamp, Word's own
+        // PowerPlus watermark, which has its dedicated reader) would be misplaced as an inline run.
+        if (pict.Elements().Any(element =>
+                element.Name.Namespace == V
+                && element.Name != V + "shapetype"
+                && (element.Attribute("style")?.Value.Contains("position:absolute", StringComparison.OrdinalIgnoreCase) == true
+                    || element.Attribute("id")?.Value.StartsWith("PowerPlus", StringComparison.Ordinal) == true)))
+        {
+            return runs;
+        }
+
+        foreach (var shape in pict.Descendants().Where(element => element.Name.Namespace == V))
+        {
+            var style = shape.Attribute("style")?.Value;
+            if (shape.Attribute(O + "hr")?.Value is "t" or "true")
+            {
+                var (_, ruleHeightPt) = ParseVmlShapeSize(style);
+                var ruleColor = shape.Attribute("fillcolor")?.Value;
+                paragraph.Formatting = paragraph.Formatting with
+                {
+                    Border = new ParagraphBorder(
+                        ruleColor is { Length: 7 } && ruleColor[0] == '#' ? ruleColor.ToUpperInvariant() : "#A0A0A0",
+                        ruleHeightPt > 0 ? ruleHeightPt : 1.5,
+                        BottomOnly: true)
+                };
+                continue;
+            }
+
+            if (shape.Element(V + "textpath") is { } textPath
+                && textPath.Attribute("string")?.Value is { Length: > 0 } artText)
+            {
+                var (artWidthPt, artHeightPt) = ParseVmlShapeSize(style);
+                var fill = shape.Element(V + "fill");
+                var wordArt = new WordArt(
+                    artText.Trim(),
+                    fill?.Attribute("colors") is not null
+                        ? WordArtStyle.GradFillMulti
+                        : fill?.Attribute("type")?.Value == "gradient"
+                            ? WordArtStyle.ChromeOne
+                            : shape.Element(V + "shadow") is not null
+                                ? WordArtStyle.Shadow
+                                : WordArtStyle.FillBlue,
+                    // v:textpath fitpath stretches the text to the shape box, so the box height sets the size.
+                    artHeightPt > 0 ? Math.Round(artHeightPt * 0.85, 1) : 36)
+                {
+                    FontFamily = ReadVmlCssValue(textPath.Attribute("style")?.Value, "font-family")?.Trim('"', '\''),
+                    WidthPt = artWidthPt > 0 ? artWidthPt : null,
+                    HeightPt = artHeightPt > 0 ? artHeightPt : null,
+                };
+                runs.Add(Run.FromWordArt(wordArt));
+                continue;
+            }
+
+            if (shape.Element(V + "textbox")?.Element(W + "txbxContent") is { } textBoxContent)
+            {
+                var (boxWidthPt, boxHeightPt) = ParseVmlShapeSize(style);
+                // Inside a v:group the child box is in group coordinates; scale by the group's own size.
+                if (shape.Parent is { } group && group.Name == V + "group"
+                    && ParseVmlShapeSize(group.Attribute("style")?.Value) is var (groupWidthPt, groupHeightPt)
+                    && groupWidthPt > 0 && groupHeightPt > 0
+                    && group.Attribute("coordsize")?.Value.Split(',') is { Length: 2 } coordSize
+                    && double.TryParse(coordSize[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var coordWidth)
+                    && double.TryParse(coordSize[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var coordHeight)
+                    && coordWidth > 0 && coordHeight > 0)
+                {
+                    boxWidthPt *= groupWidthPt / coordWidth;
+                    boxHeightPt *= groupHeightPt / coordHeight;
+                }
+                if (boxWidthPt <= 0 || boxHeightPt <= 0)
+                    continue;
+
+                var textBox = new Shape
+                {
+                    Kind = ShapeKind.TextBox,
+                    WidthPt = boxWidthPt,
+                    HeightPt = boxHeightPt,
+                    FillColorHex = "#FFFFFF",
+                    OutlineColorHex = "#000000",
+                    OutlineWidthPt = 0.75,
+                };
+                foreach (var boxParagraph in textBoxContent.Elements(W + "p"))
+                {
+                    textBox.TextParagraphs.Add(ReadParagraph(
+                        boxParagraph, archive, imageRelationships, hyperlinkRelationships, numbering));
+                }
+                runs.Add(Run.FromShape(textBox));
+            }
+        }
+
+        return runs;
+    }
+
+    private static string? ReadVmlCssValue(string? style, string key)
+    {
+        if (string.IsNullOrEmpty(style))
+            return null;
+        foreach (var part in style.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var colon = part.IndexOf(':');
+            if (colon > 0 && part[..colon].Trim().Equals(key, StringComparison.OrdinalIgnoreCase))
+                return part[(colon + 1)..].Trim();
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Parses a VML shape @style ("width:96pt;height:96pt") into its width/height in points. Missing or
     /// unparseable dimensions read back as 0 (the caller keeps the model default in that case).
     /// </summary>
@@ -7258,6 +7419,8 @@ public static partial class DocxReader
                 "both" or "justify" => TextAlignment.Justify,
                 _ => TextAlignment.Left
             },
+            // An explicit w:jc="left"/"start" must be able to override a justified style.
+            AlignmentIsSet = jc is "left" or "start",
             IndentLeftPt = DxaToPoints(indent?.Attribute(W + "left")?.Value ?? indent?.Attribute(W + "start")?.Value),
             IndentRightPt = DxaToPoints(indent?.Attribute(W + "right")?.Value ?? indent?.Attribute(W + "end")?.Value),
             // w:hanging (a positive twips value) is mutually exclusive with w:firstLine in OOXML; the model
@@ -8125,8 +8288,27 @@ public static partial class DocxReader
         if (string.IsNullOrEmpty(complexScriptFont))
             complexScriptFont = ResolveThemeFontToken(rFontsElement?.Attribute(W + "cstheme")?.Value, themeFonts, eastAsia: false, complexScript: true);
 
+        // Toggles authored OFF (<w:b w:val="0"/>, <w:u w:val="none"/>) must override an inherited "on"
+        // from the paragraph/character style chain; record them so the cascade can tell them from unset.
+        var explicitlyOff = RunToggleOverrides.None;
+        void NoteOff(string localName, RunToggleOverrides flag)
+        {
+            if (rPr.Element(W + localName) is not null && !ReadToggle(rPr, localName))
+                explicitlyOff |= flag;
+        }
+        NoteOff("b", RunToggleOverrides.Bold);
+        NoteOff("i", RunToggleOverrides.Italic);
+        NoteOff("strike", RunToggleOverrides.Strikethrough);
+
+        NoteOff("caps", RunToggleOverrides.AllCaps);
+        NoteOff("smallCaps", RunToggleOverrides.SmallCaps);
+
+        if (underline is not null && underline.Attribute(W + "val")?.Value == "none")
+            explicitlyOff |= RunToggleOverrides.Underline;
+
         return new RunFormatting
         {
+            ExplicitlyOff = explicitlyOff,
             Bold = ReadToggle(rPr, "b"),
             Italic = ReadToggle(rPr, "i"),
             Underline = underline is not null && (underline.Attribute(W + "val")?.Value ?? "single") != "none",
@@ -8142,6 +8324,12 @@ public static partial class DocxReader
             EastAsiaFontFamily = string.IsNullOrEmpty(eastAsiaFont) ? null : eastAsiaFont,
             ComplexScriptFontFamily = string.IsNullOrEmpty(complexScriptFont) ? null : complexScriptFont,
             FontSizePt = HalfPointsToPoints(rPr.Element(W + "sz")?.Attribute(W + "val")?.Value),
+            // Only a w:szCs that differs from w:sz is modeled; the common sz == szCs pair stays null.
+            ComplexScriptFontSizePt =
+                rPr.Element(W + "szCs")?.Attribute(W + "val")?.Value is { } szCs
+                && szCs != rPr.Element(W + "sz")?.Attribute(W + "val")?.Value
+                    ? HalfPointsToPoints(szCs)
+                    : null,
             ColorHex = color is null or "auto" ? null : "#" + color.TrimStart('#'),
             ThemeColor = string.IsNullOrWhiteSpace(themeColorToken)
                 ? null
@@ -8517,6 +8705,12 @@ public static partial class DocxReader
         // rendered at 0 space-after / 1.15 line regardless of the document — drifting vs Word down the page.
         var docDefaults = stylesXml.Root?.Element(W + "docDefaults");
         var ddPr = docDefaults?.Element(W + "pPrDefault")?.Element(W + "pPr");
+        // A serialized w:docDefaults root is authoritative even when its paragraph defaults are empty
+        // (<w:pPrDefault/> or none at all, as Word 2007 writes for converted documents): Word then lays
+        // such a package out at the specification default (single line, no spacing), never at the
+        // application/template 1.15 cadence reserved for packages with no document defaults whatsoever.
+        if (docDefaults is not null)
+            document.UseWordApplicationDefaultLineSpacing = false;
         if (ddPr is not null)
         {
             // A package-authored paragraph-default root is authoritative even when it omits w:line:
@@ -8543,7 +8737,10 @@ public static partial class DocxReader
                 FontFamily = defaultRun.FontFamily ?? document.DefaultRun.FontFamily,
                 EastAsiaFontFamily = defaultRun.EastAsiaFontFamily ?? document.DefaultRun.EastAsiaFontFamily,
                 ComplexScriptFontFamily = defaultRun.ComplexScriptFontFamily ?? document.DefaultRun.ComplexScriptFontFamily,
-                FontSizePt = defaultRun.FontSizePt ?? document.DefaultRun.FontSizePt,
+                // A serialized rPrDefault without w:sz means the specification default of 10pt (sz=20),
+                // not the application/template 11pt a package with no run defaults falls back to.
+                FontSizePt = defaultRun.FontSizePt ?? 10,
+                ComplexScriptFontSizePt = defaultRun.ComplexScriptFontSizePt,
                 ColorHex = defaultRun.ColorHex ?? document.DefaultRun.ColorHex,
                 ThemeColor = defaultRun.ColorHex is not null || defaultRun.ThemeColor is not null
                     ? defaultRun.ThemeColor

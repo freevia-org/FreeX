@@ -18,8 +18,10 @@ public sealed class FreeWContextMenuInventorySourceTests
         // construction added alongside the existing paragraph-spacing picker; the editor's grammar
         // menu (DocumentView.Proofing.cs, planned by ProofingContextMenuPlanner) is the eighth. The
         // Styles gallery swatch menu (StyleGalleryPlanner) and the Modify Style dialog's Format menu
-        // (StyleDefinitionDialogSession.FormatMenu) are the ninth and tenth.
-        source.Sum(text => Regex.Matches(text, @"new\s+ContextMenu\s*\(").Count).Should().Be(10);
+        // (StyleDefinitionDialogSession.FormatMenu) are the ninth and tenth. The legacy drop-down form
+        // field's in-place entry list (DocumentView.LegacyFormFields.cs, picks applied through
+        // LegacyFormFieldInteractionPlanner.SelectDropDownEntry) is the eleventh.
+        source.Sum(text => Regex.Matches(text, @"new\s+ContextMenu\s*\(").Count).Should().Be(11);
     }
 
     [Fact]
@@ -41,6 +43,7 @@ public sealed class FreeWContextMenuInventorySourceTests
         Read("Editing", "DocumentView.Proofing.cs").Should().Contain("ProofingContextMenuPlanner.BuildGrammar");
         Read("Ribbon", "StylesGallery.cs").Should().Contain("StyleGalleryPlanner.BuildContextMenu(");
         Read("StyleDefinitionDialog.cs").Should().Contain("foreach (var entry in session.FormatMenu)");
+        Read("Editing", "DocumentView.LegacyFormFields.cs").Should().Contain("LegacyFormFieldInteractionPlanner.SelectDropDownEntry");
     }
 
     private static string HostRoot() => Path.Combine(

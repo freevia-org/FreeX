@@ -43,6 +43,13 @@ internal static class RunTextEffectsXml
         var copy = new XElement(element);
         foreach (var node in copy.DescendantsAndSelf())
             node.Attributes().Where(attribute => attribute.IsNamespaceDeclaration).Remove();
+        // Effect elements carry no text content, so whitespace between them is only the source part's
+        // indentation. Dropping it keeps one effect one string whether the package was pretty-printed
+        // (FreeW's own output) or not (Word's).
+        copy.DescendantNodesAndSelf().OfType<XText>()
+            .Where(text => string.IsNullOrWhiteSpace(text.Value))
+            .ToList()
+            .ForEach(text => text.Remove());
         copy.SetAttributeValue(XNamespace.Xmlns + "w14", W14.NamespaceName);
         return copy.ToString(SaveOptions.DisableFormatting);
     }

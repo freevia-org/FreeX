@@ -1100,6 +1100,24 @@ internal static class FreeWRibbonCommands
                 CancelNamedStylePreview: editor.EndStylePreview,
                 CommitNamedStylePreview: editor.CommitStylePreview));
 
+        // Home > Font > Text Effects and Typography: presets, Outline/Shadow/Reflection/Glow, OpenType
+        // submenus and Clear Text Effects, all from the shared catalog.
+        TextEffectsRibbonWorkflow.Register(
+            registry,
+            new TextEffectsRibbonPorts(
+                PrepareExecution: () => editor.Focus(),
+                ApplyRunFormatting: editor.ApplyTextEffectFormatting));
+
+        // Developer > Controls > Legacy Tools: Word 97-2003 form fields.
+        LegacyFormFieldRibbonWorkflow.Register(
+            registry,
+            new LegacyFormFieldRibbonPorts(
+                PrepareExecution: () => editor.Focus(),
+                InsertFormField: editor.InsertLegacyFormField,
+                ShowFormFieldOptions: editor.ShowLegacyFormFieldOptionsAtCaret,
+                ToggleFormFieldShading: editor.ToggleLegacyFormFieldShading,
+                ResetFormFields: editor.ResetLegacyFormFields));
+
         // Home > Styles: New Style opens a dialog capturing name + formatting + based-on, creates a custom
         // DocumentStyle via the pure StyleManager and applies it to the selection. Manage Styles lets the
         // user modify or delete the catalog's styles (built-ins are guarded against deletion).

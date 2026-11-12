@@ -51,7 +51,12 @@ public static class DocumentParagraphFormattingResolver
                 ? direct.SuppressLineNumbers
                 : style.SuppressLineNumbersIsSet && style.SuppressLineNumbers,
             SuppressLineNumbersIsSet = direct.SuppressLineNumbersIsSet || style.SuppressLineNumbersIsSet,
-            Alignment = direct.Alignment != defaults.Alignment ? direct.Alignment : style.Alignment,
+            Alignment = direct.AlignmentIsSet || direct.Alignment != defaults.Alignment
+                ? direct.Alignment
+                : style.Alignment,
+            AlignmentIsSet = direct.AlignmentIsSet,
+            // w:bidi on the style (Arabic/Hebrew "Normal") makes every paragraph using it right-to-left.
+            Rtl = direct.Rtl || style.Rtl,
             SpaceBeforePt = direct.SpaceBeforeIsSet
                 ? direct.SpaceBeforePt
                 : style.SpaceBeforeIsSet
@@ -146,7 +151,10 @@ public static class DocumentParagraphFormattingResolver
         var shadingFrom = over.ShadingColorHex is not null ? over : inherited;
         return over with
         {
-            Alignment = over.Alignment != defaults.Alignment ? over.Alignment : inherited.Alignment,
+            Alignment = over.AlignmentIsSet || over.Alignment != defaults.Alignment
+                ? over.Alignment
+                : inherited.Alignment,
+            AlignmentIsSet = false,
             Rtl = inherited.Rtl || over.Rtl,
             SpaceBeforePt = over.SpaceBeforeIsSet ? over.SpaceBeforePt : inherited.SpaceBeforePt,
             SpaceAfterPt = over.SpaceAfterIsSet ? over.SpaceAfterPt : inherited.SpaceAfterPt,

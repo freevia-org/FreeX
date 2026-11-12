@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Text Effects and Typography">
+  <rect width="32" height="32" fill="none"/>
+  <text x="15" y="23" font-size="24" fill="#FFFFFF" stroke="#2E75B6" stroke-width="1.5" font-family="Segoe UI,Arial,sans-serif" font-weight="800" text-anchor="middle">A</text>
+  <path d="M5 28 H25" stroke="#2E75B6" stroke-width="2" stroke-opacity="0.45"/>
+  <path d="M26 4 L27.2 6.8 L30 8 L27.2 9.2 L26 12 L24.8 9.2 L22 8 L24.8 6.8 Z" fill="#F2C811"/>
+</svg>

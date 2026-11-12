@@ -373,6 +373,22 @@ public sealed record DocumentFloatingWrapReservationPlan(
     double HeightDip,
     ImageWrapping Wrapping);
 
+/// <summary>
+/// Wrap geometry for a paragraph-anchored floating object, relative to the anchor paragraph's top and
+/// the text column's left edge. Hosts that can position an exclusion at the authored offset (WPF
+/// <c>Figure</c>) use it so text above the object keeps its full width and only the lines the object
+/// actually overlaps wrap — instead of reserving the object at the anchor line itself.
+/// A top-and-bottom object spans the whole column width.
+/// </summary>
+public sealed record DocumentParagraphAnchoredWrapPlan(
+    DocumentFloatingObjectKind Kind,
+    double WidthDip,
+    double HeightDip,
+    double ColumnOffsetDip,
+    double ParagraphOffsetDip,
+    ImageWrapping Wrapping,
+    FloatingWrapTextSide WrapTextSide);
+
 public sealed record DocumentFloatingLineExclusionPlan(
     double LeftDeltaDip,
     double RightShrinkDip);
@@ -1725,6 +1741,92 @@ public static class DocumentViewLayoutPlanner
                 topAndBottomReservationWidthDip);
 
         return null;
+    }
+
+    /// <summary>
+    /// Resolves the wrap exclusion of a paragraph-anchored, column/margin-relative floating object that
+    /// wraps text (square, tight or top-and-bottom) in a single-column section. Returns null for every
+    /// other placement (page/margin-relative vertical frames, page-relative horizontal frames, negative
+    /// offsets, multi-column pages, wrapNone objects), which keep their existing reservation.
+    /// </summary>
+    public static DocumentParagraphAnchoredWrapPlan? BuildParagraphAnchoredWrapPlan(Run run, PageSettings page)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(page);
+
+        if (page.ColumnCount > 1)
+            return null;
+
+        DocumentFloatingObjectKind kind;
+        double widthPt, heightPt;
+        FloatingPlacement? placement = null;
+        switch (run)
+        {
+            case { Image: { IsFloating: true } image }:
+                (kind, widthPt, heightPt) = (DocumentFloatingObjectKind.Image, image.WidthPt, image.HeightPt);
+                break;
+            case { Shape: { IsFloating: true, Placement: { } shapePlacement } shape }:
+                (kind, widthPt, heightPt, placement) =
+                    (DocumentFloatingObjectKind.Shape, shape.WidthPt, shape.HeightPt, shapePlacement);
+                break;
+            case { Chart: { IsFloating: true, Placement: { } chartPlacement } chart }:
+                (kind, widthPt, heightPt, placement) =
+                    (DocumentFloatingObjectKind.Chart, chart.WidthPt, chart.HeightPt, chartPlacement);
+                break;
+            case { WordArt: { IsFloating: true, Placement: { } wordArtPlacement } wordArt }:
+                (kind, widthPt, heightPt, placement) = (DocumentFloatingObjectKind.WordArt,
+                    EstimateWordArtWidthPt(wordArt), EstimateWordArtHeightPt(wordArt), wordArtPlacement);
+                break;
+            case { SmartArt: { IsFloating: true, Placement: { } smartArtPlacement } smartArt }:
+                (kind, widthPt, heightPt, placement) =
+                    (DocumentFloatingObjectKind.SmartArt, smartArt.WidthPt, smartArt.HeightPt, smartArtPlacement);
+                break;
+            case { DrawingGroup: { Placement: { } groupPlacement } group }:
+                (kind, widthPt, heightPt, placement) =
+                    (DocumentFloatingObjectKind.Group, group.WidthPt, group.HeightPt, groupPlacement);
+                break;
+            default:
+                return null;
+        }
+
+        var floatingImage = run.Image;
+        var wrapping = placement?.Wrapping ?? floatingImage!.Wrapping;
+        var side = placement?.WrapTextSide ?? floatingImage!.WrapTextSide;
+        var horizontalAnchor = placement?.HorizontalAnchor ?? floatingImage!.HorizontalAnchor;
+        var horizontalOffsetPt = placement?.HorizontalOffsetPt ?? floatingImage!.HorizontalOffsetPt;
+        var verticalAnchor = placement?.VerticalAnchor ?? floatingImage!.VerticalAnchor;
+        var verticalOffsetPt = placement?.VerticalOffsetPt ?? floatingImage!.VerticalOffsetPt;
+
+        if (wrapping is not (ImageWrapping.Square or ImageWrapping.Tight or ImageWrapping.TopAndBottom)
+            || verticalAnchor != VerticalAnchor.Paragraph
+            || horizontalAnchor is not (HorizontalAnchor.Margin or HorizontalAnchor.Column)
+            || widthPt <= 0
+            || heightPt <= 0
+            || verticalOffsetPt < 0
+            || double.IsNaN(horizontalOffsetPt)
+            || double.IsNaN(verticalOffsetPt))
+        {
+            return null;
+        }
+
+        var columnWidthDip = BuildFloatingWrapReservationTextWidthDip(page);
+        var heightDip = PageLayout.PointsToDip(heightPt);
+        var paragraphOffsetDip = PageLayout.PointsToDip(verticalOffsetPt);
+        // An object that overhangs the column's right edge keeps its left edge (that is where text
+        // wraps); only the part inside the column can exclude text, so the band is trimmed there.
+        var columnOffsetDip = Math.Clamp(
+            PageLayout.PointsToDip(horizontalOffsetPt),
+            0,
+            Math.Max(0, columnWidthDip - 1));
+        var widthDip = Math.Max(1, Math.Min(PageLayout.PointsToDip(widthPt), columnWidthDip - columnOffsetDip));
+        return new DocumentParagraphAnchoredWrapPlan(
+            kind,
+            widthDip,
+            heightDip,
+            columnOffsetDip,
+            paragraphOffsetDip,
+            wrapping,
+            side);
     }
 
     public static double BuildFloatingWrapReservationTextWidthDip(PageSettings page)

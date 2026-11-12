@@ -124,6 +124,13 @@ internal static partial class FreeWCanonicalRibbonTabs
                         g.Icon("freew.subscript", subscriptCommand.Label, RibbonCommandIconKind.Subscript);
                         g.Icon("freew.superscript", superscriptCommand.Label, RibbonCommandIconKind.Superscript);
                         g.Icon("freew.change-case", changeCaseCommand.Label, RibbonCommandIconKind.ChangeCase);
+                        // Text Effects and Typography: preset looks plus Outline/Shadow/Reflection/Glow
+                        // and the OpenType submenus, all built from the shared catalog.
+                        g.Dropdown(TextEffectsRibbonCatalog.RootCommandId, FreeWRibbonText.TextEffectsCommand.Label, TextEffectsRibbonWorkflow.BuildMenu(), d => d with
+                        {
+                            PreferredLayout = RibbonCommandLayoutKind.Small,
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.WordArt)
+                        });
                         g.RowBreak();
                         g.Icon("freew.smallcaps", smallCapsCommand.Label, RibbonCommandIconKind.Font);
                         g.Icon("freew.allcaps", allCapsCommand.Label, RibbonCommandIconKind.Font);
@@ -169,6 +176,11 @@ internal static partial class FreeWCanonicalRibbonTabs
                         g.Button("freew.clear-formatting", FreeWRibbonText.ClearFormattingCompactCommand.Label);
                         g.Dropdown("freew.font-color", FreeWRibbonText.FontColorDropdownCommand.Label, BuildFontColorMenu());
                         g.Button("freew.change-case", FreeWRibbonText.ChangeCaseCompactCommand.Label);
+                        g.Dropdown(TextEffectsRibbonCatalog.RootCommandId, FreeWRibbonText.TextEffectsCommand.Label, TextEffectsRibbonWorkflow.BuildMenu(), d => d with
+                        {
+                            PreferredLayout = RibbonCommandLayoutKind.Small,
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.WordArt)
+                        });
                         g.DialogLauncher("freew.font-dialog", FreeWRibbonText.FontDialogCommand.Label, "Open Font settings.");
                     }));
 

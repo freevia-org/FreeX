@@ -32,7 +32,12 @@ public static class DocumentRunFormattingResolver
         // cascade Word uses (paragraph style -> character style -> direct formatting).
         foreach (var style in StyleChain(document, runStyleId))
             resolved = Overlay(resolved, style.Run);
-        return Overlay(resolved, directFormatting);
+        resolved = Overlay(resolved, directFormatting);
+        // "Same as the Latin size" is modeled as null, so effective formatting copied back onto a run
+        // (format painter, probes) does not grow a redundant complex-script size.
+        return resolved.ComplexScriptFontSizePt == resolved.FontSizePt
+            ? resolved with { ComplexScriptFontSizePt = null }
+            : resolved;
     }
 
     /// <summary>Convenience overload that resolves a run's own <see cref="Run.StyleId"/> alongside its
@@ -67,6 +72,13 @@ public static class DocumentRunFormattingResolver
     {
         FontFamily = direct.FontFamily ?? inherited.FontFamily,
         FontSizePt = direct.FontSizePt ?? inherited.FontSizePt,
+        // Complex-script typeface/size cascade on their own track (w:rFonts/@w:cs, w:szCs). A level that
+        // sets w:sz with an equal (unmodeled) w:szCs moves the complex-script size with it.
+        ComplexScriptFontFamily = direct.ComplexScriptFontFamily ?? inherited.ComplexScriptFontFamily,
+        EastAsiaFontFamily = direct.EastAsiaFontFamily ?? inherited.EastAsiaFontFamily,
+        ComplexScriptFontSizePt = direct.ComplexScriptFontSizePt
+            ?? direct.FontSizePt
+            ?? inherited.ComplexScriptFontSizePt,
         ColorHex = direct.ColorHex ?? inherited.ColorHex,
         ThemeColor = direct.ColorHex is not null ? direct.ThemeColor : inherited.ThemeColor,
         HighlightColorHex = direct.HighlightColorHex ?? inherited.HighlightColorHex,
@@ -90,17 +102,89 @@ public static class DocumentRunFormattingResolver
         NumberSpacing = direct.NumberSpacing != NumberSpacing.Default ? direct.NumberSpacing : inherited.NumberSpacing,
         StylisticSet = direct.StylisticSet ?? inherited.StylisticSet,
         TextEffects = RunTextEffects.Merge(direct.TextEffects, inherited.TextEffects),
-        Bold = inherited.Bold || direct.Bold,
-        Italic = inherited.Italic || direct.Italic,
-        Underline = inherited.Underline || direct.Underline,
-        Strikethrough = inherited.Strikethrough || direct.Strikethrough,
+        // A toggle the overlaying level switches off explicitly (<w:b w:val="0"/>) wins over an inherited
+        // "on"; otherwise the non-nullable toggles keep their logical-OR inheritance.
+        ExplicitlyOff = RunToggleOverrides.None,
+        Bold = Toggle(inherited.Bold, direct.Bold, direct, RunToggleOverrides.Bold),
+        Italic = Toggle(inherited.Italic, direct.Italic, direct, RunToggleOverrides.Italic),
+        Underline = Toggle(inherited.Underline, direct.Underline, direct, RunToggleOverrides.Underline),
+        Strikethrough = Toggle(inherited.Strikethrough, direct.Strikethrough, direct, RunToggleOverrides.Strikethrough),
+        // Double strikethrough and hidden text keep their pinned logical-OR contract.
         DoubleStrikethrough = inherited.DoubleStrikethrough || direct.DoubleStrikethrough,
         Hidden = inherited.Hidden || direct.Hidden,
         WebHidden = inherited.WebHidden || direct.WebHidden,
         NoProof = inherited.NoProof || direct.NoProof,
-        SmallCaps = inherited.SmallCaps || direct.SmallCaps,
-        AllCaps = inherited.AllCaps || direct.AllCaps,
+        SmallCaps = Toggle(inherited.SmallCaps, direct.SmallCaps, direct, RunToggleOverrides.SmallCaps),
+        AllCaps = Toggle(inherited.AllCaps, direct.AllCaps, direct, RunToggleOverrides.AllCaps),
     };
+
+    /// <summary>
+    /// Projects resolved formatting onto the script of <paramref name="text"/>: right-to-left script text
+    /// (Arabic/Hebrew, or any run marked w:rtl) takes its typeface from w:rFonts/@w:cs and its size from
+    /// w:szCs, exactly as Word does, instead of the Latin (ascii/hAnsi + w:sz) pair. A complex-script
+    /// typeface that <paramref name="isFontAvailable"/> rejects falls back to Times New Roman, the
+    /// Arabic-capable face Word substitutes for a missing roman-family Arabic font, so line counts track
+    /// Word rather than the platform's wider UI fallback font. Other text is returned unchanged.
+    /// </summary>
+    public static RunFormatting ProjectForScript(
+        RunFormatting resolved,
+        string? text,
+        Func<string, bool>? isFontAvailable = null)
+    {
+        ArgumentNullException.ThrowIfNull(resolved);
+        if (!resolved.Rtl && !ContainsComplexScript(text))
+            return resolved;
+
+        var family = resolved.ComplexScriptFontFamily ?? resolved.FontFamily;
+        var sizePt = resolved.ComplexScriptFontSizePt ?? resolved.FontSizePt;
+        if (family is { Length: > 0 }
+            && isFontAvailable is not null
+            && !isFontAvailable(family))
+        {
+            // Classic Arabic text faces draw far smaller than Times New Roman at the same point size;
+            // scale the substitute to the missing face's advance widths so paragraphs wrap where Word's do.
+            if (sizePt is { } authoredSize
+                && MissingComplexScriptFontAdvanceScale.TryGetValue(family, out var advanceScale))
+            {
+                sizePt = authoredSize * advanceScale;
+            }
+            family = ComplexScriptFallbackFontFamily;
+        }
+
+        return resolved with
+        {
+            FontFamily = family,
+            FontSizePt = sizePt,
+        };
+    }
+
+    /// <summary>
+    /// Advance-width ratio of a not-installed Arabic text face to the Times New Roman substitute at the
+    /// same point size, measured against Word's own output for the fidelity corpus.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, double> MissingComplexScriptFontAdvanceScale =
+        new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Traditional Arabic"] = 0.83,
+        };
+
+    public const string ComplexScriptFallbackFontFamily = "Times New Roman";
+
+    /// <summary>True when the text holds Hebrew or Arabic-script characters (incl. presentation forms).</summary>
+    public static bool ContainsComplexScript(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return false;
+        foreach (var ch in text)
+        {
+            if (ch is (>= '\u0590' and <= '\u08FF') or (>= '\uFB1D' and <= '\uFDFF') or (>= '\uFE70' and <= '\uFEFF'))
+                return true;
+        }
+        return false;
+    }
+
+    private static bool Toggle(bool inherited, bool direct, RunFormatting overlay, RunToggleOverrides flag) =>
+        direct || (inherited && (overlay.ExplicitlyOff & flag) == 0);
 }
 
 /// <summary>

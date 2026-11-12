@@ -2223,12 +2223,17 @@ public enum RunFieldKind
 /// Fields embedded in this field's instruction or cached result. Their placement preserves Word's nested
 /// <c>w:fldChar</c> ownership instead of flattening the inner instruction/result into the outer field.
 /// </param>
+/// <param name="FormField">
+/// The <c>w:ffData</c> of a legacy form field (<c>FORMTEXT</c>/<c>FORMCHECKBOX</c>/<c>FORMDROPDOWN</c>), or
+/// null for every other field. See <see cref="LegacyFormField"/>.
+/// </param>
 public sealed record ComplexField(
     string Instruction,
     bool ShowCode = false,
     SimpleFieldMetadata? SimpleField = null,
     ComplexFieldSequenceMetadata? Sequence = null,
-    IReadOnlyList<NestedComplexField>? NestedFields = null)
+    IReadOnlyList<NestedComplexField>? NestedFields = null,
+    LegacyFormField? FormField = null)
 {
     /// <summary>Whether Word prevents this field from being recalculated.</summary>
     public bool IsLocked => SimpleField?.IsLocked == true || Sequence?.IsLocked == true;
@@ -2736,6 +2741,15 @@ public sealed class TableCell
     /// the overwhelming majority of cells, so existing tables are unaffected.
     /// </summary>
     public List<Table> NestedTables { get; } = [];
+
+    /// <summary>
+    /// Reading-order hint parallel to <see cref="NestedTables"/>: entry <c>i</c> is the number of
+    /// <see cref="Paragraphs"/> that precede <c>NestedTables[i]</c> inside the cell. Renderers use it to
+    /// interleave nested tables with the cell's paragraphs the way the source authored them. A missing
+    /// entry (the list is shorter, e.g. for a model-built cell) means "before every paragraph", which is
+    /// also the order the DOCX writer emits.
+    /// </summary>
+    public List<int> NestedTableParagraphOffsets { get; } = [];
 
     /// <summary>
     /// Cell background shading as an RRGGBB hex (e.g. <c>"#FFFF00"</c>). Null means no shading.
