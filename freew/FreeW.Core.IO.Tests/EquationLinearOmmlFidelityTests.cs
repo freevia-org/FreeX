@@ -126,7 +126,7 @@ public class EquationLinearOmmlFidelityTests
         "sin^2 x",
         "lim_(x->0) f",
         @"max_(i\in I) a_i",
-        "f⁡x",
+        "f\u2061x",
         @"a\below b",
         @"a\above b",
         @"x\hat",
@@ -274,24 +274,24 @@ public class EquationLinearOmmlFidelityTests
             "<m:func><m:funcPr>" + WordControlProperties + "</m:funcPr><m:fName><m:limLow><m:limLowPr>" + WordControlProperties
             + "</m:limLowPr><m:e><m:r><m:rPr><m:sty m:val=\"p\"/></m:rPr><m:t>lim</m:t></m:r></m:e><m:lim>" + WordRun("n→∞")
             + "</m:lim></m:limLow></m:fName><m:e>" + WordRun("x") + "</m:e></m:func>",
-            "lim┬(n→∞)⁡x"
+            "lim┬(n→∞)\u2061x"
         },
         {
             "trigonometric function",
             "<m:func><m:funcPr>" + WordControlProperties + "</m:funcPr><m:fName><m:r><m:rPr><m:sty m:val=\"p\"/></m:rPr><m:t>sin</m:t></m:r></m:fName><m:e>"
             + WordRun("α") + "</m:e></m:func>",
-            "sin⁡α"
+            "sin\u2061α"
         },
         {
             "function with exponent",
             "<m:func><m:fName><m:sSup><m:e><m:r><m:rPr><m:sty m:val=\"p\"/></m:rPr><m:t>cos</m:t></m:r></m:e><m:sup>" + WordRun("2")
             + "</m:sup></m:sSup></m:fName><m:e>" + WordRun("x") + "</m:e></m:func>",
-            "cos^2⁡x"
+            "cos^2\u2061x"
         },
         {
             "vector accent",
-            "<m:acc><m:accPr><m:chr m:val=\"⃗\"/>" + WordControlProperties + "</m:accPr><m:e>" + WordRun("v") + "</m:e></m:acc>",
-            "v⃗"
+            "<m:acc><m:accPr><m:chr m:val=\"\u20D7\"/>" + WordControlProperties + "</m:accPr><m:e>" + WordRun("v") + "</m:e></m:acc>",
+            "v\u20D7"
         },
         {
             "overbar",

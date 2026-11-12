@@ -115,6 +115,32 @@ public sealed class EquationEditingTests
         EquationEditorSession.AutoCorrect(@"\alpha ", 99).Should().BeNull();
     }
 
+    [Fact]
+    public void EditorText_EveryStringIsLocalizableInBothResourceFiles()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var keys = EquationEditorText.RequiredResourceKeys;
+        keys.Should().OnlyHaveUniqueItems().And.HaveCount(13);
+
+        foreach (var file in new[] { "Strings.resx", "Strings.fr-FR.resx" })
+        {
+            var resources = System.Xml.Linq.XDocument
+                .Load(Path.Combine(root, "freew", "FreeW.App.Localization", "Resources", file))
+                .Root!
+                .Elements("data")
+                .ToDictionary(data => (string)data.Attribute("name")!, data => (string?)data.Element("value"));
+
+            foreach (var key in keys)
+                resources.Should().ContainKey(key, file).WhoseValue.Should().NotBeNullOrWhiteSpace();
+        }
+
+        var surface = EquationEditorText.BuildSurface(key => "localized:" + key);
+        surface.Title.Should().Be("localized:EquationEditor_Dialog_Title");
+        surface.Justifications.Select(entry => entry.Justification).Should().Equal(
+            MathJustification.CenterGroup, MathJustification.Left, MathJustification.Center, MathJustification.Right);
+        EquationEditorText.BuildSurface().Title.Should().Be("Equation");
+    }
+
     // ── Catalogs ─────────────────────────────────────────────────────────────────────────────────────
 
     [Fact]

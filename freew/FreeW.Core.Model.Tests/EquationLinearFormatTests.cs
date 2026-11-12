@@ -208,12 +208,12 @@ public class EquationLinearFormatTests
     public void Parse_Functions()
     {
         ShouldParseTo("sin x", MathRun.FunctionApply("sin", "x"));
-        ShouldParseTo("cos⁡x", MathRun.FunctionApply("cos", "x"));
+        ShouldParseTo("cos\u2061x", MathRun.FunctionApply("cos", "x"));
         ShouldParseTo("sin(x)", MathRun.FunctionApply("sin", Eq(MathRun.Delimiter("x"))));
         ShouldParseTo("sin θ", MathRun.FunctionApply("sin", "θ"));
         ShouldParseTo(@"cos \theta", MathRun.FunctionApply("cos", "θ"));
-        ShouldParseTo("f⁡x", MathRun.FunctionApply("f", "x"));
-        ShouldParseTo("〖sgn〗⁡x", MathRun.FunctionApply("sgn", "x"));
+        ShouldParseTo("f\u2061x", MathRun.FunctionApply("f", "x"));
+        ShouldParseTo("〖sgn〗\u2061x", MathRun.FunctionApply("sgn", "x"));
         ShouldParseTo("sin cos x", MathRun.FunctionApply("sin", Eq(MathRun.FunctionApply("cos", "x"))));
         ShouldParseTo("sin x/2", MathRun.Fraction(Eq(MathRun.FunctionApply("sin", "x")), Text("2")));
     }
@@ -250,7 +250,7 @@ public class EquationLinearFormatTests
         };
         ShouldParseTo("lim_(x->0) f", limit);
         ShouldParseTo(@"lim_(x\rightarrow 0) f", limit);
-        ShouldParseTo("lim┬(x→0)⁡f", limit);
+        ShouldParseTo("lim┬(x→0)\u2061f", limit);
         ShouldParseTo(@"a\below b", MathRun.LowerLimit("a", "b"));
         ShouldParseTo(@"a\above b", MathRun.UpperLimit("a", "b"));
         ShouldParseTo("max_i", MathRun.LowerLimit("max", "i"));
@@ -260,14 +260,14 @@ public class EquationLinearFormatTests
     [Fact]
     public void Parse_Accents()
     {
-        ShouldParseTo(@"x\hat", MathRun.AccentOf("x", "̂"));
-        ShouldParseTo(@"x\bar", MathRun.AccentOf("x", "̅"));
-        ShouldParseTo(@"x\vec", MathRun.AccentOf("x", "⃗"));
-        ShouldParseTo(@"(a+b)\tilde", MathRun.AccentOf("a+b", "̃"));
-        ShouldParseTo(@"\hat(x)", MathRun.AccentOf("x", "̂"));
-        ShouldParseTo(@"\vec(AB)", MathRun.AccentOf("AB", "⃗"));
-        ShouldParseTo(@"x\dot\dot", MathRun.AccentOf(Eq(MathRun.AccentOf("x", "̇")), "̇"));
-        ShouldParseTo(@"x\hat^2", MathRun.Superscript(Eq(MathRun.AccentOf("x", "̂")), Text("2")));
+        ShouldParseTo(@"x\hat", MathRun.AccentOf("x", "\u0302"));
+        ShouldParseTo(@"x\bar", MathRun.AccentOf("x", "\u0305"));
+        ShouldParseTo(@"x\vec", MathRun.AccentOf("x", "\u20D7"));
+        ShouldParseTo(@"(a+b)\tilde", MathRun.AccentOf("a+b", "\u0303"));
+        ShouldParseTo(@"\hat(x)", MathRun.AccentOf("x", "\u0302"));
+        ShouldParseTo(@"\vec(AB)", MathRun.AccentOf("AB", "\u20D7"));
+        ShouldParseTo(@"x\dot\dot", MathRun.AccentOf(Eq(MathRun.AccentOf("x", "\u0307")), "\u0307"));
+        ShouldParseTo(@"x\hat^2", MathRun.Superscript(Eq(MathRun.AccentOf("x", "\u0302")), Text("2")));
     }
 
     [Fact]
@@ -362,13 +362,13 @@ public class EquationLinearFormatTests
         string.Concat(Enumerable.Repeat("a/", 5000)),
         string.Concat(Enumerable.Repeat("x^", 5000)) + "x",
         string.Concat(Enumerable.Repeat("√", 5000)) + "x",
-        string.Concat(Enumerable.Repeat("f⁡", 5000)) + "x",
-        "x" + string.Concat(Enumerable.Repeat("̂", 5000)),
+        string.Concat(Enumerable.Repeat("f\u2061", 5000)) + "x",
+        "x" + string.Concat(Enumerable.Repeat("\u0302", 5000)),
         string.Concat(Enumerable.Repeat("∑_", 2000)) + "x",
         string.Concat(Enumerable.Repeat("sin ", 2000)) + "x",
         string.Concat(Enumerable.Repeat("■(", 200)) + "x" + new string(')', 200),
         "├", "┤", "├(", "┤)", "\\", "\"", "⟦0⟧", "⟦", "⟦999999999999⟧",
-        "■(", "■()", "&@&@", "a" + (char)0xD800, (char)0xDC00 + "x", "|||||", "││", "▒", "⁡", "_^_^",
+        "■(", "■()", "&@&@", "a" + (char)0xD800, (char)0xDC00 + "x", "|||||", "││", "▒", "\u2061", "_^_^",
     ];
 
     [Theory]
@@ -415,10 +415,10 @@ public class EquationLinearFormatTests
     [InlineData("|x|")]
     [InlineData("∑_(i=1)^n▒i")]
     [InlineData("∫_a^b▒x")]
-    [InlineData("sin⁡x")]
-    [InlineData("lim┬(x→0)⁡f")]
-    [InlineData("x̂")]
-    [InlineData("(a+b)⃗")]
+    [InlineData("sin\u2061x")]
+    [InlineData("lim┬(x→0)\u2061f")]
+    [InlineData("x\u0302")]
+    [InlineData("(a+b)\u20D7")]
     [InlineData("¯(x+y)")]
     [InlineData("▁(x)")]
     [InlineData("⏞(x+y)")]
@@ -540,7 +540,7 @@ public class EquationLinearFormatTests
 
         Add("empty");
         Add("text", MathRun.PlainText("x + 1"));
-        Add("text with every structural character", MathRun.PlainText("\\ \" / ^ _ ( ) [ ] { } | & @ √ ■ █ ▒ ⁡ │ ├ ┤ 〖 〗 ⟦ 0 ⟧ ∑ ̂ ⏞ ¯ ▁ ┬ ┴ ¦"));
+        Add("text with every structural character", MathRun.PlainText("\\ \" / ^ _ ( ) [ ] { } | & @ √ ■ █ ▒ \u2061 │ ├ ┤ 〖 〗 ⟦ 0 ⟧ ∑ \u0302 ⏞ ¯ ▁ ┬ ┴ ¦"));
         Add("text function words", MathRun.PlainText("sin x cos(y) lim_n max"));
         Add("text digraphs", MathRun.PlainText("a -> b <= c >= d +- e"));
         Add("text unknown name", MathRun.PlainText(@"\foo \alpha"));
@@ -575,9 +575,9 @@ public class EquationLinearFormatTests
         Add("nary all empty", MathRun.NAry("∏", string.Empty, string.Empty, string.Empty));
         Add("nary structured", MathRun.NAry("∑", Eq(MathRun.PlainText("k="), MathRun.Fraction("1", "2")), null, Eq(MathRun.Subscript("a", "k"))));
         Add("accent", MathRun.AccentOf("x"));
-        Add("accent vector", MathRun.AccentOf("AB", "⃗"));
-        Add("accent structured", MathRun.AccentOf(Eq(MathRun.Fraction("a", "b")), "̃"));
-        Add("accent stacked", MathRun.AccentOf(Eq(MathRun.AccentOf("x", "̇")), "̂"));
+        Add("accent vector", MathRun.AccentOf("AB", "\u20D7"));
+        Add("accent structured", MathRun.AccentOf(Eq(MathRun.Fraction("a", "b")), "\u0303"));
+        Add("accent stacked", MathRun.AccentOf(Eq(MathRun.AccentOf("x", "\u0307")), "\u0302"));
         Add("bar over", MathRun.BarOf("x+y"));
         Add("bar under", MathRun.BarOf("x", top: false));
         Add("group char over", MathRun.GroupCharOf("x+y"));
@@ -662,7 +662,7 @@ public class EquationLinearFormatTests
     public void RoundTrip_LinearToModelToLinear_IsAFixedPointAfterOnePass()
     {
         var random = new Random(7);
-        const string alphabet = "ab12 +-/^_()[]{}|&@\\\"√∑■▒⁡̂〖〗.,=sincolmx";
+        const string alphabet = "ab12 +-/^_()[]{}|&@\\\"√∑■▒\u2061\u0302〖〗.,=sincolmx";
         for (var iteration = 0; iteration < 600; iteration++)
         {
             var typed = new string(Enumerable.Range(0, random.Next(1, 24))
@@ -695,7 +695,7 @@ public class EquationLinearFormatTests
     private static readonly string[] TextSamples =
     [
         "x", "y", "ab", "12", "3.5", "a+b", " ", "= ", "sin", "lim", "f(x)", "a/b", "x^2", "|", "(", ")", "&", "@",
-        "α", "∞", "-", "n→∞", "\"q\"", "\\", "1", "2", "dx", "max ", "∑", "̂", ",",
+        "α", "∞", "-", "n→∞", "\"q\"", "\\", "1", "2", "dx", "max ", "∑", "\u0302", ",",
     ];
 
     private static Equation RandomEquation(Random random, int depth, int maxRuns)
@@ -738,7 +738,7 @@ public class EquationLinearFormatTests
             case 5:
                 return new MathRun { Kind = MathRunKind.NAry, Operator = random.Next(2) == 0 ? "∑" : "∫", Sub = aText, NAryLowerLimitEquation = aEquation, Sup = bText, NAryUpperLimitEquation = bEquation, Base = cText, NAryOperandEquation = cEquation };
             case 6:
-                return new MathRun { Kind = MathRunKind.Accent, Accent = random.Next(2) == 0 ? "̂" : "⃗", Base = aText, DecoratorBaseEquation = aEquation };
+                return new MathRun { Kind = MathRunKind.Accent, Accent = random.Next(2) == 0 ? "\u0302" : "\u20D7", Base = aText, DecoratorBaseEquation = aEquation };
             case 7:
                 return new MathRun { Kind = MathRunKind.Bar, BarTop = random.Next(2) == 0, Base = aText, DecoratorBaseEquation = aEquation };
             case 8:

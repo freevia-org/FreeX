@@ -21,7 +21,7 @@ public static class EquationLinearSymbols
     public const string Overbar = "¯";              // ¯  \overbar
     public const string Underbar = "▁";             // ▁  \underbar
     public const string Of = "▒";                   // ▒  \of
-    public const string FunctionApply = "⁡";        // invisible function application  \funcapply
+    public const string FunctionApply = "\u2061";        // invisible function application  \funcapply
     public const string Below = "┬";                // ┬  \below
     public const string Above = "┴";                // ┴  \above
     public const string NoBarFraction = "¦";        // ¦  \atop
@@ -60,8 +60,8 @@ public static class EquationLinearSymbols
     /// <summary>Combining accent marks (m:acc/m:accPr/m:chr) written after their base.</summary>
     public static FrozenSet<string> Accents { get; } = new[]
     {
-        "̀", "́", "̂", "̃", "̄", "̅", "̆", "̇", "̈",
-        "̌", "̿", "⃑", "⃗", "⃛",
+        "\u0300", "\u0301", "\u0302", "\u0303", "\u0304", "\u0305", "\u0306", "\u0307", "\u0308",
+        "\u030C", "\u033F", "\u20D1", "\u20D7", "\u20DB",
     }.ToFrozenSet(StringComparer.Ordinal);
 
     /// <summary>Grouping characters (m:groupChr) mapped to the position ("top"/"bot") they naturally take.</summary>
@@ -202,10 +202,10 @@ public static class EquationLinearSymbols
             ["norm"] = "‖", ["Vert"] = "‖", ["vert"] = "|",
 
             // Accents (combining marks applied to the preceding operand)
-            ["hat"] = "̂", ["check"] = "̌", ["tilde"] = "̃", ["acute"] = "́",
-            ["grave"] = "̀", ["dot"] = "̇", ["ddot"] = "̈", ["dddot"] = "⃛",
-            ["breve"] = "̆", ["bar"] = "̅", ["Bar"] = "̿", ["vec"] = "⃗",
-            ["hvec"] = "⃑",
+            ["hat"] = "\u0302", ["check"] = "\u030C", ["tilde"] = "\u0303", ["acute"] = "\u0301",
+            ["grave"] = "\u0300", ["dot"] = "\u0307", ["ddot"] = "\u0308", ["dddot"] = "\u20DB",
+            ["breve"] = "\u0306", ["bar"] = "\u0305", ["Bar"] = "\u033F", ["vec"] = "\u20D7",
+            ["hvec"] = "\u20D1",
         };
 
         return names.ToFrozenDictionary(StringComparer.Ordinal);

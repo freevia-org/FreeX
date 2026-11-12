@@ -28,7 +28,7 @@ public sealed record EquationLinearText(string Text, IReadOnlyList<MathRun> Opaq
 /// <item>delimiters <c>(…)</c> <c>[…]</c> <c>{…}</c> <c>|…|</c> <c>⟨…⟩</c> <c>⌊…⌋</c> <c>⌈…⌉</c>, any open with any close,
 /// <c>├c…┤c</c> for arbitrary glyphs, <c>〖…〗</c> for invisible grouping and <c>│</c> between arguments;</item>
 /// <item>n-ary operators <c>∑_(i=1)^n▒a_i</c> (the operand follows <c>▒</c> or a space);</item>
-/// <item>functions <c>sin x</c>, <c>sin⁡x</c> (U+2061), <c>lim_(x-&gt;0) f</c>;</item>
+/// <item>functions <c>sin x</c>, <c>sin\u2061x</c> (U+2061), <c>lim_(x-&gt;0) f</c>;</item>
 /// <item>accents after their base (<c>x\hat</c>, <c>(a+b)\vec</c>), bars <c>¯(x)</c> <c>▁(x)</c>, braces <c>⏞(x)</c> <c>⏟(x)</c>;</item>
 /// <item>matrices <c>■(a&amp;b@c&amp;d)</c> and equation arrays <c>█(a@b)</c>;</item>
 /// <item><c>\c</c> takes the character c literally, <c>"…"</c> takes a whole run literally.</item>
