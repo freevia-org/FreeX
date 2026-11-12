@@ -835,6 +835,38 @@ public sealed class FloatingObjectRenderTests
     }
 
     [StaFact]
+    public void InlineWordArt_RendersOtherPresetWarpsAsMappedOutlinesInsteadOfItalicText()
+    {
+        foreach (var warp in new[] { WordArtWarp.Inflate, WordArtWarp.ChevronUp, WordArtWarp.ArchDown, WordArtWarp.SlantUp })
+        {
+            var wordArt = new WordArt("Warped", WordArtStyle.FillBlue, 24) { Warp = warp };
+            var doc = new TextDocument();
+            var para = new Paragraph();
+            para.Runs.Add(Run.FromWordArt(wordArt));
+            doc.Blocks.Add(para);
+
+            var view = new DocumentView();
+            view.LoadModel(doc);
+
+            var container = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+                .Single()
+                .Inlines.OfType<System.Windows.Documents.InlineUIContainer>()
+                .Single();
+            var path = container.Child.Should().BeOfType<System.Windows.Shapes.Path>().Subject;
+            path.Tag.Should().BeSameAs(wordArt, "the model WordArt still round-trips through the visual");
+            var bounds = path.Data.Bounds;
+            bounds.IsEmpty.Should().BeFalse($"{warp} draws its glyph outlines");
+            bounds.Left.Should().BeGreaterThanOrEqualTo(-0.5);
+            bounds.Top.Should().BeGreaterThanOrEqualTo(-0.5);
+            bounds.Right.Should().BeLessThanOrEqualTo(path.Width + 0.5);
+            bounds.Bottom.Should().BeLessThanOrEqualTo(path.Height + 0.5);
+
+            view.CommitToModel();
+            ((Paragraph)view.Model.Blocks[0]).Runs.Should().ContainSingle(run => ReferenceEquals(run.WordArt, wordArt));
+        }
+    }
+
+    [StaFact]
     public void FloatingOverlay_RendersGroupedMixedChildrenWithoutPlaceholderLabels()
     {
         var image = new InlineImage(MinimalPng(), widthPt: 32, heightPt: 24)

@@ -7358,32 +7358,170 @@ public sealed partial class DocumentView : RichTextBox
                 glowColor: glowColor);
         }
 
-        var textBlock = new TextBlock
+        var borderThickness = wordArt.Outline.IsVisible ? Math.Max(0.5, wordArt.Outline.WidthDip) : 0;
+        FrameworkElement textVisual;
+        if (WordArtWarpGeometry.Supports(wordArt.Warp))
         {
-            Text = wordArt.Text,
-            FontFamily = new FontFamily(wordArt.FontFamily),
-            FontSize = wordArt.FontSizeDip,
-            FontWeight = wordArt.Bold ? FontWeights.Bold : FontWeights.Normal,
-            Foreground = foreground,
-            Effect = wpfEffect,
-            TextWrapping = TextWrapping.NoWrap,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        if (wordArt.Warp != WordArtWarp.None)
-            textBlock.FontStyle = wordArt.Warp is WordArtWarp.ArchUp or WordArtWarp.Inflate or WordArtWarp.Wave1
-                ? FontStyles.Normal
-                : FontStyles.Italic;
+            // Every other preset warp maps the text outline onto the shape's text rectangle (the shape
+            // minus the default body insets) along the preset's guide paths.
+            textVisual = BuildPresetWarpedWordArtText(
+                wordArt.Text,
+                wordArt.FontFamily,
+                wordArt.FontSizeDip,
+                wordArt.Bold,
+                foreground,
+                wordArt.Warp,
+                Math.Max(1, plan.Rect.WidthDip - 2 * borderThickness),
+                Math.Max(1, plan.Rect.HeightDip - 2 * borderThickness),
+                new Thickness(WordArtBodyHorizontalInsetDip, WordArtBodyVerticalInsetDip, WordArtBodyHorizontalInsetDip, WordArtBodyVerticalInsetDip),
+                wpfEffect);
+        }
+        else
+        {
+            textVisual = new TextBlock
+            {
+                Text = wordArt.Text,
+                FontFamily = new FontFamily(wordArt.FontFamily),
+                FontSize = wordArt.FontSizeDip,
+                FontWeight = wordArt.Bold ? FontWeights.Bold : FontWeights.Normal,
+                Foreground = foreground,
+                Effect = wpfEffect,
+                TextWrapping = TextWrapping.NoWrap,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+        }
 
         return new Border
         {
             Width = plan.Rect.WidthDip,
             Height = plan.Rect.HeightDip,
             BorderBrush = wordArt.Outline.IsVisible ? BuildDrawingStrokeBrush(wordArt.Outline) : null,
-            BorderThickness = wordArt.Outline.IsVisible ? new Thickness(Math.Max(0.5, wordArt.Outline.WidthDip)) : new Thickness(0),
+            BorderThickness = new Thickness(borderThickness),
             Background = fillBrush,
-            Child = textBlock
+            Child = textVisual
         };
+    }
+
+    // DrawingML body insets (a:bodyPr lIns/rIns 91440 EMU, tIns/bIns 45720 EMU) in DIPs.
+    private const double WordArtBodyHorizontalInsetDip = 9.6;
+    private const double WordArtBodyVerticalInsetDip = 4.8;
+
+    /// <summary>
+    /// Renders WordArt text through a DrawingML preset warp: the text outline is flattened, long edges are
+    /// subdivided so straight strokes follow curved guides, and every vertex is mapped from the text's own
+    /// bounds onto the inset text rectangle by <see cref="WordArtWarpGeometry.Map"/>.
+    /// </summary>
+    internal static System.Windows.Shapes.Path BuildPresetWarpedWordArtText(
+        string text,
+        string fontFamily,
+        double fontSizeDip,
+        bool bold,
+        System.Windows.Media.Brush foreground,
+        WordArtWarp warp,
+        double widthDip,
+        double heightDip,
+        Thickness insets,
+        System.Windows.Media.Effects.Effect? effect)
+    {
+        var path = new System.Windows.Shapes.Path
+        {
+            Width = Math.Max(1, widthDip),
+            Height = Math.Max(1, heightDip),
+            Fill = foreground,
+            Effect = effect,
+            Stretch = Stretch.None,
+            IsHitTestVisible = false,
+        };
+        if (string.IsNullOrEmpty(text))
+            return path;
+
+        var typeface = new Typeface(
+            new FontFamily(string.IsNullOrWhiteSpace(fontFamily) ? "Calibri" : fontFamily),
+            FontStyles.Normal,
+            bold ? FontWeights.Bold : FontWeights.Normal,
+            FontStretches.Normal);
+        var formatted = new FormattedText(
+            text,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Windows.FlowDirection.LeftToRight,
+            typeface,
+            Math.Max(1, fontSizeDip),
+            Brushes.Black,
+            1.0);
+        var source = formatted.BuildGeometry(new Point(0, 0));
+        var bounds = source.Bounds;
+        if (bounds.IsEmpty || bounds.Width <= 0 || bounds.Height <= 0)
+            return path;
+
+        var innerLeft = Math.Min(insets.Left, path.Width / 2);
+        var innerTop = Math.Min(insets.Top, path.Height / 2);
+        var innerWidth = Math.Max(1, path.Width - innerLeft - Math.Min(insets.Right, path.Width / 2));
+        var innerHeight = Math.Max(1, path.Height - innerTop - Math.Min(insets.Bottom, path.Height / 2));
+        var aspect = bounds.Height / bounds.Width;
+        var maxStep = Math.Max(0.5, bounds.Width / 96);
+
+        Point MapPoint(Point point)
+        {
+            var (x, y) = WordArtWarpGeometry.Map(
+                warp,
+                (point.X - bounds.X) / bounds.Width,
+                (point.Y - bounds.Y) / bounds.Height,
+                aspect);
+            return new Point(innerLeft + x * innerWidth, innerTop + y * innerHeight);
+        }
+
+        var flattened = source.GetFlattenedPathGeometry(0.05, ToleranceType.Absolute);
+        var warped = new PathGeometry { FillRule = flattened.FillRule };
+        foreach (var figure in flattened.Figures)
+        {
+            var points = new PointCollection();
+            var previous = figure.StartPoint;
+
+            void AddSubdivided(Point next)
+            {
+                var length = (next - previous).Length;
+                var steps = Math.Max(1, (int)Math.Ceiling(length / maxStep));
+                for (var step = 1; step <= steps; step++)
+                {
+                    var t = (double)step / steps;
+                    points.Add(MapPoint(new Point(
+                        previous.X + (next.X - previous.X) * t,
+                        previous.Y + (next.Y - previous.Y) * t)));
+                }
+                previous = next;
+            }
+
+            foreach (var segment in figure.Segments)
+            {
+                switch (segment)
+                {
+                    case PolyLineSegment polyLine:
+                        foreach (var point in polyLine.Points)
+                            AddSubdivided(point);
+                        break;
+                    case LineSegment line:
+                        AddSubdivided(line.Point);
+                        break;
+                }
+            }
+
+            if (figure.IsClosed)
+                AddSubdivided(figure.StartPoint);
+
+            var mapped = new PathFigure
+            {
+                StartPoint = MapPoint(figure.StartPoint),
+                IsClosed = figure.IsClosed,
+                IsFilled = figure.IsFilled,
+            };
+            mapped.Segments.Add(new PolyLineSegment(points, isStroked: true));
+            warped.Figures.Add(mapped);
+        }
+
+        warped.Freeze();
+        path.Data = warped;
+        return path;
     }
 
     private static FrameworkElement BuildWarpedDrawingWordArtVisual(
@@ -15206,9 +15344,36 @@ public sealed partial class DocumentView : RichTextBox
             canvas.Height = Math.Max(1, glyphs.Count == 0 ? 1 : glyphs.Max(glyph => glyph.DesiredSize.Height));
             element = canvas;
         }
+        else if (WordArtWarpGeometry.Supports(wordArtPlan.Warp))
+        {
+            // Inline WordArt has no authored box: warp the text within its own unwarped extent.
+            var natural = new FormattedText(
+                string.IsNullOrEmpty(wordArtPlan.Text) ? " " : wordArtPlan.Text,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Windows.FlowDirection.LeftToRight,
+                new Typeface(
+                    new FontFamily(wordArtPlan.FontFamily),
+                    FontStyles.Normal,
+                    wordArtPlan.Bold ? FontWeights.Bold : FontWeights.Normal,
+                    FontStretches.Normal),
+                Math.Max(1, wordArtPlan.FontSizeDip),
+                Brushes.Black,
+                1.0);
+            element = BuildPresetWarpedWordArtText(
+                wordArtPlan.Text,
+                wordArtPlan.FontFamily,
+                wordArtPlan.FontSizeDip,
+                wordArtPlan.Bold,
+                foreground,
+                wordArtPlan.Warp,
+                natural.WidthIncludingTrailingWhitespace,
+                natural.Height,
+                new Thickness(0),
+                wpfEffect);
+        }
         else
         {
-            var textBlock = new TextBlock
+            element = new TextBlock
             {
                 Text       = wordArtPlan.Text,
                 FontFamily = new FontFamily(wordArtPlan.FontFamily),
@@ -15217,10 +15382,6 @@ public sealed partial class DocumentView : RichTextBox
                 Foreground = foreground,
                 Effect     = wpfEffect,
             };
-            if (wordArtPlan.Warp != WordArtWarp.None)
-                textBlock.FontStyle = wordArtPlan.Warp is WordArtWarp.Inflate
-                    ? FontStyles.Normal : FontStyles.Italic;
-            element = textBlock;
         }
 
         element.Tag = wordArt; // carries the model WordArt so CommitToModel can round-trip it
