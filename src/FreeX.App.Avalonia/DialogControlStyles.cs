@@ -842,7 +842,7 @@ internal static class DialogWindowDefaults
             dialog.Styles.Insert(index, styles[index]);
     }
 
-    private static Selector SingleLineTextBox(Selector selector) =>
+    private static Selector SingleLineTextBox(Selector? selector) =>
         selector
             .Is<TextBox>()
             .PropertyEquals(TextBox.AcceptsReturnProperty, false)
