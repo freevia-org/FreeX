@@ -645,6 +645,16 @@ public sealed partial class MainWindow
     // of the Sheet tab: the tallest control a page-setup label may share its row with.
     private const double PageSetupMarginBoxHeight = 18;
     private const double PageSetupFieldRowHeight = 22;
+    // A Margins-tab row: the 18px box and its 8px bottom margin.
+    private const double PageSetupMarginRowHeight = PageSetupMarginBoxHeight + 8;
+
+    private static RowDefinitions PageSetupFixedRows(params double[] heights)
+    {
+        var rows = new RowDefinitions();
+        foreach (var height in heights)
+            rows.Add(new RowDefinition(height, GridUnitType.Pixel));
+        return rows;
+    }
 
     private static void ApplyPageSetupCheckBoxRowHeight(CheckBox checkBox)
     {
@@ -1218,11 +1228,23 @@ public sealed partial class MainWindow
             },
         };
 
+        // PageSetupDialog.xaml Margins tab: WPF resolves its Auto rows to the 18px box plus its 8px
+        // margin (26px) and the two 15px check boxes (4 above / 8 below the first). The rows are fixed
+        // at those heights: an Avalonia line box a pixel taller than the box made the rows 27px with
+        // the box centred on a half pixel, so they rounded to an alternating 28/26 pitch.
         var marginsGrid = new Grid
         {
             Margin = new Thickness(10),
             ColumnDefinitions = new ColumnDefinitions("120,*"),
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"),
+            RowDefinitions = PageSetupFixedRows(
+                PageSetupMarginRowHeight,
+                PageSetupMarginRowHeight,
+                PageSetupMarginRowHeight,
+                PageSetupMarginRowHeight,
+                PageSetupMarginRowHeight,
+                PageSetupMarginRowHeight,
+                4 + PageSetupCheckBoxHeight + 8,
+                PageSetupCheckBoxHeight),
         };
 
         void AddMarginField(int row, string label, TextBox value)
@@ -1378,11 +1400,25 @@ public sealed partial class MainWindow
         // Keep the Sheet tab's three-column grid in lockstep with the WPF XAML.  The stacked
         // Avalonia form made the 600x560 dialog scroll, hid the range-picker buttons, and changed
         // the visual order of the page-order/print-option controls.
+        // PageSetupDialog.xaml Sheet tab: the WPF Auto rows resolve to the 22px range pickers and
+        // combo boxes and the 15px check boxes plus their 8px margins (30/30/30, 23/23, 22, 31/15,
+        // 30/30). Fixing each row at that height keeps a taller Avalonia line box or check-box
+        // template from adding a pixel or two per row.
         var sheetGrid = new Grid
         {
             Margin = new Thickness(10),
             ColumnDefinitions = new ColumnDefinitions("150,*,Auto"),
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"),
+            RowDefinitions = PageSetupFixedRows(
+                PageSetupFieldRowHeight + 8,
+                PageSetupFieldRowHeight + 8,
+                PageSetupFieldRowHeight + 8,
+                PageSetupCheckBoxHeight + 8,
+                PageSetupCheckBoxHeight + 8,
+                PageSetupFieldRowHeight,
+                8 + PageSetupCheckBoxHeight + 8,
+                PageSetupCheckBoxHeight,
+                8 + PageSetupFieldRowHeight,
+                8 + PageSetupFieldRowHeight),
         };
 
         void AddSheetLabel(int row, string text, Thickness margin)

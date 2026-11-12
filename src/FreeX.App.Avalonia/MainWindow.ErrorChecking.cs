@@ -146,8 +146,12 @@ public sealed partial class MainWindow
             BorderBrush = Brush(171, 173, 179),
             BorderThickness = new Thickness(1),
             Background = Brushes.White,
+            // The fixed-width columns are wider than the list; like the WPF ListView, the header and
+            // rows are clipped at the list frame instead of drawing over the Error help group.
+            ClipToBounds = true,
             Child = new DockPanel
             {
+                ClipToBounds = true,
                 Children =
                 {
                     headerRow,
@@ -201,6 +205,10 @@ public sealed partial class MainWindow
                     break;
             }
         };
+
+        // The selected row turns grey when the list loses the keyboard focus, as a WPF ListView does.
+        rowsPanel.GotFocus += (_, _) => RenderRows();
+        rowsPanel.LostFocus += (_, _) => RenderRows();
 
         RefreshHeader();
         RenderRows();
@@ -349,16 +357,25 @@ public sealed partial class MainWindow
 
         Border CreateIssueRow(FormulaErrorIssue issue, int index, bool selected)
         {
+            // WPF ListViewItem: a 1px frame (transparent unless selected) around a 22px row, in the
+            // shared dialog list selection colours (grey while the list does not hold the focus).
+            var active = rowsPanel.IsKeyboardFocusWithin;
             var row = new Border
             {
-                Background = selected ? Brush(199, 224, 244) : Brushes.White,
-                BorderBrush = selected ? Brush(0, 120, 215) : Brushes.Transparent,
-                BorderThickness = selected ? new Thickness(1) : new Thickness(0, 0, 0, 1),
+                Height = ErrorCheckingWpfRowHeight,
+                Background = selected
+                    ? (active ? DialogWindowDefaults.SelectedRowFace : DialogWindowDefaults.InactiveRowFace)
+                    : Brushes.White,
+                BorderBrush = selected
+                    ? (active ? DialogWindowDefaults.SelectedRowFrame : DialogWindowDefaults.InactiveRowFrame)
+                    : Brushes.Transparent,
+                BorderThickness = new Thickness(1),
                 Child = CreateIssueRowGrid(issue),
             };
             row.PointerPressed += (_, args) =>
             {
                 selectedIndex = index;
+                rowsPanel.Focus();
                 NavigateSelected();
                 RenderRows();
                 UpdateCommandStates();
@@ -369,9 +386,14 @@ public sealed partial class MainWindow
         }
     }
 
+    // WPF ListViewItem rows at the 12px dialog font are 22px apart (frame included); the GridView
+    // column header row is 24px.
+    private const double ErrorCheckingWpfRowHeight = 22;
+    private const double ErrorCheckingWpfHeaderHeight = 24;
+
     private static Grid CreateIssueRowGrid(FormulaErrorIssue issue)
     {
-        var row = CreateErrorCheckingColumnGrid();
+        var row = CreateErrorCheckingColumnGrid(minHeight: 0);
         AddErrorCheckingCell(row, issue.SheetName, 0);
         AddErrorCheckingCell(row, issue.Cell, 1);
         AddErrorCheckingCell(row, issue.ErrorCode, 2);
@@ -382,7 +404,8 @@ public sealed partial class MainWindow
 
     private static Grid CreateErrorCheckingHeaderRow()
     {
-        var row = CreateErrorCheckingColumnGrid();
+        var row = CreateErrorCheckingColumnGrid(ErrorCheckingWpfHeaderHeight);
+        row.ClipToBounds = true;
         row.Background = new SolidColorBrush(Color.FromRgb(240, 240, 240));
         // WPF GridView column headers centre their captions over the column.
         AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.SheetColumnHeaderKey), 0, isHeader: true);
@@ -393,10 +416,10 @@ public sealed partial class MainWindow
         return row;
     }
 
-    private static Grid CreateErrorCheckingColumnGrid() =>
+    private static Grid CreateErrorCheckingColumnGrid(double minHeight) =>
         new()
         {
-            MinHeight = 24,
+            MinHeight = minHeight,
             ColumnDefinitions = new ColumnDefinitions(
                 $"{ErrorCheckingDialogPlanner.SheetColumnWidth}," +
                 $"{ErrorCheckingDialogPlanner.CellColumnWidth}," +

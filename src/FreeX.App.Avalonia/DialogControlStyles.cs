@@ -372,10 +372,11 @@ internal static class DialogWindowDefaults
 
     // WPF list selection: a light blue row in a blue frame while the list has the keyboard focus,
     // a grey row otherwise.
-    private static readonly IBrush SelectedRowFace = new ImmutableSolidColorBrush(Color.FromRgb(0xCC, 0xE8, 0xFF));
-    private static readonly IBrush SelectedRowFrame = new ImmutableSolidColorBrush(Color.FromRgb(0x99, 0xD1, 0xFF));
-    private static readonly IBrush InactiveRowFace = new ImmutableSolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9));
-    private static readonly IBrush InactiveRowFrame = InactiveRowFace;
+    // Internal so hand-drawn lists (the Error Checking issue grid) share the same selection colours.
+    internal static readonly IBrush SelectedRowFace = new ImmutableSolidColorBrush(Color.FromRgb(0xCC, 0xE8, 0xFF));
+    internal static readonly IBrush SelectedRowFrame = new ImmutableSolidColorBrush(Color.FromRgb(0x99, 0xD1, 0xFF));
+    internal static readonly IBrush InactiveRowFace = new ImmutableSolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9));
+    internal static readonly IBrush InactiveRowFrame = InactiveRowFace;
 
     // WPF Aero2 GroupBox frame (light blue-grey) and the focused text box frame (1 px light blue).
     private static readonly Color SharedGroupBoxFrameColor = Color.Parse(global::Free.Shared.Shell.CompactDialogVisualTokens.BorderHex);
