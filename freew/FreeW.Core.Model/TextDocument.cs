@@ -3157,6 +3157,13 @@ public sealed class Table : Block
     public bool? FloatingTableAllowsOverlap { get; set; }
 
     /// <summary>
+    /// Whether the table is laid out visually right-to-left (<c>w:tblPr/w:bidiVisual</c>): the first
+    /// grid column sits at the right edge and columns advance leftwards. False (the default) emits no
+    /// element, so existing tables are unaffected.
+    /// </summary>
+    public bool RightToLeft { get; set; }
+
+    /// <summary>
     /// Compatibility facade for Word's "Text wrapping: Around" control. Enabling creates the historical
     /// FreeW position only when no authored position exists; disabling clears floating placement.
     /// </summary>

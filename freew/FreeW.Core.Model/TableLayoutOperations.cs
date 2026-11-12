@@ -254,6 +254,7 @@ public static class TableLayoutOperations
             IndentFromLeftPt = source.IndentFromLeftPt,
             FloatingPosition = source.FloatingPosition,
             FloatingTableAllowsOverlap = source.FloatingTableAllowsOverlap,
+            RightToLeft = source.RightToLeft,
             DefaultCellMargins = source.DefaultCellMargins,
             CellSpacingPt = source.CellSpacingPt,
             AutoFit = source.AutoFit

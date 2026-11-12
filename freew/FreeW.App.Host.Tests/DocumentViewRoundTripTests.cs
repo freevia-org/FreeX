@@ -1771,13 +1771,126 @@ public sealed class DocumentViewRoundTripTests
         view.LoadModel(doc);
 
         var rendered = RenderedTables(view.Document).Single();
-        rendered.Columns.Sum(column => column.Width.Value).Should().BeApproximately(
+        (rendered.Columns.Sum(column => column.Width.Value)
+                + rendered.BorderThickness.Left + rendered.BorderThickness.Right).Should().BeApproximately(
             DocumentViewLayoutPlanner.BuildPageMetrics(doc.Page).ContentWidthDip, 0.01,
             "an over-wide grid would otherwise lose its right border to the page column clip");
 
         view.CommitToModel();
         view.Model.Blocks.OfType<Table>().Single().ColumnWidthsPt
             .Should().Equal(table.ColumnWidthsPt);
+    }
+
+    private static TextDocument ImportedDocumentWithCellSpacingCascade(string? tableStylePPr, out Table table)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Styles.Clear();
+        // What DocxReader produces for a package whose docDefaults declare 8pt after: the value rides on
+        // the paragraph with its IsSet flag clear (nothing but the document default set it).
+        doc.DefaultParagraph = ParagraphFormatting.Default with { SpaceBeforePt = 0, SpaceAfterPt = 8 };
+        const string ns = "xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"";
+        doc.Styles["TableNormal"] = new DocumentStyle
+        {
+            Id = "TableNormal",
+            Name = "Normal Table",
+            Type = StyleType.Table,
+            IsDefault = true,
+            PreservedTableStyleXml = $"<w:style {ns} w:type=\"table\" w:default=\"1\" w:styleId=\"TableNormal\"/>"
+        };
+        doc.Styles["TableGrid"] = new DocumentStyle
+        {
+            Id = "TableGrid",
+            Name = "Table Grid",
+            Type = StyleType.Table,
+            BasedOnStyleId = "TableNormal",
+            Paragraph = tableStylePPr is null
+                ? ParagraphFormatting.Default
+                : ParagraphFormatting.Default with { SpaceAfterPt = 0, SpaceAfterIsSet = true },
+            PreservedTableStyleXml =
+                $"<w:style {ns} w:type=\"table\" w:styleId=\"TableGrid\">{tableStylePPr}</w:style>"
+        };
+        table = Table.Create(1, 2);
+        foreach (var cell in table.Rows[0].Cells)
+        {
+            cell.Paragraphs.Clear();
+            cell.Paragraphs.Add(new Paragraph("cell")
+            {
+                Formatting = ParagraphFormatting.Default with { SpaceAfterPt = 8 }
+            });
+        }
+        table.Rows[0].Cells[1].Borders = new CellBorders
+        {
+            Top = new CellBorderEdge(BorderLineStyle.Single, "#1F4E79", 1)
+        };
+        doc.Blocks.Add(table);
+        return doc;
+    }
+
+    [StaFact]
+    public void TableCellSpacing_UnstyledImportedTable_KeepsTheDocumentDefaultSpaceAfter()
+    {
+        // No w:tblStyle => Word's default "Table Normal", which declares no paragraph spacing, so the
+        // docDefaults' 8pt-after applies inside the cells (and Word keeps it under the last paragraph).
+        var doc = ImportedDocumentWithCellSpacingCascade(tableStylePPr: null, out _);
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var cells = RenderedTables(view.Document).Single().RowGroups.Single().Rows.Single().Cells;
+        var expected = 8 * 96.0 / 72.0;
+        RenderedCellParagraphs(cells[0]).Single().Margin.Bottom.Should().BeApproximately(expected, 0.001);
+        cells[0].Padding.Bottom.Should().BeApproximately(expected, 0.001,
+            "WPF collapses the trailing block margin against the cell edge; Word does not");
+        cells[1].Padding.Bottom.Should().BeApproximately(expected, 0.001,
+            "a cell with its own borders hosts its paragraphs in nested editors and needs the same reserve");
+    }
+
+    [StaFact]
+    public void TableCellSpacing_TableStyleParagraphSpacing_OverridesTheDocumentDefault()
+    {
+        // Table Grid declares <w:spacing w:after="0"/>: the table style sits between the paragraph
+        // style and docDefaults, so its cells are compact.
+        var doc = ImportedDocumentWithCellSpacingCascade(
+            "<w:pPr><w:spacing w:after=\"0\"/></w:pPr>", out var table);
+        table.TableStyleId = "TableGrid";
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var cells = RenderedTables(view.Document).Single().RowGroups.Single().Rows.Single().Cells;
+        RenderedCellParagraphs(cells[0]).Single().Margin.Bottom.Should().Be(0);
+        cells[0].Padding.Bottom.Should().Be(0);
+    }
+
+    [StaFact]
+    public void BidiVisualTable_MirrorsColumns_AndSurvivesCommit()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(1, 2);
+        table.RightToLeft = true;
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        RenderedTables(view.Document).Single().FlowDirection
+            .Should().Be(System.Windows.FlowDirection.RightToLeft);
+        view.CommitToModel();
+        view.Model.Blocks.OfType<Table>().Single().RightToLeft.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void UnstyledImportedTable_DoesNotPaintLegacyHeaderOrBandFills()
+    {
+        // stress010: no w:tblStyle, w:tblLook noHBand="0". Word resolves the look against the default
+        // table style, which has no band formatting, so nothing is shaded.
+        var doc = ImportedDocumentWithCellSpacingCascade(tableStylePPr: null, out var table);
+        table.Formatting = table.Formatting with { HeaderRow = true, BandedRows = true };
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        RenderedTables(view.Document).Single().RowGroups.Single().Rows.Single().Cells
+            .Should().OnlyContain(cell => cell.Background == null);
     }
 
     [StaFact]
@@ -1994,7 +2107,8 @@ public sealed class DocumentViewRoundTripTests
         // so the rendered columns plus every gap must still equal the authored width.
         var spacingDip = sourceTable.CellSpacingPt!.Value * (96.0 / 72.0) * 2;
         rendered.CellSpacing.Should().BeApproximately(spacingDip, 0.001);
-        (rendered.Columns.Sum(column => column.Width.Value) + spacingDip * (rendered.Columns.Count + 1))
+        (rendered.Columns.Sum(column => column.Width.Value) + spacingDip * (rendered.Columns.Count + 1)
+                + rendered.BorderThickness.Left + rendered.BorderThickness.Right)
             .Should().BeApproximately(sourceTable.PreferredWidthPt!.Value * (96.0 / 72.0), 0.01);
         rendered.RowGroups[0].Rows[0].Cells[0].Padding.Top.Should()
             .BeApproximately(sourceTable.Rows[0].Cells[0].Margins!.TopPt * (96.0 / 72.0), 0.01);

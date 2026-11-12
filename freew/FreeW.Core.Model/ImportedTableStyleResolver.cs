@@ -66,7 +66,13 @@ public sealed class ImportedTableStyle
             || leaf.Type != StyleType.Table
             || leaf.PreservedTableStyleXml is not { Length: > 0 })
         {
-            return null;
+            // A table with no (resolvable) w:tblStyle uses the package's default table style
+            // (Word's "Table Normal"). Only imported packages carry one, so FreeW-authored tables
+            // keep their gallery/legacy look.
+            leaf = styles.Values.FirstOrDefault(style =>
+                style is { Type: StyleType.Table, IsDefault: true, PreservedTableStyleXml.Length: > 0 });
+            if (leaf is null)
+                return null;
         }
 
         var chain = new List<DocumentStyle>();

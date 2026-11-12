@@ -71,6 +71,25 @@ public class TablePropertiesRoundTripTests
     }
 
     [Fact]
+    public void Table_BidiVisual_RoundTripsInSchemaOrder_AndIsAbsentByDefault()
+    {
+        var table = Table.Create(1, 2);
+        table.TableStyleId = "TableGrid";
+        table.PreferredWidthPt = 360;
+        table.RightToLeft = true;
+
+        var tblPr = DocumentXml(table).Descendants(W + "tblPr").Single();
+        tblPr.Elements().Select(element => element.Name.LocalName)
+            .TakeWhile(name => name != "tblW")
+            .Should().Equal("tblStyle", "bidiVisual");
+        SingleTableAfterRoundTrip(table).RightToLeft.Should().BeTrue();
+
+        var plain = Table.Create(1, 2);
+        DocumentXml(plain).Descendants(W + "bidiVisual").Should().BeEmpty();
+        SingleTableAfterRoundTrip(plain).RightToLeft.Should().BeFalse();
+    }
+
+    [Fact]
     public void Table_FloatingPositionAndOverlap_EmitExactAttributesAndRoundTrip()
     {
         var table = Table.Create(1, 1);

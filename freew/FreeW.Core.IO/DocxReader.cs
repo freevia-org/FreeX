@@ -4528,6 +4528,9 @@ public static class DocxReader
             _ => null
         };
 
+        // Visually right-to-left table (w:bidiVisual): columns are mirrored, first grid column at the right.
+        table.RightToLeft = ReadToggle(tblPr, "bidiVisual");
+
         // Default cell margins (w:tblCellMar); absent → null (use the implicit docx default).
         table.DefaultCellMargins = ReadCellMargins(tblPr?.Element(W + "tblCellMar"));
 

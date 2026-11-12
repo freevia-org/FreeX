@@ -2710,6 +2710,9 @@ public static class DocxWriter
         if (table.FloatingTableAllowsOverlap is { } allowsOverlap)
             tblPr.Add(new XElement(W + "tblOverlap",
                 new XAttribute(W + "val", allowsOverlap ? "overlap" : "never")));
+        // Visually right-to-left table (w:bidiVisual) follows tblOverlap in CT_TblPr.
+        if (table.RightToLeft)
+            tblPr.Add(new XElement(W + "bidiVisual"));
 
         // Preferred table width (w:tblW): a fixed dxa width when set, else automatic (the historical default).
         // AutoFitMode.Window is the one exception: both Window and Contents write the same

@@ -9601,6 +9601,7 @@ public sealed partial class DocumentView : RichTextBox
         table.Borders = tableBorders;
         table.FloatingPosition = floatingPosition;
         table.FloatingTableAllowsOverlap = floatingTableAllowsOverlap;
+        table.RightToLeft = stashedTag?.RightToLeft ?? false;
         // Recover the table's own body-level content-control mark (a Group/RepeatingSection/
         // BuildingBlockGallery/DocumentPart/Bibliography w:sdt wrapping the whole w:tbl). Stashed by
         // BuildTable since a WPF FlowDocument Table has no native slot for it; without this, committing
@@ -9916,7 +9917,8 @@ public sealed partial class DocumentView : RichTextBox
         int SegmentCount = 1,
         int PageNumber = 1,
         bool IsPaginationSegment = false,
-        FreeW.Core.Model.BlockContentControl? BlockContentControl = null);
+        FreeW.Core.Model.BlockContentControl? BlockContentControl = null,
+        bool RightToLeft = false);
 
     private sealed record WpfTableRowTag(
         int SourceRowIndex,
@@ -10151,8 +10153,13 @@ public sealed partial class DocumentView : RichTextBox
                 segmentCount,
                 paginationPage?.PageNumber ?? 1,
                 isPaginationSegment,
-                table.BlockContentControl)
+                table.BlockContentControl,
+                table.RightToLeft)
         };
+        // w:bidiVisual mirrors the column order (first grid column at the right edge). Paragraphs
+        // stamp their own FlowDirection, so only the cell arrangement follows the table.
+        if (table.RightToLeft)
+            wpf.FlowDirection = System.Windows.FlowDirection.RightToLeft;
         // Word collapses adjacent cell borders unless w:tblCellSpacing is authored; WPF's default
         // Table.CellSpacing (2px) would otherwise draw every table as detached double-ruled boxes.
         // An authored spacing surrounds every cell, so the gap between two cells is twice the value.
@@ -10530,23 +10537,45 @@ public sealed partial class DocumentView : RichTextBox
                 }
                 if (styleBold || styleTextColorHex is not null)
                     ApplyTableStyleRunOverlay(wpfCell, styleBold, styleTextColorHex);
+                // Word keeps the space-after of a cell's last paragraph inside the cell; WPF collapses
+                // a trailing block margin against the cell edge, so reserve it as bottom padding.
+                // (A row with an authored height already contains that space inside its minimum.)
+                if (!isPaginationSegment
+                    && rowHeightPx is null
+                    && TrailingCellParagraphSpaceAfterDip(wpfCell) is > 0 and var trailingSpaceAfterDip)
+                {
+                    wpfCell.Padding = new Thickness(
+                        wpfCell.Padding.Left,
+                        wpfCell.Padding.Top,
+                        wpfCell.Padding.Right,
+                        wpfCell.Padding.Bottom + trailingSpaceAfterDip);
+                }
                 wpfRow.Cells.Add(wpfCell);
             }
             group.Rows.Add(wpfRow);
         }
 
-        if (paginationPage is not null && paginationPage.RenderRows.Count > 0)
+        var outerCellTableStyle = t_importedCellTableStyle;
+        t_importedCellTableStyle = importedTableStyle;
+        try
         {
-            foreach (var renderRow in paginationPage.RenderRows)
+            if (paginationPage is not null && paginationPage.RenderRows.Count > 0)
             {
-                if (renderRow.SourceRowIndex >= 0 && renderRow.SourceRowIndex < totalRows)
-                    AppendRenderedRow(renderRow.SourceRowIndex, renderRow.IsRepeatedHeader);
+                foreach (var renderRow in paginationPage.RenderRows)
+                {
+                    if (renderRow.SourceRowIndex >= 0 && renderRow.SourceRowIndex < totalRows)
+                        AppendRenderedRow(renderRow.SourceRowIndex, renderRow.IsRepeatedHeader);
+                }
+            }
+            else
+            {
+                for (var rowIndex = 0; rowIndex < totalRows; rowIndex++)
+                    AppendRenderedRow(rowIndex, isRepeatedHeader: false);
             }
         }
-        else
+        finally
         {
-            for (var rowIndex = 0; rowIndex < totalRows; rowIndex++)
-                AppendRenderedRow(rowIndex, isRepeatedHeader: false);
+            t_importedCellTableStyle = outerCellTableStyle;
         }
         wpf.RowGroups.Add(group);
         return wpf;
@@ -10821,6 +10850,23 @@ public sealed partial class DocumentView : RichTextBox
         return textBlocks;
     }
 
+    private static double TrailingCellParagraphSpaceAfterDip(WpfTableCell cell)
+    {
+        static WpfParagraph? LastParagraph(object? element) => element switch
+        {
+            WpfParagraph paragraph => paragraph,
+            BlockUIContainer { Child: { } child } => LastParagraph(child),
+            System.Windows.Controls.RichTextBox richTextBox => LastParagraph(richTextBox.Document.Blocks.LastBlock),
+            System.Windows.Controls.Grid grid => LastParagraph(
+                grid.Children.OfType<System.Windows.Controls.StackPanel>().FirstOrDefault()),
+            System.Windows.Controls.StackPanel { LayoutTransform: not RotateTransform } panel
+                when panel.Children.Count > 0 => LastParagraph(panel.Children[^1]),
+            _ => null
+        };
+
+        return LastParagraph(cell.Blocks.LastBlock)?.Margin.Bottom ?? 0;
+    }
+
     // w:textDirection btLr reads bottom-to-top (a counter-clockwise quarter turn); tbRl reads
     // top-to-bottom (clockwise). WPF's RotateTransform angle is clockwise-positive.
     private static double CellTextRotationAngle(CellTextDirection direction) =>
@@ -10868,6 +10914,8 @@ public sealed partial class DocumentView : RichTextBox
 
         var total = widths.Sum(width => width!.Value);
         var spacingTotal = cellSpacingDip * (columns + 1);
+        // The table's own left/right border sits outside the columns in WPF.
+        var tableBorderDip = table.Formatting.Borders ? 2 * (cellSpacingDip > 0 ? PxPerPoint / 2 : 0.5) : 0;
         var target = total - spacingTotal;
         if (table.FloatingPosition is null)
         {
@@ -10876,7 +10924,8 @@ public sealed partial class DocumentView : RichTextBox
                 ? DocumentViewLayoutPlanner.BuildColumnPlan(
                     document.Page, metrics.ContentWidthDip, usePageColumns: true).WidthDip
                 : metrics.ContentWidthDip;
-            var available = contentWidth - Math.Max(0, table.IndentFromLeftPt ?? 0) * PxPerPoint - spacingTotal;
+            var available = contentWidth - Math.Max(0, table.IndentFromLeftPt ?? 0) * PxPerPoint
+                - spacingTotal - tableBorderDip;
             if (available > 0)
                 target = Math.Min(target, available);
         }
@@ -11003,6 +11052,31 @@ public sealed partial class DocumentView : RichTextBox
         }
     }
 
+    // The imported table style whose cells are currently being built (set by BuildTable for the
+    // duration of its row loop). Table-cell paragraphs consult it for the table-style paragraph
+    // properties without widening BuildParagraph's signature for every other caller.
+    [ThreadStatic]
+    private static ImportedTableStyle? t_importedCellTableStyle;
+
+    private static bool ParagraphOrItsStyleSetsLineSpacing(ModelParagraph paragraph, TextDocument document)
+    {
+        if (paragraph.Formatting.LineSpacingIsSet)
+            return true;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var styleId = string.IsNullOrWhiteSpace(paragraph.StyleId)
+            ? DocumentStyle.FindDefaultParagraphStyleId(document)
+            : paragraph.StyleId;
+        while (!string.IsNullOrWhiteSpace(styleId)
+            && seen.Add(styleId)
+            && document.Styles.TryGetValue(styleId, out var style))
+        {
+            if (style.Paragraph.LineSpacingIsSet)
+                return true;
+            styleId = style.BasedOnStyleId;
+        }
+        return false;
+    }
+
     private static WpfParagraph BuildParagraph(
         ModelParagraph paragraph,
         TextDocument document,
@@ -11021,12 +11095,36 @@ public sealed partial class DocumentView : RichTextBox
         // cell paragraph is untouched.
         if (inTableCell)
         {
-            if (!paraFmt.SpaceBeforeIsSet)
-                paraFmt = paraFmt with { SpaceBeforePt = 0 };
-            if (!paraFmt.SpaceAfterIsSet)
-                paraFmt = paraFmt with { SpaceAfterPt = 0 };
-            if (!paraFmt.LineSpacingIsSet)
-                paraFmt = paraFmt with { LineSpacing = 1.0, LineRule = LineSpacingRule.Multiple, LineHeightPt = 0 };
+            if (t_importedCellTableStyle is { } importedCellTableStyle)
+            {
+                // Imported package: Word's cascade is direct > paragraph style > TABLE style pPr >
+                // docDefaults. A table style that declares spacing (Table Grid: after=0, single) makes
+                // the cells compact; one that declares none (Table Normal) leaves the document default
+                // spacing in force, so nothing is compacted.
+                var tableParagraph = importedCellTableStyle.Paragraph;
+                if (!paraFmt.SpaceBeforeIsSet && tableParagraph.SpaceBeforeIsSet)
+                    paraFmt = paraFmt with { SpaceBeforePt = tableParagraph.SpaceBeforePt };
+                if (!paraFmt.SpaceAfterIsSet && tableParagraph.SpaceAfterIsSet)
+                    paraFmt = paraFmt with { SpaceAfterPt = tableParagraph.SpaceAfterPt };
+                if (tableParagraph.LineSpacingIsSet && !ParagraphOrItsStyleSetsLineSpacing(paragraph, document))
+                {
+                    paraFmt = paraFmt with
+                    {
+                        LineSpacing = tableParagraph.LineSpacing,
+                        LineRule = tableParagraph.LineRule,
+                        LineHeightPt = tableParagraph.LineHeightPt
+                    };
+                }
+            }
+            else
+            {
+                if (!paraFmt.SpaceBeforeIsSet)
+                    paraFmt = paraFmt with { SpaceBeforePt = 0 };
+                if (!paraFmt.SpaceAfterIsSet)
+                    paraFmt = paraFmt with { SpaceAfterPt = 0 };
+                if (!paraFmt.LineSpacingIsSet)
+                    paraFmt = paraFmt with { LineSpacing = 1.0, LineRule = LineSpacingRule.Multiple, LineHeightPt = 0 };
+            }
         }
         // Word's application-default heading/title line boxes leave slightly more clearance before the
         // first body paragraph than WPF's Calibri metrics. Keep this host calibration on the exact imported
