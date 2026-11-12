@@ -479,11 +479,14 @@ internal static class DialogWindowDefaults
             },
             // WPF greys a disabled text box (ink and frame) by drawing it at 0.56 opacity. The
             // editor inside an editable combo follows the combo's own disabled face instead.
-            new Style(x => x.Is<TextBox>()
-                .Class(":disabled")
-                .Not(y => y.Name("PART_EditableTextBox")))
+            new Style(x => x.OfType<TextBox>().Class(":disabled"))
             {
                 Setters = { new Setter(Visual.OpacityProperty, DisabledTextBoxOpacity) },
+            },
+            // Declared after the rule above so it wins for the combo editor.
+            new Style(x => x.OfType<TextBox>().Name("PART_EditableTextBox").Class(":disabled"))
+            {
+                Setters = { new Setter(Visual.OpacityProperty, 1d) },
             },
         ];
 
