@@ -1865,6 +1865,30 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void CellBordersRemovedWithNil_HideTheInheritedGrid_AndSurviveCommit()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(1, 2);
+        var removed = new CellBorders { NoTop = true, NoLeft = true, NoBottom = true, NoRight = true };
+        table.Rows[0].Cells[0].Borders = removed;
+        table.Rows[0].Cells[1].Borders = removed;
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var rendered = RenderedTables(view.Document).Single();
+        rendered.BorderThickness.Should().Be(new Thickness(0), "a layout table has no outer frame");
+        rendered.RowGroups.Single().Rows.Single().Cells
+            .Should().OnlyContain(cell => cell.BorderThickness == new Thickness(0));
+
+        view.CommitToModel();
+        view.Model.Blocks.OfType<Table>().Single().Rows[0].Cells
+            .Should().OnlyContain(cell => cell.Borders == removed);
+    }
+
+    [StaFact]
     public void BidiVisualTable_MirrorsColumns_AndSurvivesCommit()
     {
         var doc = TextDocument.CreateEmpty();

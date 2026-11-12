@@ -71,6 +71,21 @@ public class TablePropertiesRoundTripTests
     }
 
     [Fact]
+    public void Cell_RemovedBorderEdges_RoundTripAsNil_DistinctFromInheritedEdges()
+    {
+        var table = Table.Create(1, 2);
+        table.Rows[0].Cells[0].Borders = new CellBorders { NoTop = true, NoLeft = true, NoBottom = true, NoRight = true };
+
+        var tcBorders = DocumentXml(table).Descendants(W + "tcBorders").Single();
+        tcBorders.Elements().Select(edge => $"{edge.Name.LocalName}:{edge.Attribute(W + "val")?.Value}")
+            .Should().Equal("top:nil", "left:nil", "bottom:nil", "right:nil");
+
+        var read = SingleTableAfterRoundTrip(table);
+        read.Rows[0].Cells[0].Borders.Should().Be(table.Rows[0].Cells[0].Borders);
+        read.Rows[0].Cells[1].Borders.Should().BeNull("an absent w:tcBorders inherits the table borders");
+    }
+
+    [Fact]
     public void Table_BidiVisual_RoundTripsInSchemaOrder_AndIsAbsentByDefault()
     {
         var table = Table.Create(1, 2);

@@ -2843,8 +2843,18 @@ public sealed record CellBorders
     /// <summary>Right edge border, or null to inherit.</summary>
     public CellBorderEdge? Right { get; init; }
 
-    /// <summary>True when all four edges are null (nothing to emit).</summary>
-    public bool IsEmpty => Top is null && Bottom is null && Left is null && Right is null;
+    /// <summary>The top edge is explicitly removed (<c>w:top w:val="nil"/"none"</c>) rather than inherited.</summary>
+    public bool NoTop { get; init; }
+    /// <summary>The bottom edge is explicitly removed rather than inherited.</summary>
+    public bool NoBottom { get; init; }
+    /// <summary>The left edge is explicitly removed rather than inherited.</summary>
+    public bool NoLeft { get; init; }
+    /// <summary>The right edge is explicitly removed rather than inherited.</summary>
+    public bool NoRight { get; init; }
+
+    /// <summary>True when no edge is set or explicitly removed (nothing to emit).</summary>
+    public bool IsEmpty => Top is null && Bottom is null && Left is null && Right is null
+        && !NoTop && !NoBottom && !NoLeft && !NoRight;
 }
 
 /// <summary>

@@ -10226,7 +10226,10 @@ public sealed partial class DocumentView : RichTextBox
                         : Color.FromRgb(0x9A, 0x9A, 0x9A);
         var borderBrush = new SolidColorBrush(borderColor);
 
-        if (table.Formatting.Borders)
+        // A layout table whose every cell removes all four edges has no outer frame either.
+        var allCellEdgesRemoved = table.Rows.Count > 0 && table.Rows.SelectMany(row => row.Cells).All(cell =>
+            cell.Borders is { NoTop: true, NoLeft: true, NoBottom: true, NoRight: true });
+        if (table.Formatting.Borders && !allCellEdgesRemoved)
         {
             wpf.BorderBrush = borderBrush;
             wpf.BorderThickness = new Thickness(flowCellSpacingDip > 0 ? PxPerPoint / 2 : 0.5);
@@ -10375,6 +10378,18 @@ public sealed partial class DocumentView : RichTextBox
                         : modelCell.VerticalMerge == VerticalMergeState.Continue
                             ? new Thickness(0.5, 0, 0.5, 0.5)
                             : wpfCell.BorderThickness;
+                }
+                // w:tcBorders edges set to nil/none remove the inherited table border on that side.
+                if (!hasPlannedCellBorders
+                    && modelCell.Borders is { } removedEdges
+                    && (removedEdges.NoTop || removedEdges.NoLeft || removedEdges.NoBottom || removedEdges.NoRight))
+                {
+                    var inherited = wpfCell.BorderThickness;
+                    wpfCell.BorderThickness = new Thickness(
+                        removedEdges.NoLeft ? 0 : inherited.Left,
+                        removedEdges.NoTop ? 0 : inherited.Top,
+                        removedEdges.NoRight ? 0 : inherited.Right,
+                        removedEdges.NoBottom ? 0 : inherited.Bottom);
                 }
                 // Resolve cell content. For non-Top vertical alignment, or when text is rotated, we wrap
                 // everything in a BlockUIContainer so we can position the content via WPF layout. WPF
