@@ -61,7 +61,7 @@ public static class FindReplaceBodyPlanner
         var criteria = request.ToCriteria();
         var replaced = 0;
         if (criteria.IsEmpty)
-            return new FindReplaceBodyReplaceAllCommand(before, before, 0);
+            return new FindReplaceBodyReplaceAllCommand(before, 0);
 
         var range = restrictTo?.Normalize();
         foreach (var unit in Units(before))
@@ -96,7 +96,7 @@ public static class FindReplaceBodyPlanner
             after.AddRange(clone.Blocks);
         }
 
-        return new FindReplaceBodyReplaceAllCommand(before, replaced > 0 ? after : before, replaced);
+        return new FindReplaceBodyReplaceAllCommand(replaced > 0 ? after : before, replaced);
     }
 
     // ---- units and flows ---------------------------------------------------------------------
@@ -580,14 +580,22 @@ public static class FindReplaceBodyPlanner
 
 /// <summary>
 /// The single undoable edit Replace All makes to the body: it swaps the document's block list for
-/// one in which every block that had a match is an edited deep clone. Undo swaps the original list
-/// back, so the untouched originals are restored exactly.
+/// one in which every block that had a match is an edited deep clone, and undo swaps back the list
+/// that was there.
 /// </summary>
+/// <remarks>
+/// The list to restore is captured when the command is APPLIED, not when it is planned. The plan is
+/// made against one document state, but undo has to return whatever the document held immediately
+/// before this command ran -- on a redo the body may have been re-read from the editing surface
+/// into new block objects since. The planned originals are never mutated (edits are made on
+/// clones), so restoring the captured list restores the document exactly.
+/// </remarks>
 public sealed class FindReplaceBodyReplaceAllCommand(
-    IReadOnlyList<Block> before,
     IReadOnlyList<Block> after,
     int replacedCount) : IDocumentCommand
 {
+    private List<Block>? _previous;
+
     public string Label => "Replace All";
 
     /// <summary>How many body matches the command replaces.</summary>
@@ -595,9 +603,20 @@ public sealed class FindReplaceBodyReplaceAllCommand(
 
     public bool HasEffect(IDocumentCommandContext context) => replacedCount > 0;
 
-    public void Apply(IDocumentCommandContext context) => Set(context.Document, after);
+    public void Apply(IDocumentCommandContext context)
+    {
+        _previous = [.. context.Document.Blocks];
+        Set(context.Document, after);
+    }
 
-    public void Revert(IDocumentCommandContext context) => Set(context.Document, before);
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_previous is null)
+            return;
+
+        Set(context.Document, _previous);
+        _previous = null;
+    }
 
     private static void Set(TextDocument document, IReadOnlyList<Block> blocks)
     {
