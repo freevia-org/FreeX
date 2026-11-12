@@ -429,47 +429,35 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
             if (!editor.RestrictEditingPolicy.Allows(RestrictEditingOperationKind.BodyTextEdit))
                 return new FindReplaceAllExecutionResult(0, restrictToSelection);
 
-            var search = request.ToSearchRequest();
-            var projection = Project(search);
-            var from = restrictToSelection ? projection.OffsetOf(editor.Selection.Start) : 0;
-            var limit = restrictToSelection ? projection.OffsetOf(editor.Selection.End) : int.MaxValue;
+            // The selection as a model range. A selection the body session cannot address (inside a
+            // table cell) falls back to the surface loop below, the only case that still edits
+            // match by match.
+            var selection = restrictToSelection ? editor.FindReplaceSelectionRange() : null;
+            if (restrictToSelection && selection is null)
+                return ReplaceAllOnSurface(request);
+
             var count = 0;
 
-            // Every edit below lands on editor.Commands as its own DocumentCommandBus entry; without
-            // this group, N replacements become N separate undo-stack entries and one Ctrl+Z only reverts
-            // the last match instead of the whole Replace All (matches the BeginUndoGroup/CommitUndoGroup
-            // idiom other multi-step edits already use, e.g. DocumentEditingSession.ApplyMultilevelListDefinition).
-            // notifyOnEachExecute: true -- unlike those coordinators, each replacement here is FOUND by
-            // walking the rendered surface (the projection), so the redraw between edits must still happen
-            // mid-batch or the next edit's CommitToModel() re-reads the stale surface and silently discards
-            // every replacement but the last (see DocumentCommandBus.BeginUndoGroup's doc comment).
-            editor.Commands.BeginUndoGroup(notifyOnEachExecute: true);
+            // ONE pass: the model is read back from the surface once, every body match is computed
+            // from one projection per flow and applied back to front inside a single block-list
+            // command, and the surface is rendered once when the group commits. The group keeps the
+            // body edit and the story edits together as one undo entry; notifyOnEachExecute stays
+            // off because nothing here is found by re-reading the rendered surface between edits.
+            editor.CommitToModel();
+            editor.Commands.BeginUndoGroup();
             try
             {
-                for (var visited = 0; visited < MaxReplacements; visited++)
-                {
-                    var start = from;
-                    var match = FindReplaceDialogPlanner.FindAllInSegments(projection.Segments, search)
-                        .FirstOrDefault(candidate => candidate.Start >= start);
-                    if (match.Length == 0 || (restrictToSelection && match.Start >= limit))
-                        break;
+                var body = FindReplaceBodyPlanner.PlanReplaceAll(
+                    editor.Model, request, RevisionContext(), selection);
+                editor.Commands.Execute(body);
+                count += body.ReplacedCount;
 
-                    var lengthBefore = projection.Length;
-                    from = ReplaceBodyMatch(ref projection, match, request, out var replaced);
-                    if (restrictToSelection)
-                        limit += projection.Length - lengthBefore;
-                    if (replaced)
-                        count++;
-                }
-
-                // r179: the body FlowDocument is finished; now every story the projection cannot
-                // reach at all (they are not in editor.Document): the headers and footers of every
+                // r179: every story outside editor.Document: the headers and footers of every
                 // section, footnotes, endnotes, comments and text boxes. Skipped when the operation
                 // is restricted to a selection -- a selection is a body concept, and reaching outside
                 // it is the r178 bug the Avalonia side already had.
                 if (!restrictToSelection)
                 {
-                    editor.CommitToModel();
                     count += FindReplaceStoryPlanner.ReplaceAll(
                         editor.Model,
                         request,
@@ -509,6 +497,57 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
             }
 
             return new FindReplaceAllExecutionResult(count, restrictToSelection);
+        }
+
+        /// <summary>
+        /// Replace All inside a selection the body session cannot express as a model range (one that
+        /// sits in a table cell). Matches are found on the rendered surface and replaced through the
+        /// editor one at a time, so the surface has to be re-rendered and re-projected after each --
+        /// acceptable only because the scope is a single selection, never the document.
+        /// </summary>
+        private FindReplaceAllExecutionResult ReplaceAllOnSurface(FindReplaceReplaceRequest request)
+        {
+            var search = request.ToSearchRequest();
+            var projection = Project(search);
+            var from = projection.OffsetOf(editor.Selection.Start);
+            var limit = projection.OffsetOf(editor.Selection.End);
+            var count = 0;
+
+            // notifyOnEachExecute: true -- each replacement is FOUND by walking the rendered surface,
+            // so the redraw between edits must happen mid-batch or the next edit's CommitToModel()
+            // re-reads the stale surface (see DocumentCommandBus.BeginUndoGroup's doc comment).
+            editor.Commands.BeginUndoGroup(notifyOnEachExecute: true);
+            try
+            {
+                for (var visited = 0; visited < MaxReplacements; visited++)
+                {
+                    var start = from;
+                    var match = FindReplaceDialogPlanner.FindAllInSegments(projection.Segments, search)
+                        .FirstOrDefault(candidate => candidate.Start >= start);
+                    if (match.Length == 0 || match.Start >= limit)
+                        break;
+
+                    var lengthBefore = projection.Length;
+                    from = ReplaceBodyMatch(ref projection, match, request, out var replaced);
+                    limit += projection.Length - lengthBefore;
+                    if (replaced)
+                        count++;
+                }
+
+                editor.Commands.CommitUndoGroup("Replace All");
+            }
+            catch
+            {
+                if (editor.Commands.IsUndoGroupOpen)
+                {
+                    editor.Commands.RollbackUndoGroup();
+                    editor.RefreshFromModel();
+                }
+
+                throw;
+            }
+
+            return new FindReplaceAllExecutionResult(count, InSelection: true);
         }
 
         /// <summary>

@@ -222,6 +222,60 @@ public sealed class FindReplaceWordParityHostTests
         });
     }
 
+    [StaFact]
+    public void ReplaceAll_FiveThousandReplacements_IsOnePass_WithNoPerReplacementProjectionOrRender()
+    {
+        // Regression bound: Replace All used to re-project and re-render the whole document after
+        // every replacement. It must compute every match from one model pass and render once.
+        var view = BuildView(Enumerable.Range(0, 250)
+            .Select(_ => new Paragraph(string.Join(' ', Enumerable.Repeat("lorem needle ipsum", 20))))
+            .ToArray());
+        var notifications = 0;
+        view.Commands.Changed += () => notifications++;
+        var projectionsBefore = view.FindReplaceProjectionBuildCount;
+
+        var status = ReplaceAll(view, "needle", "pin");
+
+        (view.FindReplaceProjectionBuildCount - projectionsBefore).Should().Be(
+            0, "the rendered surface must not be walked per replacement");
+        notifications.Should().Be(1, "the whole Replace All is one command-bus notification, so one render");
+        view.Model.Blocks.OfType<Paragraph>().Sum(paragraph => paragraph.PlainText.Split("pin").Length - 1)
+            .Should().Be(5_000);
+        BodyText(view).Should().OnlyContain(text => !text.Contains("needle"));
+        status.Should().Contain("5").And.Contain("000");
+
+        view.Undo();
+        BodyText(view).Should().OnlyContain(text => !text.Contains("pin") && text.Contains("needle"));
+        view.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [StaFact]
+    public void ReplaceAll_ReachesTableCells_ThroughTheOnePassModelPath()
+    {
+        var table = new Table();
+        var row = new TableRow();
+        var cell = new TableCell();
+        cell.Paragraphs.Add(new Paragraph("cat cat cat"));
+        row.Cells.Add(cell);
+        table.Rows.Add(row);
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("cat before"));
+        document.Blocks.Add(table);
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        var projectionsBefore = view.FindReplaceProjectionBuildCount;
+
+        ReplaceAll(view, "cat", "dog");
+
+        view.FindReplaceProjectionBuildCount.Should().Be(projectionsBefore);
+
+        view.CommitToModel();
+        ((Paragraph)view.Model.Blocks[0]).PlainText.Should().Be("dog before");
+        view.Model.Blocks.OfType<Table>().Single().Rows[0].Cells[0].Paragraphs[0].PlainText.Should().Be("dog dog dog");
+    }
+
     // ---- Options -----------------------------------------------------------------------------
 
     [StaFact]

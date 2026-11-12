@@ -268,7 +268,7 @@ public static class FormattedTextSearch
             if (text.Length == 0)
                 continue;
 
-            if (IsDrawingMirror(run))
+            if (IsObjectMirror(run))
             {
                 segments.Add(new FindTextSegment(
                     new string(FindSpecialCodes.ObjectPlaceholder, text.Length),
@@ -289,7 +289,11 @@ public static class FormattedTextSearch
         return segments;
     }
 
-    private static bool IsDrawingMirror(Run run) =>
+    /// <summary>
+    /// True when a run's text only mirrors content that lives elsewhere (a text box, WordArt, a
+    /// drawing group, an equation); such text is masked rather than searched in place.
+    /// </summary>
+    public static bool IsObjectMirror(Run run) =>
         run.Shape is not null
         || run.WordArt is not null
         || run.DrawingGroup is not null

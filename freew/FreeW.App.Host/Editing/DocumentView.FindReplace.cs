@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Media;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.Editing;
 using FreeW.Core.Model;
 using WpfList = System.Windows.Documents.List;
 using WpfParagraph = System.Windows.Documents.Paragraph;
@@ -137,12 +138,26 @@ public sealed partial class DocumentView
     /// </remarks>
     internal FindReplaceBodyProjection BuildFindReplaceProjection(bool includeFormatting)
     {
+        FindReplaceProjectionBuildCount++;
         var projection = new FindReplaceBodyProjection();
         WpfParagraph? pending = null;
         ProjectFindBlocks(Document.Blocks, projection, includeFormatting, ref pending);
         EndFindFlow(projection, ref pending);
         return projection;
     }
+
+    /// <summary>
+    /// How many times the body has been projected for Find and Replace. Projecting is a full walk of
+    /// the rendered document, so Replace All must not do it per replacement; tests bound it here.
+    /// </summary>
+    internal int FindReplaceProjectionBuildCount { get; private set; }
+
+    /// <summary>
+    /// The current selection as a model body range, or null when it cannot be expressed as one (for
+    /// example a selection inside a table cell).
+    /// </summary>
+    internal DocumentTextRange? FindReplaceSelectionRange() =>
+        TryGetCurrentBodyTextRange(out var range) ? range : null;
 
     private static void ProjectFindBlocks(
         BlockCollection blocks,

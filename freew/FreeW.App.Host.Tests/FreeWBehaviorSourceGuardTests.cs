@@ -72,6 +72,8 @@ public sealed class FreeWBehaviorSourceGuardTests
         wpf.Should().Contain("FindReplaceDialogPlanner.FindAllInSegments(");
         wpf.Should().Contain("FindReplaceDialogPlanner.PlanReplacement(");
         wpf.Should().Contain("FindReplaceStoryPlanner.ReplaceAll(");
+        // Replace All over the body is ONE model pass and one command, never a per-match loop.
+        wpf.Should().Contain("FindReplaceBodyPlanner.PlanReplaceAll(");
         wpf.Should().Contain("editor.BuildFindReplaceProjection(");
         wpf.Should().NotContain("TextSearch.FindAll(");
         wpf.Should().Contain("restrictToSelection");

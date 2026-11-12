@@ -912,9 +912,9 @@ public static class FindReplaceDialogPlanner
         if (criteria.IsEmpty)
             return 0;
 
-        var bodyParagraphs = TextDocumentStoryTraversal.EnumerateBlockParagraphs(document.Blocks);
-        return bodyParagraphs.Sum(paragraph => FormattedTextSearch.FindAll(document, paragraph, criteria).Count)
-            + CountStoryMatches(document, criteria);
+        // One projection per flow, exactly as Replace All sees the body (so a match that spans a
+        // paragraph mark, or sits in a nested table, is counted too).
+        return FindReplaceBodyPlanner.CountMatches(document, request) + CountStoryMatches(document, criteria);
     }
 
     private static int CountStoryMatches(TextDocument document, FindCriteria criteria) =>
