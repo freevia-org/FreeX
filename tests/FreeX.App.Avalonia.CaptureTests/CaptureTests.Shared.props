@@ -23,6 +23,7 @@
     <Using Include="Xunit" />
     <Using Include="FluentAssertions" />
     <Using Include="Free.Shared.Drawing" />
+    <Using Include="FreeX.App.Localization.LocalizedUiText" Alias="UiText" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)AvaloniaCaptureAssembly.cs" Link="AvaloniaCaptureAssembly.cs" />
