@@ -131,6 +131,24 @@ internal sealed class PageBox : Border
     /// </summary>
     internal HeaderFooterSlotKind? HeaderSlot { get; }
 
+    /// <summary>
+    /// The resolved header/footer content this page shows (null when the slot is absent) and the field
+    /// values it resolves against. Print composition lays these out itself, at the section's real
+    /// header/footer distances and full height, instead of rasterising the fixed-height sub-editors.
+    /// </summary>
+    internal HeaderFooter? HeaderSlotContent { get; }
+
+    internal HeaderFooter? FooterSlotContent { get; }
+
+    /// <summary>Total page count used for NUMPAGES on this page.</summary>
+    internal int FieldPageCount { get; }
+
+    /// <summary>1-based ordinal of the section this page belongs to.</summary>
+    internal int SectionOrdinal { get; }
+
+    /// <summary>Number of pages in this page's section (SECTIONPAGES).</summary>
+    internal int SectionPageCount { get; }
+
     internal string? HeaderSlotName => HeaderSlot is { } slot
         ? HeaderFooterDialogPlanner.SlotNameFor(slot)
         : null;
@@ -234,6 +252,11 @@ internal sealed class PageBox : Border
         PageGeometry = page;
         HeaderSlot = headerSlotKind;
         FooterSlot = footerSlotKind;
+        HeaderSlotContent = headerSlot;
+        FooterSlotContent = footerSlot;
+        FieldPageCount = pageCount;
+        SectionOrdinal = sectionOrdinal;
+        SectionPageCount = sectionPageCount;
         if (footnoteIds is { Count: > 0 }) FootnoteIds = footnoteIds;
         if (endnoteIds is { Count: > 0 })
             EndnoteIds = endnoteIds;

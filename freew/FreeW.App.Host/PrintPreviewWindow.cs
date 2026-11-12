@@ -642,11 +642,20 @@ internal static class PrintLayout
         TextDocument document,
         PageSettings page)
     {
-        if (document.Header is not { IsEmpty: false } && document.Footer is not { IsEmpty: false })
+        return ResolveHeaderFooterBodyInsetsDip(document, page, document.Header, document.Footer);
+    }
+
+    internal static (double TopDip, double BottomDip) ResolveHeaderFooterBodyInsetsDip(
+        TextDocument document,
+        PageSettings page,
+        HeaderFooter? header,
+        HeaderFooter? footer)
+    {
+        if (header is not { IsEmpty: false } && footer is not { IsEmpty: false })
             return (0, 0);
 
         var (topDip, bottomDip) = HeaderFooterBandRenderer.ResolveBodyInsetsDip(
-            document, page, document.Header, document.Footer);
+            document, page, header, footer);
         var (_, contentHeightDip) = PageLayout.ContentAreaDip(page);
         var available = Math.Max(0, contentHeightDip - 72);
         if (topDip + bottomDip > available)
@@ -1041,7 +1050,7 @@ internal sealed class HeaderFooterPaginator(
             visual.Children.Add(BuildWatermark(page.Watermark!, size));
         if (hasBorder
             && PageBorderVisibilityPlanner.LayerFor(pageBorder!.ZOrder) == PageBorderRenderLayer.BehindText)
-            visual.Children.Add(BuildPageBorder(pageBorder, size));
+            visual.Children.Add(BuildPageBorder(pageBorder, size, page, model));
         // PdfExport queries the same paginator twice per page (once to recover XPS text overlays, once
         // to rasterize), and the inner FlowDocumentPaginator can hand back the identical cached
         // DocumentPage/Visual for a repeat GetPage(pageNumber) call. Once this method has already wrapped
@@ -1068,7 +1077,7 @@ internal sealed class HeaderFooterPaginator(
         }
         if (hasBorder
             && PageBorderVisibilityPlanner.LayerFor(pageBorder!.ZOrder) == PageBorderRenderLayer.InFrontOfText)
-            visual.Children.Add(BuildPageBorder(pageBorder, size));
+            visual.Children.Add(BuildPageBorder(pageBorder, size, page, model));
         if (hasColumnRule)
             visual.Children.Add(DocumentView.BuildColumnRuleVisual(
                 page,
@@ -1443,7 +1452,7 @@ internal sealed class HeaderFooterPaginator(
             && PageBorderVisibilityPlanner.ShouldRender(border.Display, pageNumber);
         if (hasBorder
             && PageBorderVisibilityPlanner.LayerFor(border!.ZOrder) == PageBorderRenderLayer.BehindText)
-            visual.Children.Add(BuildPageBorder(border, size));
+            visual.Children.Add(BuildPageBorder(border, size, page, model));
 
         var marginLeft = PageLayout.PointsToDip(page.MarginLeftPt);
         var contentWidth = Math.Max(0, size.Width - marginLeft - PageLayout.PointsToDip(page.MarginRightPt));
@@ -1461,7 +1470,7 @@ internal sealed class HeaderFooterPaginator(
 
         if (hasBorder
             && PageBorderVisibilityPlanner.LayerFor(border!.ZOrder) == PageBorderRenderLayer.InFrontOfText)
-            visual.Children.Add(BuildPageBorder(border, size));
+            visual.Children.Add(BuildPageBorder(border, size, page, model));
 
         var contentBox = new Rect(
             marginLeft,
@@ -1576,7 +1585,7 @@ internal sealed class HeaderFooterPaginator(
     /// Draws the whole-page border (w:pgBorders) as a rectangle just inside the page edge, matching the
     /// editor's BorderBrush/BorderThickness chrome so on-screen and printed pages agree.
     /// </summary>
-    private DrawingVisual BuildPageBorder(PageBorder border, Size size)
+    internal static DrawingVisual BuildPageBorder(PageBorder border, Size size, PageSettings page, TextDocument model)
     {
         var visual = new DrawingVisual();
         var color = ParseColor(border.ColorHex);
@@ -1949,7 +1958,7 @@ internal sealed class HeaderFooterPaginator(
     }
 
     /// <summary>Draws the faint, 45-degree page watermark text centred on the page, behind the content.</summary>
-    private static DrawingVisual BuildWatermark(string text, Size size)
+    internal static DrawingVisual BuildWatermark(string text, Size size)
     {
         var visual = new DrawingVisual();
         var formatted = new FormattedText(

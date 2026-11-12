@@ -314,8 +314,22 @@ internal static class PaginationEngine
     ///
     /// <para>Must be called on the UI/STA thread.</para>
     /// </summary>
-    internal static int[] ComputeBlockPageAssignment(DocumentView editor)
+    internal static int[] ComputeBlockPageAssignment(DocumentView editor) =>
+        ComputeBlockPageAssignment(editor, out _, segmentPaginations: null);
+
+    /// <summary>
+    /// <see cref="ComputeBlockPageAssignment(DocumentView)"/>, additionally reporting the real number of
+    /// physical body pages (<paramref name="totalPageCount"/>) -- which exceeds the highest assigned
+    /// page index + 1 whenever the last block of a segment runs on past the page it starts on -- and,
+    /// when <paramref name="segmentPaginations"/> is supplied, each segment's laid-out paginator so a
+    /// caller can render the very pages this assignment describes, line for line.
+    /// </summary>
+    internal static int[] ComputeBlockPageAssignment(
+        DocumentView editor,
+        out int totalPageCount,
+        List<SegmentPagination>? segmentPaginations)
     {
+        totalPageCount = 1;
         var modelBlocks = editor.Model.Blocks;
         if (modelBlocks.Count == 0)
             return [];
@@ -353,16 +367,69 @@ internal static class PaginationEngine
             foreach (var segment in segments)
             {
                 pageOffset += ComputeSegmentPageAssignment(
-                    flow, scratchBlocks, modelBlocks, editor.Model, segment, pageOffset, assignment);
+                    flow, scratchBlocks, modelBlocks, editor.Model, segment, pageOffset, assignment,
+                    segmentPaginations);
             }
+
+            totalPageCount = Math.Max(1, pageOffset);
         }
         catch
         {
             // If pagination fails, assign all blocks to page 0.
+            segmentPaginations?.Clear();
+            totalPageCount = 1;
             return new int[modelBlocks.Count];
         }
 
         return assignment;
+    }
+
+    /// <summary>
+    /// One page segment's finished pagination: physical body pages <see cref="PageOffset"/> ..
+    /// <see cref="PageOffset"/> + <see cref="PageCount"/> - 1 are <see cref="Paginator"/>'s pages
+    /// 0 .. <see cref="PageCount"/> - 1, laid out at <see cref="Page"/>'s geometry with the body area
+    /// reduced by the header/footer insets and the footnote reserve.
+    /// </summary>
+    internal sealed record SegmentPagination(
+        int PageOffset,
+        int PageCount,
+        PageSettings Page,
+        DocumentPaginator Paginator,
+        double TopInsetDip,
+        double BottomInsetDip,
+        double FootnoteReserveDip);
+
+    /// <summary>
+    /// The default running header and footer in effect for the section that owns
+    /// <paramref name="page"/>, honouring "link to previous" (nearest earlier section defining the slot).
+    /// </summary>
+    private static (HeaderFooter? Header, HeaderFooter? Footer) ResolveRunningHeaderFooter(
+        TextDocument document,
+        PageSettings page)
+    {
+        var sections = document.Sections;
+        var index = -1;
+        for (var i = 0; i < sections.Count; i++)
+        {
+            if (ReferenceEquals(sections[i].Page, page))
+            {
+                index = i;
+                break;
+            }
+        }
+
+        if (index < 0)
+            return (document.Header, document.Footer);
+
+        HeaderFooter? header = null;
+        HeaderFooter? footer = null;
+        for (var i = index; i >= 0 && (header is null || footer is null); i--)
+        {
+            header ??= sections[i].HeadersFooters.Header;
+            footer ??= sections[i].HeadersFooters.Footer;
+        }
+
+        return (header, footer);
     }
 
     /// <summary>
@@ -379,7 +446,8 @@ internal static class PaginationEngine
         TextDocument document,
         PageSegment segment,
         int pageOffset,
-        int[] assignment)
+        int[] assignment,
+        List<SegmentPagination>? segmentPaginations = null)
     {
         var end = Math.Min(segment.End, Math.Min(scratchBlocks.Length, modelBlocks.Count));
         if (segment.Start >= end)
@@ -394,6 +462,14 @@ internal static class PaginationEngine
                 assignment[i] = pageOffset;
             return 1;
         }
+
+        // A running header taller than the top margin (or footer taller than the bottom margin)
+        // pushes this section's body area in, as Word does -- see PrintLayout.BuildPaginatedDocument.
+        var (runningHeader, runningFooter) = ResolveRunningHeaderFooter(document, segment.Page);
+        var (topInsetDip, bottomInsetDip) = PrintLayout.ResolveHeaderFooterBodyInsetsDip(
+            document, segment.Page, runningHeader, runningFooter);
+        top += topInsetDip;
+        bottom += bottomInsetDip;
 
         // Mirror PrintLayout.BuildPaginatedDocument's footnote body-reserve: when the model has
         // footnotes, PrintLayout shrinks the body's usable height by the estimated rendered height
@@ -412,7 +488,8 @@ internal static class PaginationEngine
         var footnoteReserveDip = 0.0;
         if (document.Footnotes.Count > 0)
         {
-            var (_, contentWidthDip) = PageLayout.ContentAreaDip(segment.Page);
+            // The notes wrap at the section's content WIDTH (ContentAreaDip returns width, height).
+            var (contentWidthDip, _) = PageLayout.ContentAreaDip(segment.Page);
             var provisionalFlow = new FlowDocument
             {
                 PageWidth = pageWidth,
@@ -426,12 +503,30 @@ internal static class PaginationEngine
                 provisionalFlow.Blocks.Add(scratchBlocks[i]);
             try
             {
+                var segmentModelBlocks = modelBlocks.Skip(segment.Start).Take(end - segment.Start).ToList();
                 footnoteReserveDip = ComputeMaxPerPageFootnoteReserveDip(
-                    provisionalFlow,
-                    modelBlocks.Skip(segment.Start).Take(end - segment.Start).ToList(),
-                    document,
-                    segment.Page,
-                    contentWidthDip);
+                    provisionalFlow, segmentModelBlocks, document, segment.Page, contentWidthDip);
+
+                // The reserve-free pass packs more body -- and so more notes -- onto a page than the
+                // reserved layout will, which overstates the tallest page's notes. Re-measure under
+                // the reserve itself and keep the smaller value only when it still covers every page
+                // of the layout it produces (a uniform reserve must never be shorter than a page's notes).
+                if (footnoteReserveDip > 0)
+                {
+                    double NeedUnder(double reserveDip)
+                    {
+                        provisionalFlow.PagePadding = new Thickness(left, top, right, bottom + reserveDip);
+                        return ComputeMaxPerPageFootnoteReserveDip(
+                            provisionalFlow, segmentModelBlocks, document, segment.Page, contentWidthDip);
+                    }
+
+                    var needUnderFirst = NeedUnder(footnoteReserveDip);
+                    if (needUnderFirst > 0 && needUnderFirst < footnoteReserveDip
+                        && NeedUnder(needUnderFirst) <= needUnderFirst)
+                    {
+                        footnoteReserveDip = needUnderFirst;
+                    }
+                }
             }
             finally
             {
@@ -439,6 +534,16 @@ internal static class PaginationEngine
                 // below — a WPF element may belong to only one FlowDocument at a time.
                 provisionalFlow.Blocks.Clear();
             }
+        }
+
+        // A single-column section with footnotes is paginated one page at a time, each page reserving
+        // only its own notes -- see PaginateWithPerPageFootnoteReserve.
+        if (footnoteReserveDip > 0 && segment.Page.ColumnCount <= 1)
+        {
+            return PaginateWithPerPageFootnoteReserve(
+                sourceFlow, scratchBlocks, modelBlocks, document, segment, end,
+                new Size(pageWidth, pageHeight), new Thickness(left, top, right, bottom),
+                pageOffset, assignment, segmentPaginations, topInsetDip, bottomInsetDip);
         }
 
         var segmentFlow = new FlowDocument
@@ -489,7 +594,260 @@ internal static class PaginationEngine
             assignment[i] = pageOffset + currentLocalPage;
         }
 
+        segmentPaginations?.Add(new SegmentPagination(
+            pageOffset,
+            segmentPageCount,
+            segment.Page,
+            innerPaginator,
+            topInsetDip,
+            bottomInsetDip,
+            footnoteReserveDip));
         return segmentPageCount;
+    }
+
+    /// <summary>
+    /// Paginates a footnoted, single-column segment page by page, giving every page the footnote
+    /// reserve of the notes that page actually carries -- what Word does. One uniform reserve sized for
+    /// the segment's most heavily annotated page (all a single WPF flow can express, since a
+    /// <see cref="FlowDocument"/> has one page box) left every lighter page with a band of empty body
+    /// and multiplied the page count.
+    /// <para>
+    /// Each pass lays out the remaining blocks, sizes the reserve for the notes of the blocks that
+    /// start on the first page, re-lays it out under that reserve, and cuts the flow where the second
+    /// page begins -- splitting the straddling paragraph with <see cref="TextPointer.InsertParagraphBreak"/>
+    /// so its remaining lines continue on the next page. The cut-off page becomes its own
+    /// <see cref="SegmentPagination"/>. A straddling block that cannot be split (a table, a list)
+    /// stays whole and its chunk simply spans more than one page.
+    /// </para>
+    /// </summary>
+    private static int PaginateWithPerPageFootnoteReserve(
+        FlowDocument sourceFlow,
+        System.Windows.Documents.Block[] scratchBlocks,
+        IReadOnlyList<FreeW.Core.Model.Block> modelBlocks,
+        TextDocument document,
+        PageSegment segment,
+        int end,
+        Size pageSize,
+        Thickness padding,
+        int pageOffset,
+        int[] assignment,
+        List<SegmentPagination>? segmentPaginations,
+        double topInsetDip,
+        double bottomInsetDip)
+    {
+        const double footnoteFrameClearanceDip = 24.0;
+        var (contentWidthDip, _) = PageLayout.ContentAreaDip(segment.Page);
+
+        FlowDocument NewFlow(double reserveDip)
+        {
+            var flow = new FlowDocument
+            {
+                PageWidth = pageSize.Width,
+                PageHeight = pageSize.Height,
+                PagePadding = new Thickness(padding.Left, padding.Top, padding.Right, padding.Bottom + reserveDip),
+                FontFamily = sourceFlow.FontFamily,
+                FontSize = sourceFlow.FontSize
+            };
+            DocumentView.ApplyColumnLayout(flow, segment.Page, useNativeColumnRule: false);
+            return flow;
+        }
+
+        // Each pending entry is a top-level flow block and the model block it renders; a paragraph's
+        // split-off remainder is a continuation of the same model block.
+        var pending = new List<(System.Windows.Documents.Block Block, int ModelIndex, bool IsContinuation)>();
+        var work = NewFlow(0);
+        for (var i = segment.Start; i < end; i++)
+        {
+            pending.Add((scratchBlocks[i], i, false));
+            work.Blocks.Add(scratchBlocks[i]);
+        }
+
+        var workPaginator = ((IDocumentPaginatorSource)work).DocumentPaginator;
+        workPaginator.PageSize = pageSize;
+        var dynamicWork = (DynamicDocumentPaginator)workPaginator;
+
+        int CountBlocksStartingOnFirstPage()
+        {
+            var count = 0;
+            foreach (var entry in pending)
+            {
+                if (dynamicWork.GetPageNumber(entry.Block.ContentStart) > 0)
+                    break;
+                count++;
+            }
+            return count;
+        }
+
+        double ReserveFor(int blockCount)
+        {
+            var ids = pending.Take(blockCount)
+                .Where(entry => !entry.IsContinuation)
+                .SelectMany(entry => FootnoteIdsInModelBlock(modelBlocks[entry.ModelIndex]))
+                .Distinct()
+                .ToList();
+            if (ids.Count == 0)
+                return 0;
+            var plan = DocumentNoteRegionPlanner.BuildFootnoteRegion(document, ids, pageNumber: 1, contentWidthDip);
+            return plan.EstimatedHeightDip <= 0
+                ? 0
+                : ClampFootnoteReserveDip(plan.EstimatedHeightDip + footnoteFrameClearanceDip, segment.Page);
+        }
+
+        void SetReserve(double reserveDip) =>
+            work.PagePadding = new Thickness(padding.Left, padding.Top, padding.Right, padding.Bottom + reserveDip);
+
+        var localPage = 0;
+        while (pending.Count > 0)
+        {
+            // The notes of what fits without a reserve are an upper bound for this page; under that
+            // reserve fewer blocks fit, so try the smaller reserve they need and keep it only if it
+            // still covers the page it produces.
+            SetReserve(0);
+            var reserveDip = ReserveFor(CountBlocksStartingOnFirstPage());
+            if (reserveDip > 0)
+            {
+                SetReserve(reserveDip);
+                var smaller = ReserveFor(CountBlocksStartingOnFirstPage());
+                if (smaller < reserveDip)
+                {
+                    SetReserve(smaller);
+                    if (ReserveFor(CountBlocksStartingOnFirstPage()) <= smaller)
+                        reserveDip = smaller;
+                    else
+                        SetReserve(reserveDip);
+                }
+            }
+
+            // Find where the second page begins, by page number rather than by hit-testing the page
+            // (DynamicDocumentPaginator.GetPagePosition probes the page's top-left corner, which in
+            // right-to-left text is the END of the first line, not its start).
+            var take = pending.Count;
+            for (var index = 0; index < pending.Count; index++)
+            {
+                var block = pending[index].Block;
+                if (dynamicWork.GetPageNumber(block.ContentStart) > 0)
+                {
+                    take = index; // the next page starts exactly at this block
+                    break;
+                }
+
+                if (dynamicWork.GetPageNumber(block.ContentEnd) <= 0)
+                    continue;
+
+                take = index + 1; // straddles the boundary; stays whole unless it can be split
+                if (block is System.Windows.Documents.Paragraph paragraph
+                    && FindFirstPositionOnLaterPage(dynamicWork, paragraph) is { } splitAt
+                    && HasText(paragraph.ContentStart, splitAt))
+                {
+                    if (!HasText(splitAt, paragraph.ContentEnd))
+                        break; // only the paragraph mark spills over: nothing to carry forward
+                    if (SplitParagraphAt(paragraph, splitAt) is { } remainder)
+                        pending.Insert(index + 1, (remainder, pending[index].ModelIndex, true));
+                }
+                else if (block is System.Windows.Documents.Paragraph && index > 0)
+                {
+                    take = index; // no text of it fits on this page after all
+                }
+
+                break;
+            }
+            take = Math.Clamp(take, 1, pending.Count);
+            var chunk = NewFlow(reserveDip);
+            for (var i = 0; i < take; i++)
+            {
+                work.Blocks.Remove(pending[i].Block);
+                chunk.Blocks.Add(pending[i].Block);
+            }
+
+            var chunkPaginator = ((IDocumentPaginatorSource)chunk).DocumentPaginator;
+            chunkPaginator.PageSize = pageSize;
+            chunkPaginator.ComputePageCount();
+            var chunkPages = Math.Max(1, chunkPaginator.PageCount);
+            var dynamicChunk = chunkPaginator as DynamicDocumentPaginator;
+            for (var i = 0; i < take; i++)
+            {
+                if (pending[i].IsContinuation)
+                    continue;
+                var page = chunkPages > 1 && dynamicChunk is not null
+                    ? Math.Clamp(dynamicChunk.GetPageNumber(pending[i].Block.ContentStart), 0, chunkPages - 1)
+                    : 0;
+                assignment[pending[i].ModelIndex] = pageOffset + localPage + page;
+            }
+
+            segmentPaginations?.Add(new SegmentPagination(
+                pageOffset + localPage,
+                chunkPages,
+                segment.Page,
+                chunkPaginator,
+                topInsetDip,
+                bottomInsetDip,
+                reserveDip));
+            localPage += chunkPages;
+            pending.RemoveRange(0, take);
+        }
+
+        return Math.Max(1, localPage);
+    }
+
+    /// <summary>
+    /// The first position of <paramref name="paragraph"/> that the paginator places after its first
+    /// page -- page numbers never decrease along the text, so a binary search over the paragraph's
+    /// symbol offsets finds it. Null when the whole paragraph is on the first page.
+    /// </summary>
+    private static TextPointer? FindFirstPositionOnLaterPage(
+        DynamicDocumentPaginator paginator,
+        System.Windows.Documents.Paragraph paragraph)
+    {
+        var low = 0;
+        var high = paragraph.ContentStart.GetOffsetToPosition(paragraph.ContentEnd);
+        if (high <= 0 || paginator.GetPageNumber(paragraph.ContentEnd) <= 0)
+            return null;
+
+        while (high - low > 1)
+        {
+            var middle = (low + high) / 2;
+            var probe = paragraph.ContentStart.GetPositionAtOffset(middle, LogicalDirection.Forward);
+            if (probe is not null && paginator.GetPageNumber(probe) > 0)
+                high = middle;
+            else
+                low = middle;
+        }
+
+        return paragraph.ContentStart.GetPositionAtOffset(high, LogicalDirection.Forward);
+    }
+
+    private static bool HasText(TextPointer start, TextPointer end) =>
+        new TextRange(start, end).Text.Any(character => !char.IsWhiteSpace(character));
+    /// <summary>
+    /// Splits <paramref name="paragraph"/> at <paramref name="position"/> and returns the new paragraph
+    /// holding the remainder, formatted as a continuation: no first-line indent and no space between
+    /// the two halves. Null when the position cannot be split (it is not inside this paragraph's text).
+    /// </summary>
+    private static System.Windows.Documents.Paragraph? SplitParagraphAt(
+        System.Windows.Documents.Paragraph paragraph,
+        TextPointer position)
+    {
+        if (!ReferenceEquals(position.Paragraph, paragraph))
+            return null;
+
+        System.Windows.Documents.Paragraph? remainder;
+        try
+        {
+            remainder = position.InsertParagraphBreak().Paragraph;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+
+        if (remainder is null || ReferenceEquals(remainder, paragraph))
+            return null;
+
+        remainder.TextIndent = 0;
+        remainder.BreakPageBefore = false;
+        remainder.Margin = new Thickness(remainder.Margin.Left, 0, remainder.Margin.Right, remainder.Margin.Bottom);
+        paragraph.Margin = new Thickness(paragraph.Margin.Left, paragraph.Margin.Top, paragraph.Margin.Right, 0);
+        return remainder;
     }
 
     /// <summary>
@@ -522,6 +880,13 @@ internal static class PaginationEngine
         ArgumentNullException.ThrowIfNull(document);
 
         if (document.Footnotes.Count == 0)
+            return 0;
+
+        // A run of blocks that references no footnote at all (a cover page, a contents section, ...)
+        // needs no reserve. Without this, "no page of this flow carries a footnote" fell through to
+        // the whole-document fallback below and reserved every footnote the document owns on each of
+        // these pages -- leaving one line of body per page.
+        if (!modelBlocks.Any(block => FootnoteIdsInModelBlock(block).Any()))
             return 0;
 
         const double footnoteFrameClearanceDip = 24.0;
