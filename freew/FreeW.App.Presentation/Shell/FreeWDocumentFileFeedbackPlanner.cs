@@ -45,6 +45,10 @@ public static class FreeWDocumentFileFeedbackPlanner
                 "Unrecognized file type");
         }
 
+        // Dismissing the password prompt is the user's own choice: status text only, no error dialog.
+        if (execution.Exception is DocumentPasswordCanceledException)
+            return new(false, "Open canceled.");
+
         return FailedCommand(
             Text.OpenCommand,
             "Could not open the document",
@@ -75,6 +79,9 @@ public static class FreeWDocumentFileFeedbackPlanner
         DocumentSnapshotWorkflowResult execution)
     {
         ArgumentNullException.ThrowIfNull(execution);
+        if (execution.Exception is DocumentPasswordCanceledException)
+            return new(false, "Recovery canceled.");
+
         return execution.Succeeded
             ? Success("Recovered the unsaved document.")
             : FailedCommand(

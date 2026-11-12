@@ -53,7 +53,10 @@ public sealed record BackstageCallbacks(
     Action<string>? NewFromBuiltInTemplate = null,
     Action<string>? NewFromTemplateFile = null,
     Func<string>? GetPersonalTemplatesFolder = null,
-    Func<string, IReadOnlyList<PersonalTemplateEntry>>? ListPersonalTemplates = null);
+    Func<string, IReadOnlyList<PersonalTemplateEntry>>? ListPersonalTemplates = null,
+    // File > Info > Protect Document > Encrypt with Password. Null hides the action on hosts that
+    // cannot prompt for a password.
+    Action? EncryptWithPassword = null);
 
 /// <summary>
 /// Owns FreeW Backstage state projection, command policy, enablement, and pane planning.
@@ -207,7 +210,8 @@ public sealed class FreeWBackstageSession
             Bind(_callbacks.InspectDocument),
             Bind(_callbacks.CheckAccessibility),
             document,
-            _getText);
+            _getText,
+            _callbacks.EncryptWithPassword is { } encryptWithPassword ? Bind(encryptWithPassword) : null);
 
         return SisterBackstageInfoPanePlanner.Build(new SisterBackstageInfoPaneContext(
             DocumentKindLabel: BackstageViewTextResources.DocumentLabel,

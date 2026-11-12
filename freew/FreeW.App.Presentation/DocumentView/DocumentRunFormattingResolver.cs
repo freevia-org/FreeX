@@ -89,6 +89,7 @@ public static class DocumentRunFormattingResolver
         NumberForm = direct.NumberForm != NumberForm.Default ? direct.NumberForm : inherited.NumberForm,
         NumberSpacing = direct.NumberSpacing != NumberSpacing.Default ? direct.NumberSpacing : inherited.NumberSpacing,
         StylisticSet = direct.StylisticSet ?? inherited.StylisticSet,
+        TextEffects = RunTextEffects.Merge(direct.TextEffects, inherited.TextEffects),
         Bold = inherited.Bold || direct.Bold,
         Italic = inherited.Italic || direct.Italic,
         Underline = inherited.Underline || direct.Underline,

@@ -248,7 +248,8 @@ public sealed class FreeWDocumentFileWorkflow
             _lifecycle.MarkDirtyWithPath(result.TargetPath);
             return new(DocumentFileExecutionOutcome.Succeeded, result);
         }
-        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException ex)
+            when (cancellationToken.IsCancellationRequested || ex is DocumentPasswordCanceledException)
         {
             return new(DocumentFileExecutionOutcome.Canceled, Exception: ex);
         }

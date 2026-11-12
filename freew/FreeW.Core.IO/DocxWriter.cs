@@ -8460,7 +8460,8 @@ public static partial class DocxWriter
         if (BuildLanguageElement(f) is { } langEl)
             rPr.Add(langEl);
 
-        // --- w14 OpenType extension region (after the core EG_RPrBase elements) ---
+        // --- w14 text-effects region, then the w14 OpenType region (after the core EG_RPrBase elements) ---
+        AddRunTextEffects(rPr, f);
         // w14:ligatures
         if (LigaturesToken(f.Ligatures) is { } ligatures)
             rPr.Add(new XElement(W14 + "ligatures", new XAttribute(W14 + "val", ligatures)));
@@ -8474,6 +8475,7 @@ public static partial class DocxWriter
         if (f.StylisticSet is { } styleSetId)
             rPr.Add(new XElement(W14 + "stylisticSets",
                 new XElement(W14 + "styleSet", new XAttribute(W14 + "id", styleSetId))));
+        AddRunContextualAlternates(rPr, f);
 
         return rPr.HasElements ? rPr : null;
     }
@@ -10279,6 +10281,7 @@ public static partial class DocxWriter
             rPr.Add(new XElement(W + "rtl"));
         if (BuildLanguageElement(f) is { } langEl)
             rPr.Add(langEl);
+        AddRunTextEffects(rPr, f);
         if (LigaturesToken(f.Ligatures) is { } ligatures)
             rPr.Add(new XElement(W14 + "ligatures", new XAttribute(W14 + "val", ligatures)));
         if (NumberFormToken(f.NumberForm) is { } numForm)
@@ -10288,6 +10291,7 @@ public static partial class DocxWriter
         if (f.StylisticSet is { } styleSetId)
             rPr.Add(new XElement(W14 + "stylisticSets",
                 new XElement(W14 + "styleSet", new XAttribute(W14 + "id", styleSetId))));
+        AddRunContextualAlternates(rPr, f);
         return rPr.HasElements ? rPr : null;
     }
 

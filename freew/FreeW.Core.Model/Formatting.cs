@@ -348,6 +348,13 @@ public sealed record RunFormatting
     public int? StylisticSet { get; init; }
 
     /// <summary>
+    /// Word 2010+ text effects on this run (rPr/w14:glow, w14:shadow, w14:reflection, w14:textOutline,
+    /// w14:textFill, w14:scene3d, w14:props3d, w14:cntxtAlts), or null for none. Defaults to null so no
+    /// effect element is emitted and existing runs are unaffected. See <see cref="RunTextEffects"/>.
+    /// </summary>
+    public RunTextEffects? TextEffects { get; init; }
+
+    /// <summary>
     /// OpenType number form (rPr/w14:numForm). Defaults to <see cref="NumberForm.Default"/>, which emits no
     /// element so existing runs are unaffected; <see cref="NumberForm.Lining"/>/<see cref="NumberForm.OldStyle"/>
     /// emit a <c>w14:numForm</c> in the w14 extension region.

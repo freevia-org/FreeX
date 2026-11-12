@@ -12,7 +12,7 @@ namespace FreeW.Core.IO;
 /// variant-agnostic (it keys on <c>word/document.xml</c>); writing selects the right
 /// <see cref="DocxWriteOptions"/> per variant. One instance is registered per extension.
 /// </summary>
-public sealed class DocxFileAdapter : IDocumentFileAdapter
+public sealed class DocxFileAdapter : IDocumentFileAdapter, IPasswordProtectedDocumentFileAdapter
 {
     private readonly DocxWriteOptions _writeOptions;
     private readonly bool _opensAsTemplate;
@@ -51,8 +51,43 @@ public sealed class DocxFileAdapter : IDocumentFileAdapter
     public IReadOnlyList<FileFormatDescriptor> Formats =>
         [new FileFormatDescriptor(Extension, FormatName, CanOpen: true, CanSave: true, OpensAsTemplate: _opensAsTemplate)];
 
+    /// <summary>Whether <paramref name="stream"/> is an "Encrypt with Password" package (position preserved).</summary>
+    public bool IsPasswordProtected(Stream stream) => EncryptedDocumentPackage.IsEncryptedPackage(stream);
+
+    /// <summary>
+    /// Decrypts an "Encrypt with Password" package with <paramref name="password"/> and loads it. The
+    /// returned document remembers the password (<see cref="TextDocument.EncryptionPassword"/>) so
+    /// every later save through this adapter stays encrypted.
+    /// </summary>
+    public TextDocument Load(Stream stream, string password)
+    {
+        ArgumentNullException.ThrowIfNull(password);
+        using var package = EncryptedDocumentPackage.Decrypt(stream, password);
+        var document = Load(package);
+        document.EncryptionPassword = password;
+        return document;
+    }
+
+    public void Save(TextDocument document, Stream stream)
+    {
+        if (string.IsNullOrEmpty(document.EncryptionPassword))
+        {
+            SavePlain(document, stream);
+            return;
+        }
+
+        // Encrypt with Password: the plain package only ever exists in this in-memory buffer.
+        using var plain = new MemoryStream();
+        SavePlain(document, plain);
+        EncryptedDocumentPackage.Encrypt(
+            plain.GetBuffer().AsSpan(0, (int)plain.Length), stream, document.EncryptionPassword);
+    }
+
     public TextDocument Load(Stream stream)
     {
+        if (EncryptedDocumentPackage.IsEncryptedPackage(stream))
+            throw new DocumentPasswordRequiredException();
+
         // The strict branch below decompresses the package twice -- IsStrict opens it to read
         // word/document.xml's namespace, then RewriteStrictToTransitional expands every part to
         // rewrite its namespaces -- and both run BEFORE DocxReader, which is where the zip-bomb guard
@@ -72,7 +107,7 @@ public sealed class DocxFileAdapter : IDocumentFileAdapter
         return DocxReader.Read(stream);
     }
 
-    public void Save(TextDocument document, Stream stream)
+    private void SavePlain(TextDocument document, Stream stream)
     {
         if (_strictMode)
         {

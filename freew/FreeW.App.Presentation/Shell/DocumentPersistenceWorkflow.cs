@@ -31,6 +31,13 @@ public sealed class DocumentPersistenceWorkflow
 
     public IReadOnlyList<IDocumentFileAdapter> Adapters => _adapters;
 
+    /// <summary>
+    /// Host callback that asks the user for the password of an "Encrypt with Password" document
+    /// (null return = canceled). When no host wires this, opening such a document fails with
+    /// <see cref="DocumentPasswordRequiredException"/>'s truthful message.
+    /// </summary>
+    public Func<DocumentPasswordRequest, string?>? RequestPassword { get; set; }
+
     public IReadOnlyList<IDocumentFileAdapter> PdfImportAdapters => _pdfImportAdapters;
 
     public IReadOnlyList<FileFormatDescriptor> SaveFormats =>
@@ -133,7 +140,7 @@ public sealed class DocumentPersistenceWorkflow
         var isFileSystemReadOnly = IsFileWriteRestricted(path);
 
         using var stream = File.OpenRead(path);
-        var document = adapter.Load(stream);
+        var document = DocumentPasswordOpenPolicy.Load(adapter, stream, Path.GetFileName(path), RequestPassword);
         LinkedImagePreviewResolver.ResolveLocalPreviews(document, path);
         var opensAsTemplate = format?.OpensAsTemplate == true
             && templateMode == DocumentTemplateOpenMode.NewDocument;
@@ -166,7 +173,13 @@ public sealed class DocumentPersistenceWorkflow
         ArgumentException.ThrowIfNullOrWhiteSpace(snapshotPath);
 
         using var stream = File.OpenRead(snapshotPath);
-        var document = DocxReader.Read(stream);
+        // An encrypted document's recovery copy is encrypted with the same password (see
+        // FreeWAutosaveSession.WriteSnapshot), so recovery asks for it like any other open.
+        var document = DocumentPasswordOpenPolicy.Load(
+            new DocxFileAdapter(),
+            stream,
+            Path.GetFileName(string.IsNullOrEmpty(originalPath) ? snapshotPath : originalPath),
+            RequestPassword);
         LinkedImagePreviewResolver.ResolveLocalPreviews(document, originalPath ?? snapshotPath);
         // r174 remediation: recovery adopts originalPath as the save target (the caller wires it
         // straight into MarkDirtyWithPath), so the same write-restriction check Open performs

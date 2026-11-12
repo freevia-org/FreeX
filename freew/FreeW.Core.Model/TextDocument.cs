@@ -4255,6 +4255,14 @@ public sealed class TextDocument
     public bool MarkedAsFinal { get; set; }
 
     /// <summary>
+    /// Word's "Encrypt with Password" password for this document, or null when it is not encrypted.
+    /// Session state only: it is never written into any package part, settings, or metadata. The
+    /// OOXML file adapter reads it at save time to wrap the whole package in ECMA-376 Agile
+    /// Encryption, and sets it after a password-protected package is opened so later saves stay encrypted.
+    /// </summary>
+    public string? EncryptionPassword { get; set; }
+
+    /// <summary>
     /// The document's persisted theme — the colour/font scheme that maps to <c>word/theme/theme1.xml</c>.
     /// Defaults to <see cref="DocumentTheme.Default"/> ("Office"), so existing documents are unchanged.
     /// The writer always emits a theme part (mirroring real Word documents, which always carry one); the

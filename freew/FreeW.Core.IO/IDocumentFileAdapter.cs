@@ -39,3 +39,19 @@ public interface IDocumentFileAdapter
     /// <summary>Saves the document to the given stream. The stream is not disposed by the adapter.</summary>
     void Save(TextDocument document, Stream stream);
 }
+
+/// <summary>
+/// Implemented by adapters whose format supports "Encrypt with Password" (the OOXML package family).
+/// Such an adapter's <see cref="IDocumentFileAdapter.Load(Stream)"/> throws
+/// <see cref="DocumentPasswordRequiredException"/> for an encrypted file, and its
+/// <see cref="IDocumentFileAdapter.Save"/> encrypts whenever
+/// <see cref="TextDocument.EncryptionPassword"/> is set.
+/// </summary>
+public interface IPasswordProtectedDocumentFileAdapter
+{
+    /// <summary>Whether the (seekable) stream holds a password-encrypted document. Position is preserved.</summary>
+    bool IsPasswordProtected(Stream stream);
+
+    /// <summary>Decrypts and loads the document; the result remembers <paramref name="password"/>.</summary>
+    TextDocument Load(Stream stream, string password);
+}

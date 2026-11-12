@@ -515,6 +515,18 @@
   <data name="Backstage_Safety_NoAccessibilityIssues_Status" xml:space="preserve"><value>No accessibility issues found.</value></data>
   <data name="Backstage_Safety_AccessibilityIssueCount_Status_Format" xml:space="preserve"><value>{0} accessibility issue(s) found.</value></data>
   <data name="Backstage_Safety_MarkedAsFinal_Banner" xml:space="preserve"><value>Marked as Final  An author has marked this document as final to discourage editing.</value></data>
+  <data name="Backstage_Safety_Encrypt_Label" xml:space="preserve"><value>Encrypt with Password</value></data>
+  <data name="Backstage_Safety_Encrypt_Description" xml:space="preserve"><value>Require a password to open this document. The password is applied the next time the document is saved.</value></data>
+  <data name="Backstage_Safety_Encrypted_Description" xml:space="preserve"><value>A password is required to open this document. Change or remove the password.</value></data>
+  <data name="Backstage_Safety_Encrypt_Dialog_Title" xml:space="preserve"><value>Encrypt Document</value></data>
+  <data name="Backstage_Safety_Encrypt_Dialog_Prompt" xml:space="preserve"><value>Encrypt the contents of this file. Leave the password empty to remove encryption. Password:</value></data>
+  <data name="Backstage_Safety_Encrypt_Dialog_Confirm_Prompt" xml:space="preserve"><value>Reenter password:</value></data>
+  <data name="Backstage_Safety_Encrypt_Dialog_Caution" xml:space="preserve"><value>Caution: If you lose or forget the password, it cannot be recovered. Passwords are case-sensitive.</value></data>
+  <data name="Backstage_Safety_Encrypt_Dialog_Mismatch" xml:space="preserve"><value>The passwords do not match.</value></data>
+  <data name="Backstage_Safety_Encrypt_Dialog_TooLong_Format" xml:space="preserve"><value>The password cannot be longer than {0} characters.</value></data>
+  <data name="Backstage_Safety_OpenPassword_Title" xml:space="preserve"><value>Password</value></data>
+  <data name="Backstage_Safety_OpenPassword_Prompt_Format" xml:space="preserve"><value>Enter the password to open {0}</value></data>
+  <data name="Backstage_Safety_OpenPassword_Retry_Prompt_Format" xml:space="preserve"><value>The password is incorrect. Enter the password to open {0}</value></data>
   <data name="Design_ThemeColors_Invalid_Message" xml:space="preserve"><value>Enter valid theme colors.</value></data>
   <data name="Design_PageColor_Color_Label" xml:space="preserve"><value>Color:</value></data>
   <data name="Design_PageColor_MoreColors_Label" xml:space="preserve"><value>More Colors:</value></data>

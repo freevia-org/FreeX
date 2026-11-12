@@ -32,6 +32,12 @@
     <ProjectReference Include="../FreeW.Core.IO/FreeW.Core.IO.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- A document Microsoft Word saved with File > Info > Encrypt with Password (Agile Encryption);
+         the password is in EncryptedDocumentPackageTests. -->
+    <EmbeddedResource Include="Fixtures/word-agile-encrypted.docx" LogicalName="word-agile-encrypted.docx" />
+  </ItemGroup>
+
   <Import Project="../../third_party/npoi/NPOI.Core.props" />
 
 </Project>
