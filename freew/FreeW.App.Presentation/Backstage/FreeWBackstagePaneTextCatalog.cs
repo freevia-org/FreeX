@@ -28,7 +28,7 @@ public static class FreeWBackstagePaneTextCatalog
         Text(FreeWBackstagePaneResourceKeys.RecentEmptyText, "No recent documents."),
         Text(FreeWBackstagePaneResourceKeys.TemplateHeading, "New"),
         Text(FreeWBackstagePaneResourceKeys.TemplateTileCaption, "Blank document"),
-        Text(FreeWBackstagePaneResourceKeys.TemplateFooterText, "More templates are not available in this build."),
+        Text(FreeWBackstagePaneResourceKeys.TemplateFooterText, "Pick a template to start a new, untitled document."),
         Text(FreeWBackstagePaneResourceKeys.OptionsDescription, "FreeW application settings. These persist between sessions and apply immediately."),
         new SisterBackstageExportPaneTextDescriptor(
             Text(FreeWBackstagePaneResourceKeys.ExportHeading, "Export"),

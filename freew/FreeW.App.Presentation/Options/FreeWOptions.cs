@@ -51,6 +51,13 @@ public sealed class FreeWOptions : IBasicApplicationOptions, IApplicationOptions
     /// </summary>
     public AutoCorrectOptions AutoCorrect { get; set; } = AutoCorrectOptions.Default;
 
+    /// <summary>
+    /// The folder File &gt; New lists personal templates (.dotx/.dotm) from, and where Save As a
+    /// template starts. Empty (the default) means Word's own location, "Custom Office Templates"
+    /// under the user's Documents folder -- see <c>PersonalTemplatesFolder.Resolve</c>.
+    /// </summary>
+    public string PersonalTemplatesFolder { get; set; } = string.Empty;
+
     /// <summary>Normalizes loaded values to their valid ranges (called after a load).</summary>
     public void Normalize()
     {
@@ -60,6 +67,7 @@ public sealed class FreeWOptions : IBasicApplicationOptions, IApplicationOptions
         AutoFormat ??= AutoFormatOptions.Default;
         AutoCorrect ??= AutoCorrectOptions.Default;
         AutoCorrect.Normalize();
+        PersonalTemplatesFolder = (PersonalTemplatesFolder ?? string.Empty).Trim();
     }
 
     /// <summary>
@@ -78,5 +86,6 @@ public sealed class FreeWOptions : IBasicApplicationOptions, IApplicationOptions
         AutoCorrectEnabled = AutoCorrectEnabled,
         AutoFormat = AutoFormat,
         AutoCorrect = AutoCorrect,
+        PersonalTemplatesFolder = PersonalTemplatesFolder,
     };
 }

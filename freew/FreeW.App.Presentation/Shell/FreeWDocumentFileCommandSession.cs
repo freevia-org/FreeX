@@ -58,17 +58,50 @@ public sealed class FreeWDocumentFileCommandSession
         _lifecycle.OpenAsync(
             _text.OpenAction,
             () => _ports.PickOpenPathAsync(new FreeWDocumentOpenPickerRequest(initialDirectory)),
-            path => OpenPathAsync(path));
+            // File > Open on a template edits the template itself, as Word does.
+            path => OpenPathAsync(path, templateMode: DocumentTemplateOpenMode.EditTemplate));
 
     public Task<bool> OpenSelectedPathAsync(string path) =>
         _lifecycle.OpenAsync(
             _text.OpenAction,
             () => Task.FromResult<string?>(path),
-            selectedPath => OpenPathAsync(selectedPath));
+            // A template only reaches the recent list by having been edited or saved as a template,
+            // so reopening it from there edits it again.
+            selectedPath => OpenPathAsync(selectedPath, templateMode: DocumentTemplateOpenMode.EditTemplate));
 
-    public async Task<bool> OpenPathAsync(string path, bool suppressRecentFiles = false)
+    /// <summary>
+    /// File &gt; New from an in-memory (built-in) template: dirty-gates, then loads
+    /// <paramref name="createDocument"/>'s result as a new untitled document with no save path.
+    /// </summary>
+    public Task<bool> NewFromTemplateAsync(Func<TextDocument> createDocument)
     {
-        var execution = await _workflow.OpenPathAsync(path, suppressRecentFiles);
+        ArgumentNullException.ThrowIfNull(createDocument);
+        return _lifecycle.NewAsync(
+            _text.NewAction,
+            () => _workflow.LoadNewDocumentAsync(createDocument()));
+    }
+
+    /// <summary>
+    /// File &gt; New from a template file (a personal .dotx/.dotm): dirty-gates, then creates a new
+    /// untitled document based on it. The template itself is neither targeted for save nor added to
+    /// the recent list.
+    /// </summary>
+    public Task<bool> NewFromTemplatePathAsync(string templatePath) =>
+        _lifecycle.OpenAsync(
+            _text.NewAction,
+            () => Task.FromResult<string?>(templatePath),
+            path => OpenPathAsync(path, suppressRecentFiles: true, DocumentTemplateOpenMode.NewDocument));
+
+    /// <summary>
+    /// Loads a specific path without a dirty gate (startup argument, drag-drop, double-click). A
+    /// template opens as a new untitled document unless <paramref name="templateMode"/> says to edit it.
+    /// </summary>
+    public async Task<bool> OpenPathAsync(
+        string path,
+        bool suppressRecentFiles = false,
+        DocumentTemplateOpenMode templateMode = DocumentTemplateOpenMode.NewDocument)
+    {
+        var execution = await _workflow.OpenPathAsync(path, suppressRecentFiles, templateMode: templateMode);
         return Present(FreeWDocumentFileFeedbackPlanner.PlanOpen(execution, path));
     }
 

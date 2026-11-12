@@ -55,7 +55,7 @@ public sealed class DocumentFileExecutionCoordinator
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var openResult = _persistence.Open(request.Path);
+            var openResult = _persistence.Open(request.Path, request.TemplateMode);
 
             cancellationToken.ThrowIfCancellationRequested();
             await request.LoadDocumentAsync(openResult.Document, cancellationToken);
@@ -168,7 +168,8 @@ public sealed record DocumentOpenExecutionRequest(
     Func<TextDocument, CancellationToken, ValueTask> LoadDocumentAsync,
     Func<DocumentOpenResult, bool, CancellationToken, ValueTask> CompleteOpenAsync,
     Func<string?, CancellationToken, ValueTask>? PrepareFieldContextAsync = null,
-    Func<CancellationToken, ValueTask>? UpdateFieldsAsync = null);
+    Func<CancellationToken, ValueTask>? UpdateFieldsAsync = null,
+    DocumentTemplateOpenMode TemplateMode = DocumentTemplateOpenMode.NewDocument);
 
 public sealed record DocumentOpenExecutionResult
 {

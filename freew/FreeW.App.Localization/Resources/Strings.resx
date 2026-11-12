@@ -433,7 +433,24 @@
   <data name="TableProperties_CursorOutsideTable_Message" xml:space="preserve"><value>The cursor must be inside a table to edit its properties.</value></data>
   <data name="FreeW_Backstage_Recent_EmptyText" xml:space="preserve"><value>No recent documents.</value></data>
   <data name="FreeW_Backstage_New_BlankDocument" xml:space="preserve"><value>Blank document</value></data>
-  <data name="FreeW_Backstage_New_FooterText" xml:space="preserve"><value>More templates are not available in this build.</value></data>
+  <data name="FreeW_Backstage_New_FooterText" xml:space="preserve"><value>Pick a template to start a new, untitled document.</value></data>
+  <data name="FreeW_Backstage_New_FeaturedHeading" xml:space="preserve"><value>Featured</value></data>
+  <data name="FreeW_Backstage_New_PersonalHeading" xml:space="preserve"><value>Personal</value></data>
+  <data name="FreeW_Backstage_New_PersonalEmptyText" xml:space="preserve"><value>No personal templates yet. Use Save As and choose Word Template (*.dotx) to add one.</value></data>
+  <data name="FreeW_Backstage_New_PersonalFolderFormat" xml:space="preserve"><value>Templates folder: {0}</value></data>
+  <data name="FreeW_Backstage_New_PersonalTileDescriptionFormat" xml:space="preserve"><value>Create a new document based on {0}.</value></data>
+  <data name="FreeW_Template_Blank_Name" xml:space="preserve"><value>Blank document</value></data>
+  <data name="FreeW_Template_Blank_Description" xml:space="preserve"><value>Start from an empty page.</value></data>
+  <data name="FreeW_Template_BusinessLetter_Name" xml:space="preserve"><value>Business letter</value></data>
+  <data name="FreeW_Template_BusinessLetter_Description" xml:space="preserve"><value>A formal letter with sender details, date, and signature block.</value></data>
+  <data name="FreeW_Template_Resume_Name" xml:space="preserve"><value>Resume</value></data>
+  <data name="FreeW_Template_Resume_Description" xml:space="preserve"><value>A one-page resume with profile, experience, education, and skills.</value></data>
+  <data name="FreeW_Template_Report_Name" xml:space="preserve"><value>Report</value></data>
+  <data name="FreeW_Template_Report_Description" xml:space="preserve"><value>A report with a cover page, table of contents, and numbered pages.</value></data>
+  <data name="FreeW_Template_MeetingNotes_Name" xml:space="preserve"><value>Meeting notes</value></data>
+  <data name="FreeW_Template_MeetingNotes_Description" xml:space="preserve"><value>An agenda with attendees, discussion notes, and action items.</value></data>
+  <data name="FreeW_Template_Memo_Name" xml:space="preserve"><value>Memo</value></data>
+  <data name="FreeW_Template_Memo_Description" xml:space="preserve"><value>An internal memo with To, From, Date, and Subject lines.</value></data>
   <data name="FreeW_Backstage_Options_Description" xml:space="preserve"><value>FreeW application settings. These persist between sessions and apply immediately.</value></data>
   <data name="FreeW_Backstage_Options_EditText" xml:space="preserve"><value>Edit options&#x2026;</value></data>
   <data name="FreeW_Backstage_Export_Heading" xml:space="preserve"><value>Export</value></data>

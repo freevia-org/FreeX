@@ -539,7 +539,7 @@ public class BackstageViewTests : IDisposable
         source.Should().NotContain("BackstageInfoPaneSpec plan");
         source.Should().Contain("_session.BuildAccountPane(");
         source.Should().Contain("SisterBackstagePaneSpecPlanner");
-        source.Should().Contain("_session.BuildNewPaneSpec(PaneSpecs)");
+        source.Should().Contain("_session.BuildTemplateGallery()");
         source.Should().Contain("_session.BuildOptionsPaneSpec(PaneSpecs)");
         source.Should().NotContain("ApplicationOptionsSummaryPlanner.Build(");
         source.Should().NotContain("new SisterBackstageAccountPaneContext(");

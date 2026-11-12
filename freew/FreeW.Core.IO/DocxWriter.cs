@@ -8978,7 +8978,9 @@ public static class DocxWriter
         // modelled decimal/letter/Roman number style.
         XElement MultiLevelAbstractNum(int abstractNumId) =>
             new(W + "abstractNum", new XAttribute(W + "abstractNumId", abstractNumId),
-                new XAttribute(W + "multiLevelType", "multilevel"),
+                // CT_AbstractNum declares multiLevelType as a child element, not an attribute; the
+                // attribute form made every document containing a list fail schema validation.
+                new XElement(W + "multiLevelType", new XAttribute(W + "val", "multilevel")),
                 Enumerable.Range(0, ListLevelCount).Select(level => Lvl(level,
                     MultiLevelListMarkerFormatter.ToOoxmlToken(GetMultiLevelNumberFormat(level)),
                     GetMultiLevelLevelText(level),

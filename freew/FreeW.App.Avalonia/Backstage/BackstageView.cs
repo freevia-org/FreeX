@@ -188,22 +188,51 @@ internal sealed partial class BackstageView : Window
 
     private Control BuildNewPane()
     {
-        var spec = _session.BuildNewPaneSpec(PaneSpecs);
-        var content = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
-        content.Children.Add(CreateHeading(spec.Heading));
-        content.Children.Add(CreateTemplateTile(
-            spec.TileCaption,
-            spec.Create));
-        if (!string.IsNullOrWhiteSpace(spec.FooterText))
+        // The shared template gallery: built-in templates plus the user's personal .dotx/.dotm files.
+        // This renderer draws plain page tiles; the page-one miniature marks are WPF-only for now.
+        var gallery = _session.BuildTemplateGallery();
+        var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Left };
+        content.Children.Add(CreateHeading(gallery.Heading));
+        foreach (var section in gallery.Sections)
         {
             content.Children.Add(new TextBlock
             {
-                Text = spec.FooterText,
-                Foreground = SecondaryInk,
-                Margin = new Thickness(0, 18, 0, 0),
+                Text = section.Heading,
+                Foreground = PrimaryInk,
+                FontSize = 15,
+                FontWeight = FontWeight.SemiBold,
+                Margin = new Thickness(0, 10, 0, 8),
             });
+
+            if (section.Tiles.Count > 0)
+            {
+                var tiles = new WrapPanel { Orientation = Orientation.Horizontal };
+                foreach (var tile in section.Tiles)
+                {
+                    var control = CreateTemplateTile(tile.Caption, tile.Invoke);
+                    control.Margin = new Thickness(0, 0, 18, 14);
+                    AutomationProperties.SetAutomationId(control, tile.AutomationId);
+                    AutomationProperties.SetName(control, tile.Caption);
+                    ToolTip.SetTip(control, tile.Description);
+                    tiles.Children.Add(control);
+                }
+                content.Children.Add(tiles);
+            }
+
+            foreach (var note in new[] { section.EmptyText, section.FooterText })
+            {
+                if (string.IsNullOrWhiteSpace(note))
+                    continue;
+                content.Children.Add(new TextBlock
+                {
+                    Text = note,
+                    Foreground = SecondaryInk,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 4, 0, 8),
+                });
+            }
         }
-        return content;
+        return new ScrollViewer { Content = content };
     }
 
     // ── Open pane ─────────────────────────────────────────────────────────────
