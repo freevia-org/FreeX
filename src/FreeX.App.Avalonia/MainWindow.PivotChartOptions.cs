@@ -62,19 +62,22 @@ public sealed partial class MainWindow
 
         var current = PivotChartOptionsPlanner.Read(chart!);
 
-        var showFieldButtons = MakeCheck(PivotChartOptionsDialogFieldId.ShowFieldButtons, current.ShowFieldButtons);
-        var reportFilterButtons = MakeCheck(PivotChartOptionsDialogFieldId.ShowReportFilterButtons, current.ShowReportFilterButtons, new Thickness(18, 0, 0, 0));
-        var axisFieldButtons = MakeCheck(PivotChartOptionsDialogFieldId.ShowAxisFieldButtons, current.ShowAxisFieldButtons, new Thickness(18, 0, 0, 0));
-        var valueFieldButtons = MakeCheck(PivotChartOptionsDialogFieldId.ShowValueFieldButtons, current.ShowValueFieldButtons, new Thickness(18, 0, 0, 0));
-        var showDataTable = MakeCheck(PivotChartOptionsDialogFieldId.ShowDataTable, current.ShowDataTable);
-        var dataTableLegendKeys = MakeCheck(PivotChartOptionsDialogFieldId.ShowDataTableLegendKeys, current.ShowDataTableLegendKeys, new Thickness(18, 0, 0, 0));
-        var roundedCorners = MakeCheck(PivotChartOptionsDialogFieldId.RoundedCorners, current.RoundedCorners);
-        var showHiddenData = MakeCheck(PivotChartOptionsDialogFieldId.ShowHiddenData, current.ShowHiddenData);
+        // WPF check boxes are 16px rows; the compact Avalonia check box is 20px, so every WPF bottom
+        // margin (8 / 6 / 16) is reduced by 4px to keep the same row pitch.
+        var showFieldButtons = MakeCheck(PivotChartOptionsDialogFieldId.ShowFieldButtons, current.ShowFieldButtons, new Thickness(0, 0, 0, 4));
+        var reportFilterButtons = MakeCheck(PivotChartOptionsDialogFieldId.ShowReportFilterButtons, current.ShowReportFilterButtons, new Thickness(18, 0, 0, 2));
+        var axisFieldButtons = MakeCheck(PivotChartOptionsDialogFieldId.ShowAxisFieldButtons, current.ShowAxisFieldButtons, new Thickness(18, 0, 0, 2));
+        var valueFieldButtons = MakeCheck(PivotChartOptionsDialogFieldId.ShowValueFieldButtons, current.ShowValueFieldButtons, new Thickness(18, 0, 0, 12));
+        var showDataTable = MakeCheck(PivotChartOptionsDialogFieldId.ShowDataTable, current.ShowDataTable, new Thickness(0, 0, 0, 2));
+        var dataTableLegendKeys = MakeCheck(PivotChartOptionsDialogFieldId.ShowDataTableLegendKeys, current.ShowDataTableLegendKeys, new Thickness(18, 0, 0, 12));
+        var roundedCorners = MakeCheck(PivotChartOptionsDialogFieldId.RoundedCorners, current.RoundedCorners, new Thickness(0, 0, 0, 2));
+        var showHiddenData = MakeCheck(PivotChartOptionsDialogFieldId.ShowHiddenData, current.ShowHiddenData, new Thickness(0, 0, 0, 4));
 
         var blankChoices = PivotChartOptionsPlanner.GetResolvedBlankDisplayChoices(UiText.Get);
         var blankDisplayBox = new ComboBox
         {
-            Width = 260,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 0, 0, 16),
             ItemsSource = blankChoices,
             DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(PivotChartOptionsResolvedBlankDisplayChoice.Label)),
         };
@@ -100,8 +103,13 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get(PivotChartOptionsPlanner.DialogTitleResourceKey),
+            // WPF PivotChartOptionsDialog: 420x430 outer, NoResize, so the app-wide dialog sizing makes
+            // 430 the minimum and lets the height follow the content.
             Width = 420,
-            Height = 480,
+            MinWidth = 420,
+            MaxWidth = 420,
+            MinHeight = 430 - WpfNoResizeFrameHeight,
+            SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             ShowInTaskbar = false,
@@ -109,39 +117,49 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, PivotChartOptionsPlanner.DialogAutomationId);
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
-        ApplyPivotButtonChrome(ok, 80, isDefault: true);
+        ApplyPivotButtonChrome(ok, PivotDialogButtonMinWidth, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "PivotChartOptionsOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
-        ApplyPivotButtonChrome(cancel, 80);
+        ApplyPivotButtonChrome(cancel, PivotDialogButtonMinWidth);
         AutomationProperties.SetAutomationId(cancel, "PivotChartOptionsCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) => dialog.Close(true);
 
-        var content = new StackPanel { Spacing = 6, Margin = new Thickness(16) };
-        content.Children.Add(showFieldButtons);
-        content.Children.Add(reportFilterButtons);
-        content.Children.Add(axisFieldButtons);
-        content.Children.Add(valueFieldButtons);
-        content.Children.Add(showDataTable);
-        content.Children.Add(dataTableLegendKeys);
-        content.Children.Add(roundedCorners);
-        content.Children.Add(showHiddenData);
-        content.Children.Add(new TextBlock
+        // Layout mirrors PivotChartOptionsDialog: a 16px root margin, a field-buttons group and a
+        // layout group (each 12px above the next block, content inset 10,8,10,10), dependent boxes
+        // indented 18px, the blank-display label 4px above its stretched combo, then the shared pivot
+        // OK/Cancel row. The WPF chart-style gallery group is not part of this shell.
+        var buttonPanel = new StackPanel
         {
-            Text = FieldLabel(PivotChartOptionsDialogFieldId.BlankDisplayMode),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            Margin = new Thickness(0, 4, 0, 0),
-        });
-        content.Children.Add(blankDisplayBox);
-        content.Children.Add(new StackPanel
+            Children = { showFieldButtons, reportFilterButtons, axisFieldButtons, valueFieldButtons },
+        };
+        var layoutPanel = new StackPanel
         {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 12, 0, 0),
-            Children = { ok, cancel },
-        });
+            Children =
+            {
+                showDataTable,
+                dataTableLegendKeys,
+                roundedCorners,
+                showHiddenData,
+                new TextBlock
+                {
+                    Text = FieldLabel(PivotChartOptionsDialogFieldId.BlankDisplayMode),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    Margin = new Thickness(0, 0, 0, 4),
+                },
+                blankDisplayBox,
+            },
+        };
+
+        var content = new StackPanel { Margin = new Thickness(16) };
+        content.Children.Add(CreatePivotDialogGroupBox(
+            UiText.Get(PivotChartOptionsPlanner.GetFieldButtonsSection().HeaderResourceKey),
+            buttonPanel));
+        content.Children.Add(CreatePivotDialogGroupBox(
+            UiText.Get(PivotChartOptionsPlanner.GetLayoutSection().HeaderResourceKey),
+            layoutPanel));
+        content.Children.Add(CreatePivotDialogButtonRow(ok, cancel));
         dialog.Content = content;
         ConfigurePivotDialogLifecycle(dialog, showFieldButtons);
 

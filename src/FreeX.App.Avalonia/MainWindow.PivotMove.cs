@@ -40,31 +40,25 @@ public sealed partial class MainWindow
         var destinationBox = new TextBox
         {
             Text = FormatCellReference(pivot.TargetRange.Start),
-            MinWidth = 280,
         };
         ApplyPivotTextBoxChrome(destinationBox);
         AutomationProperties.SetAutomationId(destinationBox, "MovePivotDestinationBox");
         AutomationProperties.SetName(destinationBox, UiText.Get("MovePivot_RangeName"));
 
-        var destinationPicker = new Button
-        {
-            Content = "...",
-            Width = 30,
-            MinWidth = 30,
-            Margin = new Thickness(6, 0, 0, 0),
-        };
-        ApplyPivotButtonChrome(destinationPicker, 30);
+        var destinationPicker = new Button { Content = "..." };
         AutomationProperties.SetAutomationId(destinationPicker, "MovePivotDestinationPickerButton");
         AutomationProperties.SetName(destinationPicker, UiText.Get("MovePivotTable_SelectDestination"));
 
+        // WPF MovePivotTableDialog: a 420px NoResize window whose height follows the content, with a
+        // 160px outer minimum.
         var dialog = new Window
         {
-            Title = UiText.Get("MovePivot_Title"),
+            Title = UiText.Get("MovePivotTable_Title"),
             Width = 420,
-            Height = 180,
             MinWidth = 420,
-            MinHeight = 180,
-            SizeToContent = SizeToContent.Manual,
+            MaxWidth = 420,
+            MinHeight = 160 - WpfNoResizeFrameHeight,
+            SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             ShowInTaskbar = false,
@@ -72,10 +66,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "MovePivotDialog");
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
-        ApplyPivotButtonChrome(ok, 80, isDefault: true);
+        ApplyPivotButtonChrome(ok, PivotDialogButtonMinWidth, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "MovePivotOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
-        ApplyPivotButtonChrome(cancel, 80);
+        ApplyPivotButtonChrome(cancel, PivotDialogButtonMinWidth);
         AutomationProperties.SetAutomationId(cancel, "MovePivotCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -90,21 +84,15 @@ public sealed partial class MainWindow
             dialog.Close(true);
         };
 
-        var content = new StackPanel { Spacing = 6, Margin = new Thickness(16) };
-        content.Children.Add(new TextBlock { Text = UiText.Get("MovePivot_Label"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
-        var destinationRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        destinationRow.Children.Add(destinationBox);
-        Grid.SetColumn(destinationPicker, 1);
-        destinationRow.Children.Add(destinationPicker);
-        content.Children.Add(destinationRow);
-        content.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 12, 0, 0),
-            Children = { ok, cancel },
-        });
+        // WPF: StackPanel { Margin = 16 }: label (0,3,0,4), the picker + reference box editor with a
+        // 16px bottom margin, then the shared pivot OK/Cancel row (12px top margin).
+        var content = new StackPanel { Margin = new Thickness(16) };
+        content.Children.Add(CreatePivotDialogLabel(UiText.Get("MovePivotTable_DestinationLabel")));
+        content.Children.Add(CreatePivotDialogReferenceEditor(
+            destinationPicker,
+            destinationBox,
+            new Thickness(0, 0, 0, 16)));
+        content.Children.Add(CreatePivotDialogButtonRow(ok, cancel));
         dialog.Content = content;
         dialog.Opened += (_, _) =>
         {

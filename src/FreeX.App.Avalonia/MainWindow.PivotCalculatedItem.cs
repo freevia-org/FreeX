@@ -54,7 +54,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        var fieldBox = new ComboBox { MinWidth = 260 };
+        var fieldBox = new ComboBox { HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch };
         ApplyPivotComboBoxChrome(fieldBox);
         foreach (var field in calculatedItemSession.Fields)
             fieldBox.Items.Add(field.Caption);
@@ -62,16 +62,16 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(fieldBox, "PivotCalcItemFieldBox");
         AutomationProperties.SetName(fieldBox, UiText.Get("PivotCalcItem_FieldLabel"));
 
-        var nameBox = new TextBox { MinWidth = 260 };
+        var nameBox = new TextBox();
         ApplyPivotTextBoxChrome(nameBox);
         AutomationProperties.SetAutomationId(nameBox, "PivotCalcItemNameBox");
         AutomationProperties.SetName(nameBox, UiText.Get("PivotCalcItem_NameLabel"));
 
         var formulaBox = new TextBox
         {
-            MinWidth = 260,
+            // WPF shows a one-line formula box; the box still grows with wrapped or multi-line text.
             AcceptsReturn = true,
-            MinHeight = 56,
+            MinHeight = 20,
             MaxHeight = double.PositiveInfinity,
             TextWrapping = global::Avalonia.Media.TextWrapping.Wrap,
             Text = "= ",
@@ -80,7 +80,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(formulaBox, "PivotCalcItemFormulaBox");
         AutomationProperties.SetName(formulaBox, UiText.Get("PivotCalcItem_FormulaLabel"));
 
-        var existingBox = new ComboBox { MinWidth = 260 };
+        var existingBox = new ComboBox { HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch };
         ApplyPivotComboBoxChrome(existingBox);
         AutomationProperties.SetAutomationId(existingBox, "PivotCalcItemExistingBox");
         AutomationProperties.SetName(existingBox, UiText.Get("PivotCalcItem_ExistingLabel"));
@@ -118,7 +118,7 @@ public sealed partial class MainWindow
             formulaBox.Text = draft.Formula;
         };
 
-        var fieldsList = new ListBox { Height = 96 };
+        var fieldsList = new ListBox { Height = 80 };
         ApplyPivotListBoxChrome(fieldsList);
         foreach (var reference in calculatedItemSession.FieldReferences)
             fieldsList.Items.Add(reference);
@@ -127,8 +127,13 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(fieldsList, "PivotCalcItemReferenceList");
         AutomationProperties.SetName(fieldsList, UiText.Get("PivotCalcItem_FieldsAutomation"));
 
-        var insertButton = new Button { Content = UiText.Get("PivotCalcItem_InsertField") };
+        var insertButton = new Button
+        {
+            Content = UiText.Get("PivotCalculated_InsertField"),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+        };
         ApplyPivotButtonChrome(insertButton, 110);
+        insertButton.Width = 110;
         AutomationProperties.SetAutomationId(insertButton, "PivotCalcItemInsertButton");
         void InsertSelectedReference()
         {
@@ -151,9 +156,14 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = UiText.Get("PivotCalcItem_Title"),
+            // WPF PivotCalculatedItemDialog is 500 wide and NoResize with a content-following height.
+            // Its 560px outer minimum allows for the available-items list this shell does not have, so
+            // the height simply follows the content here instead of leaving an empty band.
+            Title = UiText.Get("PivotCalculated_CalculatedItem"),
             Width = 500,
-            Height = 560,
+            MinWidth = 500,
+            MaxWidth = 500,
+            SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             ShowInTaskbar = false,
@@ -161,13 +171,13 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "PivotCalculatedItemDialog");
 
         var save = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
-        ApplyPivotButtonChrome(save, 80, isDefault: true);
+        ApplyPivotButtonChrome(save, PivotDialogButtonMinWidth, isDefault: true);
         AutomationProperties.SetAutomationId(save, "PivotCalcItemSaveButton");
         var delete = new Button { Content = UiText.Get("PivotCalcItem_Delete") };
-        ApplyPivotButtonChrome(delete, 80);
+        ApplyPivotButtonChrome(delete, PivotDialogButtonMinWidth);
         AutomationProperties.SetAutomationId(delete, "PivotCalcItemDeleteButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
-        ApplyPivotButtonChrome(cancel, 80);
+        ApplyPivotButtonChrome(cancel, PivotDialogButtonMinWidth);
         AutomationProperties.SetAutomationId(cancel, "PivotCalcItemCancelButton");
 
         PivotCalculatedItemSubmission? submission = null;
@@ -198,25 +208,25 @@ public sealed partial class MainWindow
             dialog.Close(true);
         };
 
-        var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotCalcItem_FieldLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
-        content.Children.Add(fieldBox);
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotCalcItem_ExistingLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
-        content.Children.Add(existingBox);
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotCalcItem_NameLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
-        content.Children.Add(nameBox);
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotCalcItem_FormulaLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
-        content.Children.Add(formulaBox);
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotCalcItem_FieldsLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
-        content.Children.Add(fieldsList);
-        content.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
-            Spacing = 8,
-            Children = { insertButton },
-        });
-        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([save, delete, cancel], new Thickness(0, 8, 0, 0)));
+        // Layout mirrors PivotCalculatedItemDialog: a 16px root margin, a field-and-item group and an
+        // insert-into-formula group (each 12px above the next block, content inset 10,8,10,10), labels
+        // above their controls with an 8px row gap, the 110px insert button left-aligned under the 80px
+        // field list, and the button row 12px below. The existing-item picker and Delete are
+        // Avalonia-only.
+        var itemPanel = new StackPanel();
+        AddPivotDialogLabeledControl(itemPanel, UiText.Get("PivotCalculated_SourceFieldLabel"), fieldBox);
+        AddPivotDialogLabeledControl(itemPanel, UiText.Get("PivotCalcItem_ExistingLabel"), existingBox);
+        AddPivotDialogLabeledControl(itemPanel, UiText.Get("PivotCalculated_NameLabel"), nameBox);
+        AddPivotDialogLabeledControl(itemPanel, UiText.Get("PivotCalculated_ItemFormulaLabel"), formulaBox);
+
+        var insertPanel = new StackPanel();
+        AddPivotDialogLabeledControl(insertPanel, UiText.Get("PivotCalculated_AvailableFieldsLabel"), fieldsList);
+        insertPanel.Children.Add(insertButton);
+
+        var content = new StackPanel { Margin = new Thickness(16) };
+        content.Children.Add(CreatePivotDialogGroupBox(UiText.Get("PivotCalculated_FieldAndItemGroup"), itemPanel));
+        content.Children.Add(CreatePivotDialogGroupBox(UiText.Get("PivotCalculated_InsertIntoFormulaGroup"), insertPanel));
+        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([save, delete, cancel], new Thickness(0, 12, 0, 0)));
         dialog.Content = content;
         ConfigurePivotDialogLifecycle(dialog, nameBox, selectAllText: true);
 

@@ -5,6 +5,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 
 using FreeX.App.Presentation.PivotUI;
+using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -63,18 +64,22 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = UiText.Get("PivotLoc_InsertSlicersTitle"),
-            Width = 320,
-            Height = 380,
-            MinWidth = 280,
-            MinHeight = 300,
+            // WPF: a NoResize window PivotSlicerTimelineDialogContract.Width wide. This shell picks
+            // several fields from a check list instead of one field plus a caption, so the height
+            // follows the list rather than the WPF contract height.
+            Title = UiText.Get("PivotSlicerTimeline_InsertSlicer"),
+            Width = PivotSlicerTimelineDialogContract.Width,
+            MinWidth = PivotSlicerTimelineDialogContract.Width,
+            MaxWidth = PivotSlicerTimelineDialogContract.Width,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "InsertSlicerDialog");
 
         var checkBoxes = new List<CheckBox>(headers.Count);
-        var fieldStack = new StackPanel { Spacing = 4 };
+        var fieldStack = new StackPanel();
         foreach (var header in headers)
         {
             var checkBox = new CheckBox { Content = header };
@@ -86,7 +91,6 @@ public sealed partial class MainWindow
         var fieldList = new ScrollViewer
         {
             Content = fieldStack,
-            Height = 220,
             MaxHeight = 220,
         };
         AutomationProperties.SetAutomationId(fieldList, "InsertSlicerFieldList");
@@ -101,11 +105,11 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(warningText, "InsertSlicerWarningText");
 
-        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
-        ApplyDataOpsButtonChrome(okButton, isDefault: true);
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
+        ApplyPivotButtonChrome(okButton, PivotDialogButtonMinWidth, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "InsertSlicerOkButton");
-        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
-        ApplyDataOpsButtonChrome(cancelButton);
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
+        ApplyPivotButtonChrome(cancelButton, PivotDialogButtonMinWidth);
         AutomationProperties.SetAutomationId(cancelButton, "InsertSlicerCancelButton");
 
         okButton.Click += (_, _) =>
@@ -135,43 +139,24 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close();
 
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
-            Children = { okButton, cancelButton },
-        };
+        var buttonRow = CreatePivotDialogButtonRow(okButton, cancelButton);
 
-        // Group box framing around field list to match WPF InsertSlicerDialog layout.
-        var groupHeader = new TextBlock
-        {
-            Text = UiText.Format("PivotLoc_ChooseFieldsForSlicers", pivot.Name),
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 6),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-        };
-        var groupContent = new StackPanel { Spacing = 4 };
+        // Layout mirrors the WPF InsertSlicer dialog: a 16px root margin, one captioned group box
+        // (content inset 10,8,10,10, 12px above the button row's own 12px top margin) and the shared
+        // pivot OK/Cancel row. The prompt naming the PivotTable labels the check list inside the group.
+        var groupContent = new StackPanel();
+        var groupPrompt = CreatePivotDialogLabel(UiText.Format("PivotLoc_ChooseFieldsForSlicers", pivot.Name));
+        groupPrompt.TextWrapping = TextWrapping.Wrap;
+        groupContent.Children.Add(groupPrompt);
         groupContent.Children.Add(fieldList);
         groupContent.Children.Add(warningText);
-        var groupBorder = new Border
-        {
-            BorderBrush = Brush(180, 180, 180),
-            BorderThickness = new Thickness(1),
-            Padding = new Thickness(8),
-            Child = groupContent,
-        };
 
         dialog.Content = new StackPanel
         {
-            Margin = new Thickness(12),
-            Spacing = 4,
+            Margin = new Thickness(16),
             Children =
             {
-                groupHeader,
-                groupBorder,
+                CreatePivotDialogGroupBox(UiText.Get("PivotSlicerTimeline_ChooseFieldsGroup"), groupContent),
                 buttonRow,
             },
         };
@@ -201,18 +186,22 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = UiText.Get("PivotLoc_InsertTimelinesTitle"),
-            Width = 320,
-            Height = 380,
-            MinWidth = 280,
-            MinHeight = 300,
+            // WPF: a NoResize window PivotSlicerTimelineDialogContract.Width wide. This shell picks
+            // several fields from a check list instead of one field plus a caption, so the height
+            // follows the list rather than the WPF contract height.
+            Title = UiText.Get("PivotSlicerTimeline_InsertTimeline"),
+            Width = PivotSlicerTimelineDialogContract.Width,
+            MinWidth = PivotSlicerTimelineDialogContract.Width,
+            MaxWidth = PivotSlicerTimelineDialogContract.Width,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "InsertTimelineDialog");
 
         var checkBoxes = new List<CheckBox>(headers.Count);
-        var fieldStack = new StackPanel { Spacing = 4 };
+        var fieldStack = new StackPanel();
         foreach (var header in headers)
         {
             var checkBox = new CheckBox { Content = header };
@@ -224,7 +213,6 @@ public sealed partial class MainWindow
         var fieldList = new ScrollViewer
         {
             Content = fieldStack,
-            Height = 220,
             MaxHeight = 220,
         };
         AutomationProperties.SetAutomationId(fieldList, "InsertTimelineFieldList");
@@ -239,11 +227,11 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(warningText, "InsertTimelineWarningText");
 
-        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
-        ApplyDataOpsButtonChrome(okButton, isDefault: true);
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
+        ApplyPivotButtonChrome(okButton, PivotDialogButtonMinWidth, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "InsertTimelineOkButton");
-        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
-        ApplyDataOpsButtonChrome(cancelButton);
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
+        ApplyPivotButtonChrome(cancelButton, PivotDialogButtonMinWidth);
         AutomationProperties.SetAutomationId(cancelButton, "InsertTimelineCancelButton");
 
         okButton.Click += (_, _) =>
@@ -273,43 +261,24 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close();
 
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
-            Children = { okButton, cancelButton },
-        };
+        var buttonRow = CreatePivotDialogButtonRow(okButton, cancelButton);
 
-        // Group box framing around field list to match WPF InsertTimelineDialog layout.
-        var groupHeader = new TextBlock
-        {
-            Text = UiText.Format("PivotLoc_ChooseDateFieldsForTimelines", pivot.Name),
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 6),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-        };
-        var groupContent = new StackPanel { Spacing = 4 };
+        // Layout mirrors the WPF InsertTimeline dialog: a 16px root margin, one captioned group box
+        // (content inset 10,8,10,10, 12px above the button row's own 12px top margin) and the shared
+        // pivot OK/Cancel row. The prompt naming the PivotTable labels the check list inside the group.
+        var groupContent = new StackPanel();
+        var groupPrompt = CreatePivotDialogLabel(UiText.Format("PivotLoc_ChooseDateFieldsForTimelines", pivot.Name));
+        groupPrompt.TextWrapping = TextWrapping.Wrap;
+        groupContent.Children.Add(groupPrompt);
         groupContent.Children.Add(fieldList);
         groupContent.Children.Add(warningText);
-        var groupBorder = new Border
-        {
-            BorderBrush = Brush(180, 180, 180),
-            BorderThickness = new Thickness(1),
-            Padding = new Thickness(8),
-            Child = groupContent,
-        };
 
         dialog.Content = new StackPanel
         {
-            Margin = new Thickness(12),
-            Spacing = 4,
+            Margin = new Thickness(16),
             Children =
             {
-                groupHeader,
-                groupBorder,
+                CreatePivotDialogGroupBox(UiText.Get("PivotSlicerTimeline_ChooseDateFieldsGroup"), groupContent),
                 buttonRow,
             },
         };

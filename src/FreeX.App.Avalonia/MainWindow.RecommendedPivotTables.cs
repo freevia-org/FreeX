@@ -17,12 +17,14 @@ public sealed partial class MainWindow
         {
             Title = UiText.Get(RecommendedPivotTablesDialogPlanner.TitleKey),
             Width = RecommendedPivotTablesDialogPlanner.Width,
-            // Match the Windows dialog's compact proportions: size to the content's natural height
-            // (a short left list of layouts + a preview area) instead of stretching tall. The fixed
-            // height keeps the empty-state preview from leaving a large blank region below it.
-            Height = RecommendedPivotTablesDialogPlanner.MinHeight,
-            MinHeight = RecommendedPivotTablesDialogPlanner.MinHeight,
-            MaxHeight = RecommendedPivotTablesDialogPlanner.MinHeight,
+            // The WPF dialog sizes to content with a 340px OUTER minimum, and the empty state is far
+            // shorter than that, so the window opens at the minimum. Avalonia sizes are client sizes:
+            // take the Windows caption/frame off so no empty band is left under the button row.
+            MinWidth = RecommendedPivotTablesDialogPlanner.Width,
+            MaxWidth = RecommendedPivotTablesDialogPlanner.Width,
+            Height = RecommendedPivotTablesDialogPlanner.MinHeight - WpfNoResizeFrameHeight,
+            MinHeight = RecommendedPivotTablesDialogPlanner.MinHeight - WpfNoResizeFrameHeight,
+            MaxHeight = RecommendedPivotTablesDialogPlanner.MinHeight - WpfNoResizeFrameHeight,
             SizeToContent = SizeToContent.Manual,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -39,6 +41,7 @@ public sealed partial class MainWindow
         {
             Text = UiText.Get(RecommendedPivotTablesDialogPlanner.TitleKey),
             FontSize = 18,
+            FontFamily = FormulaBarFontFamily,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(0, 0, 0, 12)
         });
@@ -58,10 +61,14 @@ public sealed partial class MainWindow
             Content = UiText.Get(RecommendedPivotTablesDialogPlanner.BlankPivotTableKey),
             Width = RecommendedPivotTablesDialogPlanner.BlankPivotTableButtonWidth,
             IsDefault = true,
-            Margin = new Thickness(0, 0, 8, 0)
         };
+        // WPF push buttons here are default-height (20px) system buttons with fixed widths.
+        ApplyPivotButtonChrome(blankPivotTable, RecommendedPivotTablesDialogPlanner.BlankPivotTableButtonWidth, isDefault: true);
+        blankPivotTable.Padding = new Thickness(1);
+        blankPivotTable.Margin = new Thickness(0, 0, 8, 0);
         AutomationProperties.SetAutomationId(blankPivotTable, RecommendedPivotTablesDialogPlanner.BlankPivotTableAutomationId);
         AutomationProperties.SetName(blankPivotTable, UiText.Get(RecommendedPivotTablesDialogPlanner.BlankPivotTableAutomationNameKey));
+        AutomationProperties.SetHelpText(blankPivotTable, UiText.Get(RecommendedPivotTablesDialogPlanner.BlankPivotTableAutomationHelpTextKey));
         blankPivotTable.Click += (_, _) =>
         {
             result = RecommendedPivotTablesDialogResult.BlankPivotTable;
@@ -74,6 +81,8 @@ public sealed partial class MainWindow
             Width = RecommendedPivotTablesDialogPlanner.CancelButtonWidth,
             IsCancel = true
         };
+        ApplyPivotButtonChrome(cancel, RecommendedPivotTablesDialogPlanner.CancelButtonWidth);
+        cancel.Padding = new Thickness(1);
         buttons.Children.Add(blankPivotTable);
         buttons.Children.Add(cancel);
         Grid.SetRow(buttons, 2);
@@ -97,19 +106,23 @@ public sealed partial class MainWindow
             Text = UiText.Get(RecommendedPivotTablesDialogPlanner.NoRecommendationsHeadingKey),
             FontWeight = FontWeight.SemiBold,
             FontSize = 14,
+            FontFamily = FormulaBarFontFamily,
             TextAlignment = TextAlignment.Center,
             Margin = new Thickness(0, 0, 0, 8)
         });
         stack.Children.Add(new TextBlock
         {
             Text = UiText.Get(RecommendedPivotTablesDialogPlanner.NoRecommendationsBodyKey),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             TextWrapping = TextWrapping.Wrap,
             TextAlignment = TextAlignment.Center
         });
 
         return new Border
         {
-            BorderBrush = Brushes.LightGray,
+            // WPF SystemColors.ControlDarkBrush (#A0A0A0) on ControlLightLight (white).
+            BorderBrush = Brush(160, 160, 160),
             BorderThickness = new Thickness(1),
             Background = Brushes.White,
             Child = stack

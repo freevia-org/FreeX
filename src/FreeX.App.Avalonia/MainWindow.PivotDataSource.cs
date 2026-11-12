@@ -44,27 +44,24 @@ public sealed partial class MainWindow
         var sourceBox = new TextBox
         {
             Text = PivotDataSourcePlanner.Capture(pivot),
-            MinWidth = 320,
         };
         ApplyPivotTextBoxChrome(sourceBox);
         AutomationProperties.SetAutomationId(sourceBox, "PivotDataSourceRangeBox");
         AutomationProperties.SetName(sourceBox, UiText.Get("PivotDataSource_RangeName"));
 
-        var sourcePicker = new Button
-        {
-            Content = "...",
-            Width = 30,
-            MinWidth = 30,
-            Margin = new Thickness(6, 0, 0, 0),
-        };
-        ApplyPivotButtonChrome(sourcePicker, 30);
+        var sourcePicker = new Button { Content = "..." };
         AutomationProperties.SetAutomationId(sourcePicker, "PivotDataSourceRangePickerButton");
         AutomationProperties.SetName(sourcePicker, UiText.Get("PivotTableDataSource_SelectPivotTableSourceRange"));
 
+        // WPF PivotTableDataSourceDialog: a 420px NoResize window whose height follows the content,
+        // with a 160px outer minimum.
         var dialog = new Window
         {
-            Title = UiText.Get("PivotDataSource_Title"),
+            Title = UiText.Get("PivotTableDataSource_ChangePivotTableDataSource"),
             Width = 420,
+            MinWidth = 420,
+            MaxWidth = 420,
+            MinHeight = 160 - WpfNoResizeFrameHeight,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
@@ -73,10 +70,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "PivotDataSourceDialog");
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
-        ApplyPivotButtonChrome(ok, 80, isDefault: true);
+        ApplyPivotButtonChrome(ok, PivotDialogButtonMinWidth, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "PivotDataSourceOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
-        ApplyPivotButtonChrome(cancel, 80);
+        ApplyPivotButtonChrome(cancel, PivotDialogButtonMinWidth);
         AutomationProperties.SetAutomationId(cancel, "PivotDataSourceCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -91,28 +88,21 @@ public sealed partial class MainWindow
             dialog.Close(true);
         };
 
-        var content = new StackPanel { Spacing = 6, Margin = new Thickness(16) };
-        content.Children.Add(new TextBlock
-        {
-            Text = UiText.Get("PivotDataSource_RangeLabel"),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            Foreground = HeaderForeground,
-        });
-        var sourceRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        sourceRow.Children.Add(sourceBox);
-        Grid.SetColumn(sourcePicker, 1);
-        sourceRow.Children.Add(sourcePicker);
-        content.Children.Add(sourceRow);
-        content.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 12, 0, 0),
-            Children = { ok, cancel },
-        });
+        // WPF: StackPanel { Margin = 16 }: label (0,3,0,4), the picker + reference box editor with a
+        // 16px bottom margin, then the shared pivot OK/Cancel row (12px top margin).
+        var content = new StackPanel { Margin = new Thickness(16) };
+        content.Children.Add(CreatePivotDialogLabel(UiText.Get("PivotTableDataSource_TableRangeLabel")));
+        content.Children.Add(CreatePivotDialogReferenceEditor(
+            sourcePicker,
+            sourceBox,
+            new Thickness(0, 0, 0, 16)));
+        content.Children.Add(CreatePivotDialogButtonRow(ok, cancel));
         dialog.Content = content;
+        dialog.Opened += (_, _) =>
+        {
+            sourceBox.Focus();
+            sourceBox.SelectAll();
+        };
         AttachDialogRangePicker(
             dialog,
             sourcePicker,
