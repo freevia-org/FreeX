@@ -54,6 +54,23 @@ Invoke-ToolCanonicalPwshHost -ScriptPath $PSCommandPath -ForwardedArguments $PSB
     if ($value -is [switch]) { "-$_" } else { "-$_"; [string]$value }
 })
 
+# Cross-session throttle (tools/ThrottleSupport.ps1): the whole preflight (it runs cold scratch builds)
+# waits for ONE machine-wide heavy slot, taken here, BEFORE any check starts, so the wait never counts
+# against the per-check watchdog below. The re-launch happens at most once: the throttled child inherits
+# FREEX_THROTTLE_HELD, and every parallel check child spawned from it therefore takes no slot of its own.
+# CI (GITHUB_ACTIONS=true) and FREEX_THROTTLE_DISABLE=1 skip this entirely.
+. (Join-Path $PSScriptRoot "ThrottleSupport.ps1")
+if (-not (Test-FreeXThrottleBypassed)) {
+    $throttledArguments = @($PSBoundParameters.Keys.ForEach({
+        $value = $PSBoundParameters[$_]
+        if ($value -is [switch]) { if ($value.IsPresent) { "-$_" } } else { "-$_"; [string]$value }
+    }))
+    $pwshPath = [Environment]::ProcessPath
+    & $pwshPath -NoProfile -File (Join-Path $PSScriptRoot "Invoke-Throttled.ps1") -Kind Preflight -- `
+        $pwshPath -NoProfile -File $PSCommandPath @throttledArguments
+    exit $LASTEXITCODE
+}
+
 function Resolve-RepositoryPreflightEntry {
     param(
         [Parameter(Mandatory = $true)][string]$Label,

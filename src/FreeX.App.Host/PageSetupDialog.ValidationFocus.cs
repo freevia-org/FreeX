@@ -46,9 +46,9 @@ public partial class PageSetupDialog
             PageSetupDialogFocusTarget.PrintArea => PrintAreaBox,
             PageSetupDialogFocusTarget.RepeatRows => RowsRepeatBox,
             PageSetupDialogFocusTarget.RepeatColumns => ColumnsRepeatBox,
-            PageSetupDialogFocusTarget.PageOrder => PageOrderBox,
+            PageSetupDialogFocusTarget.PageOrder => CheckedChoiceRadio(DownThenOverRadioButton, OverThenDownRadioButton),
             PageSetupDialogFocusTarget.PrintErrorValue => PrintErrorValueBox,
             PageSetupDialogFocusTarget.PrintComments => PrintCommentsBox,
-            _ => OrientationBox,
+            _ => CheckedChoiceRadio(PortraitRadioButton, LandscapeRadioButton),
         };
 }

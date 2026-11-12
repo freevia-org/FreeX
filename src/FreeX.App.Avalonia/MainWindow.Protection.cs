@@ -33,6 +33,10 @@ public sealed partial class MainWindow
     // WPF PasswordProtectionDialog (ProtectionDialogs.cs) uses a default-template PasswordBox, which
     // renders 18px tall at the 12px dialog font; the buttons keep the shared control height.
     private const double ProtectWpfPasswordBoxHeight = 18;
+    // WPF ProtectionDialogs.AddSheetPermissionChecklist: twelve whole permission rows show in the
+    // permission viewport; each row is a 16px check box with a 4px bottom margin.
+    private const int ProtectSheetWpfVisiblePermissionRows = 12;
+    private const double ProtectSheetPermissionRowPitch = 20;
 
     // ── Review ▸ Protect menu entry points ─────────────────────────────────────
     private void ProtectSheet() => RunGuarded(ShowProtectSheetDialogAsync);
@@ -217,11 +221,17 @@ public sealed partial class MainWindow
                 },
             };
             contentChildren.Add(ProtectionGroupBox(UiText.Get("ShellLoc_PasswordGroupHeader"), passwordPanel));
-            // WPF: the checklist scrolls inside a fixed 230px viewport and its group has no bottom margin.
+            // WPF: the checklist ScrollViewer sits directly in its group, so the scrollbar track runs
+            // to within the group frame's own inset; the group has no bottom margin. The WPF viewport
+            // shows exactly twelve whole permission rows; at this row pitch that is the viewport height.
             var checklistGroup = ProtectionGroupBox(
                 UiText.Get("ShellLoc_AllowAllUsersToLabel"),
-                new ScrollViewer { Content = checklist, Height = 230 },
-                contentMargin: new Thickness(6, 4, 2, 4));
+                new ScrollViewer
+                {
+                    Content = checklist,
+                    Height = ProtectSheetWpfVisiblePermissionRows * ProtectSheetPermissionRowPitch,
+                },
+                contentMargin: new Thickness(6, 1, 0, 0));
             checklistGroup.Margin = new Thickness(0);
             contentChildren.Add(checklistGroup);
 
@@ -253,7 +263,9 @@ public sealed partial class MainWindow
 
         contentChildren.Add(warningText);
 
-        dialog.Content = ProtectionDialogLayout(contentChildren, cancelButton, okButton);
+        // SizeToContent sizes the window from its content and does not honour the window MinHeight,
+        // so the content itself carries the WPF minimum (DialogSizing.ApplyContentHeight).
+        dialog.Content = ProtectionDialogLayout(contentChildren, cancelButton, okButton, dialog.MinHeight);
         AttachProtectionDialogInitialFocus(dialog, passwordBox);
         await dialog.ShowDialog(this);
     }
@@ -525,6 +537,37 @@ public sealed partial class MainWindow
         foreach (var child in bodyChildren)
             root.Children.Add(child);
         root.Children.Add(buttonRow);
+        return root;
+    }
+
+    /// <summary>
+    /// <see cref="ProtectionDialogLayout(Controls, Button, Button)"/> for a window whose client height
+    /// may not drop below <paramref name="clientMinHeight"/>: the height the minimum adds collects
+    /// below the buttons, as in WPF.
+    /// </summary>
+    private static Grid ProtectionDialogLayout(
+        Controls bodyChildren,
+        Button cancelButton,
+        Button okButton,
+        double clientMinHeight)
+    {
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 12, 0, 0));
+        const double rootMargin = 12;
+        var root = new Grid
+        {
+            Margin = new Thickness(rootMargin),
+            MinHeight = Math.Max(0, clientMinHeight - (2 * rootMargin)),
+        };
+
+        var rows = new List<Control>(bodyChildren) { buttonRow };
+        for (var i = 0; i < rows.Count; i++)
+        {
+            root.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            Grid.SetRow(rows[i], i);
+            root.Children.Add(rows[i]);
+        }
+
+        root.RowDefinitions.Add(new RowDefinition(GridLength.Star));
         return root;
     }
 

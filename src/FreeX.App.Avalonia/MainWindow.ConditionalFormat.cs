@@ -470,7 +470,33 @@ public sealed partial class MainWindow
             // removes the stray empty Preset dropdown that otherwise showed for every rule type.
             presetField.IsVisible = ruleType
                 is CfRuleType.IconSet or CfRuleType.DataBar or CfRuleType.ColorScale;
+            SyncPresetToRuleType(ruleType);
             errorText.IsVisible = false;
+        }
+
+        // The visible preset row names the preset of the selected visual family instead of
+        // standing empty. Showing it does not apply it: the editor keeps its (seeded) values.
+        var syncingPreset = false;
+        void SyncPresetToRuleType(CfRuleType ruleType)
+        {
+            ConditionalFormatPreset? familyPreset = ruleType switch
+            {
+                CfRuleType.DataBar => ConditionalFormatPreset.DataBar,
+                CfRuleType.ColorScale => ConditionalFormatPreset.ColorScale,
+                CfRuleType.IconSet => ConditionalFormatPreset.IconSet,
+                _ => null,
+            };
+            if (familyPreset is not { } preset ||
+                (presetBox.SelectedIndex >= 0 &&
+                 ConditionalFormatPresetFactory.BuildInput(ConditionalFormatPresetChoices[presetBox.SelectedIndex].Preset).RuleType == ruleType))
+            {
+                return;
+            }
+
+            var index = ConditionalFormatPresetChoices.ToList().FindIndex(choice => choice.Preset == preset);
+            syncingPreset = true;
+            try { presetBox.SelectedIndex = index; }
+            finally { syncingPreset = false; }
         }
 
         ruleTypeBox.SelectionChanged += (_, _) => UpdateFieldVisibility();
@@ -479,7 +505,7 @@ public sealed partial class MainWindow
 
         presetBox.SelectionChanged += (_, _) =>
         {
-            if (presetBox.SelectedIndex < 0)
+            if (syncingPreset || presetBox.SelectedIndex < 0)
                 return;
 
             var preset = ConditionalFormatPresetChoices[presetBox.SelectedIndex].Preset;
@@ -726,6 +752,11 @@ public sealed partial class MainWindow
                 rightColumn,
             },
         };
+        // The WPF capture manifest normalises the 650x371 parity window to the 634x334 client area
+        // (RuleEditorCaptureWidth/Height), so 334 is a client height. SizeToContent sizes the window
+        // from its content and does not honour the window MinHeight, so the content carries the
+        // floor; the docked button row then sits at the WPF position for the shorter rule types.
+        root.MinHeight = Math.Max(0, ConditionalFormatDialogCatalog.RuleEditorCaptureHeight - root.Margin.Top - root.Margin.Bottom);
         ConfigureDialogTabCycle(dialog, root);
         ConfigureNativeDialogInitialFocus(dialog, root, ruleTypeBox);
         dialog.Content = root;

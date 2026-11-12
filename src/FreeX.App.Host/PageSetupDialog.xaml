@@ -28,8 +28,13 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <Label Grid.Row="0" Grid.Column="0" Content="{local:Loc Key=PageSetup_Orientation}" Target="{Binding ElementName=OrientationBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                    <ComboBox x:Name="OrientationBox" Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"/>
+                    <Label Grid.Row="0" Grid.Column="0" Content="{local:Loc Key=PageSetup_Orientation}" Target="{Binding ElementName=PortraitRadioButton}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <StackPanel x:Name="OrientationChoicesPanel" Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,8">
+                        <RadioButton x:Name="PortraitRadioButton" GroupName="PageSetupOrientation" Content="{local:Loc Key=PageSetup_Portrait}" Margin="0,0,24,0"
+                                     AutomationProperties.AutomationId="PageSetupPortraitRadio"/>
+                        <RadioButton x:Name="LandscapeRadioButton" GroupName="PageSetupOrientation" Content="{local:Loc Key=PageSetup_Landscape}"
+                                     AutomationProperties.AutomationId="PageSetupLandscapeRadio"/>
+                    </StackPanel>
 
                     <Label Grid.Row="1" Grid.Column="0" Content="{local:Loc Key=PageSetup_PaperSize}" Target="{Binding ElementName=PaperSizeBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
                     <ComboBox x:Name="PaperSizeBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"/>
@@ -203,8 +208,13 @@
                             AutomationProperties.HelpText="{local:Loc Key=PageSetup_SelectColumnsToRepeatHelpText}"/>
                     <CheckBox x:Name="PrintGridlinesBox" Grid.Row="3" Grid.Column="1" Content="{local:Loc Key=PageSetup_PrintGridlines}" Margin="0,0,0,8"/>
                     <CheckBox x:Name="PrintHeadingsBox" Grid.Row="4" Grid.Column="1" Content="{local:Loc Key=PageSetup_PrintRowAndColumnHeadings}" Margin="0,0,0,8"/>
-                    <Label Grid.Row="5" Grid.Column="0" Content="{local:Loc Key=PageSetup_PageOrder}" Target="{Binding ElementName=PageOrderBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <ComboBox x:Name="PageOrderBox" Grid.Row="5" Grid.Column="1"/>
+                    <Label Grid.Row="5" Grid.Column="0" Content="{local:Loc Key=PageSetup_PageOrder}" Target="{Binding ElementName=DownThenOverRadioButton}" Padding="0" VerticalAlignment="Top" Margin="0,0,8,0"/>
+                    <StackPanel x:Name="PageOrderChoicesPanel" Grid.Row="5" Grid.Column="1">
+                        <RadioButton x:Name="DownThenOverRadioButton" GroupName="PageSetupPageOrder" Content="{local:Loc Key=PageSetup_DownThenOver}" Margin="0,0,0,4"
+                                     AutomationProperties.AutomationId="PageSetupDownThenOverRadio"/>
+                        <RadioButton x:Name="OverThenDownRadioButton" GroupName="PageSetupPageOrder" Content="{local:Loc Key=PageSetup_OverThenDown}"
+                                     AutomationProperties.AutomationId="PageSetupOverThenDownRadio"/>
+                    </StackPanel>
                     <CheckBox x:Name="PrintBlackAndWhiteBox" Grid.Row="6" Grid.Column="1" Content="{local:Loc Key=PageSetup_BlackAndWhite}" Margin="0,8,0,8"/>
                     <CheckBox x:Name="PrintDraftQualityBox" Grid.Row="7" Grid.Column="1" Content="{local:Loc Key=PageSetup_DraftQuality}"/>
                     <Label Grid.Row="8" Grid.Column="0" Content="{local:Loc Key=PageSetup_CellErrorsAs}" Target="{Binding ElementName=PrintErrorValueBox}" Padding="0" VerticalAlignment="Center" Margin="0,8,8,0"/>

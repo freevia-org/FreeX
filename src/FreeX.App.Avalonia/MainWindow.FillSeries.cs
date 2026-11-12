@@ -268,6 +268,7 @@ public sealed partial class MainWindow
             },
         };
 
+        dialog.Opened += (_, _) => columnsButton.Focus();
         await dialog.ShowDialog(this);
     }
 

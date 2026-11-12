@@ -168,6 +168,9 @@ internal sealed class FormatCellsFillEditor
 
         FillPatternStyleBox.Width = double.NaN;
         FillPatternStyleBox.MinWidth = 0;
+        FillPatternStyleBox.Height = FillWpfPatternStyleBoxHeight;
+        FillPatternStyleBox.MinHeight = FillWpfPatternStyleBoxHeight;
+        FillPatternStyleBox.MaxHeight = FillWpfPatternStyleBoxHeight;
         ClearFillCheckBox.Margin = new Thickness(0, 12, 0, 0);
         var patternStyleField = new StackPanel
         {
@@ -335,6 +338,13 @@ internal sealed class FormatCellsFillEditor
         return row;
     }
 
+    // WPF FormatCellsDialog.xaml (Fill tab): a TextBlock or zero-padding Label at the 12px dialog
+    // font is one 16px text line. Avalonia's line box at this font is shorter, so each heading and
+    // label lifted everything below it; four of them put the pattern-style block about 11px high.
+    private const double FillWpfTextLineHeight = 16;
+    // FormatCellsDialog.xaml: DlgFillPatternStyleBox Height="24".
+    private const double FillWpfPatternStyleBoxHeight = 24;
+
     /// <summary>A semi-bold section heading (WPF TextBlock FontWeight=SemiBold).</summary>
     private static TextBlock CreateHeading(string text, Thickness margin) =>
         new()
@@ -342,6 +352,8 @@ internal sealed class FormatCellsFillEditor
             Text = StripMnemonic(text),
             FontWeight = FontWeight.SemiBold,
             Margin = margin,
+            MinHeight = FillWpfTextLineHeight,
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
         };
 
     /// <summary>A regular-weight field label (WPF Label with zero padding).</summary>
@@ -350,6 +362,8 @@ internal sealed class FormatCellsFillEditor
         {
             Text = StripMnemonic(text),
             Margin = margin,
+            MinHeight = FillWpfTextLineHeight,
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
         };
 
     public bool TryCommitInput(out string message, out Control? invalidControl)

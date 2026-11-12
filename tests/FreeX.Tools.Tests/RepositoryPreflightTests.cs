@@ -3,6 +3,7 @@ using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
 
+[Collection(ToolsTestCollections.GeneratedDocsBuild)]
 public sealed class RepositoryPreflightTests
 {
     [Fact]

@@ -126,7 +126,9 @@ public sealed class Wave150PrintPreviewSelectionParityTests
 
                 var setup = window.OwnedWindows.Single(window =>
                     AutomationProperties.GetAutomationId(window) == PageSetupDialogPlanner.DialogAutomationId);
-                FindComboBox(setup, PageSetupDialogPlanner.OrientationBoxAutomationId).SelectedIndex = 1;
+                setup.GetVisualDescendants().OfType<RadioButton>()
+                    .Single(radio => AutomationProperties.GetAutomationId(radio) == PageSetupDialogPlanner.LandscapeRadioAutomationId)
+                    .IsChecked = true;
                 FindButton(setup, PageSetupDialogPlanner.OkButtonAutomationId).RaiseEvent(
                     new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                 await DrainInputAsync();
