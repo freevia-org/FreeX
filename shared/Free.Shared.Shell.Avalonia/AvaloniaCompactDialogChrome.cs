@@ -934,11 +934,13 @@ public static class AvaloniaCompactDialogChrome
         var palette = DefaultComboBoxPalette;
         if (fixedHeight)
         {
-            var height = style.ComboBoxHeight
-                ?? (palette?.Height is { } productHeight
-                    && style.ControlHeight == CompactDialogVisualTokens.ControlHeight
-                        ? productHeight
-                        : style.ControlHeight);
+            var height = style.ComboBoxHeight ?? style.ControlHeight;
+            if (style.ComboBoxHeight is null
+                && palette?.Height is { } productHeight
+                && style.ControlHeight == CompactDialogVisualTokens.ControlHeight)
+            {
+                height = productHeight;
+            }
             comboBox.Height = height;
             comboBox.MinHeight = height;
             comboBox.MaxHeight = height;
