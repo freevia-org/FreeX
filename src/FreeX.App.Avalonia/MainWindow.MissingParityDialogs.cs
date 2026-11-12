@@ -102,8 +102,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(gallery, UiText.Get("ChartStyle_GalleryAutomationName"));
 
         var dialog = NewChartDialog(UiText.Get("ChartStyle_Title"), "ChartStyleDialog");
-        dialog.Width = 480;
-        dialog.Height = 350;
+        // WPF ChartStyleDialog is a 480x350 NoResize window: an OUTER size, so the Avalonia client
+        // area drops the WPF frame.
+        dialog.Width = 480 - WpfNoResizeFrameWidth;
+        dialog.Height = 350 - WpfNoResizeClientFrameHeight;
         dialog.SizeToContent = SizeToContent.Manual;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartStyle");
@@ -283,8 +285,10 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("FormatPicture_Title"),
-            Width = 360,
-            Height = 270,
+            // WPF HeaderFooterPictureFormatDialog is a 360x270 NoResize window: an OUTER size, so the
+            // Avalonia client area drops the WPF frame.
+            Width = 360 - WpfNoResizeFrameWidth,
+            Height = 270 - WpfNoResizeClientFrameHeight,
             CanResize = false,
             Background = Brushes.White,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -309,6 +313,9 @@ public sealed partial class MainWindow
                     out var invalidField))
             {
                 warning.IsVisible = true;
+                // The client area just holds the fields and buttons; let the window grow by the
+                // warning row instead of pushing OK / Cancel past its bottom edge.
+                dialog.SizeToContent = SizeToContent.Height;
                 var invalidBox = invalidField == ObjectSizeDialogField.Width ? widthBox : heightBox;
                 invalidBox.Focus();
                 invalidBox.SelectAll();
@@ -321,9 +328,8 @@ public sealed partial class MainWindow
 
         // WPF HeaderFooterPictureFormatDialog.CreateContent: 16px root margin, the file name 12px above
         // the first label, each label 4px above its box, boxes 8px apart, a left-aligned 72px Reset
-        // button with an (0, 8, 0, 12) margin, then OK/Cancel. The window keeps the WPF 360x270 as its
-        // client size (the Avalonia controls are taller per row than the WPF ones, so the content
-        // would not fit the 241px the WPF client area leaves).
+        // button with an (0, 8, 0, 12) margin, then OK/Cancel, all inside the 344x231 client area
+        // the WPF window leaves.
         TextBlock CreateFieldLabel(string resourceKey)
         {
             var label = CreateMissingParityLabel(UiText.Get(resourceKey));

@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Layout;
 using Avalonia.LogicalTree;
@@ -71,34 +72,224 @@ internal static class ClassicScrollBarChrome
 {
     public const double BarThickness = 17;
 
-    private static readonly IBrush Track = new ImmutableSolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0));
-    private static readonly IBrush Thumb = new ImmutableSolidColorBrush(Color.FromRgb(0xCD, 0xCD, 0xCD));
-    private static readonly IBrush ThumbHover = new ImmutableSolidColorBrush(Color.FromRgb(0xA6, 0xA6, 0xA6));
-    private static readonly IBrush ThumbPressed = new ImmutableSolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60));
-    private static readonly IBrush Glyph = new ImmutableSolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60));
-    private static readonly IBrush ButtonHover = new ImmutableSolidColorBrush(Color.FromRgb(0xDA, 0xDA, 0xDA));
+    private static readonly IBrush TrackFill = new ImmutableSolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0));
+    private static readonly IBrush ThumbFill = new ImmutableSolidColorBrush(Color.FromRgb(0xCD, 0xCD, 0xCD));
+    private static readonly IBrush ThumbHoverFill = new ImmutableSolidColorBrush(Color.FromRgb(0xA6, 0xA6, 0xA6));
+    private static readonly IBrush ThumbPressedFill = new ImmutableSolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60));
+    private static readonly IBrush GlyphInk = new ImmutableSolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60));
+    private static readonly IBrush ButtonHoverFill = new ImmutableSolidColorBrush(Color.FromRgb(0xDA, 0xDA, 0xDA));
 
     public static void ApplyResources(IResourceDictionary resources)
     {
         resources["ScrollBarSize"] = BarThickness;
-        resources["ScrollBarBackground"] = Track;
-        resources["ScrollBarBackgroundPointerOver"] = Track;
-        resources["ScrollBarTrackFill"] = Track;
-        resources["ScrollBarTrackFillPointerOver"] = Track;
+        resources["ScrollBarBackground"] = TrackFill;
+        resources["ScrollBarBackgroundPointerOver"] = TrackFill;
+        resources["ScrollBarTrackFill"] = TrackFill;
+        resources["ScrollBarTrackFillPointerOver"] = TrackFill;
         resources["ScrollBarTrackStroke"] = Brushes.Transparent;
         resources["ScrollBarTrackStrokePointerOver"] = Brushes.Transparent;
-        resources["ScrollBarPanningThumbBackground"] = Thumb;
-        resources["ScrollBarThumbFillPointerOver"] = ThumbHover;
-        resources["ScrollBarThumbFillPressed"] = ThumbPressed;
-        resources["ScrollBarButtonBackground"] = Track;
-        resources["ScrollBarButtonBackgroundPointerOver"] = ButtonHover;
-        resources["ScrollBarButtonBackgroundPressed"] = ThumbPressed;
-        resources["ScrollBarButtonArrowForeground"] = Glyph;
+        resources["ScrollBarPanningThumbBackground"] = ThumbFill;
+        resources["ScrollBarThumbFillPointerOver"] = ThumbHoverFill;
+        resources["ScrollBarThumbFillPressed"] = ThumbPressedFill;
+        resources["ScrollBarButtonBackground"] = TrackFill;
+        resources["ScrollBarButtonBackgroundPointerOver"] = ButtonHoverFill;
+        resources["ScrollBarButtonBackgroundPressed"] = ThumbPressedFill;
+        resources["ScrollBarButtonArrowForeground"] = GlyphInk;
         resources["ScrollBarButtonArrowForegroundPointerOver"] = Brushes.Black;
         resources["ScrollBarButtonArrowForegroundPressed"] = Brushes.White;
         // The corner where a vertical and a horizontal bar meet takes the track colour too.
-        resources["ScrollViewerScrollBarsSeparatorBackground"] = Track;
+        resources["ScrollViewerScrollBarsSeparatorBackground"] = TrackFill;
     }
+
+    // The WPF disabled arrow glyph.
+    private static readonly IBrush DisabledGlyph = new ImmutableSolidColorBrush(Color.FromRgb(0xBF, 0xBF, 0xBF));
+    // The thumb leaves one track pixel on each side, as the WPF thumb does (15 px of a 17 px bar).
+    private const double ThumbInset = 1;
+    private const double MinimumThumbLength = 8;
+
+    /// <summary>
+    /// Restyles every scroll bar of a dialog with <see cref="ClassicTemplate"/>. Fluent's bar is a
+    /// collapsed 2 px line that animates to full width (and fades its arrows in) only while it is
+    /// expanded, so a capture or a bar whose owner turned auto-hide off late showed a 2–6 px thumb
+    /// without arrows; the classic bar has no collapsed state and no animation.
+    /// </summary>
+    public static IStyle CreateDialogScrollBarStyle() => new Style(x => x.OfType<ScrollBar>())
+    {
+        Setters =
+        {
+            new Setter(TemplatedControl.TemplateProperty, ClassicTemplate),
+            new Setter(TemplatedControl.BackgroundProperty, TrackFill),
+        },
+    };
+
+    /// <summary>
+    /// The WPF classic bar: a 17 px track, square arrow buttons at both ends and a full-width
+    /// thumb, always drawn at full size. The parts keep the names <see cref="ScrollBar"/> looks
+    /// up, and their look is set on the parts themselves so the platform theme's collapsed-state
+    /// rules for the same names cannot shrink or hide them.
+    /// </summary>
+    private static readonly FuncControlTemplate<ScrollBar> ClassicTemplate = new((scrollBar, nameScope) =>
+    {
+        var vertical = scrollBar.Orientation == Orientation.Vertical;
+
+        var lineUp = CreateLineButton("PART_LineUpButton", vertical ? "M 0,4 L 3.5,0 L 7,4 Z" : "M 4,0 L 4,7 L 0,3.5 Z");
+        var lineDown = CreateLineButton("PART_LineDownButton", vertical ? "M 0,0 L 7,0 L 3.5,4 Z" : "M 0,0 L 4,3.5 L 0,7 Z");
+        var pageUp = CreatePageButton("PART_PageUpButton");
+        var pageDown = CreatePageButton("PART_PageDownButton");
+
+        var thumb = new Thumb
+        {
+            Template = new FuncControlTemplate<Thumb>((owner, _) =>
+            {
+                var face = new Border();
+                face.Bind(Border.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = owner });
+                return face;
+            }),
+            Margin = vertical ? new Thickness(ThumbInset, 0) : new Thickness(0, ThumbInset),
+            Width = double.NaN,
+            Height = double.NaN,
+            MinWidth = vertical ? 0 : MinimumThumbLength,
+            MinHeight = vertical ? MinimumThumbLength : 0,
+            Opacity = 1,
+            RenderTransform = null,
+            Transitions = null,
+        };
+        thumb.Styles.Add(new Style(x => x.OfType<Thumb>())
+        {
+            Setters = { new Setter(TemplatedControl.BackgroundProperty, ThumbFill) },
+        });
+        thumb.Styles.Add(new Style(x => x.OfType<Thumb>().Class(":pointerover"))
+        {
+            Setters = { new Setter(TemplatedControl.BackgroundProperty, ThumbHoverFill) },
+        });
+        thumb.Styles.Add(new Style(x => x.OfType<Thumb>().Class(":pressed"))
+        {
+            Setters = { new Setter(TemplatedControl.BackgroundProperty, ThumbPressedFill) },
+        });
+
+        var track = new Track
+        {
+            Name = "PART_Track",
+            Orientation = vertical ? Orientation.Vertical : Orientation.Horizontal,
+            // A vertical track runs bottom-up unless reversed; the bar's minimum is at the top.
+            IsDirectionReversed = vertical,
+            Thumb = thumb,
+            DecreaseButton = pageUp,
+            IncreaseButton = pageDown,
+        };
+        track.Bind(Track.MinimumProperty, new Binding(nameof(RangeBase.Minimum)) { Source = scrollBar });
+        track.Bind(Track.MaximumProperty, new Binding(nameof(RangeBase.Maximum)) { Source = scrollBar });
+        track.Bind(Track.ValueProperty, new Binding(nameof(RangeBase.Value)) { Source = scrollBar, Mode = BindingMode.TwoWay });
+        track.Bind(Track.ViewportSizeProperty, new Binding(nameof(ScrollBar.ViewportSize)) { Source = scrollBar });
+
+        nameScope.Register("PART_LineUpButton", lineUp);
+        nameScope.Register("PART_LineDownButton", lineDown);
+        nameScope.Register("PART_PageUpButton", pageUp);
+        nameScope.Register("PART_PageDownButton", pageDown);
+        nameScope.Register("PART_Track", track);
+
+        var root = new Grid { Opacity = 1 };
+        root.Bind(Panel.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = scrollBar });
+        if (vertical)
+        {
+            root.Width = BarThickness;
+            root.RowDefinitions = new RowDefinitions($"{BarThickness},*,{BarThickness}");
+            Grid.SetRow(lineUp, 0);
+            Grid.SetRow(track, 1);
+            Grid.SetRow(lineDown, 2);
+        }
+        else
+        {
+            root.Height = BarThickness;
+            root.ColumnDefinitions = new ColumnDefinitions($"{BarThickness},*,{BarThickness}");
+            Grid.SetColumn(lineUp, 0);
+            Grid.SetColumn(track, 1);
+            Grid.SetColumn(lineDown, 2);
+        }
+
+        root.Children.Add(lineUp);
+        root.Children.Add(track);
+        root.Children.Add(lineDown);
+        return root;
+    });
+
+    private static RepeatButton CreateLineButton(string name, string glyphData)
+    {
+        var button = new RepeatButton
+        {
+            Name = name,
+            Focusable = false,
+            Width = BarThickness,
+            Height = BarThickness,
+            MinWidth = 0,
+            MinHeight = 0,
+            Padding = default,
+            Opacity = 1,
+            IsVisible = true,
+            Transitions = null,
+            Template = new FuncControlTemplate<RepeatButton>((owner, _) =>
+            {
+                var glyph = new global::Avalonia.Controls.Shapes.Path
+                {
+                    Data = Geometry.Parse(glyphData),
+                    Stretch = Stretch.None,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                glyph.Bind(global::Avalonia.Controls.Shapes.Shape.FillProperty, new Binding(nameof(TemplatedControl.Foreground)) { Source = owner });
+                var face = new Border { Child = glyph };
+                face.Bind(Border.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = owner });
+                return face;
+            }),
+        };
+        button.Styles.Add(new Style(x => x.OfType<RepeatButton>())
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.BackgroundProperty, TrackFill),
+                new Setter(TemplatedControl.ForegroundProperty, GlyphInk),
+            },
+        });
+        button.Styles.Add(new Style(x => x.OfType<RepeatButton>().Class(":pointerover"))
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.BackgroundProperty, ButtonHoverFill),
+                new Setter(TemplatedControl.ForegroundProperty, Brushes.Black),
+            },
+        });
+        button.Styles.Add(new Style(x => x.OfType<RepeatButton>().Class(":pressed"))
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.BackgroundProperty, ThumbPressedFill),
+                new Setter(TemplatedControl.ForegroundProperty, Brushes.White),
+            },
+        });
+        button.Styles.Add(new Style(x => x.OfType<RepeatButton>().Class(":disabled"))
+        {
+            Setters = { new Setter(TemplatedControl.ForegroundProperty, DisabledGlyph) },
+        });
+        return button;
+    }
+
+    // The track either side of the thumb: transparent (the bar's track shows through) but hit-testable.
+    private static RepeatButton CreatePageButton(string name) => new()
+    {
+        Name = name,
+        Focusable = false,
+        MinWidth = 0,
+        MinHeight = 0,
+        Opacity = 1,
+        Transitions = null,
+        Background = Brushes.Transparent,
+        Template = new FuncControlTemplate<RepeatButton>((owner, _) =>
+        {
+            var face = new Border();
+            face.Bind(Border.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = owner });
+            return face;
+        }),
+    };
 }
 
 /// <summary>
@@ -172,6 +363,33 @@ internal static class DialogWindowDefaults
     /// </summary>
     internal const string DefaultButtonCueClass = "freex-dialog-default-button";
 
+    // WPF dialogs whose XAML gives every push button an explicit height (OptionsDialog.xaml: 26).
+    private static readonly Dictionary<string, double> ExplicitWpfButtonHeights = new(StringComparer.Ordinal)
+    {
+        ["OptionsDialog"] = global::Free.Shared.Shell.CompactDialogVisualTokens.ButtonHeight,
+    };
+
+    // Format Cells sets 24 px OK/Cancel and 28 px border presets in WPF; its route-helper 26 px
+    // buttons are the nearer match and its layout was measured with them.
+    private static readonly HashSet<string> KeptRouteButtonHeightDialogs = new(StringComparer.Ordinal)
+    {
+        "FormatCellsCompactDialog",
+    };
+
+    // The Go To dialog style fixes its buttons at 24 px; the WPF Go To buttons are default buttons.
+    private const double GoToDialogButtonHeight = 24;
+    private static readonly HashSet<string> GoToDialogButtonIds = new(StringComparer.Ordinal)
+    {
+        "GoToSpecialButton",
+        "GoToReferenceBoxAcceptButton",
+        "GoToReferenceBoxCancelButton",
+    };
+
+    // Range-picker and glyph buttons size themselves to the field beside them.
+    private const double MinimumNormalizedButtonWidth = 40;
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Window, Action> DefaultButtonCueRefreshers = new();
+
     private static bool _installed;
 
     public static void Install()
@@ -227,6 +445,11 @@ internal static class DialogWindowDefaults
         // such as the per-level combos of a sort list) still carry Fluent's white face and large
         // chevron. Each one gets the shared compact combo once it is loaded inside a dialog.
         Control.LoadedEvent.AddClassHandler<ComboBox>((comboBox, _) => QueueDialogComboBoxChrome(comboBox));
+
+        // Buttons a dialog builds after it got its owner (pages built on demand) and default
+        // buttons chosen after it opened (wizard steps) get the same height and default cue.
+        Control.LoadedEvent.AddClassHandler<Button>((button, _) => NormalizeLoadedPushButtonHeight(button));
+        Button.IsDefaultProperty.Changed.AddClassHandler<Button>((button, _) => OnIsDefaultChanged(button));
     }
 
     private static IBrush VerticalGradient(byte r1, byte g1, byte b1, byte r2, byte g2, byte b2) =>
@@ -301,6 +524,7 @@ internal static class DialogWindowDefaults
                     break;
                 case Button button:
                     ApplyPushButtonFace(button);
+                    NormalizePushButtonHeight(dialog, button);
                     break;
             }
         }
@@ -309,58 +533,157 @@ internal static class DialogWindowDefaults
         // is attached after the dialog's own, so it also sees the shared descendant chrome pass.
         dialog.Opened += (_, _) =>
         {
-            var buttons = dialog.GetLogicalDescendants().OfType<Button>().ToArray();
-            foreach (var button in buttons)
+            foreach (var button in dialog.GetLogicalDescendants().OfType<Button>().ToArray())
                 FitCaption(button);
 
-            InstallDefaultButtonCue(dialog, buttons);
+            InstallDefaultButtonCue(dialog);
         };
     }
 
     /// <summary>
-    /// WPF draws the default button's blue frame only while it is defaulted, that is while the
-    /// keyboard focus is inside the dialog on a control that does not take Enter itself (no push
-    /// button, toggle or multi-line text box, the default button included). With the focus on a
-    /// button, or nowhere, every button keeps the neutral frame.
+    /// Brings a push button to the height its WPF counterpart has. WPF dialog buttons are default
+    /// WPF buttons (one caption line, <see cref="PushButtonHeight"/>) unless the dialog's XAML
+    /// gives them a height:
+    /// <list type="bullet">
+    ///   <item>route-helper buttons (a fixed height, minimum and maximum all at the shared 26 px
+    ///   token, without the shared compact chrome that already applies the product height), and
+    ///   the Go To buttons whose dialog style fixes 24 px, take the WPF default;</item>
+    ///   <item>dialogs whose WPF buttons carry an explicit height get it back where the product
+    ///   height replaced the shared token (<see cref="ExplicitWpfButtonHeights"/>);</item>
+    ///   <item>dialogs listed in <see cref="KeptRouteButtonHeightDialogs"/>, narrow picker and
+    ///   glyph buttons, and buttons without a text caption keep what they have.</item>
+    /// </list>
+    /// Runs when the dialog gets its owner and again for buttons loaded later; it is idempotent.
     /// </summary>
-    private static void InstallDefaultButtonCue(Window dialog, IReadOnlyList<Button> buttons)
+    private static void NormalizePushButtonHeight(Window dialog, Button button)
     {
-        var defaultButtons = buttons
-            .Where(button => button.IsDefault || button.Classes.Contains(DefaultButtonCueClass))
-            .ToArray();
-        if (defaultButtons.Length == 0)
+        if (button.GetType() != typeof(Button) || string.IsNullOrEmpty(CaptionOf(button)))
+            return;
+        if (!HasLocalValue(button, Layoutable.HeightProperty))
+            return;
+        if (!double.IsNaN(button.Width) && button.Width < MinimumNormalizedButtonWidth)
             return;
 
-        foreach (var button in defaultButtons)
+        var height = button.Height;
+        var dialogId = AutomationProperties.GetAutomationId(dialog) ?? string.Empty;
+        var hasSharedChrome = button.Classes.Contains(AvaloniaCompactDialogChrome.CompactButtonClass);
+        double target;
+        if (ExplicitWpfButtonHeights.TryGetValue(dialogId, out var wpfHeight))
         {
-            // Appended after every style the chrome helpers added, so these decide the resting
-            // frame; hover, pressed and disabled keep their own frames.
-            button.Styles.Add(new Style(x => RestingButton(x.OfType<Button>()))
-            {
-                Setters = { new Setter(TemplatedControl.BorderBrushProperty, ButtonBorder) },
-            });
-            button.Styles.Add(new Style(x => RestingButton(x.OfType<Button>().Class(DefaultedButtonClass)))
-            {
-                Setters = { new Setter(TemplatedControl.BorderBrushProperty, DefaultButtonBorder) },
-            });
+            if (!hasSharedChrome || height != PushButtonHeight)
+                return;
+            target = wpfHeight;
         }
+        else if (KeptRouteButtonHeightDialogs.Contains(dialogId))
+        {
+            return;
+        }
+        else if (height == global::Free.Shared.Shell.CompactDialogVisualTokens.ButtonHeight
+            && !hasSharedChrome
+            && button.MinHeight == height
+            && button.MaxHeight == height)
+        {
+            target = PushButtonHeight;
+        }
+        else if (height == GoToDialogButtonHeight
+            && GoToDialogButtonIds.Contains(AutomationProperties.GetAutomationId(button) ?? string.Empty))
+        {
+            target = PushButtonHeight;
+        }
+        else
+        {
+            return;
+        }
+
+        button.Height = target;
+        button.MinHeight = target;
+        button.MaxHeight = target;
+        if (target < height)
+        {
+            // One caption line plus the 1 px WPF padding has to fit the shorter frame.
+            var padding = button.Padding;
+            button.Padding = new Thickness(
+                padding.Left,
+                Math.Min(padding.Top, 1),
+                padding.Right,
+                Math.Min(padding.Bottom, 1));
+        }
+    }
+
+    private static void NormalizeLoadedPushButtonHeight(Button button)
+    {
+        if (TopLevel.GetTopLevel(button) is Window { } dialog && dialog.Classes.Contains(DialogWindowClass))
+            NormalizePushButtonHeight(dialog, button);
+    }
+
+    /// <summary>
+    /// WPF draws the default button's blue frame while it is defaulted (Button.IsDefaulted): the
+    /// dialog's keyboard focus is on the window itself or on a control that does not take Enter.
+    /// Only a push button (the default button included) and an editable multi-line text box take Enter; a
+    /// check box, radio button or toggle is not a WPF Button, so the cue stays while it has the
+    /// focus. A dialog whose focus is nowhere (not activated yet, or captured unfocused) keeps the
+    /// cue as well, as the WPF window then holds its own focus. The default button is found again
+    /// on every update, so a button made default after the dialog opened (wizard steps, rows
+    /// added later) gets the cue too.
+    /// </summary>
+    private static void InstallDefaultButtonCue(Window dialog)
+    {
+        var cued = new HashSet<Button>();
 
         void Update()
         {
             var focused = dialog.FocusManager?.GetFocusedElement();
-            var defaulted = focused is Visual focusedVisual
-                && (ReferenceEquals(focusedVisual, dialog) || dialog.IsVisualAncestorOf(focusedVisual))
-                && focused is not Button
-                && focused is not TextBox { AcceptsReturn: true };
-            foreach (var button in defaultButtons)
-                button.Classes.Set(DefaultedButtonClass, defaulted && button.IsEffectivelyEnabled);
+            var focusTakesEnter = focused is Visual focusedVisual
+                && !ReferenceEquals(focusedVisual, dialog)
+                && dialog.IsVisualAncestorOf(focusedVisual)
+                && TakesEnter(focused);
+            foreach (var button in dialog.GetLogicalDescendants().OfType<Button>())
+            {
+                var isDefault = button.IsDefault || button.Classes.Contains(DefaultButtonCueClass);
+                if (!isDefault && !cued.Contains(button))
+                    continue;
+                if (cued.Add(button))
+                    AddDefaultButtonCueStyles(button);
+                // The resting-frame styles skip a disabled button, so a disabled default button
+                // keeps the disabled frame whatever this class says.
+                button.Classes.Set(DefaultedButtonClass, isDefault && !focusTakesEnter);
+            }
         }
 
+        DefaultButtonCueRefreshers.AddOrUpdate(dialog, Update);
         dialog.AddHandler(global::Avalonia.Input.InputElement.GotFocusEvent, (_, _) => Update(), handledEventsToo: true);
         dialog.AddHandler(global::Avalonia.Input.InputElement.LostFocusEvent, (_, _) => Update(), handledEventsToo: true);
         Update();
         // Dialogs move the initial focus from their own Opened handlers or a posted callback.
         Dispatcher.UIThread.Post(Update, DispatcherPriority.Input);
+    }
+
+    private static void AddDefaultButtonCueStyles(Button button)
+    {
+        // Appended after every style the chrome helpers added, so these decide the resting frame;
+        // hover, pressed and disabled keep their own frames.
+        button.Styles.Add(new Style(x => RestingButton(x.OfType<Button>()))
+        {
+            Setters = { new Setter(TemplatedControl.BorderBrushProperty, ButtonBorder) },
+        });
+        button.Styles.Add(new Style(x => RestingButton(x.OfType<Button>().Class(DefaultedButtonClass)))
+        {
+            Setters = { new Setter(TemplatedControl.BorderBrushProperty, DefaultButtonBorder) },
+        });
+    }
+
+    // A read-only document box (About, licence text) lets Enter through to the default button.
+    private static bool TakesEnter(object focused) =>
+        focused is Button and not ToggleButton
+        || focused is TextBox { AcceptsReturn: true, IsReadOnly: false };
+
+    private static void OnIsDefaultChanged(Button button)
+    {
+        if (TopLevel.GetTopLevel(button) is Window { } dialog
+            && DefaultButtonCueRefreshers.TryGetValue(dialog, out var refresh))
+        {
+            refresh();
+        }
     }
 
     private static Selector RestingButton(Selector selector) =>
@@ -448,12 +771,11 @@ internal static class DialogWindowDefaults
                 },
             },
             // WPF scroll bars are classic, always-expanded bars beside the content, shown only
-            // while the content overflows. Fluent's auto-hiding bars collapse to a 2 px line laid
-            // over the content (over group-box frames, or as a stray line under a list) and only
-            // expand under the pointer; with auto-hide off they stay expanded and the scroll
-            // viewer reserves their lane. Templated scroll viewers (lists, multi-line text boxes)
-            // take the value from their owner, so the owners carry it. A single-line text box keeps
-            // the auto-hiding bar: a box shorter than its text line would otherwise show a full bar.
+            // while the content overflows. Every bar gets the classic template (no collapsed
+            // state, no animation); with auto-hide off the scroll viewer also reserves the bar's
+            // lane instead of laying the bar over the content. Templated scroll viewers (lists,
+            // multi-line text boxes) take the value from their owner, so the owners carry it.
+            ClassicScrollBarChrome.CreateDialogScrollBarStyle(),
             new Style(x => x.OfType<ScrollViewer>().Not(y => y.Name("PART_ScrollViewer")))
             {
                 Setters = { new Setter(ScrollViewer.AllowAutoHideProperty, false) },
@@ -477,6 +799,32 @@ internal static class DialogWindowDefaults
             {
                 Setters = { new Setter(ScrollViewer.AllowAutoHideProperty, false) },
             },
+            // A wrapping text box is multi-line too, whether or not it takes Enter.
+            WrappingTextBoxStyle(TextWrapping.Wrap, templatePart: false),
+            WrappingTextBoxStyle(TextWrapping.Wrap, templatePart: true),
+            WrappingTextBoxStyle(TextWrapping.WrapWithOverflow, templatePart: false),
+            WrappingTextBoxStyle(TextWrapping.WrapWithOverflow, templatePart: true),
+            // A single-line WPF text box hides its vertical bar. Its text line is often a pixel or
+            // two taller than a compact box's viewport, which made the bar "needed" and drew a
+            // 17 px track stub at the box's right end. The visibility reaches the template's
+            // scroll viewer through the box; the second rule hides the bars of a template that
+            // does not pass it on.
+            new Style(x => SingleLineTextBox(x))
+            {
+                Setters = { new Setter(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Hidden) },
+            },
+            new Style(x => SingleLineTextBox(x)
+                .Template()
+                .OfType<ScrollViewer>()
+                .Template()
+                .OfType<ScrollBar>())
+            {
+                Setters =
+                {
+                    new Setter(Visual.OpacityProperty, 0d),
+                    new Setter(global::Avalonia.Input.InputElement.IsHitTestVisibleProperty, false),
+                },
+            },
             // WPF greys a disabled text box (ink and frame) by drawing it at 0.56 opacity. The
             // editor inside an editable combo follows the combo's own disabled face instead.
             new Style(x => x.OfType<TextBox>().Class(":disabled"))
@@ -493,6 +841,20 @@ internal static class DialogWindowDefaults
         for (var index = 0; index < styles.Length; index++)
             dialog.Styles.Insert(index, styles[index]);
     }
+
+    private static Selector SingleLineTextBox(Selector? selector) =>
+        selector
+            .Is<TextBox>()
+            .PropertyEquals(TextBox.AcceptsReturnProperty, false)
+            .PropertyEquals(TextBox.TextWrappingProperty, TextWrapping.NoWrap);
+
+    private static Style WrappingTextBoxStyle(TextWrapping wrapping, bool templatePart) =>
+        new(x => templatePart
+            ? x.Is<TextBox>().PropertyEquals(TextBox.TextWrappingProperty, wrapping).Template().OfType<ScrollViewer>()
+            : x.Is<TextBox>().PropertyEquals(TextBox.TextWrappingProperty, wrapping))
+        {
+            Setters = { new Setter(ScrollViewer.AllowAutoHideProperty, false) },
+        };
 
     /// <summary>
     /// A group box no chrome helper touched still carries the theme's large caption and dark frame.

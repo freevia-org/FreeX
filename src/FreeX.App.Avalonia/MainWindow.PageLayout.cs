@@ -1577,8 +1577,10 @@ public sealed partial class MainWindow
 
         TextBox CreateEditor(HeaderFooterEditorTarget target, string text)
         {
-            var box = new TextBox { Text = text, MinHeight = 24 };
-            ApplyPageLayoutTextBoxChrome(box);
+            // HeaderFooterDialog.xaml leaves these TextBoxes at the WPF default height (18px at the
+            // 12px dialog font), like the Page Setup fields.
+            var box = new TextBox { Text = text };
+            ApplyPageSetupTextBoxChrome(box);
             AutomationProperties.SetAutomationId(box, $"HeaderFooter{target.Scope}{target.Section}Box");
             box.GotFocus += (_, _) =>
             {
@@ -1850,12 +1852,14 @@ public sealed partial class MainWindow
         };
 
         var tokenButtons = new WrapPanel { Orientation = Orientation.Horizontal };
+        // HeaderFooterDialog.xaml gives its buttons no Height: the WPF default at the 12px dialog
+        // font is 20px.
         void ApplyTokenButtonChrome(Button button, double minWidth)
         {
             ApplyPageLayoutButtonChrome(button, minWidth);
-            button.Height = 22;
-            button.MinHeight = 22;
-            button.MaxHeight = 22;
+            button.Height = 20;
+            button.MinHeight = 20;
+            button.MaxHeight = 20;
         }
         foreach (var token in new[]
         {
@@ -1990,12 +1994,12 @@ public sealed partial class MainWindow
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
         ApplyPageLayoutButtonChrome(okButton, 72, isDefault: true);
         ApplyPageLayoutButtonChrome(cancelButton, 72);
-        okButton.Height = 22;
-        okButton.MinHeight = 22;
-        okButton.MaxHeight = 22;
-        cancelButton.Height = 22;
-        cancelButton.MinHeight = 22;
-        cancelButton.MaxHeight = 22;
+        okButton.Height = 20;
+        okButton.MinHeight = 20;
+        okButton.MaxHeight = 20;
+        cancelButton.Height = 20;
+        cancelButton.MinHeight = 20;
+        cancelButton.MaxHeight = 20;
         AutomationProperties.SetAutomationId(okButton, "HeaderFooterEditorOkButton");
         AutomationProperties.SetAutomationId(cancelButton, "HeaderFooterEditorCancelButton");
 

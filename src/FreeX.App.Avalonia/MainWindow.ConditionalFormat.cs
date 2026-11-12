@@ -917,8 +917,10 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = title,
-            Width = 360,
-            Height = 180,
+            // WPF ConditionalFormatThresholdDialog is a 360x150 NoResize window: an OUTER size, so
+            // the Avalonia client area drops the WPF frame.
+            Width = 360 - WpfNoResizeFrameWidth,
+            Height = 150 - WpfNoResizeClientFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };

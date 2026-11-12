@@ -480,6 +480,10 @@ public sealed partial class MainWindow
             minWidth: 0);
         recentFilesPathBox.FontSize = 11;
         recentFilesPathBox.Foreground = Brush(102, 102, 102);
+        // WPF lays the box out in the star column right of the 230px label, so it ends at the page
+        // edge and scrolls a long path inside itself. The Avalonia box measured to the full path and
+        // widened that column past the page, which clipped its right border; cap it at the column.
+        recentFilesPathBox.MaxWidth = OptionsDialogPlanner.GeneralContentWidth - OptionsDialogPlanner.GeneralLabelWidth;
 
         var savePanel = OptionsCategoryPanel(
             OptionsSectionHeader(
@@ -902,11 +906,13 @@ public sealed partial class MainWindow
 
         var quickAccessGrid = new Grid
         {
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
             // WPF OptionsDialog.xaml: *,Auto,*,Auto with the button stacks carrying the 10px gaps,
-            // which resolves to the 128 / 112 / 127 / 102 split of the page. The grid stretches to
-            // the page width instead of a fixed 469px, one pixel wider than this viewport, which
-            // pushed the Move Up / Move Down / Reset column past the clip edge.
+            // which resolves to the 128 / 112 / 127 / 102 split of the page. Left to stretch, the
+            // star columns took the widths of their content (the right list grew to 154 px and
+            // pushed Move Up / Move Down / Reset past the page edge), so the grid is pinned to the
+            // page viewport width, which keeps both star columns equal as in WPF.
+            Width = OptionsDialogPlanner.GeneralContentWidth,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
             ColumnDefinitions = new ColumnDefinitions("*,Auto,*,Auto"),
             RowDefinitions = new RowDefinitions("Auto,Auto,180"),
         };

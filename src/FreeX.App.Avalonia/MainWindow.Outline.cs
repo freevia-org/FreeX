@@ -181,7 +181,9 @@ public sealed partial class MainWindow
         {
             Title = UiText.Get("OutlineSettings_Title"),
             Width = 320,
-            Height = 220,
+            // WPF ShowOutlineSettingsDialog sizes the window to its content height (SizeToContent),
+            // so the button row closes the dialog instead of floating above a blank band.
+            SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             CanResize = false,

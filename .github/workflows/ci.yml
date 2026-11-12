@@ -48,8 +48,61 @@ env:
   MSBUILDDISABLENODEREUSE: "1"
 
 jobs:
+  # Burst debounce. main takes roughly a commit a minute from parallel sessions, and every push
+  # used to start the full ~66 runner-minute matrix only to be cancelled by the next push (about
+  # 17% of ci.yml minutes). The concurrency group above already cancels a superseded push run
+  # (pending OR in progress), so the cheapest correct fix is to give the next push a short window
+  # to arrive BEFORE the expensive jobs start: `prepare` (and so the whole matrix) only begins
+  # after this job, and a newer push cancels this run while it sleeps.
+  #
+  # Safety: this adds no new outcome. A superseded commit ends up `cancelled`, exactly as it did
+  # before when the next push cancelled it mid-matrix, and the release-candidate resolver
+  # (tools/Resolve-GitHubReleaseCandidate.ps1) already skips any commit that lacks a successful
+  # ci.yml run and walks to the newest attested ancestor. Nothing here can turn a run green: the job
+  # has no outputs, `prepare` still decides coverage, and a newest commit is never cancelled by
+  # anyone, so it always runs the matrix it ran before.
+  #
+  # Latency: the wait is paid only when another push run was created on main within the last 5
+  # minutes (a burst); an isolated push, the daily schedule and workflow_dispatch skip it. Any API
+  # failure waits anyway (costs latency only).
+  debounce:
+    name: Debounce push burst
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Wait for a newer push when one is in flight
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEBOUNCE_SECONDS: "60"
+          BURST_WINDOW_SECONDS: "300"
+        run: |
+          $burst = $true
+          try {
+            $text = & gh api --method GET "repos/$env:GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" `
+              -f 'branch=main' -f 'event=push' -f 'per_page=10'
+            if ($LASTEXITCODE -ne 0) { throw 'gh api failed.' }
+            $cutoff = (Get-Date).ToUniversalTime().AddSeconds(-[int]$env:BURST_WINDOW_SECONDS)
+            $recent = @(($text | ConvertFrom-Json).workflow_runs |
+              Where-Object { [string]$_.id -ne $env:GITHUB_RUN_ID -and ([datetime]$_.created_at).ToUniversalTime() -gt $cutoff })
+            $burst = $recent.Count -gt 0
+            Write-Host "Other push runs created in the last $env:BURST_WINDOW_SECONDS s: $($recent.Count)."
+          }
+          catch {
+            Write-Host "Could not inspect recent runs ($($_.Exception.Message)); treating this push as part of a burst."
+          }
+          if ($burst) {
+            Write-Host "Burst: waiting $env:DEBOUNCE_SECONDS s so a newer push can cancel this run before the matrix starts."
+            Start-Sleep -Seconds ([int]$env:DEBOUNCE_SECONDS)
+          }
+          else {
+            Write-Host 'Isolated push: no wait.'
+          }
+
   prepare:
     name: Select test gates
+    needs: debounce
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:

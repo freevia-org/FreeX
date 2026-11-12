@@ -37,8 +37,8 @@ public sealed class MissingParityDialogsTests
     }
 
     [Theory]
-    [InlineData("dialog.ChartStyleDialog", "dialog.ChartStyle", 480, 350)]
-    [InlineData("dialog.HeaderFooterPictureFormatDialog", "dialog.HeaderFooterPictureFormat", 360, 270)]
+    [InlineData("dialog.ChartStyleDialog", "dialog.ChartStyle", 464, 311)]
+    [InlineData("dialog.HeaderFooterPictureFormatDialog", "dialog.HeaderFooterPictureFormat", 344, 231)]
     [InlineData("dialog.UnhideWindowDialog", "dialog.UnhideWindow", 340, 160)]
     public async Task CaptureParitySurfaces_OpensAndRendersFormerlyMissingProductionDialog(
         string catalogId,

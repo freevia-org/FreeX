@@ -150,8 +150,10 @@ public sealed record AvaloniaCompactDialogTabPalette(
 {
     /// <summary>
     /// How far the selected header's frame reaches above and beside its slot, as the WPF Aero2
-    /// selected tab does (2 px). The header strip keeps its height; the first header is inset by
-    /// the same amount so its raised frame stays on the pane's left edge. Zero keeps the flat look.
+    /// selected tab does (2 px). The header strip is inset by the same amount above and at both
+    /// sides (WPF's TabPanel inset), the strip is drawn over the pane so the selected header joins
+    /// it, and neighbouring headers keep their slots. Zero keeps the flat look and the platform
+    /// tab control template.
     /// </summary>
     public double SelectedTabRise { get; init; }
 }
@@ -1814,17 +1816,37 @@ public static class AvaloniaCompactDialogChrome
 
         var palette = DefaultTabPalette;
         var selectedTabRise = Math.Max(0, palette?.SelectedTabRise ?? 0);
+        var raisesSelectedTab = selectedTabRise > 0 && tabControl.TabStripPlacement == Dock.Top;
+        // A raised selected header reaches out by the rise on both sides and above the strip; inset
+        // the strip by the same amount on those sides so the raised frame stays inside the control
+        // and the first header's frame lands on the pane's left edge (WPF's TabPanel 2,2,2,0 inset).
+        var headerStripMargin = raisesSelectedTab
+            ? new Thickness(selectedTabRise, selectedTabRise, selectedTabRise, 0)
+            : new Thickness(0);
+        if (raisesSelectedTab)
+        {
+            // The platform template stacks the content pane over the header strip and reserves a
+            // selection-indicator row between them, so the selected header could neither cover the
+            // pane's top edge nor sit on it. This template keeps only the two required parts.
+            tabControl.Template = CreateRaisedHeaderTabControlTemplate(headerStripMargin);
+            // A negative top pane margin only compensated the platform template's taller header
+            // row; with that row gone it would slide the pane's top edge under the headers.
+            if (contentPaneMargin is { Top: < 0 } compensatedPaneMargin)
+            {
+                contentPaneMargin = new Thickness(
+                    compensatedPaneMargin.Left,
+                    0,
+                    compensatedPaneMargin.Right,
+                    compensatedPaneMargin.Bottom);
+            }
+        }
+
         var headerPresenterStyle = new Style(s => s
             .OfType<TabControl>()
             .Template()
             .OfType<ItemsPresenter>()
             .Name("PART_ItemsPresenter"));
-        // A raised selected header reaches out by the rise on both sides; inset the strip by the
-        // same amount so the first header's raised frame stays on the pane's left edge (WPF's
-        // TabPanel keeps the same side inset).
-        headerPresenterStyle.Setters.Add(new Setter(
-            Layoutable.MarginProperty,
-            new Thickness(selectedTabRise, 0, selectedTabRise, 0)));
+        headerPresenterStyle.Setters.Add(new Setter(Layoutable.MarginProperty, headerStripMargin));
         tabControl.Styles.Add(headerPresenterStyle);
 
         var contentPaneStyle = new Style(s => s
@@ -1909,6 +1931,11 @@ public static class AvaloniaCompactDialogChrome
         tabStyle.Setters.Add(new Setter(
             TabItem.MarginProperty,
             new Thickness(0, 0, -DialogTabChromeMetrics.AdjacentTabOverlap, 0)));
+        if (raisesSelectedTab)
+        {
+            // The raised frame is drawn above the header's own slot (see the template below).
+            tabStyle.Setters.Add(new Setter(Visual.ClipToBoundsProperty, false));
+        }
         tabControl.Styles.Add(tabStyle);
 
         var selectedTabStyle = new Style(s => s.OfType<TabItem>().Class(":selected"));
@@ -1921,13 +1948,22 @@ public static class AvaloniaCompactDialogChrome
                 DialogTabChromeMetrics.PaneBorderThickness,
                 DialogTabChromeMetrics.PaneBorderThickness,
                 0)));
+        // A raised selected header (WPF Aero2) widens by the rise on both sides, over the frames of
+        // its neighbours, through its own margins so the neighbours keep their slots and captions.
+        // It is bottom-aligned so a fixed header height still ends one pixel inside the pane, and
+        // its template draws the frame the rise (and that pixel) above its slot.
+        // The sideways part is not reproduced: tab captions here are narrower than Segoe UI's, so
+        // a 2 px overlap reached the neighbour's last letter.
+        var selectedSideMargin = 0d;
         selectedTabStyle.Setters.Add(new Setter(
             TabItem.MarginProperty,
             new Thickness(
+                selectedSideMargin,
                 0,
-                0,
-                -DialogTabChromeMetrics.AdjacentTabOverlap,
+                -DialogTabChromeMetrics.AdjacentTabOverlap + selectedSideMargin,
                 -DialogTabChromeMetrics.SelectedTabContentOverlap)));
+        if (raisesSelectedTab)
+            selectedTabStyle.Setters.Add(new Setter(Layoutable.VerticalAlignmentProperty, VerticalAlignment.Bottom));
         selectedTabStyle.Setters.Add(new Setter(TabItem.ZIndexProperty, 1));
         tabControl.Styles.Add(selectedTabStyle);
 
@@ -1959,15 +1995,24 @@ public static class AvaloniaCompactDialogChrome
             root.Bind(Border.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = tab });
             root.Bind(Border.BorderBrushProperty, new Binding(nameof(TemplatedControl.BorderBrush)) { Source = tab });
             root.Bind(Border.BorderThicknessProperty, new Binding(nameof(TemplatedControl.BorderThickness)) { Source = tab });
-            if (selectedTabRise > 0)
+            if (raisesSelectedTab)
             {
-                // WPF raises the selected header's frame above and beside its slot without moving
-                // the strip; the header keeps its slot and only its frame reaches out.
-                var raisedFrame = new Thickness(-selectedTabRise, -selectedTabRise, -selectedTabRise, 0);
+                // WPF raises the selected header's frame above the strip without moving the strip:
+                // the header keeps its (bottom-aligned) slot and only its frame reaches up, by the
+                // rise plus the pixel the header sinks into the pane. The matching padding keeps
+                // the header's measured height and its caption where they were.
+                var raisedReach = selectedTabRise + DialogTabChromeMetrics.SelectedTabContentOverlap;
+                var raisedFrame = new Thickness(0, -raisedReach, 0, 0);
+                var raisedFramePadding = new Thickness(0, raisedReach, 0, 0);
                 root.Bind(Layoutable.MarginProperty, new Binding(nameof(TabItem.IsSelected))
                 {
                     Source = tab,
                     Converter = new FuncValueConverter<bool, Thickness>(isSelected => isSelected ? raisedFrame : default),
+                });
+                root.Bind(Decorator.PaddingProperty, new Binding(nameof(TabItem.IsSelected))
+                {
+                    Source = tab,
+                    Converter = new FuncValueConverter<bool, Thickness>(isSelected => isSelected ? raisedFramePadding : default),
                 });
             }
             root.Child = presenter;
@@ -1975,6 +2020,44 @@ public static class AvaloniaCompactDialogChrome
         });
         tabStyle.Setters.Add(new Setter(TemplatedControl.TemplateProperty, classicTabTemplate));
     }
+
+    /// <summary>
+    /// Top-placed tab control with the two parts Avalonia requires: the header strip, drawn above
+    /// the content pane so the selected header covers the pane's top edge, and the pane directly
+    /// under the strip with no indicator row between them.
+    /// </summary>
+    private static FuncControlTemplate<TabControl> CreateRaisedHeaderTabControlTemplate(Thickness headerStripMargin) =>
+        new((tabControl, nameScope) =>
+        {
+            var strip = new ItemsPresenter
+            {
+                Name = "PART_ItemsPresenter",
+                Margin = headerStripMargin,
+                ZIndex = 1,
+                ClipToBounds = false,
+            };
+            strip.Bind(ItemsPresenter.ItemsPanelProperty, new Binding(nameof(ItemsControl.ItemsPanel)) { Source = tabControl });
+            DockPanel.SetDock(strip, Dock.Top);
+
+            var pane = new ContentPresenter { Name = "PART_SelectedContentHost" };
+            pane.Bind(ContentPresenter.ContentProperty, new Binding(nameof(TabControl.SelectedContent)) { Source = tabControl });
+            pane.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(TabControl.SelectedContentTemplate)) { Source = tabControl });
+            pane.Bind(ContentPresenter.HorizontalContentAlignmentProperty, new Binding(nameof(TabControl.HorizontalContentAlignment)) { Source = tabControl });
+            pane.Bind(ContentPresenter.VerticalContentAlignmentProperty, new Binding(nameof(TabControl.VerticalContentAlignment)) { Source = tabControl });
+
+            nameScope.Register("PART_ItemsPresenter", strip);
+            nameScope.Register("PART_SelectedContentHost", pane);
+
+            var layout = new DockPanel { LastChildFill = true };
+            layout.Children.Add(strip);
+            layout.Children.Add(pane);
+
+            var frame = new Border { Child = layout };
+            frame.Bind(Border.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = tabControl });
+            frame.Bind(Border.BorderBrushProperty, new Binding(nameof(TemplatedControl.BorderBrush)) { Source = tabControl });
+            frame.Bind(Border.BorderThicknessProperty, new Binding(nameof(TemplatedControl.BorderThickness)) { Source = tabControl });
+            return frame;
+        });
 
     public static StackPanel CreateActionRow(
         IReadOnlyList<Control> controls,

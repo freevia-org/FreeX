@@ -58,7 +58,7 @@ public sealed class SelectionPaneInteractionSourceTests
 
         source.Should().Contain("Brush(246, 246, 246)");
         source.Should().Contain("Brush(218, 218, 218)");
-        source.Should().Contain("new GridLength(32)");
+        source.Should().Contain("new GridLength(24)");
         source.Should().Contain("new GridLength(160)");
         source.Should().Contain("buttonRow.Spacing = 6;");
         // The window is sized to the WPF client area (outer 520x440 minus the Windows frame), so no

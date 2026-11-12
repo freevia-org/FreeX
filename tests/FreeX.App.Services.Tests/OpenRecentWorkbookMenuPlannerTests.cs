@@ -15,36 +15,46 @@ public sealed class OpenRecentWorkbookMenuPlannerTests
         // Open-Recent menu rebuild used to do -- hand OpenRecentWorkbookMenuPlanner.Create a raw
         // Func<string, bool> straight off the filesystem (File.Exists), with no cache in front of
         // it. A slow/unreachable UNC probe blocks the calling (UI) thread for its full duration,
-        // once per recent entry. Simulated here with a short controlled delay released from a
-        // background thread -- if Create() returned before that delay elapsed, the probe could not
-        // have run on (and blocked) the calling thread.
+        // once per recent entry.
+        // Deterministic, no wall-clock (the earlier version slept 300ms on a releaser thread that
+        // started BEFORE the stopwatch, so a descheduled main thread on a loaded runner measured
+        // less than the floor): the probe signals "entered" and then blocks on "release". A
+        // dedicated releaser thread (not Task.Run, so a saturated threadpool cannot starve it) only
+        // sets "release" AFTER it observes "entered", recording that it did so. If Create() returned
+        // while the probe was still blocked, or never ran the probe on this thread, `released` would
+        // still be false when Create returns (or the probe would never have been entered at all).
+        var probeEntered = new ManualResetEventSlim(false);
         var releaseProbe = new ManualResetEventSlim(false);
-        var releaseDelay = TimeSpan.FromMilliseconds(300);
-        // A dedicated Thread (not Task.Run) so a saturated test-run threadpool can never delay the
-        // release past the probe's own guard timeout below.
+        var released = false;
+        var callingThreadId = Environment.CurrentManagedThreadId;
+        var probeThreadId = -1;
         var releaser = new Thread(() =>
         {
-            Thread.Sleep(releaseDelay);
-            releaseProbe.Set();
+            if (probeEntered.Wait(TimeSpan.FromSeconds(30)))
+            {
+                Volatile.Write(ref released, true);
+                releaseProbe.Set();
+            }
         })
         { IsBackground = true };
         releaser.Start();
 
-        var stopwatch = Stopwatch.StartNew();
         var plan = OpenRecentWorkbookMenuPlanner.Create(
             [Entry("Work/Report.xlsx", DateTimeOffset.UtcNow)],
             fileExists: _ =>
             {
-                releaseProbe.Wait(TimeSpan.FromSeconds(5)).Should().BeTrue(
-                    "the background release must fire well inside the 5s guard timeout");
+                probeThreadId = Environment.CurrentManagedThreadId;
+                probeEntered.Set();
+                releaseProbe.Wait(TimeSpan.FromSeconds(30)).Should().BeTrue(
+                    "the releaser must fire once it sees the probe entered");
                 return true;
             },
             canOpenWorkbook: _ => true);
-        stopwatch.Stop();
 
-        stopwatch.ElapsedMilliseconds.Should().BeGreaterThanOrEqualTo((long)releaseDelay.TotalMilliseconds - 50,
+        Volatile.Read(ref released).Should().BeTrue(
             "Create's LINQ pipeline calls fileExists synchronously on the calling thread, so it cannot " +
-            "return before a probe that only unblocks after releaseDelay has elapsed");
+            "return before the blocked probe has been released");
+        probeThreadId.Should().Be(callingThreadId, "the raw probe runs on (and blocks) the calling thread");
         plan.ItemCount.Should().Be(1);
     }
 
@@ -57,22 +67,25 @@ public sealed class OpenRecentWorkbookMenuPlannerTests
         // returns the optimistic "exists" default immediately -- Create must complete near-instantly
         // even though the underlying probe is still sitting there un-released, proving the calling
         // thread was never blocked on it.
+        // No wall-clock upper bound: the probe cannot finish until the test releases it, so had
+        // Create waited on it, `probeFinished` would already be true (via the 30s guard timeout)
+        // by the time Create returned.
         var probeReleased = new ManualResetEventSlim(false);
+        var probeFinished = false;
         var cache = new RecentFilePathExistenceCache(probe: path =>
         {
-            probeReleased.Wait(TimeSpan.FromSeconds(5)); // would deadlock the test if Create blocked on this
+            probeReleased.Wait(TimeSpan.FromSeconds(30)); // would stall the test if Create blocked on this
+            Volatile.Write(ref probeFinished, true);
             return true;
         });
 
-        var stopwatch = Stopwatch.StartNew();
         var plan = OpenRecentWorkbookMenuPlanner.Create(
             [Entry("Work/Report.xlsx", DateTimeOffset.UtcNow)],
             fileExists: cache.Exists,
             canOpenWorkbook: _ => true);
-        stopwatch.Stop();
 
-        stopwatch.ElapsedMilliseconds.Should().BeLessThan(1000,
-            "the cache's optimistic default must let Create return immediately, without waiting for the " +
+        Volatile.Read(ref probeFinished).Should().BeFalse(
+            "the cache's optimistic default must let Create return without waiting for the " +
             "still-unreleased background probe");
         plan.ItemCount.Should().Be(1, "an unresolved path is optimistically shown, never hidden pre-probe");
 
