@@ -17123,6 +17123,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Rows = 1,
             Margin = new Thickness(0, 10, 8, 0),
             VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            // Stays inside the left column (WPF row 4, column 0): never wider than its cell.
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+            ClipToBounds = true,
         };
         foreach (var fontSwatchEntry in new (string ResourceKey, CellColor Color)[]
         {
@@ -17140,8 +17143,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var fontSwatchLabel = UiText.Get(fontSwatchEntry.ResourceKey);
             var fontSwatchButton = new Button
             {
+                // Width alone loses to the push-button minimum width, which made each swatch about
+                // 42px and the row of eight wider than the left column. Pin every bound to 22x18.
                 Width = 22,
+                MinWidth = 22,
+                MaxWidth = 22,
                 Height = 18,
+                MinHeight = 18,
+                MaxHeight = 18,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 Padding = new Thickness(0),
                 Background = Brush(fontSwatchColor),
                 BorderBrush = Brushes.Gray,
