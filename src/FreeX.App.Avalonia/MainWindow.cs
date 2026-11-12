@@ -4222,8 +4222,30 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
         button.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         button.Click += (_, _) => action();
+        // The template takes its fill and outline from the button, so the WPF hover and pressed
+        // triggers are replayed whenever the pointer state changes.
+        button.PropertyChanged += (_, args) =>
+        {
+            if (args.Property == InputElement.IsPointerOverProperty || args.Property == Button.IsPressedProperty)
+                ApplyStatusBarViewButtonChrome(button);
+        };
         AutomationProperties.SetName(button, automationName);
         AutomationProperties.SetHelpText(button, automationName);
+    }
+
+    // WPF StatusBarViewToggleButtonStyle: the RibbonButtonHover fill and BorderStrong outline while
+    // the pointer is over the button or it is checked, the AccentPressed fill while it is pressed
+    // (the checked trigger is declared last, so a checked button keeps the hover fill).
+    private static void ApplyStatusBarViewButtonChrome(ToggleButton button)
+    {
+        var isChecked = button.IsChecked == true;
+        var highlighted = isChecked || button.IsPointerOver || button.IsPressed;
+        button.Background = !highlighted
+            ? Brushes.Transparent
+            : button.IsPressed && !isChecked
+                ? SheetTabPressedBackground
+                : StatusBarCheckedViewBackground;
+        button.BorderBrush = highlighted ? StatusBarCheckedViewBorder : Brushes.Transparent;
     }
 
     private void UpdateStatusBarViewButtons()
@@ -4238,8 +4260,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         button.IsChecked = isChecked;
         var foreground = StatusBarForeground;
-        button.Background = isChecked ? StatusBarCheckedViewBackground : Brushes.Transparent;
-        button.BorderBrush = isChecked ? StatusBarCheckedViewBorder : Brushes.Transparent;
+        ApplyStatusBarViewButtonChrome(button);
         button.BorderThickness = new Thickness(1);
         if (button.Tag is RibbonCommandIconKind iconKind)
             button.Content = AvaloniaRibbonIcons.Build(new RibbonCommandIcon(iconKind), 15, foreground);
@@ -7397,7 +7418,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (IsContextClick(point, args))
             {
                 SelectAllCells();
-                OpenWorksheetCellContextMenu(_sheetGridHost);
+                OpenWorksheetCellContextMenu(_sheetGridHost, showMiniToolbar: false);
                 args.Handled = true;
                 return;
             }
@@ -11708,9 +11729,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// uses), bridged to the shared <see cref="RibbonMenu"/> model, then rendered into an Avalonia
     /// <see cref="ContextMenu"/> by <see cref="AvaloniaContextMenuRenderer"/>.
     /// </summary>
-    private void OpenWorksheetCellContextMenu(Control anchor)
+    private void OpenWorksheetCellContextMenu(Control anchor, bool showMiniToolbar = true)
     {
         var menu = BuildWorksheetCellContextMenu();
+        // The mini toolbar floats above the pointer-opened cell menu and shares its lifetime; the
+        // keyboard-opened menu and whole row/column selections go without it, as in the WPF host.
+        if (showMiniToolbar && ShouldShowWorksheetContextMiniToolbar(_session.SelectedRange))
+            ShowWorksheetContextMiniToolbar(menu);
+        else
+            CloseWorksheetContextMiniToolbar();
         menu.Open(anchor);
     }
 
@@ -11738,10 +11765,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// host's menu chrome: seeded command icons and a key letter per item, which
     /// OnGridContextMenuRequested applies to every one of these menus.
     /// </summary>
-    private static ContextMenu BuildWorksheetContextMenu(RibbonMenu ribbonMenu, Action<RibbonCommandId> dispatch) =>
-        AvaloniaContextMenuChrome.Apply(
+    private static ContextMenu BuildWorksheetContextMenu(RibbonMenu ribbonMenu, Action<RibbonCommandId> dispatch)
+    {
+        var menu = AvaloniaContextMenuChrome.Apply(
             AvaloniaContextMenuRenderer.BuildContextMenu(ribbonMenu, dispatch),
             assignKeyTips: true);
+        // Added after the chrome pass so the search row keeps its own metrics and takes no key letter.
+        AvaloniaWorksheetContextMenuSearch.AddSearchBox(menu);
+        return menu;
+    }
 
     /// <summary>
     /// Routes a worksheet context-menu command id back to the matching Avalonia document command.
@@ -27335,7 +27367,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // active cell's Border so it appears where the user is actually looking — mirrors WPF's
             // KeyboardCommandShortcut.OpenContextMenu -> OpenKeyboardContextMenu.
             var anchor = (Control?)_activeCellBorder ?? _sheetGridHost;
-            OpenWorksheetCellContextMenu(anchor);
+            OpenWorksheetCellContextMenu(anchor, showMiniToolbar: false);
             e.Handled = true;
             return;
         }

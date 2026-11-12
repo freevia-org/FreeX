@@ -20,4 +20,6 @@ public sealed partial class MainWindow
 
     internal bool PivotFieldPaneVisibleForTest => _pivotFieldPaneHost.IsVisible;
 
+    internal Border PivotFieldPaneHostForTest => _pivotFieldPaneHost;
+
 }

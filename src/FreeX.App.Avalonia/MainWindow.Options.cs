@@ -897,6 +897,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(exportItem, FreeXAutomationIdCatalog.QuickAccessToolbarExportCustomizationMenuItem);
         exportItem.Click += (_, _) => RunGuarded(ExportQuickAccessCustomizationAsync);
         var quickAccessImportExportMenu = new ContextMenu { Items = { importItem, exportItem } };
+        AvaloniaContextMenuChrome.Apply(quickAccessImportExportMenu);
         quickAccessImportExportButton.Click += (_, _) => quickAccessImportExportMenu.Open(quickAccessImportExportButton);
 
         var quickAccessGrid = new Grid

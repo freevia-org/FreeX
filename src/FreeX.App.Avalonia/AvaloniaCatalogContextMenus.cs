@@ -238,6 +238,10 @@ internal static class AvaloniaContextMenuChrome
         if (args.Handled || !menu.IsOpen || args.KeyModifiers != KeyModifiers.None)
             return;
 
+        // Letters typed into an editor hosted in the menu (the search row) are text, not key tips.
+        if (args.Source is TextBox)
+            return;
+
         var level = args.Source is MenuItem { Parent: MenuItem parent }
             ? ItemsOf(parent).OfType<MenuItem>()
             : ItemsOf(menu).OfType<MenuItem>();
