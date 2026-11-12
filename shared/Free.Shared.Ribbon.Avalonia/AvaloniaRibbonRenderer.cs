@@ -2709,12 +2709,19 @@ public static class AvaloniaRibbonRenderer
 
     private static int FindComboValueIndex(ComboBox combo, string value)
     {
-        var items = combo.Items.ToList();
-        return items.FindIndex(item => item switch
+        for (var index = 0; index < combo.Items.Count; index++)
         {
-            RibbonComboBoxChoice choice => string.Equals(choice.Value, value, StringComparison.Ordinal),
-            _ => string.Equals(item?.ToString(), value, StringComparison.Ordinal),
-        });
+            var item = combo.Items[index];
+            var matches = item switch
+            {
+                RibbonComboBoxChoice choice => string.Equals(choice.Value, value, StringComparison.Ordinal),
+                _ => string.Equals(item?.ToString(), value, StringComparison.Ordinal),
+            };
+            if (matches)
+                return index;
+        }
+
+        return -1;
     }
 
     private static void SetCheckBoxStateWithoutExecuting(CheckBox checkBox, bool isChecked)

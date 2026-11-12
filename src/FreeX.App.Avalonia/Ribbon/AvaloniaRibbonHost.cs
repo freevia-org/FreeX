@@ -44,6 +44,21 @@ internal static class AvaloniaRibbonKeyTipRoutes
 /// </summary>
 internal static class AvaloniaRibbonHost
 {
+    /// <summary>
+    /// Ribbon palette for the active theme. On macOS the tab strip uses the theme's sheet-surface
+    /// grey instead of the lighter chrome surface: the Windows (WPF) ribbon leaves its tab headers
+    /// transparent over the window's <c>FreeXSheetSurfaceBrush</c> background, so the whole strip
+    /// reads as one uniform grey that continues the title bar. The lighter chrome surface made the
+    /// macOS strip a second, paler band under the title bar. Windows/Linux keep the shared palette.
+    /// </summary>
+    private static RibbonVisualPalette ResolveRibbonPalette()
+    {
+        var palette = RibbonVisualPalette.FromTheme(App.ActiveTheme);
+        return OperatingSystem.IsMacOS()
+            ? palette with { TabStrip = App.ActiveTheme.Colors.SheetSurface }
+            : palette;
+    }
+
     /// <summary>Builds the ribbon control to dock at the top of the main window.</summary>
     /// <param name="session">Accessor for the live workbook session the format commands act on.</param>
     /// <param name="setStatus">Host refresh hook (redraws the grid and reports a status line).</param>
@@ -64,7 +79,7 @@ internal static class AvaloniaRibbonHost
     {
         var registry = AvaloniaRibbonComposition.BuildRegistry(session, setStatus, callbacks);
         var definition = AvaloniaRibbonComposition.BuildDefinition();
-        var palette = RibbonVisualPalette.FromTheme(App.ActiveTheme);
+        var palette = ResolveRibbonPalette();
         var ribbon = AvaloniaRibbonRenderer.BuildRibbon(
             definition,
             registry,
@@ -110,7 +125,7 @@ internal static class AvaloniaRibbonHost
         return AvaloniaRibbonRenderer.BuildRibbon(
             definition,
             registry,
-            palette: RibbonVisualPalette.FromTheme(App.ActiveTheme));
+            palette: ResolveRibbonPalette());
     }
 }
 
