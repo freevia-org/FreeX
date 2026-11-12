@@ -12,7 +12,9 @@ name: Release Packaging Rehearsal
 # This dispatches the real release workflow with dry_run, so packaging is rehearsed through exactly
 # the path a release takes -- same scripts, same runners, same validation -- rather than a
 # reimplementation that would drift from it. dry_run skips the publish and verify jobs, so nothing
-# is tagged, no release is created, and no deployment approval is needed.
+# is tagged, no release is created, and no deployment approval is needed. dry_run also skips the
+# release-only TEST gates (release-tests), because release-readiness.yml already covers them and the
+# rehearsal exists for packaging; a real release always runs or verifies them.
 #
 # Weekly rather than daily on purpose: this builds nine app bundles across three operating systems
 # plus both suite installers, and the runner pool (linux 5, macos 5, ~19 aggregate) is already

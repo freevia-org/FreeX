@@ -300,6 +300,12 @@ jobs:
   release-tests:
     name: Release test ${{ matrix.app }} ${{ matrix.platform }} ${{ matrix.displayGateId }}
     needs: [prepare, candidate]
+    # A dry run (including the weekly packaging rehearsal) rehearses PACKAGING and publishes nothing,
+    # so re-running the fifteen release-only test gates there only burns ~97 runner-minutes and holds
+    # macOS slots that the macOS package legs then queue for (FreeW osx-x64 waited 4.9 minutes for
+    # one). release-readiness.yml already covers those gates on a schedule. A real release never
+    # skips them: release-gate below accepts 'skipped' only when inputs.dry_run is true.
+    if: ${{ !inputs.dry_run }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     strategy:
@@ -388,7 +394,12 @@ jobs:
           $prepareResult = "${{ needs.prepare.result }}"
           $candidateResult = "${{ needs.candidate.result }}"
           $releaseTestResult = "${{ needs.release-tests.result }}"
-          if ($prepareResult -ne 'success' -or $candidateResult -ne 'success' -or $releaseTestResult -ne 'success') {
+          # 'skipped' is acceptable ONLY for a dry run, which publishes nothing (publish and
+          # publish-suite are gated on !inputs.dry_run). A real release must have a green result from
+          # every release test, so a skipped, cancelled or failed one still fails the gate.
+          $isDryRun = "${{ inputs.dry_run }}" -eq 'true'
+          $releaseTestsAcceptable = $releaseTestResult -eq 'success' -or ($isDryRun -and $releaseTestResult -eq 'skipped')
+          if ($prepareResult -ne 'success' -or $candidateResult -ne 'success' -or -not $releaseTestsAcceptable) {
             throw "Preparation: $prepareResult; exact-SHA integration attestations: $candidateResult; release-only tests: $releaseTestResult."
           }
 
