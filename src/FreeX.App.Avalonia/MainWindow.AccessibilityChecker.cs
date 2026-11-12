@@ -371,7 +371,7 @@ public sealed partial class MainWindow
             if (firstLeaf is not null)
                 firstLeaf.IsSelected = true;
             UpdateSelection();
-            resultsTree.Focus();
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(() => (firstLeaf ?? (Control)resultsTree).Focus(), global::Avalonia.Threading.DispatcherPriority.Background);
         };
 
         await dialog.ShowDialog(this);

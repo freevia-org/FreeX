@@ -1109,7 +1109,7 @@ public sealed partial class MainWindow
         root.Children.Add(right);
 
         dialog.Content = root;
-        dialog.Opened += (_, _) => fileNameBox.Focus();
+        // The WPF surface focuses nothing, which leaves its default button without the cue.
         await dialog.ShowDialog(this);
     }
 

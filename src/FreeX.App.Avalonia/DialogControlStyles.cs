@@ -348,6 +348,8 @@ internal static class DialogWindowDefaults
 {
     private const string DialogWindowClass = "freex-dialog-window-defaults";
     private const double DialogFontSize = 12;
+    // A text line is 4/3 of the font size: the 16 px line of the 12 px dialog font.
+    private const double DialogTextLineHeightRatio = 4.0 / 3.0;
     // WPF list rows at the 12 px dialog font: a 16 px text line plus the 1 px item padding.
     private const double DialogListRowMinHeight = 18;
     // WPF DialogReferencePicker and the native button template keep 1 px between frame and caption.
@@ -435,6 +437,19 @@ internal static class DialogWindowDefaults
         "GoToSpecialButton",
         "GoToReferenceBoxAcceptButton",
         "GoToReferenceBoxCancelButton",
+    };
+
+    // Dialogs whose WPF push buttons are default WPF buttons (no Height in the WPF dialog: ZoomDialog,
+    // SubtotalDialog, ShapeGradientDialog, ManageConditionalFormatsDialog, ConditionalFormatDialog)
+    // while their Avalonia route helper fixes them at 21 or 22 px. Their captioned push buttons take
+    // the WPF default; the deliberate 24 and 26 px heights are outside the 21-22 band.
+    private static readonly HashSet<string> WpfDefaultPushButtonDialogs = new(StringComparer.Ordinal)
+    {
+        "ZoomDialog",
+        "SubtotalCompactDialog",
+        "ShapeGradientDialog",
+        "ManageConditionalFormatsDialog",
+        "ConditionalFormatRuleDialog",
     };
 
     // Buttons whose WPF counterpart is taller than a default push button because the WPF layout
@@ -526,6 +541,42 @@ internal static class DialogWindowDefaults
         // buttons chosen after it opened (wizard steps) get the same height and default cue.
         Control.LoadedEvent.AddClassHandler<Button>((button, _) => NormalizeLoadedPushButtonHeight(button));
         Button.IsDefaultProperty.Changed.AddClassHandler<Button>((button, _) => OnIsDefaultChanged(button));
+
+        // Compact single-line text boxes keep room for one text line however a helper padded them,
+        // also when a helper re-pads or re-sizes a box after it was loaded.
+        Control.LoadedEvent.AddClassHandler<TextBox>((textBox, _) => FitDialogTextBoxLine(textBox));
+        TemplatedControl.PaddingProperty.Changed.AddClassHandler<TextBox>((textBox, _) => FitDialogTextBoxLine(textBox));
+        Layoutable.HeightProperty.Changed.AddClassHandler<TextBox>((textBox, _) => FitDialogTextBoxLine(textBox));
+    }
+
+    /// <summary>
+    /// WPF fits one 12 px text line (16 px) in an 18 px single-line text box: a 1 px frame and no
+    /// vertical padding to spare. The shared compact chrome pads every box by 3 px top and bottom,
+    /// which left an 18 px box a 10 px viewport (and a 20 or 22 px box 12 or 14), so the line was
+    /// cut at the bottom. A fixed-height single-line box in a dialog gives up only as much of its
+    /// vertical padding as the line needs; the line stays centred, as the chrome aligns it.
+    /// </summary>
+    private static void FitDialogTextBoxLine(TextBox textBox)
+    {
+        if (textBox.AcceptsReturn || textBox.TextWrapping != TextWrapping.NoWrap)
+            return;
+        var height = textBox.Height;
+        if (double.IsNaN(height) || double.IsInfinity(height) || height <= 0)
+            return;
+        if (TopLevel.GetTopLevel(textBox) is not Window { } dialog || !dialog.Classes.Contains(DialogWindowClass))
+            return;
+
+        var frame = textBox.BorderThickness;
+        var padding = textBox.Padding;
+        var lineHeight = Math.Ceiling(textBox.FontSize * DialogTextLineHeightRatio);
+        var frameRoom = height - frame.Top - frame.Bottom;
+        if (frameRoom - padding.Top - padding.Bottom >= lineHeight)
+            return;
+
+        var spare = Math.Max(0, frameRoom - lineHeight);
+        var top = Math.Min(padding.Top, Math.Floor(spare / 2));
+        var bottom = Math.Min(padding.Bottom, spare - top);
+        textBox.Padding = new Thickness(padding.Left, top, padding.Right, bottom);
     }
 
     private static IBrush VerticalGradient(byte r1, byte g1, byte b1, byte r2, byte g2, byte b2) =>
@@ -605,6 +656,8 @@ internal static class DialogWindowDefaults
             }
         }
 
+        InstallWpfTabContentFocusTransfer(dialog);
+
         // Caption fitting needs the resolved font, so it waits for the opened window. This handler
         // is attached after the dialog's own, so it also sees the shared descendant chrome pass.
         dialog.Opened += (_, _) =>
@@ -627,6 +680,9 @@ internal static class DialogWindowDefaults
     ///   <item>route-helper buttons (a fixed height, minimum and maximum all at the shared 26 px
     ///   token, without the shared compact chrome that already applies the product height), and
     ///   the Go To buttons whose dialog style fixes 24 px, take the WPF default;</item>
+    ///   <item>the 21 and 22 px buttons of <see cref="WpfDefaultPushButtonDialogs"/> take the WPF
+    ///   default too;</item>
+    ///   <item>an unchromed push button without a height of its own is at least the WPF default;</item>
     ///   <item>dialogs whose WPF buttons carry an explicit height get it back where the product
     ///   height replaced the shared token (<see cref="ExplicitWpfButtonHeights"/>);</item>
     ///   <item>dialogs listed in <see cref="KeptRouteButtonHeightDialogs"/>, narrow picker and
@@ -638,14 +694,36 @@ internal static class DialogWindowDefaults
     {
         if (button.GetType() != typeof(Button) || string.IsNullOrEmpty(CaptionOf(button)))
             return;
-        if (!HasLocalValue(button, Layoutable.HeightProperty))
-            return;
-        if (!double.IsNaN(button.Width) && button.Width < MinimumNormalizedButtonWidth)
-            return;
-
-        var height = button.Height;
         var dialogId = AutomationProperties.GetAutomationId(dialog) ?? string.Empty;
+        var height = button.Height;
+        var inWpfDefaultBand = HasLocalValue(button, Layoutable.HeightProperty)
+            && height > PushButtonHeight
+            && height < GoToDialogButtonHeight
+            && WpfDefaultPushButtonDialogs.Contains(dialogId);
+        // Narrow picker and glyph buttons size themselves to the field beside them. A glyph button
+        // in a row of push buttons is the exception in those dialogs: WPF stretches it to the row.
+        if (!double.IsNaN(button.Width)
+            && button.Width < MinimumNormalizedButtonWidth
+            && !(inWpfDefaultBand && IsInPushButtonRow(button)))
+        {
+            return;
+        }
+
         var hasSharedChrome = button.Classes.Contains(AvaloniaCompactDialogChrome.CompactButtonClass);
+        if (!HasLocalValue(button, Layoutable.HeightProperty))
+        {
+            // An unchromed push button sizes to its caption line, which the dialog font sets a
+            // pixel short of WPF's 16 px line (19 px buttons); a WPF push button is 20 px.
+            if (!hasSharedChrome
+                && !HasLocalValue(button, Layoutable.MinHeightProperty)
+                && !HasLocalValue(button, Layoutable.MaxHeightProperty)
+                && IsFramedPushButton(button))
+            {
+                button.MinHeight = PushButtonHeight;
+            }
+            return;
+        }
+
         double target;
         if (RowStretchedWpfButtonHeights.TryGetValue(
                 AutomationProperties.GetAutomationId(button) ?? string.Empty,
@@ -677,6 +755,10 @@ internal static class DialogWindowDefaults
         {
             target = PushButtonHeight;
         }
+        else if (inWpfDefaultBand)
+        {
+            target = PushButtonHeight;
+        }
         else
         {
             return;
@@ -705,14 +787,15 @@ internal static class DialogWindowDefaults
 
     /// <summary>
     /// WPF draws the default button's blue frame while it is defaulted (Button.IsDefaulted): the
-    /// dialog's keyboard focus is on the window itself or on a control that does not take Enter.
-    /// Only a push button and an editable multi-line text box take Enter, and a focused default
-    /// button keeps its own cue because Enter still presses it; a
-    /// check box, radio button or toggle is not a WPF Button, so the cue stays while it has the
-    /// focus. A dialog whose focus is nowhere (not activated yet, or captured unfocused) keeps the
-    /// cue as well, as the WPF window then holds its own focus. The default button is found again
-    /// on every update, so a button made default after the dialog opened (wizard steps, rows
-    /// added later) gets the cue too.
+    /// dialog's keyboard focus is on the window itself or on a control that does not take Enter
+    /// (KeyboardNavigation.AcceptsReturn). Every push button takes Enter, the default button
+    /// itself included: a focused default button is not defaulted and draws no cue (the WPF
+    /// dialogs that focus their default button on open show none). A check box, radio button or
+    /// toggle does not take Enter, so the cue stays while it has the focus. A dialog whose focus
+    /// is nowhere (not activated yet, or captured unfocused) keeps the cue as well, as the WPF
+    /// window then holds its own focus. The default button is found again on every update, so a
+    /// button made default after the dialog opened (wizard steps, rows added later) gets the cue
+    /// too.
     /// </summary>
     private static void InstallDefaultButtonCue(Window dialog)
     {
@@ -732,12 +815,9 @@ internal static class DialogWindowDefaults
                     continue;
                 if (cued.Add(button))
                     AddDefaultButtonCueStyles(button);
-                // Enter on the focused default button still presses that button, so WPF keeps it
-                // defaulted (its blue frame) while it holds the focus itself.
-                var focusOnThisButton = ReferenceEquals(focused, button);
                 // The resting-frame styles skip a disabled button, so a disabled default button
                 // keeps the disabled frame whatever this class says.
-                button.Classes.Set(DefaultedButtonClass, isDefault && (!focusTakesEnter || focusOnThisButton));
+                button.Classes.Set(DefaultedButtonClass, isDefault && !focusTakesEnter);
             }
         }
 
@@ -762,6 +842,86 @@ internal static class DialogWindowDefaults
             Setters = { new Setter(TemplatedControl.BorderBrushProperty, DefaultButtonBorder) },
         });
     }
+
+    /// <summary>
+    /// WPF moves the keyboard focus into the newly selected tab when a tab control changes tab while
+    /// the focus is inside the content of the tab it leaves (TabItem.SetFocus with its
+    /// focus-on-content flag, a MoveFocus to the first stop of the new content); a focused tab
+    /// header keeps the focus. Avalonia drops the focus with the content it detaches, so the dialog
+    /// was left unfocused, and kept the default cue, where WPF lands on the first control of the new
+    /// tab (a push button there takes Enter and clears the cue).
+    /// </summary>
+    private static void InstallWpfTabContentFocusTransfer(Window dialog)
+    {
+        global::Avalonia.Input.IInputElement? lastFocused = null;
+        dialog.AddHandler(
+            global::Avalonia.Input.InputElement.GotFocusEvent,
+            (_, _) => lastFocused = dialog.FocusManager?.GetFocusedElement() ?? lastFocused,
+            handledEventsToo: true);
+        dialog.AddHandler(
+            SelectingItemsControl.SelectionChangedEvent,
+            (_, args) =>
+            {
+                if (args.Source is not TabControl tabControl)
+                    return;
+
+                // The detached old content may still be reported as focused; the last focused
+                // element then says where the focus was.
+                var focused = dialog.FocusManager?.GetFocusedElement();
+                var origin = focused is Visual focusedVisual && dialog.IsVisualAncestorOf(focusedVisual)
+                    ? focused
+                    : lastFocused;
+                if (!IsInTabContent(origin, tabControl))
+                    return;
+
+                // After the new content has been laid out; a dialog that focuses its own target
+                // on a tab change keeps it.
+                Dispatcher.UIThread.Post(
+                    () => FocusFirstStopOfSelectedTab(dialog, tabControl),
+                    DispatcherPriority.Background);
+            },
+            handledEventsToo: true);
+    }
+
+    // True when the element sits in a tab's content rather than on its header.
+    private static bool IsInTabContent(object? element, TabControl tabControl)
+    {
+        ILogical? previous = null;
+        for (var node = element as ILogical; node is not null; node = node.LogicalParent)
+        {
+            if (node is TabItem tabItem && ReferenceEquals(tabItem.Parent, tabControl))
+                return previous is not null && ReferenceEquals(previous, tabItem.Content);
+            previous = node;
+        }
+
+        return false;
+    }
+
+    private static void FocusFirstStopOfSelectedTab(Window dialog, TabControl tabControl)
+    {
+        if (!dialog.IsVisible || tabControl.SelectedItem is not TabItem { Content: Control content })
+            return;
+        if (dialog.FocusManager?.GetFocusedElement() is Visual current
+            && (ReferenceEquals(current, content) || content.IsVisualAncestorOf(current)))
+        {
+            return;
+        }
+
+        content.GetVisualDescendants()
+            .OfType<Control>()
+            .Prepend(content)
+            .FirstOrDefault(IsAuthoredTabStop)
+            ?.Focus();
+    }
+
+    // A focusable, visible, enabled tab stop the dialog built itself: the spinner and drop-down
+    // buttons inside a control template are not stops of their own.
+    private static bool IsAuthoredTabStop(Control control) =>
+        control.Focusable
+        && control.IsEffectivelyVisible
+        && control.IsEffectivelyEnabled
+        && global::Avalonia.Input.KeyboardNavigation.GetIsTabStop(control)
+        && !(control is Button && control.TemplatedParent is not null);
 
     // A read-only document box (About, licence text) lets Enter through to the default button.
     private static bool TakesEnter(object focused) =>
@@ -1121,6 +1281,24 @@ internal static class DialogWindowDefaults
         if (button.MaxWidth < captionWidth + frame + (2 * GrownCaptionSidePadding))
             button.ClearValue(Layoutable.MaxWidthProperty);
         button.ClearValue(Layoutable.WidthProperty);
+    }
+
+    private static bool IsInPushButtonRow(Button button) =>
+        button.Parent is Panel row
+        && row.Children.OfType<Button>().Any(sibling =>
+            !ReferenceEquals(sibling, button)
+            && !string.IsNullOrEmpty(CaptionOf(sibling))
+            && (double.IsNaN(sibling.Width) || sibling.Width >= MinimumNormalizedButtonWidth));
+
+    // A push button keeps a frame and the push-button face; flat, link-like and swatch buttons do not.
+    private static bool IsFramedPushButton(Button button)
+    {
+        if (HasLocalValue(button, TemplatedControl.BorderThicknessProperty) && button.BorderThickness == default)
+            return false;
+        if (!HasLocalValue(button, TemplatedControl.BackgroundProperty))
+            return true;
+        return button.Background is ISolidColorBrush { Opacity: 1 } face
+            && (face.Color == Colors.White || face.Color == ButtonFaceColor);
     }
 
     private static string? CaptionOf(Button button) => button.Content switch

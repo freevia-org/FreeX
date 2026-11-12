@@ -527,7 +527,7 @@ public sealed partial class MainWindow
         root.Children.Add(buttonRow);
 
         dialog.Content = root;
-        dialog.Opened += (_, _) => okButton.Focus();
+        dialog.Opened += (_, _) => (radios.FirstOrDefault(radio => radio.IsChecked == true) ?? (Control)okButton).Focus();
         AttachOptionalPasteSpecialDialogObservation(
             dialog,
             radios,
