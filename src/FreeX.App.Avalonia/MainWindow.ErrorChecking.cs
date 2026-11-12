@@ -42,10 +42,12 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get(ErrorCheckingDialogPlanner.TitleKey),
-            Width = ErrorCheckingDialogPlanner.Width,
-            Height = ErrorCheckingDialogPlanner.Height,
-            MinWidth = ErrorCheckingDialogPlanner.MinWidth,
-            MinHeight = ErrorCheckingDialogPlanner.MinHeight,
+            // WPF ErrorCheckingDialog is a 720x420 *outer* resizable window; its client rectangle is
+            // the planner's AvaloniaClient size, which is what an Avalonia window sizes.
+            Width = ErrorCheckingDialogPlanner.AvaloniaClientWidth,
+            Height = ErrorCheckingDialogPlanner.AvaloniaClientHeight,
+            MinWidth = ErrorCheckingDialogPlanner.MinWidth - WpfResizableFrameWidth,
+            MinHeight = ErrorCheckingDialogPlanner.MinHeight - WpfResizableFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -114,6 +116,8 @@ public sealed partial class MainWindow
             Padding = new Thickness(8),
             Content = actionStack,
         };
+        // WPF ErrorCheckingDialog is a plain Window: the help group caption is normal ink.
+        ApplyPlainWindowGroupBoxChrome(actionPanel, ErrorCheckingDialogChromeStyle);
 
         var buttons = new StackPanel
         {
@@ -172,12 +176,9 @@ public sealed partial class MainWindow
         root.Children.Add(buttons);
         root.Children.Add(actionPanel);
         root.Children.Add(listPanel);
+        // The content fills the client area (and follows a resize), as the WPF DockPanel does.
         dialog.Content = new Border
         {
-            Width = ErrorCheckingDialogPlanner.AvaloniaClientWidth,
-            Height = ErrorCheckingDialogPlanner.AvaloniaClientHeight,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
-            VerticalAlignment = AvaloniaVerticalAlignment.Top,
             Background = Brushes.White,
             Child = root,
         };
@@ -383,11 +384,11 @@ public sealed partial class MainWindow
     {
         var row = CreateErrorCheckingColumnGrid();
         row.Background = new SolidColorBrush(Color.FromRgb(240, 240, 240));
-        AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.SheetColumnHeaderKey), 0, bold: true);
-        AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.CellColumnHeaderKey), 1, bold: true);
-        AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.IssueColumnHeaderKey), 2, bold: true);
-        AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.FormulaColumnHeaderKey), 3, bold: true);
-        AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.DescriptionColumnHeaderKey), 4, bold: true);
+        AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.SheetColumnHeaderKey), 0);
+        AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.CellColumnHeaderKey), 1);
+        AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.IssueColumnHeaderKey), 2);
+        AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.FormulaColumnHeaderKey), 3);
+        AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.DescriptionColumnHeaderKey), 4);
         return row;
     }
 
@@ -403,12 +404,13 @@ public sealed partial class MainWindow
                 $"{ErrorCheckingDialogPlanner.DescriptionColumnWidth}"),
         };
 
-    private static void AddErrorCheckingCell(Grid grid, string text, int column, bool bold = false)
+    private static void AddErrorCheckingCell(Grid grid, string text, int column)
     {
         var cell = new TextBlock
         {
             Text = text,
-            FontWeight = bold ? FontWeight.SemiBold : FontWeight.Normal,
+            // WPF GridView column headers and cells are both regular weight.
+            FontWeight = FontWeight.Normal,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
@@ -439,6 +441,10 @@ public sealed partial class MainWindow
             button,
             ErrorCheckingDialogChromeStyle,
             width ?? 0);
+        // WPF: every Error Checking button is Height = ErrorCheckingDialogPlanner.ButtonHeight.
+        button.Height = ErrorCheckingDialogPlanner.ButtonHeight;
+        button.MinHeight = ErrorCheckingDialogPlanner.ButtonHeight;
+        button.MaxHeight = ErrorCheckingDialogPlanner.ButtonHeight;
         return button;
     }
 

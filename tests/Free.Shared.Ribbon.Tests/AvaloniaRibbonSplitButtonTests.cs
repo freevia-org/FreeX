@@ -457,7 +457,7 @@ public sealed class AvaloniaRibbonSplitButtonTests
                 parent.IsSubMenuOpen = true;
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
                 var submenuPopup = Assert.Single(parent.GetVisualDescendants().OfType<Popup>());
-                Assert.Equal(PlacementMode.Right, submenuPopup.Placement);
+                Assert.Equal(PlacementMode.RightEdgeAlignedTop, submenuPopup.Placement);
                 Assert.Equal(
                     PopupPositionerConstraintAdjustment.FlipX | PopupPositionerConstraintAdjustment.SlideY,
                     submenuPopup.PlacementConstraintAdjustment);
@@ -516,7 +516,7 @@ public sealed class AvaloniaRibbonSplitButtonTests
                 Assert.True(parent.IsSubMenuOpen);
                 Assert.True(child.IsFocused);
                 var submenuPopup = Assert.Single(parent.GetVisualDescendants().OfType<Popup>());
-                Assert.Equal(PlacementMode.Right, submenuPopup.Placement);
+                Assert.Equal(PlacementMode.RightEdgeAlignedTop, submenuPopup.Placement);
                 Assert.Equal(
                     PopupPositionerConstraintAdjustment.FlipX | PopupPositionerConstraintAdjustment.SlideY,
                     submenuPopup.PlacementConstraintAdjustment);
