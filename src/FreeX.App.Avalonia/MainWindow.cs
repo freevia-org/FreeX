@@ -30228,16 +30228,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // A row-header selection is stored as the complete grid span so editing, rendering, and
     // commands can operate on every cell. The Name Box, however, uses Excel's compact whole-row
     // notation instead of exposing that implementation geometry.
-    private string FormatSelectionNameBoxText()
-    {
-        var range = _session.SelectedRange;
-        if (range.Start.Col == 1 && range.End.Col == CellAddress.MaxCol)
-            return range.Start.Row == range.End.Row
-                ? $"{range.Start.Row}:{range.Start.Row}"
-                : $"{range.Start.Row}:{range.End.Row}";
-
-        return FormatCellReference(_session.ActiveCell);
-    }
+    // Excel's Name Box shows the active cell for an unnamed selection, including a whole row
+    // ("A5" after clicking row header 5, not "5:5").
+    private string FormatSelectionNameBoxText() =>
+        FormatCellReference(_session.ActiveCell);
 
     private static string FormatRangeReference(GridRange range) =>
         SpreadsheetDisplayFormatter.FormatRangeReference(
