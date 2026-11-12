@@ -12,7 +12,7 @@ public partial class PageSetupDialog
         var fields = surface.Fields;
 
         PopulateChoiceBoxes();
-        OrientationBox.SelectedIndex = surface.ChoiceIndexes.Orientation;
+        SetChoiceRadios(surface.ChoiceIndexes.Orientation, PortraitRadioButton, LandscapeRadioButton);
         PaperSizeBox.SelectedIndex = surface.ChoiceIndexes.PaperSize;
         LeftMarginBox.Text = surface.Margins.Left;
         RightMarginBox.Text = surface.Margins.Right;
@@ -44,7 +44,7 @@ public partial class PageSetupDialog
         ColumnsRepeatBox.Text = surface.RepeatColumnsText;
         PrintGridlinesBox.IsChecked = fields.PrintGridlines;
         PrintHeadingsBox.IsChecked = fields.PrintHeadings;
-        PageOrderBox.SelectedIndex = surface.ChoiceIndexes.PageOrder;
+        SetChoiceRadios(surface.ChoiceIndexes.PageOrder, DownThenOverRadioButton, OverThenDownRadioButton);
         PrintBlackAndWhiteBox.IsChecked = fields.PrintBlackAndWhite;
         PrintDraftQualityBox.IsChecked = fields.PrintDraftQuality;
         PrintErrorValueBox.SelectedIndex = surface.ChoiceIndexes.PrintErrorValue;
@@ -62,12 +62,23 @@ public partial class PageSetupDialog
 
     private void PopulateChoiceBoxes()
     {
-        PopulateChoiceBox(OrientationBox, PageSetupDialogPlanner.OrientationChoices);
         PopulateChoiceBox(PaperSizeBox, PageSetupDialogPlanner.PaperSizeChoices);
-        PopulateChoiceBox(PageOrderBox, PageSetupDialogPlanner.PageOrderChoices);
         PopulateChoiceBox(PrintErrorValueBox, PageSetupDialogPlanner.PrintErrorValueChoices);
         PopulateChoiceBox(PrintCommentsBox, PageSetupDialogPlanner.PrintCommentChoices);
     }
+
+    // Orientation and page order are two-way choices shown as radio buttons, as in Excel; their
+    // order matches the planner's choice lists (index 0 = first radio).
+    private static void SetChoiceRadios(int selectedIndex, RadioButton first, RadioButton second)
+    {
+        first.IsChecked = selectedIndex != 1;
+        second.IsChecked = selectedIndex == 1;
+    }
+
+    private static int ReadChoiceRadios(RadioButton second) => second.IsChecked == true ? 1 : 0;
+
+    private static RadioButton CheckedChoiceRadio(RadioButton first, RadioButton second) =>
+        second.IsChecked == true ? second : first;
 
     private static void PopulateChoiceBox<T>(ComboBox comboBox, PageSetupChoicePlan<T> plan)
     {
