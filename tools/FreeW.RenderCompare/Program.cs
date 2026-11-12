@@ -101,7 +101,9 @@ internal static class Program
         var (left, top, right, bottom) = PageLayout.MarginsDip(pageSettings);
         flow.PageWidth = pageWidth;
         flow.PageHeight = pageHeight;
-        flow.PagePadding = new Thickness(left, top, right, bottom);
+        // Same header/footer body insets PrintLayout.BuildPaginatedDocument applies.
+        var (headerInset, footerInset) = PrintLayout.ResolveHeaderFooterBodyInsetsDip(view.Model, pageSettings);
+        flow.PagePadding = new Thickness(left, top + headerInset, right, bottom + footerInset);
         DocumentView.ApplyColumnLayout(flow, pageSettings);
         // ApplyColumnLayout sets ColumnWidth = +Infinity for single-column and leans on PageWidth to
         // constrain it; for some header/multi-section docs that leaks through as an unconstrained

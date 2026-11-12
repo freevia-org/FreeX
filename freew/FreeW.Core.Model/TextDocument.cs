@@ -2573,6 +2573,15 @@ public sealed class Paragraph : Block
     public DropCapLayoutIntent? DropCap { get; set; }
 
     /// <summary>
+    /// Horizontal alignment of the text frame this paragraph sits in (<c>w:framePr/@w:xAlign</c>), or
+    /// null when the paragraph is not framed. Word's classic Insert &gt; Page Numbers writes the PAGE
+    /// field as such a framed header/footer paragraph (<c>w:wrap="around" w:xAlign="right"</c>): the
+    /// frame floats out of the paragraph flow at that side of the text area. Render-only metadata for
+    /// header/footer composition; drop-cap frames use <see cref="DropCap"/> instead.
+    /// </summary>
+    public TextAlignment? FrameHorizontalAlignment { get; set; }
+
+    /// <summary>
     /// Optional bookmark name marking this paragraph as a navigation target. When non-null the
     /// paragraph is bracketed by w:bookmarkStart/w:bookmarkEnd on save, and runs elsewhere can point
     /// to it via <see cref="Run.HyperlinkAnchor"/>. Bookmarks are invisible markers (no glyphs).

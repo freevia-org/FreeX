@@ -427,6 +427,11 @@ internal static class PrintLayout
         var page = editor.Model.Page;
         var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
         var (left, top, right, bottom) = PageLayout.MarginsDip(page);
+        // A header taller than the top margin (or a footer taller than the bottom margin) pushes the
+        // body text area in, exactly as Word does, instead of overprinting the first/last body lines.
+        var (headerInsetDip, footerInsetDip) = ResolveHeaderFooterBodyInsetsDip(editor.Model, page);
+        top += headerInsetDip;
+        bottom += footerInsetDip;
         // Widen the page (not the body content width) to add the balloon strip purely as extra space
         // on the right, matching Word's own "the page gets wider" behaviour instead of squeezing body
         // text to make room.
@@ -475,6 +480,7 @@ internal static class PrintLayout
         // ordinary notes on the established reserve path and use fragment owners only for the
         // narrow plain-flow overflow signature proven by the fidelity compositor.
         var (contentWidthDip, contentHeightDip) = PageLayout.ContentAreaDip(page);
+        contentHeightDip = Math.Max(0, contentHeightDip - headerInsetDip - footerInsetDip);
         if (!applyFragmentedFootnoteFlow
             || !FootnoteContinuationFlowComposer.TryApply(
                 flow,
@@ -493,6 +499,32 @@ internal static class PrintLayout
         }
 
         return flow;
+    }
+
+    /// <summary>
+    /// The extra top/bottom body inset, in DIP, that the document header/footer needs beyond the page
+    /// margins (see <see cref="HeaderFooterBandRenderer.ResolveBodyInsetsDip"/>), capped so the body
+    /// always keeps a usable height. Zero for the overwhelmingly common header that fits its margin.
+    /// </summary>
+    internal static (double TopDip, double BottomDip) ResolveHeaderFooterBodyInsetsDip(
+        TextDocument document,
+        PageSettings page)
+    {
+        if (document.Header is not { IsEmpty: false } && document.Footer is not { IsEmpty: false })
+            return (0, 0);
+
+        var (topDip, bottomDip) = HeaderFooterBandRenderer.ResolveBodyInsetsDip(
+            document, page, document.Header, document.Footer);
+        var (_, contentHeightDip) = PageLayout.ContentAreaDip(page);
+        var available = Math.Max(0, contentHeightDip - 72);
+        if (topDip + bottomDip > available)
+        {
+            var scale = topDip + bottomDip <= 0 ? 0 : available / (topDip + bottomDip);
+            topDip *= scale;
+            bottomDip *= scale;
+        }
+
+        return (topDip, bottomDip);
     }
 
     private static void ApplyFootnoteBodyReserve(FlowDocument flow, TextDocument document)
@@ -863,7 +895,7 @@ internal sealed class HeaderFooterPaginator(
         // PrintLayout.ResolveFloatingObjectsByPage for how each one's real target page is resolved.
         var pageFloatingObjects = floatingObjectsByPage?.GetValueOrDefault(pageNumber);
         var hasFloatingObjects = pageFloatingObjects is { Count: > 0 };
-        if (model.Header is not { IsEmpty: false } && model.Footer is not { IsEmpty: false }
+        if (model.FinalSectionHeadersFooters.IsEmpty
             && !hasWatermark && !hasBorder && !hasLineNumbers && !hasColumnRule && !hasNotesAtFoot
             && !hasBalloons && !hasChangeBars && !hasFloatingObjects)
             return basePage;
@@ -918,19 +950,7 @@ internal sealed class HeaderFooterPaginator(
         var marginLeft = PageLayout.PointsToDip(page.MarginLeftPt);
         var contentWidth = Math.Max(0, size.Width - marginLeft - PageLayout.PointsToDip(page.MarginRightPt));
 
-        if (model.Header is { IsEmpty: false } header)
-        {
-            var headerText = ResolveText(header, pageNumber);
-            var top = PageLayout.PointsToDip(Math.Max(0, page.MarginTopPt - 36));
-            visual.Children.Add(BuildOverlay(headerText, marginLeft, top, contentWidth));
-        }
-
-        if (model.Footer is { IsEmpty: false } footer)
-        {
-            var footerText = ResolveText(footer, pageNumber);
-            var bottom = size.Height - PageLayout.PointsToDip(Math.Max(18, page.MarginBottomPt - 18));
-            visual.Children.Add(BuildOverlay(footerText, marginLeft, bottom, contentWidth));
-        }
+        AddHeaderFooterBands(visual, pageNumber, size, marginLeft, contentWidth);
 
         if (hasNotesAtFoot)
         {
@@ -1096,7 +1116,7 @@ internal sealed class HeaderFooterPaginator(
     /// reserves space inside the content area for these; FreeW approximates by drawing them in the
     /// otherwise-empty bottom margin so the note text is visible (previously only the reference marker was).
     /// </summary>
-    private DrawingVisual BuildNotesAtFoot(
+    private ContainerVisual BuildNotesAtFoot(
         Size size,
         double marginLeft,
         double contentWidth,
@@ -1106,7 +1126,7 @@ internal sealed class HeaderFooterPaginator(
         double? separatorYOverride = null,
         double? maxYOverride = null)
     {
-        var visual = new DrawingVisual();
+        var visual = new ContainerVisual();
         if (contentWidth <= 0)
             return visual;
 
@@ -1151,9 +1171,11 @@ internal sealed class HeaderFooterPaginator(
 
         var contentBottom = size.Height - PageLayout.PointsToDip(page.MarginBottomPt);
         var pen = new Pen(new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)), 0.5);
-        using var dc = visual.RenderOpen();
         var sepY = separatorYOverride ?? contentBottom + PageLayout.PointsToDip(3);
-        dc.DrawLine(pen, new Point(marginLeft, sepY), new Point(marginLeft + contentWidth * 0.3, sepY));
+        var separator = new DrawingVisual();
+        using (var dc = separator.RenderOpen())
+            dc.DrawLine(pen, new Point(marginLeft, sepY), new Point(marginLeft + contentWidth * 0.3, sepY));
+        visual.Children.Add(separator);
 
         var y = sepY + PageLayout.PointsToDip(2);
         var maxY = maxYOverride ?? size.Height - PageLayout.PointsToDip(4); // stay on the sheet
@@ -1161,32 +1183,27 @@ internal sealed class HeaderFooterPaginator(
         {
             if (y >= maxY)
                 break;
-            var formatted = new FormattedText(
+            var row = PrintPlainText.Build(
                 $"{label}. {text}",
-                System.Globalization.CultureInfo.CurrentCulture,
-                FlowDirection.LeftToRight,
-                new Typeface("Calibri"),
+                NoteFontFamily,
                 PageLayout.PointsToDip(9.0),
                 Brushes.Black,
-                1.0)
-            {
-                MaxTextWidth = contentWidth,
-                MaxLineCount = 2,
-                Trimming = TextTrimming.CharacterEllipsis
-            };
-            dc.DrawText(formatted, new Point(marginLeft, y));
-            y += formatted.Height + PageLayout.PointsToDip(1);
+                contentWidth,
+                maxLines: 2);
+            y += PrintPlainText.Place(visual, row, marginLeft, y) + PageLayout.PointsToDip(1);
         }
         return visual;
     }
 
-    private DrawingVisual BuildContinuationNotesAtFoot(
+    private static readonly FontFamily NoteFontFamily = new("Calibri");
+
+    private ContainerVisual BuildContinuationNotesAtFoot(
         Size size,
         double marginLeft,
         double contentWidth,
         DocumentFootnoteContinuationPagePlan continuationPage)
     {
-        var visual = new DrawingVisual();
+        var visual = new ContainerVisual();
         if (contentWidth <= 0)
             return visual;
 
@@ -1197,34 +1214,31 @@ internal sealed class HeaderFooterPaginator(
         var contentTop = PageLayout.PointsToDip(page.MarginTopPt);
         var contentBottom = size.Height - PageLayout.PointsToDip(page.MarginBottomPt);
         var y = Math.Max(contentTop, contentBottom - plan.EstimatedHeightDip - trailingReserveDip);
-        using var dc = visual.RenderOpen();
         if (continuationPage.SeparatorKind is not DocumentFootnoteSeparatorKind.None)
         {
             var pen = new Pen(new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)), 0.5);
-            dc.DrawLine(
-                pen,
-                new Point(marginLeft + plan.SeparatorXOffsetDip, y),
-                new Point(marginLeft + plan.SeparatorXOffsetDip + plan.SeparatorWidthDip, y));
+            var separator = new DrawingVisual();
+            using (var dc = separator.RenderOpen())
+            {
+                dc.DrawLine(
+                    pen,
+                    new Point(marginLeft + plan.SeparatorXOffsetDip, y),
+                    new Point(marginLeft + plan.SeparatorXOffsetDip + plan.SeparatorWidthDip, y));
+            }
+            visual.Children.Add(separator);
             y += 8;
         }
 
         foreach (var row in plan.Rows)
         {
             var label = string.IsNullOrEmpty(row.Label) ? string.Empty : $"{row.Label}. ";
-            var formatted = new FormattedText(
+            var text = PrintPlainText.Build(
                 label + row.Text,
-                System.Globalization.CultureInfo.CurrentCulture,
-                FlowDirection.LeftToRight,
-                new Typeface("Calibri"),
+                NoteFontFamily,
                 PageLayout.PointsToDip(plan.TextFontSizePt),
                 Brushes.Black,
-                1.0)
-            {
-                MaxTextWidth = contentWidth,
-                Trimming = TextTrimming.None
-            };
-            dc.DrawText(formatted, new Point(marginLeft, y));
-            y += Math.Max(row.EstimatedHeightDip, formatted.Height);
+                contentWidth);
+            y += Math.Max(row.EstimatedHeightDip, PrintPlainText.Place(visual, text, marginLeft, y));
         }
         return visual;
     }
@@ -1297,16 +1311,7 @@ internal sealed class HeaderFooterPaginator(
 
         var marginLeft = PageLayout.PointsToDip(page.MarginLeftPt);
         var contentWidth = Math.Max(0, size.Width - marginLeft - PageLayout.PointsToDip(page.MarginRightPt));
-        if (model.Header is { IsEmpty: false } header)
-        {
-            var top = PageLayout.PointsToDip(Math.Max(0, page.MarginTopPt - 36));
-            visual.Children.Add(BuildOverlay(ResolveText(header, pageNumber), marginLeft, top, contentWidth));
-        }
-        if (model.Footer is { IsEmpty: false } footer)
-        {
-            var bottom = size.Height - PageLayout.PointsToDip(Math.Max(18, page.MarginBottomPt - 18));
-            visual.Children.Add(BuildOverlay(ResolveText(footer, pageNumber), marginLeft, bottom, contentWidth));
-        }
+        AddHeaderFooterBands(visual, pageNumber, size, marginLeft, contentWidth);
 
         visual.Children.Add(BuildNotesAtFoot(
             size,
@@ -1803,49 +1808,65 @@ internal sealed class HeaderFooterPaginator(
     private static Color ParseColor(string hex)
         => WpfRgbColorAdapter.ParseDrawingMlOrDefault(hex, Colors.Black);
 
-    /// <summary>Renders one line of header/footer text into a positioned drawing visual.</summary>
-    private static DrawingVisual BuildOverlay(string text, double x, double y, double width)
-    {
-        var visual = new DrawingVisual();
-        // No text, or no usable content width (margins meet/exceed the page width): nothing to draw.
-        // MaxTextWidth must stay finite — WPF's text formatter throws ArgumentOutOfRangeException
-        // ("paragraphWidth '∞'") if it is set to PositiveInfinity, which previously crashed the whole
-        // print/preview paginator for narrow-content header/footer pages.
-        if (string.IsNullOrEmpty(text) || width <= 0)
-            return visual;
-
-        var formatted = new FormattedText(
-            text,
-            System.Globalization.CultureInfo.CurrentCulture,
-            FlowDirection.LeftToRight,
-            new Typeface("Calibri"),
-            PageLayout.PointsToDip(11.0), // 11pt header/footer text, expressed in DIP
-            Brushes.Black,
-            1.0)
-        {
-            MaxTextWidth = width,
-            MaxLineCount = 1,
-            Trimming = TextTrimming.CharacterEllipsis
-        };
-
-        using (var dc = visual.RenderOpen())
-            dc.DrawText(formatted, new Point(x, y));
-        return visual;
-    }
+    private readonly Dictionary<HeaderFooter, HeaderFooterBandMetrics> _bandMetrics = [];
 
     /// <summary>
-    /// Flattens a header/footer to a single display line, substituting the live page number for any
-    /// page-number field run.
+    /// Composites the header into the top of the sheet at the section's "Header from edge" distance and
+    /// the footer so that its last line ends at "Footer from edge" above the bottom of the sheet. Each is
+    /// laid out by <see cref="HeaderFooterBandRenderer"/> -- every paragraph, with its own alignment, tab
+    /// stops, run formatting and fields -- rather than as one flattened line.
     /// </summary>
-    private string ResolveText(HeaderFooter content, int zeroBasedPageNumber)
-        => HeaderFooterVisualPlanner.ResolveLineText(
-            content,
-            new HeaderFooterFieldResolutionContext(
-                model,
-                (zeroBasedPageNumber + 1).ToString(System.Globalization.CultureInfo.CurrentCulture),
-                inner.PageCount,
-                SectionOrdinal: 1,
-                SectionPageCount: inner.PageCount,
-                EvaluatedAt: DateTime.Now,
-                Culture: System.Globalization.CultureInfo.CurrentCulture));
+    private void AddHeaderFooterBands(
+        ContainerVisual visual,
+        int zeroBasedPageNumber,
+        Size size,
+        double marginLeft,
+        double contentWidth)
+    {
+        // No usable content width (margins meet/exceed the page width): nothing to draw. A non-positive
+        // layout width would otherwise reach WPF's text formatter and fail the whole paginator.
+        if (contentWidth <= 0)
+            return;
+
+        var context = new HeaderFooterBandContext(
+            zeroBasedPageNumber + 1,
+            PageNumberText: null,
+            Math.Max(1, PageCount));
+        var maxHeight = HeaderFooterBandRenderer.MaxBandHeightDip(page);
+        // Different-first-page and different-odd-and-even select the slot per page, as in Word; a
+        // selected slot that is absent prints nothing rather than falling back to the default one.
+        var slots = FreeW.App.Presentation.Ribbon.HeaderFooterPagePlanner.ResolveSlots(
+            model.FinalSectionHeadersFooters,
+            zeroBasedPageNumber + 1,
+            page,
+            FreeW.App.Presentation.Ribbon.HeaderFooterPagePlanner.UsesDifferentOddEvenPages(model));
+
+        if (slots.Header is { IsEmpty: false } header)
+        {
+            var metrics = ResolveBandMetrics(header, isHeader: true, contentWidth, maxHeight);
+            if (HeaderFooterBandRenderer.Render(model, header, true, context, contentWidth, metrics, maxHeight) is { } band)
+            {
+                band.Offset = new Vector(marginLeft, HeaderFooterBandRenderer.HeaderDistanceDip(page));
+                visual.Children.Add(band);
+            }
+        }
+
+        if (slots.Footer is { IsEmpty: false } footer)
+        {
+            var metrics = ResolveBandMetrics(footer, isHeader: false, contentWidth, maxHeight);
+            if (HeaderFooterBandRenderer.Render(model, footer, false, context, contentWidth, metrics, maxHeight) is { } band)
+            {
+                var top = size.Height - HeaderFooterBandRenderer.FooterDistanceDip(page) - metrics.HeightDip;
+                band.Offset = new Vector(marginLeft, Math.Max(0, top));
+                visual.Children.Add(band);
+            }
+        }
+    }
+
+    private HeaderFooterBandMetrics ResolveBandMetrics(HeaderFooter slot, bool isHeader, double contentWidth, double maxHeight)
+    {
+        if (!_bandMetrics.TryGetValue(slot, out var metrics))
+            _bandMetrics[slot] = metrics = HeaderFooterBandRenderer.Measure(model, slot, isHeader, contentWidth, maxHeight);
+        return metrics;
+    }
 }

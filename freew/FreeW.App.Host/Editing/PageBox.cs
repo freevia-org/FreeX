@@ -410,7 +410,7 @@ internal sealed class PageBox : Border
     /// in the slot render as the correct page number without mutating the model's field runs.
     /// </para>
     /// </summary>
-    private static DocumentView BuildHfSubEditor(
+    internal static DocumentView BuildHfSubEditor(
         TextDocument sourceModel,
         HeaderFooter? slot,
         double marginLeft,
@@ -421,15 +421,32 @@ internal sealed class PageBox : Border
         string? hfPageNumberText = null,
         int hfPageCount = 0,
         int hfSectionOrdinal = 0,
-        int hfSectionPageCount = 0)
+        int hfSectionPageCount = 0,
+        bool inheritSourceStyles = false,
+        IReadOnlyList<FreeW.Core.Model.Block>? blocksOverride = null)
     {
         // Build wrapper document (same pattern as MainWindow.OpenHeaderFooterPane).
         var wrapper = TextDocument.CreateEmpty();
         wrapper.DefaultRun       = sourceModel.DefaultRun;
         wrapper.DefaultParagraph = sourceModel.DefaultParagraph;
+        if (inheritSourceStyles)
+        {
+            // Print composition resolves the slot's paragraphs against the real style catalog, so the
+            // Header/Footer styles' centre and right tab stops, fonts and spacing apply as in Word.
+            foreach (var (styleId, style) in sourceModel.Styles)
+                wrapper.Styles[styleId] = style;
+            wrapper.Theme = sourceModel.Theme;
+            wrapper.Page.DefaultTabStopPt = sourceModel.Page.DefaultTabStopPt;
+        }
         wrapper.Blocks.Clear();
 
-        if (slot is not null)
+        if (blocksOverride is not null)
+        {
+            // Print composition supplies the exact block sequence (see HeaderFooterBandRenderer).
+            foreach (var block in blocksOverride)
+                wrapper.Blocks.Add(block);
+        }
+        else if (slot is not null)
         {
             if (slot.Table is { Rows.Count: > 0 } layoutTable)
             {

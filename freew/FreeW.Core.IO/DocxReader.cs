@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.IO.Compression;
 using System.Text;
 using System.Xml.Linq;
@@ -1820,6 +1820,7 @@ public static class DocxReader
             paragraph.StyleId = pPr.Element(W + "pStyle")?.Attribute(W + "val")?.Value;
             paragraph.Formatting = ReadParagraphFormatting(pPr, numbering, docDefaults, startOverrides);
             paragraph.DropCap = ReadDropCapIntent(pPr);
+            paragraph.FrameHorizontalAlignment = ReadFrameHorizontalAlignment(pPr);
             // A paragraph whose formatting was changed under Track Changes carries a w:pPrChange as the
             // last child of its w:pPr; parse the author/date and the nested previous w:pPr into the model.
             ApplyParagraphFormatRevision(paragraph, pPr);
@@ -1944,6 +1945,46 @@ public static class DocxReader
             paragraph.DropCap = dropCap with { SizePt = sizePt };
 
         return paragraph;
+    }
+
+    /// <summary>
+    /// Reads <c>w:framePr/@w:xAlign</c> for a non-drop-cap text frame. Only the aligned shapes Word's
+    /// page-number gallery writes are modelled; an absolutely positioned frame (<c>w:x</c>) stays in flow.
+    /// </summary>
+    private static TextAlignment? ReadFrameHorizontalAlignment(XElement pPr)
+    {
+        var framePr = pPr.Element(W + "framePr");
+        if (framePr is null || framePr.Attribute(W + "dropCap") is { Value: "drop" or "margin" })
+            return null;
+
+        return framePr.Attribute(W + "xAlign")?.Value switch
+        {
+            "right" or "outside" => TextAlignment.Right,
+            "center" => TextAlignment.Center,
+            "left" or "inside" => TextAlignment.Left,
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// A row's cells in document order, including a cell wrapped in a cell-level content control
+    /// (<c>w:tr/w:sdt/w:sdtContent/w:tc</c> -- e.g. the date cell of Word's built-in header building
+    /// blocks), which a plain <c>w:tc</c> child scan silently drops along with its content.
+    /// </summary>
+    private static IEnumerable<XElement> EnumerateRowCells(XElement container)
+    {
+        foreach (var child in container.Elements())
+        {
+            if (child.Name == W + "tc")
+            {
+                yield return child;
+            }
+            else if (child.Name == W + "sdt" && child.Element(W + "sdtContent") is { } content)
+            {
+                foreach (var nested in EnumerateRowCells(content))
+                    yield return nested;
+            }
+        }
     }
 
     private static DropCapLayoutIntent? ReadDropCapIntent(XElement pPr)
@@ -4330,7 +4371,9 @@ public static class DocxReader
                 text.Append(Hyphenator.SoftHyphen);
             else if (child.Name == W + "noBreakHyphen")
                 text.Append(Hyphenator.NoBreakHyphen);
-            else if (child.Name == W + "tab")
+            else if (child.Name == W + "tab" || child.Name == W + "ptab")
+                // w:ptab (an absolute position tab, e.g. the centre/right alignment tabs Word's header
+                // and footer building blocks use) advances like a tab to the paragraph's next stop.
                 text.Append('\t');
             else if (child.Name == W + "cr")
                 text.Append('\n');
@@ -4604,7 +4647,7 @@ public static class DocxReader
             var isStyleBanded = bandedRows
                 && !isStyleHeader
                 && TableBanding.IsBandedBodyRow(rowIndex, headerRow);
-            foreach (var tc in tr.Elements(W + "tc"))
+            foreach (var tc in EnumerateRowCells(tr))
             {
                 var cell = new TableCell();
                 var tcPr = tc.Element(W + "tcPr");

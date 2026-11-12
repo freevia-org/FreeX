@@ -179,8 +179,11 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
         if (plan.Rows.Count == 0)
             return;
 
-        var visual = new DrawingVisual();
-        using (var dc = visual.RenderOpen())
+        var visual = new ContainerVisual();
+        var rules = new DrawingVisual();
+        visual.Children.Add(rules);
+        var noteFont = new FontFamily("Calibri");
+        using (var dc = rules.RenderOpen())
         {
             var y = marginTop + contentHeight + PageLayout.PointsToDip(3);
             var maxY = pageHeight - PageLayout.PointsToDip(4);
@@ -188,17 +191,14 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
             if (plan.Kind == DocumentNoteRegionKind.Endnotes && box.IsEndnoteSyntheticPage
                 && plan.Heading is { Length: > 0 } heading && y < maxY)
             {
-                var headingText = new FormattedText(
+                var headingText = PrintPlainText.Build(
                     heading,
-                    System.Globalization.CultureInfo.CurrentCulture,
-                    FlowDirection.LeftToRight,
-                    new Typeface(new FontFamily("Calibri"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal),
+                    noteFont,
                     PageLayout.PointsToDip(plan.TextFontSizePt + 2),
                     Brushes.Black,
-                    1.0)
-                { MaxTextWidth = contentWidth };
-                dc.DrawText(headingText, new Point(marginLeft, y));
-                y += headingText.Height + PageLayout.PointsToDip(2);
+                    contentWidth,
+                    weight: FontWeights.Bold);
+                y += PrintPlainText.Place(visual, headingText, marginLeft, y) + PageLayout.PointsToDip(2);
             }
 
             if (y < maxY)
@@ -217,17 +217,14 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
                     break;
 
                 var label = string.IsNullOrEmpty(row.Label) ? string.Empty : $"{row.Label}. ";
-                var formatted = new FormattedText(
+                var text = PrintPlainText.Build(
                     label + row.Text,
-                    System.Globalization.CultureInfo.CurrentCulture,
-                    FlowDirection.LeftToRight,
-                    new Typeface("Calibri"),
+                    noteFont,
                     PageLayout.PointsToDip(plan.TextFontSizePt),
                     Brushes.Black,
-                    1.0)
-                { MaxTextWidth = contentWidth, Trimming = TextTrimming.None };
-                dc.DrawText(formatted, new Point(marginLeft, y));
-                y += Math.Max(row.EstimatedHeightDip, formatted.Height) + PageLayout.PointsToDip(1);
+                    contentWidth);
+                y += Math.Max(row.EstimatedHeightDip, PrintPlainText.Place(visual, text, marginLeft, y))
+                    + PageLayout.PointsToDip(1);
             }
         }
 
