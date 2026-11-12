@@ -794,6 +794,9 @@ public static partial class DocxReader
             var family = font.Attribute(W + "name")?.Value;
             if (string.IsNullOrEmpty(family))
                 continue;
+            // Render-only: the generic family decides Word's substitute when the face is not installed.
+            if (font.Element(W + "family")?.Attribute(W + "val")?.Value is { Length: > 0 } genericFamily)
+                document.FontGenericFamilies[family] = genericFamily;
             var recovered = new EmbeddedFont(
                 family,
                 Recover(font.Element(W + "embedRegular")),

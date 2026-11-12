@@ -4392,6 +4392,15 @@ public sealed class TextDocument
     public List<EmbeddedFont> EmbeddedFonts { get; } = [];
 
     /// <summary>
+    /// Render-only hint read from <c>word/fontTable.xml</c>: each declared font's generic family
+    /// (<c>w:family</c>: roman, swiss, modern, script, decorative or auto), keyed by font name. Word picks
+    /// the substitute for a font that is not installed from this class (a missing roman face becomes
+    /// Times New Roman, the other classes Arial), so the renderer consults it to track Word's line breaks.
+    /// It is never written back; an authored document leaves it empty.
+    /// </summary>
+    public Dictionary<string, string> FontGenericFamilies { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Package parts FreeW does not model but preserves verbatim across a docx round-trip: the original
     /// <c>word/settings.xml</c> (overlaid with FreeW's modelled toggles on write) plus pass-through parts such
     /// as <c>customXml/*</c> and <c>word/webSettings.xml</c>. Empty (the default) for a document authored from

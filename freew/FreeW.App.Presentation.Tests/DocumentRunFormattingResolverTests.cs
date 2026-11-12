@@ -394,6 +394,47 @@ public sealed class DocumentRunFormattingResolverTests
         missing.FontSizePt.Should().BeLessThan(15);
     }
 
+    [Theory]
+    [InlineData("auto", "Arial")]
+    [InlineData("swiss", "Arial")]
+    [InlineData("decorative", "Arial")]
+    [InlineData("roman", "Times New Roman")]
+    [InlineData("modern", "Courier New")]
+    public void ProjectForScript_substitutes_a_missing_complex_script_face_by_its_font_table_family(
+        string genericFamily,
+        string expectedSubstitute)
+    {
+        // Word's PDFs of the Persian fidelity book draw the uninstalled "auto"-class faces (B Lotus,
+        // IRMitra, CTraditional Arabic) as ArialMT and the roman IranNastaliq as Times New Roman.
+        var resolved = new RunFormatting
+        {
+            FontFamily = "IRMitra",
+            ComplexScriptFontFamily = "B Lotus",
+            FontSizePt = 14,
+            Rtl = true,
+        };
+        var families = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["B Lotus"] = genericFamily,
+        };
+
+        var projected = DocumentRunFormattingResolver.ProjectForScript(
+            resolved, "مقدمة", _ => false, families);
+
+        projected.FontFamily.Should().Be(expectedSubstitute);
+        projected.FontSizePt.Should().Be(14);
+    }
+
+    [Fact]
+    public void ProjectForScript_keeps_times_new_roman_for_a_missing_face_the_font_table_does_not_describe()
+    {
+        var resolved = new RunFormatting { ComplexScriptFontFamily = "Unlisted Naskh", FontSizePt = 12, Rtl = true };
+
+        DocumentRunFormattingResolver
+            .ProjectForScript(resolved, "م", _ => false, new Dictionary<string, string>())
+            .FontFamily.Should().Be(DocumentRunFormattingResolver.ComplexScriptFallbackFontFamily);
+    }
+
     [Fact]
     public void Paragraph_resolver_honours_explicit_left_alignment_and_style_bidi()
     {

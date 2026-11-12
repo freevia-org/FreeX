@@ -124,14 +124,15 @@ public static class DocumentRunFormattingResolver
     /// Projects resolved formatting onto the script of <paramref name="text"/>: right-to-left script text
     /// (Arabic/Hebrew, or any run marked w:rtl) takes its typeface from w:rFonts/@w:cs and its size from
     /// w:szCs, exactly as Word does, instead of the Latin (ascii/hAnsi + w:sz) pair. A complex-script
-    /// typeface that <paramref name="isFontAvailable"/> rejects falls back to Times New Roman, the
-    /// Arabic-capable face Word substitutes for a missing roman-family Arabic font, so line counts track
-    /// Word rather than the platform's wider UI fallback font. Other text is returned unchanged.
+    /// typeface that <paramref name="isFontAvailable"/> rejects falls back to the face Word substitutes
+    /// for it (see <see cref="MissingComplexScriptFallbackFontFamily"/>), so line counts track Word rather
+    /// than the platform's wider UI fallback font. Other text is returned unchanged.
     /// </summary>
     public static RunFormatting ProjectForScript(
         RunFormatting resolved,
         string? text,
-        Func<string, bool>? isFontAvailable = null)
+        Func<string, bool>? isFontAvailable = null,
+        IReadOnlyDictionary<string, string>? fontGenericFamilies = null)
     {
         ArgumentNullException.ThrowIfNull(resolved);
         if (!resolved.Rtl && !ContainsComplexScript(text))
@@ -150,7 +151,7 @@ public static class DocumentRunFormattingResolver
             {
                 sizePt = authoredSize * advanceScale;
             }
-            family = ComplexScriptFallbackFontFamily;
+            family = MissingComplexScriptFallbackFontFamily(family, fontGenericFamilies);
         }
 
         return resolved with
@@ -159,6 +160,35 @@ public static class DocumentRunFormattingResolver
             FontSizePt = sizePt,
         };
     }
+
+    /// <summary>
+    /// The face Word draws a missing complex-script font with, chosen from the font's generic family in
+    /// word/fontTable.xml: a roman (serif) face — or one the table does not describe — becomes Times New
+    /// Roman, a fixed-pitch ("modern") face Courier New, and every other class (swiss, script, decorative
+    /// and the "auto" most Persian/Arabic faces such as B Lotus or IRMitra declare) Arial. Word's own PDFs
+    /// of the fidelity corpus confirm the split: missing "auto" Persian faces come out as ArialMT, the
+    /// roman IranNastaliq as Times New Roman.
+    /// </summary>
+    public static string MissingComplexScriptFallbackFontFamily(
+        string family,
+        IReadOnlyDictionary<string, string>? fontGenericFamilies)
+    {
+        if (fontGenericFamilies is null
+            || !fontGenericFamilies.TryGetValue(family, out var genericFamily)
+            || string.IsNullOrWhiteSpace(genericFamily))
+        {
+            return ComplexScriptFallbackFontFamily;
+        }
+
+        return genericFamily.Trim().ToLowerInvariant() switch
+        {
+            "roman" => ComplexScriptFallbackFontFamily,
+            "modern" => "Courier New",
+            _ => SansComplexScriptFallbackFontFamily,
+        };
+    }
+
+    public const string SansComplexScriptFallbackFontFamily = "Arial";
 
     /// <summary>
     /// Advance-width ratio of a not-installed Arabic text face to the Times New Roman substitute at the

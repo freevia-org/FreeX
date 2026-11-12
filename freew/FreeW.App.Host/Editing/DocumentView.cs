@@ -4777,7 +4777,7 @@ public sealed partial class DocumentView : RichTextBox
                 || (capitals is FontCapitals.AllSmallCaps && ResolveSelectionSmallCaps(retained).Value),
             AllCaps = capitals is FontCapitals.AllSmallCaps,
             VerticalAlign = verticalAlign,
-            FontFamily = selection.GetPropertyValue(TextElement.FontFamilyProperty) is FontFamily family ? family.Source : null,
+            FontFamily = selection.GetPropertyValue(TextElement.FontFamilyProperty) is FontFamily family ? DocumentFontFamilies.ModelName(family) : null,
             FontSizePt = fontSizePt,
             ColorHex = selection.GetPropertyValue(TextElement.ForegroundProperty) is SolidColorBrush fg ? ToHex(fg.Color) : null,
             HighlightColorHex = retained.CharacterShadingHex is not null
@@ -11783,7 +11783,7 @@ public sealed partial class DocumentView : RichTextBox
         if (string.IsNullOrEmpty(text))
             return 0;
 
-        var fmt = ProjectForScript(Resolve(run, paragraph, document), text);
+        var fmt = ProjectForScript(Resolve(run, paragraph, document), text, document);
         var displayText = text;
         if (document.Page.AutoHyphenation && !paragraph.Formatting.SuppressAutoHyphens)
             displayText = HyphenateForDisplay(displayText, document.Page.DoNotHyphenateCaps);
@@ -11791,7 +11791,7 @@ public sealed partial class DocumentView : RichTextBox
             displayText = displayText.ToUpperInvariant();
 
         var fontFamily = fmt.FontFamily is { Length: > 0 } family
-            ? new FontFamily(family)
+            ? DocumentFontFamilies.Create(family)
             : new FontFamily("Calibri");
         var typeface = new Typeface(
             fontFamily,
@@ -12034,7 +12034,7 @@ public sealed partial class DocumentView : RichTextBox
             return new WpfRun(string.Empty) { Tag = new ColumnBreakMarker() };
 
         // Right-to-left script text takes its typeface/size from the complex-script properties.
-        var fmt = ProjectForScript(effectiveFormatting, run.Text);
+        var fmt = ProjectForScript(effectiveFormatting, run.Text, document);
         // Automatic hyphenation: when the document has it on and this paragraph is not suppressed, insert
         // soft hyphens (U+00AD) at the pure helper's break points so the layout engine can break long words
         // at line ends. Soft hyphens are zero-width unless a line break lands on one, and are stripped on
@@ -12056,7 +12056,7 @@ public sealed partial class DocumentView : RichTextBox
         if (fmt.Rtl)
             wpf.FlowDirection = System.Windows.FlowDirection.RightToLeft;
         if (fmt.FontFamily is { Length: > 0 } family)
-            wpf.FontFamily = new FontFamily(family);
+            wpf.FontFamily = DocumentFontFamilies.Create(family);
         var fontSizePx = (fmt.FontSizePt ?? DefaultFontSizePt) * PxPerPoint;
         // Superscript/subscript: nudge the baseline and shrink the glyphs. Set FontSize explicitly
         // (even at the default) so ReadRunFormatting can recover the original point size by undoing
@@ -13506,7 +13506,7 @@ public sealed partial class DocumentView : RichTextBox
             Tag = new FieldMarker(run.FieldKind, run.Text, run.FieldLocked, run.FieldCodeVisible, fmt)
         };
         if (fmt.FontFamily is { Length: > 0 } family)
-            wpf.FontFamily = new FontFamily(family);
+            wpf.FontFamily = DocumentFontFamilies.Create(family);
         if (fmt.FontSizePt is { } size)
             wpf.FontSize = size * PxPerPoint;
         ApplyBaselinePositionPresentation(wpf, fmt);
@@ -13665,7 +13665,7 @@ public sealed partial class DocumentView : RichTextBox
             Tag = new ComplexFieldMarker(field, run.Text, fmt)
         };
         if (fmt.FontFamily is { Length: > 0 } family)
-            wpf.FontFamily = new FontFamily(family);
+            wpf.FontFamily = DocumentFontFamilies.Create(family);
         if (fmt.FontSizePt is { } size)
             wpf.FontSize = size * PxPerPoint;
         if (displayPlan.IsFieldCode)
@@ -13728,7 +13728,7 @@ public sealed partial class DocumentView : RichTextBox
             Tag = new CrossReferenceMarker(run.CrossReference!)
         };
         if (fmt.FontFamily is { Length: > 0 } family)
-            wpf.FontFamily = new FontFamily(family);
+            wpf.FontFamily = DocumentFontFamilies.Create(family);
         if (fmt.FontSizePt is { } size)
             wpf.FontSize = size * PxPerPoint;
         if (TryParseColor(fmt.ColorHex, out var color))
@@ -13751,7 +13751,7 @@ public sealed partial class DocumentView : RichTextBox
             Tag = new TableFormulaMarker(run.TableFormula!)
         };
         if (fmt.FontFamily is { Length: > 0 } family)
-            wpf.FontFamily = new FontFamily(family);
+            wpf.FontFamily = DocumentFontFamilies.Create(family);
         if (fmt.FontSizePt is { } size)
             wpf.FontSize = size * PxPerPoint;
         if (TryParseColor(fmt.ColorHex, out var color))
@@ -18621,7 +18621,7 @@ public sealed partial class DocumentView : RichTextBox
             : rendered.HighlightColorHex;
 
         var localFontFamily = run.ReadLocalValue(TextElement.FontFamilyProperty) is FontFamily family
-            ? family.Source
+            ? DocumentFontFamilies.ModelName(family)
             : null;
         double? localFontSizePt = run.ReadLocalValue(TextElement.FontSizeProperty) is double localFontSize
             ? localFontSize / PxPerPoint / (verticalAlign == VerticalAlign.Baseline ? 1 : SuperSubScale)
@@ -18868,7 +18868,9 @@ public sealed partial class DocumentView : RichTextBox
             var visibleCharacters = run.Text.Count(character => !char.IsWhiteSpace(character));
             if (visibleCharacters == 0)
                 continue;
-            var formatting = Resolve(run, paragraph, document);
+            // Right-to-left/complex-script text is drawn in its w:cs face at w:szCs (and that face's Word
+            // substitute when missing), so that face -- not the Latin one -- sets the line it occupies.
+            var formatting = ProjectForScript(Resolve(run, paragraph, document), run.Text, document);
             if (formatting.Hidden)
                 continue;
             var line = LineOf(formatting);
@@ -18883,8 +18885,11 @@ public sealed partial class DocumentView : RichTextBox
             // No visible text: an empty paragraph takes its line from the paragraph mark, as in Word. An
             // object-only paragraph or one whose mark is hidden keeps the document-default line (the object
             // or the collapsed mark owns its height, not a text line).
-            var mark = DocumentRunFormattingResolver.Resolve(
-                document, paragraph, paragraph.MarkFormatting ?? RunFormatting.Default, null);
+            var mark = ProjectForScript(
+                DocumentRunFormattingResolver.Resolve(
+                    document, paragraph, paragraph.MarkFormatting ?? RunFormatting.Default, null),
+                null,
+                document);
             best = hasNonTextContent || mark.Hidden ? documentDefaultLine : LineOf(mark);
         }
 
@@ -18899,7 +18904,7 @@ public sealed partial class DocumentView : RichTextBox
         {
             try
             {
-                var ratio = new System.Windows.Media.FontFamily(n).LineSpacing;
+                var ratio = DocumentFontFamilies.Create(n).LineSpacing;
                 return ratio > 0 ? ratio : 1.0;
             }
             catch
@@ -18914,21 +18919,9 @@ public sealed partial class DocumentView : RichTextBox
     private static RunFormatting Resolve(ModelRun run, ModelParagraph paragraph, TextDocument document)
         => DocumentRunFormattingResolver.Resolve(document, paragraph, run.Formatting, run.StyleId);
 
-    private static readonly Lazy<HashSet<string>> s_installedFontFamilies = new(() =>
-    {
-        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var family in Fonts.SystemFontFamilies)
-        {
-            names.Add(family.Source);
-            foreach (var localized in family.FamilyNames.Values)
-                names.Add(localized);
-        }
-        return names;
-    });
-
-    private static RunFormatting ProjectForScript(RunFormatting resolved, string? text) =>
+    private static RunFormatting ProjectForScript(RunFormatting resolved, string? text, TextDocument document) =>
         DocumentRunFormattingResolver.ProjectForScript(
-            resolved, text, family => s_installedFontFamilies.Value.Contains(family));
+            resolved, text, DocumentFontFamilies.IsAvailable, document.FontGenericFamilies);
 
     private static ParagraphFormatting Resolve(ModelParagraph paragraph, TextDocument document) =>
         DocumentParagraphFormattingResolver.Resolve(document, paragraph);
