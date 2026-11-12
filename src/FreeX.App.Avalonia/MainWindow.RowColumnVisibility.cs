@@ -381,10 +381,10 @@ public sealed partial class MainWindow
             // WPF RowHeightDialog / ColumnWidthDialog are 320x150 *outer* NoResize windows (client
             // height 121): a 16px margin, the label 4px above the stretched box, 12px above the 72px
             // OK/Cancel row. The height follows the content so the inline validation line still fits.
-            Width = 320,
-            MinWidth = 320,
-            MaxWidth = 320,
-            MinHeight = 150 - WpfNoResizeFrameHeight,
+            Width = 320 - WpfNoResizeFrameWidth,
+            MinWidth = 320 - WpfNoResizeFrameWidth,
+            MaxWidth = 320 - WpfNoResizeFrameWidth,
+            MinHeight = 150 - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Height,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,

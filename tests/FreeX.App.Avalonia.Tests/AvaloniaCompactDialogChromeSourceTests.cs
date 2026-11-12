@@ -17,9 +17,9 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, PivotDialogChromeStyle, minWidth, isDefault);");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, PivotDialogChromeStyle, fixedHeight);");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, PivotDialogChromeStyle);");
-        source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 0, 0, 37));");
-        source.Should().Contain("Width = PivotOptionsPlanner.DialogWidth,");
-        source.Should().Contain("MinHeight = PivotOptionsPlanner.DialogMinHeight,");
+        source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);");
+        source.Should().Contain("Width = PivotOptionsPlanner.DialogWidth - WpfNoResizeFrameWidth,");
+        source.Should().Contain("MinHeight = PivotOptionsPlanner.DialogMinHeight - WpfNoResizeClientFrameHeight,");
         source.Should().Contain("new Border { Height = PivotOptionsPlanner.LayoutAndFormatAvaloniaSpacerHeight }");
 
         source.Should().NotContain("button.Height = 24;");

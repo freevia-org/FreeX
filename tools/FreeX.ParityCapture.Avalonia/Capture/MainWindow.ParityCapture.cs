@@ -993,9 +993,9 @@ public sealed partial class MainWindow
         {
             Title = plan.Title,
             // The WPF surface is a NoResize Width x Height window (an outer size) in the 12px
-            // dialog font; Avalonia sizes the client area.
-            Width = WorkbookFileDialogSurfacePlanner.Width,
-            Height = WorkbookFileDialogSurfacePlanner.Height - WpfNoResizeFrameHeight,
+            // dialog font; Avalonia sizes the client area, so the measured Windows frame comes off both.
+            Width = WorkbookFileDialogSurfacePlanner.Width - WpfNoResizeFrameWidth,
+            Height = WorkbookFileDialogSurfacePlanner.Height - WpfNoResizeClientFrameHeight,
             CanResize = false,
             FontFamily = FormulaBarFontFamily,
             FontSize = 12,
@@ -1826,8 +1826,9 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = title,
-            Width = PivotSlicerTimelineDialogContract.Width,
-            Height = PivotSlicerTimelineDialogContract.Height,
+            // The contract is the WPF outer NoResize window; this window is its client area.
+            Width = PivotSlicerTimelineDialogContract.Width - WpfNoResizeFrameWidth,
+            Height = PivotSlicerTimelineDialogContract.Height - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Manual,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
@@ -2487,9 +2488,17 @@ public sealed partial class MainWindow
     {
         (width, height) = surfaceId switch
         {
-            "dialog.ExportOptions" => (ExportOptionsDialogSurfacePlanner.CaptureWidth, ExportOptionsDialogSurfacePlanner.CaptureHeight),
-            "dialog.ProtectWorkbook" => (ProtectionDialogPlanner.ProtectWorkbookCaptureWidth, ProtectionDialogPlanner.ProtectWorkbookCaptureHeight),
-            "dialog.Sparkline" => (SparklinePlanner.InsertDialogCaptureWidth, SparklinePlanner.InsertDialogCaptureHeight),
+            // The WPF captures pin these as OUTER window sizes; the Avalonia window is the client
+            // area, so it is captured at the same size minus the measured Windows frame.
+            "dialog.ExportOptions" => (
+                ExportOptionsDialogSurfacePlanner.CaptureWidth - WpfNoResizeFrameWidth,
+                ExportOptionsDialogSurfacePlanner.CaptureHeight - WpfNoResizeClientFrameHeight),
+            "dialog.ProtectWorkbook" => (
+                ProtectionDialogPlanner.ProtectWorkbookCaptureWidth - WpfNoResizeFrameWidth,
+                ProtectionDialogPlanner.ProtectWorkbookCaptureHeight - WpfNoResizeClientFrameHeight),
+            "dialog.Sparkline" => (
+                SparklinePlanner.InsertDialogCaptureWidth - WpfNoResizeFrameWidth,
+                SparklinePlanner.InsertDialogCaptureHeight - WpfNoResizeClientFrameHeight),
             _ => (0, 0)
         };
 

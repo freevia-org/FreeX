@@ -42,7 +42,7 @@ public sealed class PivotDialogFeatureParitySourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(insertItemButton, \"PivotCalcItemInsertItemButton\");");
         source.Should().Contain("insertItemButton.Click += (_, _) => InsertSelectedItem();");
         source.Should().Contain("itemsList.DoubleTapped += (_, _) => InsertSelectedItem();");
-        source.Should().Contain("MinHeight = 560 - WpfNoResizeFrameHeight,");
+        source.Should().Contain("MinHeight = 560 - WpfNoResizeClientFrameHeight,");
 
         var sessionSource = File.ReadAllText(RepoFile(
             "src", "FreeX.App.Presentation", "PivotUI", "PivotCalculatedItemSession.cs"));

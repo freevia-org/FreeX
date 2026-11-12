@@ -393,8 +393,9 @@ public sealed partial class MainWindow
         // Shared explicit size so the headless parity capture (which reads dialog.Bounds verbatim) matches
         // the WPF chart-area dialog contract.
         dialog.SizeToContent = SizeToContent.Manual;
-        dialog.Width = ChartAreaFormatPlanner.DialogWidth;
-        dialog.Height = ChartAreaFormatPlanner.DialogHeight;
+        // WPF ChartAreaLegendDialog's 420x590 is the outer window; the client loses the Windows frame.
+        dialog.Width = ChartAreaFormatPlanner.DialogWidth - WpfNoResizeFrameWidth;
+        dialog.Height = ChartAreaFormatPlanner.DialogHeight - WpfNoResizeClientFrameHeight;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("FormatChartArea");
         okButton.Click += (_, _) =>

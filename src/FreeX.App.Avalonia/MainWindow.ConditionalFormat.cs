@@ -1000,10 +1000,10 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("ManageConditionalFormats_ConditionalFormattingRulesManager"),
-            // WPF ManageConditionalFormatsDialog is a 560x420 NoResize window; Height is an OUTER size
-            // there, so the client area drops the caption/frame.
-            Width = 560,
-            Height = 420 - WpfNoResizeFrameHeight,
+            // WPF ManageConditionalFormatsDialog is a 560x420 NoResize window; both are OUTER sizes
+            // there, so the client area drops the measured Windows frame.
+            Width = 560 - WpfNoResizeFrameWidth,
+            Height = 420 - WpfNoResizeClientFrameHeight,
             MinWidth = 480,
             MinHeight = 360,
             CanResize = false,

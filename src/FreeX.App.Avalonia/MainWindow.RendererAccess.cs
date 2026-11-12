@@ -29,12 +29,13 @@ public sealed partial class MainWindow
     // (430x430) and PivotFieldFilter (380x470), both NoResize, fill exactly 414x391 and 364x431;
     // PageSetup, GoTo, GoToSpecial, GoalSeek, Subtotal, AddWatch and AllowEditRanges show the same
     // 15 x 37 excess over their content margin as the resizable FindReplace and FormatCells. The thin
-    // 6 x 29 frame of a classic fixed dialog never appears. NoResize dialogs re-measured against the
-    // captures use WpfNoResizeFrameWidth / WpfNoResizeClientFrameHeight; WpfNoResizeFrameHeight keeps
-    // the older 29px allowance only for dialogs that have not been re-measured yet.
-    private const int WpfResizableFrameWidth = 16;
-    private const int WpfResizableFrameHeight = 39;
-    private const int WpfNoResizeFrameHeight = 29;
+    // 6 x 29 frame of a classic fixed dialog never appears, so every NoResize dialog uses
+    // WpfNoResizeFrameWidth / WpfNoResizeClientFrameHeight (the old 29px height allowance is gone).
+    // Exceptions: references captured with a pinned CLIENT size (TryGetFixedDialogClientCaptureSize in
+    // the WPF capture: About, Scenario Manager, Zoom) already are client sizes, and a dialog whose
+    // content would not fit the Windows client height keeps its height (or follows its content).
+    internal const int WpfResizableFrameWidth = 16;
+    internal const int WpfResizableFrameHeight = 39;
     private const int WpfNoResizeFrameWidth = WpfResizableFrameWidth;
     private const int WpfNoResizeClientFrameHeight = WpfResizableFrameHeight;
     private const int TextToColumnsDialogWidth = (int)TextToColumnsDialogMetrics.WindowWidth - WpfResizableFrameWidth;

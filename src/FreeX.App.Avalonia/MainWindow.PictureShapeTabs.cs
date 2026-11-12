@@ -391,8 +391,8 @@ public sealed partial class MainWindow
             Title = title,
             // WPF RotationDialog is a 300x150 *outer* NoResize window and TextEntryDialog a 420 wide
             // one; the multi-line alternative-text editor takes the wider frame and grows with it.
-            Width = multiline ? 420 : 300,
-            MinHeight = multiline ? 0 : 150 - WpfNoResizeFrameHeight,
+            Width = (multiline ? 420 : 300) - WpfNoResizeFrameWidth,
+            MinHeight = multiline ? 0 : 150 - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Height,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -522,12 +522,12 @@ public sealed partial class MainWindow
         {
             Title = UiText.Get("InsertLoc_ObjectSizeTitle"),
             // WPF ObjectSizeDialog is a 360x250 *outer* NoResize window (client height 221).
-            Width = 360,
-            Height = 250 - WpfNoResizeFrameHeight,
-            MinWidth = 360,
-            MinHeight = 250 - WpfNoResizeFrameHeight,
-            MaxWidth = 360,
-            MaxHeight = 250 - WpfNoResizeFrameHeight,
+            Width = 360 - WpfNoResizeFrameWidth,
+            Height = 250 - WpfNoResizeClientFrameHeight,
+            MinWidth = 360 - WpfNoResizeFrameWidth,
+            MinHeight = 250 - WpfNoResizeClientFrameHeight,
+            MaxWidth = 360 - WpfNoResizeFrameWidth,
+            MaxHeight = 250 - WpfNoResizeClientFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,

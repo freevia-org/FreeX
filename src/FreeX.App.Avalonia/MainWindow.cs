@@ -13386,14 +13386,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("Zoom_Zoom"),
-            // WPF ZoomDialog is a 300x240 *outer* NoResize window; Avalonia sizes the client area, so
-            // take the Windows caption/frame off the height.
+            // The WPF Zoom reference is captured with its CLIENT area pinned to 300x240
+            // (TryGetFixedDialogClientCaptureSize), so the reference canvas is the client size: the
+            // 16x39 Windows frame is not subtracted here. A 284x201 client would also cut the action
+            // row, which ends at y=202 in this top-down layout.
             Width = ZoomDialogPlanner.Width,
-            Height = ZoomDialogPlanner.Height - WpfNoResizeFrameHeight,
+            Height = ZoomDialogPlanner.Height,
             MinWidth = ZoomDialogPlanner.Width,
             MaxWidth = ZoomDialogPlanner.Width,
-            MinHeight = ZoomDialogPlanner.Height - WpfNoResizeFrameHeight,
-            MaxHeight = ZoomDialogPlanner.Height - WpfNoResizeFrameHeight,
+            MinHeight = ZoomDialogPlanner.Height,
+            MaxHeight = ZoomDialogPlanner.Height,
             SizeToContent = SizeToContent.Manual,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -16253,12 +16255,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // WPF ScreenTipDialog / BookmarkDialog (TextEntryDialog) are 420x170 *outer* NoResize
             // windows (client height 141): a 16px margin, the label 4px above the stretched box,
             // 12px above the 72px OK/Cancel row.
-            Width = 420,
-            Height = 170 - WpfNoResizeFrameHeight,
-            MinWidth = 420,
-            MinHeight = 170 - WpfNoResizeFrameHeight,
-            MaxWidth = 420,
-            MaxHeight = 170 - WpfNoResizeFrameHeight,
+            Width = 420 - WpfNoResizeFrameWidth,
+            Height = 170 - WpfNoResizeClientFrameHeight,
+            MinWidth = 420 - WpfNoResizeFrameWidth,
+            MinHeight = 170 - WpfNoResizeClientFrameHeight,
+            MaxWidth = 420 - WpfNoResizeFrameWidth,
+            MaxHeight = 170 - WpfNoResizeClientFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -19099,12 +19101,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Title = title,
             // WPF TextEntryDialog is a 420x170 *outer* NoResize window (client height 141): a 16px
             // margin, the label 4px above the stretched box, 12px above the 72px button row.
-            Width = 420,
-            Height = 170 - WpfNoResizeFrameHeight,
-            MinWidth = 420,
-            MinHeight = 170 - WpfNoResizeFrameHeight,
-            MaxWidth = 420,
-            MaxHeight = 170 - WpfNoResizeFrameHeight,
+            Width = 420 - WpfNoResizeFrameWidth,
+            Height = 170 - WpfNoResizeClientFrameHeight,
+            MinWidth = 420 - WpfNoResizeFrameWidth,
+            MinHeight = 170 - WpfNoResizeClientFrameHeight,
+            MaxWidth = 420 - WpfNoResizeFrameWidth,
+            MaxHeight = 170 - WpfNoResizeClientFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -21582,11 +21584,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("GoalSeekStatus_GoalSeekStatus"),
-            Width = GoalSeekStatusDialogPlanner.WindowWidth,
+            // WPF GoalSeekStatusDialog is an outer NoResize window: the client loses the 16px frame
+            // width. Its status lines and buttons overflow the 39px-shorter client on Windows (the
+            // capture shows them reaching y=164), so the height stays at the WPF value to keep them
+            // inside the window here.
+            Width = GoalSeekStatusDialogPlanner.WindowWidth - WpfNoResizeFrameWidth,
             Height = GoalSeekStatusDialogPlanner.WindowHeight(result.Converged),
-            MinWidth = GoalSeekStatusDialogPlanner.WindowWidth,
+            MinWidth = GoalSeekStatusDialogPlanner.WindowWidth - WpfNoResizeFrameWidth,
             MinHeight = GoalSeekStatusDialogPlanner.WindowHeight(result.Converged),
-            MaxWidth = GoalSeekStatusDialogPlanner.WindowWidth,
+            MaxWidth = GoalSeekStatusDialogPlanner.WindowWidth - WpfNoResizeFrameWidth,
             MaxHeight = GoalSeekStatusDialogPlanner.WindowHeight(result.Converged),
             CanResize = false,
             FontFamily = FormulaBarFontFamily,
@@ -24322,8 +24328,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("DataValidation_DataValidation"),
-            Width = 520,
-            Height = 560,
+            // WPF DataValidationDialog is a 520x560 outer NoResize window; Avalonia sizes the client.
+            Width = 520 - WpfNoResizeFrameWidth,
+            Height = 560 - WpfNoResizeClientFrameHeight,
             MinWidth = 480,
             MinHeight = 460,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,

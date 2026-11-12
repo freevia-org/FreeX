@@ -331,10 +331,11 @@ public sealed partial class MainWindow
         // equivalent Avalonia target explicit because this dialog's controls are nested in scrollable
         // group boxes and are not reliably discovered by generic first-control focus.
         var dialog = NewChartDialog(commandLabel, "ChartAxisFormatDialog", minimumBox);
-        // WPF ChartAxisFormatDialog is a 430x660 outer window; Avalonia sizes are client sizes.
+        // WPF ChartAxisFormatDialog is a 430x660 outer window; Avalonia sizes are client sizes, so the
+        // measured Windows frame comes off both (the axis groups scroll inside the height).
         dialog.SizeToContent = SizeToContent.Manual;
-        dialog.Width = 430;
-        dialog.Height = 660 - WpfNoResizeFrameHeight;
+        dialog.Width = 430 - WpfNoResizeFrameWidth;
+        dialog.Height = 660 - WpfNoResizeClientFrameHeight;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartAxisFormat");
         okButton.Click += (_, _) =>
@@ -1263,7 +1264,7 @@ public sealed partial class MainWindow
             buttonRow.Margin = new Thickness(0, ChartDialogScrollButtonGap, 0, 0);
             bodyHost = new ScrollViewer
             {
-                MaxHeight = scrollHeight - WpfNoResizeFrameHeight - (2 * ChartDialogMargin)
+                MaxHeight = scrollHeight - WpfNoResizeClientFrameHeight - (2 * ChartDialogMargin)
                     - ChartDialogScrollButtonGap - ChartDialogChromeStyle.ButtonHeight,
                 HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
                 VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
@@ -1273,7 +1274,7 @@ public sealed partial class MainWindow
 
         if (fixedWpfHeight is { } fixedHeight)
         {
-            var clientHeight = fixedHeight - WpfNoResizeFrameHeight;
+            var clientHeight = fixedHeight - WpfNoResizeClientFrameHeight;
             dialog.SizeToContent = SizeToContent.Manual;
             dialog.Height = clientHeight;
             dialog.MinHeight = clientHeight;

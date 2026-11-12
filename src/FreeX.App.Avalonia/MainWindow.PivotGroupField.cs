@@ -156,10 +156,10 @@ public sealed partial class MainWindow
             // WPF PivotFieldGroupingDialog: 420x430 outer, NoResize, so the app-wide dialog sizing makes
             // 430 the minimum and lets the height follow the content.
             Title = UiText.Get("PivotFieldGrouping_GroupPivotField"),
-            Width = 420,
-            MinWidth = 420,
-            MaxWidth = 420,
-            MinHeight = 430 - WpfNoResizeFrameHeight,
+            Width = 420 - WpfNoResizeFrameWidth,
+            MinWidth = 420 - WpfNoResizeFrameWidth,
+            MaxWidth = 420 - WpfNoResizeFrameWidth,
+            MinHeight = 430 - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
