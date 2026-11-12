@@ -23,6 +23,7 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'ThrottleSupport.ps1')
 $branch = (& git -C $repoRoot branch --show-current).Trim()
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($branch)) {
     throw 'The integration gate must run from a named Git branch.'
@@ -92,23 +93,41 @@ if (-not $SkipPreflight) {
 }
 
 if (-not $SkipBuild) {
-    & dotnet build (Join-Path $repoRoot 'FreeX.slnx') --configuration Release
-    if ($LASTEXITCODE -ne 0) {
-        throw "Release build failed with exit code $LASTEXITCODE."
+    # The Release build waits for a machine-wide heavy slot (tools/ThrottleSupport.ps1); the repository
+    # preflight above takes its own slot, so the two never overlap in this process.
+    $buildSlot = Enter-FreeXThrottle -Kind Build -Description 'dotnet build FreeX.slnx --configuration Release'
+    try {
+        & dotnet build (Join-Path $repoRoot 'FreeX.slnx') --configuration Release
+        $buildExitCode = $LASTEXITCODE
+    }
+    finally {
+        Exit-FreeXThrottle -Slot $buildSlot
+    }
+    if ($buildExitCode -ne 0) {
+        throw "Release build failed with exit code $buildExitCode."
     }
 }
 
 if (-not $SkipAffectedTests) {
     foreach ($gateId in @($selection.gateIds)) {
-        & (Join-Path $PSScriptRoot 'Invoke-TestGate.ps1') `
-            -Gate commit `
-            -Platform windows `
-            -GateId ([string]$gateId) `
-            -Configuration Release `
-            -HangTimeout 15m `
-            -ResultsDirectory 'artifacts/pre-merge-test-gates'
-        if ($LASTEXITCODE -ne 0) {
-            throw "Affected commit gate '$gateId' failed with exit code $LASTEXITCODE."
+        # Each gate waits for a machine-wide test slot (tools/ThrottleSupport.ps1); the wait happens
+        # before the gate's own hang timeout starts.
+        $testSlot = Enter-FreeXThrottle -Kind Test -Description "Invoke-TestGate $gateId"
+        try {
+            & (Join-Path $PSScriptRoot 'Invoke-TestGate.ps1') `
+                -Gate commit `
+                -Platform windows `
+                -GateId ([string]$gateId) `
+                -Configuration Release `
+                -HangTimeout 15m `
+                -ResultsDirectory 'artifacts/pre-merge-test-gates'
+            $gateExitCode = $LASTEXITCODE
+        }
+        finally {
+            Exit-FreeXThrottle -Slot $testSlot
+        }
+        if ($gateExitCode -ne 0) {
+            throw "Affected commit gate '$gateId' failed with exit code $gateExitCode."
         }
     }
 }

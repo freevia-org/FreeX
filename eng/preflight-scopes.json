@@ -4,6 +4,8 @@
   "globalTriggers": [
     "tools/Test-RepositoryPreflight.ps1",
     "tools/ToolScriptSupport.ps1",
+    "tools/ThrottleSupport.ps1",
+    "tools/Invoke-Throttled.ps1",
     "tools/PreflightScopeSupport.ps1",
     "eng/preflight-scopes.json",
     "global.json",

@@ -137,6 +137,40 @@ mentions `-ScopeBaseRef`. A bare `Test-RepositoryPreflight.ps1` is also always f
 only shortens the pre-merge wait; a missed trigger is caught by the first CI run after the push, and
 `-Full` is the escape hatch before it.
 
+## Cross-Session Throttle
+
+Many agent sessions share one machine, so per-session parallelism cannot bound the aggregate load: a
+Release build that takes minutes on a quiet box has taken tens of minutes under load, and repository
+preflight and focused tests have hit their timeouts waiting on CPU and memory, not on a defect.
+`tools/Invoke-Throttled.ps1` makes heavy verification queue instead of thrash:
+
+```powershell
+pwsh -NoProfile -File tools/Invoke-Throttled.ps1 -Kind Build -- dotnet build FreeX.slnx --configuration Release
+pwsh -NoProfile -File tools/Invoke-Throttled.ps1 -Kind Test -- dotnet test <project> --configuration Release --no-build
+```
+
+- `-Kind Build` and `-Kind Preflight` share the heavy pool (`FREEX_THROTTLE_BUILD_SLOTS`, default 2);
+  `-Kind Test` has its own pool (`FREEX_THROTTLE_TEST_SLOTS`, default 2). The wrapper waits for a slot
+  (FIFO among live waiters, a "waiting for a ... slot (queue position ...)" line on stderr every 30 s),
+  runs the command in the foreground with output and the exact exit code passed through, and always
+  releases the slot. Everything after `--` reaches the command verbatim; the wrapper never changes
+  build or test flags and never kills any process.
+- Each slot is a named OS mutex (`Global\FreeXThrottle-<pool>-<n>`), which Windows releases when the
+  owning process dies. A killed or crashed holder therefore cannot deadlock a slot; the next waiter
+  receives an abandoned mutex and treats it as acquired. (A command orphaned by killing only its
+  wrapper keeps running without a slot until it exits.)
+- `-MaxWaitMinutes` (default 360) is the escape hatch: when the budget is spent the command runs
+  without a slot after a warning. `FREEX_THROTTLE_DISABLE=1` bypasses the throttle entirely, and it is
+  bypassed automatically when `GITHUB_ACTIONS=true` (hosted runners are not shared) and for any
+  descendant of a throttled command (`FREEX_THROTTLE_HELD`), so parallel preflight children and nested
+  wrappers never take a second slot.
+- The repository entry points use it themselves: `Test-RepositoryPreflight.ps1` re-launches itself
+  through one `Preflight` slot before any check starts (the wait is outside the per-check watchdog),
+  and `Test-BranchForIntegration.ps1` takes a `Build` slot around the Release build and a `Test` slot
+  around each affected gate. `tools/Test-InvokeThrottled.ps1` (run by `Test-ToolScripts.ps1`) pins
+  the contract: exit-code pass-through, release on failure and on a killed holder, the slot limit and
+  both bypasses. `FREEX_THROTTLE_NAMESPACE` selects a private pool (used by that self-test).
+
 ## Release Gate
 
 The release gate adds WPF UI-host batches and release-only render evidence. `Full Signed Release`

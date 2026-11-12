@@ -1573,6 +1573,17 @@ exec pwsh -NoProfile -File "$(dirname "$0")/capture-process.ps1" "$@"
     Write-Host "Validated synthetic tool process forwarding and failure behavior."
 }
 
+function Assert-InvokeThrottledContract {
+    param([Parameter(Mandatory = $true)][string]$ToolRoot)
+
+    # Real child processes against a private slot namespace: exit-code pass-through, slot release on
+    # failure and on a killed holder, the slot limit, and the FREEX_THROTTLE_DISABLE / GITHUB_ACTIONS bypasses.
+    $selfTest = Join-Path $ToolRoot "Test-InvokeThrottled.ps1"
+    & ([Environment]::ProcessPath) -NoProfile -File $selfTest
+    if ($LASTEXITCODE -ne 0) {
+        throw "Test-InvokeThrottled.ps1 failed with exit code $LASTEXITCODE."
+    }
+}
 function Assert-GeneratedDocCheckNewlineSemantics {
     param([Parameter(Mandatory = $true)][string]$ToolRoot)
 
@@ -1841,6 +1852,7 @@ if ($resolvedDirectory.Equals($toolsRoot, [System.StringComparison]::OrdinalIgno
     Assert-GeneratedDocCheckNewlineSemantics -ToolRoot $resolvedDirectory
     Assert-PortableDialogPngAnalyzer -RepoRoot $repoRoot -ToolRoot $resolvedDirectory
     Assert-FidelityCorpusDownloaderBehavior -ToolRoot $resolvedDirectory
+    Assert-InvokeThrottledContract -ToolRoot $resolvedDirectory
     Assert-WindowsArtifactSigningContract -ToolRoot $resolvedDirectory
 }
 
