@@ -101,6 +101,38 @@ public class HeaderFooterFieldAndFrameReadTests
         paragraphs.Single(paragraph => paragraph.PlainText == "Plain footer").LegacyTextBoxFrame.Should().BeNull();
     }
 
+    [Theory]
+    [InlineData("F0B7")]
+    [InlineData("B7")]
+    public void SymbolElement_ReadsAsItsPrivateUseCharacterInTheSymbolFont(string code)
+    {
+        var doc = ReadWithFooter(
+            "<w:p><w:r><w:t xml:space=\"preserve\">a </w:t><w:sym w:font=\"Symbol\" w:char=\"" + code + "\"/><w:t xml:space=\"preserve\"> b</w:t></w:r></w:p>");
+
+        var runs = doc.FinalSectionHeadersFooters.Footer!.Paragraphs.Single().Runs;
+        runs.Select(run => run.Text).Should().Equal("a ", "", " b");
+        runs[1].Formatting.FontFamily.Should().Be("Symbol");
+        runs[0].Formatting.FontFamily.Should().BeNull();
+        runs[2].Formatting.FontFamily.Should().BeNull();
+    }
+
+    [Fact]
+    public void SymbolElement_SurvivesASaveAndReopen()
+    {
+        var doc = ReadWithFooter(
+            "<w:p><w:r><w:t>x</w:t></w:r></w:p>",
+            "<w:p><w:r><w:sym w:font=\"Wingdings\" w:char=\"F0FC\"/></w:r></w:p>");
+        using var saved = new MemoryStream();
+        DocxWriter.Write(doc, saved);
+        saved.Position = 0;
+
+        var reopened = DocxReader.Read(saved);
+
+        var run = reopened.Blocks.OfType<Paragraph>().First().Runs.Single(candidate => candidate.Text.Length > 0);
+        run.Text.Should().Be("");
+        run.Formatting.FontFamily.Should().Be("Wingdings");
+    }
+
     [Fact]
     public void PlainTrackedInsertion_IsUnaffected()
     {

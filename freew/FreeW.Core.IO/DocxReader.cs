@@ -4699,6 +4699,18 @@ public static partial class DocxReader
                 text.Append('\t');
             else if (child.Name == W + "cr")
                 text.Append('\n');
+            else if (child.Name == W + "sym" && ReadSymbolCharacter(child) is { } symbol)
+            {
+                // w:sym w:font="Symbol" w:char="F0B7": a glyph of a symbol font addressed by its
+                // private-use code point. It becomes its own run in that font, so the glyph survives
+                // (it used to be dropped) and saves back as the same character in the same font.
+                AddTextFragment();
+                var symbolFormatting = formatting;
+                formatting = formatting with { FontFamily = symbol.Font ?? formatting.FontFamily };
+                text.Append(symbol.Character);
+                AddTextFragment();
+                formatting = symbolFormatting;
+            }
             else if (child.Name == W + "br")
             {
                 switch (child.Attribute(W + "type")?.Value)
@@ -4717,6 +4729,25 @@ public static partial class DocxReader
         }
 
         AddTextFragment();
+    }
+
+    /// <summary>
+    /// Reads <c>w:sym</c> (<c>w:font</c>, hex <c>w:char</c>). Word addresses symbol-font glyphs in the
+    /// U+F000 private-use block; a value below U+0100 is the same glyph by its legacy 8-bit code.
+    /// </summary>
+    private static (string Character, string? Font)? ReadSymbolCharacter(XElement symbol)
+    {
+        if (!int.TryParse(symbol.Attribute(W + "char")?.Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var code)
+            || code <= 0
+            || code > 0xFFFF)
+            return null;
+
+        if (code < 0x100)
+            code += 0xF000;
+        if (char.IsSurrogate((char)code))
+            return null;
+        var font = symbol.Attribute(W + "font")?.Value;
+        return (((char)code).ToString(), string.IsNullOrWhiteSpace(font) ? null : font);
     }
 
     private static void ResolveAlternateContent(XElement run)

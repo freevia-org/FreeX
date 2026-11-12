@@ -101,6 +101,32 @@ public sealed class PreservedNumberingMarkerPlannerTests
         PreservedNumberingMarkerPlanner.Build(document)[2].Text.Should().Be("Section III.");
     }
 
+    [Fact]
+    public void Build_CarriesTheLevelFont_ForSymbolFontBullets()
+    {
+        var document = new TextDocument();
+        document.Preserved.OriginalNumbering = XElement.Parse(
+            """
+            <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:abstractNum w:abstractNumId="0">
+                <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="bullet"/><w:lvlText w:val="&#xF0B7;"/>
+                  <w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol" w:hint="default"/></w:rPr></w:lvl>
+                <w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%2."/></w:lvl>
+              </w:abstractNum>
+              <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>
+            </w:numbering>
+            """);
+        document.Blocks.Add(new Paragraph("Bullet") { PreservedNumbering = new PreservedNumbering(1, 0) });
+        document.Blocks.Add(new Paragraph("Numbered") { PreservedNumbering = new PreservedNumbering(1, 1) });
+
+        var plan = PreservedNumberingMarkerPlanner.Build(document);
+
+        plan[0].Text.Should().Be("");
+        plan[0].FontFamily.Should().Be("Symbol");
+        plan[1].Text.Should().Be("1.");
+        plan[1].FontFamily.Should().BeNull();
+    }
+
     private static TextDocument CreateDocument()
     {
         var document = new TextDocument();
