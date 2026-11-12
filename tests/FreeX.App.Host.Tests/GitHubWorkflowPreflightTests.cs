@@ -14,7 +14,13 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().Contain("workflow_dispatch:");
         workflow.Should().Contain("push:");
         workflow.Should().NotContain("pull_request:");
-        workflow.Should().NotContain("schedule:");
+        // Daily FULL-matrix drift run: impact selection may reduce a push, so a scheduled run
+        // guarantees a full-coverage attestation exists near every commit.
+        workflow.Should().Contain("schedule:");
+        workflow.Should().Contain("tools/Select-CiCoverage.ps1");
+        workflow.Should().Contain("-Coverage ${{ steps.coverage.outputs.mode || 'full' }}");
+        workflow.Should().Contain("name: \"CI coverage: ${{ needs.prepare.outputs.coverage }}\"");
+        workflow.Should().Contain("needs: [prepare, coverage, tests]");
         workflow.Should().Contain("permissions:");
         workflow.Should().Contain("contents: read");
         workflow.Should().NotContain("contents: write");

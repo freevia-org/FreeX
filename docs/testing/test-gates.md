@@ -55,6 +55,52 @@ These are execution optimizations only: conflict markers, line endings, path col
 normalization, script syntax, platform-specific APIs, generated freshness, and project references
 remain covered.
 
+## Impact-Based CI Coverage
+
+A push to `main` pays for what it can affect, and nothing is guessed. `tools/Select-CiCoverage.ps1`
+(the `prepare` job) picks one of two coverage modes:
+
+- `full` runs the whole commit matrix. It is the default and the answer to every doubt.
+- `inert` runs only the legs that own a repository preflight (`runGate=false`: static preflight on
+  Linux, platform preflight on Windows, Linux and macOS) and skips the test gates. The preflight is
+  never skipped.
+
+`inert` is granted only when the commit differs from its **anchor** (the nearest ancestor with a
+successful, completed, full-coverage `ci.yml` run) exclusively inside the documentation directories
+listed in `eng/test-gates.json` `ciImpact.inertDocsDirectories`. Everything else is `full`:
+source, tests, `tools/`, `eng/`, `.github/`, `Directory.Build.*`, `Directory.Packages.props`,
+`global.json`, solutions, root and project files, other `docs/` trees, odd path shapes (traversal,
+case differences, quoting, absolute paths), a missing or unprovable anchor, force pushes and first
+pushes without history, API or git errors in the selector, the daily scheduled run, and
+`workflow_dispatch` with `full` (the default). Selection is by tree comparison against the anchor,
+so merge commits, rebases and force pushes need no special handling.
+
+Why no per-project gate selection: nearly every commit-gate test project reads repository files at
+runtime (source-contract tests over `src/`, `docs/`, `tools/`, `.github/`, and other apps' sources),
+so a `ProjectReference` closure does not bound what a test can observe and cannot be proven sound.
+`tools/Get-ImpactedTestGates.ps1` therefore keeps its project-closure logic for the advisory local
+Windows gate (`-Scope Local`), while `-Scope Ci` applies exactly the rule above.
+
+The inert list is mechanically true. `tools/Test-CiImpactSelection.ps1` (run by
+`Test-TestGateContract.ps1` in the static preflight) fails when any tracked source, script, project,
+workflow or manifest outside release-only test projects refers to a listed directory. Comments do not
+count; two documentation generators are named exemptions that must stay unreferenced by any gate. It
+also holds the path-to-mode table, the decision table (every failure to establish a fact selects
+`full`), the reduced-matrix invariants (all preflight owners kept) and the release-attestation probes.
+
+Each `ci.yml` run records its coverage in an evidence job named `CI coverage: full` or
+`CI coverage: inert anchor=<sha>`, and the `FreeX commit gate` aggregate also requires that job.
+`tools/Test-GitHubReleaseCandidate.ps1` (used by `Resolve-GitHubReleaseCandidate.ps1`, and so by
+`Full Signed Release`) reads it back: a run before this feature (no evidence job) or a `full` run
+attests its commit; an `inert` run attests its commit only if its anchor has a successful full run
+and is an ancestor of the commit; an unreadable record attests nothing. A reduced run therefore
+cannot make a release candidate falsely green; at worst the resolver walks to an older candidate.
+
+A daily scheduled `ci.yml` run (`workflow_dispatch` with `full: true` does the same on demand) always
+runs the full matrix so a full attestation exists near every commit and drift cannot hide behind
+reduced pushes. Scheduled and manual runs use their own concurrency group, so they neither cancel nor
+are cancelled by a push run.
+
 ## Release Gate
 
 The release gate adds WPF UI-host batches and release-only render evidence. `Full Signed Release`

@@ -2,16 +2,31 @@ name: CI
 
 on:
   workflow_dispatch:
+    inputs:
+      full:
+        description: Run the full test-gate matrix instead of letting impact selection reduce it.
+        type: boolean
+        default: true
+  # Daily drift run. Impact selection may reduce a push to the repository preflight when only
+  # documentation that nothing reads changed, so a scheduled FULL run guarantees that a full
+  # attestation exists near every commit and that drift (runner images, packages, time-dependent
+  # tests) cannot hide behind a run of reduced pushes.
+  schedule:
+    - cron: "37 3 * * *"
   push:
     branches:
       - main
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # A scheduled or manual FULL run must not cancel (or be cancelled by) the push run in flight,
+  # so they get their own group; pushes still cancel superseded pushes.
+  group: ci-${{ github.ref }}-${{ github.event_name == 'push' && 'push' || 'full' }}
   cancel-in-progress: true
 
 permissions:
   contents: read
+  # Reads earlier ci.yml runs and their jobs to find the full-coverage anchor commit.
+  actions: read
 
 env:
   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
@@ -36,19 +51,41 @@ jobs:
   prepare:
     name: Select test gates
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
+      mode: ${{ steps.coverage.outputs.mode }}
+      coverage: ${{ steps.coverage.outputs.coverage }}
     steps:
-      - name: Checkout gate manifest
+      # Full commit history, but no file contents (blob:none): the coverage selector only needs the
+      # commit graph and a name-only tree comparison against its anchor commit.
+      - name: Checkout gate manifest and commit graph
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 1
+          fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
+      # Decides what this push must prove. Anything not provably inert -- and any failure to decide --
+      # selects the FULL matrix; see tools/CiImpactSupport.ps1 for the safety argument.
+      - name: Select CI coverage
+        id: coverage
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_FORCE_FULL: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.full) }}
+        run: |
+          $full = $env:CI_FORCE_FULL -eq 'true'
+          pwsh -NoProfile -File tools/Select-CiCoverage.ps1 `
+            -Repository $env:GITHUB_REPOSITORY `
+            -Sha $env:GITHUB_SHA `
+            -EventName $env:GITHUB_EVENT_NAME `
+            -Full:$full `
+            -GitHubOutputPath $env:GITHUB_OUTPUT
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build test matrix from the repository contract
         id: matrix
         shell: pwsh
-        run: pwsh -NoProfile -File tools/Get-TestGateMatrix.ps1 -Gate commit -GitHubOutputPath $env:GITHUB_OUTPUT
+        run: pwsh -NoProfile -File tools/Get-TestGateMatrix.ps1 -Gate commit -Coverage ${{ steps.coverage.outputs.mode || 'full' }} -GitHubOutputPath $env:GITHUB_OUTPUT
 
   tests:
     name: ${{ matrix.app }} ${{ matrix.platform }} ${{ matrix.displayGateId }}
@@ -80,6 +117,7 @@ jobs:
       # of bin/ would exceed the 10 GB repository cache budget. bin/ is cheap to reconstitute by
       # copying out of obj/.
       - name: Cache build intermediates
+        if: matrix.runGate
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -93,9 +131,11 @@ jobs:
       # build of the previous commit. This rewrites timestamps so they encode what git says actually
       # changed; see the script for the full argument and the fallback to a clean build.
       - name: Make build-cache timestamps honest
+        if: matrix.runGate
         shell: pwsh
         run: pwsh -NoProfile -File tools/Set-BuildCacheTimestamps.ps1
       - name: Record the commit this cache will hold
+        if: matrix.runGate
         shell: pwsh
         run: '"${{ github.sha }}" | Set-Content -LiteralPath obj-build-cache-commit.txt -Encoding ascii'
       - name: Run repository-static preflight
@@ -106,7 +146,10 @@ jobs:
         if: matrix.runPlatformPreflight
         shell: pwsh
         run: pwsh -NoProfile -File tools/Test-RepositoryPreflight.ps1 -Mode Platform
+      # runGate is false only for a reduced (inert-documentation) run, which still runs the
+      # repository preflight on every leg that owns one but skips the test gate itself.
       - name: Run isolated test gate
+        if: matrix.runGate
         shell: pwsh
         run: |
           pwsh -NoProfile -File tools/Invoke-TestGate.ps1 `
@@ -127,10 +170,25 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  # Evidence for release resolution. The job NAME records what this run covered: "full" or
+  # "inert anchor=<sha>" (only documentation nothing reads differs from that anchor commit, whose own
+  # successful full run therefore stands for this one). tools/Test-GitHubReleaseCandidate.ps1 reads it
+  # back, so a reduced run can never be mistaken for a full attestation.
+  coverage:
+    name: "CI coverage: ${{ needs.prepare.outputs.coverage }}"
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Record coverage
+        shell: pwsh
+        run: |
+          Write-Host "CI coverage: ${{ needs.prepare.outputs.coverage }}"
+
   quality-gate:
     # Keep the established required-check name so branch protection does not need migration.
     name: FreeX commit gate
-    needs: [prepare, tests]
+    needs: [prepare, coverage, tests]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -139,7 +197,8 @@ jobs:
         shell: pwsh
         run: |
           $prepareResult = "${{ needs.prepare.result }}"
+          $coverageResult = "${{ needs.coverage.result }}"
           $testResult = "${{ needs.tests.result }}"
-          if ($prepareResult -ne 'success' -or $testResult -ne 'success') {
-            throw "Matrix result: $prepareResult; preflight/test matrix result: $testResult."
+          if ($prepareResult -ne 'success' -or $coverageResult -ne 'success' -or $testResult -ne 'success') {
+            throw "Matrix result: $prepareResult; coverage evidence result: $coverageResult; preflight/test matrix result: $testResult."
           }

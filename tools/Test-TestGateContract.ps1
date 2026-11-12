@@ -357,6 +357,15 @@ if ($actualGlobalGateSet -ne $expectedGlobalGateSet) {
     $errors.Add("Global build-contract changes must select every Windows commit gate.")
 }
 
+# Impact-based CI selection must fail safe: the inert-directory proof, the path/decision tables, the
+# reduced-matrix invariants and the release-attestation probes all live in one script.
+try {
+    & (Join-Path $PSScriptRoot "Test-CiImpactSelection.ps1") | Out-Host
+}
+catch {
+    $errors.Add($_.Exception.Message)
+}
+
 $gateDocumentation = Get-Content -LiteralPath (Join-Path $repoRoot "docs/testing/test-gates.md") -Raw
 foreach ($requiredHeading in @("Commit gate", "Release gate", "all platforms", "Invoke-TestGate.ps1")) {
     if ($gateDocumentation.IndexOf($requiredHeading, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) {

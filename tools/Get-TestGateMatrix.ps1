@@ -5,7 +5,15 @@ param(
     [ValidateSet('commit', 'release', 'all')]
     [string]$Gate = 'all',
 
-    [string]$GitHubOutputPath = ''
+    [string]$GitHubOutputPath = '',
+
+    # full  = every gate (the only mode that can attest the commit on its own).
+    # inert = the commit differs from its full-coverage anchor only in documentation that nothing
+    #         reads (see tools/CiImpactSupport.ps1). Only the legs that own a repository preflight
+    #         mode are emitted, with runGate=false so they run the cheap preflight but not the
+    #         test gate. The preflight is NEVER skipped.
+    [ValidateSet('full', 'inert')]
+    [string]$Coverage = 'full'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -93,6 +101,7 @@ $entries = @(
                     platform = [string]$platform
                     runner = $runnerByPlatform[[string]$platform]
                     fetchDepth = if ($requiresFullHistory) { 0 } else { 1 }
+                    runGate = $true
                     runStaticPreflight = $preflightModes -contains 'static'
                     runPlatformPreflight = $preflightModes -contains 'platform'
                     partitionIndex = $partitionIndex
@@ -105,6 +114,19 @@ $entries = @(
 
 if ($entries.Count -eq 0) {
     throw "No '$Gate' test-gate matrix entries were selected."
+}
+
+if ($Coverage -eq 'inert') {
+    if ($Gate -ne 'commit') {
+        throw "Inert coverage only applies to the commit gate; got '$Gate'."
+    }
+    $entries = @($entries | Where-Object { $_.runStaticPreflight -or $_.runPlatformPreflight })
+    if ($entries.Count -eq 0) {
+        throw 'Inert coverage selected no preflight-owning legs; refusing to emit an empty matrix.'
+    }
+    foreach ($entry in $entries) {
+        $entry.runGate = $false
+    }
 }
 
 # Dispatch the longest jobs first. GitHub starts matrix entries in array order, and the runner

@@ -7,7 +7,13 @@ param(
     [string[]]$ChangedPaths = @(),
 
     [ValidateSet('Json', 'Text')]
-    [string]$OutputFormat = 'Text'
+    [string]$OutputFormat = 'Text',
+
+    # Local = the Windows pre-merge gate (cheap, advisory: CI re-runs everything after the push).
+    # Ci    = what a push to main must prove. Sound, not advisory: only paths proven inert (see
+    #         tools/CiImpactSupport.ps1) reduce anything; every other path selects EVERY commit gate.
+    [ValidateSet('Local', 'Ci')]
+    [string]$Scope = 'Local'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -35,7 +41,9 @@ if ($ChangedPaths.Count -eq 0) {
         throw "Base ref '$BaseRef' does not resolve to a commit. Fetch origin/main before selecting gates."
     }
 
-    $ChangedPaths = @(& git -C $repoRoot diff --name-only --diff-filter=ACMRT "$BaseRef...$HeadRef")
+    # Deleted paths count (D) and renames are reported as delete + add (--no-renames): removing or
+    # moving a file can break a consumer that was not itself touched.
+    $ChangedPaths = @(& git -C $repoRoot diff --name-only --no-renames --diff-filter=ACDMRT "$BaseRef...$HeadRef")
     if ($LASTEXITCODE -ne 0) {
         throw "Unable to compare '$BaseRef' with '$HeadRef'."
     }
@@ -47,6 +55,32 @@ $normalizedChangedPaths = @(
         Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
         Sort-Object -Unique
 )
+
+if ($Scope -eq 'Ci') {
+    . (Join-Path $PSScriptRoot 'CiImpactSupport.ps1')
+    $ciSettings = Get-CiImpactSettings -RepoRoot $repoRoot
+    # Deliberately NOT the TrimStart-normalized list above: that trims leading dots and slashes, which
+    # would turn ".github/x" into "github/x" and "../docs/archive/x" into an in-tree path.
+    $ciChangedPaths = @($ChangedPaths | ForEach-Object { ConvertTo-CiImpactPath ([string]$_) } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
+    $classification = Get-CiImpactClassification -ChangedPaths $ciChangedPaths -InertPrefixes $ciSettings.InertPrefixes
+    $allCommitGateIds = @($manifest.gates | Where-Object { $_.gate -eq 'commit' } | ForEach-Object { [string]$_.id })
+    $ciResult = [ordered]@{
+        scope = 'Ci'
+        mode = $classification.Mode
+        baseRef = $BaseRef
+        headRef = $HeadRef
+        changedPaths = $ciChangedPaths
+        nonInertPaths = @($classification.NonInertPaths)
+        gateIds = if ($classification.Mode -eq 'full') { $allCommitGateIds } else { @() }
+    }
+    if ($OutputFormat -eq 'Json') {
+        $ciResult | ConvertTo-Json -Depth 5
+    }
+    else {
+        Write-Host "CI coverage: $($classification.Mode); commit gates selected: $(@($ciResult.gateIds).Count)."
+    }
+    return
+}
 
 $windowsCommitGates = @($manifest.gates | Where-Object {
     $_.gate -eq 'commit' -and $_.platforms -contains 'windows'

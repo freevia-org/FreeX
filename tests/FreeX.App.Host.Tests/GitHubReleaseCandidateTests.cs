@@ -42,6 +42,35 @@ public sealed class GitHubReleaseCandidateTests
             $"No successful completed 'codeql.yml' run exists for exact commit {CommitSha}.");
     }
 
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
+    public void CandidateGate_RejectsAnImpactReducedRunWhoseCoverageAnchorIsNotProven()
+    {
+        // A reduced (inert-documentation-only) ci.yml run is green by construction, so it must
+        // never attest a commit by itself: it has to name a full-coverage ancestor anchor.
+        using var temp = new TestTemporaryDirectory();
+        var anchor = new string('c', 40);
+        var runDirectory = Path.Combine(temp.Path, CommitSha);
+        Directory.CreateDirectory(runDirectory);
+        WriteRunMetadata(runDirectory, "ci.yml", CommitSha, "success", 101);
+        File.WriteAllText(
+            Path.Combine(runDirectory, "ci.yml.101.jobs.json"),
+            JsonSerializer.Serialize(new
+            {
+                jobs = new[]
+                {
+                    new { name = $"CI coverage: inert anchor={anchor}", status = "completed", conclusion = "success" }
+                }
+            }));
+
+        var result = PowerShellScriptRunner.RunToolScriptWithPwsh(
+            "Test-GitHubReleaseCandidate.ps1",
+            temp.Path,
+            $"-Repository owner/repo -CommitSha {CommitSha} -RequiredWorkflows ci.yml -RunMetadataDirectory \"{runDirectory}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("proves full coverage");
+    }
+
     private static void WriteRunMetadata(string directory, string workflow, string sha, string conclusion, long id)
     {
         var payload = new
