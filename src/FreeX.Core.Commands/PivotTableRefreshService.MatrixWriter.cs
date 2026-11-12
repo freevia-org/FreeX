@@ -124,13 +124,14 @@ public static partial class PivotTableRefreshService
         IReadOnlyList<string> parentPrefix)
     {
         var suffixes = new List<string[]>();
+        var seenSuffixes = new HashSet<PivotKey>();
         foreach (var columnKey in columnKeys)
         {
             if (!ColumnKeyHasPrefix(columnKey, parentPrefix))
                 continue;
 
             var suffix = columnKey.Values.Skip(fieldPosition + 1).ToArray();
-            if (!suffixes.Any(existing => existing.SequenceEqual(suffix, StringComparer.CurrentCultureIgnoreCase)))
+            if (seenSuffixes.Add(new PivotKey(suffix)))
                 suffixes.Add(suffix);
         }
 

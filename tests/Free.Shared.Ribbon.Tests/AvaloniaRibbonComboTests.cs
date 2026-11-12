@@ -184,6 +184,31 @@ public sealed class AvaloniaRibbonComboTests
     }
 
     [Fact]
+    public async Task EditableCombo_DuplicateStateValues_SelectFirstMatch()
+    {
+        await Session.Dispatch(() =>
+        {
+            var command = new RecordingStatefulCommand("Arial");
+            var registry = new RibbonCommandRegistry();
+            registry.Register("font", command);
+            var content = AvaloniaRibbonRenderer.BuildTabContent(BuildComboTab("font", "Arial", "Calibri", "Arial"), registry);
+            var window = Show(content);
+            try
+            {
+                var combo = FindCombo(content);
+
+                combo.SelectedIndex.Should().Be(0);
+                combo.Text.Should().Be("Arial");
+                command.ExecutedValues.Should().BeEmpty();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task TypedCombo_DisplaysLabels_DispatchesValues_AndMatchesStateByValue()
     {
         await Session.Dispatch(() =>

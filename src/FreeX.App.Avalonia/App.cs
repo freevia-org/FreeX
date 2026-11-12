@@ -80,6 +80,11 @@ public sealed class App : Application
         foreach (var style in DialogControlStyles.Build())
             Styles.Add(style);
 
+        // macOS only (empty elsewhere): context menus and menu flyouts otherwise fall back to the
+        // platform default face instead of the chain the ribbon and dialogs resolve to.
+        foreach (var style in AvaloniaCompactDialogChrome.BuildPlatformMenuFontStyles())
+            Styles.Add(style);
+
         // Select the active brand theme and register token brushes into Application.Resources
         // so that chrome surfaces can look them up by key.  FREEX_THEME=midnight swaps in the
         // alternate palette; otherwise the default FreeX palette applies (values are identical

@@ -127,7 +127,7 @@ public sealed partial class MainWindow
         bool showBelowRibbon,
         string keyTip)
     {
-        var foreground = showBelowRibbon ? PrimaryInk : StatusBarForeground;
+        var foreground = showBelowRibbon ? PrimaryInk : TitleBarForeground;
         var keyTipBadge = CreateAvaloniaQuickAccessKeyTipBadge(keyTip);
         var content = new Grid
         {
@@ -150,6 +150,7 @@ public sealed partial class MainWindow
             Tag = command.Id,
         };
         _avaloniaQuickAccessKeyTipBadges[button] = keyTipBadge;
+        ApplyAvaloniaQuickAccessFlatDisabledChrome(button);
         WindowDecorationProperties.SetElementRole(button, WindowDecorationsElementRole.User);
         AutomationProperties.SetAutomationId(button, command.AutomationId);
         AutomationProperties.SetName(button, UiText.Get(command.TitleResourceKey));
@@ -157,6 +158,17 @@ public sealed partial class MainWindow
         button.Click += (_, args) => ExecuteAvaloniaQuickAccessCommand(command, button, args);
         AttachAvaloniaQuickAccessCustomization(button, command.Id);
         return button;
+    }
+
+    private const double AvaloniaQuickAccessDisabledOpacity = 0.42;
+
+    // Fluent paints a :disabled Button with an opaque grey plate (ButtonBackgroundDisabled). In the
+    // title bar that shows as grey squares behind Undo/Redo; the WPF host keeps disabled QAT buttons
+    // flat, so override the per-button theme resources the Fluent template resolves dynamically.
+    private static void ApplyAvaloniaQuickAccessFlatDisabledChrome(Button button)
+    {
+        button.Resources["ButtonBackgroundDisabled"] = Brushes.Transparent;
+        button.Resources["ButtonBorderBrushDisabled"] = Brushes.Transparent;
     }
 
     private static Border CreateAvaloniaQuickAccessKeyTipBadge(string keyTip) => new()
@@ -176,7 +188,7 @@ public sealed partial class MainWindow
         Child = new TextBlock
         {
             Text = keyTip,
-            FontFamily = new FontFamily("Segoe UI"),
+            FontFamily = Free.Shared.Shell.Avalonia.AvaloniaCompactDialogChrome.ResolveUiFontFamily("Segoe UI"),
             FontSize = 10,
             Foreground = Brushes.Black,
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -187,7 +199,7 @@ public sealed partial class MainWindow
         QuickAccessToolbarCommandDefinition command,
         bool showBelowRibbon)
     {
-        var foreground = showBelowRibbon ? PrimaryInk : StatusBarForeground;
+        var foreground = showBelowRibbon ? PrimaryInk : TitleBarForeground;
         var button = new Button
         {
             Width = 14,
@@ -203,6 +215,7 @@ public sealed partial class MainWindow
                 foreground),
             Tag = $"{command.Id}.History",
         };
+        ApplyAvaloniaQuickAccessFlatDisabledChrome(button);
         WindowDecorationProperties.SetElementRole(button, WindowDecorationsElementRole.User);
         AutomationProperties.SetAutomationId(button, $"{command.Id}QatHistoryButton");
         AutomationProperties.SetName(
@@ -383,7 +396,12 @@ public sealed partial class MainWindow
             HasActiveWorksheet: _session.Workbook.GetSheet(_session.ActiveSheet.Id) is not null,
             HasSelection: _session.SelectedRanges.Count > 0);
         foreach (var (commandId, button) in _avaloniaQuickAccessButtons)
+        {
             button.IsEnabled = QuickAccessCommandStateResolver.CanExecute(commandId, state);
+            // The glyph carries an explicit brush, so dim the whole button like the WPF title-bar
+            // button style does instead of relying on Fluent's disabled foreground.
+            button.Opacity = button.IsEnabled ? 1 : AvaloniaQuickAccessDisabledOpacity;
+        }
 
         RefreshAvaloniaQuickAccessKeyTipBadges();
     }
