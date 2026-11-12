@@ -835,21 +835,7 @@ public sealed partial class MainWindow
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         });
 
-        var actions = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 10,
-            Margin = new Thickness(0, 16, 0, 0),
-        };
-        actions.Children.Add(CreateLiveBackstageActionButton(
-            UiText.Get("ShellLoc_PrintPreviewTitle"),
-            "BackstagePrintPreviewButton",
-            async () => await ShowPrintPreviewDialogAsync()));
-        actions.Children.Add(CreateLiveBackstageActionButton(
-            UiText.Get("MainWindow_Text_Print"),
-            "BackstagePrintNowButton",
-            async () => await ShowPrintDialogAsync()));
-        content.Children.Add(actions);
+        content.Children.Add(BuildLiveBackstagePrintWorkspace());
         return content;
     }
 

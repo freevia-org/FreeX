@@ -234,27 +234,7 @@ public sealed partial class MainWindow
         {
             if (!hasExternalPageSource)
             {
-                var ignorePrintArea = currentSettings.PrintWhat is PrintWhat.Selection || currentSettings.IgnorePrintArea;
-                AvaloniaPrintPreviewPaginationContext updatedContext;
-                var created = currentSettings.PrintWhat == PrintWhat.EntireWorkbook
-                    ? AvaloniaPrintPreviewPaginationContext.TryCreateWorkbook(
-                        _session.Workbook,
-                        PrintPreviewTextMeasurer,
-                        out updatedContext,
-                        ResolveWorkbookDirectoryForHeaderFooter(),
-                        currentSettings.IgnorePrintArea)
-                    : AvaloniaPrintPreviewPaginationContext.TryCreate(
-                        _session.Workbook,
-                        _session.ActiveSheet,
-                        PrintPreviewTextMeasurer,
-                        currentSettings.PrintWhat == PrintWhat.Selection
-                            ? _session.SelectedRange
-                            : null,
-                        out updatedContext,
-                        ResolveWorkbookDirectoryForHeaderFooter(),
-                        ignorePrintArea);
-
-                if (created)
+                if (TryCreatePreviewContextForSettings(currentSettings, out var updatedContext))
                 {
                     context = updatedContext;
                     pageCount = updatedContext.PageCount;
@@ -307,34 +287,7 @@ public sealed partial class MainWindow
         exportButton.Click += (_, _) => RunGuarded(async () =>
         {
             dialog.Close();
-            var settings = currentSettings;
-            var hasPageRange = settings.PageFrom.HasValue || settings.PageTo.HasValue;
-            var request = BuildPrintJobRequest(
-                settings.PrintWhat switch
-                {
-                    PrintWhat.EntireWorkbook => WorkbookExportPrintScope.VisibleWorkbook,
-                    PrintWhat.Selection => WorkbookExportPrintScope.SelectedRange,
-                    _ => WorkbookExportPrintScope.ActiveSheet,
-                },
-                hasPageRange ? PrintJobPageRangeKind.PageRange : PrintJobPageRangeKind.AllPages,
-                hasPageRange ? settings.PageFrom : null,
-                hasPageRange ? settings.PageTo : null,
-                PrintSettingsPlanner.ClampCopies(settings.Copies),
-                settings.Collated) with
-            {
-                IgnorePrintAreas = settings.IgnorePrintArea,
-                Sides = settings.Sides switch
-                {
-                    PrintPreviewSidesMode.TwoSidedLongEdge => PrintSides.TwoSidedLongEdge,
-                    PrintPreviewSidesMode.TwoSidedShortEdge => PrintSides.TwoSidedShortEdge,
-                    _ => PrintSides.OneSided,
-                },
-            };
-            var targetPrinter = canSpool
-                ? printerNames.FirstOrDefault(name => string.Equals(name, settings.PrinterName, StringComparison.Ordinal))
-                    ?? defaultPrinterName
-                : null;
-            await ExecutePrintJobAsync(request, targetPrinter, canSpool);
+            await PrintWithPreviewSettingsAsync(currentSettings, canSpool, printerNames, defaultPrinterName);
         });
         dialog.KeyDown += (_, e) =>
         {
@@ -453,6 +406,73 @@ public sealed partial class MainWindow
         };
 
         await dialog.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Paginates what the given print settings would print (active sheet, selection or the whole
+    /// workbook, honouring Ignore Print Area) for the preview surfaces.
+    /// </summary>
+    private bool TryCreatePreviewContextForSettings(
+        PrintPreviewSettings settings,
+        out AvaloniaPrintPreviewPaginationContext context)
+    {
+        var ignorePrintArea = settings.PrintWhat is PrintWhat.Selection || settings.IgnorePrintArea;
+        return settings.PrintWhat == PrintWhat.EntireWorkbook
+            ? AvaloniaPrintPreviewPaginationContext.TryCreateWorkbook(
+                _session.Workbook,
+                PrintPreviewTextMeasurer,
+                out context,
+                ResolveWorkbookDirectoryForHeaderFooter(),
+                settings.IgnorePrintArea)
+            : AvaloniaPrintPreviewPaginationContext.TryCreate(
+                _session.Workbook,
+                _session.ActiveSheet,
+                PrintPreviewTextMeasurer,
+                settings.PrintWhat == PrintWhat.Selection
+                    ? _session.SelectedRange
+                    : null,
+                out context,
+                ResolveWorkbookDirectoryForHeaderFooter(),
+                ignorePrintArea);
+    }
+
+    /// <summary>
+    /// Sends what the print settings describe to the chosen printer (or, with no spooler, to the
+    /// print-ready-PDF fallback). Shared by the preview window's and the File &gt; Print pane's Print button.
+    /// </summary>
+    private async Task PrintWithPreviewSettingsAsync(
+        PrintPreviewSettings settings,
+        bool canSpool,
+        IReadOnlyList<string> printerNames,
+        string? defaultPrinterName)
+    {
+        var hasPageRange = settings.PageFrom.HasValue || settings.PageTo.HasValue;
+        var request = BuildPrintJobRequest(
+            settings.PrintWhat switch
+            {
+                PrintWhat.EntireWorkbook => WorkbookExportPrintScope.VisibleWorkbook,
+                PrintWhat.Selection => WorkbookExportPrintScope.SelectedRange,
+                _ => WorkbookExportPrintScope.ActiveSheet,
+            },
+            hasPageRange ? PrintJobPageRangeKind.PageRange : PrintJobPageRangeKind.AllPages,
+            hasPageRange ? settings.PageFrom : null,
+            hasPageRange ? settings.PageTo : null,
+            PrintSettingsPlanner.ClampCopies(settings.Copies),
+            settings.Collated) with
+        {
+            IgnorePrintAreas = settings.IgnorePrintArea,
+            Sides = settings.Sides switch
+            {
+                PrintPreviewSidesMode.TwoSidedLongEdge => PrintSides.TwoSidedLongEdge,
+                PrintPreviewSidesMode.TwoSidedShortEdge => PrintSides.TwoSidedShortEdge,
+                _ => PrintSides.OneSided,
+            },
+        };
+        var targetPrinter = canSpool
+            ? printerNames.FirstOrDefault(name => string.Equals(name, settings.PrinterName, StringComparison.Ordinal))
+                ?? defaultPrinterName
+            : null;
+        await ExecutePrintJobAsync(request, targetPrinter, canSpool);
     }
 
     private static Border CreatePrintPreviewTopToolbar(

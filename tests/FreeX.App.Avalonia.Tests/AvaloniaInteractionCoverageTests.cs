@@ -69,14 +69,14 @@ public sealed class AvaloniaInteractionCoverageTests
         // count rose by 10 in r143 when the Cell Styles gallery gained the built-in styles Excel
         // ships that FreeX was missing. The Insert Form Controls group adds one dropdown and seven
         // menu commands.
-        Assert.Equal(652, rows.Length);
+        Assert.Equal(653, rows.Length);
         Assert.Equal(313, rows.Count(row => row.Kind != nameof(RibbonMenuItem)));
-        Assert.Equal(339, rows.Count(row => row.Kind == nameof(RibbonMenuItem)));
-        Assert.Equal(615, rows.Select(row => row.CommandId).Distinct().Count());
+        Assert.Equal(340, rows.Count(row => row.Kind == nameof(RibbonMenuItem)));
+        Assert.Equal(616, rows.Select(row => row.CommandId).Distinct().Count());
         Assert.Equal(76, definition.Tabs.Sum(tab => tab.Groups.Count));
 
         var runner = File.ReadAllText(RepoFile("tools", "Run-FreeXLinuxInteractionValidation.ps1"));
-        Assert.Contains("$authoritativeRibbonBindingRowCount = 652", runner, StringComparison.Ordinal);
+        Assert.Contains("$authoritativeRibbonBindingRowCount = 653", runner, StringComparison.Ordinal);
         Assert.Contains("$authoritativeCollapsedRibbonGroupRowCount = 76", runner, StringComparison.Ordinal);
     }
 
@@ -118,9 +118,9 @@ public sealed class AvaloniaInteractionCoverageTests
                     ribbonOnly: false,
                     coreSection: "ribbon-bindings");
 
-                Assert.Equal(652, results.Count(result => result.Category == "ribbon-command"));
+                Assert.Equal(653, results.Count(result => result.Category == "ribbon-command"));
                 Assert.Equal(76, results.Count(result => result.Category == "ribbon-collapsed-group"));
-                Assert.Equal(728, results.Count);
+                Assert.Equal(729, results.Count);
                 Assert.All(results, result => Assert.Equal("passed", result.Status));
                 Assert.DoesNotContain(results, result => result.Category == "ribbon-command-behavior");
             }

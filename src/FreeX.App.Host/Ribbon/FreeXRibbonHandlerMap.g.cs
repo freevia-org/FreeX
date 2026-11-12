@@ -114,6 +114,7 @@ public partial class MainWindow
             ["Axis Title Size"] = new(static (owner, sender, eventArgs) => owner.ChartAxisTitleSizeBtn_Click(sender, eventArgs), nameof(ChartAxisTitleSizeBtn_Click)),
             [FreeXRibbonCommandIds.PageLayoutPaperSizeB4Jis] = new(static (owner, sender, eventArgs) => owner.SizeB4_Click(sender, eventArgs), nameof(SizeB4_Click)),
             [FreeXRibbonCommandIds.PageLayoutPaperSizeB5Jis] = new(static (owner, sender, eventArgs) => owner.SizeB5_Click(sender, eventArgs), nameof(SizeB5_Click)),
+            [FreeXRibbonCommandIds.PageLayoutPaperSizeMore] = new(static (owner, sender, eventArgs) => owner.SizeMore_Click(sender, eventArgs), nameof(SizeMore_Click)),
             ["Background"] = new(static (owner, sender, eventArgs) => owner.BackgroundBtn_Click(sender, eventArgs), nameof(BackgroundBtn_Click)),
             ["Bad"] = new(static (owner, sender, eventArgs) => owner.CellStyleBadMenuItem_Click(sender, eventArgs), nameof(CellStyleBadMenuItem_Click)),
             [FreeXRibbonCommandIds.PivotBandedColumns] = new(static (owner, sender, eventArgs) => owner.PivotBandedColumnsBtn_Click(sender, eventArgs), nameof(PivotBandedColumnsBtn_Click)),
