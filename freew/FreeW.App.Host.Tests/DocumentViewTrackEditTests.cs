@@ -822,6 +822,36 @@ public sealed class DocumentViewTrackEditTests
     }
 
     [StaFact]
+    public void CommitToModel_PreservesRunTextEffectsThroughWpfView()
+    {
+        const string w14 = "xmlns:w14=\"http://schemas.microsoft.com/office/word/2010/wordml\"";
+        var formatting = new RunFormatting
+        {
+            Bold = true,
+            TextEffects = new RunTextEffects
+            {
+                Glow = $"<w14:glow w14:rad=\"63500\" {w14}><w14:srgbClr w14:val=\"FF0000\" /></w14:glow>",
+                Outline = $"<w14:textOutline w14:w=\"9525\" {w14}><w14:noFill /></w14:textOutline>",
+                ContextualAlternates = $"<w14:cntxtAlts {w14} />",
+            },
+        };
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Plain ", new RunFormatting()));
+        paragraph.Runs.Add(new Run("Glowing", formatting));
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        view.CommitToModel();
+
+        var runs = ((Paragraph)view.Model.Blocks[0]).Runs;
+        runs.Single(run => run.Text == "Glowing").Formatting.Should().Be(formatting);
+        runs.Single(run => run.Text == "Plain ").Formatting.TextEffects.Should().BeNull();
+    }
+
+    [StaFact]
     public void FormatPainter_SelectedRangeCopiesFullFormattingTracksAndUndoesAtomically()
     {
         var sourceFormatting = new RunFormatting

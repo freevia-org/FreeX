@@ -8103,6 +8103,7 @@ public static partial class DocxReader
             NumberSpacing = NumberSpacingFromToken(numSpacing),
             StylisticSet = styleSetId is null ? null
                 : int.TryParse(styleSetId, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var id) ? id : null,
+            TextEffects = ReadRunTextEffects(rPr),
             CharacterBorder = charBorder,
             CharacterShadingHex = charShadingHex,
             CharacterShadingPattern = charShadingHex is not null ? shdPattern : ShadingPattern.Clear,
@@ -8515,6 +8516,7 @@ public static partial class DocxReader
                     ? defaultRun.Ligatures
                     : document.DefaultRun.Ligatures,
                 StylisticSet = defaultRun.StylisticSet ?? document.DefaultRun.StylisticSet,
+                TextEffects = RunTextEffects.Merge(defaultRun.TextEffects, document.DefaultRun.TextEffects),
                 NumberForm = defaultRun.NumberForm != NumberForm.Default
                     ? defaultRun.NumberForm
                     : document.DefaultRun.NumberForm,
