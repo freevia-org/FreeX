@@ -386,7 +386,7 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         moveCopySource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, MoveCopySheetDialogChromeStyle, minWidth, isDefault);");
         moveCopySource.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, MoveCopySheetDialogChromeStyle);");
         moveCopySource.Should().Contain("AvaloniaCompactDialogChrome.ApplyListBox(listBox, MoveCopySheetDialogChromeStyle);");
-        moveCopySource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 12, 0, 0));");
+        moveCopySource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]);");
 
         sheetOptionsSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle SheetOptionsDialogChromeStyle => new(FormulaBarFontFamily);");
         sheetOptionsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, SheetOptionsDialogChromeStyle, minWidth, isDefault);");
