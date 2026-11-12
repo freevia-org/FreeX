@@ -52,6 +52,7 @@ public sealed class AvaloniaReadyModeNavigationParityTests
         Session.Dispatch(async () =>
         {
             var window = new MainWindow([], null!, CreateOptionsSession(moveSelectionAfterEnter, direction));
+            CellAddress landed;
             try
             {
                 window.Show();
@@ -63,13 +64,17 @@ public sealed class AvaloniaReadyModeNavigationParityTests
                 await window.RaiseKeyDownForTest(new KeyEventArgs { Key = key, KeyModifiers = modifiers });
 
                 var active = window.Session.ActiveCell;
-                return new CellAddress(sheet.Id, active.Row, active.Col);
+                landed = new CellAddress(sheet.Id, active.Row, active.Col);
             }
             finally
             {
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
+
+            // Returned at the lambda's own statement level so the headless Dispatch contract scanner
+            // sees the value-returning (awaited) overload.
+            return landed;
         }, CancellationToken.None);
 
     [Theory]
