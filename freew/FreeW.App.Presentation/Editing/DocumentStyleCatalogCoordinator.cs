@@ -23,10 +23,14 @@ public sealed class DocumentStyleCatalogCoordinator
     /// <summary>
     /// Creates the style described by <paramref name="definition"/>. A paragraph or linked style is also
     /// applied to <paramref name="paragraphIndices"/> in the same undo step (Word applies a new style to
-    /// the current paragraph). A character style is only added to the catalog: applying it to selected
-    /// text is the renderer's ordinary named-style path, because that needs its selection mapping.
+    /// the current paragraph). A character style is applied to selected text by
+    /// <paramref name="applyCreated"/>, which the renderer supplies because that needs its selection
+    /// mapping; it runs inside the same undo group, so creating and applying are one undo step.
     /// </summary>
-    public DocumentStyle? CreateStyle(StyleDefinition definition, IReadOnlyList<int> paragraphIndices)
+    public DocumentStyle? CreateStyle(
+        StyleDefinition definition,
+        IReadOnlyList<int> paragraphIndices,
+        Action<DocumentStyle>? applyCreated = null)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(paragraphIndices);
@@ -83,6 +87,7 @@ public sealed class DocumentStyleCatalogCoordinator
             {
                 foreach (var index in targets)
                     commands.Execute(new SetParagraphStyleCommand(index, created.Id));
+                applyCreated?.Invoke(created);
             }
             commands.CommitUndoGroup("New Style");
         }

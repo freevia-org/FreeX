@@ -26,8 +26,8 @@ public sealed partial class DocumentView
 
     /// <summary>
     /// Create New Style: adds the style and applies it the way Word does — a paragraph or linked style
-    /// to the selected paragraphs (one undo step with the creation), a character style to the selected
-    /// text through the ordinary named-style path.
+    /// to the selected paragraphs, a character style to the selected text through the ordinary
+    /// named-style path; either way creating and applying are one undo step.
     /// </summary>
     public DocumentStyle? CreateStyleAndApply(StyleDefinition definition)
     {
@@ -37,14 +37,19 @@ public sealed partial class DocumentView
         var paragraphTargets = SelectedModelParagraphIndices();
         var hasTextSelection = !Selection.IsEmpty;
         CommitToModel();
-        var created = _editingSession.Styles.CreateStyle(definition, paragraphTargets);
-        if (created is { Type: StyleType.Character } && hasTextSelection)
-        {
-            _editingSession.ApplyNamedStyle(
-                created.Id,
-                CreateNamedStyleApplicationTarget(selectedRange, paragraphTargets, hasTextSelection));
-        }
-        return created;
+        // The character-style application runs inside the creation's undo group: one Undo removes both.
+        return _editingSession.Styles.CreateStyle(
+            definition,
+            paragraphTargets,
+            created =>
+            {
+                if (created.Type == StyleType.Character && hasTextSelection)
+                {
+                    _editingSession.ApplyNamedStyle(
+                        created.Id,
+                        CreateNamedStyleApplicationTarget(selectedRange, paragraphTargets, hasTextSelection));
+                }
+            });
     }
 
     /// <summary>Modify Style: applies an edited definition (name, type-specific formatting, lineage, gallery flag).</summary>

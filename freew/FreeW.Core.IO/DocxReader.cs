@@ -8521,6 +8521,12 @@ public static class DocxReader
         if (styles is null)
             return;
 
+        // Word always writes w:qFormat on Normal and the headings, so a styles part with no w:qFormat
+        // on ANY style was not written by something that uses the flag (FreeW itself never wrote it
+        // before the gallery flag existed). Such a document keeps the earlier behaviour: every style is
+        // offered in the gallery. Once any style carries the flag, the flag decides.
+        var usesQuickFormat = styles.Any(style => style.Element(W + "qFormat") is not null);
+
         foreach (var s in styles)
         {
             var id = s.Attribute(W + "styleId")?.Value;
@@ -8552,8 +8558,9 @@ public static class DocxReader
                 // linked style pairs stay linked on save instead of silently unlinking.
                 LinkedStyleId = s.Element(W + "link")?.Attribute(W + "val")?.Value,
                 // "Add to the Styles gallery" (w:qFormat): present (and not switched off) means shown.
-                QuickFormat = s.Element(W + "qFormat") is { } qFormat
-                    && qFormat.Attribute(W + "val")?.Value is not ("0" or "false" or "off"),
+                QuickFormat = !usesQuickFormat
+                    || (s.Element(W + "qFormat") is { } qFormat
+                        && qFormat.Attribute(W + "val")?.Value is not ("0" or "false" or "off")),
                 OutlineLevel = ReadOutlineLevel(pPr),
                 Run = rPr is null ? RunFormatting.Default : ReadRunFormatting(rPr, themeFonts),
                 Paragraph = pPr is null ? ParagraphFormatting.Default : ReadParagraphFormatting(pPr),
