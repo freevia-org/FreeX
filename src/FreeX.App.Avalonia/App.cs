@@ -85,6 +85,14 @@ public sealed class App : Application
         foreach (var style in AvaloniaCompactDialogChrome.BuildPlatformMenuFontStyles())
             Styles.Add(style);
 
+        // WPF-shaped control chrome for every code-built dialog: square corners (Fluent rounds
+        // buttons, text boxes and combo boxes by 3-4px; newer dialogs already zero it per control)
+        // and a disabled text box that stays white with a pale border instead of Fluent's solid
+        // grey slab. Application.Resources wins over the FluentTheme dictionaries for these keys.
+        Resources["ControlCornerRadius"] = new CornerRadius(0);
+        Resources["TextControlBackgroundDisabled"] = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.FromRgb(255, 255, 255));
+        Resources["TextControlBorderBrushDisabled"] = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.FromRgb(217, 217, 217));
+
         // Select the active brand theme and register token brushes into Application.Resources
         // so that chrome surfaces can look them up by key.  FREEX_THEME=midnight swaps in the
         // alternate palette; otherwise the default FreeX palette applies (values are identical
