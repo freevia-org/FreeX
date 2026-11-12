@@ -676,6 +676,11 @@ public sealed class DocumentViewRoundTripTests
         var paragraphs = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().ToList();
         paragraphs[0].KeepTogether.Should().BeFalse();
         paragraphs[1].KeepTogether.Should().BeFalse();
+        // Word's default-on widow/orphan rule maps to PTS's native two-line guards; explicit off clears them.
+        paragraphs[0].MinOrphanLines.Should().Be(2);
+        paragraphs[0].MinWidowLines.Should().Be(2);
+        paragraphs[1].MinOrphanLines.Should().Be(0);
+        paragraphs[1].MinWidowLines.Should().Be(0);
 
         var roundTripped = RoundTrip(document).Blocks.OfType<Paragraph>().ToList();
         roundTripped[0].Formatting.KeepLinesTogether.Should().BeFalse();
@@ -683,11 +688,10 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
-    public void ExplicitWidowControlOn_StillForcesKeepTogether()
+    public void ExplicitWidowControlOn_MapsToTwoLineWidowOrphanGuardNotKeepTogether()
     {
-        // Sibling/no-regression: a source document that explicitly turns widowControl ON (rather than
-        // merely omitting the token) still maps to KeepTogether — the fix only stops the OMITTED/default
-        // case from being over-widened, it must not also strip the explicit-on mapping.
+        // An explicit widowControl=on token means the same as Word's omitted default: a two-line
+        // widow/orphan guard (PTS MinWidowLines/MinOrphanLines), not keep-the-whole-paragraph-together.
         var document = TextDocument.CreateEmpty();
         document.Blocks.Clear();
         document.Blocks.Add(new Paragraph("Explicit widow on.")
@@ -699,7 +703,99 @@ public sealed class DocumentViewRoundTripTests
         view.LoadModel(document);
 
         var paragraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
-        paragraph.KeepTogether.Should().BeTrue();
+        paragraph.KeepTogether.Should().BeFalse();
+        paragraph.MinOrphanLines.Should().Be(2);
+        paragraph.MinWidowLines.Should().Be(2);
+    }
+
+    [StaFact]
+    public void DefaultWidowControl_PaginatorNeverStrandsASingleLineAtAPageBoundary()
+    {
+        // Regression for the WPF print/render paginator leaving one line of a paragraph alone at the top
+        // or bottom of a page (f2-hf-basic p3, field-page-number-variants p3). Sweep the filler ahead of a
+        // multi-line paragraph until widow-control-off strands a single line, then require the default
+        // (omitted widowControl) paragraph to keep at least two lines on each side of the boundary.
+        static int[] LinesPerPage(int fillerCount, ParagraphFormatting formatting)
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            for (var index = 0; index < fillerCount; index++)
+                document.Blocks.Add(new Paragraph($"Filler paragraph {index + 1}."));
+            document.Blocks.Add(new Paragraph(string.Join(" ", Enumerable.Repeat(
+                "Widow and orphan control keeps two lines together on both sides of a page break.", 3)))
+            {
+                Formatting = formatting
+            });
+
+            var view = new DocumentView();
+            view.LoadModel(document);
+            var flow = view.Document;
+            flow.PageWidth = 300;
+            flow.PageHeight = 200;
+            flow.PagePadding = new System.Windows.Thickness(10);
+            flow.ColumnWidth = double.PositiveInfinity;
+            var paginator = ((System.Windows.Documents.IDocumentPaginatorSource)flow).DocumentPaginator;
+            paginator.ComputePageCount();
+
+            var lines = new List<int>();
+            for (var pageIndex = 0; pageIndex < paginator.PageCount; pageIndex++)
+            {
+                // Count the target paragraph's rendered lines on this page: the distinct line positions
+                // of glyph runs that are not filler text.
+                var lineYs = new HashSet<long>();
+                CollectTargetLineYs(paginator.GetPage(pageIndex).Visual, 0, lineYs);
+                if (lineYs.Count > 0)
+                    lines.Add(lineYs.Count);
+            }
+            return [.. lines];
+        }
+
+        static void CollectTargetLineYs(System.Windows.Media.Visual visual, double offsetY, HashSet<long> lineYs)
+        {
+            var y = offsetY + System.Windows.Media.VisualTreeHelper.GetOffset(visual).Y +
+                ((System.Windows.Media.VisualTreeHelper.GetTransform(visual)?.Value.OffsetY) ?? 0);
+            if (System.Windows.Media.VisualTreeHelper.GetDrawing(visual) is { } drawing)
+                CollectFromDrawing(drawing, y, lineYs);
+            for (var index = 0; index < System.Windows.Media.VisualTreeHelper.GetChildrenCount(visual); index++)
+            {
+                if (System.Windows.Media.VisualTreeHelper.GetChild(visual, index) is System.Windows.Media.Visual child)
+                    CollectTargetLineYs(child, y, lineYs);
+            }
+        }
+
+        static void CollectFromDrawing(System.Windows.Media.Drawing drawing, double offsetY, HashSet<long> lineYs)
+        {
+            switch (drawing)
+            {
+                case System.Windows.Media.DrawingGroup group:
+                    var groupY = offsetY + (group.Transform?.Value.OffsetY ?? 0);
+                    foreach (var child in group.Children)
+                        CollectFromDrawing(child, groupY, lineYs);
+                    break;
+                case System.Windows.Media.GlyphRunDrawing { GlyphRun: { } run }:
+                    var text = run.Characters is { } characters ? new string([.. characters]) : string.Empty;
+                    if (!text.Contains("Filler", StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(text))
+                        lineYs.Add((long)Math.Round(offsetY + run.BaselineOrigin.Y));
+                    break;
+            }
+        }
+
+        var widowOff = ParagraphFormatting.Default with { WidowControl = false, WidowControlIsSet = true };
+        int[] defaultLines = [];
+        var stranded = false;
+        for (var fillerCount = 1; fillerCount < 20 && !stranded; fillerCount++)
+        {
+            var offLines = LinesPerPage(fillerCount, widowOff);
+            if (offLines.Length == 2 && (offLines[0] == 1 || offLines[1] == 1))
+            {
+                stranded = true;
+                defaultLines = LinesPerPage(fillerCount, ParagraphFormatting.Default);
+            }
+        }
+
+        stranded.Should().BeTrue("the sweep must reach a boundary that strands one line without widow control");
+        defaultLines.Should().OnlyContain(count => count >= 2,
+            "Word's default widow/orphan control never leaves a single paragraph line alone on a page");
     }
 
     [StaFact]

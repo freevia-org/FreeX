@@ -8780,6 +8780,12 @@ public sealed partial class DocumentView : RichTextBox
         /// <summary>The paragraph authored an explicit start alignment (w:jc="left").</summary>
         public bool AlignmentIsSet { get; init; }
 
+        /// <summary>
+        /// The one-line height (DIP) BuildParagraph scaled by the Multiple line rule, from the paragraph's
+        /// own font. ReadLineSpacing divides by the same basis so the multiple round-trips exactly.
+        /// </summary>
+        public double MultipleLineBasisPx { get; init; } = double.NaN;
+
         /// <summary>A justified paragraph rendered start-aligned because its lines are tab-positioned.</summary>
         public bool RenderedJustifyAsStart { get; init; }
     }
@@ -11316,6 +11322,7 @@ public sealed partial class DocumentView : RichTextBox
         var hasExplicitMultipleLineSpacing = paraFmt.LineSpacingIsSet ||
             Math.Abs(paraFmt.LineSpacing - ParagraphFormatting.Default.LineSpacing) > 0.0001 ||
             usesWordApplicationDefaultLineSpacing;
+        var multipleLineBasisPx = ParagraphMultipleLineBasisPx(paragraph, document);
         var wpf = new WpfParagraph
         {
             // Right-to-left paragraph direction (w:bidi). WPF lays the inline content out RTL and, because
@@ -11352,13 +11359,16 @@ public sealed partial class DocumentView : RichTextBox
             // height in points; WPF only does absolute LineHeight, so both map to that height — and Exact
             // additionally forces BlockLineHeight so the height is honoured even for taller content (AtLeast is
             // approximated as exact, the closest FlowDocument behaviour).
+            // The "line" a multiple scales is the natural line of the paragraph's OWN font (its dominant
+            // text run, or the paragraph mark for an empty paragraph), not the document default font: a
+            // Times New Roman paragraph in a Calibri-default document is ~1.15 em per line, not Calibri's
+            // ~1.22 em, and a 16pt paragraph's 1.15 lines are 1.15 x its 16pt line, not x 11pt.
             LineHeight = paraFmt.LineRule == LineSpacingRule.Multiple && hasExplicitMultipleLineSpacing
                 ? (paraFmt.LineSpacing > 0
-                    ? paraFmt.LineSpacing * DefaultLineHeightRatio(document) *
+                    ? paraFmt.LineSpacing * multipleLineBasisPx *
                       (ImportedWordLineSpacingPlanner.UsesApplicationDefaultRunLineHeightCalibration(document, paraFmt)
                           ? ImportedWordApplicationLineHeightScale
-                          : 1.0) *
-                      (document.DefaultRun.FontSizePt ?? 11) * PxPerPoint
+                          : 1.0)
                     : double.NaN)
                 : (paraFmt.LineHeightPt > 0 ? paraFmt.LineHeightPt * PxPerPoint : double.NaN),
             LineStackingStrategy = paraFmt.LineRule == LineSpacingRule.Exact
@@ -11368,15 +11378,18 @@ public sealed partial class DocumentView : RichTextBox
             // they survive an edit/commit cycle without a Tag. WidowControl has no FlowDocument slot and
             // is carried on the Tag instead (see below).
             KeepWithNext = paraFmt.KeepWithNext,
-            // WPF has no widow/orphan setting. Use the shared Word pagination policy for ordinary
-            // paragraphs; its keep-together primitive is the closest native representation of the
-            // default two-line widow/orphan guard. Table-cell and non-text-object paths retain their
-            // existing ownership so this policy only changes ordinary body composition.
+            // Keep-lines-together (and the table-cell/non-text-object ownership) comes from the shared
+            // Word pagination planner. Word's widow/orphan control is NOT keep-together: it only forbids a
+            // single stranded first/last line, so it maps onto PTS's native MinOrphanLines/MinWidowLines
+            // below, which split the paragraph exactly where Word does (pulling one line forward, or moving
+            // a 2-3 line paragraph whole) instead of moving every long paragraph wholesale.
             KeepTogether = DocumentParagraphPaginationPlanner.ShouldKeepParagraphTogether(
                 paraFmt,
                 isTableCell: inTableCell,
                 hasNonTextLayoutObject: hasNonTextLayoutObject) ||
-                hasNonTextLayoutObject
+                hasNonTextLayoutObject,
+            MinOrphanLines = DocumentParagraphPaginationPlanner.ResolveMinimumWidowOrphanLines(paraFmt),
+            MinWidowLines = DocumentParagraphPaginationPlanner.ResolveMinimumWidowOrphanLines(paraFmt)
         };
         // Word default: no pair kerning. Set on the paragraph (not only the editor FlowDocument) so
         // synthetic marker/field runs inherit it wherever the block is re-hosted (page boxes, print).
@@ -11449,7 +11462,8 @@ public sealed partial class DocumentView : RichTextBox
             paragraph.BlockContentControl,
             paragraph.PreservedNumbering)
         {
-            AlignmentIsSet = paraFmt.AlignmentIsSet
+            AlignmentIsSet = paraFmt.AlignmentIsSet,
+            MultipleLineBasisPx = multipleLineBasisPx
         };
 
         // Word never justifies the part of a line that is positioned by tab stops; WPF would stretch the
@@ -19174,7 +19188,10 @@ public sealed partial class DocumentView : RichTextBox
                 : 0,
             LineSpacing = paragraph.LineStackingStrategy == LineStackingStrategy.BlockLineHeight
                 ? ParagraphFormatting.Default.LineSpacing
-                : ReadLineSpacing(paragraph.LineHeight, document),
+                : ReadLineSpacing(
+                    paragraph.LineHeight,
+                    document,
+                    (paragraph.Tag as ParagraphTag)?.MultipleLineBasisPx ?? double.NaN),
             IndentLeftPt = paragraph.Margin.Left / PxPerPoint,
             IndentRightPt = paragraph.Margin.Right / PxPerPoint,
             FirstLineIndentPt = paragraph.TextIndent / PxPerPoint,
@@ -19218,13 +19235,13 @@ public sealed partial class DocumentView : RichTextBox
     // default font's natural line height). Must use the SAME ratio as the forward path or an edit/commit
     // cycle would shift every paragraph's spacing. An unset LineHeight is NaN; fall back to the model default
     // so editing text never silently flattens a paragraph's spacing.
-    private static double ReadLineSpacing(double lineHeight, TextDocument document)
+    private static double ReadLineSpacing(double lineHeight, TextDocument document, double basisPx = double.NaN)
     {
-        var fontPt = document.DefaultRun.FontSizePt ?? 11;
-        var ratio = DefaultLineHeightRatio(document);
-        if (double.IsNaN(lineHeight) || lineHeight <= 0 || fontPt <= 0 || ratio <= 0)
+        if (double.IsNaN(basisPx) || basisPx <= 0)
+            basisPx = (document.DefaultRun.FontSizePt ?? 11) * PxPerPoint * DefaultLineHeightRatio(document);
+        if (double.IsNaN(lineHeight) || lineHeight <= 0 || double.IsNaN(basisPx) || basisPx <= 0)
             return ParagraphFormatting.Default.LineSpacing;
-        var spacing = lineHeight / (fontPt * PxPerPoint * ratio);
+        var spacing = lineHeight / basisPx;
         // BuildParagraph also multiplies by the run-metric calibration, and its predicate applies that
         // factor ONLY to the implicit default multiple (it requires the paragraph to carry no explicit
         // spacing). Divide the same factor back out for exactly that case so the forward and inverse
@@ -19247,9 +19264,67 @@ public sealed partial class DocumentView : RichTextBox
     // default font and cached, since BuildParagraph runs this for every paragraph on load. Forward and
     // inverse line-spacing math both call this so they stay exactly invertible.
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, double> LineHeightRatioCache = new();
-    private static double DefaultLineHeightRatio(TextDocument document)
+    private static double DefaultLineHeightRatio(TextDocument document) =>
+        FontLineHeightRatio(document.DefaultRun.FontFamily);
+
+    /// <summary>
+    /// The one-line height (DIP) that Word's Multiple line rule scales for this paragraph: the natural
+    /// line height (FontFamily.LineSpacing x size) of the font carrying most of its visible text, or of the paragraph
+    /// mark when it has no text. Falls back to the document default font and size.
+    /// </summary>
+    internal static double ParagraphMultipleLineBasisPx(ModelParagraph paragraph, TextDocument document)
     {
-        var name = document.DefaultRun.FontFamily;
+        var defaultFamily = document.DefaultRun.FontFamily;
+        var defaultSizePt = document.DefaultRun.FontSizePt ?? 11;
+        double LineOf(RunFormatting formatting) =>
+            FontLineHeightRatio(formatting.FontFamily is { Length: > 0 } family ? family : defaultFamily) *
+            (formatting.FontSizePt is > 0 and var size ? size : defaultSizePt);
+
+        var documentDefaultLine = FontLineHeightRatio(defaultFamily) * defaultSizePt;
+        // WPF has one LineHeight per paragraph while Word sizes each line by its own tallest run, so use
+        // the line of the font that carries most of the paragraph's visible characters. A lone 14pt space
+        // run inside 12pt body text must not stretch every line of the paragraph.
+        var weightByLine = new Dictionary<double, int>();
+        var hasNonTextContent = false;
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.Image is not null || run.Chart is not null || run.Shape is not null ||
+                run.WordArt is not null || run.SmartArt is not null || run.Equation is not null ||
+                run.EmbeddedObject is not null)
+            {
+                hasNonTextContent = true;
+                continue;
+            }
+            if (string.IsNullOrEmpty(run.Text))
+                continue;
+            var visibleCharacters = run.Text.Count(character => !char.IsWhiteSpace(character));
+            if (visibleCharacters == 0)
+                continue;
+            var formatting = Resolve(run, paragraph, document);
+            if (formatting.Hidden)
+                continue;
+            var line = LineOf(formatting);
+            weightByLine[line] = weightByLine.GetValueOrDefault(line) + visibleCharacters;
+        }
+
+        var best = weightByLine.Count == 0
+            ? 0.0
+            : weightByLine.OrderByDescending(entry => entry.Value).ThenByDescending(entry => entry.Key).First().Key;
+        if (best <= 0)
+        {
+            // No visible text: an empty paragraph takes its line from the paragraph mark, as in Word. An
+            // object-only paragraph or one whose mark is hidden keeps the document-default line (the object
+            // or the collapsed mark owns its height, not a text line).
+            var mark = DocumentRunFormattingResolver.Resolve(
+                document, paragraph, paragraph.MarkFormatting ?? RunFormatting.Default, null);
+            best = hasNonTextContent || mark.Hidden ? documentDefaultLine : LineOf(mark);
+        }
+
+        return best * PxPerPoint;
+    }
+
+    private static double FontLineHeightRatio(string? name)
+    {
         if (string.IsNullOrEmpty(name))
             name = "Calibri";
         return LineHeightRatioCache.GetOrAdd(name, static n =>
