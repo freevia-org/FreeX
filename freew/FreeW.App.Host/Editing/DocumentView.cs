@@ -8798,7 +8798,23 @@ public sealed partial class DocumentView : RichTextBox
 
         /// <summary>A justified paragraph rendered start-aligned because its lines are tab-positioned.</summary>
         public bool RenderedJustifyAsStart { get; init; }
+
+        /// <summary>
+        /// The authored vertical layout of an empty hidden-mark paragraph that is rendered collapsed (see
+        /// <see cref="DocumentParagraphPaginationPlanner.IsCollapsedHiddenMarkParagraph"/>). Commit reads
+        /// these back instead of the collapsed render values so the model keeps its spacing.
+        /// </summary>
+        public CollapsedParagraphLayout? CollapsedLayout { get; init; }
     }
+
+    private sealed record CollapsedParagraphLayout(
+        double MarginTop,
+        double MarginBottom,
+        double LineHeight,
+        LineStackingStrategy LineStackingStrategy);
+
+    // The smallest line box WPF accepts; an empty paragraph with this block line height takes no space.
+    private const double CollapsedParagraphLineHeightPx = 0.01;
 
     private sealed record RenderedBookmarkBoundary(BookmarkBoundary Boundary);
 
@@ -10794,7 +10810,47 @@ public sealed partial class DocumentView : RichTextBox
             previousWpfParagraph = wpfParagraph;
         }
 
+        SuppressCellEdgeAutoSpacing(cell, modelParagraphs, paragraphs, document);
         return paragraphs;
+    }
+
+    /// <summary>
+    /// Word's HTML automatic spacing (<c>w:beforeAutospacing</c>/<c>w:afterAutospacing</c>) collapses at a
+    /// table cell's edges the way an HTML paragraph margin does inside a <c>td</c>: the cell's first
+    /// paragraph gets no automatic space before and its last paragraph none after. Numeric spacing is kept.
+    /// </summary>
+    private static void SuppressCellEdgeAutoSpacing(
+        ModelTableCell cell,
+        IReadOnlyList<ModelParagraph> modelParagraphs,
+        List<WpfParagraph> paragraphs,
+        TextDocument document)
+    {
+        if (paragraphs.Count == 0 || paragraphs.Count != modelParagraphs.Count)
+            return;
+
+        var nestedOffsets = cell.NestedTables.Count == 0
+            ? new List<int>()
+            : Enumerable.Range(0, cell.NestedTables.Count)
+                .Select(index => index < cell.NestedTableParagraphOffsets.Count
+                    ? cell.NestedTableParagraphOffsets[index]
+                    : modelParagraphs.Count)
+                .ToList();
+
+        var first = paragraphs[0];
+        if (!nestedOffsets.Any(offset => offset <= 0)
+            && Resolve(modelParagraphs[0], document) is { BeforeAutoSpacing: true }
+            && first.Tag is not ParagraphTag { CollapsedLayout: not null })
+        {
+            first.Margin = new Thickness(first.Margin.Left, 0, first.Margin.Right, first.Margin.Bottom);
+        }
+
+        var last = paragraphs[^1];
+        if (!nestedOffsets.Any(offset => offset >= modelParagraphs.Count)
+            && Resolve(modelParagraphs[^1], document) is { AfterAutoSpacing: true }
+            && last.Tag is not ParagraphTag { CollapsedLayout: not null })
+        {
+            last.Margin = new Thickness(last.Margin.Left, last.Margin.Top, last.Margin.Right, 0);
+        }
     }
 
     private static Thickness ResolveTableBlockMargin(
@@ -11480,6 +11536,22 @@ public sealed partial class DocumentView : RichTextBox
             AlignmentIsSet = paraFmt.AlignmentIsSet,
             MultipleLineBasisPx = multipleLineBasisPx
         };
+
+        // Word gives an empty paragraph whose mark is hidden no height at all (its mark merges into the
+        // next paragraph). Render it as a zero-height line and keep the authored values for commit.
+        if (DocumentParagraphPaginationPlanner.IsCollapsedHiddenMarkParagraph(document, paragraph))
+        {
+            wpf.Tag = ((ParagraphTag)wpf.Tag) with
+            {
+                CollapsedLayout = new CollapsedParagraphLayout(
+                    wpf.Margin.Top, wpf.Margin.Bottom, wpf.LineHeight, wpf.LineStackingStrategy)
+            };
+            wpf.Margin = new Thickness(wpf.Margin.Left, 0, wpf.Margin.Right, 0);
+            wpf.LineHeight = CollapsedParagraphLineHeightPx;
+            wpf.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+            wpf.MinOrphanLines = 0;
+            wpf.MinWidowLines = 0;
+        }
 
         // Word never justifies the part of a line that is positioned by tab stops; WPF would stretch the
         // inter-word gaps of such a line past the planned tab advances and push a right-aligned leader
@@ -19173,6 +19245,13 @@ public sealed partial class DocumentView : RichTextBox
         var suppressAutoHyphensIsSet = tag?.SuppressAutoHyphensIsSet ?? false;
         var suppressLineNumbers = paragraph.Tag is ParagraphTag { SuppressLineNumbers: true };
         var suppressLineNumbersIsSet = paragraph.Tag is ParagraphTag { SuppressLineNumbersIsSet: true };
+        // A collapsed hidden-mark paragraph renders with zero spacing and a zero line; its authored
+        // vertical layout rides on the Tag.
+        var collapsed = tag?.CollapsedLayout;
+        var marginTop = collapsed?.MarginTop ?? paragraph.Margin.Top;
+        var marginBottom = collapsed?.MarginBottom ?? paragraph.Margin.Bottom;
+        var lineHeight = collapsed?.LineHeight ?? paragraph.LineHeight;
+        var lineStacking = collapsed?.LineStackingStrategy ?? paragraph.LineStackingStrategy;
         return ParagraphFormatting.Default with
         {
             SuppressAutoHyphens = suppressAutoHyphens,
@@ -19190,21 +19269,21 @@ public sealed partial class DocumentView : RichTextBox
             KeepLinesTogether = keepLinesTogether,
             WidowControl = widowControl,
             WidowControlIsSet = widowControlIsSet,
-            SpaceBeforePt = paragraph.Margin.Top / PxPerPoint,
-            SpaceAfterPt = paragraph.Margin.Bottom / PxPerPoint,
+            SpaceBeforePt = marginTop / PxPerPoint,
+            SpaceAfterPt = marginBottom / PxPerPoint,
             // An exact line height (BlockLineHeight, set for the Exact rule) reads back as an absolute
             // height in points; otherwise the LineHeight is a multiple of the font size.
-            LineRule = paragraph.LineStackingStrategy == LineStackingStrategy.BlockLineHeight
+            LineRule = lineStacking == LineStackingStrategy.BlockLineHeight
                 ? LineSpacingRule.Exact
                 : LineSpacingRule.Multiple,
-            LineHeightPt = paragraph.LineStackingStrategy == LineStackingStrategy.BlockLineHeight
-                && !double.IsNaN(paragraph.LineHeight)
-                ? paragraph.LineHeight / PxPerPoint
+            LineHeightPt = lineStacking == LineStackingStrategy.BlockLineHeight
+                && !double.IsNaN(lineHeight)
+                ? lineHeight / PxPerPoint
                 : 0,
-            LineSpacing = paragraph.LineStackingStrategy == LineStackingStrategy.BlockLineHeight
+            LineSpacing = lineStacking == LineStackingStrategy.BlockLineHeight
                 ? ParagraphFormatting.Default.LineSpacing
                 : ReadLineSpacing(
-                    paragraph.LineHeight,
+                    lineHeight,
                     document,
                     (paragraph.Tag as ParagraphTag)?.MultipleLineBasisPx ?? double.NaN),
             IndentLeftPt = paragraph.Margin.Left / PxPerPoint,
