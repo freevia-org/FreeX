@@ -15692,17 +15692,16 @@ public sealed partial class DocumentView : RichTextBox
 
         var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt, documentTheme);
         var content = SmartArtRenderer.Build(smartArt, plan, strokeThickness);
-        var isNativeWordSmartArt = plan.LayoutId is "orgchart1" or "pyramid1";
 
+        // Word draws a SmartArt diagram's shapes only: its drawing canvas has no fill and no outline, so
+        // text behind a floating diagram stays visible and no frame surrounds the nodes.
         var element = new Border
         {
             Width = widthPx,
             Height = heightPx,
-            Background = isNativeWordSmartArt ? Brushes.Transparent : Brushes.White,
-            BorderBrush = isNativeWordSmartArt
-                ? null
-                : new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
-            BorderThickness = isNativeWordSmartArt ? new Thickness(0) : new Thickness(strokeThickness),
+            Background = Brushes.Transparent,
+            BorderBrush = null,
+            BorderThickness = new Thickness(0),
             Child = content,
             Tag = smartArt // carries the model SmartArt so CommitToModel can round-trip it
         };
