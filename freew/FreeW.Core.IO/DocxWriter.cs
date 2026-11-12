@@ -4150,7 +4150,7 @@ public static partial class DocxWriter
         // rather than silently downgrading to inline.
         if (run.Equation is { } equation)
             return equation.IsDisplayMath
-                ? new XElement(M + "oMathPara", BuildOMath(equation))
+                ? new XElement(M + "oMathPara", BuildOMathParaProperties(equation), BuildOMath(equation))
                 : BuildOMath(equation);
 
         // A ruby annotation is a paragraph-level sibling of w:r. Its base text remains mirrored in Run.Text
@@ -4435,13 +4435,71 @@ public static partial class DocxWriter
         MathRunKind.EquationArray => BuildEquationArray(run.Matrix, depth),
         MathRunKind.FunctionApply => BuildFunctionApply(run, depth),
         MathRunKind.GroupChar => BuildGroupChar(run, depth),
+        MathRunKind.LowerLimit => new XElement(M + "limLow",
+            BuildMathSlot(M + "e", run.ScriptBaseEquation, run.Base, depth),
+            BuildMathSlot(M + "lim", run.ScriptSubEquation, run.Sub, depth)),
+        MathRunKind.UpperLimit => new XElement(M + "limUpp",
+            BuildMathSlot(M + "e", run.ScriptBaseEquation, run.Base, depth),
+            BuildMathSlot(M + "lim", run.ScriptSupEquation, run.Sup, depth)),
+        MathRunKind.Preserved => BuildPreservedMath(run),
         _ => MathText(run.Text)
     };
 
-    private static XElement BuildFraction(MathRun run, int depth) =>
-        new(M + "f",
+    /// <summary>
+    /// Builds m:oMathParaPr for a display equation. Word's default justification (centred as a group) is
+    /// written as no properties at all, exactly as Word does. Mirrors the reader's oMathPara branch.
+    /// </summary>
+    private static XElement? BuildOMathParaProperties(Equation equation)
+    {
+        var justification = equation.Justification switch
+        {
+            MathJustification.Left => "left",
+            MathJustification.Right => "right",
+            MathJustification.Center => "center",
+            _ => null
+        };
+        return justification is null
+            ? null
+            : new XElement(M + "oMathParaPr", new XElement(M + "jc", new XAttribute(M + "val", justification)));
+    }
+
+    /// <summary>
+    /// Writes a preserved OMML fragment back verbatim. A fragment whose stored XML no longer parses (never
+    /// produced by the reader) degrades to its math text so saving cannot fail.
+    /// </summary>
+    private static XElement BuildPreservedMath(MathRun run)
+    {
+        if (run.RawOmml.Length > 0)
+        {
+            try
+            {
+                var element = XElement.Parse(run.RawOmml, LoadOptions.PreserveWhitespace);
+                if (element.Name.Namespace == M)
+                    return element;
+            }
+            catch (System.Xml.XmlException)
+            {
+                // Fall through to the text fallback.
+            }
+        }
+
+        return MathText(run.Text);
+    }
+
+    private static XElement BuildFraction(MathRun run, int depth)
+    {
+        var type = run.FractionType switch
+        {
+            MathFractionType.NoBar => "noBar",
+            MathFractionType.Skewed => "skw",
+            MathFractionType.Linear => "lin",
+            _ => null
+        };
+        return new XElement(M + "f",
+            type is null ? null : new XElement(M + "fPr", new XElement(M + "type", new XAttribute(M + "val", type))),
             BuildMathSlot(M + "num", run.NumeratorEquation, run.Numerator, depth),
             BuildMathSlot(M + "den", run.DenominatorEquation, run.Denominator, depth));
+    }
 
     private static XElement BuildMathSlot(XName slotName, Equation? equation, string fallback, int depth)
     {
@@ -4534,11 +4592,13 @@ public static partial class DocxWriter
     /// </summary>
     private static XElement BuildDelimiter(MathRun run, int depth)
     {
+        // CT_DPr is a sequence: begChr, sepChr, endChr — any other order is schema-invalid.
         var dPr = new XElement(M + "dPr",
             new XElement(M + "begChr", new XAttribute(M + "val", run.OpenChar)),
+            run.AdditionalDelimiterArguments.Count > 0
+                ? new XElement(M + "sepChr", new XAttribute(M + "val", run.DelimiterSeparator))
+                : null,
             new XElement(M + "endChr", new XAttribute(M + "val", run.CloseChar)));
-        if (run.AdditionalDelimiterArguments.Count > 0)
-            dPr.Add(new XElement(M + "sepChr", new XAttribute(M + "val", run.DelimiterSeparator)));
 
         var d = new XElement(M + "d", dPr, BuildMathSlot(M + "e", run.DelimiterContentEquation, run.Base, depth));
         for (var index = 0; index < run.AdditionalDelimiterArguments.Count; index++)
@@ -4606,7 +4666,7 @@ public static partial class DocxWriter
     /// </summary>
     private static XElement BuildFunctionApply(MathRun run, int depth) =>
         new(M + "func",
-            new XElement(M + "fName", MathText(run.FuncName)),
+            BuildMathSlot(M + "fName", run.FunctionNameEquation, run.FuncName, depth),
             BuildMathSlot(M + "e", run.FunctionArgumentEquation, run.Base, depth));
 
     /// <summary>

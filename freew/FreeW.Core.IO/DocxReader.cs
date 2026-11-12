@@ -2993,10 +2993,12 @@ public static partial class DocxReader
             // nested m:oMath exactly like the inline case, but flag the resulting Equation as display math
             // so DocxWriter re-wraps it in m:oMathPara on save instead of the bare inline m:oMath — without
             // this branch the whole oMathPara (and its equation) was silently dropped on open.
+            var justification = ReadMathJustification(child);
             foreach (var mathElement in child.Elements(M + "oMath"))
             {
                 var displayEquation = ReadOMath(mathElement);
                 displayEquation.IsDisplayMath = true;
+                displayEquation.Justification = justification;
                 var displayRun = Run.FromEquation(displayEquation);
                 displayRun.Control = control;
                 displayRun.HyperlinkUrl = hyperlinkUrl;
@@ -3246,6 +3248,12 @@ public static partial class DocxReader
                 yield return ReadFunctionApply(child);
             else if (child.Name == M + "groupChr")
                 yield return ReadGroupChar(child);
+            else if (child.Name == M + "limLow")
+                yield return ReadLimit(child, MathRunKind.LowerLimit);
+            else if (child.Name == M + "limUpp")
+                yield return ReadLimit(child, MathRunKind.UpperLimit);
+            else if (IsPreservedMathElement(child))
+                yield return MathRun.PreservedOmml(child.ToString(SaveOptions.DisableFormatting), MathTextOf(child));
             else
             {
                 // Unknown OMML construct: keep its text so the equation degrades rather than disappears.
@@ -3333,17 +3341,68 @@ public static partial class DocxReader
         var hasNestedNumerator = HasStructuredMathSlot(numerator);
         var hasNestedDenominator = HasStructuredMathSlot(denominator);
 
-        return hasNestedNumerator || hasNestedDenominator
-            ? new MathRun
-            {
-                Kind = MathRunKind.Fraction,
-                Numerator = numeratorText,
-                Denominator = denominatorText,
-                NumeratorEquation = hasNestedNumerator ? ReadMathSlot(numerator) : null,
-                DenominatorEquation = hasNestedDenominator ? ReadMathSlot(denominator) : null
-            }
-            : MathRun.Fraction(numeratorText, denominatorText);
+        var type = fraction.Element(M + "fPr")?.Element(M + "type")?.Attribute(M + "val")?.Value switch
+        {
+            "noBar" => MathFractionType.NoBar,
+            "skw" => MathFractionType.Skewed,
+            "lin" => MathFractionType.Linear,
+            _ => MathFractionType.Bar
+        };
+
+        return new MathRun
+        {
+            Kind = MathRunKind.Fraction,
+            FractionType = type,
+            Numerator = numeratorText,
+            Denominator = denominatorText,
+            NumeratorEquation = hasNestedNumerator ? ReadMathSlot(numerator) : null,
+            DenominatorEquation = hasNestedDenominator ? ReadMathSlot(denominator) : null
+        };
     }
+
+    /// <summary>
+    /// Reads a limit (m:limLow / m:limUpp): the base from m:e and the limit expression from m:lim, carried
+    /// in the subscript slot for a lower limit and the superscript slot for an upper one. Mirrors
+    /// <c>DocxWriter.BuildMathRun</c>.
+    /// </summary>
+    private static MathRun ReadLimit(XElement limit, MathRunKind kind)
+    {
+        var baseSlot = limit.Element(M + "e");
+        var limSlot = limit.Element(M + "lim");
+        var limText = MathTextOf(limSlot);
+        var limEquation = HasStructuredMathSlot(limSlot) ? ReadMathSlot(limSlot) : null;
+        var lower = kind == MathRunKind.LowerLimit;
+        return new MathRun
+        {
+            Kind = kind,
+            Base = MathTextOf(baseSlot),
+            ScriptBaseEquation = HasStructuredMathSlot(baseSlot) ? ReadMathSlot(baseSlot) : null,
+            Sub = lower ? limText : string.Empty,
+            ScriptSubEquation = lower ? limEquation : null,
+            Sup = lower ? string.Empty : limText,
+            ScriptSupEquation = lower ? null : limEquation
+        };
+    }
+
+    /// <summary>Reads m:oMathParaPr/m:jc; an absent or unknown value is Word's default (centred as a group).</summary>
+    private static MathJustification ReadMathJustification(XElement oMathPara) =>
+        oMathPara.Element(M + "oMathParaPr")?.Element(M + "jc")?.Attribute(M + "val")?.Value switch
+        {
+            "left" => MathJustification.Left,
+            "right" => MathJustification.Right,
+            "center" => MathJustification.Center,
+            _ => MathJustification.CenterGroup
+        };
+
+    /// <summary>
+    /// OMML objects FreeW does not model. They are kept verbatim (see <see cref="MathRunKind.Preserved"/>)
+    /// instead of being flattened to their text, so opening and saving a document never rewrites them.
+    /// </summary>
+    private static bool IsPreservedMathElement(XElement element) =>
+        element.Name == M + "sPre" ||
+        element.Name == M + "box" ||
+        element.Name == M + "borderBox" ||
+        element.Name == M + "phant";
 
     private static Equation ReadMathSlot(XElement? slot) =>
         slot is null ? new Equation() : new Equation(ReadMathRuns(slot.Elements()));
@@ -3364,7 +3423,10 @@ public static partial class DocxReader
         element.Name == M + "m" ||
         element.Name == M + "eqArr" ||
         element.Name == M + "func" ||
-        element.Name == M + "groupChr";
+        element.Name == M + "groupChr" ||
+        element.Name == M + "limLow" ||
+        element.Name == M + "limUpp" ||
+        IsPreservedMathElement(element);
 
     /// <summary>
     /// Reads a radical (m:rad). When m:radPr/m:degHide is "1" (or m:deg is empty) it is a square root
@@ -3393,7 +3455,8 @@ public static partial class DocxReader
     }
 
     /// <summary>
-    /// Reads an n-ary operator (m:nary): the operator glyph from m:naryPr/m:chr (default ∑), the lower/
+    /// Reads an n-ary operator (m:nary): the operator glyph from m:naryPr/m:chr (absent = ∫, the OMML
+    /// default, which is how Word writes every integral), the lower/
     /// upper limits from m:sub / m:sup and the operand from m:e. Mirrors <c>DocxWriter.BuildNAry</c>.
     /// </summary>
     private static MathRun ReadNAry(XElement nary)
@@ -3408,7 +3471,7 @@ public static partial class DocxReader
         var hasNestedSub = HasStructuredMathSlot(sub);
         var hasNestedSup = HasStructuredMathSlot(sup);
         var hasNestedOperand = HasStructuredMathSlot(operand);
-        var op = string.IsNullOrEmpty(chr) ? "∑" : chr;
+        var op = string.IsNullOrEmpty(chr) ? "∫" : chr;
 
         return hasNestedSub || hasNestedSup || hasNestedOperand
             ? new MathRun
@@ -3476,8 +3539,10 @@ public static partial class DocxReader
     private static MathRun ReadDelimiter(XElement d)
     {
         var dPr = d.Element(M + "dPr");
-        var open = dPr?.Element(M + "begChr")?.Attribute(M + "val")?.Value;
-        var close = dPr?.Element(M + "endChr")?.Attribute(M + "val")?.Value;
+        // An absent m:begChr / m:endChr means the default round bracket; one present with an empty (or no)
+        // value means "no glyph on this side" and must stay empty.
+        var open = dPr?.Element(M + "begChr") is { } begChr ? begChr.Attribute(M + "val")?.Value ?? string.Empty : null;
+        var close = dPr?.Element(M + "endChr") is { } endChr ? endChr.Attribute(M + "val")?.Value ?? string.Empty : null;
         var sep = dPr?.Element(M + "sepChr")?.Attribute(M + "val")?.Value;
         var arguments = d.Elements(M + "e").ToList();
         var content = arguments.Count > 0 ? arguments[0] : null;
@@ -3491,8 +3556,8 @@ public static partial class DocxReader
         {
             Kind = MathRunKind.Delimiter,
             Base = contentText,
-            OpenChar = string.IsNullOrEmpty(open) ? "(" : open,
-            CloseChar = string.IsNullOrEmpty(close) ? ")" : close,
+            OpenChar = open ?? "(",
+            CloseChar = close ?? ")",
             DelimiterContentEquation = HasStructuredMathSlot(content) ? ReadMathSlot(content) : null,
             AdditionalDelimiterArguments = additionalArguments,
             AdditionalDelimiterContentEquations = additionalEquations,
@@ -3546,18 +3611,18 @@ public static partial class DocxReader
     /// </summary>
     private static MathRun ReadFunctionApply(XElement func)
     {
-        var funcName = MathTextOf(func.Element(M + "fName"));
+        var nameSlot = func.Element(M + "fName");
+        var funcName = MathTextOf(nameSlot);
         var argument = func.Element(M + "e");
         var argumentText = MathTextOf(argument);
-        return HasStructuredMathSlot(argument)
-            ? new MathRun
-            {
-                Kind = MathRunKind.FunctionApply,
-                FuncName = funcName,
-                Base = argumentText,
-                FunctionArgumentEquation = ReadMathSlot(argument)
-            }
-            : MathRun.FunctionApply(funcName, argumentText);
+        return new MathRun
+        {
+            Kind = MathRunKind.FunctionApply,
+            FuncName = funcName,
+            FunctionNameEquation = HasStructuredMathSlot(nameSlot) ? ReadMathSlot(nameSlot) : null,
+            Base = argumentText,
+            FunctionArgumentEquation = HasStructuredMathSlot(argument) ? ReadMathSlot(argument) : null
+        };
     }
 
     /// <summary>

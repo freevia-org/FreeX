@@ -35,9 +35,9 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
         root.GetProperty("tabs").EnumerateArray()
             .Select(tab => tab.GetProperty("tabId").GetString())
             .Should().Equal(
-                "chart-design", "chart-format", "design", "developer", "drawing-format", "header-footer-design",
-                "help", "home", "insert", "layout", "mailings", "picture-format", "references", "review",
-                "smartart-design", "table-design", "table-layout", "view");
+                "chart-design", "chart-format", "design", "developer", "drawing-format", "equation",
+                "header-footer-design", "help", "home", "insert", "layout", "mailings", "picture-format",
+                "references", "review", "smartart-design", "table-design", "table-layout", "view");
     }
 
     public static IEnumerable<object[]> CanonicalTabProfiles()
@@ -68,7 +68,8 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
                 "smartart-design",
                 "table-design",
                 "table-layout",
-                "header-footer-design");
+                "header-footer-design",
+                "equation");
 
         FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia).Tabs
             .Where(tab => tab.IsContextual)
@@ -81,7 +82,8 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
                 "drawing-format",
                 "chart-design",
                 "chart-format",
-                "smartart-design");
+                "smartart-design",
+                "equation");
     }
 
     [Fact]

@@ -814,6 +814,12 @@ public sealed partial class DocumentView : RichTextBox
 
     protected override void OnPreviewKeyDown(KeyEventArgs e)
     {
+        if (TryHandleEquationShortcut(e))
+        {
+            e.Handled = true;
+            return;
+        }
+
         var input = DocumentEditorInteractionSession.PlanBodyKey(
             ToEditorInputKey(e.Key),
             ToEditorInputModifiers(Keyboard.Modifiers));
@@ -11214,7 +11220,7 @@ public sealed partial class DocumentView : RichTextBox
             BreakPageBefore = paraFmt.PageBreakBefore || paragraph.Runs.Any(r => r.IsPageBreak),
             BreakColumnBefore = paragraph.Runs.Any(r => r.IsColumnBreak),
             TextAlignment = isDisplayMathOnlyParagraph && paraFmt.Alignment == ModelTextAlignment.Left
-                ? WpfTextAlignment.Center
+                ? DisplayEquationAlignment(paragraph)
                 : ToWpfAlignment(paraFmt.Alignment),
             // WPF's Block.Margin (unlike FrameworkElement.Margin) rejects negative components with an
             // ArgumentException, so clamp at >= 0. Real docs do carry negative indents/spacing (e.g. a
@@ -14984,7 +14990,8 @@ public sealed partial class DocumentView : RichTextBox
         stack.Children.Add(BuildEquationStructureTextBlock(numerator, WpfTextAlignment.Center));
         stack.Children.Add(new Border
         {
-            Background = Brushes.Black,
+            // A "no bar" fraction (binomial coefficient) keeps the stack's spacing without the rule.
+            Background = element.FractionBarVisible ? Brushes.Black : Brushes.Transparent,
             Height = 1,
             MinWidth = 14,
             Margin = new Thickness(0, 0, 0, 0)

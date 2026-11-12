@@ -1265,4 +1265,17 @@
   <data name="MailMerge_EditList_SelectAll" xml:space="preserve"><value>Select All</value></data>
   <data name="MailMerge_EditList_ClearAll" xml:space="preserve"><value>Clear All</value></data>
   <data name="MailMerge_EditList_SummaryFormat" xml:space="preserve"><value>{0} of {1} recipient(s) will be merged.</value></data>
+  <data name="EquationEditor_Dialog_Title" xml:space="preserve"><value>Equation</value></data>
+  <data name="EquationEditor_Linear_Label" xml:space="preserve"><value>Linear format:</value></data>
+  <data name="EquationEditor_Preview_Label" xml:space="preserve"><value>Preview:</value></data>
+  <data name="EquationEditor_Inline_Label" xml:space="preserve"><value>Inline</value></data>
+  <data name="EquationEditor_Display_Label" xml:space="preserve"><value>Display</value></data>
+  <data name="EquationEditor_Justification_Label" xml:space="preserve"><value>Justification:</value></data>
+  <data name="EquationEditor_JustifyLeft_Label" xml:space="preserve"><value>Left</value></data>
+  <data name="EquationEditor_JustifyCenter_Label" xml:space="preserve"><value>Centered</value></data>
+  <data name="EquationEditor_JustifyRight_Label" xml:space="preserve"><value>Right</value></data>
+  <data name="EquationEditor_JustifyCenterGroup_Label" xml:space="preserve"><value>Centered as a Group</value></data>
+  <data name="EquationEditor_Hint" xml:space="preserve"><value>Type the equation in linear format, for example x=(-b\pm\sqrt(b^2-4ac))/(2a). Press Enter to accept or Esc to cancel.</value></data>
+  <data name="EquationEditor_OpaqueParts_Notice" xml:space="preserve"><value>Parts shown as a numbered token cannot be edited as text. They are kept exactly as they are.</value></data>
+  <data name="EquationEditor_EmptyPreview" xml:space="preserve"><value>Type equation here.</value></data>
 </root>
