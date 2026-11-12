@@ -187,7 +187,7 @@ public sealed class TextToColumnsDialogLifecycleRegressionTests
                 var ruler = Find<Canvas>(dialog, "TextToColumnsFixedWidthRuler");
                 ruler.IsEffectivelyVisible.Should().BeTrue();
                 Find<TextBlock>(dialog, "TextToColumnsFixedWidthRulerHint").Text.Should().Be(
-                    UiText.Get("TextToColumns_ClickTheRulerToCreateABreakLineDragToMoveItOrRightClickALineToRemoveIt"));
+                    global::FreeX.App.Localization.LocalizedUiText.Get("TextToColumns_ClickTheRulerToCreateABreakLineDragToMoveItOrRightClickALineToRemoveIt"));
 
                 var breaksBox = Find<TextBox>(dialog, "TextToColumnsBreaksBox");
                 breaksBox.Text = "3,6";
