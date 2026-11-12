@@ -27,6 +27,7 @@ public static class FreeWRibbon
             .AddSmartArtContextualTab(capabilities)
             .AddTableContextualTabs(capabilities)
             .AddHeaderFooterDesignTab(capabilities)
+            .AddEquationContextualTab(capabilities)
             .Build();
 
         return definition with { Tabs = OrderTabs(definition.Tabs, capabilities.TabOrder) };

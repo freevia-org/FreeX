@@ -628,4 +628,17 @@
   <data name="MailMerge_EditList_SelectAll" xml:space="preserve"><value>Sélectionner tout</value></data>
   <data name="MailMerge_EditList_ClearAll" xml:space="preserve"><value>Effacer tout</value></data>
   <data name="MailMerge_EditList_SummaryFormat" xml:space="preserve"><value>{0} destinataire(s) sur {1} seront fusionnés.</value></data>
+  <data name="EquationEditor_Dialog_Title" xml:space="preserve"><value>Équation</value></data>
+  <data name="EquationEditor_Linear_Label" xml:space="preserve"><value>Format linéaire :</value></data>
+  <data name="EquationEditor_Preview_Label" xml:space="preserve"><value>Aperçu :</value></data>
+  <data name="EquationEditor_Inline_Label" xml:space="preserve"><value>En ligne</value></data>
+  <data name="EquationEditor_Display_Label" xml:space="preserve"><value>Hors texte</value></data>
+  <data name="EquationEditor_Justification_Label" xml:space="preserve"><value>Justification :</value></data>
+  <data name="EquationEditor_JustifyLeft_Label" xml:space="preserve"><value>À gauche</value></data>
+  <data name="EquationEditor_JustifyCenter_Label" xml:space="preserve"><value>Centré</value></data>
+  <data name="EquationEditor_JustifyRight_Label" xml:space="preserve"><value>À droite</value></data>
+  <data name="EquationEditor_JustifyCenterGroup_Label" xml:space="preserve"><value>Centré en tant que groupe</value></data>
+  <data name="EquationEditor_Hint" xml:space="preserve"><value>Saisissez l'équation au format linéaire, par exemple x=(-b\pm\sqrt(b^2-4ac))/(2a). Appuyez sur Entrée pour valider ou sur Échap pour annuler.</value></data>
+  <data name="EquationEditor_OpaqueParts_Notice" xml:space="preserve"><value>Les parties affichées sous forme de jeton numéroté ne peuvent pas être modifiées en tant que texte. Elles sont conservées telles quelles.</value></data>
+  <data name="EquationEditor_EmptyPreview" xml:space="preserve"><value>Tapez l'équation ici.</value></data>
 </root>

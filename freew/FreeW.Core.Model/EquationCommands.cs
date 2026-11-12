@@ -180,6 +180,40 @@ public static class EquationEditPlanner
         return parts;
     }
 
+    /// <summary>
+    /// Replaces <paramref name="target"/> (found by instance) with <paramref name="replacement"/> directly
+    /// in <paramref name="document"/>, applying the same paragraph plan as <see cref="ReplaceEquationCommand"/>.
+    /// Passing the same instance for both gives a display equation its own line. Returns false when the
+    /// target is not in the document. This is the non-undoable building block for hosts that record
+    /// undo as whole-document snapshots; everything else should execute the command.
+    /// </summary>
+    public static bool TryReplace(TextDocument document, Equation target, Equation replacement)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(replacement);
+
+        if (EquationLocator.Find(document, target) is not { } location)
+            return false;
+
+        Swap(location, Plan(location, replacement, IsLayoutChange(target, replacement)));
+        return true;
+    }
+
+    /// <summary>True when replacing <paramref name="target"/> changes how the equation is laid out.</summary>
+    internal static bool IsLayoutChange(Equation target, Equation replacement) =>
+        ReferenceEquals(target, replacement)
+        || target.IsDisplayMath != replacement.IsDisplayMath
+        || target.Justification != replacement.Justification;
+
+    /// <summary>Puts the planned paragraphs where the located paragraph was.</summary>
+    internal static void Swap(EquationLocation location, IReadOnlyList<Paragraph> planned)
+    {
+        location.Container.RemoveAt(location.ParagraphIndex);
+        for (var offset = 0; offset < planned.Count; offset++)
+            location.Container.Insert(location.ParagraphIndex + offset, planned[offset]);
+    }
+
     /// <summary>True when the paragraph holds nothing but display equations (ignoring empty text runs).</summary>
     public static bool IsDisplayOnly(Paragraph paragraph)
     {
@@ -254,18 +288,16 @@ public sealed class ReplaceEquationCommand(Equation target, Equation replacement
         if (_applied is not null || EquationLocator.Find(context.Document, target) is not { } location)
             return;
 
-        var layoutChanged = ReferenceEquals(target, replacement)
-            || target.IsDisplayMath != replacement.IsDisplayMath
-            || target.Justification != replacement.Justification;
-        var planned = EquationEditPlanner.Plan(location, replacement, layoutChanged);
+        var planned = EquationEditPlanner.Plan(
+            location,
+            replacement,
+            EquationEditPlanner.IsLayoutChange(target, replacement));
 
         _container = location.Container;
         _index = location.ParagraphIndex;
         _original = location.Paragraph;
         _applied = planned;
-        _container.RemoveAt(_index);
-        for (var offset = 0; offset < planned.Count; offset++)
-            _container.Insert(_index + offset, planned[offset]);
+        EquationEditPlanner.Swap(location, planned);
     }
 
     public void Revert(IDocumentCommandContext context)

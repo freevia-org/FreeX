@@ -725,6 +725,10 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── Equation ─────────────────────────────────────────────────────────
         // The split-button face and preset gallery share Presentation-owned identities and factories.
         EquationRibbonWorkflow.Register(r, new EquationRibbonPorts(editor.InsertEquation));
+        // Equation tab: this renderer has no in-place equation editor yet, so the shared workflow inserts
+        // gallery equations and structure templates as new equations and leaves the editor-only commands
+        // (edit, conversions, symbols) unavailable rather than pretending.
+        EquationToolsRibbonWorkflow.Register(r, new EquationToolsRibbonPorts(editor.InsertEquation));
 
         // ── Text from File ───────────────────────────────────────────────────
         // Opens a file picker (shell callback); DOCX content is inserted as model blocks and TXT as plain text.

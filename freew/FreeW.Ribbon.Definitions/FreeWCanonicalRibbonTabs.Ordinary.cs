@@ -642,6 +642,12 @@ internal static partial class FreeWCanonicalRibbonTabs
                             m.Item(EquationPresetCatalog.Get(EquationPresetKind.Matrix).CommandId, "Matrix (2x2)", "M");
                             m.Item(EquationPresetCatalog.Get(EquationPresetKind.Function).CommandId, "Function (sin)", "C");
                             m.Item(EquationPresetCatalog.Get(EquationPresetKind.GroupCharacter).CommandId, "Group (brace)", "G");
+                            m.Separator();
+                            // Word's built-in gallery equations, then the editor for a new one.
+                            foreach (var builtIn in EquationPresetCatalog.BuiltInEquations)
+                                m.Item(builtIn.CommandId, builtIn.BuiltInName!);
+                            m.Separator();
+                            m.Item(EquationToolsRibbonWorkflow.NewCommandId, "Insert New Equation", "E");
                         });
                         g.SplitButton("freew.symbol", symbolCommand.Label, BuildSymbolMenu(), split => split with
                         {
@@ -1197,7 +1203,7 @@ internal static partial class FreeWCanonicalRibbonTabs
     /// Each preset maps to the canonical command id owned by <see cref="EquationPresetCatalog"/>.
     /// </summary>
     private static RibbonMenu BuildEquationMenu() =>
-        new(new RibbonMenuItem[]
+        new(((IEnumerable<RibbonMenuItem>)new RibbonMenuItem[]
         {
             new("Insert New Equation", new RibbonCommandId(EquationPresetCatalog.DefaultCommandId)),
             RibbonMenuItem.Separator(),
@@ -1215,7 +1221,8 @@ internal static partial class FreeWCanonicalRibbonTabs
             new("Matrix",              new RibbonCommandId(EquationPresetCatalog.Get(EquationPresetKind.Matrix).CommandId)),
             new("Function",            new RibbonCommandId(EquationPresetCatalog.Get(EquationPresetKind.Function).CommandId)),
             new("Group Character",     new RibbonCommandId(EquationPresetCatalog.Get(EquationPresetKind.GroupCharacter).CommandId)),
-        });
+            RibbonMenuItem.Separator(),
+        }).Concat(BuiltInEquationMenuItems()).ToArray());
 
     private static RibbonMenu BuildSymbolMenu() =>
         new(SymbolRibbonWorkflow.Choices

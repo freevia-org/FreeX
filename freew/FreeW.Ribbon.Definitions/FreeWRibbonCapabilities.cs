@@ -33,6 +33,7 @@ public sealed record FreeWRibbonCapabilities
     public string DrawingContextKey { get; } = "drawing";
     public string ChartContextKey { get; } = "chart";
     public string SmartArtContextKey { get; } = "smartart";
+    public string EquationContextKey { get; } = "equation";
     public bool UsesPortableControlPresentation => ControlPresentation == FreeWRibbonControlPresentation.Portable;
 
     internal FreeWRibbonControlPresentation ControlPresentation { get; }
@@ -50,7 +51,7 @@ public sealed record FreeWRibbonCapabilities
         [
             "home", "insert", "design", "layout", "references", "mailings", "review", "view", "help", "developer",
             "drawing-format", "picture-format", "chart-design", "chart-format", "smartart-design",
-            "table-design", "table-layout", "header-footer-design",
+            "table-design", "table-layout", "header-footer-design", "equation",
         ]);
 
     public static FreeWRibbonCapabilities Avalonia { get; } = new(
@@ -60,7 +61,7 @@ public sealed record FreeWRibbonCapabilities
         [
             "file", "home", "insert", "design", "layout", "references", "mailings", "review", "view", "help", "developer",
             "table-design", "table-layout", "header-footer-design", "picture-format", "drawing-format",
-            "chart-design", "chart-format", "smartart-design",
+            "chart-design", "chart-format", "smartart-design", "equation",
         ]);
 }
 

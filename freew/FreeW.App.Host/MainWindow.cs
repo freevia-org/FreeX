@@ -555,6 +555,8 @@ public sealed partial class MainWindow : Window
         // non-empty selection shows its own word/character totals (and reverts when nothing is selected).
         // Also re-evaluate which contextual "Tools" tabs apply to the new selection.
         editor.SelectionChanged += (_, _) => OnDocumentEditorSelectionChanged(editor);
+        // The Equation tab also stays up while the equation editor is open.
+        editor.EquationEditor.StateChanged += (_, _) => RefreshContextualTabs();
         _autosave = new AutosaveCoordinator(editor, _file, recoverInNewWindow: OpenNewWindowWithRecoveredSnapshot);
         Loaded += (_, _) =>
         {
@@ -1194,6 +1196,8 @@ public sealed partial class MainWindow : Window
             state = state.With("drawing");
         if (_editor.SelectedSmartArt() is not null)
             state = state.With("smartart");
+        if (_editor.SelectedEquation() is not null || _editor.EquationEditor.IsOpen)
+            state = state.With("equation");
 
         _contextualTabs.Apply(state);
     }

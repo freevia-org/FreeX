@@ -490,8 +490,18 @@ internal static class FreeWRibbonCommands
             new EquationRibbonPorts(equation =>
             {
                 editor.Focus();
-                editor.InsertEquation(equation);
+                editor.InsertEquationAtCaret(equation);
             }));
+        // Equation contextual tab: Tools, Symbols and Structures drive the in-place equation editor.
+        EquationToolsRibbonWorkflow.Register(
+            registry,
+            new EquationToolsRibbonPorts(
+                InsertEquation: editor.InsertEquationAtCaret,
+                InsertNewEquation: editor.EquationEditor.BeginNew,
+                EditSelectedEquation: () => editor.EquationEditor.BeginEditSelected(),
+                InsertLinearText: editor.EquationEditor.InsertText,
+                SelectedEquation: editor.SelectedEquation,
+                ReplaceEquation: (original, replacement) => editor.ReplaceEquation(original, replacement)));
         // Shape Size: reuse ImageSizeDialog (same W/H in points).
         var shapeObjectCommands = CreateFloatingObjectCommandPorts(editor, ObjectFormatTarget.Shape);
         registry.Bind(

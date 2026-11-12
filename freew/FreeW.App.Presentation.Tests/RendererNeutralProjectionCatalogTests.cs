@@ -9,7 +9,9 @@ public sealed class RendererNeutralProjectionCatalogTests
     [Fact]
     public void EquationCatalogOwnsThirteenUniqueFreshPresetsAndTheDefaultEquation()
     {
-        EquationPresetCatalog.Presets.Should().HaveCount(13);
+        // 13 structure presets plus Word's 9 built-in gallery equations.
+        EquationPresetCatalog.Presets.Should().HaveCount(22);
+        EquationPresetCatalog.BuiltInEquations.Should().HaveCount(9);
         EquationPresetCatalog.Presets.Select(preset => preset.Kind).Should().OnlyHaveUniqueItems();
         EquationPresetCatalog.Presets.Select(preset => preset.CommandId).Should().OnlyHaveUniqueItems();
         EquationPresetCatalog.Presets.Should().OnlyContain(preset =>

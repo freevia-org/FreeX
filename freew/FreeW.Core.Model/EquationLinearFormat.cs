@@ -71,6 +71,47 @@ public static class EquationLinearFormat
     }
 
     /// <summary>
+    /// Word's "Linear" conversion: the same equation as a single run of its linear text, so the document
+    /// shows the source (<c>a/b</c>) instead of the built-up form. Returns null when part of the equation
+    /// cannot be written as linear text — flattening it would lose that part, so the conversion is refused.
+    /// </summary>
+    public static Equation? ToLinearDisplay(Equation equation)
+    {
+        ArgumentNullException.ThrowIfNull(equation);
+
+        var linear = ToLinear(equation);
+        if (linear.HasOpaqueParts)
+            return null;
+
+        var result = new Equation { IsDisplayMath = equation.IsDisplayMath, Justification = equation.Justification };
+        if (linear.Text.Length > 0)
+            result.Runs.Add(MathRun.PlainText(linear.Text));
+        return result;
+    }
+
+    /// <summary>
+    /// Word's "Professional" conversion: builds up every plain-text fragment of the equation from linear
+    /// format, leaving fragments that are already structures as they are. It undoes
+    /// <see cref="ToLinearDisplay"/> exactly.
+    /// </summary>
+    public static Equation BuildUp(Equation equation)
+    {
+        ArgumentNullException.ThrowIfNull(equation);
+
+        var source = equation.Clone();
+        var result = new Equation { IsDisplayMath = source.IsDisplayMath, Justification = source.Justification };
+        foreach (var run in EquationStructure.CanonicalRuns(source.Runs))
+        {
+            if (run.Kind == MathRunKind.Text)
+                result.Runs.AddRange(ParseRuns(run.Text, []));
+            else
+                result.Runs.Add(run);
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Replaces every recognised <c>\name</c> in <paramref name="text"/> by its character (the text the
     /// editor shows after Word-style math autocorrect) without otherwise changing it.
     /// </summary>
