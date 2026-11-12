@@ -121,6 +121,7 @@ internal static class DialogWindowDefaults
         AvaloniaCompactDialogChrome.DefaultTextSelectionBrush = TextSelection;
         AvaloniaCompactDialogChrome.DefaultTextSelectionForegroundBrush = DialogControlStyles.SelectionForegroundBrush;
         AvaloniaCompactDialogChrome.DefaultListRowMinHeight = DialogListRowMinHeight;
+        AvaloniaCompactDialogChrome.CompactEditableComboOwnsEditor = true;
 
         // Every dialog is shown owned (ShowDialog / Show with an owner), and the owner is assigned
         // after the dialog has been built, so this is the one point that sees all of them.

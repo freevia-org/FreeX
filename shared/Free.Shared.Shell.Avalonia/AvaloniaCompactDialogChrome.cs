@@ -187,6 +187,13 @@ public static class AvaloniaCompactDialogChrome
     /// Null keeps the token for every caller.
     /// </summary>
     public static double? DefaultListRowMinHeight { get; set; }
+
+    /// <summary>
+    /// When true, the editor inside a compact editable combo box keeps the combo template's own
+    /// borderless chrome and drops its minimum height. Off by default so sister apps keep the
+    /// editor metrics their parity tests measure.
+    /// </summary>
+    public static bool CompactEditableComboOwnsEditor { get; set; }
     public static IBrush DialogSeparatorBrush => DialogTabPaneBorderBrush;
 
     private static readonly IBrush ButtonBorderBrush = new ImmutableSolidColorBrush(
@@ -304,6 +311,7 @@ public static class AvaloniaCompactDialogChrome
                     var explicitFamily = textBox.FontFamily;
                     var isEditableComboTextBox = textBox.Name == "PART_EditableTextBox";
                     if (isEditableComboTextBox
+                        && CompactEditableComboOwnsEditor
                         && textBox.TemplatedParent is ComboBox owner
                         && owner.Classes.Contains(CompactComboBoxClass))
                     {
@@ -943,7 +951,6 @@ public static class AvaloniaCompactDialogChrome
         var editableText = new TextBox
         {
             Name = "PART_EditableTextBox",
-            MinHeight = 0,
             Padding = new Thickness(
                 style.ComboBoxPadding.Left,
                 style.ComboBoxPadding.Top,
@@ -955,6 +962,8 @@ public static class AvaloniaCompactDialogChrome
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalContentAlignment = VerticalAlignment.Center,
         };
+        if (CompactEditableComboOwnsEditor)
+            editableText.MinHeight = 0;
         editableText.Bind(TextBox.ForegroundProperty, new Binding(nameof(TemplatedControl.Foreground)) { Source = comboBox });
         editableText.Bind(TextBox.TextProperty, new Binding(nameof(ComboBox.Text))
         {
