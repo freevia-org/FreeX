@@ -1324,22 +1324,21 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// WPF AutoFilterDialog.CreateMenuCommandButton / SetMenuCommandButtonContent: a borderless
-    /// 22px row with (5,2) padding holding a 14px icon, the 12px label 7px to its right and, for
-    /// the filter families, a continuation chevron at the far right.
+    /// 22px row with (5,2) padding holding the 12px access-key label and, for the filter
+    /// families, a continuation chevron at the far right. The captured WPF dialog draws no icon
+    /// in front of the label, so the row carries none.
     /// </summary>
     private static Button CreateAutoFilterParityMenuButton(AutoFilterMenuItem item)
     {
         var content = new AvaloniaGrid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        var icon = AvaloniaRibbonIcons.BuildMonochrome(item.IconKind, 14, null, Brush(0x21, 0x21, 0x21));
-        icon.VerticalAlignment = AvaloniaVerticalAlignment.Center;
-        content.Children.Add(icon);
 
-        var label = new TextBlock
+        // WPF hosts the label in an AccessText: the access-key marker is consumed, not drawn.
+        var label = new AccessText
         {
             Text = item.Label,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
-            Margin = new Thickness(7, 0, item.ShowsContinuation ? 8 : 0, 0),
+            Margin = new Thickness(0, 0, item.ShowsContinuation ? 8 : 0, 0),
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
         };
         AvaloniaGrid.SetColumn(label, 1);

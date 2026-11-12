@@ -2001,38 +2001,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
     }
 
-    // WPF's worksheet scrollbars are the classic system bars: 17px thick, a #F0F0F0 track, a
-    // square #CDCDCD thumb (#A6A6A6 hover, #606060 pressed) and #606060 arrow glyphs on buttons
-    // that share the track colour. Fluent draws a 12px bar with a rounded translucent thumb, so the
-    // bar's own resource scope carries the classic colours and thickness.
-    private const double WorksheetScrollBarThickness = 17;
+    // WPF's worksheet scrollbars are the classic system bars (ClassicScrollBarChrome, shared with
+    // the dialog windows); the bar's own resource scope carries the classic colours and thickness.
+    private const double WorksheetScrollBarThickness = ClassicScrollBarChrome.BarThickness;
 
-    private static void ApplyWorksheetScrollBarChrome(ScrollBar scrollBar)
-    {
-        var track = Brush(0xF0, 0xF0, 0xF0);
-        var thumb = Brush(0xCD, 0xCD, 0xCD);
-        var thumbHover = Brush(0xA6, 0xA6, 0xA6);
-        var thumbPressed = Brush(0x60, 0x60, 0x60);
-        var glyph = Brush(0x60, 0x60, 0x60);
-        var buttonHover = Brush(0xDA, 0xDA, 0xDA);
-        var resources = scrollBar.Resources;
-        resources["ScrollBarSize"] = WorksheetScrollBarThickness;
-        resources["ScrollBarBackground"] = track;
-        resources["ScrollBarBackgroundPointerOver"] = track;
-        resources["ScrollBarTrackFill"] = track;
-        resources["ScrollBarTrackFillPointerOver"] = track;
-        resources["ScrollBarTrackStroke"] = Brushes.Transparent;
-        resources["ScrollBarTrackStrokePointerOver"] = Brushes.Transparent;
-        resources["ScrollBarPanningThumbBackground"] = thumb;
-        resources["ScrollBarThumbFillPointerOver"] = thumbHover;
-        resources["ScrollBarThumbFillPressed"] = thumbPressed;
-        resources["ScrollBarButtonBackground"] = track;
-        resources["ScrollBarButtonBackgroundPointerOver"] = buttonHover;
-        resources["ScrollBarButtonBackgroundPressed"] = thumbPressed;
-        resources["ScrollBarButtonArrowForeground"] = glyph;
-        resources["ScrollBarButtonArrowForegroundPointerOver"] = Brushes.Black;
-        resources["ScrollBarButtonArrowForegroundPressed"] = Brushes.White;
-    }
+    private static void ApplyWorksheetScrollBarChrome(ScrollBar scrollBar) =>
+        ClassicScrollBarChrome.ApplyResources(scrollBar.Resources);
 
     private void ConfigureSheetTabNavigationButton(Button button, string glyph, string automationName, int direction)
     {
@@ -21135,6 +21109,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         button.Padding = new Thickness(4, 1);
         button.Background = Brushes.White;
         button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        // These dialogs route Enter themselves instead of through Button.IsDefault; the class lets
+        // the dialog defaults still draw the WPF default-button cue on the WPF default button.
+        if (isDefault)
+            button.Classes.Add(DialogWindowDefaults.DefaultButtonCueClass);
         button.BorderThickness = new Thickness(1);
         button.FontSize = 12; button.FontFamily = FormulaBarFontFamily;
         button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;

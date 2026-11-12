@@ -618,7 +618,8 @@ public sealed partial class MainWindow
                 Children =
                 {
                     AvaloniaRibbonIcons.BuildMonochrome(item.IconKind, 14, null, Brush(0x21, 0x21, 0x21)),
-                    new TextBlock
+                    // WPF hosts the label in an AccessText, so the access-key marker is consumed.
+                    new AccessText
                     {
                         Text = item.Label,
                         FontSize = 12,

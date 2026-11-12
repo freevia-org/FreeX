@@ -21,6 +21,8 @@ public sealed partial class MainWindow
         {
             ControlHeight = EvaluateFormulaDialogPlanner.ButtonHeight,
             ButtonHeight = EvaluateFormulaDialogPlanner.ButtonHeight,
+            // WPF sizes these buttons to the planner height, which equals the shared token.
+            KeepButtonHeight = true,
             ActionSpacing = EvaluateFormulaDialogPlanner.ActionSpacing,
         };
 

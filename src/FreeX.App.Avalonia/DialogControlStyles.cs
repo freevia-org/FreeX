@@ -9,6 +9,8 @@ using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.Styling;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Free.Shared.Shell.Avalonia;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Avalonia;
@@ -60,6 +62,46 @@ internal static class DialogControlStyles
 }
 
 /// <summary>
+/// WPF's classic system scroll bar: 17 px thick, a #F0F0F0 track, a square #CDCDCD thumb (#A6A6A6
+/// hover, #606060 pressed) and #606060 arrow glyphs on buttons that share the track colour. Fluent
+/// draws a 12 px bar with a rounded translucent thumb; these keys restyle every bar that resolves
+/// them from the given scope (one worksheet bar, or a whole dialog window).
+/// </summary>
+internal static class ClassicScrollBarChrome
+{
+    public const double BarThickness = 17;
+
+    private static readonly IBrush Track = new ImmutableSolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0));
+    private static readonly IBrush Thumb = new ImmutableSolidColorBrush(Color.FromRgb(0xCD, 0xCD, 0xCD));
+    private static readonly IBrush ThumbHover = new ImmutableSolidColorBrush(Color.FromRgb(0xA6, 0xA6, 0xA6));
+    private static readonly IBrush ThumbPressed = new ImmutableSolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60));
+    private static readonly IBrush Glyph = new ImmutableSolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60));
+    private static readonly IBrush ButtonHover = new ImmutableSolidColorBrush(Color.FromRgb(0xDA, 0xDA, 0xDA));
+
+    public static void ApplyResources(IResourceDictionary resources)
+    {
+        resources["ScrollBarSize"] = BarThickness;
+        resources["ScrollBarBackground"] = Track;
+        resources["ScrollBarBackgroundPointerOver"] = Track;
+        resources["ScrollBarTrackFill"] = Track;
+        resources["ScrollBarTrackFillPointerOver"] = Track;
+        resources["ScrollBarTrackStroke"] = Brushes.Transparent;
+        resources["ScrollBarTrackStrokePointerOver"] = Brushes.Transparent;
+        resources["ScrollBarPanningThumbBackground"] = Thumb;
+        resources["ScrollBarThumbFillPointerOver"] = ThumbHover;
+        resources["ScrollBarThumbFillPressed"] = ThumbPressed;
+        resources["ScrollBarButtonBackground"] = Track;
+        resources["ScrollBarButtonBackgroundPointerOver"] = ButtonHover;
+        resources["ScrollBarButtonBackgroundPressed"] = ThumbPressed;
+        resources["ScrollBarButtonArrowForeground"] = Glyph;
+        resources["ScrollBarButtonArrowForegroundPointerOver"] = Brushes.Black;
+        resources["ScrollBarButtonArrowForegroundPressed"] = Brushes.White;
+        // The corner where a vertical and a horizontal bar meet takes the track colour too.
+        resources["ScrollViewerScrollBarsSeparatorBackground"] = Track;
+    }
+}
+
+/// <summary>
 /// WPF-shaped defaults for every FreeX dialog window, installed once at startup. FreeX dialogs are a
 /// mix of windows on the shared compact chrome, windows chromed by a route helper and raw windows,
 /// so the native WPF look (push-button colours, 12 px text, selection colours, group-box frame) is
@@ -96,6 +138,40 @@ internal static class DialogWindowDefaults
     // The WPF system highlight (#0078D7) at the text box's 0.4 selection opacity over a white field.
     private static readonly IBrush TextSelection = new ImmutableSolidColorBrush(Color.FromRgb(0x99, 0xC9, 0xEF));
 
+    // WPF's standard push button: a 16 px caption line at the 12 px dialog font, 1 px padding and a
+    // 1 px frame. Replaces the shared compact token (26) wherever a dialog's chrome style keeps it.
+    private const double PushButtonHeight = 20;
+    private static readonly Thickness UnchromedButtonPadding = new(8, 1, 8, 1);
+
+    // WPF Aero2 ComboBox: a #F0F0F0 to #E5E5E5 face in a 1 px #ACACAC frame, a white editable
+    // field, #ECF4FC to #DCECFC with a #7EB4EA frame under the pointer, and a #F0F0F0 face in a
+    // #D9D9D9 frame with GrayText ink when disabled; 22 px at the default control height.
+    private const double ComboBoxHeight = 22;
+    private static readonly IBrush ComboBoxFace = VerticalGradient(0xF0, 0xF0, 0xF0, 0xE5, 0xE5, 0xE5);
+    private static readonly IBrush ComboBoxFrame = new ImmutableSolidColorBrush(Color.FromRgb(0xAC, 0xAC, 0xAC));
+    private static readonly IBrush ComboBoxHoverFace = VerticalGradient(0xEC, 0xF4, 0xFC, 0xDC, 0xEC, 0xFC);
+    private static readonly IBrush ComboBoxHoverFrame = new ImmutableSolidColorBrush(Color.FromRgb(0x7E, 0xB4, 0xEA));
+    private static readonly IBrush ComboBoxDisabledFace = new ImmutableSolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0));
+    private static readonly IBrush ComboBoxDisabledFrame = new ImmutableSolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9));
+    private static readonly IBrush GrayText = new ImmutableSolidColorBrush(Color.FromRgb(0x6D, 0x6D, 0x6D));
+
+    // WPF Aero2 TabItem: unselected headers carry the combo face gradient in a #ACACAC frame, the
+    // selected header is white, joined to a #ACACAC pane and raised 2 px above and beside its slot.
+    private const double SelectedTabRise = 2;
+
+    // WPF Aero2 greys a disabled text box by drawing the whole box at 0.56 opacity.
+    private const double DisabledTextBoxOpacity = 0.56;
+
+    // A default button shows the default cue only while the keyboard focus is on a control that
+    // does not take Enter itself (WPF Button.IsDefaulted).
+    private const string DefaultedButtonClass = "freex-dialog-defaulted";
+
+    /// <summary>
+    /// Marks the WPF default button of a dialog that routes Enter itself and so leaves
+    /// <see cref="Button.IsDefault"/> unset; it gets the same focus-driven default cue.
+    /// </summary>
+    internal const string DefaultButtonCueClass = "freex-dialog-default-button";
+
     private static bool _installed;
 
     public static void Install()
@@ -117,15 +193,90 @@ internal static class DialogWindowDefaults
             ButtonDisabledInk)
         {
             CornerRadius = new CornerRadius(0),
+            Height = PushButtonHeight,
         };
         AvaloniaCompactDialogChrome.DefaultTextSelectionBrush = TextSelection;
         AvaloniaCompactDialogChrome.DefaultTextSelectionForegroundBrush = DialogControlStyles.SelectionForegroundBrush;
         AvaloniaCompactDialogChrome.DefaultListRowMinHeight = DialogListRowMinHeight;
         AvaloniaCompactDialogChrome.CompactEditableComboOwnsEditor = true;
+        AvaloniaCompactDialogChrome.DefaultComboBoxPalette = new AvaloniaCompactDialogComboBoxPalette(
+            ComboBoxFace,
+            Brushes.White,
+            ComboBoxFrame,
+            ComboBoxHoverFace,
+            ComboBoxHoverFrame,
+            ComboBoxDisabledFace,
+            ComboBoxDisabledFrame,
+            GrayText)
+        {
+            Height = ComboBoxHeight,
+        };
+        AvaloniaCompactDialogChrome.DefaultTabPalette = new AvaloniaCompactDialogTabPalette(
+            ComboBoxFace,
+            ComboBoxFrame,
+            ComboBoxFrame)
+        {
+            SelectedTabRise = SelectedTabRise,
+        };
 
         // Every dialog is shown owned (ShowDialog / Show with an owner), and the owner is assigned
         // after the dialog has been built, so this is the one point that sees all of them.
         Window.OwnerProperty.Changed.AddClassHandler<Window>(OnOwnerChanged);
+
+        // Combo boxes no chrome helper touched (raw dialogs, and rows a dialog adds after it opened,
+        // such as the per-level combos of a sort list) still carry Fluent's white face and large
+        // chevron. Each one gets the shared compact combo once it is loaded inside a dialog.
+        Control.LoadedEvent.AddClassHandler<ComboBox>((comboBox, _) => QueueDialogComboBoxChrome(comboBox));
+    }
+
+    private static IBrush VerticalGradient(byte r1, byte g1, byte b1, byte r2, byte g2, byte b2) =>
+        new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+            GradientStops =
+            {
+                new global::Avalonia.Media.GradientStop(Color.FromRgb(r1, g1, b1), 0),
+                new global::Avalonia.Media.GradientStop(Color.FromRgb(r2, g2, b2), 1),
+            },
+        };
+
+    // Posted so that a dialog's own chrome pass (which runs when the window opens) goes first.
+    private static void QueueDialogComboBoxChrome(ComboBox comboBox) =>
+        Dispatcher.UIThread.Post(() => ApplyDialogComboBoxChrome(comboBox), DispatcherPriority.Background);
+
+    private static void ApplyDialogComboBoxChrome(ComboBox comboBox)
+    {
+        if (comboBox.Classes.Contains(AvaloniaCompactDialogChrome.CompactComboBoxClass))
+            return;
+        if (TopLevel.GetTopLevel(comboBox) is not Window { } dialog || !dialog.Classes.Contains(DialogWindowClass))
+            return;
+
+        // Keep what the dialog decided about the combo's own layout and type; the shared chrome
+        // supplies only the frame, face, template and (when the dialog fixed none) the height.
+        var hadExplicitHeight = HasLocalValue(comboBox, Layoutable.HeightProperty)
+            || HasLocalValue(comboBox, Layoutable.MinHeightProperty)
+            || HasLocalValue(comboBox, Layoutable.MaxHeightProperty);
+        var alignment = comboBox.HorizontalAlignment;
+        AvaloniaProperty[] keptProperties =
+        [
+            TemplatedControl.PaddingProperty,
+            TemplatedControl.FontSizeProperty,
+            TemplatedControl.FontFamilyProperty,
+        ];
+        var kept = keptProperties
+            .Where(property => HasLocalValue(comboBox, property))
+            .Select(property => (Property: property, Value: comboBox.GetValue(property)))
+            .ToArray();
+
+        AvaloniaCompactDialogChrome.ApplyComboBox(
+            comboBox,
+            AvaloniaCompactDialogChrome.WindowsStyle,
+            fixedHeight: !hadExplicitHeight);
+
+        comboBox.HorizontalAlignment = alignment;
+        foreach (var (property, value) in kept)
+            comboBox.SetValue(property, value);
     }
 
     private static void OnOwnerChanged(Window dialog, AvaloniaPropertyChangedEventArgs _)
@@ -158,10 +309,65 @@ internal static class DialogWindowDefaults
         // is attached after the dialog's own, so it also sees the shared descendant chrome pass.
         dialog.Opened += (_, _) =>
         {
-            foreach (var button in dialog.GetLogicalDescendants().OfType<Button>().ToArray())
+            var buttons = dialog.GetLogicalDescendants().OfType<Button>().ToArray();
+            foreach (var button in buttons)
                 FitCaption(button);
+
+            InstallDefaultButtonCue(dialog, buttons);
         };
     }
+
+    /// <summary>
+    /// WPF draws the default button's blue frame only while it is defaulted, that is while the
+    /// keyboard focus is inside the dialog on a control that does not take Enter itself (no push
+    /// button, toggle or multi-line text box, the default button included). With the focus on a
+    /// button, or nowhere, every button keeps the neutral frame.
+    /// </summary>
+    private static void InstallDefaultButtonCue(Window dialog, IReadOnlyList<Button> buttons)
+    {
+        var defaultButtons = buttons
+            .Where(button => button.IsDefault || button.Classes.Contains(DefaultButtonCueClass))
+            .ToArray();
+        if (defaultButtons.Length == 0)
+            return;
+
+        foreach (var button in defaultButtons)
+        {
+            // Appended after every style the chrome helpers added, so these decide the resting
+            // frame; hover, pressed and disabled keep their own frames.
+            button.Styles.Add(new Style(x => RestingButton(x.OfType<Button>()))
+            {
+                Setters = { new Setter(TemplatedControl.BorderBrushProperty, ButtonBorder) },
+            });
+            button.Styles.Add(new Style(x => RestingButton(x.OfType<Button>().Class(DefaultedButtonClass)))
+            {
+                Setters = { new Setter(TemplatedControl.BorderBrushProperty, DefaultButtonBorder) },
+            });
+        }
+
+        void Update()
+        {
+            var focused = dialog.FocusManager?.GetFocusedElement();
+            var defaulted = focused is Visual focusedVisual
+                && (ReferenceEquals(focusedVisual, dialog) || dialog.IsVisualAncestorOf(focusedVisual))
+                && focused is not Button
+                && focused is not TextBox { AcceptsReturn: true };
+            foreach (var button in defaultButtons)
+                button.Classes.Set(DefaultedButtonClass, defaulted && button.IsEffectivelyEnabled);
+        }
+
+        dialog.AddHandler(InputElement.GotFocusEvent, (_, _) => Update(), handledEventsToo: true);
+        dialog.AddHandler(InputElement.LostFocusEvent, (_, _) => Update(), handledEventsToo: true);
+        Update();
+        // Dialogs move the initial focus from their own Opened handlers or a posted callback.
+        Dispatcher.UIThread.Post(Update, DispatcherPriority.Input);
+    }
+
+    private static Selector RestingButton(Selector selector) =>
+        selector
+            .Not(x => x.Class(":pointerover"))
+            .Not(x => x.Class(":pressed"))
+            .Not(x => x.Class(":disabled"));
 
     // The backstage panes own their chrome, and print surfaces belong to the print work stream.
     private static bool IsOutOfScope(Window dialog)
@@ -193,6 +399,13 @@ internal static class DialogWindowDefaults
         resources["ButtonForegroundPointerOver"] = DialogControlStyles.SelectionForegroundBrush;
         resources["ButtonForegroundPressed"] = DialogControlStyles.SelectionForegroundBrush;
         resources["ButtonForegroundDisabled"] = ButtonDisabledInk;
+        // Fluent's 8,5,8,6 button padding makes an unchromed 12 px push button 29-30 px tall.
+        resources["ButtonPadding"] = UnchromedButtonPadding;
+        // The disabled-text-box opacity (InsertScopedStyles) does the greying, as in WPF, so the
+        // Fluent disabled ink and frame stay those of an enabled box underneath it.
+        resources["TextControlForegroundDisabled"] = DialogControlStyles.SelectionForegroundBrush;
+        resources["TextControlBorderBrushDisabled"] = new ImmutableSolidColorBrush(Color.FromRgb(0xAB, 0xAD, 0xB3));
+        ClassicScrollBarChrome.ApplyResources(resources);
     }
 
     /// <summary>
@@ -234,6 +447,44 @@ internal static class DialogWindowDefaults
                     new Setter(ScrollViewer.HorizontalScrollBarVisibilityProperty, ScrollBarVisibility.Auto),
                 },
             },
+            // WPF scroll bars are classic, always-expanded bars beside the content, shown only
+            // while the content overflows. Fluent's auto-hiding bars collapse to a 2 px line laid
+            // over the content (over group-box frames, or as a stray line under a list) and only
+            // expand under the pointer; with auto-hide off they stay expanded and the scroll
+            // viewer reserves their lane. Templated scroll viewers (lists, multi-line text boxes)
+            // take the value from their owner, so the owners carry it. A single-line text box keeps
+            // the auto-hiding bar: a box shorter than its text line would otherwise show a full bar.
+            new Style(x => x.OfType<ScrollViewer>().Not(y => y.Name("PART_ScrollViewer")))
+            {
+                Setters = { new Setter(ScrollViewer.AllowAutoHideProperty, false) },
+            },
+            new Style(x => x.Is<ItemsControl>())
+            {
+                Setters = { new Setter(ScrollViewer.AllowAutoHideProperty, false) },
+            },
+            new Style(x => x.Is<ItemsControl>().Template().OfType<ScrollViewer>())
+            {
+                Setters = { new Setter(ScrollViewer.AllowAutoHideProperty, false) },
+            },
+            new Style(x => x.Is<TextBox>().PropertyEquals(TextBox.AcceptsReturnProperty, true))
+            {
+                Setters = { new Setter(ScrollViewer.AllowAutoHideProperty, false) },
+            },
+            new Style(x => x.Is<TextBox>()
+                .PropertyEquals(TextBox.AcceptsReturnProperty, true)
+                .Template()
+                .OfType<ScrollViewer>())
+            {
+                Setters = { new Setter(ScrollViewer.AllowAutoHideProperty, false) },
+            },
+            // WPF greys a disabled text box (ink and frame) by drawing it at 0.56 opacity. The
+            // editor inside an editable combo follows the combo's own disabled face instead.
+            new Style(x => x.Is<TextBox>()
+                .Class(":disabled")
+                .Not(y => y.Name("PART_EditableTextBox")))
+            {
+                Setters = { new Setter(Visual.OpacityProperty, DisabledTextBoxOpacity) },
+            },
         ];
 
         for (var index = 0; index < styles.Length; index++)
@@ -273,18 +524,10 @@ internal static class DialogWindowDefaults
         if (button.GetType() != typeof(Button) || string.IsNullOrEmpty(CaptionOf(button)))
             return;
 
+        // Unchromed: the scoped resources supply the face and frame, and the default-button frame
+        // follows the keyboard focus (InstallDefaultButtonCue).
         if (!HasLocalValue(button, TemplatedControl.BackgroundProperty))
-        {
-            // Unchromed: the scoped resources supply the face; only the default-button frame is missing.
-            if (button.IsDefault
-                && !HasLocalValue(button, TemplatedControl.BorderBrushProperty)
-                && !button.Classes.Contains(AvaloniaCompactDialogChrome.CompactButtonClass))
-            {
-                button.BorderBrush = DefaultButtonBorder;
-            }
-
             return;
-        }
 
         if (button.Background is not ISolidColorBrush { Opacity: 1 } face
             || (face.Color != Colors.White && face.Color != ButtonFaceColor))
@@ -299,7 +542,9 @@ internal static class DialogWindowDefaults
         }
 
         button.Background = ButtonFace;
-        button.BorderBrush = button.IsDefault ? DefaultButtonBorder : ButtonBorder;
+        // The scoped ButtonBorderBrush resource supplies the neutral frame; a local frame here would
+        // outrank the focus-driven default cue.
+        button.ClearValue(TemplatedControl.BorderBrushProperty);
         button.BorderThickness = new Thickness(1);
         button.CornerRadius = new CornerRadius(0);
     }
