@@ -88,7 +88,53 @@ public static class AvaloniaCompactDialogChrome
     public const string CompactTextBoxClass = "free-compact-dialog-textbox";
     private const string ReadOnlyDocumentClass = "free-read-only-document";
 
-    public static FontFamily WindowsUiFontFamily { get; } = new(
+    /// <summary>
+    /// Regular-width UI chain used on macOS. macOS has no Segoe UI but ships Arial Narrow, so the
+    /// Windows/Linux chains below (which list the metric-compatible narrow faces right after
+    /// Segoe UI) resolve to a visibly condensed face there. Arial is the face the ribbon already
+    /// resolves to on macOS, so dialogs, menus and window chrome stay consistent with it.
+    /// </summary>
+    public const string MacOsUiFontFamilyChain = "Segoe UI, Arial, Helvetica Neue, Helvetica, sans-serif";
+
+    // Declared before WindowsUiFontFamily: static initializers run in textual order and
+    // ResolveUiFontFamily returns this instance on macOS.
+    public static FontFamily MacOsUiFontFamily { get; } = new(MacOsUiFontFamilyChain);
+
+    /// <summary>
+    /// Single authority for shell UI font chains: returns <paramref name="windowsFontFamilyChain"/>
+    /// unchanged on Windows/Linux and the regular-width <see cref="MacOsUiFontFamily"/> on macOS.
+    /// Use for chrome/dialog/menu text only, never for document or cell content fonts.
+    /// </summary>
+    public static FontFamily ResolveUiFontFamily(string windowsFontFamilyChain)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(windowsFontFamilyChain);
+        return OperatingSystem.IsMacOS() ? MacOsUiFontFamily : new FontFamily(windowsFontFamilyChain);
+    }
+
+    /// <summary>
+    /// Application-level styles that give popup menus (context menus, menu flyouts and their
+    /// submenus, which inherit from the popup root) the same UI chain as the dialogs and ribbon on
+    /// macOS, instead of the platform default face. Empty on Windows/Linux.
+    /// </summary>
+    public static IReadOnlyList<Style> BuildPlatformMenuFontStyles()
+    {
+        if (!OperatingSystem.IsMacOS())
+            return [];
+
+        return
+        [
+            new Style(s => s.OfType<ContextMenu>())
+            {
+                Setters = { new Setter(TemplatedControl.FontFamilyProperty, MacOsUiFontFamily) },
+            },
+            new Style(s => s.OfType<MenuFlyoutPresenter>())
+            {
+                Setters = { new Setter(TemplatedControl.FontFamilyProperty, MacOsUiFontFamily) },
+            },
+        ];
+    }
+
+    public static FontFamily WindowsUiFontFamily { get; } = ResolveUiFontFamily(
         "Segoe UI, Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, " +
         "DejaVu Sans Condensed, Arial, Liberation Sans, Noto Sans, DejaVu Sans, Helvetica, sans-serif");
 

@@ -43,7 +43,8 @@ public sealed class VelopackUpdateOrchestrator
         UpdateManager? manager;
         try
         {
-            manager = new UpdateManager(new GithubSource(repoUrl, accessToken: null, prerelease: prerelease));
+            manager = new UpdateManager(
+                new PackageScopedUpdateSource(new GithubSource(repoUrl, accessToken: null, prerelease: prerelease)));
         }
         catch (Exception ex)
         {
