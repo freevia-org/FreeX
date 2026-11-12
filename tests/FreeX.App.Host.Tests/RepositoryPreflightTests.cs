@@ -101,6 +101,47 @@ public sealed class RepositoryPreflightTests
     }
 
     [Fact]
+    public void RepositoryPreflight_KillsRetriesAndNamesACheckThatNeverReturns()
+    {
+        // The static batch used to stall forever when one check's child process hung: nothing
+        // could time out a runspace. Every check is now a watched process, so a check that never
+        // returns is killed, retried once, and then fails the gate by name instead of hanging it.
+        using var temp = new TestTemporaryDirectory();
+
+        var passingScript = CreatePassingPreflightScript(temp.Path, "Test-Passing.ps1");
+        var hangingScript = Path.Combine(temp.Path, "Test-Hanging.ps1");
+        File.WriteAllText(
+            hangingScript,
+            """
+            Write-Host "Synthetic preflight started."
+            Start-Sleep -Seconds 600
+            """);
+
+        var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
+            "Test-RepositoryPreflight.ps1",
+            "-Mode Static -CheckTimeoutSeconds 2 " +
+            $"-JsonFilesScriptPath \"{passingScript}\" " +
+            $"-XmlFilesScriptPath \"{hangingScript}\" " +
+            $"-GitHubWorkflowsScriptPath \"{passingScript}\" " +
+            $"-TestGateContractScriptPath \"{passingScript}\" " +
+            $"-DotNetSdkReadinessScriptPath \"{passingScript}\" " +
+            $"-DotNetProjectReferencesScriptPath \"{passingScript}\" " +
+            $"-SolutionProjectsScriptPath \"{passingScript}\" " +
+            $"-CodeQlSolutionScriptPath \"{passingScript}\" " +
+            $"-CrossPlatformPortabilityScriptPath \"{passingScript}\" " +
+            $"-GeneratedDocsScriptPath \"{passingScript}\" " +
+            $"-ConflictMarkersScriptPath \"{passingScript}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        result.CombinedOutput.Should().Contain("XML files preflight timed out after 2 second(s) on attempt 1 of 2");
+        result.CombinedOutput.Should().Contain("Retrying once.");
+        result.CombinedOutput.Should().Contain("attempt 2 of 2");
+        result.CombinedOutput.Should().Contain("Synthetic preflight started.");
+        result.CombinedOutput.Should().Contain("Running JSON files preflight...");
+        result.CombinedOutput.Should().NotContain("Repository preflight checks passed.");
+    }
+
+    [Fact]
     public void DotNetSdkReadinessPreflight_FailsWhenWorkflowSdkBandIsMissing()
     {
         using var temp = new TestTemporaryDirectory();
