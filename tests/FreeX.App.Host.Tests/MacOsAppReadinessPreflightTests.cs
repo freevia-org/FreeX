@@ -2968,7 +2968,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     applicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication
                     Title = FormatWindowWorkbookTitle();
                     var isGroupedTab = tab.IsGrouped && _session.IsWorkbookGrouped;
-                    tab.TabColor is { } tabColor ? Brush(tabColor) : Brushes.Transparent;
+                    var tabFill = tab.TabColor is { } tabColor ? CreatePastelSheetTabBrush(tabColor)
                     var clearColorItem = new NativeMenuItem { Header = UiText.Get("RibbonWire_TabColorNone") };
                     clearColorItem.Click += (_, _) => ApplyActiveSheetTabColor(null);
                     ApplyActiveSheetTabColor(swatch.Color);
