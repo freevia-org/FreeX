@@ -595,9 +595,18 @@ public sealed class FindReplaceBodyReplaceAllCommand(
 
     public bool HasEffect(IDocumentCommandContext context) => replacedCount > 0;
 
-    public void Apply(IDocumentCommandContext context) => Set(context.Document, after);
+    // The block list actually replaced, captured when the edit is applied. Undo must restore what the
+    // document held at that moment, not the list handed in at construction: another command may have
+    // run in between, and a stale snapshot would silently discard its blocks.
+    private List<Block>? _replaced;
 
-    public void Revert(IDocumentCommandContext context) => Set(context.Document, before);
+    public void Apply(IDocumentCommandContext context)
+    {
+        _replaced = [.. context.Document.Blocks];
+        Set(context.Document, after);
+    }
+
+    public void Revert(IDocumentCommandContext context) => Set(context.Document, _replaced ?? before);
 
     private static void Set(TextDocument document, IReadOnlyList<Block> blocks)
     {
