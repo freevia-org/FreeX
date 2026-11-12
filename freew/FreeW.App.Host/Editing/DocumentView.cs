@@ -11628,15 +11628,57 @@ public sealed partial class DocumentView : RichTextBox
         if (fmt.VerticalAlign is VerticalAlign.Superscript or VerticalAlign.Subscript)
             fontSizePx *= SuperSubScale;
 
+        var flowDirection = fmt.Rtl
+            ? System.Windows.FlowDirection.RightToLeft
+            : System.Windows.FlowDirection.LeftToRight;
+        // The measurement must use the same kerning decision the rendered run gets (see
+        // ApplyOpenTypeTypography): FormattedText always pair-kerns, so for the Word-default unkerned run
+        // it reports a narrower advance than the line actually takes. A right-aligned tab stop sized from
+        // that narrower width overshoots the line by the kerning delta and pushes the text after the tab
+        // (a TOC/TOA page number, a dot leader) onto a line of its own.
+        if (!RunKerningPlanner.IsKerningEnabled(fmt, DefaultFontSizePt))
+            return MeasureUnkernedTextWidth(displayText, typeface, fontSizePx, flowDirection);
+
         var formatted = new FormattedText(
             displayText,
             System.Globalization.CultureInfo.CurrentCulture,
-            fmt.Rtl ? System.Windows.FlowDirection.RightToLeft : System.Windows.FlowDirection.LeftToRight,
+            flowDirection,
             typeface,
             fontSizePx,
             Brushes.Black,
             1.0);
         return formatted.WidthIncludingTrailingWhitespace;
+    }
+
+    private static double MeasureUnkernedTextWidth(
+        string text,
+        Typeface typeface,
+        double fontSizePx,
+        System.Windows.FlowDirection flowDirection)
+    {
+        // A TextBlock is the lightest WPF text host that honours Typography.Kerning. Its desired width
+        // drops trailing whitespace, so measure against a sentinel glyph and subtract the sentinel
+        // (with kerning off the sentinel cannot interact with the preceding character).
+        const string sentinel = "|";
+        double Measure(string value)
+        {
+            var block = new System.Windows.Controls.TextBlock
+            {
+                Text = value,
+                FontFamily = typeface.FontFamily,
+                FontStyle = typeface.Style,
+                FontWeight = typeface.Weight,
+                FontStretch = typeface.Stretch,
+                FontSize = fontSizePx,
+                FlowDirection = flowDirection,
+                TextWrapping = TextWrapping.NoWrap
+            };
+            Typography.SetKerning(block, false);
+            block.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            return block.DesiredSize.Width;
+        }
+
+        return Math.Max(0, Measure(text + sentinel) - Measure(sentinel));
     }
 
     // Insert soft hyphens into a run's display text via the pure Hyphenator. When doNotHyphenateCaps is on,
