@@ -3183,9 +3183,9 @@ public sealed class AvaloniaShellSourceTests
         var routeSource = normalizedSource[handlerIndex..nextMethodIndex];
 
         routeSource.Should().Contain("Width = 360,");
-        routeSource.Should().Contain("Height = 210,");
+        routeSource.Should().Contain("Height = 210 - WpfNoResizeFrameHeight,");
         routeSource.Should().Contain("MinWidth = 360,");
-        routeSource.Should().Contain("MaxHeight = 210,");
+        routeSource.Should().Contain("MaxHeight = 210 - WpfNoResizeFrameHeight,");
         routeSource.Should().NotContain("DataTableRangeSummaryText");
         routeSource.Should().NotContain("Table range:");
         routeSource.Should().NotContain("new OneVariableDataTableCommand");
