@@ -287,10 +287,13 @@ public static class AvaloniaCompactDialogChrome
                     // Window.Opened, so re-applying without the dialog's explicit border brush reset
                     // it to the shared default and erased the WPF-parity group borders the dialog had
                     // deliberately set -- the dialog's own chrome call was silently undone.
+                    // Likewise keep a caption ink the dialog set on purpose (WPF-parity dialogs caption
+                    // their groups in control ink, not the accent).
                     ApplyGroupBox(
                         groupBox,
                         style,
-                        groupBox.IsSet(TemplatedControl.BorderBrushProperty) ? groupBox.BorderBrush : null);
+                        groupBox.IsSet(TemplatedControl.BorderBrushProperty) ? groupBox.BorderBrush : null,
+                        groupBox.IsSet(TemplatedControl.ForegroundProperty) ? groupBox.Foreground : null);
                     break;
                 case Label label:
                     ApplyLabel(label, style);
@@ -1365,11 +1368,12 @@ public static class AvaloniaCompactDialogChrome
     public static void ApplyGroupBox(
         GroupBox groupBox,
         AvaloniaCompactDialogChromeStyle? style = null,
-        IBrush? borderBrush = null)
+        IBrush? borderBrush = null,
+        IBrush? captionBrush = null)
     {
         ArgumentNullException.ThrowIfNull(groupBox);
         style ??= WindowsStyle;
-        var accent = ThemeAccentBrush(style);
+        var accent = captionBrush ?? ThemeAccentBrush(style);
 
         groupBox.FontFamily = style.FontFamily;
         groupBox.FontSize = style.FontSize;

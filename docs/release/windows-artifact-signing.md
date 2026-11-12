@@ -79,7 +79,10 @@ pwsh -NoProfile -File tools/Publish-UserTestBuild.ps1 `
 Velopack invokes the repository signing wrapper through its native
 `--signTemplate` option, so it signs the Windows application payload and
 generated installer at the correct packaging stages. The wrapper retries
-transient Azure failures and verifies every signed file. Do not
+transient Azure failures and verifies every signed file; the all-app Windows
+packager (`tools/Publish-WindowsVelopackPackage.ps1`) uses Velopack's
+multi-file `{{file...}}` template with `--signParallel 8`, and the wrapper signs
+each batch concurrently. Do not
 Authenticode-sign ZIP, NUPKG, JSON, SBOM, or checksum files.
 
 ## CI with GitHub OIDC

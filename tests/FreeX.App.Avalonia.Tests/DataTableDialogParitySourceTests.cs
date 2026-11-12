@@ -14,7 +14,7 @@ public sealed class DataTableDialogParitySourceTests
         wpf.Should().Contain("Width = 360;");
         wpf.Should().Contain("Height = 210;");
         avalonia.Should().Contain("Width = 360,");
-        avalonia.Should().Contain("Height = 210,");
+        avalonia.Should().Contain("Height = 210 - WpfNoResizeFrameHeight,");
         avalonia.Should().Contain("UiText.Get(\"DataTable_Title\")");
         avalonia.Should().Contain("initialRowInputCellText");
         avalonia.Should().Contain("initialColumnInputCellText");
@@ -54,7 +54,7 @@ public sealed class DataTableDialogParitySourceTests
         dataTableMethod.Should().Contain("DataTableColumnInputCellPickerButton");
         dataTableMethod.Should().Contain("AttachDialogRangePicker(dialog, rowInputPicker, rowInputBox, \"range.data-table.row-input-cell\")");
         dataTableMethod.Should().Contain("AttachDialogRangePicker(dialog, columnInputPicker, columnInputBox, \"range.data-table.column-input-cell\")");
-        dataTableMethod.Should().Contain("new ColumnDefinition { Width = new GridLength(110) }");
+        dataTableMethod.Should().Contain("new ColumnDefinition { Width = GridLength.Auto }");
         dataTableMethod.Should().Contain("dialog.Content = new StackPanel");
         dataTableMethod.Should().Contain("Margin = new Thickness(0)");
         dataTableMethod.Should().NotContain("DockPanel.SetDock(buttonRow, Dock.Bottom)");
@@ -68,7 +68,7 @@ public sealed class DataTableDialogParitySourceTests
         dataTableMethod.Should().Contain("ApplyDataTablePickerChrome(columnInputPicker)");
         avalonia.Should().Contain("Foreground = Brushes.Black");
         dataTableMethod.Should().Contain("Margin = new Thickness(0)");
-        avalonia.Should().Contain("new Thickness(12, 12, 27, 12)");
+        dataTableMethod.Should().Contain("Margin = new Thickness(12),");
     }
 
     private static string ExtractBetween(string source, string startMarker, string endMarker)

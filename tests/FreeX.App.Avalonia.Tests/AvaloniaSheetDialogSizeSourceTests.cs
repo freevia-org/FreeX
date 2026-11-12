@@ -42,13 +42,13 @@ public sealed class AvaloniaSheetDialogSizeSourceTests
     {
         var rendererSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.RendererAccess.cs"));
         rendererSource.Should().Contain("private const int ForecastSheetDialogWidth = 320;");
-        rendererSource.Should().Contain("private const int ForecastSheetDialogHeight = 150;");
+        rendererSource.Should().Contain("private const int ForecastSheetDialogHeight = 150 - WpfNoResizeFrameHeight;");
         rendererSource.Should().Contain("private const int SubtotalDialogWidth = 380;");
         rendererSource.Should().Contain("private const int SubtotalDialogHeight = 390;");
         rendererSource.Should().Contain(
-            "private const int TextToColumnsDialogWidth = (int)TextToColumnsDialogMetrics.WindowWidth;");
+            "private const int TextToColumnsDialogWidth = (int)TextToColumnsDialogMetrics.WindowWidth - WpfResizableFrameWidth;");
         rendererSource.Should().Contain(
-            "private const int TextToColumnsDialogHeight = (int)TextToColumnsDialogMetrics.WindowHeight;");
+            "private const int TextToColumnsDialogHeight = (int)TextToColumnsDialogMetrics.WindowHeight - WpfResizableFrameHeight;");
         rendererSource.Should().NotContain("ParityDialogWidth");
 
         var mainWindowSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));

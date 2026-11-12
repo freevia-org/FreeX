@@ -63,18 +63,27 @@ public sealed partial class MainWindow
             return;
 
         var targetIndex = field.Children.IndexOf(target);
+        // WPF ScenarioManagerDialog builds these rows with DialogReferencePicker.CreateEditor's
+        // defaults: a 28px "..." button docked on the LEFT of the box with a 6px gap after it.
         var picker = new Button
         {
             Content = "...",
-            Width = 30,
-            MinWidth = 30,
-            Margin = new Thickness(6, 0, 0, 0),
+            Width = 28,
+            MinWidth = 28,
+            Margin = new Thickness(0, 0, 6, 0),
         };
-        AvaloniaCompactDialogChrome.ApplyButton(picker, ScenarioManagerDialogChromeStyle, 30);
+        AvaloniaCompactDialogChrome.ApplyButton(picker, ScenarioManagerDialogChromeStyle, 28);
         AutomationProperties.SetAutomationId(picker, pickerAutomationId);
         AutomationProperties.SetName(picker, pickerAutomationName);
 
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        // The row takes over the field's own margin (the 8px gap under each field) so the picker
+        // and the box share one baseline instead of the picker centring over box-plus-gap.
+        var row = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            Margin = target.Margin,
+        };
+        target.Margin = default;
         if (field is Grid parentGrid)
         {
             Grid.SetRow(row, Grid.GetRow(target));
@@ -84,12 +93,13 @@ public sealed partial class MainWindow
         }
 
         field.Children.RemoveAt(targetIndex);
+        // The box stays first in the logical order, so Tab still reaches it before its picker.
         Grid.SetRow(target, 0);
-        Grid.SetColumn(target, 0);
+        Grid.SetColumn(target, 1);
         Grid.SetRowSpan(target, 1);
         Grid.SetColumnSpan(target, 1);
         row.Children.Add(target);
-        Grid.SetColumn(picker, 1);
+        Grid.SetColumn(picker, 0);
         row.Children.Add(picker);
         field.Children.Insert(targetIndex, row);
 
