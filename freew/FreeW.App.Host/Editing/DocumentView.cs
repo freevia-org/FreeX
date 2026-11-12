@@ -11148,6 +11148,12 @@ public sealed partial class DocumentView : RichTextBox
                         LineHeightPt = tableParagraph.LineHeightPt
                     };
                 }
+                else if (!paraFmt.LineSpacingIsSet)
+                {
+                    // Nothing in the cascade (not even docDefaults) declares a line pitch: Word's
+                    // built-in default is single spacing.
+                    paraFmt = paraFmt with { LineSpacing = 1.0, LineRule = LineSpacingRule.Multiple, LineHeightPt = 0 };
+                }
             }
             else
             {
