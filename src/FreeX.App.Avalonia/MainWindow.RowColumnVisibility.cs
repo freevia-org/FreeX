@@ -378,10 +378,15 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = title,
+            // WPF RowHeightDialog / ColumnWidthDialog are 320x150 *outer* NoResize windows (client
+            // height 121): a 16px margin, the label 4px above the stretched box, 12px above the 72px
+            // OK/Cancel row. The height follows the content so the inline validation line still fits.
             Width = 320,
-            Height = 170,
-            MinWidth = 280,
-            MinHeight = 160,
+            MinWidth = 320,
+            MaxWidth = 320,
+            MinHeight = 150 - WpfNoResizeFrameHeight,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -389,7 +394,8 @@ public sealed partial class MainWindow
         var valueBox = new TextBox
         {
             Text = current.ToString("0.##", CultureInfo.CurrentCulture),
-            MinWidth = 240,
+            HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 0, 0, 12),
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(valueBox, RowColumnDialogChromeStyle);
         AutomationProperties.SetName(valueBox, prompt);
@@ -397,11 +403,12 @@ public sealed partial class MainWindow
 
         var validationText = new TextBlock();
         AvaloniaCompactDialogChrome.ApplyValidationStatus(validationText, RowColumnDialogChromeStyle);
+        validationText.Margin = new Thickness(0, 0, 0, 8);
 
         var okButton = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")), IsDefault = true };
         var cancelButton = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")), IsCancel = true };
-        AvaloniaCompactDialogChrome.ApplyButton(okButton, RowColumnDialogChromeStyle, 84, isDefault: true);
-        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, RowColumnDialogChromeStyle, 84);
+        AvaloniaCompactDialogChrome.ApplyButton(okButton, RowColumnDialogChromeStyle, 72, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, RowColumnDialogChromeStyle, 72);
         AutomationProperties.SetAutomationId(okButton, "DimensionDialogOkButton");
         AutomationProperties.SetAutomationId(cancelButton, "DimensionDialogCancelButton");
 
@@ -439,15 +446,22 @@ public sealed partial class MainWindow
             }
         };
 
-        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([cancelButton, okButton]);
+        // WPF DialogButtonRowFactory.Create: OK first, then Cancel.
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]);
 
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
-            Spacing = 8,
             Children =
             {
-                new TextBlock { Text = prompt },
+                new TextBlock
+                {
+                    Text = StripDisplayMnemonic(prompt),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 4),
+                },
                 valueBox,
                 validationText,
                 buttonRow,

@@ -371,13 +371,17 @@ public sealed partial class MainWindow
         string initial,
         bool multiline = false)
     {
+        // WPF ObjectSizeDialog.CreateSingleInputContent (RotationDialog / TextEntryDialog): a 16px
+        // margin around the label (4px above the editor), the stretched editor (12px above the
+        // buttons) and a right-aligned row of 72px buttons.
         var input = new TextBox
         {
             Text = initial,
-            MinWidth = 260,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
             AcceptsReturn = multiline,
             TextWrapping = multiline ? TextWrapping.Wrap : TextWrapping.NoWrap,
             MinHeight = multiline ? 64 : 0,
+            Margin = new Thickness(0, 0, 0, 12),
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(input, PictureShapeDialogChromeStyle, fixedHeight: !multiline);
         AutomationProperties.SetAutomationId(input, "PictureShapeInputBox");
@@ -385,31 +389,40 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = title,
-            SizeToContent = SizeToContent.WidthAndHeight,
+            // WPF RotationDialog is a 300x150 *outer* NoResize window and TextEntryDialog a 420 wide
+            // one; the multi-line alternative-text editor takes the wider frame and grows with it.
+            Width = multiline ? 420 : 300,
+            MinHeight = multiline ? 0 : 150 - WpfNoResizeFrameHeight,
+            SizeToContent = SizeToContent.Height,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "PictureShapeInputDialog");
 
-        var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), Width = 80, IsDefault = true };
+        var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), Width = 72, IsDefault = true };
         AutomationProperties.SetAutomationId(okButton, "PictureShapeInputOkButton");
         okButton.Click += (_, _) => dialog.Close(input.Text ?? string.Empty);
 
-        var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), Width = 80, IsCancel = true };
+        var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), Width = 72, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "PictureShapeInputCancelButton");
         cancelButton.Click += (_, _) => dialog.Close((string?)null);
-        AvaloniaCompactDialogChrome.ApplyButton(okButton, PictureShapeDialogChromeStyle, 80, isDefault: true);
-        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, PictureShapeDialogChromeStyle, 80);
+        AvaloniaCompactDialogChrome.ApplyButton(okButton, PictureShapeDialogChromeStyle, 72, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, PictureShapeDialogChromeStyle, 72);
 
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
-            Spacing = 12,
-            MinWidth = 300,
             Children =
             {
-                new TextBlock { Text = prompt },
+                new TextBlock
+                {
+                    Text = StripDisplayMnemonic(prompt),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 4),
+                },
                 input,
                 AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]),
             },
@@ -428,11 +441,13 @@ public sealed partial class MainWindow
             ObjectSizeDialogField.Width,
             ObjectSizeDialogField.Width,
             CultureInfo.CurrentCulture);
+        // WPF ObjectSizeDialog: a 16px margin around stacked label-above-editor pairs (label 4px
+        // above its stretched editor, 8px between pairs), height first, then a row of 72px buttons.
         var widthBox = new TextBox
         {
             Text = state.WidthText,
-            Width = 120,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 0, 0, 8),
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(widthBox, PictureShapeDialogChromeStyle);
         AutomationProperties.SetAutomationId(widthBox, "ObjectSizeWidthBox");
@@ -440,26 +455,33 @@ public sealed partial class MainWindow
         var heightBox = new TextBox
         {
             Text = state.HeightText,
-            Width = 120,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 0, 0, 8),
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(heightBox, PictureShapeDialogChromeStyle);
         AutomationProperties.SetAutomationId(heightBox, "ObjectSizeHeightBox");
 
         var warning = new TextBlock();
         AvaloniaCompactDialogChrome.ApplyValidationStatus(warning, PictureShapeDialogChromeStyle);
+        warning.Margin = new Thickness(0, 0, 0, 8);
 
         var dialog = new Window
         {
             Title = UiText.Get("InsertLoc_ObjectSizeTitle"),
-            SizeToContent = SizeToContent.WidthAndHeight,
+            // WPF ObjectSizeDialog is a 360x250 *outer* NoResize window (client height 221).
+            Width = 360,
+            Height = 250 - WpfNoResizeFrameHeight,
+            MinWidth = 360,
+            MinHeight = 250 - WpfNoResizeFrameHeight,
+            MaxWidth = 360,
+            MaxHeight = 250 - WpfNoResizeFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "ObjectSizeDialog");
 
-        var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), Width = 80, IsDefault = true };
+        var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), Width = 72, IsDefault = true };
         AutomationProperties.SetAutomationId(okButton, "ObjectSizeOkButton");
         okButton.Click += (_, _) =>
         {
@@ -476,36 +498,39 @@ public sealed partial class MainWindow
             dialog.Close((ObjectSizeDialogSize?)size);
         };
 
-        var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), Width = 80, IsCancel = true };
+        var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), Width = 72, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "ObjectSizeCancelButton");
         cancelButton.Click += (_, _) => dialog.Close((ObjectSizeDialogSize?)null);
-        AvaloniaCompactDialogChrome.ApplyButton(okButton, PictureShapeDialogChromeStyle, 80, isDefault: true);
-        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, PictureShapeDialogChromeStyle, 80);
+        AvaloniaCompactDialogChrome.ApplyButton(okButton, PictureShapeDialogChromeStyle, 72, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, PictureShapeDialogChromeStyle, 72);
 
-        StackPanel Row(string label, TextBox box) => new()
+        TextBlock FieldLabel(string label) => new()
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            Children =
-            {
-                new TextBlock { Text = StripDisplayMnemonic(label), Width = 64, VerticalAlignment = AvaloniaVerticalAlignment.Center },
-                box,
-            },
+            Text = StripDisplayMnemonic(label),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 0, 0, 4),
         };
 
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
-            Spacing = 12,
-            MinWidth = 260,
             Children =
             {
-                Row(UiText.Get("InsertLoc_WidthLabel"), widthBox),
-                Row(UiText.Get("InsertLoc_HeightLabel"), heightBox),
+                FieldLabel(UiText.Get("InsertLoc_HeightLabel")),
+                heightBox,
+                FieldLabel(UiText.Get("InsertLoc_WidthLabel")),
+                widthBox,
                 warning,
                 AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]),
             },
+        };
+
+        // WPF FocusInitialKeyboardTarget: the height box owns initial focus with its value selected.
+        dialog.Opened += (_, _) =>
+        {
+            heightBox.Focus();
+            heightBox.SelectAll();
         };
 
         return await dialog.ShowDialog<ObjectSizeDialogSize?>(this);

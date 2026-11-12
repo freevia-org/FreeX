@@ -61,7 +61,10 @@ public sealed class SelectionPaneInteractionSourceTests
         source.Should().Contain("new GridLength(32)");
         source.Should().Contain("new GridLength(160)");
         source.Should().Contain("buttonRow.Spacing = 6;");
-        source.Should().Contain("new GridLength(37)");
+        // The window is sized to the WPF client area (outer 520x440 minus the Windows frame), so no
+        // spacer row stands in for the caption below the action row any more.
+        source.Should().Contain("Height = 440 - WpfResizableFrameHeight");
+        source.Should().NotContain("new GridLength(37)");
         source.Should().Contain("listBox.SelectedItem = session.SelectedId is { } selectedId");
         source.Should().Contain("filtered.FirstOrDefault(row => row.Id == selectedId)");
     }

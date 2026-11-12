@@ -67,17 +67,18 @@ public sealed partial class MainWindow
         var state = FormatPicturePlanner.CreateDialogState(target.Values);
         var suppressSync = false;
 
-        var widthBox = new TextBox { Text = state.WidthText, Width = 140 };
+        // WPF FormatPictureDialog: the editors stretch across the tab page's star column.
+        var widthBox = new TextBox { Text = state.WidthText };
         ApplyDrawingTextBoxChrome(widthBox);
         AutomationProperties.SetAutomationId(widthBox, "FormatObjectWidthBox");
         AutomationProperties.SetName(widthBox, UiText.Get("FormatPicture_WidthLabel"));
 
-        var heightBox = new TextBox { Text = state.HeightText, Width = 140 };
+        var heightBox = new TextBox { Text = state.HeightText };
         ApplyDrawingTextBoxChrome(heightBox);
         AutomationProperties.SetAutomationId(heightBox, "FormatObjectHeightBox");
         AutomationProperties.SetName(heightBox, UiText.Get("FormatPicture_HeightLabel"));
 
-        var rotationBox = new TextBox { Text = state.RotationText, Width = 140 };
+        var rotationBox = new TextBox { Text = state.RotationText };
         ApplyDrawingTextBoxChrome(rotationBox);
         AutomationProperties.SetAutomationId(rotationBox, "FormatObjectRotationBox");
         AutomationProperties.SetName(rotationBox, UiText.Get("FormatPicture_RotationLabel"));
@@ -87,6 +88,7 @@ public sealed partial class MainWindow
             Content = StripDisplayMnemonic(UiText.Get("FormatPicture_LockAspectRatio")),
             IsChecked = state.LockAspectRatio,
             IsVisible = state.LockAspectRatioSupported,
+            Margin = new Thickness(0, 0, 0, 8),
         };
         ApplyDrawingCheckBoxChrome(lockAspectBox);
         AutomationProperties.SetAutomationId(lockAspectBox, "FormatObjectLockAspectBox");
@@ -96,7 +98,8 @@ public sealed partial class MainWindow
             Text = state.AltText,
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
-            MinHeight = 64,
+            Height = 86,
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             BorderBrush = Brush(130, 130, 130),
@@ -136,19 +139,26 @@ public sealed partial class MainWindow
             Title = target.Kind == DrawingObjectTargetKind.Picture
                 ? UiText.Get("FormatPicture_PictureTitle")
                 : UiText.Get("FormatPicture_ShapeTitle"),
-            Width = 360,
-            SizeToContent = SizeToContent.Height,
+            // WPF FormatPictureDialog is a 480x440 *outer* NoResize window; Avalonia sizes are client
+            // sizes, so the height loses the Windows caption/frame allowance.
+            Width = 480,
+            Height = 440 - WpfNoResizeFrameHeight,
+            MinWidth = 480,
+            MinHeight = 440 - WpfNoResizeFrameHeight,
+            MaxWidth = 480,
+            MaxHeight = 440 - WpfNoResizeFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "FormatObjectDialog");
 
-        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
-        ApplyDrawingButtonChrome(ok, width: 80, isDefault: true);
+        // WPF DialogButtonRowFactory.Create(Accept, 72): 72px buttons with an 8px gap.
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 72 };
+        ApplyDrawingButtonChrome(ok, width: 72, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "FormatObjectOkButton");
-        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
-        ApplyDrawingButtonChrome(cancel, width: 80);
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 72 };
+        ApplyDrawingButtonChrome(cancel, width: 72);
         AutomationProperties.SetAutomationId(cancel, "FormatObjectCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -170,23 +180,68 @@ public sealed partial class MainWindow
             dialog.Close(true);
         };
 
-        var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
-        content.Children.Add(SectionHeader(UiText.Get("FormatPicture_SizeHeader")));
-        content.Children.Add(FormRow(UiText.Get("FormatPicture_WidthLabel"), widthBox));
-        content.Children.Add(FormRow(UiText.Get("FormatPicture_HeightLabel"), heightBox));
-        content.Children.Add(FormRow(UiText.Get("FormatPicture_RotationLabel"), rotationBox));
+        // WPF FormatPictureDialog: a 14px root margin around a tab control that fills the window down
+        // to the OK/Cancel row. Each tab page is a two-column grid (12px margin, 110px label column,
+        // star editor column) whose rows are 8px apart, in the order height, width, rotation.
+        var sizePage = CreateFormatObjectTabGrid();
+        AddFormatObjectTabRow(sizePage, 0, UiText.Get("FormatPicture_HeightLabel"), heightBox);
+        AddFormatObjectTabRow(sizePage, 1, UiText.Get("FormatPicture_WidthLabel"), widthBox);
+        AddFormatObjectTabRow(sizePage, 2, UiText.Get("FormatPicture_RotationLabel"), rotationBox);
         if (state.LockAspectRatioSupported)
-            content.Children.Add(lockAspectBox);
-        content.Children.Add(SectionHeader(UiText.Get("FormatPicture_AltTextHeader")));
-        content.Children.Add(new TextBlock
         {
-            Text = UiText.Get("FormatPicture_AltTextLabel"),
+            lockAspectBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
+            Grid.SetRow(lockAspectBox, 3);
+            Grid.SetColumn(lockAspectBox, 1);
+            sizePage.Children.Add(lockAspectBox);
+        }
+
+        var altTextPage = CreateFormatObjectTabGrid();
+        var altTextLabel = new TextBlock
+        {
+            Text = StripDisplayMnemonic(UiText.Get("FormatPicture_DescriptionLabel")),
             Foreground = HeaderForeground,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             TextWrapping = TextWrapping.Wrap,
-        });
-        content.Children.Add(altTextBox);
-        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 8, 0, 0)));
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            Margin = new Thickness(0, 0, 8, 8),
+        };
+        Grid.SetRow(altTextLabel, 0);
+        Grid.SetColumn(altTextLabel, 0);
+        altTextPage.Children.Add(altTextLabel);
+        Grid.SetRow(altTextBox, 0);
+        Grid.SetColumn(altTextBox, 1);
+        altTextPage.Children.Add(altTextBox);
+
+        var tabs = new TabControl
+        {
+            Items =
+            {
+                new TabItem { Header = StripDisplayMnemonic(UiText.Get("FormatPicture_SizeTab")), Content = sizePage },
+                new TabItem { Header = StripDisplayMnemonic(UiText.Get("FormatPicture_AltTextTab")), Content = altTextPage },
+            },
+        };
+        AutomationProperties.SetAutomationId(tabs, "FormatObjectTabs");
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs, DrawingDialogChromeStyle);
+
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);
+        var content = new Grid
+        {
+            Margin = new Thickness(14),
+            RowDefinitions = new RowDefinitions("*,Auto"),
+        };
+        Grid.SetRow(tabs, 0);
+        Grid.SetRow(buttonRow, 1);
+        content.Children.Add(tabs);
+        content.Children.Add(buttonRow);
         dialog.Content = content;
+
+        // WPF FocusInitialKeyboardTarget: the height box owns initial focus with its value selected.
+        dialog.Opened += (_, _) =>
+        {
+            heightBox.Focus();
+            heightBox.SelectAll();
+        };
 
         var confirmed = await dialog.ShowDialog<bool>(this);
         if (!confirmed)
@@ -207,6 +262,36 @@ public sealed partial class MainWindow
         }
 
         ApplyFormatObjectResult(result, target);
+    }
+
+    private static Grid CreateFormatObjectTabGrid() => new()
+    {
+        Margin = new Thickness(12),
+        ColumnDefinitions = new ColumnDefinitions("110,*"),
+        RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto"),
+        VerticalAlignment = AvaloniaVerticalAlignment.Top,
+    };
+
+    private static void AddFormatObjectTabRow(Grid grid, int row, string label, TextBox box)
+    {
+        var labelBlock = new TextBlock
+        {
+            Text = StripDisplayMnemonic(label),
+            Foreground = HeaderForeground,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 8),
+        };
+        Grid.SetRow(labelBlock, row);
+        Grid.SetColumn(labelBlock, 0);
+        grid.Children.Add(labelBlock);
+
+        box.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+        box.Margin = new Thickness(0, 0, 0, 8);
+        Grid.SetRow(box, row);
+        Grid.SetColumn(box, 1);
+        grid.Children.Add(box);
     }
 
     /// <summary>
@@ -265,7 +350,8 @@ public sealed partial class MainWindow
         var dialog = new FreeXDialogWindow(DrawingDialogChromeStyle)
         {
             Title = UiText.Get("PictureCrop_Title"),
-            Width = 320,
+            // WPF PictureCropDialog is 420 wide; the height follows the four stacked editors.
+            Width = 420,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
@@ -284,11 +370,12 @@ public sealed partial class MainWindow
             bottomBox.Text = PictureCropDialogPlanner.FormatPercent(0);
         };
 
-        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
-        ApplyDrawingButtonChrome(ok, width: 80, isDefault: true);
+        // WPF DialogButtonRowFactory.Create(accept, 72): 72px OK/Cancel buttons with an 8px gap.
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 72 };
+        ApplyDrawingButtonChrome(ok, width: 72, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "PictureCropOkButton");
-        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
-        ApplyDrawingButtonChrome(cancel, width: 80);
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 72 };
+        ApplyDrawingButtonChrome(cancel, width: 72);
         AutomationProperties.SetAutomationId(cancel, "PictureCropCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -303,13 +390,35 @@ public sealed partial class MainWindow
             dialog.Close(true);
         };
 
-        var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
-        content.Children.Add(FormRow(UiText.Get("PictureCrop_LeftLabel"), leftBox));
-        content.Children.Add(FormRow(UiText.Get("PictureCrop_TopLabel"), topBox));
-        content.Children.Add(FormRow(UiText.Get("PictureCrop_RightLabel"), rightBox));
-        content.Children.Add(FormRow(UiText.Get("PictureCrop_BottomLabel"), bottomBox));
+        // WPF PictureCropDialog: a 16px margin around stacked label-above-editor pairs (label 4px
+        // above its stretched editor, 8px between pairs and above the button row).
+        var content = new StackPanel { Margin = new Thickness(16) };
+        void AddCropField(string label, TextBox box)
+        {
+            content.Children.Add(new TextBlock
+            {
+                Text = StripDisplayMnemonic(label),
+                Foreground = HeaderForeground,
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
+                Margin = new Thickness(0, content.Children.Count == 0 ? 0 : 8, 0, 4),
+            });
+            content.Children.Add(box);
+        }
+
+        AddCropField(UiText.Get("PictureCrop_LeftLabel"), leftBox);
+        AddCropField(UiText.Get("PictureCrop_TopLabel"), topBox);
+        AddCropField(UiText.Get("PictureCrop_RightLabel"), rightBox);
+        AddCropField(UiText.Get("PictureCrop_BottomLabel"), bottomBox);
         content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([resetButton, ok, cancel], new Thickness(0, 8, 0, 0)));
         dialog.Content = content;
+
+        // WPF FocusInitialKeyboardTarget: the left crop box owns initial focus with its value selected.
+        dialog.Opened += (_, _) =>
+        {
+            leftBox.Focus();
+            leftBox.SelectAll();
+        };
 
         var confirmed = await dialog.ShowDialog<bool>(this);
         if (!confirmed)
@@ -351,7 +460,7 @@ public sealed partial class MainWindow
 
     private static TextBox CropBox(string automationId, string text)
     {
-        var box = new TextBox { Text = text, Width = 120, HorizontalAlignment = AvaloniaHorizontalAlignment.Left };
+        var box = new TextBox { Text = text, HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch };
         ApplyDrawingTextBoxChrome(box);
         AutomationProperties.SetAutomationId(box, automationId);
         return box;
@@ -399,8 +508,13 @@ public sealed partial class MainWindow
         var dialog = new FreeXDialogWindow(DrawingDialogChromeStyle)
         {
             Title = UiText.Get("ShapeEffects_Title"),
+            // WPF ShapeEffectsDialog is a 380x190 *outer* NoResize window (client height 161).
             Width = 380,
-            Height = 190,
+            Height = 190 - WpfNoResizeFrameHeight,
+            MinWidth = 380,
+            MinHeight = 190 - WpfNoResizeFrameHeight,
+            MaxWidth = 380,
+            MaxHeight = 190 - WpfNoResizeFrameHeight,
             Background = Brushes.White,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
@@ -408,11 +522,12 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "ShapeEffectsDialog");
 
-        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
-        ApplyDrawingButtonChrome(ok, width: 80, isDefault: true);
+        // WPF DialogButtonRowFactory.Create(Accept, 72): 72px buttons with an 8px gap.
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 72 };
+        ApplyDrawingButtonChrome(ok, width: 72, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "ShapeEffectsOkButton");
-        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
-        ApplyDrawingButtonChrome(cancel, width: 80);
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 72 };
+        ApplyDrawingButtonChrome(cancel, width: 72);
         AutomationProperties.SetAutomationId(cancel, "ShapeEffectsCancelButton");
         cancel.Click += (_, _) => dialog.Close((DrawingShapeEffectPreset?)null);
         ok.Click += (_, _) => dialog.Close(
@@ -430,7 +545,8 @@ public sealed partial class MainWindow
                 {
                     Text = StripDisplayMnemonic(UiText.Get("ShapeEffects_EffectLabel")),
                     Foreground = HeaderForeground,
-                    FontSize = 16,
+                    // WPF: a plain Label in the dialog's default 12px UI font.
+                    FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
                     Margin = new Thickness(0, 0, 0, 4),
                 },
@@ -537,8 +653,8 @@ public sealed partial class MainWindow
                     new GradientStop(ToColor(endColor), 1),
                 },
             };
-            if (startSummaryRef is { } ss) ss.Text = $"Start: {FormatRgb(startColor)}";
-            if (endSummaryRef is { } es) es.Text = $"End: {FormatRgb(endColor)}";
+            if (startSummaryRef is { } ss) ss.Text = UiText.Format("ShapeGradient_StartColorSummary", FormatRgb(startColor));
+            if (endSummaryRef is { } es) es.Text = UiText.Format("ShapeGradient_EndColorSummary", FormatRgb(endColor));
         }
 
         directionBox.SelectionChanged += (_, _) => UpdatePreview();
@@ -619,8 +735,10 @@ public sealed partial class MainWindow
             Margin = new Thickness(2, 0, 0, 12),
         };
 
-        var startSummary = new TextBlock { Text = $"Start: {FormatRgb(startColor)}", Foreground = Brushes.DimGray, FontSize = 12, FontFamily = FormulaBarFontFamily };
-        var endSummary = new TextBlock { Text = $"End: {FormatRgb(endColor)}", Foreground = Brushes.DimGray, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 2, 0, 6) };
+        // WPF: both summary lines use SystemColors.GrayTextBrush (#6D6D6D) and the localized summary formats.
+        var summaryInk = Brush(109, 109, 109);
+        var startSummary = new TextBlock { Text = UiText.Format("ShapeGradient_StartColorSummary", FormatRgb(startColor)), Foreground = summaryInk, FontSize = 12, FontFamily = FormulaBarFontFamily };
+        var endSummary = new TextBlock { Text = UiText.Format("ShapeGradient_EndColorSummary", FormatRgb(endColor)), Foreground = summaryInk, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 2, 0, 6) };
         startSummaryRef = startSummary;
         endSummaryRef = endSummary;
         var content = new StackPanel { Spacing = 0, Margin = new Thickness(18, 16, 18, 8) };
@@ -785,17 +903,4 @@ public sealed partial class MainWindow
     private static IBrush SolidColor(CellColor color) => new SolidColorBrush(ToColor(color));
 
     private static Color ToColor(CellColor color) => Color.FromRgb(color.R, color.G, color.B);
-
-    /// <summary>Shared label-left / control-right row used by the drawing dialogs.</summary>
-    private static StackPanel FormRow(string label, Control control) => new()
-    {
-        Orientation = Orientation.Horizontal,
-        Spacing = 8,
-        VerticalAlignment = AvaloniaVerticalAlignment.Center,
-        Children =
-        {
-            new TextBlock { Text = StripDisplayMnemonic(label), Width = 96, VerticalAlignment = AvaloniaVerticalAlignment.Center, Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
-            control,
-        },
-    };
 }

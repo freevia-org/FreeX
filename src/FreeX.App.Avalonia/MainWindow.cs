@@ -15889,24 +15889,35 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var prompt = new Window
         {
             Title = title,
-            Width = 380,
-            Height = 160,
-            MinWidth = 340,
-            MinHeight = 150,
+            // WPF ScreenTipDialog / BookmarkDialog (TextEntryDialog) are 420x170 *outer* NoResize
+            // windows (client height 141): a 16px margin, the label 4px above the stretched box,
+            // 12px above the 72px OK/Cancel row.
+            Width = 420,
+            Height = 170 - WpfNoResizeFrameHeight,
+            MinWidth = 420,
+            MinHeight = 170 - WpfNoResizeFrameHeight,
+            MaxWidth = 420,
+            MaxHeight = 170 - WpfNoResizeFrameHeight,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             FontFamily = FormulaBarFontFamily,
             FontSize = 12,
         };
 
-        var inputBox = new TextBox { Text = initialValue ?? string.Empty, MinWidth = 300 };
+        var inputBox = new TextBox
+        {
+            Text = initialValue ?? string.Empty,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 0, 0, 12),
+        };
         ApplyDialogTextBoxChrome(inputBox);
         AutomationProperties.SetName(inputBox, label);
 
         var okButton = new Button { Content = UiText.Get("Common_Ok") };
-        ApplyDialogButtonChrome(okButton, width: 84, isDefault: true);
+        ApplyDialogButtonChrome(okButton, width: 72, isDefault: true);
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel") };
-        ApplyDialogButtonChrome(cancelButton, width: 84);
+        ApplyDialogButtonChrome(cancelButton, width: 72);
 
         void Accept()
         {
@@ -15925,17 +15936,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         prompt.Content = new StackPanel
         {
             Margin = new Thickness(16),
-            Spacing = 8,
             Children =
             {
-                new TextBlock { Text = label },
+                new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) },
                 inputBox,
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
                     Spacing = 8,
                     HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    Margin = new Thickness(0, 8, 0, 0),
                     Children = { okButton, cancelButton },
                 },
             },
@@ -16459,9 +16468,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         int initialTabIndex = 0,
         string? numberFormatOverride = null)
     {
-        const double formatCellsDialogWidth = 620;
-        const double formatCellsDefaultDialogHeight = 540;
-        const double formatCellsBorderDialogHeight = 596.5;
+        // The WPF reference is a 620x540 *outer* NoResize window (596.5 tall once the Border tab's
+        // detail rows are all visible) whose client area is 606x502: its content, laid out with a
+        // 10px margin, ends 24px short of the right edge and 48px short of the bottom edge of that
+        // outer size. Avalonia sizes are client sizes, so the frame is subtracted here instead of
+        // being re-created as an empty band right of and below OK/Cancel. WPF narrows the other
+        // five tabs to 550x510; this dialog keeps the Border-tab width on every tab because the
+        // Fill and Border editors are measured against that width.
+        const double formatCellsFrameWidth = 14;
+        const double formatCellsFrameHeight = 38;
+        const double formatCellsDialogWidth = 620 - formatCellsFrameWidth;
+        const double formatCellsDefaultDialogHeight = 540 - formatCellsFrameHeight;
+        const double formatCellsBorderDialogHeight = 596.5 - formatCellsFrameHeight;
 
         FormatCellsCompactDialogPlan? result = null;
         var currentNumberFormat = numberFormatOverride ?? _session.SelectedRangeStartNumberFormat;
@@ -16512,7 +16530,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             SelectedItem = numberCategories.Contains(currentNumberCategory)
                 ? currentNumberCategory
                 : numberCategories[0],
-            MinWidth = 150,
+            // WPF: a 150px category column whose panel keeps 12px clear on the right.
+            MinWidth = 138,
             Height = 278,
             VerticalAlignment = AvaloniaVerticalAlignment.Top,
         };
@@ -16623,7 +16642,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ItemsSource = FormatCellsNumberFormatPlanner.NegativeOptions,
             SelectedIndex = currentNumberNegativeIndex,
             MinWidth = 200,
-            Height = 96,
+            Height = 82,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
         AutomationProperties.SetName(
             numberNegativeBox,
@@ -16985,6 +17005,153 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         fontNameBox.TextChanged += (_, _) => RefreshFontPreview();
         fontColorBox.SelectionChanged += (_, _) => RefreshFontPreview();
         RefreshFontPreview();
+
+        // WPF presents bold/italic as one font-style list and single underline as a drop-down.
+        // The check boxes above stay the value holders the planner input and the preview read
+        // (as the inside-border toggles do on the Border tab) but are not placed in the tab.
+        var fontStyleLabels = new[]
+        {
+            UiText.Get("FormatCells_FontStyleRegular"),
+            UiText.Get("FormatCells_FontStyleItalic"),
+            UiText.Get("FormatCells_FontStyleBold"),
+            UiText.Get("FormatCells_FontStyleBoldItalic"),
+        };
+        var fontStyleList = new ListBox
+        {
+            ItemsSource = fontStyleLabels,
+            Height = 96,
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+        };
+        AutomationProperties.SetName(
+            fontStyleList,
+            UiText.CreateAutomationName(UiText.Get("FormatCells_FontStyle")));
+        AutomationProperties.SetAutomationId(fontStyleList, "FormatCellsFontStyleList");
+        var syncingFontStyle = false;
+        void SyncFontStyleListFromBoxes()
+        {
+            if (syncingFontStyle)
+                return;
+            syncingFontStyle = true;
+            fontStyleList.SelectedIndex = (boldBox.IsChecked == true ? 2 : 0) + (italicBox.IsChecked == true ? 1 : 0);
+            syncingFontStyle = false;
+        }
+        fontStyleList.SelectionChanged += (_, _) =>
+        {
+            if (syncingFontStyle || fontStyleList.SelectedIndex < 0)
+                return;
+            syncingFontStyle = true;
+            boldBox.IsChecked = fontStyleList.SelectedIndex >= 2;
+            italicBox.IsChecked = fontStyleList.SelectedIndex % 2 == 1;
+            syncingFontStyle = false;
+        };
+        boldBox.IsCheckedChanged += (_, _) => SyncFontStyleListFromBoxes();
+        italicBox.IsCheckedChanged += (_, _) => SyncFontStyleListFromBoxes();
+        SyncFontStyleListFromBoxes();
+
+        var underlineStyleLabels = new[]
+        {
+            UiText.Get("FormatCells_UnderlineNone"),
+            UiText.Get("FormatCells_UnderlineSingle"),
+        };
+        var underlineStyleBox = new ComboBox
+        {
+            ItemsSource = underlineStyleLabels,
+            SelectedIndex = underlineBox.IsChecked == true ? 1 : 0,
+        };
+        AutomationProperties.SetName(
+            underlineStyleBox,
+            UiText.CreateAutomationName(UiText.Get("FormatCells_Underline")));
+        AutomationProperties.SetAutomationId(underlineStyleBox, "FormatCellsUnderlineStyleBox");
+        ApplyFormatCellsComboBoxChrome(underlineStyleBox);
+        underlineStyleBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+        underlineStyleBox.Margin = new Thickness(0, 0, 8, 0);
+        var syncingUnderlineStyle = false;
+        underlineStyleBox.SelectionChanged += (_, _) =>
+        {
+            if (syncingUnderlineStyle || underlineStyleBox.SelectedIndex < 0)
+                return;
+            syncingUnderlineStyle = true;
+            underlineBox.IsChecked = underlineStyleBox.SelectedIndex == 1;
+            syncingUnderlineStyle = false;
+        };
+        underlineBox.IsCheckedChanged += (_, _) =>
+        {
+            if (syncingUnderlineStyle)
+                return;
+            syncingUnderlineStyle = true;
+            underlineStyleBox.SelectedIndex = underlineBox.IsChecked == true ? 1 : 0;
+            syncingUnderlineStyle = false;
+        };
+
+        // WPF colour row: an R,G,B box with a 54px pick button docked on its right. The picker
+        // stays the value the planner reads, so an untouched box still means no colour change;
+        // the box only pushes a colour into the picker once its text was actually edited.
+        fontColorBox.ConfigureCompactPickButton();
+        fontColorBox.BorderBrush = Brush(112, 112, 112);
+        fontColorBox.CornerRadius = new CornerRadius(0);
+        fontColorBox.Margin = new Thickness(6, 0, 0, 0);
+        var fontColorTextBox = new TextBox
+        {
+            Text = FormatRgb(currentFillStyle.ResolveFontColor(_session.Workbook.Theme)),
+        };
+        AutomationProperties.SetName(fontColorTextBox, UiText.Get("FormatCells_FontColorTitle"));
+        AutomationProperties.SetAutomationId(fontColorTextBox, "FormatCellsFontColorTextBox");
+        ApplyDialogTextBoxChrome(fontColorTextBox);
+        var fontColorSyncedText = fontColorTextBox.Text;
+        fontColorBox.SelectionChanged += (_, _) =>
+        {
+            if (fontColorBox.SelectedColor is not { } pickedFontColor)
+                return;
+            fontColorSyncedText = FormatRgb(pickedFontColor);
+            fontColorTextBox.Text = fontColorSyncedText;
+        };
+        void CommitFontColorText()
+        {
+            if (string.Equals(fontColorTextBox.Text, fontColorSyncedText, StringComparison.Ordinal))
+                return;
+            if (TryParseRgb(fontColorTextBox.Text, out var typedFontColor))
+                fontColorBox.SelectColor(typedFontColor);
+        }
+        fontColorTextBox.LostFocus += (_, _) => CommitFontColorText();
+
+        var fontColorPalette = new UniformGrid
+        {
+            Columns = 8,
+            Rows = 1,
+            Margin = new Thickness(0, 10, 8, 0),
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+        };
+        foreach (var fontSwatchEntry in new (string ResourceKey, CellColor Color)[]
+        {
+            ("FormatCells_AutomaticFontColor", new CellColor(0, 0, 0)),
+            ("FormatCells_GrayFont", new CellColor(128, 128, 128)),
+            ("FormatCells_RedFont", new CellColor(192, 0, 0)),
+            ("FormatCells_OrangeFont", new CellColor(237, 125, 49)),
+            ("FormatCells_GoldFont", new CellColor(255, 192, 0)),
+            ("FormatCells_GreenFont", new CellColor(0, 176, 80)),
+            ("FormatCells_BlueFont", new CellColor(0, 112, 192)),
+            ("FormatCells_PurpleFont", new CellColor(112, 48, 160)),
+        })
+        {
+            var fontSwatchColor = fontSwatchEntry.Color;
+            var fontSwatchLabel = UiText.Get(fontSwatchEntry.ResourceKey);
+            var fontSwatchButton = new Button
+            {
+                Width = 22,
+                Height = 18,
+                Padding = new Thickness(0),
+                Background = Brush(fontSwatchColor),
+                BorderBrush = Brushes.Gray,
+                BorderThickness = new Thickness(1),
+            };
+            AutomationProperties.SetName(fontSwatchButton, fontSwatchLabel);
+            ToolTip.SetTip(fontSwatchButton, fontSwatchLabel);
+            fontSwatchButton.Click += (_, _) => fontColorBox.SelectColor(fontSwatchColor);
+            fontColorPalette.Children.Add(fontSwatchButton);
+        }
 
         var fillEditor = new FormatCellsFillEditor(
             _recentColors,
@@ -17387,8 +17554,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var protectionExplanationText = new TextBlock
         {
             Text = UiText.Get("FormatCells_ProtectionExplanation"),
-            Foreground = HeaderForeground,
+            // WPF SystemColors.GrayTextBrush, 12px under the second check box.
+            Foreground = Brush(109, 109, 109),
             TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 12, 0, 0),
         };
         AutomationProperties.SetAutomationId(protectionExplanationText, "FormatCellsProtectionExplanationText");
 
@@ -17433,6 +17602,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         void Accept()
         {
+            // Enter accepts without moving focus, so a typed font colour is committed here too.
+            CommitFontColorText();
             var normalFont = normalFontBox.IsChecked == true;
             var clearFill = fillEditor.ClearFill;
             var borderChoice = borderPresetBox.SelectedItem as FormatCellsNullableChoice<CellBorderPreset>;
@@ -17533,34 +17704,47 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Number tab body: a two-column Grid matching the WPF Format Cells dialog. The
         // shared control-availability planner hides whole option panels for categories
         // such as General, rather than leaving disabled controls visible.
-        var numberCategoryLabel = new TextBlock { Text = StripDisplayMnemonic(UiText.Get("FormatCells_Category")), Margin = new Thickness(0, 0, 0, 4) };
+        var numberCategoryLabel = new TextBlock { Text = StripDisplayMnemonic(UiText.Get("FormatCells_Category")), Margin = new Thickness(0, 4, 0, 2) };
         DockPanel.SetDock(numberCategoryLabel, Dock.Top);
         var numberCategoryField = new DockPanel
         {
             LastChildFill = true,
             VerticalAlignment = AvaloniaVerticalAlignment.Stretch,
+            Margin = new Thickness(0, 0, 12, 0),
             Children =
             {
                 numberCategoryLabel,
                 numberCategoryList,
             },
         };
-        numberTypeField = CreateFormatCellsField(UiText.Get("FormatCells_Type"), numberFormatBox);
-        numberDecimalPlacesField = CreateFormatCellsField(UiText.Get("FormatCells_DecimalPlaces"), numberDecimalPlacesBox);
-        numberSymbolField = CreateFormatCellsField(UiText.Get("FormatCells_Symbol"), numberSymbolBox);
-        numberNegativeNumbersField = CreateFormatCellsField(UiText.Get("FormatCells_NegativeNumbers"), numberNegativeBox);
+        // WPF: each option is a label 2px above its 24px editor; the first follows the sample box
+        // directly and the others start 10px below the previous editor. The editors fill the 330px
+        // option column.
+        foreach (var numberEditor in new Control[] { numberFormatBox, numberDecimalPlacesBox, numberSymbolBox })
+            numberEditor.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+        numberTypeField = CreateFormatCellsField(UiText.Get("FormatCells_Type"), numberFormatBox, new Thickness(0, 0, 0, 2));
+        numberDecimalPlacesField = CreateFormatCellsField(UiText.Get("FormatCells_DecimalPlaces"), numberDecimalPlacesBox, new Thickness(0, 10, 0, 2));
+        numberSymbolField = CreateFormatCellsField(UiText.Get("FormatCells_Symbol"), numberSymbolBox, new Thickness(0, 10, 0, 2));
+        numberNegativeNumbersField = CreateFormatCellsField(UiText.Get("FormatCells_NegativeNumbers"), numberNegativeBox, new Thickness(0, 10, 0, 2));
         ApplyNumberControlAvailability();
         var numberRightColumn = new StackPanel
         {
-            Spacing = 10,
+            Spacing = 0,
+            Width = 330,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
             Children =
             {
                 new StackPanel
                 {
-                    Spacing = 4,
+                    Spacing = 0,
                     Children =
                     {
-                        new TextBlock { Text = UiText.Get("FormatCells_Sample"), FontWeight = FontWeight.SemiBold },
+                        new TextBlock
+                        {
+                            Text = UiText.Get("FormatCells_Sample"),
+                            FontWeight = FontWeight.SemiBold,
+                            Margin = new Thickness(0, 4, 0, 2),
+                        },
                         new Border
                         {
                             BorderBrush = FormulaBarControlBorder,
@@ -17568,6 +17752,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                             Padding = new Thickness(8, 6),
                             Width = 94,
                             Height = 36,
+                            Margin = new Thickness(0, 0, 0, 10),
                             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
                             Child = numberPreview,
                         },
@@ -17582,8 +17767,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         var numberBodyGrid = new AvaloniaGrid
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
-            ColumnSpacing = 12,
+            Margin = new Thickness(FormatCellsDialogAlignmentLayout.ContentInset),
+            ColumnDefinitions = new ColumnDefinitions("150,*"),
         };
         numberBodyGrid.Children.Add(numberCategoryField);
         AvaloniaGrid.SetColumn(numberCategoryField, 0);
@@ -17646,71 +17831,134 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             UiText.Get("FormatCells_TabAlignment"),
             "FormatCellsAlignmentTab",
             alignmentBody);
-        // Font tab: Windows shows Font NAME + Size as selectable lists side by side. The
-        // lists drive the existing name/size text boxes (kept below for free entry + as the
-        // value sink the result reads), preserving the FontName/FontSize wiring.
+        // Font tab, laid out like WPF FormatCellsDialog.xaml: a 2* / 1.25* / 90 grid inset 8px with
+        // the font, font-style and size editors in a 108px row, the underline and colour editors
+        // under their own labels, and below them the swatch row, the normal-font check box and the
+        // effects group on the left with the bordered sample on the right. The font and size text
+        // boxes keep their pick lists directly beneath them (the box is the value the result reads).
+        fontNameBox.MinWidth = 0;
+        fontNameList.MinWidth = 0;
+        fontNameList.Height = 72;
+        fontNameList.Margin = new Thickness(0, -1, 0, 0);
+        fontSizeBox.MinWidth = 0;
+        fontSizeList.MinWidth = 0;
+        fontSizeList.Height = 72;
+        fontSizeList.Margin = new Thickness(0, -1, 0, 0);
         var fontNameColumn = new StackPanel
         {
-            Spacing = 4,
+            Spacing = 0,
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
             Children =
             {
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("FormatCells_Font")) },
-                fontNameList,
                 fontNameBox,
+                fontNameList,
             },
         };
         var fontSizeColumn = new StackPanel
         {
-            Spacing = 4,
+            Spacing = 0,
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
             Children =
             {
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("FormatCells_Size")) },
-                fontSizeList,
                 fontSizeBox,
+                fontSizeList,
             },
         };
+
+        var fontColorRow = new DockPanel();
+        DockPanel.SetDock(fontColorBox, Dock.Right);
+        fontColorRow.Children.Add(fontColorBox);
+        fontColorRow.Children.Add(fontColorTextBox);
+
+        ApplyFormatCellsCompactCheckBoxHeight(normalFontBox);
+        normalFontBox.Margin = new Thickness(0, 36, 8, 0);
+        normalFontBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
+        normalFontBox.VerticalAlignment = AvaloniaVerticalAlignment.Top;
+
+        var fontEffectsPanel = new WrapPanel { Margin = new Thickness(8, 6, 8, 4) };
+        foreach (var fontEffectBox in new[] { doubleUnderlineBox, strikethroughBox, superscriptBox, subscriptBox })
+        {
+            ApplyFormatCellsCompactCheckBoxHeight(fontEffectBox);
+            fontEffectBox.Margin = ReferenceEquals(fontEffectBox, subscriptBox)
+                ? new Thickness(0)
+                : new Thickness(0, 0, 12, 6);
+            fontEffectsPanel.Children.Add(fontEffectBox);
+        }
+        var fontEffectsGroup = new GroupBox
+        {
+            Header = UiText.Get("FormatCells_Effects"),
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 64, 8, 0),
+            Content = fontEffectsPanel,
+        };
+        ApplyPlainWindowGroupBoxChrome(fontEffectsGroup, AvaloniaCompactDialogChrome.WindowsStyle);
+
+        fontPreview.HorizontalAlignment = AvaloniaHorizontalAlignment.Center;
+        var fontSamplePanel = new StackPanel
+        {
+            Margin = new Thickness(0, 10, 0, 0),
+            Spacing = 0,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = UiText.Get("FormatCells_Sample"),
+                    FontWeight = FontWeight.SemiBold,
+                    Margin = new Thickness(0, 0, 0, 2),
+                },
+                new Border
+                {
+                    // WPF SystemColors.ControlDarkBrush frame around a white 92px sample.
+                    BorderBrush = Brush(160, 160, 160),
+                    BorderThickness = new Thickness(1),
+                    Background = Brushes.White,
+                    Height = 92,
+                    Padding = new Thickness(10),
+                    ClipToBounds = true,
+                    Child = fontPreview,
+                },
+            },
+        };
+
+        var fontTabGrid = new AvaloniaGrid
+        {
+            Margin = new Thickness(FormatCellsDialogAlignmentLayout.ContentInset),
+            ColumnDefinitions = new ColumnDefinitions("2*,1.25*,90"),
+            RowDefinitions = new RowDefinitions("Auto,108,Auto,Auto,*"),
+        };
+        TextBlock CreateFontTabLabel(string resourceKey, Thickness margin) =>
+            new()
+            {
+                Text = StripDisplayMnemonic(UiText.Get(resourceKey)),
+                Margin = margin,
+            };
+        void AddFontTabChild(Control fontTabChild, int row, int column, int columnSpan = 1)
+        {
+            AvaloniaGrid.SetRow(fontTabChild, row);
+            AvaloniaGrid.SetColumn(fontTabChild, column);
+            if (columnSpan > 1)
+                AvaloniaGrid.SetColumnSpan(fontTabChild, columnSpan);
+            fontTabGrid.Children.Add(fontTabChild);
+        }
+        AddFontTabChild(CreateFontTabLabel("FormatCells_Font2", new Thickness(0, 4, 8, 2)), 0, 0);
+        AddFontTabChild(CreateFontTabLabel("FormatCells_FontStyle", new Thickness(0, 4, 8, 2)), 0, 1);
+        AddFontTabChild(CreateFontTabLabel("FormatCells_Size", new Thickness(0, 4, 0, 2)), 0, 2);
+        AddFontTabChild(fontNameColumn, 1, 0);
+        AddFontTabChild(fontStyleList, 1, 1);
+        AddFontTabChild(fontSizeColumn, 1, 2);
+        AddFontTabChild(CreateFontTabLabel("FormatCells_Underline", new Thickness(0, 6, 8, 2)), 2, 0);
+        AddFontTabChild(CreateFontTabLabel("FormatCells_Color", new Thickness(0, 6, 8, 2)), 2, 1);
+        AddFontTabChild(underlineStyleBox, 3, 0);
+        AddFontTabChild(fontColorRow, 3, 1, columnSpan: 2);
+        AddFontTabChild(fontColorPalette, 4, 0);
+        AddFontTabChild(normalFontBox, 4, 0);
+        AddFontTabChild(fontEffectsGroup, 4, 0);
+        AddFontTabChild(fontSamplePanel, 4, 1, columnSpan: 2);
         var fontTab = CreateFormatCellsTab(
             UiText.Get("FormatCells_TabFont"),
             "FormatCellsFontTab",
-            new StackPanel
-            {
-                Spacing = 10,
-                Children =
-                {
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        Spacing = 16,
-                        Children = { fontNameColumn, fontSizeColumn },
-                    },
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        Spacing = 12,
-                        Children =
-                        {
-                            boldBox,
-                            italicBox,
-                            underlineBox,
-                            doubleUnderlineBox,
-                            strikethroughBox,
-                        },
-                    },
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        Spacing = 12,
-                        Children =
-                        {
-                            superscriptBox,
-                            subscriptBox,
-                        },
-                    },
-                    CreateFormatCellsField(UiText.Get("FormatCells_Color"), fontColorBox),
-                    normalFontBox,
-                    CreateFormatCellsField(UiText.Get("FormatCells_Preview"), fontPreview),
-                },
-            });
+            fontTabGrid);
         var fillTab = CreateFormatCellsTab(
             UiText.Get("FormatCells_TabFill"),
             "FormatCellsFillTab",
@@ -17778,6 +18026,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     Width = 22,
                     Height = 18,
                     Padding = new Thickness(0),
+                    Background = Brush(221, 221, 221),
+                    BorderBrush = Brushes.Gray,
+                    BorderThickness = new Thickness(1),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+                    VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
                     Tag = entry,
                 };
                 AutomationProperties.SetName(moreButton, label);
@@ -18022,11 +18277,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             "FormatCellsProtectionTab",
             new StackPanel
             {
-                Spacing = 10,
+                // WPF: 8px page inset, the check boxes 4px and 6px below the previous element.
+                Margin = new Thickness(FormatCellsDialogAlignmentLayout.ContentInset),
+                Spacing = 0,
                 Children =
                 {
-                    lockedBox,
-                    hiddenBox,
+                    CreateFormatCellsCheckBoxRow(
+                        ApplyFormatCellsCompactCheckBoxHeight(lockedBox),
+                        FormatCellsDialogAlignmentLayout.LabelTopMargin),
+                    CreateFormatCellsCheckBoxRow(
+                        ApplyFormatCellsCompactCheckBoxHeight(hiddenBox),
+                        FormatCellsDialogAlignmentLayout.FollowupCheckBoxTopMargin),
                     protectionExplanationText,
                 },
             });
@@ -18087,7 +18348,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var root = new AvaloniaGrid
         {
-            Margin = new Thickness(10, 10, 24, 48),
+            Margin = new Thickness(10),
             RowDefinitions = new RowDefinitions("*,Auto,Auto"),
             RowSpacing = 0,
             Children =
@@ -18184,6 +18445,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private static CheckBox CreateFormatCellsCheckBoxRow(CheckBox checkBox, double topMargin)
     {
         checkBox.Margin = new Thickness(0, topMargin, 0, 0);
+        return checkBox;
+    }
+
+    // WPF check boxes are 16px rows; the shared dialog chrome reserves 20px.
+    private static CheckBox ApplyFormatCellsCompactCheckBoxHeight(CheckBox checkBox)
+    {
+        checkBox.Height = FormatCellsDialogAlignmentLayout.CheckBoxHeight;
+        checkBox.MinHeight = FormatCellsDialogAlignmentLayout.CheckBoxHeight;
+        checkBox.MaxHeight = FormatCellsDialogAlignmentLayout.CheckBoxHeight;
         return checkBox;
     }
 
@@ -18416,10 +18686,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = title,
-            Width = 380,
-            Height = 165,
-            MinWidth = 340,
-            MinHeight = 155,
+            // WPF TextEntryDialog is a 420x170 *outer* NoResize window (client height 141): a 16px
+            // margin, the label 4px above the stretched box, 12px above the 72px button row.
+            Width = 420,
+            Height = 170 - WpfNoResizeFrameHeight,
+            MinWidth = 420,
+            MinHeight = 170 - WpfNoResizeFrameHeight,
+            MaxWidth = 420,
+            MaxHeight = 170 - WpfNoResizeFrameHeight,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -18427,17 +18702,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var inputBox = new TextBox
         {
             Text = initialText,
-            MinWidth = 280,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 0, 0, 12),
         };
+        ApplyDialogTextBoxChrome(inputBox);
         AutomationProperties.SetName(inputBox, label);
         AutomationProperties.SetAutomationId(inputBox, automationId);
 
         var acceptButton = new Button { Content = acceptText };
-        ApplyDialogButtonChrome(acceptButton, width: 84, isDefault: true);
+        ApplyDialogButtonChrome(acceptButton, width: 72, isDefault: true);
         AutomationProperties.SetAutomationId(acceptButton, $"{automationId}AcceptButton");
 
         var cancelButton = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")) };
-        ApplyDialogButtonChrome(cancelButton, width: 84);
+        ApplyDialogButtonChrome(cancelButton, width: 72);
         AutomationProperties.SetAutomationId(cancelButton, $"{automationId}CancelButton");
 
         void Accept()
@@ -18477,10 +18754,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
-            Spacing = 8,
             Children =
             {
-                new TextBlock { Text = label },
+                new TextBlock
+                {
+                    Text = StripDisplayMnemonic(label),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    Margin = new Thickness(0, 0, 0, 4),
+                },
                 inputBox,
                 buttonRow,
             },
@@ -21089,6 +21371,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Padding = new Thickness(0),
             Margin = new Thickness(6, 4, 0, 4),
         };
+        // WPF GoalSeekDialog.xaml: an ordinary bordered push button stretched to its 34px grid row
+        // less the 4px margins (26) and to its 34px column less the 6px gap (28). Without chrome
+        // Fluent painted a flat, borderless grey slab only as tall as its text.
+        ApplyDialogButtonChrome(button, 28);
+        button.Padding = new Thickness(0);
         AutomationProperties.SetAutomationId(button, automationId);
         button.Click += (_, _) =>
         {

@@ -403,12 +403,18 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("UnhideWindow_Title"),
+            // WPF UnhideWindowDialog is 340x160: a 16px margin, the label 4px above the 64px list,
+            // 12px above the 72px OK/Cancel row. With the Avalonia control heights that content
+            // fills the 160 client height, so the WPF size is kept as the client size.
             Width = 340,
             Height = 160,
             CanResize = false,
             Background = Brushes.White,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
+            // WPF dialogs inherit the 12px UI font; the Avalonia window default is 14px.
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
         };
         AutomationProperties.SetAutomationId(dialog, "UnhideWindowDialog");
 

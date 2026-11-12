@@ -34,7 +34,8 @@ public sealed class AvaloniaCompactDialogChromeClusterASourceTests
         rowColumnSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle RowColumnDialogChromeStyle => new(FormulaBarFontFamily);");
         rowColumnSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(valueBox, RowColumnDialogChromeStyle);");
         rowColumnSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyValidationStatus(validationText, RowColumnDialogChromeStyle);");
-        rowColumnSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([cancelButton, okButton]);");
+        // WPF Row Height / Column Width put the default button first, then the cancel button.
+        rowColumnSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]);");
 
         proofingSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle ProofingDialogChromeStyle => new(FormulaBarFontFamily);");
         proofingSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyListBox(list, ProofingDialogChromeStyle);");

@@ -286,6 +286,8 @@ public sealed partial class MainWindow
         return picker;
     }
 
+    private const double DialogRangePickerButtonHeight = 24;
+
     private static Button CreateDialogRangePickerButton(string automationId, string automationName)
     {
         var picker = new Button
@@ -296,6 +298,14 @@ public sealed partial class MainWindow
             Margin = new Thickness(6, 0, 0, 0),
         };
         ApplyDialogButtonChrome(picker, 28);
+        // WPF DialogReferencePicker.CreateButton sets no height: the DockPanel stretches the picker
+        // to its reference box, so it is a normal bordered push button exactly as tall as the box
+        // (24), not the 26px command-button height the shared chrome token carries.
+        picker.Height = DialogRangePickerButtonHeight;
+        picker.MinHeight = DialogRangePickerButtonHeight;
+        picker.MaxHeight = DialogRangePickerButtonHeight;
+        picker.Padding = new Thickness(0);
+        picker.VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center;
         AutomationProperties.SetAutomationId(picker, automationId);
         AutomationProperties.SetName(picker, automationName);
         AutomationProperties.SetHelpText(picker, UiText.Get("DialogReferencePicker_HelpText"));

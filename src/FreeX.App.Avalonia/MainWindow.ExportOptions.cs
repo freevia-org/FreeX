@@ -31,6 +31,8 @@ public sealed partial class MainWindow
             Width = ExportOptionsDialogSurfacePlanner.Width,
             SizeToContent = SizeToContent.Height,
             MaxHeight = ExportOptionsDialogSurfacePlanner.MaxHeight,
+            // WPF ExportOptionsDialog is ResizeMode.NoResize.
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -175,7 +177,9 @@ public sealed partial class MainWindow
             focusTarget?.Focus();
         }
 
-        var stack = new StackPanel { Margin = new Thickness(16), Spacing = 2 };
+        // WPF stacks the options with no extra spacing inside a 16px margin; the row gaps come from
+        // the per-row margins below. The bottom margin moves to the docked button row.
+        var stack = new StackPanel { Margin = new Thickness(16, 16, 16, 0) };
         stack.Children.Add(CreateExportOptionsSectionLabel("ExportOptions_PublishWhat"));
         stack.Children.Add(activeSheetButton);
         stack.Children.Add(selectionButton);
@@ -214,8 +218,9 @@ public sealed partial class MainWindow
 
         var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), IsDefault = true };
         var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true };
-        ApplyDialogButtonChrome(okButton, 84, isDefault: true);
-        ApplyDialogButtonChrome(cancelButton, 84);
+        // WPF: 80px OK/Cancel buttons 8px apart, 18px below the last option and 16px above the edge.
+        ApplyDialogButtonChrome(okButton, 80, isDefault: true);
+        ApplyDialogButtonChrome(cancelButton, 80);
         okButton.Click += (_, _) =>
         {
             ShowError(null);
@@ -279,7 +284,7 @@ public sealed partial class MainWindow
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(16, 8, 16, 12),
+            Margin = new Thickness(16, 18, 16, 16),
             Spacing = 8,
             Children = { okButton, cancelButton },
         };
@@ -347,8 +352,9 @@ public sealed partial class MainWindow
         new()
         {
             Width = width,
-            Height = 28,
-            MinHeight = 28,
+            // WPF's combo boxes share the 24px control row of the text boxes beside them.
+            Height = global::Free.Shared.Shell.CompactDialogVisualTokens.ControlHeight,
+            MinHeight = global::Free.Shared.Shell.CompactDialogVisualTokens.ControlHeight,
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             IsEnabled = isEnabled,
             SelectedIndex = 0
