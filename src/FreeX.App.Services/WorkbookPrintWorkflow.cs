@@ -115,8 +115,10 @@ public static class WorkbookPrintWorkflow
                         ? PrintPageRange.Single(job.FirstPage)
                         : PrintPageRange.Between(job.FirstPage, job.LastPage),
                     Collate: job.Collate,
-                    JobTitle: jobTitle,
-                    Sides: job.Request.Sides);
+                    JobTitle: jobTitle)
+                {
+                    Sides = job.Request.Sides,
+                };
                 var portableExecution = await new PortablePrintSubmissionWorkflow(printService).ExecuteAsync(
                     static (intent, _) => Task.FromResult<PrintSelection?>(intent.RequestedSelection),
                     async (output, _, token) =>
