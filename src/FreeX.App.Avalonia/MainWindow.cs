@@ -20311,6 +20311,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         rb.FontSize = 12; rb.FontFamily = FormulaBarFontFamily;
     }
 
+    /// <summary>
+    /// Several WPF data-tool dialogs are plain <c>Window</c>s (they do not merge the shared dialog
+    /// theme), so their group boxes carry normal-ink captions rather than the accent-tinted ones the
+    /// shared compact chrome applies. Keeps the shared frame/typography and only restores the ink.
+    /// </summary>
+    private static void ApplyPlainWindowGroupBoxChrome(GroupBox groupBox, AvaloniaCompactDialogChromeStyle style)
+    {
+        AvaloniaCompactDialogChrome.ApplyGroupBox(groupBox, style);
+        groupBox.Foreground = HeaderForeground;
+        groupBox.HeaderTemplate = new FuncDataTemplate<object>((header, _) => new TextBlock
+        {
+            Text = header?.ToString() ?? string.Empty,
+            FontFamily = style.FontFamily,
+            FontSize = style.FontSize,
+            Foreground = HeaderForeground,
+            TextWrapping = TextWrapping.NoWrap,
+        });
+    }
+
     private async Task<SortDialogOptions?> ShowSortOptionsDialogAsync(SortDialogOptions current)
     {
         SortDialogOptions? result = null;
@@ -20509,14 +20528,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("GoalSeek_GoalSeek"),
+            // WPF GoalSeekDialog.xaml is a 380x210 *outer* NoResize window; its client area is the
+            // outer height minus the Windows caption/frame, and the star row above OK/Cancel absorbs
+            // what the three field rows leave. Avalonia sizes the client area, so take the frame off.
             Width = 380,
-            Height = 210,
+            Height = 210 - WpfNoResizeFrameHeight,
             MinWidth = 380,
-            MinHeight = 210,
+            MinHeight = 210 - WpfNoResizeFrameHeight,
             MaxWidth = 380,
-            MaxHeight = 210,
+            MaxHeight = 210 - WpfNoResizeFrameHeight,
             CanResize = false,
             FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -20638,14 +20661,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             },
         };
 
+        // WPF GoalSeekDialog.xaml: <Grid Margin="12"> with a 140 / * / 34 column split. Each field
+        // row is as tall as its WPF Label (26) plus the 4px top/bottom margins, i.e. 34.
         var body = new AvaloniaGrid
         {
-            Margin = new Thickness(16),
+            Margin = new Thickness(12),
             RowDefinitions =
             {
-                new RowDefinition { Height = GridLength.Auto },
-                new RowDefinition { Height = GridLength.Auto },
-                new RowDefinition { Height = GridLength.Auto },
+                new RowDefinition { Height = GridLength.Auto, MinHeight = 34 },
+                new RowDefinition { Height = GridLength.Auto, MinHeight = 34 },
+                new RowDefinition { Height = GridLength.Auto, MinHeight = 34 },
                 new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
                 new RowDefinition { Height = GridLength.Auto },
             },
@@ -20653,9 +20678,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(34) });
-        AddGoalSeekField(body, row: 0, "Set cell:", setCellBox, CreateGoalSeekPickerButton(setCellBox, "GoalSeekSetCellPickerButton"));
-        AddGoalSeekField(body, row: 1, "To value:", targetValueBox, pickerButton: null);
-        AddGoalSeekField(body, row: 2, "By changing cell:", changingCellBox, CreateGoalSeekPickerButton(changingCellBox, "GoalSeekChangingCellPickerButton"));
+        AddGoalSeekField(body, row: 0, UiText.Get("GoalSeek_SetCell"), setCellBox, CreateGoalSeekPickerButton(setCellBox, "GoalSeekSetCellPickerButton"));
+        AddGoalSeekField(body, row: 1, UiText.Get("GoalSeek_ToValue"), targetValueBox, pickerButton: null);
+        AddGoalSeekField(body, row: 2, UiText.Get("GoalSeek_ByChangingCell"), changingCellBox, CreateGoalSeekPickerButton(changingCellBox, "GoalSeekChangingCellPickerButton"));
         AddGridChild(body, errorText, 3, 0);
         AvaloniaGrid.SetColumnSpan(errorText, 3);
         AddGridChild(body, buttonRow, 4, 0);
@@ -21815,14 +21840,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("MainWindowMessage_RemoveDuplicatesTitle"),
+            // WPF RemoveDuplicatesDialog is a 360x360 *outer* NoResize window whose stacked content
+            // (12px margin, header check box, "Columns:" label, bulk buttons, 160px column list,
+            // OK/Cancel) ends right at the bottom of its client area. Avalonia's Height is a client
+            // size, so 360 left an empty band under OK/Cancel; size the height to the content.
             Width = 360,
-            Height = 360,
             MinWidth = 360,
-            MinHeight = 360,
             MaxWidth = 360,
-            MaxHeight = 360,
+            SizeToContent = SizeToContent.Height,
             CanResize = false,
             FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -21839,10 +21867,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetHelpText(hasHeadersBox, UiText.Get("RemoveDuplicates_MyDataHasHeadersHelpText"));
         ApplyDialogCheckBoxChrome(hasHeadersBox);
 
-        var columnsPanel = new StackPanel
-        {
-            Spacing = 4,
-        };
+        // WPF: a plain StackPanel; each column check box carries Margin = (0, 0, 0, 4), so rows are
+        // 4px apart (panel spacing on top of that doubled the gap).
+        var columnsPanel = new StackPanel();
         AutomationProperties.SetName(columnsPanel, UiText.CreateAutomationName(UiText.Get("RemoveDuplicates_ColumnsAutomationName")));
         AutomationProperties.SetAutomationId(columnsPanel, "RemoveDuplicatesColumnsPanel");
         AutomationProperties.SetHelpText(columnsPanel, UiText.Get("RemoveDuplicates_ColumnsHelpText"));
@@ -22625,7 +22652,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Padding = new Thickness(8),
             Content = fields,
         };
-        AvaloniaCompactDialogChrome.ApplyGroupBox(addEditGroup, dialogChrome);
+        // WPF ScenarioManagerDialog is a plain Window: the "Add/Edit Scenario" caption is normal ink.
+        ApplyPlainWindowGroupBoxChrome(addEditGroup, dialogChrome);
 
         var body = new AvaloniaGrid
         {
@@ -22788,12 +22816,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("DataTable_Title"),
+            // WPF DataTableDialog is a 360x210 *outer* NoResize window; the content is top-stacked and
+            // the rest of the client area stays empty. Avalonia sizes the client area, so take the
+            // Windows caption/frame off the height to keep the same band under OK/Cancel.
             Width = 360,
-            Height = 210,
+            Height = 210 - WpfNoResizeFrameHeight,
             MinWidth = 360,
-            MinHeight = 210,
+            MinHeight = 210 - WpfNoResizeFrameHeight,
             MaxWidth = 360,
-            MaxHeight = 210,
+            MaxHeight = 210 - WpfNoResizeFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -22870,9 +22901,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var fields = new Grid
         {
             Margin = new Thickness(0, 0, 0, 10),
+            // WPF: label column Auto (each label carries an 8px right margin), editor column *.
             ColumnDefinitions =
             {
-                new ColumnDefinition { Width = new GridLength(110) },
+                new ColumnDefinition { Width = GridLength.Auto },
                 new ColumnDefinition { Width = GridLength.Star },
             },
         };
@@ -22975,10 +23007,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         dialog.Content = new StackPanel
         {
-            // WPF's non-client frame leaves a narrower content area inside the same
-            // 360x210 logical authority surface. Keep the Avalonia client controls on
-            // that authority without changing the window size or interaction contract.
-            Margin = new Thickness(12, 12, 27, 12),
+            // WPF: root StackPanel { Margin = 12 }; the "..." pickers end 12px from the right edge.
+            Margin = new Thickness(12),
             Children =
             {
                 new StackPanel { Children = { fields, errorText } },
@@ -23112,6 +23142,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AutomationProperties.SetAutomationId(dialog, "ForecastSheetCompactDialog");
 
+        // The WPF ForecastSheetDialog shows only the periods label, the box and Create/Cancel
+        // (ObjectSizeDialog.CreateSingleInputContent). The source-range summary stays in the tree for
+        // assistive tech but is collapsed so the visible layout matches.
         var sourceRangeText = new TextBlock
         {
             Text = UiText.Format(
@@ -23119,6 +23152,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 FormatRangeReference(_session.SelectedRange)),
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
+            IsVisible = false,
         };
         AutomationProperties.SetName(sourceRangeText, UiText.Get("ForecastSheet_SourceRangeAutomationName"));
         AutomationProperties.SetAutomationId(sourceRangeText, "ForecastSheetSourceRangeSummaryText");
@@ -23128,16 +23162,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Text = ForecastSheetPlanner.DefaultForecastPeriods.ToString(CultureInfo.InvariantCulture),
             MinWidth = 160,
+            // WPF: box.Margin = (0, 0, 0, 12) above the button row.
+            Margin = new Thickness(0, 0, 0, 12),
         };
         ApplyDataToolsTextBoxChrome(periodsBox);
         AutomationProperties.SetName(periodsBox, UiText.CreateAutomationName(UiText.Get("ForecastSheet_PeriodsAutomationName")));
         AutomationProperties.SetAutomationId(periodsBox, "ForecastPeriodsBox");
         AutomationProperties.SetHelpText(periodsBox, UiText.Get("ForecastSheet_PeriodsHelpText"));
 
+        // WPF reports an invalid period count in a warning box. This shell keeps its inline message,
+        // but only while the plan is invalid; the window grows by a fixed band to make room for it.
         var errorText = new TextBlock
         {
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
+            IsVisible = false,
+            Height = ForecastSheetErrorBandHeight - 8,
+            Margin = new Thickness(0, 0, 0, 8),
         };
         AutomationProperties.SetName(errorText, UiText.Get("ForecastSheet_ValidationAutomationName"));
         AutomationProperties.SetAutomationId(errorText, "ForecastSheetErrorText");
@@ -23146,11 +23187,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var createButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ForecastSheet_CreateButton")),
-            Width = 76,
-            MinWidth = 76,
+            // WPF: DialogButtonRowFactory.Create(accept, 72, ...) -- 72px buttons, 8px apart.
+            Width = 72,
+            MinWidth = 72,
             IsDefault = true,
         };
-        ApplyDataToolsButtonChrome(createButton, 76, isDefault: true);
+        ApplyDataToolsButtonChrome(createButton, 72, isDefault: true);
         AutomationProperties.SetName(
             createButton,
             UiText.CreateAutomationName(UiText.Get("ForecastSheet_CreateButton")));
@@ -23160,11 +23202,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var cancelButton = new Button
         {
             Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
-            Width = 76,
-            MinWidth = 76,
+            Width = 72,
+            MinWidth = 72,
             IsCancel = true,
         };
-        ApplyDataToolsButtonChrome(cancelButton, 76);
+        ApplyDataToolsButtonChrome(cancelButton, 72);
         AutomationProperties.SetName(cancelButton, UiText.CreateAutomationName(UiText.Get("Common_Cancel")));
         AutomationProperties.SetAutomationId(cancelButton, "ForecastSheetCancelButton");
         AutomationProperties.SetHelpText(cancelButton, UiText.Get("ForecastSheet_CancelHelpText"));
@@ -23175,12 +23217,27 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 _session.SelectedRange,
                 periodsBox.Text);
 
+        void ShowForecastSheetError(bool visible)
+        {
+            if (errorText.IsVisible == visible)
+                return;
+
+            errorText.IsVisible = visible;
+            double height = ForecastSheetDialogHeight + (visible ? ForecastSheetErrorBandHeight : 0);
+            dialog.MaxHeight = Math.Max(dialog.MaxHeight, height);
+            dialog.MinHeight = Math.Min(dialog.MinHeight, height);
+            dialog.Height = height;
+            dialog.MinHeight = height;
+            dialog.MaxHeight = height;
+        }
+
         void RefreshPlanStatus()
         {
             var forecastPlan = CreatePlan();
             errorText.Text = forecastPlan.IsReady
                 ? forecastPlan.StatusText
                 : FormatForecastSheetPlanError(forecastPlan);
+            ShowForecastSheetError(!forecastPlan.IsReady);
         }
 
         void Accept()
@@ -23189,6 +23246,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (!forecastPlan.IsReady)
             {
                 errorText.Text = FormatForecastSheetPlanError(forecastPlan);
+                ShowForecastSheetError(true);
                 periodsBox.Focus();
                 periodsBox.SelectAll();
                 return;
@@ -23220,34 +23278,28 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
             Children =
             {
                 createButton,
                 cancelButton,
             },
         };
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         RefreshPlanStatus();
-        dialog.Content = new DockPanel
+        // WPF ObjectSizeDialog.CreateSingleInputContent: StackPanel { Margin = 16 } stacking the
+        // label (4px above the box), the box (12px above the buttons) and the right-aligned button
+        // row. The periods box stays ahead of the buttons in the logical order, as in WPF.
+        dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
             Children =
             {
+                sourceRangeText,
+                CreateForecastSheetField(
+                    StripDisplayMnemonic(UiText.Get("ForecastSheet_PeriodsLabel")),
+                    periodsBox),
+                errorText,
                 buttonRow,
-                new StackPanel
-                {
-                    Spacing = 10,
-                    Children =
-                    {
-                        sourceRangeText,
-                        CreateForecastSheetField(
-                            StripDisplayMnemonic(UiText.Get("ForecastSheet_PeriodsLabel")),
-                            periodsBox),
-                        errorText,
-                    },
-                },
             },
         };
         dialog.Opened += (_, _) =>
