@@ -294,8 +294,12 @@ public sealed class FreeXCleanupMED1Tests
             // state it leaves behind — not a source-string check.
             window.InvokeShowEditIssueForTest("This value violates the data validation rule.");
 
+            // macOS deliberately skips the live region (Avalonia 12.0.4 native raiseLiveRegionChanged
+            // abort, see MainWindow.StatusBar.EnsureStatusTextLiveRegion).
             global::Avalonia.Automation.AutomationProperties.GetLiveSetting(window.StatusTextForTest)
-                .Should().Be(global::Avalonia.Automation.AutomationLiveSetting.Polite,
+                .Should().Be(OperatingSystem.IsMacOS()
+                    ? global::Avalonia.Automation.AutomationLiveSetting.Off
+                    : global::Avalonia.Automation.AutomationLiveSetting.Polite,
                     "a failed edit/validation commit must mark _statusText as a Polite live region so a " +
                     "screen reader announces the failure — previously there was no live-region signal at all");
             window.StatusTextForTest.Text.Should().Be("This value violates the data validation rule.",

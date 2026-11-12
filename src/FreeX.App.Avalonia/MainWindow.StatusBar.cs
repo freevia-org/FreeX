@@ -284,6 +284,13 @@ public sealed partial class MainWindow
         if (_statusTextLiveSettingApplied)
             return;
 
+        // macOS: same Avalonia 12.0.4 native raiseLiveRegionChanged abort as the selection-statistic
+        // readouts above -- any polite live region whose text changes while VoiceOver (or another
+        // accessibility client) is attached can take the whole process down. Skip it on macOS until
+        // the framework is fixed; the status text's Name/HelpText remain readable on demand.
+        if (OperatingSystem.IsMacOS())
+            return;
+
         AutomationProperties.SetLiveSetting(_statusText, AutomationLiveSetting.Polite);
         _statusTextLiveSettingApplied = true;
     }
