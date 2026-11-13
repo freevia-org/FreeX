@@ -116,7 +116,9 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
 
             overlay.IsAttachedToVisualTree().Should().BeTrue();
             overlay.Bounds.Width.Should().Be(NameBoxDropdownWidthForTest);
-            overlay.Bounds.Height.Should().Be(NameBoxDropdownHeightForTest);
+            // WPF drop-down parity: content height (list + 2px border), capped at MaxDropDownHeight 220.
+            overlay.Bounds.Height.Should().BeLessThanOrEqualTo(220);
+            overlay.Bounds.Height.Should().Be(list.Bounds.Height + 2);
             overlay.IsHitTestVisible.Should().BeTrue();
             list.IsAttachedToVisualTree().Should().BeTrue();
             list.IsFocused.Should().BeTrue();
@@ -569,5 +571,4 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
     }
 
     private const double NameBoxDropdownWidthForTest = 208;
-    private const double NameBoxDropdownHeightForTest = 136;
 }

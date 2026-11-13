@@ -18,22 +18,21 @@ public sealed class BackstageParityCaptureOwnershipSourceTests
     }
 
     [Fact]
-    public void AvaloniaCaptureTool_DerivesProjectionFromProductionWpfPlan()
+    public void AvaloniaCaptureTool_RendersTheShippingBackstageOverlayForLivePanes()
     {
-        var projection = File.ReadAllText(RepoFile(
-            "tools",
-            "FreeX.ParityCapture.Avalonia",
-            "Capture",
-            "BackstageInfoParityProjection.cs"));
         var capture = File.ReadAllText(RepoFile(
             "tools",
             "FreeX.ParityCapture.Avalonia",
             "Capture",
             "MainWindow.ParityCapture.cs"));
 
-        projection.Should().Contain("FreeXBackstageInfoSurface.WpfInfoPane");
-        projection.Should().Contain("wpfPlan with { Details = capturedDetails }");
-        capture.Should().Contain("BackstageInfoParityProjection.Build(");
+        // Home, Info, Print and Export come from the real overlay; only Account (a native dialog in the
+        // shipping shell) keeps a capture-only pane.
+        capture.Should().Contain("ShowBackstageOverlay();");
+        capture.Should().Contain("TryActivateBackstagePane(pane);");
+        capture.Should().Contain("capture.UsesCaptureOnlyAccountPane");
+        capture.Should().NotContain("CreateParityCapturedBackstageInfoPane");
+        capture.Should().NotContain("CreateParityCapturedBackstageHomePane");
     }
 
     private static string RepoFile(params string[] segments) =>

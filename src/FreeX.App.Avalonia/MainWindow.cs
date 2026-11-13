@@ -19888,6 +19888,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _cellAddressAutocompleteListBox!.IsEnabled = items.Count > 0;
         _cellAddressAutocompleteListBox.ItemsSource = items.ToArray();
         _cellAddressAutocompleteListBox.SelectedIndex = -1;
+        FitCellAddressAutocompleteSurfaceToContent();
         PositionCellAddressAutocompleteSurface();
         _cellAddressAutocompleteSurface!.IsVisible = true;
         _cellAddressAutocompleteOverlay!.IsVisible = true;
@@ -19903,7 +19904,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 popupPosition.X,
                 popupPosition.Y,
                 NameBoxDropdownWidth,
-                NameBoxDropdownHeight);
+                (int)Math.Round(_cellAddressAutocompleteSurface.Height));
         }
         Dispatcher.UIThread.Post(
             () =>
@@ -19923,6 +19924,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         overlay.IsVisible = false;
         if (_cellAddressAutocompleteSurface is not null)
             _cellAddressAutocompleteSurface.IsVisible = false;
+    }
+
+    // WPF's Name Box ComboBox drop-down is content height capped at MaxDropDownHeight=220; the
+    // fixed 136px surface left blank space under short lists and clipped long ones early.
+    private const double NameBoxDropdownMaxHeight = 220;
+
+    private void FitCellAddressAutocompleteSurfaceToContent()
+    {
+        if (_cellAddressAutocompleteListBox is null || _cellAddressAutocompleteSurface is null)
+            return;
+
+        _cellAddressAutocompleteListBox.Height = double.NaN;
+        _cellAddressAutocompleteListBox.Measure(
+            new Size(NameBoxDropdownWidth - 2, double.PositiveInfinity));
+        var content = _cellAddressAutocompleteListBox.DesiredSize.Height;
+        // Two pixels are the surface border; an empty list still keeps one row of height.
+        var height = Math.Min(NameBoxDropdownMaxHeight, Math.Max(content, 24) + 2);
+        _cellAddressAutocompleteSurface.Height = height;
+        _cellAddressAutocompleteListBox.Height = height - 2;
     }
 
     private static TextBlock BuildCellAddressAutocompleteText(NameBoxNavigationItem item)

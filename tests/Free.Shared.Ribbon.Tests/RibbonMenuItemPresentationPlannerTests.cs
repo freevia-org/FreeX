@@ -40,7 +40,10 @@ public sealed class RibbonMenuItemPresentationPlannerTests
                 _ => { });
 
             var item = menu.Items.OfType<MenuItem>().Single();
-            item.InputGesture.Should().Be(KeyGesture.Parse("Ctrl+S"));
+            // macOS shows the Command key (Meta); Windows and Linux keep Ctrl.
+            item.InputGesture.Should().Be(KeyGesture.Parse(OperatingSystem.IsMacOS() ? "Cmd+S" : "Ctrl+S"));
+            if (OperatingSystem.IsMacOS())
+                item.InputGesture!.KeyModifiers.Should().Be(KeyModifiers.Meta);
         }, CancellationToken.None);
     }
 

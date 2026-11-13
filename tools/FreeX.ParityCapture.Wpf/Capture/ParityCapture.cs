@@ -294,11 +294,6 @@ internal static class ParityCapture
             SetBackstageContent(window, replacementContent);
         if (!string.IsNullOrWhiteSpace(focusEntryId))
             FocusBackstageEntry(window, focusEntryId);
-        // The start-screen Home view carries a "More templates (Excluded)" rail link that points at an
-        // unavailable online-template service; it is excluded from the product, so collapse it for the
-        // parity capture so the Home/Export surface matches the Linux backstage (which omits it). The
-        // live control stays in the XAML — this only affects the offscreen capture pass.
-        HideBackstageMoreTemplatesLink(window);
         window.UpdateLayout();
         PumpDispatcher();
 
@@ -316,23 +311,6 @@ internal static class ParityCapture
             window,
             FreeXBackstageCapturePlanner.CaptureWidth,
             FreeXBackstageCapturePlanner.CaptureHeight);
-    }
-
-    private static void HideBackstageMoreTemplatesLink(MainWindow window)
-    {
-        if (window.FindName("StartScreenOverlay") is not DependencyObject overlay)
-            return;
-
-        foreach (var button in FindVisualChildren<Button>(overlay))
-        {
-            if (string.Equals(
-                    AutomationProperties.GetAutomationId(button),
-                    "MoreTemplatesExcludedButton",
-                    StringComparison.Ordinal))
-            {
-                button.Visibility = Visibility.Collapsed;
-            }
-        }
     }
 
     private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)

@@ -11,7 +11,9 @@ public sealed class FreeXBackstageCapturePlannerTests
         var plans = FreeXBackstageCapturePlanner.Build(FreeXBackstageCaptureHost.Wpf);
 
         plans.Select(plan => plan.SurfaceId).Should().Equal(
+            "backstage.Home",
             "backstage.Info",
+            "backstage.Print",
             "backstage.Export",
             "backstage.Account");
         plans.Should().OnlyContain(plan =>
@@ -29,6 +31,7 @@ public sealed class FreeXBackstageCapturePlannerTests
     {
         FreeXBackstageCapturePlanner.Build(FreeXBackstageCaptureHost.Avalonia)
             .Select(plan => plan.SurfaceId)
-            .Should().Equal("backstage.Export", "backstage.Info", "backstage.Account");
+            .Should().Equal(
+                "backstage.Export", "backstage.Home", "backstage.Info", "backstage.Print", "backstage.Account");
     }
 }

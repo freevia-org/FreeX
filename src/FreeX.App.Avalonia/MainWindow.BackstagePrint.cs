@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 using FreeX.App.Presentation.PageLayout;
@@ -31,6 +32,27 @@ public sealed partial class MainWindow
             context = AvaloniaPrintPreviewPaginationContext.Empty();
         var navigator = PrintPreviewPageNavigator.Create(context.PageCount);
 
+        // WPF SsPrintSettingsSummary: the active sheet's print settings as one 13px paragraph under the
+        // "Print" sub-heading, refreshed whenever the settings change.
+        var settingsSummary = new TextBlock
+        {
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 13,
+            LineHeight = 20,
+            Foreground = Brush(0x1F, 0x1F, 0x1F),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 12),
+        };
+        AutomationProperties.SetAutomationId(settingsSummary, "BackstagePrintSettingsSummary");
+        AutomationProperties.SetName(settingsSummary, UiText.Get("PrintPreview_SettingsSummaryAutomationName"));
+        AutomationProperties.SetHelpText(settingsSummary, UiText.Get("PrintPreview_SettingsSummaryHelpText"));
+
+        void RefreshSummary() =>
+            settingsSummary.Text = PrintSettingsPlanner.Build(
+                _session.ActiveSheet,
+                currentSettings.IgnorePrintArea,
+                PrintPreviewSettingsTextResolver).Summary;
+
         var pageHost = new Border
         {
             Background = PrintPreviewSurfaceBackground,
@@ -55,7 +77,7 @@ public sealed partial class MainWindow
         void Render()
         {
             pageHost.Child = context.PageCount > 0
-                ? BuildPreviewDocumentViewerSurface(context, navigator.CurrentIndex)
+                ? BuildBackstagePreviewFitToWidthSurface(context, navigator.CurrentIndex)
                 : new TextBlock
                 {
                     Text = UiText.Get("ShellLoc_NothingToPreview"),
@@ -68,6 +90,7 @@ public sealed partial class MainWindow
                 .StatusText;
             previousButton.IsEnabled = navigator.CanGoPrevious;
             nextButton.IsEnabled = navigator.CanGoNext;
+            RefreshSummary();
         }
 
         void Repaginate()
@@ -95,12 +118,6 @@ public sealed partial class MainWindow
             () => PrintWithPreviewSettingsAsync(currentSettings, canSpool, printerNames, defaultPrinterName));
         printButton.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
 
-        var previewWindowButton = CreateLiveBackstageActionButton(
-            UiText.Get("ShellLoc_PrintPreviewTitle"),
-            "BackstagePrintPreviewButton",
-            async () => await ShowPrintPreviewDialogAsync());
-        previewWindowButton.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
-
         var rail = CreatePrintPreviewSettingsRail(
             PrintPreviewSurfacePlanner.CreateSettingsRailPlan(
                 _session.ActiveSheet,
@@ -116,16 +133,41 @@ public sealed partial class MainWindow
                 updated => currentSettings = updated,
                 Repaginate),
             printerBoxes.Add);
-        rail.MaxHeight = BackstagePrintPreviewHeight;
+        rail.Background = Brushes.Transparent;
+        // The shared rail insets its rows by 10 px for the preview window; flush them with the Print button here.
+        rail.Margin = new Thickness(-10, 0, 0, 0);
 
-        var leftColumn = new StackPanel { Spacing = 10, Width = PrintPreviewSurfacePlanner.SettingsRailWidth + 24 };
-        leftColumn.Children.Add(new StackPanel
+        // WPF left column: ONE 220x34 Print button, the 13px SemiBold "Print" sub-heading, the settings
+        // summary and the settings host, all in one scroller 300 px wide (24 px gutter to the divider).
+        printButton.Width = 220;
+        printButton.Margin = new Thickness(0, 0, 0, 16);
+        var leftStack = new StackPanel
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 10,
-            Children = { printButton, previewWindowButton },
-        });
-        leftColumn.Children.Add(rail);
+            Children =
+            {
+                printButton,
+                new TextBlock
+                {
+                    Text = UiText.Get("MainWindow_Text_Print"),
+                    FontFamily = FormulaBarFontFamily,
+                    FontSize = 13,
+                    FontWeight = FontWeight.SemiBold,
+                    Foreground = Brush(0x55, 0x55, 0x55),
+                    Margin = new Thickness(0, 0, 0, 8),
+                },
+                settingsSummary,
+                rail,
+            },
+        };
+        var leftColumn = new ScrollViewer
+        {
+            Width = 300,
+            MaxHeight = BackstagePrintPreviewHeight,
+            Padding = new Thickness(0, 0, 24, 0),
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = leftStack,
+        };
 
         var navigation = new StackPanel
         {
@@ -134,20 +176,26 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 6, 0, 0),
             Children = { previousButton, pageStatus, nextButton },
         };
-        var rightColumn = new DockPanel { Margin = new Thickness(24, 0, 0, 0) };
+        var rightDock = new DockPanel();
         DockPanel.SetDock(navigation, Dock.Bottom);
-        rightColumn.Children.Add(navigation);
-        rightColumn.Children.Add(new Border
+        rightDock.Children.Add(navigation);
+        rightDock.Children.Add(new Border
         {
             BorderBrush = Brushes.LightGray,
             BorderThickness = new Thickness(1),
             Child = pageHost,
         });
+        var rightColumn = new Border
+        {
+            BorderBrush = Brush(0xE0, 0xE0, 0xE0),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            Padding = new Thickness(24, 0, 0, 0),
+            Child = rightDock,
+        };
 
         var workspace = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("Auto,*"),
-            Margin = new Thickness(0, 16, 0, 0),
         };
         Grid.SetColumn(leftColumn, 0);
         Grid.SetColumn(rightColumn, 1);
@@ -181,4 +229,23 @@ public sealed partial class MainWindow
 
         return workspace;
     }
+
+    // WPF's Backstage DocumentViewer calls FitToWidth after every refresh. The page painting has a fixed
+    // paper size, so scale it to the viewport width (vertical scroll only) instead of clipping the right edge.
+    private static Control BuildBackstagePreviewFitToWidthSurface(
+        AvaloniaPrintPreviewPaginationContext context,
+        int pageIndex) =>
+        new ScrollViewer
+        {
+            Background = PrintPreviewSurfaceBackground,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = new Viewbox
+            {
+                Stretch = Stretch.Uniform,
+                StretchDirection = StretchDirection.Both,
+                Margin = new Thickness(16, 8),
+                Child = BuildPreviewPageView(context, pageIndex),
+            },
+        };
 }
