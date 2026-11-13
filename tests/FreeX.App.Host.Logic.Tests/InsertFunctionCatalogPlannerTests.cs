@@ -12,7 +12,7 @@ public sealed class InsertFunctionCatalogPlannerTests
     [InlineData("TEXT", "Text")]
     [InlineData("TODAY", "Date & Time")]
     [InlineData("AVERAGE", "Statistical")]
-    [InlineData("FILTER", "Dynamic Array")]
+    [InlineData("FILTER", "Lookup & Reference")]
     [InlineData("PMT", "Financial")]
     [InlineData("ISBLANK", "Information")]
     [InlineData("DSUM", "Database")]
@@ -21,8 +21,16 @@ public sealed class InsertFunctionCatalogPlannerTests
     [InlineData("DELTA", "Engineering")]
     [InlineData("GESTEP", "Engineering")]
     [InlineData("IMABS", "Engineering")]
-    [InlineData("MAP", "Dynamic Array")]
-    [InlineData("SORTBY", "Dynamic Array")]
+    [InlineData("MAP", "Logical")]
+    [InlineData("SORTBY", "Lookup & Reference")]
+    [InlineData("SEQUENCE", "Math & Trig")]
+    [InlineData("CHOOSE", "Lookup & Reference")]
+    [InlineData("ROW", "Lookup & Reference")]
+    [InlineData("STDEV.P", "Statistical")]
+    [InlineData("CLEAN", "Text")]
+    [InlineData("STDEV", "Compatibility")]
+    [InlineData("BASE", "Math & Trig")]
+    [InlineData("WEBSERVICE", "Web")]
     [InlineData("LAMBDA", "Logical")]
     [InlineData("SUM", "Math & Trig")]
     public void GetCategory_MapsKnownFunctionFamilies(string functionName, string expectedCategory)
@@ -64,7 +72,7 @@ public sealed class InsertFunctionCatalogPlannerTests
         catalog.Should().Contain(entry => entry.Name == "CONVERT" && entry.Category == "Engineering");
         catalog.Should().Contain(entry => entry.Name == "DELTA" && entry.Category == "Engineering");
         catalog.Should().Contain(entry => entry.Name == "IMSUM" && entry.Category == "Engineering");
-        catalog.Should().Contain(entry => entry.Name == "TAKE" && entry.Category == "Dynamic Array");
+        catalog.Should().Contain(entry => entry.Name == "TAKE" && entry.Category == "Lookup & Reference");
         catalog.Should().Contain(entry => entry.Name == "GETPIVOTDATA" && entry.Category == "Lookup & Reference");
         catalog.Should().Contain(entry => entry.Name == "LAMBDA" && entry.Category == "Logical");
     }
@@ -75,7 +83,7 @@ public sealed class InsertFunctionCatalogPlannerTests
         var catalog = InsertFunctionCatalogPlanner.BuildCatalog();
         string[] engineeringFunctions =
         [
-            "BASE", "COMPLEX", "DECIMAL", "DELTA", "ERF", "ERF.PRECISE", "ERFC", "ERFC.PRECISE",
+            "COMPLEX", "DELTA", "ERF", "ERF.PRECISE", "ERFC", "ERFC.PRECISE",
             "GESTEP", "IMABS", "IMAGINARY", "IMARGUMENT", "IMCONJUGATE", "IMDIV", "IMPRODUCT",
             "IMREAL", "IMSUB", "IMSUM"
         ];

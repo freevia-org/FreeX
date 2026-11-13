@@ -321,7 +321,9 @@ public sealed partial class WorksheetContextMenuPlannerTests
     {
         var source = DialogSourceTestSupport.ReadAppServicesRibbonSource("WorksheetContextMenuPlanner.cs");
 
-        source.Should().Contain("WorksheetCommandCache[GetStateCacheIndex(state)]");
+        source.Should().Contain("var index = GetStateCacheIndex(state);");
+        source.Should().Contain("var copied = WorksheetCommandCache[index];");
+        source.Should().Contain("Interlocked.CompareExchange(ref variants[index], built, null)");
         source.Should().Contain("private static readonly IReadOnlyList<WorksheetContextMenuCommand>[] WorksheetCommandCache");
         source.Should().Contain("private static IReadOnlyList<WorksheetContextMenuCommand> Freeze");
     }

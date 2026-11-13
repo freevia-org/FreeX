@@ -115,7 +115,7 @@ public sealed class FormulaCommandSourceTests
         source.Should().Contain("RemoveTraceArrows(FormulaTraceArrowKind.Precedent, \"Remove Precedent Arrows\");");
         source.Should().Contain("RemoveTraceArrows(FormulaTraceArrowKind.Dependent, \"Remove Dependent Arrows\");");
         source.Should().Contain("_formulaTraceArrows.RemoveAll(arrow => arrow.Kind == kind.Value)");
-        source.Should().Contain("FormulaFinancialBtn_Click(object sender, RoutedEventArgs e) => OpenFormulaFunctionMenu(sender, [\"PMT\", \"NPV\", \"IRR\", \"RATE\", \"PV\", \"FV\"]);");
+        source.Should().Contain("FormulaFinancialBtn_Click(object sender, RoutedEventArgs e) => OpenFormulaFunctionMenu(sender, InsertFunctionCatalogPlanner.FunctionLibraryNames(\"Financial\"));");
         source.Should().Contain("FormulaMoreBtn_Click(object sender, RoutedEventArgs e)    => InsertFunctionBtn_Click(sender, e);");
         source.Should().Contain("InsertFunctionCatalogPlanner.BuildCatalog()");
         source.Should().Contain("new FunctionArgumentsDialog(");
