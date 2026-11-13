@@ -78,39 +78,12 @@ internal static class PaginatedCommitCoordinator
         // just those blocks too). Untouched blocks keep their instances, which is what lets the layout
         // session reuse their render and their pages.
         var clock = PagedEditDiagnostics.StartClock();
-        if (panel.TryGetEditedSpan(out var firstBox, out var lastBox))
+        var perBox = TryReadBoundedSpan(panel, targetEditor, out var firstBox, out var lastBox);
+        if (perBox is null && panel.TryGetEditedSpan(out firstBox, out lastBox))
+            perBox = ReadWholeSpan(panel, targetEditor, firstBox, lastBox);
+        if (perBox is not null)
         {
-            // The span's pages are read in one pass, so a block split across two of them is rejoined;
-            // each block belongs to the page it starts on.
-            var spanBlocks = new List<ModelBlock>();
-            var pageStarts = new int[lastBox - firstBox + 1];
-            targetEditor.ReadPagesInto(
-                panel.PageBoxes.Skip(firstBox).Take(lastBox - firstBox + 1).Select(box => box.Body.Document).ToList(),
-                spanBlocks,
-                pageStarts);
-            var perBox = new List<ModelBlock[]>();
-            for (var i = 0; i < pageStarts.Length; i++)
-            {
-                var end = i + 1 < pageStarts.Length ? pageStarts[i + 1] : spanBlocks.Count;
-                perBox.Add(spanBlocks.Skip(pageStarts[i]).Take(end - pageStarts[i]).ToArray());
-            }
-
-            // A page read only because it shares a split block with an edited page keeps its other
-            // blocks' instances (they are what it shows): only the split block is replaced there.
-            for (var i = 0; i < perBox.Count; i++)
-            {
-                var box = panel.PageBoxes[firstBox + i];
-                if (panel.WasEditedSinceCommit(box) || box.ModelBlocks is not { } shown || shown.Length != perBox[i].Length)
-                    continue;
-                var lastContinues = firstBox + i + 1 <= lastBox && panel.PageBoxes[firstBox + i + 1].ContinuesPrevious;
-                for (var k = 0; k < shown.Length; k++)
-                {
-                    if (k == shown.Length - 1 && lastContinues)
-                        continue;
-                    perBox[i][k] = shown[k];
-                }
-            }
-            spanBlocks = perBox.SelectMany(blocks => blocks).ToList();
+            var spanBlocks = perBox.SelectMany(blocks => blocks).ToList();
 
             var spanStart = panel.PageBoxes[firstBox].ModelStart;
             var spanCount = 0;
@@ -154,7 +127,8 @@ internal static class PaginatedCommitCoordinator
                 }
                 panel.OnSpanCommitted(firstBox, lastBox, perBox);
                 if (clock is not null)
-                    LastTiming = $"span read {read:F0} ms, execute {clock.Elapsed.TotalMilliseconds - read:F0} ms";
+                    LastTiming = $"span read {read:F0} ms, execute {clock.Elapsed.TotalMilliseconds - read:F0} ms, "
+                        + $"pages {firstBox}..{lastBox} of {panel.PageBoxes.Count}, {spanBlocks.Count} blocks read";
                 return;
             }
         }
@@ -196,5 +170,133 @@ internal static class PaginatedCommitCoordinator
             throw;
         }
         panel.OnWholeBodyCommitted(tailStart);
+    }
+
+    /// <summary>
+    /// The edited span's pages read in one pass, so a block split across two of them is rejoined; each block
+    /// belongs to the page it starts on. The span reaches every page a split block is on, whole.
+    /// </summary>
+    private static List<ModelBlock[]> ReadWholeSpan(PaginatedEditorPanel panel, DocumentView targetEditor, int firstBox, int lastBox)
+    {
+        var spanBlocks = new List<ModelBlock>();
+        var pageStarts = new int[lastBox - firstBox + 1];
+        targetEditor.ReadPagesInto(
+            panel.PageBoxes.Skip(firstBox).Take(lastBox - firstBox + 1).Select(box => box.Body.Document).ToList(),
+            spanBlocks,
+            pageStarts);
+        var perBox = new List<ModelBlock[]>();
+        for (var i = 0; i < pageStarts.Length; i++)
+        {
+            var end = i + 1 < pageStarts.Length ? pageStarts[i + 1] : spanBlocks.Count;
+            perBox.Add(spanBlocks.Skip(pageStarts[i]).Take(end - pageStarts[i]).ToArray());
+        }
+
+        // A page read only because it shares a split block with an edited page keeps its other
+        // blocks' instances (they are what it shows): only the split block is replaced there.
+        for (var i = 0; i < perBox.Count; i++)
+        {
+            var box = panel.PageBoxes[firstBox + i];
+            if (panel.WasEditedSinceCommit(box) || box.ModelBlocks is not { } shown || shown.Length != perBox[i].Length)
+                continue;
+            var lastContinues = firstBox + i + 1 <= lastBox && panel.PageBoxes[firstBox + i + 1].ContinuesPrevious;
+            for (var k = 0; k < shown.Length; k++)
+            {
+                if (k == shown.Length - 1 && lastContinues)
+                    continue;
+                perBox[i][k] = shown[k];
+            }
+        }
+        return perBox;
+    }
+
+    /// <summary>
+    /// W14: the edited span read with its boundary boxes cut down to the one block each shares with the
+    /// edited pages. The box before the first edited page supplies only its last block (the head of the block
+    /// the edited page continues), the boxes after the last edited page only their first block (the rest of
+    /// the edited page's last block); every other block on them is untouched and keeps its instance. In a
+    /// document where every page ends in a split paragraph the span is then a few pages, not the whole
+    /// chain. Null (the caller reads the span whole) when a boundary piece is not a plain paragraph or
+    /// table that merges into its neighbour, or the model does not line up.
+    /// </summary>
+    private static List<ModelBlock[]>? TryReadBoundedSpan(
+        PaginatedEditorPanel panel, DocumentView targetEditor, out int firstBox, out int lastBox)
+    {
+        if (!panel.TryGetEditedSpan(out firstBox, out lastBox, out var editedFirst, out var editedLast, bounded: true))
+            return null;
+
+        // One entry per box of the span: a slice of the box's blocks (all of them for the edited range).
+        var slices = new List<IReadOnlyList<System.Windows.Documents.Block>>();
+        for (var b = firstBox; b <= lastBox; b++)
+        {
+            var blocks = DocumentView.ReadableBlocks(panel.PageBoxes[b].Body.Document);
+            if (b >= editedFirst && b <= editedLast)
+            {
+                slices.Add(blocks);
+                continue;
+            }
+            if (blocks.Count == 0)
+                return null;
+            var piece = b < editedFirst ? blocks[^1] : blocks[0];
+            if (piece is System.Windows.Documents.List)
+                return null;
+            slices.Add([piece]);
+        }
+
+        var spanBlocks = new List<ModelBlock>();
+        var sliceStarts = new int[slices.Count];
+        targetEditor.ReadPageSlicesInto(slices, spanBlocks, sliceStarts);
+        var perBox = new List<ModelBlock[]>();
+        for (var i = 0; i < slices.Count; i++)
+        {
+            var b = firstBox + i;
+            var end = i + 1 < sliceStarts.Length ? sliceStarts[i + 1] : spanBlocks.Count;
+            var read = spanBlocks.Skip(sliceStarts[i]).Take(end - sliceStarts[i]).ToArray();
+            var box = panel.PageBoxes[b];
+            if (box.ModelBlocks is not { } shown)
+                return null;
+
+            if (b >= editedFirst && b <= editedLast)
+            {
+                // As ReadWholeSpan: an untouched page between edited ones keeps its instances but for the
+                // block that continues onto the next page.
+                if (!panel.WasEditedSinceCommit(box) && shown.Length == read.Length)
+                {
+                    var continuesOn = panel.PageBoxes[b + 1].ContinuesPrevious;
+                    for (var k = 0; k < shown.Length; k++)
+                    {
+                        if (k == shown.Length - 1 && continuesOn)
+                            continue;
+                        read[k] = shown[k];
+                    }
+                }
+                perBox.Add(read);
+            }
+            else if (b < editedFirst)
+            {
+                // The head block of what the edited page continues is read again (merged with the rest);
+                // a box that is only a middle piece of it contributes nothing but its rest.
+                var contributesHead = shown.Length > 0 && b == firstBox;
+                if (read.Length != (contributesHead ? 1 : 0))
+                    return null;
+                if (contributesHead)
+                {
+                    var kept = shown.ToArray();
+                    kept[^1] = read[0];
+                    perBox.Add(kept);
+                }
+                else
+                {
+                    perBox.Add(shown);
+                }
+            }
+            else
+            {
+                // The rest of the edited page's last block merged into it; the box keeps everything it shows.
+                if (read.Length != 0)
+                    return null;
+                perBox.Add(shown);
+            }
+        }
+        return perBox;
     }
 }

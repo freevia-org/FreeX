@@ -282,6 +282,7 @@ public sealed class PagedEditW7PerformanceProbe(ITestOutputHelper output)
         var wordStats = panel.LayoutSession.LastStatistics;
         var wordComplete = panel.IsLayoutComplete;
         panel.FinishLayoutNow();
+        output.WriteLine($"  in-line burst, run completed: {panel.LayoutSession.LastStatistics}");
 
         var growBox = panel.PageBoxes[panel.PageBoxes.Count / 2];
         panel.ScrollToPage(growBox.PageNumber);
@@ -310,6 +311,7 @@ public sealed class PagedEditW7PerformanceProbe(ITestOutputHelper output)
                 break;
         }
         var growBackground = total.Elapsed;
+        output.WriteLine($"  line-adding burst, run completed: {panel.LayoutSession.LastStatistics}");
 
         output.WriteLine($"W10 progressive: first page shown {firstPage.TotalMilliseconds:F0} ms ({shownAtOpen} pages built at open); "
             + $"background to complete {background.TotalMilliseconds:F0} ms; realised pages near a mid-document viewport {realized}/{panel.PageBoxes.Count}");
