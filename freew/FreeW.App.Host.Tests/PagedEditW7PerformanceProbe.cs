@@ -41,6 +41,41 @@ public sealed class PagedEditW7PerformanceProbe(ITestOutputHelper output)
         _ = PaginationEngine.ComputeBlockPageAssignment(editor, out _, null, layoutOnly: true);
         output.WriteLine($"page assignment: print clone {assignment.TotalMilliseconds:F0} ms, layout-only direct render {clock.Elapsed.TotalMilliseconds:F0} ms");
 
+        // W9: the incremental layout session -- first run, then one edit in the middle that adds lines and
+        // one that only changes a word, each re-paginated from what changed.
+        {
+            var session = new PagedLayoutSession(editor);
+            clock.Restart();
+            _ = session.ComputeAssignment(out _);
+            var sessionFirst = clock.Elapsed;
+            var firstStats = session.LastStatistics;
+            var blocks = editor.Model.Blocks;
+            var middle = Enumerable.Range(blocks.Count / 2, blocks.Count / 2)
+                .First(i => blocks[i] is FreeW.Core.Model.Paragraph { Runs.Count: > 0 });
+            var grown = (FreeW.Core.Model.Paragraph)blocks[middle];
+            var replacement = new FreeW.Core.Model.Paragraph { Formatting = grown.Formatting, StyleId = grown.StyleId };
+            replacement.Runs.AddRange(grown.Runs);
+            replacement.Runs.Add(new FreeW.Core.Model.Run(string.Concat(Enumerable.Repeat(" more words to wrap", 30))));
+            blocks[middle] = replacement;
+            clock.Restart();
+            _ = session.ComputeAssignment(out _);
+            var sessionGrow = clock.Elapsed;
+            var growStats = session.LastStatistics;
+            var word = (FreeW.Core.Model.Paragraph)blocks[middle];
+            var wordEdit = new FreeW.Core.Model.Paragraph { Formatting = word.Formatting, StyleId = word.StyleId };
+            wordEdit.Runs.AddRange(word.Runs);
+            wordEdit.Runs.Add(new FreeW.Core.Model.Run("s"));
+            blocks[middle] = wordEdit;
+            clock.Restart();
+            _ = session.ComputeAssignment(out _);
+            var sessionWord = clock.Elapsed;
+            var wordStats = session.LastStatistics;
+            blocks[middle] = grown;
+            output.WriteLine($"session first run: {sessionFirst.TotalMilliseconds:F0} ms ({firstStats})");
+            output.WriteLine($"session re-flow after a growing edit mid-document: {sessionGrow.TotalMilliseconds:F0} ms ({growStats})");
+            output.WriteLine($"session re-flow after a one-word edit: {sessionWord.TotalMilliseconds:F0} ms ({wordStats})");
+        }
+
         clock.Restart();
         var scratch = new DocumentView();
         scratch.LoadModel(editor.Model);
@@ -55,7 +90,11 @@ public sealed class PagedEditW7PerformanceProbe(ITestOutputHelper output)
         panel.UpdateLayout();
         var build = clock.Elapsed;
 
-        var box = panel.PageBoxes.First(b => b.Body.Document.Blocks.Count > 0);
+        // As in the app: the pages are the editing surface, so the hidden editor tracks its units.
+        panel.AttachAsActiveSurface();
+        editor.RefreshFromModel();
+
+        var box = panel.PageBoxes[panel.PageBoxes.Count / 2];
         var keystrokes = new List<double>();
         for (var i = 0; i < 20; i++)
         {
@@ -74,6 +113,18 @@ public sealed class PagedEditW7PerformanceProbe(ITestOutputHelper output)
         panel.Repaginate();
         panel.UpdateLayout();
         var repaginate = clock.Elapsed;
+        output.WriteLine($"  re-flow detail: {panel.LayoutSession.LastStatistics}; kept boxes {panel.LastRebuildKeptBoxes}/{panel.PageBoxes.Count}; hidden incremental refreshes {editor.IncrementalBodyRefreshCount}");
+
+        // A burst that adds several lines (the page's blocks move on).
+        var growBox = panel.PageBoxes[panel.PageBoxes.Count / 2];
+        growBox.Body.Document.Blocks.FirstBlock.ContentEnd.GetInsertionPosition(LogicalDirection.Backward)
+            .InsertTextInRun(string.Concat(Enumerable.Repeat(" more words to wrap", 30)));
+        growBox.Body.UpdateLayout();
+        clock.Restart();
+        panel.Repaginate();
+        panel.UpdateLayout();
+        output.WriteLine($"re-pagination after a growing burst: {clock.Elapsed.TotalMilliseconds:F0} ms "
+            + $"({panel.LayoutSession.LastStatistics}; kept boxes {panel.LastRebuildKeptBoxes}/{panel.PageBoxes.Count})");
 
         panel.CaptureContentBottoms();
         var target = panel.PageBoxes.First(b => b.Body.Document.Blocks.Count > 0);
