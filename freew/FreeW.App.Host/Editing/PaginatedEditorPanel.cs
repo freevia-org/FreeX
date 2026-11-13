@@ -3589,15 +3589,19 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
         }
 
         DocumentView? scratch = null;
+        IDisposable? batch = null;
         DocumentView Scratch()
         {
             if (scratch is null)
             {
                 scratch = new DocumentView();
                 scratch.BindModelForRangeRender(model);
+                batch = scratch.BeginRangeRenderBatch();
             }
             return scratch;
         }
+        try
+        {
 
         // The page each rendered block starts on gets the batch render of it (cut after its first cut).
         var u = 0;
@@ -3675,6 +3679,11 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
         }
 
         return contents;
+        }
+        finally
+        {
+            batch?.Dispose();
+        }
     }
 
     /// <summary>
@@ -4098,6 +4107,9 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
         }
         return true;
     }
+
+    /// <summary>True when <paramref name="box"/>'s body was edited since the last commit.</summary>
+    internal bool WasEditedSinceCommit(PageBox box) => _editedSinceCommit.Contains(box);
 
     /// <summary>After a span commit: the span's boxes now show <paramref name="perBox"/>; later boxes shift.</summary>
     internal void OnSpanCommitted(int firstBox, int lastBox, IReadOnlyList<FreeW.Core.Model.Block[]> perBox)

@@ -5806,9 +5806,49 @@ public sealed partial class DocumentView : RichTextBox
         IReadOnlyDictionary<int, PreservedNumberingMarkerPlan> PreservedNumberingMarkers,
         DocumentListMarkerSequencePlanner ListMarkerSequence);
 
+    // While a range-render batch is open (see BeginRangeRenderBatch) the whole-document parts of the render
+    // context are computed once: the model does not change between the batch's renders.
+    private (TextDocument Model, IReadOnlyDictionary<int, IReadOnlyList<LeadingWrapReservation>> Wraps,
+        IReadOnlySet<ModelRun> Suppressed, IReadOnlyDictionary<int, PreservedNumberingMarkerPlan> Preserved)? _rangeRenderBatch;
+    private bool _rangeRenderBatchOpen;
+
+    /// <summary>
+    /// Opens a batch of range renders of an unchanging model (several <see cref="RenderBodyUnitRange"/>
+    /// calls): the document-wide render context is built once for the batch. Dispose to close it.
+    /// </summary>
+    internal IDisposable BeginRangeRenderBatch()
+    {
+        _rangeRenderBatchOpen = true;
+        _rangeRenderBatch = null;
+        return new RangeRenderBatchScope(this);
+    }
+
+    private sealed class RangeRenderBatchScope(DocumentView owner) : IDisposable
+    {
+        public void Dispose()
+        {
+            owner._rangeRenderBatchOpen = false;
+            owner._rangeRenderBatch = null;
+        }
+    }
+
     private BodyRenderContext CreateBodyRenderContext(TextDocument model, int replayListNumberingTo)
     {
-        var leadingWrapReservations = BuildLeadingWrapReservations(model, out var suppressedFloatingWrapRuns);
+        IReadOnlyDictionary<int, IReadOnlyList<LeadingWrapReservation>> leadingWrapReservations;
+        IReadOnlySet<ModelRun> suppressedFloatingWrapRuns;
+        IReadOnlyDictionary<int, PreservedNumberingMarkerPlan> preservedMarkers;
+        if (_rangeRenderBatchOpen && _rangeRenderBatch is { } cached && ReferenceEquals(cached.Model, model))
+        {
+            (_, leadingWrapReservations, suppressedFloatingWrapRuns, preservedMarkers) = cached;
+        }
+        else
+        {
+            leadingWrapReservations = BuildLeadingWrapReservations(model, out var suppressed);
+            suppressedFloatingWrapRuns = suppressed;
+            preservedMarkers = PreservedNumberingMarkerPlanner.Build(model);
+            if (_rangeRenderBatchOpen)
+                _rangeRenderBatch = (model, leadingWrapReservations, suppressedFloatingWrapRuns, preservedMarkers);
+        }
         var sequence = new DocumentListMarkerSequencePlanner(
             model.MultiLevelList.NumberFormats, model.MultiLevelList.LevelTexts);
         // The list numbering state at a block is what the blocks before it advanced it to: every list
@@ -5829,7 +5869,7 @@ public sealed partial class DocumentView : RichTextBox
         return new BodyRenderContext(
             leadingWrapReservations,
             suppressedFloatingWrapRuns,
-            PreservedNumberingMarkerPlanner.Build(model),
+            preservedMarkers,
             sequence);
     }
 

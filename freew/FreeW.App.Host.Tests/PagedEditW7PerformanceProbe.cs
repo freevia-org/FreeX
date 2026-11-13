@@ -26,6 +26,9 @@ public sealed class PagedEditW7PerformanceProbe(ITestOutputHelper output)
 
         // The probe is the one place the paged editor's timing diagnostics are switched on.
         PagedEditDiagnostics.Enabled = true;
+        // FREEW_PAGED_PERF_NOSPLIT=1 measures the same document with blocks kept whole on their first page.
+        var split = PagedLayoutSession.SplitBlocksAcrossPages;
+        PagedLayoutSession.SplitBlocksAcrossPages = Environment.GetEnvironmentVariable("FREEW_PAGED_PERF_NOSPLIT") != "1";
         try
         {
             Measure(path);
@@ -33,6 +36,7 @@ public sealed class PagedEditW7PerformanceProbe(ITestOutputHelper output)
         finally
         {
             PagedEditDiagnostics.Enabled = false;
+            PagedLayoutSession.SplitBlocksAcrossPages = split;
         }
     }
 

@@ -95,6 +95,23 @@ internal static class PaginatedCommitCoordinator
                 perBox.Add(spanBlocks.Skip(pageStarts[i]).Take(end - pageStarts[i]).ToArray());
             }
 
+            // A page read only because it shares a split block with an edited page keeps its other
+            // blocks' instances (they are what it shows): only the split block is replaced there.
+            for (var i = 0; i < perBox.Count; i++)
+            {
+                var box = panel.PageBoxes[firstBox + i];
+                if (panel.WasEditedSinceCommit(box) || box.ModelBlocks is not { } shown || shown.Length != perBox[i].Length)
+                    continue;
+                var lastContinues = firstBox + i + 1 <= lastBox && panel.PageBoxes[firstBox + i + 1].ContinuesPrevious;
+                for (var k = 0; k < shown.Length; k++)
+                {
+                    if (k == shown.Length - 1 && lastContinues)
+                        continue;
+                    perBox[i][k] = shown[k];
+                }
+            }
+            spanBlocks = perBox.SelectMany(blocks => blocks).ToList();
+
             var spanStart = panel.PageBoxes[firstBox].ModelStart;
             var spanCount = 0;
             for (var i = firstBox; i <= lastBox; i++)
@@ -107,9 +124,24 @@ internal static class PaginatedCommitCoordinator
                 panel.MarkBodyCommitted();
                 try
                 {
-                    targetEditor.HintNextBodyReplacement(spanStart, spanCount, spanBlocks.Count);
-                    panel.RunOwnModelMutation(() =>
-                        targetEditor.Commands.Execute(new ReplaceBlocksCommand(spanStart, spanCount, spanBlocks)));
+                    // Replace only what changed: the blocks at either end that are the same instances stay.
+                    var prefix = 0;
+                    while (prefix < spanCount && prefix < spanBlocks.Count
+                        && ReferenceEquals(model.Blocks[spanStart + prefix], spanBlocks[prefix]))
+                        prefix++;
+                    var suffix = 0;
+                    while (suffix < spanCount - prefix && suffix < spanBlocks.Count - prefix
+                        && ReferenceEquals(model.Blocks[spanStart + spanCount - 1 - suffix], spanBlocks[spanBlocks.Count - 1 - suffix]))
+                        suffix++;
+                    var replaceStart = spanStart + prefix;
+                    var replaceCount = spanCount - prefix - suffix;
+                    var replacement = spanBlocks.Skip(prefix).Take(spanBlocks.Count - prefix - suffix).ToList();
+                    if (replaceCount > 0 || replacement.Count > 0)
+                    {
+                        targetEditor.HintNextBodyReplacement(replaceStart, replaceCount, replacement.Count);
+                        panel.RunOwnModelMutation(() =>
+                            targetEditor.Commands.Execute(new ReplaceBlocksCommand(replaceStart, replaceCount, replacement)));
+                    }
                 }
                 catch
                 {

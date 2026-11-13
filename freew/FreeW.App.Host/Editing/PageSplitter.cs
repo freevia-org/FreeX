@@ -134,6 +134,26 @@ internal static class PageSplitter
         if (PageOf(block.ContentStart) >= page)
             return block.ContentStart;
 
+        // Fast path: where the paginator says the page starts, when that is inside the block and the
+        // position before it is on an earlier page (it probes the page's top-left corner, which is not
+        // the first position for right-to-left text or a line opening with a list marker).
+        try
+        {
+            if (paginator.GetPagePosition(paginator.GetPage(page)) is TextPointer start
+                && start.CompareTo(block.ContentStart) > 0
+                && start.CompareTo(block.ContentEnd) < 0
+                && PageOf(start) == page
+                && start.GetPositionAtOffset(-1, LogicalDirection.Backward) is { } before
+                && PageOf(before) < page)
+            {
+                return start;
+            }
+        }
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or ArgumentException)
+        {
+            // Fall back to the search.
+        }
+
         var low = 0;
         while (high - low > 1)
         {
