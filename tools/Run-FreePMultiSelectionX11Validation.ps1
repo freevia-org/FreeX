@@ -19,7 +19,7 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
-$resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) { [IO.Path]::GetFullPath($OutputDir) } else { [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir)) }
+$resolvedOutputRoot = Resolve-ToolRepoPath -Path $OutputDir -RepoRoot $repoRoot
 $fixtureName = "freep-multiselect-x11-wave89-fixture.pptx"
 $fixturePath = Join-Path $resolvedOutputRoot $fixtureName
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"

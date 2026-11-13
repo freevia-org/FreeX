@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Free.ToolsShared;
 using FreeX.ParityCompare.Core;
 
 var options = ChromeCompareOptions.Parse(args);
@@ -184,15 +185,9 @@ static string BuildMarkdown(ChromeReport report)
 
 static string EscapeTable(string? value) => (value ?? string.Empty).Replace("|", "\\|").Replace(Environment.NewLine, " ");
 
-static string FindRepositoryRoot(string start)
-{
-    for (var directory = new DirectoryInfo(start); directory is not null; directory = directory.Parent)
-    {
-        if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            return directory.FullName;
-    }
-    throw new DirectoryNotFoundException("Could not locate FreeX.slnx from the current directory.");
-}
+static string FindRepositoryRoot(string start) =>
+    RepositoryRootLocator.Find(start, "FreeX.slnx")
+        ?? throw new DirectoryNotFoundException("Could not locate FreeX.slnx from the current directory.");
 
 static string Resolve(string root, string path) => Path.IsPathFullyQualified(path) ? path : Path.Combine(root, path);
 static string Relative(string root, string path) => Path.GetRelativePath(root, path).Replace('\\', '/');

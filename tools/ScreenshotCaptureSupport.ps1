@@ -437,3 +437,152 @@ function Capture-ScreenRectangle($left, $top, $width, $height, $path) {
         $bmp.Dispose()
     }
 }
+
+# ---- Native Office ribbon-chrome capture helpers (Capture-FreeWWordChrome / Capture-FreePPowerPointChrome) ----
+# The per-app scripts differ only in the Office application, its file prefix and the tab list; the
+# foreground/width/tab-selection mechanics live here so both lanes use one implementation.
+
+function Clear-NativeChromeCapture {
+    param(
+        [Parameter(Mandatory = $true)][string]$OutputDirectory,
+        [Parameter(Mandatory = $true)][string]$FilePattern
+    )
+
+    Get-ChildItem -LiteralPath $OutputDirectory -Filter $FilePattern -File -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction Stop
+    foreach ($name in @("manifest.json", "blocker-manifest.json")) {
+        Remove-Item -LiteralPath (Join-Path $OutputDirectory $name) -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Write-NativeChromeBlockerManifest {
+    param(
+        [Parameter(Mandatory = $true)][string]$OutputDirectory,
+        [Parameter(Mandatory = $true)][string]$Tool,
+        [Parameter(Mandatory = $true)][string]$AppLabel,
+        [Parameter(Mandatory = $true)][string]$Reason
+    )
+
+    [ordered]@{
+        schemaVersion = 1
+        tool = $Tool
+        captureStatus = "blocked"
+        reason = $Reason
+        generatedAtUtc = [DateTime]::UtcNow.ToString("o")
+        policy = "No partial evidence is retained when the expected $AppLabel-owned foreground window cannot be validated."
+    } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $OutputDirectory "blocker-manifest.json") -Encoding utf8
+}
+
+function Set-NativeChromeForegroundWindow {
+    param(
+        [Parameter(Mandatory = $true)][IntPtr]$WindowHandle,
+        [Parameter(Mandatory = $true)][int]$ProcessId,
+        [Parameter(Mandatory = $true)][string]$ExpectedTitle,
+        [Parameter(Mandatory = $true)][string]$Operation
+    )
+
+    # Windows may reject a direct foreground transfer while another desktop
+    # process owns the active input queue.  Temporarily attaching this helper
+    # to both queues makes the transfer explicit; the postcondition remains
+    # the exact process/title guard below, so this never weakens provenance.
+    $foregroundWindow = [ScreenshotWin32]::GetForegroundWindow()
+    $foregroundThreadId = [uint32]0
+    $foregroundProcessId = [uint32]0
+    if ($foregroundWindow -ne [IntPtr]::Zero) {
+        $foregroundThreadId = [ScreenshotWin32]::GetWindowThreadProcessId($foregroundWindow, [ref]$foregroundProcessId)
+    }
+    $targetThreadId = [uint32]0
+    $targetProcessId = [uint32]0
+    $targetThreadId = [ScreenshotWin32]::GetWindowThreadProcessId($WindowHandle, [ref]$targetProcessId)
+    $currentThreadId = [ScreenshotWin32]::GetCurrentThreadId()
+    $attachedForeground = $false
+    $attachedTarget = $false
+    try {
+        if ($foregroundThreadId -ne 0 -and $foregroundThreadId -ne $currentThreadId) {
+            $attachedForeground = [ScreenshotWin32]::AttachThreadInput($currentThreadId, $foregroundThreadId, $true)
+        }
+        if ($targetThreadId -ne 0 -and $targetThreadId -ne $currentThreadId) {
+            $attachedTarget = [ScreenshotWin32]::AttachThreadInput($currentThreadId, $targetThreadId, $true)
+        }
+        [ScreenshotWin32]::ShowWindow($WindowHandle, 1) | Out-Null
+        [ScreenshotWin32]::BringWindowToTop($WindowHandle) | Out-Null
+        [ScreenshotWin32]::SetActiveWindow($WindowHandle) | Out-Null
+        [ScreenshotWin32]::SetForegroundWindow($WindowHandle) | Out-Null
+        [ScreenshotWin32]::SetFocus($WindowHandle) | Out-Null
+    }
+    finally {
+        if ($attachedTarget) {
+            [ScreenshotWin32]::AttachThreadInput($currentThreadId, $targetThreadId, $false) | Out-Null
+        }
+        if ($attachedForeground) {
+            [ScreenshotWin32]::AttachThreadInput($currentThreadId, $foregroundThreadId, $false) | Out-Null
+        }
+    }
+    Start-Sleep -Milliseconds 350
+    Assert-ForegroundWindowOwnership $ProcessId $ExpectedTitle $Operation
+}
+
+function Resolve-NativeChromeWidthSpecs {
+    param([Parameter(Mandatory = $true)][string]$Value)
+
+    $result = @()
+    foreach ($entry in $Value.Split(',')) {
+        $trimmed = $entry.Trim()
+        $width = 0
+        if (-not [int]::TryParse($trimmed, [ref]$width) -or $width -lt 750) {
+            throw "Widths must be comma-separated integral logical widths of at least 750. Invalid value: '$trimmed'."
+        }
+        $result += $width
+    }
+    if ($result.Count -eq 0 -or @($result | Select-Object -Unique).Count -ne $result.Count) {
+        throw "Widths must contain at least one distinct value."
+    }
+    return $result
+}
+
+function Find-NativeChromeTab {
+    param(
+        [Parameter(Mandatory = $true)]$AppElement,
+        [Parameter(Mandatory = $true)][string]$TabName
+    )
+
+    $condition = New-Object System.Windows.Automation.AndCondition @(
+        (New-Object System.Windows.Automation.PropertyCondition(
+            [System.Windows.Automation.AutomationElement]::NameProperty,
+            $TabName)),
+        (New-Object System.Windows.Automation.PropertyCondition(
+            [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+            [System.Windows.Automation.ControlType]::TabItem)))
+    return $AppElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+}
+
+function Select-NativeChromeTab {
+    param(
+        [Parameter(Mandatory = $true)]$Tab,
+        [Parameter(Mandatory = $true)][IntPtr]$WindowHandle,
+        [Parameter(Mandatory = $true)][int]$ProcessId,
+        [Parameter(Mandatory = $true)][string]$ExpectedTitle,
+        [Parameter(Mandatory = $true)][string]$TabName,
+        [Parameter(Mandatory = $true)][string]$AppLabel
+    )
+
+    Set-NativeChromeForegroundWindow $WindowHandle $ProcessId $ExpectedTitle "$AppLabel '$TabName' tab selection"
+    try {
+        $selection = [System.Windows.Automation.SelectionItemPattern]$Tab.GetCurrentPattern(
+            [System.Windows.Automation.SelectionItemPattern]::Pattern)
+        $selection.Select()
+    }
+    catch {
+        $bounds = $Tab.Current.BoundingRectangle
+        if ($bounds.Width -le 0 -or $bounds.Height -le 0) {
+            throw "$AppLabel tab '$TabName' has no actionable bounds."
+        }
+        [System.Windows.Forms.Cursor]::Position = [System.Drawing.Point]::new(
+            [int]($bounds.Left + ($bounds.Width / 2)),
+            [int]($bounds.Top + ($bounds.Height / 2)))
+        Assert-ForegroundWindowOwnership $ProcessId $ExpectedTitle "$AppLabel '$TabName' fallback click"
+        [ScreenshotWin32]::mouse_event(2, 0, 0, 0, 0)
+        [ScreenshotWin32]::mouse_event(4, 0, 0, 0, 0)
+    }
+    Start-Sleep -Milliseconds 650
+}

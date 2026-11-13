@@ -20,24 +20,14 @@ $resolvedOutputDirectory = Resolve-ToolRepoPath -Path $OutputDirectory -RepoRoot
 New-Item -ItemType Directory -Force -Path $resolvedOutputDirectory | Out-Null
 
 function Clear-CurrentCapture {
-    Get-ChildItem -LiteralPath $resolvedOutputDirectory -Filter "word_*.png" -File -ErrorAction SilentlyContinue |
-        Remove-Item -Force -ErrorAction Stop
-    foreach ($name in @("manifest.json", "blocker-manifest.json")) {
-        Remove-Item -LiteralPath (Join-Path $resolvedOutputDirectory $name) -Force -ErrorAction SilentlyContinue
-    }
+    Clear-NativeChromeCapture -OutputDirectory $resolvedOutputDirectory -FilePattern "word_*.png"
 }
 
 function Write-BlockerManifest {
     param([Parameter(Mandatory = $true)][string]$Reason)
 
-    [ordered]@{
-        schemaVersion = 1
-        tool = "tools/Capture-FreeWWordChrome.ps1"
-        captureStatus = "blocked"
-        reason = $Reason
-        generatedAtUtc = [DateTime]::UtcNow.ToString("o")
-        policy = "No partial evidence is retained when the expected Word-owned foreground window cannot be validated."
-    } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $resolvedOutputDirectory "blocker-manifest.json") -Encoding utf8
+    Write-NativeChromeBlockerManifest -OutputDirectory $resolvedOutputDirectory -AppLabel "Word" `
+        -Tool "tools/Capture-FreeWWordChrome.ps1" -Reason $Reason
 }
 
 function Set-WordForegroundWindow {
@@ -48,82 +38,15 @@ function Set-WordForegroundWindow {
         [Parameter(Mandatory = $true)][string]$Operation
     )
 
-    [ScreenshotWin32]::ShowWindow($WindowHandle, 1) | Out-Null
-    [ScreenshotWin32]::BringWindowToTop($WindowHandle) | Out-Null
-    [ScreenshotWin32]::SetForegroundWindow($WindowHandle) | Out-Null
-    Start-Sleep -Milliseconds 350
-    Assert-ForegroundWindowOwnership $ProcessId $ExpectedTitle $Operation
-}
-
-function Resolve-WidthSpecs {
-    param([Parameter(Mandatory = $true)][string]$Value)
-
-    $result = @()
-    foreach ($entry in $Value.Split(',')) {
-        $trimmed = $entry.Trim()
-        $width = 0
-        if (-not [int]::TryParse($trimmed, [ref]$width) -or $width -lt 750) {
-            throw "Widths must be comma-separated integral logical widths of at least 750. Invalid value: '$trimmed'."
-        }
-        $result += $width
-    }
-    if ($result.Count -eq 0 -or @($result | Select-Object -Unique).Count -ne $result.Count) {
-        throw "Widths must contain at least one distinct value."
-    }
-    return $result
-}
-
-function Find-WordTab {
-    param(
-        [Parameter(Mandatory = $true)]$AppElement,
-        [Parameter(Mandatory = $true)][string]$TabName
-    )
-
-    $condition = New-Object System.Windows.Automation.AndCondition @(
-        (New-Object System.Windows.Automation.PropertyCondition(
-            [System.Windows.Automation.AutomationElement]::NameProperty,
-            $TabName)),
-        (New-Object System.Windows.Automation.PropertyCondition(
-            [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
-            [System.Windows.Automation.ControlType]::TabItem)))
-    return $AppElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
-}
-
-function Select-WordTab {
-    param(
-        [Parameter(Mandatory = $true)]$Tab,
-        [Parameter(Mandatory = $true)][IntPtr]$WindowHandle,
-        [Parameter(Mandatory = $true)][int]$ProcessId,
-        [Parameter(Mandatory = $true)][string]$ExpectedTitle,
-        [Parameter(Mandatory = $true)][string]$TabName
-    )
-
-    Set-WordForegroundWindow $WindowHandle $ProcessId $ExpectedTitle "Word '$TabName' tab selection"
-    try {
-        $selection = [System.Windows.Automation.SelectionItemPattern]$Tab.GetCurrentPattern(
-            [System.Windows.Automation.SelectionItemPattern]::Pattern)
-        $selection.Select()
-    }
-    catch {
-        $bounds = $Tab.Current.BoundingRectangle
-        if ($bounds.Width -le 0 -or $bounds.Height -le 0) {
-            throw "Word tab '$TabName' has no actionable bounds."
-        }
-        [System.Windows.Forms.Cursor]::Position = [System.Drawing.Point]::new(
-            [int]($bounds.Left + ($bounds.Width / 2)),
-            [int]($bounds.Top + ($bounds.Height / 2)))
-        Assert-ForegroundWindowOwnership $ProcessId $ExpectedTitle "Word '$TabName' fallback click"
-        [ScreenshotWin32]::mouse_event(2, 0, 0, 0, 0)
-        [ScreenshotWin32]::mouse_event(4, 0, 0, 0, 0)
-    }
-    Start-Sleep -Milliseconds 650
+    # Shared AttachThreadInput-based foreground transfer (ScreenshotCaptureSupport.ps1).
+    Set-NativeChromeForegroundWindow $WindowHandle $ProcessId $ExpectedTitle $Operation
 }
 
 $word = $null
 $document = $null
 $wordProcessId = 0
 try {
-    $logicalWidths = @(Resolve-WidthSpecs $Widths)
+    $logicalWidths = @(Resolve-NativeChromeWidthSpecs $Widths)
     $screenDpi = [ScreenshotWin32]::GetScreenDpi()
     $scale = $screenDpi / 96.0
     $captureHeight = [int][Math]::Ceiling(300 * $scale)
@@ -162,7 +85,7 @@ try {
     }
 
     foreach ($tabName in $mappedTabNames) {
-        if ($null -eq (Find-WordTab $appElement $tabName)) {
+        if ($null -eq (Find-NativeChromeTab $appElement $tabName)) {
             throw "The installed Word profile does not expose required mapped tab '$tabName'."
         }
     }
@@ -182,11 +105,11 @@ try {
         Set-WordForegroundWindow $windowHandle $wordProcessId $expectedTitle "Word ${logicalWidth}px resize"
 
         foreach ($tabName in $mappedTabNames) {
-            $tab = Find-WordTab $appElement $tabName
+            $tab = Find-NativeChromeTab $appElement $tabName
             if ($null -eq $tab) {
                 throw "Word mapped tab '$tabName' disappeared after resize to ${logicalWidth}px."
             }
-            Select-WordTab $tab $windowHandle $wordProcessId $expectedTitle $tabName
+            Select-NativeChromeTab $tab $windowHandle $wordProcessId $expectedTitle $tabName "Word"
             $rect = New-Object ScreenshotWin32+RECT
             if (-not [ScreenshotWin32]::GetWindowRect($windowHandle, [ref]$rect)) {
                 throw "Could not resolve Word window bounds for '$tabName' at ${logicalWidth}px."
@@ -210,7 +133,7 @@ try {
                 pixelHeight = $captureHeight
                 captureStatus = "complete"
                 captureMethod = "CopyFromScreen-window-rectangle-top-band"
-                sha256 = (Get-FileHash -LiteralPath $fullPath -Algorithm SHA256).Hash.ToLowerInvariant()
+                sha256 = (Get-ToolFileSha256 -Path $fullPath)
             }
         }
     }

@@ -6,8 +6,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 . (Join-Path $PSScriptRoot "PhysicalValidationScriptSupport.ps1")
-$resolvedOutput = if ([IO.Path]::IsPathRooted($OutputDir)) { [IO.Path]::GetFullPath($OutputDir) } else { [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir)) }
+$resolvedOutput = Resolve-ToolRepoPath -Path $OutputDir -RepoRoot $repoRoot
+$powerShellPath = Get-ToolPowerShellPath
 $fixtureProject = Join-Path $repoRoot "freew/tools/FreeW.GroupChildPhysicalFixture/FreeW.GroupChildPhysicalFixture.csproj"
 $fixturePath = Join-Path $resolvedOutput "nested-edit-points-wave63.docx"
 $probePath = Join-Path $repoRoot "tools/LinuxInteractiveDocker/run-freew-wave63-nested-edit-points-probe.sh"
@@ -23,7 +25,7 @@ try {
     if ($before['child-point-0'] -ne '3600,1800') { throw "Fixture child point was not deterministic: '$($before['child-point-0'])'." }
     if ([string]::IsNullOrWhiteSpace($before['child-points'])) { throw "Fixture had no nested leaf geometry points." }
 
-    & powershell -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Start -App FreeW -Port $Port -OutputDir $resolvedOutput -DocumentPath $fixturePath -Replace
+    & $powerShellPath -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Start -App FreeW -Port $Port -OutputDir $resolvedOutput -DocumentPath $fixturePath -Replace
     $started = $true
     $session = Get-Content $sessionPath -Raw | ConvertFrom-Json
     $sessionDir = [string]$session.sessionDirectory
@@ -57,5 +59,13 @@ try {
     Write-Host "Wave 63 physical validation passed. Manifest: $(Join-Path $resolvedOutput 'freew-wave63-nested-edit-points-validation.json')"
 }
 finally {
-    if ($started) { & powershell -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Stop -App FreeW -Port $Port }
+    # A failed container stop must not mask the real validation error in flight.
+    if ($started) {
+        try {
+            & $powerShellPath -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Stop -App FreeW -Port $Port
+            if ($LASTEXITCODE -ne 0) { throw "exit code $LASTEXITCODE" }
+        } catch {
+            Write-Warning "Could not stop harness-owned FreeW container on port ${Port}: $($_.Exception.Message)"
+        }
+    }
 }

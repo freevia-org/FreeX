@@ -95,13 +95,13 @@ try {
     New-Item -ItemType Directory -Path $evidenceDirectory -Force | Out-Null
     $probeLog = Join-Path $evidenceDirectory "probe.log"; New-Item -ItemType File -Path $probeLog -Force | Out-Null
     $sourceBefore = Join-Path $evidenceDirectory "fixture-source-before.sha256.txt"; $sourceAfter = Join-Path $evidenceDirectory "fixture-source-after.sha256.txt"
-    (Get-FileHash -LiteralPath $fixturePath -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -LiteralPath $sourceBefore -Encoding ascii
+    (Get-ToolFileSha256 -Path $fixturePath) | Set-Content -LiteralPath $sourceBefore -Encoding ascii
     $dockerArguments = @("exec", "--env", "FREEP_DOCUMENT_PATH=/documents/$fixtureFileName", "--env", "FREEP_EXPECTED_DOCUMENT_NAME=$fixtureFileName", "--env", "FREEP_EXPECTED_WINDOW_PATTERN=FreeP", "--env", "FREEP_SCREEN_WIDTH=$Width", "--env", "FREEP_SCREEN_HEIGHT=$Height", "--env", "FREEP_SCREEN_DPI=$Dpi", [string]$session.containerName, "bash", "/work/freep-clipboard-shortcut-probe.sh", "/work/freep-clipboard-shortcut-validation")
     Push-Location $repoRoot; try { $probeOutput = @(& docker @dockerArguments 2>&1); $probeExitCode = $LASTEXITCODE } finally { Pop-Location }
     if ($probeOutput.Count -gt 0) { $probeOutput | Set-Content -LiteralPath $probeLog -Encoding utf8 } else { "docker exec produced no stdout/stderr; inspect the manifest and runtime evidence." | Set-Content -LiteralPath $probeLog -Encoding utf8 }
-    (Get-FileHash -LiteralPath $fixturePath -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -LiteralPath $sourceAfter -Encoding ascii
+    (Get-ToolFileSha256 -Path $fixturePath) | Set-Content -LiteralPath $sourceAfter -Encoding ascii
     $mountedDocument = Join-Path $resolvedOutputRoot "freep/documents/$fixtureFileName"; $mountedAfter = Join-Path $evidenceDirectory "fixture-host-mounted-after.sha256.txt"
-    if (Test-Path -LiteralPath $mountedDocument -PathType Leaf) { (Get-FileHash -LiteralPath $mountedDocument -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -LiteralPath $mountedAfter -Encoding ascii } else { "MISSING mounted document: $mountedDocument" | Set-Content -LiteralPath $mountedAfter -Encoding utf8 }
+    if (Test-Path -LiteralPath $mountedDocument -PathType Leaf) { (Get-ToolFileSha256 -Path $mountedDocument) | Set-Content -LiteralPath $mountedAfter -Encoding ascii } else { "MISSING mounted document: $mountedDocument" | Set-Content -LiteralPath $mountedAfter -Encoding utf8 }
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
         $failureEvidenceName = "probe-runner-failure.txt"; @("The dedicated FreeP clipboard probe exited without writing its manifest.", "docker-exit-code=$probeExitCode", "probe-log=$probeLog", "probe-output=$([string]::Join([Environment]::NewLine, @($probeOutput)))") | Set-Content -LiteralPath (Join-Path $evidenceDirectory $failureEvidenceName) -Encoding utf8
         $failureResults = @($requiredIds | ForEach-Object { [ordered]@{ id = $_; category = "physical-x11-clipboard-shortcut"; status = "failed"; evidenceLevel = "physical-x11-input"; evidence = @($failureEvidenceName); note = "Probe runner exited before producing row-specific evidence." } })
