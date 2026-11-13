@@ -147,7 +147,7 @@ public sealed partial class MainWindow
         var openAfterPublishBox = new CheckBox
         {
             Content = StripDisplayMnemonic(UiText.Get("ExportOptions_OpenAfterPublishing")),
-            Margin = new Thickness(0, 8, 0, 0)
+            Margin = new Thickness(0, 6, 0, 0)
         };
         var errorBlock = new TextBlock
         {
@@ -185,19 +185,19 @@ public sealed partial class MainWindow
 
         // WPF stacks the options with no extra spacing inside a 16px margin; the row gaps come from
         // the per-row margins below. The bottom margin moves to the docked button row.
-        var stack = new StackPanel { Margin = new Thickness(16, 16, 16, 0) };
+        var stack = new StackPanel { Margin = new Thickness(16, 18, 16, 0) };
         stack.Children.Add(CreateExportOptionsSectionLabel("ExportOptions_PublishWhat"));
         stack.Children.Add(activeSheetButton);
         stack.Children.Add(selectionButton);
         stack.Children.Add(workbookButton);
-        stack.Children.Add(CreateExportOptionsSectionLabel("ExportOptions_PageRange", topMargin: 12));
+        stack.Children.Add(CreateExportOptionsSectionLabel("ExportOptions_PageRange", topMargin: 11));
         stack.Children.Add(allPagesButton);
 
         // WPF: Pages, then each Label with Margin (8, 0, 6, 0) before its 56px box.
         var pageRangePanel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 4, 0, 0),
+            Margin = new Thickness(0, -2, 0, 0),
         };
         pageRangePanel.Children.Add(pagesButton);
         pageRangePanel.Children.Add(CreateExportOptionsLabel("ExportOptions_From", fromPageBox, new Thickness(8, 0, 6, 0)));
@@ -206,7 +206,7 @@ public sealed partial class MainWindow
         pageRangePanel.Children.Add(toPageBox);
         stack.Children.Add(pageRangePanel);
 
-        stack.Children.Add(CreateExportOptionsSectionLabel("ExportOptions_PdfXpsOptions", topMargin: 14));
+        stack.Children.Add(CreateExportOptionsSectionLabel("ExportOptions_PdfXpsOptions", topMargin: 19, bottomMargin: 5));
         stack.Children.Add(documentPropertiesBox);
         stack.Children.Add(ignorePrintAreasBox);
         stack.Children.Add(bookmarksBox);
@@ -217,6 +217,7 @@ public sealed partial class MainWindow
         stack.Children.Add(bitmapTextBox);
         stack.Children.Add(pdfABox);
         stack.Children.Add(structureTagsBox);
+        standardQualityButton.Margin = new Thickness(0, 2, 0, 0);
         stack.Children.Add(standardQualityButton);
         stack.Children.Add(minimumSizeButton);
         stack.Children.Add(openAfterPublishBox);
@@ -302,7 +303,9 @@ public sealed partial class MainWindow
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(16, 18, 16, 16),
+            // The WPF capture puts OK 10px under the last option (the section captions above absorbed
+            // the slack) and leaves 24px below it.
+            Margin = new Thickness(16, 10, 16, 24),
             Spacing = 8,
             Children = { okButton, cancelButton },
         };

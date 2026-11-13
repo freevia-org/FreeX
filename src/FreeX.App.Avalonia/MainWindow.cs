@@ -22700,6 +22700,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return groupFrame;
         });
 
+        // WPF stacks the three option check boxes at a 15px pitch (the default CheckBox height at the
+        // 12px dialog font), the first starting 3px below the group frame; the compact check box is 18.
+        void ApplySubtotalOptionBoxHeights()
+        {
+            foreach (var optionBox in new[] { replaceBox, pageBreakBox, summaryBelowBox })
+            {
+                optionBox.Height = 15;
+                optionBox.MinHeight = 15;
+                optionBox.MaxHeight = 15;
+            }
+
+            replaceBox.Margin = new Thickness(0, 3, 0, 0);
+        }
+
+        ApplySubtotalOptionBoxHeights();
+
         // WPF SubtotalDialog: root StackPanel { Margin = 12 } -- the fields, the options and then the
         // button row, so the fields also precede Remove All / OK / Cancel in the tab order.
         dialog.Content = new StackPanel
@@ -22730,6 +22746,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // The generic list pass gives every list a 1px frame; inside this group box that drew a
             // second frame nested in the group border.
             columnsList.BorderThickness = new Thickness(0);
+            ApplySubtotalOptionBoxHeights();
             groupColumnBox.Focus();
         };
 

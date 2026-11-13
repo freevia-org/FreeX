@@ -63,6 +63,8 @@ public sealed partial class MainWindow
 
         var rangesList = new ListBox { MinHeight = 80 };
         AvaloniaCompactDialogChrome.ApplyListBox(rangesList, AllowEditRangeDialogChromeStyle);
+        // The WPF list items start 3px lower in the list frame than the compact list row does.
+        rangesList.Padding = new Thickness(0, 3, 0, 0);
         AutomationProperties.SetAutomationId(rangesList, "AllowEditRangeExistingRangesList");
 
         var rangeBox = new TextBox
@@ -286,7 +288,7 @@ public sealed partial class MainWindow
         {
             Header = StripDisplayMnemonic(UiText.Get("AllowEditRange_ExistingRangesLabel")),
             Content = existingRangesGroupContent,
-            Margin = new Thickness(0, 0, 0, 10),
+            Margin = new Thickness(0, 0, 0, 12),
             Padding = new Thickness(0),
         };
         AvaloniaCompactDialogChrome.ApplyGroupBox(existingRangesGroup, AllowEditRangeDialogChromeStyle);
@@ -336,10 +338,10 @@ public sealed partial class MainWindow
         {
             Children =
             {
-                new TextBlock { Text = UiText.Get("AllowEditRange_Intro"), Foreground = HeaderForeground, TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 0, 0, 10) },
+                new TextBlock { Text = UiText.Get("AllowEditRange_Intro"), Foreground = HeaderForeground, TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 2, 0, 13) },
                 existingRangesGroup,
                 rangeGroup,
-                new TextBlock { Text = UiText.Get("AllowEditRange_Example"), Foreground = Brush(109, 109, 109), TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 6, 0, 10) },
+                new TextBlock { Text = UiText.Get("AllowEditRange_Example"), Foreground = Brush(109, 109, 109), TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 7, 0, 12) },
                 rangePasswordPanel,
                 warningText,
             },
