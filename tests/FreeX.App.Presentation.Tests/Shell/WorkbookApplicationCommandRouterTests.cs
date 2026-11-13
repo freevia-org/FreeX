@@ -22,7 +22,7 @@ public sealed class WorkbookApplicationCommandRouterTests
     [Fact]
     public void CoversEveryGenericWorksheetContextMenuAction()
     {
-        WorkbookApplicationCommandRouter.WorksheetContextMenuRoutes.Should().HaveCount(58);
+        WorkbookApplicationCommandRouter.WorksheetContextMenuRoutes.Should().HaveCount(59);
         WorkbookApplicationCommandRouter.WorksheetContextMenuRoutes
             .Select(route => route.SourceKey)
             .Should()

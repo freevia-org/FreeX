@@ -4928,6 +4928,20 @@ public sealed partial class WorkbookSession : IDisposable
     }
 
     /// <summary>
+    /// Turns the AutoFilter on over the current region around the active cell, whatever the
+    /// selection, for Excel's "Filter by Selected Cell's Value" on a sheet with no AutoFilter yet.
+    /// </summary>
+    public WorkbookCellEditResult EnableAutoFilterAroundActiveCell()
+    {
+        if (ActiveSheetHasAutoFilter)
+            return SuccessfulNoOpEditResult();
+
+        var range = AutoFilterToggleRangePlanner.Create(ActiveSheet, new GridRange(ActiveCell, ActiveCell));
+        return ExecuteRepeatableCommandPreservingSelection(
+            () => new ToggleWorksheetAutoFilterCommand(ActiveSheet.Id, range));
+    }
+
+    /// <summary>
     /// R127-services-sort-multiarea-1: real Excel refuses Sort outright on a Ctrl+click multi-area
     /// selection ("This operation is not allowed on multiple selections. Select a single range and
     /// click the command again."). Both SortSelectedRange overloads previously read only

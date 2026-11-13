@@ -227,6 +227,7 @@ public static class WorksheetContextMenuPlanner
             new WorksheetContextMenuCommand("Custom Sort...", WorksheetContextMenuAction.CustomSort, AccessHeader: "C_ustom Sort..."),
             WorksheetContextMenuCommand.Separator,
             new WorksheetContextMenuCommand("Filter...", WorksheetContextMenuAction.Filter, AccessHeader: "_Filter..."),
+            new WorksheetContextMenuCommand("Filter by Selected Cell's Value", WorksheetContextMenuAction.FilterBySelectedCellValue, AccessHeader: "Filter by Selected Cell's _Value"),
             new WorksheetContextMenuCommand("Clear Filter", WorksheetContextMenuAction.ClearFilter, AccessHeader: "C_lear Filter", IsEnabled: state.HasAutoFilterHeaderTarget),
             new WorksheetContextMenuCommand("Reapply Filter", WorksheetContextMenuAction.ReapplyFilter, AccessHeader: "_Reapply Filter", IsEnabled: state.HasAutoFilterHeaderTarget),
             new WorksheetContextMenuCommand("Pick From Drop-down List...", WorksheetContextMenuAction.PickFromDropDown, AccessHeader: "Pick From _Drop-down List...")),
@@ -566,7 +567,8 @@ public enum WorksheetContextMenuAction
     SendBackward,
     EditAltText,
     SelectionPane,
-    DeleteObject
+    DeleteObject,
+    FilterBySelectedCellValue
 }
 
 public enum WorksheetContextMenuTargetKind

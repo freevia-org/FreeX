@@ -149,6 +149,9 @@ public static partial class FormulaAuditingService
         return result;
     }
 
+    /// <summary>Formula count above which the background indicators skip the whole-sheet formula-pattern rules.</summary>
+    public const int BackgroundFormulaPatternRuleLimit = 20_000;
+
     /// <summary>
     /// Excel's background error checking: the cells of one sheet that show the green error
     /// indicator in their top-left corner, each with the rule that flagged it. Formulas that return
@@ -168,8 +171,15 @@ public static partial class FormulaAuditingService
             result.TryAdd(issue.Address, issue.ErrorCode);
         }
 
-        foreach (var issue in FindFormulaCellIssues(workbook, sheetId, includeBlankReferences: false))
-            result.TryAdd(issue.Address, issue.ErrorCode);
+        // The formula-pattern rules (inconsistent formulas, omitted adjacent cells, ...) scan every
+        // formula on the sheet; Excel runs them in the background, but here they run when the sheet
+        // is repainted after an edit. Above this size that scan (~4 ms per 1,000 formulas) would lag
+        // typing, so very large sheets keep only the per-cell rules above.
+        if (workbook.GetSheet(sheetId) is { FormulaCellCount: <= BackgroundFormulaPatternRuleLimit })
+        {
+            foreach (var issue in FindFormulaCellIssues(workbook, sheetId, includeBlankReferences: false))
+                result.TryAdd(issue.Address, issue.ErrorCode);
+        }
 
         return result;
     }
