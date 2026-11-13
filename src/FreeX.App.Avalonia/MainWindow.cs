@@ -27361,8 +27361,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // the process — and it sits behind EVERY keystroke, fanning out to save/close/print-preview/
     // paste-special/help-link/go-to/hyperlink paths. A single throwing shortcut (a browser launch
     // that fails, a malformed hyperlink, a paste edge case) would take the app down mid-edit.
-    private void MainWindow_KeyDown(object? sender, KeyEventArgs e) =>
+    private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
+    {
+        // Keys typed into the File screen's own text boxes reach here unhandled (so X11 still
+        // delivers their characters); they must not drive worksheet shortcuts underneath.
+        if (IsKeyForOpenBackstage())
+            return;
+
         RunGuarded(() => MainWindow_KeyDownAsync(e));
+    }
 
     private async Task MainWindow_KeyDownAsync(KeyEventArgs e)
     {
@@ -27440,6 +27447,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             e.Handled = true;
             await OpenSelectedHyperlinkAsync();
+            return;
+        }
+
+        // Excel: while a copied range is outlined (marching ants), a plain Enter pastes it into the
+        // selection and ends copy mode instead of moving the selection.
+        if (e.Key == Key.Enter &&
+            e.KeyModifiers == KeyModifiers.None &&
+            _clipboardMarqueeRange is not null &&
+            _inlineCellEditAddress is null &&
+            !_formulaBox.IsFocused &&
+            !IsTextEditingEventSource(e))
+        {
+            e.Handled = true;
+            await PasteClipboardTextAsync();
+            SetClipboardMarquee(null, isCut: false);
             return;
         }
 
@@ -30228,16 +30250,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // A row-header selection is stored as the complete grid span so editing, rendering, and
     // commands can operate on every cell. The Name Box, however, uses Excel's compact whole-row
     // notation instead of exposing that implementation geometry.
-    private string FormatSelectionNameBoxText()
-    {
-        var range = _session.SelectedRange;
-        if (range.Start.Col == 1 && range.End.Col == CellAddress.MaxCol)
-            return range.Start.Row == range.End.Row
-                ? $"{range.Start.Row}:{range.Start.Row}"
-                : $"{range.Start.Row}:{range.End.Row}";
-
-        return FormatCellReference(_session.ActiveCell);
-    }
+    // Excel's Name Box shows the active cell for an unnamed selection, including a whole row
+    // ("A5" after clicking row header 5, not "5:5").
+    private string FormatSelectionNameBoxText() =>
+        FormatCellReference(_session.ActiveCell);
 
     private static string FormatRangeReference(GridRange range) =>
         SpreadsheetDisplayFormatter.FormatRangeReference(

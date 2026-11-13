@@ -750,6 +750,8 @@ internal static class PrintLayout
         var page = editor.Model.Page;
         var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
         var balloonSources = ResolvePrintBalloonSources(editor);
+        if (UsesPerPageFootnoteReserve(editor, balloonSources))
+            return SectionAwareDocumentPaginator.Build(editor);
         if (balloonSources.Count > 0)
             pageWidth += BalloonStripWidthDip;
 
@@ -784,6 +786,56 @@ internal static class PrintLayout
             floatingObjectsByPage: floatingObjectsByPage,
             changedLineRules: !editor.CurrentReviewDisplayPolicy.ShouldShowSimpleMarkupChangeBar), flow);
     }
+
+    /// <summary>
+    /// Word shrinks each page's body by the notes that page itself carries. One WPF flow has a single page
+    /// box, so the single-flow path could only reserve one height for every page (or none, drawing the
+    /// notes into the bottom margin while the body ran on underneath them). A single-column document whose
+    /// body references footnotes therefore paginates through the section-aware engine, which lays each page
+    /// out under its own footnote reserve and paints the notes inside it. Documents that need the overlays
+    /// only the single-flow path draws (review balloons/change bars, floating drawings) keep that path.
+    /// </summary>
+    internal static bool UsesPerPageFootnoteReserve(
+        DocumentView editor,
+        IReadOnlyList<ReviewBalloonSource> balloonSources)
+    {
+        var model = editor.Model;
+        if (model.Footnotes.Count == 0 || model.Page.ColumnCount > 1 || balloonSources.Count > 0)
+            return false;
+        var reviewPolicy = editor.CurrentReviewDisplayPolicy;
+        if ((reviewPolicy.ShouldShowSimpleMarkupChangeBar || reviewPolicy.ShouldMarkAllMarkupChangedLines)
+            && model.Blocks.Any(block => ChangeBarBlockHasRevision(block, reviewPolicy)))
+            return false;
+
+        var paragraphs = model.Blocks.SelectMany(BodyParagraphs).ToList();
+        if (!paragraphs.Any(paragraph => paragraph.Runs.Any(run => run.FootnoteId is not null))
+            || paragraphs.Any(paragraph => paragraph.Runs.Any(IsFloatingDrawing)))
+            return false;
+
+        // A note taller than a whole page stays with the continuation compositor proven against Word for
+        // that case (FootnoteContinuationFlowComposer).
+        var (contentWidthDip, contentHeightDip) = PageLayout.ContentAreaDip(model.Page);
+        return !model.Footnotes.Keys.Any(id =>
+            DocumentNoteRegionPlanner.BuildFootnoteRegion(model, [id], pageNumber: 1, contentWidthDip).EstimatedHeightDip
+            + FootnoteContinuationTrailingReserveDip > contentHeightDip);
+    }
+
+    private static IEnumerable<FreeW.Core.Model.Paragraph> BodyParagraphs(FreeW.Core.Model.Block block) => block switch
+    {
+        FreeW.Core.Model.Paragraph paragraph => [paragraph],
+        FreeW.Core.Model.Table table => table.Rows
+            .SelectMany(row => row.Cells)
+            .SelectMany(cell => cell.Paragraphs.Concat(cell.NestedTables.SelectMany(BodyParagraphs))),
+        _ => [],
+    };
+
+    private static bool IsFloatingDrawing(FreeW.Core.Model.Run run) =>
+        run.Image is { IsFloating: true }
+        || run.Shape is { IsFloating: true }
+        || run.Chart is { IsFloating: true }
+        || run.WordArt is { IsFloating: true }
+        || run.SmartArt is { IsFloating: true }
+        || run.DrawingGroup is not null;
 
     private static bool NeedsSectionAwareRendering(TextDocument document) =>
         document.Sections.Any(section =>

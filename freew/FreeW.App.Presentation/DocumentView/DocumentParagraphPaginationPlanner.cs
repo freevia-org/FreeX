@@ -45,6 +45,45 @@ public static class DocumentParagraphPaginationPlanner
         return IsWidowControlEffective(formatting) ? WordWidowOrphanMinimumLines : 0;
     }
 
+    /// <summary>
+    /// True when Word lays the paragraph out with no height at all: its paragraph mark is hidden text
+    /// (<c>w:pPr/w:rPr/w:vanish</c>, directly or through its style) and it shows nothing else. Word merges a
+    /// hidden mark into the following paragraph, so an otherwise empty paragraph -- the classic spacer
+    /// between two tables in HTML-sourced documents -- takes no line and none of its spacing. A paragraph
+    /// with any visible run, object, note reference, break or section break keeps its normal layout.
+    /// </summary>
+    public static bool IsCollapsedHiddenMarkParagraph(TextDocument document, Paragraph paragraph)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(paragraph);
+
+        if (paragraph.SectionBreak is not null || paragraph.DropCap is not null)
+            return false;
+
+        var mark = DocumentRunFormattingResolver.Resolve(
+            document, paragraph, paragraph.MarkFormatting ?? RunFormatting.Default);
+        if (!mark.Hidden)
+            return false;
+
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.IsPageBreak || run.IsColumnBreak)
+                return false;
+            if (DocumentRunFormattingResolver.Resolve(document, paragraph, run).Hidden)
+                continue;
+            var bare = string.IsNullOrEmpty(run.Text)
+                && run.Image is null && run.Equation is null && run.Shape is null && run.WordArt is null
+                && run.Chart is null && run.EmbeddedObject is null && run.SmartArt is null
+                && run.PreservedDrawing is null && run.DrawingGroup is null
+                && run.FootnoteId is null && run.EndnoteId is null
+                && run.FieldKind == RunFieldKind.None && run.ComplexField is null && run.Control is null;
+            if (!bare)
+                return false;
+        }
+
+        return true;
+    }
+
     /// <summary>True when Word applies widow/orphan control to the paragraph (omitted = default on).</summary>
     public static bool IsWidowControlEffective(ParagraphFormatting formatting)
     {

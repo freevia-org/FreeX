@@ -884,6 +884,17 @@ public partial class MainWindow
             return;
         }
 
+        // Excel: while a copied range is outlined (marching ants), a plain Enter pastes it into the
+        // selection and ends copy mode instead of moving the selection.
+        if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.None && !extendSelection &&
+            SheetGrid.ClipboardRange is not null)
+        {
+            ExecutePaste();
+            ClearClipboardMarqueeIfOwnedByThisWindow();
+            e.Handled = true;
+            return;
+        }
+
         // When Shift or F8 extend mode is active the moving end is _selectionCursor; otherwise it's the active cell.
         var current = extendSelection && _selectionCursor.HasValue
             ? _selectionCursor.Value

@@ -253,7 +253,13 @@ public partial class MainWindow
         if (_nameBoxGlobalRangeIndex!.TryGetValue(range, out var globalName))
             return globalName;
 
-        return FormatRangeReference(range.Start, range.End);
+        // Excel's Name Box shows the active cell for any unnamed selection -- "A5" for a clicked
+        // row header, "B2" for B2:D5 -- never the range itself ("A5:XFD5"). The range size only
+        // appears transiently ("3R x 4C") while dragging.
+        var active = SheetGrid.ActiveCell is { } activeCell && range.Contains(activeCell)
+            ? activeCell
+            : range.Start;
+        return FormatRangeReference(active, active);
     }
 
     /// <summary>
