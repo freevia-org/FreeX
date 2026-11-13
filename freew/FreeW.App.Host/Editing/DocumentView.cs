@@ -11739,19 +11739,11 @@ public sealed partial class DocumentView : RichTextBox
                     InsertNestedTableBlocks(wpfCell, modelCell, document);
                 if (styleBold || styleTextColorHex is not null)
                     ApplyTableStyleRunOverlay(wpfCell, styleBold, styleTextColorHex);
-                // Word keeps the space-after of a cell's last paragraph inside the cell; WPF collapses
-                // a trailing block margin against the cell edge, so reserve it as bottom padding.
-                // (A row with an authored height already contains that space inside its minimum.)
-                if (rowHeightPx is null
-                    && !hasPlannedCellBorders
-                    && TrailingCellParagraphSpaceAfterDip(wpfCell) is > 0 and var trailingSpaceAfterDip)
-                {
-                    wpfCell.Padding = new Thickness(
-                        wpfCell.Padding.Left,
-                        wpfCell.Padding.Top,
-                        wpfCell.Padding.Right,
-                        wpfCell.Padding.Bottom + trailingSpaceAfterDip);
-                }
+                // Word keeps the space-after of a cell's last paragraph inside the cell, and so does WPF: the
+                // trailing block margin of a plain cell is part of its measured height (the harness measures
+                // a row pitch of line + space-after, identical to the same paragraph outside a table). Do NOT
+                // also reserve it as cell padding -- that counted the space twice and made every cell row with a
+                // space-after one space-after too tall (a 17pt-exact / 6pt-after table row rendered 29pt).
                 wpfRow.Cells.Add(wpfCell);
             }
             group.Rows.Add(wpfRow);
@@ -12166,23 +12158,6 @@ public sealed partial class DocumentView : RichTextBox
     {
         var pitchDip = ((row.HeightPt ?? 0) + Math.Max(0, margins.TopPt)) * PxPerPoint;
         return Math.Max(0, isHeaderRow || row.IsRepeatingHeader ? pitchDip - cellSpacingDip : pitchDip);
-    }
-
-    private static double TrailingCellParagraphSpaceAfterDip(WpfTableCell cell)
-    {
-        static WpfParagraph? LastParagraph(object? element) => element switch
-        {
-            WpfParagraph paragraph => paragraph,
-            BlockUIContainer { Child: { } child } => LastParagraph(child),
-            System.Windows.Controls.RichTextBox richTextBox => LastParagraph(richTextBox.Document.Blocks.LastBlock),
-            System.Windows.Controls.Grid grid => LastParagraph(
-                grid.Children.OfType<System.Windows.Controls.StackPanel>().FirstOrDefault()),
-            System.Windows.Controls.StackPanel { LayoutTransform: not RotateTransform } panel
-                when panel.Children.Count > 0 => LastParagraph(panel.Children[^1]),
-            _ => null
-        };
-
-        return LastParagraph(cell.Blocks.LastBlock)?.Margin.Bottom ?? 0;
     }
 
     // w:textDirection btLr reads bottom-to-top (a counter-clockwise quarter turn); tbRl reads
@@ -12800,6 +12775,15 @@ public sealed partial class DocumentView : RichTextBox
                         - following.WidthDip;
                     if (plan.AdvanceDip > roomDip && roomDip >= ParagraphTabStopLayoutPlanner.MinimumAdvanceDip)
                         plan = plan with { AdvanceDip = roomDip, SegmentStartDip = penPositionDip + roomDip };
+                    else if (roomDip < ParagraphTabStopLayoutPlanner.MinimumAdvanceDip && following.WidthDip <= 0)
+                    {
+                        // The line is already full to the cell's text edge (an earlier tab leader was clamped
+                        // there) and nothing follows this tab: Word lets a trailing tab with no room left sit
+                        // in the margin instead of wrapping. Rendering even the 1 DIP minimum advance would
+                        // push it onto a line of its own and double the row height (a TOC row that ends in two
+                        // tabs, e.g. "...<tab leader><tab>").
+                        plan = plan with { AdvanceDip = 0, SegmentStartDip = penPositionDip };
+                    }
                 }
 
                 var tabInline = BuildRenderedTabStopInline(plan, run, paragraph, document);
@@ -12940,7 +12924,9 @@ public sealed partial class DocumentView : RichTextBox
         var element = new TabStopLeaderElement(plan, brush)
         {
             Tag = marker,
-            Width = Math.Max(ParagraphTabStopLayoutPlanner.MinimumAdvanceDip, plan.AdvanceDip),
+            Width = plan.AdvanceDip <= 0
+                ? 0
+                : Math.Max(ParagraphTabStopLayoutPlanner.MinimumAdvanceDip, plan.AdvanceDip),
             Height = 1,
             IsHitTestVisible = false
         };
