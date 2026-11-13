@@ -163,8 +163,8 @@ public sealed class R147_RealPointerPressedHeaderSelectionTests
                     rowFiveFirstCell,
                     new CellAddress(sheet.Id, 5, CellAddress.MaxCol)),
                     "the physical row-header click must retain the full-row selection geometry");
-                window.CellAddressBoxTextForTest.Should().Be("5:5",
-                    "Excel displays a whole-row selection with compact row notation in the Name Box");
+                window.CellAddressBoxTextForTest.Should().Be("A5",
+                    "Excel's Name Box shows the active cell for a whole-row selection (UX-QA-ITER67-001)");
                 window.FormulaBoxTextForTest.Should().Be("row 5 value",
                     "the formula bar must continue to display the active cell's value");
             }

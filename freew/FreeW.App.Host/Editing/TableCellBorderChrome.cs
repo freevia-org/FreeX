@@ -84,9 +84,18 @@ public sealed class TableCellBorderChrome : FrameworkElement
     {
         base.OnRender(drawingContext);
 
-        var rect = new Rect(0, 0, ActualWidth, ActualHeight);
-        if (rect.Width <= 0 || rect.Height <= 0)
+        // Word draws a cell border inside the cell box; centring the strokes on the edge would push
+        // half of each rule (and the outer line of a double rule) outside the cell, where the host
+        // clips it away when the cell has no padding around this chrome.
+        double HalfExtent(TableCellBorderVisualEdge edge) =>
+            TableCellBorderVisualPlanner.StrokeExtentDip(_plan.Edge(edge)) / 2;
+        var left = HalfExtent(TableCellBorderVisualEdge.Left);
+        var top = HalfExtent(TableCellBorderVisualEdge.Top);
+        var width = ActualWidth - left - HalfExtent(TableCellBorderVisualEdge.Right);
+        var height = ActualHeight - top - HalfExtent(TableCellBorderVisualEdge.Bottom);
+        if (width <= 0 || height <= 0)
             return;
+        var rect = new Rect(left, top, width, height);
 
         foreach (var edge in _plan.Edges)
             DrawEdge(drawingContext, rect, edge);

@@ -28,6 +28,18 @@ public sealed record DocumentNoteRegionPlan(
     IReadOnlyList<DocumentNoteRegionRow> Rows)
 {
     public bool HasContent => Rows.Count > 0;
+
+    /// <summary>The note text font when the document's footnote style names one; null for the host default.</summary>
+    public string? TextFontFamily { get; init; }
+
+    /// <summary>
+    /// Height of the separator line box above the notes (Word's separator is a paragraph in the document's
+    /// Normal font). Renderers draw the rule inside this band.
+    /// </summary>
+    public double SeparatorHeightDip { get; init; } = DocumentNoteRegionPlanner.DefaultSeparatorHeightDip;
+
+    /// <summary>Vertical gap after each note row (the footnote paragraph's space after).</summary>
+    public double RowGapDip { get; init; } = DocumentNoteRegionPlanner.DefaultRowGapDip;
 }
 
 /// <summary>Whether a footnote fragment begins a region, continues an earlier page, or needs no rule.</summary>
@@ -117,11 +129,13 @@ public static class DocumentNoteRegionPlanner
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(footnoteIds);
 
-        var rows = BuildRows(document, footnoteIds, isFootnote: true, contentWidthDip);
+        var metrics = ResolveFootnoteTextMetrics(document, footnoteIds);
+        var rows = BuildRows(document, footnoteIds, isFootnote: true, contentWidthDip, metrics);
         var height = EstimateRegionHeight(
             rows,
             hasHeading: false,
-            hasSeparator: rows.Count > 0);
+            hasSeparator: rows.Count > 0,
+            metrics);
         return new DocumentNoteRegionPlan(
             DocumentNoteRegionKind.Footnotes,
             Math.Max(1, pageNumber),
@@ -129,11 +143,205 @@ public static class DocumentNoteRegionPlanner
             Heading: null,
             SeparatorXOffsetDip: 0,
             SeparatorWidthDip: Math.Min(FootnoteSeparatorWidthDip, Math.Max(0, contentWidthDip)),
-            TextFontSizePt: NoteTextFontSizePt,
-            LabelFontSizePt: NoteTextFontSizePt * LabelScale,
+            TextFontSizePt: metrics.FontSizePt,
+            LabelFontSizePt: metrics.FontSizePt * LabelScale,
             EstimatedHeightDip: height,
-            Rows: rows);
+            Rows: rows)
+        {
+            TextFontFamily = metrics.FontFamily,
+            SeparatorHeightDip = metrics.SeparatorHeightDip,
+            RowGapDip = metrics.RowGapDip,
+        };
     }
+
+    /// <summary>
+    /// Lays out the footnote bands of consecutive body pages. Each page has the band height its
+    /// pagination reserved and the notes referenced on it; what does not fit in a band continues at the
+    /// top of the next page's band (after a continuation separator), word by word, ahead of that page's
+    /// own notes. Returns one fragment page per input page, using the same metrics as
+    /// <see cref="BuildFootnoteRegion"/>.
+    /// </summary>
+    public static IReadOnlyList<DocumentFootnoteContinuationPagePlan> BuildSequentialFootnoteBands(
+        TextDocument document,
+        IReadOnlyList<(IReadOnlyList<int> FootnoteIds, double BandHeightDip, int PageNumber)> pages,
+        double contentWidthDip)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(pages);
+
+        var result = new List<DocumentFootnoteContinuationPagePlan>(pages.Count);
+        var carried = new List<FootnoteFragmentState>();
+        foreach (var (ids, bandHeightDip, pageNumber) in pages)
+        {
+            var metrics = ResolveFootnoteTextMetrics(document, ids.Count > 0 ? ids : carried.Select(s => s.Row.NoteId).ToList());
+            var charsPerLine = ApproximateCharsPerLine(contentWidthDip, metrics.CharWidthDip);
+            var queue = carried
+                .Concat(BuildRows(document, ids, isFootnote: true, contentWidthDip, metrics)
+                    .Select(row => new FootnoteFragmentState(
+                        row,
+                        row.Text.ReplaceLineEndings(" ").Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList())))
+                .ToList();
+            if (queue.Count == 0)
+            {
+                result.Add(new DocumentFootnoteContinuationPagePlan(pageNumber, DocumentFootnoteSeparatorKind.None, 0, 0, []));
+                continue;
+            }
+
+            var separator = carried.Count > 0
+                ? DocumentFootnoteSeparatorKind.Continuation
+                : DocumentFootnoteSeparatorKind.Initial;
+            // A page with nothing reserved still shows the first line of each note it references.
+            var available = Math.Max(bandHeightDip, metrics.SeparatorHeightDip + metrics.LineHeightDip);
+            var remaining = available - metrics.SeparatorHeightDip;
+            var fragments = new List<DocumentFootnoteContinuationFragment>();
+            var index = 0;
+            while (index < queue.Count && remaining >= metrics.LineHeightDip - 0.5)
+            {
+                var state = queue[index];
+                var maxLines = Math.Max(1, (int)Math.Floor((remaining + 0.5) / metrics.LineHeightDip));
+                var wordCount = state.RemainingWords.Count == 0
+                    ? 0
+                    : WordsThatFit(state.RemainingWords, maxLines * charsPerLine);
+                var text = string.Join(" ", state.RemainingWords.Take(wordCount));
+                state.RemainingWords.RemoveRange(0, wordCount);
+                var lines = Math.Max(1, (int)Math.Ceiling(text.Length / (double)charsPerLine));
+                var height = lines * metrics.LineHeightDip;
+                var endsNote = state.RemainingWords.Count == 0;
+                fragments.Add(new DocumentFootnoteContinuationFragment(
+                    state.Row.NoteId,
+                    state.Row.SequenceIndex,
+                    state.StartsNote ? state.Row.Label : null,
+                    text,
+                    state.StartsNote,
+                    endsNote,
+                    height));
+                state.StartsNote = false;
+                remaining -= height + (endsNote ? metrics.RowGapDip : 0);
+                if (!endsNote)
+                    break;
+                index++;
+            }
+
+            carried = queue.Skip(index).Where(state => state.RemainingWords.Count > 0 || state.StartsNote).ToList();
+            result.Add(new DocumentFootnoteContinuationPagePlan(
+                pageNumber,
+                separator,
+                available,
+                Math.Ceiling(available - remaining),
+                fragments));
+        }
+
+        return result;
+    }
+
+    public const double DefaultSeparatorHeightDip = 8.0;
+    public const double DefaultRowGapDip = 2.0;
+    private const double DefaultLineHeightRatio = 1.25;
+
+    /// <summary>
+    /// The text metrics a page's footnote band is laid out with. Word sets footnotes in the "footnote text"
+    /// paragraph style (10pt single-spaced in its template) below a separator paragraph in the Normal font.
+    /// When the notes resolve an explicit font size through their style chain, the band uses that size, its
+    /// font's natural single line and the paragraph's own space after; otherwise the historical 9pt
+    /// estimate stays in force.
+    /// </summary>
+    private readonly record struct NoteTextMetrics(
+        double FontSizePt,
+        string? FontFamily,
+        double LineHeightDip,
+        double CharWidthDip,
+        double RowGapDip,
+        double SeparatorHeightDip)
+    {
+        public static NoteTextMetrics Default { get; } = new(
+            NoteTextFontSizePt,
+            null,
+            NoteTextFontSizePt * PxPerPoint * DefaultLineHeightRatio,
+            NoteAverageCharacterWidthDip,
+            DefaultRowGapDip,
+            DefaultSeparatorHeightDip);
+    }
+
+    private static NoteTextMetrics ResolveFootnoteTextMetrics(TextDocument document, IReadOnlyList<int> footnoteIds)
+    {
+        foreach (var id in footnoteIds)
+        {
+            if (!document.Footnotes.TryGetValue(id, out var footnote))
+                continue;
+            foreach (var paragraph in footnote.Content)
+            {
+                var textRun = paragraph.Runs
+                    .Where(run => run.FootnoteId is null && !string.IsNullOrWhiteSpace(run.Text))
+                    .OrderByDescending(run => run.Text.Length)
+                    .FirstOrDefault();
+                if (textRun is null)
+                    continue;
+
+                // Only an authored note size (direct or through the note's style chain) replaces the
+                // estimate; the document-wide default body size is not the footnote size.
+                var run = DocumentRunFormattingResolver.Resolve(document, paragraph, textRun);
+                if (run.FontSizePt is not { } sizePt || sizePt <= 0
+                    || (textRun.Formatting.FontSizePt is null && !StyleChainSetsFontSize(document, paragraph.StyleId)))
+                    return NoteTextMetrics.Default;
+
+                var paragraphFormatting = DocumentParagraphFormattingResolver.Resolve(document, paragraph);
+                var multiple = paragraphFormatting.LineRule == LineSpacingRule.Multiple
+                    && paragraphFormatting.LineSpacingIsSet
+                    && paragraphFormatting.LineSpacing > 0
+                        ? paragraphFormatting.LineSpacing
+                        : 1.0;
+                var lineHeightDip = paragraphFormatting.LineRule == LineSpacingRule.Exact
+                    && paragraphFormatting.LineHeightPt > 0
+                        ? paragraphFormatting.LineHeightPt * PxPerPoint
+                        : sizePt * PxPerPoint * NaturalLineRatio(run.FontFamily) * multiple;
+                var rowGapDip = paragraphFormatting.SpaceAfterIsSet
+                    ? Math.Max(0, paragraphFormatting.SpaceAfterPt) * PxPerPoint
+                    : DefaultRowGapDip;
+
+                // Word's separator is its own paragraph in the Normal style's font.
+                var normal = DocumentRunFormattingResolver.Resolve(document, new Paragraph(), RunFormatting.Default);
+                var separatorSizePt = normal.FontSizePt is > 0 and var normalSize ? normalSize : sizePt;
+                var separatorHeightDip = separatorSizePt * PxPerPoint * NaturalLineRatio(normal.FontFamily);
+
+                return new NoteTextMetrics(
+                    sizePt,
+                    run.FontFamily,
+                    lineHeightDip,
+                    sizePt * PxPerPoint * AverageCharacterEm(run.FontFamily),
+                    rowGapDip,
+                    separatorHeightDip);
+            }
+        }
+
+        return NoteTextMetrics.Default;
+    }
+
+    private static bool StyleChainSetsFontSize(TextDocument document, string? styleId)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        while (!string.IsNullOrWhiteSpace(styleId)
+            && seen.Add(styleId)
+            && document.Styles.TryGetValue(styleId, out var style))
+        {
+            if (style.Run.FontSizePt is > 0)
+                return true;
+            styleId = style.BasedOnStyleId;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// A font's single line (ascent + descent + gap) as a multiple of its size, for the common Office
+    /// faces; other faces use the historical 1.25 estimate.
+    /// </summary>
+    private static double NaturalLineRatio(string? fontFamily) => fontFamily?.Trim().ToUpperInvariant() switch
+    {
+        "TIMES NEW ROMAN" or "ARIAL" or "COURIER NEW" or "TAHOMA" or "VERDANA" or "GEORGIA" => 1.15,
+        "CALIBRI" or "CALIBRI LIGHT" => 1.22,
+        "CAMBRIA" => 1.17,
+        "SEGOE UI" => 1.33,
+        _ => DefaultLineHeightRatio,
+    };
 
     /// <summary>
     /// Splits the supplied footnotes into physical-page fragments using the same width and line-height estimate
@@ -553,8 +761,10 @@ public static class DocumentNoteRegionPlanner
         TextDocument document,
         IReadOnlyList<int> ids,
         bool isFootnote,
-        double contentWidthDip)
+        double contentWidthDip,
+        NoteTextMetrics? metrics = null)
     {
+        var textMetrics = metrics ?? NoteTextMetrics.Default;
         var rows = new List<DocumentNoteRegionRow>();
         var options = isFootnote ? document.FootnoteNumbering : document.EndnoteNumbering;
         var sequenceById = ComputeSequenceById(document, isFootnote, ids);
@@ -596,7 +806,7 @@ public static class DocumentNoteRegionPlanner
                 sequence,
                 label,
                 text,
-                EstimateRowHeight(text, contentWidthDip)));
+                EstimateRowHeight(text, contentWidthDip, textMetrics)));
         }
 
         return rows;
@@ -667,34 +877,45 @@ public static class DocumentNoteRegionPlanner
     private static double EstimateRegionHeight(
         IReadOnlyList<DocumentNoteRegionRow> rows,
         bool hasHeading,
-        bool hasSeparator)
+        bool hasSeparator,
+        NoteTextMetrics? metrics = null)
     {
         if (rows.Count == 0)
             return 0;
 
+        var textMetrics = metrics ?? NoteTextMetrics.Default;
         var height = 0.0;
         if (hasHeading)
             height += (NoteTextFontSizePt + 2) * PxPerPoint + 10;
         if (hasSeparator)
-            height += 8;
-        height += rows.Sum(r => r.EstimatedHeightDip + 2);
+            height += textMetrics.SeparatorHeightDip;
+        height += rows.Sum(r => r.EstimatedHeightDip + textMetrics.RowGapDip);
         return Math.Ceiling(height);
     }
 
-    private static double EstimateRowHeight(string text, double contentWidthDip)
+    private static double EstimateRowHeight(string text, double contentWidthDip, NoteTextMetrics metrics)
     {
-        var fontHeight = NoteTextFontSizePt * PxPerPoint * 1.25;
-        var approxCharsPerLine = ApproximateCharsPerLine(contentWidthDip);
+        var approxCharsPerLine = ApproximateCharsPerLine(contentWidthDip, metrics.CharWidthDip);
         var normalized = text.ReplaceLineEndings(" ");
         var lines = Math.Max(1, (int)Math.Ceiling(normalized.Length / (double)approxCharsPerLine));
-        return Math.Ceiling(lines * fontHeight);
+        return metrics.FontFamily is null
+            ? Math.Ceiling(lines * metrics.LineHeightDip)
+            : lines * metrics.LineHeightDip;
     }
 
-    private static int ApproximateCharsPerLine(double contentWidthDip)
+    private static int ApproximateCharsPerLine(double contentWidthDip, double charWidthDip = NoteAverageCharacterWidthDip)
     {
         var usableWidth = Math.Max(80, contentWidthDip - 20);
-        return Math.Max(12, (int)Math.Floor(usableWidth / NoteAverageCharacterWidthDip));
+        return Math.Max(12, (int)Math.Floor(usableWidth / Math.Max(1, charWidthDip)));
     }
+
+    /// <summary>Average advance of running text, as a fraction of the font size.</summary>
+    private static double AverageCharacterEm(string? fontFamily) => fontFamily?.Trim().ToUpperInvariant() switch
+    {
+        "TIMES NEW ROMAN" or "GEORGIA" or "CAMBRIA" => 0.43,
+        "CALIBRI" or "CALIBRI LIGHT" => 0.47,
+        _ => 0.5,
+    };
 
     private static int ApproximateContinuationCharsPerLine(double contentWidthDip)
         // Continuation pages use the same note text column and font as the initial region. Keeping

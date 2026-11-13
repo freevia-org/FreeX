@@ -24,7 +24,9 @@ public sealed class R91_CellEntryFormulaValidationTests
     [Fact]
     public void CreateCell_UnbalancedParenFormula_ThrowsFormulaParseException()
     {
-        var act = () => CellEntryParser.CreateCell("=SUM(A1", Anchor, useR1C1ReferenceStyle: false);
+        // An extra closing parenthesis is genuinely malformed; Excel refuses it. (A closing
+        // parenthesis that is only missing at the end is added instead, as Excel does.)
+        var act = () => CellEntryParser.CreateCell("=SUM(A1))", Anchor, useR1C1ReferenceStyle: false);
 
         act.Should().Throw<FormulaParseException>();
     }
@@ -57,7 +59,7 @@ public sealed class R91_CellEntryFormulaValidationTests
     {
         var (session, sheet, address) = CreateSessionAtA1();
 
-        var result = session.CommitCellText("=SUM(A1");
+        var result = session.CommitCellText("=SUM(A1))");
 
         result.Success.Should().BeFalse(
             "an unbalanced formula must fail the commit, matching Excel's correction-prompt refusal to leave edit mode");

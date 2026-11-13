@@ -18,6 +18,31 @@ public sealed class DocumentParagraphPaginationPlannerTests
     }
 
     [Fact]
+    public void EmptyParagraphWithHiddenMark_CollapsesLikeWord()
+    {
+        // drawing.docx: an empty spacer paragraph between two tables whose mark is w:vanish. Word gives it
+        // no height; laying it out as a normal empty line pushed the document a paragraph behind Word.
+        var document = new TextDocument();
+        var hiddenMark = RunFormatting.Default with { Hidden = true };
+        var spacer = new Paragraph { MarkFormatting = hiddenMark };
+        DocumentParagraphPaginationPlanner.IsCollapsedHiddenMarkParagraph(document, spacer).Should().BeTrue();
+
+        var hiddenTextOnly = new Paragraph { MarkFormatting = hiddenMark };
+        hiddenTextOnly.Runs.Add(new Run("secret", hiddenMark));
+        DocumentParagraphPaginationPlanner.IsCollapsedHiddenMarkParagraph(document, hiddenTextOnly).Should().BeTrue();
+
+        var visibleText = new Paragraph { MarkFormatting = hiddenMark };
+        visibleText.Runs.Add(new Run("shown"));
+        DocumentParagraphPaginationPlanner.IsCollapsedHiddenMarkParagraph(document, visibleText).Should().BeFalse();
+
+        var pageBreak = new Paragraph { MarkFormatting = hiddenMark };
+        pageBreak.Runs.Add(new Run(string.Empty) { IsPageBreak = true });
+        DocumentParagraphPaginationPlanner.IsCollapsedHiddenMarkParagraph(document, pageBreak).Should().BeFalse();
+
+        DocumentParagraphPaginationPlanner.IsCollapsedHiddenMarkParagraph(document, new Paragraph()).Should().BeFalse();
+    }
+
+    [Fact]
     public void ExplicitWidowControlOn_DoesNotKeepOrdinaryParagraphTogether()
     {
         // Widow control guards single lines (MinWidow/MinOrphan lines), not the whole paragraph.

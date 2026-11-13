@@ -109,7 +109,7 @@ public sealed class R118_NameBoxRangeIndexCacheTests
 
             // Prime the cache with a query BEFORE the name exists, at the current revision.
             var before = harness.Window.FormatNameBoxSelectionText(range);
-            before.Should().Be("B2:C3");
+            before.Should().Be("B2", "an unnamed selection shows its active cell, as in Excel");
 
             // Define the name through the real command path (mirrors DefineNamedRangeCommand usage
             // in MainWindow.Editing.cs / NamedRangeDialog.xaml.cs), which bumps the navigation-cache

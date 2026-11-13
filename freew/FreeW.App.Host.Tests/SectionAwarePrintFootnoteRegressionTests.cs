@@ -100,9 +100,11 @@ public sealed class SectionAwarePrintFootnoteRegressionTests
 
         var paginator = PrintLayout.BuildPaginator(editor);
 
-        paginator.Should().NotBeOfType<SectionAwareDocumentPaginator>(
-            "two sections that share one page geometry, header/footer, and line-numbering must stay on " +
-            "the ordinary FlowDocument print path");
+        // Same-geometry sections need no section-aware geometry, but a footnoted single-column document
+        // prints through the per-page footnote reserve (PrintLayout.UsesPerPageFootnoteReserve), which is
+        // the section-aware engine; either way the note text must print.
+        paginator.Should().BeOfType<SectionAwareDocumentPaginator>(
+            "a footnoted single-column document reserves each page's own notes the way Word does");
 
         paginator.ComputePageCount();
         var page = paginator.GetPage(0);

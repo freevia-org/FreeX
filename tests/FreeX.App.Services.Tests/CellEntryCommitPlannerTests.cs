@@ -43,7 +43,7 @@ public sealed class CellEntryCommitPlannerTests
     public void BuildSelection_ReturnsOneFailureAndNoPartialEditsForMalformedFormula()
     {
         var plan = CellEntryCommitPlanner.BuildSelection(
-            "=SUM(A1",
+            "=SUM(A1))",
             [new CellAddress(SheetId, 0, 0), new CellAddress(SheetId, 0, 1)],
             false);
 
