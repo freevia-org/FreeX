@@ -2355,7 +2355,7 @@ public sealed partial class MainWindow : Window
     // Open the Header/Footer pane for the named slot, loading its Paragraphs into the sub-editor.
     // Preserves run formatting (bold/italic/colour/field runs) that the old plain-text dialog lost.
     //
-    // Phase 4 (DEBUG): when PagedEdit is active, route to the in-page header/footer region instead
+    // Phase 4: when PagedEdit is active, route to the in-page header/footer region instead
     // of opening the docked pane, so the in-page sub-editor gets focus. The docked pane remains
     // for the non-paged modes.
     private void OpenHeaderFooterPane(string slotName) =>
