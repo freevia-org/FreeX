@@ -173,7 +173,8 @@ public sealed partial class MainWindow
             // header/footer now); then the region being edited gets the caret back.
             _editor.ApplyPageSettings(_ => { });
             MarkDirtyOutsideBodyUndo();
-            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, new Action(() =>
+            // Queued after the panel's own rebuild of the command (same priority, first in first out).
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() =>
             {
                 if (_pagedEditMode && ReferenceEquals(_pagedEditPanel, pages))
                     pages.FocusSectionHeaderFooter(region.SectionIndex, region.IsHeader);

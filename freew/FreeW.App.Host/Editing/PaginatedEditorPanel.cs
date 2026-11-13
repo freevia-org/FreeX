@@ -4517,6 +4517,9 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
     }
 
     /// <summary>The page facts a body page box is built from; equal keys and blocks mean the box can stay.</summary>
+    private static int OwnerKey(object? owner) =>
+        owner is null ? 0 : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(owner);
+
     private static string BoxKey(
         int physicalPageIndex,
         HeaderFooterPageSectionPlan pageSection,
@@ -4549,6 +4552,10 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
             slots.HeaderSlot,
             slots.Footer is null,
             slots.FooterSlot,
+            // Which section owns each slot: unlinking a section (or linking it again) leaves the text the
+            // page shows as it was, but the page's edits must now land in another section's header/footer.
+            OwnerKey(ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots.HeaderSlot)),
+            OwnerKey(ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots.FooterSlot)),
             pageNumberText,
             totalBoxCount,
             sectionPageCount,
