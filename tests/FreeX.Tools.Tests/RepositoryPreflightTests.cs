@@ -120,7 +120,9 @@ public sealed class RepositoryPreflightTests
 
         var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
             "Test-RepositoryPreflight.ps1",
-            "-Mode Static -CheckTimeoutSeconds 2 " +
+            // Generous enough for a loaded CI runner to start pwsh for the passing checks and the
+            // hanging one's first line; only the hanging check should ever reach the limit.
+            "-Mode Static -CheckTimeoutSeconds 10 " +
             $"-JsonFilesScriptPath \"{passingScript}\" " +
             $"-XmlFilesScriptPath \"{hangingScript}\" " +
             $"-GitHubWorkflowsScriptPath \"{passingScript}\" " +
@@ -134,7 +136,7 @@ public sealed class RepositoryPreflightTests
             $"-ConflictMarkersScriptPath \"{passingScript}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("XML files preflight timed out after 2 second(s) on attempt 1 of 2");
+        result.CombinedOutput.Should().Contain("XML files preflight timed out after 10 second(s) on attempt 1 of 2");
         result.CombinedOutput.Should().Contain("Retrying once.");
         result.CombinedOutput.Should().Contain("attempt 2 of 2");
         result.CombinedOutput.Should().Contain("Synthetic preflight started.");
