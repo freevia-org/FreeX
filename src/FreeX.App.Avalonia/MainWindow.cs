@@ -8536,6 +8536,45 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return true;
     }
 
+    // Excel: double-clicking an edge of the selection's border jumps to the edge of the data in that
+    // direction (Ctrl+Arrow); Shift+double-click extends the selection there. Mirrors WPF's
+    // MainWindow.OnSelectionBorderDoubleClicked.
+    private bool TryJumpFromSelectionBorder(PointerEventArgs args)
+    {
+        if (!EnableFillHandleAndCellDragAndDrop ||
+            IsPointerOnAutofillHandle(args) ||
+            _activeSelectionOutlineVisual is not { } outline ||
+            outline.Bounds.Width <= 0 ||
+            outline.Bounds.Height <= 0)
+        {
+            return false;
+        }
+
+        var pos = args.GetPosition(outline);
+        var zoomFactor = GetActiveZoomFactor();
+        var edge = GridSelectionMovePlanner.HitBorderEdge(
+            new GridSelectionLayout(
+                new GridRect(0, 0, outline.Bounds.Width, outline.Bounds.Height),
+                _activeSelectionHasTopEdge,
+                _activeSelectionHasLeftEdge,
+                _activeSelectionHasBottomEdge,
+                _activeSelectionHasRightEdge),
+            _session.SelectedRanges.Count > 1 ? _session.SelectedRanges : null,
+            new GridPoint(pos.X, pos.Y),
+            handleSize: Math.Max(AutofillHandleSize, AutofillHandleSize * zoomFactor),
+            handleHitPadding: Math.Max(AutofillHandleHitPadding, AutofillHandleHitPadding * zoomFactor));
+        if (edge == GridSelectionBorderEdge.None)
+            return false;
+
+        var extend = args.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        var current = extend && _selectionExtensionCursor is { } cursor ? cursor : _session.ActiveCell;
+        var target = GridSelectionMovePlanner.FindBorderJumpTarget(_session.ActiveSheet, current, edge);
+        MoveOrExtendActiveCellTo(target, extend);
+        ClearSelectedDrawingObject();
+        RefreshShell(UiText.Get("MainLoc_Ready"));
+        return true;
+    }
+
     private bool IsPointerOnSelectionMoveBorder(PointerEventArgs args)
     {
         if (!EnableFillHandleAndCellDragAndDrop)
@@ -9476,6 +9515,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 var referenceLength = _formulaRangeEditingSession.ReferenceSpan?.Length;
                 BeginCellSelectionDrag(args, border, address);
                 TrackFormulaPointDragAnchor(address, referenceStart, referenceLength);
+                args.Handled = true;
+                return;
+            }
+
+            // Excel: double-clicking the selection's border jumps to the edge of the data that way.
+            if (!IsBorderDrawModeActive && args.ClickCount >= 2 && TryJumpFromSelectionBorder(args))
+            {
                 args.Handled = true;
                 return;
             }

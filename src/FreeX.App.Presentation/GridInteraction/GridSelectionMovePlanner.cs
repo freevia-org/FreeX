@@ -68,6 +68,69 @@ public static class GridSelectionMovePlanner
             (visible.HasRightEdge && insideVerticalSpan && IsNear(pointer.X, rect.Right, borderHitThickness));
     }
 
+    /// <summary>
+    /// Which edge of the selection's border the pointer is on (Excel: double-clicking it jumps to the
+    /// edge of the data that way, like Ctrl+Arrow), or <see cref="GridSelectionBorderEdge.None"/>.
+    /// </summary>
+    public static GridSelectionBorderEdge HitBorderEdge(
+        ViewportModel? viewport,
+        GridRange? selectedRange,
+        IReadOnlyList<GridRange>? selectedRanges,
+        GridPoint pointer,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double borderHitThickness = 4,
+        double metricScale = 1)
+    {
+        if (viewport is null || selectedRange is not { } range)
+            return GridSelectionBorderEdge.None;
+
+        var layout = GridSelectionLayoutPlanner.CalculateVisibleSelectionLayout(
+            viewport,
+            range,
+            rowHeaderWidth,
+            columnHeaderHeight,
+            metricScale);
+        return HitBorderEdge(layout, selectedRanges, pointer, borderHitThickness);
+    }
+
+    /// <summary>The same as above for a host that already has the selection's visible layout.</summary>
+    public static GridSelectionBorderEdge HitBorderEdge(
+        GridSelectionLayout? layout,
+        IReadOnlyList<GridRange>? selectedRanges,
+        GridPoint pointer,
+        double borderHitThickness = 4,
+        double handleSize = 6,
+        double handleHitPadding = 3)
+    {
+        if (!IsOnMoveBorder(layout, selectedRanges, pointer, borderHitThickness, handleSize, handleHitPadding) ||
+            layout is not { } visible)
+        {
+            return GridSelectionBorderEdge.None;
+        }
+
+        // The nearest edge wins where two meet at a corner.
+        var rect = visible.Rect;
+        var candidates = new List<(GridSelectionBorderEdge Edge, double Distance)>(4);
+        if (visible.HasTopEdge) candidates.Add((GridSelectionBorderEdge.Top, Math.Abs(pointer.Y - rect.Top)));
+        if (visible.HasBottomEdge) candidates.Add((GridSelectionBorderEdge.Bottom, Math.Abs(pointer.Y - rect.Bottom)));
+        if (visible.HasLeftEdge) candidates.Add((GridSelectionBorderEdge.Left, Math.Abs(pointer.X - rect.Left)));
+        if (visible.HasRightEdge) candidates.Add((GridSelectionBorderEdge.Right, Math.Abs(pointer.X - rect.Right)));
+        return candidates.Count == 0
+            ? GridSelectionBorderEdge.None
+            : candidates.MinBy(candidate => candidate.Distance).Edge;
+    }
+
+    /// <summary>The cell a border double-click jumps to from <paramref name="current"/>: Ctrl+Arrow's data boundary.</summary>
+    public static CellAddress FindBorderJumpTarget(Sheet? sheet, CellAddress current, GridSelectionBorderEdge edge) => edge switch
+    {
+        GridSelectionBorderEdge.Top => ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, -1),
+        GridSelectionBorderEdge.Bottom => ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, 1),
+        GridSelectionBorderEdge.Left => ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(sheet, current, -1),
+        GridSelectionBorderEdge.Right => ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(sheet, current, 1),
+        _ => current,
+    };
+
     public static CellAddress ClampDragStartCell(GridRange source, CellAddress dragStartCell)
     {
         var row = Math.Min(Math.Max(dragStartCell.Row, source.Start.Row), source.End.Row);
@@ -104,4 +167,14 @@ public static class GridSelectionMovePlanner
 
     private static bool IsNear(double value, double target, double tolerance) =>
         Math.Abs(value - target) <= tolerance;
+}
+
+/// <summary>An edge of the selection's border (see <see cref="GridSelectionMovePlanner.HitBorderEdge"/>).</summary>
+public enum GridSelectionBorderEdge
+{
+    None,
+    Top,
+    Bottom,
+    Left,
+    Right,
 }
