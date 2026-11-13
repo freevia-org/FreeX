@@ -264,6 +264,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         new("Segoe UI, Arial, Helvetica Neue, Helvetica, sans-serif");
     // Subtotal is a compact WPF data dialog: its inputs and buttons are shorter than the generic
     // 24px compact-dialog family. Keep the shared chrome and only override the measured WPF metrics.
+    private const double SubtotalWpfPushButtonHeight = 20;
     private static readonly AvaloniaCompactDialogChromeStyle SubtotalDialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
@@ -22636,6 +22637,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             },
         };
         Grid.SetColumn(actionButtons, 2);
+        // WPF CreateSubtotalButtonRow uses default push buttons (TextToColumnsDialog.CreateButtonRow:
+        // no Height), which are 20 px at the 12 px dialog font; the row is as tall as its buttons.
+        foreach (var subtotalButton in new[] { okButton, removeAllButton, cancelButton })
+        {
+            subtotalButton.Height = SubtotalWpfPushButtonHeight;
+            subtotalButton.MinHeight = SubtotalWpfPushButtonHeight;
+            subtotalButton.MaxHeight = SubtotalWpfPushButtonHeight;
+        }
+        buttonRow.Height = SubtotalWpfPushButtonHeight;
 
         // WPF SubtotalDialog: new GroupBox { Content = _subtotalColumnList } with no header. The WPF
         // frame is a 99px rounded rectangle 1px inside the 12px root margin, with the rows inset 14px

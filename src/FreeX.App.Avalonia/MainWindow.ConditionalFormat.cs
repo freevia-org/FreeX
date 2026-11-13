@@ -390,15 +390,17 @@ public sealed partial class MainWindow
             control.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
             switch (control)
             {
+                // ConditionalFormatDialog.xaml: default WPF combo boxes (22 px) and text boxes (18 px)
+                // at the 12 px dialog font.
                 case ComboBox combo:
-                    combo.Height = 21;
-                    combo.MinHeight = 21;
-                    combo.MaxHeight = 21;
+                    combo.Height = 22;
+                    combo.MinHeight = 22;
+                    combo.MaxHeight = 22;
                     break;
                 case TextBox text:
-                    text.Height = 20;
-                    text.MinHeight = 20;
-                    text.MaxHeight = 20;
+                    text.Height = 18;
+                    text.MinHeight = 18;
+                    text.MaxHeight = 18;
                     break;
             }
         }
@@ -722,6 +724,16 @@ public sealed partial class MainWindow
                 },
             },
         };
+
+        // ConditionalFormatDialog.xaml: the first label sits 18 px under the header and each label
+        // 12 px under the control above it (a 10 px gap between fields once the label's line box
+        // is counted); the Format... button sits 12 px under the format box.
+        if (descriptionEditor.Content is StackPanel descriptionFields)
+        {
+            descriptionFields.Margin = new Thickness(0, 18, 0, 0);
+            descriptionFields.Spacing = 10;
+        }
+        highlightRow.Spacing = 12;
 
         var rightColumn = new DockPanel
         {

@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -137,7 +138,20 @@ public sealed partial class MainWindow
         };
 
         var headerRow = CreateErrorCheckingHeaderRow();
-        DockPanel.SetDock(headerRow, Dock.Top);
+        var headerStrip = new Border { ClipToBounds = true, Child = headerRow };
+        DockPanel.SetDock(headerStrip, Dock.Top);
+
+        // The fixed-width columns are wider than the list. Like the WPF ListView (ScrollViewer
+        // default Auto), the rows scroll horizontally under a classic bar, and the column header
+        // follows the horizontal offset while staying above the rows.
+        var rowsScroller = new ScrollViewer
+        {
+            Content = rowsPanel,
+            HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+        };
+        rowsScroller.ScrollChanged += (_, _) =>
+            headerRow.RenderTransform = new TranslateTransform(-rowsScroller.Offset.X, 0);
 
         var listPanel = new DockPanel();
         listPanel.Children.Add(CreateErrorCheckingLabel());
@@ -146,24 +160,16 @@ public sealed partial class MainWindow
             BorderBrush = Brush(171, 173, 179),
             BorderThickness = new Thickness(1),
             Background = Brushes.White,
-            // The fixed-width columns are wider than the list; like the WPF ListView, the header and
-            // rows are clipped at the list frame instead of drawing over the Error help group.
+            // The header and rows are clipped at the list frame instead of drawing over the Error
+            // help group.
             ClipToBounds = true,
             Child = new DockPanel
             {
                 ClipToBounds = true,
                 Children =
                 {
-                    headerRow,
-                    new ScrollViewer
-                    {
-                        Content = rowsPanel,
-                        // Disabled (not Auto) horizontal scrolling: the columns already truncate at the
-                        // right edge, and Windows shows no horizontal scrollbar here — Auto rendered a
-                        // stray black scrollbar bar under the issues list.
-                        HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
-                        VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-                    },
+                    headerStrip,
+                    rowsScroller,
                 },
             },
         });
@@ -370,6 +376,9 @@ public sealed partial class MainWindow
                     ? (active ? DialogWindowDefaults.SelectedRowFrame : DialogWindowDefaults.InactiveRowFrame)
                     : Brushes.Transparent,
                 BorderThickness = new Thickness(1),
+                // WPF ListViewItem rows start 1 px inside the list frame, and their GridView columns
+                // start where the header's do (3 px inside the frame).
+                Margin = new Thickness(ErrorCheckingWpfRowInset, 0, 0, 0),
                 Child = CreateIssueRowGrid(issue),
             };
             row.PointerPressed += (_, args) =>
@@ -390,15 +399,26 @@ public sealed partial class MainWindow
     // column header row is 24px.
     private const double ErrorCheckingWpfRowHeight = 22;
     private const double ErrorCheckingWpfHeaderHeight = 24;
+    // WPF Aero2 GridViewColumnHeader at the 12 px dialog font: a 20 px white-to-grey face over a
+    // 1 px #D5D5D5 line, each column closed by a 1 px grey gripper line.
+    private const double ErrorCheckingWpfHeaderFaceHeight = 20;
+    // The GridView columns start 3 px inside the list frame; a row frame starts 1 px inside it.
+    private const double ErrorCheckingWpfColumnInset = 3;
+    private const double ErrorCheckingWpfRowInset = 1;
+    // WPF ListView item text renders in the list's dark navy item ink.
+    private static readonly IBrush ErrorCheckingWpfRowInk = new ImmutableSolidColorBrush(Color.FromRgb(0x04, 0x22, 0x71));
 
     private static Grid CreateIssueRowGrid(FormulaErrorIssue issue)
     {
         var row = CreateErrorCheckingColumnGrid(minHeight: 0);
+        row.Margin = new Thickness(ErrorCheckingWpfColumnInset - ErrorCheckingWpfRowInset - 1, 0, 0, 0);
         AddErrorCheckingCell(row, issue.SheetName, 0);
         AddErrorCheckingCell(row, issue.Cell, 1);
         AddErrorCheckingCell(row, issue.ErrorCode, 2);
         AddErrorCheckingCell(row, issue.FormulaText ?? string.Empty, 3);
         AddErrorCheckingCell(row, issue.Description, 4);
+        foreach (var cell in row.Children.OfType<TextBlock>())
+            cell.Foreground = ErrorCheckingWpfRowInk;
         return row;
     }
 
@@ -413,6 +433,55 @@ public sealed partial class MainWindow
         AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.IssueColumnHeaderKey), 2, isHeader: true);
         AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.FormulaColumnHeaderKey), 3, isHeader: true);
         AddErrorCheckingCell(row, UiText.Get(ErrorCheckingDialogPlanner.DescriptionColumnHeaderKey), 4, isHeader: true);
+
+        // The Aero2 header face: 20 px of white fading to a faint grey, a #D5D5D5 bottom line, and
+        // a gripper line closing each column (the first pixel of the next column).
+        row.MinHeight = ErrorCheckingWpfHeaderFaceHeight + 1;
+        row.Height = ErrorCheckingWpfHeaderFaceHeight + 1;
+        row.Margin = new Thickness(ErrorCheckingWpfColumnInset, 0, 0, 0);
+        row.Background = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+            GradientStops =
+            {
+                new GradientStop(Color.FromRgb(0xFF, 0xFF, 0xFF), 0),
+                new GradientStop(Color.FromRgb(0xFF, 0xFF, 0xFF), 0.4),
+                new GradientStop(Color.FromRgb(0xF7, 0xF8, 0xF9), 1),
+            },
+        };
+        foreach (var cell in row.Children.OfType<TextBlock>())
+            cell.Margin = new Thickness(4, 0);
+        var bottomLine = new Border
+        {
+            Height = 1,
+            VerticalAlignment = AvaloniaVerticalAlignment.Bottom,
+            Background = new ImmutableSolidColorBrush(Color.FromRgb(0xD5, 0xD5, 0xD5)),
+        };
+        Grid.SetColumnSpan(bottomLine, 5);
+        row.Children.Add(bottomLine);
+        for (var column = 0; column < 5; column++)
+        {
+            var gripper = new Border
+            {
+                Width = 1,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+                Margin = new Thickness(0, 2, -1, 1),
+                Background = new LinearGradientBrush
+                {
+                    StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                    EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+                    GradientStops =
+                    {
+                        new GradientStop(Color.FromRgb(0xF0, 0xF0, 0xF0), 0),
+                        new GradientStop(Color.FromRgb(0xD7, 0xD7, 0xD7), 1),
+                    },
+                },
+            };
+            Grid.SetColumn(gripper, column);
+            row.Children.Add(gripper);
+        }
+
         return row;
     }
 

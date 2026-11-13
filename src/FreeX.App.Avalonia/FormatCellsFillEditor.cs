@@ -129,7 +129,8 @@ internal sealed class FormatCellsFillEditor
             Height = 22,
             Margin = new Thickness(0, 4, 60, 0),
             Background = Brushes.White,
-            BorderBrush = Brushes.Gray,
+            // WPF frames the strip lighter than the swatches: #B6B6B6 at the top to #ACACAC below.
+            BorderBrush = BackgroundPreviewFrame,
             BorderThickness = new Thickness(1),
         };
         AutomationProperties.SetAutomationId(_backgroundPreview, "FormatCellsFillBackgroundPreview");
@@ -484,13 +485,37 @@ internal sealed class FormatCellsFillEditor
         return more;
     }
 
+    private static readonly IBrush PreviewFrameTopBottom = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0));
+    private static readonly IBrush PreviewFrameSides = GradientBrush(
+        new RelativePoint(1, 0, RelativeUnit.Relative),
+        Color.FromRgb(0xC4, 0xC4, 0xC4),
+        Color.FromRgb(0xDA, 0xDA, 0xDA));
+    private static readonly IBrush BackgroundPreviewFrame = GradientBrush(
+        new RelativePoint(0, 1, RelativeUnit.Relative),
+        Color.FromRgb(0xB6, 0xB6, 0xB6),
+        Color.FromRgb(0xAC, 0xAC, 0xAC));
+
+    private static IBrush GradientBrush(RelativePoint end, Color from, Color to) =>
+        new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = end,
+            GradientStops =
+            {
+                new GradientStop(from, 0),
+                new GradientStop(to, 1),
+            },
+        };
+
     private Border CreatePreview(string automationId, string label, bool large)
     {
         var surface = new Border
         {
             Background = Brushes.White,
-            BorderBrush = Brushes.Gray,
-            BorderThickness = new Thickness(1),
+            // WPF draws the samples in an etched frame: #A0A0A0 along the top and bottom, a lighter
+            // #C4C4C4 left and #DADADA right edge (the side lines are added inside the content).
+            BorderBrush = PreviewFrameTopBottom,
+            BorderThickness = new Thickness(0, 1, 0, 1),
             // WPF: 146px sample and 62px pattern sample, both as wide as their grid column.
             Height = large ? 146 : 62,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
@@ -507,6 +532,15 @@ internal sealed class FormatCellsFillEditor
             IsHitTestVisible = false,
         };
         content.Children.Add(text);
+        // Index 3, after the fill, pattern and caption that SetPreview addresses by index: the
+        // frame's side lines, reaching out through the padding to the surface edge.
+        content.Children.Add(new Border
+        {
+            Margin = new Thickness(-8),
+            BorderThickness = new Thickness(1, 0, 1, 0),
+            BorderBrush = PreviewFrameSides,
+            IsHitTestVisible = false,
+        });
         surface.Child = content;
         AutomationProperties.SetAutomationId(surface, automationId);
         return surface;

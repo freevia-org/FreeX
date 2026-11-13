@@ -21,6 +21,9 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static readonly IBrush AccessibilityCheckerStatusInk =
+        new global::Avalonia.Media.Immutable.ImmutableSolidColorBrush(Color.FromRgb(0x4B, 0x55, 0x63));
+
     private async Task ShowAccessibilityCheckerDialogAsync()
     {
         if (_isOpening || _isSaving)
@@ -84,6 +87,8 @@ public sealed partial class MainWindow
             TextWrapping = TextWrapping.Wrap,
             // WPF: _statusText.Margin = (0, 8, 0, 0), docked above the 12px-offset button row.
             Margin = new Thickness(0, 8, 0, 0),
+            // The WPF status line renders in the dialog's secondary grey ink, not the body black.
+            Foreground = AccessibilityCheckerStatusInk,
         };
 
         var closeButton = new Button
@@ -225,6 +230,7 @@ public sealed partial class MainWindow
             Text = plan.StatusText,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 8, 0, 0),
+            Foreground = AccessibilityCheckerStatusInk,
         };
 
         var goToButton = new Button

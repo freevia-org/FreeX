@@ -383,6 +383,8 @@ internal static class DialogWindowDefaults
     private static readonly IBrush GroupBoxFrame = new ImmutableSolidColorBrush(Color.FromRgb(0xD5, 0xDF, 0xE5));
     private static readonly IBrush FocusedTextBoxFrame = new ImmutableSolidColorBrush(
         Color.Parse(global::Free.Shared.Shell.CompactDialogVisualTokens.FocusedInputBorderHex));
+    private static readonly IBrush UnchromedTextBoxFrame = new ImmutableSolidColorBrush(
+        Color.Parse(global::Free.Shared.Shell.CompactDialogVisualTokens.FieldBorderHex));
 
     // WPF's standard push button: a 16 px caption line at the 12 px dialog font, 1 px padding and a
     // 1 px frame. Replaces the shared compact token (26) wherever a dialog's chrome style keeps it.
@@ -854,7 +856,9 @@ internal static class DialogWindowDefaults
     /// </summary>
     private static void InstallWpfTabContentFocusTransfer(Window dialog)
     {
-        global::Avalonia.Input.IInputElement? lastFocused = null;
+        // A dialog may take its initial focus before it is given its owner (and so before this
+        // runs), so the focus it already holds is where the tracking starts.
+        global::Avalonia.Input.IInputElement? lastFocused = dialog.FocusManager?.GetFocusedElement();
         dialog.AddHandler(
             global::Avalonia.Input.InputElement.GotFocusEvent,
             (_, _) => lastFocused = dialog.FocusManager?.GetFocusedElement() ?? lastFocused,
@@ -983,6 +987,11 @@ internal static class DialogWindowDefaults
         // A text box nothing chromed draws Fluent's 2 px accent frame on focus; WPF draws 1 px of
         // light blue.
         resources["TextControlBorderBrushFocused"] = FocusedTextBoxFrame;
+        // A text box nothing chromed rests in Fluent's BaseMedium frame (#666666) and darkens under
+        // the pointer; WPF frames it in the light field grey (the shared #B7BCC2 field border) and
+        // in light blue under the pointer.
+        resources["TextControlBorderBrush"] = UnchromedTextBoxFrame;
+        resources["TextControlBorderBrushPointerOver"] = ComboBoxHoverFrame;
         resources["TextControlBorderThemeThicknessFocused"] = new Thickness(1);
         // Fluent's list items paint the selection from these keys (a translucent accent).
         resources["ListBoxItemBackgroundSelected"] = SelectedRowFace;

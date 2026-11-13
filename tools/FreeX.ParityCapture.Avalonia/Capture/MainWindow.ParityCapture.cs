@@ -1009,6 +1009,9 @@ public sealed partial class MainWindow
                 _session.DisplayName,
                 NativeWorkbookExtension));
 
+    private const double WorkbookFileDialogWpfFileNameBoxHeight = 25;
+    private const double WorkbookFileDialogWpfFileTypeBoxHeight = 26;
+
     private async Task ShowWorkbookFileDialogParitySurfaceAsync(WorkbookFileDialogSurfacePlan plan)
     {
         var dialog = new Window
@@ -1072,6 +1075,10 @@ public sealed partial class MainWindow
             SelectedIndex = 0,
         };
         AutomationProperties.SetAutomationId(fileTypeBox, WorkbookFileDialogSurfacePlanner.FileTypeBoxAutomationId);
+        // The WPF capture measures the file-name box at 25 px and the file-type drop-down at 26 px
+        // (its 12 px text plus the WPF TextBox / ComboBox padding), not the 22 px default height.
+        fileNameBox.Height = fileNameBox.MinHeight = WorkbookFileDialogWpfFileNameBoxHeight;
+        fileTypeBox.Height = fileTypeBox.MinHeight = WorkbookFileDialogWpfFileTypeBoxHeight;
 
         var form = new AvaloniaGrid
         {
@@ -2408,7 +2415,9 @@ public sealed partial class MainWindow
         try
         {
             // Fire-and-forget: schedule the modal opener after this method starts polling for its owned window.
-            openerTask = RunParityModalOpenerAsync(opener, suppressInspectionAutoClose: !render);
+            // The capture closes the dialog itself once it has rendered (or recorded), so an inspection
+            // route must not close it first: the settle pass below runs the posted auto-close otherwise.
+            openerTask = RunParityModalOpenerAsync(opener, suppressInspectionAutoClose: true);
         }
         catch (Exception ex)
         {
@@ -2441,6 +2450,7 @@ public sealed partial class MainWindow
                 return result;
             }
 
+            await SettleParityDialogPostedWorkAsync(dialog);
             if (TryGetFixedModalCaptureSize(surfaceId, out var fixedWidth, out var fixedHeight))
             {
                 dialog.SizeToContent = SizeToContent.Manual;
@@ -2556,7 +2566,8 @@ public sealed partial class MainWindow
         Task openerTask;
         try
         {
-            openerTask = RunParityModalOpenerAsync(opener, suppressInspectionAutoClose: !render);
+            // The capture closes the dialog itself (see CaptureModalSurfaceAsync).
+            openerTask = RunParityModalOpenerAsync(opener, suppressInspectionAutoClose: true);
         }
         catch (Exception ex)
         {
@@ -2673,8 +2684,27 @@ public sealed partial class MainWindow
         }
     }
 
+    /// <summary>
+    /// A dialog finishes its chrome in work it posts at Background priority once it has loaded (the
+    /// FreeX combo-box chrome, focus moved after open, tab-content focus transfer). The capture
+    /// otherwise rendered as soon as the window reported bounds, which raced that work: a capture
+    /// could show the unthemed Fluent combo or text box. Draining the Background queue (twice, as a
+    /// posted step may post another) renders the dialog as the user sees it once it has settled.
+    /// </summary>
+    private static async Task SettleParityDialogPostedWorkAsync(Window dialog)
+    {
+        const int settlePasses = 2;
+        for (var pass = 0; pass < settlePasses; pass++)
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+            try { dialog.UpdateLayout(); } catch { /* best-effort */ }
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+        }
+    }
+
     private static async Task WaitForParityDialogLayoutAsync(Window dialog)
     {
+        await SettleParityDialogPostedWorkAsync(dialog);
         const int resizePollCount = 10;
         for (var attempt = 0; attempt < resizePollCount; attempt++)
         {
