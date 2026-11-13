@@ -770,6 +770,7 @@ public partial class MainWindow
         RefreshInlineEditorPosition();
         RefreshErrorSmartTag();
         RefreshPasteOptionsButton();
+        RefreshInsertOptionsButton();
         UpdateChartsheetPresentation(sheet);
     }
 

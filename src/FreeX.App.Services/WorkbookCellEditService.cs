@@ -24,6 +24,9 @@ public sealed class WorkbookCellEditService
     public bool CanRedo(WorkbookId workbookId) =>
         _commandBus.CanRedo(workbookId);
 
+    public IWorkbookCommand? PeekUndoCommand(WorkbookId workbookId) =>
+        _commandBus is CommandBus bus && bus.TryPeekUndoCommand(workbookId, out var command) ? command : null;
+
     public IReadOnlyList<CommandHistoryEntry> GetUndoHistory(WorkbookId workbookId, int maxCount) =>
         _commandBus is ICommandHistoryProvider historyProvider
             ? historyProvider.GetUndoHistory(workbookId, maxCount)

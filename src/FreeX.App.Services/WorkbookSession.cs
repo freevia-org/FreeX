@@ -855,6 +855,9 @@ public sealed partial class WorkbookSession : IDisposable
     public IReadOnlyList<CommandHistoryEntry> GetUndoHistory(int maxCount) =>
         _cellEditService.GetUndoHistory(Workbook.Id, maxCount);
 
+    /// <summary>The command the next Undo would revert, or null.</summary>
+    public IWorkbookCommand? PeekUndoCommand() => _cellEditService.PeekUndoCommand(Workbook.Id);
+
     /// <summary>Entries on the undo stack; grows when a command runs or is redone.</summary>
     public int UndoStackDepth => _cellEditService.GetUndoStackDepth(Workbook.Id);
 

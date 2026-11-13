@@ -60,6 +60,14 @@ public sealed partial class WorkbookSession
         return ExecuteCommandPreservingSelection(command);
     }
 
+    /// <summary>Excel's Insert Options choice applied to rows or columns that were just inserted.</summary>
+    public WorkbookCellEditResult FormatInsertedBand(InsertedBand band, InsertedBandFormat format)
+    {
+        ArgumentNullException.ThrowIfNull(band);
+        return ExecuteCommandPreservingSelection(
+            new InsertedBandFormatCommand(band.SheetId, band.Rows, band.Start, band.Count, format));
+    }
+
     private static int CompareAddresses(CellAddress left, CellAddress right) =>
         left.Row != right.Row ? left.Row.CompareTo(right.Row) : left.Col.CompareTo(right.Col);
 }
