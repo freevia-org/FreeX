@@ -2387,23 +2387,67 @@ public sealed partial class MainWindow
         }
     }
 
-    private static ParitySurfaceResult CaptureBackstageSurface(
+    private ParitySurfaceResult CaptureBackstageSurface(
         string outputDirectory,
         FreeXBackstageCaptureSurfacePlan capture)
     {
         var pngName = capture.PngFileName;
         try
         {
-            RenderVisualToPng(
-                CreateParityCapturedBackstageSurface(capture.SurfaceId),
-                (int)capture.Width,
-                (int)capture.Height,
-                Path.Combine(outputDirectory, pngName));
+            // Account is a native dialog in the shipping shell (a message box on WPF), so both hosts render a
+            // capture-only Account pane for it. Every other surface renders the REAL shipping Backstage
+            // overlay (rail, pane factories, metrics) so the comparison covers what users actually see.
+            if (capture.UsesCaptureOnlyAccountPane)
+            {
+                RenderVisualToPng(
+                    CreateParityCapturedBackstageSurface(capture.SurfaceId),
+                    (int)capture.Width,
+                    (int)capture.Height,
+                    Path.Combine(outputDirectory, pngName));
+                return ParityCaptureOutputGuard.ResultForPng(capture.SurfaceId, ParitySurfaceKind.Backstage, outputDirectory, pngName);
+            }
+
+            var pane = capture.Pane switch
+            {
+                FreeXBackstageCapturePane.Info => FreeXBackstagePaneId.Info,
+                FreeXBackstageCapturePane.Print => FreeXBackstagePaneId.Print,
+                _ => FreeXBackstagePaneId.Home,
+            };
+            try
+            {
+                ShowBackstageOverlay();
+                TryActivateBackstagePane(pane);
+                LayoutWindow();
+                if (!string.IsNullOrWhiteSpace(capture.WpfFocusEntryId))
+                    FocusParityBackstageEntry(capture.WpfFocusEntryId);
+                LayoutWindow();
+                RenderWindowWithCapturedTitleBarToPng(this, (int)capture.Width, (int)capture.Height, Path.Combine(outputDirectory, pngName));
+            }
+            finally
+            {
+                HideBackstageOverlay();
+                LayoutWindow();
+            }
+
             return ParityCaptureOutputGuard.ResultForPng(capture.SurfaceId, ParitySurfaceKind.Backstage, outputDirectory, pngName);
         }
         catch (Exception ex)
         {
             return new ParitySurfaceResult(capture.SurfaceId, ParitySurfaceKind.Backstage, pngName, Captured: false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    private void FocusParityBackstageEntry(string automationId)
+    {
+        foreach (var control in global::Avalonia.VisualTree.VisualExtensions
+                     .GetVisualDescendants(_backstageOverlay)
+                     .OfType<Control>())
+        {
+            if (!string.Equals(AutomationProperties.GetAutomationId(control), automationId, StringComparison.Ordinal))
+                continue;
+
+            control.Focus(global::Avalonia.Input.NavigationMethod.Tab);
+            return;
         }
     }
 
@@ -3225,13 +3269,7 @@ public sealed partial class MainWindow
 
     private static Control CreateParityCapturedBackstageSurface(string surfaceId)
     {
-        var pane = surfaceId switch
-        {
-            { } id when id.EndsWith(".Info", StringComparison.Ordinal) => "Info",
-            { } id when id.EndsWith(".Export", StringComparison.Ordinal) => "Export",
-            { } id when id.EndsWith(".Account", StringComparison.Ordinal) => "Account",
-            _ => "Home",
-        };
+        var pane = "Account";
 
         var root = new AvaloniaGrid
         {
@@ -3261,11 +3299,7 @@ public sealed partial class MainWindow
 
         AddGridChild(body, CreateParityCapturedBackstageRail(pane), 0, 0);
 
-        var content = string.Equals(pane, "Info", StringComparison.Ordinal)
-            ? CreateParityCapturedBackstageInfoPane()
-            : string.Equals(pane, "Account", StringComparison.Ordinal)
-                ? CreateParityCapturedBackstageAccountPane()
-                : CreateParityCapturedBackstageHomePane();
+        var content = CreateParityCapturedBackstageAccountPane();
         AddGridChild(body, CreateParityCapturedBackstageContentScroll(content), 0, 1);
         AddGridChild(root, CreateParityCapturedStatusBarFooter(), 2, 0);
         ApplyParityBackstageTypography(root);
@@ -3628,75 +3662,6 @@ public sealed partial class MainWindow
         }
     }
 
-    private static Control CreateParityCapturedBackstageHomePane()
-    {
-        var canvas = new Canvas
-        {
-            Background = Brushes.White,
-        };
-
-        PlaceBackstage(canvas, new TextBlock
-        {
-            Text = "Good evening",
-            FontSize = 30,
-            Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
-        }, 40, 40);
-        PlaceBackstage(canvas, new TextBlock
-        {
-            Text = "New",
-            FontSize = 14,
-            FontWeight = FontWeight.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
-        }, 40, 98);
-        PlaceBackstage(canvas, CreateParityCapturedBlankWorkbookTile(), 44, 126);
-
-        var homePane = FreeXBackstageHomePanePlanner.Build();
-        var recentHeader = new AvaloniaGrid
-        {
-            ColumnDefinitions =
-            {
-                new ColumnDefinition { Width = GridLength.Auto },
-                new ColumnDefinition { Width = GridLength.Auto },
-            },
-        };
-        AddGridChild(recentHeader, new TextBlock
-        {
-            Text = UiText.Get(homePane.RecentTab.LabelKey),
-            FontSize = 13,
-            Foreground = new SolidColorBrush(Color.FromRgb(0, 96, 128)),
-            Margin = new Thickness(0, 0, 28, 0),
-        }, 0, 0);
-        AddGridChild(recentHeader, new TextBlock
-        {
-            Text = UiText.Get(homePane.PinnedTab.LabelKey),
-            FontSize = 13,
-            Foreground = new SolidColorBrush(Color.FromRgb(95, 99, 104)),
-        }, 0, 1);
-        PlaceBackstage(canvas, recentHeader, 40, 248);
-        PlaceBackstage(canvas, new Border
-        {
-            Width = 64,
-            Height = 2,
-            Background = new SolidColorBrush(Color.FromRgb(0, 96, 128)),
-        }, 40, 272);
-        PlaceBackstage(canvas, new Border
-        {
-            Width = 198,
-            Height = 24,
-            Background = new SolidColorBrush(Color.FromRgb(246, 246, 246)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(218, 220, 224)),
-            BorderThickness = new Thickness(1),
-        }, 692, 244);
-        PlaceBackstage(canvas, CreateParityCapturedRecentHeaderRow(homePane), 40, 286);
-        PlaceBackstage(canvas, CreateParityCapturedBackstageRecentFile(), 40, 310);
-
-        return new Border
-        {
-            Background = Brushes.White,
-            Child = canvas,
-        };
-    }
-
     private static Control CreateParityCapturedBackstageAccountPane()
     {
         var projection = FreeXBackstagePaneProjectionPlanner.BuildAccountDialog(
@@ -3836,59 +3801,6 @@ public sealed partial class MainWindow
         };
     }
 
-    private static void PlaceBackstage(Canvas canvas, Control child, double left, double top)
-    {
-        Canvas.SetLeft(child, left);
-        Canvas.SetTop(child, top);
-        canvas.Children.Add(child);
-    }
-
-    private static Control CreateParityCapturedBlankWorkbookTile()
-    {
-        var canvas = new Canvas
-        {
-            Width = 108,
-            Height = 80,
-        };
-        canvas.Children.Add(CreateParityCapturedThumbnailRect(0, 0, 18, 80, fill: Color.FromRgb(0xF0, 0xF0, 0xF0)));
-        canvas.Children.Add(CreateParityCapturedThumbnailRect(0, 0, 108, 14, fill: Color.FromRgb(0xF0, 0xF0, 0xF0)));
-        foreach (var y in new[] { 27d, 40d, 53d, 66d })
-            canvas.Children.Add(CreateParityCapturedThumbnailLine(0, y, 108, y));
-        foreach (var x in new[] { 42d, 66d, 90d })
-            canvas.Children.Add(CreateParityCapturedThumbnailLine(x, 14, x, 80));
-        canvas.Children.Add(CreateParityCapturedThumbnailRect(18, 14, 24, 13, fill: Color.FromRgb(0xE6, 0xF6, 0xFA)));
-        canvas.Children.Add(CreateParityCapturedThumbnailRect(18, 14, 24, 13, stroke: Color.FromRgb(0x0F, 0x6D, 0x8C), strokeThickness: 1.5));
-
-        var preview = new Border
-        {
-            Width = 108,
-            Height = 80,
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
-            BorderThickness = new Thickness(1),
-            ClipToBounds = true,
-            Child = canvas,
-        };
-
-        return new StackPanel
-        {
-            Width = 108,
-            Children =
-            {
-                preview,
-                new TextBlock
-                {
-                    Text = "Blank workbook",
-                    FontSize = 12,
-                    Margin = new Thickness(0, 6, 0, 2),
-                    TextAlignment = TextAlignment.Center,
-                    Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
-                },
-            },
-        };
-    }
-
     private static Control CreateParityCapturedThumbnailRect(
         double left,
         double top,
@@ -3922,43 +3834,6 @@ public sealed partial class MainWindow
         };
     }
 
-    private static Control CreateParityCapturedRecentHeaderRow(FreeXBackstageHomePanePlan homePane)
-    {
-        var grid = new AvaloniaGrid
-        {
-            Width = 850,
-            Height = 28,
-            ColumnDefinitions =
-            {
-                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
-                new ColumnDefinition { Width = new GridLength(150) },
-                new ColumnDefinition { Width = new GridLength(36) },
-            },
-        };
-        AddGridChild(grid, new TextBlock
-        {
-            Text = ResolveParityCapturedRecentColumnLabel(homePane, FreeXBackstageRecentColumnId.Name),
-            FontSize = 11,
-            Foreground = new SolidColorBrush(Color.FromRgb(95, 99, 104)),
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-        }, 0, 0);
-        AddGridChild(grid, new TextBlock
-        {
-            Text = ResolveParityCapturedRecentColumnLabel(homePane, FreeXBackstageRecentColumnId.DateModified),
-            FontSize = 11,
-            Foreground = new SolidColorBrush(Color.FromRgb(95, 99, 104)),
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-        }, 0, 1);
-        return new Border
-        {
-            Width = 850,
-            Height = 28,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(225, 225, 225)),
-            BorderThickness = new Thickness(0, 1, 0, 1),
-            Child = grid,
-        };
-    }
-
     private static string ResolveParityCapturedRecentColumnLabel(
         FreeXBackstageHomePanePlan homePane,
         FreeXBackstageRecentColumnId id)
@@ -3967,233 +3842,8 @@ public sealed partial class MainWindow
         return UiText.Get(column.LabelKey);
     }
 
-    private static Control CreateParityCapturedBackstageRecentFile()
-    {
-        var grid = new AvaloniaGrid
-        {
-            Width = 850,
-            Height = 44,
-            ColumnDefinitions =
-            {
-                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
-                new ColumnDefinition { Width = new GridLength(150) },
-                new ColumnDefinition { Width = new GridLength(36) },
-            },
-        };
-        var nameColumn = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-        };
-        nameColumn.Children.Add(new Border
-        {
-            Width = 26,
-            Height = 30,
-            Background = new SolidColorBrush(Color.FromRgb(15, 109, 140)),
-            CornerRadius = new CornerRadius(2),
-            Margin = new Thickness(0, 0, 10, 0),
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            Child = new TextBlock
-            {
-                Text = "X",
-                FontSize = 11,
-                FontWeight = FontWeight.Bold,
-                Foreground = Brushes.White,
-                HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
-                VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            },
-        });
-
-        var text = new StackPanel
-        {
-            Spacing = 1,
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-        };
-        text.Children.Add(new TextBlock
-        {
-            Text = "01_pivot-tables_customer-products.xlsx",
-            FontSize = 13,
-            Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
-        });
-        text.Children.Add(new TextBlock
-        {
-            Text = @"C:\Users\quinn\OneDrive\Documents\FreeX\FreeX\test-corpus\public\contextures",
-            FontSize = 11,
-            Foreground = new SolidColorBrush(Color.FromRgb(95, 99, 104)),
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        });
-        nameColumn.Children.Add(text);
-        AddGridChild(grid, nameColumn, 0, 0);
-        AddGridChild(grid, new TextBlock
-        {
-            Text = "Yesterday at 1:43 AM",
-            FontSize = 12,
-            Foreground = new SolidColorBrush(Color.FromRgb(102, 102, 102)),
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-        }, 0, 1);
-        AddGridChild(grid, AvaloniaRibbonIcons.Build(RibbonCommandIconKind.Pin, 22, "Pin to list"), 0, 2);
-        return grid;
-    }
-
-    private static Control CreateParityCapturedBackstageInfoPane()
-    {
-        var projection = FreeXBackstagePaneProjectionPlanner.BuildInfoPane(
-            BuildParityCapturedBackstageInfoPanePlan());
-        var heading = projection.Elements.OfType<FreeXBackstageHeadingProjectionElement>().Single();
-        var sectionHeaders = projection.Elements.OfType<FreeXBackstageSectionHeaderProjectionElement>().ToArray();
-        var actionRow = projection.Elements.OfType<FreeXBackstageInfoActionRowProjectionElement>().Single();
-        var detailRows = projection.Elements.OfType<FreeXBackstageDetailRowsProjectionElement>().Single();
-        var root = new AvaloniaGrid
-        {
-            Margin = new Thickness(44, 34, 46, 0),
-            ColumnDefinitions =
-            {
-                new ColumnDefinition { Width = new GridLength(420) },
-                new ColumnDefinition { Width = new GridLength(1) },
-                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
-            },
-        };
-        var actions = new StackPanel { Spacing = 14 };
-        actions.Children.Add(new TextBlock
-        {
-            Text = UiText.Get(heading.TextKey),
-            FontSize = 30,
-            FontWeight = FontWeight.Normal,
-            Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
-        });
-        actions.Children.Add(new TextBlock
-        {
-            Text = UiText.Get(sectionHeaders[0].TextKey),
-            FontSize = 14,
-            FontWeight = FontWeight.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
-        });
-        foreach (var action in actionRow.Actions)
-        {
-            actions.Children.Add(CreateParityCapturedBackstageInfoAction(
-                action.Icon,
-                UiText.Get(action.LabelKey),
-                ResolveParityCapturedBackstageTextValue(action.Detail)));
-        }
-        AddGridChild(root, actions, 0, 0);
-        AddGridChild(root, new Border
-        {
-            Width = 1,
-            Background = new SolidColorBrush(Color.FromRgb(225, 225, 225)),
-            Margin = new Thickness(0, 52, 0, 0),
-        }, 0, 1);
-
-        var properties = new StackPanel
-        {
-            Margin = new Thickness(28, 52, 0, 0),
-            Spacing = 10,
-        };
-        properties.Children.Add(new TextBlock
-        {
-            Text = UiText.Get(sectionHeaders[1].TextKey),
-            FontSize = 14,
-            FontWeight = FontWeight.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
-        });
-        foreach (var detail in detailRows.Rows)
-        {
-            properties.Children.Add(CreateParityCapturedBackstageProperty(
-                UiText.Get(detail.LabelKey),
-                ResolveParityCapturedBackstageTextValue(detail.Value)));
-        }
-        AddGridChild(root, properties, 0, 2);
-
-        return new Border
-        {
-            Background = Brushes.White,
-            Child = root,
-        };
-    }
-
-    private static FreeXBackstageInfoPanePlan BuildParityCapturedBackstageInfoPanePlan()
-    {
-        var workbook = ParityDemoWorkbookFactory.Create();
-        var activeSheet = workbook.Sheets[workbook.ActiveSheetIndex ?? 0];
-        var info = BackstageInfoPlanner.Build(
-            workbook,
-            null,
-            AvaloniaPlannerTextResources.Text,
-            activeSheet,
-            CultureInfo.CurrentCulture);
-
-        return global::FreeX.ParityCapture.Avalonia.BackstageInfoParityProjection.Build(
-            BackstageInfoPlanner.CreatePaneRequest(info));
-    }
-
-    private static Control CreateParityCapturedBackstageInfoAction(RibbonCommandIconKind iconKind, string title, string detail)
-    {
-        _ = iconKind;
-        return new StackPanel
-        {
-            Spacing = 6,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
-            Children =
-            {
-                new Border
-                {
-                    Width = 220,
-                    Height = 30,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
-                    Background = new SolidColorBrush(Color.FromRgb(221, 221, 221)),
-                    BorderBrush = new SolidColorBrush(Color.FromRgb(128, 128, 128)),
-                    BorderThickness = new Thickness(1),
-                    Child = new TextBlock
-                    {
-                        Text = title,
-                        FontSize = 12,
-                        Foreground = Brushes.Black,
-                        HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
-                        VerticalAlignment = AvaloniaVerticalAlignment.Center,
-                    },
-                },
-                new TextBlock
-                {
-                    Text = detail,
-                    FontSize = 11,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
-                    Foreground = new SolidColorBrush(Color.FromRgb(64, 64, 64)),
-                    TextWrapping = TextWrapping.Wrap,
-                    MaxWidth = 292,
-                },
-            },
-        };
-    }
-
     private static string ResolveParityCapturedBackstageTextValue(FreeXBackstageTextValue? value) =>
         value?.Resolve(UiText.Get) ?? string.Empty;
-
-    private static Control CreateParityCapturedBackstageProperty(string name, string value) =>
-        new StackPanel
-        {
-            Spacing = 2,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = name,
-                    FontSize = 11,
-                    Foreground = new SolidColorBrush(Color.FromRgb(95, 99, 104)),
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
-                    TextAlignment = TextAlignment.Left,
-                },
-                new TextBlock
-                {
-                    Text = value,
-                    FontSize = 13,
-                    Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
-                    TextWrapping = TextWrapping.Wrap,
-                    MaxWidth = 340,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
-                    TextAlignment = TextAlignment.Left,
-                },
-            },
-        };
 
     /// <summary>
     /// Renders <paramref name="visual"/> into an off-screen <see cref="RenderTargetBitmap"/> at the given

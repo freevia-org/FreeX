@@ -25,7 +25,8 @@ public sealed class FreeXResourceBypassTailSourceTests
         var backstage = Read("src", "FreeX.App.Avalonia", "MainWindow.LiveBackstage.cs");
         backstage.Should().Contain("FreeXBackstageInfoSurface.AvaloniaLivePane");
         backstage.Should().Contain("UiText.Get(\"Backstage_Home_NoRecentWorkbooks\")");
-        backstage.Should().Contain("UiText.Get(\"Backstage_Print_Description\")");
+        // WPF's Print pane has no description paragraph (SsPrintView), so the live pane must not add one.
+        backstage.Should().NotContain("Backstage_Print_Description");
         backstage.Should().NotContain("Text = \"(No recent workbooks)\"");
         backstage.Should().NotContain("CreateLiveBackstageSection(\"Properties\")");
         backstage.Should().NotContain("Preview the active worksheet or send it to an available printer.");

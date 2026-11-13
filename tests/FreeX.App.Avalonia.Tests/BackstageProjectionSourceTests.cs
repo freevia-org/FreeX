@@ -144,7 +144,6 @@ public sealed class BackstageProjectionSourceTests
         projectionPlannerSource.Should().Contain("new FreeXBackstageSectionHeaderProjectionElement(pane.ActionsHeadingKey)");
         projectionPlannerSource.Should().Contain("new FreeXBackstageDetailRowsProjectionElement(ProjectInfoDetails(pane.Details))");
 
-        captureSource.Should().Contain("FreeXBackstagePaneProjectionPlanner.BuildInfoPane(");
         captureSource.Should().Contain("FreeXBackstagePaneProjectionPlanner.BuildAccountDialog(");
         captureSource.Should().Contain("FreeXBackstageDetailRowsProjectionElement");
         captureSource.Should().Contain("BuildParityCapturedBackstageAccountRows(detailRows.Rows)");

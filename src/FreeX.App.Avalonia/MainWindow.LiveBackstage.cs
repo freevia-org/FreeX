@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -12,10 +13,12 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using AvaloniaGrid = global::Avalonia.Controls.Grid;
@@ -287,7 +290,23 @@ public sealed partial class MainWindow
             Foreground = LiveBackstageInk,
             Margin = new Thickness(0, 18, 0, 12),
         });
-        content.Children.Add(BuildLiveBackstageBlankWorkbookCard());
+        // WPF New row: Blank workbook | 16 | the wider "More templates" card.
+        var newRow = new AvaloniaGrid
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = GridLength.Auto },
+                new ColumnDefinition { Width = new GridLength(16) },
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+            },
+        };
+        var blankCard = BuildLiveBackstageBlankWorkbookCard();
+        var moreTemplatesCard = BuildLiveBackstageMoreTemplatesCard();
+        AvaloniaGrid.SetColumn(blankCard, 0);
+        AvaloniaGrid.SetColumn(moreTemplatesCard, 2);
+        newRow.Children.Add(blankCard);
+        newRow.Children.Add(moreTemplatesCard);
+        content.Children.Add(newRow);
 
         // ── Recent | Pinned tabs + search ────────────────────────────────────────
         var recentTabText = CreateLiveBackstageRecentTabText(LiveBackstageHomePanePlan.RecentTab);
@@ -533,6 +552,121 @@ public sealed partial class MainWindow
             await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);
         });
         return card;
+    }
+
+    // WPF "More templates" card (SsMoreTemplatesBtn): a 320+ px wide #F6F7F8 plate with three white
+    // preview tiles, kept visible but honest -- the online template service is an excluded command.
+    private Button BuildLiveBackstageMoreTemplatesCard()
+    {
+        static Border Tile(string headerHex, string bodyHex)
+        {
+            static IBrush Hex(string hex) => Brush(
+                Convert.ToByte(hex[..2], 16), Convert.ToByte(hex.Substring(2, 2), 16), Convert.ToByte(hex.Substring(4, 2), 16));
+
+            return new Border
+            {
+                Background = Brushes.White,
+                BorderBrush = Brush(0xD8, 0xDD, 0xE2),
+                BorderThickness = new Thickness(1),
+                Child = new AvaloniaGrid
+                {
+                    Margin = new Thickness(8),
+                    Children =
+                    {
+                        new Border { Height = 7, Background = Hex(headerHex), VerticalAlignment = VerticalAlignment.Top },
+                        new Border { Height = 34, Background = Hex(bodyHex), VerticalAlignment = VerticalAlignment.Bottom },
+                    },
+                },
+            };
+        }
+
+        var tiles = new AvaloniaGrid
+        {
+            Margin = new Thickness(22, 13),
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                new ColumnDefinition { Width = new GridLength(12) },
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                new ColumnDefinition { Width = new GridLength(12) },
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+            },
+        };
+        var green = Tile("DDEFE5", "EEF6F1");
+        var blue = Tile("DCE9F7", "EEF3FA");
+        var orange = Tile("F1E2D7", "F9F2EC");
+        AvaloniaGrid.SetColumn(green, 0);
+        AvaloniaGrid.SetColumn(blue, 2);
+        AvaloniaGrid.SetColumn(orange, 4);
+        tiles.Children.Add(green);
+        tiles.Children.Add(blue);
+        tiles.Children.Add(orange);
+
+        var name = UiText.Get("MainWindow_AutomationName_MoreTemplatesUnavailable");
+        var card = new Button
+        {
+            Template = LiveBackstageFlatButtonTemplate,
+            Padding = new Thickness(4),
+            BorderThickness = new Thickness(0),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Stretch,
+            Cursor = new Cursor(StandardCursorType.Hand),
+            Content = new StackPanel
+            {
+                MinWidth = 320,
+                Children =
+                {
+                    new Border
+                    {
+                        Height = 108,
+                        Background = Brush(0xF6, 0xF7, 0xF8),
+                        BorderBrush = Brush(0xD4, 0xD8, 0xDC),
+                        BorderThickness = new Thickness(1),
+                        Child = tiles,
+                    },
+                    new TextBlock
+                    {
+                        Text = name,
+                        FontFamily = FormulaBarFontFamily,
+                        FontSize = 12,
+                        Foreground = LiveBackstageDateInk,
+                        TextAlignment = TextAlignment.Center,
+                        Margin = new Thickness(0, 7, 0, 2),
+                    },
+                },
+            },
+        };
+        ApplyLiveBackstageHoverPlate(card, "live-backstage-more-templates", Brush(0xF3, 0xF6, 0xF9));
+        ToolTip.SetTip(card, UiText.Get("MainWindow_TooltipTitle_MoreTemplatesExcluded"));
+        AutomationProperties.SetAutomationId(card, "MoreTemplatesExcludedButton");
+        AutomationProperties.SetName(card, name);
+        AutomationProperties.SetHelpText(
+            card,
+            UiText.Get("MainWindow_AutomationHelpText_OnlineTemplateDiscoveryDependsOnAnExternalMicrosoftTemplateServiceAndIsE_D9AF02A3"));
+        card.Click += (_, _) =>
+        {
+            var message = DeferredCommandMessageResolver.Resolve(
+                DeferredCommandMessagePlanner.OnlineTemplatesExcluded(),
+                AvaloniaPlannerTextResources.Text);
+            ShowLiveBackstageNotice(message.Title, message.Body);
+        };
+        return card;
+    }
+
+    private void ShowLiveBackstageNotice(string title, string body)
+    {
+        Action<string, string, UserMessageIcon>? handler = null;
+        ResolveSaveFailureNoticeHandler(ref handler);
+        if (handler is not null)
+        {
+            handler(title, body, UserMessageIcon.Information);
+            return;
+        }
+
+        AvaloniaSynchronousUserMessageDialog.ShowMessage(
+            this,
+            new UserMessageRequest(body, title, UserMessageButtons.Ok, UserMessageIcon.Information),
+            UserMessageResult.Ok);
     }
 
     private static Border CreateLiveBackstageThumbnailBlock(
@@ -782,73 +916,258 @@ public sealed partial class MainWindow
 
     private Control BuildLiveBackstageInfoPane()
     {
-        var display = WorkbookInfoDisplayPlanner.Build(
-            BuildWorkbookInfoPlan(),
-            WorkbookInfoDisplaySurface.AvaloniaBackstageInfoDialog,
-            AvaloniaPlannerTextResources.Text);
+        // Same data path as the WPF host's UpdateInfoView: recalculate first so circular references
+        // are reported like Formulas > Error Checking, then project the shared BackstageInfoPlanner.
+        _session.RecalculateWorkbook();
+        var info = BackstageInfoPlanner.Build(
+            _session.Workbook,
+            _session.CurrentFilePath,
+            AvaloniaPlannerTextResources.Text,
+            _session.ActiveSheet,
+            CultureInfo.CurrentCulture,
+            hasSelection: HasPrintSelection(_session.SelectedRange),
+            cyclicCells: _session.CyclicCells);
         var pane = FreeXBackstageInfoPanePlanner.Build(
             FreeXBackstageInfoSurface.AvaloniaLivePane,
-            CreateBackstageInfoPaneRequest(display));
+            BackstageInfoPlanner.CreatePaneRequest(info));
+
+        // WPF SsInfoView: heading, then a two-column body (280 actions | * properties) inside a
+        // ScrollViewer. The frame's own content scroller supplies the vertical scrolling here.
         var content = CreateLiveBackstagePaneStack(LiveBackstagePaneTopInset);
         content.Children.Add(CreateLiveBackstageHeading(UiText.Get(pane.TitleKey)));
-        content.Children.Add(CreateLiveBackstageSection(UiText.Get(pane.PropertiesHeadingKey)));
-        foreach (var detail in pane.Details)
+
+        var actions = new StackPanel { Margin = new Thickness(0, 0, 24, 0) };
+        actions.Children.Add(new TextBlock
         {
-            content.Children.Add(CreateLiveBackstageDetail(
-                UiText.Get(detail.LabelKey),
-                detail.Value.Resolve(UiText.Get)));
+            Text = UiText.Get(pane.ActionsHeadingKey),
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 14,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = LiveBackstageInk,
+            Margin = new Thickness(0, 0, 0, 10),
+        });
+        for (var i = 0; i < pane.Actions.Count; i++)
+        {
+            var action = pane.Actions[i];
+            actions.Children.Add(CreateLiveBackstageInfoActionButton(action));
+            if (action.Detail is { } detail)
+            {
+                actions.Children.Add(new TextBlock
+                {
+                    Text = detail.Resolve(UiText.Get),
+                    FontFamily = FormulaBarFontFamily,
+                    FontSize = 12,
+                    Foreground = LiveBackstageBodyInk,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, i == pane.Actions.Count - 1 ? 0 : 20),
+                });
+            }
         }
 
-        content.Children.Add(CreateLiveBackstageSection(UiText.Get(pane.ProtectionSectionHeaderKey)));
-        content.Children.Add(CreateLiveBackstageDetail(
-            UiText.Get("Backstage_LiveInfo_WorkbookLabel"),
-            pane.WorkbookProtectionSummary.Resolve(UiText.Get)));
-        content.Children.Add(CreateLiveBackstageDetail(
-            UiText.Get("Backstage_LiveInfo_ActiveSheetLabel"),
-            pane.ActiveSheetProtectionSummary.Resolve(UiText.Get)));
-        content.Children.Add(CreateLiveBackstageSection(UiText.Get(pane.StatisticsSectionHeaderKey)));
-        content.Children.Add(new TextBlock
+        var properties = new StackPanel();
+        properties.Children.Add(CreateLiveBackstageSection(UiText.Get(pane.PropertiesHeadingKey), topMargin: 0));
+        foreach (var detail in pane.Details)
+            properties.Children.Add(CreateLiveBackstageInfoDetail(detail));
+
+        properties.Children.Add(new Border
         {
-            Text = pane.StatisticsSummary.Resolve(UiText.Get),
+            Height = 1,
+            Background = LiveBackstageInfoDividerBrush,
+            Margin = new Thickness(0, 0, 0, 20),
+        });
+        properties.Children.Add(new TextBlock
+        {
+            Text = UiText.Get("MainWindow_Text_AboutFreeX"),
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 13,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = LiveBackstageBodyInk,
+            Margin = new Thickness(0, 0, 0, 10),
+        });
+        properties.Children.Add(new TextBlock
+        {
+            Text = UiText.Get("MainWindow_Text_FreeXDescription"),
             FontFamily = FormulaBarFontFamily,
             FontSize = 12,
-            LineHeight = 18,
+            LineHeight = 20,
             Foreground = LiveBackstageBodyInk,
             TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 6),
         });
-        if (pane.UnsavedChangesNote is { } unsavedChangesNote)
+        properties.Children.Add(new TextBlock
         {
-            content.Children.Add(new TextBlock
+            Text = UiText.Get("MainWindow_Text_FreeXTrademarkDisclaimer"),
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 11,
+            LineHeight = 18,
+            Foreground = Brush(0x66, 0x66, 0x66),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 6),
+        });
+        properties.Children.Add(new TextBlock
+        {
+            Text = UiText.Get("MainWindow_Text_Version05TesterRelease"),
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 11,
+            Foreground = LiveBackstageMutedInk,
+        });
+
+        var propertiesHost = new Border
+        {
+            BorderBrush = LiveBackstageInfoDividerBrush,
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            Padding = new Thickness(24, 0, 0, 0),
+            Child = properties,
+        };
+        var body = new AvaloniaGrid
+        {
+            Margin = new Thickness(0, 0, 0, 24),
+            ColumnDefinitions =
             {
-                Text = unsavedChangesNote.Resolve(UiText.Get),
-                FontFamily = FormulaBarFontFamily,
-                FontSize = 12,
-                Foreground = LiveBackstageBodyInk,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 12, 0, 0),
-            });
+                new ColumnDefinition { Width = new GridLength(280) },
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+            },
+        };
+        AvaloniaGrid.SetColumn(actions, 0);
+        AvaloniaGrid.SetColumn(propertiesHost, 1);
+        body.Children.Add(actions);
+        body.Children.Add(propertiesHost);
+        content.Children.Add(body);
+
+        PinLiveBackstageBodyWidth(content, body);
+        return content;
+    }
+
+    // The frame's content scroller hands a StackPanel child whose own content is wider than the 40 px-padded
+    // viewport the full measured width, so a star-column body would wrap and clip past the right edge.
+    // Pin the body to the width the pane is actually arranged at.
+    private static void PinLiveBackstageBodyWidth(Control pane, Control body) =>
+        pane.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != Visual.BoundsProperty)
+                return;
+
+            var width = pane.Bounds.Width;
+            if (width > 0 && !(Math.Abs(body.Width - width) < 0.5))
+                body.Width = width;
+        };
+
+    private static readonly IBrush LiveBackstageInfoDividerBrush = Brush(0xE0, 0xE0, 0xE0);
+
+    private Button CreateLiveBackstageInfoActionButton(FreeXBackstageInfoActionPlan action)
+    {
+        var label = UiText.Get(action.LabelKey);
+        var description = UiText.Get(action.AutomationHelpTextKey ?? action.TooltipDescriptionKey ?? action.LabelKey);
+        var tooltipTitle = UiText.Get(action.TooltipTitleKey ?? action.LabelKey);
+        if (action.Id == FreeXBackstageInfoActionId.ProtectWorkbook)
+        {
+            // Same dynamic Protect/Unprotect Workbook chrome as WPF's RefreshBackstageInfoProtectionButton.
+            var chrome = FreeX.App.Presentation.Protection.ProtectionWorkflowSession
+                .CreateWorkbookChromePlan(_session.Workbook);
+            label = UiText.Get(chrome.ButtonContentResourceKey);
+            tooltipTitle = UiText.Get(chrome.TooltipTitleResourceKey);
+            description = UiText.Get(chrome.TooltipDescriptionResourceKey);
         }
 
-        return content;
+        var button = new Button
+        {
+            Content = label,
+            Width = 220,
+            Height = 30,
+            Padding = new Thickness(8, 0),
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 6),
+        };
+        AutomationProperties.SetAutomationId(button, action.AutomationId);
+        AutomationProperties.SetName(button, label);
+        AutomationProperties.SetHelpText(button, description);
+        ToolTip.SetTip(button, tooltipTitle);
+        button.Click += (_, _) => RunGuarded(() => RunLiveBackstageInfoActionAsync(action.Id));
+        return button;
+    }
+
+    private async Task RunLiveBackstageInfoActionAsync(FreeXBackstageInfoActionId id)
+    {
+        switch (id)
+        {
+            case FreeXBackstageInfoActionId.ProtectWorkbook:
+                await ShowProtectWorkbookDialogAsync();
+                if (_backstageOverlay.IsVisible)
+                    TryActivateBackstagePane(FreeXBackstagePaneId.Info);
+                break;
+            case FreeXBackstageInfoActionId.CheckAccessibility:
+                HideBackstageOverlay();
+                await ShowAccessibilityCheckerDialogAsync();
+                break;
+            case FreeXBackstageInfoActionId.WorkbookStatistics:
+                await ShowWorkbookStatisticsDialogAsync();
+                break;
+            case FreeXBackstageInfoActionId.ErrorChecking:
+                HideBackstageOverlay();
+                await CheckFormulaErrorsAsync();
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(id), id, null);
+        }
+    }
+
+    // WPF Info property row metrics (SsInfoView): an 11px #888 caption over the value; most values are
+    // 13px #1F1F1F, but File path and Workbook statistics are 12px #555, and the bottom gap is 12 or 20.
+    private static Control CreateLiveBackstageInfoDetail(FreeXBackstageInfoDetailPlan detail)
+    {
+        var (size, muted, wrap, lineHeight, bottom) = detail.Id switch
+        {
+            FreeXBackstageInfoDetailId.FilePath => (12d, true, true, double.NaN, 12d),
+            FreeXBackstageInfoDetailId.Format => (13d, false, false, double.NaN, 20d),
+            FreeXBackstageInfoDetailId.Share => (13d, false, true, double.NaN, 20d),
+            FreeXBackstageInfoDetailId.Export => (13d, false, true, double.NaN, 20d),
+            FreeXBackstageInfoDetailId.WorkbookProtection => (13d, false, true, double.NaN, 12d),
+            FreeXBackstageInfoDetailId.ActiveSheetProtection => (13d, false, true, double.NaN, 20d),
+            FreeXBackstageInfoDetailId.WorkbookStatistics => (12d, true, true, 18d, 12d),
+            FreeXBackstageInfoDetailId.Accessibility => (13d, false, false, double.NaN, 20d),
+            FreeXBackstageInfoDetailId.FormulaErrors => (13d, false, false, double.NaN, 20d),
+            _ => (13d, false, false, double.NaN, 12d),
+        };
+        var value = new TextBlock
+        {
+            Text = detail.Value.Resolve(UiText.Get),
+            FontFamily = FormulaBarFontFamily,
+            FontSize = size,
+            Foreground = muted ? LiveBackstageBodyInk : LiveBackstageInk,
+            TextWrapping = wrap ? TextWrapping.Wrap : TextWrapping.NoWrap,
+        };
+        if (!double.IsNaN(lineHeight))
+            value.LineHeight = lineHeight;
+        AutomationProperties.SetAutomationId(value, detail.ValueAutomationId);
+        return new StackPanel
+        {
+            Margin = new Thickness(0, 0, 0, bottom),
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = UiText.Get(detail.LabelKey),
+                    FontFamily = FormulaBarFontFamily,
+                    FontSize = 11,
+                    Foreground = LiveBackstageMutedInk,
+                    Margin = new Thickness(0, 0, 0, 2),
+                },
+                value,
+            },
+        };
     }
 
     private Control BuildLiveBackstagePrintPane()
     {
         var content = CreateLiveBackstagePaneStack(LiveBackstagePaneTopInset);
         content.Children.Add(CreateLiveBackstageHeading(UiText.Get("MainWindow_Text_Print")));
-        content.Children.Add(new TextBlock
-        {
-            Text = UiText.Get("Backstage_Print_Description"),
-            FontFamily = FormulaBarFontFamily,
-            FontSize = 13,
-            LineHeight = 20,
-            Foreground = LiveBackstageInk,
-            TextWrapping = TextWrapping.Wrap,
-            MaxWidth = 520,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
-        });
-
-        content.Children.Add(BuildLiveBackstagePrintWorkspace());
+        var workspace = BuildLiveBackstagePrintWorkspace();
+        content.Children.Add(workspace);
+        PinLiveBackstageBodyWidth(content, workspace);
         return content;
     }
 
@@ -900,7 +1219,7 @@ public sealed partial class MainWindow
         };
 
     // WPF Info "Properties" section header: 13px SemiBold #555.
-    private static TextBlock CreateLiveBackstageSection(string text) =>
+    private static TextBlock CreateLiveBackstageSection(string text, double topMargin = 8) =>
         new()
         {
             Text = text,
@@ -908,32 +1227,6 @@ public sealed partial class MainWindow
             FontSize = 13,
             FontWeight = FontWeight.SemiBold,
             Foreground = LiveBackstageBodyInk,
-            Margin = new Thickness(0, 8, 0, 14),
-        };
-
-    // WPF Info property: an 11px #888 caption stacked over the 13px #1F1F1F value, 12px apart.
-    private static Control CreateLiveBackstageDetail(string label, string value) =>
-        new StackPanel
-        {
-            Margin = new Thickness(0, 0, 0, 12),
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = label,
-                    FontFamily = FormulaBarFontFamily,
-                    FontSize = 11,
-                    Foreground = LiveBackstageMutedInk,
-                    Margin = new Thickness(0, 0, 0, 2),
-                },
-                new TextBlock
-                {
-                    Text = value,
-                    FontFamily = FormulaBarFontFamily,
-                    FontSize = 13,
-                    Foreground = LiveBackstageInk,
-                    TextWrapping = TextWrapping.Wrap,
-                },
-            },
+            Margin = new Thickness(0, topMargin, 0, 14),
         };
 }

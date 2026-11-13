@@ -85,16 +85,29 @@ public sealed class FreeXBackstageInfoPanePlannerTests
             FreeXBackstageInfoSurface.AvaloniaLivePane,
             Request(unsavedChangesNote: "Unsaved changes"));
 
-        plan.Actions.Should().BeEmpty();
-        plan.ProtectionSectionHeaderKey.Should().Be("Backstage_LiveInfo_ProtectionSectionHeader");
-        plan.StatisticsSectionHeaderKey.Should().Be("Backstage_LiveInfo_StatisticsSectionHeader");
-        plan.Details.Select(detail => (detail.Id, detail.LabelKey)).Should().Equal(
-            (FreeXBackstageInfoDetailId.WorkbookName, "Backstage_LiveInfo_WorkbookLabel"),
-            (FreeXBackstageInfoDetailId.FilePath, "Backstage_LiveInfo_LocationLabel"),
-            (FreeXBackstageInfoDetailId.Format, "Backstage_LiveInfo_FormatLabel"),
-            (FreeXBackstageInfoDetailId.FileSize, "Backstage_LiveInfo_SizeLabel"),
-            (FreeXBackstageInfoDetailId.LastModified, "Backstage_LiveInfo_LastModifiedLabel"),
-            (FreeXBackstageInfoDetailId.SheetCount, "Backstage_LiveInfo_SheetsLabel"));
+        // The live pane mirrors WPF's SsInfoView: the four workbook actions and the full property list.
+        plan.Actions.Select(action => action.Id).Should().Equal(
+            FreeXBackstageInfoActionId.ProtectWorkbook,
+            FreeXBackstageInfoActionId.CheckAccessibility,
+            FreeXBackstageInfoActionId.WorkbookStatistics,
+            FreeXBackstageInfoActionId.ErrorChecking);
+        plan.Details.Select(detail => detail.Id).Should().Equal(
+            FreeXBackstageInfoDetailId.WorkbookName,
+            FreeXBackstageInfoDetailId.FilePath,
+            FreeXBackstageInfoDetailId.SheetCount,
+            FreeXBackstageInfoDetailId.Format,
+            FreeXBackstageInfoDetailId.FileSize,
+            FreeXBackstageInfoDetailId.LastModified,
+            FreeXBackstageInfoDetailId.Share,
+            FreeXBackstageInfoDetailId.Export,
+            FreeXBackstageInfoDetailId.WorkbookProtection,
+            FreeXBackstageInfoDetailId.ActiveSheetProtection,
+            FreeXBackstageInfoDetailId.WorkbookStatistics,
+            FreeXBackstageInfoDetailId.Accessibility,
+            FreeXBackstageInfoDetailId.FormulaErrors);
+        plan.Details.Select(detail => detail.LabelKey).Should().Equal(
+            FreeXBackstagePaneCatalog.BuildInfoDetails(FreeXBackstageInfoSurface.WpfInfoPane)
+                .Select(detail => detail.LabelKey));
         TextFor(plan, FreeXBackstageInfoDetailId.WorkbookName).Should().Be("Budget.xlsx");
         plan.WorkbookProtectionSummary.Text.Should().Be("Workbook protected");
         plan.ActiveSheetProtectionSummary.Text.Should().Be("Sheet unprotected");
