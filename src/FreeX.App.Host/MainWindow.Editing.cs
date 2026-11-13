@@ -1089,20 +1089,10 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// R139-freex-cell-editing-edit-commit-collapses-range-selection: Enter/Tab (and their Shift
-    /// variants) that commit an in-cell/formula-bar edit must CYCLE the active cell within a
-    /// pre-existing multi-cell selection -- wrapping at the far end back to the start -- exactly
-    /// like Excel and like the ready-mode Enter/Tab handler in MainWindow.Selection.cs (which
-    /// routes through the same <see cref="GridSelectionNavigationPlanner.PlanCycle"/> +
-    /// <see cref="MoveActiveCellWithinSelection"/> pair). It must NOT collapse the selection via
-    /// <see cref="SetActiveCell"/>, which is what happened before this fix. Arrow-key commits
-    /// (the inline editor's inlineEditorCommitsOnArrow path, and the formula bar's
-    /// Up/Down/PageUp/PageDown fallback) are ordinary navigation, not range-cycling, so this only
-    /// engages when the physical key that triggered the commit was actually Enter or Tab; every
-    /// other key -- and any Enter/Tab where there is no eligible multi-cell selection to cycle
-    /// within (a single selected cell, or a single selected merged region) -- falls back
-    /// unchanged to the pre-existing SetActiveCell behavior. Returns the address that ended up
-    /// active so the caller can EnsureCellVisible it.
+    /// Applies the edit-commit move decided by
+    /// <see cref="GridSelectionNavigationPlanner.PlanEditCommitMove"/> (R139: Enter/Tab cycle within a
+    /// multi-cell selection, everything else falls back to <see cref="SetActiveCell"/>). Returns the
+    /// address that ended up active so the caller can EnsureCellVisible it.
     /// </summary>
     private CellAddress MoveActiveCellAfterEditCommit(
         CellAddress current,
@@ -1117,24 +1107,21 @@ public partial class MainWindow
             _ => (GridSelectionCycleKey?)null
         };
 
-        var cyclePlan = cycleKey is { } resolvedKey
-            ? GridSelectionNavigationPlanner.PlanCycle(
-                _workbook.GetSheet(_currentSheetId),
-                SheetGrid.SelectedRange,
-                SheetGrid.SelectedRanges,
-                current,
-                resolvedKey,
-                forward: (modifiers & ModifierKeys.Shift) == 0)
-            : null;
+        var move = GridSelectionNavigationPlanner.PlanEditCommitMove(
+            _workbook.GetSheet(_currentSheetId),
+            SheetGrid.SelectedRange,
+            SheetGrid.SelectedRanges,
+            current,
+            cycleKey,
+            forward: (modifiers & ModifierKeys.Shift) == 0,
+            fallbackTarget);
 
-        if (cyclePlan is { } cycle)
-        {
-            MoveActiveCellWithinSelection(cycle.Target);
-            return cycle.Target;
-        }
+        if (move.CycledWithinSelection)
+            MoveActiveCellWithinSelection(move.Target);
+        else
+            SetActiveCell(move.Target);
 
-        SetActiveCell(fallbackTarget);
-        return fallbackTarget;
+        return move.Target;
     }
 
     internal static void InsertLineBreak(System.Windows.Controls.TextBox editor)

@@ -265,12 +265,10 @@ internal static class ChartEmojiGlyphs
 
     private static (int Width, int Height) ReadPngDimensions(byte[] png)
     {
-        // PNG: 8-byte signature, then IHDR chunk: 4-byte length, 4-byte type "IHDR",
-        // then 4-byte width, 4-byte height (big-endian). Width starts at offset 16.
-        if (png.Length < 24)
-            return (0, 0);
-        int Read32(int o) => (png[o] << 24) | (png[o + 1] << 16) | (png[o + 2] << 8) | png[o + 3];
-        return (Read32(16), Read32(20));
+        // Shared header reader; (0, 0) means "no usable size" and the caller then draws nothing.
+        return Free.Shared.Drawing.ImageHeader.TryReadPngSize(png, out var width, out var height)
+            ? (width, height)
+            : (0, 0);
     }
 
     private static int NextCodePoint(string s, int index, out int codePoint)

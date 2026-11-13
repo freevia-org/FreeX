@@ -8,8 +8,10 @@ using FreeW.Core.Model;
 namespace FreeW.App.Avalonia;
 
 /// <summary>
-/// Avalonia scheduling, dispatch, and prompt adapter for the renderer-neutral
-/// <see cref="FreeWAutosaveSession"/>.
+/// FreeW's binding of the shared <see cref="AvaloniaAutosaveHost{TDocument}"/> (periodic loop,
+/// emergency fan-out, clean-exit stop, startup/manual recovery, recovery prompt) to its editor and
+/// file workflow. Only the document ports, the guarded restore, and the new-window / dirty-gate
+/// callbacks are FreeW-specific.
 ///
 /// <para>
 /// Call <see cref="Start"/> after the window opens and <see cref="StopAsync"/> after the
@@ -19,30 +21,19 @@ namespace FreeW.App.Avalonia;
 /// </summary>
 internal sealed partial class AutosaveAdapter : IDisposable
 {
-    private static readonly EmergencySnapshotFanOut<AutosaveAdapter> EmergencySnapshots =
-        new(static adapter => adapter.TryEmergencySnapshot());
-    private static readonly TimeSpan EmergencySnapshotDispatcherTimeout = TimeSpan.FromSeconds(8);
-
-    private readonly DocumentView _editor;
-    private readonly IDisposable _emergencySnapshotRegistration;
-    private readonly FileCommandWorkflow _workflow;
-    private readonly FreeWDocumentFileWorkflow _documentFileWorkflow;
-    private readonly AutosavePeriodicTaskLoop _periodicLoop;
-    private readonly FreeWAutosaveSession _session;
-    private readonly Func<AutosaveRecoveryCandidate, Task<bool>>? _recoverInNewWindowAsync;
-    private readonly Func<Task<bool>>? _confirmDiscardOrSaveAsync;
+    private readonly AvaloniaAutosaveHost<TextDocument> _host;
 
     public AutosaveAdapter(
         DocumentView editor,
         FileCommandWorkflow workflow,
-        Func<FreeWAutosavePorts, FreeWAutosaveSession>? sessionFactory = null,
+        Func<AutosaveDocumentPorts<TextDocument>, FreeWAutosaveSession>? sessionFactory = null,
         Func<AutosaveRecoveryCandidate, Task<bool>>? recoverInNewWindowAsync = null,
         Func<Task<bool>>? confirmDiscardOrSaveAsync = null,
         Func<TextDocument?>? getMailMergeTemplate = null,
         // Round-172 finding shared-autosave-recovery/F3: the window's REAL FreeWDocumentFileWorkflow
         // -- the object that owns the external-modification write-time guard
         // (_currentFileSourceLastWriteTimeUtc) and whose OpenSnapshotAsync is the only place that
-        // re-arms it correctly on recovery (see CompleteDocumentRecovery below). MainWindow always
+        // re-arms it correctly on recovery (see the restore callback below). MainWindow always
         // supplies its own _documentFileWorkflow here so recovery shares the SAME FileCommandWorkflow
         // identity and guard state that the window's real Ctrl+S save goes through. Left null (as
         // every pre-existing test double here does), a fresh, fully-functional workflow is built over
@@ -54,9 +45,7 @@ internal sealed partial class AutosaveAdapter : IDisposable
         ArgumentNullException.ThrowIfNull(editor);
         ArgumentNullException.ThrowIfNull(workflow);
 
-        _editor = editor;
-        _workflow = workflow;
-        _documentFileWorkflow = documentFileWorkflow ?? new FreeWDocumentFileWorkflow(
+        var documentFiles = documentFileWorkflow ?? new FreeWDocumentFileWorkflow(
             workflow,
             new DocumentPersistenceWorkflow(),
             new FreeWDocumentFilePorts(
@@ -66,7 +55,7 @@ internal sealed partial class AutosaveAdapter : IDisposable
                     editor.LoadDocument(document);
                     return ValueTask.CompletedTask;
                 }));
-        var ports = new FreeWAutosavePorts(
+        var ports = new AutosaveDocumentPorts<TextDocument>(
             GetOriginalFilePath: () => workflow.CurrentPath,
             GetDisplayName: () => workflow.DisplayName,
             GetIsDirty: () => workflow.IsDirty,
@@ -81,24 +70,40 @@ internal sealed partial class AutosaveAdapter : IDisposable
             // accessor returns null and the live editor document is snapshotted exactly as before.
             ExecuteWithDocument: writeDocument =>
                 writeDocument(getMailMergeTemplate?.Invoke() ?? editor.Document));
-        _session = sessionFactory?.Invoke(ports) ?? new FreeWAutosaveSession(ports);
-        _periodicLoop = new AutosavePeriodicTaskLoop(
-            FreeWAutosaveSession.DefaultInterval,
-            () => AvaloniaBoundedDispatcherTransaction.TryExecute(
-                _session.Snapshot,
-                EmergencySnapshotDispatcherTimeout));
-        _recoverInNewWindowAsync = recoverInNewWindowAsync;
-        _confirmDiscardOrSaveAsync = confirmDiscardOrSaveAsync;
-        _emergencySnapshotRegistration = EmergencySnapshots.Register(this);
+
+        // Round-172 finding shared-autosave-recovery/F3: recovery is a form of OPENING a document, so
+        // the accepted snapshot is restored through FreeWDocumentFileWorkflow.OpenSnapshotAsync -- the
+        // one place that re-arms the external-modification write-time guard from the ORIGINAL file's
+        // current on-disk write time -- rather than a hand-rolled, unguarded load beside it (which let
+        // the first save after recovery silently overwrite a copy that changed on disk while the app
+        // was gone). OpenSnapshotAsync never throws (it reports failure via Succeeded), so a
+        // corrupt/truncated snapshot still surfaces as recovered: false.
+        var restore = AutosaveRecoveryRestore<TextDocument>.FromSnapshotPath(
+            (snapshotPath, originalPath) =>
+                documentFiles.OpenSnapshotAsync(snapshotPath, originalPath)
+                    .GetAwaiter().GetResult().Succeeded);
+
+        _host = new AvaloniaAutosaveHost<TextDocument>(
+            FreeWAutosaveProfile.Session,
+            ports,
+            new AvaloniaAutosaveHostCallbacks<TextDocument>(
+                // startup-fileopen F2: a command-line/file-association document opened into this
+                // window before the startup offer runs is not dirty, so it must not be replaced.
+                CurrentWindowHasExplicitDocument: () => workflow.CurrentPath is not null,
+                RestoreIntoCurrentWindow: restore,
+                RecoverInNewWindowAsync: recoverInNewWindowAsync,
+                // Manual Backstage > Open > "Recover Unsaved" may run against a dirty document, so it
+                // runs the same save/discard dirty gate the WPF host does.
+                ConfirmDiscardOrSaveAsync: confirmDiscardOrSaveAsync,
+                PromptResponseOverride: ResolvePromptResponse),
+            UiText.Get,
+            sessionFactory: sessionPorts => sessionFactory?.Invoke(sessionPorts) ?? new FreeWAutosaveSession(sessionPorts));
     }
 
     /// <summary>
-    /// Best-effort emergency snapshot for this window's document. Must never throw -- delegates to
-    /// <see cref="FreeWAutosaveSession.TryEmergencySnapshot"/>, which is never-throw by design.
+    /// Best-effort emergency snapshot for this window's document. Must never throw.
     /// </summary>
-    public void TryEmergencySnapshot() => AvaloniaBoundedDispatcherTransaction.TryExecute(
-        _session.TryEmergencySnapshot,
-        EmergencySnapshotDispatcherTimeout);
+    public void TryEmergencySnapshot() => _host.TryEmergencySnapshot();
 
     /// <summary>
     /// Attempts an emergency snapshot for every live window's document. Wired as the Avalonia
@@ -106,158 +111,40 @@ internal sealed partial class AutosaveAdapter : IDisposable
     /// crash takes the same best-effort snapshot FreeX's Avalonia host does instead of losing every
     /// edit since the last periodic autosave tick.
     /// </summary>
-    public static void TryEmergencySnapshots() => EmergencySnapshots.TrySnapshotAll();
+    public static void TryEmergencySnapshots() => AvaloniaAutosaveHost<TextDocument>.TrySnapshotAll();
 
-    /// <summary>
-    /// Start the periodic autosave loop. Safe to call from any thread.
-    /// The shared timer remains renderer-neutral; each complete snapshot transaction is marshalled
-    /// through the bounded Avalonia dispatcher bridge.
-    /// </summary>
-    public void Start() => _periodicLoop.Start();
+    /// <summary>Start the periodic autosave loop. Safe to call from any thread.</summary>
+    public void Start() => _host.Start();
 
     /// <summary>
     /// Stop the loop and delete the current-session snapshot (clean exit). Awaitable so the
     /// window's Closing handler can ensure cleanup before the process exits.
     /// </summary>
-    public async Task StopAsync()
-    {
-        await _periodicLoop.StopAsync();
-        _session.CompleteCleanExit();
-    }
+    public Task StopAsync() => _host.StopAsync();
 
     /// <summary>
     /// Check for recovery candidates from a previous session and offer each one in order.
     /// Must be called from the UI thread (it may show an Avalonia dialog).
-    /// Errors are swallowed — recovery is best-effort and never blocks startup.
+    /// Errors are swallowed -- recovery is best-effort and never blocks startup.
     /// </summary>
-    /// <remarks>
-    /// startup-fileopen F2: mirrors the fix already applied to FreeP's Avalonia
-    /// <c>AutosaveAdapter.OfferRecoveryAsync</c>. The caller's window may already have loaded a
-    /// command-line/file-association document before this runs (see <c>MainWindow</c>, which opens
-    /// the startup file into <c>this</c> synchronously, then fires this from the <c>Opened</c>
-    /// handler): the just-opened document is not dirty, so routing the first accepted candidate
-    /// straight into "the current window" would silently replace it. We snapshot whether the window
-    /// already has an explicitly opened document (<see cref="FileCommandWorkflow.CurrentPath"/>
-    /// non-null) BEFORE any candidate is applied, and if so force every accepted candidate through
-    /// the new-window path instead -- the same path already used for every candidate beyond the
-    /// first. A genuinely fresh window (no startup file) keeps the prior unconditional behaviour.
-    /// </remarks>
-    public async Task OfferRecoveryAsync(Window owner)
-    {
-        ArgumentNullException.ThrowIfNull(owner);
-
-        await AvaloniaAutosaveRecoveryHost.OfferStartupAsync(
-            owner,
-            currentWindowHasExplicitDocument: () => _workflow.CurrentPath is not null,
-            _session.PlanRecoveries,
-            createOffer: static (recovery, remainingCount) => new FreeWRecoveryOffer(
-                recovery,
-                remainingCount,
-                FreeWRecoveryPromptMode.StartupQuotedDisplayName),
-            promptAsync: offer => new ValueTask<bool>(RecoveryPromptDialog.ShowAsync(owner, offer.Prompt)),
-            recoverInCurrentWindow: CompleteDocumentRecovery,
-            recoverInNewWindowAsync: recovery => _recoverInNewWindowAsync is null
-                ? Task.FromResult(false)
-                : _recoverInNewWindowAsync(recovery.Candidate),
-            completeRecoveryResult: (recovery, accepted, recovered) =>
-                _session.CompleteRecoveryResult(recovery, accepted, recovered));
-    }
+    public Task OfferRecoveryAsync(Window owner) => _host.OfferRecoveryAsync(owner);
 
     /// <summary>
-    /// Manual Backstage &gt; Open &gt; "Recover Unsaved" command. Unlike <see cref="OfferRecoveryAsync"/>
-    /// (the best-effort, silent STARTUP offer -- a fresh window has nothing unsaved to lose), this is
-    /// reachable at any point mid-session, possibly against a dirty document. Restoring a recovered
-    /// snapshot into THIS window must therefore run the same save/discard dirty gate FreeW's WPF host
-    /// runs via <c>FileCommands.RecoverSnapshot</c> (which wraps the restore through
-    /// <c>FileCommandWorkflow.Open(...)</c> so <c>ConfirmDiscardOrSave</c> prompts first) -- otherwise
-    /// the current unsaved edits are silently discarded. See
-    /// <c>AutosaveCoordinator.RecoverUnsavedDocuments</c> on the WPF side for the sibling
-    /// implementation this mirrors.
+    /// Manual Backstage &gt; Open &gt; "Recover Unsaved" command. Reachable at any point mid-session,
+    /// possibly against a dirty document, so restoring into THIS window runs the save/discard dirty
+    /// gate supplied as <c>confirmDiscardOrSaveAsync</c> first.
     /// </summary>
-    public async Task RecoverUnsavedDocumentsAsync(Window owner)
+    public Task RecoverUnsavedDocumentsAsync(Window owner) => _host.RecoverManuallyAsync(owner);
+
+    public void Dispose() => _host.Dispose();
+
+    private static bool? ResolvePromptResponse(string message)
     {
-        ArgumentNullException.ThrowIfNull(owner);
-
-        var text = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
-
-        await AvaloniaAutosaveRecoveryHost.RecoverManuallyAsync(
-            owner,
-            new(text.Title, text.NoDocumentsMessage, text.FailureMessageFormat),
-            _session.PlanRecoveries,
-            createOffer: static (recovery, remainingCount) => new FreeWRecoveryOffer(
-                recovery,
-                remainingCount,
-                FreeWRecoveryPromptMode.Manual),
-            promptAsync: offer => new ValueTask<bool>(RecoveryPromptDialog.ShowAsync(owner, offer.Prompt)),
-            _confirmDiscardOrSaveAsync,
-            recoverInCurrentWindow: CompleteDocumentRecovery,
-            recoverInNewWindowAsync: recovery => _recoverInNewWindowAsync is null
-                ? Task.FromResult(false)
-                : _recoverInNewWindowAsync(recovery.Candidate),
-            completeRecoveryResult: (recovery, accepted, recovered) =>
-                _session.CompleteRecoveryResult(recovery, accepted, recovered));
+        Func<string, bool>? responder = null;
+        ResolvePromptResponder(ref responder);
+        return responder?.Invoke(message);
     }
 
-    /// <summary>
-    /// Round-172 finding shared-autosave-recovery/F3: this used to hand-roll the restore
-    /// (<c>_editor.LoadDocument(document); _workflow.MarkDirtyWithPath(originalPath);</c> via
-    /// <c>FreeWAutosaveSession.CompleteDocumentRecovery</c>'s document-callback overload), bypassing
-    /// <see cref="FreeWDocumentFileWorkflow.OpenSnapshotAsync"/> entirely -- the one place that
-    /// re-arms the external-modification write-time guard from the ORIGINAL file's current on-disk
-    /// write time. <c>_workflow.CurrentPath</c> ended up correctly pointed at the original file (both
-    /// objects share the same underlying <see cref="FileCommandWorkflow"/>), but the guard field
-    /// inside <see cref="_documentFileWorkflow"/> was never touched, so it stayed at whatever stale
-    /// value (or null) it already held -- letting the first save after recovery silently overwrite a
-    /// copy that changed on disk while the app was gone. Routes through the path-based
-    /// <see cref="FreeWAutosaveSession.CompleteRecovery"/> overload (the same one the WPF host's
-    /// <c>AutosaveCoordinator</c> uses via <c>FileCommands.OpenSnapshot</c>) so recovery is treated as
-    /// a form of opening a document and goes through the identical guarded path a normal open does,
-    /// rather than a second, unguarded load routine living beside it. <c>OpenSnapshotAsync</c> never
-    /// throws (it catches and reports failure via <c>Succeeded</c>), so a corrupt/truncated snapshot
-    /// still surfaces as <c>recovered: false</c> exactly as before.
-    /// </summary>
-    private bool CompleteDocumentRecovery(AutosaveRecoveryPlan recovery) =>
-        _session.CompleteRecovery(
-            recovery,
-            accepted: true,
-            restoreSnapshot: (snapshotPath, originalPath) =>
-                _documentFileWorkflow.OpenSnapshotAsync(snapshotPath, originalPath)
-                    .GetAwaiter().GetResult().Succeeded,
-            FreeWRecoveryRestoreExceptionPolicy.QuarantineCandidate);
-
-    public void Dispose()
-    {
-        _emergencySnapshotRegistration.Dispose();
-        _periodicLoop.Dispose();
-        _session.Dispose();
-    }
-}
-
-/// <summary>
-/// Minimal Yes / No prompt for the autosave recovery offer.
-/// </summary>
-internal sealed partial class RecoveryPromptDialog : FreeWDialogWindow
-{
-    private RecoveryPromptDialog(string message)
-    {
-        var recoveryText = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
-        AvaloniaRecoveryPromptDialogComposer.Compose(
-            this,
-            message,
-            new(recoveryText.Title, recoveryText.RecoverButton, recoveryText.SkipButton),
-            response => Close(response));
-    }
-
-    /// <summary>Show the prompt and return true if the user chose to recover.</summary>
-    public static Task<bool> ShowAsync(Window owner, string message)
-    {
-        var handled = false;
-        var response = false;
-        ResolveResponseOverride(message, ref handled, ref response);
-        return handled
-            ? Task.FromResult(response)
-            : new RecoveryPromptDialog(message).ShowDialog<bool>(owner);
-    }
-
-    static partial void ResolveResponseOverride(string message, ref bool handled, ref bool response);
+    /// <summary>Headless-test seam: lets tests answer the recovery prompt without a real modal.</summary>
+    static partial void ResolvePromptResponder(ref Func<string, bool>? responder);
 }

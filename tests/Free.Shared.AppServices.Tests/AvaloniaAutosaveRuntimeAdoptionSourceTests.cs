@@ -9,8 +9,8 @@ public sealed class AvaloniaAutosaveRuntimeAdoptionSourceTests
         var sources = new[]
         {
             File.ReadAllText(Path.Combine(root, "src", "FreeX.App.Avalonia", "App.cs")),
-            File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "AutosaveAdapter.cs")),
-            File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "AutosaveAdapter.cs")),
+            // FreeW and FreeP share one host, which owns the fan-out registration.
+            File.ReadAllText(Path.Combine(root, "shared", "Free.Shared.Shell.Avalonia", "AvaloniaAutosaveHost.cs")),
         };
 
         sources.Should().OnlyContain(source => source.Contains("EmergencySnapshotFanOut<", StringComparison.Ordinal));
@@ -23,21 +23,27 @@ public sealed class AvaloniaAutosaveRuntimeAdoptionSourceTests
     public void SisterAvaloniaAdapters_UseSharedPeriodicAndBoundedTransactionRuntimes()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
-        var sources = new[]
+        var sharedHost = File.ReadAllText(Path.Combine(
+            root, "shared", "Free.Shared.Shell.Avalonia", "AvaloniaAutosaveHost.cs"));
+        sharedHost.Should().Contain("AutosavePeriodicTaskLoop")
+            .And.Contain("AvaloniaBoundedDispatcherTransaction.TryExecute(")
+            .And.Contain("Session.Snapshot")
+            .And.Contain("Session.TryEmergencySnapshot")
+            .And.NotContain("ManualResetEventSlim")
+            .And.NotContain("RunLoopAsync(")
+            .And.NotContain("CancellationTokenSource");
+
+        var adapters = new[]
         {
             File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "AutosaveAdapter.cs")),
             File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "AutosaveAdapter.cs")),
         };
-
-        foreach (var source in sources)
+        foreach (var adapter in adapters)
         {
-            source.Should().Contain("AutosavePeriodicTaskLoop")
-                .And.Contain("AvaloniaBoundedDispatcherTransaction.TryExecute(")
-                .And.Contain("_session.Snapshot")
-                .And.Contain("_session.TryEmergencySnapshot")
-                .And.NotContain("ManualResetEventSlim")
-                .And.NotContain("RunLoopAsync(")
-                .And.NotContain("CancellationTokenSource");
+            adapter.Should().Contain("AvaloniaAutosaveHost<")
+                .And.NotContain("AutosavePeriodicTaskLoop")
+                .And.NotContain("AvaloniaBoundedDispatcherTransaction")
+                .And.NotContain("EmergencySnapshotFanOut<");
         }
     }
 }

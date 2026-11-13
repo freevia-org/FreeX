@@ -389,6 +389,24 @@ public sealed record DocumentParagraphAnchoredWrapPlan(
     ImageWrapping Wrapping,
     FloatingWrapTextSide WrapTextSide);
 
+/// <summary>
+/// A paragraph-relative wrap exclusion rectangle (DIPs from the column's left edge and the paragraph's
+/// top). <see cref="BlocksWholeLine"/> marks a top-and-bottom exclusion: no text beside it.
+/// </summary>
+public sealed record DocumentParagraphWrapRect(
+    double LeftDip,
+    double WidthDip,
+    double TopDip,
+    double HeightDip,
+    bool BlocksWholeLine,
+    FloatingWrapTextSide WrapTextSide)
+{
+    public double BottomDip => TopDip + HeightDip;
+}
+
+/// <summary>A vertically disjoint wrap band produced from overlapping exclusions, owned by one source rect.</summary>
+public sealed record DocumentParagraphWrapBand(int OwnerIndex, DocumentParagraphWrapRect Rect);
+
 public sealed record DocumentFloatingLineExclusionPlan(
     double LeftDeltaDip,
     double RightShrinkDip);
@@ -1827,6 +1845,91 @@ public static class DocumentViewLayoutPlanner
             paragraphOffsetDip,
             wrapping,
             side);
+    }
+
+    /// <summary>
+    /// Word lets the wrap exclusions of objects anchored in one paragraph overlap vertically (a square
+    /// object beside — or inside the band of — a top-and-bottom one), and text wraps around their union
+    /// line by line. A host whose exclusions may not share a vertical band (WPF's page layout pushes a
+    /// figure below every figure placed before it whose band it overlaps, even side by side) needs the
+    /// exclusions re-cut into vertically disjoint bands: each elementary band between two exclusion edges
+    /// spans the union of the rects covering it, blocks the whole line when any of them does, and keeps a
+    /// one-sided wrap only when every covering rect agrees. Returns null when no two rects overlap
+    /// vertically, so the original exclusions stay untouched. A rect that is entirely covered by
+    /// earlier rects owns no band.
+    /// </summary>
+    public static IReadOnlyList<DocumentParagraphWrapBand>? BuildVerticallyDisjointParagraphWrapBands(
+        IReadOnlyList<DocumentParagraphWrapRect> rects)
+    {
+        ArgumentNullException.ThrowIfNull(rects);
+        const double epsilon = 0.01;
+
+        var overlaps = false;
+        for (var i = 0; i < rects.Count && !overlaps; i++)
+        {
+            for (var j = i + 1; j < rects.Count; j++)
+            {
+                if (rects[i].TopDip < rects[j].BottomDip - epsilon && rects[j].TopDip < rects[i].BottomDip - epsilon)
+                {
+                    overlaps = true;
+                    break;
+                }
+            }
+        }
+
+        if (!overlaps)
+            return null;
+
+        var edges = rects
+            .SelectMany(rect => new[] { rect.TopDip, rect.BottomDip })
+            .OrderBy(edge => edge)
+            .ToList();
+        var distinctEdges = new List<double>();
+        foreach (var edge in edges)
+        {
+            if (distinctEdges.Count == 0 || edge - distinctEdges[^1] > epsilon)
+                distinctEdges.Add(edge);
+        }
+
+        var bands = new List<DocumentParagraphWrapBand>();
+        for (var k = 0; k + 1 < distinctEdges.Count; k++)
+        {
+            var top = distinctEdges[k];
+            var bottom = distinctEdges[k + 1];
+            var covering = Enumerable.Range(0, rects.Count)
+                .Where(index => rects[index].TopDip <= top + epsilon && rects[index].BottomDip >= bottom - epsilon)
+                .ToList();
+            if (covering.Count == 0)
+                continue;
+
+            var left = covering.Min(index => rects[index].LeftDip);
+            var right = covering.Max(index => rects[index].LeftDip + rects[index].WidthDip);
+            var blocksWholeLine = covering.Any(index => rects[index].BlocksWholeLine);
+            var firstSide = rects[covering[0]].WrapTextSide;
+            var side = covering.All(index => rects[index].WrapTextSide == firstSide)
+                ? firstSide
+                : FloatingWrapTextSide.BothSides;
+            var owner = covering[0];
+
+            if (bands.Count > 0
+                && bands[^1] is { OwnerIndex: var lastOwner, Rect: var last }
+                && lastOwner == owner
+                && Math.Abs(last.BottomDip - top) <= epsilon
+                && Math.Abs(last.LeftDip - left) <= epsilon
+                && Math.Abs(last.LeftDip + last.WidthDip - right) <= epsilon
+                && last.BlocksWholeLine == blocksWholeLine
+                && last.WrapTextSide == side)
+            {
+                bands[^1] = bands[^1] with { Rect = last with { HeightDip = bottom - last.TopDip } };
+                continue;
+            }
+
+            bands.Add(new DocumentParagraphWrapBand(
+                owner,
+                new DocumentParagraphWrapRect(left, right - left, top, bottom - top, blocksWholeLine, side)));
+        }
+
+        return bands;
     }
 
     public static double BuildFloatingWrapReservationTextWidthDip(PageSettings page)

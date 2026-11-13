@@ -154,6 +154,57 @@ public sealed record ChartNativeVisualSettings(
     bool ShowDataLabels,
     bool ScatterConnectsPoints);
 
+/// <summary>
+/// Resolved text sizes (points) of an imported chart part: explicit <c>a:defRPr</c>/<c>a:rPr</c>
+/// <c>@sz</c> values (hundredths of a point) from the element's <c>c:txPr</c> / rich text, falling back
+/// to the chart-space <c>c:txPr</c> and then to Word's defaults for a chart part without text properties.
+/// </summary>
+public sealed record ChartTextSizes(
+    double TitlePt,
+    double AxisTitlePt,
+    double TickLabelPt,
+    double LegendPt,
+    double DataLabelPt)
+{
+    /// <summary>Word's rendering of a chart part that carries no text properties at all.</summary>
+    public static ChartTextSizes WordDefault { get; } = new(18, 18, 9, 9, 9);
+}
+
+/// <summary>
+/// The chart text sizes (points) a chart part states explicitly — or that were edited — and that a save
+/// writes back: the chart-space <c>c:txPr</c> default, the title and axis-title rich-text run size, and the
+/// axis, legend and data-label <c>c:txPr</c> sizes. Null entries were not stated and are never written,
+/// so Word's rendering defaults are not stamped into a file that did not carry them.
+/// </summary>
+public sealed record ChartAuthoredTextSizes(
+    double? ChartSpacePt = null,
+    double? TitlePt = null,
+    double? AxisTitlePt = null,
+    double? TickLabelPt = null,
+    double? LegendPt = null,
+    double? DataLabelPt = null)
+{
+    public bool HasAny =>
+        ChartSpacePt is not null || TitlePt is not null || AxisTitlePt is not null
+        || TickLabelPt is not null || LegendPt is not null || DataLabelPt is not null;
+
+    /// <summary>
+    /// Resolves the rendered sizes: a stated size wins, then the chart-space default, then Word's rendering
+    /// of a part without text properties (<see cref="ChartTextSizes.WordDefault"/>).
+    /// </summary>
+    public ChartTextSizes Resolve()
+    {
+        var defaults = ChartTextSizes.WordDefault;
+        var basePt = ChartSpacePt ?? defaults.TickLabelPt;
+        return new ChartTextSizes(
+            TitlePt ?? (ChartSpacePt is { } space ? space * 1.4 : defaults.TitlePt),
+            AxisTitlePt ?? ChartSpacePt ?? defaults.AxisTitlePt,
+            TickLabelPt ?? basePt,
+            LegendPt ?? basePt,
+            DataLabelPt ?? basePt);
+    }
+}
+
 // ─── Chart Gallery catalogs ───────────────────────────────────────────────────
 //
 // Three curated sets mirror Word's Chart Design ribbon galleries:
@@ -395,6 +446,19 @@ public sealed class Chart
     /// </summary>
     public ChartNativeVisualSettings? NativeVisualSettings { get; set; }
 
+    /// <summary>
+    /// Text sizes recovered from an imported chart part (see <see cref="ChartTextSizes"/>). Null keeps
+    /// FreeW's gallery text sizes for charts authored in the model. Rendering only: a save writes
+    /// <see cref="AuthoredTextSizes"/>, the sizes the part stated (or an edit set).
+    /// </summary>
+    public ChartTextSizes? NativeTextSizes { get; set; }
+
+    /// <summary>
+    /// The text sizes the chart part stated explicitly, or that an edit set; written back on save (see
+    /// <see cref="ChartAuthoredTextSizes"/>). Null when the part stated none.
+    /// </summary>
+    public ChartAuthoredTextSizes? AuthoredTextSizes { get; set; }
+
     public Chart() { }
 
     /// <summary>
@@ -435,7 +499,9 @@ public sealed class Chart
             StyleId = StyleId,
             ColorSchemeId = ColorSchemeId,
             QuickLayoutId = QuickLayoutId,
-            NativeVisualSettings = NativeVisualSettings
+            NativeVisualSettings = NativeVisualSettings,
+            NativeTextSizes = NativeTextSizes,
+            AuthoredTextSizes = AuthoredTextSizes
         };
         clone.Categories.AddRange(Categories);
         foreach (var series in Series)

@@ -17,8 +17,8 @@ public sealed class PresentationBackstagePanePlanner
 {
     // Not resx-backed -- mirrors FreeW's own Open pane, which keeps its heading/description/group
     // text as plain constants in BackstageOpenPanePlanner rather than routing them through its
-    // localization catalog. Only the recoverable command's own label (AutosaveRecoveryText.
-    // BackstageLabel) is localized, per FreeP's resx conventions for user-invokable command text.
+    // localization catalog. Only the recoverable command's own label (FreePAutosaveProfile.
+    // ResolveBackstageLabel) is localized, per FreeP's resx conventions for user-invokable command text.
     private const string OpenPaneHeading = "Open";
     private const string OpenPaneDescription =
         "Open an existing presentation, or recover one FreeP didn't get to save.";
@@ -103,7 +103,7 @@ public sealed class PresentationBackstagePanePlanner
         ArgumentNullException.ThrowIfNull(browse);
         ArgumentNullException.ThrowIfNull(recoverUnsaved);
 
-        var text = AutosaveRecoveryTextCatalog.Resolve(_getText);
+        var backstageLabel = FreePAutosaveProfile.ResolveBackstageLabel(_getText);
         return new BackstageActionPaneSpec(
             OpenPaneHeading,
             OpenPaneDescription,
@@ -121,7 +121,7 @@ public sealed class PresentationBackstagePanePlanner
                 new BackstageActionGroup(OpenPaneRecoveryGroupHeading,
                 [
                     new BackstageActionRow(
-                        text.BackstageLabel,
+                        backstageLabel,
                         OpenPaneRecoveryRowDescription,
                         recoverUnsaved)
                     {

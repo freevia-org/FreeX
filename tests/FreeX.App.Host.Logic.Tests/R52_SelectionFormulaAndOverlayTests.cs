@@ -286,8 +286,10 @@ public sealed class R52_SelectionFormulaAndOverlayTests
                 sheet.FrozenCols = 3;
                 var current = new CellAddress(sheet.Id, 50, 26); // Z50, far from A1.
 
-                var target = (CellAddress)R49MainWindowTestHarness.Invoke(
-                    window, "GetHomeNavigationTarget", sheet, current, true)!;
+                // The WPF GetHomeNavigationTarget helper was folded into the shared
+                // ExcelWorksheetNavigationPlanner.ResolveTarget; Home is its GetHomeTarget piece.
+                var target = ExcelWorksheetNavigationPlanner.GetHomeTarget(
+                    sheet, sheet.Id, current, ctrlHeld: true, endMode: false);
 
                 target.Should().Be(new CellAddress(sheet.Id, 3, 4),
                     "Ctrl+Home must jump to the top-left cell of the SCROLLABLE region (D3, the first " +
@@ -312,8 +314,8 @@ public sealed class R52_SelectionFormulaAndOverlayTests
                 var sheet = workbook.GetSheetAt(0);
                 var current = new CellAddress(sheet.Id, 50, 26);
 
-                var target = (CellAddress)R49MainWindowTestHarness.Invoke(
-                    window, "GetHomeNavigationTarget", sheet, current, true)!;
+                var target = ExcelWorksheetNavigationPlanner.GetHomeTarget(
+                    sheet, sheet.Id, current, ctrlHeld: true, endMode: false);
 
                 target.Should().Be(new CellAddress(sheet.Id, 1, 1));
             }
@@ -339,8 +341,8 @@ public sealed class R52_SelectionFormulaAndOverlayTests
                 sheet.FrozenCols = 3;
                 var current = new CellAddress(sheet.Id, 50, 26);
 
-                var target = (CellAddress)R49MainWindowTestHarness.Invoke(
-                    window, "GetHomeNavigationTarget", sheet, current, false)!;
+                var target = ExcelWorksheetNavigationPlanner.GetHomeTarget(
+                    sheet, sheet.Id, current, ctrlHeld: false, endMode: false);
 
                 target.Should().Be(new CellAddress(sheet.Id, 50, 1));
             }

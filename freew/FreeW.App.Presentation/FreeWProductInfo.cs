@@ -19,25 +19,15 @@ public static class FreeWProductInfo
     public const string PrivacyNotice = "Privacy: FreeW is a local desktop app. Documents are opened, edited, and saved on this machine unless the user explicitly chooses an external sharing path. Local tester diagnostics stay on the user's machine unless the user chooses to share them. FreeW does not intentionally collect document contents, filenames, or file paths in diagnostics or crash reports.";
     public const string SourceNotice = "Full project license, legal notice, privacy notice, third-party notices, and bundled third-party license texts are available in Help > Legal Notices and are maintained with the Free-family release materials at https://github.com/freevia-org/FreeX.";
 
-    public static string GetVersionText(Assembly assembly)
-    {
-        var version = AssemblyVersionMetadata.FromAssembly(assembly);
-        return AppVersionFormatter.FormatVersionText(
-            version.InformationalVersion);
-    }
+    // FreeW keeps the three-part version ("0.5.0"); FreeX alone drops a trailing ".0" patch.
+    public static string GetVersionText(Assembly assembly) =>
+        ProductBuildInfo.GetVersionText(assembly);
 
-    public static string GetBuildVersionText(Assembly assembly)
-    {
-        var version = AssemblyVersionMetadata.FromAssembly(assembly);
-        return AppVersionFormatter.FormatBuildVersionText(
-            version.InformationalVersion,
-            version.AssemblyVersion);
-    }
+    public static string GetBuildVersionText(Assembly assembly) =>
+        ProductBuildInfo.GetBuildVersionText(assembly);
 
     public static string CreateFeedbackUrl(Assembly assembly) =>
-        AppFeedbackReporter.CreateIssueUrl(
-            ProductName,
-            AppDiagnosticsMetadata.Create(GetBuildVersionText(assembly)));
+        ProductBuildInfo.CreateFeedbackUrl(ProductName, assembly);
 
     public static string CreateAboutText(Assembly assembly)
     {

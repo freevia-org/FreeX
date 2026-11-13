@@ -10,11 +10,18 @@ public sealed class WpfAutosaveHostRuntimeAdoptionTests
     public void AutosaveCoordinator_UsesSharedWpfTimer(string productDirectory, string hostProject)
     {
         var source = ReadHostSource(productDirectory, hostProject, "AutosaveCoordinator.cs");
+        var shared = ReadSharedAutosaveHost();
 
-        source.Should().Contain("private readonly WpfAutosaveTimer _timer;");
-        source.Should().Contain("new WpfAutosaveTimer(");
-        source.Should().NotContain("DispatcherTimer");
-        source.Should().NotContain(".Tick +=");
+        shared.Should().Contain("private readonly WpfAutosaveTimer _timer;");
+        shared.Should().Contain("new WpfAutosaveTimer(");
+        foreach (var text in new[] { source, shared })
+        {
+            text.Should().NotContain("DispatcherTimer");
+            text.Should().NotContain(".Tick +=");
+        }
+
+        source.Should().Contain("new WpfAutosaveHost<");
+        source.Should().NotContain("WpfAutosaveTimer");
     }
 
     [Theory]
@@ -25,11 +32,21 @@ public sealed class WpfAutosaveHostRuntimeAdoptionTests
         string hostProject)
     {
         var source = ReadHostSource(productDirectory, hostProject, "AutosaveCoordinator.cs");
+        var shared = ReadSharedAutosaveHost();
 
-        source.Should().Contain("WpfAutosaveRecoveryHost.OfferStartup(");
-        source.Should().Contain("WpfAutosaveRecoveryHost.RecoverManually(");
-        source.Should().NotContain("DialogMessageHelper.");
-        source.Should().NotContain("catch (Exception ex)");
+        shared.Should().Contain("WpfAutosaveRecoveryHost.OfferStartup(");
+        shared.Should().Contain("WpfAutosaveRecoveryHost.RecoverManually(");
+        foreach (var text in new[] { source, shared })
+        {
+            text.Should().NotContain("DialogMessageHelper.");
+            text.Should().NotContain("catch (Exception ex)");
+        }
+
+        // The product coordinator is a thin binding: it must not re-grow its own recovery walk.
+        source.Should().NotContain("WpfAutosaveRecoveryHost.")
+            .And.NotContain("AutosaveRecoveryPromptMode")
+            .And.NotContain("AutosaveRecoveryWorkflow")
+            .And.NotContain("CreateOffer(");
     }
 
     [Theory]
@@ -59,6 +76,10 @@ public sealed class WpfAutosaveHostRuntimeAdoptionTests
         source.Should().Contain("DispatcherPriority.Send");
         source.Should().Contain("CancellationToken.None");
     }
+
+    private static string ReadSharedAutosaveHost() =>
+        File.ReadAllText(TestWorkspaceFileLocator.Find(
+            "shared", "Free.Shared.Shell.Wpf", "WpfAutosaveHost.cs"));
 
     private static string ReadHostSource(string productDirectory, string hostProject, string fileName) =>
         File.ReadAllText(TestWorkspaceFileLocator.Find(productDirectory, hostProject, fileName));

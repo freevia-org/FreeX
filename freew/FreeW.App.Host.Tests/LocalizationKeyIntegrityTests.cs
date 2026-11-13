@@ -62,7 +62,7 @@ public sealed class LocalizationKeyIntegrityTests
             .Concat(ChartTitleDialogPlanner.RequiredResourceKeys)
             .Concat(ChartAxisTitlesDialogPlanner.RequiredResourceKeys)
             .Concat(ChartSizeDialogPlanner.RequiredResourceKeys)
-            .Concat(AutosaveRecoveryTextCatalog.RequiredResourceKeys)
+            .Concat(FreeWAutosaveProfile.Recovery.RequiredResourceKeys)
             .Concat(StyleDefinitionDialogText.RequiredResourceKeys)
             .Concat(MailMergeRecipientSourceText.RequiredResourceKeys)
             .Distinct(StringComparer.Ordinal);

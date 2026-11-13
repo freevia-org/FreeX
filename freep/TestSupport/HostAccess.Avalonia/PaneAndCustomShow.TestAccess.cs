@@ -30,13 +30,12 @@ internal sealed partial class CustomShowDialog
         bool isInsideList) =>
         CompleteCustomShowSlideDrag(sourceSlideIndex, targetDropIndex, isInsideList);
 
-    internal bool IsCustomShowSlideDragActiveForTests => _customShowSlideDragActive;
+    internal bool IsCustomShowSlideDragActiveForTests => _customShowSlideDrag.IsActive;
 
     internal IPointer BeginCustomShowSlideDragForTests(int sourceSlideIndex)
     {
-        _customShowSlideDragStartPoint = new Point();
-        _customShowSlideDragSourceIndex = sourceSlideIndex;
-        _customShowSlideDragActive = true;
+        _customShowSlideDrag.Press(0, 0, sourceSlideIndex);
+        _customShowSlideDrag.MarkActive();
         var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, isPrimary: true);
         pointer.Capture(this);
         return pointer;

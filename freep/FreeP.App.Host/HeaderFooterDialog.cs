@@ -72,7 +72,7 @@ public sealed partial class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWi
         {
             Content = surface.Field(HeaderFooterDialogField.Footer).Label,
             IsChecked = defaults.ShowFooter,
-            Margin = new Thickness(0, 0, 0, 4),
+            Margin = new Thickness(0, 0, 0, HeaderFooterDialogVisualMetrics.WpfFooterCheckBottomMargin),
         };
         _footerBox = new TextBox
         {

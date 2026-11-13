@@ -187,7 +187,8 @@ public sealed record ChartSceneLegendEntry(
     double SwatchY,
     double SwatchSize,
     double TextX,
-    double TextY);
+    double TextY,
+    double FontSize = 9);
 
 /// <summary>
 /// Renderer-neutral chart scene. Coordinates are local to <see cref="FrameBounds"/>;
@@ -416,6 +417,8 @@ public sealed record SmartArtVisualPlan(
 
 public static partial class ChartSmartArtVisualPlanner
 {
+    private const double PointToDip = 96.0 / 72.0;
+
     public static ChartVisualPlan BuildChartPlan(Chart chart)
     {
         ArgumentNullException.ThrowIfNull(chart);
@@ -848,6 +851,41 @@ public static partial class ChartSmartArtVisualPlanner
                 var textX = usesCompactCategoryLegend ? x + 6 : x + 11;
                 legend.Add(new ChartSceneLegendEntry(label, x, y, swatchSize, textX, y));
             }
+        }
+
+        if (chart.NativeTextSizes is { } nativeSizes)
+        {
+            // An imported chart part's text sizes are source-authoritative (c:txPr / rich-text sz, or
+            // Word's defaults for a part without text properties) — FreeW's gallery sizes apply only to
+            // charts authored in the model. The Word quick-layout column signature scales its own axis
+            // titles in the renderer, so those keep their gallery base size.
+            var rendererScalesAxisTitles = chart.Kind == ChartKind.Column
+                && chart.StyleId == 7
+                && chart.QuickLayoutId == 9
+                && string.Equals(chart.ColorSchemeId, "mono-blue", StringComparison.OrdinalIgnoreCase);
+            texts = texts
+                .Select(text => text with
+                {
+                    FontSize = text.Kind switch
+                    {
+                        ChartSceneTextKind.Title => nativeSizes.TitlePt * PointToDip,
+                        ChartSceneTextKind.AxisTitle when !rendererScalesAxisTitles => nativeSizes.AxisTitlePt * PointToDip,
+                        ChartSceneTextKind.CategoryAxis or ChartSceneTextKind.ValueAxis => nativeSizes.TickLabelPt * PointToDip,
+                        ChartSceneTextKind.DataLabel => nativeSizes.DataLabelPt * PointToDip,
+                        ChartSceneTextKind.Legend => nativeSizes.LegendPt * PointToDip,
+                        _ => text.FontSize,
+                    },
+                })
+                .ToList();
+            // Word sets the legend text one DIP past its swatch; the gallery offsets were tuned for
+            // smaller text and would run the label into the swatch.
+            legend = legend
+                .Select(entry => entry with
+                {
+                    FontSize = nativeSizes.LegendPt * PointToDip,
+                    TextX = Math.Max(entry.TextX, entry.SwatchX + entry.SwatchSize + 1),
+                })
+                .ToList();
         }
 
         return new ChartScene(chart.Kind, plan.GeometryKind, plan.StyleId, plan.ColorSchemeId, plan.QuickLayoutId,

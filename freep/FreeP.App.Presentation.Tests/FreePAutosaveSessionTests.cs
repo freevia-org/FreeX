@@ -18,7 +18,7 @@ public sealed class FreePAutosaveSessionTests : IDisposable
 
     public void Dispose() => _temporaryDirectory.Dispose();
 
-    private static FreePAutosavePorts Ports(
+    private static AutosaveDocumentPorts<Presentation> Ports(
         Presentation presentation,
         bool isDirty,
         int dirtyGeneration = 1,
@@ -29,7 +29,7 @@ public sealed class FreePAutosaveSessionTests : IDisposable
             GetDisplayName: () => displayName,
             GetIsDirty: () => isDirty,
             GetDirtyGeneration: () => dirtyGeneration,
-            ExecuteWithPresentation: write => write(presentation));
+            ExecuteWithDocument: write => write(presentation));
 
     [Fact]
     public void Snapshot_WritesAReadablePptxPackageAndSidecarForADirtyPresentation()
@@ -108,12 +108,12 @@ public sealed class FreePAutosaveSessionTests : IDisposable
     {
         var store = new AutosaveSnapshotStore(TempDirectory);
         using var session = new FreePAutosaveSession(
-            new FreePAutosavePorts(
+            new AutosaveDocumentPorts<Presentation>(
                 GetOriginalFilePath: () => null,
                 GetDisplayName: () => "Presentation1",
                 GetIsDirty: () => true,
                 GetDirtyGeneration: () => 1,
-                ExecuteWithPresentation: _ => throw new InvalidOperationException("boom")),
+                ExecuteWithDocument: _ => throw new InvalidOperationException("boom")),
             store,
             "freep-autosave-throwing");
 

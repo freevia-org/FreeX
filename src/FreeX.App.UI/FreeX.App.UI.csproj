@@ -10,6 +10,7 @@
     <ProjectReference Include="../FreeX.App.Localization/FreeX.App.Localization.csproj" />
     <ProjectReference Include="../FreeX.App.Services/FreeX.App.Services.csproj" />
     <ProjectReference Include="../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.Drawing.Wpf/Free.Shared.Drawing.Wpf.csproj" />
   </ItemGroup>
 
   <ItemGroup>

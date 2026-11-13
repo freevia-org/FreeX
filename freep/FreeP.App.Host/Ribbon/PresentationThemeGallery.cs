@@ -4,14 +4,15 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using Free.Shared.Ribbon;
+using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
 
 /// <summary>
 /// Compact PowerPoint-style theme thumbnails for the Design ribbon. The catalog remains defined by
-/// <see cref="BuiltInThemes"/> and activation continues through the shared command registry; this type
-/// owns only the WPF preview surface.
+/// <see cref="BuiltInThemes"/> and activation continues through the shared command registry; selection
+/// is planned by <see cref="ThemeGalleryPlanner"/> and this type owns only the WPF preview surface.
 /// </summary>
 internal static class PresentationThemeGallery
 {
@@ -24,23 +25,19 @@ internal static class PresentationThemeGallery
         {
             Orientation = Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(2, 1, 2, 0),
+            Margin = new Thickness(
+                FreePRibbonGalleryMetrics.StripMarginSide,
+                FreePRibbonGalleryMetrics.StripMarginTop,
+                FreePRibbonGalleryMetrics.StripMarginSide,
+                0),
         };
 
         var entries = BuiltInThemes.GetAll();
-        if (state == RibbonAdaptiveGroupState.Full)
-        {
-            foreach (var entry in entries)
-                strip.Children.Add(BuildThemeButton(entry, registry));
-        }
-        else
-        {
-            var activeName = activeThemeName?.Invoke();
-            var active = entries.FirstOrDefault(entry => string.Equals(entry.DisplayName, activeName, StringComparison.OrdinalIgnoreCase))
-                ?? entries[0];
-            strip.Children.Add(BuildThemeButton(active, registry));
+        var plan = ThemeGalleryPlanner.Plan(entries, state, activeThemeName?.Invoke());
+        foreach (var entry in plan.Thumbnails)
+            strip.Children.Add(BuildThemeButton(entry, registry));
+        if (plan.ShowMore)
             strip.Children.Add(BuildMoreThemesButton(entries, registry));
-        }
 
         return strip;
     }
@@ -51,13 +48,13 @@ internal static class PresentationThemeGallery
     {
         var button = new Button
         {
-            Content = "More\u2026",
-            MinWidth = 28,
-            Height = 48,
-            Padding = new Thickness(4, 0, 4, 0),
-            ToolTip = "More Themes",
+            Content = FreePRibbonGalleryMetrics.ThemeMoreText,
+            MinWidth = FreePRibbonGalleryMetrics.ThemeMoreMinWidth,
+            Height = FreePRibbonGalleryMetrics.ThemeMoreHeight,
+            Padding = new Thickness(FreePRibbonGalleryMetrics.ThemeMorePaddingSide, 0, FreePRibbonGalleryMetrics.ThemeMorePaddingSide, 0),
+            ToolTip = FreePRibbonGalleryMetrics.ThemeMoreLabel,
         };
-        AutomationProperties.SetName(button, "More Themes");
+        AutomationProperties.SetName(button, FreePRibbonGalleryMetrics.ThemeMoreLabel);
 
         var menu = new ContextMenu();
         foreach (var entry in entries)
@@ -83,24 +80,33 @@ internal static class PresentationThemeGallery
     private static FrameworkElement BuildThemeButton(BuiltInThemeEntry entry, IRibbonCommandRegistry registry)
     {
         var theme = entry.Theme;
-        var preview = new Grid { Width = 82, Height = 50, Margin = new Thickness(3, 0, 3, 0) };
+        var preview = new Grid
+        {
+            Width = FreePRibbonGalleryMetrics.ThemePreviewWidth,
+            Height = FreePRibbonGalleryMetrics.ThemePreviewHeight,
+            Margin = new Thickness(FreePRibbonGalleryMetrics.ThemePreviewSideMargin, 0, FreePRibbonGalleryMetrics.ThemePreviewSideMargin, 0),
+        };
         preview.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         preview.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         var page = new Border
         {
             Background = Brush(theme.ColorScheme[ThemeColorSlot.Lt1]),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0x9C, 0x9C, 0x9C)),
+            BorderBrush = Brush(FreePRibbonGalleryMetrics.ThumbnailBorder),
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(7, 3, 7, 4),
+            Padding = new Thickness(
+                FreePRibbonGalleryMetrics.ThemePagePaddingSide,
+                FreePRibbonGalleryMetrics.ThemePagePaddingTop,
+                FreePRibbonGalleryMetrics.ThemePagePaddingSide,
+                FreePRibbonGalleryMetrics.ThemePagePaddingBottom),
         };
         var previewContent = new Grid();
         previewContent.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         previewContent.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         previewContent.Children.Add(new TextBlock
         {
-            Text = "Aa",
-            FontSize = 26,
+            Text = FreePRibbonGalleryMetrics.ThemeSampleText,
+            FontSize = FreePRibbonGalleryMetrics.ThemeSampleFontSize,
             Foreground = Brush(theme.ColorScheme[ThemeColorSlot.Dk2]),
             VerticalAlignment = VerticalAlignment.Center,
         });
@@ -109,10 +115,10 @@ internal static class PresentationThemeGallery
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Stretch,
         };
-        foreach (var slot in AccentSlots)
+        foreach (var slot in ThemeGalleryPlanner.AccentSlots)
         {
-            swatches.Children.Add(Bar(theme.ColorScheme[slot], 7, 4));
-            swatches.Children.Add(new Border { Width = 1 });
+            swatches.Children.Add(Bar(theme.ColorScheme[slot], FreePRibbonGalleryMetrics.ThemeSwatchWidth, FreePRibbonGalleryMetrics.ThemeSwatchHeight));
+            swatches.Children.Add(new Border { Width = FreePRibbonGalleryMetrics.ThemeSwatchGap });
         }
         Grid.SetRow(swatches, 1);
         previewContent.Children.Add(swatches);
@@ -122,10 +128,14 @@ internal static class PresentationThemeGallery
         var caption = new TextBlock
         {
             Text = entry.DisplayName,
-            FontSize = 9,
+            FontSize = FreePRibbonGalleryMetrics.CaptionFontSize,
             TextTrimming = TextTrimming.CharacterEllipsis,
             TextAlignment = TextAlignment.Center,
-            Margin = new Thickness(1, 1, 1, 0),
+            Margin = new Thickness(
+                FreePRibbonGalleryMetrics.CaptionMarginSide,
+                FreePRibbonGalleryMetrics.CaptionMarginTop,
+                FreePRibbonGalleryMetrics.CaptionMarginSide,
+                0),
         };
         Grid.SetRow(caption, 1);
         preview.Children.Add(caption);
@@ -136,14 +146,14 @@ internal static class PresentationThemeGallery
             Background = Brushes.Transparent,
             BorderBrush = Brushes.Transparent,
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(1),
+            Padding = new Thickness(FreePRibbonGalleryMetrics.ButtonPadding),
             ToolTip = entry.DisplayName,
         };
         AutomationProperties.SetName(button, entry.DisplayName);
         button.MouseEnter += (_, _) =>
         {
-            button.Background = new SolidColorBrush(Color.FromRgb(0xEA, 0xF1, 0xFB));
-            button.BorderBrush = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x9A));
+            button.Background = Brush(FreePRibbonGalleryMetrics.HoverBackground);
+            button.BorderBrush = Brush(FreePRibbonGalleryMetrics.HoverBorder);
         };
         button.MouseLeave += (_, _) =>
         {
@@ -154,12 +164,8 @@ internal static class PresentationThemeGallery
         return button;
     }
 
-    private static void ExecuteTheme(BuiltInThemeEntry entry, IRibbonCommandRegistry registry)
-    {
-        var commandId = new RibbonCommandId("freep.theme." + entry.Id.ToLowerInvariant());
-        if (registry.TryGet(commandId, out var command) && command is not null)
-            command.Execute(RibbonCommandContext.Empty);
-    }
+    private static void ExecuteTheme(BuiltInThemeEntry entry, IRibbonCommandRegistry registry) =>
+        FreePRibbonGalleryCommands.Execute(registry, ThemeGalleryPlanner.CommandIdFor(entry));
 
     private static Border Bar(SrgbColor color, double width, double height) => new()
     {
@@ -169,14 +175,4 @@ internal static class PresentationThemeGallery
     };
 
     private static SolidColorBrush Brush(SrgbColor color) => new(Color.FromRgb(color.R, color.G, color.B));
-
-    private static readonly ThemeColorSlot[] AccentSlots =
-    [
-        ThemeColorSlot.Accent1,
-        ThemeColorSlot.Accent2,
-        ThemeColorSlot.Accent3,
-        ThemeColorSlot.Accent4,
-        ThemeColorSlot.Accent5,
-        ThemeColorSlot.Accent6,
-    ];
 }

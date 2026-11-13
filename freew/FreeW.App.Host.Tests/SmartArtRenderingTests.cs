@@ -49,6 +49,21 @@ public sealed class SmartArtRenderingTests
         LogicalDescendants<Border>(view.Document)
             .Single(b => b.Child is TextBlock { Text: var nodeText } && nodeText == text);
 
+    [StaFact]
+    public void DiagramCanvas_HasNoFrameOrFill_LikeWord()
+    {
+        // drawing-objects-complex: Word draws only the diagram's shapes; FreeW's white, grey-bordered
+        // canvas hid the body text behind a floating diagram and framed group-child diagrams.
+        var sa = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Verify"]);
+        var view = ViewWithSmartArt(sa);
+
+        var canvas = LogicalDescendants<Border>(view.Document).Single(border => ReferenceEquals(border.Tag, sa));
+        canvas.Background.Should().BeOfType<SolidColorBrush>()
+            .Which.Color.A.Should().Be(0, "the diagram canvas is unfilled");
+        canvas.BorderThickness.Should().Be(new Thickness(0));
+        canvas.BorderBrush.Should().BeNull();
+    }
+
     // ── Bug #4: node color cycling ───────────────────────────────────────────────────────────────
 
     /// <summary>

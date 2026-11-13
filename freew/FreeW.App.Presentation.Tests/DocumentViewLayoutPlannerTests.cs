@@ -1539,6 +1539,44 @@ public sealed class DocumentViewLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildVerticallyDisjointParagraphWrapBands_RecutsOverlappingExclusionsIntoUnionBands()
+    {
+        // drawing-objects-complex: a top-and-bottom chart, a square SmartArt inside its band and a square
+        // group beside the SmartArt — all anchored in one paragraph. WPF stacks overlapping figures, so the
+        // exclusions are re-cut into vertically disjoint bands spanning the union of their covering rects.
+        var chart = new DocumentParagraphWrapRect(280, 280, 160, 168, true, FloatingWrapTextSide.BothSides);
+        var smartArt = new DocumentParagraphWrapRect(48, 288, 280, 120, false, FloatingWrapTextSide.BothSides);
+        var group = new DocumentParagraphWrapRect(373, 251, 347, 200, false, FloatingWrapTextSide.BothSides);
+
+        var bands = DocumentViewLayoutPlanner.BuildVerticallyDisjointParagraphWrapBands([chart, smartArt, group])!;
+
+        bands.Should().Equal(
+            new DocumentParagraphWrapBand(0, new DocumentParagraphWrapRect(280, 280, 160, 120, true, FloatingWrapTextSide.BothSides)),
+            new DocumentParagraphWrapBand(0, new DocumentParagraphWrapRect(48, 512, 280, 48, true, FloatingWrapTextSide.BothSides)),
+            new DocumentParagraphWrapBand(1, new DocumentParagraphWrapRect(48, 288, 328, 19, false, FloatingWrapTextSide.BothSides)),
+            new DocumentParagraphWrapBand(1, new DocumentParagraphWrapRect(48, 576, 347, 53, false, FloatingWrapTextSide.BothSides)),
+            new DocumentParagraphWrapBand(2, new DocumentParagraphWrapRect(373, 251, 400, 147, false, FloatingWrapTextSide.BothSides)));
+        for (var index = 1; index < bands.Count; index++)
+            bands[index].Rect.TopDip.Should().BeGreaterThanOrEqualTo(bands[index - 1].Rect.BottomDip - 0.01);
+
+        // Exclusions that never share a vertical band keep their original figures.
+        DocumentViewLayoutPlanner.BuildVerticallyDisjointParagraphWrapBands([chart, group]).Should().BeNull();
+
+        // A one-sided wrap survives only where every covering rect agrees; a rect wholly covered by an
+        // earlier one owns no band.
+        var left = new DocumentParagraphWrapRect(0, 100, 0, 100, false, FloatingWrapTextSide.Left);
+        var inner = new DocumentParagraphWrapRect(10, 50, 20, 30, false, FloatingWrapTextSide.Left);
+        var rightSide = new DocumentParagraphWrapRect(200, 50, 80, 40, false, FloatingWrapTextSide.Right);
+        var mixed = DocumentViewLayoutPlanner.BuildVerticallyDisjointParagraphWrapBands([left, inner, rightSide])!;
+        mixed.Should().NotContain(band => band.OwnerIndex == 1);
+        mixed.Should().ContainSingle(band => band.Rect.TopDip == 80).Which.Rect.WrapTextSide
+            .Should().Be(FloatingWrapTextSide.BothSides);
+        mixed.Should().Contain(band => band.Rect.TopDip == 0 && band.Rect.WrapTextSide == FloatingWrapTextSide.Left);
+        mixed.Should().ContainSingle(band => band.Rect.TopDip == 100).Which.Rect.WrapTextSide
+            .Should().Be(FloatingWrapTextSide.Right);
+    }
+
+    [Fact]
     public void BuildFloatingObjectDrawOrder_OrdersMergedKindsInsideEachBand()
     {
         var surface = DocumentViewLayoutPlanner.BuildSurfacePlan(

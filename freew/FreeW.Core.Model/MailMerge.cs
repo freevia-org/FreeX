@@ -2859,24 +2859,9 @@ public static class MailMerge
         if (rounded is < 1 or > 32767)
             return MergeFieldNumberFormatError;
 
-        (int Value, string Symbol)[] map =
-        [
-            (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
-            (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
-            (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")
-        ];
-        var remaining = decimal.ToInt32(rounded);
-        var result = new System.Text.StringBuilder();
-        foreach (var (amount, symbol) in map)
-        {
-            while (remaining >= amount)
-            {
-                result.Append(symbol);
-                remaining -= amount;
-            }
-        }
-        var text = result.ToString();
-        return lower ? text.ToLowerInvariant() : text;
+        return Free.Shared.IO.NumeralFormatter.TryToExtendedRoman(decimal.ToInt32(rounded), upper: !lower, out var roman)
+            ? roman
+            : MergeFieldNumberFormatError;
     }
 
     private static string FormatMergeFieldAlphabetic(decimal rounded, bool lower)
@@ -2886,10 +2871,9 @@ public static class MailMerge
         if (rounded is < 1 or > 780)
             return MergeFieldNumberFormatError;
 
-        var value = decimal.ToInt32(rounded);
-        var letter = (char)((lower ? 'a' : 'A') + (value - 1) % 26);
-        var count = (value - 1) / 26 + 1;
-        return new string(letter, count);
+        return Free.Shared.IO.NumeralFormatter.TryToRepeatedLetters(decimal.ToInt32(rounded), upper: !lower, out var letters)
+            ? letters
+            : MergeFieldNumberFormatError;
     }
 
     private static string FormatMergeFieldHex(decimal rounded)

@@ -9,27 +9,9 @@ public static class FreePProductInfo
     public const string ProductName = "FreeP";
     public const string HelpUrl = "https://github.com/freevia-org/FreeX/tree/main/freep";
 
-    public static string CreateFeedbackUrl(Assembly assembly)
-    {
-        ArgumentNullException.ThrowIfNull(assembly);
-        var metadata = AssemblyVersionMetadata.FromAssembly(assembly);
-        var version = AppVersionFormatter.FormatBuildVersionText(
-            metadata.InformationalVersion,
-            metadata.AssemblyVersion);
-        return AppFeedbackReporter.CreateIssueUrl(
-            ProductName,
-            AppDiagnosticsMetadata.Create(version));
-    }
+    public static string CreateFeedbackUrl(Assembly assembly) =>
+        ProductBuildInfo.CreateFeedbackUrl(ProductName, assembly);
 
-    public static string CreateDiagnosticsText(Assembly assembly)
-    {
-        ArgumentNullException.ThrowIfNull(assembly);
-        var metadata = AssemblyVersionMetadata.FromAssembly(assembly);
-        var version = AppVersionFormatter.FormatBuildVersionText(
-            metadata.InformationalVersion,
-            metadata.AssemblyVersion);
-        return AppFeedbackReporter.CreateDiagnosticsText(
-            ProductName,
-            AppDiagnosticsMetadata.Create(version));
-    }
+    public static string CreateDiagnosticsText(Assembly assembly) =>
+        ProductBuildInfo.CreateDiagnosticsText(ProductName, assembly);
 }

@@ -1753,20 +1753,12 @@ public partial class GridView
 
         // Dashed pens are rare; build without caching to keep cache key simple.
         var brush = GetDrawingObjectBrush(255, outlineColor);
-        var dashStyle = outline.Dash switch
-        {
-            DrawingShapeOutlineDash.Dash => DashStyles.Dash,
-            DrawingShapeOutlineDash.Dot => DashStyles.Dot,
-            DrawingShapeOutlineDash.DashDot => DashStyles.DashDot,
-            DrawingShapeOutlineDash.LongDash => DashStyles.DashDot, // closest WPF built-in
-            DrawingShapeOutlineDash.LongDashDot => DashStyles.DashDotDot,
-            DrawingShapeOutlineDash.LongDashDotDot => DashStyles.DashDotDot,
-            DrawingShapeOutlineDash.SystemDash => DashStyles.Dash,
-            DrawingShapeOutlineDash.SystemDot => DashStyles.Dot,
-            DrawingShapeOutlineDash.SystemDashDot => DashStyles.DashDot,
-            _ => DashStyles.Solid
-        };
-        var pen = new Pen(brush, thicknessDip) { DashStyle = dashStyle };
+        // Dash/gap lengths come from the shared DrawingML preset table (units of line width).
+        var dashStyle = DrawingMlPresetDashPattern.Get(outline.Dash.ToPresetDash()) is { } dashPattern
+            ? new DashStyle(dashPattern, 0)
+            : DashStyles.Solid;
+        // Flat dash cap: the ECMA-376 lengths are for flat-capped dashes.
+        var pen = new Pen(brush, thicknessDip) { DashStyle = dashStyle, DashCap = PenLineCap.Flat };
         pen.Freeze();
         return pen;
     }

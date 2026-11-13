@@ -7895,6 +7895,10 @@ public static partial class DocxWriter
                     new XAttribute("uri", BuildFreeWChartDesignExtensionUri(chart))));
         }
 
+        var authoredSizes = chart.AuthoredTextSizes is { HasAny: true } sizes ? sizes : null;
+        if (authoredSizes is not null)
+            ApplyAuthoredChartTextSizes(chartElement, authoredSizes);
+
         return new XDocument(
             new XElement(C + "chartSpace",
                 new XAttribute(XNamespace.Xmlns + "c", C.NamespaceName),
@@ -7902,6 +7906,8 @@ public static partial class DocxWriter
                 new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
                 styleElement,
                 chartElement,
+                // CT_ChartSpace: chart, spPr?, txPr?, externalData? — the chart-space text default.
+                authoredSizes?.ChartSpacePt is { } spacePt ? BuildChartTextProperties(spacePt) : null,
                 // c:externalData ties the chart to its editable companion workbook (resolved via the chart
                 // part's own _rels). autoUpdate=0 keeps the literal caches authoritative for display.
                 new XElement(C + "externalData",
@@ -7909,6 +7915,64 @@ public static partial class DocxWriter
                     new XElement(C + "autoUpdate", new XAttribute("val", "0"))),
                 extLst));
     }
+
+    /// <summary>
+    /// Writes back the text sizes the source chart part stated (or an edit set), each in its schema slot:
+    /// the title / axis-title rich-text run size (a:rPr before a:t), the axis c:txPr (before c:crossAx),
+    /// the legend c:txPr (after c:overlay) and the data-label c:txPr (before c:showLegendKey). Sizes the
+    /// part did not state are left out so Word keeps rendering its own defaults.
+    /// </summary>
+    private static void ApplyAuthoredChartTextSizes(XElement chartElement, ChartAuthoredTextSizes sizes)
+    {
+        static void SizeRichRuns(XElement? title, double? pt)
+        {
+            if (title is null || pt is not { } size)
+                return;
+            foreach (var run in title.Elements(C + "tx").Elements(C + "rich").Descendants(A + "r"))
+            {
+                run.Element(A + "rPr")?.Remove();
+                run.AddFirst(new XElement(A + "rPr", new XAttribute("sz", ToChartTextHundredths(size))));
+            }
+        }
+
+        SizeRichRuns(chartElement.Element(C + "title"), sizes.TitlePt);
+
+        var plotArea = chartElement.Element(C + "plotArea");
+        foreach (var axis in plotArea?.Elements().Where(element =>
+                     element.Name == C + "catAx" || element.Name == C + "valAx"
+                     || element.Name == C + "dateAx" || element.Name == C + "serAx") ?? [])
+        {
+            SizeRichRuns(axis.Element(C + "title"), sizes.AxisTitlePt);
+            if (sizes.TickLabelPt is { } tickPt && axis.Element(C + "crossAx") is { } crossAx)
+                crossAx.AddBeforeSelf(BuildChartTextProperties(tickPt));
+        }
+
+        if (sizes.LegendPt is { } legendPt && chartElement.Element(C + "legend") is { } legend)
+        {
+            if (legend.Element(C + "overlay") is { } overlay)
+                overlay.AddAfterSelf(BuildChartTextProperties(legendPt));
+            else
+                legend.Add(BuildChartTextProperties(legendPt));
+        }
+
+        if (sizes.DataLabelPt is { } dataLabelPt)
+        {
+            foreach (var labels in plotArea?.Descendants(C + "dLbls") ?? [])
+                labels.AddFirst(BuildChartTextProperties(dataLabelPt));
+        }
+    }
+
+    private static XElement BuildChartTextProperties(double sizePt) =>
+        new(C + "txPr",
+            new XElement(A + "bodyPr"),
+            new XElement(A + "lstStyle"),
+            new XElement(A + "p",
+                new XElement(A + "pPr",
+                    new XElement(A + "defRPr", new XAttribute("sz", ToChartTextHundredths(sizePt)))),
+                new XElement(A + "endParaRPr", new XAttribute("lang", "en-US"))));
+
+    private static int ToChartTextHundredths(double sizePt) =>
+        Math.Clamp((int)Math.Round(sizePt * 100), 100, 400000);
 
     private static string BuildFreeWChartDesignExtensionUri(Chart chart)
     {

@@ -2045,7 +2045,13 @@ public static class PresentationPdfExporter
         XDocument document;
         try
         {
-            document = XDocument.Parse(Encoding.UTF8.GetString(bytes), LoadOptions.PreserveWhitespace);
+            // The ink part is a preserved part of the opened .pptx, i.e. package-supplied. Parse it
+            // through the hardened settings (DTD prohibited, no resolver, character cap) rather than
+            // XDocument.Parse's defaults. Reading from a string keeps the previous UTF-8-decoded
+            // semantics (the XML declaration's encoding is not consulted).
+            using var textReader = new StringReader(Encoding.UTF8.GetString(bytes));
+            using var xmlReader = System.Xml.XmlReader.Create(textReader, Free.Shared.Opc.SecureXmlReaderSettings.Create());
+            document = XDocument.Load(xmlReader, LoadOptions.PreserveWhitespace);
         }
         catch
         {
