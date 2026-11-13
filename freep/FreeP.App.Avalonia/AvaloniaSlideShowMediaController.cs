@@ -117,26 +117,6 @@ internal sealed partial class AvaloniaSlideShowMediaController
     }
 
     public void EnterSlide(
-        Slide slide,
-        double slideDipW,
-        double slideDipH,
-        double canvasW,
-        double canvasH,
-        IReadOnlyList<PresentationMediaTranscriptTrackDescriptor>? captionTracks = null,
-        uint? preferredCaptionShapeId = null,
-        int? preferredCaptionTrackIndex = null,
-        int? captionSlideIndex = null,
-        int? preferredCaptionSlideIndex = null,
-        bool showMediaControls = true,
-        bool showNarration = true,
-        int? presentationSlideIndex = null)
-        => EnterSlide(
-            new(slide, slideDipW, slideDipH, canvasW, canvasH, captionTracks,
-                preferredCaptionShapeId, preferredCaptionTrackIndex, captionSlideIndex,
-                preferredCaptionSlideIndex, showMediaControls, showNarration),
-            presentationSlideIndex);
-
-    public void EnterSlide(
         SlideShowMediaNativeEntryRequest request,
         int? presentationSlideIndex = null)
     {

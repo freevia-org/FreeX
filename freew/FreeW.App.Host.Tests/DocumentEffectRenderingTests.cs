@@ -29,7 +29,8 @@ public sealed class DocumentEffectRenderingTests
         SingleTagged<Border, Shape>(view).Effect.Should().BeNull();
         SingleTagged<Border, Chart>(view).BorderThickness.Left.Should().Be(1);
         SingleTagged<Border, Chart>(view).Effect.Should().BeNull();
-        SingleTagged<Border, SmartArt>(view).BorderThickness.Left.Should().Be(1);
+        // A SmartArt canvas carries no frame in Word (the theme line weight applies to its node shapes).
+        SingleTagged<Border, SmartArt>(view).BorderThickness.Left.Should().Be(0);
         SingleTagged<Border, SmartArt>(view).Effect.Should().BeNull();
         SingleTagged<TextBlock, WordArt>(view).Effect.Should().BeNull();
     }
@@ -51,7 +52,7 @@ public sealed class DocumentEffectRenderingTests
         chart.Effect.Should().BeOfType<DropShadowEffect>();
 
         var smartArt = SingleTagged<Border, SmartArt>(view);
-        smartArt.BorderThickness.Left.Should().BeGreaterThan(1);
+        smartArt.BorderThickness.Left.Should().Be(0, "a SmartArt canvas carries no frame");
         smartArt.Effect.Should().BeOfType<DropShadowEffect>();
     }
 

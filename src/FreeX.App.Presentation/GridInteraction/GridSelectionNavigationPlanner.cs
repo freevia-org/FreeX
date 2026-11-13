@@ -17,6 +17,8 @@ public readonly record struct GridSelectionCyclePlan(
     bool MovedToAnotherArea,
     bool WrappedAcrossSelection);
 
+public readonly record struct GridSelectionEditCommitMove(CellAddress Target, bool CycledWithinSelection);
+
 /// <summary>
 /// Portable selection policy for Enter/Tab cycling, whole-row/column construction, disjoint-area
 /// accumulation, and the live Name Box projection shown during a drag. Native hosts retain key
@@ -24,6 +26,39 @@ public readonly record struct GridSelectionCyclePlan(
 /// </summary>
 public static class GridSelectionNavigationPlanner
 {
+    /// <summary>
+    /// R139-freex-cell-editing-edit-commit-collapses-range-selection: Enter/Tab (and their Shift
+    /// variants) that commit an in-cell/formula-bar edit must CYCLE the active cell within a
+    /// pre-existing multi-cell selection -- wrapping at the far end back to the start -- exactly
+    /// like Excel and like the ready-mode Enter/Tab handler. It must NOT collapse the selection to
+    /// the plain <paramref name="fallbackTarget"/> move, which is what happened before this fix.
+    /// Arrow-key commits (the inline editor's commit-on-arrow path, and the formula bar's
+    /// Up/Down/PageUp/PageDown fallback) are ordinary navigation, not range-cycling, so this only
+    /// cycles when <paramref name="cycleKey"/> is non-null (the physical key was Enter or Tab);
+    /// every other key -- and any Enter/Tab where there is no eligible multi-cell selection to cycle
+    /// within (a single selected cell, or a single selected merged region) -- returns the fallback
+    /// unchanged. The host moves the active cell WITHIN the selection when
+    /// <see cref="GridSelectionEditCommitMove.CycledWithinSelection"/> is true and otherwise applies
+    /// its own plain active-cell move to <see cref="GridSelectionEditCommitMove.Target"/>.
+    /// </summary>
+    public static GridSelectionEditCommitMove PlanEditCommitMove(
+        Sheet? sheet,
+        GridRange? primaryRange,
+        IReadOnlyList<GridRange>? selectedAreas,
+        CellAddress current,
+        GridSelectionCycleKey? cycleKey,
+        bool forward,
+        CellAddress fallbackTarget)
+    {
+        var cyclePlan = cycleKey is { } key
+            ? PlanCycle(sheet, primaryRange, selectedAreas, current, key, forward)
+            : null;
+
+        return cyclePlan is { } cycle
+            ? new GridSelectionEditCommitMove(cycle.Target, CycledWithinSelection: true)
+            : new GridSelectionEditCommitMove(fallbackTarget, CycledWithinSelection: false);
+    }
+
     public static GridSelectionCyclePlan? PlanCycle(
         Sheet? sheet,
         GridRange? primaryRange,

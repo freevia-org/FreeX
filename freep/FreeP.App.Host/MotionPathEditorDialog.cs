@@ -133,7 +133,7 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         public void Build(int rowIndex, Action remove)
         {
             var plan = _native.Initialize(_surface, _value, rowIndex);
-            _kind.Width = 76;
+            _kind.Width = MotionPathEditorDialogVisualMetrics.KindWidth;
             _kind.Margin = new Thickness(2);
             _kind.SelectionChanged += (_, _) => _native.RefreshEnablement();
             PresentationDialogControlAdapter.ApplySemantic(
@@ -164,7 +164,10 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             removeButton.IsEnabled = plan.Enablement.DeleteEnabled;
             Grid.SetColumn(removeButton, 8);
             grid.Children.Add(removeButton);
-            Control = new Border { BorderBrush = System.Windows.Media.Brushes.LightGray, BorderThickness = new Thickness(0, 0, 0, 1), Child = grid };
+            Control = new Border { BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(
+                MotionPathEditorDialogVisualMetrics.RowBorderColor.R,
+                MotionPathEditorDialogVisualMetrics.RowBorderColor.G,
+                MotionPathEditorDialogVisualMetrics.RowBorderColor.B)), BorderThickness = new Thickness(0, 0, 0, 1), Child = grid };
         }
 
         public MotionPathEditorRowInput ReadInput() => _native.CaptureInput();

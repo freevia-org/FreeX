@@ -4804,7 +4804,7 @@ public sealed partial class DocumentView : RichTextBox
                 || (capitals is FontCapitals.AllSmallCaps && ResolveSelectionSmallCaps(retained).Value),
             AllCaps = capitals is FontCapitals.AllSmallCaps,
             VerticalAlign = verticalAlign,
-            FontFamily = selection.GetPropertyValue(TextElement.FontFamilyProperty) is FontFamily family ? family.Source : null,
+            FontFamily = selection.GetPropertyValue(TextElement.FontFamilyProperty) is FontFamily family ? DocumentFontFamilies.ModelName(family) : null,
             FontSizePt = fontSizePt,
             ColorHex = selection.GetPropertyValue(TextElement.ForegroundProperty) is SolidColorBrush fg ? ToHex(fg.Color) : null,
             HighlightColorHex = retained.CharacterShadingHex is not null
@@ -7341,6 +7341,46 @@ public sealed partial class DocumentView : RichTextBox
         var fillBrush = BuildDrawingFillBrush(wordArt.Fill);
         var foreground = BuildDrawingWordArtTextBrush(wordArt);
         var wpfEffect = BuildWordArtEffect(plan.Effects, DocumentEffectSet.FromTheme(_model.Theme));
+        var borderThickness = wordArt.Outline.IsVisible ? Math.Max(0.5, wordArt.Outline.WidthDip) : 0;
+        var bodyInsets = new Thickness(
+            WordArtBodyHorizontalInsetDip,
+            WordArtBodyVerticalInsetDip,
+            WordArtBodyHorizontalInsetDip,
+            WordArtBodyVerticalInsetDip);
+        var textWidthDip = Math.Max(1, plan.Rect.WidthDip - 2 * borderThickness);
+        var textHeightDip = Math.Max(1, plan.Rect.HeightDip - 2 * borderThickness);
+        if (wordArt.Warp == WordArtWarp.Wave1
+            && MeasureWordArtLineWidthDip(wordArt.Text, wordArt.FontFamily, wordArt.FontSizeDip, wordArt.Bold)
+                > textWidthDip - bodyInsets.Left - bodyInsets.Right)
+        {
+            // Word wraps a warped text body that does not fit its shape's text rectangle, then warps
+            // the wrapped block as a whole (drawing-objects-complex: "Free" / "W"). The single-line
+            // glyph placement below only covers text that fits on one line.
+            // A shape glow is not drawn here: a halo outside the box enlarges the object's visual bounds,
+            // which the floating overlay and print/export composites fit back into the object frame.
+            var hasShapeGlow = plan.Effects.HasGlow;
+            return new Border
+            {
+                Width = plan.Rect.WidthDip,
+                Height = plan.Rect.HeightDip,
+                BorderBrush = wordArt.Outline.IsVisible ? BuildDrawingStrokeBrush(wordArt.Outline) : null,
+                BorderThickness = new Thickness(borderThickness),
+                Background = fillBrush,
+                Child = BuildPresetWarpedWordArtText(
+                    wordArt.Text,
+                    wordArt.FontFamily,
+                    wordArt.FontSizeDip,
+                    wordArt.Bold,
+                    foreground,
+                    wordArt.Warp,
+                    textWidthDip,
+                    textHeightDip,
+                    bodyInsets,
+                    hasShapeGlow ? null : wpfEffect,
+                    wrapToWidth: true),
+            };
+        }
+
         if (wordArt.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)
         {
             var preserveOpaqueGlowBlueFill = wordArt is
@@ -7387,32 +7427,193 @@ public sealed partial class DocumentView : RichTextBox
                 glowColor: glowColor);
         }
 
-        var textBlock = new TextBlock
+        FrameworkElement textVisual;
+        if (WordArtWarpGeometry.Supports(wordArt.Warp))
         {
-            Text = wordArt.Text,
-            FontFamily = new FontFamily(wordArt.FontFamily),
-            FontSize = wordArt.FontSizeDip,
-            FontWeight = wordArt.Bold ? FontWeights.Bold : FontWeights.Normal,
-            Foreground = foreground,
-            Effect = wpfEffect,
-            TextWrapping = TextWrapping.NoWrap,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        if (wordArt.Warp != WordArtWarp.None)
-            textBlock.FontStyle = wordArt.Warp is WordArtWarp.ArchUp or WordArtWarp.Inflate or WordArtWarp.Wave1
-                ? FontStyles.Normal
-                : FontStyles.Italic;
+            // Every other preset warp maps the text outline onto the shape's text rectangle (the shape
+            // minus the default body insets) along the preset's guide paths.
+            textVisual = BuildPresetWarpedWordArtText(
+                wordArt.Text,
+                wordArt.FontFamily,
+                wordArt.FontSizeDip,
+                wordArt.Bold,
+                foreground,
+                wordArt.Warp,
+                textWidthDip,
+                textHeightDip,
+                bodyInsets,
+                wpfEffect,
+                wrapToWidth: !WordArtWarpGeometry.IsArc(wordArt.Warp));
+        }
+        else
+        {
+            textVisual = new TextBlock
+            {
+                Text = wordArt.Text,
+                FontFamily = new FontFamily(wordArt.FontFamily),
+                FontSize = wordArt.FontSizeDip,
+                FontWeight = wordArt.Bold ? FontWeights.Bold : FontWeights.Normal,
+                Foreground = foreground,
+                Effect = wpfEffect,
+                TextWrapping = TextWrapping.NoWrap,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+        }
 
         return new Border
         {
             Width = plan.Rect.WidthDip,
             Height = plan.Rect.HeightDip,
             BorderBrush = wordArt.Outline.IsVisible ? BuildDrawingStrokeBrush(wordArt.Outline) : null,
-            BorderThickness = wordArt.Outline.IsVisible ? new Thickness(Math.Max(0.5, wordArt.Outline.WidthDip)) : new Thickness(0),
+            BorderThickness = new Thickness(borderThickness),
             Background = fillBrush,
-            Child = textBlock
+            Child = textVisual
         };
+    }
+
+    private static double MeasureWordArtLineWidthDip(string text, string fontFamily, double fontSizeDip, bool bold) =>
+        new FormattedText(
+            string.IsNullOrEmpty(text) ? " " : text,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Windows.FlowDirection.LeftToRight,
+            new Typeface(
+                new FontFamily(string.IsNullOrWhiteSpace(fontFamily) ? "Calibri" : fontFamily),
+                FontStyles.Normal,
+                bold ? FontWeights.Bold : FontWeights.Normal,
+                FontStretches.Normal),
+            Math.Max(1, fontSizeDip),
+            Brushes.Black,
+            1.0).WidthIncludingTrailingWhitespace;
+
+    // DrawingML body insets (a:bodyPr lIns/rIns 91440 EMU, tIns/bIns 45720 EMU) in DIPs.
+    private const double WordArtBodyHorizontalInsetDip = 9.6;
+    private const double WordArtBodyVerticalInsetDip = 4.8;
+
+    /// <summary>
+    /// Renders WordArt text through a DrawingML preset warp: the text outline is flattened, long edges are
+    /// subdivided so straight strokes follow curved guides, and every vertex is mapped from the text's own
+    /// bounds onto the inset text rectangle by <see cref="WordArtWarpGeometry.Map"/>.
+    /// </summary>
+    internal static System.Windows.Shapes.Path BuildPresetWarpedWordArtText(
+        string text,
+        string fontFamily,
+        double fontSizeDip,
+        bool bold,
+        System.Windows.Media.Brush foreground,
+        WordArtWarp warp,
+        double widthDip,
+        double heightDip,
+        Thickness insets,
+        System.Windows.Media.Effects.Effect? effect,
+        bool wrapToWidth = false)
+    {
+        var path = new System.Windows.Shapes.Path
+        {
+            Width = Math.Max(1, widthDip),
+            Height = Math.Max(1, heightDip),
+            Fill = foreground,
+            Effect = effect,
+            Stretch = Stretch.None,
+            IsHitTestVisible = false,
+        };
+        if (string.IsNullOrEmpty(text))
+            return path;
+
+        var typeface = new Typeface(
+            new FontFamily(string.IsNullOrWhiteSpace(fontFamily) ? "Calibri" : fontFamily),
+            FontStyles.Normal,
+            bold ? FontWeights.Bold : FontWeights.Normal,
+            FontStretches.Normal);
+        var formatted = new FormattedText(
+            text,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Windows.FlowDirection.LeftToRight,
+            typeface,
+            Math.Max(1, fontSizeDip),
+            Brushes.Black,
+            1.0);
+        var innerLeft = Math.Min(insets.Left, path.Width / 2);
+        var innerTop = Math.Min(insets.Top, path.Height / 2);
+        var innerWidth = Math.Max(1, path.Width - innerLeft - Math.Min(insets.Right, path.Width / 2));
+        var innerHeight = Math.Max(1, path.Height - innerTop - Math.Min(insets.Bottom, path.Height / 2));
+        // An envelope warp lays the body out first (square wrap at the text rectangle's width) and
+        // then warps the wrapped block as a whole.
+        if (wrapToWidth && formatted.WidthIncludingTrailingWhitespace > innerWidth)
+        {
+            formatted.Trimming = TextTrimming.None;
+            formatted.MaxTextWidth = innerWidth;
+        }
+
+        var source = formatted.BuildGeometry(new Point(0, 0));
+        var bounds = source.Bounds;
+        if (bounds.IsEmpty || bounds.Width <= 0 || bounds.Height <= 0)
+            return path;
+
+        var aspect = bounds.Height / bounds.Width;
+        var maxStep = Math.Max(0.5, bounds.Width / 96);
+
+        Point MapPoint(Point point)
+        {
+            var (x, y) = WordArtWarpGeometry.Map(
+                warp,
+                (point.X - bounds.X) / bounds.Width,
+                (point.Y - bounds.Y) / bounds.Height,
+                aspect);
+            return new Point(innerLeft + x * innerWidth, innerTop + y * innerHeight);
+        }
+
+        var flattened = source.GetFlattenedPathGeometry(0.05, ToleranceType.Absolute);
+        var warped = new PathGeometry { FillRule = flattened.FillRule };
+        foreach (var figure in flattened.Figures)
+        {
+            var points = new PointCollection();
+            var previous = figure.StartPoint;
+
+            void AddSubdivided(Point next)
+            {
+                var length = (next - previous).Length;
+                var steps = Math.Max(1, (int)Math.Ceiling(length / maxStep));
+                for (var step = 1; step <= steps; step++)
+                {
+                    var t = (double)step / steps;
+                    points.Add(MapPoint(new Point(
+                        previous.X + (next.X - previous.X) * t,
+                        previous.Y + (next.Y - previous.Y) * t)));
+                }
+                previous = next;
+            }
+
+            foreach (var segment in figure.Segments)
+            {
+                switch (segment)
+                {
+                    case PolyLineSegment polyLine:
+                        foreach (var point in polyLine.Points)
+                            AddSubdivided(point);
+                        break;
+                    case LineSegment line:
+                        AddSubdivided(line.Point);
+                        break;
+                }
+            }
+
+            if (figure.IsClosed)
+                AddSubdivided(figure.StartPoint);
+
+            var mapped = new PathFigure
+            {
+                StartPoint = MapPoint(figure.StartPoint),
+                IsClosed = figure.IsClosed,
+                IsFilled = figure.IsFilled,
+            };
+            mapped.Segments.Add(new PolyLineSegment(points, isStroked: true));
+            warped.Figures.Add(mapped);
+        }
+
+        warped.Freeze();
+        path.Data = warped;
+        return path;
     }
 
     private static FrameworkElement BuildWarpedDrawingWordArtVisual(
@@ -10523,11 +10724,17 @@ public sealed partial class DocumentView : RichTextBox
                 var vAlign = modelCell.VerticalAlignment;
                 if (hasPlannedCellBorders)
                 {
+                    // Word lays an "at least" row's own border lines outside the authored height
+                    // (the plain-cell path gets the same from the WPF cell border thickness).
+                    var borderedMinHeightPx = rowHeightPx is { } atLeastHeight
+                        && modelRow.HeightRule != TableRowHeightRule.Exact
+                            ? atLeastHeight + cellBorderPlan.VerticalBorderExtentDip
+                            : rowHeightPx;
                     var cellContentHost = BuildCellContentHost(
                         modelCell,
                         document,
                         vAlign,
-                        rowHeightPx,
+                        borderedMinHeightPx,
                         cellBorderPlan,
                         preservedNumberingMarkers);
                     // A cell with its own w:tcBorders still honours w:tcMar (flow tables and page
@@ -11692,6 +11899,8 @@ public sealed partial class DocumentView : RichTextBox
                 suppressedFloatingWrapRuns);
         }
 
+        SeparateOverlappingParagraphAnchoredWrapFigures(wpf);
+
         if (!string.IsNullOrWhiteSpace(preservedNumberingMarker))
             PrependMultiLevelMarker(wpf, preservedNumberingMarker, document, preservedNumberingMarkerFont);
 
@@ -11913,7 +12122,7 @@ public sealed partial class DocumentView : RichTextBox
         if (string.IsNullOrEmpty(text))
             return 0;
 
-        var fmt = ProjectForScript(Resolve(run, paragraph, document), text);
+        var fmt = ProjectForScript(Resolve(run, paragraph, document), text, document);
         var displayText = text;
         if (document.Page.AutoHyphenation && !paragraph.Formatting.SuppressAutoHyphens)
             displayText = HyphenateForDisplay(displayText, document.Page.DoNotHyphenateCaps);
@@ -11921,7 +12130,7 @@ public sealed partial class DocumentView : RichTextBox
             displayText = displayText.ToUpperInvariant();
 
         var fontFamily = fmt.FontFamily is { Length: > 0 } family
-            ? new FontFamily(family)
+            ? DocumentFontFamilies.Create(family)
             : new FontFamily("Calibri");
         var typeface = new Typeface(
             fontFamily,
@@ -12167,7 +12376,7 @@ public sealed partial class DocumentView : RichTextBox
             return new WpfRun(string.Empty) { Tag = new ColumnBreakMarker() };
 
         // Right-to-left script text takes its typeface/size from the complex-script properties.
-        var fmt = ProjectForScript(effectiveFormatting, run.Text);
+        var fmt = ProjectForScript(effectiveFormatting, run.Text, document);
         // Automatic hyphenation: when the document has it on and this paragraph is not suppressed, insert
         // soft hyphens (U+00AD) at the pure helper's break points so the layout engine can break long words
         // at line ends. Soft hyphens are zero-width unless a line break lands on one, and are stripped on
@@ -12193,7 +12402,7 @@ public sealed partial class DocumentView : RichTextBox
         if (fmt.Rtl)
             wpf.FlowDirection = System.Windows.FlowDirection.RightToLeft;
         if (fmt.FontFamily is { Length: > 0 } family)
-            wpf.FontFamily = new FontFamily(family);
+            wpf.FontFamily = DocumentFontFamilies.Create(family);
         var fontSizePx = (fmt.FontSizePt ?? DefaultFontSizePt) * PxPerPoint;
         // Superscript/subscript: nudge the baseline and shrink the glyphs. Set FontSize explicitly
         // (even at the default) so ReadRunFormatting can recover the original point size by undoing
@@ -12492,6 +12701,116 @@ public sealed partial class DocumentView : RichTextBox
             Margin = new Thickness(0),
             Tag = reservationMarker,
         };
+    }
+
+    /// <summary>
+    /// WPF's page layout never lets two figures share a vertical band: a figure whose band overlaps one
+    /// placed before it is pushed below it even when the two sit side by side, so the wrap exclusion of
+    /// an object anchored next to (or inside the band of) another object in the same paragraph lands far
+    /// below where Word draws it. Re-cut those exclusions into vertically disjoint bands (see
+    /// <see cref="DocumentViewLayoutPlanner.BuildVerticallyDisjointParagraphWrapBands"/>): each object's
+    /// figure takes its first band, extra bands become untagged visual-only figures, and an object left
+    /// without a band keeps its round-trip identity as an empty anchor run.
+    /// </summary>
+    private static void SeparateOverlappingParagraphAnchoredWrapFigures(WpfParagraph wpf)
+    {
+        var figures = wpf.Inlines
+            .OfType<Figure>()
+            .Where(figure => figure is
+            {
+                Tag: FloatingWrapReservationMarker,
+                VerticalAnchor: FigureVerticalAnchor.ParagraphTop,
+                HorizontalAnchor: FigureHorizontalAnchor.ContentLeft,
+            }
+                && figure.Width.IsAbsolute
+                && figure.Height.IsAbsolute)
+            .ToList();
+        if (figures.Count < 2)
+            return;
+
+        var rects = figures
+            .Select(figure => new DocumentParagraphWrapRect(
+                figure.HorizontalOffset,
+                figure.Width.Value,
+                figure.VerticalOffset,
+                figure.Height.Value,
+                figure.WrapDirection == WrapDirection.None,
+                figure.WrapDirection switch
+                {
+                    WrapDirection.Left => FloatingWrapTextSide.Left,
+                    WrapDirection.Right => FloatingWrapTextSide.Right,
+                    _ => FloatingWrapTextSide.BothSides,
+                }))
+            .ToList();
+        var bands = DocumentViewLayoutPlanner.BuildVerticallyDisjointParagraphWrapBands(rects);
+        if (bands is null)
+            return;
+
+        for (var index = 0; index < figures.Count; index++)
+        {
+            var figure = figures[index];
+            var owned = bands.Where(band => band.OwnerIndex == index).Select(band => band.Rect).ToList();
+            if (owned.Count == 0)
+            {
+                var reservation = (FloatingWrapReservationMarker)figure.Tag;
+                Inline anchorRun = new WpfRun(string.Empty) { Tag = reservation.Anchor };
+                if (reservation.HyperlinkUrl is { Length: > 0 } url)
+                    anchorRun = BuildHyperlink(anchorRun, url, reservation.HyperlinkTooltip);
+                else if (reservation.HyperlinkAnchor is { Length: > 0 } anchor)
+                    anchorRun = BuildInternalHyperlink(anchorRun, anchor, reservation.HyperlinkTooltip);
+                wpf.Inlines.InsertAfter(figure, anchorRun);
+                wpf.Inlines.Remove(figure);
+                continue;
+            }
+
+            ApplyWrapBand(figure, owned[0]);
+            Inline previous = figure;
+            foreach (var extra in owned.Skip(1))
+            {
+                var placeholder = new Border
+                {
+                    Background = Brushes.Transparent,
+                    Opacity = 0,
+                    IsHitTestVisible = false,
+                    Focusable = false,
+                };
+                var bandFigure = new Figure(new BlockUIContainer(placeholder) { Margin = new Thickness(0) })
+                {
+                    HorizontalAnchor = FigureHorizontalAnchor.ContentLeft,
+                    VerticalAnchor = FigureVerticalAnchor.ParagraphTop,
+                    Margin = new Thickness(0),
+                };
+                ApplyWrapBand(bandFigure, extra);
+                wpf.Inlines.InsertAfter(previous, bandFigure);
+                previous = bandFigure;
+            }
+        }
+
+        static void ApplyWrapBand(Figure figure, DocumentParagraphWrapRect rect)
+        {
+            var width = Math.Max(1, rect.WidthDip);
+            var height = Math.Max(1, rect.HeightDip);
+            figure.Width = new FigureLength(width, FigureUnitType.Pixel);
+            figure.Height = new FigureLength(height, FigureUnitType.Pixel);
+            figure.HorizontalOffset = rect.LeftDip;
+            figure.VerticalOffset = rect.TopDip;
+            figure.WrapDirection = rect.BlocksWholeLine
+                ? WrapDirection.None
+                : rect.WrapTextSide switch
+                {
+                    FloatingWrapTextSide.Left => WrapDirection.Left,
+                    FloatingWrapTextSide.Right => WrapDirection.Right,
+                    _ => WrapDirection.Both,
+                };
+            foreach (var block in figure.Blocks.OfType<BlockUIContainer>())
+            {
+                if (block.Child is FrameworkElement placeholder)
+                {
+                    placeholder.Width = width;
+                    placeholder.Height = height;
+                }
+            }
+        }
     }
 
     private static double FloatingWrapReservationTextWidthDip(TextDocument document)
@@ -13643,7 +13962,7 @@ public sealed partial class DocumentView : RichTextBox
             Tag = new FieldMarker(run.FieldKind, run.Text, run.FieldLocked, run.FieldCodeVisible, fmt)
         };
         if (fmt.FontFamily is { Length: > 0 } family)
-            wpf.FontFamily = new FontFamily(family);
+            wpf.FontFamily = DocumentFontFamilies.Create(family);
         if (fmt.FontSizePt is { } size)
             wpf.FontSize = size * PxPerPoint;
         ApplyBaselinePositionPresentation(wpf, fmt);
@@ -13802,7 +14121,7 @@ public sealed partial class DocumentView : RichTextBox
             Tag = new ComplexFieldMarker(field, run.Text, fmt)
         };
         if (fmt.FontFamily is { Length: > 0 } family)
-            wpf.FontFamily = new FontFamily(family);
+            wpf.FontFamily = DocumentFontFamilies.Create(family);
         if (fmt.FontSizePt is { } size)
             wpf.FontSize = size * PxPerPoint;
         if (displayPlan.IsFieldCode)
@@ -13865,7 +14184,7 @@ public sealed partial class DocumentView : RichTextBox
             Tag = new CrossReferenceMarker(run.CrossReference!)
         };
         if (fmt.FontFamily is { Length: > 0 } family)
-            wpf.FontFamily = new FontFamily(family);
+            wpf.FontFamily = DocumentFontFamilies.Create(family);
         if (fmt.FontSizePt is { } size)
             wpf.FontSize = size * PxPerPoint;
         if (TryParseColor(fmt.ColorHex, out var color))
@@ -13888,7 +14207,7 @@ public sealed partial class DocumentView : RichTextBox
             Tag = new TableFormulaMarker(run.TableFormula!)
         };
         if (fmt.FontFamily is { Length: > 0 } family)
-            wpf.FontFamily = new FontFamily(family);
+            wpf.FontFamily = DocumentFontFamilies.Create(family);
         if (fmt.FontSizePt is { } size)
             wpf.FontSize = size * PxPerPoint;
         if (TryParseColor(fmt.ColorHex, out var color))
@@ -15231,9 +15550,36 @@ public sealed partial class DocumentView : RichTextBox
             canvas.Height = Math.Max(1, glyphs.Count == 0 ? 1 : glyphs.Max(glyph => glyph.DesiredSize.Height));
             element = canvas;
         }
+        else if (WordArtWarpGeometry.Supports(wordArtPlan.Warp))
+        {
+            // Inline WordArt has no authored box: warp the text within its own unwarped extent.
+            var natural = new FormattedText(
+                string.IsNullOrEmpty(wordArtPlan.Text) ? " " : wordArtPlan.Text,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Windows.FlowDirection.LeftToRight,
+                new Typeface(
+                    new FontFamily(wordArtPlan.FontFamily),
+                    FontStyles.Normal,
+                    wordArtPlan.Bold ? FontWeights.Bold : FontWeights.Normal,
+                    FontStretches.Normal),
+                Math.Max(1, wordArtPlan.FontSizeDip),
+                Brushes.Black,
+                1.0);
+            element = BuildPresetWarpedWordArtText(
+                wordArtPlan.Text,
+                wordArtPlan.FontFamily,
+                wordArtPlan.FontSizeDip,
+                wordArtPlan.Bold,
+                foreground,
+                wordArtPlan.Warp,
+                natural.WidthIncludingTrailingWhitespace,
+                natural.Height,
+                new Thickness(0),
+                wpfEffect);
+        }
         else
         {
-            var textBlock = new TextBlock
+            element = new TextBlock
             {
                 Text       = wordArtPlan.Text,
                 FontFamily = new FontFamily(wordArtPlan.FontFamily),
@@ -15242,10 +15588,6 @@ public sealed partial class DocumentView : RichTextBox
                 Foreground = foreground,
                 Effect     = wpfEffect,
             };
-            if (wordArtPlan.Warp != WordArtWarp.None)
-                textBlock.FontStyle = wordArtPlan.Warp is WordArtWarp.Inflate
-                    ? FontStyles.Normal : FontStyles.Italic;
-            element = textBlock;
         }
 
         element.Tag = wordArt; // carries the model WordArt so CommitToModel can round-trip it
@@ -15497,7 +15839,7 @@ public sealed partial class DocumentView : RichTextBox
             Canvas.SetTop(swatch, entry.SwatchY);
             canvas.Children.Add(swatch);
             AddSceneText(canvas, new ChartSceneText(entry.Text, entry.TextX, entry.TextY,
-                ChartSceneTextAnchor.TopLeft, ChartSceneTextKind.Legend, "#000000", 9));
+                ChartSceneTextAnchor.TopLeft, ChartSceneTextKind.Legend, "#000000", entry.FontSize));
         }
     }
 
@@ -15717,17 +16059,16 @@ public sealed partial class DocumentView : RichTextBox
 
         var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt, documentTheme);
         var content = SmartArtRenderer.Build(smartArt, plan, strokeThickness);
-        var isNativeWordSmartArt = plan.LayoutId is "orgchart1" or "pyramid1";
 
+        // Word draws a SmartArt diagram's shapes only: its drawing canvas has no fill and no outline, so
+        // text behind a floating diagram stays visible and no frame surrounds the nodes.
         var element = new Border
         {
             Width = widthPx,
             Height = heightPx,
-            Background = isNativeWordSmartArt ? Brushes.Transparent : Brushes.White,
-            BorderBrush = isNativeWordSmartArt
-                ? null
-                : new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
-            BorderThickness = isNativeWordSmartArt ? new Thickness(0) : new Thickness(strokeThickness),
+            Background = Brushes.Transparent,
+            BorderBrush = null,
+            BorderThickness = new Thickness(0),
             Child = content,
             Tag = smartArt // carries the model SmartArt so CommitToModel can round-trip it
         };
@@ -18758,7 +19099,7 @@ public sealed partial class DocumentView : RichTextBox
             : rendered.HighlightColorHex;
 
         var localFontFamily = run.ReadLocalValue(TextElement.FontFamilyProperty) is FontFamily family
-            ? family.Source
+            ? DocumentFontFamilies.ModelName(family)
             : null;
         double? localFontSizePt = run.ReadLocalValue(TextElement.FontSizeProperty) is double localFontSize
             ? localFontSize / PxPerPoint / (verticalAlign == VerticalAlign.Baseline ? 1 : SuperSubScale)
@@ -19012,7 +19353,9 @@ public sealed partial class DocumentView : RichTextBox
             var visibleCharacters = run.Text.Count(character => !char.IsWhiteSpace(character));
             if (visibleCharacters == 0)
                 continue;
-            var formatting = Resolve(run, paragraph, document);
+            // Right-to-left/complex-script text is drawn in its w:cs face at w:szCs (and that face's Word
+            // substitute when missing), so that face -- not the Latin one -- sets the line it occupies.
+            var formatting = ProjectForScript(Resolve(run, paragraph, document), run.Text, document);
             if (formatting.Hidden)
                 continue;
             var line = LineOf(formatting);
@@ -19027,8 +19370,11 @@ public sealed partial class DocumentView : RichTextBox
             // No visible text: an empty paragraph takes its line from the paragraph mark, as in Word. An
             // object-only paragraph or one whose mark is hidden keeps the document-default line (the object
             // or the collapsed mark owns its height, not a text line).
-            var mark = DocumentRunFormattingResolver.Resolve(
-                document, paragraph, paragraph.MarkFormatting ?? RunFormatting.Default, null);
+            var mark = ProjectForScript(
+                DocumentRunFormattingResolver.Resolve(
+                    document, paragraph, paragraph.MarkFormatting ?? RunFormatting.Default, null),
+                null,
+                document);
             best = hasNonTextContent || mark.Hidden ? documentDefaultLine : LineOf(mark);
         }
 
@@ -19043,7 +19389,7 @@ public sealed partial class DocumentView : RichTextBox
         {
             try
             {
-                var ratio = new System.Windows.Media.FontFamily(n).LineSpacing;
+                var ratio = DocumentFontFamilies.Create(n).LineSpacing;
                 return ratio > 0 ? ratio : 1.0;
             }
             catch
@@ -19058,21 +19404,9 @@ public sealed partial class DocumentView : RichTextBox
     private static RunFormatting Resolve(ModelRun run, ModelParagraph paragraph, TextDocument document)
         => DocumentRunFormattingResolver.Resolve(document, paragraph, run.Formatting, run.StyleId);
 
-    private static readonly Lazy<HashSet<string>> s_installedFontFamilies = new(() =>
-    {
-        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var family in Fonts.SystemFontFamilies)
-        {
-            names.Add(family.Source);
-            foreach (var localized in family.FamilyNames.Values)
-                names.Add(localized);
-        }
-        return names;
-    });
-
-    private static RunFormatting ProjectForScript(RunFormatting resolved, string? text) =>
+    private static RunFormatting ProjectForScript(RunFormatting resolved, string? text, TextDocument document) =>
         DocumentRunFormattingResolver.ProjectForScript(
-            resolved, text, family => s_installedFontFamilies.Value.Contains(family));
+            resolved, text, DocumentFontFamilies.IsAvailable, document.FontGenericFamilies);
 
     private static ParagraphFormatting Resolve(ModelParagraph paragraph, TextDocument document) =>
         DocumentParagraphFormattingResolver.Resolve(document, paragraph);

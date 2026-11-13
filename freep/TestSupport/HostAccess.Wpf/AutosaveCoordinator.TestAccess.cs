@@ -7,8 +7,8 @@ namespace FreeP.App.Host;
 /// </summary>
 internal sealed partial class AutosaveCoordinator
 {
-    internal string SnapshotIdForTests => _session.SnapshotId;
-    internal void SnapshotNowForTests() => _session.Snapshot();
+    internal string SnapshotIdForTests => _host.Session.SnapshotId;
+    internal void SnapshotNowForTests() => _host.Session.Snapshot();
 
     /// <summary>
     /// Releases this coordinator's snapshot ownership lock without deleting the snapshot -- exactly
@@ -17,5 +17,5 @@ internal sealed partial class AutosaveCoordinator
     /// stays "live owned" and <c>AutosaveSnapshotStore.ExcludeLiveOwned</c> filters it out of
     /// recovery, even though the coordinator that wrote it is done with it for the test's purposes.
     /// </summary>
-    internal void SimulateCrashForTests() => _session.Dispose();
+    internal void SimulateCrashForTests() => _host.Session.Dispose();
 }

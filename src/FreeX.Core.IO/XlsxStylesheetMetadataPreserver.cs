@@ -58,15 +58,11 @@ internal static class XlsxStylesheetMetadataPreserver
         try
         {
             using var stream = sourceStylesEntry.Open();
-            using var reader = XmlReader.Create(stream, new XmlReaderSettings
-            {
-                DtdProcessing = DtdProcessing.Prohibit,
-                MaxCharactersInDocument = SecureXmlReaderSettings.DefaultMaxCharactersInDocument,
-                XmlResolver = null,
-                IgnoreComments = true,
-                IgnoreProcessingInstructions = true,
-                IgnoreWhitespace = true
-            });
+            var settings = SecureXmlReaderSettings.Create();
+            settings.IgnoreComments = true;
+            settings.IgnoreProcessingInstructions = true;
+            settings.IgnoreWhitespace = true;
+            using var reader = XmlReader.Create(stream, settings);
 
             var stylesheetDepth = -1;
             while (reader.Read())

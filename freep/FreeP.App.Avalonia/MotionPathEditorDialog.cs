@@ -163,7 +163,7 @@ internal sealed class MotionPathEditorDialog : FreePDialogWindow
         public void Build(int rowIndex, Action remove)
         {
             var plan = _native.Initialize(_surface, _value, rowIndex);
-            _kind.Width = 78;
+            _kind.Width = MotionPathEditorDialogVisualMetrics.KindWidth;
             _kind.Margin = new Thickness(2);
             _kind.SelectionChanged += (_, _) => _native.RefreshEnablement();
             PresentationDialogControlAdapter.ApplySemantic(
@@ -193,7 +193,10 @@ internal sealed class MotionPathEditorDialog : FreePDialogWindow
             panel.Children.Add(delete);
             Control = new Border
             {
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(
+                    MotionPathEditorDialogVisualMetrics.RowBorderColor.R,
+                    MotionPathEditorDialogVisualMetrics.RowBorderColor.G,
+                    MotionPathEditorDialogVisualMetrics.RowBorderColor.B)),
                 BorderThickness = new Thickness(0, 0, 0, 1),
                 Child = panel,
             };

@@ -1,5 +1,6 @@
 using System.Windows.Input;
 using FreeX.App.Presentation;
+using FreeX.App.Presentation.FormulaBar;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -44,6 +45,37 @@ public static class ExcelWorksheetNavigationPlanner
             MapModifiers(modifiers),
             current,
             pageSize);
+
+    /// <summary>
+    /// WPF adapter for the portable key-to-target decision
+    /// (<see cref="FreeX.App.Presentation.ExcelWorksheetNavigationPlanner.ResolveTarget"/>): converts
+    /// the native key/modifiers and forwards the viewport-derived page sizes and Enter option.
+    /// </summary>
+    public static ExcelWorksheetNavigationResolution? ResolveTarget(
+        Sheet? sheet,
+        SheetId sheetId,
+        CellAddress current,
+        Key key,
+        Key systemKey,
+        ModifierKeys modifiers,
+        bool endMode,
+        int pageRows,
+        int pageColumns,
+        bool moveSelectionAfterEnter,
+        FormulaEditorEnterDirection enterDirection) =>
+        FreeX.App.Presentation.ExcelWorksheetNavigationPlanner.ResolveTarget(
+            sheet,
+            sheetId,
+            current,
+            MapKey(key),
+            new ExcelWorksheetNavigationRequest(
+                MapModifiers(modifiers),
+                endMode,
+                pageRows,
+                pageColumns,
+                moveSelectionAfterEnter,
+                enterDirection,
+                MapKey(systemKey)));
 
     public static CellAddress FindVerticalDataBoundary(Sheet? sheet, CellAddress current, int rowDirection)
         => FreeX.App.Presentation.ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(

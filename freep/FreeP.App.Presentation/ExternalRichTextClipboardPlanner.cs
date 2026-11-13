@@ -1350,9 +1350,9 @@ public static class ExternalRichTextClipboardPlanner
             byte[] payload = _pictureBytes.ToArray();
             long? widthEmu = ToPictureExtentEmu(_pictureWidthGoalTwips, _pictureScaleX);
             long? heightEmu = ToPictureExtentEmu(_pictureHeightGoalTwips, _pictureScaleY);
-            string? contentType = HasPrefix(payload, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+            string? contentType = Free.Shared.Drawing.ImageHeader.HasPngSignature(payload)
                 ? "image/png"
-                : HasPrefix(payload, [0xFF, 0xD8, 0xFF])
+                : Free.Shared.Drawing.ImageHeader.Detect(payload) == Free.Shared.Drawing.ImageHeaderFormat.Jpeg
                     ? "image/jpeg"
                     : null;
             if (contentType is not null)
@@ -1480,20 +1480,6 @@ public static class ExternalRichTextClipboardPlanner
         {
             var className = _objectClass.ToString().Trim();
             return className.Length == 0 ? null : className;
-        }
-
-        private static bool HasPrefix(byte[] value, byte[] prefix)
-        {
-            if (value.Length < prefix.Length)
-                return false;
-
-            for (int i = 0; i < prefix.Length; i++)
-            {
-                if (value[i] != prefix[i])
-                    return false;
-            }
-
-            return true;
         }
 
         private void AppendText(string text)

@@ -12,6 +12,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 # explicit and reason-bearing so a renderer suffix alone can never opt a new project out.
 $rendererSharedProjectExceptions = [ordered]@{
     "shared/Free.Shared.AppServices.Windows/Free.Shared.AppServices.Windows.csproj" = "Windows file-association adapter"
+    "shared/Free.Shared.Drawing.Wpf/Free.Shared.Drawing.Wpf.csproj" = "WPF drawing adapter"
     "shared/Free.Shared.Pdf.Skia/Free.Shared.Pdf.Skia.csproj" = "Skia PDF renderer"
     "shared/Free.Shared.Pdf.Wpf/Free.Shared.Pdf.Wpf.csproj" = "WPF PDF renderer"
     "shared/Free.Shared.Ribbon.Avalonia/Free.Shared.Ribbon.Avalonia.csproj" = "Avalonia ribbon renderer"

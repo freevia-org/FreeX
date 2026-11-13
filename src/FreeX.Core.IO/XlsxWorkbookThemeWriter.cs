@@ -135,14 +135,7 @@ internal static class XlsxWorkbookThemeWriter
             try
             {
                 using var stringReader = new StringReader($"<themeSupplement>{nativeThemeSupplementXml}</themeSupplement>");
-                using var xmlReader = XmlReader.Create(
-                    stringReader,
-                    new XmlReaderSettings
-                    {
-                        DtdProcessing = DtdProcessing.Prohibit,
-                        MaxCharactersInDocument = SecureXmlReaderSettings.DefaultMaxCharactersInDocument,
-                        XmlResolver = null
-                    });
+                using var xmlReader = XmlReader.Create(stringReader, SecureXmlReaderSettings.Create());
                 var document = XDocument.Load(xmlReader);
                 foreach (var element in document.Root!
                              .Elements()

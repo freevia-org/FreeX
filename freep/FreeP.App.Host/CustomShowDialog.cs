@@ -15,8 +15,7 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
     private readonly ListBox _customShowSlideList = new();
     private readonly StackPanel _slidePanel = new();
     private readonly TextBlock _validationText = new();
-    private Point? _customShowSlideDragStartPoint;
-    private int _customShowSlideDragSourceIndex = -1;
+    private readonly SlideShowCustomShowDragTracker _customShowSlideDrag = new();
 
     private PresentationDialogSurfacePlan<
         SlideShowCustomShowDialogField,
@@ -277,34 +276,34 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
         var item = FindVisualAncestor<ListBoxItem>(e.OriginalSource as DependencyObject);
         if (item?.DataContext is SlideShowCustomShowSessionSlideItemPlan slide)
         {
-            _customShowSlideDragStartPoint = e.GetPosition(_customShowSlideList);
-            _customShowSlideDragSourceIndex = slide.Index;
+            var pressPoint = e.GetPosition(_customShowSlideList);
+            _customShowSlideDrag.Press(pressPoint.X, pressPoint.Y, slide.Index);
             return;
         }
 
-        _customShowSlideDragStartPoint = null;
-        _customShowSlideDragSourceIndex = -1;
+        _customShowSlideDrag.Reset();
     }
 
     private void OnCustomShowSlideListMouseMove(object sender, MouseEventArgs e)
     {
-        if (_customShowSlideDragStartPoint is not { } dragStartPoint ||
-            _customShowSlideDragSourceIndex < 0 ||
+        if (!_customShowSlideDrag.HasPress ||
             e.LeftButton != MouseButtonState.Pressed)
         {
             return;
         }
 
         var position = e.GetPosition(_customShowSlideList);
-        if (Math.Abs(position.X - dragStartPoint.X) < SystemParameters.MinimumHorizontalDragDistance &&
-            Math.Abs(position.Y - dragStartPoint.Y) < SystemParameters.MinimumVerticalDragDistance)
+        if (!_customShowSlideDrag.ShouldBegin(
+                position.X,
+                position.Y,
+                SystemParameters.MinimumHorizontalDragDistance,
+                SystemParameters.MinimumVerticalDragDistance))
         {
             return;
         }
 
-        var sourceIndex = _customShowSlideDragSourceIndex;
-        _customShowSlideDragStartPoint = null;
-        _customShowSlideDragSourceIndex = -1;
+        var sourceIndex = _customShowSlideDrag.SourceIndex;
+        _customShowSlideDrag.Reset();
         DragDrop.DoDragDrop(_customShowSlideList, sourceIndex, DragDropEffects.Move);
     }
 
@@ -334,13 +333,15 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
         var item = FindVisualAncestor<ListBoxItem>(e.OriginalSource as DependencyObject);
         if (item?.DataContext is SlideShowCustomShowSessionSlideItemPlan slide)
         {
-            var position = e.GetPosition(item);
-            return position.Y > item.ActualHeight / 2
-                ? slide.Index + 1
-                : slide.Index;
+            return SlideShowCustomShowDragTracker.ResolveDropIndex(
+                slide.Index,
+                e.GetPosition(item).Y,
+                item.ActualHeight,
+                _customShowSlideList.Items.Count);
         }
 
-        return _customShowSlideList.Items.Count;
+        return SlideShowCustomShowDragTracker.ResolveDropIndex(
+            -1, 0, 0, _customShowSlideList.Items.Count);
     }
 
     private SlideShowCustomShowDragReorderPlan ApplyCustomShowSlideDragReorder(

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Plain net10.0-windows (no OS version) so FreeX.App.UI (net10.0-windows) can reference it. -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WPF companion to the neutral Free.Shared.Drawing tier, mirroring
+         Free.Shared.Drawing.Avalonia: converts portable shape contours to WPF geometry. -->
+    <ProjectReference Include="../Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
+  </ItemGroup>
+
+</Project>

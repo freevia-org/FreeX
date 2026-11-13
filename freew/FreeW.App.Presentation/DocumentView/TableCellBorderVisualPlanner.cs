@@ -51,6 +51,27 @@ public sealed record TableCellBorderVisualPlan(IReadOnlyList<TableCellBorderEdge
 
     public TableCellBorderEdgeVisualPlan Edge(TableCellBorderVisualEdge edge) =>
         Edges.First(plan => plan.Edge == edge);
+
+    /// <summary>
+    /// The height the cell's own top and bottom border lines occupy. Word lays an "at least" row's
+    /// borders outside its authored height, so a header row with a double top rule and a thick bottom
+    /// rule stands taller than a plain row of the same w:trHeight (fixture table-layout-complex: the
+    /// two such rows are ~10 px taller in Word than the authored minimum). A double line takes its
+    /// two strokes and the gap between them (3x the width), a thick line twice its width, any other
+    /// visible line its width.
+    /// </summary>
+    public double VerticalBorderExtentDip =>
+        EdgeExtentDip(Edge(TableCellBorderVisualEdge.Top)) + EdgeExtentDip(Edge(TableCellBorderVisualEdge.Bottom));
+
+    private static double EdgeExtentDip(TableCellBorderEdgeVisualPlan edge) =>
+        !edge.IsVisible
+            ? 0
+            : edge.Style switch
+            {
+                BorderLineStyle.Double => 3 * edge.WidthDip,
+                BorderLineStyle.Thick => 2 * edge.WidthDip,
+                _ => edge.WidthDip,
+            };
 }
 
 public static class TableCellBorderVisualPlanner

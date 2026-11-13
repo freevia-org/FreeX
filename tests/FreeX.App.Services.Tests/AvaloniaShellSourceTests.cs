@@ -1810,8 +1810,11 @@ public sealed class AvaloniaShellSourceTests
         // shared AdjustTargetPastMerge helper (mirrors the inline cell editor and the WPF host)
         // instead of moving straight to the raw intent.Target.
         source.Should().Contain("var adjustedTarget = ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(");
-        source.Should().Contain("var rowDelta = GetCellIndexDelta(current.Row, adjustedTarget.Row);");
-        source.Should().Contain("var colDelta = GetCellIndexDelta(current.Col, adjustedTarget.Col);");
+        // The landing cell then goes through GridSelectionNavigationPlanner.PlanEditCommitMove
+        // (cycle within the selection, else the merge-adjusted target), shared with the WPF host.
+        source.Should().Contain("GridSelectionNavigationPlanner.PlanEditCommitMove(");
+        source.Should().Contain("var rowDelta = GetCellIndexDelta(current.Row, move.Target.Row);");
+        source.Should().Contain("var colDelta = GetCellIndexDelta(current.Col, move.Target.Col);");
         source.Should().Contain("_session.MoveActiveCell(rowDelta, colDelta);");
         source.Should().Contain("var result = _session.CommitCellText(_formulaBox.Text ?? \"\", UseR1C1ReferenceStyle);");
         source.Should().Contain("if (_isOpening || _isSaving)");

@@ -98,8 +98,8 @@ public sealed class FreeWBehaviorSourceGuardTests
     public void AutosaveFacades_DelegateNeutralLifecyclePlanningAndWorkflowToSharedServices()
     {
         var session = ReadSource("freew", "FreeW.App.Presentation", "Shell", "FreeWAutosaveSession.cs");
-        var planner = ReadSource("freew", "FreeW.App.Presentation", "Shell", "AutosaveRecoveryPlanner.cs");
-        var workflow = ReadSource("freew", "FreeW.App.Presentation", "Shell", "FreeWRecoveryWorkflow.cs");
+        var sharedProfile = ReadSource(
+            "shared", "Free.Shared.AppServices", "AutosaveApplicationProfile.cs");
         var sharedSession = ReadSource(
             "shared", "Free.Shared.AppServices", "AutosaveDocumentSession.cs");
         var sharedPlanner = ReadSource(
@@ -110,11 +110,15 @@ public sealed class FreeWBehaviorSourceGuardTests
             "shared", "Free.Shared.Shell.Wpf", "WpfAutosaveRecoveryHost.cs");
         var wpf = ReadSource("freew", "FreeW.App.Host", "AutosaveCoordinator.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "AutosaveAdapter.cs");
+        var sharedWpfAutosaveHost = ReadSource(
+            "shared", "Free.Shared.Shell.Wpf", "WpfAutosaveHost.cs");
+        var sharedAvaloniaAutosaveHost = ReadSource(
+            "shared", "Free.Shared.Shell.Avalonia", "AvaloniaAutosaveHost.cs");
 
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("new FreeWAutosaveSession(");
-            source.Should().Contain("FreeWAutosaveSession.DefaultInterval");
+            source.Should().Contain("FreeWAutosaveProfile.Session");
             source.Should().NotContain("AutosaveSnapshotCoordinator");
             source.Should().NotContain("AutosaveRecoveryPlanner");
             source.Should().NotContain("AutosaveSnapshotStore");
@@ -125,29 +129,31 @@ public sealed class FreeWBehaviorSourceGuardTests
 
         var wpfStartupOffer = Between(wpf, "public bool OfferRecovery", "public bool RecoverUnsavedDocuments");
         var wpfManualOffer = wpf[wpf.IndexOf("public bool RecoverUnsavedDocuments", StringComparison.Ordinal)..];
-        var avaloniaStartupOffer = Between(avalonia, "public async Task OfferRecoveryAsync", "public void Dispose");
+        var avaloniaStartupOffer = Between(avalonia, "public Task OfferRecoveryAsync", "public void Dispose");
         foreach (var nativeOffer in new[] { wpfStartupOffer, wpfManualOffer, avaloniaStartupOffer })
         {
             nativeOffer.Should().NotContain("for (var index = 0; index < recoveries.Count; index++)");
             nativeOffer.Should().NotContain("unsaved documents found");
         }
 
-        session.Should().Contain("new AutosaveDocumentSession<TextDocument>(");
-        session.Should().Contain("AutosaveRecoveryPlanner.PlanAll(_store)");
-        session.Should().Contain("AutosaveRecoveryPlanner.Complete(");
+        session.Should().Contain(": AutosaveApplicationSession<TextDocument>");
+        session.Should().Contain("AutosaveApplicationProfile<TextDocument>");
         session.Should().Contain("DocxWriter.Write(document, path)");
         session.Should().Contain("ReadSnapshot: DocxReader.Read");
+        session.Should().Contain("new AutosaveRecoveryPromptText(\"FreeW\", \"documents\")");
         session.Should().NotContain("new AutosaveSnapshotCoordinator(");
+        session.Should().NotContain("new AutosaveDocumentSession<");
         session.Should().NotContain("class SnapshotSource : IAutosaveSnapshotSource");
+        session.Should().NotContain("AutosaveRecoveryPlannerCore");
+        session.Should().NotContain("AutosaveRecoveryPolicy");
 
-        planner.Should().Contain("AutosaveRecoveryPlannerCore.PlanAll(");
-        planner.Should().Contain(": IAutosaveRecoveryPlan");
-        planner.Should().NotContain("AutosaveRecoveryPolicy");
-
-        workflow.Should().Contain("AutosaveRecoveryWorkflow.RunAsync(");
-        workflow.Should().Contain("AutosaveRecoveryPromptFormatter.Format(");
-        workflow.Should().Contain("new(\"FreeW\", \"documents\")");
-        workflow.Should().NotContain("for (var index = 0; index < recoveries.Count; index++)");
+        sharedProfile.Should().Contain("new AutosaveDocumentSession<TDocument>(");
+        sharedProfile.Should().Contain("AutosaveRecoveryPlannerCore.PlanAll(");
+        sharedProfile.Should().Contain("AutosaveRecoveryPlannerCore.Complete(");
+        sharedProfile.Should().Contain(": IAutosaveRecoveryPlan");
+        sharedProfile.Should().Contain("AutosaveRecoveryWorkflow.RunAsync(");
+        sharedProfile.Should().Contain("AutosaveRecoveryPromptFormatter.Format(");
+        sharedProfile.Should().NotContain("for (var index = 0; index < recoveries.Count; index++)");
 
         sharedSession.Should().Contain("new AutosaveSnapshotCoordinator(store, snapshotId)");
         sharedSession.Should().Contain("class SnapshotSource : IAutosaveSnapshotSource");
@@ -157,20 +163,20 @@ public sealed class FreeWBehaviorSourceGuardTests
         sharedWorkflow.Should().Contain("var useCurrentWindow = !anyAccepted;");
         sharedWorkflow.Should().Contain("AutosaveRecoveryPromptMode.Manual");
 
-        wpf.Should().Contain("_session.PlanRecoveries");
-        wpf.Should().Contain("WpfAutosaveRecoveryHost.OfferStartup(");
-        wpf.Should().Contain("WpfAutosaveRecoveryHost.RecoverManually(");
-        wpf.Should().Contain("_session.CompleteRecovery(");
-        wpf.Should().Contain("_file.OpenSnapshot");
+        sharedWpfAutosaveHost.Should().Contain("Session.PlanRecoveries");
+        sharedWpfAutosaveHost.Should().Contain("WpfAutosaveRecoveryHost.OfferStartup(");
+        sharedWpfAutosaveHost.Should().Contain("WpfAutosaveRecoveryHost.RecoverManually(");
+        sharedWpfAutosaveHost.Should().Contain("Session.CompleteRecovery(");
+        wpf.Should().Contain("file.OpenSnapshot");
         wpf.Should().Contain("editor.CommitToModel()");
         sharedWpfHost.Should().Contain("AutosaveRecoveryWorkflow.RunAsync(");
         sharedWpfHost.Should().Contain("DialogMessageHelper.AskYesNo(");
-          avalonia.Should().Contain("_session.PlanRecoveries,");
-          avalonia.Should().Contain("AvaloniaAutosaveRecoveryHost.OfferStartupAsync(");
-          avalonia.Should().Contain("AvaloniaAutosaveRecoveryHost.RecoverManuallyAsync(");
-        avalonia.Should().NotContain("FreeWRecoveryWorkflow.RunAsync(");
-          avalonia.Should().Contain("RecoveryPromptDialog.ShowAsync(");
-        avalonia.Should().Contain("AvaloniaBoundedDispatcherTransaction.TryExecute(");
+        sharedAvaloniaAutosaveHost.Should().Contain("Session.PlanRecoveries,");
+        sharedAvaloniaAutosaveHost.Should().Contain("AvaloniaAutosaveRecoveryHost.OfferStartupAsync(");
+        sharedAvaloniaAutosaveHost.Should().Contain("AvaloniaAutosaveRecoveryHost.RecoverManuallyAsync(");
+        avalonia.Should().NotContain("Recovery.RunAsync(");
+        sharedAvaloniaAutosaveHost.Should().Contain("AvaloniaAutosaveRecoveryPromptDialog.ShowAsync(");
+        sharedAvaloniaAutosaveHost.Should().Contain("AvaloniaBoundedDispatcherTransaction.TryExecute(");
         // r172: repointed from the old "_session.CompleteDocumentRecovery(" +
         // "_editor.LoadDocument(document)" pair, which pinned the exact call the recovery
         // fix legitimately replaced. The contract is that the Avalonia adapter completes a
@@ -178,10 +184,11 @@ public sealed class FreeWBehaviorSourceGuardTests
         // document-file workflow -- which is what arms the external-modification baseline --
         // rather than hand-rolling a load beside it. Pinning the method NAME made that fix
         // look like a regression; pinning the route is what this guard is actually for.
-        avalonia.Should().Contain("_session.CompleteRecovery(");
-        avalonia.Should().Contain("_documentFileWorkflow.OpenSnapshotAsync(");
+        avalonia.Should().Contain("AutosaveRecoveryRestore<TextDocument>.FromSnapshotPath(");
+        sharedAvaloniaAutosaveHost.Should().Contain("RestoreIntoCurrentWindow.Complete(");
+        avalonia.Should().Contain("documentFiles.OpenSnapshotAsync(");
         avalonia.Should().NotContain("DocxReader");
-        avalonia.Should().Contain("FreeWRecoveryRestoreExceptionPolicy.QuarantineCandidate");
+        sharedAvaloniaAutosaveHost.Should().Contain("AutosaveRecoveryRestoreExceptionPolicy.QuarantineCandidate");
     }
 
     [Fact]

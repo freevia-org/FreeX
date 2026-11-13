@@ -272,14 +272,9 @@ internal static class XlsxSharedStringMetadataPreserver
 
     private static bool ContainsRichSharedStringMetadata(ZipArchiveEntry sharedStringsEntry)
     {
-        var settings = new XmlReaderSettings
-        {
-            DtdProcessing = DtdProcessing.Prohibit,
-            MaxCharactersInDocument = SecureXmlReaderSettings.DefaultMaxCharactersInDocument,
-            XmlResolver = null,
-            IgnoreComments = true,
-            IgnoreProcessingInstructions = true
-        };
+        var settings = SecureXmlReaderSettings.Create();
+        settings.IgnoreComments = true;
+        settings.IgnoreProcessingInstructions = true;
 
         using var stream = sharedStringsEntry.Open();
         using var reader = XmlReader.Create(stream, settings);
@@ -352,14 +347,9 @@ internal static class XlsxSharedStringMetadataPreserver
         var firstUse = new Dictionary<int, int>();
         var position = 0;
 
-        var settings = new XmlReaderSettings
-        {
-            DtdProcessing = DtdProcessing.Prohibit,
-            MaxCharactersInDocument = SecureXmlReaderSettings.DefaultMaxCharactersInDocument,
-            XmlResolver = null,
-            IgnoreComments = true,
-            IgnoreProcessingInstructions = true
-        };
+        var settings = SecureXmlReaderSettings.Create();
+        settings.IgnoreComments = true;
+        settings.IgnoreProcessingInstructions = true;
 
         var worksheetEntries = archive.Entries
             .Where(entry => entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
@@ -411,14 +401,9 @@ internal static class XlsxSharedStringMetadataPreserver
     {
         var map = new Dictionary<CellSharedStringRef, int>();
 
-        var settings = new XmlReaderSettings
-        {
-            DtdProcessing = DtdProcessing.Prohibit,
-            MaxCharactersInDocument = SecureXmlReaderSettings.DefaultMaxCharactersInDocument,
-            XmlResolver = null,
-            IgnoreComments = true,
-            IgnoreProcessingInstructions = true
-        };
+        var settings = SecureXmlReaderSettings.Create();
+        settings.IgnoreComments = true;
+        settings.IgnoreProcessingInstructions = true;
 
         var worksheetEntries = archive.Entries
             .Where(entry => entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
