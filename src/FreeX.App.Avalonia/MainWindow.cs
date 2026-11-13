@@ -5290,6 +5290,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _cellAffordanceOverlay = overlay;
         AddFormulaReferenceGripOverlay(overlay, viewport, showHeadings, zoomFactor);
         AddDataValidationDropdownOverlay(overlay, viewport, showHeadings, zoomFactor);
+        AddErrorSmartTagOverlay(overlay, viewport, showHeadings, zoomFactor);
 
         var pageBreakOverlay = WorksheetViewModeUiStatePlanner.Build(_session.ViewMode).UsesPageBreakPreviewOverlay
             ? BuildPageBreakPreviewOverlay(viewport, showHeadings, zoomFactor)
@@ -9342,6 +9343,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             richRuns: richRuns,
             flowDirection: flowDirection,
             commentDisplay: commentDisplay,
+            errorIndicator: HasErrorIndicatorAt(address),
             fontFamily: fontFamily,
             suppressDefaultGridlines: CellSurfaceGridlinePlanner.HasVisibleFill(
                 style,
@@ -11872,6 +11874,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         IReadOnlyList<ResolvedCellTextRun>? richRuns = null,
         FlowDirection flowDirection = FlowDirection.LeftToRight,
         CellCommentDisplay? commentDisplay = null,
+        bool errorIndicator = false,
         FontFamily? fontFamily = null,
         bool suppressDefaultGridlines = false,
         CellBorderNeighborEdges borderNeighbors = default,
@@ -12038,6 +12041,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var indicatorHost = new AvaloniaGrid { ClipToBounds = true };
             indicatorHost.Children.Add(cellContent);
             indicatorHost.Children.Add(CreateCommentIndicatorLayer(indicatorComment.Kind, zoomFactor));
+            cellContent = indicatorHost;
+        }
+
+        // Excel's green error indicator (background error checking), top-left; mirrors WPF's
+        // GridView.DrawErrorIndicator.
+        if (errorIndicator)
+        {
+            var indicatorHost = new AvaloniaGrid { ClipToBounds = true };
+            indicatorHost.Children.Add(cellContent);
+            indicatorHost.Children.Add(CreateErrorIndicatorLayer(zoomFactor));
             cellContent = indicatorHost;
         }
 
@@ -12239,6 +12252,33 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// cell, purple #7C379E for ThreadedComment or Mixed (Excel suppresses the note color once a
     /// thread coexists on the same cell).
     /// </summary>
+    private static Control CreateErrorIndicatorLayer(double zoomFactor)
+    {
+        const double size = 6;
+        var scaledSize = size * zoomFactor;
+        var geometry = new StreamGeometry();
+        using (var context = geometry.Open())
+        {
+            context.BeginFigure(new Point(0, 0), isFilled: true);
+            context.LineTo(new Point(scaledSize, 0));
+            context.LineTo(new Point(0, scaledSize));
+            context.EndFigure(isClosed: true);
+        }
+
+        return new global::Avalonia.Controls.Shapes.Path
+        {
+            Data = geometry,
+            Fill = ErrorIndicatorFill,
+            Stretch = Stretch.None,
+            Width = scaledSize,
+            Height = scaledSize,
+            Margin = new Thickness(1, 1, 0, 0),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            IsHitTestVisible = false,
+        };
+    }
+
     private static Control CreateCommentIndicatorLayer(CellCommentDisplayKind kind, double zoomFactor)
     {
         const double size = 7;

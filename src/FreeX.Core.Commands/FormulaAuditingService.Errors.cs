@@ -149,6 +149,31 @@ public static partial class FormulaAuditingService
         return result;
     }
 
+    /// <summary>
+    /// Excel's background error checking: the cells of one sheet that show the green error
+    /// indicator in their top-left corner, each with the rule that flagged it. Formulas that return
+    /// an error come first, as in Excel's smart tag. Typed error constants, invalid validation
+    /// entries and circular references carry no indicator, and "Formulas referring to empty cells"
+    /// is left out because Excel ships with that rule switched off.
+    /// </summary>
+    public static IReadOnlyDictionary<CellAddress, string> FindBackgroundErrorIndicators(Workbook workbook, SheetId sheetId)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        var result = new Dictionary<CellAddress, string>();
+        foreach (var issue in FindLiteralFormulaErrorIssues(workbook, sheetId))
+        {
+            if (issue.FormulaText is null && issue.ErrorCode.StartsWith('#'))
+                continue;
+
+            result.TryAdd(issue.Address, issue.ErrorCode);
+        }
+
+        foreach (var issue in FindFormulaCellIssues(workbook, sheetId, includeBlankReferences: false))
+            result.TryAdd(issue.Address, issue.ErrorCode);
+
+        return result;
+    }
+
     private static IEnumerable<FormulaErrorIssue> FindLiteralFormulaErrorIssues(
         Workbook workbook,
         SheetId? sheetId,
@@ -316,9 +341,13 @@ public static partial class FormulaAuditingService
         }
     }
 
-    private static IEnumerable<FormulaErrorIssue> FindFormulaCellIssues(Workbook workbook, SheetId? sheetId)
+    private static IEnumerable<FormulaErrorIssue> FindFormulaCellIssues(
+        Workbook workbook,
+        SheetId? sheetId,
+        bool includeBlankReferences = true)
     {
-        var checkBlankReferences = !workbook.DisabledFormulaErrorCodes.Contains(FormulaRefersToBlankCellsErrorCode);
+        var checkBlankReferences = includeBlankReferences &&
+            !workbook.DisabledFormulaErrorCodes.Contains(FormulaRefersToBlankCellsErrorCode);
         var checkInconsistentCalculatedColumnFormulas = !workbook.DisabledFormulaErrorCodes.Contains(InconsistentCalculatedColumnFormulaErrorCode);
         var checkInconsistentFormulas = !workbook.DisabledFormulaErrorCodes.Contains(InconsistentFormulaErrorCode);
         var checkOmittedAdjacentCells = !workbook.DisabledFormulaErrorCodes.Contains(FormulaOmitsAdjacentCellsErrorCode);

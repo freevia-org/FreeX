@@ -14,7 +14,7 @@ using CoreSortKey = FreeX.Core.Commands.SortKey;
 
 namespace FreeX.App.Services;
 
-public sealed class WorkbookSession : IDisposable
+public sealed partial class WorkbookSession : IDisposable
 {
     private sealed class ReplaceSubtotalRowsCommand : IWorkbookCommand
     {
