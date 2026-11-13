@@ -28,9 +28,14 @@ public sealed partial class MainWindow
     // function is inserted (most recent first) and seeded from the catalog defaults.
     private IReadOnlyList<string> _insertFunctionMostRecentlyUsed = InsertFunctionCatalogPlanner.DefaultMostRecentlyUsed;
 
-    private void InsertFunction() => RunGuarded(ShowInsertFunctionDialogAsync);
+    private void InsertFunction() => RunGuarded(() => ShowInsertFunctionDialogAsync());
 
-    private async Task ShowInsertFunctionDialogAsync()
+    // Formulas > Function Library category buttons: open Insert Function on that category, so the
+    // list shows every function Excel's button would list.
+    private Action InsertFunctionInCategory(string category) =>
+        () => RunGuarded(() => ShowInsertFunctionDialogAsync(category));
+
+    private async Task ShowInsertFunctionDialogAsync(string? initialCategory = null)
     {
         if (_isOpening || _isSaving)
             return;
@@ -38,7 +43,7 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var selected = await ShowInsertFunctionPickerDialogAsync();
+        var selected = await ShowInsertFunctionPickerDialogAsync(initialCategory);
         if (selected is null)
             return;
 
@@ -49,7 +54,7 @@ public sealed partial class MainWindow
         InsertComposedFunctionFormula(selected.Name, formula);
     }
 
-    private async Task<InsertFunctionCatalogEntry?> ShowInsertFunctionPickerDialogAsync()
+    private async Task<InsertFunctionCatalogEntry?> ShowInsertFunctionPickerDialogAsync(string? initialCategory = null)
     {
         var catalog = InsertFunctionCatalogPlanner.BuildCatalog();
         InsertFunctionCatalogEntry? result = null;
@@ -80,7 +85,7 @@ public sealed partial class MainWindow
         var categoryBox = new ComboBox
         {
             ItemsSource = InsertFunctionCatalogPlanner.BuildCategoryChoices(catalog),
-            SelectedItem = InsertFunctionCatalogPlanner.MostRecentlyUsedCategory,
+            SelectedItem = initialCategory ?? InsertFunctionCatalogPlanner.MostRecentlyUsedCategory,
             // WPF: _categoryBox { Margin = (4, 0, 0, 0) } fills the editor column.
             Margin = new Thickness(4, 0, 0, 0),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,

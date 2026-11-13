@@ -41,6 +41,16 @@ public static class InsertFunctionCatalogPlanner
             .Select(name => new InsertFunctionCatalogEntry(name, GetCategory(name), GetDescription(name)))
             .ToArray();
 
+    /// <summary>
+    /// The functions a Formulas &gt; Function Library category button lists: every implemented
+    /// function in that category, alphabetically, as in Excel.
+    /// </summary>
+    public static IReadOnlyList<string> FunctionLibraryNames(string category) =>
+        BuildCatalog()
+            .Where(entry => string.Equals(entry.Category, category, StringComparison.Ordinal))
+            .Select(entry => entry.Name)
+            .ToArray();
+
     /// <summary>The category choices for the dropdown: MRU, All, then the present categories sorted.</summary>
     public static IReadOnlyList<string> BuildCategoryChoices(IReadOnlyList<InsertFunctionCatalogEntry> catalog)
     {
@@ -123,16 +133,20 @@ public static class InsertFunctionCatalogPlanner
 
     public static string GetCategory(string name)
     {
+        // Excel's own Insert Function / Function Library categories. Anything not listed below
+        // (SUM, ROUND, SEQUENCE, RANDARRAY, SUBTOTAL, AGGREGATE, ...) is Math & Trig, as in Excel.
         if (LogicalFunctions.Contains(name)) return "Logical";
         if (LookupFunctions.Contains(name)) return "Lookup & Reference";
         if (TextFunctions.Contains(name)) return "Text";
         if (DateTimeFunctions.Contains(name)) return "Date & Time";
         if (StatisticalFunctions.Contains(name)) return "Statistical";
-        if (DynamicArrayFunctions.Contains(name)) return "Dynamic Array";
         if (FinancialFunctions.Contains(name)) return "Financial";
         if (InformationFunctions.Contains(name)) return "Information";
         if (DatabaseFunctions.Contains(name)) return "Database";
         if (EngineeringFunctions.Contains(name)) return "Engineering";
+        if (CompatibilityFunctions.Contains(name)) return "Compatibility";
+        if (WebFunctions.Contains(name)) return "Web";
+        if (CubeFunctions.Contains(name)) return "Cube";
         return "Math & Trig";
     }
 
@@ -159,16 +173,18 @@ public static class InsertFunctionCatalogPlanner
         return int.MaxValue;
     }
 
-    private static readonly HashSet<string> LogicalFunctions = ["IF", "IFS", "AND", "OR", "NOT", "XOR", "TRUE", "FALSE", "IFERROR", "IFNA", "LET", "LAMBDA"];
-    private static readonly HashSet<string> LookupFunctions = ["VLOOKUP", "HLOOKUP", "XLOOKUP", "INDEX", "MATCH", "XMATCH", "LOOKUP", "INDIRECT", "OFFSET", "ADDRESS", "TRANSPOSE", "GETPIVOTDATA"];
-    private static readonly HashSet<string> TextFunctions = ["CONCAT", "TEXTJOIN", "LEFT", "RIGHT", "MID", "LEN", "TRIM", "TEXT", "UPPER", "LOWER", "PROPER", "SUBSTITUTE", "FIND", "SEARCH", "REPT", "VALUE"];
-    private static readonly HashSet<string> DateTimeFunctions = ["TODAY", "NOW", "DATE", "YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND", "WEEKDAY", "EDATE", "DATEDIF", "EOMONTH", "WORKDAY", "NETWORKDAYS"];
-    private static readonly HashSet<string> StatisticalFunctions = ["AVERAGE", "COUNT", "COUNTA", "MIN", "MAX", "COUNTIF", "COUNTIFS", "AVERAGEIF", "MEDIAN", "STDEV.S", "VAR.S", "RANK.EQ", "PERCENTILE.INC"];
-    private static readonly HashSet<string> DynamicArrayFunctions = ["FILTER", "SORT", "SORTBY", "UNIQUE", "SEQUENCE", "RANDARRAY", "TAKE", "DROP", "EXPAND", "CHOOSEROWS", "CHOOSECOLS", "VSTACK", "HSTACK", "TOROW", "TOCOL", "WRAPROWS", "WRAPCOLS", "MAP", "REDUCE", "SCAN", "BYROW", "BYCOL", "MAKEARRAY"];
+    private static readonly HashSet<string> LogicalFunctions = new(StringComparer.OrdinalIgnoreCase) { "AND", "BYCOL", "BYROW", "FALSE", "IF", "IFERROR", "IFNA", "IFS", "LAMBDA", "LET", "MAKEARRAY", "MAP", "NOT", "OR", "REDUCE", "SCAN", "SWITCH", "TRUE", "XOR" };
+    private static readonly HashSet<string> LookupFunctions = new(StringComparer.OrdinalIgnoreCase) { "ADDRESS", "AREAS", "CHOOSE", "CHOOSECOLS", "CHOOSEROWS", "COLUMN", "COLUMNS", "DROP", "EXPAND", "FILTER", "FORMULATEXT", "GETPIVOTDATA", "GROUPBY", "HLOOKUP", "HSTACK", "HYPERLINK", "IMAGE", "INDEX", "INDIRECT", "LOOKUP", "MATCH", "OFFSET", "PIVOTBY", "ROW", "ROWS", "RTD", "SORT", "SORTBY", "TAKE", "TOCOL", "TOROW", "TRANSPOSE", "TRIMRANGE", "UNIQUE", "VLOOKUP", "VSTACK", "WRAPCOLS", "WRAPROWS", "XLOOKUP", "XMATCH" };
+    private static readonly HashSet<string> TextFunctions = new(StringComparer.OrdinalIgnoreCase) { "ARRAYTOTEXT", "ASC", "BAHTTEXT", "CHAR", "CLEAN", "CODE", "CONCAT", "DBCS", "DOLLAR", "EXACT", "FIND", "FINDB", "FIXED", "LEFT", "LEFTB", "LEN", "LENB", "LOWER", "MID", "MIDB", "NUMBERVALUE", "PHONETIC", "PROPER", "REGEXEXTRACT", "REGEXREPLACE", "REGEXTEST", "REPLACE", "REPLACEB", "REPT", "RIGHT", "RIGHTB", "SEARCH", "SEARCHB", "SUBSTITUTE", "T", "TEXT", "TEXTAFTER", "TEXTBEFORE", "TEXTJOIN", "TEXTSPLIT", "TRIM", "UNICHAR", "UNICODE", "UPPER", "VALUE", "VALUETOTEXT" };
+    private static readonly HashSet<string> DateTimeFunctions = new(StringComparer.OrdinalIgnoreCase) { "DATE", "DATEDIF", "DATEVALUE", "DAY", "DAYS", "DAYS360", "EDATE", "EOMONTH", "HOUR", "ISOWEEKNUM", "MINUTE", "MONTH", "NETWORKDAYS", "NETWORKDAYS.INTL", "NOW", "SECOND", "TIME", "TIMEVALUE", "TODAY", "WEEKDAY", "WEEKNUM", "WORKDAY", "WORKDAY.INTL", "YEAR", "YEARFRAC" };
+    private static readonly HashSet<string> StatisticalFunctions = new(StringComparer.OrdinalIgnoreCase) { "AVEDEV", "AVERAGE", "AVERAGEA", "AVERAGEIF", "AVERAGEIFS", "BETA.DIST", "BETA.INV", "BINOM.DIST", "BINOM.DIST.RANGE", "BINOM.INV", "CHISQ.DIST", "CHISQ.DIST.RT", "CHISQ.INV", "CHISQ.INV.RT", "CHISQ.TEST", "CONFIDENCE.NORM", "CONFIDENCE.T", "CORREL", "COUNT", "COUNTA", "COUNTBLANK", "COUNTIF", "COUNTIFS", "COVARIANCE.P", "COVARIANCE.S", "DEVSQ", "EXPON.DIST", "F.DIST", "F.DIST.RT", "F.INV", "F.INV.RT", "F.TEST", "FISHER", "FISHERINV", "FORECAST.ETS", "FORECAST.ETS.CONFINT", "FORECAST.ETS.SEASONALITY", "FORECAST.ETS.STAT", "FORECAST.LINEAR", "FREQUENCY", "GAMMA", "GAMMA.DIST", "GAMMA.INV", "GAMMALN", "GAMMALN.PRECISE", "GAUSS", "GEOMEAN", "GROWTH", "HARMEAN", "HYPGEOM.DIST", "INTERCEPT", "KURT", "LARGE", "LINEST", "LOGEST", "LOGNORM.DIST", "LOGNORM.INV", "MAX", "MAXA", "MAXIFS", "MEDIAN", "MIN", "MINA", "MINIFS", "MODE.MULT", "MODE.SNGL", "NEGBINOM.DIST", "NORM.DIST", "NORM.INV", "NORM.S.DIST", "NORM.S.INV", "PEARSON", "PERCENTILE.EXC", "PERCENTILE.INC", "PERCENTRANK.EXC", "PERCENTRANK.INC", "PERMUT", "PERMUTATIONA", "PHI", "POISSON.DIST", "PROB", "QUARTILE.EXC", "QUARTILE.INC", "RANK.AVG", "RANK.EQ", "RSQ", "SKEW", "SKEW.P", "SLOPE", "SMALL", "STANDARDIZE", "STDEV.P", "STDEV.S", "STDEVA", "STDEVPA", "STEYX", "T.DIST", "T.DIST.2T", "T.DIST.RT", "T.INV", "T.INV.2T", "T.TEST", "TREND", "TRIMMEAN", "VAR.P", "VAR.S", "VARA", "VARPA", "WEIBULL.DIST", "Z.TEST" };
+    private static readonly HashSet<string> InformationFunctions = new(StringComparer.OrdinalIgnoreCase) { "CELL", "ERROR.TYPE", "INFO", "ISBLANK", "ISERR", "ISERROR", "ISEVEN", "ISFORMULA", "ISLOGICAL", "ISNA", "ISNONTEXT", "ISNUMBER", "ISODD", "ISOMITTED", "ISREF", "ISTEXT", "N", "NA", "SHEET", "SHEETS", "TYPE" };
+    private static readonly HashSet<string> CompatibilityFunctions = new(StringComparer.OrdinalIgnoreCase) { "BETADIST", "BETAINV", "BINOMDIST", "CEILING", "CHIDIST", "CHIINV", "CHITEST", "CONCATENATE", "CONFIDENCE", "COVAR", "CRITBINOM", "EXPONDIST", "FDIST", "FINV", "FLOOR", "FORECAST", "FTEST", "GAMMADIST", "GAMMAINV", "HYPGEOMDIST", "LOGINV", "LOGNORMDIST", "MODE", "NEGBINOMDIST", "NORMDIST", "NORMINV", "NORMSDIST", "NORMSINV", "PERCENTILE", "PERCENTRANK", "POISSON", "QUARTILE", "RANK", "STDEV", "STDEVP", "TDIST", "TINV", "TTEST", "VAR", "VARP", "WEIBULL", "ZTEST" };
+    private static readonly HashSet<string> WebFunctions = new(StringComparer.OrdinalIgnoreCase) { "ENCODEURL", "FILTERXML", "WEBSERVICE" };
+    private static readonly HashSet<string> CubeFunctions = new(StringComparer.OrdinalIgnoreCase) { "CUBEKPIMEMBER", "CUBEMEMBER", "CUBEMEMBERPROPERTY", "CUBERANKEDMEMBER", "CUBESET", "CUBESETCOUNT", "CUBEVALUE" };
     private static readonly HashSet<string> FinancialFunctions = ["PMT", "NPV", "IRR", "RATE", "PV", "FV", "IPMT", "PPMT", "NPER", "CUMIPMT", "CUMPRINC", "EFFECT", "NOMINAL", "MIRR", "XIRR", "XNPV", "RRI", "PDURATION", "FVSCHEDULE", "DB", "DDB", "VDB", "SYD", "AMORDEGRC", "AMORLINC", "DOLLARDE", "DOLLARFR", "DISC", "INTRATE", "RECEIVED", "ACCRINT", "ACCRINTM", "TBILLEQ", "TBILLPRICE", "TBILLYIELD", "COUPDAYBS", "COUPDAYS", "COUPDAYSNC", "COUPNCD", "COUPNUM", "COUPPCD", "PRICE", "YIELD", "PRICEDISC", "PRICEMAT", "YIELDDISC", "YIELDMAT", "DURATION", "MDURATION", "ODDFPRICE", "ODDFYIELD", "ODDLPRICE", "ODDLYIELD"];
-    private static readonly HashSet<string> InformationFunctions = ["ISBLANK", "ISNUMBER", "ISTEXT", "ISERROR", "ISREF", "ISFORMULA", "FORMULATEXT", "NA", "CELL", "INFO", "TYPE", "ERROR.TYPE", "N", "ISEVEN", "ISODD"];
     private static readonly HashSet<string> DatabaseFunctions = ["DSUM", "DAVERAGE", "DCOUNT", "DCOUNTA", "DGET", "DMAX", "DMIN", "DPRODUCT", "DSTDEV", "DSTDEVP", "DVAR", "DVARP"];
-    private static readonly HashSet<string> EngineeringFunctions = ["BASE", "BIN2DEC", "BIN2HEX", "BIN2OCT", "BITAND", "BITLSHIFT", "BITOR", "BITRSHIFT", "BITXOR", "COMPLEX", "CONVERT", "DEC2BIN", "DEC2HEX", "DEC2OCT", "DECIMAL", "DELTA", "ERF", "ERF.PRECISE", "ERFC", "ERFC.PRECISE", "GESTEP", "HEX2BIN", "HEX2DEC", "HEX2OCT", "IMABS", "IMAGINARY", "IMARGUMENT", "IMCONJUGATE", "IMCOS", "IMCOSH", "IMCOT", "IMCSC", "IMCSCH", "IMDIV", "IMEXP", "IMLN", "IMLOG10", "IMLOG2", "IMPOWER", "IMPRODUCT", "IMREAL", "IMSEC", "IMSECH", "IMSIN", "IMSINH", "IMSQRT", "IMSUB", "IMSUM", "IMTAN", "OCT2BIN", "OCT2DEC", "OCT2HEX"];
+    private static readonly HashSet<string> EngineeringFunctions = ["BESSELI", "BESSELJ", "BESSELK", "BESSELY", "BIN2DEC", "BIN2HEX", "BIN2OCT", "BITAND", "BITLSHIFT", "BITOR", "BITRSHIFT", "BITXOR", "COMPLEX", "CONVERT", "DEC2BIN", "DEC2HEX", "DEC2OCT", "DELTA", "ERF", "ERF.PRECISE", "ERFC", "ERFC.PRECISE", "GESTEP", "HEX2BIN", "HEX2DEC", "HEX2OCT", "IMABS", "IMAGINARY", "IMARGUMENT", "IMCONJUGATE", "IMCOS", "IMCOSH", "IMCOT", "IMCSC", "IMCSCH", "IMDIV", "IMEXP", "IMLN", "IMLOG10", "IMLOG2", "IMPOWER", "IMPRODUCT", "IMREAL", "IMSEC", "IMSECH", "IMSIN", "IMSINH", "IMSQRT", "IMSUB", "IMSUM", "IMTAN", "OCT2BIN", "OCT2DEC", "OCT2HEX"];
 
     private static readonly Dictionary<string, string> KnownDescriptions = new(StringComparer.OrdinalIgnoreCase)
     {

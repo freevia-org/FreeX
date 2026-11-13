@@ -3510,7 +3510,30 @@ public sealed class WorkbookSession : IDisposable
         ApplySuccessfulEditResult(result, address);
         GrowRowHeightForAlreadyWrappedCellIfNeeded(address);
         CancelPendingCutAfterMutatingEdit();
+        TryApplyAutoHyperlink(address, text);
         return result;
+    }
+
+    /// <summary>
+    /// Excel turns a typed web address, e-mail address or network path into a hyperlink as a
+    /// separate undo step, so a first Ctrl+Z removes the link and keeps the typed text. An existing
+    /// hyperlink on the cell is left alone, and a protected sheet that forbids hyperlinks simply
+    /// keeps the plain text.
+    /// </summary>
+    private void TryApplyAutoHyperlink(CellAddress address, string text)
+    {
+        if (AutoHyperlinkPlanner.TryGetTarget(text) is not { } target)
+            return;
+
+        var sheet = Workbook.GetSheet(address.Sheet);
+        if (sheet is null || sheet.Hyperlinks.ContainsKey(address))
+            return;
+
+        var linkResult = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new SetHyperlinkCommand(address.Sheet, address, target, text));
+        if (linkResult.Success && !linkResult.IsNoOp)
+            ApplySuccessfulEditResult(linkResult, address);
     }
 
     /// <summary>

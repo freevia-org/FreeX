@@ -68,8 +68,62 @@ public static class WorksheetContextMenuPlanner
             WorksheetContextMenuTargetKind.Chart => ChartCommands,
             WorksheetContextMenuTargetKind.RowSelection => RowSelectionCommands,
             WorksheetContextMenuTargetKind.ColumnSelection => ColumnSelectionCommands,
-            _ => WorksheetCommandCache[GetStateCacheIndex(state)]
+            _ => GetWorksheetCommands(state)
         };
+    }
+
+    // Variants of the cached worksheet plans for "nothing copied" and "cut", built on first use.
+    private static readonly IReadOnlyList<WorksheetContextMenuCommand>?[] WorksheetNoClipboardCache =
+        new IReadOnlyList<WorksheetContextMenuCommand>?[WorksheetStateCacheSize];
+
+    private static readonly IReadOnlyList<WorksheetContextMenuCommand>?[] WorksheetCutCache =
+        new IReadOnlyList<WorksheetContextMenuCommand>?[WorksheetStateCacheSize];
+
+    private static IReadOnlyList<WorksheetContextMenuCommand> GetWorksheetCommands(WorksheetContextMenuState state)
+    {
+        var index = GetStateCacheIndex(state);
+        var copied = WorksheetCommandCache[index];
+        var variants = state.Clipboard switch
+        {
+            WorksheetContextMenuClipboardState.Copied => null,
+            WorksheetContextMenuClipboardState.Cut => WorksheetCutCache,
+            _ => WorksheetNoClipboardCache,
+        };
+        if (variants is null)
+            return copied;
+
+        var cached = Volatile.Read(ref variants[index]);
+        if (cached is not null)
+            return cached;
+
+        var built = ApplyClipboardState(copied, state.Clipboard);
+        return Interlocked.CompareExchange(ref variants[index], built, null) ?? built;
+    }
+
+    // Excel only offers "Insert Copied Cells..." while copied cells are outlined, and calls it
+    // "Insert Cut Cells..." after a cut. Without an outlined copy the entry is greyed out.
+    private static IReadOnlyList<WorksheetContextMenuCommand> ApplyClipboardState(
+        IReadOnlyList<WorksheetContextMenuCommand> commands,
+        WorksheetContextMenuClipboardState clipboard)
+    {
+        if (clipboard == WorksheetContextMenuClipboardState.Copied)
+            return commands;
+
+        WorksheetContextMenuCommand Adjust(WorksheetContextMenuCommand command)
+        {
+            if (command.Action == WorksheetContextMenuAction.InsertCopiedCells)
+            {
+                return clipboard == WorksheetContextMenuClipboardState.Cut
+                    ? command with { Header = "Insert Cut Cells...", AccessHeader = "Insert Cut _Cells..." }
+                    : command with { IsEnabled = false };
+            }
+
+            return command.HasChildren
+                ? command with { Children = Freeze(command.Children.Select(Adjust).ToArray()) }
+                : command;
+        }
+
+        return Freeze(commands.Select(Adjust).ToArray());
     }
 
     /// <summary>
@@ -418,6 +472,16 @@ public sealed record WorksheetContextMenuState(
     bool NoteIsShown = false)
 {
     public static WorksheetContextMenuState Default { get; } = new();
+
+    /// <summary>Whether cells are currently outlined after Copy or Cut (marching ants).</summary>
+    public WorksheetContextMenuClipboardState Clipboard { get; init; } = WorksheetContextMenuClipboardState.None;
+}
+
+public enum WorksheetContextMenuClipboardState
+{
+    None,
+    Copied,
+    Cut,
 }
 
 public enum WorksheetContextMenuAction

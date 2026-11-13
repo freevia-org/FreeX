@@ -1318,8 +1318,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Unhide"] = () => RunGuarded(ShowUnhideWindowDialogAsync),
                     ["Show Formulas"] = ToggleShowFormulas,
                     // Formulas Function Library category buttons open the function picker.
-                    ["Lookup & Reference"] = InsertFunction,
-                    ["Math & Trig"] = InsertFunction,
+                    ["Lookup & Reference"] = InsertFunctionInCategory("Lookup & Reference"),
+                    ["Math & Trig"] = InsertFunctionInCategory("Math & Trig"),
                     [FreeXRibbonCommandIds.FormulasMoreFunctions] = InsertFunction,
                     ["Recently Used"] = InsertFunction,
                     // Data tab (Sort & Filter / Tools / Forecast / Outline groups).
@@ -1331,10 +1331,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Subtotal"] = () => RunGuarded(ShowSubtotalDialogAsync),
                     // --- Parity pass: wire remaining no-op ribbon buttons to existing handlers ---
                     // Formula Library category buttons open the function picker (like the others).
-                    ["Financial"] = InsertFunction,
-                    ["Logical Functions"] = InsertFunction,
-                    ["Text Functions"] = InsertFunction,
-                    ["Date & Time"] = InsertFunction,
+                    ["Financial"] = InsertFunctionInCategory("Financial"),
+                    ["Logical Functions"] = InsertFunctionInCategory("Logical"),
+                    ["Text Functions"] = InsertFunctionInCategory("Text"),
+                    ["Date & Time"] = InsertFunctionInCategory("Date & Time"),
                     // Dropdown parent buttons apply a sensible default (their menu items remain individually wired).
                     ["Borders"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.All),
                     ["Accounting Number Format"] = ApplySelectedRangeCurrencyFormat,
@@ -11707,7 +11707,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var sheet = _session.ActiveSheet;
         var address = _session.ActiveCell;
-        var state = WorksheetContextMenuPlanner.ResolveWorksheetState(sheet, address);
+        var state = WorksheetContextMenuPlanner.ResolveWorksheetState(sheet, address) with
+        {
+            Clipboard = _clipboardMarqueeRange is null
+                ? WorksheetContextMenuClipboardState.None
+                : _clipboardMarqueeIsCut
+                    ? WorksheetContextMenuClipboardState.Cut
+                    : WorksheetContextMenuClipboardState.Copied,
+        };
         var commands = WorksheetContextMenuPlanner.BuildCommands(
             WorksheetContextMenuTargetKind.Worksheet,
             state);
