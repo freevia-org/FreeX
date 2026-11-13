@@ -8,8 +8,12 @@ namespace FreeW.App.Host.Tests;
 
 public sealed class WorkspaceScrollOwnershipTests
 {
+    /// <summary>
+    /// The continuous editor (Draft; W12: Print Layout is edited on pages) scrolls the workspace, not a
+    /// RichTextBox-local region; the Print Layout pages scroll as one stack.
+    /// </summary>
     [StaFact]
-    public void PrintLayout_UsesTheWorkspaceScrollerInsteadOfAnEditorLocalScroller()
+    public void ContinuousEditor_UsesTheWorkspaceScrollerInsteadOfAnEditorLocalScroller()
     {
         var window = new MainWindow(new FreeWOptions(), messageService: new NoUiMessageService());
 
@@ -22,6 +26,12 @@ public sealed class WorkspaceScrollOwnershipTests
             window.ActiveDocumentEditorForTests.LoadModel(document);
 
             window.Show();
+            window.UpdateLayout();
+            var pages = window.PrintLayoutPagesForTests;
+            pages.Should().NotBeNull();
+            pages!.ScrollableHeight.Should().BeGreaterThan(0, "the Print Layout pages scroll as one stack");
+
+            window.SetViewModeForTests(FreeW.App.Presentation.DocumentView.DocumentViewMode.Draft);
             window.UpdateLayout();
 
             window.ActiveDocumentEditorForTests.VerticalScrollBarVisibility.Should()

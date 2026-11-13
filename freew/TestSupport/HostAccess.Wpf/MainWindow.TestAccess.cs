@@ -18,6 +18,10 @@ public sealed partial class MainWindow
         _sideToSidePreviousPairButton is not null &&
         _sideToSideNextPairButton is not null &&
         _sideToSidePairStatusText is not null;
+    internal PaginatedEditorPanel? PrintLayoutPagesForTests => _pagedEditMode ? _pagedEditPanel : null;
+    internal void SetViewModeForTests(FreeW.App.Presentation.DocumentView.DocumentViewMode mode) => SetViewMode(mode);
+    internal void ToggleOutlineViewForTests() => ToggleOutlineView();
+    internal bool IsOutlineModeActiveForTests => _outlineMode;
     internal DocumentView? SplitEditorForTests => _splitEditor;
     internal Grid? SplitGridForTests => _splitGrid;
     internal DocumentView ActiveDocumentEditorForTests => ResolveActiveDocumentEditor();

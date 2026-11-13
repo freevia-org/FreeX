@@ -72,6 +72,36 @@ public sealed class BackstageCloseFocusRestoreTests
         return window;
     }
 
+    // W12: Print Layout (the default) is edited on pages, so there "the document editor" is the page the
+    // caret is in; Draft keeps the continuous editor.
+    [StaFact]
+    public void ClosingBackstage_ReturnsKeyboardFocusToThePageInPrintLayout()
+    {
+        var window = NewOffscreenWindow();
+        try
+        {
+            window.Show();
+            var pages = window.PrintLayoutPagesForTests;
+            pages.Should().NotBeNull();
+            pages!.FocusCaretPage();
+            var page = pages.ActiveBox!.Body;
+            Keyboard.FocusedElement.Should().Be(page, "the page must hold keyboard focus before opening the Backstage");
+
+            InvokePrivate(window, "ShowBackstage");
+            Keyboard.ClearFocus();
+            Keyboard.FocusedElement.Should().NotBe(page);
+
+            GetBackstage(window).Hide();
+
+            Keyboard.FocusedElement.Should().Be(page,
+                "closing the Backstage must return keyboard focus to the page the caret is in");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     [StaFact]
     public void ClosingBackstage_ReturnsKeyboardFocusToTheDocumentEditor()
     {
@@ -79,6 +109,8 @@ public sealed class BackstageCloseFocusRestoreTests
         try
         {
             window.Show();
+            window.SetViewModeForTests(FreeW.App.Presentation.DocumentView.DocumentViewMode.Draft);
+            window.UpdateLayout();
             var editor = GetEditor(window);
             editor.Focus();
             Keyboard.FocusedElement.Should().Be(editor,
@@ -130,10 +162,10 @@ public sealed class BackstageCloseFocusRestoreTests
         try
         {
             window.Show();
-            var editor = GetEditor(window);
             var backstage = GetBackstage(window);
 
-            var layer = System.Windows.Documents.AdornerLayer.GetAdornerLayer(editor);
+            // The visible document surface: in Print Layout (the default) the pages.
+            var layer = System.Windows.Documents.AdornerLayer.GetAdornerLayer(window.PrintLayoutPagesForTests!);
             layer.Should().NotBeNull();
 
             InvokePrivate(window, "ShowBackstage");

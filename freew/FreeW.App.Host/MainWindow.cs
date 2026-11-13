@@ -251,12 +251,12 @@ public sealed partial class MainWindow : Window
     private readonly DispatcherTimer _editorChromeRefreshTimer;
     private DocumentView? _pendingEditorChromeRefresh;
 
-    // PagedEdit: editable paginated surface. When active the workspace child is swapped
-    // from the live workspaceGrid to a PaginatedEditorPanel. Exiting commits all page boxes back to
-    // the model and reloads the continuous editor. Opt-in via View ▸ Views ▸ Page Edit.
+    // Print Layout's editing surface: the paged editor. While shown the workspace child is swapped from
+    // the live workspaceGrid to a PaginatedEditorPanel; leaving it (Draft, Web Layout, Outline, Read
+    // Mode, Multiple Pages / Side to Side / Split) commits all page boxes back to the model and shows the
+    // continuous editor (see SyncPrintLayoutSurface).
     private bool _pagedEditMode;
-    private PaginatedEditorPanel? _pagedEditPanel;  // non-null while PagedEdit is active
-    private ToggleButton _pagedEditSwitch = null!;  // status-bar shortcut toggle
+    private PaginatedEditorPanel? _pagedEditPanel;  // non-null while the pages are shown
 
     // Outline view (View > Outline). The outline surface overlays the normal editing surface; entering the
     // view hides the workspace (and its rulers) and shows the outline, exiting restores them verbatim —
@@ -550,6 +550,8 @@ public sealed partial class MainWindow : Window
         {
             if (_splitEditor is not null && _splitEditor.ZoomLevel != factor)
                 _splitEditor.ZoomLevel = factor;
+            // Print Layout's pages zoom with the editor.
+            _pagedEditPanel?.SetZoom(factor);
         };
         // Live selection stats: when the caret/selection moves, refresh the status-bar counts so a
         // non-empty selection shows its own word/character totals (and reverts when nothing is selected).
@@ -835,7 +837,7 @@ public sealed partial class MainWindow : Window
             OnClosed: () =>
             {
                 SetEditorAdornersVisible(true);
-                _editor.Focus();
+                FocusDocumentSurface();
             },
             GetDisplayName: () => _file.DisplayName,
             GetCurrentPath: () => _file.CurrentPath,
@@ -895,6 +897,9 @@ public sealed partial class MainWindow : Window
                 Loaded += (_, _) => _ = OpenAdditionalStartupFiles(additionalStartupFilePaths);
             }
         }
+
+        // Print Layout (the default view) opens on pages, as in Word.
+        SyncPrintLayoutSurface();
     }
 
     // shared-startup-args F2: the same PlatformPathIdentityComparer the shared StartupFileOpenPlanner
@@ -1176,8 +1181,19 @@ public sealed partial class MainWindow : Window
     // Toggle the editor's AdornerLayer (page-break markers, etc.) so they don't draw over the backstage.
     private void SetEditorAdornersVisible(bool visible)
     {
-        if (System.Windows.Documents.AdornerLayer.GetAdornerLayer(_editor) is { } layer)
+        // The surface the user sees: the Print Layout pages, or the continuous editor.
+        Visual surface = _pagedEditMode && _pagedEditPanel is { } pages ? pages : _editor;
+        if (System.Windows.Documents.AdornerLayer.GetAdornerLayer(surface) is { } layer)
             layer.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>Gives keyboard focus to the document surface the user sees (the Print Layout pages or the continuous editor).</summary>
+    private void FocusDocumentSurface()
+    {
+        if (_pagedEditMode && _pagedEditPanel is { } pages)
+            pages.FocusCaretPage();
+        else
+            _editor.Focus();
     }
 
     // Recompute which contextual "Tools" tabs apply to the current selection and let the shared controller
@@ -1455,22 +1471,7 @@ public sealed partial class MainWindow : Window
             FreeWApplicationFrameTextCatalog.Draft.HelpText,
             RibbonCommandIconKind.Draft,
             DocumentViewMode.Draft);
-        // PagedEdit has its own toggle (enter/exit), not routed through SetViewMode(mode), because
-        // the paged surface is a separate workspace child swap — not a DocumentView mode change.
-        _pagedEditSwitch = new ToggleButton
-        {
-            Content = StatusViewIcon(RibbonCommandIconKind.PrintLayout),
-            Style = (Style)FindResource("ChromeStatusToggleButtonStyle"),
-            Width = 24,
-            Height = 22,
-            Padding = new Thickness(4, 2, 4, 2),
-            Margin = new Thickness(1, 2, 1, 2),
-            ToolTip = UiText.Get("View_PageEdit_WpfHelpText")
-        };
-        AutomationProperties.SetName(_pagedEditSwitch, FreeWApplicationFrameTextCatalog.PageEditLabel);
-        AutomationProperties.SetHelpText(_pagedEditSwitch, UiText.Get("View_PageEdit_WpfHelpText"));
-        _pagedEditSwitch.Click += (_, _) => TogglePagedEditView();
-
+        // Print Layout is edited on pages, so it has no separate Page Edit switch.
         panel.Children.Add(ViewButton(
             FreeWApplicationFrameTextCatalog.ReadMode.Label,
             FreeWApplicationFrameTextCatalog.ReadMode.HelpText,
@@ -1479,7 +1480,6 @@ public sealed partial class MainWindow : Window
         panel.Children.Add(_printLayoutSwitch);
         panel.Children.Add(_webLayoutSwitch);
         panel.Children.Add(_draftSwitch);
-        panel.Children.Add(_pagedEditSwitch);
         return panel;
     }
 
@@ -2401,7 +2401,7 @@ public sealed partial class MainWindow : Window
         _hfActiveSlot  = null;
         _hfPane.Visibility = Visibility.Collapsed;
         SyncHeaderFooterSectionRibbonState();
-        _editor.Focus();
+        FocusDocumentSurface();
     }
 
     // Read mode (distraction-free view): hide the ribbon, title bar, navigation pane, and the status
@@ -2422,6 +2422,10 @@ public sealed partial class MainWindow : Window
             RevealPane: ToChromeVisibility(_revealPaneVisible),
             ReviewingPane: ToChromeVisibility(_reviewPaneVisible)));
 
+        // Read Mode shows the continuous editor as a reading column; leaving it returns Print Layout to
+        // the pages. The selection survives either way.
+        var selection = CaptureDocumentSelection();
+
         if (plan.IsActive)
         {
             _editorMarginBeforeReadMode = _editor.Margin;
@@ -2431,6 +2435,7 @@ public sealed partial class MainWindow : Window
             _editorEffectBeforeReadMode = _editor.Effect;
             _editorBackgroundBeforeReadMode = _editor.Background;
         }
+        SyncPrintLayoutSurface();
 
         _titleBar.Visibility = ToVisibility(plan.Chrome.TitleBar);
         _ribbon.Visibility = ToVisibility(plan.Chrome.Ribbon);
@@ -2459,6 +2464,7 @@ public sealed partial class MainWindow : Window
             _editor.Effect = _editorEffectBeforeReadMode;
             _editor.Background = _editorBackgroundBeforeReadMode;
         }
+        RestoreDocumentSelection(selection);
 
         _stateStore.SetChecked("freew.read-mode", plan.IsActive);
     }
@@ -2498,7 +2504,7 @@ public sealed partial class MainWindow : Window
         }
 
         _stateStore.SetChecked("freew.focus", _focusModeActive);
-        _editor.Focus();
+        FocusDocumentSurface();
     }
 
     /// <summary>
@@ -2772,25 +2778,111 @@ public sealed partial class MainWindow : Window
     // bar so exactly one mode reads as active. Switching never mutates the model.
     private void SetViewMode(DocumentViewMode mode)
     {
+        // Print Layout edits on pages (as Word's Print Layout): re-choosing it while the pages are the
+        // surface changes nothing.
+        if (mode == DocumentViewMode.PrintLayout && _pagedEditMode && !_outlineMode && !_viewSession.IsPageSurfaceActive)
+        {
+            RefreshViewModeChecks();
+            return;
+        }
+
+        var selection = CaptureDocumentSelection();
         var plan = _viewSession.PlanDocumentViewChange(
             _editor.ViewMode,
             _outlineMode,
             _pagedEditMode,
             mode);
 
-        if (plan.ExitOutlineMode)
-            LeaveOutlineView(restorePriorView: false);
+        _suppressPrintLayoutSurfaceSync++;
+        try
+        {
+            if (plan.ExitOutlineMode)
+                LeaveOutlineView(restorePriorView: false);
 
-        if (plan.ExitPaginatedView)
-            ApplyViewDepthTransition(_viewSession.RestoreLiveEditor());
+            if (plan.ExitPaginatedView)
+                ApplyViewDepthTransition(_viewSession.RestoreLiveEditor());
 
-        if (plan.ExitPagedEditMode)
-            ExitPagedEdit();
+            if (plan.ExitPagedEditMode)
+                ExitPagedEdit();
+        }
+        finally
+        {
+            _suppressPrintLayoutSurfaceSync--;
+        }
 
-        _editor.SetViewMode(plan.TargetMode);
-        if (_splitEditor is not null)
-            _splitEditor.SetViewMode(plan.TargetMode);
+        // A view switch re-renders the same model: not an edit.
+        _switchingPrintLayoutSurface++;
+        try
+        {
+            _editor.SetViewMode(plan.TargetMode);
+            if (_splitEditor is not null)
+                _splitEditor.SetViewMode(plan.TargetMode);
+        }
+        finally
+        {
+            _switchingPrintLayoutSurface--;
+        }
+        SyncPrintLayoutSurface();
+        RestoreDocumentSelection(selection);
         RefreshViewModeChecks();
+    }
+
+    /// <summary>
+    /// Print Layout is edited on pages (the paged editor), as in Word; Draft and Web Layout keep the
+    /// continuous editor, and Outline, Read Mode, Multiple Pages / Side to Side and Split use their own
+    /// surfaces. Shows the pages whenever the live editor is in Print Layout and nothing replaces it.
+    /// </summary>
+    private bool PrintLayoutUsesPages =>
+        _editor.ViewMode == DocumentViewMode.PrintLayout
+        && !_outlineMode
+        && !_editorInteraction.IsReadModeActive
+        && _viewSession.CurrentDepth.Mode == FreeWViewDepthMode.LiveEditor;
+
+    private int _suppressPrintLayoutSurfaceSync;
+    private int _switchingPrintLayoutSurface;
+
+    /// <summary>Enters or leaves the paged surface so it matches <see cref="PrintLayoutUsesPages"/>.</summary>
+    private void SyncPrintLayoutSurface()
+    {
+        if (_suppressPrintLayoutSurfaceSync > 0)
+            return;
+        if (PrintLayoutUsesPages)
+            EnterPagedEdit();
+        else
+            ExitPagedEdit();
+    }
+
+    /// <summary>The selection as document positions (top-level block, offset), from the pages or the continuous editor.</summary>
+    private PaginatedEditorPanel.PagedSelection? CaptureDocumentSelection()
+    {
+        try
+        {
+            return _pagedEditMode && _pagedEditPanel is { } panel
+                ? panel.CaptureSelection()
+                : _editor.CaptureBlockSelection();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Selects <paramref name="selection"/> on whichever surface now shows the document.</summary>
+    private void RestoreDocumentSelection(PaginatedEditorPanel.PagedSelection? selection)
+    {
+        if (selection is null)
+            return;
+        try
+        {
+            if (_pagedEditMode && _pagedEditPanel is { } panel)
+                panel.ShowSelection(selection);
+            else
+                _editor.RestoreBlockSelection(selection);
+        }
+        catch
+        {
+            // A position the re-rendered surface no longer holds: the caret stays where the render left it.
+        }
     }
 
     // Push the active view mode into the shared RibbonStateStore (so the View ribbon's Print Layout /
@@ -2810,14 +2902,14 @@ public sealed partial class MainWindow : Window
         if (_printLayoutSwitch is not null) _printLayoutSwitch.IsChecked = plan.PrintLayout;
         if (_webLayoutSwitch is not null) _webLayoutSwitch.IsChecked = plan.WebLayout;
         if (_draftSwitch is not null) _draftSwitch.IsChecked = plan.Draft;
-        if (_pagedEditSwitch is not null) _pagedEditSwitch.IsChecked = plan.PagedEdit;
     }
 
+    // The pages are how Print Layout is edited, so they check Print Layout (not a view of their own).
     private FreeWDocumentViewCheckPlan CurrentDocumentViewChecks() =>
         _viewSession.BuildDocumentViewChecks(
             _editor.ViewMode,
             _outlineMode,
-            _pagedEditMode);
+            isPagedEditMode: false);
 
     // View > Outline: swap the normal editing surface for the heading-structured outline view (and its
     // Outlining mini-toolbar), or back again. Entering hides the workspace + rulers and shows the outline,
@@ -2862,8 +2954,9 @@ public sealed partial class MainWindow : Window
         _workspace.Visibility = Visibility.Visible;
         ApplyRulerVisibility();
 
-        if (plan.EnterPagedEditSurface)
-            EnterPagedEdit();
+        // Back to the view the editor is in: Print Layout returns to the pages.
+        if (restorePriorView)
+            SyncPrintLayoutSurface();
 
         RefreshOutlineViewState();
     }
@@ -2900,6 +2993,12 @@ public sealed partial class MainWindow : Window
 
     private void ApplyViewDepthTransition(FreeWViewDepthTransition transition)
     {
+        // Multiple Pages, Side to Side and Split replace the Print Layout pages with their own surface;
+        // returning to the live editor shows the pages again.
+        var selection = CaptureDocumentSelection();
+        if (transition.Current.Mode != FreeWViewDepthMode.LiveEditor && _pagedEditMode)
+            ExitPagedEdit();
+
         if (transition.ExitSplitSurface)
             ExitSplitView();
         if (transition.ExitPageSurface)
@@ -2924,6 +3023,11 @@ public sealed partial class MainWindow : Window
         }
 
         SyncViewDepthRibbonState();
+        if (plan.Mode == FreeWViewDepthMode.LiveEditor && !_pagedEditMode)
+        {
+            SyncPrintLayoutSurface();
+            RestoreDocumentSelection(selection);
+        }
     }
 
     /// <summary>
@@ -3132,44 +3236,62 @@ public sealed partial class MainWindow : Window
     /// exiting commits all page boxes back to the model and restores the continuous editor.
     /// Mutually exclusive with Print Layout / Web Layout / Draft (the continuous editor stays the default).
     /// </summary>
-    private void TogglePagedEditView()
-    {
-        if (_pagedEditMode)
-            ExitPagedEdit();
-        else
-            EnterPagedEdit();
-    }
+    // The pages are how Print Layout is edited now, so the (no longer shown on the WPF ribbon) Page Edit
+    // command simply selects Print Layout.
+    private void TogglePagedEditView() => SetViewMode(DocumentViewMode.PrintLayout);
 
     /// <summary>
-    /// Enters PagedEdit mode: commits the live editor, builds the <see cref="PaginatedEditorPanel"/>,
-    /// and swaps it in as the workspace child.  The default continuous editor is untouched.
+    /// Shows the pages: commits the live editor, builds the <see cref="PaginatedEditorPanel"/> and swaps
+    /// it in as the workspace child, keeping the caret/selection. The continuous editor stays behind it
+    /// as the hidden source the commands read.
     /// </summary>
     internal void EnterPagedEdit()
     {
         if (_pagedEditMode)
             return;
 
-        // Leave any overlay modes that also swap the workspace child.
-        if (_viewSession.CurrentDepth.Mode != FreeWViewDepthMode.LiveEditor)
-            ApplyViewDepthTransition(_viewSession.RestoreLiveEditor());
-        if (_outlineMode)
-            LeaveOutlineView(restorePriorView: false);
+        var selection = _editor.CaptureBlockSelection();
+        _suppressPrintLayoutSurfaceSync++;
+        try
+        {
+            // Leave any overlay modes that also swap the workspace child.
+            if (_viewSession.CurrentDepth.Mode != FreeWViewDepthMode.LiveEditor)
+                ApplyViewDepthTransition(_viewSession.RestoreLiveEditor());
+            if (_outlineMode)
+                LeaveOutlineView(restorePriorView: false);
+        }
+        finally
+        {
+            _suppressPrintLayoutSurfaceSync--;
+        }
 
         // Commit so the panel reflects the latest edits, and re-render the (now hidden) continuous editor
         // from the committed model: print and export paginate a clone of its flow, and the pages render
         // the model, so the two must show the same document for screen and print to break alike.
-        _editor.CommitToModel();
-        _editor.RefreshFromModel();
+        _switchingPrintLayoutSurface++;
+        try
+        {
+            _editor.CommitToModel();
+            _editor.RefreshFromModel();
 
-        _pagedEditPanel = PaginatedEditorPanel.Build(_editor, progressive: true);
-        AttachPaginatedSurface(_pagedEditPanel);
-        _pagedEditMode = true;
+            _pagedEditPanel = PaginatedEditorPanel.Build(_editor, progressive: true);
+            AttachPaginatedSurface(_pagedEditPanel);
+            _pagedEditMode = true;
+        }
+        finally
+        {
+            _switchingPrintLayoutSurface--;
+        }
 
         // Swap workspace child exactly like EnterPaginatedView / ToggleSplitWindow.
         _workspaceGridChild = _workspace.Child;
         _workspace.Child = _pagedEditPanel;
+        if (selection is not null)
+        {
+            _editor.RestoreBlockSelection(selection);
+            _pagedEditPanel.ShowSelection(selection);
+        }
 
-        // Sync ribbon toggles: PagedEdit on, print-family modes off.
         RefreshViewModeChecks();
     }
 
@@ -3183,8 +3305,18 @@ public sealed partial class MainWindow : Window
         if (!_pagedEditMode || _pagedEditPanel is null)
             return;
 
-        // Commit all page boxes into the model.
-        DetachPaginatedSurface(_pagedEditPanel);
+        var selection = _pagedEditPanel.CaptureSelection();
+
+        // Commit all page boxes into the model (page edits marked the document dirty as they were made).
+        _switchingPrintLayoutSurface++;
+        try
+        {
+            DetachPaginatedSurface(_pagedEditPanel);
+        }
+        finally
+        {
+            _switchingPrintLayoutSurface--;
+        }
 
         // Restore workspace.
         if (_workspaceGridChild is not null)
@@ -3192,8 +3324,9 @@ public sealed partial class MainWindow : Window
         _workspaceGridChild = null;
         _pagedEditPanel = null;
         _pagedEditMode = false;
+        if (selection is not null)
+            _editor.RestoreBlockSelection(selection);
 
-        // Sync ribbon toggles: PagedEdit off, print-family mode back on.
         RefreshViewModeChecks();
     }
 
@@ -3985,6 +4118,10 @@ public sealed partial class MainWindow : Window
     private void OnDocumentEditorChanged(DocumentView source, UndoAction undoAction = UndoAction.None)
     {
         if (_synchronizingSplitEditors)
+            return;
+        // Showing or leaving the Print Layout pages re-renders the continuous editor from the model it
+        // already holds: not an edit.
+        if (_switchingPrintLayoutSurface > 0)
             return;
 
         if (_splitEditor is { } peer)

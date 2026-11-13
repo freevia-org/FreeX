@@ -893,7 +893,6 @@
   <data name="View_WebLayout_HelpText" xml:space="preserve"><value>Web Layout: continuous, full-width view</value></data>
   <data name="View_WebLayout_WpfHelpText" xml:space="preserve"><value>Web Layout: continuous, full-width view (no page chrome)</value></data>
   <data name="View_PageEdit_HelpText" xml:space="preserve"><value>Page Edit: editable paginated page boxes</value></data>
-  <data name="View_PageEdit_WpfHelpText" xml:space="preserve"><value>Page Edit: editable paginated page boxes (WYSIWYG pagination)</value></data>
   <data name="Ruler_TabStopSelector_AutomationName" xml:space="preserve"><value>Tab stop selector</value></data>
   <data name="Ruler_CenterTab_ToolTip" xml:space="preserve"><value>Center tab</value></data>
   <data name="Ruler_RightTab_ToolTip" xml:space="preserve"><value>Right tab</value></data>

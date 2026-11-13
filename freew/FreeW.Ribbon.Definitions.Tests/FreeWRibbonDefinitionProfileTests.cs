@@ -1051,6 +1051,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
                 "freew.import-pdf-text",
                 "freew.new",
                 "freew.open",
+                "freew.paged-edit-view",
                 "freew.save",
             });
         foreach (var row in platformOnlyRows)
@@ -1064,6 +1065,17 @@ public sealed class FreeWRibbonDefinitionProfileTests
         AssertPlatformOnlyNote(commands, "freew.new", "Avalonia compact File command");
         AssertPlatformOnlyNote(commands, "freew.open", "Avalonia compact File command");
         AssertPlatformOnlyNote(commands, "freew.save", "Avalonia compact File command");
+        AssertPlatformOnlyNote(commands, "freew.paged-edit-view", "WPF Print Layout is itself edited on pages");
+        AssertBehaviorEvidence(
+            commands,
+            "freew.paged-edit-view",
+            "freew/FreeW.App.Host.Tests/PagedEditFlagTests.cs",
+            "PagedEditFlagTests.WpfViewRibbon_HasPrintLayout_AndNoSeparatePageEditToggle",
+            "freew/FreeW.App.Avalonia.Tests/OutlineViewParityTests.cs",
+            "OutlineViewParityTests.Production_outline_callback_swaps_workspace_and_is_mutually_exclusive_with_view_modes",
+            "freew.platform-only.print-layout-pages",
+            "Print Layout page-editing shell variance",
+            "platform-only");
         AssertGapClassification(commands, "freew.arrange-all", "shared-profile");
         AssertBehaviorEvidence(
             commands,

@@ -419,7 +419,6 @@
   <data name="View_WebLayout_HelpText" xml:space="preserve"><value>Mode Web : affichage continu sur toute la largeur</value></data>
   <data name="View_WebLayout_WpfHelpText" xml:space="preserve"><value>Mode Web : affichage continu sur toute la largeur (sans cadre de page)</value></data>
   <data name="View_PageEdit_HelpText" xml:space="preserve"><value>Édition de page : pages paginées modifiables</value></data>
-  <data name="View_PageEdit_WpfHelpText" xml:space="preserve"><value>Édition de page : pages paginées modifiables (pagination WYSIWYG)</value></data>
   <data name="Ruler_TabStopSelector_AutomationName" xml:space="preserve"><value>Sélecteur de taquet de tabulation</value></data>
   <data name="Ruler_CenterTab_ToolTip" xml:space="preserve"><value>Tabulation centrée</value></data>
   <data name="Ruler_RightTab_ToolTip" xml:space="preserve"><value>Tabulation droite</value></data>

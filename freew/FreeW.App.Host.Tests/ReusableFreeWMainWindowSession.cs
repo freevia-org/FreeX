@@ -39,6 +39,10 @@ internal static class ReusableFreeWMainWindowSession
             Invoke(window, "ToggleSideToSide");
         if (HasValue(window, "SplitEditorForTests"))
             Invoke(window, "ToggleSplitWindow");
+        if (GetBoolean(window, "IsOutlineModeActiveForTests"))
+            Invoke(window, "ToggleOutlineViewForTests");
+        // Every test starts in the default view (Print Layout, on pages), whatever the last one chose.
+        window.SetViewModeForTests(FreeW.App.Presentation.DocumentView.DocumentViewMode.PrintLayout);
     }
 
     private static bool GetBoolean(MainWindow window, string propertyName) =>

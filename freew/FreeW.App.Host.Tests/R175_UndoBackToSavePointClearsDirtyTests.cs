@@ -41,6 +41,11 @@ public sealed class R175_UndoBackToSavePointClearsDirtyTests : IDisposable
         var messages = new RecordingUserMessageService { NextResult = UserMessageResult.Cancel };
         var window = new MainWindow(new FreeWOptions(), messageService: messages);
         window.Show();
+        // These drive the continuous editor's native RichTextBox undo: Draft (W12: Print Layout is edited
+        // on pages, whose undo is the shared command bus).
+        window.SetViewModeForTests(FreeW.App.Presentation.DocumentView.DocumentViewMode.Draft);
+        // The editor joined the visual tree with the switch: apply its template now, as Show() did before.
+        window.UpdateLayout();
         var path = WriteDocx("Base.docx", "Hello");
         Assert.True(GetFileCommands(window).OpenPath(path));
         var editor = window.ActiveDocumentEditorForTests;

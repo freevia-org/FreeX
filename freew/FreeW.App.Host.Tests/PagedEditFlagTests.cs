@@ -8,10 +8,10 @@ using Xunit;
 namespace FreeW.App.Host.Tests;
 
 /// <summary>
-/// Asserts that the <c>PagedEdit</c> mode is a SHIPPED OPT-IN mode that IS present in the production
-/// ribbon (View ▸ Views ▸ Page Edit / <c>freew.paged-edit-view</c>), that the continuous editor
-/// (PrintLayout) remains the startup default, and that the three continuous print-family view modes
-/// (PrintLayout / WebLayout / Draft) still work.  Runs in both DEBUG and Release builds.
+/// W12: the WPF Print Layout is edited on pages (Word's model), so the WPF ribbon no longer offers a
+/// separate Page Edit view (<c>freew.paged-edit-view</c> stays a registered command, which selects Print
+/// Layout, and the Avalonia ribbon keeps its opt-in toggle); Print Layout stays the default view mode and
+/// the three print-family view modes (PrintLayout / WebLayout / Draft) still work.
 /// </summary>
 public sealed class PagedEditFlagTests
 {
@@ -20,12 +20,11 @@ public sealed class PagedEditFlagTests
     [Fact]
     public void DocumentViewMode_ContainsFourModes_IncludingPagedEdit()
     {
-        // PagedEdit is now a shipped opt-in mode.  The enum must have exactly four members in all
-        // builds (DEBUG and Release alike).
+        // PagedEdit stays an enum value (the Avalonia host's opt-in overlay uses it).
         var allValues = Enum.GetValues<DocumentViewMode>();
 
         allValues.Should().HaveCount(4,
-            "PagedEdit is a shipped opt-in mode — four enum values expected in all builds");
+            "PagedEdit is a shipped mode — four enum values expected in all builds");
         allValues.Should().Contain(DocumentViewMode.PagedEdit,
             "PagedEdit must be present in both Debug and Release builds");
     }
@@ -39,39 +38,40 @@ public sealed class PagedEditFlagTests
         view.LoadModel(TextDocument.CreateEmpty());
 
         view.ViewMode.Should().Be(DocumentViewMode.PrintLayout,
-            "PrintLayout must remain the default; PagedEdit is opt-in and must not change the startup default");
+            "Print Layout is the default view (the WPF host shows it on pages)");
     }
 
-    // ── ribbon: freew.paged-edit-view MUST appear in the View tab's Views group ──────────────────
+    // ── ribbon: Print Layout is the paged view; no separate Page Edit toggle on the WPF ribbon ─────
 
     [Fact]
-    public void ViewRibbon_ContainsPagedEditCommand_InViewsGroup()
+    public void WpfViewRibbon_HasPrintLayout_AndNoSeparatePageEditToggle()
     {
         var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var viewTab = definition.FindTab("view");
 
         viewTab.Should().NotBeNull("the View tab must exist in the ribbon");
 
-        // Collect all command ids from every control on the View tab.
-        var allCommandIds = viewTab!.Groups
-            .SelectMany(g => g.Controls)
-            .Select(c => c.CommandId.Value)
-            .ToList();
-
-        allCommandIds.Should().Contain(
-            "freew.paged-edit-view",
-            "PagedEdit is a shipped opt-in View mode and must appear on the production View ribbon");
-
-        // Specifically it must live in the Views group.
-        var viewsGroupIds = viewTab.Groups
+        var viewsGroupIds = viewTab!.Groups
             .First(g => g.Id == "views")
             .Controls
             .Select(c => c.CommandId.Value)
             .ToList();
 
-        viewsGroupIds.Should().Contain(
+        viewsGroupIds.Should().Contain(["freew.print-layout", "freew.web-layout", "freew.draft-view", "freew.outline-view"]);
+        viewTab.Groups.SelectMany(g => g.Controls).Select(c => c.CommandId.Value).Should().NotContain(
             "freew.paged-edit-view",
-            "freew.paged-edit-view must be in the Views group alongside Print Layout / Web Layout / Draft");
+            "the WPF Print Layout is the paged editor, so a second toggle for it would be redundant");
+    }
+
+    [Fact]
+    public void AvaloniaViewRibbon_KeepsItsOptInPageEditToggle()
+    {
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
+        definition.FindTab("view")!.Groups
+            .First(g => g.Id == "views")
+            .Controls
+            .Select(c => c.CommandId.Value)
+            .Should().Contain("freew.paged-edit-view");
     }
 
     // ── existing view-mode parity tests still pass (regression guard) ─────────────────────────────
@@ -91,8 +91,7 @@ public sealed class PagedEditFlagTests
                  })
         {
             view.SetViewMode(mode);
-            view.ViewMode.Should().Be(mode,
-                $"SetViewMode({mode}) must still work after the PagedEdit mode was promoted to production");
+            view.ViewMode.Should().Be(mode, $"SetViewMode({mode}) must still work");
         }
     }
 }

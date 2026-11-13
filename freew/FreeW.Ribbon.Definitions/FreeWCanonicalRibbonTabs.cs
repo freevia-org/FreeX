@@ -368,7 +368,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                         group.MediumToggle("freew.web-layout", "Web Layout", RibbonCommandIconKind.WebLayout);
                         group.MediumToggle("freew.outline-view", "Outline", RibbonCommandIconKind.MultilevelList);
                         group.MediumToggle("freew.draft-view", "Draft", RibbonCommandIconKind.Draft);
-                        group.MediumToggle("freew.paged-edit-view", "Page Edit", RibbonCommandIconKind.PrintLayout);
+                        // No Page Edit toggle: the WPF Print Layout is edited on pages (Word's model).
                     }),
                 tab => tab.Group("views", "Views", null, 110, group =>
                     {

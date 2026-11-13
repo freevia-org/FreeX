@@ -213,6 +213,7 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
         HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
         Content = _pageHost;
+        SetZoom(sourceEditor.ZoomLevel);
 
         // Attach undo coordinator after all boxes are wired.
         _undoCoordinator.Attach(this, sourceEditor);
@@ -676,6 +677,17 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
     internal PageBox? ActiveBox =>
         _pageBoxes.FirstOrDefault(b => b.Body.IsKeyboardFocusWithin)
         ?? (_lastCaretBox is not null && _pageBoxes.Contains(_lastCaretBox) ? _lastCaretBox : null);
+
+    /// <summary>Gives keyboard focus to the page holding the caret (the first page when none has had it yet).</summary>
+    internal void FocusCaretPage()
+    {
+        var box = ActiveBox ?? _pageBoxes.FirstOrDefault();
+        if (box is null)
+            return;
+        RealizeBox(box);
+        box.Body.Focus();
+        _lastCaretBox = box;
+    }
 
     internal void MarkBodyCommitted() => _hasPendingBodyEdits = false;
 
@@ -2568,7 +2580,8 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
             {
                 continue;
             }
-            var height = box.ActualHeight > 0 ? box.ActualHeight : PageBox.NominalHeight(box.PageGeometry);
+            // TranslatePoint sees the zoom; the box's own height does not.
+            var height = (box.ActualHeight > 0 ? box.ActualHeight : PageBox.NominalHeight(box.PageGeometry)) * Zoom;
             var bottom = top + height;
             if (bottom >= 0 && top <= viewportHeight)
             {
@@ -3556,6 +3569,34 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
             unitPage[u] = renderedPages[units[u].RenderedStart];
 
         return new PagePlan(units, unitPage, ranges) { Starts = starts, RenderedPages = renderedPages };
+    }
+
+    /// <summary>
+    /// Scales the page stack (the editor's zoom: the status-bar slider, View > Zoom and Ctrl+wheel all set
+    /// the hidden editor's <see cref="DocumentView.ZoomLevel"/>, which the host forwards here).
+    /// </summary>
+    internal void SetZoom(double factor)
+    {
+        _pageHost.LayoutTransform = Math.Abs(factor - 1.0) < 0.0001
+            ? Transform.Identity
+            : new ScaleTransform(factor, factor);
+    }
+
+    internal double Zoom => _pageHost.LayoutTransform is ScaleTransform scale ? scale.ScaleX : 1.0;
+
+    // Ctrl+wheel zooms the pages as it zooms the continuous editor.
+    protected override void OnPreviewMouseWheel(MouseWheelEventArgs e)
+    {
+        if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            _sourceEditor.ZoomLevel = e.Delta > 0
+                ? ZoomLevels.StepUp(_sourceEditor.ZoomLevel)
+                : ZoomLevels.StepDown(_sourceEditor.ZoomLevel);
+            SetZoom(_sourceEditor.ZoomLevel);
+            e.Handled = true;
+            return;
+        }
+        base.OnPreviewMouseWheel(e);
     }
 
     /// <summary>

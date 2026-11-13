@@ -193,11 +193,14 @@ public sealed class HeaderFooterSectionPaneTests
         ((Free.Shared.Ribbon.IRibbonStatefulCommand)link).GetState().IsChecked.Should().BeFalse();
     }
 
+    // The docked pane and its section navigation belong to the continuous editor: Draft (W12: Print
+    // Layout is edited on pages, whose in-page header/footer regions own their section).
     private static void Run(Action<MainWindow> test) =>
         ReusableFreeWMainWindowSession.Run(window =>
         {
             try
             {
+                window.SetViewModeForTests(FreeW.App.Presentation.DocumentView.DocumentViewMode.Draft);
                 test(window);
             }
             finally

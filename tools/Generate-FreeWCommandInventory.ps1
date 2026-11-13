@@ -644,6 +644,8 @@ internal static class FreeWCommandInventory
             "Avalonia exposes Open as a compact File command; WPF routes the same lifecycle through its Backstage/File workflow rather than this generated command id."),
         ["freew.save"] = AvaloniaFileShellEvidence(
             "Avalonia exposes Save as a compact File command; WPF routes the same lifecycle through its Backstage/File workflow rather than this generated command id."),
+        ["freew.paged-edit-view"] = PrintLayoutPagesEvidence(
+            "WPF edits Print Layout on pages (the paged editor is the Print Layout surface, as in Word), so its ribbon has no separate Page Edit toggle; Avalonia keeps Page Edit as an opt-in view beside its continuous Print Layout."),
     };
 
     private static readonly Dictionary<string, string> PlatformOnlyNotes = new(StringComparer.Ordinal)
@@ -658,6 +660,7 @@ internal static class FreeWCommandInventory
         ["freew.new"] = "Accepted host variance: Avalonia compact File command; WPF routes New through Backstage/File lifecycle workflow instead of this generated command id.",
         ["freew.open"] = "Accepted host variance: Avalonia compact File command; WPF routes Open through Backstage/File lifecycle workflow instead of this generated command id.",
         ["freew.save"] = "Accepted host variance: Avalonia compact File command; WPF routes Save through Backstage/File lifecycle workflow instead of this generated command id.",
+        ["freew.paged-edit-view"] = "Accepted host variance: Avalonia opt-in Page Edit view; the WPF Print Layout is itself edited on pages, so WPF offers no separate toggle.",
     };
 
     public static InventoryDocument Build(string repoRoot)
@@ -1448,6 +1451,18 @@ internal static class FreeWCommandInventory
                 Path: "freew/FreeW.App.Avalonia.Tests/RibbonAndDocumentTests.cs",
                 Test: "RibbonAndDocumentTests.Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed"));
 
+    private static CommandBehaviorEvidence PrintLayoutPagesEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.platform-only.print-layout-pages",
+            Slice: "Print Layout page-editing shell variance",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Host.Tests/PagedEditFlagTests.cs",
+                Test: "PagedEditFlagTests.WpfViewRibbon_HasPrintLayout_AndNoSeparatePageEditToggle"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Avalonia.Tests/OutlineViewParityTests.cs",
+                Test: "OutlineViewParityTests.Production_outline_callback_swaps_workspace_and_is_mutually_exclusive_with_view_modes"));
+
     private static CommandBehaviorEvidence AvaloniaPdfImportEvidence(string summary) =>
         new(
             EvidenceId: "freew.platform-only.pdf-import-shell",
@@ -1643,6 +1658,7 @@ internal static class FreeWCommandInventory
             (string.Equals(pair.Right, commandId, StringComparison.Ordinal) && allCommandIds.Contains(pair.Left)));
 
     private static bool IsPlatformOnly(string commandId, IReadOnlyList<CommandLocation> locations) =>
+        commandId == "freew.paged-edit-view" ||
         locations.Any(location => location.TabId == "file") ||
         locations.Any(location => location.TabId == "help") ||
         locations.Any(location => location.TabId == "view" && location.GroupId == "window" && commandId is not "freew.new-window" and not "freew.split");
