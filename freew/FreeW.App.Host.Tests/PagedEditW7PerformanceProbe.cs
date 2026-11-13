@@ -252,6 +252,7 @@ public sealed class PagedEditW7PerformanceProbe(ITestOutputHelper output)
                 break;
         }
         var background = total.Elapsed;
+        output.WriteLine($"  background layout: {panel.LayoutSession.LastStatistics}");
         Layout(panel);
 
         // Scroll to the middle of the document, as a user would, and edit the page shown there.

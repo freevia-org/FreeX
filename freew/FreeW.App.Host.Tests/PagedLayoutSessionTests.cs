@@ -131,6 +131,70 @@ public sealed class PagedLayoutSessionTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// W14: documents where (almost) every page ends in a paragraph split at an inline page break have no
+    /// page that starts on a whole block. An edit must still re-flow locally (restart and stop at a page
+    /// that starts exactly on a forced fragment) and give exactly the full computation's pages, cuts included.
+    /// </summary>
+    [StaTheory]
+    [InlineData(4)]
+    [InlineData(3)]
+    [InlineData(12)]
+    [InlineData(40)]
+    public void Session_BreakHeavyDocument_ReflowsLocallyAndMatchesFreshLayout(int breakEvery)
+    {
+        var document = PagedEditW7PerformanceProbe.InlineBreakDocument(paragraphs: 240, breakEvery);
+        var editor = new DocumentView();
+        editor.LoadModel(document);
+        var session = new PagedLayoutSession(editor);
+        AssertSessionMatches(editor, session, "initial");
+        session.LastStatistics.FallbackReason.Should().BeNull();
+
+        var blocks = editor.Model.Blocks;
+        var edits = new List<(string Name, Action Apply)>
+        {
+            ("grow mid", () => Replace(blocks, 120, 30, " more words to wrap")),
+            ("word mid", () => Replace(blocks, 120, 1, "s")),
+            ("grow early", () => Replace(blocks, 14, 25, " more words to wrap")),
+            ("grow near end", () => Replace(blocks, 225, 25, " more words to wrap")),
+            ("delete mid", () => blocks.RemoveAt(100)),
+            ("insert break paragraph", () =>
+            {
+                var paragraph = new Paragraph("inserted " + string.Join(" ", Enumerable.Range(0, 30).Select(i => "w" + i)));
+                paragraph.Runs.Add(Run.PageBreak());
+                paragraph.Runs.Add(new Run("tail"));
+                blocks.Insert(90, paragraph);
+            }),
+        };
+        foreach (var (name, apply) in edits)
+        {
+            apply();
+            editor.LoadModel(editor.Model);
+            var label = $"breakEvery {breakEvery}, {name}";
+            var run = session.ComputeRun();
+            var stats = session.LastStatistics;
+            output.WriteLine($"{label}: incremental={stats.Incremental} laidOut={stats.PagesLaidOut} reused={stats.PagesReused} fallback={stats.FallbackReason ?? "-"}");
+            stats.FallbackReason.Should().BeNull(label);
+            stats.Incremental.Should().BeTrue(label);
+            stats.PagesLaidOut.Should().BeLessThan(16, $"{label}: an edit re-lays out only the pages around it");
+
+            AssertSessionMatches(editor, session, label);
+            var fresh = new PagedLayoutSession(editor).ComputeRun();
+            run.RenderedPages.Should().Equal(fresh.RenderedPages, $"{label}: rendered pages");
+            run.Cuts.Should().Equal(fresh.Cuts, $"{label}: cuts");
+            run.TotalPageCount.Should().Be(fresh.TotalPageCount, $"{label}: page count");
+        }
+
+        static void Replace(IList<Block> blocks, int index, int words, string text)
+        {
+            var original = (Paragraph)blocks[index];
+            var edited = new Paragraph { Formatting = original.Formatting, StyleId = original.StyleId };
+            edited.Runs.AddRange(original.Runs);
+            edited.Runs.Add(new Run(string.Concat(Enumerable.Repeat(text, words))));
+            blocks[index] = edited;
+        }
+    }
+
+    /// <summary>
     /// W12: a Number list restarted by an override renders as a second List; the full computation now
     /// predicts that pairing too, so the session lays it out itself (no fallback) with the same result.
     /// </summary>
