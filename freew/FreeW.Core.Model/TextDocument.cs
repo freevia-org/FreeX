@@ -3961,7 +3961,12 @@ public sealed class Section(PageSettings page, SectionBreakKind breakKind = Sect
     /// <summary>This section's page geometry / layout. Each section owns an independent instance.</summary>
     public PageSettings Page { get; set; } = page;
 
-    /// <summary>How this section begins relative to the previous one (w:sectPr/w:type).</summary>
+    /// <summary>
+    /// For a section ended by a <see cref="Paragraph.SectionBreak"/> marker: the break that FOLLOWS that
+    /// paragraph, i.e. how the NEXT section begins relative to this one (continuous / next-page / even /
+    /// odd). The DOCX reader and writer translate to and from OOXML, where w:sectPr/w:type instead
+    /// describes how the section that owns the sectPr starts.
+    /// </summary>
     public SectionBreakKind BreakKind { get; set; } = breakKind;
 
     /// <summary>
