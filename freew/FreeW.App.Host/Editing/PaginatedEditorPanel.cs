@@ -204,8 +204,10 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         int pageCount;
         try
         {
+            // The editing surface only needs each block's page, so it lays out a direct render of the
+            // model; printing (segmentPaginations requested) keeps the print clone it draws from.
             assignment = PaginationEngine.ComputeBlockPageAssignment(
-                sourceEditor, out var totalPageCount, segmentPaginations);
+                sourceEditor, out var totalPageCount, segmentPaginations, layoutOnly: segmentPaginations is null);
             pageCount = assignment.Length > 0 ? assignment.Max() + 1 : 1;
             // A final block that runs on past the page it starts on still owns those physical pages.
             pageCount = Math.Max(1, Math.Max(pageCount, totalPageCount));
@@ -1355,7 +1357,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
             int pageCount;
             try
             {
-                assignment = PaginationEngine.ComputeBlockPageAssignment(_sourceEditor, out var totalPageCount, null);
+                assignment = PaginationEngine.ComputeBlockPageAssignment(
+                    _sourceEditor, out var totalPageCount, null, layoutOnly: true);
                 pageCount = assignment.Length > 0 ? assignment.Max() + 1 : 1;
                 // Same rule as Build: a final block that runs past its first page owns those pages too.
                 pageCount = Math.Max(1, Math.Max(pageCount, totalPageCount));

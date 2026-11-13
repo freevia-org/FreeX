@@ -336,7 +336,8 @@ internal static class PaginationEngine
     internal static int[] ComputeBlockPageAssignment(
         DocumentView editor,
         out int totalPageCount,
-        List<SegmentPagination>? segmentPaginations)
+        List<SegmentPagination>? segmentPaginations,
+        bool layoutOnly = false)
     {
         totalPageCount = 1;
         var modelBlocks = editor.Model.Blocks;
@@ -356,11 +357,15 @@ internal static class PaginationEngine
         System.Windows.Documents.Block[] scratchBlocks;
         try
         {
-            // The XAML clone must stay: a direct render of the model lays out differently on some real
-            // documents (measured on the fidelity corpus), so only the unused footnote reserve is dropped.
+            // A caller that only needs each block's page (nothing to print) lays out a direct render of the
+            // committed model with its editor tags removed -- what the XAML round trip leaves behind for
+            // layout. The clone's other treatments (comment highlights, form-field shading, text-effect
+            // brushes) only change colours.
             flow = UseReferencePagination
                 ? PrintLayout.BuildPaginatedDocument(editor)
-                : PrintLayout.BuildPaginatedBlockSource(editor);
+                : layoutOnly && segmentPaginations is null && BuildLayoutRenderFlow(editor) is { } layoutFlow
+                    ? layoutFlow
+                    : PrintLayout.BuildPaginatedBlockSource(editor);
             ApplySectionBreakFlags(editor, flow);
             scratchBlocks = flow.Blocks.ToArray();
             flow.Blocks.Clear(); // detach so segment slices can be re-parented into per-segment flows
@@ -442,6 +447,53 @@ internal static class PaginationEngine
         }
 
         return assignment;
+    }
+
+    /// <summary>
+    /// A flow holding a direct render of <paramref name="editor"/>'s committed model (see
+    /// <see cref="DocumentView.CreateLayoutRenderTwin"/>) with every element's <c>Tag</c> cleared, as the
+    /// XAML clone has them: the pagination reads footnote markers from tags and falls back to the model
+    /// when there are none, so leaving them would change which notes a page carries. Null when no
+    /// faithful twin can be rendered.
+    /// </summary>
+    private static FlowDocument? BuildLayoutRenderFlow(DocumentView editor)
+    {
+        var twin = editor.CreateLayoutRenderTwin();
+        if (twin?.Document is not { } source)
+            return null;
+
+        var flow = new FlowDocument
+        {
+            FontFamily = source.FontFamily,
+            FontSize = source.FontSize
+        };
+        var blocks = source.Blocks.ToList();
+        source.Blocks.Clear();
+        foreach (var block in blocks)
+        {
+            ClearTags(block);
+            flow.Blocks.Add(block);
+        }
+        return flow;
+    }
+
+    private static void ClearTags(DependencyObject node)
+    {
+        switch (node)
+        {
+            case FrameworkContentElement contentElement:
+                contentElement.Tag = null;
+                break;
+            case FrameworkElement element:
+                element.Tag = null;
+                break;
+        }
+
+        foreach (var child in LogicalTreeHelper.GetChildren(node))
+        {
+            if (child is DependencyObject dependencyChild)
+                ClearTags(dependencyChild);
+        }
     }
 
     /// <summary>

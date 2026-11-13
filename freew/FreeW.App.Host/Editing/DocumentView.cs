@@ -436,6 +436,50 @@ public sealed partial class DocumentView : RichTextBox
     /// No-op when already in that mode. Pending live edits are committed before the mode-specific
     /// run tree is rebuilt, so Web Layout-only visibility can change without losing text.
     /// </summary>
+    /// <summary>
+    /// A fresh, never-shown editor that renders this editor's committed <see cref="Model"/> the way
+    /// <see cref="PrintLayout"/>'s print clone source sees it: the same view mode, review display,
+    /// page-break markers, field context and, when the model needs inline page/column-break fragments,
+    /// the same fragment render the print path builds. Null while outline levels are collapsed.
+    /// </summary>
+    internal DocumentView? CreateLayoutRenderTwin()
+    {
+        if (_outlineCollapse.BuildHiddenBlockIndices(_model.Blocks).Count > 0)
+            return null;
+
+        DocumentView twin;
+        if (HasRendererInlineFlowBreakFragments(_model))
+        {
+            // Mirrors PrintLayout.BuildPaginatedDocument's inline-break render source field for field.
+            twin = new DocumentView
+            {
+                RenderPageBreakMarkers = false,
+                RenderInlineFlowBreakFragmentsForPagination = true,
+                DisplayForReview = DisplayForReview,
+                ShowMarkupInsertionsAndDeletions = ShowMarkupInsertionsAndDeletions,
+                ShowMarkupComments = ShowMarkupComments,
+                ShowMarkupFormatting = ShowMarkupFormatting
+            };
+        }
+        else
+        {
+            twin = new DocumentView
+            {
+                RenderPageBreakMarkers = RenderPageBreakMarkers,
+                RenderInlineFlowBreakFragmentsForPagination = RenderInlineFlowBreakFragmentsForPagination,
+                CurrentFileName = CurrentFileName,
+                FieldEvaluationDocument = FieldEvaluationDocument,
+                FieldEvaluationFileName = FieldEvaluationFileName,
+                ViewMode = ViewMode,
+                _reviewDisplayState = _reviewDisplayState,
+                _viewDepthLayout = _viewDepthLayout
+            };
+        }
+
+        twin.LoadModel(_model);
+        return twin;
+    }
+
     public void SetViewMode(DocumentViewMode mode)
     {
         if (ViewMode == mode)

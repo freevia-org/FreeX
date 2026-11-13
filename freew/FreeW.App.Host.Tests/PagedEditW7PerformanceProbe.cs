@@ -37,6 +37,9 @@ public sealed class PagedEditW7PerformanceProbe(ITestOutputHelper output)
         clock.Restart();
         _ = PaginationEngine.ComputeBlockPageAssignment(editor);
         var assignment = clock.Elapsed;
+        clock.Restart();
+        _ = PaginationEngine.ComputeBlockPageAssignment(editor, out _, null, layoutOnly: true);
+        output.WriteLine($"page assignment: print clone {assignment.TotalMilliseconds:F0} ms, layout-only direct render {clock.Elapsed.TotalMilliseconds:F0} ms");
 
         clock.Restart();
         var scratch = new DocumentView();

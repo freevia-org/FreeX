@@ -84,10 +84,13 @@ public sealed class PagedPaginationEquivalenceTests(ITestOutputHelper output)
         }
 
         var optimised = PaginationEngine.ComputeBlockPageAssignment(editor, out var optimisedPages, null);
+        var layoutOnly = PaginationEngine.ComputeBlockPageAssignment(editor, out var layoutOnlyPages, null, layoutOnly: true);
         output.WriteLine($"{label}: blocks={reference.Length} pages={referencePages}");
 
         optimised.Should().Equal(reference, $"{label}: optimised assignment");
         optimisedPages.Should().Be(referencePages, $"{label}: optimised page count");
+        layoutOnly.Should().Equal(reference, $"{label}: layout-only (direct render) assignment");
+        layoutOnlyPages.Should().Be(referencePages, $"{label}: layout-only page count");
     }
 
     private static TextDocument BuildDocument(Random random)
