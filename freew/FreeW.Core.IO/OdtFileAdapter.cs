@@ -638,7 +638,7 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
 
         foreach (var (name, bytes) in pictureWriter.Pictures)
         {
-            var entry = archive.CreateEntry(name, CompressionLevel.Optimal);
+            var entry = OpenDocumentPackageWriter.CreateEntry(archive, name, CompressionLevel.Optimal);
             using var es = entry.Open();
             es.Write(bytes, 0, bytes.Length);
         }
