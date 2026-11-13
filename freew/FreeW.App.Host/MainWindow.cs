@@ -3155,8 +3155,11 @@ public sealed partial class MainWindow : Window
         if (_outlineMode)
             LeaveOutlineView(restorePriorView: false);
 
-        // Commit so the panel reflects the latest edits.
+        // Commit so the panel reflects the latest edits, and re-render the (now hidden) continuous editor
+        // from the committed model: print and export paginate a clone of its flow, and the pages render
+        // the model, so the two must show the same document for screen and print to break alike.
         _editor.CommitToModel();
+        _editor.RefreshFromModel();
 
         _pagedEditPanel = PaginatedEditorPanel.Build(_editor, progressive: true);
         AttachPaginatedSurface(_pagedEditPanel);
