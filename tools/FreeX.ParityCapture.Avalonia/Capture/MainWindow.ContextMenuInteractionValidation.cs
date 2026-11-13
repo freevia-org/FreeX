@@ -904,6 +904,25 @@ public sealed partial class MainWindow
             _session.SelectRange(new GridRange(address, end));
         }
 
+        if (action == WorksheetContextMenuAction.CustomSort)
+        {
+            // Custom Sort shares WorkbookSession.GetSelectedRangeSortError with the WPF host: a
+            // one-row selection is refused before any dialog opens (WPF shows a warning box, the
+            // Avalonia shell reports it in the status bar). Seed a sortable two-column block and
+            // select its whole current region so the production route reaches the Sort dialog
+            // without first raising the adjacent-data Sort Warning.
+            var sortEnd = new CellAddress(sheet.Id, 4, 3);
+            sheet.SetCell(address, new TextValue("Region"));
+            sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new TextValue("Total"));
+            sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new TextValue("North"));
+            sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(20));
+            sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new TextValue("South"));
+            sheet.SetCell(sortEnd, new NumberValue(10));
+            var sortRange = new GridRange(address, sortEnd);
+            _session.SelectRange(
+                QuickSortRangePlanner.ResolveAdjacentDataExpansion(sheet, sortRange) ?? sortRange);
+        }
+
         if (action is WorksheetContextMenuAction.EditComment or
             WorksheetContextMenuAction.ResolveComment or
             WorksheetContextMenuAction.UnresolveComment or

@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Free.Shared.Shell;
@@ -97,6 +98,11 @@ public class AvaloniaAboutDialog : AvaloniaDialogWindow
         AutomationProperties.SetAutomationId(_aboutTextBox, textAutomationId);
         AutomationProperties.SetHelpText(_aboutTextBox, helpText);
 
+        // The read-only About text keeps keyboard focus (as in WPF). Avalonia's TextBox swallows
+        // Return whenever AcceptsReturn is set, even while read-only, so the IsDefault OK button
+        // never saw Enter. WPF's read-only box does not accept Return and lets Enter reach OK.
+        _aboutTextBox.AddHandler(KeyDownEvent, OnAboutTextKeyDown, RoutingStrategies.Tunnel);
+
         Content = CreateContent(okAutomationId, helpText, rightContentMargin);
         ApplyAboutVisualChrome();
         Opened += (_, _) =>
@@ -177,6 +183,21 @@ public class AvaloniaAboutDialog : AvaloniaDialogWindow
         // WPF's About action button has a white resting surface; preserve the shared button
         // metrics and border while correcting this authority-specific fill.
         _okButton.Background = Brushes.White;
+    }
+
+    private void OnAboutTextKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Handled ||
+            e.Key != Key.Enter ||
+            e.KeyModifiers != KeyModifiers.None ||
+            !_aboutTextBox.IsReadOnly ||
+            !_okButton.IsEffectivelyEnabled)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        _okButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, _okButton));
     }
 
     private void FocusInitialKeyboardTarget()

@@ -97,6 +97,7 @@ public sealed partial class MainWindow
         finally
         {
             hidden.Close();
+            ReactivateAfterAuxiliaryParityWindow();
         }
     }
 
@@ -725,7 +726,21 @@ public sealed partial class MainWindow
         finally
         {
             auxiliaryWindow.Close();
+            ReactivateAfterAuxiliaryParityWindow();
         }
+    }
+
+    // The window dialogs need a second top-level window to list. Showing it takes activation from
+    // this window, and closing it again does not hand activation back under the headless platform
+    // (a desktop window manager does), so the owner-focus contract read "no focus" although the
+    // production dialog restored nothing wrong. Hand activation back the way the OS would.
+    private void ReactivateAfterAuxiliaryParityWindow()
+    {
+        if (!IsVisible)
+            return;
+
+        Activate();
+        Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
     }
 
     private async Task ShowWithParityChartTypeAsync(ChartType chartType, Func<Task> showDialogAsync)

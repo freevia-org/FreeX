@@ -335,6 +335,7 @@ public sealed partial class MainWindow
 
         var initial = NormalizeDialogTabStop(initialFocus);
         var visited = new List<IInputElement?> { initial };
+        var sequence = new List<IInputElement?> { initial };
         var maximumSteps = Math.Max(2, tabStops + 2);
         for (var step = 1; step <= maximumSteps; step++)
         {
@@ -353,6 +354,7 @@ public sealed partial class MainWindow
                 return "failed:focus-left-dialog:step=" + step;
 
             var after = NormalizeDialogTabStop(afterFocus);
+            sequence.Add(after);
 
             if (ReferenceEquals(initial, after))
             {
@@ -366,7 +368,10 @@ public sealed partial class MainWindow
                 visited.Add(after);
         }
 
-        return $"failed:focus-cycle-did-not-wrap:steps={maximumSteps},stops={visited.Count}";
+        // Name the stops so a failure says where the cycle went instead of only how far.
+        var path = string.Join(">", sequence.Take(4).Select(DescribeInputElement)) + ">...>" +
+            string.Join(">", sequence.TakeLast(8).Select(DescribeInputElement));
+        return $"failed:focus-cycle-did-not-wrap:steps={maximumSteps},stops={visited.Count},path={path}";
     }
 
     private static async Task<string> ExerciseEscapeAsync(Window dialog)

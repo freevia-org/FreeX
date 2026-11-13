@@ -3596,6 +3596,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaBox.BorderThickness = new Thickness(1);
         _formulaBox.GotFocus += FormulaBox_GotFocus;
         _formulaBox.KeyDown += FormulaBox_KeyDown;
+        _formulaBox.AddHandler(InputElement.KeyDownEvent, FormulaBox_ExpandedEnterKeyDown, RoutingStrategies.Tunnel);
         _formulaBox.PropertyChanged += (_, args) =>
         {
             if (_isApplyingFormulaBoxText ||
@@ -19470,6 +19471,26 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ClearFormulaRangeEntryState();
         _session.BeginFormulaEdit(_session.ActiveCell);
         _formulaBoxEditOriginalText = _formulaBox.Text ?? "";
+    }
+
+    /// <summary>
+    /// WPF wires FormulaBar_KeyDown as PreviewKeyDown, so Enter commits even while the expanded bar
+    /// accepts returns. Here FormulaBox_KeyDown bubbles, and once the bar is expanded
+    /// (AcceptsReturn) Avalonia's TextBox consumed Enter first and typed a line break: Enter,
+    /// Shift+Enter and Ctrl+Enter no longer committed the edit. Alt+Enter keeps inserting the line
+    /// break through the focused-editor shortcut route.
+    /// </summary>
+    private void FormulaBox_ExpandedEnterKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Handled ||
+            e.Key != Key.Enter ||
+            !_formulaBox.AcceptsReturn ||
+            e.KeyModifiers.HasFlag(KeyModifiers.Alt))
+        {
+            return;
+        }
+
+        FormulaBox_KeyDown(sender, e);
     }
 
     private void FormulaBox_KeyDown(object? sender, KeyEventArgs e)

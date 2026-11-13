@@ -97,6 +97,8 @@ public sealed partial class MainWindow
         var formulaBarEditMode = !_formulaRangeEditingSession.PointMode;
         await RaiseEditingValidationKeyAsync(_formulaBox, Key.F2);
         var formulaBarModeToggled = formulaBarEditMode && _formulaRangeEditingSession.PointMode;
+        var formulaBarFocused = _formulaBox.IsFocused;
+        var formulaBarEditAddress = _session.FormulaEditAddress;
         var formulaBarPointInserted = TryInsertFormulaPointReference(pointTarget);
         var formulaBarText = _formulaBox.Text ?? "";
         await RaiseEditingValidationKeyAsync(_formulaBox, Key.Enter);
@@ -109,7 +111,9 @@ public sealed partial class MainWindow
                 ? "passed"
                 : "failed",
             "focus-textinput-mode-toggle-cell-point-enter",
-            $"pointStarted={formulaBarPointModeStarted}; toggled={formulaBarModeToggled}; inserted={formulaBarPointInserted}; text={formulaBarText}; committed={formulaBarCommitted}",
+            $"pointStarted={formulaBarPointModeStarted}; toggled={formulaBarModeToggled}; inserted={formulaBarPointInserted}; text={formulaBarText}; committed={formulaBarCommitted}; " +
+            $"focused={formulaBarFocused}; editAddress={formulaBarEditAddress?.ToString() ?? "none"}; barVisible={_formulaBox.IsEffectivelyVisible}; " +
+            $"multiLine={_formulaBox.AcceptsReturn}; editAfterEnter={_session.FormulaEditAddress?.ToString() ?? "none"}",
             "The production formula bar entered edit/Point mode through focus and TextInput, accepted a grid reference, and committed with routed Enter."));
 
         var dragFormulaAddress = new CellAddress(sheet.Id, 6, 2);

@@ -1416,11 +1416,7 @@ public sealed partial class MainWindow
 
         var formulaBarVisible = !_isFormulaBarHidden;
         if (formulaBarVisible != input.ShowFormulaBar)
-        {
-            _isFormulaBarHidden = !input.ShowFormulaBar;
-            _formulaBox.IsVisible = input.ShowFormulaBar;
-            _cellAddressText.IsVisible = input.ShowFormulaBar;
-        }
+            ApplyFormulaBarVisibility(input.ShowFormulaBar);
 
         RefreshShell(UiText.Get("Options_Saved"));
     }

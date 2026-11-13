@@ -44,14 +44,24 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        _isFormulaBarHidden = !_isFormulaBarHidden;
-        var visible = !_isFormulaBarHidden;
+        var visible = _isFormulaBarHidden;
+        ApplyFormulaBarVisibility(visible);
 
+        RefreshShell(visible ? UiText.Get("ShellLoc_ShowingFormulaBar") : UiText.Get("ShellLoc_HidingFormulaBar"));
+    }
+
+    /// <summary>
+    /// The one place the formula bar row is shown or hidden, shared by View ▸ Show ▸ Formula Bar and
+    /// File ▸ Options ▸ Show formula bar (WPF collapses a single FormulaBarBorder from both). Options
+    /// used to flip only the input and Name Box, so after View hid the whole row, re-enabling the bar
+    /// in Options reported it visible while the row stayed collapsed.
+    /// </summary>
+    private void ApplyFormulaBarVisibility(bool visible)
+    {
+        _isFormulaBarHidden = !visible;
         _formulaBarHost.IsVisible = visible;
         _formulaBox.IsVisible = visible;
         _cellAddressText.IsVisible = visible;
-
-        RefreshShell(visible ? UiText.Get("ShellLoc_ShowingFormulaBar") : UiText.Get("ShellLoc_HidingFormulaBar"));
     }
 
     /// <summary>
