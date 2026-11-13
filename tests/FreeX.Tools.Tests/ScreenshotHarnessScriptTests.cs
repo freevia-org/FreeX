@@ -7,41 +7,6 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class ScreenshotHarnessScriptTests
 {
-    [Theory]
-    [InlineData("screenshot_excel.ps1", "screenshots_excel", "excel_<WidthLabel>_<RibbonTab>.png", "excel_$($widthSpec.Label)_$safe.png")]
-    [InlineData("screenshot_ribbon.ps1", "screenshots", "ribbon_<WidthLabel>_<RibbonTab>.png", "ribbon_$($widthSpec.Label)_$safe.png")]
-    public void ScreenshotScripts_RecordOutputNamingAndWindowBoundsInEvidenceManifest(
-        string scriptName,
-        string outputDirectory,
-        string namingPattern,
-        string filePattern)
-    {
-        var script = ReadScript(scriptName);
-
-        script.Should().Contain($"Join-Path $PSScriptRoot \"{outputDirectory}\"");
-        script.Should().Contain("function Write-RibbonScreenshotEvidenceManifest");
-        script.Should().Contain("screenshot_manifest.json");
-        script.Should().Contain($"-OutputNaming \"{namingPattern}\"");
-        script.Should().Contain($"CatalogEvidenceTarget = \"docs/testing/ui-test-catalog.md\"");
-        script.Should().Contain("WidthSource = \"RibbonScreenshotTourPlanner.DefaultWidths\"");
-        script.Should().Contain("$plannedCaptureCount = $Tabs.Count * $Widths.Count");
-        script.Should().Contain("PlannedCaptureCount = $plannedCaptureCount");
-        script.Should().Contain("ActualCaptureCount = $Captures.Count");
-        script.Should().Contain("CaptureStatus = \"complete\"");
-        script.Should().Contain("CaptureMethod = \"CopyFromScreen-window-rectangle-top-band\"");
-        script.Should().Contain("ForegroundGuard = [pscustomobject]");
-        script.Should().Contain("ExpectedProcessId = $ExpectedProcessId");
-        script.Should().Contain("ExpectedWindowTitle = $ExpectedWindowTitle");
-        script.Should().Contain("WindowBounds = [pscustomobject]");
-        script.Should().Contain("CaptureLogicalHeight = $CaptureLogicalHeight");
-        script.Should().Contain("CapturePhysicalHeight = $CapturePhysicalHeight");
-        script.Should().Contain("Widths = $Widths");
-        script.Should().Contain("$manifest[\"Captures\"] = $Captures");
-        script.Should().Contain("CaptureSequence = $script:capturedFiles.Count + 1");
-        script.Should().Contain("CaptureKey = \"ribbon:$($widthSpec.Label):$safe\"");
-        script.Should().Contain($"$fileName = \"{filePattern}\"");
-        script.Should().Contain("$path = Join-Path $outDir $fileName");
-    }
 
     [Theory]
     [InlineData("screenshot_excel.ps1")]
@@ -396,86 +361,7 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain("Start-Process -FilePath $exe -ArgumentList @(\"/x\") -PassThru");
     }
 
-    [Fact]
-    public void ExcelScreenshotScript_ProvidesOptInAutoFilterFlyoutTour()
-    {
-        var script = ReadScript("screenshot_excel.ps1");
 
-        script.Should().Contain("[string]$AutoFilterFlyoutTour = $env:FREEX_EXCEL_AUTOFILTER_FLYOUT_TOUR");
-        script.Should().Contain("if ($AutoFilterFlyoutTour -eq \"1\")");
-        script.Should().Contain("function Invoke-ExcelAutoFilterFlyoutTour");
-        script.Should().Contain("function New-ExcelAutoFilterSampleWorkbook");
-        script.Should().Contain("Join-Path $outDir \"autofilter-flyout-tour\"");
-        script.Should().Contain("excel_autofilter_flyout_tour_manifest.json");
-        script.Should().Contain("interactive_table_autofilter_dropdown_opened.png");
-        script.Should().Contain("Tool = \"FREEX_EXCEL_AUTOFILTER_FLYOUT_TOUR\"");
-        script.Should().Contain("EvidenceFamily = \"popup\"");
-        script.Should().Contain("EvidenceSubject = \"excel\"");
-        script.Should().Contain("EvidenceApp = \"Microsoft Excel\"");
-        script.Should().Contain("OutputNaming = \"interactive_table_autofilter_dropdown_opened.png\"");
-        script.Should().Contain("CatalogEvidenceTarget = \"docs/testing/ui-test-catalog.md\"");
-        script.Should().Contain("HeaderCell = \"A1\"");
-        script.Should().Contain("HeaderText = \"score\"");
-        script.Should().Contain("AutoFilterRange = \"A1:D6\"");
-        script.Should().Contain("FilterColumnOffset = 0");
-        script.Should().Contain("CaptureStatus = \"complete\"");
-        script.Should().Contain("State = \"opened\"");
-        script.Should().Contain("function Click-ExcelAutoFilterHeaderDropdown");
-        script.Should().Contain("[ScreenshotWin32]::SetProcessDPIAware() | Out-Null");
-        script.Should().Contain("[ScreenshotWin32]::SetCursorPos($clickX, $clickY) | Out-Null");
-        script.Should().Contain("$pointToScreenScale = 2.0");
-        script.Should().Contain("$clickX = [int]($left + ($header.Width * $pointToScreenScale) - 12)");
-        script.Should().Contain("function Set-ExcelForegroundWindow");
-        script.Should().Contain("New-Object -ComObject WScript.Shell");
-        script.Should().Contain("[ScreenshotWin32]::SetWindowPos($excelHwnd, [IntPtr](-1), 0, 0, 0, 0, 0x0043) | Out-Null");
-        script.Should().Contain("Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle \"Excel AutoFilter flyout setup\"");
-        script.Should().Contain("PairKey = \"interactive:table-autofilter-dropdown:opened\"");
-        script.Should().Contain("CounterpartTool = \"FREEX_AUTOFILTER_FLYOUT_TOUR\"");
-        script.Should().Contain("CounterpartFileName = \"freex_table_autofilter_dropdown.png\"");
-        script.Should().Contain("SampleRange = \"A1:D6\"");
-        script.Should().Contain("SampleValues = @(\"1\", \"2\", \"3\", \"4\", \"(Blanks)\")");
-        script.Should().Contain("Assert-ForegroundWindowOwnership $excelPid $excelTitle \"Excel AutoFilter flyout setup\"");
-        script.Should().Contain("Click-ExcelAutoFilterHeaderDropdown $excelApp $worksheet \"A1\" $excelPid $excelTitle");
-        script.Should().Contain("Excel AutoFilter flyout tour did not detect a foreground Excel popup window");
-        script.Should().Contain("Assert-ForegroundProcessOwnership $excelPid \"Excel AutoFilter flyout screen capture\"");
-        script.Should().Contain("Find-ExcelAutoFilterPopupWindow $excelPid $excelHwnd");
-    }
-
-    [Fact]
-    public void ExcelScreenshotScript_ProvidesOptInHomeNumberFormatDropdownTour()
-    {
-        var script = ReadScript("screenshot_excel.ps1");
-
-        script.Should().Contain("[string]$NumberFormatDropdownTour = $env:FREEX_EXCEL_NUMBER_FORMAT_DROPDOWN_TOUR");
-        script.Should().Contain("if ($NumberFormatDropdownTour -eq \"1\")");
-        script.Should().Contain("function Invoke-ExcelNumberFormatDropdownTour");
-        script.Should().Contain("function New-ExcelNumberFormatSampleWorkbook");
-        script.Should().Contain("function Expand-ExcelNumberFormatDropdown");
-        script.Should().Contain("Join-Path $outDir \"home-number-format-dropdown-tour\"");
-        script.Should().Contain("excel_home_number_format_dropdown_tour_manifest.json");
-        script.Should().Contain("interactive_home_number_format_opened.png");
-        script.Should().Contain("Tool = \"FREEX_EXCEL_NUMBER_FORMAT_DROPDOWN_TOUR\"");
-        script.Should().Contain("EvidenceFamily = \"dropdown\"");
-        script.Should().Contain("EvidenceSubject = \"excel\"");
-        script.Should().Contain("EvidenceApp = \"Microsoft Excel\"");
-        script.Should().Contain("OutputNaming = \"interactive_home_number_format_opened.png\"");
-        script.Should().Contain("CatalogEvidenceTarget = \"docs/testing/ui-test-catalog.md\"");
-        script.Should().Contain("SelectedCell = \"A1\"");
-        script.Should().Contain("SelectedFormat = \"General\"");
-        script.Should().Contain("CaptureStatus = \"complete\"");
-        script.Should().Contain("State = \"opened\"");
-        script.Should().Contain("NumberFormatGallery");
-        script.Should().Contain("[System.Windows.Automation.ExpandCollapsePattern]::Pattern");
-        script.Should().Contain("$pattern.Expand()");
-        script.Should().Contain("Find-ExcelPopupWindow $excelPid $excelHwnd 120 120");
-        script.Should().Contain("Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle \"Excel Number Format dropdown setup\"");
-        script.Should().Contain("PairKey = \"interactive:home-number-format:opened\"");
-        script.Should().Contain("CounterpartTool = \"FREEX_HOME_NUMBER_FORMAT_DROPDOWN_TOUR\"");
-        script.Should().Contain("CounterpartFileName = \"freex_dropdown_home_number_format_opened.png\"");
-        script.Should().Contain("SampleValue = \"1234.56\"");
-        script.Should().Contain("Assert-ForegroundWindowOwnership $excelPid $excelTitle \"Excel Number Format dropdown setup\"");
-        script.Should().Contain("Assert-ForegroundProcessOwnership $excelPid \"Excel Number Format dropdown screen capture\"");
-    }
 
     [Fact]
     public void ExcelScreenshotScript_ProvidesOptInHomeBordersDropdownTour()

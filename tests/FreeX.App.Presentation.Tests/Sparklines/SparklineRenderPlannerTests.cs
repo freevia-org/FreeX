@@ -195,29 +195,6 @@ public sealed class SparklineRenderPlannerTests
 
     // ── Integration smoke: verify sparklines load from the real fixture XLSX ──────────────────────
 
-    [Fact]
-    public void Fixture_LineMarkers_001_LoadsSparklineWithSevenValues()
-    {
-        var path = TestWorkspaceFileLocator.TryFindFileFromBaseDirectory(
-            "docs", "planning", "wave4-sparklines-fixtures",
-            "generated-excel-sparklines",
-            "Excel_native_sparkline_line_markers_001.xlsx");
-
-        if (path is null)
-            return; // fixture not yet generated — skip silently in CI
-
-        using var stream = File.OpenRead(path);
-        var adapter = new XlsxFileAdapter();
-        var workbook = adapter.Load(stream);
-        var sheet = workbook.Sheets[0];
-
-        sheet.Sparklines.Should().NotBeEmpty("fixture must contain at least one sparkline");
-
-        var sp = sheet.Sparklines[0];
-        var series = SparklineSeriesReader.ReadSeries(workbook, sheet, sp);
-        series.Should().HaveCount(7, "fixture data is A2:A8 = 7 values");
-        series.Should().Equal(3, 7, 2, 9, 5, 1, 8);
-    }
 
     private static (Workbook Workbook, Sheet Sheet) BuildSheet()
     {

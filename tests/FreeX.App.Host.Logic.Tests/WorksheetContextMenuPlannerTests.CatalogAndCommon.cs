@@ -5,20 +5,6 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class WorksheetContextMenuPlannerTests
 {
-    [Fact]
-    public void UiTestCatalog_WorksheetContextMenuCommandCountMatchesPlanner()
-    {
-        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
-        var commandCount = FlattenActionCommands(WorksheetContextMenuPlanner.BuildCommands()).Count;
-
-        catalog.Should().Contain(
-            $"| Worksheet context menu commands | {commandCount} | From `WorksheetContextMenuPlanner.BuildCommands()`. |");
-        catalog.Should().Contain($"Worksheet context menu has {commandCount} planner commands");
-        catalog.Should().Contain($"| Worksheet context menu | {commandCount} planner commands via right-click, Shift+F10, Menu key. |");
-        catalog.Should().Contain($"| UI-CAT-CONTEXT-001 | Worksheet context menu | {commandCount} worksheet context-menu planner commands. |");
-        catalog.Should().NotContain("47 planner commands");
-        catalog.Should().NotContain("47 worksheet context-menu planner commands");
-    }
 
     [Fact]
     public void BuildCommands_GroupsNormalWorksheetContextMenuIntoUsableTopLevelShape()

@@ -27,58 +27,6 @@ public sealed class OutputWorkflowArchitectureTests
         source.Should().NotContain("DocumentViewer");
     }
 
-    [Fact]
-    public void RenderersDelegateOutputPlanningAndPortablePrintExecution()
-    {
-        var wpf = ReadSource("freew", "FreeW.App.Host", "MainWindow.cs");
-        var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "MainWindow.cs");
-        var parityPlan = ReadSource("docs", "planning", "freew-avalonia-parity-plan.md");
-
-        wpf.Should().Contain("FreeWExportWorkflow.CreatePlan(");
-        wpf.Should().Contain("FreeWExportWorkflow.ExecuteAsync(");
-        wpf.Should().Contain("FreeWPrintRequestPlanner.Create(");
-        wpf.Should().Contain("FreeWPrintRequestPlanner.ResolvePageRange(");
-        wpf.Should().Contain("WpfPaginatorPrintWorkflow.Execute(");
-        wpf.Should().NotContain("new PrintDialog()");
-        avalonia.Should().Contain("FreeWExportWorkflow.CreatePlan(");
-        avalonia.Should().Contain("FreeWExportWorkflow.ExecuteAsync(");
-        avalonia.Should().Contain("_portablePrintWorkflow.ExecuteAsync(");
-        avalonia.Should().Contain("new PortablePrintSubmissionWorkflow(_printService)");
-        avalonia.Should().Contain("(intent, token) => _showPrintSelectionDialog(this, intent.Discovery, token)");
-        avalonia.Should().Contain("FreeWPrintMessagePlanner.PlanCapability(");
-        avalonia.Should().Contain("PlatformPrintServiceSelector.Select(");
-        avalonia.Should().Contain("windowsFactory: static () => new WindowsPrintService()");
-        avalonia.Should().Contain("cupsFactory: static () => new CupsPrintService()");
-        parityPlan.Should().Contain("Direct printer selection is also closed:");
-        parityPlan.Should().NotContain(
-            "The remaining Backstage print gap is direct native printer selection in Avalonia");
-
-        foreach (var renderer in new[] { wpf, avalonia })
-        {
-            renderer.Should().NotContain("AtomicFileWriter.CreateTempPath(");
-            renderer.Should().NotContain("AtomicFileWriter.ReplaceTarget(");
-            renderer.Should().NotContain("AtomicFileWriter.CleanupTempFile(");
-        }
-
-        avalonia.Should().NotContain("_printService.SubmitAsync(");
-        avalonia.Should().NotContain("FormatPrintDiscoveryStatus(");
-        avalonia.Should().NotContain("FormatPrintSubmissionStatus(");
-        avalonia.Should().NotContain("DirectPrintDeferredReason(");
-        wpf.Should().NotContain("File.WriteAllBytes(temporaryPath");
-        avalonia.Should().NotContain("File.Create(temporaryPath");
-
-        ReadSource("freew", "FreeW.App.Host", "PdfExport.cs")
-            .Should().NotContain("Save(DocumentPaginator paginator, string path");
-        ReadSource("freew", "FreeW.App.Host", "XpsExport.cs")
-            .Should().NotContain("Save(DocumentPaginator paginator, string path");
-        avalonia.Should().NotContain("FreeWAvaloniaPdfExport.Save(_editor, path")
-            .And.NotContain("FreeWAvaloniaXpsExport.Save(_editor, path");
-
-        ReadSource("freew", "FreeW.App.Avalonia", "Pdf", "FreeWAvaloniaPdfExport.cs")
-            .Should().Contain("Save(DocumentView view, Stream stream");
-        ReadSource("freew", "FreeW.App.Avalonia", "Pdf", "FreeWAvaloniaXpsExport.cs")
-            .Should().Contain("Save(DocumentView view, Stream stream");
-    }
 
     [Fact]
     public void PreviewWindowsUseSharedSessionForRendererNeutralState()

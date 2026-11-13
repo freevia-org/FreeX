@@ -4,21 +4,6 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class PublicReleaseDocumentationTests
 {
-    [Fact]
-    public void Public_release_docs_are_discoverable_from_repository_indexes()
-    {
-        var repositoryReadme = WorkspaceFileLocator.ReadAllText("README.md");
-        var docsReadme = WorkspaceFileLocator.ReadAllText("docs", "README.md");
-
-        repositoryReadme.Should().Contain(
-            "[Public-preview acceptance, rollback, and incident runbook](docs/release/public-preview-operations.md)");
-        docsReadme.Should().Contain(
-            "[release/public-preview-operations.md](release/public-preview-operations.md)");
-        docsReadme.Should().Contain(
-            "[release/public-preview-decision-record-template.md](release/public-preview-decision-record-template.md)");
-        docsReadme.Should().Contain(
-            "[release/public-preview-release-notes-template.md](release/public-preview-release-notes-template.md)");
-    }
 
     [Fact]
     public void Certificate_independent_gate_links_acceptance_and_release_note_procedures()
@@ -96,19 +81,4 @@ public sealed class PublicReleaseDocumentationTests
         releaseNotes.Should().Contain("no guaranteed support lifetime or response time");
     }
 
-    [Fact]
-    public void Public_support_and_security_policies_route_incidents_without_promising_outcomes()
-    {
-        var support = WorkspaceFileLocator.ReadAllText("docs", "support", "feedback.md");
-        var security = WorkspaceFileLocator.ReadAllText("SECURITY.md");
-
-        support.Should().Contain("## Release Corrections And Support Boundaries");
-        support.Should().Contain("do not carry a guaranteed response time or support lifetime");
-        support.Should().Contain(
-            "[acceptance, rollback, and incident runbook](../release/public-preview-operations.md)");
-        security.Should().Contain("## Maintainer Handling");
-        security.Should().Contain(
-            "[public-preview incident procedure](docs/release/public-preview-operations.md#incident-procedure)");
-        security.Should().Contain("does not establish a disclosure deadline or legal notification threshold");
-    }
 }

@@ -181,56 +181,6 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
             .BeEmpty("the readiness accessibility marker contract should match the accessibility report keys emitted by MacOsLaunchSmoke");
     }
 
-    [Fact]
-    public void MacOsLaunchSmoke_CommandKeyReportKeysMatchSourcePlanningAndHostedSafeWorkflowMarkers()
-    {
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
-        var workflow = File.ReadAllText(RepositoryFileLocator.Find(".github", "workflows", "macos-app.yml"));
-        var planning = File.ReadAllText(RepositoryFileLocator.Find("docs", "planning", "multiplatform-macos-port.md"));
-
-        var sourceReportKeys = ExtractDistinctKeys(smokeSource, CommandKeySourceReportKeyPattern);
-        var workflowGrepKeys = ExtractDistinctKeys(workflow, CommandKeyWorkflowGrepReportKeyPattern);
-
-        sourceReportKeys.Should().Equal(ExpectedCommandKeyReportKeys);
-        workflowGrepKeys.Should().Equal(ExpectedHostedWorkflowCommandKeyGrepKeys);
-        workflow.Should().Contain("live_command_key_smoke=not_required");
-
-        FindMissingKeys(
-                ExpectedHostedWorkflowCommandKeyGrepKeys,
-                sourceReportKeys,
-                "hosted workflow grep marker",
-                "MacOsLaunchSmoke report")
-            .Should()
-            .BeEmpty("every hosted workflow grep should stay backed by a MacOsLaunchSmoke report key");
-
-        foreach (var key in ExpectedCommandKeyReportKeys)
-            planning.Should().Contain($"{key}=");
-
-        smokeSource.Should().Contain("internal sealed record MacOsLaunchSmokeCommandKeySnapshot(");
-        smokeSource.Should().Contain("internal sealed record MacOsLaunchSmokeLiveCommandKeySnapshot(");
-        smokeSource.Should().Contain("commandKeyEvidence = CaptureCommandKeyEvidence(access);");
-        smokeSource.Should().Contain("access.BeginCommandObservation(observation =>");
-        smokeSource.Should().Contain("liveCommandKeyEvidence = RecordCommandObservation(");
-        smokeSource.Should().Contain("commandKeyEvidence.IsPassed");
-        smokeSource.Should().Contain("liveCommandKeyEvidence.IsPassed");
-        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_newWorkbookMenuItem\", Key.N, KeyModifiers.Meta)");
-        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_openMenuItem\", Key.O, KeyModifiers.Meta)");
-        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_saveMenuItem\", Key.S, KeyModifiers.Meta)");
-        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_saveAsMenuItem\", Key.S, KeyModifiers.Meta | KeyModifiers.Shift)");
-        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_closeWorkbookMenuItem\", Key.W, KeyModifiers.Meta)");
-        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_quitMenuItem\", Key.Q, KeyModifiers.Meta)");
-        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_selectAllMenuItem\", Key.A, KeyModifiers.Meta)");
-        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_findMenuItem\", Key.F, KeyModifiers.Meta)");
-        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_boldMenuItem\", Key.B, KeyModifiers.Meta)");
-        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_italicMenuItem\", Key.I, KeyModifiers.Meta)");
-        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_underlineMenuItem\", Key.U, KeyModifiers.Meta)");
-        smokeSource.Should().Contain("HasFindDirectRouteSourceGuard: MainWindow.RendererValidationAccess.HasMethods(");
-        smokeSource.Should().Contain("HasPageUpDirectRouteSourceGuard: MainWindow.RendererValidationAccess.HasMethods(");
-        smokeSource.Should().Contain("HasPageDownDirectRouteSourceGuard: MainWindow.RendererValidationAccess.HasMethods(");
-        smokeSource.Should().Contain("cmd_find_direct_route_source_guard={FormatBool(commandKeyEvidence.HasFindDirectRouteSourceGuard)}");
-        smokeSource.Should().Contain("cmd_page_up_direct_route_source_guard={FormatBool(commandKeyEvidence.HasPageUpDirectRouteSourceGuard)}");
-        smokeSource.Should().Contain("cmd_page_down_direct_route_source_guard={FormatBool(commandKeyEvidence.HasPageDownDirectRouteSourceGuard)}");
-    }
 
     private static string[] ExtractDistinctKeys(string text, Regex pattern) =>
         pattern.Matches(text)

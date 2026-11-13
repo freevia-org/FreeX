@@ -21,24 +21,6 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
         Hash(TabSignature(avalonia.FindTab(tabId)!)).Should().Be(expectedAvaloniaHash);
     }
 
-    [Fact]
-    public void Canonical_tab_profile_evidence_is_generated_and_complete()
-    {
-        using var document = ReadCanonicalEvidence();
-        var root = document.RootElement;
-
-        root.GetProperty("schema").GetString().Should().Be("freew.canonical-ribbon-profiles.v1");
-        root.GetProperty("generatedBy").GetString().Should().Be(
-            "freew/FreeW.Ribbon.Definitions.Tests/Generate-FreeWCanonicalRibbonEvidence.ps1");
-        root.GetProperty("topologySource").GetString().Should().Contain(
-            "FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf/Avalonia)");
-        root.GetProperty("tabs").EnumerateArray()
-            .Select(tab => tab.GetProperty("tabId").GetString())
-            .Should().Equal(
-                "chart-design", "chart-format", "design", "developer", "drawing-format", "equation",
-                "header-footer-design", "help", "home", "insert", "layout", "mailings", "picture-format",
-                "references", "review", "smartart-design", "table-design", "table-layout", "view");
-    }
 
     public static IEnumerable<object[]> CanonicalTabProfiles()
     {

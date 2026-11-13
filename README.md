@@ -36,7 +36,7 @@ Note: link to the versioned assets above rather than `releases/latest/download/.
 
 ## Documentation
 
-Start with the [user guide](docs/user/guide.md), [documentation index](docs/README.md), and [current status snapshot](docs/history/status-2026-08-08.md). Current build scope and known limitations are tracked in [outstanding build](docs/planning/outstanding-build.md), [fidelity workstream summary](docs/fidelity/README.md), and [fidelity contract](docs/formats/fidelity-contract.md).
+Start with the [user guide](docs/user/guide.md). Architecture notes are in [docs/architecture](docs/architecture/architecture.md), release and packaging notes in [docs/release](docs/release/), and legal notices in [docs/legal](docs/legal/legal-notices.md).
 
 This monorepo also hosts **FreeW**, a sibling `.docx` word processor built on the same shared tier. See [freew/README.md](freew/README.md).
 

@@ -768,38 +768,6 @@ public sealed partial class MainWindowSourceHygieneTests
         foregroundSource.Should().Contain("The harness intentionally rejects the built-in xlDialogActivate workbook/window dialog");
     }
 
-    [Fact]
-    public void UxParityScenarioBatch_ExposesExpandedCoreSuite()
-    {
-        var batchSource = WorkspaceFileLocator.ReadAllText("tools", "Run-UxParityScenarioBatch.ps1");
-
-        // "native-output" was added as its own scenario category (0b54f1cb46 "batch native output
-        // foreground evidence" and follow-ups); the pinned ValidateSet literal predates that.
-        batchSource.Should().Contain("[ValidateSet(\"smoke\", \"core\", \"dialogs\", \"status\", \"formula\", \"filtering\", \"grid\", \"native-output\", \"all\")]");
-        batchSource.Should().Contain("\"core\" { return $pairs | Where-Object { $_[\"id\"] -in @(\"format-cells-dialog\", \"format-cells-context-dialog\", \"sheet-tab-context-menu\", \"sheet-tab-overflow-activate-dialog\") } }");
-        batchSource.Should().Contain("id = \"status-footer-reference\"");
-        batchSource.Should().Contain("excelScenario = \"excel-status-footer-reference\"");
-        batchSource.Should().Contain("freexScenario = \"freex-status-live-stats-accessibility\"");
-        batchSource.Should().Contain("\"status\" { return $pairs | Where-Object { $_[\"area\"] -eq \"Status bar\" } }");
-        batchSource.Should().Contain("id = \"autofilter-opened-state\"");
-        batchSource.Should().Contain("excelScenario = \"excel-autofilter\"");
-        batchSource.Should().Contain("freexScenario = \"freex-autofilter\"");
-        batchSource.Should().Contain("\"filtering\" { return $pairs | Where-Object { $_[\"area\"] -eq \"Sorting and filtering\" } }");
-        batchSource.Should().Contain("comparisonMode = \"freex-only\"");
-        batchSource.Should().Contain("freexScenario = \"freex-grid-row-column-resize\"");
-        batchSource.Should().Contain("freexScenario = \"freex-grid-wheel-scroll\"");
-        batchSource.Should().Contain("\"grid\" { return $pairs | Where-Object { $_[\"area\"] -eq \"Grid pointer mechanics\" } }");
-        batchSource.Should().Contain("function New-NotRequiredScenarioResult");
-        batchSource.Should().Contain("\"freex-capture-complete\"");
-        batchSource.Should().Contain("freexCaptureComplete = $freexCaptureComplete");
-        batchSource.Should().Contain("[switch]$MinimizeForeignForeground");
-        batchSource.Should().Contain("Clear-ForeignForegroundWindow $Scenario");
-        batchSource.Should().Contain("$title.IndexOf(\"Media Player\", [StringComparison]::OrdinalIgnoreCase) -ge 0");
-        batchSource.Should().Contain("function Write-ScenarioContactSheet");
-        batchSource.Should().Contain("$batchContactSheetPath = Join-Path $runDirectory \"ux-scenario-contact-sheet.png\"");
-        batchSource.Should().Contain("contactSheetPath = $batchContactSheetPath");
-        batchSource.Should().Contain("UX parity scenario contact sheet");
-    }
 
     [Fact]
     public void FocusedPivotFieldListTaskPane_TabTraversalIsNotHijackedByWorksheetMovement()

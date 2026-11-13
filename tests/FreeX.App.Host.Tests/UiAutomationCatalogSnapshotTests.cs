@@ -10,43 +10,10 @@ internal static class UiAutomationCatalogSnapshotHarness
 {
     public static void Run(FreeXUiRun run)
     {
-        VisibleControls_MatchCatalogSnapshotExpectations(run);
         VisibleShellControls_ExposeExpectedAutomationPatterns(run);
         VisibleDialogEntryPointControls_ExposeInvokePattern(run);
     }
 
-    private static void VisibleControls_MatchCatalogSnapshotExpectations(FreeXUiRun run)
-    {
-        var snapshot = CaptureVisibleControlsWhen(
-            run,
-            controls => controls.Any(control => control.AutomationId == "SaveQatBtn") &&
-                controls.Any(control => control.AutomationId == "AddSheetButton") &&
-                controls.Any(control => control.AutomationId == "ZoomSlider"),
-            "the stable shell UI Automation peers to be ready");
-        var expectedTabNames = ReadCatalogTopLevelTabNames();
-        var expectedVisibleAutomationIds = ReadExpectedVisibleAutomationIdsFromXaml();
-
-        snapshot.Should().Contain(control => control.ControlType == "Window" && control.Name.Contains("FreeX", StringComparison.Ordinal));
-        snapshot.Count(control => control.ControlType == "Button").Should().BeGreaterThanOrEqualTo(20);
-        snapshot.Count(control => control.ControlType == "TabItem").Should().BeGreaterThanOrEqualTo(expectedTabNames.Count);
-
-        snapshot.Select(control => control.Name)
-            .Should()
-            .Contain(expectedTabNames)
-            .And.Contain([
-                UiText.Get("MainWindow_AutomationName_ZoomSlider"),
-                UiText.Get("MainWindow_AutomationName_InsertSheet"),
-                UiText.Get("MainWindow_AutomationName_Save"),
-                UiText.Get("MainWindow_AutomationName_Undo"),
-                UiText.Get("MainWindow_AutomationName_Redo")]);
-
-        snapshot.Select(control => control.AutomationId)
-            .Should()
-            .Contain(expectedVisibleAutomationIds);
-
-        snapshot.Should().Contain(control => control.AutomationId == "ZoomSlider" && control.Name == UiText.Get("MainWindow_AutomationName_ZoomSlider") && control.ControlType == "Slider");
-        snapshot.Should().Contain(control => control.AutomationId == "AddSheetButton" && control.Name == UiText.Get("MainWindow_AutomationName_InsertSheet") && control.ControlType == "Button");
-    }
 
     private static void VisibleDialogEntryPointControls_ExposeInvokePattern(FreeXUiRun run)
     {
@@ -77,32 +44,6 @@ internal static class UiAutomationCatalogSnapshotHarness
         AssertVisibleElementExposesPattern(root, run.ProcessId, AutomationElement.AutomationIdProperty, "ZoomSlider", ControlType.Slider, RangeValuePattern.Pattern);
     }
 
-    private static IReadOnlyList<string> ReadCatalogTopLevelTabNames()
-    {
-        var resourceKeyByCatalogName = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["File"] = "MainWindow_Header_File",
-            ["Home"] = "MainWindow_Header_Home",
-            ["Insert"] = "MainWindow_Header_Insert",
-            ["Draw"] = "MainWindow_Header_Draw",
-            ["Page Layout"] = "MainWindow_Header_PageLayout",
-            ["Formulas"] = "MainWindow_Header_Formulas",
-            ["Data"] = "MainWindow_Header_Data",
-            ["Review"] = "MainWindow_Header_Review",
-            ["View"] = "MainWindow_Header_View",
-            ["Help"] = "MainWindow_Header_Help"
-        };
-
-        using var document = JsonDocument.Parse(WorkspaceFileLocator.ReadAllText("docs", "parity/command-inventory.json"));
-        return document.RootElement
-            .GetProperty("keyTips")
-            .GetProperty("topLevelTabs")
-            .EnumerateArray()
-            .Select(tab => tab.GetProperty("name").GetString()!)
-            .Select(name => name == "File/Backstage" ? "File" : name)
-            .Select(name => UiText.Get(resourceKeyByCatalogName[name]))
-            .ToList();
-    }
 
     private static IReadOnlyList<string> ReadExpectedVisibleAutomationIdsFromXaml()
     {

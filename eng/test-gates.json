@@ -3,22 +3,9 @@
   "ciImpact": {
     "inertDocsDirectories": [
       "architecture",
-      "branding",
-      "known-issues",
-      "superpowers",
-      "ui-test-artifacts",
-      "unification"
+      "branding"
     ],
-    "inertReferenceExemptions": [
-      {
-        "file": "tools/Measure-DedupResiduals.ps1",
-        "reason": "Generator that writes docs/unification/dedup-residual-metrics.*; no gate, preflight or test invokes it."
-      },
-      {
-        "file": "tools/Test-Measure-DedupResiduals.ps1",
-        "reason": "Self-test of that generator against a temporary fixture tree; no gate, preflight or test invokes it."
-      }
-    ],
+    "inertReferenceExemptions": [],
     "maxAncestors": 50
   },
   "gates": [

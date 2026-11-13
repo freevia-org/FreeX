@@ -8,9 +8,7 @@ row with `source=local` and a `local://files/...` provenance URL.
 
 Current status as of 2026-07-01: `manifest.csv` has 157 rows: 134 redistributable on-demand rows
 plus 23 repo-generated local fixtures under `files/review/` and `files/tables/`. The manifest is
-guarded by `freew/FreeW.Core.IO.Tests/FreeWFidelityCorpusManifestTests.cs`. The current expansion
-summary is [../docs/fidelity/2026-06-19-freew-corpus-feature-growth.md](../docs/fidelity/2026-06-19-freew-corpus-feature-growth.md).
-
+guarded by `freew/FreeW.Core.IO.Tests/FreeWFidelityCorpusManifestTests.cs`.
 The seed corpus focuses on Microsoft Word / WordprocessingML features FreeW needs to learn to open,
 preserve, render, and eventually edit:
 
@@ -64,10 +62,7 @@ Run the commands from the repository root; `tools/Fetch-FreeWFidelityCorpus.ps1`
 
 **Round-trip (no Word needed):** the corpus-gated test
 `freew/FreeW.Core.IO.Tests/FreeWFidelityCorpusRoundTripTests.cs` opens + round-trips every `files/` doc and
-asserts no modelled-content loss (it no-ops when `files/` is absent). Findings:
-`docs/fidelity/2026-06-17-freew-corpus-roundtrip.md` is the historical 26-file baseline; the current
-corpus growth note is `docs/fidelity/2026-06-19-freew-corpus-feature-growth.md`.
-
+asserts no modelled-content loss (it no-ops when `files/` is absent).
 **FreeW visual evidence smoke (no Word needed):** use the repeatable WPF + Avalonia runner when you
 need local evidence that the shared manifest contract is healthy:
 

@@ -77,21 +77,16 @@
       "triggers": ["**/*.csproj", "**/*.slnx"],
       "sample": "FreeP.slnx"
     },
-    "generated docs": {
-      "triggers": ["**", "!{ciInertDocs}"],
-      "sample": "docs/parity/anything.md"
-    },
     "Git conflict markers": {
       "triggers": [
         "**/*.cs", "**/*.csproj", "**/*.props", "**/*.targets", "**/*.slnx", "**/*.xaml", "**/*.xml",
         "**/*.resx", "**/*.json", "**/*.md", "**/*.ps1", "**/*.yml", "**/*.yaml", "**/*.config", "**/*.ruleset"
       ],
-      "sample": "docs/parity/anything.md"
+      "sample": "docs/release/anything.md"
     },
     "PowerShell tools": {
       "triggers": [
-        "tools/**", "freew-fidelity-corpus/tools/**", "freew/build/**",
-        "docs/parity/dialog-visual-assets/**", ".github/**"
+        "tools/**", "freew-fidelity-corpus/tools/**", "freew/build/**", ".github/**"
       ],
       "sample": "tools/Anything.ps1"
     },

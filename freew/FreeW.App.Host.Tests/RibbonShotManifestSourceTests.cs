@@ -32,20 +32,6 @@ public sealed class RibbonShotManifestSourceTests
         source.Should().Contain("new RenderTargetBitmap((int)w, (int)h");
     }
 
-    [Fact]
-    public void WordParityPlanningDocs_DocumentRibbonShotManifestContract()
-    {
-        var source = File.ReadAllText(RepositoryFile(
-            "docs",
-            "planning",
-            "freew-ms-word-parity-session-2026-06-21.md"));
-
-        source.Should().Contain("freew/tools/FreeW.RibbonShot");
-        source.Should().Contain("freew_ribbonshot_manifest.json");
-        source.Should().Contain("schema version 1");
-        source.Should().Contain("requested mode");
-        source.Should().Contain("capture count");
-    }
 
     private static string RepositoryFile(params string[] parts) =>
         TestWorkspaceFileLocator.Find(parts);

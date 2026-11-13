@@ -87,35 +87,6 @@ function Assert-ToolSourceCentralization {
         }
     }
 
-    $generatorNames = @(
-        "Generate-DialogParityInventory.ps1",
-        "Generate-DialogVisualEvidenceSummary.ps1",
-        "Generate-ConditionalFormatOpenedStateEvidence.ps1",
-        "Generate-CrossAppParityDashboard.ps1"
-    )
-    foreach ($generatorName in $generatorNames) {
-        $generatorPath = Join-Path $ToolRoot $generatorName
-        $generator = Get-Content -LiteralPath $generatorPath -Raw
-        if (-not $generator.Contains('ToolScriptSupport.ps1')) {
-            throw "$generatorName must dot-source ToolScriptSupport.ps1."
-        }
-
-        if ($generator -match 'function\s+(ConvertTo-RepoRelativePath|Read-(JsonFile|GeneratedJson)|Escape-MarkdownCell|Test-FileContentMatches)\b') {
-            throw "$generatorName redeclares a helper owned by ToolScriptSupport.ps1."
-        }
-    }
-
-    $crossAppDashboard = Get-Content -LiteralPath (Join-Path $ToolRoot "Generate-CrossAppParityDashboard.ps1") -Raw
-    foreach ($requiredCall in @("New-ToolTemporaryDirectory", "Remove-ToolTemporaryDirectory")) {
-        if (-not $crossAppDashboard.Contains($requiredCall)) {
-            throw "Generate-CrossAppParityDashboard.ps1 must use shared temporary-directory helper '$requiredCall'."
-        }
-    }
-    if ($crossAppDashboard.Contains("GetTempPath") -or $crossAppDashboard.Contains("Guid]::NewGuid") -or
-        $crossAppDashboard -match 'Remove-Item\s+-LiteralPath\s+\$tempRoot\s+-Recurse') {
-        throw "Generate-CrossAppParityDashboard.ps1 redeclares temporary-directory ownership."
-    }
-
     $centralizedScriptHelpers = [ordered]@{
         "Test-JsonFiles.ps1" = @("Resolve-RepoPath", "Test-IsExcludedPath", "Get-RepositoryRelativePath", "Get-TrackedRepositoryFiles")
         "Test-XmlFiles.ps1" = @("Resolve-RepoPath", "Test-IsBuildOutputPath", "Get-RepositoryRelativePath", "Get-TrackedRepositoryFiles")
@@ -133,8 +104,6 @@ function Assert-ToolSourceCentralization {
         "Test-MacOsPublicPreviewReadiness.ps1" = @("Resolve-InputPath")
         "Test-MacOsPublicPreviewPromotion.ps1" = @("Resolve-InputPath")
         "Test-MacOsHumanValidationChecklist.ps1" = @("Resolve-InputPath")
-        "Run-UxParitySuite.ps1" = @("Get-RepoRoot", "Get-GitValue", "Resolve-FreeXExe")
-        "Run-UxParityScenarioBatch.ps1" = @("Get-RepoRoot", "Get-GitValue", "Resolve-FreeXExe")
         "Publish-UserTestBuild.ps1" = @()
     }
     foreach ($entry in $centralizedScriptHelpers.GetEnumerator()) {
@@ -348,13 +317,6 @@ function Assert-ToolSourceCentralization {
         Remove-ToolTemporaryDirectory -Path $relativePathProbeTempRoot
     }
 
-    $freeWShellVisualGenerator = Get-Content -LiteralPath (Join-Path $ToolRoot "Generate-FreeWShellVisualEvidence.ps1") -Raw
-    if (-not $freeWShellVisualGenerator.Contains("Get-VisualEvidenceRepoRelativePath") -or
-        $freeWShellVisualGenerator -match 'function\s+Relative\b' -or
-        $freeWShellVisualGenerator.Contains("TrimStart('\\')")) {
-        throw "Generate-FreeWShellVisualEvidence.ps1 must use shared cross-platform repository-relative path conversion."
-    }
-
     foreach ($readinessScriptName in @(
             "Test-LinuxAppReadiness.ps1",
             "Test-LinuxHumanValidationChecklist.ps1",
@@ -457,56 +419,6 @@ function Assert-ToolSourceCentralization {
         if (-not $probe.Contains("ProbeScriptSupport.sh") -or
             $probe -match '(?m)^(capture|focus_owner|send_owner_key|capture_window_state)\(\)') {
             throw "$probeName must use shared X11 probe primitives."
-        }
-    }
-
-    foreach ($generatorName in @(
-            "Generate-FreePDialogPaneVisualEvidenceManifest.ps1",
-            "Generate-FreePWholeWindowVisualEvidenceManifest.ps1")) {
-        $generator = Get-Content -LiteralPath (Join-Path $ToolRoot $generatorName) -Raw
-        foreach ($requiredCall in @("Get-VisualEvidenceFileSha256", "Get-VisualEvidenceArtifactInventory")) {
-            if (-not $generator.Contains($requiredCall)) {
-                throw "$generatorName must use shared visual-evidence helper '$requiredCall'."
-            }
-        }
-        if ($generator -match 'function\s+(Get-EvidenceRelativePath|Get-RelativePath|Get-NormalizedTextSha256)\b' -or
-            $generator.Contains("Get-FileHash")) {
-            throw "$generatorName redeclares visual-evidence hashing or inventory logic."
-        }
-    }
-
-    foreach ($hashConsumerName in @(
-            "Generate-FreeWShellVisualEvidence.ps1",
-            "Test-FreePPowerPointChromeEvidence.ps1",
-            "Test-FreeWWordChromeEvidence.ps1")) {
-        $hashConsumer = Get-Content -LiteralPath (Join-Path $ToolRoot $hashConsumerName) -Raw
-        if (-not $hashConsumer.Contains("VisualEvidenceScriptSupport.ps1") -or
-            -not $hashConsumer.Contains("Get-VisualEvidenceFileSha256") -or
-            $hashConsumer.Contains("Get-FileHash") -or
-            $hashConsumer -match 'function\s+Sha\b') {
-            throw "$hashConsumerName must use shared portable visual-evidence file hashing."
-        }
-    }
-
-    # These four generators intentionally record hand-authored parity findings for a declared
-    # covered-input list rather than pinning source-file hashes: with dozens of parallel sessions
-    # editing the hot files they cover (e.g. DocumentView.cs, MainWindow.cs), byte-for-byte source
-    # hashing made an unrelated source edit turn main red on every commit. Regenerating only
-    # reproduces the declared findings, so callers must re-verify by hand when a listed source
-    # changes; see each generator's `freshnessCheck`/"## Freshness" prose.
-    foreach ($sourceEvidenceGeneratorName in @(
-            "Generate-FreeWDesignDialogParityEvidence.ps1",
-            "Generate-FreeWMailMergeDialogParityEvidence.ps1",
-            "Generate-FreeWMediaDialogParityEvidence.ps1",
-            "Generate-FreeWShellPlatformParityEvidence.ps1")) {
-        $sourceEvidenceGenerator = Get-Content -LiteralPath (Join-Path $ToolRoot $sourceEvidenceGeneratorName) -Raw
-        if ($sourceEvidenceGenerator.Contains("sourceSha256") -or
-            $sourceEvidenceGenerator.Contains("SourceHashes") -or
-            $sourceEvidenceGenerator.Contains("wpfSha256") -or
-            $sourceEvidenceGenerator.Contains("avaloniaSha256") -or
-            $sourceEvidenceGenerator.Contains("Get-FileHash") -or
-            $sourceEvidenceGenerator.Contains("Get-ToolNormalizedTextSha256")) {
-            throw "$sourceEvidenceGeneratorName must not pin source-file hashes; it must only assert its declared covered-input list still resolves to real files."
         }
     }
 
@@ -685,18 +597,6 @@ function Assert-CommandInventoryMenuTraversalCentralization {
         }
     }
 
-    foreach ($generatorName in @("Generate-FreePCommandParityInventory.ps1", "Generate-FreeWCommandInventory.ps1")) {
-        $generator = Get-Content -LiteralPath (Join-Path $ToolRoot $generatorName) -Raw
-        if (([regex]::Matches($generator, "Get-ToolCommandInventoryMenuTraversalSource")).Count -ne 1) {
-            throw "$generatorName must consume Get-ToolCommandInventoryMenuTraversalSource exactly once."
-        }
-
-        if ($generator.Contains("private static IEnumerable<(string CommandId, CommandLocation Location)> MenuLocations") -or
-            $generator.Contains("private static IEnumerable<RibbonMenuItem> MenuItems")) {
-            throw "$generatorName still contains a private copy of the shared menu traversal helper."
-        }
-    }
-
     if ($helper.IndexOf("yield return item", [System.StringComparison]::Ordinal) -ge
         $helper.IndexOf("foreach (var child in MenuItems(item.Children))", [System.StringComparison]::Ordinal)) {
         throw "Shared command inventory menu helper must yield a parent before recursively yielding nested children."
@@ -725,28 +625,6 @@ function Assert-CommandInventoryGeneratedProjectCentralization {
         }
     }
 
-    foreach ($generatorName in @("Generate-FreePCommandParityInventory.ps1", "Generate-FreeWCommandInventory.ps1")) {
-        $generator = Get-Content -LiteralPath (Join-Path $ToolRoot $generatorName) -Raw
-        if (([regex]::Matches($generator, "Invoke-ToolGeneratedProject")).Count -ne 1) {
-            throw "$generatorName must consume Invoke-ToolGeneratedProject exactly once."
-        }
-
-        foreach ($forbiddenSource in @(
-                "& dotnet run",
-                'New-Item -ItemType Directory -Path $tempRoot',
-                "Test-ToolGeneratedFileContentMatches",
-                'Copy-Item -LiteralPath $temp')) {
-            if ($generator.Contains($forbiddenSource)) {
-                throw "$generatorName still owns shared generated-project orchestration '$forbiddenSource'."
-            }
-        }
-
-        foreach ($requiredCall in @("Outputs = [ordered]@", "Arguments = {", 'Check = $Check')) {
-            if (-not $generator.Contains($requiredCall)) {
-                throw "$generatorName must pass '$requiredCall' to Invoke-ToolGeneratedProject."
-            }
-        }
-    }
 
     Write-Host "Validated command inventory generated-project orchestration centralization."
 }
@@ -781,32 +659,6 @@ function Assert-GitHubApiQueryPortability {
     }
 
     Write-Host "Validated that every gh api call passes its query fields portably."
-}
-
-function Assert-CommandInventoryGeneratorEncoding {
-    param([Parameter(Mandatory = $true)][string]$ToolRoot)
-
-    $generatorPath = Join-Path $ToolRoot "Generate-FreeWCommandInventory.ps1"
-    $utf8 = [System.Text.UTF8Encoding]::new($false, $true)
-    $generator = [System.IO.File]::ReadAllText($generatorPath, $utf8)
-    $programMarker = '$programSource = @' + [char]39
-    $programStart = $generator.IndexOf($programMarker, [System.StringComparison]::Ordinal)
-    $programEnd = $generator.IndexOf("'@", $programStart + $programMarker.Length, [System.StringComparison]::Ordinal)
-    if ($programStart -lt 0 -or $programEnd -lt 0) {
-        throw "Generate-FreeWCommandInventory.ps1 must retain its embedded C# program source markers."
-    }
-
-    $programSource = $generator.Substring($programStart + $programMarker.Length, $programEnd - $programStart - $programMarker.Length)
-    $nonAscii = [regex]::Matches($programSource, '[^\x00-\x7F]')
-    if ($nonAscii.Count -gt 0) {
-        throw "Generate-FreeWCommandInventory.ps1 contains non-ASCII text in its embedded C# payload; use a C# Unicode escape so Windows PowerShell cannot reinterpret it. Found '$($nonAscii[0].Value)'."
-    }
-
-    if ($programSource.IndexOf('\u00D7', [System.StringComparison]::Ordinal) -lt 0) {
-        throw "Generate-FreeWCommandInventory.ps1 must preserve the multiplication sign through a C# Unicode escape."
-    }
-
-    Write-Host "Validated deterministic UTF-8 handling for the FreeW command inventory generator."
 }
 
 function Assert-GeneratedFileComparisonEncoding {
@@ -1624,140 +1476,6 @@ function Assert-InvokeThrottledContract {
         throw "Test-InvokeThrottled.ps1 failed with exit code $LASTEXITCODE."
     }
 }
-function Assert-GeneratedDocCheckNewlineSemantics {
-    param([Parameter(Mandatory = $true)][string]$ToolRoot)
-
-    foreach ($generatorName in @(
-            "Generate-ConditionalFormatOpenedStateEvidence.ps1",
-            "Generate-DialogParityInventory.ps1",
-            "Generate-DialogVisualEvidenceSummary.ps1")) {
-        $generator = Get-Content -LiteralPath (Join-Path $ToolRoot $generatorName) -Raw
-        $checkLines = @($generator -split "`r?`n" | Where-Object { $_ -match "Test-ToolGeneratedContentMatches" })
-        if ($checkLines.Count -ne 2 -or @($checkLines | Where-Object { $_ -notmatch "-NormalizeNewlines\b" }).Count -ne 0) {
-            throw "$generatorName must normalize newlines for both generated-document checks."
-        }
-    }
-
-    . (Join-Path $ToolRoot "ToolScriptSupport.ps1")
-    $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("freex-tool-script-tests-" + [guid]::NewGuid().ToString("N"))
-    New-Item -ItemType Directory -Force -Path $tempRoot | Out-Null
-    try {
-        $actualPath = Join-Path $tempRoot "generated.txt"
-        [System.IO.File]::WriteAllText(
-            $actualPath,
-            "first`r`nsecond`r`n",
-            [System.Text.UTF8Encoding]::new($false))
-
-        Test-ToolGeneratedContentMatches `
-            -ExpectedContent "first`nsecond`n" `
-            -ActualPath $actualPath `
-            -Label "Normalized generated-content behavior" `
-            -GeneratorScriptName "test generator" `
-            -NormalizeNewlines
-
-        $strictComparisonRejected = $false
-        try {
-            Test-ToolGeneratedContentMatches `
-                -ExpectedContent "first`nsecond`n" `
-                -ActualPath $actualPath `
-                -Label "Strict generated-content behavior" `
-                -GeneratorScriptName "test generator"
-        }
-        catch {
-            $strictComparisonRejected = $true
-        }
-
-        if (-not $strictComparisonRejected) {
-            throw "Test-ToolGeneratedContentMatches must remain strict when newline normalization is not requested."
-        }
-    }
-    finally {
-        Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
-    }
-
-    Write-Host "Validated generated-document newline normalization source and behavior."
-}
-
-function Assert-PortableDialogPngAnalyzer {
-    param(
-        [Parameter(Mandatory = $true)][string]$RepoRoot,
-        [Parameter(Mandatory = $true)][string]$ToolRoot
-    )
-
-    $generatorPath = Join-Path $ToolRoot "Generate-DialogVisualEvidenceSummary.ps1"
-    $analyzerPath = Join-Path $ToolRoot "DialogPngAnalyzer.cs"
-    $generator = Get-Content -LiteralPath $generatorPath -Raw
-    $analyzer = Get-Content -LiteralPath $analyzerPath -Raw
-
-    if (-not $generator.Contains('DialogPngAnalyzer.cs')) {
-        throw "Generate-DialogVisualEvidenceSummary.ps1 must load the managed PNG analyzer."
-    }
-    foreach ($windowsImageToken in @("System.Drawing", "GdiPlus", "PInvokeGdiPlus")) {
-        if ($generator.Contains($windowsImageToken) -or $analyzer.Contains($windowsImageToken)) {
-            throw "Dialog PNG analysis must not depend on Windows image API '$windowsImageToken'."
-        }
-    }
-    foreach ($requiredValidation in @("DeflateStream", "ComputeCrc32", "ComputeAdler32", "PreserveLegacyColorChannels", "PNG must use 8-bit RGB or RGBA pixels")) {
-        if (-not $analyzer.Contains($requiredValidation)) {
-            throw "DialogPngAnalyzer.cs is missing required portable validation '$requiredValidation'."
-        }
-    }
-
-    Add-Type -TypeDefinition $analyzer
-
-    $rgbaPath = Join-Path $RepoRoot "tools/fixtures/dialog-png-analyzer/rgba-dialog.png"
-    $rgbPath = Join-Path $RepoRoot "tools/fixtures/dialog-png-analyzer/rgb-dialog.png"
-    $straightAlphaPath = Join-Path $RepoRoot "tools/fixtures/dialog-png-analyzer/straight-alpha-dialog.png"
-    $rgbaMetrics = [DialogPngAnalyzer]::Analyze($rgbaPath)
-    $rgbMetrics = [DialogPngAnalyzer]::Analyze($rgbPath)
-    $straightAlphaMetrics = [DialogPngAnalyzer]::Analyze($straightAlphaPath)
-    if ($rgbaMetrics.Width -ne 630 -or $rgbaMetrics.Height -ne 510 -or
-        $rgbaMetrics.DistinctColors -ne 482 -or $rgbaMetrics.Signature.Count -ne 1024 -or
-        -not $rgbaMetrics.IsNonBlank -or
-        [Math]::Abs($rgbaMetrics.DpiX - 143.99259948730469) -gt 0.0000001 -or
-        [Math]::Abs($rgbaMetrics.NonBackgroundRatio - 0.102194210) -gt 0.0000005 -or
-        [Math]::Abs($rgbaMetrics.MeanLuma - 247.054042) -gt 0.0000005) {
-        throw "Portable RGBA PNG analysis did not preserve the established evidence metrics."
-    }
-    if ($rgbMetrics.Width -ne 620 -or $rgbMetrics.Height -ne 540 -or
-        $rgbMetrics.DistinctColors -ne 1813 -or $rgbMetrics.Signature.Count -ne 1024 -or
-        -not $rgbMetrics.IsNonBlank -or $rgbMetrics.OpaqueRatio -ne 1.0 -or
-        [Math]::Abs($rgbMetrics.NonBackgroundRatio - 0.125020908) -gt 0.0000005 -or
-        [Math]::Abs($rgbMetrics.MeanLuma - 244.163866) -gt 0.0000005) {
-        throw "Portable RGB PNG analysis did not preserve the established evidence metrics."
-    }
-    if ($straightAlphaMetrics.Width -ne 312 -or $straightAlphaMetrics.Height -ne 437 -or
-        $straightAlphaMetrics.DistinctColors -ne 227 -or
-        [Math]::Abs($straightAlphaMetrics.NonBackgroundRatio - 0.115605) -gt 0.0000005 -or
-        [Math]::Abs($straightAlphaMetrics.MeanLuma - 247.86178) -gt 0.0000005) {
-        throw "Portable sBIT PNG analysis did not preserve the established straight-alpha evidence metrics."
-    }
-
-    $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("freex-png-analyzer-tests-" + [guid]::NewGuid().ToString("N"))
-    New-Item -ItemType Directory -Force -Path $tempRoot | Out-Null
-    try {
-        $corruptPath = Join-Path $tempRoot "corrupt.png"
-        $corruptBytes = [System.IO.File]::ReadAllBytes($rgbaPath)
-        $corruptBytes[40] = $corruptBytes[40] -bxor 1
-        [System.IO.File]::WriteAllBytes($corruptPath, $corruptBytes)
-        $corruptionRejected = $false
-        try {
-            [DialogPngAnalyzer]::Analyze($corruptPath) | Out-Null
-        }
-        catch {
-            $corruptionRejected = $_.Exception.Message.Contains("CRC mismatch")
-        }
-        if (-not $corruptionRejected) {
-            throw "Portable PNG analysis did not reject corrupt chunk data."
-        }
-    }
-    finally {
-        Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
-    }
-
-    Write-Host "Validated portable RGB/RGBA PNG metrics and corrupt-data rejection."
-}
-
 function Assert-FidelityCorpusDownloaderBehavior {
     param([Parameter(Mandatory = $true)][string]$ToolRoot)
 
@@ -1880,7 +1598,6 @@ if ($resolvedDirectory.Equals($toolsRoot, [System.StringComparison]::OrdinalIgno
     Assert-ToolSourceCentralization -ToolRoot $resolvedDirectory
     Assert-CommandInventoryMenuTraversalCentralization -ToolRoot $resolvedDirectory
     Assert-CommandInventoryGeneratedProjectCentralization -ToolRoot $resolvedDirectory
-    Assert-CommandInventoryGeneratorEncoding -ToolRoot $resolvedDirectory
     Assert-GitHubApiQueryPortability -ToolRoot $resolvedDirectory
     Assert-GeneratedFileComparisonEncoding
     Assert-CommandInventoryMenuTraversalBehavior -ToolRoot $resolvedDirectory
@@ -1889,8 +1606,6 @@ if ($resolvedDirectory.Equals($toolsRoot, [System.StringComparison]::OrdinalIgno
     Assert-SharedToolHelperBehavior -RepoRoot $repoRoot
     Assert-ToolProviderPathBehavior -ToolRoot $resolvedDirectory
     Assert-ToolProcessBehavior -ToolRoot $resolvedDirectory
-    Assert-GeneratedDocCheckNewlineSemantics -ToolRoot $resolvedDirectory
-    Assert-PortableDialogPngAnalyzer -RepoRoot $repoRoot -ToolRoot $resolvedDirectory
     Assert-FidelityCorpusDownloaderBehavior -ToolRoot $resolvedDirectory
     Assert-InvokeThrottledContract -ToolRoot $resolvedDirectory
     Assert-WindowsArtifactSigningContract -ToolRoot $resolvedDirectory

@@ -310,17 +310,12 @@ foreach ($relativePath in $plainScriptPaths) {
 Write-PortabilityPhase 'static repository path case'
 
 $windowsOnlyPowerShellScripts = @(
-    'tools/Capture-FreePPowerPointChrome.ps1',
-    'tools/Capture-FreePResponsiveChrome.ps1',
-    'tools/Capture-FreeWWordChrome.ps1',
     'tools/FreeW.RenderCompare/Export-WordPdfs.ps1',
     'tools/FreeW.RenderCompare/Export-WordPdfsVisible.ps1',
     'tools/Invoke-ForegroundCapture.ps1',
     'tools/Publish-UserTestBuild.ps1',
     'tools/Run-FidelityBatch.ps1',
     'tools/Run-FreeWWordBaselineEvidence.ps1',
-    'tools/Run-UxParityScenarioBatch.ps1',
-    'tools/Run-UxParitySuite.ps1',
     'tools/ScreenshotCaptureSupport.ps1',
     'tools/screenshot_excel.ps1',
     'tools/screenshot_ribbon.ps1',

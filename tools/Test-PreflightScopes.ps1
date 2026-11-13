@@ -72,19 +72,18 @@ function Assert-Selection([string]$Name, [object[]]$Changes, [string[]]$Expected
     Assert-True (($actual -join '|') -ceq ($wanted -join '|')) "[$Name] expected [$($wanted -join ', ')] but got [$($actual -join ', ')]."
 }
 
-Assert-Selection 'C# source edit' @((New-Change 'M' 'src/FreeX.Core.Model/Workbook.cs')) @('cross-platform portability', 'generated docs', 'Git conflict markers', 'test-gate contract')
-Assert-Selection 'test source edit' @((New-Change 'M' 'tests/FreeX.Core.Model.Tests/WorkbookTests.cs')) @('GitHub workflows', 'cross-platform portability', 'generated docs', 'Git conflict markers', 'test-gate contract')
-Assert-Selection 'tool script edit' @((New-Change 'M' 'tools/Generate-Something.ps1')) @('cross-platform portability', 'generated docs', 'Git conflict markers', 'PowerShell tools', 'test-gate contract')
+Assert-Selection 'C# source edit' @((New-Change 'M' 'src/FreeX.Core.Model/Workbook.cs')) @('cross-platform portability', 'Git conflict markers', 'test-gate contract')
+Assert-Selection 'test source edit' @((New-Change 'M' 'tests/FreeX.Core.Model.Tests/WorkbookTests.cs')) @('GitHub workflows', 'cross-platform portability', 'Git conflict markers', 'test-gate contract')
+Assert-Selection 'tool script edit' @((New-Change 'M' 'tools/Generate-Something.ps1')) @('cross-platform portability', 'Git conflict markers', 'PowerShell tools', 'test-gate contract')
 Assert-Selection 'inert markdown' @((New-Change 'M' "docs/$inert/note.md")) @('Git conflict markers')
 Assert-Selection 'inert binary' @((New-Change 'M' "docs/$inert/figure.png")) @()
 Assert-Selection 'inert file added' @((New-Change 'A' "docs/$inert/figure.png")) @('cross-platform portability')
-Assert-Selection 'parity markdown' @((New-Change 'M' 'docs/parity/matrix.md')) @('generated docs', 'Git conflict markers')
-Assert-Selection 'avalonia macOS surface' @((New-Change 'M' 'src/FreeX.App.Avalonia/Program.cs')) @('cross-platform portability', 'generated docs', 'Git conflict markers', 'macOS app readiness', 'test-gate contract')
-Assert-Selection 'linux packaging asset' @((New-Change 'M' 'tools/packaging/linux/freex.conf')) @('Linux packaging scripts', 'PowerShell tools', 'cross-platform portability', 'generated docs', 'test-gate contract')
-Assert-Selection 'json edit' @((New-Change 'M' 'eng/something.json')) @('JSON files', 'cross-platform portability', 'generated docs', 'Git conflict markers', 'test-gate contract')
-Assert-Selection 'project reference edit' @((New-Change 'M' 'src/FreeX.Core.Model/FreeX.Core.Model.csproj')) @('XML files', '.NET SDK readiness', '.NET project references', 'solution projects', 'CodeQL production solution', 'cross-platform portability', 'default test solution projects', 'FreeW solution projects', 'FreeP solution projects', 'generated docs', 'Git conflict markers', 'test-gate contract')
-Assert-Selection 'rename = delete + add' @((New-Change 'D' 'src/A/Old.csproj'), (New-Change 'A' 'src/B/New.csproj')) @('XML files', '.NET SDK readiness', '.NET project references', 'solution projects', 'CodeQL production solution', 'cross-platform portability', 'default test solution projects', 'FreeW solution projects', 'FreeP solution projects', 'generated docs', 'Git conflict markers', 'test-gate contract')
-Assert-Selection 'deleted source file' @((New-Change 'D' 'src/FreeX.Core.Model/Old.cs')) @('cross-platform portability', 'generated docs', 'Git conflict markers', 'test-gate contract')
+Assert-Selection 'avalonia macOS surface' @((New-Change 'M' 'src/FreeX.App.Avalonia/Program.cs')) @('cross-platform portability', 'Git conflict markers', 'macOS app readiness', 'test-gate contract')
+Assert-Selection 'linux packaging asset' @((New-Change 'M' 'tools/packaging/linux/freex.conf')) @('Linux packaging scripts', 'PowerShell tools', 'cross-platform portability', 'test-gate contract')
+Assert-Selection 'json edit' @((New-Change 'M' 'eng/something.json')) @('JSON files', 'cross-platform portability', 'Git conflict markers', 'test-gate contract')
+Assert-Selection 'project reference edit' @((New-Change 'M' 'src/FreeX.Core.Model/FreeX.Core.Model.csproj')) @('XML files', '.NET SDK readiness', '.NET project references', 'solution projects', 'CodeQL production solution', 'cross-platform portability', 'default test solution projects', 'FreeW solution projects', 'FreeP solution projects', 'Git conflict markers', 'test-gate contract')
+Assert-Selection 'rename = delete + add' @((New-Change 'D' 'src/A/Old.csproj'), (New-Change 'A' 'src/B/New.csproj')) @('XML files', '.NET SDK readiness', '.NET project references', 'solution projects', 'CodeQL production solution', 'cross-platform portability', 'default test solution projects', 'FreeW solution projects', 'FreeP solution projects', 'Git conflict markers', 'test-gate contract')
+Assert-Selection 'deleted source file' @((New-Change 'D' 'src/FreeX.Core.Model/Old.cs')) @('cross-platform portability', 'Git conflict markers', 'test-gate contract')
 Assert-Selection 'no changes' @() @()
 foreach ($globalPath in @('Directory.Build.props', 'Directory.Packages.props', 'global.json', 'tools/ToolScriptSupport.ps1', 'tools/Test-RepositoryPreflight.ps1', 'eng/preflight-scopes.json', '.gitattributes')) {
     Assert-Selection "global trigger $globalPath" @((New-Change 'M' $globalPath)) @() $true

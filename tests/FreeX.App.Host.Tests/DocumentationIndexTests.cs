@@ -9,179 +9,13 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class DocumentationIndexTests
 {
-    [Fact]
-    public void DocsReadme_LinksNewestStatusReportAndCurrentPlanningSources()
-    {
-        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
-        var readme = WorkspaceFileLocator.ReadAllText("docs", "README.md");
-        var newestStatusReport = NewestStatusReportRelativePath(docsDirectory);
 
-        readme.Should().Contain($"[{newestStatusReport}]({newestStatusReport})");
-        readme.Should().Contain("[planning/outstanding-build.md](planning/outstanding-build.md)");
-        readme.Should().Contain("[planning/next-phases.md](planning/next-phases.md)");
-        readme.Should().Contain("[parity/command-surface.md](parity/command-surface.md)");
-        readme.Should().Contain("[parity/menu-toolbar.md](parity/menu-toolbar.md)");
-        readme.Should().Contain("[parity/shortcuts.md](parity/shortcuts.md)");
-        readme.Should().Contain("[parity/functions.md](parity/functions.md)");
-        readme.Should().Contain("[formats/fidelity-contract.md](formats/fidelity-contract.md)");
-        readme.Should().Contain("[formats/xlsx-corpus-report.md](formats/xlsx-corpus-report.md)");
-        readme.Should().Contain("[formats/xlsx-test-corpus-plan.md](formats/xlsx-test-corpus-plan.md)");
-        readme.Should().Contain("[reviews/comprehensive-code-review-2026-05-28.md](reviews/comprehensive-code-review-2026-05-28.md)");
-        readme.Should().Contain("[release/tester-release-checklist.md](release/tester-release-checklist.md)");
-        readme.Should().Contain("[reviews/code-review-log.md](reviews/code-review-log.md)");
-        readme.Should().Contain("[architecture/decisions/008-code-review-hardening-2026-05-28.md](architecture/decisions/008-code-review-hardening-2026-05-28.md)");
-        readme.Should().Contain("[performance/baseline.md](performance/baseline.md)");
-        readme.Should().Contain("[performance/backlog-2026-06-04.md](performance/backlog-2026-06-04.md)");
-        File.Exists(Path.Combine(docsDirectory, "parity/command-inventory.json")).Should().BeTrue();
-        File.Exists(Path.Combine(docsDirectory, "reviews/comprehensive-code-review-2026-05-28.md")).Should().BeTrue();
-        File.Exists(Path.Combine(docsDirectory, "reviews/code-review-log.md")).Should().BeTrue();
-        File.Exists(Path.Combine(docsDirectory, "architecture", "decisions", "008-code-review-hardening-2026-05-28.md")).Should().BeTrue();
-        ProjectStatusReportLink().Matches(readme).Should().NotBeEmpty();
-    }
 
-    [Fact]
-    public void DocsReadme_LinksEveryComprehensiveReviewReport()
-    {
-        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
-        var readme = WorkspaceFileLocator.ReadAllText("docs", "README.md");
-        var reviewReports = Directory
-            .GetFiles(Path.Combine(docsDirectory, "reviews"), "comprehensive-code-review-*.md")
-            .Select(path => Path.GetRelativePath(docsDirectory, path).Replace(Path.DirectorySeparatorChar, '/'))
-            .Order(StringComparer.Ordinal)
-            .ToArray();
 
-        reviewReports.Should().NotBeEmpty();
-        foreach (var report in reviewReports)
-            readme.Should().Contain($"[{report}]({report})");
-    }
 
-    [Fact]
-    public void CodeReviewLog_LinksEveryComprehensiveReviewReport()
-    {
-        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
-        var log = WorkspaceFileLocator.ReadAllText("docs", "reviews", "code-review-log.md");
-        var reviewReports = Directory
-            .GetFiles(Path.Combine(docsDirectory, "reviews"), "comprehensive-code-review-*.md")
-            .Select(path => Path.GetFileName(path)!)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
 
-        reviewReports.Should().NotBeEmpty();
-        foreach (var report in reviewReports)
-            Regex.IsMatch(log, $@"\[[^\]]*{Regex.Escape(report)}\]\([^)]*{Regex.Escape(report)}\)")
-                .Should().BeTrue($"{report} should be linked from the code review log");
-    }
 
-    [Fact]
-    public void NewestStatusReport_NamesCurrentPlanningSources()
-    {
-        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
-        var newestStatusReport = NewestStatusReportPath(docsDirectory);
-        var report = File.ReadAllText(newestStatusReport);
 
-        report.Should().Contain("[planning/outstanding-build.md](../planning/outstanding-build.md)");
-        report.Should().Contain("[planning/next-phases.md](../planning/next-phases.md)");
-        report.Should().Contain("[parity/command-surface.md](../parity/command-surface.md)");
-        report.Should().Contain("[parity/menu-toolbar.md](../parity/menu-toolbar.md)");
-        report.Should().Contain("[parity/shortcuts.md](../parity/shortcuts.md)");
-        report.Should().Contain("[parity/functions.md](../parity/functions.md)");
-        report.Should().Contain("[formats/fidelity-contract.md](../formats/fidelity-contract.md)");
-        report.Should().Contain("[formats/xlsx-corpus-report.md](../formats/xlsx-corpus-report.md)");
-        report.Should().Contain("[release/test-distribution.md](../release/test-distribution.md)");
-        report.Should().Contain("[performance/baseline.md](../performance/baseline.md)");
-    }
-
-    [Fact]
-    public void NewestStatusReport_UsesBranchNeutralMainlineMetadata()
-    {
-        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
-        var newestStatusReport = NewestStatusReportPath(docsDirectory);
-        var report = File.ReadAllText(newestStatusReport);
-
-        report.Should().Contain("Mainline observed: branch-neutral `origin/main` snapshot");
-        report.Should().NotContain("codex/");
-        report.Should().NotContain("Build-lane worktree");
-        report.Should().NotContain("| Local branches |");
-        report.Should().NotContain("| Registered worktrees |");
-        report.Should().NotContain("| Source lines under `src/` |");
-        report.Should().NotContain("| Test lines under `tests/` |");
-        report.Should().NotContain("| Documentation lines under `docs/` |");
-        report.Should().NotContain("| Test methods marked `[Fact]` / `[Theory]` |");
-        report.Should().NotContain("registered worktrees remain");
-    }
-
-    [Fact]
-    public void NewestStatusReport_ReleaseProgressMetadataMatchesJson()
-    {
-        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
-        var newestStatusReport = NewestStatusReportPath(docsDirectory);
-        var report = File.ReadAllText(newestStatusReport);
-        using var progressDocument = JsonDocument.Parse(WorkspaceFileLocator.ReadAllText("release", "progress.json"));
-        var overallCompletion = progressDocument.RootElement.GetProperty("overallCompletion").GetInt32();
-        var expectedReleaseStream = GetExpectedTesterReleaseStream(overallCompletion);
-
-        report.Should().Contain("[release/progress.json](../../release/progress.json)");
-        report.Should().Contain($"overallCompletion: {overallCompletion}");
-        report.Should().Contain($"Overall completion estimate is now **{overallCompletion}%**");
-        report.Should().Contain($"`{expectedReleaseStream}` stream");
-    }
-
-    [Fact]
-    public void ReleaseFacingDocs_UseTesterReleaseStreamFromProgressMetadata()
-    {
-        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
-        using var progressDocument = JsonDocument.Parse(WorkspaceFileLocator.ReadAllText("release", "progress.json"));
-        var expectedReleaseStream = GetExpectedTesterReleaseStream(progressDocument.RootElement.GetProperty("overallCompletion").GetInt32());
-        var newestStatusReport = NewestStatusReportRelativePath(docsDirectory);
-
-        var releaseFacingDocs = new[]
-        {
-            "planning/outstanding-build.md",
-            "release/test-distribution.md",
-            newestStatusReport
-        };
-
-        foreach (var doc in releaseFacingDocs)
-        {
-            var source = doc == newestStatusReport
-                ? File.ReadAllText(Path.Combine(docsDirectory, doc))
-                : WorkspaceFileLocator.ReadAllText("docs", doc);
-
-            source.Should().Contain(
-                expectedReleaseStream,
-                "{0} should describe the same tester stream that release/progress.json drives",
-                doc);
-        }
-    }
-
-    [Fact]
-    public void NewestStatusReport_RepositoryMetricsMatchTrackedSources()
-    {
-        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
-        var repositoryRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
-        var newestStatusReport = NewestStatusReportPath(docsDirectory);
-        var report = File.ReadAllText(newestStatusReport);
-        var metrics = ReadMetricTable(report);
-        var gitResult = TestProcessRunner.Run("git", "ls-files", repositoryRoot);
-
-        gitResult.ExitCode.Should().Be(0, gitResult.Error);
-        IReadOnlyList<string> trackedFiles = gitResult.Output
-            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
-        var sourceFiles = trackedFiles.Where(path => path.StartsWith("src/", StringComparison.Ordinal) && path.EndsWith(".cs", StringComparison.Ordinal)).ToArray();
-        var testFiles = trackedFiles.Where(path => path.StartsWith("tests/", StringComparison.Ordinal) && path.EndsWith(".cs", StringComparison.Ordinal)).ToArray();
-        var docsFiles = trackedFiles.Where(path => path.StartsWith("docs/", StringComparison.Ordinal) && path.EndsWith(".md", StringComparison.Ordinal)).ToArray();
-
-        // A dated status report is a point-in-time snapshot, not a live mirror of HEAD. With many
-        // concurrent sessions merging to main, asserting byte-exact equality against `git ls-files`
-        // flipped this test red on essentially every merge (the file census changes whenever any
-        // session adds/removes a file) — see docs/reviews/comprehensive-code-review-2026-05-30.md s7.3.
-        // Require each metric to be present, positive, and within a snapshot tolerance of live:
-        // this still catches fabricated or grossly-stale counts but ignores routine per-merge churn.
-        AssertMetricTracksLive(metrics, "Tracked files", trackedFiles.Count);
-        AssertMetricTracksLive(metrics, "C# source files under `src/`", sourceFiles.Length);
-        AssertMetricTracksLive(metrics, "C# test files under `tests/`", testFiles.Length);
-        AssertMetricTracksLive(metrics, "Markdown docs under `docs/`", docsFiles.Length);
-    }
 
     private static void AssertMetricTracksLive(IReadOnlyDictionary<string, int> metrics, string metric, int live)
     {
@@ -202,47 +36,8 @@ public sealed partial class DocumentationIndexTests
             live);
     }
 
-    [Fact]
-    public void NewestStatusReport_KeyOpenItemsMatchOutstandingBuildHighestPriorityItems()
-    {
-        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
-        var newestStatusReport = NewestStatusReportPath(docsDirectory);
-        var outstandingBuild = WorkspaceFileLocator.ReadAllLines("docs", "planning/outstanding-build.md");
-        var report = File.ReadAllLines(newestStatusReport);
 
-        ReadNumberedBoldItems(outstandingBuild, "## Highest Priority Outstanding Work")
-            .Take(5)
-            .Should()
-            .Equal(ReadNumberedBoldItems(report, "## Remaining Outstanding Work"));
-    }
 
-    [Fact]
-    public void CurrentPlanningDocs_ConditionalFormattingRemainingScopeStaysAligned()
-    {
-        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
-        var newestStatusReport = NewestStatusReportPath(docsDirectory);
-        var outstandingBuild = WorkspaceFileLocator.ReadAllText("docs", "planning/outstanding-build.md");
-        var nextPhasesPlan = WorkspaceFileLocator.ReadAllText("docs", "planning/next-phases.md");
-        var report = File.ReadAllText(newestStatusReport);
-
-        outstandingBuild.Should().Contain("Remaining: any deeper color-scale XLSX edge semantics.");
-        nextPhasesPlan.Should().Contain("Remaining polish is any deeper color-scale XLSX edge semantics as new gaps are found.");
-        report.Should().Contain("Phase 7D: Deeper color-scale XLSX edge semantics as new gaps are found");
-        nextPhasesPlan.Should().NotContain("rule-manager dialog matching Excel's full priority/manage-rules UX");
-        report.Should().NotContain("Remaining CF hardening beyond data bar/color scale advanced options");
-    }
-
-    [Fact]
-    public void DocsReadme_LinksReleaseFacingUserDocs()
-    {
-        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
-        var readme = WorkspaceFileLocator.ReadAllText("docs", "README.md");
-
-        readme.Should().Contain("[user/guide.md](user/guide.md)");
-        readme.Should().Contain("[user/troubleshooting.md](user/troubleshooting.md)");
-        new FileInfo(Path.Combine(docsDirectory, "user/guide.md")).Length.Should().BeGreaterThan(0);
-        new FileInfo(Path.Combine(docsDirectory, "user/troubleshooting.md")).Length.Should().BeGreaterThan(0);
-    }
 
     [Fact]
     public void UserTroubleshooting_DocumentsLegacyBinaryOpenOnlySupport()
@@ -260,71 +55,9 @@ public sealed partial class DocumentationIndexTests
         troubleshooting.Should().NotContain("It does not open `.xls`");
     }
 
-    [Fact]
-    public void UiTestCatalog_EvidenceScreenshotCountMatchesArtifacts()
-    {
-        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
-        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
-        var screenshotCount = Directory.GetFiles(Path.Combine(docsDirectory, "ui-test-artifacts"), "*.png").Length;
-        var declaredCount = int.Parse(UiEvidenceScreenshotCount().Match(catalog).Groups["count"].Value);
 
-        declaredCount.Should().Be(screenshotCount);
-    }
 
-    [Fact]
-    public void UiTestCatalog_XamlClickWiredControlCountMatchesMainWindow()
-    {
-        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
-        var clickWiredCount = RibbonXamlCatalogSnapshotReader.ReadMainWindowSnapshot().ClickHandlerCount;
-        var declaredCount = int.Parse(UiCatalogXamlClickWiredCount().Match(catalog).Groups["count"].Value);
 
-        declaredCount.Should().Be(clickWiredCount);
-    }
-
-    [Fact]
-    public void UiTestCatalog_UsesCanonicalBranchNeutralMetadata()
-    {
-        var catalog = WorkspaceFileLocator.ReadAllText("docs", "testing/ui-test-catalog.md");
-
-        catalog.Should().Contain("Canonical path: `docs/testing/ui-test-catalog.md`");
-        catalog.Should().NotContain("Last updated:");
-        catalog.Should().NotContain("Branch:");
-        catalog.Should().NotContain("Current catalog branch:");
-    }
-
-    [Fact]
-    public void CurrentPlanningDocs_LocalMarkdownLinksResolve()
-    {
-        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
-        var newestStatusReport = NewestStatusReportRelativePath(docsDirectory);
-        var currentDocs = new[]
-        {
-            "README.md",
-            newestStatusReport,
-            "planning/outstanding-build.md",
-            "planning/next-phases.md",
-            "testing/ui-test-catalog.md",
-            "reviews/code-review-log.md",
-            "parity/shortcuts.md",
-            "parity/functions.md",
-            "parity/command-surface.md",
-            "parity/menu-toolbar.md",
-            "formats/fidelity-contract.md",
-            "formats/xlsx-corpus-report.md",
-            "formats/xlsx-test-corpus-plan.md",
-            "release/test-distribution.md",
-            "release/tester-release-checklist.md",
-            "release/public-preview-readiness.md",
-            "release/public-preview-operations.md",
-            "release/public-preview-decision-record-template.md",
-            "release/public-preview-release-notes-template.md",
-            "performance/baseline.md",
-            "performance/backlog-2026-06-04.md"
-        };
-
-        foreach (var doc in currentDocs)
-            AssertLocalMarkdownLinksResolve(Path.Combine(docsDirectory, doc), docsDirectory);
-    }
 
     private static void AssertLocalMarkdownLinksResolve(string sourcePath, string docsDirectory)
     {

@@ -97,114 +97,13 @@ public class XlsxCorpusScaffoldTests
         readme.Should().Contain("redistribution");
     }
 
-    [Fact]
-    public void CorpusPlan_DocumentsAllAllowedManifestStatuses()
-    {
-        var plan = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-test-corpus-plan.md");
 
-        foreach (var status in AllowedStatuses)
-            plan.Should().Contain($"`{status}`");
-    }
 
-    [Fact]
-    public void CorpusPlan_StatesCurrentManifestBaselineCounts()
-    {
-        var manifestRows = ReadManifestRows();
-        var plan = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-test-corpus-plan.md");
-        var generatedCount = manifestRows.Count(row => row.SourceType == "generated");
-        var publicCount = manifestRows.Count(row => row.SourceType == "public");
-        var localPrivateCount = manifestRows.Count(row => row.SourceType == "local-private");
-        var regressionCount = manifestRows.Count(row => row.SourceType == "regression");
 
-        plan.Should().Contain(
-            $"Current executable manifest baseline: {manifestRows.Count} rows ({generatedCount} generated, {publicCount} public, {localPrivateCount} local-private, {regressionCount} regression).");
-    }
 
-    [Fact]
-    public void CorpusReport_PublishesWorkbookAndFeatureBucketPassRates()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
-        var generatedSupportedCount = manifestRows.Count(row => row.SourceType == "generated" && row.ExpectedStatus == "supported-pass");
-        var generatedMetadataCount = manifestRows.Count(row => row.SourceType == "generated" && row.ExpectedStatus == "supported-metadata-pass");
-        var generatedKnownGapCount = manifestRows.Count(row => row.SourceType == "generated" && row.ExpectedStatus == "supported-known-gap");
-        var publicCount = manifestRows.Count(row => row.SourceType == "public");
-        var localPrivateCount = manifestRows.Count(row => row.SourceType == "local-private");
-        var regressionCount = manifestRows.Count(row => row.SourceType == "regression");
 
-        report.Should().Contain($"Total manifest rows: {manifestRows.Count}.");
-        report.Should().Contain($"| Generated deterministic supported-pass fixtures | {generatedSupportedCount} |");
-        report.Should().Contain($"| Generated deterministic supported-metadata-pass fixtures | {generatedMetadataCount} |");
-        report.Should().Contain($"| Generated deterministic known-gap fixtures | {generatedKnownGapCount} |");
-        report.Should().Contain($"| Public redistributed workbooks | {publicCount} |");
-        report.Should().Contain($"| Local private workbooks | {localPrivateCount} |");
-        report.Should().Contain($"| Regression workbooks | {regressionCount} |");
-        report.Should().Contain("## Pass Rate Summary");
-        report.Should().Contain("| Workbook set | Executed | Passing | Pass rate |");
-        report.Should().Contain($"| Generated supported-pass workbooks | {generatedSupportedCount} | {generatedSupportedCount} | 100% |");
-        report.Should().Contain($"| Generated supported-metadata-pass workbooks | {generatedMetadataCount} | {generatedMetadataCount} | 100% |");
-        report.Should().Contain($"| Generated known-gap warning workbooks | {generatedKnownGapCount} | {generatedKnownGapCount} | 100% |");
-        report.Should().Contain($"| Generated known-gap retention workbooks | {generatedKnownGapCount} | {generatedKnownGapCount} | 100% |");
-        report.Should().Contain($"| Public redistributed workbooks | {publicCount} | {publicCount} | 100% |");
-        report.Should().Contain($"| Regression cached-result workbooks | {regressionCount} | {regressionCount} | 100% |");
-        report.Should().Contain("| Feature bucket | Evidence | Pass rate |");
-        report.Should().Contain("| PivotTables, pivot caches, and PivotChart binding |");
-        report.Should().Contain("| Slicers, timelines, external links, printer settings, calc chains, volatile dependencies, document thumbnails, worksheet custom properties, worksheet scenarios, custom XML |");
-    }
 
-    [Fact]
-    public void CorpusReport_LastUpdatedMatchesCorpusPlan()
-    {
-        var plan = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-test-corpus-plan.md");
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
 
-        report.Should().Contain($"**Last updated:** {ReadLastUpdatedDate(plan)}");
-    }
-
-    [Fact]
-    public void CorpusReport_StatesTopFailureSummary()
-    {
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
-
-        report.Should().Contain("## Top Failures");
-        report.Should().Contain("No active automated XLSX corpus failures are currently recorded.");
-    }
-
-    [Fact]
-    public void CorpusReport_StatesPrioritizedFixListMappedToCommandParity()
-    {
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
-
-        report.Should().Contain("## Prioritized Fix List");
-        report.Should().Contain("`docs/parity/command-surface.md`");
-    }
-
-    [Fact]
-    public void CorpusReport_DoesNotListCompletedLocalPrivateManifestRowsAsOpenGap()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
-
-        manifestRows.Count(row => row.SourceType == "local-private")
-            .Should().BeGreaterThan(0, "optional local-private workbook rows are already represented in the manifest");
-        report.Should().NotContain(
-            "Add local-private workbook rows",
-            "the report gap list should not ask for manifest rows after they exist");
-    }
-
-    [Fact]
-    public void CorpusReport_UsesCurrentManifestBaselineInExpansionGap()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
-
-        report.Should().NotContain(
-            "Continue expanding the 100-row corpus beyond the current baseline",
-            "the executable manifest has moved past the original 100-row target");
-        report.Should().Contain(
-            $"Continue expanding the {manifestRows.Count}-row corpus baseline",
-            "the report gap list should track the live manifest size");
-    }
 
     [Fact]
     public void CorpusManifest_UsesPublicPassOnlyForPublicRows()
@@ -298,336 +197,27 @@ public class XlsxCorpusScaffoldTests
                 "non-public corpus rows with unsupported feature tags should be known-gap rows with explicit warning text");
     }
 
-    [Fact]
-    public void CorpusReport_StatesNonPublicUnsupportedAndExcludedWarningDeclarations()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
-        var warningDeclarationCount = manifestRows
-            .Where(row => row.SourceType != "public" && ExpectedWarningsFor(row).Count > 0)
-            .Count();
 
-        warningDeclarationCount.Should().BeGreaterThan(0);
-        report.Should().Contain($"| Non-public unsupported/excluded warning declarations | {warningDeclarationCount}/{warningDeclarationCount} present in manifest |");
-    }
 
-    [Fact]
-    public void CorpusReport_StatesPublicUnsupportedTagWarningDetectionCount()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
-        var publicUnsupportedTagCount = manifestRows
-            .Where(row => row.SourceType == "public" && ExpectedWarningsFor(row).Count > 0)
-            .Count();
 
-        publicUnsupportedTagCount.Should().BeGreaterThan(0);
-        report.Should().Contain($"| Public unsupported-tag warning detection | {publicUnsupportedTagCount}/{publicUnsupportedTagCount} exercised by corpus runner |");
-    }
 
-    [Fact]
-    public void CorpusReport_StatesPublicSourceMetadataCoverage()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
-        var publicRows = manifestRows
-            .Where(row => row.SourceType == "public")
-            .ToArray();
 
-        publicRows.Should().HaveCountGreaterThan(0);
-        publicRows.Should().OnlyContain(
-            row =>
-                row.SourceUrl.StartsWith("https://", StringComparison.Ordinal) &&
-                !string.IsNullOrWhiteSpace(row.RetrievedOn) &&
-                !string.IsNullOrWhiteSpace(row.License),
-            "redistributed public corpus rows need auditable provenance metadata");
-        report.Should().Contain($"| Public source metadata coverage | {publicRows.Length}/{publicRows.Length} rows declare source URL, retrieval date, and license |");
-    }
 
-    [Fact]
-    public void CorpusReport_StatesLocalPrivatePrivacyMetadataCoverage()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
-        var localPrivateRows = manifestRows
-            .Where(row => row.SourceType == "local-private")
-            .ToArray();
 
-        localPrivateRows.Should().HaveCountGreaterThan(0);
-        localPrivateRows.Should().OnlyContain(
-            row =>
-                IsUserApprovedLocalPrivatePath(row.Path) &&
-                row.SourceUrl == "user-approved-local" &&
-                row.License == "private-local",
-            "local-private corpus rows should use ignored relative paths unless the user explicitly approves a local absolute workbook path");
-        report.Should().Contain($"| Local-private privacy metadata coverage | {localPrivateRows.Length}/{localPrivateRows.Length} rows use local-only source markers and private-local license |");
-    }
 
-    [Fact]
-    public void CorpusReport_StatesLocalPrivateKnownGapWarningsAreDeclared()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
-        var localPrivateKnownGapCount = manifestRows.Count(row => row.SourceType == "local-private" && row.ExpectedStatus == "supported-known-gap");
 
-        manifestRows
-            .Where(row => row.SourceType == "local-private" && row.ExpectedStatus == "supported-known-gap")
-            .Should()
-            .OnlyContain(row => !string.IsNullOrWhiteSpace(row.ExpectedWarnings));
-        report.Should().Contain("known-gap warning expectations are declared for optional private rows");
-        report.Should().Contain($"| Local-private known-gap warning declarations | {localPrivateKnownGapCount}/{localPrivateKnownGapCount} present in manifest for skipped optional private rows |");
-    }
 
-    [Fact]
-    public void CorpusReport_StatesDataValidationSemanticXmlCoverage()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
 
-        manifestRows.Should().Contain(row =>
-            row.Path == "generated/dv-count-package-003.xlsx" &&
-            row.FeatureTags.Contains("data-validation", StringComparison.Ordinal) &&
-            row.ExpectedStatus == "supported-metadata-pass");
-        const string reportLine = "| Data validation XML semantic comparison | Ten-rule generated package verifies list, numeric, date/time, text-length, and custom `dataValidation` type/operator/formula/`sqref` semantics survive ordinary model edits |";
-        report.Should().Contain(reportLine);
-        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
-    }
 
-    [Fact]
-    public void CorpusReport_StatesUnsupportedSheetTypeWorkbookReferenceCoverage()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
 
-        manifestRows.Should().Contain(row =>
-            row.Path == "generated/unsupported-sheet-types-001.xlsx" &&
-            row.FeatureTags.Contains("chart-sheets", StringComparison.Ordinal) &&
-            row.FeatureTags.Contains("dialog-sheets", StringComparison.Ordinal) &&
-            row.FeatureTags.Contains("macro-sheets", StringComparison.Ordinal));
-        const string reportLine = "| Unsupported sheet type package references | Chartsheet, dialog sheet, and macro sheet workbook references and relationships are exercised by generated known-gap retention coverage |";
-        report.Should().Contain(reportLine);
-        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
-    }
 
-    [Fact]
-    public void CorpusReport_StatesThreadedCommentPackageReferenceCoverage()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
 
-        manifestRows.Should().Contain(row =>
-            row.Path == "generated/threaded-comments-001.xlsx" &&
-            row.FeatureTags.Contains("threaded-comments", StringComparison.Ordinal));
-        const string reportLine = "| Threaded comment package references | Worksheet threaded-comment relationships and workbook persons relationships are exercised by generated metadata-pass retention coverage without unsupported-feature warnings |";
-        report.Should().Contain(reportLine);
-        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
-    }
 
-    [Fact]
-    public void FidelityContract_StatesThreadedCommentsAreModelBackedAndCloudSemanticsAreOutOfScope()
-    {
-        var contract = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/fidelity-contract.md");
-        var troubleshooting = TestWorkspaceFiles.ReadWorkspaceText("docs", "user/troubleshooting.md");
 
-        contract.Should().Contain("| Threaded comments | Partial | Model-backed local threaded comment roots, replies, authors, timestamps, and resolved state load/save through worksheet threaded-comment parts and workbook persons parts");
-        contract.Should().Contain("Microsoft 365 Share/co-authoring state, cloud permissions, presence, version history, and other cloud/service state are outside local XLSX package fidelity.");
-        contract.Should().NotContain("| Threaded comments | Excluded | Retained as package part |");
-        troubleshooting.Should().Contain("FreeX loads and saves local threaded comment roots, replies, authors, timestamps, and resolved state, but Microsoft 365 cloud sync, co-authoring presence, and service-side conversation state are outside local workbook fidelity.");
-    }
 
-    [Fact]
-    public void CorpusReport_StatesCustomRibbonUiPackageReferenceCoverage()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
 
-        manifestRows.Should().Contain(row =>
-            row.Path == "generated/custom-ribbon-ui-001.xlsx" &&
-            row.FeatureTags.Contains("custom-ribbon-ui", StringComparison.Ordinal));
-        const string reportLine = "| Custom Ribbon UI package references | Package-root custom UI relationships are exercised by generated known-gap retention coverage |";
-        report.Should().Contain(reportLine);
-        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
-    }
 
-    [Fact]
-    public void CorpusReport_StatesFormControlPackageReferenceCoverage()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
 
-        manifestRows.Should().Contain(row =>
-            row.Path == "generated/form-controls-001.xlsx" &&
-            row.FeatureTags.Contains("form-controls", StringComparison.Ordinal) &&
-            row.FeatureTags.Contains("activex", StringComparison.Ordinal));
-        const string reportLine = "| Form control and ActiveX package references | Worksheet control relationships and ActiveX binary relationships are exercised by generated known-gap retention coverage |";
-        report.Should().Contain(reportLine);
-        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
-    }
-
-    [Fact]
-    public void CorpusReport_StatesOfficeAddinsPackageReferenceCoverage()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
-
-        manifestRows.Should().Contain(row =>
-            row.Path == "generated/office-addins-001.xlsx" &&
-            row.FeatureTags.Contains("office-addins", StringComparison.Ordinal) &&
-            row.FeatureTags.Contains("webextensions", StringComparison.Ordinal));
-        const string reportLine = "| Office add-in package references | Package-root task pane relationships and task pane webextension relationships are exercised by generated known-gap retention coverage |";
-        report.Should().Contain(reportLine);
-        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
-    }
-
-    [Fact]
-    public void CorpusReport_StatesPowerQueryPackageReferenceCoverage()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
-
-        manifestRows.Should().Contain(row =>
-            row.Path == "generated/power-query-001.xlsx" &&
-            row.FeatureTags.Contains("power-query", StringComparison.Ordinal) &&
-            row.FeatureTags.Contains("connections", StringComparison.Ordinal));
-        const string reportLine = "| Power Query package references | Worksheet query table relationships are exercised by generated known-gap retention coverage |";
-        report.Should().Contain(reportLine);
-        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
-    }
-
-    [Fact]
-    public void CorpusReport_StatesLiveWebQueryPackageReferenceCoverage()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
-
-        manifestRows.Should().Contain(row =>
-            row.Path == "generated/live-web-queries-001.xlsx" &&
-            row.FeatureTags.Contains("live-web-queries", StringComparison.Ordinal) &&
-            row.FeatureTags.Contains("web-publish", StringComparison.Ordinal));
-        const string reportLine = "| Live web query package references | Web publishing items and web-query connection metadata are exercised by generated known-gap retention coverage |";
-        report.Should().Contain(reportLine);
-        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
-    }
-
-    [Fact]
-    public void CorpusReport_StatesSmartArtPackageReferenceCoverage()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
-
-        manifestRows.Should().Contain(row =>
-            row.Path == "generated/smartart-diagrams-001.xlsx" &&
-            row.FeatureTags.Contains("smartart", StringComparison.Ordinal) &&
-            row.FeatureTags.Contains("diagrams", StringComparison.Ordinal));
-        const string reportLine = "| SmartArt diagram package references | Worksheet drawing relationships and drawing diagram relationships are exercised by generated known-gap retention coverage |";
-        report.Should().Contain(reportLine);
-        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
-    }
-
-    [Fact]
-    public void CorpusReport_StatesVbaMacrosPackageReferenceCoverage()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
-
-        manifestRows.Should().Contain(row =>
-            row.Path == "generated/vba-macros-001.xlsm" &&
-            row.FeatureTags.Contains("macros", StringComparison.Ordinal));
-        const string reportLine = "| VBA macro package references | Workbook VBA project relationships are exercised by generated known-gap retention coverage |";
-        report.Should().Contain(reportLine);
-        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
-    }
-
-    [Fact]
-    public void CorpusReport_StatesSignedVbaProjectSignaturePackageReferenceCoverage()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
-
-        manifestRows.Should().Contain(row =>
-            row.Path == "generated/vba-signature-001.xlsm" &&
-            row.FeatureTags.Contains("macros", StringComparison.Ordinal) &&
-            row.FeatureTags.Contains("vba-signatures", StringComparison.Ordinal));
-        const string reportLine = "| Signed VBA project signature package references | Source-patch ordinary edits retain the VBA project signature part, signature relationship, macro-enabled workbook content type, and VBA project relationship; rebuilt-save stale signature pruning remains covered by focused package graph tests |";
-        report.Should().Contain(reportLine);
-        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
-    }
-
-    [Fact]
-    public void CorpusReport_StatesVolatileDependencyPackageReferenceCoverage()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
-
-        manifestRows.Should().Contain(row =>
-            row.Path == "generated/volatile-dependencies-001.xlsx" &&
-            row.ExpectedStatus == "supported-metadata-pass" &&
-            row.FeatureTags.Contains("volatile-dependencies", StringComparison.Ordinal));
-        const string reportLine = "| Volatile dependency package references | Workbook volatile-dependency relationships and content-type overrides are exercised by generated metadata-pass retention coverage, with formula-edit repair-risk pruning covered by focused package graph tests |";
-        report.Should().Contain(reportLine);
-        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
-    }
-
-    [Fact]
-    public void CorpusReport_StatesDocumentThumbnailPackageReferenceCoverage()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
-
-        manifestRows.Should().Contain(row =>
-            row.Path == "generated/document-thumbnail-001.xlsx" &&
-            row.ExpectedStatus == "supported-metadata-pass" &&
-            row.FeatureTags.Contains("document-thumbnail", StringComparison.Ordinal));
-        const string reportLine = "| Document thumbnail package references | Package-root thumbnail relationships and image content types are exercised by generated metadata-pass retention coverage, with stale thumbnail graph repair covered by focused package graph tests |";
-        report.Should().Contain(reportLine);
-        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
-    }
-
-    [Fact]
-    public void CorpusReport_StatesDataModelPackageReferenceCoverage()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
-
-        manifestRows.Should().Contain(row =>
-            row.Path == "generated/data-model-001.xlsx" &&
-            row.FeatureTags.Contains("data-model", StringComparison.Ordinal) &&
-            row.FeatureTags.Contains("power-pivot", StringComparison.Ordinal));
-        const string reportLine = "| Data Model package references | Workbook Data Model relationships are exercised by generated known-gap retention coverage |";
-        report.Should().Contain(reportLine);
-        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
-    }
-
-    [Fact]
-    public void CorpusReport_StatesLinkedDataTypePackageReferenceCoverage()
-    {
-        var manifestRows = ReadManifestRows();
-        var report = TestWorkspaceFiles.ReadWorkspaceText("docs", "formats/xlsx-corpus-report.md");
-
-        manifestRows.Should().Contain(row =>
-            row.Path == "generated/linked-data-types-001.xlsx" &&
-            row.FeatureTags.Contains("linked-data-types", StringComparison.Ordinal) &&
-            row.FeatureTags.Contains("rich-data", StringComparison.Ordinal));
-        const string reportLine = "| Linked data type package references | Rich data package parts and Rich Value Structure relationships are exercised by generated known-gap retention coverage |";
-        report.Should().Contain(reportLine);
-        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
-    }
-
-    [Fact]
-    public void OutstandingBuild_StatesCurrentCorpusManifestCounts()
-    {
-        var manifestRows = ReadManifestRows();
-        var outstandingBuild = TestWorkspaceFiles.ReadWorkspaceText("docs", "planning/outstanding-build.md");
-        var nextPhasesPlan = TestWorkspaceFiles.ReadWorkspaceText("docs", "planning/next-phases.md");
-        var generatedCount = manifestRows.Count(row => row.SourceType == "generated");
-        var publicCount = manifestRows.Count(row => row.SourceType == "public");
-        var localPrivateCount = manifestRows.Count(row => row.SourceType == "local-private");
-        var regressionCount = manifestRows.Count(row => row.SourceType == "regression");
-
-        outstandingBuild.Should().Contain(
-            $"Current manifest has {manifestRows.Count} rows: {generatedCount} generated rows, {publicCount} public rows, {localPrivateCount} optional local-private rows, and {regressionCount} regression formula-cache workbooks.");
-        nextPhasesPlan.Should().Contain($"current {manifestRows.Count}-row manifest baseline");
-        nextPhasesPlan.Should().NotContain("prior 90-row manifest baseline");
-    }
 
     [Fact]
     public void RegressionFormulaCachedWorkbooks_AreAllRepresentedInCorpusManifest()
@@ -649,23 +239,6 @@ public class XlsxCorpusScaffoldTests
         manifestRegressionPaths.Should().Equal(regressionWorkbookPaths);
     }
 
-    [Fact]
-    public void NewestStatusReport_StatesCurrentCorpusManifestCount()
-    {
-        var manifestRows = ReadManifestRows();
-        var docsDirectory = TestWorkspaceFiles.FindWorkspaceFileDirectory("docs", "README.md");
-        var newestStatusReport = Directory.GetFiles(Path.Combine(docsDirectory, "history"), "status-*.md")
-            .Order(StringComparer.Ordinal)
-            .Last();
-        var report = File.ReadAllText(newestStatusReport);
-
-        report.Should().ContainAny(
-            $"expanded to {manifestRows.Count} manifest rows",
-            $"Manifest baseline is {manifestRows.Count} rows",
-            $"XLSX corpus manifest rows | {manifestRows.Count}");
-        report.Should().Contain($"{manifestRows.Count} workbook manifest rows");
-        report.Should().Contain($"Expand the {manifestRows.Count}-row corpus baseline");
-    }
 
     private static IReadOnlyList<ManifestRow> ReadManifestRows()
     {

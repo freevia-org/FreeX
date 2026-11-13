@@ -67,27 +67,6 @@ public static class FunctionalParityMatrix
         return rows;
     }
 
-    /// <summary>
-    /// Loads the committed legacy WPF inventory and augments it with typed semantic ids from the generated
-    /// WPF handler map. The source projection is required while the preserved snapshot remains display-oriented.
-    /// </summary>
-    public static IReadOnlySet<string> LoadWpfHandlerIds()
-    {
-        var ids = File.ReadAllLines(WpfHandlerIdsPath)
-            .Where(line => !string.IsNullOrWhiteSpace(line))
-            .Select(NormalizeLegacyWpfHandlerId)
-            .ToHashSet(StringComparer.Ordinal);
-
-        FreeXRibbonCommandSourceScanner.AddTypedCommandIds(
-            File.ReadAllText(Path.Combine(
-                RepoRoot(),
-                "src",
-                "FreeX.App.Host",
-                "Ribbon",
-                "FreeXRibbonHandlerMap.g.cs")),
-            ids);
-        return ids;
-    }
 
     private static string NormalizeLegacyWpfHandlerId(string commandId) => commandId switch
     {
@@ -98,7 +77,6 @@ public static class FunctionalParityMatrix
         _ => commandId,
     };
 
-    public static string WpfHandlerIdsPath => Path.Combine(RepoRoot(), "docs", "parity", "wpf-handler-ids.txt");
 
     /// <summary>Walks up from the test assembly location to the repo root (the dir holding <c>FreeX.slnx</c>).</summary>
     public static string RepoRoot() =>

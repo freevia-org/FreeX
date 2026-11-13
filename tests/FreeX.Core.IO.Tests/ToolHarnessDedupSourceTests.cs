@@ -196,57 +196,7 @@ public sealed class ToolHarnessDedupSourceTests
         foregroundCapture.Should().Contain("Diagnostics: {string.Join");
     }
 
-    [Fact]
-    public void ToolScripts_UseCanonicalSharedSupportEntryPoints()
-    {
-        var support = TestWorkspaceFiles.ReadRepoText("tools", "ToolScriptSupport.ps1");
-        var screenshotSupport = TestWorkspaceFiles.ReadRepoText("tools", "ScreenshotCaptureSupport.ps1");
-        var inventoryScripts = new[]
-        {
-            TestWorkspaceFiles.ReadRepoText("tools", "Generate-FreePCommandParityInventory.ps1"),
-            TestWorkspaceFiles.ReadRepoText("tools", "Generate-FreeWCommandInventory.ps1"),
-            TestWorkspaceFiles.ReadRepoText("tools", "Generate-CommandInventoryDocs.ps1"),
-            TestWorkspaceFiles.ReadRepoText("tools", "Generate-DialogParityInventory.ps1"),
-            TestWorkspaceFiles.ReadRepoText("tools", "Test-GeneratedDocs.ps1"),
-            TestWorkspaceFiles.ReadRepoText("tools", "Generate-ConditionalFormatOpenedStateEvidence.ps1"),
-            TestWorkspaceFiles.ReadRepoText("tools", "Generate-CrossAppParityDashboard.ps1"),
-            TestWorkspaceFiles.ReadRepoText("tools", "Generate-DialogVisualEvidenceSummary.ps1"),
-        };
-        var screenshotScripts = new[]
-        {
-            TestWorkspaceFiles.ReadRepoText("tools", "screenshot_excel.ps1"),
-            TestWorkspaceFiles.ReadRepoText("tools", "screenshot_ribbon.ps1"),
-        };
 
-        support.Should().Contain("function Resolve-ToolRepoPath");
-        support.Should().Contain("function Test-ToolGeneratedFileContentMatches");
-        inventoryScripts.Should().OnlyContain(script => script.Contains("ToolScriptSupport.ps1", StringComparison.Ordinal));
-        inventoryScripts.Should().OnlyContain(script => !script.Contains("function Resolve-RepoPath", StringComparison.Ordinal));
-        screenshotSupport.Should().Contain("function Resolve-CaptureWidths");
-        screenshotScripts.Should().OnlyContain(script => script.Contains("ScreenshotCaptureSupport.ps1", StringComparison.Ordinal));
-        screenshotScripts.Should().OnlyContain(script => !script.Contains("function Resolve-CaptureWidths", StringComparison.Ordinal));
-        screenshotScripts.Should().OnlyContain(script => !script.Contains("function Capture-ScreenRectangle", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void CommandInventoryGenerators_ConsumeSharedRecursiveMenuTraversalEmitter()
-    {
-        var support = TestWorkspaceFiles.ReadRepoText("tools", "ToolScriptSupport.ps1");
-        var generators = new[]
-        {
-            TestWorkspaceFiles.ReadRepoText("tools", "Generate-FreePCommandParityInventory.ps1"),
-            TestWorkspaceFiles.ReadRepoText("tools", "Generate-FreeWCommandInventory.ps1"),
-        };
-
-        support.Should().Contain("function Get-ToolCommandInventoryMenuTraversalSource");
-        support.Should().Contain("foreach (var child in MenuItems(item.Children))");
-        support.Should().Contain("yield return child");
-
-        generators.Should().OnlyContain(script =>
-            script.Contains("Get-ToolCommandInventoryMenuTraversalSource", StringComparison.Ordinal) &&
-            !script.Contains("private static IEnumerable<(string CommandId, CommandLocation Location)> MenuLocations", StringComparison.Ordinal) &&
-            !script.Contains("private static IEnumerable<RibbonMenuItem> MenuItems", StringComparison.Ordinal));
-    }
 
     [Fact]
     public void CommandInventoryMenuTraversal_EmitsParentBeforeNestedChildren()
@@ -261,35 +211,6 @@ public sealed class ToolHarnessDedupSourceTests
         childYield.Should().BeGreaterThan(childTraversal);
     }
 
-    [Fact]
-    public void CommandInventoryGenerators_UseSharedGeneratedProjectOrchestration()
-    {
-        var support = TestWorkspaceFiles.ReadRepoText("tools", "ToolScriptSupport.ps1");
-        var generators = new[]
-        {
-            TestWorkspaceFiles.ReadRepoText("tools", "Generate-FreePCommandParityInventory.ps1"),
-            TestWorkspaceFiles.ReadRepoText("tools", "Generate-FreeWCommandInventory.ps1"),
-        };
-
-        support.Should().Contain("function Invoke-ToolGeneratedProject");
-        support.Should().Contain("<Project Sdk=\"Microsoft.NET.Sdk\">");
-        support.Should().Contain("<ProjectReference Include=\"$($Options.Reference)\" />");
-        support.Should().Contain("<NuGetAudit>false</NuGetAudit>");
-        support.Should().Contain("$buildArguments = @(");
-        support.Should().Contain("retrying once with isolated build servers and serialized compilation");
-        support.Should().Contain("\"--no-incremental\"");
-        support.Should().Contain("Test-ToolGeneratedFileContentMatches");
-        support.Should().Contain("-NormalizeNewlines");
-        support.Should().Contain("[System.IO.File]::WriteAllText($generatedFile.DestinationPath");
-
-        generators.Should().OnlyContain(script =>
-            script.Contains("Invoke-ToolGeneratedProject @", StringComparison.Ordinal) &&
-            script.Contains("Outputs = [ordered]@", StringComparison.Ordinal) &&
-            script.Contains("Arguments = {", StringComparison.Ordinal) &&
-            !script.Contains("& dotnet run", StringComparison.Ordinal) &&
-            !script.Contains("Test-ToolGeneratedFileContentMatches", StringComparison.Ordinal) &&
-            !script.Contains("Copy-Item -LiteralPath $temp", StringComparison.Ordinal));
-    }
 
     [Fact]
     public void FreePRenderCompare_UsesSharedWpfBitmapDecodeHelpers()
@@ -318,17 +239,4 @@ public sealed class ToolHarnessDedupSourceTests
         imageDiff.Should().NotContain("bitmap.CopyPixels(pixels, width * 4, 0)");
     }
 
-    [Fact]
-    public void FreePWholeWindowEvidenceManifest_AccountsForRichEditorSelectionArtifacts()
-    {
-        var generator = TestWorkspaceFiles.ReadRepoText(
-            "tools",
-            "Generate-FreePWholeWindowVisualEvidenceManifest.ps1");
-
-        generator.Should().Contain("$selectionArtifactCount = 3");
-        generator.Should().Contain("diff/editor.rich-text-selection.wpf-selection.png");
-        generator.Should().Contain("diff/editor.rich-text-selection.avalonia-selection.png");
-        generator.Should().Contain("diff/editor.rich-text-selection.selection.png");
-        generator.Should().Contain("$artifact.diffPngCount -ne ($expectedScenarioCount + $selectionArtifactCount)");
-    }
 }

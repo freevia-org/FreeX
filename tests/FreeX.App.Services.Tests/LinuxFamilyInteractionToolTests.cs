@@ -258,47 +258,7 @@ public sealed class LinuxFamilyInteractionToolTests
         root.GetProperty("allOf").GetArrayLength().Should().Be(2);
     }
 
-    [Fact]
-    public void FamilyParityDocStatesBaselineBoundaryAndAppSurfaceDifferences()
-    {
-        var doc = File.ReadAllText(RepositoryFileLocator.Find(
-            "docs", "parity", "family-linux-physical-baseline-2026-07-23.md"));
 
-        doc.Should().Contain("not exhaustive");
-        doc.Should().Contain("FreeW");
-        doc.Should().Contain("FreeP");
-        doc.Should().Contain("top-level");
-        doc.Should().Contain("FreePBackstageOverlay");
-        doc.Should().Contain("contractValidation");
-        doc.Should().Contain("Run-FamilyLinuxInteractionValidation.ps1");
-        doc.Should().Contain("exact twenty-four-row contract");
-        doc.Should().Contain("exact forty-five-row contract");
-        doc.Should().Contain("animation-pane-physical-workflow");
-        doc.Should().Contain("file-new-shortcut-discard-creates-clean");
-        doc.Should().Contain("backstage-print-open");
-        doc.Should().Contain("backstage-export-open");
-        doc.Should().Contain("options-tab-navigation");
-        doc.Should().Contain("slide-pane-new-slide-create");
-        doc.Should().Contain("slide-pane-delete-undo");
-        doc.Should().Contain("nested-keytip-prefix-deferral");
-        doc.Should().Contain("Ctrl+Z").And.Contain("Shift+F10");
-    }
-
-    [Fact]
-    public void Wave95FreeWPhysicalExpansionDocStatesBoundedBackstageAndOptionsRows()
-    {
-        var doc = File.ReadAllText(RepositoryFileLocator.Find(
-            "docs", "parity", "freew-wave95-physical-backstage-options-20260801.md"));
-
-        doc.Should().Contain("exactly forty-five result rows");
-        doc.Should().Contain("backstage-print-dismissal");
-        doc.Should().Contain("backstage-export-dismissal");
-        doc.Should().Contain("options-open");
-        doc.Should().Contain("options-focus");
-        doc.Should().Contain("physical-x11-input");
-        doc.Should().Contain("coverage.exhaustive");
-        doc.Should().Contain("No product files");
-    }
 
     [Fact]
     public void FamilyRunnerUsesCurrentAvaloniaRibbonTabKeyTipsAndFileSurfaceContracts()

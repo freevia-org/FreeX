@@ -8,7 +8,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="../../docs/parity/parity-demo.csv"
+    <EmbeddedResource Include="parity-demo.csv"
                       LogicalName="FreeX.Parity.DemoWorkbook.csv" />
   </ItemGroup>
 

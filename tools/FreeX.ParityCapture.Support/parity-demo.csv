@@ -1,0 +1,9 @@
+Region,Product,Units,Price,Revenue
+North,Widget,120,9.5,1140
+South,Gadget,85,14.25,1211.25
+East,Sprocket,200,3.75,750
+West,Gizmo,64,21,1344
+North,Cog,310,1.2,372
+South,Widget,150,9.5,1425
+East,Gadget,95,14.25,1353.75
+Total,,1024,,7596

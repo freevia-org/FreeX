@@ -606,15 +606,6 @@ public sealed class PageSetupDialogXamlTests
         });
     }
 
-    [Fact]
-    public void UiTestCatalog_PageSetupRowNoLongerListsCenterAndPageOrderProofAsRemaining()
-    {
-        var catalog = WorkspaceFileLocator.ReadAllLines("docs", "testing/ui-test-catalog.md");
-        var pageSetupRow = catalog.Single(line => line.StartsWith("| UI-CMD-PAGE-003 |", StringComparison.Ordinal));
-
-        pageSetupRow.Should().Contain("Center on Page and Page Order dialog choices flow through the command builder into the worksheet model");
-        pageSetupRow.Should().NotContain("Remaining work is Center on Page, Page Order");
-    }
 
     private static string ReadPageSetupDialogSource() =>
         DialogSourceTestSupport.ReadHostSources(

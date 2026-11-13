@@ -6,18 +6,6 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class DocumentationEncodingTests
 {
-    [Fact]
-    public void CurrentUserFacingDocs_DoNotContainMojibake()
-    {
-        var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
-        var repoDirectory = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
-
-        var invalidLines = CurrentDocumentationFiles
-            .SelectMany(file => FindMojibake(repoDirectory, Path.Combine(docsDirectory, file)))
-            .ToList();
-
-        invalidLines.Should().BeEmpty("current user-facing docs should stay readable after UTF-8/Windows-1252 round trips");
-    }
 
     [Theory]
     [InlineData("Code Review Hardening \u00E2\u20AC\u201D 2026-05-28")]

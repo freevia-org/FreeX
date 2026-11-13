@@ -12,10 +12,8 @@ artifacts independent from Microsoft.
   share only the `Free.Shared.*` libraries; neither references the other.
 
 > Status: feature-complete through roadmap Milestones **A-U** plus follow-up file-format, corpus,
-> icon-audit, and platform slices on current mainline. See
-> [`../docs/planning/freew-roadmap.md`](../docs/planning/freew-roadmap.md) for the historical
-> per-feature implementation log and [`../docs/planning/freew-file-formats.md`](../docs/planning/freew-file-formats.md)
-> for the current format-adapter matrix.
+> icon-audit, and platform slices on current mainline.
+
 
 ---
 
@@ -278,6 +276,4 @@ baselines still require Word COM on the validation machine. Each is noted in cod
 
 ## Roadmap
 
-The single source of truth for FreeW's feature set, per-feature implementation notes, and status log is
-[`../docs/planning/freew-roadmap.md`](../docs/planning/freew-roadmap.md). Milestones A through U are
-complete.
+Milestones A through U of the FreeW roadmap are complete.

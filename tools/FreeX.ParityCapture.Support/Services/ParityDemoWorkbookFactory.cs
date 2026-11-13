@@ -12,7 +12,7 @@ namespace FreeX.App.Services;
 /// ~4% "regression" on the data-dependent <c>grid.demo</c> surface.
 ///
 /// <para>
-/// The single source of truth is the committed CSV at <c>docs/parity/parity-demo.csv</c>, embedded into
+/// The single source of truth is the committed CSV at <c>tools/FreeX.ParityCapture.Support/parity-demo.csv</c>, embedded into
 /// this assembly as <c>FreeX.Parity.DemoWorkbook.csv</c>. Embedding (rather than resolving a repo-relative
 /// path at runtime) guarantees the SAME bytes are available to the WPF host on Windows and the Avalonia
 /// app inside the headless Linux Docker container, where the repo tree is not present.
@@ -27,7 +27,7 @@ namespace FreeX.App.Services;
 /// </summary>
 public static class ParityDemoWorkbookFactory
 {
-    /// <summary>Logical name of the embedded copy of <c>docs/parity/parity-demo.csv</c>.</summary>
+    /// <summary>Logical name of the embedded copy of <c>tools/FreeX.ParityCapture.Support/parity-demo.csv</c>.</summary>
     public const string EmbeddedResourceName = "FreeX.Parity.DemoWorkbook.csv";
 
     /// <summary>Stable workbook + sheet names so the title bar / sheet tab compare identically too.</summary>
@@ -95,7 +95,7 @@ public static class ParityDemoWorkbookFactory
         return workbook;
     }
 
-    /// <summary>The raw demo CSV text (the embedded copy of <c>docs/parity/parity-demo.csv</c>).</summary>
+    /// <summary>The raw demo CSV text (the embedded copy of <c>tools/FreeX.ParityCapture.Support/parity-demo.csv</c>).</summary>
     public static string ReadDemoCsv()
     {
         var assembly = typeof(ParityDemoWorkbookFactory).Assembly;

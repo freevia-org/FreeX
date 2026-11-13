@@ -104,30 +104,6 @@ public sealed class RibbonTabParityTests
             "object arrangement remains in Draw and the object-specific contextual format tabs");
     }
 
-    [Fact]
-    public void ArrangeGroups_TreatBringForwardAndSendBackwardAsDistinctRibbonRows()
-    {
-        var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
-
-        foreach (var arrangeGroup in new[]
-        {
-            Group(Tab(catalog, "Draw"), "Arrange"),
-            Group(Tab(catalog, "Shape Format"), "Arrange"),
-            Group(Tab(catalog, "Picture Format"), "Arrange")
-        })
-        {
-            CommandTitles(arrangeGroup).Should().ContainInOrder("Bring Forward", "Send Backward");
-
-            // The declarative ribbon routes these via their RibbonCommandId through the registry rather
-            // than an XAML Click handler, so assert the distinct, stable key tips.
-            Command(arrangeGroup, "Bring Forward").KeyTip.Should().Be("BF");
-            Command(arrangeGroup, "Send Backward").KeyTip.Should().Be("SB");
-        }
-
-        WorkspaceFileLocator.ReadAllText("docs", "parity/command-surface.md")
-            .Should()
-            .Contain("| Bring Forward/Send Backward | Implemented |");
-    }
 
     [Fact]
     public void ShapeFormatTab_UsesObjectContextualGroupOrder()

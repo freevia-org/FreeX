@@ -8,8 +8,6 @@ internal static class WorkspaceFileLocator
     public static string FindWorkspaceRoot() =>
         TestWorkspaceFileLocator.FindContainingDirectory("FreeX.slnx");
 
-    public static string FindDocsDirectory() =>
-        TestWorkspaceFileLocator.FindContainingDirectory("docs", "README.md");
 
     public static string FindToolScript(string fileName) =>
         Find("tools", fileName);

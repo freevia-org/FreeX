@@ -36,7 +36,4 @@ formula recalc, CSV/HTML flattening, multi-sheet collapse, the SpreadsheetML Boo
 from a real **FreeX-output-defect** (a literal value FreeX wrote that LibreOffice mis-read, or a formula
 that vanished into a literal in a format that should keep it). Only the latter fails the run.
 
-See `docs/fidelity/2026-06-19-libreoffice-crosscheck.md` for the full findings and the one
-reverse-direction reader caveat (FreeX's ClosedXML xlsx reader on a LibreOffice-authored workbook).
-
 **Not a CI/merge gate** — LibreOffice may not be present on CI. Run on demand.
