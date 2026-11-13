@@ -27,6 +27,17 @@ public static class SisterQuickAccessToolbarCatalog
         new(RedoCommandId, "Redo (Ctrl+Y)", RibbonCommandIconKind.Redo)
     ];
 
+    /// <summary>
+    /// The default commands with platform-appropriate shortcut text in each tooltip
+    /// (Cmd+S / Cmd+Z / Shift+Cmd+Z on macOS, Ctrl+S / Ctrl+Z / Ctrl+Y elsewhere).
+    /// </summary>
+    public static IReadOnlyList<SisterQuickAccessToolbarCommand> GetDefaultCommands(bool macOs) =>
+        macOs
+            ? DefaultCommands
+                .Select(command => command with { Tooltip = RibbonShortcutText.ForPlatform(command.Tooltip, macOs: true) })
+                .ToArray()
+            : DefaultCommands;
+
     public static bool Execute(SisterQuickAccessToolbarActions actions, string commandId)
     {
         ArgumentNullException.ThrowIfNull(actions);

@@ -35,7 +35,7 @@ public static class SisterQuickAccessToolbarBuilder
         visuals ??= new SisterQuickAccessToolbarVisualOptions();
 
         var buttons = new List<Button>();
-        foreach (var command in SisterQuickAccessToolbarCatalog.DefaultCommands)
+        foreach (var command in SisterQuickAccessToolbarCatalog.GetDefaultCommands(OperatingSystem.IsMacOS()))
         {
             var button = new Button
             {
@@ -84,7 +84,11 @@ public static class SisterQuickAccessToolbarBuilder
             });
 
             AutomationProperties.SetAutomationId(button, command.CommandId);
-            AutomationProperties.SetName(button, command.Tooltip);
+            // The automation name stays the authored (Windows) text so automation and tests are
+            // platform-stable; only the visible tooltip follows the platform shortcut.
+            AutomationProperties.SetName(
+                button,
+                SisterQuickAccessToolbarCatalog.DefaultCommands.First(item => item.CommandId == command.CommandId).Tooltip);
             ToolTip.SetTip(button, command.Tooltip);
             button.Click += (_, _) =>
             {

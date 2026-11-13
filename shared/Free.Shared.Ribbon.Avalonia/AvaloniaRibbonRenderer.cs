@@ -8,6 +8,7 @@ using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.Styling;
@@ -48,6 +49,7 @@ public static class AvaloniaRibbonRenderer
     private const string PopupChromeClass = "free-ribbon-popup-chrome";
     private const string SubmenuPlacementClass = "free-ribbon-submenu-placement";
     private const double RibbonCheckBoxHeight = 16;
+    private const double WpfRibbonTabControlMinHeight = 132;
     private const double RibbonCheckGlyphSize = 11;
     private const int MaxRowsPerColumn = 3;
     private static readonly AttachedProperty<string?> KeyTipProperty =
@@ -762,6 +764,9 @@ public static class AvaloniaRibbonRenderer
             // Windows closes the ribbon with a 1px rule above the formula bar.
             tabControl.BorderBrush = resolvedPalette.DividerBrush;
             tabControl.BorderThickness = new Thickness(0, 0, 0, 1);
+            // WPF MainWindow.xaml pins the RibbonTabs TabControl to MinHeight 132 so the ribbon block
+            // (and the grid below it) never changes height between tabs whose groups are all 22px rows.
+            tabControl.MinHeight = WpfRibbonTabControlMinHeight;
         }
         ApplyRibbonTheme(tabControl, resolvedPalette);
         tabControl.Items.Add(BuildFileTabItem(resolvedPalette));
@@ -1734,7 +1739,8 @@ public static class AvaloniaRibbonRenderer
                 HorizontalContentAlignment = HorizontalAlignment.Center,
                 VerticalContentAlignment = VerticalAlignment.Center,
             };
-            ToolTip.SetTip(launcherButton, launcher.TooltipDescription ?? launcher.TooltipTitle);
+            ToolTip.SetTip(launcherButton, BuildRibbonTooltipContent(launcher.TooltipTitle, launcher.TooltipDescription, RibbonKeyTipText.NormalizeOrEmpty(launcher.KeyTip)));
+            ToolTip.SetShowDelay(launcherButton, 500);
             SetKeyTip(launcherButton, launcher.KeyTip);
             WireControl(launcherButton, launcherControl, registry, afterExecute, palette, attachMenu: false);
             Grid.SetColumn(launcherButton, 1);
@@ -1965,6 +1971,17 @@ public static class AvaloniaRibbonRenderer
         Action? afterExecute,
         AvaloniaRibbonPalette palette)
     {
+        var element = BuildInlineControlCore(control, registry, afterExecute, palette);
+        ApplyRibbonTooltip(element, control);
+        return element;
+    }
+
+    private static Control BuildInlineControlCore(
+        RibbonControl control,
+        IRibbonCommandRegistry? registry,
+        Action? afterExecute,
+        AvaloniaRibbonPalette palette)
+    {
         var element = control switch
         {
             RibbonSeparator => BuildInlineDivider(palette),
@@ -2013,6 +2030,78 @@ public static class AvaloniaRibbonRenderer
     // affordance) rather than running "▾" into the caption text.
     private static Control BuildLargeControl(RibbonControl control, IRibbonCommandRegistry? registry, Action? afterExecute, AvaloniaRibbonPalette palette)
     {
+        var element = BuildLargeControlCore(control, registry, afterExecute, palette);
+        ApplyRibbonTooltip(element, control);
+        return element;
+    }
+
+    // WPF RibbonTooltip: every ribbon control carries an Office-style tooltip (bold title, grey
+    // description, key tip). The title defaults to the label like RibbonWpfRenderer.WireMetadata.
+    // A split control is a Grid of buttons, so each interactive part receives the tip.
+    private static void ApplyRibbonTooltip(Control element, RibbonControl control)
+    {
+        var title = !string.IsNullOrEmpty(control.TooltipTitle) ? control.TooltipTitle : control.Label;
+        var description = control.TooltipDescription;
+        var keyTip = RibbonKeyTipText.NormalizeOrEmpty(control.KeyTip);
+        if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(description))
+            return;
+
+        void Walk(Control target)
+        {
+            if (target is Button or ComboBox or CheckBox)
+            {
+                if (ToolTip.GetTip(target) is null)
+                {
+                    ToolTip.SetTip(target, BuildRibbonTooltipContent(title, description, keyTip));
+                    ToolTip.SetShowDelay(target, 500);
+                }
+
+                return;
+            }
+
+            foreach (var child in target.GetLogicalChildren())
+            {
+                if (child is Control childControl)
+                    Walk(childControl);
+            }
+        }
+
+        Walk(element);
+    }
+
+    internal static Control BuildRibbonTooltipContent(string? title, string? description, string? keyTip)
+    {
+        var panel = new StackPanel { MaxWidth = 270 };
+        // Authored text carries Windows shortcut hints ("Ctrl+X"); show Cmd on macOS only.
+        title = RibbonShortcutText.ForPlatform(title, MacOsChromeParity);
+        description = RibbonShortcutText.ForPlatform(description, MacOsChromeParity);
+        if (!string.IsNullOrEmpty(title))
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = string.IsNullOrEmpty(keyTip) ? title : $"{title} ({keyTip})",
+                FontWeight = FontWeight.Bold,
+                FontSize = 13,
+                Margin = new Thickness(0, 0, 0, string.IsNullOrEmpty(description) ? 0 : 3),
+            });
+        }
+
+        if (!string.IsNullOrEmpty(description))
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = description,
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 11.5,
+                Foreground = Brushes.DimGray,
+            });
+        }
+
+        return panel;
+    }
+
+    private static Control BuildLargeControlCore(RibbonControl control, IRibbonCommandRegistry? registry, Action? afterExecute, AvaloniaRibbonPalette palette)
+    {
         if (control is RibbonSplitButton splitButton)
             return BuildLargeSplitControl(splitButton, registry, afterExecute, palette);
 
@@ -2031,17 +2120,8 @@ public static class AvaloniaRibbonRenderer
         // would break the long word mid-character ("Conditiona\nl"). WrapWithOverflow wraps at word
         // boundaries and never splits a word, and a MaxWidth matching the button content keeps the two
         // words on their own lines exactly like WPF.
-        stack.Children.Add(new TextBlock
-        {
-            Text = control.Label,
-            FontSize = 12,
-            FontFamily = RibbonFontFamily,
-            TextAlignment = TextAlignment.Center,
-            TextWrapping = TextWrapping.WrapWithOverflow,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 2, 0, 0),
-            MaxWidth = 74,
-        });
+        var caption = NewLargeCaption(control.Label);
+        stack.Children.Add(caption);
 
         // Large dropdown affordance: a centered chevron on its own line under the label. True split
         // buttons are handled by BuildLargeSplitControl so their primary and menu actions remain distinct.
@@ -2052,7 +2132,7 @@ public static class AvaloniaRibbonRenderer
 
         // WPF RibbonLargeButton: compact hero column, Padding 3,2.
         var button = NewButtonLike(control, palette);
-        button.Width = 80;
+        button.Width = LargeButtonWidth(caption);
         button.Height = 76;
         button.Padding = new Thickness(4, 2);
         button.HorizontalContentAlignment = HorizontalAlignment.Center;
@@ -2062,12 +2142,56 @@ public static class AvaloniaRibbonRenderer
         return button;
     }
 
+    // WPF EnsureNaturalLabelWidth: a caption never crops. WrapWithOverflow keeps words whole but the
+    // 74px cap would clip a single word wider than the hero button ("Recommended"), so measure the
+    // longest word and widen the caption and button to fit it. Normal captions keep the 80px tile.
+    private const double LargeButtonBaseWidth = 80;
+    private const double LargeCaptionBaseMaxWidth = 74;
+
+    private static TextBlock NewLargeCaption(string label)
+    {
+        var caption = new TextBlock
+        {
+            Text = label,
+            FontSize = 12,
+            FontFamily = RibbonFontFamily,
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.WrapWithOverflow,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 2, 0, 0),
+            MaxWidth = LargeCaptionBaseMaxWidth,
+        };
+
+        var longestWord = 0d;
+        foreach (var word in (label ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var probe = new TextBlock { Text = word, FontSize = 12, FontFamily = RibbonFontFamily };
+            probe.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            longestWord = Math.Max(longestWord, probe.DesiredSize.Width);
+        }
+
+        if (longestWord > LargeCaptionBaseMaxWidth)
+        {
+            caption.MaxWidth = Math.Ceiling(longestWord);
+            caption.MinWidth = Math.Ceiling(longestWord);
+        }
+
+        return caption;
+    }
+
+    private static double LargeButtonWidth(TextBlock caption) =>
+        caption.MaxWidth > LargeCaptionBaseMaxWidth
+            ? Math.Max(LargeButtonBaseWidth, caption.MaxWidth + 8)
+            : LargeButtonBaseWidth;
+
     private static Control BuildLargeSplitControl(
         RibbonSplitButton control,
         IRibbonCommandRegistry? registry,
         Action? afterExecute,
         AvaloniaRibbonPalette palette)
     {
+        var splitCaption = NewLargeCaption(control.Label);
+        var largeWidth = LargeButtonWidth(splitCaption);
         var primaryContent = new StackPanel
         {
             Orientation = Orientation.Vertical,
@@ -2076,17 +2200,7 @@ public static class AvaloniaRibbonRenderer
             Children =
             {
                 NewIcon(control, RibbonVisualMetrics.LargeIconSize, HorizontalAlignment.Center),
-                new TextBlock
-                {
-                    Text = control.Label,
-                    FontSize = 12,
-                    FontFamily = RibbonFontFamily,
-                    TextAlignment = TextAlignment.Center,
-                    TextWrapping = TextWrapping.WrapWithOverflow,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    Margin = new Thickness(0, 2, 0, 0),
-                    MaxWidth = 74,
-                },
+                splitCaption,
             },
         };
         var primary = new Button
@@ -2105,8 +2219,8 @@ public static class AvaloniaRibbonRenderer
         {
             Content = Chevron(new Thickness(0), palette),
             Tag = $"{control.CommandId.Value}.Dropdown",
-            Width = 80,
-            MinWidth = 80,
+            Width = largeWidth,
+            MinWidth = largeWidth,
             Height = 20,
             MinHeight = 20,
             Padding = new Thickness(0),
@@ -2123,7 +2237,7 @@ public static class AvaloniaRibbonRenderer
 
         var split = new Grid
         {
-            Width = 80,
+            Width = largeWidth,
             Height = 76,
             RowDefinitions = new RowDefinitions("*,20"),
         };
@@ -2316,7 +2430,21 @@ public static class AvaloniaRibbonRenderer
             box.TemplateApplied += (_, args) => CompactEditableComboParts(box, args.NameScope);
         if (combo.Choices.Count > 0)
         {
-            box.DisplayMemberBinding = new Binding(nameof(RibbonComboBoxChoice.Label));
+            if (combo.PresentationKind == RibbonComboBoxPresentationKind.Gallery)
+            {
+                // WPF RibbonGalleryComboBox: rich rows (preview glyph, label, description) in a
+                // wide popup while the editable box still shows only the choice label.
+                box.ItemTemplate = AvaloniaRibbonGalleryRow.CreateItemTemplate(RibbonFontFamily);
+                TextSearch.SetTextBinding(box, new Binding(nameof(RibbonComboBoxChoice.Label)));
+                box.MaxDropDownHeight = 640;
+                // WPF gallery popup is a white panel with a #5C5C5C 1px frame.
+                box.Resources["ComboBoxDropDownBackground"] = Brushes.White;
+                box.Resources["ComboBoxDropDownBorderBrush"] = new SolidColorBrush(Color.FromRgb(92, 92, 92));
+            }
+            else
+            {
+                box.DisplayMemberBinding = new Binding(nameof(RibbonComboBoxChoice.Label));
+            }
             foreach (var choice in combo.Choices)
                 box.Items.Add(choice);
         }
@@ -2555,7 +2683,12 @@ public static class AvaloniaRibbonRenderer
     {
         if (attachMenu && BuildMenu(control) is { } menu && element is Button menuButton)
         {
-            var flyout = menu.BuildFlyout(registry, afterExecute);
+            var flyout = AvaloniaRibbonCellStyleGallery.IsGallery(control, menu)
+                ? AvaloniaRibbonCellStyleGallery.BuildFlyout(
+                    menu,
+                    RibbonFontFamily,
+                    commandId => Execute(commandId, registry, afterExecute))
+                : menu.BuildFlyout(registry, afterExecute);
             ConfigureMenuFlyout(flyout, menuButton, palette, RibbonPopupInteractionContract.CollapsedGroup);
             menuButton.Flyout = flyout;
         }
@@ -2913,7 +3046,7 @@ public static class AvaloniaRibbonRenderer
     {
         try
         {
-            return global::Avalonia.Input.KeyGesture.Parse(gesture);
+            return global::Avalonia.Input.KeyGesture.Parse(RibbonShortcutText.ToGestureForPlatform(gesture, OperatingSystem.IsMacOS()));
         }
         catch (Exception)
         {

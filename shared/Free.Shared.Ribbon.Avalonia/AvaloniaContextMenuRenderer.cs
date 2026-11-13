@@ -252,7 +252,7 @@ public static class AvaloniaContextMenuRenderer
 
         try
         {
-            return KeyGesture.Parse(gesture);
+            return KeyGesture.Parse(RibbonShortcutText.ToGestureForPlatform(gesture, OperatingSystem.IsMacOS()));
         }
         catch (Exception)
         {
