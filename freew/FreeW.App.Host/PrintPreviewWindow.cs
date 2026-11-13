@@ -77,6 +77,16 @@ internal static class PrintLayout
         BuildPaginatedDocument(editor, applyFragmentedFootnoteFlow: false, out _);
 
     /// <summary>
+    /// <see cref="BuildPaginatedDocument(DocumentView)"/> for callers that only take the cloned blocks and
+    /// lay them out in flows of their own (the section-aware page assignment): the whole-document
+    /// footnote body reserve is skipped, because it only sets this flow's
+    /// <see cref="FlowDocument.PagePadding"/> -- which such callers never read -- and costs a full
+    /// provisional pagination of the document.
+    /// </summary>
+    internal static FlowDocument BuildPaginatedBlockSource(DocumentView editor) =>
+        BuildPaginatedDocument(editor, applyFragmentedFootnoteFlow: false, out _, balloonSources: null, applyFootnoteBodyReserve: false);
+
+    /// <summary>
     /// Width, in DIP, reserved on the right of the printed/exported page for the Review &gt; Show Markup
     /// &gt; Balloons strip when <see cref="DocumentView.ShowMarkupBalloons"/> is on and the document has
     /// at least one comment or shown tracked-change revision. Word's own behaviour: the printed page
@@ -549,7 +559,8 @@ internal static class PrintLayout
         DocumentView editor,
         bool applyFragmentedFootnoteFlow,
         out FootnoteContinuationFlowComposition? footnoteComposition,
-        IReadOnlyList<ReviewBalloonSource>? balloonSources = null)
+        IReadOnlyList<ReviewBalloonSource>? balloonSources = null,
+        bool applyFootnoteBodyReserve = true)
     {
         var page = editor.Model.Page;
         var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
@@ -630,7 +641,8 @@ internal static class PrintLayout
                 out var composition))
         {
             footnoteComposition = null;
-            ApplyFootnoteBodyReserve(flow, editor.Model);
+            if (applyFootnoteBodyReserve)
+                ApplyFootnoteBodyReserve(flow, editor.Model);
         }
         else
         {

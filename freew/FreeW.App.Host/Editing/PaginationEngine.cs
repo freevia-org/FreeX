@@ -14,6 +14,15 @@ namespace FreeW.App.Host.Editing;
 internal static class PaginationEngine
 {
     /// <summary>
+    /// Test-only switch: when set (per thread), <see cref="ComputeBlockPageAssignment(DocumentView, out int, List{SegmentPagination}?)"/>
+    /// runs its original, un-optimised path -- the whole-document footnote body reserve pass and the
+    /// full (three-pass) provisional reserve measurement of a single-column footnoted section -- so tests
+    /// can prove the optimised path produces the identical page assignment.
+    /// </summary>
+    [ThreadStatic]
+    internal static bool UseReferencePagination;
+
+    /// <summary>
     /// Returns the canonical FlowDocument offsets at which WPF starts each realized paginator page.
     /// Consumers that need page-specific body regions must carry these positions forward instead of
     /// rebuilding model-block fragments, which loses WPF's line-level continuation ownership.
@@ -347,7 +356,11 @@ internal static class PaginationEngine
         System.Windows.Documents.Block[] scratchBlocks;
         try
         {
-            flow = PrintLayout.BuildPaginatedDocument(editor);
+            // The XAML clone must stay: a direct render of the model lays out differently on some real
+            // documents (measured on the fidelity corpus), so only the unused footnote reserve is dropped.
+            flow = UseReferencePagination
+                ? PrintLayout.BuildPaginatedDocument(editor)
+                : PrintLayout.BuildPaginatedBlockSource(editor);
             ApplySectionBreakFlags(editor, flow);
             scratchBlocks = flow.Blocks.ToArray();
             flow.Blocks.Clear(); // detach so segment slices can be re-parented into per-segment flows
@@ -556,14 +569,23 @@ internal static class PaginationEngine
             try
             {
                 var segmentModelBlocks = modelBlocks.Skip(segment.Start).Take(end - segment.Start).ToList();
-                footnoteReserveDip = ComputeMaxPerPageFootnoteReserveDip(
-                    provisionalFlow, segmentModelBlocks, document, segment.Page, contentWidthDip);
+
+                // A single-column section only needs to know WHETHER any page needs a reserve: the
+                // per-page path below sizes every page's own reserve itself, and the refinement below
+                // only ever swaps one positive reserve for another. Deciding that stops at the first
+                // footnoted page instead of laying out the whole section three times.
+                var decidedSingleColumn = !UseReferencePagination && segment.Page.ColumnCount <= 1;
+                footnoteReserveDip = decidedSingleColumn
+                    ? (HasPositivePerPageFootnoteReserve(
+                        provisionalFlow, segmentModelBlocks, document, segment.Page, contentWidthDip) ? 1.0 : 0.0)
+                    : ComputeMaxPerPageFootnoteReserveDip(
+                        provisionalFlow, segmentModelBlocks, document, segment.Page, contentWidthDip);
 
                 // The reserve-free pass packs more body -- and so more notes -- onto a page than the
                 // reserved layout will, which overstates the tallest page's notes. Re-measure under
                 // the reserve itself and keep the smaller value only when it still covers every page
                 // of the layout it produces (a uniform reserve must never be shorter than a page's notes).
-                if (footnoteReserveDip > 0)
+                if (footnoteReserveDip > 0 && !decidedSingleColumn)
                 {
                     double NeedUnder(double reserveDip)
                     {
@@ -1172,6 +1194,72 @@ internal static class PaginationEngine
         }
 
         return maxReserveDip;
+    }
+
+    /// <summary>
+    /// Whether <see cref="ComputeMaxPerPageFootnoteReserveDip"/> would return a positive reserve for the
+    /// same inputs, decided page by page in document order: the first page whose notes need a reserve
+    /// answers it, so only the pages up to that one are laid out instead of the whole flow.
+    /// </summary>
+    private static bool HasPositivePerPageFootnoteReserve(
+        FlowDocument provisionalFlow,
+        IReadOnlyList<FreeW.Core.Model.Block> modelBlocks,
+        TextDocument document,
+        PageSettings page,
+        double contentWidthDip)
+    {
+        if (document.Footnotes.Count == 0 || !modelBlocks.Any(block => FootnoteIdsInModelBlock(block).Any()))
+            return false;
+
+        var paginator = ((IDocumentPaginatorSource)provisionalFlow).DocumentPaginator;
+        paginator.PageSize = new Size(provisionalFlow.PageWidth, provisionalFlow.PageHeight);
+        var flowBlocks = provisionalFlow.Blocks.ToArray();
+        var pairedCount = Math.Min(flowBlocks.Length, modelBlocks.Count);
+        if (paginator is not DynamicDocumentPaginator dynamicPaginator
+            || !modelBlocks.Take(pairedCount).Any(block => FootnoteIdsInModelBlock(block).Any()))
+        {
+            // The full measurement's own fallbacks decide these cases.
+            return ComputeMaxPerPageFootnoteReserveDip(provisionalFlow, modelBlocks, document, page, contentWidthDip) > 0;
+        }
+
+        const double footnoteFrameClearanceDip = 24.0;
+        bool PageNeedsReserve(IReadOnlyList<int> pageFootnoteIds)
+        {
+            if (pageFootnoteIds.Count == 0)
+                return false;
+            var plan = DocumentNoteRegionPlanner.BuildFootnoteRegion(document, pageFootnoteIds, pageNumber: 1, contentWidthDip);
+            return plan.EstimatedHeightDip > 0
+                && ClampFootnoteReserveDip(plan.EstimatedHeightDip + footnoteFrameClearanceDip, page) > 0;
+        }
+
+        // Same grouping as ComputeFootnoteIdsByPageFromModel. Block start pages never decrease along the
+        // flow, so a page's id list is complete as soon as a block starts on a later page.
+        var currentPage = 0;
+        var pageIds = new List<int>();
+        for (var i = 0; i < pairedCount; i++)
+        {
+            try
+            {
+                var pageNumber = dynamicPaginator.GetPageNumber(flowBlocks[i].ContentStart);
+                if (pageNumber >= 0 && pageNumber != currentPage)
+                {
+                    if (PageNeedsReserve(pageIds))
+                        return true;
+                    pageIds.Clear();
+                    currentPage = pageNumber;
+                }
+            }
+            catch (NotSupportedException) { }
+            catch (InvalidOperationException) { }
+
+            foreach (var footnoteId in FootnoteIdsInModelBlock(modelBlocks[i]))
+            {
+                if (!pageIds.Contains(footnoteId))
+                    pageIds.Add(footnoteId);
+            }
+        }
+
+        return PageNeedsReserve(pageIds);
     }
 
     /// <summary>
