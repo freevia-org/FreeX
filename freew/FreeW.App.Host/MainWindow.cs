@@ -2894,6 +2894,7 @@ public sealed partial class MainWindow : Window
             ? PaginatedPageLayoutMode.TwoColumnGrid
             : PaginatedPageLayoutMode.Horizontal;
         _editablePaginatedPanel = PaginatedEditorPanel.Build(_editor, layoutMode);
+        AttachPaginatedSurface(_editablePaginatedPanel);
 
         _workspaceGridChild = _workspace.Child;
         if (plan.IsSideToSideActive)
@@ -3069,10 +3070,7 @@ public sealed partial class MainWindow : Window
 
         _paginatedViewer = null;
         if (_editablePaginatedPanel is not null)
-        {
-            PaginatedCommitCoordinator.Commit(_editablePaginatedPanel, _editor);
-            _editor.LoadModel(_editor.Model);
-        }
+            DetachPaginatedSurface(_editablePaginatedPanel);
         _editablePaginatedPanel = null;
         _workspaceGridChild = null;
         ResetSideToSideNavigation();
@@ -3117,6 +3115,7 @@ public sealed partial class MainWindow : Window
         _editor.CommitToModel();
 
         _pagedEditPanel = PaginatedEditorPanel.Build(_editor);
+        AttachPaginatedSurface(_pagedEditPanel);
         _pagedEditMode = true;
 
         // Swap workspace child exactly like EnterPaginatedView / ToggleSplitWindow.
@@ -3138,7 +3137,7 @@ public sealed partial class MainWindow : Window
             return;
 
         // Commit all page boxes into the model.
-        PaginatedCommitCoordinator.Commit(_pagedEditPanel, _editor);
+        DetachPaginatedSurface(_pagedEditPanel);
 
         // Restore workspace.
         if (_workspaceGridChild is not null)
@@ -3147,11 +3146,33 @@ public sealed partial class MainWindow : Window
         _pagedEditPanel = null;
         _pagedEditMode = false;
 
-        // Reload the continuous editor from the just-committed model so the view is current.
-        _editor.LoadModel(_editor.Model);
-
         // Sync ribbon toggles: PagedEdit off, print-family mode back on.
         RefreshViewModeChecks();
+    }
+
+    /// <summary>
+    /// Makes a paginated editor the live editing surface of <see cref="_editor"/>: Save, AutoSave,
+    /// Print and every command that commits first now read the pages (not the hidden continuous
+    /// surface), Undo/Redo share the editor's command history, and typing on a page marks the
+    /// document dirty immediately.
+    /// </summary>
+    private void AttachPaginatedSurface(PaginatedEditorPanel panel)
+    {
+        panel.AttachAsActiveSurface();
+        panel.Edited += MarkDirtyOutsideBodyUndo;
+    }
+
+    /// <summary>
+    /// Final commit of a paginated editor, then hands the body back to the continuous editor. The
+    /// continuous editor re-renders the SAME model instance (it is not reloaded), so the undo history
+    /// built while editing pages carries over.
+    /// </summary>
+    private void DetachPaginatedSurface(PaginatedEditorPanel panel)
+    {
+        panel.CommitPendingEdits();
+        panel.Edited -= MarkDirtyOutsideBodyUndo;
+        panel.Detach();
+        _editor.RefreshFromSharedDocument();
     }
 
     // ── Split Window ─────────────────────────────────────────────────────────────────────────────

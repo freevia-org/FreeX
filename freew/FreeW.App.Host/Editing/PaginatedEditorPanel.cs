@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -58,11 +58,24 @@ internal enum PaginatedPageLayoutMode
     TwoColumnGrid
 }
 
-internal sealed class PaginatedEditorPanel : ScrollViewer
+/// <summary>
+/// A caret position in the paged editor expressed independently of pagination: the index of the
+/// top-level body block (counted across every page in order) and the symbol offset inside it.
+/// </summary>
+internal sealed record PagedCaretPosition(int BlockIndex, int Offset);
+
+internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurface
 {
     // ── workspace background (same grey "desk" as the main editor) ────────────────────────────────
-    private static readonly Brush WorkspaceBrush =
-        new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6));
+    // Frozen: a static brush is shared by every UI thread that builds a panel (each test, each window).
+    private static readonly Brush WorkspaceBrush = CreateWorkspaceBrush();
+
+    private static Brush CreateWorkspaceBrush()
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6));
+        brush.Freeze();
+        return brush;
+    }
 
     // ── public state ──────────────────────────────────────────────────────────────────────────────
     /// <summary>Ordered list of page boxes, one per page.</summary>
@@ -77,6 +90,17 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     private readonly PaginatedPageLayoutMode _layoutMode;
     private readonly IPlatformClipboard _platformClipboard;
     private DispatcherTimer? _repaginateTimer;
+
+    // ── model ownership (W7: paged editing as a real editing surface) ─────────────────────────────
+    private TextDocument _sourceModel;          // the document these pages were built from
+    private bool _hasPendingBodyEdits;          // typed on the pages but not yet in the model
+    private bool _rebuilding;                   // page boxes are being replaced; their TextChanged is not an edit
+    private int _ownModelMutationDepth;         // > 0 while this panel itself is changing the model
+    private bool _attachedAsSurface;
+    private bool _externalRebuildQueued;
+    private PageBox? _lastCaretBox;             // the page the caret was last placed in
+    private readonly HashSet<PageBox> _editedSinceRepagination = new();
+    private readonly Dictionary<PageBox, double> _contentBottoms = new();
 
     // ── Phase 3b-2: cross-page selection and undo ─────────────────────────────────────────────────
     private readonly CrossPageSelection _crossPageSelection = new();
@@ -104,6 +128,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         IPlatformClipboard? platformClipboard)
     {
         _sourceEditor = sourceEditor;
+        _sourceModel = sourceEditor.Model;
         _pageBoxes = boxes;
         _layoutMode = layoutMode;
         _platformClipboard = platformClipboard ?? new WpfPlatformClipboard(
@@ -130,6 +155,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
 
         // Panel-level Ctrl+C / Ctrl+X / Ctrl+V for cross-page clipboard.
         PreviewKeyDown += OnPanelPreviewKeyDown;
+
+        ScheduleContentBottomCapture();
 
         // Panel-level drag-drop hooks wired per-box below; see HookDragDrop.
     }
@@ -372,11 +399,27 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     private void HookTextChanged(PageBox box)
     {
         box.Body.TextChanged += OnAnyPageBodyTextChanged;
+        box.Body.SelectionChanged += OnAnyPageBodySelectionChanged;
+        box.Body.GotKeyboardFocus += OnAnyPageBodyGotKeyboardFocus;
+        box.BoundaryEditRequested += OnBoundaryEditRequested;
+        box.DocumentNavigationRequested += OnDocumentNavigationRequested;
+        if (box.HeaderSubEditor is { } header)
+            header.TextChanged += OnHeaderFooterTextChanged;
+        if (box.FooterSubEditor is { } footer)
+            footer.TextChanged += OnHeaderFooterTextChanged;
     }
 
     private void UnhookTextChanged(PageBox box)
     {
         box.Body.TextChanged -= OnAnyPageBodyTextChanged;
+        box.Body.SelectionChanged -= OnAnyPageBodySelectionChanged;
+        box.Body.GotKeyboardFocus -= OnAnyPageBodyGotKeyboardFocus;
+        box.BoundaryEditRequested -= OnBoundaryEditRequested;
+        box.DocumentNavigationRequested -= OnDocumentNavigationRequested;
+        if (box.HeaderSubEditor is { } header)
+            header.TextChanged -= OnHeaderFooterTextChanged;
+        if (box.FooterSubEditor is { } footer)
+            footer.TextChanged -= OnHeaderFooterTextChanged;
     }
 
     private void HookShiftArrow(PageBox box)
@@ -390,7 +433,400 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     }
 
     private void OnAnyPageBodyTextChanged(object? sender, System.Windows.Controls.TextChangedEventArgs e)
-        => ScheduleRepaginate();
+    {
+        if (_rebuilding)
+            return;
+
+        _hasPendingBodyEdits = true;
+        if (sender is RichTextBox body && _pageBoxes.FirstOrDefault(b => ReferenceEquals(b.Body, body)) is { } box)
+        {
+            _lastCaretBox = box;
+            _editedSinceRepagination.Add(box);
+        }
+        Edited?.Invoke();
+        ScheduleRepaginate();
+    }
+
+    private void OnHeaderFooterTextChanged(object? sender, System.Windows.Controls.TextChangedEventArgs e)
+    {
+        if (!_rebuilding)
+            Edited?.Invoke();
+    }
+
+    private void OnAnyPageBodySelectionChanged(object? sender, RoutedEventArgs e)
+    {
+        if (!_rebuilding && sender is RichTextBox body
+            && _pageBoxes.FirstOrDefault(b => ReferenceEquals(b.Body, body)) is { } box)
+        {
+            _lastCaretBox = box;
+        }
+    }
+
+    private void OnAnyPageBodyGotKeyboardFocus(object? sender, KeyboardFocusChangedEventArgs e)
+        => OnAnyPageBodySelectionChanged(sender, e);
+
+    // ── W7: the paged editor as the document's editing surface ───────────────────────────────────
+
+    /// <summary>
+    /// Raised whenever the user changes the document on the pages (body or header/footer), before
+    /// the change reaches the model -- the host marks the document dirty from it, so closing the
+    /// window right after typing still prompts to save.
+    /// </summary>
+    internal event Action? Edited;
+
+    /// <summary>The document these pages currently show and commit into.</summary>
+    internal TextDocument SourceModel => _sourceModel;
+
+    /// <summary>True when page text was edited since the last commit into the model.</summary>
+    internal bool HasPendingBodyEdits => _hasPendingBodyEdits;
+
+    /// <summary>The page the caret is in (keyboard focus first, else where it was last placed).</summary>
+    internal PageBox? ActiveBox =>
+        _pageBoxes.FirstOrDefault(b => b.Body.IsKeyboardFocusWithin)
+        ?? (_lastCaretBox is not null && _pageBoxes.Contains(_lastCaretBox) ? _lastCaretBox : null);
+
+    internal void MarkBodyCommitted() => _hasPendingBodyEdits = false;
+
+    /// <summary>
+    /// Runs a model change made by this panel itself (commit, undo, redo) so the source editor's
+    /// change notification is not mistaken for an external edit that requires a rebuild.
+    /// </summary>
+    internal void RunOwnModelMutation(Action mutation)
+    {
+        _ownModelMutationDepth++;
+        try
+        {
+            mutation();
+        }
+        finally
+        {
+            _ownModelMutationDepth--;
+        }
+    }
+
+    /// <summary>
+    /// Makes this panel the source editor's live editing surface: commits, Save/AutoSave/Print and
+    /// Undo/Redo on the (hidden) source editor are routed here, and model changes made by commands
+    /// elsewhere rebuild the pages.
+    /// </summary>
+    internal void AttachAsActiveSurface()
+    {
+        if (_attachedAsSurface)
+            return;
+        _attachedAsSurface = true;
+        _sourceEditor.ExternalEditingSurface = this;
+        _sourceEditor.EditingSessionChanged += OnSourceEditingSessionChanged;
+    }
+
+    /// <summary>
+    /// Releases the source editor (call after the final commit, when leaving the paged view): stops
+    /// pending re-pagination so nothing is written into the model after the view is gone.
+    /// </summary>
+    internal void Detach()
+    {
+        _repaginateTimer?.Stop();
+        if (!_attachedAsSurface)
+            return;
+        _attachedAsSurface = false;
+        if (ReferenceEquals(_sourceEditor.ExternalEditingSurface, this))
+            _sourceEditor.ExternalEditingSurface = null;
+        _sourceEditor.EditingSessionChanged -= OnSourceEditingSessionChanged;
+    }
+
+    private void OnSourceEditingSessionChanged()
+    {
+        if (_ownModelMutationDepth > 0 || !_attachedAsSurface || _externalRebuildQueued)
+            return;
+
+        // A ribbon command, dialog or find/replace changed the model through the bus. Commands commit
+        // first (CommitToModel routes here), so the pages hold nothing the model lacks; rebuild once
+        // the command has finished.
+        _externalRebuildQueued = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            _externalRebuildQueued = false;
+            if (_attachedAsSurface)
+                Rebuild(CaptureCaret());
+        }));
+    }
+
+    void IExternalEditingSurface.CommitPendingEdits() => CommitPendingEdits();
+
+    /// <summary>Writes pending page edits into the model now (one undo unit).</summary>
+    internal void CommitPendingEdits()
+    {
+        _repaginateTimer?.Stop();
+        PaginatedCommitCoordinator.Commit(this, _sourceEditor);
+        // The re-pagination the burst would have triggered still has to happen, for the layout.
+        if (_attachedAsSurface && _pageBoxes.Count > 0)
+            _repaginateTimer?.Start();
+    }
+
+    bool IExternalEditingSurface.CanUndo => _undoCoordinator.CanUndo;
+
+    bool IExternalEditingSurface.CanRedo => _undoCoordinator.CanRedo;
+
+    void IExternalEditingSurface.Undo() => _undoCoordinator.Undo();
+
+    void IExternalEditingSurface.Redo() => _undoCoordinator.Redo();
+
+    void IExternalEditingSurface.OnSourceModelReloaded()
+    {
+        // A different document was loaded into the source editor: the pages' pending edits belong
+        // to the old one and must not be written into the new one.
+        _hasPendingBodyEdits = false;
+        Rebuild(caret: null);
+    }
+
+    /// <summary>Records the caret as a pagination-independent document position.</summary>
+    internal PagedCaretPosition? CaptureCaret()
+    {
+        var active = ActiveBox;
+        if (active is null)
+            return null;
+
+        var blockBase = 0;
+        foreach (var box in _pageBoxes)
+        {
+            var blocks = box.Body.Document.Blocks;
+            if (!ReferenceEquals(box, active))
+            {
+                blockBase += blocks.Count;
+                continue;
+            }
+
+            try
+            {
+                var caret = box.Body.CaretPosition;
+                var index = 0;
+                foreach (var block in blocks)
+                {
+                    if (caret.CompareTo(block.ContentEnd) <= 0)
+                    {
+                        var offset = Math.Max(0, block.ContentStart.GetOffsetToPosition(caret));
+                        return new PagedCaretPosition(blockBase + index, offset);
+                    }
+                    index++;
+                }
+
+                return new PagedCaretPosition(blockBase + Math.Max(0, blocks.Count - 1), int.MaxValue);
+            }
+            catch
+            {
+                return new PagedCaretPosition(blockBase, 0);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Places the caret at <paramref name="caret"/> in whichever page now holds that block (clamped
+    /// to the document), focuses that page and brings it into view.
+    /// </summary>
+    internal void RestoreCaret(PagedCaretPosition? caret)
+    {
+        if (caret is null || _pageBoxes.Count == 0)
+            return;
+
+        var remaining = caret.BlockIndex;
+        PageBox? target = null;
+        System.Windows.Documents.Block? targetBlock = null;
+        foreach (var box in _pageBoxes)
+        {
+            var count = box.Body.Document.Blocks.Count;
+            if (remaining < count)
+            {
+                target = box;
+                targetBlock = box.Body.Document.Blocks.ElementAt(remaining);
+                break;
+            }
+            remaining -= count;
+        }
+
+        if (target is null)
+        {
+            // Past the end (blocks were deleted): the end of the last page that has any text.
+            target = _pageBoxes.LastOrDefault(b => b.Body.Document.Blocks.Count > 0) ?? _pageBoxes[^1];
+            targetBlock = target.Body.Document.Blocks.LastBlock;
+        }
+
+        target.Body.Focus();
+        _lastCaretBox = target;
+        try
+        {
+            TextPointer? position = null;
+            if (targetBlock is not null)
+            {
+                var length = targetBlock.ContentStart.GetOffsetToPosition(targetBlock.ContentEnd);
+                position = targetBlock.ContentStart.GetPositionAtOffset(Math.Min(caret.Offset, length))
+                    ?? targetBlock.ContentEnd;
+                position = position.GetInsertionPosition(LogicalDirection.Backward) ?? position;
+            }
+            if (position is not null)
+                target.Body.CaretPosition = position;
+            target.BringIntoView();
+        }
+        catch
+        {
+            // Caret stays at the page's default position.
+        }
+    }
+
+    // ── W7: editing and navigation across a page boundary ────────────────────────────────────────
+
+    private void OnBoundaryEditRequested(PageBox source, bool backward)
+    {
+        if (backward)
+            MergeAcrossBoundary(source.PreviousBox, source);
+        else
+            MergeAcrossBoundary(source, source.NextBox);
+    }
+
+    /// <summary>
+    /// Backspace at the top of a page / Delete at the bottom of one: joins the last paragraph of
+    /// <paramref name="upper"/> with the first paragraph of <paramref name="lower"/>, exactly as the
+    /// same key joins two paragraphs on one page (the upper paragraph keeps its formatting), and puts
+    /// the caret at the join. Returns false (nothing changes) when either side is not a plain
+    /// paragraph -- a table or list edge -- or a locked content control is involved.
+    /// </summary>
+    internal bool MergeAcrossBoundary(PageBox? upper, PageBox? lower)
+    {
+        if (upper is null || lower is null)
+            return false;
+        if (upper.IsParitySyntheticPage || lower.IsParitySyntheticPage)
+            return false;
+
+        if (upper.Body.Document.Blocks.LastBlock is not System.Windows.Documents.Paragraph upperParagraph
+            || lower.Body.Document.Blocks.FirstBlock is not System.Windows.Documents.Paragraph lowerParagraph)
+        {
+            return false;
+        }
+
+        if (RangeTouchesLockedContentControl(upper, upperParagraph.ContentStart, upperParagraph.ContentEnd)
+            || RangeTouchesLockedContentControl(lower, lowerParagraph.ContentStart, lowerParagraph.ContentEnd))
+        {
+            return false;
+        }
+
+        try
+        {
+            var joinOffset = upperParagraph.ContentStart.GetOffsetToPosition(upperParagraph.ContentEnd);
+            var moved = lowerParagraph.Inlines.ToList();
+            lowerParagraph.Inlines.Clear();
+            lower.Body.Document.Blocks.Remove(lowerParagraph);
+            foreach (var inline in moved)
+                upperParagraph.Inlines.Add(inline);
+
+            upper.Body.Focus();
+            _lastCaretBox = upper;
+            var join = upperParagraph.ContentStart.GetPositionAtOffset(joinOffset) ?? upperParagraph.ContentEnd;
+            upper.Body.CaretPosition = join.GetInsertionPosition(LogicalDirection.Forward) ?? join;
+        }
+        catch
+        {
+            return false;
+        }
+
+        // Both TextChanged events already flagged the edit; re-flow now rather than after the
+        // debounce, so the text pulled up from the next page is laid out where the user looks.
+        ScheduleRepaginate();
+        return true;
+    }
+
+    internal void OnDocumentNavigationRequested(PageBox source, PageNavigationTarget target, bool extendSelection)
+    {
+        if (_pageBoxes.Count == 0)
+            return;
+
+        PageBox destination;
+        bool toStart;
+        switch (target)
+        {
+            case PageNavigationTarget.DocumentStart:
+                destination = _pageBoxes[0];
+                toStart = true;
+                break;
+            case PageNavigationTarget.DocumentEnd:
+                destination = _pageBoxes[^1];
+                toStart = false;
+                break;
+            case PageNavigationTarget.PreviousPage:
+                if (source.PreviousBox is null)
+                {
+                    destination = source;
+                    toStart = true;
+                    break;
+                }
+                destination = source.PreviousBox;
+                toStart = true;
+                break;
+            default:
+                if (source.NextBox is null)
+                {
+                    destination = source;
+                    toStart = false;
+                    break;
+                }
+                destination = source.NextBox;
+                toStart = true;
+                break;
+        }
+
+        var document = destination.Body.Document;
+        var pointer = toStart
+            ? document.ContentStart.GetInsertionPosition(LogicalDirection.Forward)
+            : document.ContentEnd.GetInsertionPosition(LogicalDirection.Backward);
+        if (pointer is null)
+            return;
+
+        if (extendSelection)
+        {
+            if (ReferenceEquals(destination, source))
+            {
+                source.Body.Selection.Select(source.Body.Selection.Start, pointer);
+            }
+            else
+            {
+                if (!_crossPageSelection.HasAnchor)
+                    _crossPageSelection.BeginSelection(_pageBoxes, source, source.Body.CaretPosition);
+                _crossPageSelection.ExtendSelection(_pageBoxes, destination, pointer);
+            }
+        }
+        else
+        {
+            _crossPageSelection.Clear(_pageBoxes);
+            destination.Body.CaretPosition = pointer;
+        }
+
+        destination.Body.Focus();
+        _lastCaretBox = destination;
+        destination.BringIntoView();
+    }
+
+    /// <summary>Ctrl+A in paged view: selects the whole body, across every page.</summary>
+    internal void SelectAllPages()
+    {
+        var first = _pageBoxes.FirstOrDefault(b => !b.IsParitySyntheticPage);
+        var last = _pageBoxes.LastOrDefault(b => !b.IsParitySyntheticPage);
+        if (first is null || last is null)
+            return;
+
+        var start = first.Body.Document.ContentStart.GetInsertionPosition(LogicalDirection.Forward);
+        var end = last.Body.Document.ContentEnd.GetInsertionPosition(LogicalDirection.Backward);
+        if (start is null || end is null)
+            return;
+
+        if (ReferenceEquals(first, last))
+        {
+            first.Body.Selection.Select(start, end);
+            return;
+        }
+
+        _crossPageSelection.Clear(_pageBoxes);
+        _crossPageSelection.BeginSelection(_pageBoxes, first, start);
+        _crossPageSelection.ExtendSelection(_pageBoxes, last, end);
+    }
 
     // ── Phase 3b-2: cross-page selection keyboard handler ────────────────────────────────────────
 
@@ -438,6 +874,12 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
 
         switch (e.Key)
         {
+            case Key.A when (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Alt)) == 0
+                            && _pageBoxes.Any(b => b.Body.IsKeyboardFocusWithin):
+                SelectAllPages();
+                e.Handled = true;
+                break;
+
             case Key.C when _crossPageSelection.IsActive:
                 CopySelection();
                 e.Handled = true;
@@ -736,7 +1178,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 _repaginateTimer.Stop();
                 try
                 {
-                    Repaginate();
+                    CommitAndRepaginateIfLayoutChanged();
                 }
                 catch (Exception)
                 {
@@ -756,177 +1198,81 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     }
 
     /// <summary>
+    /// The debounce tick after a typing burst. The burst is always committed (one undo unit); the
+    /// expensive part -- re-running the shared paginator over the whole document and rebuilding every
+    /// page -- is skipped when no edited page's text got taller or shorter (typing within a line,
+    /// overtyping, retyping a word), because then no block can have moved to another page. Any page
+    /// whose height cannot be measured (no layout yet) forces the full re-pagination.
+    /// </summary>
+    internal void CommitAndRepaginateIfLayoutChanged()
+    {
+        if (_editedSinceRepagination.Count > 0 && _editedSinceRepagination.All(ContentBottomUnchanged))
+        {
+            _repaginateTimer?.Stop();
+            _editedSinceRepagination.Clear();
+            PaginatedCommitCoordinator.Commit(this, _sourceEditor);
+            return;
+        }
+
+        Repaginate();
+    }
+
+    private bool ContentBottomUnchanged(PageBox box) =>
+        _contentBottoms.TryGetValue(box, out var baseline)
+        && MeasureContentBottom(box) is { } current
+        && Math.Abs(current - baseline) < 0.5;
+
+    /// <summary>Bottom of the page body's last line, in the body's coordinates; null without layout.</summary>
+    internal static double? MeasureContentBottom(PageBox box)
+    {
+        try
+        {
+            var end = box.Body.Document.ContentEnd.GetInsertionPosition(LogicalDirection.Backward);
+            var rect = end?.GetCharacterRect(LogicalDirection.Backward) ?? Rect.Empty;
+            return rect.IsEmpty || double.IsNaN(rect.Bottom) || double.IsInfinity(rect.Bottom) ? null : rect.Bottom;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Records each page's laid-out content height once layout has run (after a build/rebuild).</summary>
+    private void ScheduleContentBottomCapture()
+    {
+        _contentBottoms.Clear();
+        Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(CaptureContentBottoms));
+    }
+
+    internal void CaptureContentBottoms()
+    {
+        _contentBottoms.Clear();
+        foreach (var box in _pageBoxes)
+        {
+            if (MeasureContentBottom(box) is { } bottom)
+                _contentBottoms[box] = bottom;
+        }
+    }
+
+    /// <summary>
     /// Commits all page boxes, re-runs the pagination engine, re-shards, and rebuilds the page
-    /// stack.  Preserves the caret by tracking which page box index has keyboard focus, then
-    /// restoring focus to the page box that now occupies that slot (or the nearest one).
+    /// stack. The caret is tracked as a document position (top-level block + offset inside it), not
+    /// as a page slot, so when typing pushes the caret's paragraph onto the next page -- or Backspace
+    /// pulls it back -- the caret follows the text to whichever page now holds it.
     ///
     /// <para>Must run on the UI/STA thread (called from the DispatcherTimer Tick).</para>
     /// </summary>
     internal void Repaginate()
     {
-        // ── Track active box ──────────────────────────────────────────────────────────────────────
-        // Record which page-box index currently has focus and the caret offset within it so we can
-        // restore focus to the same position (or nearest) after rebuild.
-        int focusedBoxIndex = -1;
-        int caretCharOffset = 0;
-        for (int i = 0; i < _pageBoxes.Count; i++)
-        {
-            if (_pageBoxes[i].Body.IsKeyboardFocusWithin)
-            {
-                focusedBoxIndex = i;
-                // Best-effort caret offset within the page-box body.
-                var tp = _pageBoxes[i].Body.CaretPosition;
-                if (tp != null)
-                {
-                    try
-                    {
-                        caretCharOffset = _pageBoxes[i].Body.Document.ContentStart
-                            .GetOffsetToPosition(tp);
-                    }
-                    catch { caretCharOffset = 0; }
-                }
-                break;
-            }
-        }
+        _repaginateTimer?.Stop();
+        _editedSinceRepagination.Clear();
+        var caret = CaptureCaret();
 
         // ── Commit current page boxes into the model ──────────────────────────────────────────────
         PaginatedCommitCoordinator.Commit(this, _sourceEditor);
 
-        // ── Re-shard ──────────────────────────────────────────────────────────────────────────────
-        var model = _sourceEditor.Model;
-
-        var scratch = new DocumentView();
-        scratch.LoadModel(model);
-        var allBlocks = scratch.Document.Blocks.ToList();
-        scratch.Document.Blocks.Clear();
-
-        int[] assignment;
-        int pageCount;
-        try
-        {
-            assignment = PaginationEngine.ComputeBlockPageAssignment(_sourceEditor);
-            pageCount = assignment.Length > 0 ? assignment.Max() + 1 : 1;
-            pageCount = Math.Max(1, pageCount);
-        }
-        catch
-        {
-            assignment = new int[allBlocks.Count];
-            pageCount = 1;
-        }
-
-        var shards = ShardByPageAssignment(allBlocks, assignment, pageCount);
-
-        // Collect footnote IDs per page shard for the repaginated layout.
-        var pageFootnoteIdsRep = new IReadOnlyList<int>[pageCount];
-        for (var i = 0; i < pageCount; i++)
-        {
-            var (fnIds, _) = DocumentView.CollectNoteIds(shards[i]);
-            pageFootnoteIdsRep[i] = fnIds;
-        }
-
-        // ── Rebuild page boxes ────────────────────────────────────────────────────────────────────
-        // Notify undo coordinator that a repagination is starting (resets burst flag).
-        _undoCoordinator.OnRepaginationStarting();
-
-        // Unhook TextChanged, ShiftArrow, and DragDrop from old boxes before discarding them.
-        foreach (var old in _pageBoxes)
-        {
-            UnhookTextChanged(old);
-            _undoCoordinator.UnhookBox(old);
-            UnhookShiftArrow(old);
-            UnhookDragDrop(old);
-        }
-
-        // Clear any cross-page selection since page boxes are being rebuilt.
-        _crossPageSelection.Clear(_pageBoxes);
-        _dragPending = false;
-        _dragActive = false;
-        _dragSourceBox = null;
-
-        ClearPageHost();
-        _pageBoxes.Clear();
-
-        var hasEndnotesRep = model.Endnotes.Count > 0;
-        var endnoteIdsRep = model.Endnotes.Keys.OrderBy(k => k).ToList();
-        var requiresDedicatedEndnotePageRep = hasEndnotesRep && RequiresDedicatedEndnotePage(_sourceEditor);
-        var totalBoxCountRep = requiresDedicatedEndnotePageRep ? pageCount + 1 : pageCount;
-        var pageToSectionRep = HeaderFooterPagePlanner.MapPagesToSections(model, assignment, pageCount);
-        var pageNumberDisplayRep = PageNumberFormatDialogPlanner.BuildDisplayPlans(pageToSectionRep, model, assignment);
-        var differentOddEvenPagesRep = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(model);
-        for (var i = 0; i < pageCount; i++)
-        {
-            // SG: per-section page geometry.
-            var pageSection = pageToSectionRep[i];
-            var slots = HeaderFooterPagePlanner.ResolveSlots(
-                pageSection.HeadersFooters,
-                pageSection.SectionRelativePageNumber,
-                pageSection.PageSettings,
-                differentOddEvenPagesRep,
-                pageNumberDisplayRep[i].LogicalPageNumber);
-            var box = new PageBox(i + 1, pageSection.PageSettings, shards[i],
-                sourceModel: model,
-                headerSlot: slots.Header, headerSlotKind: slots.HeaderSlot,
-                footerSlot: slots.Footer, footerSlotKind: slots.FooterSlot,
-                pageCount: totalBoxCountRep,
-                pageNumberText: pageNumberDisplayRep[i].Text,
-                sectionOrdinal: pageSection.SectionIndex + 1,
-                sectionPageCount: pageSection.SectionPageCount
-                    + (requiresDedicatedEndnotePageRep
-                        && pageSection.SectionIndex == pageToSectionRep[^1].SectionIndex ? 1 : 0),
-                footnoteIds: pageFootnoteIdsRep[i],
-                endnoteIds: hasEndnotesRep && !requiresDedicatedEndnotePageRep && i == pageCount - 1
-                    ? endnoteIdsRep
-                    : null);
-            // freew-cc-3: see the matching comment in Build() above.
-            box.ContentControlLockProbe = _sourceEditor.TryEvaluateContentControlLock;
-            // W21: section-aware commit -- owner resolved per slot (see Build's comment above).
-            box.OwnerSectionHf = ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots.HeaderSlot);
-            box.FooterOwnerSectionHf = ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots.FooterSlot);
-            _pageBoxes.Add(box);
-            AddPageBoxToHost(box);
-            HookTextChanged(box);
-            HookShiftArrow(box);
-            HookDragDrop(box);
-        }
-
-        if (requiresDedicatedEndnotePageRep)
-        {
-            var endnotePage = BuildDedicatedEndnotePage(
-                model, pageCount, assignment, pageToSectionRep,
-                differentOddEvenPagesRep, endnoteIdsRep);
-            _pageBoxes.Add(endnotePage);
-            AddPageBoxToHost(endnotePage);
-            HookTextChanged(endnotePage);
-            HookShiftArrow(endnotePage);
-            HookDragDrop(endnotePage);
-        }
-
-        // Wire neighbour links for cross-page caret routing.
-        for (var i = 0; i < _pageBoxes.Count; i++)
-        {
-            _pageBoxes[i].PreviousBox = i > 0 ? _pageBoxes[i - 1] : null;
-            _pageBoxes[i].NextBox = i < _pageBoxes.Count - 1 ? _pageBoxes[i + 1] : null;
-        }
-
-        // Re-attach undo coordinator to the new boxes.
-        _undoCoordinator.ReAttach(_pageBoxes);
-
-        // ── Restore focus ─────────────────────────────────────────────────────────────────────────
-        if (focusedBoxIndex >= 0 && _pageBoxes.Count > 0)
-        {
-            int restoreIndex = Math.Min(focusedBoxIndex, _pageBoxes.Count - 1);
-            var targetBox = _pageBoxes[restoreIndex];
-            targetBox.Body.Focus();
-            // Restore caret to the recorded offset (best effort).
-            try
-            {
-                var doc = targetBox.Body.Document;
-                var tp = doc.ContentStart.GetPositionAtOffset(caretCharOffset);
-                if (tp != null)
-                    targetBox.Body.CaretPosition = tp;
-            }
-            catch { /* ignore — caret lands at start */ }
-        }
+        RebuildBoxesFromModel();
+        RestoreCaret(caret);
     }
 
     // ── Phase 3b-2: cross-page selection accessor ────────────────────────────────────────────────
@@ -937,127 +1283,160 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     /// <summary>The panel-level cross-page undo coordinator.</summary>
     internal CrossPageUndoCoordinator UndoCoordinator => _undoCoordinator;
 
-    // ── Phase 3b-2: full rebuild (used by undo coordinator to restore a snapshot) ───────────────
+    // ── full rebuild (undo/redo, external model changes) ─────────────────────────────────────────
 
     /// <summary>
     /// Re-shards the panel from the <see cref="_sourceEditor"/>'s current model state, rebuilding
-    /// all page boxes.  Called by <see cref="CrossPageUndoCoordinator"/> after restoring a snapshot.
-    /// The caret is moved to the first box.
+    /// all page boxes, without committing them first (the model is authoritative here: an undo/redo
+    /// or an external command has just changed it). The caret moves to the first page.
     /// </summary>
-    internal void Rebuild()
+    internal void Rebuild() => Rebuild(caret: null);
+
+    /// <summary>
+    /// <see cref="Rebuild()"/>, restoring the caret to <paramref name="caret"/> (clamped to the
+    /// rebuilt document) when one is given.
+    /// </summary>
+    internal void Rebuild(PagedCaretPosition? caret)
     {
-        // Re-run the full Repaginate logic but without caret tracking (we lost the old boxes).
-        _undoCoordinator.OnRepaginationStarting();
-
-        foreach (var old in _pageBoxes)
+        _repaginateTimer?.Stop();
+        _hasPendingBodyEdits = false;
+        RebuildBoxesFromModel();
+        if (caret is not null)
+            RestoreCaret(caret);
+        else if (_pageBoxes.Count > 0)
         {
-            UnhookTextChanged(old);
-            _undoCoordinator.UnhookBox(old);
-            UnhookShiftArrow(old);
-            UnhookDragDrop(old);
+            _pageBoxes[0].Body.Focus();
+            _lastCaretBox = _pageBoxes[0];
         }
-        _crossPageSelection.Clear(_pageBoxes);
-        _dragPending = false;
-        _dragActive = false;
-        _dragSourceBox = null;
-        ClearPageHost();
-        _pageBoxes.Clear();
+    }
 
-        var model = _sourceEditor.Model;
-
-        var scratch = new DocumentView();
-        scratch.LoadModel(model);
-        var allBlocks = scratch.Document.Blocks.ToList();
-        scratch.Document.Blocks.Clear();
-
-        int[] assignment;
-        int pageCount;
+    private void RebuildBoxesFromModel()
+    {
+        _rebuilding = true;
         try
         {
-            assignment = PaginationEngine.ComputeBlockPageAssignment(_sourceEditor);
-            pageCount = assignment.Length > 0 ? assignment.Max() + 1 : 1;
-            pageCount = Math.Max(1, pageCount);
+            _undoCoordinator.OnRepaginationStarting();
+
+            foreach (var old in _pageBoxes)
+            {
+                UnhookTextChanged(old);
+                _undoCoordinator.UnhookBox(old);
+                UnhookShiftArrow(old);
+                UnhookDragDrop(old);
+            }
+
+            // Clear any cross-page selection since page boxes are being rebuilt.
+            _crossPageSelection.Clear(_pageBoxes);
+            _dragPending = false;
+            _dragActive = false;
+            _dragSourceBox = null;
+            _lastCaretBox = null;
+
+            ClearPageHost();
+            _pageBoxes.Clear();
+
+            var model = _sourceEditor.Model;
+            _sourceModel = model;
+
+            var scratch = new DocumentView();
+            scratch.LoadModel(model);
+            var allBlocks = scratch.Document.Blocks.ToList();
+            scratch.Document.Blocks.Clear();
+
+            int[] assignment;
+            int pageCount;
+            try
+            {
+                assignment = PaginationEngine.ComputeBlockPageAssignment(_sourceEditor, out var totalPageCount, null);
+                pageCount = assignment.Length > 0 ? assignment.Max() + 1 : 1;
+                // Same rule as Build: a final block that runs past its first page owns those pages too.
+                pageCount = Math.Max(1, Math.Max(pageCount, totalPageCount));
+            }
+            catch
+            {
+                assignment = new int[allBlocks.Count];
+                pageCount = 1;
+            }
+
+            var shards = ShardByPageAssignment(allBlocks, assignment, pageCount);
+
+            var pageFootnoteIds = new IReadOnlyList<int>[pageCount];
+            for (var i = 0; i < pageCount; i++)
+            {
+                var (fnIds, _) = DocumentView.CollectNoteIds(shards[i]);
+                pageFootnoteIds[i] = fnIds;
+            }
+
+            var hasEndnotes = model.Endnotes.Count > 0;
+            var endnoteIds = model.Endnotes.Keys.OrderBy(k => k).ToList();
+            var requiresDedicatedEndnotePage = hasEndnotes && RequiresDedicatedEndnotePage(_sourceEditor);
+            var totalBoxCount = requiresDedicatedEndnotePage ? pageCount + 1 : pageCount;
+            var pageToSection = HeaderFooterPagePlanner.MapPagesToSections(model, assignment, pageCount);
+            var pageNumberDisplay = PageNumberFormatDialogPlanner.BuildDisplayPlans(pageToSection, model, assignment);
+            var differentOddEvenPages = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(model);
+            for (var i = 0; i < pageCount; i++)
+            {
+                // SG: per-section page geometry.
+                var pageSection = pageToSection[i];
+                var slots = HeaderFooterPagePlanner.ResolveSlots(
+                    pageSection.HeadersFooters,
+                    pageSection.SectionRelativePageNumber,
+                    pageSection.PageSettings,
+                    differentOddEvenPages,
+                    pageNumberDisplay[i].LogicalPageNumber);
+                var box = new PageBox(i + 1, pageSection.PageSettings, shards[i],
+                    sourceModel: model,
+                    headerSlot: slots.Header, headerSlotKind: slots.HeaderSlot,
+                    footerSlot: slots.Footer, footerSlotKind: slots.FooterSlot,
+                    pageCount: totalBoxCount,
+                    pageNumberText: pageNumberDisplay[i].Text,
+                    sectionOrdinal: pageSection.SectionIndex + 1,
+                    sectionPageCount: pageSection.SectionPageCount
+                        + (requiresDedicatedEndnotePage
+                            && pageSection.SectionIndex == pageToSection[^1].SectionIndex ? 1 : 0),
+                    footnoteIds: pageFootnoteIds[i],
+                    endnoteIds: hasEndnotes && !requiresDedicatedEndnotePage && i == pageCount - 1
+                        ? endnoteIds
+                        : null);
+                // freew-cc-3: see the matching comment in Build() above.
+                box.ContentControlLockProbe = _sourceEditor.TryEvaluateContentControlLock;
+                // W21: section-aware commit -- owner resolved per slot (see Build's comment above).
+                box.OwnerSectionHf = ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots.HeaderSlot);
+                box.FooterOwnerSectionHf = ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots.FooterSlot);
+                AddRebuiltBox(box);
+            }
+
+            if (requiresDedicatedEndnotePage)
+            {
+                AddRebuiltBox(BuildDedicatedEndnotePage(
+                    model, pageCount, assignment, pageToSection,
+                    differentOddEvenPages, endnoteIds));
+            }
+
+            // Wire neighbour links for cross-page caret routing.
+            for (var i = 0; i < _pageBoxes.Count; i++)
+            {
+                _pageBoxes[i].PreviousBox = i > 0 ? _pageBoxes[i - 1] : null;
+                _pageBoxes[i].NextBox = i < _pageBoxes.Count - 1 ? _pageBoxes[i + 1] : null;
+            }
+
+            _undoCoordinator.ReAttach(_pageBoxes);
+            _editedSinceRepagination.Clear();
+            ScheduleContentBottomCapture();
         }
-        catch
+        finally
         {
-            assignment = new int[allBlocks.Count];
-            pageCount = 1;
+            _rebuilding = false;
         }
+    }
 
-        var shards = ShardByPageAssignment(allBlocks, assignment, pageCount);
-
-        var pageFootnoteIdsReb = new IReadOnlyList<int>[pageCount];
-        for (var i = 0; i < pageCount; i++)
-        {
-            var (fnIds, _) = DocumentView.CollectNoteIds(shards[i]);
-            pageFootnoteIdsReb[i] = fnIds;
-        }
-
-        var hasEndnotesReb = model.Endnotes.Count > 0;
-        var endnoteIdsReb = model.Endnotes.Keys.OrderBy(k => k).ToList();
-        var requiresDedicatedEndnotePageReb = hasEndnotesReb && RequiresDedicatedEndnotePage(_sourceEditor);
-        var totalBoxCountReb = requiresDedicatedEndnotePageReb ? pageCount + 1 : pageCount;
-        var pageToSectionReb = HeaderFooterPagePlanner.MapPagesToSections(model, assignment, pageCount);
-        var pageNumberDisplayReb = PageNumberFormatDialogPlanner.BuildDisplayPlans(pageToSectionReb, model, assignment);
-        var differentOddEvenPagesReb = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(model);
-        for (var i = 0; i < pageCount; i++)
-        {
-            // SG: per-section page geometry.
-            var pageSection = pageToSectionReb[i];
-            var slots = HeaderFooterPagePlanner.ResolveSlots(
-                pageSection.HeadersFooters,
-                pageSection.SectionRelativePageNumber,
-                pageSection.PageSettings,
-                differentOddEvenPagesReb,
-                pageNumberDisplayReb[i].LogicalPageNumber);
-            var box = new PageBox(i + 1, pageSection.PageSettings, shards[i],
-                sourceModel: model,
-                headerSlot: slots.Header, headerSlotKind: slots.HeaderSlot,
-                footerSlot: slots.Footer, footerSlotKind: slots.FooterSlot,
-                pageCount: totalBoxCountReb,
-                pageNumberText: pageNumberDisplayReb[i].Text,
-                sectionOrdinal: pageSection.SectionIndex + 1,
-                sectionPageCount: pageSection.SectionPageCount
-                    + (requiresDedicatedEndnotePageReb
-                        && pageSection.SectionIndex == pageToSectionReb[^1].SectionIndex ? 1 : 0),
-                footnoteIds: pageFootnoteIdsReb[i],
-                endnoteIds: hasEndnotesReb && !requiresDedicatedEndnotePageReb && i == pageCount - 1
-                    ? endnoteIdsReb
-                    : null);
-            // freew-cc-3: see the matching comment in Build() above.
-            box.ContentControlLockProbe = _sourceEditor.TryEvaluateContentControlLock;
-            // W21: section-aware commit -- owner resolved per slot (see Build's comment above).
-            box.OwnerSectionHf = ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots.HeaderSlot);
-            box.FooterOwnerSectionHf = ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots.FooterSlot);
-            _pageBoxes.Add(box);
-            AddPageBoxToHost(box);
-            HookTextChanged(box);
-            HookShiftArrow(box);
-            HookDragDrop(box);
-        }
-
-        if (requiresDedicatedEndnotePageReb)
-        {
-            var endnotePage = BuildDedicatedEndnotePage(
-                model, pageCount, assignment, pageToSectionReb,
-                differentOddEvenPagesReb, endnoteIdsReb);
-            _pageBoxes.Add(endnotePage);
-            AddPageBoxToHost(endnotePage);
-            HookTextChanged(endnotePage);
-            HookShiftArrow(endnotePage);
-            HookDragDrop(endnotePage);
-        }
-
-        for (var i = 0; i < _pageBoxes.Count; i++)
-        {
-            _pageBoxes[i].PreviousBox = i > 0 ? _pageBoxes[i - 1] : null;
-            _pageBoxes[i].NextBox = i < _pageBoxes.Count - 1 ? _pageBoxes[i + 1] : null;
-        }
-
-        _undoCoordinator.ReAttach(_pageBoxes);
-
-        if (_pageBoxes.Count > 0)
-            _pageBoxes[0].Body.Focus();
+    private void AddRebuiltBox(PageBox box)
+    {
+        _pageBoxes.Add(box);
+        AddPageBoxToHost(box);
+        HookTextChanged(box);
+        HookShiftArrow(box);
+        HookDragDrop(box);
     }
 
     private static bool RequiresDedicatedEndnotePage(DocumentView editor)

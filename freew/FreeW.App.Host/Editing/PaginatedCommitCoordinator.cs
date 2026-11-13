@@ -46,23 +46,38 @@ internal static class PaginatedCommitCoordinator
     {
         var model = targetEditor.Model;
 
+        // The page boxes were built from one specific document. If the editor has since loaded a
+        // different one (File > Open, mail-merge preview), writing these pages into it would replace
+        // the new document's body with the old one's.
+        if (!ReferenceEquals(panel.SourceModel, model))
+            return;
+
         // ── Phase 4: commit in-page header/footer sub-editors to their model slots first ─────────
         // This mirrors CloseHeaderFooterPane in MainWindow: sub-editors → wrapper model → slot.
         // Must happen before the body-block reassembly so a subsequent Render/LoadModel picks up
         // the updated header/footer paragraphs.
         panel.CommitHeaderFooterSlots(targetEditor);
 
+        // Nothing typed on the pages since the last commit: the model is already authoritative, and
+        // re-reading untouched pages would only push an empty undo unit (and run every block through
+        // the read path for no reason).
+        if (!panel.HasPendingBodyEdits)
+            return;
+
         var collected = new List<ModelBlock>();
 
         foreach (var box in panel.PageBoxes)
             targetEditor.ReadBlocksInto(box.Body.Document, collected);
 
-        model.Blocks.Clear();
-        foreach (var block in collected)
-            model.Blocks.Add(block);
-
         // Mirror CommitToModel: never leave an empty block list.
-        if (model.Blocks.Count == 0)
-            model.Blocks.Add(new ModelParagraph());
+        if (collected.Count == 0)
+            collected.Add(new ModelParagraph());
+
+        // One undo unit per edit burst, on the same DocumentCommandBus history the continuous editor
+        // uses: undo restores the exact pre-burst block instances, so the document is exactly equal
+        // to what it was, whichever pages the burst touched.
+        panel.RunOwnModelMutation(() =>
+            targetEditor.Commands.Execute(new ReplaceBlocksCommand(0, model.Blocks.Count, collected)));
+        panel.MarkBodyCommitted();
     }
 }

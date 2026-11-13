@@ -1548,13 +1548,21 @@ public sealed partial class DocumentView : RichTextBox
     /// <summary>Undo/redo command bus over this view's model (backed by the shared UndoRedoStack).</summary>
     public DocumentCommandBus Commands => _commands;
 
+    /// <summary>
+    /// The surface that currently owns this view's body (the paged editor), or null when this view
+    /// is the live editing surface. See <see cref="IExternalEditingSurface"/>.
+    /// </summary>
+    internal IExternalEditingSurface? ExternalEditingSurface { get; set; }
+
     public new bool CanUndo =>
+        ExternalEditingSurface is { } surface ? surface.CanUndo :
         (base.CanUndo && AllowsRestrictEditingHistoryOperation(RestrictEditingOperationKind.HistoryUndo, mutationKind: null))
         || (_commands.CanUndo && AllowsRestrictEditingHistoryOperation(
             RestrictEditingOperationKind.HistoryUndo,
             _commands.NextUndoMutationKind));
 
     public new bool CanRedo =>
+        ExternalEditingSurface is { } surface ? surface.CanRedo :
         (base.CanRedo && AllowsRestrictEditingHistoryOperation(RestrictEditingOperationKind.HistoryRedo, mutationKind: null))
         || (_commands.CanRedo && AllowsRestrictEditingHistoryOperation(
             RestrictEditingOperationKind.HistoryRedo,
@@ -1562,6 +1570,12 @@ public sealed partial class DocumentView : RichTextBox
 
     public new void Undo()
     {
+        if (ExternalEditingSurface is { } surface)
+        {
+            surface.Undo();
+            return;
+        }
+
         if (base.CanUndo
             && AllowsRestrictEditingHistoryOperation(RestrictEditingOperationKind.HistoryUndo, mutationKind: null))
         {
@@ -1582,6 +1596,12 @@ public sealed partial class DocumentView : RichTextBox
 
     public new void Redo()
     {
+        if (ExternalEditingSurface is { } surface)
+        {
+            surface.Redo();
+            return;
+        }
+
         if (base.CanRedo
             && AllowsRestrictEditingHistoryOperation(RestrictEditingOperationKind.HistoryRedo, mutationKind: null))
         {
@@ -1609,6 +1629,7 @@ public sealed partial class DocumentView : RichTextBox
         ApplySpellCheckVisibility();
         ResetProofingSessionState();
         Render();
+        ExternalEditingSurface?.OnSourceModelReloaded();
     }
 
     /// <summary>
@@ -8857,6 +8878,14 @@ public sealed partial class DocumentView : RichTextBox
     /// <summary>Read the edited FlowDocument back into the model (paragraphs + tables).</summary>
     public void CommitToModel()
     {
+        // While the paged editor owns the body, this view's own FlowDocument is a stale, hidden
+        // projection: reading it back would overwrite everything typed on the pages.
+        if (ExternalEditingSurface is { } surface)
+        {
+            surface.CommitPendingEdits();
+            return;
+        }
+
         // Read the (visible) FlowDocument blocks back into a fresh list first. When outline collapse is
         // active the view only holds the visible blocks, so the hidden model blocks are spliced back in
         // afterwards (see MergeHiddenBlocks) to keep the model document complete.

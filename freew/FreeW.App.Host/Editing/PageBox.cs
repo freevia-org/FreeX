@@ -13,6 +13,20 @@ namespace FreeW.App.Host.Editing;
 /// Shift+arrow selection boundary was crossed.</summary>
 internal delegate void CrossPageShiftArrowHandler(PageBox source, bool movingForward);
 
+/// <summary>Backspace at the top of a page (<paramref name="backward"/>) or Delete at the bottom of one.</summary>
+internal delegate void CrossPageBoundaryEditHandler(PageBox source, bool backward);
+
+/// <summary>Document-level caret movement the page itself cannot perform.</summary>
+internal enum PageNavigationTarget
+{
+    DocumentStart,
+    DocumentEnd,
+    PreviousPage,
+    NextPage
+}
+
+internal delegate void PageNavigationHandler(PageBox source, PageNavigationTarget target, bool extendSelection);
+
 
 /// <summary>
 /// One physical page slot in the <see cref="PaginatedEditorPanel"/>.  Hosts an editable header
@@ -198,6 +212,15 @@ internal sealed class PageBox : Border
     /// the <see cref="CrossPageSelection"/> model.
     /// </summary>
     internal event CrossPageShiftArrowHandler? ShiftArrowBoundaryReached;
+
+    /// <summary>
+    /// Fired for Backspace with the caret at the very start of this page, or Delete at its very end
+    /// (no selection): the panel joins the paragraphs on either side of the page boundary.
+    /// </summary>
+    internal event CrossPageBoundaryEditHandler? BoundaryEditRequested;
+
+    /// <summary>Fired for Ctrl+Home / Ctrl+End / Page Up / Page Down (Shift extends the selection).</summary>
+    internal event PageNavigationHandler? DocumentNavigationRequested;
 
     // ── construction ─────────────────────────────────────────────────────────────────────────────
 
@@ -731,9 +754,40 @@ internal sealed class PageBox : Border
         }
 
         bool shiftHeld = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+        bool ctrlHeld = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
 
         switch (e.Key)
         {
+            case Key.Back when !ctrlHeld && PreviousBox is not null && Body.Selection.IsEmpty && IsCaretAtDocumentStart():
+                BoundaryEditRequested?.Invoke(this, backward: true);
+                e.Handled = true;
+                break;
+
+            case Key.Delete when !ctrlHeld && NextBox is not null && Body.Selection.IsEmpty && IsCaretAtDocumentEnd():
+                BoundaryEditRequested?.Invoke(this, backward: false);
+                e.Handled = true;
+                break;
+
+            case Key.Home when ctrlHeld:
+                DocumentNavigationRequested?.Invoke(this, PageNavigationTarget.DocumentStart, shiftHeld);
+                e.Handled = true;
+                break;
+
+            case Key.End when ctrlHeld:
+                DocumentNavigationRequested?.Invoke(this, PageNavigationTarget.DocumentEnd, shiftHeld);
+                e.Handled = true;
+                break;
+
+            case Key.PageUp when !ctrlHeld:
+                DocumentNavigationRequested?.Invoke(this, PageNavigationTarget.PreviousPage, shiftHeld);
+                e.Handled = true;
+                break;
+
+            case Key.PageDown when !ctrlHeld:
+                DocumentNavigationRequested?.Invoke(this, PageNavigationTarget.NextPage, shiftHeld);
+                e.Handled = true;
+                break;
+
             case Key.Down:
             case Key.Right:
                 if (NextBox is not null && IsCaretAtDocumentEnd())
