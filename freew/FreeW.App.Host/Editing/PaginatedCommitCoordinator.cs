@@ -52,6 +52,12 @@ internal static class PaginatedCommitCoordinator
         if (!ReferenceEquals(panel.SourceModel, model))
             return;
 
+        // Re-entrant call: applying the commit re-renders the source editor, whose chrome refresh
+        // updates ribbon state, and several state queries commit the editor first. The model is being
+        // written right now; committing again would recurse until the stack overflows.
+        if (panel.IsMutatingModel)
+            return;
+
         // ── Phase 4: commit in-page header/footer sub-editors to their model slots first ─────────
         // This mirrors CloseHeaderFooterPane in MainWindow: sub-editors → wrapper model → slot.
         // Must happen before the body-block reassembly so a subsequent Render/LoadModel picks up
@@ -76,8 +82,18 @@ internal static class PaginatedCommitCoordinator
         // One undo unit per edit burst, on the same DocumentCommandBus history the continuous editor
         // uses: undo restores the exact pre-burst block instances, so the document is exactly equal
         // to what it was, whichever pages the burst touched.
-        panel.RunOwnModelMutation(() =>
-            targetEditor.Commands.Execute(new ReplaceBlocksCommand(0, model.Blocks.Count, collected)));
+        // Cleared before applying so anything the apply triggers sees a clean surface; restored if
+        // the command throws so the edits are not silently dropped.
         panel.MarkBodyCommitted();
+        try
+        {
+            panel.RunOwnModelMutation(() =>
+                targetEditor.Commands.Execute(new ReplaceBlocksCommand(0, model.Blocks.Count, collected)));
+        }
+        catch
+        {
+            panel.MarkBodyPending();
+            throw;
+        }
     }
 }

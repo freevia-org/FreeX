@@ -48,6 +48,44 @@ public sealed class PagedEditW7SurfaceTests
     }
 
     [StaFact]
+    public void CommitThatTriggersAnotherCommitWhileApplying_DoesNotRecurse()
+    {
+        var (panel, editor) = BuildTwoPagePanel();
+        panel.AttachAsActiveSurface();
+        // Ribbon state queries commit the editor first, and they run from the re-render the commit
+        // itself causes (this recursed until the stack overflowed).
+        var reentrantCommits = 0;
+        editor.EditingSessionChanged += () =>
+        {
+            reentrantCommits++;
+            editor.CommitToModel();
+        };
+
+        Append(panel.PageBoxes[0], " once");
+        editor.CommitToModel();
+
+        reentrantCommits.Should().Be(1);
+        ModelTexts(editor)[0].Should().Be("Page 1 content once");
+        editor.Undo();
+        ModelTexts(editor)[0].Should().Be("Page 1 content", "it was a single undo unit");
+        panel.Detach();
+    }
+
+    [StaFact]
+    public void HiddenEditorCommitWithNothingPending_IsANoOp()
+    {
+        var (panel, editor) = BuildTwoPagePanel();
+        panel.AttachAsActiveSurface();
+        var before = editor.Model.Blocks.ToList();
+
+        editor.CommitToModel();
+
+        editor.Model.Blocks.Should().Equal(before);
+        editor.Commands.CanUndo.Should().BeFalse();
+        panel.Detach();
+    }
+
+    [StaFact]
     public void TypingOnAPage_RaisesEditedBeforeTheModelChanges()
     {
         var (panel, editor) = BuildTwoPagePanel();

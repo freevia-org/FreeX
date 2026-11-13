@@ -487,6 +487,11 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
 
     internal void MarkBodyCommitted() => _hasPendingBodyEdits = false;
 
+    internal void MarkBodyPending() => _hasPendingBodyEdits = true;
+
+    /// <summary>True while this panel is itself writing the model (commit, undo, redo).</summary>
+    internal bool IsMutatingModel => _ownModelMutationDepth > 0;
+
     /// <summary>
     /// Runs a model change made by this panel itself (commit, undo, redo) so the source editor's
     /// change notification is not mistaken for an external edit that requires a rebuild.
@@ -555,10 +560,13 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
     /// <summary>Writes pending page edits into the model now (one undo unit).</summary>
     internal void CommitPendingEdits()
     {
+        // Called often and incidentally (ribbon state queries commit the editor first), so it must
+        // be a no-op when nothing is pending and must never schedule work of its own.
+        var reflowWasScheduled = _repaginateTimer?.IsEnabled == true;
         _repaginateTimer?.Stop();
         PaginatedCommitCoordinator.Commit(this, _sourceEditor);
-        // The re-pagination the burst would have triggered still has to happen, for the layout.
-        if (_attachedAsSurface && _pageBoxes.Count > 0)
+        // The re-pagination the burst already scheduled still has to happen, for the layout.
+        if (reflowWasScheduled && _attachedAsSurface && _pageBoxes.Count > 0)
             _repaginateTimer?.Start();
     }
 
