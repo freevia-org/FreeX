@@ -46,6 +46,35 @@ public sealed class PagedEditW9IncrementalTests(Xunit.Abstractions.ITestOutputHe
         panel.Detach();
     }
 
+    /// <summary>
+    /// W13: a document with inline manual page breaks no longer re-renders the whole hidden editor on a
+    /// commit: only the replaced blocks are refreshed, and the hidden editor still equals a fresh render.
+    /// </summary>
+    [StaFact]
+    public void InlineBreakDocument_PageEdit_RefreshesTheHiddenEditorInPlace()
+    {
+        var (panel, editor) = BuildPanel(PagedEditW7PerformanceProbe.InlineBreakDocument(paragraphs: 40));
+        panel.AttachAsActiveSurface();
+        editor.RefreshFromModel();
+        var before = editor.Model.Blocks.ToList();
+        var fullRenders = editor.FullBodyRenderCount;
+
+        Append(panel.PageBoxes[3], " typed");
+        PaginatedCommitCoordinator.Commit(panel, editor);
+
+        editor.IncrementalBodyRefreshCount.Should().Be(1, "only the replaced blocks are rendered again (refused at {0})", editor.LastBodyRefreshRefusal);
+        editor.FullBodyRenderCount.Should().Be(fullRenders);
+        HiddenText(editor).Should().Be(FreshRenderText(editor.Model));
+        editor.Model.Blocks.Count(block => block is ModelParagraph p && p.Runs.Any(run => run.IsPageBreak))
+            .Should().Be(before.Count(block => block is ModelParagraph p && p.Runs.Any(run => run.IsPageBreak)), "no break is lost");
+
+        panel.Repaginate();
+        PageTexts(panel).Should().Equal(PageTexts(PaginatedEditorPanel.Build(editor)));
+        editor.Undo();
+        editor.Model.Blocks.Should().Equal(before, "undo restores the exact block instances");
+        panel.Detach();
+    }
+
     [StaFact]
     public void Reflow_KeepsUnchangedPageBoxes_AndMatchesAFreshBuild()
     {

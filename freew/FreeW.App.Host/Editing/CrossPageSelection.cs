@@ -66,6 +66,32 @@ internal sealed class CrossPageSelection
     /// <summary>True when any selection state is recorded (even single-box).</summary>
     internal bool HasAnchor => AnchorBoxIndex >= 0 && AnchorPointer is not null;
 
+    /// <summary>One page's share of a selection inside one cell of a table row split across pages.</summary>
+    internal readonly record struct CellShare(PageBox Box, TextPointer From, TextPointer To, bool TextSeamAfter);
+
+    /// <summary>
+    /// Set by the paged editor: when the selection starts and ends in two pages' shares of the same cell of
+    /// a row split across pages, the shares it covers (in page order); else null. Such a selection is the
+    /// cell's text across the page boundary, not every cell between its two ends in page order.
+    /// </summary>
+    internal Func<int, TextPointer, int, TextPointer, IReadOnlyList<CellShare>?>? SplitCellShares { get; set; }
+
+    /// <summary>The split-cell shares of the current selection (see <see cref="SplitCellShares"/>), or null.</summary>
+    internal IReadOnlyList<CellShare>? CurrentCellShares(IReadOnlyList<PageBox> boxes)
+    {
+        if (!IsActive || AnchorPointer is null || ActivePointer is null || SplitCellShares is null)
+            return null;
+        var (startBox, startPtr, endBox, endPtr) = NormalizeDirection(boxes);
+        try
+        {
+            return SplitCellShares(startBox, startPtr, endBox, endPtr);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     // ── public API ────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -142,6 +168,22 @@ internal sealed class CrossPageSelection
         var (startBox, startPtr, endBox, endPtr) = NormalizeDirection(boxes);
         var sb = new System.Text.StringBuilder();
 
+        if (CurrentCellShares(boxes) is { } shares)
+        {
+            for (var k = 0; k < shares.Count; k++)
+            {
+                try
+                {
+                    sb.Append(new TextRange(shares[k].From, shares[k].To).Text);
+                    // Shares split between paragraphs are separate paragraphs; a mid-line seam is not.
+                    if (k + 1 < shares.Count && !shares[k].TextSeamAfter)
+                        sb.Append("\r\n");
+                }
+                catch { /* ignore position validity issues */ }
+            }
+            return sb.ToString();
+        }
+
         for (int i = startBox; i <= endBox; i++)
         {
             var box = boxes[i];
@@ -182,6 +224,19 @@ internal sealed class CrossPageSelection
     private void ApplyRenderedSelection(IReadOnlyList<PageBox> boxes)
     {
         var (startBox, startPtr, endBox, endPtr) = NormalizeDirection(boxes);
+
+        if (CurrentCellShares(boxes) is { } shares)
+        {
+            foreach (var share in shares)
+            {
+                try
+                {
+                    share.Box.Body.Selection.Select(share.From, share.To);
+                }
+                catch { /* ignore invalid pointer states */ }
+            }
+            return;
+        }
 
         for (int i = startBox; i <= endBox; i++)
         {

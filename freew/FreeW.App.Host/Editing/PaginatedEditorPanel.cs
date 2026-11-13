@@ -217,6 +217,7 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
 
         // Attach undo coordinator after all boxes are wired.
         _undoCoordinator.Attach(this, sourceEditor);
+        _crossPageSelection.SplitCellShares = SplitCellShares;
 
         // Panel-level Ctrl+C / Ctrl+X / Ctrl+V for cross-page clipboard.
         PreviewKeyDown += OnPanelPreviewKeyDown;
@@ -548,6 +549,7 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
         box.Body.SelectionChanged += OnAnyPageBodySelectionChanged;
         box.Body.GotKeyboardFocus += OnAnyPageBodyGotKeyboardFocus;
         box.BoundaryEditRequested += OnBoundaryEditRequested;
+        box.CellSeamKey = OnCellSeamKey;
         box.DocumentNavigationRequested += OnDocumentNavigationRequested;
         HookHeaderFooter(box);
         HookMarkup(box);
@@ -572,6 +574,7 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
         box.Body.SelectionChanged -= OnAnyPageBodySelectionChanged;
         box.Body.GotKeyboardFocus -= OnAnyPageBodyGotKeyboardFocus;
         box.BoundaryEditRequested -= OnBoundaryEditRequested;
+        box.CellSeamKey = null;
         box.DocumentNavigationRequested -= OnDocumentNavigationRequested;
         UnhookHeaderFooter(box);
         UnhookMarkup(box);
@@ -875,9 +878,12 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
                     var local = Math.Max(0, block.ContentStart.GetOffsetToPosition(pointer));
                     return new PagedCaretPosition(
                         Math.Max(0, blockBase + index),
-                        box.PieceOf(block) is { } piece
-                            ? PieceBase(box, block) + Math.Clamp(local - piece.Open, 0, piece.Span)
-                            : local);
+                        box.PieceOf(block) switch
+                        {
+                            { Map: { } map } => map.ToFull(local),
+                            { } piece => PieceBase(box, block) + Math.Clamp(local - piece.Open, 0, piece.Span),
+                            null => local,
+                        });
                 }
             }
 
@@ -959,6 +965,8 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
         System.Windows.Documents.Block? chosen = null;
         PagePiece? chosenPiece = null;
         var chosenBase = 0;
+        var chosenMappedLocal = -1;
+        var chosenDistance = int.MaxValue;
         var pieceBase = 0;
         var previousSpan = 0;
         foreach (var box in _pageBoxes)
@@ -980,6 +988,18 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
                 previousSpan = piece?.Span ?? PageSplitter.SymbolLength(block);
                 if (logical != position.BlockIndex)
                     continue;
+                if (piece?.Map is { } map)
+                {
+                    // A piece of a table split inside a row: the piece that shows the offset (on a tie
+                    // between the side before a cut and the side after, the later piece), else the nearest.
+                    var (mappedLocal, distance) = map.ToLocal(position.Offset);
+                    if (chosen is null || distance <= chosenDistance)
+                    {
+                        (chosenBox, chosen, chosenPiece, chosenBase) = (box, block, piece, 0);
+                        (chosenMappedLocal, chosenDistance) = (mappedLocal, distance);
+                    }
+                    continue;
+                }
                 if (chosen is null || position.Offset >= pieceBase)
                 {
                     (chosenBox, chosen, chosenPiece, chosenBase) = (box, block, piece, pieceBase);
@@ -996,7 +1016,11 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
 
         var length = PageSplitter.SymbolLength(chosen);
         int local;
-        if (chosenPiece is null)
+        if (chosenPiece?.Map is not null)
+        {
+            local = chosenMappedLocal;
+        }
+        else if (chosenPiece is null)
         {
             local = Math.Min(position.Offset, length);
         }
@@ -1352,6 +1376,241 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
         return true;
     }
 
+    /// <summary>
+    /// Backspace/Left at the start of a cell's content on a page that continues a split row, Delete/Right
+    /// at the end of one on the page before: the cell's text runs on in the same cell across the page
+    /// boundary, so the key acts on the other side as it would within the cell (a mid-line seam deletes or
+    /// steps over the character across it; a seam between paragraphs joins them). False: not at such an
+    /// edge (the native key handling applies).
+    /// </summary>
+    internal bool OnCellSeamKey(PageBox box, Key key)
+    {
+        try
+        {
+            var caret = box.Body.CaretPosition;
+            if (EnclosingCell(caret) is not { Parent: System.Windows.Documents.TableRow row } cell
+                || TopLevelBlock(cell) is not { } top
+                || box.PieceOf(top) is not { } piece)
+            {
+                return false;
+            }
+            var index = row.Cells.IndexOf(cell);
+            if (index < 0)
+                return false;
+
+            if (key is Key.Back or Key.Left
+                && ReferenceEquals(piece.RowContinuedFromPrevious, row)
+                && CellContentStart(cell) is { } start && caret.CompareTo(start) <= 0
+                && TryPreviousBlock(box, top, out var upperBox, out var upperBlock)
+                && upperBox.PieceOf(upperBlock)?.RowContinuedOnNext is { } upperRow
+                && index < upperRow.Cells.Count)
+            {
+                var seam = piece.CellTextSeamsFromPrevious is { } seams && index < seams.Length && seams[index];
+                return key == Key.Left
+                    ? MoveIntoCell(upperBox, upperRow.Cells[index], toEnd: true, step: seam)
+                    : EditAcrossCellSeam(upperBox, upperRow.Cells[index], box, cell, seam, backward: true);
+            }
+
+            if (key is Key.Delete or Key.Right
+                && ReferenceEquals(piece.RowContinuedOnNext, row)
+                && CellContentEnd(cell) is { } end && caret.CompareTo(end) >= 0
+                && TryNextBlock(box, top, out var lowerBox, out var lowerBlock)
+                && lowerBox.PieceOf(lowerBlock) is { RowContinuedFromPrevious: { } lowerRow } lowerPiece
+                && index < lowerRow.Cells.Count)
+            {
+                var seam = lowerPiece.CellTextSeamsFromPrevious is { } seams && index < seams.Length && seams[index];
+                return key == Key.Right
+                    ? MoveIntoCell(lowerBox, lowerRow.Cells[index], toEnd: false, step: seam)
+                    : EditAcrossCellSeam(box, cell, lowerBox, lowerRow.Cells[index], seam, backward: false);
+            }
+        }
+        catch
+        {
+            // Native handling.
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// The pages' shares of one cell of a split row that a selection from <paramref name="startPointer"/> on
+    /// page <paramref name="startBox"/> to <paramref name="endPointer"/> on page <paramref name="endBox"/>
+    /// covers, when both ends lie in that cell; else null (see <see cref="CrossPageSelection.SplitCellShares"/>).
+    /// </summary>
+    private IReadOnlyList<CrossPageSelection.CellShare>? SplitCellShares(int startBox, TextPointer startPointer, int endBox, TextPointer endPointer)
+    {
+        if (startBox < 0 || endBox >= _pageBoxes.Count || startBox >= endBox
+            || EnclosingCell(startPointer) is not { Parent: System.Windows.Documents.TableRow row } cell
+            || TopLevelBlock(cell) is not { } top
+            || _pageBoxes[startBox].PieceOf(top) is not { } piece
+            || !ReferenceEquals(piece.RowContinuedOnNext, row))
+        {
+            return null;
+        }
+        var index = row.Cells.IndexOf(cell);
+        var shares = new List<CrossPageSelection.CellShare>();
+        var from = startPointer;
+        var currentCell = cell;
+        for (var k = startBox + 1; k <= endBox; k++)
+        {
+            var box = _pageBoxes[k];
+            if (box.Body.Document.Blocks.FirstBlock is not { } first
+                || box.PieceOf(first) is not { RowContinuedFromPrevious: { } nextRow } nextPiece
+                || index >= nextRow.Cells.Count)
+            {
+                return null;
+            }
+            var seam = nextPiece.CellTextSeamsFromPrevious is { } seams && index < seams.Length && seams[index];
+            if (CellContentEnd(currentCell) is { } shareEnd)
+                shares.Add(new CrossPageSelection.CellShare(_pageBoxes[k - 1], from, shareEnd, seam));
+            currentCell = nextRow.Cells[index];
+            if (CellContentStart(currentCell) is not { } shareStart)
+            {
+                if (k == endBox)
+                    return null;
+                continue;
+            }
+            from = shareStart;
+            if (k < endBox && !ReferenceEquals(nextPiece.RowContinuedOnNext, nextRow))
+                return null;
+        }
+        if (EnclosingCell(endPointer) != currentCell)
+            return null;
+        shares.Add(new CrossPageSelection.CellShare(_pageBoxes[endBox], from, endPointer, false));
+        return shares;
+    }
+
+    private static System.Windows.Documents.TableCell? EnclosingCell(TextPointer position)
+    {
+        for (var node = position.Parent; node is TextElement element; node = element.Parent)
+        {
+            if (element is System.Windows.Documents.TableCell cell)
+                return cell;
+        }
+        return null;
+    }
+
+    private static System.Windows.Documents.Block? TopLevelBlock(TextElement element)
+    {
+        TextElement current = element;
+        while (current.Parent is TextElement parent)
+            current = parent;
+        return current as System.Windows.Documents.Block;
+    }
+
+    private static TextPointer? CellContentStart(System.Windows.Documents.TableCell cell) =>
+        cell.Blocks.Count == 0 ? null : cell.ContentStart.GetInsertionPosition(LogicalDirection.Forward);
+
+    private static TextPointer? CellContentEnd(System.Windows.Documents.TableCell cell) =>
+        cell.Blocks.Count == 0 ? null : cell.ContentEnd.GetInsertionPosition(LogicalDirection.Backward);
+
+    /// <summary>The block after <paramref name="block"/> in page order (across pages).</summary>
+    private bool TryNextBlock(PageBox box, System.Windows.Documents.Block block, out PageBox nextBox, out System.Windows.Documents.Block next)
+    {
+        if (block.NextBlock is { } sibling)
+        {
+            (nextBox, next) = (box, sibling);
+            return true;
+        }
+        for (var i = _pageBoxes.IndexOf(box) + 1; i < _pageBoxes.Count; i++)
+        {
+            if (_pageBoxes[i].Body.Document.Blocks.FirstBlock is { } first)
+            {
+                (nextBox, next) = (_pageBoxes[i], first);
+                return true;
+            }
+        }
+        (nextBox, next) = (box, block);
+        return false;
+    }
+
+    /// <summary>Puts the caret at the end (or start) of <paramref name="cell"/>'s content, one character further in when <paramref name="step"/>.</summary>
+    private bool MoveIntoCell(PageBox target, System.Windows.Documents.TableCell cell, bool toEnd, bool step)
+    {
+        var position = toEnd ? CellContentEnd(cell) : CellContentStart(cell);
+        if (position is null)
+            return false;
+        if (step && position.GetNextInsertionPosition(toEnd ? LogicalDirection.Backward : LogicalDirection.Forward) is { } stepped
+            && EnclosingCell(stepped) == cell)
+        {
+            position = stepped;
+        }
+        RealizeBox(target);
+        target.Body.Focus();
+        _lastCaretBox = target;
+        target.Body.CaretPosition = position;
+        return true;
+    }
+
+    /// <summary>
+    /// Backspace at the start of <paramref name="lowerCell"/> (<paramref name="backward"/>) or Delete at the
+    /// end of <paramref name="upperCell"/>, the two pages' shares of one cell of a split row: a mid-line seam
+    /// deletes the character across it (the caret stays at the seam); a seam between paragraphs joins the
+    /// lower share's first paragraph to the upper share's last (the caret at the join).
+    /// </summary>
+    internal bool EditAcrossCellSeam(
+        PageBox upper,
+        System.Windows.Documents.TableCell upperCell,
+        PageBox lower,
+        System.Windows.Documents.TableCell lowerCell,
+        bool textSeam,
+        bool backward)
+    {
+        if (CellContentEnd(upperCell) is not { } upperEnd || CellContentStart(lowerCell) is not { } lowerStart)
+            return false;
+
+        if (textSeam)
+        {
+            if (backward)
+            {
+                var before = upperEnd.GetNextInsertionPosition(LogicalDirection.Backward);
+                if (before is null || EnclosingCell(before) != upperCell || RangeTouchesLockedContentControl(upper, before, upperEnd))
+                    return false;
+                new TextRange(before, upperEnd).Text = string.Empty;
+                RealizeBox(lower);
+                lower.Body.Focus();
+                _lastCaretBox = lower;
+                if (CellContentStart(lowerCell) is { } caret)
+                    lower.Body.CaretPosition = caret;
+            }
+            else
+            {
+                var after = lowerStart.GetNextInsertionPosition(LogicalDirection.Forward);
+                if (after is null || EnclosingCell(after) != lowerCell || RangeTouchesLockedContentControl(lower, lowerStart, after))
+                    return false;
+                new TextRange(lowerStart, after).Text = string.Empty;
+                RealizeBox(upper);
+                upper.Body.Focus();
+                _lastCaretBox = upper;
+                if (CellContentEnd(upperCell) is { } caret)
+                    upper.Body.CaretPosition = caret;
+            }
+        }
+        else
+        {
+            if (upperCell.Blocks.LastBlock is not System.Windows.Documents.Paragraph upperParagraph
+                || lowerCell.Blocks.FirstBlock is not System.Windows.Documents.Paragraph lowerParagraph
+                || RangeTouchesLockedContentControl(upper, upperParagraph.ContentStart, upperParagraph.ContentEnd)
+                || RangeTouchesLockedContentControl(lower, lowerParagraph.ContentStart, lowerParagraph.ContentEnd))
+            {
+                return false;
+            }
+            var joinOffset = upperParagraph.ContentStart.GetOffsetToPosition(upperParagraph.ContentEnd);
+            var moved = lowerParagraph.Inlines.ToList();
+            lowerParagraph.Inlines.Clear();
+            lowerCell.Blocks.Remove(lowerParagraph);
+            foreach (var inline in moved)
+                upperParagraph.Inlines.Add(inline);
+            RealizeBox(upper);
+            upper.Body.Focus();
+            _lastCaretBox = upper;
+            var join = upperParagraph.ContentStart.GetPositionAtOffset(joinOffset) ?? upperParagraph.ContentEnd;
+            upper.Body.CaretPosition = join.GetInsertionPosition(LogicalDirection.Forward) ?? join;
+        }
+
+        ScheduleRepaginate();
+        return true;
+    }
+
     internal void OnDocumentNavigationRequested(PageBox source, PageNavigationTarget target, bool extendSelection)
     {
         if (_pageBoxes.Count == 0)
@@ -1681,6 +1940,31 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
 
         if (startPtr is null || endPtr is null)
             return false;
+
+        // A selection inside one cell of a row split across pages deletes that cell's text on each page.
+        if (_crossPageSelection.CurrentCellShares(_pageBoxes) is { } shares)
+        {
+            foreach (var share in shares)
+            {
+                if (RangeTouchesLockedContentControl(share.Box, share.From, share.To))
+                    return false;
+            }
+            var deletedAll = true;
+            foreach (var share in shares)
+            {
+                try
+                {
+                    new TextRange(share.From, share.To).Text = string.Empty;
+                }
+                catch
+                {
+                    deletedAll = false;
+                }
+            }
+            _crossPageSelection.Clear(_pageBoxes);
+            ScheduleRepaginate();
+            return deletedAll;
+        }
 
         // freew-cc-3 / shared-drag-drop F1: Word declines the WHOLE deletion outright when it would
         // remove a locked content control, rather than deleting part of it (see the sibling Avalonia
@@ -2987,6 +3271,89 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
     /// <para>Returns <c>true</c> when a matching sub-editor was found and focused; <c>false</c>
     /// when the slot is not currently visible (e.g. first-header but DifferentFirstPage is off).</para>
     /// </summary>
+    /// <summary>An in-page header or footer region: its section (index into the model's sections) and slot.</summary>
+    internal sealed record HeaderFooterRegion(int SectionIndex, HeaderFooterSlotKind Slot, bool IsHeader);
+
+    private HeaderFooterRegion? _activeHeaderFooterRegion;
+
+    /// <summary>
+    /// The header/footer region being edited on a page (it has, or last had, keyboard focus and the body
+    /// has not taken it back since); null while the body is being edited. Header &amp; Footer > Previous /
+    /// Next section and Link to Previous act on it in Print Layout.
+    /// </summary>
+    internal HeaderFooterRegion? ActiveHeaderFooterRegion => _activeHeaderFooterRegion;
+
+    /// <summary>Raised when <see cref="ActiveHeaderFooterRegion"/> changes.</summary>
+    internal event Action? HeaderFooterRegionChanged;
+
+    protected override void OnPreviewGotKeyboardFocus(KeyboardFocusChangedEventArgs e)
+    {
+        base.OnPreviewGotKeyboardFocus(e);
+        if (e.NewFocus is not DependencyObject focused)
+            return;
+        HeaderFooterRegion? region = null;
+        var inBody = false;
+        foreach (var box in _pageBoxes)
+        {
+            if (box.HeaderSubEditor is { } header && (ReferenceEquals(header, focused) || header.IsAncestorOf(focused))
+                && box.HeaderSlot is { } headerSlot)
+            {
+                region = new HeaderFooterRegion(Math.Max(0, box.SectionOrdinal - 1), headerSlot, IsHeader: true);
+                break;
+            }
+            if (box.FooterSubEditor is { } footer && (ReferenceEquals(footer, focused) || footer.IsAncestorOf(focused))
+                && box.FooterSlot is { } footerSlot)
+            {
+                region = new HeaderFooterRegion(Math.Max(0, box.SectionOrdinal - 1), footerSlot, IsHeader: false);
+                break;
+            }
+            if (ReferenceEquals(box.Body, focused))
+            {
+                inBody = true;
+                break;
+            }
+        }
+        if (region is not null || inBody)
+            SetActiveHeaderFooterRegion(region);
+    }
+
+    private void SetActiveHeaderFooterRegion(HeaderFooterRegion? region)
+    {
+        if (_activeHeaderFooterRegion == region)
+            return;
+        _activeHeaderFooterRegion = region;
+        HeaderFooterRegionChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Focuses the header (or footer) region of the first page of section <paramref name="sectionIndex"/>
+    /// (finishing the pagination when that page is not laid out yet) and brings it into view. False when
+    /// the section has no such page or region.
+    /// </summary>
+    internal bool FocusSectionHeaderFooter(int sectionIndex, bool header)
+    {
+        PageBox? Find() => _pageBoxes.FirstOrDefault(box =>
+            box.SectionOrdinal == sectionIndex + 1 && !box.IsParitySyntheticPage && !box.IsEndnoteSyntheticPage);
+
+        var target = Find();
+        if (target is null && !IsLayoutComplete)
+        {
+            FinishLayoutNow();
+            target = Find();
+        }
+        if (target is null)
+            return false;
+        RealizeBox(target);
+        var editor = header ? target.HeaderSubEditor : target.FooterSubEditor;
+        var slot = header ? target.HeaderSlot : target.FooterSlot;
+        if (editor is null || slot is null)
+            return false;
+        target.BringIntoView();
+        editor.Focus();
+        SetActiveHeaderFooterRegion(new HeaderFooterRegion(sectionIndex, slot.Value, header));
+        return true;
+    }
+
     internal bool FocusInPageHfRegion(HeaderFooterSlotKind slot)
     {
         // Find the first page box whose header or footer sub-editor matches the slot.
@@ -3481,7 +3848,7 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
         // A block whose text all lies on a later page than its start (a paragraph opening with a manual
         // page break: print leaves only its empty first fragment behind) is shown from that page.
         static bool MovesWholeBlock(CutLocator locator) =>
-            locator is { IsRow: false, Paragraph: 0, Offset: 0 } || locator is { IsRow: true, Row: 0 };
+            locator is { IsRow: false, Paragraph: 0, Offset: 0 } || locator is { IsRow: true, Row: 0, Cells: null };
 
         foreach (var cut in cuts)
         {
@@ -3621,9 +3988,20 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
             return 1;
         if (la.IsRow != lb.IsRow)
             return 0; // never both on one block
-        return la.IsRow
-            ? la.Row.CompareTo(lb.Row)
-            : la.Paragraph != lb.Paragraph ? la.Paragraph.CompareTo(lb.Paragraph) : la.Offset.CompareTo(lb.Offset);
+        if (la.IsRow)
+        {
+            // Before row v, then inside it (cell cuts advance together), then before row v + 1.
+            if (la.Row != lb.Row)
+                return la.Row.CompareTo(lb.Row);
+            return (la.Cells, lb.Cells) switch
+            {
+                (null, null) => 0,
+                (null, _) => -1,
+                (_, null) => 1,
+                ({ } ca, { } cb) => ca.CompareTo(cb),
+            };
+        }
+        return la.Paragraph != lb.Paragraph ? la.Paragraph.CompareTo(lb.Paragraph) : la.Offset.CompareTo(lb.Offset);
     }
 
     /// <summary>
@@ -3717,7 +4095,11 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
                         continue;
                     var block = renderedUnit.Blocks[b];
                     var page = renderedPages[r];
-                    if (cutsOf.TryGetValue(r, out var cuts)
+                    if (cutsOf.TryGetValue(r, out var cuts) && cuts.Any(cut => cut.Locator.IsInsideRow))
+                    {
+                        contents[page].Pieces.Add(TablePiece(block, from: null, to: cuts[0].Locator));
+                    }
+                    else if (cuts is not null
                         && PageSplitter.Resolve(block, cuts[0].Locator, forward: false) is { } cutAt)
                     {
                         var close = PageSplitter.Depth(block, cutAt);
@@ -3745,7 +4127,11 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
                     return null;
                 ApplyUnitContextualSpacing(model, units, start.Unit, rendered[0]);
                 var copy = rendered[0].Blocks[start.BlockInUnit];
-                if (CutPiece(copy, locator, i + 1 < cuts.Count ? cuts[i + 1].Locator : null) is not { } pieces)
+                var next = i + 1 < cuts.Count ? cuts[i + 1].Locator : (CutLocator?)null;
+                List<PagePiece>? pieces = cuts.Any(cut => cut.Locator.IsInsideRow) && PageSplitter.SingleTable(copy) is not null
+                    ? [TablePiece(copy, locator, next)]
+                    : CutPiece(copy, locator, next);
+                if (pieces is null)
                     continue;
                 contents[page].Blocks.InsertRange(0, pieces.Select(piece => piece.Block));
                 contents[page].Pieces.AddRange(pieces);
@@ -3791,12 +4177,6 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
         copy.BreakPageBefore = false;
 
         var textSeam = !from.IsRow && from.Offset > 0;
-        static void AsContinuationLine(System.Windows.Documents.Paragraph paragraph)
-        {
-            paragraph.TextIndent = 0;
-            paragraph.Margin = new Thickness(paragraph.Margin.Left, 0, paragraph.Margin.Right, paragraph.Margin.Bottom);
-            paragraph.BreakPageBefore = false;
-        }
 
         switch (copy)
         {
@@ -3889,6 +4269,67 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
             default:
                 return null;
         }
+    }
+
+    /// <summary>A line continuing text from the page before: no first-line indent, no space before.</summary>
+    private static void AsContinuationLine(System.Windows.Documents.Paragraph paragraph)
+    {
+        paragraph.TextIndent = 0;
+        paragraph.Margin = new Thickness(paragraph.Margin.Left, 0, paragraph.Margin.Right, paragraph.Margin.Bottom);
+        paragraph.BreakPageBefore = false;
+    }
+
+    /// <summary>
+    /// Cuts a render of a table some of whose page cuts lie inside a row (a row taller than the space left)
+    /// to the piece between <paramref name="from"/> and <paramref name="to"/> (null: the table's start or
+    /// end). The split row keeps its cells, each showing its own share; the piece maps positions through
+    /// its <see cref="PagePiece.Map"/>, and a continuing piece's first row is read back cell by cell into
+    /// the row it continues.
+    /// </summary>
+    private static PagePiece TablePiece(System.Windows.Documents.Block block, CutLocator? from, CutLocator? to)
+    {
+        var table = PageSplitter.SingleTable(block);
+        var rows = table is null ? [] : PageSplitter.TableRows(table);
+        var fromRow = from is { Cells: not null, Row: var fr } && fr >= 0 && fr < rows.Count ? rows[fr] : null;
+        var toRow = to is { Cells: not null, Row: var tr } && tr >= 0 && tr < rows.Count ? rows[tr] : null;
+        static bool[]? Seams(CutLocator? locator) =>
+            locator?.Cells?.Cells.Select(cut => !CellCuts.IsEnd(cut) && cut.Offset > 0).ToArray();
+        var seamsFrom = Seams(from);
+        var seamsTo = Seams(to);
+
+        var map = PageSplitter.TrimTablePiece(block, from, to);
+        if (from is not null)
+        {
+            block.BreakPageBefore = false;
+            if (table is not null)
+            {
+                table.BreakPageBefore = false;
+                DocumentView.MarkReadContinuation(table);
+            }
+            if (fromRow is not null && from?.Cells is { } cells && seamsFrom is not null)
+            {
+                DocumentView.MarkRowContinuation(fromRow, cells.Cells.Select(CellCuts.IsStart).ToArray(), seamsFrom);
+                var c = 0;
+                foreach (var cell in fromRow.Cells)
+                {
+                    if (c < seamsFrom.Length && seamsFrom[c] && cell.Blocks.FirstBlock is System.Windows.Documents.Paragraph continued)
+                        AsContinuationLine(continued);
+                    c++;
+                }
+            }
+        }
+
+        return new PagePiece
+        {
+            Block = block,
+            Map = map,
+            ContinuesPrevious = from is not null,
+            ContinuesNext = to is not null,
+            RowContinuedFromPrevious = fromRow,
+            RowContinuedOnNext = toRow,
+            CellTextSeamsFromPrevious = seamsFrom,
+            CellTextSeamsOnNext = seamsTo,
+        };
     }
 
     private static int TopLevelItemIndex(System.Windows.Documents.List list, TextPointer position)

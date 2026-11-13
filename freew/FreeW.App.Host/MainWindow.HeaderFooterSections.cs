@@ -104,9 +104,14 @@ public sealed partial class MainWindow
     /// <summary>The section + slot the Header/Footer ribbon commands act on right now.</summary>
     private HeaderFooterSectionSlotView? CurrentHeaderFooterSectionSlot()
     {
-        if (_pagedEditMode)
-            return null; // in-page regions own their section; the docked-pane navigation does not apply
         var model = _editor.Model;
+        if (_pagedEditMode)
+        {
+            // Print Layout: the header/footer region being edited on a page (none while the body is).
+            return _pagedEditPanel?.ActiveHeaderFooterRegion is { } region
+                ? HeaderFooterSectionLinkPlanner.Describe(model.Sections, region.SectionIndex, region.Slot)
+                : null;
+        }
         return _hfActiveSlot is { } slot
             ? HeaderFooterSectionLinkPlanner.Describe(model.Sections, _hfActiveSectionIndex, slot)
             : HeaderFooterSectionLinkPlanner.Describe(
@@ -120,6 +125,20 @@ public sealed partial class MainWindow
     {
         if (CurrentHeaderFooterSectionSlot() is not { } current)
             return;
+
+        if (_pagedEditMode && _pagedEditPanel is { } pages && pages.ActiveHeaderFooterRegion is { } region)
+        {
+            // The pages' header/footer edits land first (one undo unit), then the neighbouring section's
+            // first page shows its header/footer region with the caret in it, as Word does.
+            pages.CommitPendingEdits();
+            if (HeaderFooterSectionLinkPlanner.PlanAdjacentSection(_editor.Model.Sections, current.SectionIndex, direction)
+                is { } adjacent)
+            {
+                pages.FocusSectionHeaderFooter(adjacent, region.IsHeader);
+            }
+            SyncHeaderFooterSectionRibbonState();
+            return;
+        }
 
         CommitHeaderFooterPaneEdits();
         var sections = _editor.Model.Sections;
@@ -143,6 +162,26 @@ public sealed partial class MainWindow
     {
         if (CurrentHeaderFooterSectionSlot() is not { CanLinkToPrevious: true } current)
             return;
+
+        if (_pagedEditMode && _pagedEditPanel is { } pages && pages.ActiveHeaderFooterRegion is { } region)
+        {
+            // Unlinking copies what the section currently shows, so the pages' unsaved typing lands first.
+            pages.CommitPendingEdits();
+            if (!HeaderFooterSectionLinkPlanner.ToggleLinkToPrevious(_editor.Model.Sections, current.SectionIndex, current.Slot))
+                return;
+            // Re-render: the pages rebuild from the model (they show the section's own or inherited
+            // header/footer now); then the region being edited gets the caret back.
+            _editor.ApplyPageSettings(_ => { });
+            MarkDirtyOutsideBodyUndo();
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, new Action(() =>
+            {
+                if (_pagedEditMode && ReferenceEquals(_pagedEditPanel, pages))
+                    pages.FocusSectionHeaderFooter(region.SectionIndex, region.IsHeader);
+                SyncHeaderFooterSectionRibbonState();
+            }));
+            SyncHeaderFooterSectionRibbonState();
+            return;
+        }
 
         // Unlinking copies what the section currently shows, so unsaved typing must land first.
         CommitHeaderFooterPaneEdits();

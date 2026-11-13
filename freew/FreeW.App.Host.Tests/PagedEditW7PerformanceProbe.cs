@@ -40,6 +40,57 @@ public sealed class PagedEditW7PerformanceProbe(ITestOutputHelper output)
         }
     }
 
+    /// <summary>
+    /// Opt-in (<c>FREEW_PAGED_PERF_BREAKS=1</c>): the progressive re-flow on a generated 100+ page document
+    /// with many inline manual page breaks (paragraphs the print render splits into fragments).
+    /// </summary>
+    [StaFact]
+    public void MeasurePagedEditOnLongInlineBreakDocument()
+    {
+        if (Environment.GetEnvironmentVariable("FREEW_PAGED_PERF_BREAKS") != "1")
+            return;
+        PagedEditDiagnostics.Enabled = true;
+        try
+        {
+            // breakEvery: 4 puts a manual break on every page (worst case: every page ends in a split paragraph),
+            // 40 a break every ~10 pages; false/true is the hidden editor re-rendered whole / refreshed in place.
+            foreach (var (breakEvery, inPlace) in new[] { (40, false), (40, true), (12, true), (4, true) })
+            {
+                DocumentView.RefreshInlineBreakDocumentsInPlace = inPlace;
+                var editor = new DocumentView();
+                editor.LoadModel(InlineBreakDocument(paragraphs: 720, breakEvery));
+                editor.CommitToModel();
+                output.WriteLine($"generated inline-break document: blocks={editor.Model.Blocks.Count}, a break every {breakEvery} paragraphs; hidden editor refreshed in place: {inPlace}");
+                MeasureProgressive(editor);
+            }
+        }
+        finally
+        {
+            DocumentView.RefreshInlineBreakDocumentsInPlace = true;
+            PagedEditDiagnostics.Enabled = false;
+        }
+    }
+
+    /// <summary>A long document in which every fourth paragraph holds a manual page break mid-text.</summary>
+    internal static FreeW.Core.Model.TextDocument InlineBreakDocument(int paragraphs, int breakEvery = 4)
+    {
+        var words = string.Join(" ", Enumerable.Range(0, 70).Select(i => $"word{i}"));
+        var doc = FreeW.Core.Model.TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        for (var i = 0; i < paragraphs; i++)
+        {
+            var paragraph = new FreeW.Core.Model.Paragraph();
+            paragraph.Runs.Add(new FreeW.Core.Model.Run($"Paragraph {i}: " + words));
+            if (i % breakEvery == breakEvery - 1)
+            {
+                paragraph.Runs.Add(FreeW.Core.Model.Run.PageBreak());
+                paragraph.Runs.Add(new FreeW.Core.Model.Run("after the break " + words[..120]));
+            }
+            doc.Blocks.Add(paragraph);
+        }
+        return doc;
+    }
+
     private void Measure(string path)
     {
         var clock = Stopwatch.StartNew();

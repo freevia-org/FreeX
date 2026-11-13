@@ -771,6 +771,15 @@ internal static class PrintLayout
         var paginator = ((IDocumentPaginatorSource)flow).DocumentPaginator;
         paginator.PageSize = new Size(pageWidth, pageHeight);
 
+        // Under "restart each page" every body mark shows its page's own footnote number, as Word does
+        // (and as the note band at the foot of the page numbers its notes).
+        if (editor.Model.FootnoteNumbering.NumberRestart == FreeW.Core.Model.NoteNumberRestart.EachPage
+            && paginator is DynamicDocumentPaginator dynamicPaginator)
+        {
+            paginator.ComputePageCount();
+            DocumentView.RenumberFootnoteMarksByPage(flow, dynamicPaginator, editor.Model);
+        }
+
         IReadOnlyDictionary<int, DocumentFootnoteContinuationPagePlan>? fragmentedFootnotePages = null;
         if (footnoteComposition is not null)
         {

@@ -1119,6 +1119,9 @@ internal sealed class PagedLayoutSession
     {
         if (!SplitBlocksAcrossPages)
             return null;
+        // A row taller than the space left continues on the page cell by cell, as print splits it.
+        if (PageSplitter.LocateInsideRow(paginator, block, page) is { } insideRow)
+            return new RenderedCut(recordedPage, rendered, insideRow);
         var position = PageSplitter.FirstPositionOnPage(paginator, block, page);
         if (position is null)
             return null;
@@ -1538,7 +1541,7 @@ internal sealed class PagedLayoutSession
                 {
                     // A new page starts at r. Clean when the block before it ended on an earlier page.
                     var clean = r == startRendered
-                        || window.PageOf(window[r - 1].ContentEnd) < page;
+                        || PageSplitter.EndPage(window.Paginator, window[r - 1]) < page;
 
                     // Every page from the one after the previous block's start up to this one that the
                     // previous block reaches starts inside it.
@@ -2022,10 +2025,13 @@ internal sealed class PagedLayoutSession
                                 startsClean = true;
                                 break;
                             }
-                            if (startPage < q && dynamicChunk.GetPageNumber(pending[i].Block.ContentEnd) >= q)
+                            if (startPage < q && PageSplitter.EndPage(dynamicChunk, pending[i].Block) >= q)
                                 straddler = i;
                         }
-                        if (!startsClean && straddler >= 0
+                        // A split table row running on onto a page another block starts on still starts it.
+                        if (startsClean && straddler >= 0 && PageSplitter.SingleTable(pending[straddler].Block) is null)
+                            straddler = -1;
+                        if (straddler >= 0
                             && CutFor(dynamicChunk, pending[straddler].Block, pending[straddler].Rendered, q, localPage + q,
                                 pending[straddler].ContentBase) is { } cut)
                         {

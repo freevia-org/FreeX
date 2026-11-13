@@ -720,6 +720,10 @@ internal static class PaginationEngine
             assignment[i] = pageOffset + currentLocalPage;
         }
 
+        // Print: under "restart each page" every body mark shows its page's own footnote number (Word).
+        if (segmentPaginations is not null && dynamicPaginator is not null)
+            DocumentView.RenumberFootnoteMarksByPage(segmentFlow, dynamicPaginator, document);
+
         segmentPaginations?.Add(new SegmentPagination(
             pageOffset,
             segmentPageCount,
@@ -1052,6 +1056,10 @@ internal static class PaginationEngine
             chunkPaginator.ComputePageCount();
             var chunkPages = Math.Max(1, chunkPaginator.PageCount);
             var dynamicChunk = chunkPaginator as DynamicDocumentPaginator;
+            // Print: under "restart each page" every body mark is numbered among the marks on its own page
+            // (Word; the paged editor numbers its pages' marks the same way).
+            if (segmentPaginations is not null && dynamicChunk is not null)
+                DocumentView.RenumberFootnoteMarksByPage(chunk, dynamicChunk, document);
             for (var i = 0; i < take; i++)
             {
                 if (pending[i].IsContinuation)

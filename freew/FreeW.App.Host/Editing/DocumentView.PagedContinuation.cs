@@ -6,6 +6,7 @@ using ModelBlock = FreeW.Core.Model.Block;
 using ModelParagraph = FreeW.Core.Model.Paragraph;
 using ModelRun = FreeW.Core.Model.Run;
 using ModelTable = FreeW.Core.Model.Table;
+using ModelTableRow = FreeW.Core.Model.TableRow;
 using WpfList = System.Windows.Documents.List;
 using WpfParagraph = System.Windows.Documents.Paragraph;
 using WpfTable = System.Windows.Documents.Table;
@@ -31,6 +32,51 @@ public sealed partial class DocumentView
     internal static bool IsReadContinuation(System.Windows.Documents.Block block) =>
         s_readContinuations.TryGetValue(block, out _);
 
+    private sealed record RowContinuation(bool[] HeadEmpty, bool[] TextSeam);
+
+    private static readonly ConditionalWeakTable<System.Windows.Documents.TableRow, RowContinuation> s_rowContinuations = new();
+
+    /// <summary>
+    /// Marks <paramref name="row"/> (the first row of a table continuing from the page before) as the rest
+    /// of the row that ends that page's table: the paginator split the row, so reading the pages merges it
+    /// cell by cell into that row. Per cell, <paramref name="headEmpty"/>: the earlier pages show nothing of
+    /// the cell (its content all starts here); <paramref name="textSeam"/>: its first paragraph continues
+    /// the earlier cell's last paragraph mid-line.
+    /// </summary>
+    internal static void MarkRowContinuation(System.Windows.Documents.TableRow row, bool[] headEmpty, bool[] textSeam) =>
+        s_rowContinuations.AddOrUpdate(row, new RowContinuation(headEmpty, textSeam));
+
+    /// <summary>Merges a row the page boundary split back into the row it continues, cell by cell.</summary>
+    private static void MergeRowContinuation(
+        ModelTableRow head,
+        ModelTableRow tail,
+        System.Windows.Documents.TableRow wpfTail,
+        RowContinuation continuation)
+    {
+        var wpfCells = wpfTail.Cells.ToList();
+        for (var c = 0; c < Math.Min(head.Cells.Count, tail.Cells.Count); c++)
+        {
+            // The tail shows nothing of this cell (an empty cell read back as one empty paragraph).
+            if (c < wpfCells.Count && wpfCells[c].Blocks.Count == 0)
+                continue;
+            var into = head.Cells[c];
+            var from = tail.Cells[c];
+            if (c < continuation.HeadEmpty.Length && continuation.HeadEmpty[c])
+            {
+                into.Paragraphs.Clear();
+                into.Paragraphs.AddRange(from.Paragraphs);
+                continue;
+            }
+            var rest = from.Paragraphs.AsEnumerable();
+            if (c < continuation.TextSeam.Length && continuation.TextSeam[c] && into.Paragraphs.Count > 0 && from.Paragraphs.Count > 0)
+            {
+                MergeParagraphContinuation(into.Paragraphs[^1], from.Paragraphs[0]);
+                rest = from.Paragraphs.Skip(1);
+            }
+            into.Paragraphs.AddRange(rest);
+        }
+    }
+
     /// <summary>
     /// Reads consecutive pages' bodies into model blocks in one pass (see
     /// <see cref="ReadRenderedPagesInto"/>); <paramref name="pageStarts"/> receives, per page, the number of
@@ -52,7 +98,17 @@ public sealed partial class DocumentView
                 var into = pendingSegmentTable ?? (target.Count > 0 ? target[^1] as ModelTable : null);
                 if (into is null)
                     return false;
-                foreach (var row in ReadTable(wpfTable, document).Rows)
+                var rows = ReadTable(wpfTable, document).Rows;
+                var skip = 0;
+                // A first row that continues the row the page before ends with (split mid-row).
+                if (rows.Count > 0 && into.Rows.Count > 0
+                    && wpfTable.RowGroups.SelectMany(group => group.Rows).FirstOrDefault(row => !IsRepeatedHeaderRenderRow(row)) is { } wpfFirst
+                    && s_rowContinuations.TryGetValue(wpfFirst, out var continuation))
+                {
+                    MergeRowContinuation(into.Rows[^1], rows[0], wpfFirst, continuation);
+                    skip = 1;
+                }
+                foreach (var row in rows.Skip(skip))
                     into.Rows.Add(row);
                 return true;
             }

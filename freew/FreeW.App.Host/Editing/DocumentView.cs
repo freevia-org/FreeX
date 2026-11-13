@@ -6236,17 +6236,26 @@ public sealed partial class DocumentView : RichTextBox
     /// <summary>Where the last incremental body refresh spent its time (diagnostics for the probe).</summary>
     internal string LastBodyRefreshTiming { get; private set; } = "";
 
+    /// <summary>Why the last in-place body refresh was refused (diagnostics for tests and the probe).</summary>
+    internal string LastBodyRefreshRefusal { get; private set; } = "";
+
+    /// <summary>Test/probe switch: false restores the W12 behaviour (inline-break documents always render whole).</summary>
+    internal static bool RefreshInlineBreakDocumentsInPlace { get; set; } = true;
+
     private bool TryRefreshBodyAfterReplacement((int Start, int OldCount, int NewCount) hint)
     {
         var refreshClock = PagedEditDiagnostics.StartClock();
         if (_bodyUnits is not { Count: > 0 } old
             || Document is not { } document
+            // W13: a document with inline page/column breaks is refreshed in place too: this (editing)
+            // render keeps a paragraph with breaks as one body paragraph whose render depends only on itself
+            // (fragments are a pagination render's concern), so its units are as independent as any other.
             || RenderInlineFlowBreakFragmentsForPagination
+            || (!RefreshInlineBreakDocumentsInPlace && HasRendererInlineFlowBreakFragments(_model))
             || HasHiddenOutlineBlocks
-            || HasRendererInlineFlowBreakFragments(_model)
             || HasLeadingWrapReservations())
         {
-            return false;
+            LastBodyRefreshRefusal = "r1"; return false;
         }
 
         PagedLayoutSession.UnitPlan[] plans;
@@ -6256,12 +6265,14 @@ public sealed partial class DocumentView : RichTextBox
         }
         catch (PagedLayoutSession.UnsupportedException)
         {
-            return false;
+            LastBodyRefreshRefusal = "r2"; return false;
         }
 
         var delta = hint.NewCount - hint.OldCount;
         if (old[^1].Unit.End + delta != _model.Blocks.Count)
-            return false;
+        {
+            LastBodyRefreshRefusal = "r3"; return false;
+        }
 
         static bool Same(RenderedBodyUnit unit, PagedLayoutSession.UnitPlan plan, int shift) =>
             unit.Signature is not null
@@ -6294,12 +6305,17 @@ public sealed partial class DocumentView : RichTextBox
         // blocks. A growing edit changes the leading-content estimate of every later table, not the
         // paragraphs between them, so only those tables are rendered again.
         var oldByRange = new Dictionary<(int, int), RenderedBodyUnit>();
+        // W13: inside the replaced range, a unit whose blocks are the very instances the replacement kept
+        // (the commit puts back the instances of blocks no edited page touched) renders as it did.
+        var oldByFirstBlock = new Dictionary<ModelBlock, RenderedBodyUnit>(ReferenceEqualityComparer.Instance);
         foreach (var unit in old.Skip(prefix).Take(oldMiddle))
         {
             if (unit.Unit.End <= hint.Start)
                 oldByRange[(unit.Unit.Start, unit.Unit.End)] = unit;
             else if (unit.Unit.Start >= hint.Start + hint.OldCount)
                 oldByRange[(unit.Unit.Start + delta, unit.Unit.End + delta)] = unit;
+            else if (unit.Blocks.Length > 0)
+                oldByFirstBlock[unit.Blocks[0]] = unit;
         }
         var reused = new RenderedBodyUnit?[newMiddle];
         var toRender = 0;
@@ -6313,6 +6329,14 @@ public sealed partial class DocumentView : RichTextBox
             {
                 reused[k] = candidate;
             }
+            else if (!outsideEdit
+                && plan.Blocks.Length > 0
+                && oldByFirstBlock.TryGetValue(plan.Blocks[0], out var kept)
+                && Same(kept, plan, plan.Start - kept.Unit.Start)
+                && kept.Blocks.Zip(plan.Blocks).All(pair => ReferenceEquals(pair.First, pair.Second)))
+            {
+                reused[k] = kept;
+            }
             else
             {
                 toRender++;
@@ -6321,17 +6345,23 @@ public sealed partial class DocumentView : RichTextBox
 
         // Re-rendering most of the body costs no less than a full render.
         if (toRender > Math.Max(8, plans.Length / 2))
-            return false;
+        {
+            LastBodyRefreshRefusal = $"r4 (prefix {prefix}, suffix {suffix}, middle {newMiddle}/{oldMiddle}, {toRender} of {plans.Length} units to render, hint {hint})"; return false;
+        }
 
         // Every block of the old middle must still be where the last render put it.
         foreach (var unit in old.Skip(prefix).Take(oldMiddle))
         {
             if (unit.Unit.Blocks.Any(block => !ReferenceEquals(block.Parent, document)))
-                return false;
+            {
+                LastBodyRefreshRefusal = "r5"; return false;
+            }
         }
         var anchor = prefix > 0 ? old[prefix - 1].Unit.Blocks[^1] : null;
         if (anchor is not null && !ReferenceEquals(anchor.Parent, document))
-            return false;
+        {
+            LastBodyRefreshRefusal = "r6"; return false;
+        }
 
         var planned = refreshClock?.Elapsed.TotalMilliseconds ?? 0;
         var fresh = new BodyRenderUnit?[newMiddle];
@@ -6348,11 +6378,15 @@ public sealed partial class DocumentView : RichTextBox
                 end++;
             var group = RenderBodyUnitRange(plans[prefix + k].Start, plans[prefix + end - 1].End);
             if (group.Count != end - k)
-                return false;
+            {
+                LastBodyRefreshRefusal = "r7"; return false;
+            }
             for (var g = 0; g < group.Count; g++)
             {
                 if (group[g].Start != plans[prefix + k + g].Start || group[g].End != plans[prefix + k + g].End)
-                    return false;
+                {
+                    LastBodyRefreshRefusal = "r8"; return false;
+                }
                 fresh[k + g] = group[g];
             }
             k = end;
@@ -14437,6 +14471,11 @@ public sealed partial class DocumentView : RichTextBox
         {
             Tag = new FootnoteMarker(footnoteId)
         };
+        // A print clone (XAML round-trip) loses the Tag but keeps the automation id; under "restart each page"
+        // print still has to find the mark to renumber it for the page it lands on (RenumberFootnoteMarksByPage).
+        if (document.FootnoteNumbering.NumberRestart == NoteNumberRestart.EachPage)
+            System.Windows.Automation.AutomationProperties.SetAutomationId(
+                marker, FootnoteMarkAutomationIdPrefix + footnoteId.ToString(System.Globalization.CultureInfo.InvariantCulture));
         ApplyNoteReferencePresentation(marker, document);
         if (document.Footnotes.TryGetValue(footnoteId, out var footnote) && footnote.PlainText is { Length: > 0 } text)
             marker.ToolTip = text;
@@ -14488,20 +14527,68 @@ public sealed partial class DocumentView : RichTextBox
         TextDocument document,
         IReadOnlyList<int> pageFootnoteIds)
     {
-        foreach (var block in blocks)
-        {
-            var position = block.ContentStart;
-            while (position is not null && position.CompareTo(block.ContentEnd) < 0)
-            {
-                if (position.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.ElementStart
-                    && position.GetAdjacentElement(LogicalDirection.Forward) is WpfRun { Tag: FootnoteMarker marker } markerRun)
-                {
-                    markerRun.Text = ResolveNoteBodyMarkDisplayNumber(
-                        document, marker.FootnoteId, isFootnote: true, pageFootnoteIds);
-                }
+        // Collected first: changing a run's text while walking (or enumerating a block collection) would
+        // invalidate the walk.
+        var marks = blocks.ToList().SelectMany(FootnoteMarkRuns).ToList();
+        foreach (var (markerRun, footnoteId) in marks)
+            SetMarkText(markerRun, ResolveNoteBodyMarkDisplayNumber(document, footnoteId, isFootnote: true, pageFootnoteIds));
+    }
 
-                position = position.GetNextContextPosition(LogicalDirection.Forward);
+    internal const string FootnoteMarkAutomationIdPrefix = "freew-fn-";
+
+    /// <summary>The footnote reference mark runs in <paramref name="block"/>, in order: tagged, or (in a print clone) carrying the mark's automation id.</summary>
+    private static IEnumerable<(WpfRun Run, int FootnoteId)> FootnoteMarkRuns(System.Windows.Documents.Block block)
+    {
+        var position = block.ContentStart;
+        while (position is not null && position.CompareTo(block.ContentEnd) < 0)
+        {
+            if (position.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.ElementStart
+                && position.GetAdjacentElement(LogicalDirection.Forward) is WpfRun run)
+            {
+                if (run.Tag is FootnoteMarker marker)
+                    yield return (run, marker.FootnoteId);
+                else if (System.Windows.Automation.AutomationProperties.GetAutomationId(run) is { Length: > 0 } automationId && automationId.StartsWith(FootnoteMarkAutomationIdPrefix, StringComparison.Ordinal)
+                    && int.TryParse(automationId.AsSpan(FootnoteMarkAutomationIdPrefix.Length), System.Globalization.NumberStyles.Integer,
+                        System.Globalization.CultureInfo.InvariantCulture, out var id))
+                    yield return (run, id);
             }
+            position = position.GetNextContextPosition(LogicalDirection.Forward);
+        }
+    }
+
+    private static void SetMarkText(WpfRun run, string text)
+    {
+        if (!string.Equals(run.Text, text, StringComparison.Ordinal))
+            run.Text = text;
+    }
+
+    /// <summary>
+    /// Under <see cref="NoteNumberRestart.EachPage"/>, renumbers every footnote reference mark of a laid-out
+    /// <paramref name="flow"/> for the page <paramref name="paginator"/> puts it on -- as Word numbers them, and
+    /// as the note band at the foot of the same page numbers its notes. A no-op for other restart settings.
+    /// </summary>
+    internal static void RenumberFootnoteMarksByPage(FlowDocument flow, DynamicDocumentPaginator paginator, TextDocument document)
+    {
+        if (document.FootnoteNumbering.NumberRestart != NoteNumberRestart.EachPage)
+            return;
+        var marks = new List<(WpfRun Run, int FootnoteId, int Page)>();
+        try
+        {
+            foreach (var block in flow.Blocks.ToList())
+            {
+                foreach (var (run, id) in FootnoteMarkRuns(block).ToList())
+                    marks.Add((run, id, paginator.GetPageNumber(run.ContentStart)));
+            }
+        }
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or ArgumentException)
+        {
+            return;
+        }
+        foreach (var page in marks.GroupBy(mark => mark.Page))
+        {
+            var ids = page.Select(mark => mark.FootnoteId).Distinct().ToList();
+            foreach (var (run, id, _) in page)
+                SetMarkText(run, ResolveNoteBodyMarkDisplayNumber(document, id, isFootnote: true, ids));
         }
     }
 

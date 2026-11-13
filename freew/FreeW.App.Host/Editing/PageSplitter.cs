@@ -14,17 +14,69 @@ namespace FreeW.App.Host.Editing;
 /// 0 for a top-level paragraph, its position among a list's paragraphs otherwise -- and the number of
 /// content characters (text characters and embedded objects) before the cut); <see cref="Paragraph"/>
 /// &lt; 0 is a table cut before visual row <see cref="Row"/> (rows of every row group, in order,
-/// repeated header rows included).
+/// repeated header rows included). A row cut with <see cref="Cells"/> lies inside row <see cref="Row"/>:
+/// the paginator split that row (taller than the space left) and each cell continues at its own cut.
 /// </summary>
-internal readonly record struct CutLocator(int Paragraph, int Offset, int Row)
+internal readonly record struct CutLocator(int Paragraph, int Offset, int Row, CellCuts? Cells = null)
 {
     internal static CutLocator AtParagraph(int paragraph, int offset) => new(paragraph, offset, -1);
 
     internal static CutLocator AtRow(int row) => new(-1, 0, row);
 
+    internal static CutLocator InsideRow(int row, CellCuts cells) => new(-1, 0, row, cells);
+
     internal bool IsRow => Paragraph < 0;
 
-    public override string ToString() => IsRow ? $"r{Row}" : $"p{Paragraph}+{Offset}";
+    /// <summary>A cut inside a row (per-cell cuts), not before it.</summary>
+    internal bool IsInsideRow => Cells is not null;
+
+    public override string ToString() => IsRow ? (Cells is { } cells ? $"r{Row}[{cells}]" : $"r{Row}") : $"p{Paragraph}+{Offset}";
+}
+
+/// <summary>
+/// Where each cell of a row split mid-row continues: per cell (in row order) the cell paragraph's ordinal
+/// and the content characters before the cut in it (as <see cref="CutLocator.AtParagraph"/> within the
+/// cell), or <see cref="End"/> when none of the cell's content is on the later page.
+/// </summary>
+internal sealed class CellCuts : IEquatable<CellCuts>
+{
+    internal const int End = int.MaxValue;
+
+    internal CellCuts(IReadOnlyList<(int Paragraph, int Offset)> cells) => Cells = cells;
+
+    internal IReadOnlyList<(int Paragraph, int Offset)> Cells { get; }
+
+    internal static bool IsEnd((int Paragraph, int Offset) cut) => cut.Paragraph == End;
+
+    internal static bool IsStart((int Paragraph, int Offset) cut) => cut is (0, 0);
+
+    public bool Equals(CellCuts? other) => other is not null && Cells.SequenceEqual(other.Cells);
+
+    public override bool Equals(object? obj) => Equals(obj as CellCuts);
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        foreach (var cell in Cells)
+            hash.Add(cell);
+        return hash.ToHashCode();
+    }
+
+    internal int CompareTo(CellCuts other)
+    {
+        for (var i = 0; i < Math.Min(Cells.Count, other.Cells.Count); i++)
+        {
+            var compare = Cells[i].Paragraph != other.Cells[i].Paragraph
+                ? Cells[i].Paragraph.CompareTo(other.Cells[i].Paragraph)
+                : Cells[i].Offset.CompareTo(other.Cells[i].Offset);
+            if (compare != 0)
+                return compare;
+        }
+        return Cells.Count.CompareTo(other.Cells.Count);
+    }
+
+    public override string ToString() =>
+        string.Join(",", Cells.Select(cell => IsEnd(cell) ? "e" : $"{cell.Paragraph}+{cell.Offset}"));
 }
 
 /// <summary>A page (segment-local in a layout pass, global in a run's result) that starts inside rendered block <see cref="Rendered"/>.</summary>
@@ -156,7 +208,7 @@ internal static class PageSplitter
     /// The first position of <paramref name="block"/> the paginator places on <paramref name="page"/> or
     /// later (page numbers never decrease along the text), or null when the block ends before that page.
     /// </summary>
-    internal static TextPointer? FirstPositionOnPage(DynamicDocumentPaginator paginator, WpfBlock block, int page)
+    internal static TextPointer? FirstPositionOnPage(DynamicDocumentPaginator paginator, TextElement block, int page)
     {
         int PageOf(TextPointer position)
         {
@@ -364,6 +416,342 @@ internal static class PageSplitter
     internal static List<TableRow> TableRows(WpfTable table) =>
         table.RowGroups.SelectMany(group => group.Rows).ToList();
 
+    // ── a row taller than the space left: split inside it, cell by cell ──────────────────────────────
+
+    /// <summary>
+    /// The cut of a page that starts inside a row of table <paramref name="block"/> (any render of it laid
+    /// out by <paramref name="paginator"/>): the last row that starts before <paramref name="page"/> when
+    /// the paginator continues some of its content on that page, with each cell's first position there.
+    /// Null when no row straddles the page start (the table splits between rows, if at all) or the row
+    /// cannot be cut cell by cell (a merged cell, or a cell holding anything but paragraphs).
+    /// </summary>
+    internal static CutLocator? LocateInsideRow(DynamicDocumentPaginator paginator, WpfBlock block, int page)
+    {
+        if (SingleTable(block) is not { } table)
+            return null;
+        var rows = TableRows(table);
+        if (rows.Count == 0)
+            return null;
+
+        int PageOf(TextPointer position)
+        {
+            try
+            {
+                return paginator.GetPageNumber(position);
+            }
+            catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or ArgumentException)
+            {
+                return -1;
+            }
+        }
+
+        // Row starts never move back a page: the last row starting before the page.
+        int low = -1, high = rows.Count;
+        while (high - low > 1)
+        {
+            var middle = (low + high) / 2;
+            var start = FirstContent(rows[middle]) ?? rows[middle].ContentStart;
+            var startPage = PageOf(start);
+            if (startPage >= 0 && startPage < page)
+                low = middle;
+            else
+                high = middle;
+        }
+        if (low < 0)
+            return null;
+        var v = low;
+        var row = rows[v];
+        if (RowEndPage(paginator, row) < page || !CanSplitRow(rows, v))
+            return null;
+
+        var cuts = new List<(int Paragraph, int Offset)>(row.Cells.Count);
+        bool anyBefore = false, anyAfter = false;
+        foreach (var cell in row.Cells)
+        {
+            var blocks = cell.Blocks.ToList();
+            var position = blocks.Count == 0 ? null : FirstPositionOnPage(paginator, cell, page);
+            var cut = position is null ? (CellCuts.End, 0) : LocateInCell(blocks, position, p => PageOf(p) < page);
+            cuts.Add(cut);
+            if (!CellCuts.IsStart(cut) && blocks.Count > 0)
+                anyBefore = true;
+            if (!CellCuts.IsEnd(cut))
+                anyAfter = true;
+        }
+        return anyBefore && anyAfter ? CutLocator.InsideRow(v, new CellCuts(cuts)) : null;
+    }
+
+    /// <summary>
+    /// The last page <paramref name="block"/> reaches. A table's end position is on the page its last
+    /// cell ends on, but a row the paginator split runs on as far as its longest cell.
+    /// </summary>
+    internal static int EndPage(DynamicDocumentPaginator paginator, WpfBlock block)
+    {
+        var page = SafePageOf(paginator, block.ContentEnd);
+        if (SingleTable(block) is { } table && TableRows(table) is { Count: > 0 } rows)
+            page = Math.Max(page, RowEndPage(paginator, rows[^1]));
+        return page;
+    }
+
+    private static int RowEndPage(DynamicDocumentPaginator paginator, TableRow row)
+    {
+        var page = SafePageOf(paginator, row.ContentEnd);
+        foreach (var cell in row.Cells)
+        {
+            if (LastContent(cell) is { } last)
+                page = Math.Max(page, SafePageOf(paginator, last));
+        }
+        return page;
+    }
+
+    private static int SafePageOf(DynamicDocumentPaginator paginator, TextPointer position)
+    {
+        try
+        {
+            return paginator.GetPageNumber(position);
+        }
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or ArgumentException)
+        {
+            return -1;
+        }
+    }
+
+    /// <summary>
+    /// The cut a page starting at <paramref name="position"/> makes in a cell of <paramref name="blocks"/>:
+    /// inside a paragraph (its block ordinal and content offset), or before a block. A block that is not a
+    /// paragraph (a picture's container) is never cut: it is on the later page unless
+    /// <paramref name="startsEarlier"/> says its start is on an earlier one.
+    /// </summary>
+    private static (int Paragraph, int Offset) LocateInCell(
+        List<WpfBlock> blocks,
+        TextPointer position,
+        Func<TextPointer, bool> startsEarlier)
+    {
+        for (var j = 0; j < blocks.Count; j++)
+        {
+            var block = blocks[j];
+            if (position.CompareTo(block.ContentStart) <= 0)
+                return (j, 0);
+            if (position.CompareTo(block.ContentEnd) > 0)
+                continue;
+            if (block is not WpfParagraph paragraph)
+            {
+                return !startsEarlier(block.ContentStart) ? (j, 0)
+                    : j + 1 < blocks.Count ? (j + 1, 0) : (CellCuts.End, 0);
+            }
+            var offset = ContentOffset(paragraph.ContentStart, position);
+            if (offset > 0 && PaginationEngine.HasText(position, paragraph.ContentEnd))
+                return (j, offset);
+            if (offset <= 0)
+                return (j, 0);
+            // Only the paragraph mark spills over: the next block starts the page.
+            return j + 1 < blocks.Count ? (j + 1, 0) : (CellCuts.End, 0);
+        }
+        return (CellCuts.End, 0);
+    }
+
+    /// <summary>Row <paramref name="v"/> holds only unmerged cells of paragraphs, and no cell above spans into it.</summary>
+    private static bool CanSplitRow(List<TableRow> rows, int v)
+    {
+        for (var r = 0; r < v; r++)
+        {
+            foreach (var cell in rows[r].Cells)
+            {
+                if (cell.RowSpan > v - r)
+                    return false;
+            }
+        }
+        foreach (var cell in rows[v].Cells)
+        {
+            if (cell.RowSpan != 1)
+                return false;
+            foreach (var child in cell.Blocks)
+            {
+                if (child is WpfParagraph paragraph ? DocumentView.IsInlineBreakContinuationFragment(paragraph) : child is not BlockUIContainer)
+                    return false;
+            }
+        }
+        return rows[v].Cells.Count > 0;
+    }
+
+    /// <summary>The first text (or embedded object) of <paramref name="element"/>.</summary>
+    internal static TextPointer? FirstContent(TextElement element)
+    {
+        for (var pointer = element.ContentStart; pointer is not null && pointer.CompareTo(element.ContentEnd) < 0;
+             pointer = pointer.GetNextContextPosition(LogicalDirection.Forward))
+        {
+            if (pointer.GetPointerContext(LogicalDirection.Forward) is TextPointerContext.Text or TextPointerContext.EmbeddedElement)
+                return pointer;
+        }
+        return null;
+    }
+
+    /// <summary>The position before the last text character (or embedded object) of <paramref name="element"/>.</summary>
+    private static TextPointer? LastContent(TextElement element)
+    {
+        for (var pointer = element.ContentEnd; pointer is not null && pointer.CompareTo(element.ContentStart) > 0;
+             pointer = pointer.GetNextContextPosition(LogicalDirection.Backward))
+        {
+            if (pointer.GetPointerContext(LogicalDirection.Backward) is TextPointerContext.Text or TextPointerContext.EmbeddedElement)
+                return pointer.GetPositionAtOffset(-1, LogicalDirection.Forward);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The position a cell cut names in <paramref name="cell"/>: for the side before the cut
+    /// (<paramref name="forward"/> false) right after the last character, for the side after it at the
+    /// start of the next; a cut at a paragraph's start lies between the cell's paragraphs.
+    /// </summary>
+    internal static TextPointer ResolveCell(TableCell cell, (int Paragraph, int Offset) cut, bool forward)
+    {
+        if (CellCuts.IsEnd(cut))
+            return cell.ContentEnd;
+        var blocks = cell.Blocks.ToList();
+        if (cut.Paragraph >= blocks.Count)
+            return cell.ContentEnd;
+        return cut.Offset > 0 && blocks[cut.Paragraph] is WpfParagraph paragraph
+            ? CutPosition(paragraph, cut.Offset, forward)
+            : blocks[cut.Paragraph].ElementStart;
+    }
+
+    /// <summary>The position before row <paramref name="v"/>, outside any element it is the first child of (below <paramref name="block"/>).</summary>
+    private static TextPointer RowStart(WpfBlock block, List<TableRow> rows, int v)
+    {
+        TextElement element = rows[v];
+        while (element.Parent is TextElement parent && !ReferenceEquals(parent, block)
+            && FirstChild(parent) is { } first && ReferenceEquals(first, element))
+        {
+            element = parent;
+        }
+        return element.ElementStart;
+    }
+
+    /// <summary>
+    /// Cuts a render of a table (or of a section holding one) to the piece between two row cuts
+    /// (<see cref="CutLocator.AtRow"/> or <see cref="CutLocator.InsideRow"/>; null: the table's start or
+    /// end). A row cut inside a row keeps the row with each cell cut at its own position: the side before
+    /// keeps every cell's content up to its cut, the side after from it (a cell may be left empty). Returns
+    /// the piece's position map onto the whole render's symbol offsets, or null when the trimmed piece does
+    /// not come out as predicted (it is then left as cut, without a map).
+    /// </summary>
+    internal static PieceMap? TrimTablePiece(WpfBlock block, CutLocator? from, CutLocator? to)
+    {
+        if (SingleTable(block) is not { } table)
+            return null;
+        var rows = TableRows(table);
+
+        // Everything is measured on the untrimmed render first.
+        var breaks = new List<(int StopFull, int Close, int ResumeFull, int Open)>();
+        var startFull = 0;
+        var startOpen = 0;
+        var endFull = SymbolLength(block);
+        var endClose = 0;
+
+        if (to is { IsRow: true } end)
+        {
+            if (end.Cells is { } endCells)
+            {
+                if (end.Row < 0 || end.Row >= rows.Count || rows[end.Row].Cells.Count != endCells.Cells.Count)
+                    return null;
+                var c = 0;
+                foreach (var cell in rows[end.Row].Cells)
+                {
+                    var at = ResolveCell(cell, endCells.Cells[c++], forward: false);
+                    breaks.Add((SymbolOffset(block, at), Depth(cell, at), SymbolOffset(block, cell.ContentEnd), 0));
+                }
+                var after = rows[end.Row].ElementEnd;
+                endFull = SymbolOffset(block, after);
+                endClose = Depth(block, after);
+            }
+            else if (Resolve(block, end, forward: false) is { } at)
+            {
+                endFull = SymbolOffset(block, at);
+                endClose = Depth(block, at);
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        if (from is { IsRow: true } start)
+        {
+            if (start.Cells is { } startCells)
+            {
+                if (start.Row < 0 || start.Row >= rows.Count || rows[start.Row].Cells.Count != startCells.Cells.Count)
+                    return null;
+                var before = RowStart(block, rows, start.Row);
+                startFull = SymbolOffset(block, before);
+                startOpen = Depth(block, before);
+                var c = 0;
+                foreach (var cell in rows[start.Row].Cells)
+                {
+                    var at = ResolveCell(cell, startCells.Cells[c++], forward: true);
+                    breaks.Add((SymbolOffset(block, cell.ContentStart), 0, SymbolOffset(block, at), Depth(cell, at)));
+                }
+            }
+            else if (Resolve(block, start, forward: true) is { } at)
+            {
+                startFull = SymbolOffset(block, at);
+                startOpen = Depth(block, at);
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        // The map: kept stretches of the whole render, each after the ancestors re-opened before it.
+        breaks.Sort((a, b) => a.StopFull != b.StopFull ? a.StopFull.CompareTo(b.StopFull) : a.ResumeFull.CompareTo(b.ResumeFull));
+        var segments = new List<PieceMap.Segment>();
+        var local = startOpen;
+        var full = startFull;
+        foreach (var (stopFull, close, resumeFull, open) in breaks)
+        {
+            if (stopFull < full || stopFull > endFull)
+                return null;
+            segments.Add(new PieceMap.Segment(local, full, stopFull - full));
+            local += stopFull - full + close + open;
+            full = resumeFull;
+        }
+        if (endFull < full)
+            return null;
+        segments.Add(new PieceMap.Segment(local, full, endFull - full));
+        var expectedLength = local + endFull - full + endClose;
+
+        // Trim: the side after the end cut first (positions before it keep their content offsets).
+        if (to is { IsRow: true } trimEnd)
+        {
+            if (trimEnd.Cells is { } endCells)
+            {
+                var c = 0;
+                foreach (var cell in rows[trimEnd.Row].Cells.ToList())
+                    Trim(cell, ResolveCell(cell, endCells.Cells[c++], forward: false), keepBefore: true);
+                TrimAfter(block, rows[trimEnd.Row].ElementEnd);
+            }
+            else if (Resolve(block, trimEnd, forward: false) is { } at)
+            {
+                TrimAfter(block, at);
+            }
+        }
+        if (from is { IsRow: true } trimStart)
+        {
+            if (trimStart.Cells is { } startCells)
+            {
+                var c = 0;
+                foreach (var cell in rows[trimStart.Row].Cells.ToList())
+                    Trim(cell, ResolveCell(cell, startCells.Cells[c++], forward: true), keepBefore: false);
+                TrimBefore(block, RowStart(block, rows, trimStart.Row));
+            }
+            else if (Resolve(block, trimStart, forward: true) is { } at)
+            {
+                TrimBefore(block, at);
+            }
+        }
+
+        return SymbolLength(block) == expectedLength ? new PieceMap(segments) : null;
+    }
+
     /// <summary>
     /// The cut position <paramref name="locator"/> names in <paramref name="block"/> (any render of it).
     /// A paragraph cut resolves inside text: for the side before the cut (<paramref name="forward"/> false)
@@ -426,7 +814,7 @@ internal static class PageSplitter
     // ── structural trimming ──────────────────────────────────────────────────────────────────────────
 
     /// <summary>Open elements between <paramref name="position"/> and <paramref name="top"/> (exclusive).</summary>
-    internal static int Depth(WpfBlock top, TextPointer position)
+    internal static int Depth(TextElement top, TextPointer position)
     {
         var depth = 0;
         var node = position.Parent;
@@ -450,7 +838,7 @@ internal static class PageSplitter
     /// <summary>Removes everything in <paramref name="top"/> before <paramref name="position"/>, keeping its ancestors.</summary>
     internal static void TrimBefore(WpfBlock top, TextPointer position) => Trim(top, position, keepBefore: false);
 
-    private static void Trim(WpfBlock top, TextPointer position, bool keepBefore)
+    private static void Trim(TextElement top, TextPointer position, bool keepBefore)
     {
         var container = position.Parent as TextElement;
         TextPointer boundary;
@@ -564,4 +952,68 @@ internal sealed class PagePiece
 
     /// <summary>The symbols of the whole block this piece shows.</summary>
     internal int Span => Math.Max(0, PageSplitter.SymbolLength(Block) - Open - Close);
+
+    /// <summary>
+    /// A piece of a table split inside a row: its content is not one stretch of the whole block (each
+    /// cell of the split row shows its own share), so positions map through this instead of
+    /// <see cref="Open"/>/<see cref="Gap"/>. Every piece of such a block has one (offsets are absolute).
+    /// </summary>
+    internal PieceMap? Map { get; init; }
+
+    /// <summary>The piece's first row continues the previous piece's last row cell by cell.</summary>
+    internal System.Windows.Documents.TableRow? RowContinuedFromPrevious { get; init; }
+
+    /// <summary>The piece's last row continues cell by cell on the next piece.</summary>
+    internal System.Windows.Documents.TableRow? RowContinuedOnNext { get; init; }
+
+    /// <summary>Per cell of <see cref="RowContinuedFromPrevious"/>: its text continues a paragraph of the previous piece's cell mid-line.</summary>
+    internal bool[]? CellTextSeamsFromPrevious { get; init; }
+
+    /// <summary>Per cell of <see cref="RowContinuedOnNext"/>: its text continues mid-line in the next piece's cell.</summary>
+    internal bool[]? CellTextSeamsOnNext { get; init; }
+}
+
+/// <summary>
+/// Maps symbol offsets of a page piece onto those of the whole (unsplit) block it was cut from: an ordered
+/// list of stretches the piece keeps, each at its own local offset. Positions in what the piece re-opens
+/// (the ancestors of a cut) map to the nearest kept position.
+/// </summary>
+internal sealed class PieceMap(IReadOnlyList<PieceMap.Segment> segments)
+{
+    internal readonly record struct Segment(int Local, int Full, int Length);
+
+    internal IReadOnlyList<Segment> Segments { get; } = segments;
+
+    /// <summary>The whole-block offset of local offset <paramref name="local"/>.</summary>
+    internal int ToFull(int local)
+    {
+        if (Segments.Count == 0)
+            return 0;
+        var segment = Segments[0];
+        foreach (var candidate in Segments)
+        {
+            if (candidate.Local > local)
+                break;
+            segment = candidate;
+        }
+        return segment.Full + Math.Clamp(local - segment.Local, 0, segment.Length);
+    }
+
+    /// <summary>
+    /// The local offset of whole-block offset <paramref name="full"/> and how far it is from what the piece
+    /// keeps (0: the piece shows it).
+    /// </summary>
+    internal (int Local, int Distance) ToLocal(int full)
+    {
+        var best = (Local: 0, Distance: int.MaxValue);
+        foreach (var segment in Segments)
+        {
+            if (full >= segment.Full && full <= segment.Full + segment.Length)
+                return (segment.Local + full - segment.Full, 0);
+            var distance = full < segment.Full ? segment.Full - full : full - segment.Full - segment.Length;
+            if (distance < best.Distance)
+                best = (full < segment.Full ? segment.Local : segment.Local + segment.Length, distance);
+        }
+        return best;
+    }
 }

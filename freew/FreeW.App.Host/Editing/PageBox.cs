@@ -222,6 +222,12 @@ internal sealed class PageBox : Border
         PieceOf(Body.Document.Blocks.FirstBlock) is { ContinuesPrevious: true, IsTextSeam: true };
 
     /// <summary>
+    /// Set by the paged editor: handles Backspace/Delete/Left/Right (no modifiers, no selection) at the
+    /// edge of a cell of a table row split across pages; true when it did.
+    /// </summary>
+    internal Func<PageBox, Key, bool>? CellSeamKey { get; set; }
+
+    /// <summary>
     /// The <see cref="SectionHeadersFooters"/> that this page box's FOOTER sub-editor should commit
     /// back to. Resolved independently of <see cref="OwnerSectionHf"/> because the header and footer
     /// slots can each link to a different preceding section.
@@ -953,6 +959,14 @@ internal sealed class PageBox : Border
 
         bool shiftHeld = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
         bool ctrlHeld = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
+
+        // A table row split across pages: a cell's text continues in the same cell on the other page.
+        if (!shiftHeld && !ctrlHeld && e.Key is Key.Back or Key.Delete or Key.Left or Key.Right
+            && Body.Selection.IsEmpty && CellSeamKey?.Invoke(this, e.Key) == true)
+        {
+            e.Handled = true;
+            return;
+        }
 
         switch (e.Key)
         {

@@ -3340,6 +3340,7 @@ public sealed partial class MainWindow : Window
     {
         panel.AttachAsActiveSurface();
         panel.Edited += MarkDirtyOutsideBodyUndo;
+        panel.HeaderFooterRegionChanged += SyncHeaderFooterSectionRibbonState;
     }
 
     /// <summary>
@@ -3351,7 +3352,9 @@ public sealed partial class MainWindow : Window
     {
         panel.CommitPendingEdits();
         panel.Edited -= MarkDirtyOutsideBodyUndo;
+        panel.HeaderFooterRegionChanged -= SyncHeaderFooterSectionRibbonState;
         panel.Detach();
+        SyncHeaderFooterSectionRibbonState();
         _editor.RefreshFromSharedDocument();
     }
 
