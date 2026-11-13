@@ -6371,18 +6371,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             : fillBlock;
     }
 
-    // Maps DrawingShapeOutlineDash → dash arrays compatible with Avalonia StrokeDashArray.
-    // Arrays are dash/gap lengths in units of stroke thickness, matching WPF DashStyles.
-    private static double[]? GetShapeOutlineDashArray(DrawingShapeOutlineDash dash) => dash switch
-    {
-        DrawingShapeOutlineDash.Dash or DrawingShapeOutlineDash.LongDash
-            or DrawingShapeOutlineDash.SystemDash                       => [2, 2],
-        DrawingShapeOutlineDash.Dot or DrawingShapeOutlineDash.SystemDot => [1, 2],
-        DrawingShapeOutlineDash.DashDot or DrawingShapeOutlineDash.SystemDashDot => [2, 2, 1, 2],
-        DrawingShapeOutlineDash.LongDashDot                             => [2, 2, 1, 2],
-        DrawingShapeOutlineDash.LongDashDotDot                          => [2, 2, 1, 2, 1, 2],
-        _                                                               => null,
-    };
+    // Dash/gap lengths (in stroke thicknesses) come from the shared DrawingML preset table, the same
+    // one the WPF grid and FreeP renderers read; Avalonia StrokeDashArray uses the same unit.
+    private static double[]? GetShapeOutlineDashArray(DrawingShapeOutlineDash dash) =>
+        DrawingMlPresetDashPattern.ToArray(dash.ToPresetDash());
 
     // Non-ellipse shapes: render the true preset outline via the geometry factory when available,
     // falling back to a plain rectangle for kinds the factory does not cover.
@@ -9918,20 +9910,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     /// <summary>
-    /// R139-freex-cell-editing-edit-commit-collapses-range-selection: Enter/Tab (and their Shift
-    /// variants) that commit an in-cell/formula-bar edit must CYCLE the active cell within a
-    /// pre-existing multi-cell selection -- wrapping at the far end back to the start -- exactly
-    /// like Excel and like the ready-mode Enter/Tab handler in NavigateActiveCell (which routes
-    /// through the same <see cref="GridSelectionNavigationPlanner.PlanCycle"/> +
-    /// <see cref="WorkbookSession.MoveActiveCellWithinSelection"/> pair). It must NOT collapse
-    /// the selection via the plain delta-based <see cref="WorkbookSession.MoveActiveCell"/>,
-    /// which is what happened before this fix. Arrow-key commits (the inline editor's
-    /// inlineEditorCommitsOnArrow path, and the formula bar's Up/Down/PageUp/PageDown fallback)
-    /// are ordinary navigation, not range-cycling, so this only engages when the physical key
-    /// that triggered the commit was actually Enter or Tab; every other key -- and any Enter/Tab
-    /// where there is no eligible multi-cell selection to cycle within (a single selected cell,
-    /// or a single selected merged region) -- falls back unchanged to the pre-existing
-    /// delta-based MoveActiveCell behavior.
+    /// Applies the edit-commit move decided by
+    /// <see cref="GridSelectionNavigationPlanner.PlanEditCommitMove"/> (R139: Enter/Tab cycle within a
+    /// multi-cell selection, everything else falls back to the plain delta-based
+    /// <see cref="WorkbookSession.MoveActiveCell"/>).
     /// </summary>
     private void MoveActiveCellAfterEditCommit(CellAddress current, CellAddress adjustedTarget, Key key, bool shiftHeld)
     {
@@ -9942,24 +9924,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             _ => (GridSelectionCycleKey?)null
         };
 
-        var cyclePlan = cycleKey is { } resolvedKey
-            ? GridSelectionNavigationPlanner.PlanCycle(
-                _session.Workbook.GetSheet(current.Sheet),
-                _session.SelectedRange,
-                _session.SelectedRanges,
-                current,
-                resolvedKey,
-                forward: !shiftHeld)
-            : null;
+        var move = GridSelectionNavigationPlanner.PlanEditCommitMove(
+            _session.Workbook.GetSheet(current.Sheet),
+            _session.SelectedRange,
+            _session.SelectedRanges,
+            current,
+            cycleKey,
+            forward: !shiftHeld,
+            adjustedTarget);
 
-        if (cyclePlan is { } cycle)
+        if (move.CycledWithinSelection)
         {
-            _session.MoveActiveCellWithinSelection(cycle.Target);
+            _session.MoveActiveCellWithinSelection(move.Target);
             return;
         }
 
-        var rowDelta = GetCellIndexDelta(current.Row, adjustedTarget.Row);
-        var colDelta = GetCellIndexDelta(current.Col, adjustedTarget.Col);
+        var rowDelta = GetCellIndexDelta(current.Row, move.Target.Row);
+        var colDelta = GetCellIndexDelta(current.Col, move.Target.Col);
         if (rowDelta != 0 || colDelta != 0)
             _session.MoveActiveCell(rowDelta, colDelta);
     }
@@ -27450,6 +27431,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
+        // Excel: while a copied range is outlined (marching ants), a plain Enter pastes it into the
+        // selection and ends copy mode instead of moving the selection.
+        if (e.Key == Key.Enter &&
+            e.KeyModifiers == KeyModifiers.None &&
+            _clipboardMarqueeRange is not null &&
+            _inlineCellEditAddress is null &&
+            !_formulaBox.IsFocused &&
+            !IsTextEditingEventSource(e))
+        {
+            e.Handled = true;
+            await PasteClipboardTextAsync();
+            SetClipboardMarquee(null, isCut: false);
+            return;
+        }
+
         if (IsAutoSumShortcut(e))
         {
             e.Handled = true;
@@ -28142,32 +28138,43 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             _session.Viewport, _session.ActiveSheet) - 1);
         var extendSelection = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         var moveOnly = navigationKey is ExcelWorksheetNavigationKey.Enter or ExcelWorksheetNavigationKey.Tab;
-        var useDataBoundary = ExcelWorksheetNavigationPlanner.ShouldUseDataBoundary(navigationKey, navigationModifiers, _endMode);
-        var ctrlHeld = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta);
         var sheet = _session.Workbook.GetSheet(_session.ActiveSheet.Id);
         var current = extendSelection && !moveOnly && _selectionExtensionCursor is { } cursor
             ? cursor
             : _session.ActiveCell;
 
-        // r188: captured BEFORE the flag is cleared. Home's target depends on it -- End then Home
-        // reproduces Ctrl+End in Excel -- and the switch below runs after this point, so reading
-        // _endMode there would always see false. The WPF sibling calls its Home helper from inside
-        // the switch for exactly this reason (MainWindow.Selection.cs, R82-app-keyboard-nav-5-2).
-        var endModeBeforeClear = _endMode;
+        // The shared planner owns the whole key -> target decision. r188: it reads the End-mode value
+        // passed in the request, which is captured BEFORE the flag is cleared below -- Home's target
+        // depends on it (End then Home reproduces Ctrl+End in Excel, R82-app-keyboard-nav-5-2).
+        // Plain steps, Enter and Tab are advanced past a merged block (R51), and ready-mode Enter
+        // honors "After pressing Enter, move selection" and its direction (R82-app-keyboard-nav-5-1).
+        var resolution = ExcelWorksheetNavigationPlanner.ResolveTarget(
+            sheet,
+            _session.ActiveSheet.Id,
+            current,
+            navigationKey,
+            new ExcelWorksheetNavigationRequest(
+                navigationModifiers,
+                _endMode,
+                pageRows,
+                pageCols,
+                MoveSelectionAfterEnter,
+                AfterEnterDirection));
         if (_endMode)
             _endMode = false;
 
+        if (resolution is not { } resolvedNavigation)
+            return;
+
         // Presentation owns traversal order, multi-area wrapping, and merged-cell eligibility.
         // Avalonia retains native key conversion and applies only the returned active-cell target.
-        var cyclePlan = moveOnly
+        var cyclePlan = moveOnly && resolvedNavigation.CycleKey is { } cycleKey
             ? GridSelectionNavigationPlanner.PlanCycle(
                 sheet,
                 _session.SelectedRange,
                 _session.SelectedRanges,
                 current,
-                navigationKey == ExcelWorksheetNavigationKey.Tab
-                    ? GridSelectionCycleKey.Tab
-                    : GridSelectionCycleKey.Enter,
+                cycleKey,
                 forward: !extendSelection)
             : null;
         if (cyclePlan is { } cycle)
@@ -28179,58 +28186,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        // Alt+PageUp/Alt+PageDown resolve to a horizontal screen-page move (Excel/WPF parity)
-        // before falling back to the vertical PageUp/PageDown handling below.
-        CellAddress? target = ExcelWorksheetNavigationPlanner.GetHorizontalPageTarget(
-            navigationKey,
-            navigationKey,
-            navigationModifiers,
-            current,
-            pageCols);
-
-        target ??= navigationKey switch
-        {
-            ExcelWorksheetNavigationKey.Up => useDataBoundary
-                ? ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, -1)
-                : OffsetAddress(current, -1, 0),
-            ExcelWorksheetNavigationKey.Down => useDataBoundary
-                ? ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, +1)
-                : OffsetAddress(current, 1, 0),
-            ExcelWorksheetNavigationKey.Left => useDataBoundary
-                ? ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(sheet, current, -1)
-                : OffsetAddress(current, 0, -1),
-            ExcelWorksheetNavigationKey.Right => useDataBoundary
-                ? ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(sheet, current, +1)
-                : OffsetAddress(current, 0, 1),
-            ExcelWorksheetNavigationKey.PageUp => OffsetAddress(current, -pageRows, 0),
-            ExcelWorksheetNavigationKey.PageDown => OffsetAddress(current, pageRows, 0),
-            // Goes through the shared planner rather than composing the address here: it also
-            // owns the End-then-Home jump and the frozen-pane origin for Ctrl+Home, both of which
-            // the hand-written form above got wrong (it always returned row 1 / column 1).
-            ExcelWorksheetNavigationKey.Home => ExcelWorksheetNavigationPlanner.GetHomeTarget(
-                sheet,
-                _session.ActiveSheet.Id,
-                current,
-                ctrlHeld,
-                endModeBeforeClear),
-            // ShouldHandleWorksheetNavigationKey only lets End through when Ctrl is held (plain End
-            // is consumed by TryToggleEndMode above), so this always resolves via GetCtrlEndCell.
-            ExcelWorksheetNavigationKey.End => ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, _session.ActiveSheet.Id),
-            ExcelWorksheetNavigationKey.Enter => extendSelection
-                ? OffsetAddress(current, -1, 0)
-                : OffsetAddress(current, 1, 0),
-            ExcelWorksheetNavigationKey.Tab => extendSelection
-                ? OffsetAddress(current, 0, -1)
-                : OffsetAddress(current, 0, 1),
-            _ => null
-        };
-
-        if (target is not { } resolvedTarget)
-            return;
-
-        var navigationTarget = moveOnly
-            ? ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(sheet, current, resolvedTarget)
-            : resolvedTarget;
+        var navigationTarget = resolvedNavigation.Target;
 
         // Arrow/Tab/Enter navigation on a protected sheet must SKIP a locked cell it would
         // otherwise land the active cell on (when "Select locked cells" is unchecked), stepping
@@ -28266,12 +28222,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         e.Handled = true;
         RefreshShell(UiText.Get("MainLoc_Ready"));
     }
-
-    private CellAddress OffsetAddress(CellAddress current, int rowDelta, int colDelta) =>
-        new(
-            _session.ActiveSheet.Id,
-            OffsetCellIndex(current.Row, rowDelta, CellAddress.MaxRow),
-            OffsetCellIndex(current.Col, colDelta, CellAddress.MaxCol));
 
     private static ExcelWorksheetNavigationKey ToWorksheetNavigationKey(Key key) =>
         key switch
@@ -28330,9 +28280,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // upward/leftward Shift+Arrow run doesn't relocate the active cell to the range's top-left.
         _session.SelectAnchoredRange(anchor, target);
     }
-
-    private static uint OffsetCellIndex(uint current, int delta, uint max) =>
-        (uint)Math.Clamp((long)current + delta, 1, max);
 
     private void MainWindow_TextInput(object? sender, TextInputEventArgs e)
     {

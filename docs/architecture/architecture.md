@@ -38,6 +38,7 @@ projects:
 | Project | Purpose | Consumers |
 |---|---|---|
 | `Free.Shared.Drawing` | Shared drawing/geometry primitives | FreeX (`Core.Model`, `Core.Calc`, `Core.Commands`, `Core.IO`, `App.*`), FreeP (`Core.Model`, `App.Rendering.Wpf/Avalonia`, `App.Presentation`) |
+| `Free.Shared.Drawing.Wpf` | WPF contour-to-geometry adapter (`WpfShapeGeometryAdapter`) over `Free.Shared.Drawing`; sibling of `Free.Shared.Drawing.Avalonia` | FreeX.App.UI, FreeP.App.Rendering.Wpf |
 | `Free.Shared.Ribbon` | Neutral declarative ribbon model | FreeX, FreeW, FreeP (`Ribbon.Definitions`, `App.Host`/`App.Avalonia` on every app) |
 | `Free.Shared.Ribbon.Wpf` | WPF ribbon renderer/chrome (`SharedChromeResources.xaml`) over `Free.Shared.Ribbon` | FreeX.App.Host, FreeW.App.Host |
 | `Free.Shared.Ribbon.Avalonia` | Avalonia ribbon renderer over `Free.Shared.Ribbon` | FreeX.App.Avalonia, FreeW.App.Avalonia, FreeP.App.Avalonia |

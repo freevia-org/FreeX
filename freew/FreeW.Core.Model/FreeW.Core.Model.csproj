@@ -7,6 +7,7 @@
   <ItemGroup>
     <ProjectReference Include="../../shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
     <ProjectReference Include="../../shared/Free.Shared.Commands/Free.Shared.Commands.csproj" />
+    <ProjectReference Include="../../shared/Free.Shared.IO/Free.Shared.IO.csproj" />
     <ProjectReference Include="../../shared/Free.Shared.Opc/Free.Shared.Opc.csproj" />
     <ProjectReference Include="../../shared/Free.Shared.TextSearch/Free.Shared.TextSearch.csproj" />
   </ItemGroup>

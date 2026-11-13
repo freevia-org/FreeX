@@ -5,14 +5,8 @@ namespace FreeX.App.Services;
 
 public static class LegalNoticeProvider
 {
-    private static readonly LegalNoticeResource[] Resources =
-    [
-        new("Project License", "FreeX.Legal.ProjectLicense.txt"),
-        new("Legal Notices", "FreeX.Legal.LegalNotices.md"),
-        new("Privacy Notice", "FreeX.Legal.PrivacyNotice.md"),
-        new("Third-Party Notices", "FreeX.Legal.ThirdPartyNotices.md"),
-        new("Third-Party License Texts", "FreeX.Legal.ThirdPartyLicenses.md")
-    ];
+    private static readonly IReadOnlyList<LegalNoticeResource> Resources =
+        ProductLegalNoticeManifest.Create("FreeX");
 
     internal static IReadOnlyList<LegalNoticeResource> ExpectedEmbeddedResources => Resources;
 

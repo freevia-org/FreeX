@@ -37,7 +37,7 @@ public sealed class AutosaveAdapterEmergencySnapshotTests
 
     private static AutosaveAdapter NewAdapter(
         FileCommandWorkflow workflow,
-        Func<FreePAutosavePorts, FreePAutosaveSession> sessionFactory) =>
+        Func<AutosaveDocumentPorts<Presentation>, FreePAutosaveSession> sessionFactory) =>
         new(
             () => Presentation.CreateEmpty(),
             workflow,
@@ -50,7 +50,7 @@ public sealed class AutosaveAdapterEmergencySnapshotTests
     ///
     /// <para>
     /// Uses a <c>sessionFactory</c> override with a synchronous (non-<c>Dispatcher.UIThread</c>)
-    /// <c>ExecuteWithPresentation</c> port, exactly like FreeW's sibling test. The REAL ports'
+    /// <c>ExecuteWithDocument</c> port, exactly like FreeW's sibling test. The REAL ports'
     /// marshal is covered separately by
     /// <see cref="TryEmergencySnapshot_UsingRealPorts_DoesNotDeadlockWhenReentrantOnTheUiThread"/>.
     /// </para>
@@ -71,12 +71,12 @@ public sealed class AutosaveAdapterEmergencySnapshotTests
                 adapter = NewAdapter(
                     NewWorkflow(),
                     _ => new FreePAutosaveSession(
-                        new FreePAutosavePorts(
+                        new AutosaveDocumentPorts<Presentation>(
                             GetOriginalFilePath: () => null,
                             GetDisplayName: () => "Presentation1",
                             GetIsDirty: () => true,
                             GetDirtyGeneration: () => 1,
-                            ExecuteWithPresentation: write => write(Presentation.CreateEmpty())),
+                            ExecuteWithDocument: write => write(Presentation.CreateEmpty())),
                         store,
                         snapshotId));
             });
@@ -126,7 +126,7 @@ public sealed class AutosaveAdapterEmergencySnapshotTests
     }
 
     /// <summary>
-    /// Keeps the real production <c>FreePAutosavePorts.ExecuteWithPresentation</c> model projection
+    /// Keeps the real production <c>AutosaveDocumentPorts.ExecuteWithDocument</c> model projection
     /// (only the store is swapped out) and drives the adapter's shared whole-snapshot dispatcher
     /// transaction from inside a UI-thread-dispatched action, reproducing the exact reentrancy
     /// shape of <c>AppDomain.UnhandledException</c> firing on the UI thread. A naive

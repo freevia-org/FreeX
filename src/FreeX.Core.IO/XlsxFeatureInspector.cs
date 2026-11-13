@@ -40,12 +40,15 @@ public sealed record XlsxFeatureReport(
 
 public static class XlsxFeatureInspector
 {
-    private static readonly XmlReaderSettings ScanXmlSettings = new()
+    private static readonly XmlReaderSettings ScanXmlSettings = CreateScanXmlSettings();
+
+    internal static XmlReaderSettings CreateScanXmlSettings()
     {
-        DtdProcessing = DtdProcessing.Prohibit,
-        IgnoreComments = true,
-        IgnoreProcessingInstructions = true
-    };
+        var settings = SecureXmlReaderSettings.Create();
+        settings.IgnoreComments = true;
+        settings.IgnoreProcessingInstructions = true;
+        return settings;
+    }
 
     public static XlsxFeatureReport Inspect(Stream stream)
     {

@@ -1,18 +1,10 @@
 using System.Globalization;
-using System.Text;
 
 namespace FreeW.Core.Model;
 
 /// <summary>Formats canonical Word footnote and endnote reference marks.</summary>
 public static class NoteNumberFormatter
 {
-    private static readonly (int Value, string Symbol)[] RomanNumerals =
-    [
-        (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
-        (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
-        (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")
-    ];
-
     private static readonly string[] ChicagoSymbols = ["*", "\u2020", "\u2021", "\u00A7"];
 
     public static string Format(int value, NoteNumberingOptions options)
@@ -46,37 +38,17 @@ public static class NoteNumberFormatter
     /// </summary>
     private const int MaximumSymbolicNumeral = 3999;
 
-    private static string ToRoman(int value)
-    {
-        if (value > MaximumSymbolicNumeral)
-            return value.ToString(CultureInfo.InvariantCulture);
+    private static string ToRoman(int value) =>
+        value <= MaximumSymbolicNumeral
+        && Free.Shared.IO.NumeralFormatter.TryToRoman(value, upper: true, out var roman)
+            ? roman
+            : value.ToString(CultureInfo.InvariantCulture);
 
-        var remaining = value;
-        var result = new StringBuilder();
-        foreach (var (number, symbol) in RomanNumerals)
-        {
-            while (remaining >= number)
-            {
-                result.Append(symbol);
-                remaining -= number;
-            }
-        }
-
-        return result.ToString();
-    }
-
-    private static string ToLetter(int value, bool lower)
-    {
-        var result = new StringBuilder();
-        while (value > 0)
-        {
-            value--;
-            result.Insert(0, (char)((lower ? 'a' : 'A') + value % 26));
-            value /= 26;
-        }
-
-        return result.ToString();
-    }
+    // The caller has already normalised value to >= 1, so the conversion always succeeds.
+    private static string ToLetter(int value, bool lower) =>
+        Free.Shared.IO.NumeralFormatter.TryToBijectiveLetters(value, upper: !lower, out var letters)
+            ? letters
+            : value.ToString(CultureInfo.InvariantCulture);
 
     private static string ToChicago(int value)
     {

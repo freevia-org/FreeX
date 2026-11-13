@@ -213,6 +213,34 @@ public sealed record SlideShowSettingsShowTypeOption(
 public sealed record SlideShowSettingsDialogCommitPlan(
     SlideShowSettingsState Settings);
 
+/// <summary>A check-box row of the Set Up Slide Show dialog and how its initial value is read.</summary>
+public sealed record SlideShowSettingsToggleField(
+    SlideShowSettingsDialogField Field,
+    Func<SlideShowSettingsDialogInput, bool> Initial);
+
+/// <summary>Whether the loop check is forced on and whether the user may still change it.</summary>
+public sealed record SlideShowSettingsLoopState(bool ForceChecked, bool IsEnabled);
+
+/// <summary>Shared WPF-authority layout values for the Set Up Slide Show dialog.</summary>
+public static class SlideShowSettingsDialogVisualMetrics
+{
+    // WPF sizes the dialog to its content at 360 wide. The Avalonia dialog is a fixed-size window (Height 240)
+    // whose outer width was tuned against the WPF raster (the sibling Header and Footer dialog documents the
+    // same fixed-geometry compensation), so the two stay separate named values rather than one number.
+    public const double WpfWindowWidth = 360;
+    public const double AvaloniaWindowWidth = 345.3333333333333;
+
+    public const double WpfCheckBottomMargin = 8;
+    public const double WpfLoopCheckBottomMargin = 12;
+    public const double WpfShowTypeBottomMargin = 12;
+    public const double WpfKioskRestartBottomMargin = 12;
+
+    public static double WpfToggleBottomMargin(SlideShowSettingsDialogField field) =>
+        field == SlideShowSettingsDialogField.LoopUntilStopped
+            ? WpfLoopCheckBottomMargin
+            : WpfCheckBottomMargin;
+}
+
 public sealed class SlideShowSettingsDialogSession
 {
     private readonly EditingSession _editor;
@@ -223,6 +251,28 @@ public sealed class SlideShowSettingsDialogSession
         new(PresentationShowType.BrowsedByIndividual, "Browsed by an individual"),
         new(PresentationShowType.BrowsedAtKiosk, "Browsed at a kiosk"),
     ];
+
+    /// <summary>The check-box rows in creation order, each with its initial-value accessor.</summary>
+    public static IReadOnlyList<SlideShowSettingsToggleField> ToggleFields { get; } =
+    [
+        new(SlideShowSettingsDialogField.UseTimings, input => input.UseSlideTimings),
+        new(SlideShowSettingsDialogField.ShowWithoutAnimation, input => input.ShowWithoutAnimation),
+        new(SlideShowSettingsDialogField.PlayNarration, input => input.ShowWithNarration),
+        new(SlideShowSettingsDialogField.ShowMediaControls, input => input.ShowMediaControls),
+        new(SlideShowSettingsDialogField.ShowMasterGraphics, input => input.ShowMasterShapes),
+        new(SlideShowSettingsDialogField.LoopUntilStopped, input => input.LoopUntilStopped),
+        new(SlideShowSettingsDialogField.ShowBrowseScrollbar, input => input.ShowBrowseScrollbar),
+    ];
+
+    /// <summary>
+    /// PowerPoint forces "Loop until 'Esc'" whenever "Browsed at a kiosk" is selected and the user cannot turn it
+    /// off in that mode: the check shows checked and is disabled for as long as kiosk is the show type.
+    /// </summary>
+    public static SlideShowSettingsLoopState ResolveLoopState(PresentationShowType? showType)
+    {
+        var isKiosk = showType == PresentationShowType.BrowsedAtKiosk;
+        return new SlideShowSettingsLoopState(ForceChecked: isKiosk, IsEnabled: !isKiosk);
+    }
 
     public SlideShowSettingsDialogSession(EditingSession editor)
     {
@@ -284,7 +334,7 @@ public sealed class SlideShowSettingsDialogSession
         // kiosk" -- an unattended kiosk display must never fall through to the editor.
         // The loop checkbox is independent UI state, so ignore an unchecked value here
         // rather than let a kiosk show silently end.
-        var loopUntilStopped = input.LoopUntilStopped || showType == PresentationShowType.BrowsedAtKiosk;
+        var loopUntilStopped = input.LoopUntilStopped || ResolveLoopState(showType).ForceChecked;
 
         LastCommitPlan = new SlideShowSettingsDialogCommitPlan(new SlideShowSettingsState(
             input.UseSlideTimings,

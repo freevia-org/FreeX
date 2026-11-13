@@ -34,8 +34,8 @@ internal static class ZoomDialogChrome
 
     internal static Button MakeButton(string label, bool isDefault, Action action)
     {
-        var button = new Button { Content = label, IsDefault = isDefault, MinWidth = 80 };
-        AvaloniaCompactDialogChrome.ApplyButton(button, Style, minWidth: 80, isDefault: isDefault);
+        var button = new Button { Content = label, IsDefault = isDefault, MinWidth = ZoomDialogVisualMetrics.ButtonMinWidth };
+        AvaloniaCompactDialogChrome.ApplyButton(button, Style, minWidth: ZoomDialogVisualMetrics.ButtonMinWidth, isDefault: isDefault);
         button.Click += (_, _) => action();
         return button;
     }
@@ -51,14 +51,14 @@ internal static class ZoomDialogChrome
             IsDefault = plan.IsDefault,
             IsCancel = plan.IsCancel,
             IsEnabled = isEnabled,
-            MinWidth = 80,
+            MinWidth = ZoomDialogVisualMetrics.ButtonMinWidth,
         };
         AutomationProperties.SetName(button, plan.AccessibleName);
         AutomationProperties.SetAutomationId(button, plan.AutomationId);
         AvaloniaCompactDialogChrome.ApplyButton(
             button,
             Style,
-            minWidth: 80,
+            minWidth: ZoomDialogVisualMetrics.ButtonMinWidth,
             isDefault: plan.IsDefault);
         button.Click += (_, _) => action();
         return button;

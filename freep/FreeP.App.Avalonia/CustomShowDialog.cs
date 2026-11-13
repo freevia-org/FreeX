@@ -22,9 +22,7 @@ internal sealed partial class CustomShowDialog : FreePDialogWindow
     private readonly ListBox _customShowSlideList = new();
     private readonly StackPanel _slidePanel = new();
     private readonly TextBlock _validationText = new();
-    private Point? _customShowSlideDragStartPoint;
-    private int _customShowSlideDragSourceIndex = -1;
-    private bool _customShowSlideDragActive;
+    private readonly SlideShowCustomShowDragTracker _customShowSlideDrag = new();
 
     private PresentationDialogSurfacePlan<
         SlideShowCustomShowDialogField,
@@ -314,9 +312,7 @@ internal sealed partial class CustomShowDialog : FreePDialogWindow
         if (point.Properties.IsLeftButtonPressed &&
             item?.DataContext is SlideShowCustomShowSessionSlideItemPlan slide)
         {
-            _customShowSlideDragStartPoint = point.Position;
-            _customShowSlideDragSourceIndex = slide.Index;
-            _customShowSlideDragActive = false;
+            _customShowSlideDrag.Press(point.Position.X, point.Position.Y, slide.Index);
             return;
         }
 
@@ -326,33 +322,32 @@ internal sealed partial class CustomShowDialog : FreePDialogWindow
     private void OnCustomShowSlideListPointerMoved(object? sender, PointerEventArgs e)
     {
         var point = e.GetCurrentPoint(_customShowSlideList);
-        if (_customShowSlideDragStartPoint is not { } dragStartPoint ||
-            _customShowSlideDragSourceIndex < 0 ||
+        if (!_customShowSlideDrag.HasPress ||
             !point.Properties.IsLeftButtonPressed)
         {
             return;
         }
 
-        if (Math.Abs(point.Position.X - dragStartPoint.X) < DragStartThreshold &&
-            Math.Abs(point.Position.Y - dragStartPoint.Y) < DragStartThreshold)
+        if (!_customShowSlideDrag.ShouldBegin(
+                point.Position.X, point.Position.Y, DragStartThreshold, DragStartThreshold))
         {
             return;
         }
 
-        _customShowSlideDragActive = true;
+        _customShowSlideDrag.MarkActive();
         e.Pointer.Capture(this);
         e.Handled = true;
     }
 
     private void OnCustomShowSlideListPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (!_customShowSlideDragActive || _customShowSlideDragSourceIndex < 0)
+        if (!_customShowSlideDrag.IsActive || _customShowSlideDrag.SourceIndex < 0)
         {
             ResetCustomShowSlideDrag();
             return;
         }
 
-        var sourceSlideIndex = _customShowSlideDragSourceIndex;
+        var sourceSlideIndex = _customShowSlideDrag.SourceIndex;
         var pointerPosition = e.GetPosition(_customShowSlideList);
         var isInsideList = new Rect(
             0,
@@ -368,13 +363,13 @@ internal sealed partial class CustomShowDialog : FreePDialogWindow
 
     private void OnCustomShowSlidePointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
     {
-        if (_customShowSlideDragActive || _customShowSlideDragSourceIndex >= 0)
+        if (_customShowSlideDrag.IsActive || _customShowSlideDrag.SourceIndex >= 0)
             ResetCustomShowSlideDrag();
     }
 
     private void OnCustomShowSlideListDragOver(object? sender, DragEventArgs e)
     {
-        e.DragEffects = _customShowSlideDragSourceIndex >= 0
+        e.DragEffects = _customShowSlideDrag.SourceIndex >= 0
             ? DragDropEffects.Move
             : DragDropEffects.None;
         e.Handled = true;
@@ -382,12 +377,12 @@ internal sealed partial class CustomShowDialog : FreePDialogWindow
 
     private void OnCustomShowSlideListDrop(object? sender, DragEventArgs e)
     {
-        if (_customShowSlideDragSourceIndex < 0)
+        if (_customShowSlideDrag.SourceIndex < 0)
         {
             return;
         }
 
-        var sourceSlideIndex = _customShowSlideDragSourceIndex;
+        var sourceSlideIndex = _customShowSlideDrag.SourceIndex;
         var targetDropIndex = ResolveCustomShowSlideDropIndex(e);
         ResetCustomShowSlideDrag();
         ApplyCustomShowSlideDragReorder(sourceSlideIndex, targetDropIndex);
@@ -401,13 +396,15 @@ internal sealed partial class CustomShowDialog : FreePDialogWindow
             _customShowSlideList.InputHitTest(pointerPosition) ?? e.Source);
         if (item?.DataContext is SlideShowCustomShowSessionSlideItemPlan slide)
         {
-            var itemPosition = e.GetPosition(item);
-            return itemPosition.Y > item.Bounds.Height / 2
-                ? slide.Index + 1
-                : slide.Index;
+            return SlideShowCustomShowDragTracker.ResolveDropIndex(
+                slide.Index,
+                e.GetPosition(item).Y,
+                item.Bounds.Height,
+                _customShowSlideList.Items.Count);
         }
 
-        return _customShowSlideList.Items.Count;
+        return SlideShowCustomShowDragTracker.ResolveDropIndex(
+            -1, 0, 0, _customShowSlideList.Items.Count);
     }
 
     private int ResolveCustomShowSlideDropIndex(DragEventArgs e)
@@ -415,21 +412,18 @@ internal sealed partial class CustomShowDialog : FreePDialogWindow
         var item = FindControlAncestor<ListBoxItem>(e.Source);
         if (item?.DataContext is SlideShowCustomShowSessionSlideItemPlan slide)
         {
-            var position = e.GetPosition(item);
-            return position.Y > item.Bounds.Height / 2
-                ? slide.Index + 1
-                : slide.Index;
+            return SlideShowCustomShowDragTracker.ResolveDropIndex(
+                slide.Index,
+                e.GetPosition(item).Y,
+                item.Bounds.Height,
+                _customShowSlideList.Items.Count);
         }
 
-        return _customShowSlideList.Items.Count;
+        return SlideShowCustomShowDragTracker.ResolveDropIndex(
+            -1, 0, 0, _customShowSlideList.Items.Count);
     }
 
-    private void ResetCustomShowSlideDrag()
-    {
-        _customShowSlideDragStartPoint = null;
-        _customShowSlideDragSourceIndex = -1;
-        _customShowSlideDragActive = false;
-    }
+    private void ResetCustomShowSlideDrag() => _customShowSlideDrag.Reset();
 
     private bool CompleteCustomShowSlideDrag(
         int sourceSlideIndex,

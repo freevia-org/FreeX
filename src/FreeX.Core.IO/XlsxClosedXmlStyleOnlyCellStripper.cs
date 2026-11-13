@@ -108,14 +108,9 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
 
     private static bool ContainsDuplicateStyleOnlyCells(Stream worksheetStream)
     {
-        var settings = new XmlReaderSettings
-        {
-            DtdProcessing = DtdProcessing.Prohibit,
-            MaxCharactersInDocument = SecureXmlReaderSettings.DefaultMaxCharactersInDocument,
-            XmlResolver = null,
-            IgnoreComments = true,
-            IgnoreProcessingInstructions = true
-        };
+        var settings = SecureXmlReaderSettings.Create();
+        settings.IgnoreComments = true;
+        settings.IgnoreProcessingInstructions = true;
         using var reader = XmlReader.Create(worksheetStream, settings);
         HashSet<string>? seenStyleIndexes = null;
 
@@ -197,14 +192,8 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
         var cellName = worksheetNs + "c";
         var seenStyleIndexes = new HashSet<string>(StringComparer.Ordinal);
 
-        var readerSettings = new XmlReaderSettings
-        {
-            DtdProcessing = DtdProcessing.Prohibit,
-            MaxCharactersInDocument = SecureXmlReaderSettings.DefaultMaxCharactersInDocument,
-            XmlResolver = null,
-            IgnoreComments = false,
-            IgnoreProcessingInstructions = false
-        };
+        // Comments and processing instructions are deliberately preserved (both default to false).
+        var readerSettings = SecureXmlReaderSettings.Create();
         using var reader = XmlReader.Create(worksheetStream, readerSettings);
         var writerSettings = new XmlWriterSettings
         {

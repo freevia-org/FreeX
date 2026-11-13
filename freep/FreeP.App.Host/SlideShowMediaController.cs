@@ -204,27 +204,8 @@ public sealed partial class SlideShowMediaController
     /// Called when entering a slide. Collects all Media shapes and creates a
     /// (possibly hidden) MediaElement for each.
     /// </summary>
-    /// <param name="slide">The slide just entered.</param>
-    /// <param name="slideDipW">Slide width in DIP (presentation.SlideSizeCxEmu / 9525.0).</param>
-    /// <param name="slideDipH">Slide height in DIP.</param>
-    /// <param name="canvasW">Actual pixel width of the slide canvas at the moment of entry.</param>
-    /// <param name="canvasH">Actual pixel height of the slide canvas.</param>
-    public void EnterSlide(Slide slide, double slideDipW, double slideDipH,
-                           double canvasW, double canvasH,
-                           IReadOnlyList<PresentationMediaTranscriptTrackDescriptor>? captionTracks = null,
-                           uint? preferredCaptionShapeId = null,
-                           int? preferredCaptionTrackIndex = null,
-                           int? captionSlideIndex = null,
-                           int? preferredCaptionSlideIndex = null,
-                           bool showMediaControls = true,
-                           bool showNarration = true,
-                           int? presentationSlideIndex = null)
-        => EnterSlide(
-            new(slide, slideDipW, slideDipH, canvasW, canvasH, captionTracks,
-                preferredCaptionShapeId, preferredCaptionTrackIndex, captionSlideIndex,
-                preferredCaptionSlideIndex, showMediaControls, showNarration),
-            presentationSlideIndex);
-
+    /// <param name="request">The slide just entered with its DIP size, canvas pixel size and caption preferences.</param>
+    /// <param name="presentationSlideIndex">Presentation-order index used for media continuity across slides.</param>
     public void EnterSlide(
         SlideShowMediaNativeEntryRequest request,
         int? presentationSlideIndex = null)

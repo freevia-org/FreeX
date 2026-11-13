@@ -4,26 +4,25 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Shell;
 
-public sealed record FreeWAutosavePorts(
-    Func<string?> GetOriginalFilePath,
-    Func<string> GetDisplayName,
-    Func<bool> GetIsDirty,
-    Func<int> GetDirtyGeneration,
-    Action<Action<TextDocument>> ExecuteWithDocument);
-
-public enum FreeWRecoveryRestoreExceptionPolicy
-{
-    PreserveCandidate,
-    QuarantineCandidate
-}
-
 /// <summary>
-/// FreeW's compatibility facade over the shared, renderer-neutral autosave lifecycle.
-/// Native hosts retain scheduling and document access; this adapter supplies DOCX I/O policy.
+/// FreeW's autosave profile: the product name and document noun used in recovery prompts, the
+/// DOCX snapshot serializers, and the 30 s cadence. Everything else is the shared
+/// <see cref="AutosaveApplicationSession{TDocument}"/> / <see cref="AutosaveRecoveryProfile"/>.
 /// </summary>
-public sealed class FreeWAutosaveSession : IDisposable
+public static class FreeWAutosaveProfile
 {
-    private static readonly AutosaveDocumentSessionOptions<TextDocument> SessionOptions = new(
+    public static AutosaveRecoveryProfile Recovery { get; } = new(
+        new AutosaveRecoveryPromptText("FreeW", "documents"),
+        "a document",
+        new AutosaveRecoveryTextDefaults(
+            "FreeW - Recover",
+            "Recover",
+            "Skip",
+            "No unsaved documents were found.",
+            "Could not recover the document.\n\n{0}"));
+
+    public static AutosaveApplicationProfile<TextDocument> Session { get; } = new(
+        Recovery,
         Interval: TimeSpan.FromSeconds(30),
         WriteSnapshot: WriteSnapshot,
         ReadSnapshot: DocxReader.Read);
@@ -44,95 +43,30 @@ public sealed class FreeWAutosaveSession : IDisposable
         using var stream = File.Create(path);
         new DocxFileAdapter().Save(document, stream);
     }
+}
 
-    private readonly AutosaveSnapshotStore _store;
-    private readonly AutosaveDocumentSession<TextDocument> _session;
+/// <summary>FreeW's autosave session: the shared lifecycle bound to <see cref="FreeWAutosaveProfile"/>.</summary>
+public sealed class FreeWAutosaveSession : AutosaveApplicationSession<TextDocument>
+{
+    public static TimeSpan DefaultInterval => FreeWAutosaveProfile.Session.Interval;
 
-    public static TimeSpan DefaultInterval => SessionOptions.Interval;
-
-    public FreeWAutosaveSession(FreeWAutosavePorts ports)
-        : this(
-            ports,
-            AutosaveSnapshotStore.CreateDefault(PlatformApplicationDataPathProvider.LocalInstance),
-            CreateSnapshotId())
-    {
-    }
-
-    public FreeWAutosaveSession(FreeWAutosavePorts ports, AutosaveSnapshotStore store)
-        : this(ports, store, CreateSnapshotId())
+    public FreeWAutosaveSession(AutosaveDocumentPorts<TextDocument> ports)
+        : base(FreeWAutosaveProfile.Session, ports)
     {
     }
 
     public FreeWAutosaveSession(
-        FreeWAutosavePorts ports,
-        AutosaveSnapshotStore store,
-        string snapshotId)
+        AutosaveDocumentPorts<TextDocument> ports,
+        AutosaveSnapshotStore store)
+        : base(FreeWAutosaveProfile.Session, ports, store)
     {
-        ArgumentNullException.ThrowIfNull(ports);
-
-        _store = store;
-        _session = new AutosaveDocumentSession<TextDocument>(
-            new AutosaveDocumentPorts<TextDocument>(
-                ports.GetOriginalFilePath,
-                ports.GetDisplayName,
-                ports.GetIsDirty,
-                ports.GetDirtyGeneration,
-                ports.ExecuteWithDocument),
-            SessionOptions,
-            store,
-            snapshotId);
     }
 
-    public string SnapshotId => _session.SnapshotId;
-
-    public static string CreateSnapshotId() =>
-        AutosaveDocumentSession<TextDocument>.CreateSnapshotId();
-
-    public void Snapshot() => _session.Snapshot();
-
-    public void TryEmergencySnapshot() => _session.TryEmergencySnapshot();
-
-    public void CompleteCleanExit() => _session.CompleteCleanExit();
-
-    public AutosaveRecoveryPlan? PlanLatestRecovery() =>
-        AutosaveRecoveryPlanner.PlanLatest(_store);
-
-    public IReadOnlyList<AutosaveRecoveryPlan> PlanRecoveries() =>
-        AutosaveRecoveryPlanner.PlanAll(_store);
-
-    public AutosaveRecoveryDisposition CompleteRecoveryResult(
-        AutosaveRecoveryPlan plan,
-        bool accepted,
-        bool recovered) =>
-        AutosaveRecoveryPlanner.Complete(plan, accepted, recovered);
-
-    public bool CompleteRecovery(
-        AutosaveRecoveryPlan plan,
-        bool accepted,
-        Func<string, string?, bool> restoreSnapshot,
-        FreeWRecoveryRestoreExceptionPolicy exceptionPolicy =
-            FreeWRecoveryRestoreExceptionPolicy.PreserveCandidate) =>
-        _session.CompleteRecovery(
-            plan,
-            accepted,
-            restoreSnapshot,
-            MapExceptionPolicy(exceptionPolicy));
-
-    public bool CompleteDocumentRecovery(
-        AutosaveRecoveryPlan plan,
-        bool accepted,
-        Action<TextDocument, string?> applyRecoveredDocument,
-        FreeWRecoveryRestoreExceptionPolicy exceptionPolicy =
-            FreeWRecoveryRestoreExceptionPolicy.PreserveCandidate) =>
-        _session.CompleteDocumentRecovery(
-            plan,
-            accepted,
-            applyRecoveredDocument,
-            MapExceptionPolicy(exceptionPolicy));
-
-    public void Dispose() => _session.Dispose();
-
-    private static AutosaveRecoveryRestoreExceptionPolicy MapExceptionPolicy(
-        FreeWRecoveryRestoreExceptionPolicy exceptionPolicy) =>
-        (AutosaveRecoveryRestoreExceptionPolicy)(int)exceptionPolicy;
+    public FreeWAutosaveSession(
+        AutosaveDocumentPorts<TextDocument> ports,
+        AutosaveSnapshotStore store,
+        string snapshotId)
+        : base(FreeWAutosaveProfile.Session, ports, store, snapshotId)
+    {
+    }
 }

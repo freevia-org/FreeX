@@ -274,38 +274,14 @@ public static class PresentationListMarkerPlanner
         };
     }
 
-    private static string ToRoman(int value, bool upper)
-    {
-        if (value > 3999)
-            return value.ToString();
+    // Past 3999 a roman numeral has no classic form (and grows one "M" per thousand): decimal fallback.
+    private static string ToRoman(int value, bool upper) =>
+        Free.Shared.IO.NumeralFormatter.TryToRoman(value, upper, out var roman)
+            ? roman
+            : value.ToString();
 
-        var values = new[] { 1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1 };
-        var symbols = upper
-            ? new[] { "M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I" }
-            : new[] { "m", "cm", "d", "cd", "c", "xc", "l", "xl", "x", "ix", "v", "iv", "i" };
-        var result = new System.Text.StringBuilder();
-        for (int index = 0; index < values.Length; index++)
-        {
-            while (value >= values[index])
-            {
-                value -= values[index];
-                result.Append(symbols[index]);
-            }
-        }
-
-        return result.ToString();
-    }
-
-    private static string ToAlpha(int value, bool upper)
-    {
-        var result = new System.Text.StringBuilder();
-        while (value > 0)
-        {
-            value--;
-            result.Insert(0, (char)((upper ? 'A' : 'a') + value % 26));
-            value /= 26;
-        }
-
-        return result.Length == 0 ? (upper ? "A" : "a") : result.ToString();
-    }
+    private static string ToAlpha(int value, bool upper) =>
+        Free.Shared.IO.NumeralFormatter.TryToBijectiveLetters(value, upper, out var letters)
+            ? letters
+            : (upper ? "A" : "a");
 }

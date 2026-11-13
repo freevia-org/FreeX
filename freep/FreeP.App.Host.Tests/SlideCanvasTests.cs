@@ -426,7 +426,10 @@ public sealed class SlideCanvasTests
             .BeOfType<System.Windows.Media.SolidColorBrush>()
             .Subject;
         brush.Color.Should().Be(System.Windows.Media.Color.FromArgb(0x7F, 0x12, 0x34, 0x56));
-        pen.DashStyle.Should().Be(System.Windows.Media.DashStyles.DashDot);
+        // ECMA-376 prstDash dashDot is 4 on, 3 off, 1 on, 3 off (not the WPF built-in 2,2,0,2).
+        pen.DashStyle.Dashes.Should().Equal(4.0, 3.0, 1.0, 3.0);
+        // ECMA-376 lengths assume flat dashes; a capped dash would grow by half the line width per end.
+        pen.DashCap.Should().Be(System.Windows.Media.PenLineCap.Flat);
         pen.IsFrozen.Should().BeTrue();
     }
 
@@ -464,6 +467,7 @@ public sealed class SlideCanvasTests
         brush.GradientStops.Last().Should().Match<System.Windows.Media.GradientStop>(stop =>
             stop.Offset == 1.0 && stop.Color == System.Windows.Media.Color.FromRgb(0xD0, 0xE0, 0xF0));
         pen.DashStyle.Dashes.Should().Equal(8.0, 3.0);
+        pen.DashCap.Should().Be(System.Windows.Media.PenLineCap.Flat);
         pen.IsFrozen.Should().BeTrue();
     }
 

@@ -61,7 +61,7 @@ public sealed class AboutLegalSharedBoundaryTests
             .NotContain("GetManifestResourceStream");
 
         Read(root, "freew", "FreeW.App.Presentation", "FreeWProductInfo.cs")
-            .Should().Contain("AssemblyVersionMetadata.FromAssembly").And
+            .Should().Contain("ProductBuildInfo.").And
             .NotContain("AssemblyInformationalVersionAttribute");
         Read(root, "freew", "FreeW.App.Presentation", "FreeWLegalNoticeManifest.cs")
             .Should().Contain("EmbeddedLegalNoticeLoader.GetDocuments");

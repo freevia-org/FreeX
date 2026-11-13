@@ -1704,38 +1704,19 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
         };
     }
 
-    private static string ToRoman(int value)
-    {
-        (int Value, string Symbol)[] map =
-        [
-            (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
-            (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
-            (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")
-        ];
-        var remaining = Math.Clamp(value, 1, 3999);
-        var result = new StringBuilder();
-        foreach (var (number, symbol) in map)
-        {
-            while (remaining >= number)
-            {
-                result.Append(symbol);
-                remaining -= number;
-            }
-        }
-        return result.ToString();
-    }
+    // Past 3999 a roman numeral has no classic form; like a browser's `list-style-type: upper-roman`
+    // (CSS counter-style range 1..3999, decimal fallback) -- and like the .docx-side
+    // NoteNumberFormatter -- the marker degrades to the plain decimal number instead of printing a
+    // wrong clamped "MMMCMXCIX".
+    private static string ToRoman(int value) =>
+        Free.Shared.IO.NumeralFormatter.TryToRoman(value, upper: true, out var roman)
+            ? roman
+            : value.ToString(CultureInfo.InvariantCulture);
 
-    private static string ToLetter(int value, bool lower)
-    {
-        var characters = new List<char>();
-        while (value > 0)
-        {
-            value--;
-            characters.Insert(0, (char)((lower ? 'a' : 'A') + value % 26));
-            value /= 26;
-        }
-        return new string([.. characters]);
-    }
+    private static string ToLetter(int value, bool lower) =>
+        Free.Shared.IO.NumeralFormatter.TryToBijectiveLetters(value, upper: !lower, out var letters)
+            ? letters
+            : value.ToString(CultureInfo.InvariantCulture);
 
     private static string ToChicago(int value)
     {

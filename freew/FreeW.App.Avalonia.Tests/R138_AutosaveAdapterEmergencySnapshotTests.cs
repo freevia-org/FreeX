@@ -83,7 +83,7 @@ public sealed class R138_AutosaveAdapterEmergencySnapshotTests
                     wf,
                     sessionFactory: _ =>
                     {
-                        var syncPorts = new FreeWAutosavePorts(
+                        var syncPorts = new AutosaveDocumentPorts<TextDocument>(
                             GetOriginalFilePath: () => null,
                             GetDisplayName: () => "Untitled",
                             GetIsDirty: () => true,

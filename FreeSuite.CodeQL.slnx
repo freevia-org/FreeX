@@ -5,6 +5,7 @@
     <Project Path="shared/Free.Shared.Commands/Free.Shared.Commands.csproj" />
     <Project Path="shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
     <Project Path="shared/Free.Shared.Drawing.Avalonia/Free.Shared.Drawing.Avalonia.csproj" />
+    <Project Path="shared/Free.Shared.Drawing.Wpf/Free.Shared.Drawing.Wpf.csproj" />
     <Project Path="shared/Free.Shared.IO/Free.Shared.IO.csproj" />
     <Project Path="shared/Free.Shared.Localization/Free.Shared.Localization.csproj" />
     <Project Path="shared/Free.Shared.Opc/Free.Shared.Opc.csproj" />

@@ -441,7 +441,7 @@ public sealed class AvaloniaGridInputSourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var overlayMethod = source[
             source.IndexOf("private static Control CreateShapeTextOverlay", StringComparison.Ordinal)..
-            source.IndexOf("// Maps DrawingShapeOutlineDash", StringComparison.Ordinal)];
+            source.IndexOf("private static double[]? GetShapeOutlineDashArray", StringComparison.Ordinal)];
 
         // Return type must be Control (not TextBlock) to allow returning Panel for outline case.
         overlayMethod.Should().Contain("private static Control CreateShapeTextOverlay(");
@@ -507,7 +507,7 @@ public sealed class AvaloniaGridInputSourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var overlayMethod = source[
             source.IndexOf("private static Control CreateShapeTextOverlay", StringComparison.Ordinal)..
-            source.IndexOf("// Maps DrawingShapeOutlineDash", StringComparison.Ordinal)];
+            source.IndexOf("private static double[]? GetShapeOutlineDashArray", StringComparison.Ordinal)];
 
         overlayMethod.Should().Contain("if (!(d.IsWordArt && d.ShapeTextHasNoFill))");
         overlayMethod.Should().Contain("return d.IsWordArt && d.ShapeTextHasNoFill");

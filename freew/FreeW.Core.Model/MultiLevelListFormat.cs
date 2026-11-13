@@ -211,42 +211,18 @@ public static class MultiLevelListMarkerFormatter
         _ => ListNumberFormat.Decimal
     };
 
-    private static string FormatLetters(int value, bool upper)
-    {
-        var chars = new Stack<char>();
-        var n = value;
-        while (n > 0)
-        {
-            n--;
-            chars.Push((char)((upper ? 'A' : 'a') + (n % 26)));
-            n /= 26;
-        }
-        return new string(chars.ToArray());
-    }
+    private static string FormatLetters(int value, bool upper) =>
+        Free.Shared.IO.NumeralFormatter.TryToBijectiveLetters(value, upper, out var letters)
+            ? letters
+            : value.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-    private static string FormatRoman(int value, bool upper)
-    {
-        (int Value, string Numeral)[] numerals =
-        [
-            (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
-            (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
-            (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")
-        ];
-
-        var builder = new System.Text.StringBuilder();
-        var remaining = value;
-        foreach (var (amount, numeral) in numerals)
-        {
-            while (remaining >= amount)
-            {
-                builder.Append(numeral);
-                remaining -= amount;
-            }
-        }
-
-        var result = builder.ToString();
-        return upper ? result : result.ToLowerInvariant();
-    }
+    // A roman numeral emits one "M" per thousand past 3999, so an uncapped conversion of a huge
+    // w:start value would build a multi-megabyte marker. Out of range the marker degrades to the
+    // decimal number, matching NoteNumberFormatter / ComplexFieldEngine / PageNumberFormatDialogPlanner.
+    private static string FormatRoman(int value, bool upper) =>
+        Free.Shared.IO.NumeralFormatter.TryToRoman(value, upper, out var roman)
+            ? roman
+            : value.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }
 
 public sealed class MultiLevelListMarkerState
