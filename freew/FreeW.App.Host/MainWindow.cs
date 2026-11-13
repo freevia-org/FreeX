@@ -850,6 +850,8 @@ public sealed partial class MainWindow : Window
         var frame = SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(_titleBar, root, _backstage));
         Content = frame.Root;
         PreviewKeyDown += MainWindow_PreviewKeyDown;
+        PreviewMouseDown += (_, e) => PreparePagedSurfaceForCommand(e.OriginalSource, null);
+        Deactivated += (_, _) => PreparePagedSurfaceForCommand(null, null);
 
         // V5 KeyTips: pressing Alt overlays Word-style letter badges over the ribbon tabs, then over the
         // active tab's controls, so the ribbon is fully keyboard-navigable. The overlay walks the rendered
@@ -2497,8 +2499,48 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
+    /// <summary>
+    /// W10: before a ribbon click, a window shortcut or a dialog acts on the document while the paged
+    /// editor is the surface, page edits are committed and the page selection is mirrored into the hidden
+    /// editor those commands read. Typing and caret keys inside a page never pay for it.
+    /// </summary>
+    private void PreparePagedSurfaceForCommand(object? source, KeyEventArgs? key)
+    {
+        if (!_pagedEditMode || _pagedEditPanel is not { } panel)
+            return;
+        if (key is not null)
+        {
+            var modifiers = Keyboard.Modifiers;
+            var isCommandKey = key.Key is >= Key.F1 and <= Key.F12
+                || ((modifiers & (ModifierKeys.Control | ModifierKeys.Alt)) != 0
+                    && key.Key is >= Key.A and <= Key.Z);
+            if (!isCommandKey)
+                return;
+        }
+        else if (source is DependencyObject element && IsWithin(element, panel))
+        {
+            return;
+        }
+
+        panel.PrepareForCommand();
+
+        static bool IsWithin(DependencyObject element, DependencyObject ancestor)
+        {
+            for (DependencyObject? current = element; current is not null;
+                 current = current is Visual or System.Windows.Media.Media3D.Visual3D
+                     ? VisualTreeHelper.GetParent(current)
+                     : LogicalTreeHelper.GetParent(current))
+            {
+                if (ReferenceEquals(current, ancestor))
+                    return true;
+            }
+            return false;
+        }
+    }
+
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        PreparePagedSurfaceForCommand(e.OriginalSource, e);
         if (_viewSession.CurrentDepth.IsSplitActive
             && (Keyboard.Modifiers & ModifierKeys.Control) != 0
             && e.Key is Key.Z or Key.Y)
@@ -3114,7 +3156,7 @@ public sealed partial class MainWindow : Window
         // Commit so the panel reflects the latest edits.
         _editor.CommitToModel();
 
-        _pagedEditPanel = PaginatedEditorPanel.Build(_editor);
+        _pagedEditPanel = PaginatedEditorPanel.Build(_editor, progressive: true);
         AttachPaginatedSurface(_pagedEditPanel);
         _pagedEditMode = true;
 

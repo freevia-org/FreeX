@@ -244,9 +244,11 @@ public sealed class PagedEditW7SurfaceTests
         // Now a new line of text: page 1 gets taller, so the pages are re-laid out.
         Append(first, string.Concat(Enumerable.Repeat(" grow", 60)));
         Layout(panel);
+        var reflows = panel.RepaginationCount;
         panel.CommitAndRepaginateIfLayoutChanged();
 
-        panel.PageBoxes[0].Should().NotBeSameAs(first, "a height change re-runs pagination");
+        // W10: the re-flow keeps the edited page's box (it already shows what was committed).
+        panel.RepaginationCount.Should().Be(reflows + 1, "a height change re-runs pagination");
         ModelTexts(editor)[0].Should().EndWith("grow");
     }
 
@@ -256,10 +258,11 @@ public sealed class PagedEditW7SurfaceTests
         var (panel, _) = BuildTwoPagePanel();
         var first = panel.PageBoxes[0];
         Append(first, "y");
+        var reflows = panel.RepaginationCount;
 
         panel.CommitAndRepaginateIfLayoutChanged();
 
-        panel.PageBoxes[0].Should().NotBeSameAs(first, "unknown heights must never skip re-pagination");
+        panel.RepaginationCount.Should().Be(reflows + 1, "unknown heights must never skip re-pagination");
     }
 
     // ── across the page boundary ──────────────────────────────────────────────────────────────────

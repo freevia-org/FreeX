@@ -30,4 +30,11 @@ internal interface IExternalEditingSurface
 
     /// <summary>The hidden view loaded a different document; the surface must stop writing to the old one.</summary>
     void OnSourceModelReloaded();
+
+    /// <summary>
+    /// The editor the user is typing in (its selection and command target): native editing commands
+    /// with no model-level path -- formatting the caret's next typed text, say -- act on it rather than
+    /// on the hidden view. Null when the surface has no active editor.
+    /// </summary>
+    System.Windows.Controls.RichTextBox? ActiveEditor { get; }
 }

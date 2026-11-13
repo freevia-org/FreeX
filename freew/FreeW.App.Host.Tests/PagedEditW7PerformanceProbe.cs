@@ -76,6 +76,8 @@ public sealed class PagedEditW7PerformanceProbe(ITestOutputHelper output)
             output.WriteLine($"session re-flow after a one-word edit: {sessionWord.TotalMilliseconds:F0} ms ({wordStats})");
         }
 
+        MeasureProgressive(editor);
+
         clock.Restart();
         var scratch = new DocumentView();
         scratch.LoadModel(editor.Model);
@@ -144,6 +146,110 @@ public sealed class PagedEditW7PerformanceProbe(ITestOutputHelper output)
         output.WriteLine($"burst commit (bus + hidden render): {commit.TotalMilliseconds:F0} ms");
         output.WriteLine($"re-pagination after burst: {repaginate.TotalMilliseconds:F0} ms");
         panel.PageBoxes.Should().NotBeEmpty();
+    }
+
+    /// <summary>
+    /// W10: the progressive (default-candidate) surface -- time to the first visible page, the longest
+    /// background slice (input is blocked for at most that long), keystrokes, and the synchronous part of
+    /// a re-flow on the visible page after an in-line and a line-adding edit.
+    /// </summary>
+    private void MeasureProgressive(DocumentView editor)
+    {
+        var viewport = new System.Windows.Size(1200, 900);
+        void Layout(PaginatedEditorPanel target)
+        {
+            target.Measure(viewport);
+            target.Arrange(new System.Windows.Rect(viewport));
+            target.UpdateLayout();
+        }
+
+        var clock = Stopwatch.StartNew();
+        var panel = PaginatedEditorPanel.Build(editor, progressive: true);
+        Layout(panel);
+        panel.UpdateRealization();
+        var firstPage = clock.Elapsed;
+        var shownAtOpen = panel.PageBoxes.Count;
+        panel.AttachAsActiveSurface();
+
+        var slices = new List<double>();
+        clock.Restart();
+        var total = Stopwatch.StartNew();
+        while (true)
+        {
+            clock.Restart();
+            var done = panel.AdvanceBackgroundLayout(PaginatedEditorPanel.BackgroundSlice);
+            slices.Add(clock.Elapsed.TotalMilliseconds);
+            if (done)
+                break;
+        }
+        var background = total.Elapsed;
+        Layout(panel);
+
+        // Scroll to the middle of the document, as a user would, and edit the page shown there.
+        var middle = panel.PageBoxes[panel.PageBoxes.Count / 2];
+        panel.ScrollToPage(middle.PageNumber);
+        Layout(panel);
+        panel.UpdateRealization();
+        Layout(panel);
+        var realized = panel.PageBoxes.Count(b => b.IsRealized);
+
+        var keystrokes = new List<double>();
+        for (var i = 0; i < 20; i++)
+        {
+            clock.Restart();
+            middle.Body.Document.Blocks.FirstBlock.ContentEnd.GetInsertionPosition(LogicalDirection.Backward)
+                .InsertTextInRun("x");
+            middle.Body.UpdateLayout();
+            keystrokes.Add(clock.Elapsed.TotalMilliseconds);
+        }
+        middle.Body.Focus();
+        clock.Restart();
+        panel.Repaginate();
+        Layout(panel);
+        var wordReflow = clock.Elapsed;
+        var wordTiming = panel.LastReflowTiming + "; " + PaginatedCommitCoordinator.LastTiming + "; hidden " + editor.LastBodyRefreshTiming
+            + $" (full renders {editor.FullBodyRenderCount}, incremental {editor.IncrementalBodyRefreshCount})";
+        var wordStats = panel.LayoutSession.LastStatistics;
+        var wordComplete = panel.IsLayoutComplete;
+        panel.FinishLayoutNow();
+
+        var growBox = panel.PageBoxes[panel.PageBoxes.Count / 2];
+        panel.ScrollToPage(growBox.PageNumber);
+        Layout(panel);
+        panel.UpdateRealization();
+        growBox.Body.Focus();
+        growBox.Body.Document.Blocks.FirstBlock.ContentEnd.GetInsertionPosition(LogicalDirection.Backward)
+            .InsertTextInRun(string.Concat(Enumerable.Repeat(" more words to wrap", 30)));
+        growBox.Body.UpdateLayout();
+        clock.Restart();
+        panel.Repaginate();
+        Layout(panel);
+        var growReflow = clock.Elapsed;
+        var growTiming = panel.LastReflowTiming + "; " + PaginatedCommitCoordinator.LastTiming + "; hidden " + editor.LastBodyRefreshTiming
+            + $" (full renders {editor.FullBodyRenderCount}, incremental {editor.IncrementalBodyRefreshCount})";
+        var growKept = panel.LastRebuildKeptBoxes;
+        var growShown = panel.PageBoxes.Count;
+        slices.Clear();
+        total.Restart();
+        while (true)
+        {
+            clock.Restart();
+            var done = panel.AdvanceBackgroundLayout(PaginatedEditorPanel.BackgroundSlice);
+            slices.Add(clock.Elapsed.TotalMilliseconds);
+            if (done)
+                break;
+        }
+        var growBackground = total.Elapsed;
+
+        output.WriteLine($"W10 progressive: first page shown {firstPage.TotalMilliseconds:F0} ms ({shownAtOpen} pages built at open); "
+            + $"background to complete {background.TotalMilliseconds:F0} ms; realised pages near a mid-document viewport {realized}/{panel.PageBoxes.Count}");
+        output.WriteLine($"W10 keystroke on a realised page: median {Median(keystrokes):F1} ms, max {keystrokes.Max():F1} ms");
+        output.WriteLine($"W10 re-flow (synchronous) after an in-line burst: {wordReflow.TotalMilliseconds:F0} ms "
+            + $"(complete={wordComplete}; {wordTiming}; {wordStats})");
+        output.WriteLine($"W10 re-flow (synchronous) after a line-adding burst: {growReflow.TotalMilliseconds:F0} ms "
+            + $"({growTiming}; {growShown} pages shown, {growKept} kept); background to complete {growBackground.TotalMilliseconds:F0} ms, "
+            + $"longest slice {slices.Max():F0} ms over {slices.Count} slices; longest overall {panel.LongestSliceTiming}");
+        panel.Detach();
     }
 
     private static double Median(List<double> values)

@@ -132,12 +132,12 @@ internal sealed class PageBox : Border
     /// Caller (<see cref="PaginatedCommitCoordinator"/>) commits this back to the model slot via
     /// <see cref="CommitHeaderSlot"/>.
     /// </summary>
-    internal DocumentView? HeaderSubEditor { get; }
+    internal DocumentView? HeaderSubEditor { get; private set; }
 
     /// <summary>
     /// The in-page footer sub-editor.  Null when the slot was null and no content exists.
     /// </summary>
-    internal DocumentView? FooterSubEditor { get; }
+    internal DocumentView? FooterSubEditor { get; private set; }
 
     /// <summary>
     /// The model slot that <see cref="HeaderSubEditor"/> belongs to, so the commit coordinator can
@@ -155,13 +155,13 @@ internal sealed class PageBox : Border
     internal HeaderFooter? FooterSlotContent { get; }
 
     /// <summary>Total page count used for NUMPAGES on this page.</summary>
-    internal int FieldPageCount { get; }
+    internal int FieldPageCount { get; private set; }
 
     /// <summary>1-based ordinal of the section this page belongs to.</summary>
     internal int SectionOrdinal { get; }
 
     /// <summary>Number of pages in this page's section (SECTIONPAGES).</summary>
-    internal int SectionPageCount { get; }
+    internal int SectionPageCount { get; private set; }
 
     internal string? HeaderSlotName => HeaderSlot is { } slot
         ? HeaderFooterDialogPlanner.SlotNameFor(slot)
@@ -277,7 +277,8 @@ internal sealed class PageBox : Border
         IReadOnlyList<int>? footnoteIds = null,
         IReadOnlyList<int>? endnoteIds = null,
         bool isEndnoteSyntheticPage = false,
-        bool isParitySyntheticPage = false)
+        bool isParitySyntheticPage = false,
+        bool deferChrome = false)
     {
         PageNumber = pageNumber;
         PageNumberText = pageNumberText
@@ -295,6 +296,8 @@ internal sealed class PageBox : Border
             EndnoteIds = endnoteIds;
         IsEndnoteSyntheticPage = isEndnoteSyntheticPage;
         IsParitySyntheticPage = isParitySyntheticPage;
+        _sourceModel = sourceModel;
+        _hfPageNumberText = pageNumberText;
 
         var (pageWidth, _) = PageLayout.PageSizeDip(page);
         var (marginLeft, marginTop, marginRight, marginBottom) = PageLayout.MarginsDip(page);
@@ -302,37 +305,10 @@ internal sealed class PageBox : Border
 
         // ── page-chrome border (the white page "sheet") ───────────────────────────────────────────
         Background = Brushes.White;
-        BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0));
+        BorderBrush = ChromeBorderBrush;
         BorderThickness = new Thickness(1);
         Margin = new Thickness(0, PageGapDip, 0, 0);
         Width = pageWidth;
-
-        // ── outer grid: row 0 = header | row 1 = body | row 2 = footnote region | row 3 = footer ──
-        // The footnote row is always present but has zero height when there are no footnotes, so
-        // the layout is identical to the pre-footnote behaviour for pages without footnotes.
-        var stack = new Grid();
-        stack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(HeaderHeightDip) });    // row 0: header
-        stack.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                     // row 1: body
-        stack.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                     // row 2: footnotes
-        stack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(FooterHeightDip) });    // row 3: footer
-
-        // ── Phase 4: header region ────────────────────────────────────────────────────────────────
-        if (sourceModel is not null && headerSlotKind is not null)
-        {
-            HeaderSubEditor = BuildHfSubEditor(
-                sourceModel, headerSlot, marginLeft, marginRight, isHeader: true, isActivated: false,
-                hfPageNumber: pageNumber, hfPageNumberText: pageNumberText, hfPageCount: pageCount,
-                hfSectionOrdinal: sectionOrdinal, hfSectionPageCount: sectionPageCount);
-            Grid.SetRow(HeaderSubEditor, 0);
-            stack.Children.Add(HeaderSubEditor);
-        }
-        else
-        {
-            // Fallback: read-only label (no slot or no source model provided).
-            var headerStrip = BuildStrip($"— Page {pageNumber} —", marginLeft, marginRight);
-            Grid.SetRow(headerStrip, 0);
-            stack.Children.Add(headerStrip);
-        }
 
         // ── body RichTextBox ──────────────────────────────────────────────────────────────────────
         var bodyFlow = new FlowDocument { PagePadding = new Thickness(0) };
@@ -395,6 +371,167 @@ internal sealed class PageBox : Border
         // DocumentView.OnPreviewCanExecuteClipboardMutation, mirrored here for this plain RichTextBox.
         CommandManager.AddPreviewCanExecuteHandler(Body, OnBodyPreviewCanExecuteClipboardMutation);
         CommandManager.AddPreviewExecutedHandler(Body, OnBodyPreviewExecutedClipboardMutation);
+        _bodyMinHeight = Body.MinHeight;
+
+        if (deferChrome)
+            Child = BuildPlaceholder(NominalHeight(page));
+        else
+            BuildChrome();
+    }
+
+    // ── W10: deferred page chrome (page virtualisation) ──────────────────────────────────────────
+    private static readonly Brush ChromeBorderBrush = CreateFrozenBrush(Color.FromRgb(0xC0, 0xC0, 0xC0));
+
+    private static Brush CreateFrozenBrush(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
+
+    private readonly TextDocument? _sourceModel;
+    private readonly string? _hfPageNumberText;
+    private readonly double _bodyMinHeight;
+    private Grid? _chrome;
+
+    /// <summary>
+    /// True when the page's chrome (header/footer sub-editors, note region, the body in the visual tree)
+    /// is built. A virtualised page keeps its body document -- every edit, commit, search and caret
+    /// operation still works on it -- but shows a sized placeholder instead.
+    /// </summary>
+    internal bool IsRealized { get; private set; }
+
+    /// <summary>Set when a header/footer sub-editor on this page was edited since its slots were committed.</summary>
+    internal bool HeaderFooterEdited => HeaderEdited || FooterEdited;
+
+    /// <summary>The header sub-editor was edited since its slot was committed.</summary>
+    internal bool HeaderEdited { get; set; }
+
+    /// <summary>The footer sub-editor was edited since its slot was committed.</summary>
+    internal bool FooterEdited { get; set; }
+
+    /// <summary>The height a page of these settings occupies before layout (header strip, page, footer strip, border).</summary>
+    internal static double NominalHeight(PageSettings page)
+    {
+        var (_, pageHeight) = PageLayout.PageSizeDip(page);
+        return HeaderHeightDip + pageHeight + FooterHeightDip + 2;
+    }
+
+    /// <summary>The distance between two stacked pages.</summary>
+    internal static double PageGap => PageGapDip;
+
+    private static Border BuildPlaceholder(double height) => new()
+    {
+        Height = Math.Max(1, height - 2),
+        Background = Brushes.White
+    };
+
+    /// <summary>Builds the page chrome (no-op when already realised).</summary>
+    internal void Realize()
+    {
+        if (IsRealized)
+            return;
+        BuildChrome();
+    }
+
+    /// <summary>
+    /// Drops the chrome and shows a placeholder of the page's current height. The body document (and so
+    /// every edit on it) is kept. Callers must not virtualise a page with keyboard focus or unsaved
+    /// header/footer edits.
+    /// </summary>
+    internal void Virtualize()
+    {
+        if (!IsRealized)
+            return;
+        var height = ActualHeight > 0 ? ActualHeight : NominalHeight(PageGeometry);
+        _chrome?.Children.Clear();
+        _chrome = null;
+        HeaderSubEditor = null;
+        FooterSubEditor = null;
+        AnchoredHeaderFooterLayers = [];
+        Child = BuildPlaceholder(height);
+        IsRealized = false;
+    }
+
+    /// <summary>
+    /// Updates the page and section page counts this page shows (NUMPAGES / SECTIONPAGES) without
+    /// rebuilding the page: the body's section fields are re-resolved and realised header/footer
+    /// sub-editors are rebuilt. Returns true when the header/footer sub-editors were replaced.
+    /// </summary>
+    internal bool UpdatePageCounts(int pageCount, int sectionPageCount)
+    {
+        if (FieldPageCount == pageCount && SectionPageCount == sectionPageCount)
+            return false;
+        FieldPageCount = pageCount;
+        SectionPageCount = sectionPageCount;
+        DocumentView.ResolvePageSectionFields(Body.Document.Blocks.ToList(), SectionOrdinal, sectionPageCount);
+        if (!IsRealized || _chrome is null)
+            return false;
+        var (marginLeft, _, marginRight, _) = PageLayout.MarginsDip(PageGeometry);
+        var replaced = false;
+        if (_sourceModel is not null && HeaderSubEditor is { } oldHeader)
+        {
+            _chrome.Children.Remove(oldHeader);
+            HeaderSubEditor = BuildHfSubEditor(
+                _sourceModel, HeaderSlotContent, marginLeft, marginRight, isHeader: true, isActivated: false,
+                hfPageNumber: PageNumber, hfPageNumberText: _hfPageNumberText, hfPageCount: FieldPageCount,
+                hfSectionOrdinal: SectionOrdinal, hfSectionPageCount: SectionPageCount);
+            Grid.SetRow(HeaderSubEditor, 0);
+            _chrome.Children.Add(HeaderSubEditor);
+            replaced = true;
+        }
+        if (_sourceModel is not null && FooterSubEditor is { } oldFooter)
+        {
+            _chrome.Children.Remove(oldFooter);
+            FooterSubEditor = BuildHfSubEditor(
+                _sourceModel, FooterSlotContent, marginLeft, marginRight, isHeader: false, isActivated: false,
+                hfPageNumber: PageNumber, hfPageNumberText: _hfPageNumberText, hfPageCount: FieldPageCount,
+                hfSectionOrdinal: SectionOrdinal, hfSectionPageCount: SectionPageCount);
+            Grid.SetRow(FooterSubEditor, 3);
+            _chrome.Children.Add(FooterSubEditor);
+            replaced = true;
+        }
+        return replaced;
+    }
+
+    private void BuildChrome()
+    {
+        var sourceModel = _sourceModel;
+        var page = PageGeometry;
+        var pageNumber = PageNumber;
+        var (pageWidth, _) = PageLayout.PageSizeDip(page);
+        var (marginLeft, _, marginRight, _) = PageLayout.MarginsDip(page);
+        var (contentWidth, _) = PageLayout.ContentAreaDip(page);
+        var footnoteIds = FootnoteIds;
+        var endnoteIds = EndnoteIds;
+        Body.MinHeight = _bodyMinHeight;
+
+        // ── outer grid: row 0 = header | row 1 = body | row 2 = footnote region | row 3 = footer ──
+        // The footnote row is always present but has zero height when there are no footnotes, so
+        // the layout is identical to the pre-footnote behaviour for pages without footnotes.
+        var stack = new Grid();
+        stack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(HeaderHeightDip) });    // row 0: header
+        stack.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                     // row 1: body
+        stack.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                     // row 2: footnotes
+        stack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(FooterHeightDip) });    // row 3: footer
+
+        // ── Phase 4: header region ────────────────────────────────────────────────────────────────
+        if (sourceModel is not null && HeaderSlot is not null)
+        {
+            HeaderSubEditor = BuildHfSubEditor(
+                sourceModel, HeaderSlotContent, marginLeft, marginRight, isHeader: true, isActivated: false,
+                hfPageNumber: pageNumber, hfPageNumberText: _hfPageNumberText, hfPageCount: FieldPageCount,
+                hfSectionOrdinal: SectionOrdinal, hfSectionPageCount: SectionPageCount);
+            Grid.SetRow(HeaderSubEditor, 0);
+            stack.Children.Add(HeaderSubEditor);
+        }
+        else
+        {
+            // Fallback: read-only label (no slot or no source model provided).
+            var headerStrip = BuildStrip($"— Page {pageNumber} —", marginLeft, marginRight);
+            Grid.SetRow(headerStrip, 0);
+            stack.Children.Add(headerStrip);
+        }
 
         Grid.SetRow(Body, 1);
         stack.Children.Add(Body);
@@ -407,8 +544,8 @@ internal sealed class PageBox : Border
         if (sourceModel is not null && noteIds is { Count: > 0 })
         {
             var noteRegion = BuildNoteRegion(
-                sourceModel, footnoteIds ?? Array.Empty<int>(),
-                endnoteIds ?? Array.Empty<int>(),
+                sourceModel, footnoteIds,
+                endnoteIds,
                 marginLeft, marginRight, contentWidth, isEndnoteBox);
 
             // Carve the note region out of the fixed page content area instead of appending it below
@@ -426,12 +563,12 @@ internal sealed class PageBox : Border
         }
 
         // ── Phase 4: footer region (row 3) ───────────────────────────────────────────────────────
-        if (sourceModel is not null && footerSlotKind is not null)
+        if (sourceModel is not null && FooterSlot is not null)
         {
             FooterSubEditor = BuildHfSubEditor(
-                sourceModel, footerSlot, marginLeft, marginRight, isHeader: false, isActivated: false,
-                hfPageNumber: pageNumber, hfPageNumberText: pageNumberText, hfPageCount: pageCount,
-                hfSectionOrdinal: sectionOrdinal, hfSectionPageCount: sectionPageCount);
+                sourceModel, FooterSlotContent, marginLeft, marginRight, isHeader: false, isActivated: false,
+                hfPageNumber: pageNumber, hfPageNumberText: _hfPageNumberText, hfPageCount: FieldPageCount,
+                hfSectionOrdinal: SectionOrdinal, hfSectionPageCount: SectionPageCount);
             Grid.SetRow(FooterSubEditor, 3);
             stack.Children.Add(FooterSubEditor);
         }
@@ -442,8 +579,10 @@ internal sealed class PageBox : Border
             stack.Children.Add(footerStrip);
         }
 
+        _chrome = stack;
+        IsRealized = true;
         Child = AddAnchoredLayers(stack, sourceModel, page, new HeaderFooterBandContext(
-            pageNumber, pageNumberText, pageCount, sectionOrdinal, sectionPageCount));
+            pageNumber, _hfPageNumberText, FieldPageCount, SectionOrdinal, SectionPageCount));
     }
 
     /// <summary>
@@ -652,8 +791,11 @@ internal sealed class PageBox : Border
     /// the panel coordinator ensures that only one page box per owning section+slot triggers the
     /// commit.</para>
     /// </summary>
-    internal void CommitHeaderSlot(DocumentView helper, SectionHeadersFooters hf) =>
-        CommitOneSlot(HeaderSubEditor, HeaderSlot, HeaderSlotContent, helper, hf);
+    internal void CommitHeaderSlot(
+        DocumentView helper,
+        SectionHeadersFooters hf,
+        Action<SectionHeadersFooters, HeaderFooterSlotKind, HeaderFooter>? apply = null) =>
+        CommitOneSlot(HeaderSubEditor, HeaderSlot, HeaderSlotContent, helper, hf, apply);
 
     /// <summary>
     /// Commits the footer sub-editor back to the appropriate slot on <paramref name="hf"/> -- the real
@@ -661,15 +803,19 @@ internal sealed class PageBox : Border
     /// may be a different section than the one <see cref="CommitHeaderSlot"/> writes into. See
     /// <see cref="CommitHeaderSlot"/> for the dedup contract.
     /// </summary>
-    internal void CommitFooterSlot(DocumentView helper, SectionHeadersFooters hf) =>
-        CommitOneSlot(FooterSubEditor, FooterSlot, FooterSlotContent, helper, hf);
+    internal void CommitFooterSlot(
+        DocumentView helper,
+        SectionHeadersFooters hf,
+        Action<SectionHeadersFooters, HeaderFooterSlotKind, HeaderFooter>? apply = null) =>
+        CommitOneSlot(FooterSubEditor, FooterSlot, FooterSlotContent, helper, hf, apply);
 
     private static void CommitOneSlot(
         DocumentView? subEditor,
         HeaderFooterSlotKind? slot,
         HeaderFooter? original,
         DocumentView helper,
-        SectionHeadersFooters hf)
+        SectionHeadersFooters hf,
+        Action<SectionHeadersFooters, HeaderFooterSlotKind, HeaderFooter>? apply)
     {
         if (subEditor is null || slot is null)
             return;
@@ -700,7 +846,10 @@ internal sealed class PageBox : Border
             SpliceLegacyTextBoxParagraphs(original, hfOut.Paragraphs);
         }
 
-        HeaderFooterDialogPlanner.SetSlot(hf, slot.Value, hfOut);
+        if (apply is not null)
+            apply(hf, slot.Value, hfOut);
+        else
+            HeaderFooterDialogPlanner.SetSlot(hf, slot.Value, hfOut);
     }
 
     /// <summary>

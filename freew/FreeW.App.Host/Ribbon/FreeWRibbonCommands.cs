@@ -193,8 +193,9 @@ internal static class FreeWRibbonCommands
         {
             if (tryModelToggle())
                 return;
-            if (command.CanExecute(null, editor))
-                command.Execute(null, editor);
+            var target = editor.CommandTarget;
+            if (command.CanExecute(null, target))
+                command.Execute(null, target);
         }
 
         Action CreateCharacterEffectExecution(CharacterEffect effect)
@@ -7568,7 +7569,7 @@ internal static class FreeWRibbonCommands
                 editor.Focus();
                 if (tryModelApply?.Invoke(value) == true)
                     return;
-                apply(editor.Selection, value);
+                apply(editor.CommandSelection, value);
             }
         }
 

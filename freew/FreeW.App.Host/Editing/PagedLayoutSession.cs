@@ -74,13 +74,35 @@ internal sealed class PagedLayoutSession
 
     internal LayoutStatistics LastStatistics { get; private set; } = new(false, "not run", 0, 0, 0, 0);
 
-    /// <summary>Forgets every cached render and the previous pagination.</summary>
+    /// <summary>Units rendered together when pagination reaches one that is not cached.</summary>
+    internal static int RenderAheadUnits { get; set; } = 8;
+
+    /// <summary>Forgets every cached render and the previous pagination (cancels a run in progress).</summary>
     internal void Invalidate()
+    {
+        CancelActiveRun();
+        ClearCaches();
+    }
+
+    private void ClearCaches()
     {
         _cache.Clear();
         _last = null;
         _twin = null;
         _boundModel = null;
+    }
+
+    private LayoutRun? _activeRun;
+
+    /// <summary>The run in progress, if any.</summary>
+    internal LayoutRun? ActiveRun => _activeRun;
+
+    /// <summary>Cancels the run in progress (its partial result is discarded; the previous run stays the base).</summary>
+    internal void CancelActiveRun()
+    {
+        var run = _activeRun;
+        _activeRun = null;
+        run?.Cancel();
     }
 
     /// <summary>
@@ -89,20 +111,198 @@ internal sealed class PagedLayoutSession
     /// </summary>
     internal int[] ComputeAssignment(out int totalPageCount)
     {
-        try
+        var run = BeginRun();
+        run.RunToEnd();
+        totalPageCount = run.TotalPageCount;
+        return run.Assignment;
+    }
+
+    /// <summary>
+    /// Starts a stepwise pagination of the current model (cancelling any run in progress). Each
+    /// <see cref="LayoutRun.Step"/> lays out about one page, so a caller can paginate only as far as it
+    /// needs now and continue the rest later; pages before <see cref="LayoutRun.FinalPageCount"/> are
+    /// final while the run is in progress. The model must not change while the run is in progress.
+    /// </summary>
+    internal LayoutRun BeginRun()
+    {
+        CancelActiveRun();
+        var run = new LayoutRun(this);
+        _activeRun = run;
+        run.Attach(RunSteps(run));
+        return run;
+    }
+
+    private void OnRunEnded(LayoutRun run)
+    {
+        if (ReferenceEquals(_activeRun, run))
+            _activeRun = null;
+        _placed = [];
+    }
+
+    private void FallBack(LayoutRun run, Exception ex)
+    {
+        if (ReferenceEquals(_activeRun, run))
+            _activeRun = null;
+        Invalidate();
+        var reason = ex is UnsupportedException unsupported ? unsupported.Message : ex.GetType().Name + ": " + ex.Message;
+        LastStatistics = new LayoutStatistics(false, reason, 0, 0, 0, 0);
+        run.Assignment = PaginationEngine.ComputeBlockPageAssignment(_source, out var total, null, layoutOnly: true);
+        run.TotalPageCount = total;
+    }
+
+    /// <summary>
+    /// One pagination of the model, advanced a page at a time. Pages before <see cref="FinalPageCount"/>
+    /// and the model blocks before <see cref="FrontierModelBlock"/> have their final page; once
+    /// <see cref="IsComplete"/>, <see cref="Assignment"/> is the whole result (identical to
+    /// <see cref="ComputeAssignment"/>).
+    /// </summary>
+    internal sealed class LayoutRun
+    {
+        private readonly PagedLayoutSession _session;
+        private IEnumerator<bool>? _steps;
+        private int[] _completedGlobalPage = [];
+
+        internal LayoutRun(PagedLayoutSession session) => _session = session;
+
+        internal void Attach(IEnumerable<bool> steps) => _steps = steps.GetEnumerator();
+
+        internal bool IsComplete { get; private set; }
+
+        internal bool IsCancelled { get; private set; }
+
+        internal int[] Assignment { get; set; } = [];
+
+        internal int TotalPageCount { get; set; } = 1;
+
+        // Progress, written by the run.
+        internal int[] RenderedStartOfModel = [];
+        internal int RenderedCount;
+        internal int FrontierRendered;
+        internal int FrontierPage;
+        internal SegmentResult? CurrentSegment;
+        internal int CurrentSegmentOffset;
+
+        /// <summary>The longest single step so far (diagnostics).</summary>
+        internal double LongestStepMs { get; private set; }
+
+        /// <summary>Pages whose set of starting blocks is final.</summary>
+        internal int FinalPageCount => IsComplete ? TotalPageCount : FrontierPage;
+
+        /// <summary>The first model block whose page is not final yet (the model's block count once complete).</summary>
+        internal int FrontierModelBlock
         {
-            return ComputeIncremental(out totalPageCount);
+            get
+            {
+                if (IsComplete)
+                    return Assignment.Length;
+                var m = 0;
+                while (m < RenderedStartOfModel.Length && RenderedStartOfModel[m] < FrontierRendered)
+                    m++;
+                return m;
+            }
         }
-        catch (Exception ex)
+
+        /// <summary>The final page of every model block before <see cref="FrontierModelBlock"/> (-1 after it).</summary>
+        internal int[] PartialAssignment()
         {
-            Invalidate();
-            var reason = ex is UnsupportedException unsupported ? unsupported.Message : ex.GetType().Name + ": " + ex.Message;
-            LastStatistics = new LayoutStatistics(false, reason, 0, 0, 0, 0);
-            return PaginationEngine.ComputeBlockPageAssignment(_source, out totalPageCount, null, layoutOnly: true);
+            if (IsComplete)
+                return Assignment;
+            var result = new int[RenderedStartOfModel.Length];
+            var frontier = FrontierModelBlock;
+            for (var m = 0; m < result.Length; m++)
+            {
+                if (m >= frontier)
+                {
+                    result[m] = -1;
+                    continue;
+                }
+                var r = RenderedStartOfModel[m];
+                var segment = CurrentSegment;
+                result[m] = segment is not null && r >= segment.RenderedStart
+                    ? CurrentSegmentOffset + segment.LocalPage[r - segment.RenderedStart]
+                    : r < _completedGlobalPage.Length ? _completedGlobalPage[r] : 0;
+            }
+            return result;
         }
-        finally
+
+        internal void OnSegmentCompleted(SegmentResult segment, int offset)
         {
-            _placed = [];
+            if (_completedGlobalPage.Length != RenderedCount)
+                Array.Resize(ref _completedGlobalPage, RenderedCount);
+            for (var r = segment.RenderedStart; r < segment.RenderedEnd; r++)
+                _completedGlobalPage[r] = offset + segment.LocalPage[r - segment.RenderedStart];
+            CurrentSegment = null;
+        }
+
+        /// <summary>Lays out about one more page. Returns true once the run is complete.</summary>
+        internal bool Step()
+        {
+            if (IsComplete || IsCancelled)
+                return IsComplete;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                if (!_steps!.MoveNext())
+                    Finish();
+                LongestStepMs = Math.Max(LongestStepMs, clock.Elapsed.TotalMilliseconds);
+            }
+            catch (Exception ex)
+            {
+                DisposeSteps();
+                _session.FallBack(this, ex);
+                Finish();
+            }
+            return IsComplete;
+        }
+
+        internal void RunToEnd()
+        {
+            while (!Step() && !IsCancelled)
+            {
+            }
+        }
+
+        /// <summary>Steps until <paramref name="done"/> holds, the run completes, or <paramref name="budget"/> elapses.</summary>
+        internal void RunUntil(Func<LayoutRun, bool> done, TimeSpan? budget = null)
+        {
+            var clock = budget is null ? null : System.Diagnostics.Stopwatch.StartNew();
+            while (!IsComplete && !IsCancelled && !done(this))
+            {
+                Step();
+                if (clock is not null && clock.Elapsed >= budget!.Value)
+                    break;
+            }
+        }
+
+        private void Finish()
+        {
+            DisposeSteps();
+            IsComplete = true;
+            FrontierPage = TotalPageCount;
+            _session.OnRunEnded(this);
+        }
+
+        internal void Cancel()
+        {
+            if (IsComplete || IsCancelled)
+                return;
+            IsCancelled = true;
+            DisposeSteps();
+            _session.OnRunEnded(this);
+        }
+
+        private void DisposeSteps()
+        {
+            var steps = _steps;
+            _steps = null;
+            try
+            {
+                steps?.Dispose();
+            }
+            catch
+            {
+                // Releasing the layout flows of an abandoned run must never fail the caller.
+            }
         }
     }
 
@@ -518,8 +718,9 @@ internal sealed class PagedLayoutSession
         var unit = _unitOfRendered[renderedIndex];
         if (_placed[unit] is null)
         {
-            // Render ahead: neighbouring missing units in one range keeps the render passes few.
-            EnsurePlaced(unit, Math.Min(_plans.Length, unit + 24));
+            // Render ahead: neighbouring missing units in one range keeps the render passes few, and a
+            // short range keeps one pagination step (the unit of background work) short.
+            EnsurePlaced(unit, Math.Min(_plans.Length, unit + RenderAheadUnits));
         }
         var placed = _placed[unit]!;
         return placed.TopBlocks[renderedIndex - _plans[unit].RenderedStart];
@@ -543,17 +744,17 @@ internal sealed class PagedLayoutSession
 
     // ── run state ───────────────────────────────────────────────────────────────────────────────────
 
-    private sealed record CarryLink(int[] FootnoteIds, double BandHeightDip, int PageNumber);
+    internal sealed record CarryLink(int[] FootnoteIds, double BandHeightDip, int PageNumber);
 
     /// <summary>The state a pass (footnote path) or page (plain path) starts from.</summary>
-    private sealed record PassRecord(
+    internal sealed record PassRecord(
         int StartRendered,          // first rendered block of the pass (fresh start) or of its remainder
         bool StartsWithRemainder,   // the pass begins with the rest of a paragraph split on the page before
         double CarriedNoteDip,
         CarryLink[] CarryChain,
         int LocalPageStart);
 
-    private enum SegmentMode
+    internal enum SegmentMode
     {
         Empty,
         ZeroHeight,
@@ -561,7 +762,7 @@ internal sealed class PagedLayoutSession
         Footnote
     }
 
-    private sealed class SegmentResult
+    internal sealed class SegmentResult
     {
         public int RenderedStart;
         public int RenderedEnd;
@@ -584,15 +785,16 @@ internal sealed class PagedLayoutSession
 
     // ── the run ─────────────────────────────────────────────────────────────────────────────────────
 
-    private int[] ComputeIncremental(out int totalPageCount)
+    private IEnumerable<bool> RunSteps(LayoutRun runState)
     {
-        totalPageCount = 1;
+        runState.TotalPageCount = 1;
         _unitsRendered = _unitsReused = _pagesLaidOut = _pagesReused = 0;
         var model = _source.Model;
         if (model.Blocks.Count == 0)
         {
             LastStatistics = new LayoutStatistics(true, null, 0, 0, 0, 0);
-            return [];
+            runState.Assignment = [];
+            yield break;
         }
 
         if (PaginationEngine.UseReferencePagination)
@@ -609,7 +811,7 @@ internal sealed class PagedLayoutSession
 
         if (!ReferenceEquals(_boundModel, model) || _twin is null)
         {
-            Invalidate();
+            ClearCaches();
             _twin = _source.CreateLayoutRenderTwin(renderBody: false)
                 ?? throw new UnsupportedException("no layout twin");
             _boundModel = model;
@@ -690,9 +892,13 @@ internal sealed class PagedLayoutSession
         var assignment = new int[model.Blocks.Count];
         var pageOffset = 0;
         var reusableSegments = last is not null && last.Segments.Count == segments.Count;
+        runState.RenderedStartOfModel = renderedStartOfModel;
+        runState.RenderedCount = renderedCount;
         for (var s = 0; s < segments.Count; s++)
         {
             var segment = segments[s];
+            runState.FrontierRendered = Math.Min(segment.Start, renderedCount);
+            runState.FrontierPage = pageOffset;
             var previousSegment = reusableSegments ? last!.Segments[s] : null;
             if (previousSegment is not null && !ReferenceEquals(previousSegment.Page, segment.Page))
                 previousSegment = null;
@@ -724,14 +930,22 @@ internal sealed class PagedLayoutSession
                 var restartFrom = previousSegment is not null && previousSegment.RenderedStart == segment.Start
                     ? previousSegment
                     : null;
-                result = PaginateSegment(model, segment, restartFrom, changedStartRendered, changedEndRendered, renderedDelta);
+                result = new SegmentResult();
+                runState.CurrentSegment = result;
+                runState.CurrentSegmentOffset = pageOffset;
+                foreach (var step in PaginateSegment(
+                    model, segment, restartFrom, changedStartRendered, changedEndRendered, renderedDelta, result, runState, pageOffset))
+                {
+                    yield return step;
+                }
             }
 
             run.Segments.Add(result);
+            runState.OnSegmentCompleted(result, pageOffset);
             pageOffset += result.PageCount;
         }
 
-        totalPageCount = Math.Max(1, pageOffset);
+        var totalPageCount = Math.Max(1, pageOffset);
 
         // Map rendered pages back to model blocks (PaginationEngine: assignment[m] = page of renderedStart[m]).
         var segmentAssignment = new int[renderedCount];
@@ -752,7 +966,8 @@ internal sealed class PagedLayoutSession
         _last = run;
         LastStatistics = new LayoutStatistics(
             last is not null, null, _unitsRendered, _unitsReused, _pagesLaidOut, _pagesReused);
-        return assignment;
+        runState.Assignment = assignment;
+        runState.TotalPageCount = totalPageCount;
     }
 
     private static SegmentResult Shift(SegmentResult source, int renderedDelta, int pageDelta) => new()
@@ -774,27 +989,27 @@ internal sealed class PagedLayoutSession
 
     // ── one segment ─────────────────────────────────────────────────────────────────────────────────
 
-    private SegmentResult PaginateSegment(
+    private IEnumerable<bool> PaginateSegment(
         TextDocument document,
         PaginationEngine.PageSegment segment,
         SegmentResult? previous,
         int changedStart,
         int changedEnd,
-        int renderedDelta)
+        int renderedDelta,
+        SegmentResult result,
+        LayoutRun run,
+        int pageOffset)
     {
-        var result = new SegmentResult
-        {
-            RenderedStart = segment.Start,
-            RenderedEnd = Math.Max(segment.Start, segment.End),
-            Page = segment.Page
-        };
+        result.RenderedStart = segment.Start;
+        result.RenderedEnd = Math.Max(segment.Start, segment.End);
+        result.Page = segment.Page;
         var end = Math.Min(segment.End, _unitOfRendered.Length);
         if (segment.Start >= end)
         {
             result.Mode = SegmentMode.Empty;
             result.RenderedEnd = segment.Start;
             result.PageCount = 0;
-            return result;
+            yield break;
         }
 
         result.RenderedEnd = end;
@@ -806,7 +1021,7 @@ internal sealed class PagedLayoutSession
         {
             result.Mode = SegmentMode.ZeroHeight;
             result.PageCount = 1;
-            return result;
+            yield break;
         }
 
         var (runningHeader, runningFooter) = PaginationEngine.ResolveRunningHeaderFooter(document, segment.Page);
@@ -869,18 +1084,12 @@ internal sealed class PagedLayoutSession
         if (previous is not null && previous.UsesFootnotePath != usesFootnotePath)
             previous = null;
 
-        if (usesFootnotePath)
-        {
-            result.Mode = SegmentMode.Footnote;
-            PaginateFootnotePath(document, segment, end, result, previous, changedStart, changedEnd, renderedDelta, NewFlow);
-        }
-        else
-        {
-            result.Mode = SegmentMode.Plain;
-            PaginatePlain(segment, end, result, previous, changedStart, changedEnd, renderedDelta, () => NewFlow(0), pageSize);
-        }
-
-        return result;
+        var steps = usesFootnotePath
+            ? PaginateFootnotePath(document, segment, end, result, previous, changedStart, changedEnd, renderedDelta, NewFlow, run, pageOffset)
+            : PaginatePlain(segment, end, result, previous, changedStart, changedEnd, renderedDelta, () => NewFlow(0), run, pageOffset);
+        result.Mode = usesFootnotePath ? SegmentMode.Footnote : SegmentMode.Plain;
+        foreach (var step in steps)
+            yield return step;
     }
 
     /// <summary>
@@ -1020,7 +1229,7 @@ internal sealed class PagedLayoutSession
 
     // ── plain path ──────────────────────────────────────────────────────────────────────────────────
 
-    private void PaginatePlain(
+    private IEnumerable<bool> PaginatePlain(
         PaginationEngine.PageSegment segment,
         int end,
         SegmentResult result,
@@ -1029,7 +1238,8 @@ internal sealed class PagedLayoutSession
         int changedEnd,
         int renderedDelta,
         Func<FlowDocument> newFlow,
-        Size pageSize)
+        LayoutRun run,
+        int pageOffset)
     {
         // Restart point: the last page of the previous run that started cleanly on a whole block, at
         // least one page before the page holding the first changed block.
@@ -1087,11 +1297,16 @@ internal sealed class PagedLayoutSession
                             }));
                         result.PageCount = previous.PageCount + pageDelta;
                         _pagesReused += previous.PageCount - old.LocalPageStart;
-                        return;
+                        yield break;
                     }
                     result.Passes.Add(record);
                     currentLocal = page;
                     _pagesLaidOut++;
+
+                    // Every block before r has its final page, and no later block starts before this page.
+                    run.FrontierRendered = r;
+                    run.FrontierPage = pageOffset + pageBase + page;
+                    yield return false;
                 }
                 result.LocalPage[r - segment.Start] = pageBase + page;
             }
@@ -1131,7 +1346,7 @@ internal sealed class PagedLayoutSession
 
     // ── per-page footnote path ──────────────────────────────────────────────────────────────────────
 
-    private void PaginateFootnotePath(
+    private IEnumerable<bool> PaginateFootnotePath(
         TextDocument document,
         PaginationEngine.PageSegment segment,
         int end,
@@ -1140,7 +1355,9 @@ internal sealed class PagedLayoutSession
         int changedStart,
         int changedEnd,
         int renderedDelta,
-        Func<double, FlowDocument> newFlow)
+        Func<double, FlowDocument> newFlow,
+        LayoutRun run,
+        int pageOffset)
     {
         const double footnoteFrameClearanceDip = 0.0;
         const double minimumSplitBandDip = 36.0;
@@ -1352,10 +1569,15 @@ internal sealed class PagedLayoutSession
                         }));
                     result.PageCount = previous.PageCount + pageDelta;
                     _pagesReused += previous.PageCount - old.LocalPageStart;
-                    return;
+                    yield break;
                 }
                 result.Passes.Add(state);
                 passesThisRun++;
+
+                // Blocks before the head (and a split head, whose start page is already known) are final.
+                run.FrontierRendered = head.IsContinuation ? head.Rendered + 1 : head.Rendered;
+                run.FrontierPage = pageOffset + localPage;
+                yield return false;
 
                 if (pending[0].Block.BreakPageBefore)
                     pending[0] = SetBreakBefore(pending[0], false);
@@ -1363,6 +1585,8 @@ internal sealed class PagedLayoutSession
                 TopUp(Math.Max(32, lastTake * 4));
                 SetReserve(0);
                 EnsureSafe();
+                // Mid-pass yield (no progress to report): keeps one step of background work short.
+                yield return false;
                 var countWithoutReserve = CountBlocksStartingOnFirstPage();
                 var reserveDip = ReserveFor(countWithoutReserve);
                 if (reserveDip > 0)
@@ -1423,6 +1647,7 @@ internal sealed class PagedLayoutSession
                 }
                 take = Math.Clamp(take, 1, pending.Count);
                 lastTake = take;
+                yield return false;
                 var chunkFootnoteIds = NoteIdsOnFirstPage(take);
                 UpdateCarry(chunkFootnoteIds, Math.Max(0, reserveDip - footnoteFrameClearanceDip), take);
                 var chunk = newFlow(reserveDip);

@@ -1618,6 +1618,15 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     internal IExternalEditingSurface? ExternalEditingSurface { get; set; }
 
+    /// <summary>
+    /// The selection a native (non-model) editing command acts on: the active page's while a paged
+    /// editor is the surface, else this editor's own.
+    /// </summary>
+    internal TextSelection CommandSelection => ExternalEditingSurface?.ActiveEditor?.Selection ?? Selection;
+
+    /// <summary>The target a native routed editing command executes against (see <see cref="CommandSelection"/>).</summary>
+    internal IInputElement CommandTarget => (IInputElement?)ExternalEditingSurface?.ActiveEditor ?? this;
+
     public new bool CanUndo =>
         ExternalEditingSurface is { } surface ? surface.CanUndo :
         (base.CanUndo && AllowsRestrictEditingHistoryOperation(RestrictEditingOperationKind.HistoryUndo, mutationKind: null))
@@ -5834,13 +5843,18 @@ public sealed partial class DocumentView : RichTextBox
     /// different times and apply it across them (see <see cref="ApplyContextualSpacingAcrossUnits"/>).
     /// Outline collapse is ignored (callers do not use this while levels are collapsed).
     /// </summary>
+    /// <summary>Time the last range render spent building its whole-document context (diagnostics).</summary>
+    internal static double LastRangeRenderContextMs { get; private set; }
+
     internal IReadOnlyList<BodyRenderUnit> RenderBodyUnitRange(int from, int to)
     {
         var units = new List<BodyRenderUnit>();
+        var rangeClock = System.Diagnostics.Stopwatch.StartNew();
         BeginRenderPass();
         try
         {
             var context = CreateBodyRenderContext(_model, from);
+            LastRangeRenderContextMs = rangeClock.Elapsed.TotalMilliseconds;
             RenderBodyUnits(
                 from,
                 Math.Min(to, _model.Blocks.Count),
@@ -5929,7 +5943,7 @@ public sealed partial class DocumentView : RichTextBox
         // a no-op, leaving the original rendering path unchanged.
         var hidden = _outlineCollapse.BuildHiddenBlockIndices(_model.Blocks);
         _hiddenBlocks.Clear();
-        var renderedUnits = TrackBodyUnits ? new List<RenderedBodyUnit>() : null;
+        var renderedUnits = new List<RenderedBodyUnit>();
         RenderBodyUnits(
             0,
             _model.Blocks.Count,
@@ -5940,12 +5954,14 @@ public sealed partial class DocumentView : RichTextBox
             {
                 foreach (var block in unit.Blocks)
                     flow.Blocks.Add(block);
-                renderedUnits?.Add(new RenderedBodyUnit(unit, unit.Blocks[0].Margin));
+                renderedUnits.Add(new RenderedBodyUnit(unit, unit.Blocks[0].Margin));
             },
             (visibleOffset, block) => _hiddenBlocks.Add((visibleOffset, block)));
-        _bodyUnits = renderedUnits is not null && hidden.Count == 0 && !RenderInlineFlowBreakFragmentsForPagination
-            ? SignBodyUnits(renderedUnits)
-            : null;
+        var unitsUsable = hidden.Count == 0 && !RenderInlineFlowBreakFragmentsForPagination;
+        _bodyUnits = TrackBodyUnits && unitsUsable ? SignBodyUnits(renderedUnits) : null;
+        // W10: the units are always recorded (cheap), and signed only once a paged editor starts tracking
+        // them -- so its first commit refreshes in place instead of re-rendering the whole body.
+        _unsignedBodyUnits = !TrackBodyUnits && unitsUsable ? renderedUnits : null;
         _bodyRenderInProgress = true;
 
         // Snapshot this pass's image-decode losses onto the instance so ImageDecodeDiagnostics reflects
@@ -5993,7 +6009,23 @@ public sealed partial class DocumentView : RichTextBox
     /// the command bus (see <see cref="HintNextBodyReplacement"/>) re-renders only the units it changed.
     /// The paged editor sets it on the hidden source editor while it is the editing surface.
     /// </summary>
-    internal bool TrackBodyUnits { get; set; }
+    internal bool TrackBodyUnits
+    {
+        get => _trackBodyUnits;
+        set
+        {
+            _trackBodyUnits = value;
+            if (value && _bodyUnits is null && _unsignedBodyUnits is { } recorded)
+                _bodyUnits = SignBodyUnits(recorded);
+            _unsignedBodyUnits = null;
+        }
+    }
+
+    private bool _trackBodyUnits;
+    private List<RenderedBodyUnit>? _unsignedBodyUnits;
+
+    /// <summary>True while a render is replacing body blocks (selection changes then are not the user's).</summary>
+    internal bool IsRenderingBody => _bodyRenderInProgress;
 
     /// <summary>One unit of the current body render with what decides whether it can be kept.</summary>
     private sealed class RenderedBodyUnit(BodyRenderUnit unit, Thickness naturalMargin)
@@ -6040,7 +6072,10 @@ public sealed partial class DocumentView : RichTextBox
     {
         // Any change that did not come from a render makes the recorded units stale.
         if (!_bodyRenderInProgress)
+        {
             _bodyUnits = null;
+            _unsignedBodyUnits = null;
+        }
         base.OnTextChanged(e);
     }
 
@@ -6075,8 +6110,12 @@ public sealed partial class DocumentView : RichTextBox
     /// them into the live flow document. False when the replacement cannot be applied in place; the
     /// caller then renders everything.
     /// </summary>
+    /// <summary>Where the last incremental body refresh spent its time (diagnostics for the probe).</summary>
+    internal string LastBodyRefreshTiming { get; private set; } = "";
+
     private bool TryRefreshBodyAfterReplacement((int Start, int OldCount, int NewCount) hint)
     {
+        var refreshClock = System.Diagnostics.Stopwatch.StartNew();
         if (_bodyUnits is not { Count: > 0 } old
             || Document is not { } document
             || RenderInlineFlowBreakFragmentsForPagination
@@ -6127,8 +6166,38 @@ public sealed partial class DocumentView : RichTextBox
 
         var newMiddle = plans.Length - suffix - prefix;
         var oldMiddle = old.Count - suffix - prefix;
+
+        // W10: inside the middle, a unit outside the replaced blocks whose render did not change keeps its
+        // blocks. A growing edit changes the leading-content estimate of every later table, not the
+        // paragraphs between them, so only those tables are rendered again.
+        var oldByRange = new Dictionary<(int, int), RenderedBodyUnit>();
+        foreach (var unit in old.Skip(prefix).Take(oldMiddle))
+        {
+            if (unit.Unit.End <= hint.Start)
+                oldByRange[(unit.Unit.Start, unit.Unit.End)] = unit;
+            else if (unit.Unit.Start >= hint.Start + hint.OldCount)
+                oldByRange[(unit.Unit.Start + delta, unit.Unit.End + delta)] = unit;
+        }
+        var reused = new RenderedBodyUnit?[newMiddle];
+        var toRender = 0;
+        for (var k = 0; k < newMiddle; k++)
+        {
+            var plan = plans[prefix + k];
+            var outsideEdit = plan.End <= hint.Start || plan.Start >= hint.Start + hint.NewCount;
+            if (outsideEdit
+                && oldByRange.TryGetValue((plan.Start, plan.End), out var candidate)
+                && Same(candidate, plan, plan.Start - candidate.Unit.Start))
+            {
+                reused[k] = candidate;
+            }
+            else
+            {
+                toRender++;
+            }
+        }
+
         // Re-rendering most of the body costs no less than a full render.
-        if (newMiddle > Math.Max(8, plans.Length / 2))
+        if (toRender > Math.Max(8, plans.Length / 2))
             return false;
 
         // Every block of the old middle must still be where the last render put it.
@@ -6141,29 +6210,59 @@ public sealed partial class DocumentView : RichTextBox
         if (anchor is not null && !ReferenceEquals(anchor.Parent, document))
             return false;
 
-        var fresh = newMiddle > 0
-            ? RenderBodyUnitRange(plans[prefix].Start, plans[prefix + newMiddle - 1].End)
-            : [];
-        if (fresh.Count != newMiddle)
-            return false;
-        for (var k = 0; k < newMiddle; k++)
+        var planned = refreshClock.Elapsed.TotalMilliseconds;
+        var fresh = new BodyRenderUnit?[newMiddle];
+        for (var k = 0; k < newMiddle;)
         {
-            if (fresh[k].Start != plans[prefix + k].Start || fresh[k].End != plans[prefix + k].End)
+            if (reused[k] is not null)
+            {
+                k++;
+                continue;
+            }
+
+            var end = k + 1;
+            while (end < newMiddle && reused[end] is null)
+                end++;
+            var group = RenderBodyUnitRange(plans[prefix + k].Start, plans[prefix + end - 1].End);
+            if (group.Count != end - k)
                 return false;
+            for (var g = 0; g < group.Count; g++)
+            {
+                if (group[g].Start != plans[prefix + k + g].Start || group[g].End != plans[prefix + k + g].End)
+                    return false;
+                fresh[k + g] = group[g];
+            }
+            k = end;
         }
+        var rendered = refreshClock.Elapsed.TotalMilliseconds;
 
         _bodyRenderInProgress = true;
         try
         {
+            var keptOld = new HashSet<RenderedBodyUnit>(reused.Where(unit => unit is not null)!);
             foreach (var unit in old.Skip(prefix).Take(oldMiddle))
             {
+                if (keptOld.Contains(unit))
+                    continue;
                 foreach (var block in unit.Unit.Blocks)
                     document.Blocks.Remove(block);
             }
 
+            // Kept units stay in document order; fresh units go in right after the unit before them.
             var previous = anchor;
-            foreach (var unit in fresh)
+            var updated = new List<RenderedBodyUnit>(plans.Length);
+            updated.AddRange(old.Take(prefix));
+            for (var k = 0; k < newMiddle; k++)
             {
+                if (reused[k] is { } keptUnit)
+                {
+                    keptUnit.Unit = keptUnit.Unit with { Start = plans[prefix + k].Start, End = plans[prefix + k].End };
+                    updated.Add(keptUnit);
+                    previous = keptUnit.Unit.Blocks[^1];
+                    continue;
+                }
+
+                var unit = fresh[k]!;
                 foreach (var block in unit.Blocks)
                 {
                     if (previous is not null)
@@ -6174,13 +6273,7 @@ public sealed partial class DocumentView : RichTextBox
                         document.Blocks.Add(block);
                     previous = block;
                 }
-            }
-
-            var updated = new List<RenderedBodyUnit>(plans.Length);
-            updated.AddRange(old.Take(prefix));
-            for (var k = 0; k < newMiddle; k++)
-            {
-                updated.Add(new RenderedBodyUnit(fresh[k], fresh[k].Blocks[0].Margin)
+                updated.Add(new RenderedBodyUnit(unit, unit.Blocks[0].Margin)
                 {
                     Blocks = plans[prefix + k].Blocks,
                     Signature = plans[prefix + k].Signature
@@ -6205,8 +6298,11 @@ public sealed partial class DocumentView : RichTextBox
             _renderJoinSlashes = false;
         }
 
+        var swapped = refreshClock.Elapsed.TotalMilliseconds;
         IncrementalBodyRefreshCount++;
         SyncBodyOverlays();
+        LastBodyRefreshTiming = $"plan {planned:F0} ms, render {rendered - planned:F0} ms (context {LastRangeRenderContextMs:F0} ms, {toRender} of {newMiddle} units), swap {swapped - rendered:F0} ms, "
+            + $"overlays {refreshClock.Elapsed.TotalMilliseconds - swapped:F0} ms";
         return true;
     }
 

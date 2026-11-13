@@ -27,6 +27,9 @@ namespace FreeW.App.Host.Editing;
 /// </summary>
 internal static class PaginatedCommitCoordinator
 {
+    /// <summary>Where the last span commit spent its time (diagnostics for the probe).</summary>
+    internal static string LastTiming { get; private set; } = "";
+
     /// <summary>
     /// Reads all page boxes back into <paramref name="targetEditor"/>'s model.
     ///
@@ -74,6 +77,7 @@ internal static class PaginatedCommitCoordinator
         // last commit are read back, and only their blocks are replaced (the source editor refreshes
         // just those blocks too). Untouched blocks keep their instances, which is what lets the layout
         // session reuse their render and their pages.
+        var clock = System.Diagnostics.Stopwatch.StartNew();
         if (panel.TryGetEditedSpan(out var firstBox, out var lastBox))
         {
             var perBox = new List<ModelBlock[]>();
@@ -94,6 +98,7 @@ internal static class PaginatedCommitCoordinator
             // Never leave an empty document; the whole-body path below adds the empty paragraph.
             if (spanBlocks.Count > 0 || spanCount < model.Blocks.Count)
             {
+                var read = clock.Elapsed.TotalMilliseconds;
                 panel.MarkBodyCommitted();
                 try
                 {
@@ -111,6 +116,7 @@ internal static class PaginatedCommitCoordinator
                     targetEditor.ClearBodyReplacementHint();
                 }
                 panel.OnSpanCommitted(firstBox, lastBox, perBox);
+                LastTiming = $"span read {read:F0} ms, execute {clock.Elapsed.TotalMilliseconds - read:F0} ms";
                 return;
             }
         }
@@ -119,6 +125,16 @@ internal static class PaginatedCommitCoordinator
 
         foreach (var box in panel.PageBoxes)
             targetEditor.ReadBlocksInto(box.Body.Document, collected);
+
+        // W10: blocks the background pagination has not put on a page yet are not on any page box; they
+        // were not edited, so they follow the pages unchanged (the same instances).
+        var tailStart = -1;
+        if (panel.TailStart >= 0 && panel.TailStart <= model.Blocks.Count)
+        {
+            tailStart = collected.Count;
+            for (var m = panel.TailStart; m < model.Blocks.Count; m++)
+                collected.Add(model.Blocks[m]);
+        }
 
         // Mirror CommitToModel: never leave an empty block list.
         if (collected.Count == 0)
@@ -140,6 +156,6 @@ internal static class PaginatedCommitCoordinator
             panel.MarkBodyPending();
             throw;
         }
-        panel.OnWholeBodyCommitted();
+        panel.OnWholeBodyCommitted(tailStart);
     }
 }

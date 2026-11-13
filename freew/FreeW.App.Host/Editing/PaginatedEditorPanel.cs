@@ -117,6 +117,51 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
     /// <summary>Page boxes the last re-flow kept rather than rebuilt (diagnostics).</summary>
     internal int LastRebuildKeptBoxes { get; private set; }
 
+    // ── W10: progressive layout and page virtualisation ───────────────────────────────────────────
+    // With progressive layout (the vertical Page Edit view), opening and re-flowing lay out only the
+    // pages the user sees -- plus the caret's page and a margin -- and the rest is paginated in
+    // dispatcher-yielding background slices; the not-yet-paginated blocks are shown as one sized
+    // placeholder (_tailPlaceholder) and are not on any page box (_tailStart). Only pages near the
+    // viewport have their chrome (header/footer sub-editors, note region) built; the others keep their
+    // body document but show a placeholder of their height.
+    private readonly bool _progressive;
+    private PagedLayoutSession.LayoutRun? _backgroundRun;
+    private bool _backgroundScheduled;
+    private bool _realizationScheduled;
+    private Border? _tailPlaceholder;
+    private int _tailStart = -1;
+    private int _lastCompleteTotalPages;
+    private int _visibleFirst = -1;
+    private int _visibleLast = -1;
+    private readonly Dictionary<int, PageBox> _reusePool = new();
+
+    /// <summary>Pages laid out synchronously beyond the last visible page.</summary>
+    internal const int SyncMarginPages = 1;
+
+    /// <summary>Pages laid out (and realised) synchronously when nothing is visible yet (open).</summary>
+    internal const int InitialPages = 2;
+
+    /// <summary>A document of at most this many top-level blocks is paginated whole, synchronously.</summary>
+    internal const int SmallDocumentBlocks = 150;
+
+    /// <summary>A document of at most this many pages has every page realised.</summary>
+    internal const int SmallDocumentPages = 10;
+
+    /// <summary>Time one background pagination slice may take before yielding to input.</summary>
+    internal static readonly TimeSpan BackgroundSlice = TimeSpan.FromMilliseconds(40);
+
+    /// <summary>True when this panel lays out progressively and virtualises its pages.</summary>
+    internal bool UsesProgressiveLayout => _progressive && _layoutMode == PaginatedPageLayoutMode.Vertical;
+
+    /// <summary>True when every page is laid out (no background pagination is pending).</summary>
+    internal bool IsLayoutComplete => _tailStart < 0;
+
+    /// <summary>The first model block not yet on a page box (-1 when every block is).</summary>
+    internal int TailStart => _tailStart;
+
+    /// <summary>Raised whenever the set of pages changes (re-flow or background progress).</summary>
+    internal event Action? LayoutProgressChanged;
+
     // ── Phase 3b-2: cross-page selection and undo ─────────────────────────────────────────────────
     private readonly CrossPageSelection _crossPageSelection = new();
     private readonly CrossPageUndoCoordinator _undoCoordinator = new();
@@ -141,9 +186,11 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         List<PageBox> boxes,
         PaginatedPageLayoutMode layoutMode,
         IPlatformClipboard? platformClipboard,
-        PagedLayoutSession layout)
+        PagedLayoutSession layout,
+        bool progressive = false)
     {
         _layout = layout;
+        _progressive = progressive;
         _sourceEditor = sourceEditor;
         _sourceModel = sourceEditor.Model;
         _pageBoxes = boxes;
@@ -175,6 +222,12 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
 
         ScheduleContentBottomCapture();
 
+        if (_progressive)
+        {
+            ScrollChanged += (_, _) => ScheduleRealization();
+            SizeChanged += (_, _) => ScheduleRealization();
+        }
+
         // Panel-level drag-drop hooks wired per-box below; see HookDragDrop.
     }
 
@@ -202,10 +255,22 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         PaginatedPageLayoutMode layoutMode = PaginatedPageLayoutMode.Vertical,
         bool includeParityBlankPages = false,
         IPlatformClipboard? platformClipboard = null,
-        List<PaginationEngine.SegmentPagination>? segmentPaginations = null)
+        List<PaginationEngine.SegmentPagination>? segmentPaginations = null,
+        bool progressive = false)
     {
         var model = sourceEditor.Model;
         var layout = new PagedLayoutSession(sourceEditor);
+
+        // W10: the vertical editing view opens progressively -- the first pages synchronously, the rest
+        // in the background -- and virtualises its pages.
+        if (progressive && layoutMode == PaginatedPageLayoutMode.Vertical
+            && !includeParityBlankPages && segmentPaginations is null)
+        {
+            var progressivePanel = new PaginatedEditorPanel(
+                sourceEditor, [], layoutMode, platformClipboard, layout, progressive: true);
+            progressivePanel.RebuildBoxesFromModel(reuseUnchangedPages: false);
+            return progressivePanel;
+        }
 
         // ── Step 1: engine-driven page assignment ─────────────────────────────────────────────────
         // Explicit breaks, overflow, and footnote-reference positions are honoured; the page count
@@ -442,8 +507,13 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
     /// <summary>Scrolls the editable surface to the requested 1-based page.</summary>
     internal void ScrollToPage(int pageNumber)
     {
+        if (pageNumber > _pageBoxes.Count)
+            FinishLayoutNow();
         var page = _pageBoxes.FirstOrDefault(box => box.PageNumber == pageNumber);
-        page?.BringIntoView();
+        if (page is null)
+            return;
+        RealizeBox(page);
+        page.BringIntoView();
     }
 
 
@@ -454,10 +524,20 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         box.Body.GotKeyboardFocus += OnAnyPageBodyGotKeyboardFocus;
         box.BoundaryEditRequested += OnBoundaryEditRequested;
         box.DocumentNavigationRequested += OnDocumentNavigationRequested;
-        if (box.HeaderSubEditor is { } header)
-            header.TextChanged += OnHeaderFooterTextChanged;
-        if (box.FooterSubEditor is { } footer)
-            footer.TextChanged += OnHeaderFooterTextChanged;
+        HookHeaderFooter(box);
+        if (box.IsRealized)
+            ApplySpellCheck(box);
+    }
+
+    /// <summary>
+    /// W10: a shown page checks spelling as the source editor does, so misspellings get the red squiggle
+    /// and the right-click menu offers the speller's suggestions (a correction is an ordinary page edit).
+    /// </summary>
+    private void ApplySpellCheck(PageBox box)
+    {
+        var enabled = box.IsRealized && !box.IsParitySyntheticPage && _sourceEditor.SpellCheck.IsEnabled;
+        if (box.Body.SpellCheck.IsEnabled != enabled)
+            box.Body.SpellCheck.IsEnabled = enabled;
     }
 
     private void UnhookTextChanged(PageBox box)
@@ -467,6 +547,19 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         box.Body.GotKeyboardFocus -= OnAnyPageBodyGotKeyboardFocus;
         box.BoundaryEditRequested -= OnBoundaryEditRequested;
         box.DocumentNavigationRequested -= OnDocumentNavigationRequested;
+        UnhookHeaderFooter(box);
+    }
+
+    private void HookHeaderFooter(PageBox box)
+    {
+        if (box.HeaderSubEditor is { } header)
+            header.TextChanged += OnHeaderFooterTextChanged;
+        if (box.FooterSubEditor is { } footer)
+            footer.TextChanged += OnHeaderFooterTextChanged;
+    }
+
+    private void UnhookHeaderFooter(PageBox box)
+    {
         if (box.HeaderSubEditor is { } header)
             header.TextChanged -= OnHeaderFooterTextChanged;
         if (box.FooterSubEditor is { } footer)
@@ -510,6 +603,13 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         {
             // Other pages show the same header/footer: the next re-flow rebuilds every page.
             _headerFooterEditedSinceRebuild = true;
+            foreach (var box in _pageBoxes)
+            {
+                if (ReferenceEquals(box.HeaderSubEditor, sender))
+                    box.HeaderEdited = true;
+                else if (ReferenceEquals(box.FooterSubEditor, sender))
+                    box.FooterEdited = true;
+            }
             Edited?.Invoke();
         }
     }
@@ -522,6 +622,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
             && _pageBoxes.FirstOrDefault(b => ReferenceEquals(b.Body, body)) is { } box)
         {
             _lastCaretBox = box;
+            if (!_syncingSelection && body.IsKeyboardFocusWithin)
+                MirrorSelectionToSource();
         }
     }
 
@@ -561,6 +663,13 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
     /// </summary>
     internal void RunOwnModelMutation(Action mutation)
     {
+        // A pagination in progress describes the model before this change: drop it; the re-flow that
+        // follows every own mutation (or the one scheduled below) starts a new one.
+        if (_backgroundRun is not null)
+        {
+            CancelBackgroundLayout();
+            _backgroundLayoutInterrupted = true;
+        }
         _ownModelMutationDepth++;
         try
         {
@@ -586,6 +695,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         // The hidden source editor then refreshes only the blocks a page commit replaced.
         _sourceEditor.TrackBodyUnits = true;
         _sourceEditor.EditingSessionChanged += OnSourceEditingSessionChanged;
+        _sourceEditor.SelectionChanged += OnSourceSelectionChanged;
+        MirrorSelectionToSource();
     }
 
     /// <summary>
@@ -595,6 +706,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
     internal void Detach()
     {
         _repaginateTimer?.Stop();
+        _backgroundAllowed = false;
+        CancelBackgroundLayout();
         if (!_attachedAsSurface)
             return;
         _attachedAsSurface = false;
@@ -604,6 +717,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
             _sourceEditor.TrackBodyUnits = false;
         }
         _sourceEditor.EditingSessionChanged -= OnSourceEditingSessionChanged;
+        _sourceEditor.SelectionChanged -= OnSourceSelectionChanged;
     }
 
     private void OnSourceEditingSessionChanged()
@@ -618,8 +732,16 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
         {
             _externalRebuildQueued = false;
-            if (_attachedAsSurface)
-                Rebuild(CaptureCaret());
+            if (!_attachedAsSurface)
+                return;
+            var selection = _pendingSourceSelection ?? CaptureSelection();
+            _pendingSourceSelection = null;
+            Rebuild(selection?.Active);
+            // The command's own selection (a replaced match, a restyled range) -- or the one the user
+            // had -- stays selected on the rebuilt pages.
+            if (selection is not null && selection.Anchor != selection.Active)
+                ShowSelection(selection);
+            MirrorSelectionToSource();
         }));
     }
 
@@ -632,11 +754,19 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         // be a no-op when nothing is pending and must never schedule work of its own.
         var reflowWasScheduled = _repaginateTimer?.IsEnabled == true;
         _repaginateTimer?.Stop();
+        _backgroundLayoutInterrupted = false;
         PaginatedCommitCoordinator.Commit(this, _sourceEditor);
-        // The re-pagination the burst already scheduled still has to happen, for the layout.
-        if (reflowWasScheduled && _attachedAsSurface && _pageBoxes.Count > 0)
+        // The re-pagination the burst already scheduled still has to happen, for the layout; so does the
+        // background pagination the commit interrupted.
+        if (_backgroundLayoutInterrupted && _attachedAsSurface && _pageBoxes.Count > 0)
+            ScheduleRepaginate();
+        else if (reflowWasScheduled && _attachedAsSurface && _pageBoxes.Count > 0)
             _repaginateTimer?.Start();
     }
+
+    private bool _backgroundLayoutInterrupted;
+
+    System.Windows.Controls.RichTextBox? IExternalEditingSurface.ActiveEditor => ActiveBox?.Body;
 
     bool IExternalEditingSurface.CanUndo => _undoCoordinator.CanUndo;
 
@@ -660,40 +790,271 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         var active = ActiveBox;
         if (active is null)
             return null;
-
-        var blockBase = 0;
-        foreach (var box in _pageBoxes)
+        try
         {
-            var blocks = box.Body.Document.Blocks;
-            if (!ReferenceEquals(box, active))
+            return ToGlobal(active, active.Body.CaretPosition);
+        }
+        catch
+        {
+            return ToGlobal(active, null);
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="pointer"/> in <paramref name="box"/> as a document position: the top-level block
+    /// (counted across every page in order) and the symbol offset in it. A null pointer is the page start.
+    /// </summary>
+    internal PagedCaretPosition? ToGlobal(PageBox box, TextPointer? pointer)
+    {
+        var blockBase = 0;
+        foreach (var candidate in _pageBoxes)
+        {
+            var blocks = candidate.Body.Document.Blocks;
+            if (!ReferenceEquals(candidate, box))
             {
                 blockBase += blocks.Count;
                 continue;
             }
 
-            try
-            {
-                var caret = box.Body.CaretPosition;
-                var index = 0;
-                foreach (var block in blocks)
-                {
-                    if (caret.CompareTo(block.ContentEnd) <= 0)
-                    {
-                        var offset = Math.Max(0, block.ContentStart.GetOffsetToPosition(caret));
-                        return new PagedCaretPosition(blockBase + index, offset);
-                    }
-                    index++;
-                }
-
-                return new PagedCaretPosition(blockBase + Math.Max(0, blocks.Count - 1), int.MaxValue);
-            }
-            catch
-            {
+            if (pointer is null)
                 return new PagedCaretPosition(blockBase, 0);
+            var index = 0;
+            foreach (var block in blocks)
+            {
+                if (pointer.CompareTo(block.ContentEnd) <= 0)
+                    return new PagedCaretPosition(blockBase + index, Math.Max(0, block.ContentStart.GetOffsetToPosition(pointer)));
+                index++;
             }
+
+            return new PagedCaretPosition(blockBase + Math.Max(0, blocks.Count - 1), int.MaxValue);
         }
 
         return null;
+    }
+
+    /// <summary>The page and position a document position falls on (finishing pagination when it lies past the pages shown).</summary>
+    internal (PageBox Box, TextPointer Pointer)? FromGlobal(PagedCaretPosition position)
+    {
+        if (_pageBoxes.Count == 0)
+            return null;
+        var total = _pageBoxes.Sum(box => box.Body.Document.Blocks.Count);
+        if (position.BlockIndex >= total && !IsLayoutComplete)
+            FinishLayoutNow();
+
+        var remaining = position.BlockIndex;
+        foreach (var box in _pageBoxes)
+        {
+            var count = box.Body.Document.Blocks.Count;
+            if (remaining < count)
+            {
+                var block = box.Body.Document.Blocks.ElementAt(remaining);
+                var length = block.ContentStart.GetOffsetToPosition(block.ContentEnd);
+                var pointer = block.ContentStart.GetPositionAtOffset(Math.Min(position.Offset, length)) ?? block.ContentEnd;
+                return (box, pointer.GetInsertionPosition(LogicalDirection.Forward) ?? pointer);
+            }
+            remaining -= count;
+        }
+
+        var last = _pageBoxes.LastOrDefault(b => b.Body.Document.Blocks.Count > 0) ?? _pageBoxes[^1];
+        return (last, last.Body.Document.ContentEnd.GetInsertionPosition(LogicalDirection.Backward) ?? last.Body.Document.ContentEnd);
+    }
+
+    // ── W10: the page selection and the hidden source editor's selection ──────────────────────────
+    // Commands (ribbon formatting, styles, Find/Replace, spelling, Go To) read and set the selection of
+    // the hidden continuous editor, which renders exactly the blocks the pages show, in the same order.
+    // The page selection is mirrored into it whenever the two documents agree (no page edits pending),
+    // and a selection a command makes there is shown on the pages.
+
+    /// <summary>A selection as two document positions (anchor, active end).</summary>
+    internal sealed record PagedSelection(PagedCaretPosition Anchor, PagedCaretPosition Active);
+
+    private bool _syncingSelection;
+    private PagedSelection? _pendingSourceSelection;
+
+    /// <summary>The page selection (or caret) as document positions.</summary>
+    internal PagedSelection? CaptureSelection()
+    {
+        try
+        {
+            if (_crossPageSelection.IsActive
+                && _crossPageSelection.AnchorPointer is { } anchorPointer
+                && _crossPageSelection.ActivePointer is { } activePointer
+                && _crossPageSelection.AnchorBoxIndex >= 0 && _crossPageSelection.AnchorBoxIndex < _pageBoxes.Count
+                && _crossPageSelection.ActiveBoxIndex >= 0 && _crossPageSelection.ActiveBoxIndex < _pageBoxes.Count
+                && ToGlobal(_pageBoxes[_crossPageSelection.AnchorBoxIndex], anchorPointer) is { } anchor
+                && ToGlobal(_pageBoxes[_crossPageSelection.ActiveBoxIndex], activePointer) is { } active)
+            {
+                return new PagedSelection(anchor, active);
+            }
+
+            if (ActiveBox is not { } box)
+                return null;
+            var selection = box.Body.Selection;
+            return ToGlobal(box, selection.Start) is { } start && ToGlobal(box, selection.End) is { } end
+                ? new PagedSelection(start, end)
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Selects <paramref name="selection"/> on the pages (across pages when needed) and brings it into view.</summary>
+    internal void ShowSelection(PagedSelection selection)
+    {
+        if (FromGlobal(selection.Anchor) is not { } anchor || FromGlobal(selection.Active) is not { } active)
+            return;
+
+        _syncingSelection = true;
+        try
+        {
+            _crossPageSelection.Clear(_pageBoxes);
+            RealizeBox(anchor.Box);
+            RealizeBox(active.Box);
+            if (ReferenceEquals(anchor.Box, active.Box))
+            {
+                active.Box.Body.Selection.Select(anchor.Pointer, active.Pointer);
+            }
+            else
+            {
+                _crossPageSelection.BeginSelection(_pageBoxes, anchor.Box, anchor.Pointer);
+                _crossPageSelection.ExtendSelection(_pageBoxes, active.Box, active.Pointer);
+            }
+            active.Box.Body.Focus();
+            _lastCaretBox = active.Box;
+            BringPositionIntoView(active.Box, active.Pointer);
+        }
+        catch
+        {
+            // A position the pages no longer hold: leave the selection where it was.
+        }
+        finally
+        {
+            _syncingSelection = false;
+        }
+    }
+
+    private void BringPositionIntoView(PageBox box, TextPointer pointer)
+    {
+        box.BringIntoView();
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            try
+            {
+                var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
+                if (!rect.IsEmpty)
+                    box.Body.BringIntoView(rect);
+            }
+            catch
+            {
+                // Laid out differently by now; the page itself is in view.
+            }
+        }));
+    }
+
+    /// <summary>The hidden editor's position for a document position (null when the documents disagree).</summary>
+    private TextPointer? SourcePointer(PagedCaretPosition position)
+    {
+        var block = _sourceEditor.Document.Blocks.ElementAtOrDefault(position.BlockIndex);
+        if (block is null)
+            return null;
+        var length = block.ContentStart.GetOffsetToPosition(block.ContentEnd);
+        return block.ContentStart.GetPositionAtOffset(Math.Min(position.Offset, length)) ?? block.ContentEnd;
+    }
+
+    private PagedCaretPosition? SourcePosition(TextPointer pointer)
+    {
+        var index = 0;
+        foreach (var block in _sourceEditor.Document.Blocks)
+        {
+            if (pointer.CompareTo(block.ContentEnd) <= 0)
+                return new PagedCaretPosition(index, Math.Max(0, block.ContentStart.GetOffsetToPosition(pointer)));
+            index++;
+        }
+        return index > 0 ? new PagedCaretPosition(index - 1, int.MaxValue) : null;
+    }
+
+    /// <summary>The hidden editor shows the same top-level blocks as the pages (and the not-yet-paginated rest).</summary>
+    private bool SourceMatchesPages()
+    {
+        if (!ReferenceEquals(_sourceModel, _sourceEditor.Model) || _hasPendingBodyEdits)
+            return false;
+        var shown = _pageBoxes.Sum(box => box.Body.Document.Blocks.Count);
+        var source = _sourceEditor.Document.Blocks.Count;
+        return IsLayoutComplete ? source == shown : source >= shown;
+    }
+
+    /// <summary>Copies the page selection into the hidden editor (when the two documents agree).</summary>
+    internal void MirrorSelectionToSource()
+    {
+        if (!_attachedAsSurface || _syncingSelection || _rebuilding || !SourceMatchesPages())
+            return;
+        if (CaptureSelection() is not { } selection
+            || SourcePointer(selection.Anchor) is not { } anchor
+            || SourcePointer(selection.Active) is not { } active)
+        {
+            return;
+        }
+
+        _syncingSelection = true;
+        try
+        {
+            _sourceEditor.Selection.Select(anchor, active);
+        }
+        catch
+        {
+            // Out of step for a moment; the next selection change or commit mirrors it again.
+        }
+        finally
+        {
+            _syncingSelection = false;
+        }
+    }
+
+    /// <summary>
+    /// Readies the hidden editor for a command that reads its selection: writes pending page edits into
+    /// the model (so both documents agree) and mirrors the page selection. Called by the host before
+    /// ribbon commands, shortcuts and dialogs act.
+    /// </summary>
+    internal void PrepareForCommand()
+    {
+        if (!_attachedAsSurface)
+            return;
+        CommitPendingEdits();
+        MirrorSelectionToSource();
+    }
+
+    private void OnSourceSelectionChanged(object? sender, RoutedEventArgs e)
+    {
+        if (_syncingSelection || _ownModelMutationDepth > 0 || _rebuilding || _sourceEditor.IsRenderingBody)
+            return;
+        if (!ReferenceEquals(_sourceModel, _sourceEditor.Model) || _hasPendingBodyEdits)
+            return;
+        PagedSelection? selection;
+        try
+        {
+            selection = SourcePosition(_sourceEditor.Selection.Start) is { } start
+                && SourcePosition(_sourceEditor.Selection.End) is { } end
+                    ? new PagedSelection(start, end)
+                    : null;
+        }
+        catch
+        {
+            return;
+        }
+        if (selection is null)
+            return;
+
+        // A command that changed the model selected in its result: show it once the pages are rebuilt.
+        if (_externalRebuildQueued)
+        {
+            _pendingSourceSelection = selection;
+            return;
+        }
+        if (CaptureSelection() == selection)
+            return;
+        ShowSelection(selection);
     }
 
     /// <summary>
@@ -727,6 +1088,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
             targetBlock = target.Body.Document.Blocks.LastBlock;
         }
 
+        RealizeBox(target);
         target.Body.Focus();
         _lastCaretBox = target;
         try
@@ -814,6 +1176,11 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
     {
         if (_pageBoxes.Count == 0)
             return;
+        if (target == PageNavigationTarget.DocumentEnd
+            || (target == PageNavigationTarget.NextPage && source.NextBox is null))
+        {
+            FinishLayoutNow();
+        }
 
         PageBox destination;
         bool toStart;
@@ -875,6 +1242,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
             destination.Body.CaretPosition = pointer;
         }
 
+        RealizeBox(destination);
         destination.Body.Focus();
         _lastCaretBox = destination;
         destination.BringIntoView();
@@ -883,6 +1251,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
     /// <summary>Ctrl+A in paged view: selects the whole body, across every page.</summary>
     internal void SelectAllPages()
     {
+        FinishLayoutNow();
         var first = _pageBoxes.FirstOrDefault(b => !b.IsParitySyntheticPage);
         var last = _pageBoxes.LastOrDefault(b => !b.IsParitySyntheticPage);
         if (first is null || last is null)
@@ -1282,7 +1651,9 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
     /// </summary>
     internal void CommitAndRepaginateIfLayoutChanged()
     {
-        if (_editedSinceRepagination.Count > 0 && _editedSinceRepagination.All(ContentBottomUnchanged))
+        // A commit during background pagination interrupts it, so the re-flow has to run anyway.
+        if (IsLayoutComplete
+            && _editedSinceRepagination.Count > 0 && _editedSinceRepagination.All(ContentBottomUnchanged))
         {
             _repaginateTimer?.Stop();
             _editedSinceRepagination.Clear();
@@ -1342,16 +1713,31 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
     {
         _repaginateTimer?.Stop();
         _editedSinceRepagination.Clear();
+        RepaginationCount++;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
         var caret = CaptureCaret();
 
         // ── Commit current page boxes into the model ──────────────────────────────────────────────
         PaginatedCommitCoordinator.Commit(this, _sourceEditor);
+        var commit = clock.Elapsed;
 
         // Only this panel changed the model since the last layout (whole-block replacements), so the
         // layout session re-paginates from the edit and unchanged pages keep their boxes.
         RebuildBoxesFromModel(reuseUnchangedPages: true);
+        var rebuild = clock.Elapsed - commit;
         RestoreCaret(caret);
+        LastReflowTiming = $"commit {commit.TotalMilliseconds:F0} ms, layout+boxes {rebuild.TotalMilliseconds:F0} ms "
+            + $"(layout {_lastLayoutMs:F0} ms, boxes {_lastApplyMs:F0} ms), caret {(clock.Elapsed - commit - rebuild).TotalMilliseconds:F0} ms";
     }
+
+    /// <summary>Re-flows run so far (diagnostics for tests).</summary>
+    internal int RepaginationCount { get; private set; }
+
+    /// <summary>Where the last <see cref="Repaginate"/> spent its time (diagnostics for the probe).</summary>
+    internal string LastReflowTiming { get; private set; } = "";
+
+    private double _lastLayoutMs;
+    private double _lastApplyMs;
 
     // ── Phase 3b-2: cross-page selection accessor ────────────────────────────────────────────────
 
@@ -1387,6 +1773,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
             RestoreCaret(caret);
         else if (_pageBoxes.Count > 0)
         {
+            RealizeBox(_pageBoxes[0]);
             _pageBoxes[0].Body.Focus();
             _lastCaretBox = _pageBoxes[0];
         }
@@ -1394,14 +1781,59 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
 
     private void RebuildBoxesFromModel(bool reuseUnchangedPages)
     {
+        CancelBackgroundLayout();
         var model = _sourceEditor.Model;
         int[] assignment;
         int pageCount;
+        if (UsesProgressiveLayout)
+        {
+            // W10: lay out only through the pages the user sees (and the caret's page), show those, and
+            // paginate the rest in the background.
+            var (targetPage, targetBlock) = ComputeSyncTarget();
+            PagedLayoutSession.LayoutRun? run = null;
+            try
+            {
+                var layoutClock = System.Diagnostics.Stopwatch.StartNew();
+                run = _layout.BeginRun();
+                if (model.Blocks.Count > SmallDocumentBlocks)
+                    run.RunUntil(r => r.FinalPageCount > targetPage && r.FrontierModelBlock > targetBlock);
+                _lastLayoutMs = layoutClock.Elapsed.TotalMilliseconds;
+                layoutClock.Restart();
+                if (!run.IsComplete && TryApplyRun(run, reuseUnchangedPages, background: false))
+                {
+                    _lastApplyMs = layoutClock.Elapsed.TotalMilliseconds;
+                    _backgroundRun = run;
+                    ScheduleBackgroundLayout();
+                    return;
+                }
+                layoutClock.Restart();
+                run.RunToEnd();
+                _lastLayoutMs += layoutClock.Elapsed.TotalMilliseconds;
+                layoutClock.Restart();
+                if (run.IsComplete && TryApplyRun(run, reuseUnchangedPages, background: false))
+                {
+                    _lastApplyMs = layoutClock.Elapsed.TotalMilliseconds;
+                    return;
+                }
+            }
+            catch
+            {
+                run?.Cancel();
+                run = null;
+            }
+
+            if (run is { IsComplete: true } && TryApplyRun(run, reuseUnchangedPages, background: false))
+                return;
+            assignment = run is { IsComplete: true } ? run.Assignment : new int[model.Blocks.Count];
+            pageCount = run is { IsComplete: true } ? CompletePageCount(run.Assignment, run.TotalPageCount) : 1;
+            RebuildBoxesFromModelFull(assignment, pageCount);
+            return;
+        }
+
         try
         {
             assignment = _layout.ComputeAssignment(out var totalPageCount);
-            pageCount = assignment.Length > 0 ? assignment.Max() + 1 : 1;
-            pageCount = Math.Max(1, Math.Max(pageCount, totalPageCount));
+            pageCount = CompletePageCount(assignment, totalPageCount);
         }
         catch
         {
@@ -1415,28 +1847,93 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
             return;
         }
 
+        ApplyBodyPlan(model, assignment, pageCount, plan, pageCount, complete: true, reuseUnchangedPages, background: false);
+    }
+
+    private static int CompletePageCount(int[] assignment, int totalPageCount)
+    {
+        var pageCount = assignment.Length > 0 ? assignment.Max() + 1 : 1;
+        // A final block that runs on past the page it starts on still owns those physical pages.
+        return Math.Max(1, Math.Max(pageCount, totalPageCount));
+    }
+
+    /// <summary>
+    /// Shows what <paramref name="run"/> has laid out: every page when it is complete, else its final pages
+    /// followed by a sized placeholder for the rest. False when the run's result cannot be planned by
+    /// render unit (the caller falls back to a whole rebuild).
+    /// </summary>
+    private bool TryApplyRun(PagedLayoutSession.LayoutRun run, bool reuseUnchangedPages, bool background)
+    {
+        var model = _sourceEditor.Model;
+        if (run.IsComplete)
+        {
+            var pageCount = CompletePageCount(run.Assignment, run.TotalPageCount);
+            if (PlanPages(model, run.Assignment, pageCount) is not { } plan)
+                return false;
+            ApplyBodyPlan(model, run.Assignment, pageCount, plan, pageCount, complete: true, reuseUnchangedPages, background);
+            return true;
+        }
+
+        var known = run.FinalPageCount;
+        var frontier = run.FrontierModelBlock;
+        if (known <= 0 || frontier <= 0 || frontier >= model.Blocks.Count)
+            return false;
+
+        // The blocks whose page is not final yet go on one provisional page after the final ones; that
+        // page is shown as a placeholder, not built.
+        var partial = run.PartialAssignment();
+        for (var m = frontier; m < partial.Length; m++)
+            partial[m] = known;
+        if (PlanPages(model, partial, known + 1) is not { } partialPlan)
+            return false;
+        ApplyBodyPlan(model, partial, known + 1, partialPlan, known, complete: false, reuseUnchangedPages, background);
+        return true;
+    }
+
+    /// <summary>
+    /// Builds (or keeps) the page boxes of the first <paramref name="bodyPages"/> pages of
+    /// <paramref name="plan"/>. When <paramref name="complete"/> is false the plan's last page holds the
+    /// blocks not yet paginated, shown as a placeholder. A <paramref name="background"/> apply (background
+    /// pagination progress) keeps the caret, the selection and every page already shown.
+    /// </summary>
+    private void ApplyBodyPlan(
+        TextDocument model,
+        int[] assignment,
+        int pageCount,
+        PagePlan plan,
+        int bodyPages,
+        bool complete,
+        bool reuseUnchangedPages,
+        bool background)
+    {
         _rebuilding = true;
         try
         {
-            _undoCoordinator.OnRepaginationStarting();
-            _crossPageSelection.Clear(_pageBoxes);
-            _dragPending = false;
-            _dragActive = false;
-            _dragSourceBox = null;
-            _lastCaretBox = null;
+            if (!background)
+            {
+                _undoCoordinator.OnRepaginationStarting();
+                _crossPageSelection.Clear(_pageBoxes);
+                _dragPending = false;
+                _dragActive = false;
+                _dragSourceBox = null;
+                _lastCaretBox = null;
+            }
             _sourceModel = model;
 
             var hasEndnotes = model.Endnotes.Count > 0;
             var endnoteIds = model.Endnotes.Keys.OrderBy(k => k).ToList();
-            var requiresDedicatedEndnotePage = hasEndnotes && RequiresDedicatedEndnotePage(_sourceEditor);
-            var totalBoxCount = requiresDedicatedEndnotePage ? pageCount + 1 : pageCount;
+            var requiresDedicatedEndnotePage = complete && hasEndnotes && RequiresDedicatedEndnotePage(_sourceEditor);
+            var totalBoxCount = complete
+                ? (requiresDedicatedEndnotePage ? pageCount + 1 : pageCount)
+                : EstimateTotalPages(bodyPages, plan.Ranges[bodyPages].Start, model.Blocks.Count);
             var pageToSection = HeaderFooterPagePlanner.MapPagesToSections(model, assignment, pageCount);
             var pageNumberDisplay = PageNumberFormatDialogPlanner.BuildDisplayPlans(pageToSection, model, assignment);
             var differentOddEvenPages = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(model);
 
-            var slots = new HeaderFooterSlotPlan[pageCount];
-            var keys = new string[pageCount];
-            for (var i = 0; i < pageCount; i++)
+            var slots = new HeaderFooterSlotPlan[bodyPages];
+            var keys = new string[bodyPages];
+            var sectionPageCounts = new int[bodyPages];
+            for (var i = 0; i < bodyPages; i++)
             {
                 var pageSection = pageToSection[i];
                 slots[i] = HeaderFooterPagePlanner.ResolveSlots(
@@ -1445,19 +1942,36 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
                     pageSection.PageSettings,
                     differentOddEvenPages,
                     pageNumberDisplay[i].LogicalPageNumber);
-                var sectionPageCount = pageSection.SectionPageCount
+                sectionPageCounts[i] = pageSection.SectionPageCount
                     + (requiresDedicatedEndnotePage && pageSection.SectionIndex == pageToSection[^1].SectionIndex ? 1 : 0);
                 keys[i] = BoxKey(
-                    i, pageSection, slots[i], pageNumberDisplay[i].Text, totalBoxCount, sectionPageCount, model,
-                    plan.Ranges[i], hasEndnotes && !requiresDedicatedEndnotePage && i == pageCount - 1);
+                    i, pageSection, slots[i], pageNumberDisplay[i].Text,
+                    // Progressive layout updates page counts in place (they are provisional until the
+                    // background pagination completes), so they are not part of a box's identity there.
+                    _progressive ? -1 : totalBoxCount,
+                    _progressive ? -1 : sectionPageCounts[i],
+                    model,
+                    plan.Ranges[i], complete && hasEndnotes && !requiresDedicatedEndnotePage && i == pageCount - 1);
             }
 
             var oldBoxes = _pageBoxes.ToList();
+            PageBox? Candidate(int page)
+            {
+                if (page < oldBoxes.Count)
+                    return oldBoxes[page];
+                return _reusePool.TryGetValue(page, out var pooled) ? pooled : null;
+            }
+
             bool CanKeep(int page)
             {
-                if (!reuseUnchangedPages || !_boxRangesValid || _headerFooterEditedSinceRebuild || page >= oldBoxes.Count)
+                if (!reuseUnchangedPages || !_boxRangesValid)
                     return false;
-                var old = oldBoxes[page];
+                // An in-page header/footer edit shows on other pages too: a foreground re-flow rebuilds
+                // them; background progress never discards a page (it may hold that edit).
+                if (_headerFooterEditedSinceRebuild && !background)
+                    return false;
+                if (Candidate(page) is not { } old)
+                    return false;
                 var range = plan.Ranges[page];
                 if (old.ModelKey != keys[page] || old.ModelStart != range.Start
                     || old.ModelBlocks is not { } shown || shown.Length != range.Count)
@@ -1470,17 +1984,27 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
                 return true;
             }
 
-            var keep = new bool[pageCount];
-            for (var i = 0; i < pageCount; i++)
+            var keep = new bool[bodyPages];
+            for (var i = 0; i < bodyPages; i++)
                 keep[i] = CanKeep(i);
 
-            var shards = RenderPages(model, plan, page => !keep[page]);
+            var shards = RenderPages(model, plan, page => page < bodyPages && !keep[page]);
             var newBoxes = new List<PageBox>(totalBoxCount);
-            for (var i = 0; i < pageCount; i++)
+            for (var i = 0; i < bodyPages; i++)
             {
                 if (keep[i])
                 {
-                    newBoxes.Add(oldBoxes[i]);
+                    var kept = Candidate(i)!;
+                    if (_progressive && !kept.HeaderFooterEdited)
+                    {
+                        var realized = kept.IsRealized;
+                        if (realized)
+                            UnhookHeaderFooter(kept);
+                        kept.UpdatePageCounts(totalBoxCount, sectionPageCounts[i]);
+                        if (realized)
+                            HookHeaderFooter(kept);
+                    }
+                    newBoxes.Add(kept);
                     continue;
                 }
 
@@ -1493,13 +2017,12 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
                     pageCount: totalBoxCount,
                     pageNumberText: pageNumberDisplay[i].Text,
                     sectionOrdinal: pageSection.SectionIndex + 1,
-                    sectionPageCount: pageSection.SectionPageCount
-                        + (requiresDedicatedEndnotePage
-                            && pageSection.SectionIndex == pageToSection[^1].SectionIndex ? 1 : 0),
+                    sectionPageCount: sectionPageCounts[i],
                     footnoteIds: fnIds,
-                    endnoteIds: hasEndnotes && !requiresDedicatedEndnotePage && i == pageCount - 1
+                    endnoteIds: complete && hasEndnotes && !requiresDedicatedEndnotePage && i == pageCount - 1
                         ? endnoteIds
-                        : null)
+                        : null,
+                    deferChrome: _progressive && !ShouldRealizeOnBuild(i, totalBoxCount))
                 {
                     ModelKey = keys[i],
                     ModelStart = plan.Ranges[i].Start,
@@ -1520,18 +2043,34 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
                 newBoxes.Add(endnotePage);
             }
 
-            // Retire the boxes that were replaced; keep the others where they are in the page host.
-            foreach (var old in oldBoxes)
+            // Retire the boxes that were replaced; keep the others where they are in the page host. A
+            // foreground partial re-flow parks the pages past its frontier: background progress reuses
+            // them when their blocks and page facts come out unchanged.
+            var pool = !complete && !background && reuseUnchangedPages ? new Dictionary<int, PageBox>() : null;
+            foreach (var old in oldBoxes.Concat(_reusePool.Values))
             {
                 if (newBoxes.Contains(old))
                     continue;
-                UnhookTextChanged(old);
-                _undoCoordinator.UnhookBox(old);
-                UnhookShiftArrow(old);
-                UnhookDragDrop(old);
-                _contentBottoms.Remove(old);
+                if (oldBoxes.Contains(old))
+                {
+                    UnhookTextChanged(old);
+                    _undoCoordinator.UnhookBox(old);
+                    UnhookShiftArrow(old);
+                    UnhookDragDrop(old);
+                    _contentBottoms.Remove(old);
+                    if (pool is not null && old.ModelBlocks is not null && !old.HeaderFooterEdited)
+                        pool[oldBoxes.IndexOf(old)] = old;
+                }
+            }
+            _reusePool.Clear();
+            if (pool is not null)
+            {
+                foreach (var (index, box) in pool)
+                    _reusePool[index] = box;
             }
 
+            if (_tailPlaceholder is not null)
+                _pageHost.Children.Remove(_tailPlaceholder);
             var children = _pageHost.Children;
             for (var i = 0; i < newBoxes.Count; i++)
             {
@@ -1539,19 +2078,38 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
                     continue;
                 if (i < children.Count)
                     children.RemoveAt(i);
-                children.Insert(i, newBoxes[i]);
+                // A pooled box may still sit further down the host.
+                children.Remove(newBoxes[i]);
+                children.Insert(Math.Min(i, children.Count), newBoxes[i]);
             }
             while (children.Count > newBoxes.Count)
                 children.RemoveAt(children.Count - 1);
 
+            if (complete)
+            {
+                _tailPlaceholder = null;
+                _tailStart = -1;
+                _lastCompleteTotalPages = totalBoxCount;
+            }
+            else
+            {
+                _tailStart = plan.Ranges[bodyPages].Start;
+                var tailPages = Math.Max(1, totalBoxCount - bodyPages);
+                var pageHeight = PageBox.NominalHeight(pageToSection[bodyPages].PageSettings) + PageBox.PageGap;
+                _tailPlaceholder ??= new Border { Background = Brushes.Transparent };
+                _tailPlaceholder.Height = tailPages * pageHeight;
+                _tailPlaceholder.Width = PageLayout.PageSizeDip(pageToSection[bodyPages].PageSettings).Width;
+                children.Add(_tailPlaceholder);
+            }
+
             _pageBoxes.Clear();
             _pageBoxes.AddRange(newBoxes);
-            var kept = 0;
+            var keptCount = 0;
             foreach (var box in newBoxes)
             {
                 if (oldBoxes.Contains(box))
                 {
-                    kept++;
+                    keptCount++;
                     continue;
                 }
                 HookTextChanged(box);
@@ -1559,7 +2117,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
                 HookDragDrop(box);
                 _undoCoordinator.HookBox(box);
             }
-            LastRebuildKeptBoxes = kept;
+            if (!background)
+                LastRebuildKeptBoxes = keptCount;
 
             for (var i = 0; i < _pageBoxes.Count; i++)
             {
@@ -1568,9 +2127,14 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
             }
 
             _boxRangesValid = true;
-            _headerFooterEditedSinceRebuild = false;
-            _editedSinceRepagination.Clear();
-            ScheduleContentBottomCapture();
+            if (!background)
+            {
+                _headerFooterEditedSinceRebuild = false;
+                _editedSinceRepagination.Clear();
+                ScheduleContentBottomCapture();
+            }
+            ScheduleRealization();
+            LayoutProgressChanged?.Invoke();
         }
         finally
         {
@@ -1578,8 +2142,280 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         }
     }
 
+    // ── W10: progressive layout ───────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// How far a foreground re-flow lays out before showing pages: through the last visible page plus a
+    /// margin (the first pages when nothing is visible yet), and past the caret's page.
+    /// </summary>
+    private (int Page, int ModelBlock) ComputeSyncTarget()
+    {
+        var page = _visibleLast >= 0 ? _visibleLast + SyncMarginPages : InitialPages - 1;
+        var block = -1;
+        var caretBox = ActiveBox;
+        if (caretBox?.ModelBlocks is { } blocks && _pageBoxes.Contains(caretBox))
+        {
+            block = caretBox.ModelStart + Math.Max(0, blocks.Length - 1);
+            page = Math.Max(page, _pageBoxes.IndexOf(caretBox) + SyncMarginPages);
+        }
+        return (page, block);
+    }
+
+    private int EstimateTotalPages(int knownPages, int frontierModel, int blockCount)
+    {
+        var proportional = (int)Math.Ceiling(knownPages * (double)blockCount / Math.Max(1, frontierModel));
+        var estimate = _lastCompleteTotalPages > 0 ? _lastCompleteTotalPages : proportional;
+        return Math.Max(knownPages + 1, estimate);
+    }
+
+    private bool ShouldRealizeOnBuild(int page, int pageCount)
+    {
+        // A short document is built whole, exactly as without virtualisation.
+        if (pageCount <= SmallDocumentPages)
+            return true;
+        if (_visibleFirst < 0)
+            return page < InitialPages;
+        return page >= _visibleFirst - 1 && page <= _visibleLast + 1;
+    }
+
+    private void CancelBackgroundLayout()
+    {
+        var run = _backgroundRun;
+        _backgroundRun = null;
+        if (run is not null && !run.IsComplete)
+            run.Cancel();
+    }
+
+    private void ScheduleBackgroundLayout()
+    {
+        if (_backgroundScheduled || _backgroundRun is null)
+            return;
+        _backgroundScheduled = true;
+        // Background priority: input, layout and rendering always run first, so typing and scrolling
+        // stay responsive while the rest of the document is paginated.
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            _backgroundScheduled = false;
+            if (_backgroundRun is null)
+                return;
+            try
+            {
+                RunBackgroundSlice(BackgroundSlice);
+            }
+            catch
+            {
+                // Never let background pagination take the editor down: the pages shown stay valid.
+                CancelBackgroundLayout();
+                return;
+            }
+            ScheduleBackgroundLayout();
+        }));
+    }
+
+    /// <summary>Advances the background pagination for about <paramref name="budget"/> and shows its progress.</summary>
+    private void RunBackgroundSlice(TimeSpan budget)
+    {
+        if (_backgroundRun is not { } run)
+            return;
+        if (run.IsCancelled || !_backgroundAllowed || !ReferenceEquals(_sourceEditor.Model, _sourceModel))
+        {
+            CancelBackgroundLayout();
+            return;
+        }
+
+        var before = run.FinalPageCount;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        run.RunUntil(_ => false, budget);
+        var layout = clock.Elapsed.TotalMilliseconds;
+        if (run.IsComplete)
+        {
+            _backgroundRun = null;
+            if (!TryApplyRun(run, reuseUnchangedPages: true, background: true))
+                RebuildBoxesFromModelFull(run.Assignment, CompletePageCount(run.Assignment, run.TotalPageCount));
+        }
+        else if (run.FinalPageCount > before)
+        {
+            TryApplyRun(run, reuseUnchangedPages: true, background: true);
+        }
+        var total = clock.Elapsed.TotalMilliseconds;
+        if (total > _longestSliceMs)
+        {
+            _longestSliceMs = total;
+            LongestSliceTiming = $"{total:F0} ms (layout {layout:F0} ms, pages {total - layout:F0} ms; {before}->{run.FinalPageCount}; "
+                + $"longest step {run.LongestStepMs:F0} ms)";
+        }
+    }
+
+    private double _longestSliceMs;
+
+    /// <summary>The longest background slice so far and where it went (diagnostics for the probe).</summary>
+    internal string LongestSliceTiming { get; private set; } = "";
+
+    // The panel paginates in the background whether or not it is attached as the editing surface (a
+    // freshly built panel is attached by the host right after Build); Detach stops it.
+    private bool _backgroundAllowed = true;
+
+    /// <summary>
+    /// Finishes any background pagination synchronously, so every page box exists (whole-document
+    /// operations: Select All, Ctrl+End, Find, Go To).
+    /// </summary>
+    /// <summary>Runs one background pagination slice now (diagnostics and tests); true once layout is complete.</summary>
+    internal bool AdvanceBackgroundLayout(TimeSpan budget)
+    {
+        RunBackgroundSlice(budget);
+        return _backgroundRun is null;
+    }
+
+    internal void FinishLayoutNow()
+    {
+        while (_backgroundRun is not null)
+            RunBackgroundSlice(TimeSpan.FromSeconds(30));
+    }
+
+    private void ScheduleRealization()
+    {
+        if (!UsesProgressiveLayout || _realizationScheduled)
+            return;
+        _realizationScheduled = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            _realizationScheduled = false;
+            UpdateRealization();
+        }));
+    }
+
+    /// <summary>
+    /// Builds the chrome of the pages within a viewport's height of the visible area and drops it from
+    /// pages far from it (never the caret's page, a page with keyboard focus, header/footer edits not yet
+    /// committed, or part of a cross-page selection). When the not-yet-paginated placeholder comes into
+    /// view, pagination advances now rather than in the background.
+    /// </summary>
+    internal void UpdateRealization()
+    {
+        if (!UsesProgressiveLayout || _pageBoxes.Count == 0 || ViewportHeight <= 0)
+            return;
+
+        var viewportHeight = ViewportHeight;
+        var margin = viewportHeight;
+        var first = -1;
+        var last = -1;
+        var keepAlive = KeepAliveBoxes();
+        for (var i = 0; i < _pageBoxes.Count; i++)
+        {
+            var box = _pageBoxes[i];
+            double top;
+            try
+            {
+                top = box.TranslatePoint(new Point(0, 0), this).Y;
+            }
+            catch
+            {
+                continue;
+            }
+            var height = box.ActualHeight > 0 ? box.ActualHeight : PageBox.NominalHeight(box.PageGeometry);
+            var bottom = top + height;
+            if (bottom >= 0 && top <= viewportHeight)
+            {
+                if (first < 0)
+                    first = i;
+                last = i;
+            }
+
+            if (bottom >= -margin && top <= viewportHeight + margin)
+                RealizeBox(box);
+            else if ((bottom < -4 * margin || top > viewportHeight + 4 * margin) && !keepAlive.Contains(box))
+                VirtualizeBox(box);
+        }
+
+        _visibleFirst = first;
+        _visibleLast = last;
+
+        if (_tailPlaceholder is not null && _backgroundRun is not null)
+        {
+            double tailTop;
+            try
+            {
+                tailTop = _tailPlaceholder.TranslatePoint(new Point(0, 0), this).Y;
+            }
+            catch
+            {
+                return;
+            }
+            if (tailTop <= viewportHeight + margin)
+            {
+                RunBackgroundSlice(TimeSpan.FromMilliseconds(150));
+                ScheduleRealization();
+            }
+        }
+    }
+
+    private HashSet<PageBox> KeepAliveBoxes()
+    {
+        var keep = new HashSet<PageBox>();
+        foreach (var box in _pageBoxes)
+        {
+            if (box.IsKeyboardFocusWithin || box.HeaderFooterEdited)
+                keep.Add(box);
+        }
+        if (_lastCaretBox is not null)
+        {
+            keep.Add(_lastCaretBox);
+            if (_lastCaretBox.PreviousBox is { } previous)
+                keep.Add(previous);
+            if (_lastCaretBox.NextBox is { } next)
+                keep.Add(next);
+        }
+        if (_crossPageSelection.IsActive)
+        {
+            var from = Math.Min(_crossPageSelection.AnchorBoxIndex, _crossPageSelection.ActiveBoxIndex);
+            var to = Math.Max(_crossPageSelection.AnchorBoxIndex, _crossPageSelection.ActiveBoxIndex);
+            for (var i = Math.Max(0, from); i <= to && i < _pageBoxes.Count; i++)
+                keep.Add(_pageBoxes[i]);
+        }
+        return keep;
+    }
+
+    /// <summary>Builds a page's chrome (and hooks its header/footer sub-editors) if it is virtualised.</summary>
+    internal void RealizeBox(PageBox box)
+    {
+        if (box.IsRealized)
+            return;
+        var wasRebuilding = _rebuilding;
+        _rebuilding = true;
+        try
+        {
+            box.Realize();
+            HookHeaderFooter(box);
+            ApplySpellCheck(box);
+        }
+        finally
+        {
+            _rebuilding = wasRebuilding;
+        }
+        // Its laid-out height is the baseline the next typing burst compares against.
+        Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+        {
+            if (box.IsRealized && _pageBoxes.Contains(box) && MeasureContentBottom(box) is { } bottom)
+                _contentBottoms[box] = bottom;
+        }));
+    }
+
+    private void VirtualizeBox(PageBox box)
+    {
+        if (!box.IsRealized)
+            return;
+        UnhookHeaderFooter(box);
+        box.Virtualize();
+        ApplySpellCheck(box);
+        _contentBottoms.Remove(box);
+    }
+
     private void RebuildBoxesFromModelFull(int[] assignment, int pageCount)
     {
+        CancelBackgroundLayout();
+        _reusePool.Clear();
+        _tailPlaceholder = null;
+        _tailStart = -1;
         _boxRangesValid = false;
         _rebuilding = true;
         try
@@ -1845,17 +2681,31 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
 
         foreach (var box in _pageBoxes)
         {
+            // W10: only a page whose header/footer was edited writes its slots back. Writing every
+            // page's (unchanged) slots replaced each slot with an equal copy -- turning an absent slot
+            // into an empty one -- which changed every page's facts and rebuilt every page box on the
+            // first re-flow after open.
+            if (!box.HeaderFooterEdited)
+                continue;
+            var headerEdited = box.HeaderEdited;
+            var footerEdited = box.FooterEdited;
+            box.HeaderEdited = false;
+            box.FooterEdited = false;
             var headerHf = box.OwnerSectionHf ?? docLevelHf;
             var footerHf = box.FooterOwnerSectionHf ?? docLevelHf;
 
             // Commit header slot (once per owning-section+slot pair).
-            if (box.HeaderSlot is { } headerSlot && committedSlots.Add((headerHf, headerSlot)))
-                box.CommitHeaderSlot(helperEditor, headerHf);
+            if (headerEdited && box.HeaderSlot is { } headerSlot && committedSlots.Add((headerHf, headerSlot)))
+                box.CommitHeaderSlot(helperEditor, headerHf, ApplySlot);
 
             // Commit footer slot independently -- it may own to a different section than the header.
-            if (box.FooterSlot is { } footerSlot && committedSlots.Add((footerHf, footerSlot)))
-                box.CommitFooterSlot(helperEditor, footerHf);
+            if (footerEdited && box.FooterSlot is { } footerSlot && committedSlots.Add((footerHf, footerSlot)))
+                box.CommitFooterSlot(helperEditor, footerHf, ApplySlot);
         }
+
+        // W10: a header/footer edit is an undoable edit on the shared command history, like body text.
+        void ApplySlot(SectionHeadersFooters owner, HeaderFooterSlotKind slot, HeaderFooter value) =>
+            RunOwnModelMutation(() => helperEditor.Commands.Execute(new SetHeaderFooterSlotCommand(owner, slot, value)));
     }
 
     /// <summary>
@@ -2507,7 +3357,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
                 return false;
             expectedStart += box.ModelBlocks.Length;
         }
-        if (expectedStart != blocks.Count)
+        // Blocks not paginated yet (progressive layout) follow the last page, unchanged.
+        if (expectedStart != (_tailStart >= 0 ? _tailStart : blocks.Count) || expectedStart > blocks.Count)
             return false;
         for (var i = firstBox; i <= lastBox; i++)
         {
@@ -2533,14 +3384,17 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
                 box.ModelBlocks = perBox[i - firstBox];
             position += box.ModelBlocks!.Length;
         }
+        if (_tailStart >= 0)
+            _tailStart = position;
         _editedSinceCommit.Clear();
     }
 
     /// <summary>A whole-document commit replaced every block: what the boxes show is no longer known.</summary>
-    internal void OnWholeBodyCommitted()
+    internal void OnWholeBodyCommitted(int tailStart = -1)
     {
         _editedSinceCommit.Clear();
         _boxRangesValid = false;
+        _tailStart = tailStart;
     }
 
     // ── sharding ──────────────────────────────────────────────────────────────────────────────────

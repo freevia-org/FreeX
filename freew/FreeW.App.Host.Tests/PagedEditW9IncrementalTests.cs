@@ -51,8 +51,6 @@ public sealed class PagedEditW9IncrementalTests(Xunit.Abstractions.ITestOutputHe
     {
         var (panel, editor) = BuildPanel(LongDocument(pages: 6));
         panel.AttachAsActiveSurface();
-        // The first commit writes every page's header/footer slots into the model (empty ones
-        // included), so the first re-flow rebuilds the pages once.
         Append(panel.PageBoxes[3], "s");
         panel.Repaginate();
         var firstBox = panel.PageBoxes[0];

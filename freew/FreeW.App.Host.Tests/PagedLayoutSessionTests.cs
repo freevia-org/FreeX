@@ -145,7 +145,32 @@ public sealed class PagedLayoutSessionTests(ITestOutputHelper output)
     private void AssertSessionMatches(DocumentView editor, PagedLayoutSession session, string label)
     {
         var full = PaginationEngine.ComputeBlockPageAssignment(editor, out var fullPages, null, layoutOnly: true);
-        var incremental = session.ComputeAssignment(out var incrementalPages);
+
+        // W10: step the run a page at a time; whatever it reports as final must already be the final result.
+        var run = session.BeginRun();
+        var steps = 0;
+        while (!run.Step())
+        {
+            steps++;
+            var frontier = run.FrontierModelBlock;
+            var finalPages = run.FinalPageCount;
+            var partial = run.PartialAssignment();
+            for (var m = 0; m < full.Length; m++)
+            {
+                if (m < frontier)
+                {
+                    partial[m].Should().Be(full[m], $"{label}: block {m} reported final after step {steps}");
+                    full[m].Should().BeLessThan(finalPages, $"{label}: block {m} lies on a final page");
+                }
+                else
+                {
+                    full[m].Should().BeGreaterThanOrEqualTo(finalPages,
+                        $"{label}: block {m} past the frontier starts on a page that is not final");
+                }
+            }
+        }
+        var incremental = run.Assignment;
+        var incrementalPages = run.TotalPageCount;
         var stats = session.LastStatistics;
         output.WriteLine($"{label}: blocks={full.Length} pages={fullPages} incremental={stats.Incremental} "
             + $"fallback={stats.FallbackReason ?? "-"} rendered={stats.UnitsRendered} reusedUnits={stats.UnitsReused} "
