@@ -376,6 +376,13 @@ public partial class MainWindow
         if (sheet is null)
             return WorksheetContextMenuState.Default;
 
-        return WorksheetContextMenuPlanner.ResolveWorksheetState(sheet, address);
+        return WorksheetContextMenuPlanner.ResolveWorksheetState(sheet, address) with
+        {
+            Clipboard = SheetGrid.ClipboardRange is null
+                ? WorksheetContextMenuClipboardState.None
+                : SheetGrid.ClipboardIsCut
+                    ? WorksheetContextMenuClipboardState.Cut
+                    : WorksheetContextMenuClipboardState.Copied,
+        };
     }
 }

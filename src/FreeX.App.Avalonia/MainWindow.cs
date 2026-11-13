@@ -11726,7 +11726,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var sheet = _session.ActiveSheet;
         var address = _session.ActiveCell;
-        var state = WorksheetContextMenuPlanner.ResolveWorksheetState(sheet, address);
+        var state = WorksheetContextMenuPlanner.ResolveWorksheetState(sheet, address) with
+        {
+            Clipboard = _clipboardMarqueeRange is null
+                ? WorksheetContextMenuClipboardState.None
+                : _clipboardMarqueeIsCut
+                    ? WorksheetContextMenuClipboardState.Cut
+                    : WorksheetContextMenuClipboardState.Copied,
+        };
         var commands = WorksheetContextMenuPlanner.BuildCommands(
             WorksheetContextMenuTargetKind.Worksheet,
             state);
