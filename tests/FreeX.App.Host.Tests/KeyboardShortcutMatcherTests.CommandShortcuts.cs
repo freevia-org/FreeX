@@ -67,6 +67,7 @@ public sealed partial class KeyboardShortcutMatcherTests
     [InlineData(Key.F5, Key.None, ModifierKeys.None, KeyboardCommandShortcut.GoTo)]
     [InlineData(Key.G, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.GoTo)]
     [InlineData(Key.None, Key.F1, ModifierKeys.Alt, KeyboardCommandShortcut.InsertEmbeddedChart)]
+    [InlineData(Key.F1, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.ToggleRibbon)]
     [InlineData(Key.F11, Key.None, ModifierKeys.None, KeyboardCommandShortcut.InsertChartSheet)]
     [InlineData(Key.None, Key.OemPlus, ModifierKeys.Alt, KeyboardCommandShortcut.AutoSum)]
     [InlineData(Key.None, Key.Add, ModifierKeys.Alt, KeyboardCommandShortcut.AutoSum)]

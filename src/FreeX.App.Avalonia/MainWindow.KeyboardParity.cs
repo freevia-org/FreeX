@@ -259,6 +259,9 @@ public sealed partial class MainWindow
             case KeyboardCommandShortcut.InsertEmbeddedChart:
                 InsertChartFromSelection(ChartType.Column);
                 break;
+            case KeyboardCommandShortcut.ToggleRibbon:
+                ToggleRibbonCollapsed();
+                break;
             case KeyboardCommandShortcut.InsertChartSheet:
                 InsertChartSheetFromSelection();
                 break;

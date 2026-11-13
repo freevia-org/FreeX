@@ -431,6 +431,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         ConfigureBackstageInfoActionButtons();
         InitializeBackstageFrame();
         RegisterKeyboardCommandShortcuts();
+        InitializeRibbonDisplayState();
 
         SheetTabsControl.ItemsSource = _sheetTabs;
         

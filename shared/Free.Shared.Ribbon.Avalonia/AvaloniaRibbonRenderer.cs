@@ -41,7 +41,7 @@ public sealed record AvaloniaRibbonRendererOptions(
 /// accent underline on the selected tab, and <see cref="RibbonCheckBox"/> renders as a real check box.
 /// Behavior is resolved through an <see cref="IRibbonCommandRegistry"/> keyed by command id.
 /// </summary>
-public static class AvaloniaRibbonRenderer
+public static partial class AvaloniaRibbonRenderer
 {
     private const string FileRibbonTabId = "FileTab";
     private const string KeyTipBadgeTag = "RibbonKeyTipBadge";
@@ -782,6 +782,7 @@ public static class AvaloniaRibbonRenderer
 
         if (tabControl.Items.Count > 0)
             tabControl.SelectedIndex = tabControl.Items.Count > 1 ? 1 : 0;
+        AttachDisplayState(tabControl);
         var lastContentTabIndex = tabControl.SelectedIndex;
         var restoringContentTab = false;
         UpdateTabHeaderSelectionStates(tabControl);
@@ -841,6 +842,7 @@ public static class AvaloniaRibbonRenderer
                 {
                     SyncContextualTabs(
                         tabControl, definition, registry, contextSource, afterExecute, resolvedPalette, stateStore, resolvedOptions);
+                    ApplyDisplayState(tabControl);
 
                     if ((tabControl.SelectedItem as TabItem)?.Tag is string syncedId &&
                         string.Equals(syncedId, FileRibbonTabId, StringComparison.Ordinal))
@@ -1013,6 +1015,7 @@ public static class AvaloniaRibbonRenderer
             }
 
             tabControl.SelectedItem = item;
+            ShowCollapsedRibbonForKeyTip(tabControl);
             return true;
         }
 

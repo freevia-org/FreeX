@@ -59,6 +59,7 @@ public partial class MainWindow
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.PasteValues, (_, _) => ExecutePaste(PasteMode.Values));
         RegisterPortableKeyboardCommand(KeyboardCommandShortcut.GoTo, WorkbookShortcutRoute.GoTo);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertEmbeddedChart, (_, _) => InsertEmbeddedChart());
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ToggleRibbon, (_, _) => ToggleRibbonCollapsed());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertChartSheet, (_, _) => InsertChartSheet());
         RegisterPortableKeyboardCommand(KeyboardCommandShortcut.AutoSum, WorkbookShortcutRoute.AutoSum);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.GroupSelection, GroupRowsBtn_Click);

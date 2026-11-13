@@ -132,7 +132,8 @@ public enum KeyboardCommandShortcut
     EditCell,
     ClearSelection,
     ClearSelectionAndEdit,
-    RepeatLastAction
+    RepeatLastAction,
+    ToggleRibbon
 }
 
 public enum WorkbookShortcutKey
@@ -254,6 +255,8 @@ public static class WorkbookKeyboardShortcutCatalog
         C(KeyboardCommandShortcut.ReapplyFilter, WorkbookShortcutKey.L, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Alt),
         C(KeyboardCommandShortcut.QuickAnalysis, WorkbookShortcutKey.Q, WorkbookShortcutModifiers.Control),
         C(KeyboardCommandShortcut.InsertEmbeddedChart, WorkbookShortcutKey.F1, WorkbookShortcutModifiers.Alt),
+        // Excel: Ctrl+F1 shows or hides the ribbon commands ("Show tabs only").
+        C(KeyboardCommandShortcut.ToggleRibbon, WorkbookShortcutKey.F1, WorkbookShortcutModifiers.Control),
         C(KeyboardCommandShortcut.InsertChartSheet, WorkbookShortcutKey.F11),
         C(KeyboardCommandShortcut.GroupSelection, WorkbookShortcutKey.Right, WorkbookShortcutModifiers.Alt | WorkbookShortcutModifiers.Shift),
         C(KeyboardCommandShortcut.UngroupSelection, WorkbookShortcutKey.Left, WorkbookShortcutModifiers.Alt | WorkbookShortcutModifiers.Shift),
