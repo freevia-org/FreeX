@@ -4537,6 +4537,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             ApplyWorksheetScrollAxis(_verticalWorksheetScrollBar, state.Vertical);
             ApplyWorksheetScrollAxis(_horizontalWorksheetScrollBar, state.Horizontal);
+            // A chartsheet has no scrollable cell grid (WPF hides the grid and scroll chrome with it).
+            var showScrollBars = !IsChartsheet(_session.ActiveSheet);
+            _verticalWorksheetScrollBar.IsVisible = showScrollBars;
+            _horizontalWorksheetScrollBar.IsVisible = showScrollBars;
         }
         finally
         {
@@ -5050,6 +5054,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private Control BuildSheetGrid()
     {
         RecordSheetGridBuilt();
+        if (IsChartsheet(_session.ActiveSheet))
+            return BuildChartsheetView();
         _formulaReferenceGridOverlay = null;
         _cellAffordanceOverlay = null;
         _formulaReferenceGridHighlightVisuals.Clear();
