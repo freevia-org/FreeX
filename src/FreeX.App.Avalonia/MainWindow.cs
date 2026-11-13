@@ -16272,7 +16272,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             currentFolder = folder;
             folderBox.Text = folder;
             folderEntries.ItemsSource = HyperlinkDialogPanePlanner.ListFolder(folder)
-                .Select(entry => new ListBoxItem { Content = (entry.IsFolder ? "📁 " : "    ") + entry.Name, Tag = entry })
+                .Select(entry => new ListBoxItem { Content = HyperlinkDialogPanePlanner.EntryText(entry), Tag = entry })
                 .ToArray();
         }
 
@@ -16286,9 +16286,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if ((folderEntries.SelectedItem as ListBoxItem)?.Tag is HyperlinkFolderEntry { IsFolder: true } folder)
                 ShowFolder(folder.FullPath);
         };
-        var upButton = new Button { Content = "↑", Width = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var upButton = new Button { Content = HyperlinkDialogPanePlanner.UpOneFolderGlyph, Width = 26, Margin = new Thickness(4, 0, 0, 0) };
         ApplyDialogButtonChrome(upButton);
-        ToolTip.SetTip(upButton, "Up One Folder");
+        ToolTip.SetTip(upButton, HyperlinkDialogPanePlanner.UpOneFolderToolTip);
         AutomationProperties.SetAutomationId(upButton, "HyperlinkUpFolderButton");
         upButton.Click += (_, _) =>
         {
@@ -16308,7 +16308,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Excel's in-pane switcher: Current Folder / Recent Files.
         var currentFolderList = new ListBox
         {
-            ItemsSource = new[] { UiText.Get("Hyperlink_CurrentFolder"), "Recent Files" },
+            ItemsSource = new[] { UiText.Get("Hyperlink_CurrentFolder"), HyperlinkDialogPanePlanner.RecentFilesLabel },
             SelectedIndex = 0,
             Width = 92,
             Margin = new Thickness(0, 0, 6, 0),
@@ -16334,7 +16334,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 .Where(System.IO.File.Exists)
                 .Select(path => new ListBoxItem
                 {
-                    Content = "    " + path,
+                    Content = HyperlinkDialogPanePlanner.FileEntryPrefix + path,
                     Tag = new HyperlinkFolderEntry(System.IO.Path.GetFileName(path), path, IsFolder: false),
                 })
                 .ToArray();
@@ -16368,7 +16368,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 targetBox.Text = HyperlinkDialogPanePlanner.DefaultCellReference;
         };
         var placePane = new AvaloniaGrid { RowDefinitions = new RowDefinitions("Auto,*") };
-        placePane.Children.Add(new TextBlock { Text = "Or select a place in this document:", Margin = new Thickness(0, 0, 0, 4) });
+        placePane.Children.Add(new TextBlock { Text = HyperlinkDialogPanePlanner.SelectPlaceCaption, Margin = new Thickness(0, 0, 0, 4) });
         AvaloniaGrid.SetRow(documentPlaces, 1);
         placePane.Children.Add(documentPlaces);
 
@@ -16380,14 +16380,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 ? path
                 : newDocumentFolder;
         targetBox.TextChanged += (_, _) => UpdateFullPath();
-        var changePathButton = new Button { Content = "Change..." };
+        var changePathButton = new Button { Content = HyperlinkDialogPanePlanner.ChangePathButton };
         ApplyDialogButtonChrome(changePathButton, width: HyperlinkDialogPlanner.SecondaryButtonWidth);
         AutomationProperties.SetAutomationId(changePathButton, "HyperlinkChangePathButton");
         changePathButton.Click += (_, _) => RunGuarded(async () =>
         {
             var folders = await dialog.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
             {
-                Title = "Create New Document",
+                Title = UiText.Get("Hyperlink_LinkTypeCreateNewDocument"),
                 AllowMultiple = false,
             });
             if (folders.Count > 0 && folders[0].TryGetLocalPath() is { } folder)
@@ -16396,13 +16396,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 UpdateFullPath();
             }
         });
-        var newDocumentPane = CreateHyperlinkFieldRow(new TextBlock { Text = "Full path:" }, fullPathText, changePathButton, new Thickness(0));
+        var newDocumentPane = CreateHyperlinkFieldRow(new TextBlock { Text = HyperlinkDialogPanePlanner.FullPathLabel }, fullPathText, changePathButton, new Thickness(0));
         newDocumentPane.VerticalAlignment = AvaloniaVerticalAlignment.Top;
 
         // E-mail Address: targetBox holds the address; subject and recently used addresses here.
         var subjectBox = new TextBox { Height = HyperlinkDialogPlanner.FieldHeight, HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch };
         ApplyDialogTextBoxChrome(subjectBox);
-        AutomationProperties.SetName(subjectBox, "Subject");
+        AutomationProperties.SetName(subjectBox, HyperlinkDialogPanePlanner.SubjectAutomationName);
         AutomationProperties.SetAutomationId(subjectBox, "HyperlinkEmailSubjectTextBox");
         var recentEmails = new ListBox
         {
@@ -16414,7 +16414,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 .ToArray(),
         };
         AvaloniaCompactDialogChrome.ApplyListBox(recentEmails, AvaloniaCompactDialogChrome.WindowsStyle with { ListBoxItemPadding = new Thickness(4, 0) });
-        AutomationProperties.SetName(recentEmails, "Recently used e-mail addresses");
+        AutomationProperties.SetName(recentEmails, HyperlinkDialogPanePlanner.RecentEmailAutomationName);
         AutomationProperties.SetAutomationId(recentEmails, "HyperlinkRecentEmailAddresses");
         recentEmails.SelectionChanged += (_, _) =>
         {
@@ -16426,8 +16426,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             }
         };
         var emailPane = new AvaloniaGrid { RowDefinitions = new RowDefinitions("Auto,Auto,*") };
-        emailPane.Children.Add(CreateHyperlinkFieldRow(new TextBlock { Text = "Subject:" }, subjectBox, null, new Thickness(0, 0, 0, 8)));
-        var recentCaption = new TextBlock { Text = "Recently used e-mail addresses:", Margin = new Thickness(0, 0, 0, 4) };
+        emailPane.Children.Add(CreateHyperlinkFieldRow(new TextBlock { Text = HyperlinkDialogPanePlanner.SubjectLabel }, subjectBox, null, new Thickness(0, 0, 0, 8)));
+        var recentCaption = new TextBlock { Text = HyperlinkDialogPanePlanner.RecentEmailCaption, Margin = new Thickness(0, 0, 0, 4) };
         AvaloniaGrid.SetRow(recentCaption, 1);
         emailPane.Children.Add(recentCaption);
         AvaloniaGrid.SetRow(recentEmails, 2);

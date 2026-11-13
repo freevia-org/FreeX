@@ -22,7 +22,7 @@ public sealed class HyperlinkDialog : Window
     private readonly Button _screenTipButton = new() { Content = UiText.Get("Hyperlink_ScreenTip") };
     private readonly Button _bookmarkButton = new() { Content = UiText.Get("Hyperlink_Bookmark") };
     private readonly Button _browseButton = new() { Content = UiText.Get("Hyperlink_Browse") };
-    private readonly Button _changePathButton = new() { Content = "Change..." };
+    private readonly Button _changePathButton = new() { Content = HyperlinkDialogPanePlanner.ChangePathButton };
     private readonly ListBox _linkTypes = new();
     private readonly ListBox _folderEntries = new();
     private readonly ListBox _documentPlaces = new();
@@ -308,7 +308,7 @@ public sealed class HyperlinkDialog : Window
             Padding = new Thickness(0),
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
         };
-        var upButton = new Button { Content = "↑", Width = 26, Margin = new Thickness(4, 0, 0, 0), ToolTip = "Up One Folder" };
+        var upButton = new Button { Content = HyperlinkDialogPanePlanner.UpOneFolderGlyph, Width = 26, Margin = new Thickness(4, 0, 0, 0), ToolTip = HyperlinkDialogPanePlanner.UpOneFolderToolTip };
         upButton.Click += (_, _) => NavigateUpFolder();
         AutomationProperties.SetAutomationId(upButton, "HyperlinkUpFolderButton");
         var folderRow = new DockPanel();
@@ -324,7 +324,7 @@ public sealed class HyperlinkDialog : Window
         // Excel's left-hand switcher inside this pane: Current Folder / Recent Files.
         var currentFolderContext = new ListBox
         {
-            ItemsSource = new[] { UiText.Get("Hyperlink_CurrentFolder"), "Recent Files" },
+            ItemsSource = new[] { UiText.Get("Hyperlink_CurrentFolder"), HyperlinkDialogPanePlanner.RecentFilesLabel },
             SelectedIndex = 0,
             Width = 92,
             Margin = new Thickness(0, 0, 6, 0),
@@ -367,7 +367,7 @@ public sealed class HyperlinkDialog : Window
 
     private void BuildPlacePane()
     {
-        var caption = new TextBlock { Text = "Or select a place in this document:", Margin = new Thickness(0, 0, 0, 4) };
+        var caption = new TextBlock { Text = HyperlinkDialogPanePlanner.SelectPlaceCaption, Margin = new Thickness(0, 0, 0, 4) };
         AutomationProperties.SetName(_documentPlaces, UiText.Get("Hyperlink_SelectPlaceInDocument"));
         AutomationProperties.SetAutomationId(_documentPlaces, "HyperlinkDocumentPlaces");
         _documentPlaces.SelectionChanged += (_, _) =>
@@ -387,7 +387,7 @@ public sealed class HyperlinkDialog : Window
     private void BuildNewDocumentPane()
     {
         var pathRow = CreateFieldRow(new Thickness(0));
-        pathRow.Children.Add(new TextBlock { Text = "Full path:", VerticalAlignment = System.Windows.VerticalAlignment.Top });
+        pathRow.Children.Add(new TextBlock { Text = HyperlinkDialogPanePlanner.FullPathLabel, VerticalAlignment = System.Windows.VerticalAlignment.Top });
         pathRow.Children.Add(_fullPathText);
         Grid.SetColumn(_fullPathText, 1);
         AutomationProperties.SetAutomationId(_fullPathText, "HyperlinkNewDocumentFullPath");
@@ -404,16 +404,16 @@ public sealed class HyperlinkDialog : Window
     private void BuildEmailPane()
     {
         var subjectRow = CreateFieldRow(new Thickness(0, 0, 0, 8));
-        var subjectLabel = new Label { Content = "_Subject:", Target = _subjectBox, Padding = new Thickness(0), VerticalAlignment = System.Windows.VerticalAlignment.Center };
+        var subjectLabel = new Label { Content = HyperlinkDialogPanePlanner.SubjectAccessLabel, Target = _subjectBox, Padding = new Thickness(0), VerticalAlignment = System.Windows.VerticalAlignment.Center };
         _subjectBox.Height = HyperlinkDialogPlanner.FieldHeight;
-        AutomationProperties.SetName(_subjectBox, "Subject");
+        AutomationProperties.SetName(_subjectBox, HyperlinkDialogPanePlanner.SubjectAutomationName);
         AutomationProperties.SetAutomationId(_subjectBox, "HyperlinkEmailSubjectTextBox");
         subjectRow.Children.Add(subjectLabel);
         subjectRow.Children.Add(_subjectBox);
         Grid.SetColumn(_subjectBox, 1);
 
-        var recentCaption = new TextBlock { Text = "Recently used e-mail addresses:", Margin = new Thickness(0, 0, 0, 4) };
-        AutomationProperties.SetName(_recentEmails, "Recently used e-mail addresses");
+        var recentCaption = new TextBlock { Text = HyperlinkDialogPanePlanner.RecentEmailCaption, Margin = new Thickness(0, 0, 0, 4) };
+        AutomationProperties.SetName(_recentEmails, HyperlinkDialogPanePlanner.RecentEmailAutomationName);
         AutomationProperties.SetAutomationId(_recentEmails, "HyperlinkRecentEmailAddresses");
         _recentEmails.SelectionChanged += (_, _) =>
         {
@@ -440,7 +440,7 @@ public sealed class HyperlinkDialog : Window
         _currentFolder = folder;
         _folderText.Text = folder;
         _folderEntries.ItemsSource = HyperlinkDialogPanePlanner.ListFolder(folder)
-            .Select(entry => new ListBoxItem { Content = (entry.IsFolder ? "📁 " : "    ") + entry.Name, Tag = entry })
+            .Select(entry => new ListBoxItem { Content = HyperlinkDialogPanePlanner.EntryText(entry), Tag = entry })
             .ToArray();
     }
 
@@ -451,7 +451,7 @@ public sealed class HyperlinkDialog : Window
             .Where(System.IO.File.Exists)
             .Select(path => new ListBoxItem
             {
-                Content = "    " + path,
+                Content = HyperlinkDialogPanePlanner.FileEntryPrefix + path,
                 Tag = new HyperlinkFolderEntry(System.IO.Path.GetFileName(path), path, IsFolder: false),
             })
             .ToArray();
@@ -574,7 +574,7 @@ public sealed class HyperlinkDialog : Window
     {
         var dialog = new Microsoft.Win32.OpenFolderDialog
         {
-            Title = "Create New Document",
+            Title = UiText.Get("Hyperlink_LinkTypeCreateNewDocument"),
             InitialDirectory = _newDocumentFolder,
         };
         if (dialog.ShowDialog(this) != true)

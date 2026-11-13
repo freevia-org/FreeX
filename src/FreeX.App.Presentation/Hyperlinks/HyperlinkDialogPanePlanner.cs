@@ -26,6 +26,25 @@ public static class HyperlinkDialogPanePlanner
     ];
 
     public const string DefaultCellReference = "A1";
+
+    // Pane captions that have no localized resource yet; renderers take them from here.
+    public const string RecentFilesLabel = "Recent Files";
+    public const string UpOneFolderToolTip = "Up One Folder";
+    public const string UpOneFolderGlyph = "↑";
+    public const string FolderEntryPrefix = "📁 ";
+    public const string FileEntryPrefix = "    ";
+    public const string SelectPlaceCaption = "Or select a place in this document:";
+    public const string FullPathLabel = "Full path:";
+    public const string ChangePathButton = "Change...";
+    public const string SubjectLabel = "Subject:";
+    public const string SubjectAccessLabel = "_Subject:";
+    public const string SubjectAutomationName = "Subject";
+    public const string RecentEmailCaption = "Recently used e-mail addresses:";
+    public const string RecentEmailAutomationName = "Recently used e-mail addresses";
+
+    /// <summary>The text a folder-list row shows for <paramref name="entry"/>.</summary>
+    public static string EntryText(HyperlinkFolderEntry entry) =>
+        (entry.IsFolder ? FolderEntryPrefix : FileEntryPrefix) + entry.Name;
     public const int MaxFolderEntries = 500;
 
     /// <summary>The "Look in" folder: the workbook's folder, else the user's Documents folder.</summary>
