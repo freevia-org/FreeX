@@ -35,7 +35,8 @@ public sealed class LinuxAppReadinessPreflightTests
         script.Should().Contain("packaging_smoke_status");
         script.Should().Contain("launch_smoke_status");
         script.Should().Contain("format_cells_style_roundtrip_count");
-        script.Should().Contain("Get-FileHash");
+        // Checksums go through the shared raw-byte SHA-256 helper (same digest as Get-FileHash).
+        script.Should().Contain("Get-ToolFileSha256");
         script.Should().Contain("tarball_sha256");
         script.Should().Contain("ConvertTo-Json");
         script.Should().Contain("linux-x64");
