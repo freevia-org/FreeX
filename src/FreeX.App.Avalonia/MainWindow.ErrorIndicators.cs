@@ -20,9 +20,7 @@ public partial class MainWindow
 
     private readonly BackgroundErrorIndicatorCache _errorIndicatorCache = new();
 
-    internal Button? ErrorSmartTagButtonForTest { get; private set; }
-
-    internal void RefreshShellForTest() => RefreshShell(UiText.Get("MainLoc_Ready"));
+    private Button? _errorSmartTagButton;
 
     private bool HasErrorIndicatorAt(CellAddress address) => GetErrorIndicatorCode(address) is not null;
 
@@ -31,7 +29,7 @@ public partial class MainWindow
 
     private void AddErrorSmartTagOverlay(Canvas overlay, ViewportModel viewport, bool showHeadings, double zoomFactor)
     {
-        ErrorSmartTagButtonForTest = null;
+        _errorSmartTagButton = null;
         if (GetErrorIndicatorCode(_session.ActiveCell) is not { } code ||
             !TryGetDisplayedCellBounds(viewport, _session.ActiveCell, showHeadings, zoomFactor, out var left, out var top, out var width, out _))
         {
@@ -47,7 +45,7 @@ public partial class MainWindow
         Canvas.SetLeft(button, buttonLeft);
         Canvas.SetTop(button, Math.Max(0, top));
         overlay.Children.Add(button);
-        ErrorSmartTagButtonForTest = button;
+        _errorSmartTagButton = button;
     }
 
     private Button CreateErrorSmartTagButton(string code)

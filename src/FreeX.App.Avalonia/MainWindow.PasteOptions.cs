@@ -20,11 +20,11 @@ public partial class MainWindow
     private bool _pasteOptionsKeysHooked;
     private bool _pasteOptionsCtrlAlone;
 
-    internal Button? PasteOptionsButtonForTest { get; private set; }
+    private Button? _pasteOptionsButton;
 
     private void AddPasteOptionsOverlay(Canvas overlay, ViewportModel viewport, bool showHeadings, double zoomFactor)
     {
-        PasteOptionsButtonForTest = null;
+        _pasteOptionsButton = null;
         if (_pasteOptionsTracker.Update(_session, _session.SelectedRange) is not { } range ||
             range.Start.Sheet != _session.ActiveSheet.Id ||
             !TryGetDisplayedCellBounds(viewport, range.End, showHeadings, zoomFactor, out var left, out var top, out var width, out var height))
@@ -36,7 +36,7 @@ public partial class MainWindow
         Canvas.SetLeft(button, left + width + 1);
         Canvas.SetTop(button, top + height + 1);
         overlay.Children.Add(button);
-        PasteOptionsButtonForTest = button;
+        _pasteOptionsButton = button;
         if (!_pasteOptionsKeysHooked)
         {
             _pasteOptionsKeysHooked = true;
@@ -49,13 +49,13 @@ public partial class MainWindow
     // dismisses the button.
     private void PasteOptions_KeyDown(object? sender, KeyEventArgs e)
     {
-        if (PasteOptionsButtonForTest is null)
+        if (_pasteOptionsButton is null)
             return;
 
         if (e.Key == Key.Escape)
         {
             _pasteOptionsTracker.Dismiss();
-            PasteOptionsButtonForTest.IsVisible = false;
+            _pasteOptionsButton.IsVisible = false;
             return;
         }
 
@@ -65,7 +65,7 @@ public partial class MainWindow
     private void PasteOptions_KeyUp(object? sender, KeyEventArgs e)
     {
         if (_pasteOptionsCtrlAlone && e.Key is Key.LeftCtrl or Key.RightCtrl &&
-            PasteOptionsButtonForTest is { IsVisible: true, Flyout: { } flyout } button)
+            _pasteOptionsButton is { IsVisible: true, Flyout: { } flyout } button)
         {
             flyout.ShowAt(button);
         }
