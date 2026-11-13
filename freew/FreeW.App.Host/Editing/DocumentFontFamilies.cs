@@ -29,8 +29,8 @@ internal static class DocumentFontFamilies
     private static readonly ConcurrentDictionary<string, FontFamily?> s_cloudFamilies = new(StringComparer.OrdinalIgnoreCase);
     private static readonly ConcurrentDictionary<string, string> s_modelNameBySource = new(StringComparer.Ordinal);
 
-    /// <summary>The Office cloud-font cache root; overridable so tests can point at a scratch folder.</summary>
-    internal static string? CloudFontRoot { get; set; } = DefaultCloudFontRoot();
+    /// <summary>The Office cloud-font cache root (per user).</summary>
+    private static readonly string? CloudFontRoot = DefaultCloudFontRoot();
 
     public static bool IsInstalled(string name) => s_installed.Value.Contains(name);
 
@@ -55,8 +55,6 @@ internal static class DocumentFontFamilies
 
     internal static FontFamily? TryGetCloudFamily(string name) =>
         s_cloudFamilies.GetOrAdd(name, static n => LoadCloudFamily(CloudFontRoot, n));
-
-    internal static void ResetCloudCacheForTests() => s_cloudFamilies.Clear();
 
     internal static FontFamily? LoadCloudFamily(string? root, string name)
     {
