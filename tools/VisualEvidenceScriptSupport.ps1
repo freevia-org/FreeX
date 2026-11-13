@@ -111,33 +111,15 @@ function Add-VisualEvidenceResultReferences {
 function Get-VisualEvidenceFileSha256 {
     param([Parameter(Mandatory = $true)][string]$Path)
 
-    $stream = [IO.File]::OpenRead($Path)
-    try {
-        $hasher = [Security.Cryptography.SHA256]::Create()
-        try {
-            return [BitConverter]::ToString($hasher.ComputeHash($stream)).Replace("-", "").ToLowerInvariant()
-        }
-        finally {
-            $hasher.Dispose()
-        }
-    }
-    finally {
-        $stream.Dispose()
-    }
+    return Get-ToolFileSha256 -Path $Path
 }
 
+# Thin alias over the shared implementation. -Lenient keeps the historical decoding (invalid UTF-8
+# becomes replacement characters rather than throwing) so committed evidence manifests stay valid.
 function Get-VisualEvidenceNormalizedTextSha256 {
     param([Parameter(Mandatory = $true)][string]$Path)
 
-    $content = [IO.File]::ReadAllText($Path).Replace("`r`n", "`n").Replace("`r", "`n")
-    $bytes = [Text.UTF8Encoding]::new($false).GetBytes($content)
-    $hasher = [Security.Cryptography.SHA256]::Create()
-    try {
-        return [BitConverter]::ToString($hasher.ComputeHash($bytes)).Replace("-", "").ToLowerInvariant()
-    }
-    finally {
-        $hasher.Dispose()
-    }
+    return Get-ToolNormalizedTextSha256 -Path $Path -Lenient
 }
 
 function Get-VisualEvidenceRelativePath {

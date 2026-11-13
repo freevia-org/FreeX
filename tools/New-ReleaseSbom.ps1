@@ -32,7 +32,7 @@ try {
     if (-not (Test-Path -LiteralPath $generated)) { throw "SBOM output missing: $generated" }
     Copy-Item -LiteralPath $generated -Destination $OutputPath -Force
     $outputName = Split-Path -Leaf $OutputPath
-    $hash = (Get-FileHash -LiteralPath $OutputPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $hash = (Get-ToolFileSha256 -Path $OutputPath)
     "$hash  $outputName" | Set-Content -LiteralPath "$OutputPath.sha256" -NoNewline -Encoding ascii
     Write-Host "Produced $OutputPath"
 }

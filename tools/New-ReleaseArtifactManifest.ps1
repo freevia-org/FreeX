@@ -31,7 +31,7 @@ function Find-One([string]$Name) {
     Find-ToolReleaseArtifact -InputRoot $InputRoot -Name $Name
 }
 
-function Hash([string]$Path) { (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() }
+function Hash([string]$Path) { (Get-ToolFileSha256 -Path $Path) }
 
 function Get-RepositoryRelativePath([string]$Path) {
     return ConvertTo-ToolRepoRelativePath -Path $Path -RepoRoot $RepositoryRoot

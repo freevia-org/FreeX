@@ -299,12 +299,20 @@ function Assert-ToolSourceCentralization {
             throw "VisualEvidenceScriptSupport.ps1 is missing required helper '$requiredHelper'."
         }
     }
+    # The portable SHA-256 implementation lives once in ToolScriptSupport.ps1; the visual-evidence
+    # helpers are thin aliases over it.
+    $toolScriptSupport = Get-Content -LiteralPath (Join-Path $ToolRoot "ToolScriptSupport.ps1") -Raw
     foreach ($requiredPortableHashCall in @(
-            "[IO.File]::OpenRead(`$Path)",
+            "[IO.File]::OpenRead(",
             "[Security.Cryptography.SHA256]::Create()",
             "ComputeHash(`$stream)")) {
-        if (-not $visualEvidenceSupport.Contains($requiredPortableHashCall)) {
-            throw "VisualEvidenceScriptSupport.ps1 must use portable SHA-256 file hashing via '$requiredPortableHashCall'."
+        if (-not $toolScriptSupport.Contains($requiredPortableHashCall)) {
+            throw "ToolScriptSupport.ps1 must use portable SHA-256 file hashing via '$requiredPortableHashCall'."
+        }
+    }
+    foreach ($requiredAlias in @("Get-ToolFileSha256 -Path `$Path", "Get-ToolNormalizedTextSha256 -Path `$Path -Lenient")) {
+        if (-not $visualEvidenceSupport.Contains($requiredAlias)) {
+            throw "VisualEvidenceScriptSupport.ps1 must delegate hashing to the shared helper via '$requiredAlias'."
         }
     }
     if ($visualEvidenceSupport.Contains("Get-FileHash")) {
@@ -511,6 +519,29 @@ function Assert-ToolSourceCentralization {
         [System.IO.File]::WriteAllText($crlfPath, "alpha`r`nbeta`r`n", $utf8)
         if ((Get-ToolNormalizedTextSha256 -Path $lfPath) -cne (Get-ToolNormalizedTextSha256 -Path $crlfPath)) {
             throw "Get-ToolNormalizedTextSha256 must produce identical hashes for LF and CRLF source text."
+        }
+        if ((Get-VisualEvidenceNormalizedTextSha256 -Path $crlfPath) -cne (Get-ToolNormalizedTextSha256 -Path $lfPath)) {
+            throw "Get-VisualEvidenceNormalizedTextSha256 must stay an alias of Get-ToolNormalizedTextSha256 for valid UTF-8."
+        }
+        $rawFileHash = Get-ToolFileSha256 -Path $lfPath
+        # SHA256.HashData is .NET 5+; this self-test also runs under Windows PowerShell 5.1.
+        $sha256 = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            $expectedRawHash = [BitConverter]::ToString($sha256.ComputeHash([System.IO.File]::ReadAllBytes($lfPath))).Replace("-", "").ToLowerInvariant()
+        }
+        finally {
+            $sha256.Dispose()
+        }
+        if ($rawFileHash -cne $expectedRawHash -or (Get-VisualEvidenceFileSha256 -Path $lfPath) -cne $expectedRawHash) {
+            throw "Get-ToolFileSha256 and Get-VisualEvidenceFileSha256 must return lowercase hex SHA-256 of the raw file bytes."
+        }
+        # Invalid UTF-8: strict throws, -Lenient (the visual-evidence alias) hashes the replacement-character text.
+        $badUtf8Path = Join-Path $textHashTempRoot "invalid-utf8.txt"
+        [System.IO.File]::WriteAllBytes($badUtf8Path, [byte[]](0x61, 0xFF, 0x62))
+        $strictRejected = $false
+        try { [void](Get-ToolNormalizedTextSha256 -Path $badUtf8Path) } catch { $strictRejected = $true }
+        if (-not $strictRejected -or [string]::IsNullOrEmpty((Get-VisualEvidenceNormalizedTextSha256 -Path $badUtf8Path))) {
+            throw "Get-ToolNormalizedTextSha256 must reject invalid UTF-8 while the visual-evidence alias stays lenient."
         }
     }
     finally {

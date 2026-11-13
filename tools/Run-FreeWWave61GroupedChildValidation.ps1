@@ -6,12 +6,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 . (Join-Path $PSScriptRoot "PhysicalValidationScriptSupport.ps1")
-$resolvedOutput = if ([IO.Path]::IsPathRooted($OutputDir)) {
-    [IO.Path]::GetFullPath($OutputDir)
-} else {
-    [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
-}
+$resolvedOutput = Resolve-ToolRepoPath -Path $OutputDir -RepoRoot $repoRoot
+$powerShellPath = Get-ToolPowerShellPath
 $fixtureProject = Join-Path $repoRoot "freew/tools/FreeW.GroupChildPhysicalFixture/FreeW.GroupChildPhysicalFixture.csproj"
 $fixturePath = Join-Path $resolvedOutput "group-child-wave61.docx"
 $probePath = Join-Path $repoRoot "tools/LinuxInteractiveDocker/run-freew-wave61-group-child-probe.sh"
@@ -25,7 +23,7 @@ try {
         Out-File -LiteralPath (Join-Path $resolvedOutput "fixture-generation.txt") -Encoding utf8
     $before = Read-PhysicalValidationFixtureValues -ProjectPath $fixtureProject -Action "inspect" -ArtifactPath $fixturePath
 
-    & powershell -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") `
+    & $powerShellPath -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") `
         -Action Start -App FreeW -Port $Port -OutputDir $resolvedOutput -DocumentPath $fixturePath `
         -Replace
     $started = $true
@@ -92,6 +90,12 @@ try {
     Write-Host "Wave 61 physical validation passed. Manifest: $(Join-Path $resolvedOutput 'freew-wave61-group-child-validation.json')"
 } finally {
     if ($started) {
-        & powershell -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Stop -App FreeW -Port $Port
+        # A failed container stop must not mask the real validation error in flight.
+        try {
+            & $powerShellPath -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Stop -App FreeW -Port $Port
+            if ($LASTEXITCODE -ne 0) { throw "exit code $LASTEXITCODE" }
+        } catch {
+            Write-Warning "Could not stop harness-owned FreeW container on port ${Port}: $($_.Exception.Message)"
+        }
     }
 }

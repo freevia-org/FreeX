@@ -8,6 +8,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function Resolve-RepoPath([string]$path) {
     return [IO.Path]::GetFullPath((Join-Path $repoRoot $path))
@@ -50,7 +51,7 @@ if ($StrictImprovementContractProbe) {
 }
 
 function Get-FileSha256([string]$path) {
-    return (Get-FileHash -Algorithm SHA256 -LiteralPath (Resolve-RepoPath $path)).Hash.ToLowerInvariant()
+    return Get-ToolFileSha256 -Path (Resolve-RepoPath $path)
 }
 
 function Get-NormalizedTextSha256([string]$text) {

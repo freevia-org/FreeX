@@ -18,9 +18,7 @@ function Assert-True {
         [Parameter(Mandatory = $true)][string]$Message
     )
 
-    if (-not $Condition) {
-        Add-ValidationError $Message
-    }
+    Assert-ToolValidationCondition -Errors $validationErrors -Condition $Condition -Message $Message -GitHubTitle "Linux app readiness"
 }
 
 function Get-RepoFile {

@@ -26,11 +26,7 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
-$resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
-    [IO.Path]::GetFullPath($OutputDir)
-} else {
-    [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
-}
+$resolvedOutputRoot = Resolve-ToolRepoPath -Path $OutputDir -RepoRoot $repoRoot
 $fixtureProject = Join-Path $repoRoot "freew/tools/FreeW.FieldShortcutFixture/FreeW.FieldShortcutFixture.csproj"
 $fixturePath = Join-Path $resolvedOutputRoot "fixture/field-shortcut-fixture.docx"
 $fixtureFileName = Split-Path -Leaf $fixturePath

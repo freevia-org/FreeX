@@ -141,7 +141,7 @@ try {
 
     $sourceBefore = Join-Path $evidenceDirectory "fixture-source-before.sha256.txt"
     $sourceAfter = Join-Path $evidenceDirectory "fixture-source-after.sha256.txt"
-    (Get-FileHash -LiteralPath $fixturePath -Algorithm SHA256).Hash.ToLowerInvariant() |
+    (Get-ToolFileSha256 -Path $fixturePath) |
         Set-Content -LiteralPath $sourceBefore -Encoding ascii
 
     $dockerArguments = @(
@@ -169,12 +169,12 @@ try {
             Set-Content -LiteralPath $probeLog -Encoding utf8
     }
 
-    (Get-FileHash -LiteralPath $fixturePath -Algorithm SHA256).Hash.ToLowerInvariant() |
+    (Get-ToolFileSha256 -Path $fixturePath) |
         Set-Content -LiteralPath $sourceAfter -Encoding ascii
     $mountedDocument = Join-Path $resolvedOutputRoot "freep/documents/$fixtureFileName"
     $mountedAfter = Join-Path $evidenceDirectory "fixture-host-mounted-after.sha256.txt"
     if (Test-Path -LiteralPath $mountedDocument -PathType Leaf) {
-        (Get-FileHash -LiteralPath $mountedDocument -Algorithm SHA256).Hash.ToLowerInvariant() |
+        (Get-ToolFileSha256 -Path $mountedDocument) |
             Set-Content -LiteralPath $mountedAfter -Encoding ascii
     } else {
         "MISSING mounted document: $mountedDocument" | Set-Content -LiteralPath $mountedAfter -Encoding utf8

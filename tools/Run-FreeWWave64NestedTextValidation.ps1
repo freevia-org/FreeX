@@ -8,8 +8,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 . (Join-Path $PSScriptRoot "PhysicalValidationScriptSupport.ps1")
-$resolvedOutput = if ([IO.Path]::IsPathRooted($OutputDir)) { [IO.Path]::GetFullPath($OutputDir) } else { [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir)) }
+$resolvedOutput = Resolve-ToolRepoPath -Path $OutputDir -RepoRoot $repoRoot
+$powerShellPath = Get-ToolPowerShellPath
 $fixtureProject = Join-Path $repoRoot "freew/tools/FreeW.GroupChildPhysicalFixture/FreeW.GroupChildPhysicalFixture.csproj"
 $fixturePath = Join-Path $resolvedOutput "nested-text-wave64.docx"
 $savedDocumentPath = Join-Path $resolvedOutput "freew/documents/nested-text-wave64.docx"
@@ -31,7 +33,7 @@ try {
     if ($before['child-text-direction'] -ne 'Horizontal') { throw "Unexpected fixture text direction: '$($before['child-text-direction'])'." }
     if ($before['child-text-alignment'] -ne 'Left') { throw "Unexpected fixture text alignment: '$($before['child-text-alignment'])'." }
 
-    & powershell -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Start -App FreeW -Port $Port -OutputDir $resolvedOutput -DocumentPath $fixturePath -Replace
+    & $powerShellPath -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Start -App FreeW -Port $Port -OutputDir $resolvedOutput -DocumentPath $fixturePath -Replace
     $started = $true
     $session = Get-Content $sessionPath -Raw | ConvertFrom-Json
     $sessionDir = [string]$session.sessionDirectory
@@ -52,11 +54,11 @@ try {
     if ($after['outer-transform'] -ne $before['outer-transform'] -or $after['inner-transform'] -ne $before['inner-transform']) { throw "Nested group transforms changed during text editing." }
     if ($after['child-transform'] -ne $before['child-transform']) { throw "Nested leaf transform changed during text alignment." }
 
-    & powershell -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Stop -App FreeW -Port $Port
+    & $powerShellPath -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Stop -App FreeW -Port $Port
     $started = $false
     New-Item -ItemType Directory -Path (Split-Path -Parent $reopenSourcePath) -Force | Out-Null
     Copy-Item -LiteralPath $savedDocumentPath -Destination $reopenSourcePath -Force
-    & powershell -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Start -App FreeW -Port $Port -OutputDir $resolvedOutput -DocumentPath $reopenSourcePath -Replace
+    & $powerShellPath -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Start -App FreeW -Port $Port -OutputDir $resolvedOutput -DocumentPath $reopenSourcePath -Replace
     $started = $true
     $session = Get-Content $sessionPath -Raw | ConvertFrom-Json
     $reopenSessionDir = [string]$session.sessionDirectory
@@ -128,5 +130,13 @@ try {
     Write-Host "Nested text physical validation passed. Manifest: $manifestPath"
 }
 finally {
-    if ($started) { & powershell -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Stop -App FreeW -Port $Port }
+    # A failed container stop must not mask the real validation error in flight.
+    if ($started) {
+        try {
+            & $powerShellPath -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Stop -App FreeW -Port $Port
+            if ($LASTEXITCODE -ne 0) { throw "exit code $LASTEXITCODE" }
+        } catch {
+            Write-Warning "Could not stop harness-owned FreeW container on port ${Port}: $($_.Exception.Message)"
+        }
+    }
 }
