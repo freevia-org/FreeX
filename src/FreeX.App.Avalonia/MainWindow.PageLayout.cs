@@ -1033,6 +1033,8 @@ public sealed partial class MainWindow
             "PageSetup_OverThenDown", "PageSetupPageOrder", surface.ChoiceIndexes.PageOrder == 1,
             PageSetupDialogPlanner.OverThenDownRadioAutomationId);
         overThenDownRadio.Margin = new Thickness(0, 4, 0, 0);
+        downThenOverRadio.Height = overThenDownRadio.Height = PageSetupCheckBoxHeight;
+        downThenOverRadio.MinHeight = overThenDownRadio.MinHeight = PageSetupCheckBoxHeight;
         var pageOrderPanel = new StackPanel { Children = { downThenOverRadio, overThenDownRadio } };
         AutomationProperties.SetAutomationId(pageOrderPanel, PageSetupDialogPlanner.PageOrderBoxAutomationId);
 
@@ -1428,7 +1430,9 @@ public sealed partial class MainWindow
                 PageSetupFieldRowHeight + 8,
                 PageSetupCheckBoxHeight + 8,
                 PageSetupCheckBoxHeight + 8,
-                PageSetupFieldRowHeight,
+                // Two stacked radios (15 + 4 + 15): WPF sizes this Auto row from its StackPanel, so a
+                // 22px row would let "Over, then down" run into the Black and white check below.
+                PageSetupCheckBoxHeight + 4 + PageSetupCheckBoxHeight,
                 8 + PageSetupCheckBoxHeight + 8,
                 PageSetupCheckBoxHeight,
                 8 + PageSetupFieldRowHeight,
@@ -1488,6 +1492,8 @@ public sealed partial class MainWindow
         AddSheetValue(3, gridlinesCheck, margin: new Thickness(0, 0, 0, 8));
         AddSheetValue(4, headingsCheck, margin: new Thickness(0, 0, 0, 8));
         AddSheetLabel(5, UiText.Get("PageSetup_PageOrder"), new Thickness(0, 0, 8, 0));
+        // PageSetupDialog.xaml: the Page order label is VerticalAlignment=Top beside its two radios.
+        sheetGrid.Children[^1].VerticalAlignment = AvaloniaVerticalAlignment.Top;
         AddSheetValue(5, pageOrderPanel, margin: new Thickness(0));
         AddSheetValue(6, blackAndWhiteCheck, margin: new Thickness(0, 8, 0, 8));
         AddSheetValue(7, draftQualityCheck, margin: new Thickness(0));
