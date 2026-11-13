@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using FreeP.App.Compositor;
+using FreeP.Core.Model;
 using Free.Shared.Ribbon;
 
 namespace FreeP.App.Host;
@@ -11,48 +12,33 @@ namespace FreeP.App.Host;
 /// <summary>
 /// Native WPF presentation for PowerPoint's common animation strip. The complete catalog is read
 /// from the shared ribbon definition and remains available from the categorized More Effects menu.
+/// Favourites, categorisation and geometry are planned by <see cref="AnimationGalleryPlanner"/>.
 /// </summary>
 internal static class PresentationAnimationGallery
 {
-    private static readonly string[] FavoriteCommandIds =
-    [
-        "freep.anim.none",
-        "freep.anim.entrance.appear",
-        "freep.anim.entrance.fade",
-        "freep.anim.entrance.fly-in",
-        "freep.anim.entrance.wipe",
-        "freep.anim.entrance.zoom",
-    ];
-
     public static FrameworkElement Build(
         RibbonTab tab,
         IRibbonCommandRegistry registry,
         IRibbonStateStore stateStore,
         RibbonAdaptiveGroupState state = RibbonAdaptiveGroupState.Full)
     {
-        var controls = tab.FindGroup("animation-effects")?.Controls
-            .Where(control => !string.IsNullOrEmpty(control.CommandId.Value))
-            .ToArray()
-            ?? Array.Empty<RibbonControl>();
+        var plan = AnimationGalleryPlanner.Plan(tab, state);
 
         var strip = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(2, 1, 2, 0),
+            Margin = new Thickness(
+                FreePRibbonGalleryMetrics.StripMarginSide,
+                FreePRibbonGalleryMetrics.StripMarginTop,
+                FreePRibbonGalleryMetrics.StripMarginSide,
+                0),
         };
 
-        var favoriteCommandIds = state == RibbonAdaptiveGroupState.SmallWithLabels
-            ? FavoriteCommandIds.Take(3)
-            : FavoriteCommandIds.AsEnumerable();
-        foreach (var commandId in favoriteCommandIds)
-        {
-            var control = controls.FirstOrDefault(candidate => candidate.CommandId.Value == commandId);
-            if (control is not null)
-                strip.Children.Add(BuildFavoriteButton(control, registry, stateStore));
-        }
+        foreach (var control in plan.Favorites)
+            strip.Children.Add(BuildFavoriteButton(control, registry, stateStore));
 
-        strip.Children.Add(BuildMoreButton(controls, registry, stateStore));
+        strip.Children.Add(BuildMoreButton(plan, registry, stateStore));
         return strip;
     }
 
@@ -61,7 +47,11 @@ internal static class PresentationAnimationGallery
         IRibbonCommandRegistry registry,
         IRibbonStateStore stateStore)
     {
-        var content = new Grid { Width = 55, Height = 51 };
+        var content = new Grid
+        {
+            Width = FreePRibbonGalleryMetrics.AnimationButtonWidth,
+            Height = FreePRibbonGalleryMetrics.AnimationButtonHeight,
+        };
         content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         content.Children.Add(BuildPreview(control.CommandId.Value));
@@ -69,10 +59,14 @@ internal static class PresentationAnimationGallery
         var caption = new TextBlock
         {
             Text = control.Label,
-            FontSize = 9,
+            FontSize = FreePRibbonGalleryMetrics.CaptionFontSize,
             TextTrimming = TextTrimming.CharacterEllipsis,
             TextAlignment = TextAlignment.Center,
-            Margin = new Thickness(1, 1, 1, 0),
+            Margin = new Thickness(
+                FreePRibbonGalleryMetrics.CaptionMarginSide,
+                FreePRibbonGalleryMetrics.CaptionMarginTop,
+                FreePRibbonGalleryMetrics.CaptionMarginSide,
+                0),
         };
         Grid.SetRow(caption, 1);
         content.Children.Add(caption);
@@ -83,32 +77,32 @@ internal static class PresentationAnimationGallery
             Background = Brushes.Transparent,
             BorderBrush = Brushes.Transparent,
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(1),
-            Margin = new Thickness(1, 0, 1, 0),
+            Padding = new Thickness(FreePRibbonGalleryMetrics.ButtonPadding),
+            Margin = new Thickness(FreePRibbonGalleryMetrics.ButtonSideMargin, 0, FreePRibbonGalleryMetrics.ButtonSideMargin, 0),
             ToolTip = control.Label,
         };
         AutomationProperties.SetName(button, control.Label);
         BindState(button, control.CommandId, stateStore);
         button.MouseEnter += (_, _) =>
         {
-            button.Background = new SolidColorBrush(Color.FromRgb(0xEA, 0xF1, 0xFB));
-            button.BorderBrush = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x9A));
+            button.Background = Brush(FreePRibbonGalleryMetrics.HoverBackground);
+            button.BorderBrush = Brush(FreePRibbonGalleryMetrics.HoverBorder);
         };
         button.MouseLeave += (_, _) =>
         {
             button.Background = Brushes.Transparent;
             button.BorderBrush = Brushes.Transparent;
         };
-        button.Click += (_, _) => Execute(control.CommandId, registry);
+        button.Click += (_, _) => FreePRibbonGalleryCommands.Execute(registry, control.CommandId);
         return button;
     }
 
     private static FrameworkElement BuildMoreButton(
-        IReadOnlyList<RibbonControl> controls,
+        AnimationGalleryPlan plan,
         IRibbonCommandRegistry registry,
         IRibbonStateStore stateStore)
     {
-        var moreEffectsLabel = UiText.Get("Ribbon_Command_AnimationMoreEffects_Label");
+        var moreEffectsLabel = UiText.Get(AnimationGalleryPlanner.MoreEffectsLabelKey);
         var button = new Button
         {
             Content = new TextBlock
@@ -116,15 +110,15 @@ internal static class PresentationAnimationGallery
                 Text = moreEffectsLabel + " ▾",
                 TextAlignment = TextAlignment.Center,
                 TextWrapping = TextWrapping.Wrap,
-                FontSize = 10,
+                FontSize = FreePRibbonGalleryMetrics.AnimationMoreFontSize,
             },
-            Width = 62,
-            Height = 50,
-            Margin = new Thickness(2, 0, 1, 0),
+            Width = FreePRibbonGalleryMetrics.AnimationMoreWidth,
+            Height = FreePRibbonGalleryMetrics.AnimationMoreHeight,
+            Margin = new Thickness(FreePRibbonGalleryMetrics.AnimationMoreLeftMargin, 0, FreePRibbonGalleryMetrics.AnimationMoreRightMargin, 0),
             ToolTip = moreEffectsLabel,
         };
         AutomationProperties.SetName(button, moreEffectsLabel);
-        var menu = BuildMoreMenu(controls, registry, stateStore);
+        var menu = BuildMoreMenu(plan, registry, stateStore);
         button.Click += (_, _) =>
         {
             menu.PlacementTarget = button;
@@ -135,56 +129,46 @@ internal static class PresentationAnimationGallery
     }
 
     private static ContextMenu BuildMoreMenu(
-        IReadOnlyList<RibbonControl> controls,
+        AnimationGalleryPlan plan,
         IRibbonCommandRegistry registry,
         IRibbonStateStore stateStore)
     {
         var menu = new ContextMenu();
-        AddCategory(menu, UiText.Get("Ribbon_Category_AnimationEntrance_Label"), controls, ".entrance.", registry, stateStore);
-        AddCategory(menu, UiText.Get("Ribbon_Category_AnimationEmphasis_Label"), controls, ".emphasis.", registry, stateStore);
-        AddCategory(menu, UiText.Get("Ribbon_Category_AnimationExit_Label"), controls, ".exit.", registry, stateStore);
-        return menu;
-    }
-
-    private static void AddCategory(
-        ItemsControl menu,
-        string header,
-        IEnumerable<RibbonControl> controls,
-        string commandMarker,
-        IRibbonCommandRegistry registry,
-        IRibbonStateStore stateStore)
-    {
-        var category = new MenuItem { Header = header };
-        foreach (var control in controls.Where(control => control.CommandId.Value.Contains(commandMarker, StringComparison.Ordinal)))
+        foreach (var categoryPlan in plan.Categories)
         {
-            var item = new MenuItem { Header = control.Label };
-            AutomationProperties.SetName(item, control.Label);
-            BindState(item, control.CommandId, stateStore);
-            item.Click += (_, _) => Execute(control.CommandId, registry);
-            category.Items.Add(item);
+            var category = new MenuItem { Header = UiText.Get(categoryPlan.HeaderKey) };
+            foreach (var control in categoryPlan.Controls)
+            {
+                var item = new MenuItem { Header = control.Label };
+                AutomationProperties.SetName(item, control.Label);
+                BindState(item, control.CommandId, stateStore);
+                item.Click += (_, _) => FreePRibbonGalleryCommands.Execute(registry, control.CommandId);
+                category.Items.Add(item);
+            }
+
+            if (category.Items.Count > 0)
+                menu.Items.Add(category);
         }
 
-        if (category.Items.Count > 0)
-            menu.Items.Add(category);
+        return menu;
     }
 
     private static FrameworkElement BuildPreview(string commandId)
     {
         var border = new Border
         {
-            Width = 50,
-            Height = 30,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xA6, 0xA6, 0xA6)),
+            Width = FreePRibbonGalleryMetrics.AnimationPreviewWidth,
+            Height = FreePRibbonGalleryMetrics.AnimationPreviewHeight,
+            BorderBrush = Brush(FreePRibbonGalleryMetrics.AnimationPreviewBorder),
             BorderThickness = new Thickness(1),
             Background = Brushes.White,
         };
-        var mark = PresentationAnimationPreviewCatalog.GlyphFor(commandId);
         border.Child = new TextBlock
         {
-            Text = mark,
-            FontSize = PresentationAnimationPreviewCatalog.IsNone(commandId) ? 24 : 25,
-            FontFamily = new FontFamily("Segoe UI Symbol"),
-            Foreground = new SolidColorBrush(Color.FromRgb(0x8C, 0x8C, 0x8C)),
+            Text = PresentationAnimationPreviewCatalog.GlyphFor(commandId),
+            FontSize = FreePRibbonGalleryMetrics.AnimationGlyphSizeFor(commandId),
+            FontFamily = new FontFamily(FreePRibbonGalleryMetrics.AnimationGlyphFontFamily),
+            Foreground = Brush(FreePRibbonGalleryMetrics.AnimationGlyphColor),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -204,9 +188,5 @@ internal static class PresentationAnimationGallery
         element.Unloaded += (_, _) => stateStore.StateChanged -= handler;
     }
 
-    private static void Execute(RibbonCommandId commandId, IRibbonCommandRegistry registry)
-    {
-        if (registry.TryGet(commandId, out var command) && command is not null)
-            command.Execute(RibbonCommandContext.Empty);
-    }
+    private static SolidColorBrush Brush(SrgbColor color) => new(Color.FromRgb(color.R, color.G, color.B));
 }

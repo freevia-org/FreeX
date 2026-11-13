@@ -1,10 +1,14 @@
-using System.IO.Compression;
 using Free.Shared.AppServices;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.IO;
 
 namespace FreeW.App.Presentation.Tests;
 
+/// <summary>
+/// FreeW's binding of the shared autosave session: the 30 s cadence, the DOCX serializer pair, and
+/// the FreeW recovery profile. Lifecycle, planning, and recovery-completion behaviour is tested once
+/// in <c>Free.Shared.AppServices.Tests.AutosaveApplicationProfileTests</c>.
+/// </summary>
 public sealed class FreeWAutosaveSessionTests : IDisposable
 {
     private readonly TestTemporaryDirectory _temporaryDirectory = new(nameof(FreeWAutosaveSessionTests));
@@ -16,13 +20,26 @@ public sealed class FreeWAutosaveSessionTests : IDisposable
     }
 
     [Fact]
-    public void Snapshot_UsesPortableSourcePortsAndGenerationGate()
+    public void Profile_CarriesFreeWProductTextAndDocxSerializers()
+    {
+        var text = FreeWAutosaveProfile.Recovery.ResolveText();
+
+        FreeWAutosaveProfile.Recovery.PromptText.Should().Be(
+            new AutosaveRecoveryPromptText("FreeW", "documents"));
+        FreeWAutosaveProfile.Recovery.UnnamedItemFallback.Should().Be("a document");
+        text.Title.Should().Be("FreeW - Recover");
+        text.NoDocumentsMessage.Should().Be("No unsaved documents were found.");
+        FreeWAutosaveProfile.Session.Recovery.Should().BeSameAs(FreeWAutosaveProfile.Recovery);
+    }
+
+    [Fact]
+    public void Snapshot_WritesAReadableDocxThroughThePortableSourcePorts()
     {
         var generation = 4;
         var writes = 0;
         var store = CreateStore();
         using var session = new FreeWAutosaveSession(
-            new FreeWAutosavePorts(
+            new AutosaveDocumentPorts<TextDocument>(
                 GetOriginalFilePath: () => "C:\\Docs\\Draft.docx",
                 GetDisplayName: () => "Draft.docx",
                 GetIsDirty: () => true,
@@ -39,6 +56,7 @@ public sealed class FreeWAutosaveSessionTests : IDisposable
         session.Snapshot();
 
         writes.Should().Be(1);
+        DocxReader.Read(store.GetSnapshotPath("current-session")).Should().NotBeNull();
         var sidecar = AutosaveSnapshotStore.TryDeserializeSidecar(
             File.ReadAllText(store.GetSidecarPath("current-session")));
         sidecar.Should().NotBeNull();
@@ -48,116 +66,6 @@ public sealed class FreeWAutosaveSessionTests : IDisposable
         generation++;
         session.Snapshot();
         writes.Should().Be(2);
-    }
-
-    [Fact]
-    public void PlanAndCompleteRecovery_RestoresLatestAndDeletesOnlyOfferedCandidate()
-    {
-        var store = CreateStore();
-        var older = CreateCandidate(store, "older", "2026-08-10T08:00:00Z", "Older");
-        var newer = CreateCandidate(store, "newer", "2026-08-10T09:00:00Z", "Newer", "C:\\Docs\\Newer.docx");
-        using var session = CreateSession(store);
-        string? restoredPath = null;
-        string? restoredOriginalPath = null;
-
-        var plan = session.PlanLatestRecovery();
-        var recovered = session.CompleteRecovery(
-            plan!,
-            accepted: true,
-            restoreSnapshot: (path, originalPath) =>
-            {
-                restoredPath = path;
-                restoredOriginalPath = originalPath;
-                return true;
-            });
-
-        recovered.Should().BeTrue();
-        plan!.Candidate.SnapshotPath.Should().Be(newer.SnapshotPath);
-        restoredPath.Should().Be(newer.SnapshotPath);
-        restoredOriginalPath.Should().Be("C:\\Docs\\Newer.docx");
-        File.Exists(newer.SnapshotPath).Should().BeFalse();
-        File.Exists(newer.SidecarPath).Should().BeFalse();
-        File.Exists(older.SnapshotPath).Should().BeTrue();
-        File.Exists(older.SidecarPath).Should().BeTrue();
-    }
-
-    [Fact]
-    public void CompleteRecovery_DeclineKeepsCandidateAndSkipsRestore()
-    {
-        var store = CreateStore();
-        var candidate = CreateCandidate(store, "declined", "2026-08-10T09:00:00Z", "Draft");
-        using var session = CreateSession(store);
-        var restoreCalled = false;
-
-        var recovered = session.CompleteRecovery(
-            session.PlanLatestRecovery()!,
-            accepted: false,
-            restoreSnapshot: (_, _) =>
-            {
-                restoreCalled = true;
-                return true;
-            });
-
-        recovered.Should().BeFalse();
-        restoreCalled.Should().BeFalse();
-        File.Exists(candidate.SnapshotPath).Should().BeTrue();
-        File.Exists(candidate.SidecarPath).Should().BeTrue();
-    }
-
-    [Fact]
-    public void CompleteRecovery_FailedRestoreQuarantinesCandidate()
-    {
-        var store = CreateStore();
-        var candidate = CreateCandidate(store, "failed", "2026-08-10T09:00:00Z", "Draft");
-        using var session = CreateSession(store);
-
-        var recovered = session.CompleteRecovery(
-            session.PlanLatestRecovery()!,
-            accepted: true,
-            restoreSnapshot: (_, _) => false);
-
-        recovered.Should().BeFalse();
-        File.Exists(candidate.SnapshotPath).Should().BeFalse();
-        File.Exists(candidate.SidecarPath).Should().BeFalse();
-        Directory.GetFiles(Path.Combine(_temporaryDirectory.Path, "Quarantine"))
-            .Should().HaveCount(2);
-    }
-
-    [Fact]
-    public void CompleteRecovery_DefaultExceptionPolicyPropagatesAndKeepsCandidate()
-    {
-        var store = CreateStore();
-        var candidate = CreateCandidate(store, "preserved", "2026-08-10T09:00:00Z", "Draft");
-        using var session = CreateSession(store);
-
-        Action act = () => session.CompleteRecovery(
-            session.PlanLatestRecovery()!,
-            accepted: true,
-            restoreSnapshot: (_, _) => throw new InvalidOperationException("restore failed"));
-
-        act.Should().Throw<InvalidOperationException>();
-        File.Exists(candidate.SnapshotPath).Should().BeTrue();
-        File.Exists(candidate.SidecarPath).Should().BeTrue();
-    }
-
-    [Fact]
-    public void CompleteRecovery_QuarantineExceptionPolicyMovesCandidateAside()
-    {
-        var store = CreateStore();
-        var candidate = CreateCandidate(store, "quarantined", "2026-08-10T09:00:00Z", "Draft");
-        using var session = CreateSession(store);
-
-        var recovered = session.CompleteRecovery(
-            session.PlanLatestRecovery()!,
-            accepted: true,
-            restoreSnapshot: (_, _) => throw new InvalidOperationException("restore failed"),
-            exceptionPolicy: FreeWRecoveryRestoreExceptionPolicy.QuarantineCandidate);
-
-        recovered.Should().BeFalse();
-        File.Exists(candidate.SnapshotPath).Should().BeFalse();
-        File.Exists(candidate.SidecarPath).Should().BeFalse();
-        Directory.GetFiles(Path.Combine(_temporaryDirectory.Path, "Quarantine"))
-            .Should().HaveCount(2);
     }
 
     [Fact]
@@ -189,34 +97,13 @@ public sealed class FreeWAutosaveSessionTests : IDisposable
         File.Exists(candidate.SidecarPath).Should().BeFalse();
     }
 
-    [Fact]
-    public void CompleteCleanExit_DeletesCurrentSessionSnapshot()
-    {
-        var store = CreateStore();
-        using var session = new FreeWAutosaveSession(
-            new FreeWAutosavePorts(
-                GetOriginalFilePath: () => null,
-                GetDisplayName: () => "Draft",
-                GetIsDirty: () => true,
-                GetDirtyGeneration: () => 1,
-                ExecuteWithDocument: writeDocument => writeDocument(TextDocument.CreateEmpty())),
-            store,
-            "current-session");
-        session.Snapshot();
-
-        session.CompleteCleanExit();
-
-        File.Exists(store.GetSnapshotPath("current-session")).Should().BeFalse();
-        File.Exists(store.GetSidecarPath("current-session")).Should().BeFalse();
-    }
-
     public void Dispose() => _temporaryDirectory.Dispose();
 
     private AutosaveSnapshotStore CreateStore() => new(_temporaryDirectory.Path);
 
     private static FreeWAutosaveSession CreateSession(AutosaveSnapshotStore store) =>
         new(
-            new FreeWAutosavePorts(
+            new AutosaveDocumentPorts<TextDocument>(
                 GetOriginalFilePath: () => null,
                 GetDisplayName: () => "Current",
                 GetIsDirty: () => false,
@@ -224,29 +111,6 @@ public sealed class FreeWAutosaveSessionTests : IDisposable
                 ExecuteWithDocument: writeDocument => writeDocument(TextDocument.CreateEmpty())),
             store,
             "current-session");
-
-    private static AutosaveRecoveryCandidate CreateCandidate(
-        AutosaveSnapshotStore store,
-        string snapshotId,
-        string timestampUtc,
-        string displayName,
-        string? originalPath = null)
-    {
-        var snapshotPath = store.GetSnapshotPath(snapshotId);
-        WriteValidSnapshot(snapshotPath);
-
-        var sidecarPath = store.GetSidecarPath(snapshotId);
-        var sidecar = new AutosaveSidecar
-        {
-            DisplayName = displayName,
-            OriginalFilePath = originalPath,
-            SnapshotId = snapshotId,
-            TimestampUtc = timestampUtc
-        };
-        File.WriteAllText(sidecarPath, AutosaveSnapshotStore.SerializeSidecar(sidecar));
-
-        return new AutosaveRecoveryCandidate(snapshotPath, sidecarPath, sidecar);
-    }
 
     private static AutosaveRecoveryCandidate CreateDocumentCandidate(
         AutosaveSnapshotStore store,
@@ -268,11 +132,5 @@ public sealed class FreeWAutosaveSessionTests : IDisposable
         File.WriteAllText(sidecarPath, AutosaveSnapshotStore.SerializeSidecar(sidecar));
 
         return new AutosaveRecoveryCandidate(snapshotPath, sidecarPath, sidecar);
-    }
-
-    private static void WriteValidSnapshot(string path)
-    {
-        using var archive = ZipFile.Open(path, ZipArchiveMode.Create);
-        archive.CreateEntry("[Content_Types].xml");
     }
 }

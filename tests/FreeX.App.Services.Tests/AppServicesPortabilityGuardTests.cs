@@ -54,6 +54,7 @@ public sealed class SharedPortableProjectPortabilityGuardTests
         {
             ["Free.Shared.AppServices.Windows"] = "Windows file-association adapter",
             ["Free.Shared.Drawing.Avalonia"] = "Avalonia drawing geometry adapter",
+            ["Free.Shared.Drawing.Wpf"] = "WPF drawing geometry adapter",
             ["Free.Shared.Pdf.Skia"] = "Skia PDF renderer",
             ["Free.Shared.Pdf.Wpf"] = "WPF PDF renderer",
             ["Free.Shared.Ribbon.Avalonia"] = "Avalonia ribbon renderer",

@@ -758,8 +758,10 @@ public sealed class FloatingObjectRenderTests
     }
 
     [StaFact]
-    public void FloatingOverlay_UsesOuterOnlyGlowLayerForImportedFreeW30PointWave1Signature()
+    public void FloatingOverlay_WrapsAndWarpsWave1TextThatOverflowsItsBox()
     {
+        // drawing-objects-complex: 30pt "FreeW" does not fit its 124-DIP box, so Word wraps it into
+        // "Free" / "W" and warps the wrapped block as a whole.
         var wordArt = new WordArt("FreeW", WordArtStyle.GlowBlue, 30)
         {
             Warp = WordArtWarp.Wave1,
@@ -781,18 +783,16 @@ public sealed class FloatingObjectRenderTests
         view.LoadModel(doc);
         view.SetFloatingCanvas(canvas);
 
-        var root = canvas.Children.OfType<Canvas>().Single();
-        root.Measure(new Size(124, 64));
-        root.Arrange(new Rect(0, 0, 124, 64));
-        root.UpdateLayout();
-
-        Canvas.GetTop(root).Should().BeApproximately(121, 0.01);
-        root.Effect.Should().BeNull();
-        root.Children.OfType<Border>().Should().HaveCount(3);
-        root.Children.OfType<Border>().Single(border => border.Effect is null && border.Opacity == 0.6)
-            .Background.Should().BeOfType<SolidColorBrush>()
-            .Which.Color.Should().Be(Color.FromRgb(0x2E, 0x75, 0xB6));
-        root.Children.OfType<TextBlock>().Should().HaveCount(wordArt.Text.Length);
+        var box = canvas.Children.OfType<Border>().Single();
+        Canvas.GetTop(box).Should().BeApproximately(121, 0.01);
+        box.Background.Should().BeOfType<SolidColorBrush>()
+            .Which.Color.Should().Be(Color.FromRgb(0x24, 0x24, 0x24));
+        var text = box.Child.Should().BeOfType<System.Windows.Shapes.Path>().Subject;
+        var bounds = text.Data.Bounds;
+        bounds.IsEmpty.Should().BeFalse();
+        bounds.Right.Should().BeLessThanOrEqualTo(box.Width, "the text wraps inside the box");
+        bounds.Bottom.Should().BeLessThanOrEqualTo(box.Height);
+        canvas.Children.OfType<Canvas>().Should().BeEmpty("the overflowing text is not laid out as one glyph row");
     }
 
     [StaFact]
@@ -832,6 +832,38 @@ public sealed class FloatingObjectRenderTests
         glyphs.Should().HaveCount(wordArt.Text.Length);
         glyphs.Any(glyph => glyph.RenderTransform is RotateTransform rotation && Math.Abs(rotation.Angle) > 0.1)
             .Should().BeTrue();
+    }
+
+    [StaFact]
+    public void InlineWordArt_RendersOtherPresetWarpsAsMappedOutlinesInsteadOfItalicText()
+    {
+        foreach (var warp in new[] { WordArtWarp.Inflate, WordArtWarp.ChevronUp, WordArtWarp.ArchDown, WordArtWarp.SlantUp })
+        {
+            var wordArt = new WordArt("Warped", WordArtStyle.FillBlue, 24) { Warp = warp };
+            var doc = new TextDocument();
+            var para = new Paragraph();
+            para.Runs.Add(Run.FromWordArt(wordArt));
+            doc.Blocks.Add(para);
+
+            var view = new DocumentView();
+            view.LoadModel(doc);
+
+            var container = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+                .Single()
+                .Inlines.OfType<System.Windows.Documents.InlineUIContainer>()
+                .Single();
+            var path = container.Child.Should().BeOfType<System.Windows.Shapes.Path>().Subject;
+            path.Tag.Should().BeSameAs(wordArt, "the model WordArt still round-trips through the visual");
+            var bounds = path.Data.Bounds;
+            bounds.IsEmpty.Should().BeFalse($"{warp} draws its glyph outlines");
+            bounds.Left.Should().BeGreaterThanOrEqualTo(-0.5);
+            bounds.Top.Should().BeGreaterThanOrEqualTo(-0.5);
+            bounds.Right.Should().BeLessThanOrEqualTo(path.Width + 0.5);
+            bounds.Bottom.Should().BeLessThanOrEqualTo(path.Height + 0.5);
+
+            view.CommitToModel();
+            ((Paragraph)view.Model.Blocks[0]).Runs.Should().ContainSingle(run => ReferenceEquals(run.WordArt, wordArt));
+        }
     }
 
     [StaFact]

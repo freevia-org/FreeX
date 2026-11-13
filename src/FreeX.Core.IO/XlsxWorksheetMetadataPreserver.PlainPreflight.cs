@@ -646,15 +646,14 @@ internal static partial class XlsxWorksheetMetadataPreserver
         !attribute.IsNamespaceDeclaration &&
         !modeledAttributeNames.Contains(attribute.Name.LocalName);
 
-    private static XmlReaderSettings CreateWorksheetPreflightReaderSettings() =>
-        new()
-        {
-            DtdProcessing = DtdProcessing.Prohibit,
-            XmlResolver = null,
-            IgnoreComments = true,
-            IgnoreProcessingInstructions = true,
-            IgnoreWhitespace = true
-        };
+    internal static XmlReaderSettings CreateWorksheetPreflightReaderSettings()
+    {
+        var settings = SecureXmlReaderSettings.Create();
+        settings.IgnoreComments = true;
+        settings.IgnoreProcessingInstructions = true;
+        settings.IgnoreWhitespace = true;
+        return settings;
+    }
 
     private static bool HasNativeOnlyWorksheetAttributes(XmlReader reader, HashSet<string> modeledAttributeNames)
     {

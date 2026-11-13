@@ -112,7 +112,7 @@ public class AutosaveRecoveryDeletionTests : IDisposable
 
     /// <summary>
     /// r141: declining the unprompted STARTUP offer must discard the offered snapshot -- through the
-    /// real <see cref="FreeWRecoveryWorkflow.RunAsync"/> production path, not a hand-simulated
+    /// real <see cref="AutosaveRecoveryProfile.RunAsync"/> production path, not a hand-simulated
     /// stand-in -- so the same stale document does not keep nagging on every later launch (matches
     /// FreeX's <c>StartupRecoveryWorkflow</c>, which discards a declined snapshot the same way). A
     /// non-offered candidate sitting in the same recovery directory must survive untouched.
@@ -128,13 +128,13 @@ public class AutosaveRecoveryDeletionTests : IDisposable
         var newer = CreateCandidate("snap-b", "2026-06-20T09:00:00Z");
 
         var store = new AutosaveSnapshotStore(_recoveryDir);
-        var offered = AutosaveRecoveryPlanner.PlanLatest(store)!;
+        var offered = FreeWAutosaveProfile.Recovery.PlanLatest(store)!;
         offered.Candidate.SnapshotPath.Should().Be(newer.SnapshotPath);
 
         // Act: run the real startup workflow and decline the one offer.
-        var result = await FreeWRecoveryWorkflow.RunAsync(
+        var result = await FreeWAutosaveProfile.Recovery.RunAsync(
             [offered],
-            FreeWRecoveryPromptMode.Startup,
+            AutosaveRecoveryPromptMode.Startup,
             _ => new ValueTask<bool>(false),
             (_, _) => new ValueTask<bool>(false));
 
@@ -160,11 +160,11 @@ public class AutosaveRecoveryDeletionTests : IDisposable
         var newer = CreateCandidate("snap-b", "2026-06-20T09:00:00Z");
 
         var store = new AutosaveSnapshotStore(_recoveryDir);
-        var recoveries = AutosaveRecoveryPlanner.PlanAll(store);
+        var recoveries = FreeWAutosaveProfile.Recovery.PlanAll(store);
 
-        var result = await FreeWRecoveryWorkflow.RunAsync(
+        var result = await FreeWAutosaveProfile.Recovery.RunAsync(
             recoveries,
-            FreeWRecoveryPromptMode.Manual,
+            AutosaveRecoveryPromptMode.Manual,
             _ => new ValueTask<bool>(false),
             (_, _) => new ValueTask<bool>(false));
 

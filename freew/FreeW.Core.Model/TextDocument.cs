@@ -232,54 +232,25 @@ public sealed class InlineImage(byte[] bytes, double widthPt, double heightPt, I
     public static bool HasRecognisedSignature(byte[] bytes) =>
         bytes is not null && bytes.Length >= 2 && DetectsExplicitly(bytes);
 
-    private static bool DetectsExplicitly(byte[] bytes)
-    {
-        // Png is DetectFormat's fallback, so "it said Png" is not evidence on its own -- check the
-        // PNG signature directly and otherwise require a non-fallback answer.
-        if (bytes.Length >= 4
-            && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47)
-        {
-            return true;
-        }
+    // The signature list itself lives in Free.Shared.Drawing.ImageHeader (the one shared owner);
+    // "Unknown" there is exactly "no explicit signature", which is what this guard asks.
+    private static bool DetectsExplicitly(byte[] bytes) =>
+        Free.Shared.Drawing.ImageHeader.Detect(bytes) != Free.Shared.Drawing.ImageHeaderFormat.Unknown;
 
-        return DetectFormat(bytes) != ImageFormat.Png;
-    }
-
-    public static ImageFormat DetectFormat(byte[] bytes)
-    {
-        if (bytes is null || bytes.Length < 2)
-            return ImageFormat.Png;
-
-        bool Starts(params byte[] sig)
-        {
-            if (bytes.Length < sig.Length)
-                return false;
-            for (var i = 0; i < sig.Length; i++)
-                if (bytes[i] != sig[i])
-                    return false;
-            return true;
-        }
-
-        if (Starts(0x89, 0x50, 0x4E, 0x47))
-            return ImageFormat.Png;
-        if (Starts(0xFF, 0xD8, 0xFF))
-            return ImageFormat.Jpeg;
-        if (Starts(0x47, 0x49, 0x46, 0x38))
-            return ImageFormat.Gif;
-        if (Starts(0x42, 0x4D))
-            return ImageFormat.Bmp;
-        if (Starts(0x49, 0x49, 0x2A, 0x00) || Starts(0x4D, 0x4D, 0x00, 0x2A))
-            return ImageFormat.Tiff;
-        // EMF: a 0x00000001 record type then, at byte offset 40, the ASCII signature " EMF".
-        if (Starts(0x01, 0x00, 0x00, 0x00) && bytes.Length >= 44
-            && bytes[40] == 0x20 && bytes[41] == 0x45 && bytes[42] == 0x4D && bytes[43] == 0x46)
-            return ImageFormat.Emf;
-        // WMF: the placeable-metafile header (D7 CD C6 9A) or a classic WMF header (01/02 00 09 00).
-        if (Starts(0xD7, 0xCD, 0xC6, 0x9A) || Starts(0x01, 0x00, 0x09, 0x00) || Starts(0x02, 0x00, 0x09, 0x00))
-            return ImageFormat.Wmf;
-
-        return ImageFormat.Png;
-    }
+    // Sits under the doc comment that opens the DetectFormat/HasRecognisedSignature pair above.
+    public static ImageFormat DetectFormat(byte[] bytes) =>
+        bytes is null
+            ? ImageFormat.Png
+            : Free.Shared.Drawing.ImageHeader.Detect(bytes) switch
+            {
+                Free.Shared.Drawing.ImageHeaderFormat.Jpeg => ImageFormat.Jpeg,
+                Free.Shared.Drawing.ImageHeaderFormat.Gif => ImageFormat.Gif,
+                Free.Shared.Drawing.ImageHeaderFormat.Bmp => ImageFormat.Bmp,
+                Free.Shared.Drawing.ImageHeaderFormat.Tiff => ImageFormat.Tiff,
+                Free.Shared.Drawing.ImageHeaderFormat.Emf => ImageFormat.Emf,
+                Free.Shared.Drawing.ImageHeaderFormat.Wmf => ImageFormat.Wmf,
+                _ => ImageFormat.Png
+            };
 
     /// <summary>
     /// The lower-case media-part file extension (no dot) for an <see cref="ImageFormat"/>, e.g.

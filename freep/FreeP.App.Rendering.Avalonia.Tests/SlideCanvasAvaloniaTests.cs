@@ -2927,7 +2927,8 @@ public sealed class SlideCanvasAvaloniaTests
             .BeOfType<SolidColorBrush>()
             .Subject;
         brush.Color.Should().Be(Color.FromArgb(0x7F, 0x12, 0x34, 0x56));
-        pen.DashStyle.Should().Be(DashStyle.DashDot);
+        // ECMA-376 prstDash dashDot is 4 on, 3 off, 1 on, 3 off (not the Avalonia built-in 2,2,0,2).
+        pen.DashStyle.Should().BeOfType<DashStyle>().Subject.Dashes.Should().Equal(4.0, 3.0, 1.0, 3.0);
     }
 
     [Fact]

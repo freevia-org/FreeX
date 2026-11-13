@@ -6,14 +6,7 @@ namespace FreeP.App.Compositor;
 public static class FreePLegalNoticeManifest
 {
     public static IReadOnlyList<LegalNoticeResource> Resources { get; } =
-        Array.AsReadOnly<LegalNoticeResource>(
-        [
-            new("Project License", "FreeP.Legal.ProjectLicense.txt"),
-            new("Legal Notices", "FreeP.Legal.LegalNotices.md"),
-            new("Privacy Notice", "FreeP.Legal.PrivacyNotice.md"),
-            new("Third-Party Notices", "FreeP.Legal.ThirdPartyNotices.md"),
-            new("Third-Party License Texts", "FreeP.Legal.ThirdPartyLicenses.md"),
-        ]);
+        ProductLegalNoticeManifest.Create("FreeP");
 }
 
 /// <summary>Loads FreeP's renderer-independent, offline legal notice bundle.</summary>

@@ -1,3 +1,6 @@
+using Free.Shared.Shell.Avalonia;
+using FreeP.Core.Model;
+
 namespace FreeP.App.Avalonia;
 
 /// <summary>
@@ -8,28 +11,22 @@ namespace FreeP.App.Avalonia;
 /// </summary>
 internal sealed partial class AutosaveAdapter
 {
-    internal static int ActiveAdapterCountForTests => EmergencySnapshots.ActiveCount;
-    internal string SnapshotIdForTests => _session.SnapshotId;
-    internal void SnapshotNowForTests() => _session.Snapshot();
+    internal static int ActiveAdapterCountForTests => AvaloniaAutosaveHost<Presentation>.ActiveCount;
+    internal string SnapshotIdForTests => _host.Session.SnapshotId;
+    internal void SnapshotNowForTests() => _host.Session.Snapshot();
 
     /// <summary>
     /// Releases this adapter's snapshot ownership lock without deleting the snapshot -- exactly what
     /// an actual process crash does. Without this, a snapshot written earlier in the same test
     /// process stays "live owned" and is filtered out of recovery.
     /// </summary>
-    internal void SimulateCrashForTests() => _session.Dispose();
+    internal void SimulateCrashForTests() => _host.Session.Dispose();
+
+    static partial void ResolvePromptResponder(ref Func<string, bool>? responder) =>
+        responder = RecoveryPromptDialog.TestResponder;
 }
 
-internal sealed partial class RecoveryPromptDialog
+internal static class RecoveryPromptDialog
 {
     public static Func<string, bool>? TestResponder { get; set; }
-
-    static partial void ResolveResponseOverride(string message, ref bool handled, ref bool response)
-    {
-        if (TestResponder is not { } responder)
-            return;
-
-        handled = true;
-        response = responder(message);
-    }
 }

@@ -78,6 +78,7 @@ internal sealed partial class HeaderFooterDialog : FreePDialogWindow
         {
             Content = surface.Field(HeaderFooterDialogField.Footer).Label,
             IsChecked = defaults.ShowFooter,
+            Margin = new Thickness(0, 0, 0, HeaderFooterDialogVisualMetrics.AvaloniaFooterCheckBottomMargin),
         };
         _footerBox = new TextBox
         {

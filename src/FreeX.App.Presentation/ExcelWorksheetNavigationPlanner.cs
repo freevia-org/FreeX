@@ -1,3 +1,5 @@
+using FreeX.App.Presentation.FormulaBar;
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -30,8 +32,125 @@ public enum ExcelWorksheetNavigationKey
     Tab
 }
 
+/// <summary>
+/// Host-supplied inputs for <see cref="ExcelWorksheetNavigationPlanner.ResolveTarget"/>. Everything
+/// that depends on the native toolkit (key/modifier conversion, viewport-derived page sizes, the
+/// user's "After pressing Enter, move selection" option) is flattened into this value so the
+/// key-to-target decision itself is portable and identical for the WPF and Avalonia shells.
+/// </summary>
+/// <param name="Modifiers">Held modifiers (Meta is folded into Control by the Avalonia mapper).</param>
+/// <param name="EndMode">Whether Excel's sticky End mode is armed (read BEFORE the host clears it).</param>
+/// <param name="PageRows">Rows per Page Up/Down step (visible scrollable rows less one, at least 1).</param>
+/// <param name="PageColumns">Columns per Alt+Page Up/Down step (visible scrollable columns less one, at least 1).</param>
+/// <param name="MoveSelectionAfterEnter">The "After pressing Enter, move selection" option; when false ready-mode Enter does not move.</param>
+/// <param name="EnterDirection">The configured Enter direction; Shift+Enter moves the opposite way.</param>
+/// <param name="SystemKey">WPF's <c>e.SystemKey</c> (the real key when Alt is held and the key is reported as System).</param>
+public readonly record struct ExcelWorksheetNavigationRequest(
+    ExcelWorksheetNavigationModifiers Modifiers,
+    bool EndMode,
+    int PageRows,
+    int PageColumns,
+    bool MoveSelectionAfterEnter = true,
+    FormulaEditorEnterDirection EnterDirection = FormulaEditorEnterDirection.Down,
+    ExcelWorksheetNavigationKey SystemKey = ExcelWorksheetNavigationKey.None);
+
+/// <summary>
+/// Result of <see cref="ExcelWorksheetNavigationPlanner.ResolveTarget"/>.
+/// <paramref name="CycleKey"/> is non-null exactly for Enter/Tab (which move the active cell, never
+/// extend the selection) and is the key to hand to
+/// <see cref="GridSelectionNavigationPlanner.PlanCycle"/> for those two.
+/// </summary>
+public readonly record struct ExcelWorksheetNavigationResolution(
+    CellAddress Target,
+    GridSelectionCycleKey? CycleKey);
+
 public static class ExcelWorksheetNavigationPlanner
 {
+    /// <summary>
+    /// The single "key -> target cell" decision shared by the WPF and Avalonia shells. Returns null
+    /// when the key/modifier combination is not a worksheet navigation key (see
+    /// <see cref="ShouldHandleWorksheetNavigationKey"/>). Plain arrow steps, Enter and Tab are all
+    /// advanced past a merged block (<see cref="AdjustTargetPastMerge"/>) so the key press is never
+    /// absorbed by a step that lands back inside the same merge (R51-render-merged-cell-edit-nav-3-1);
+    /// Ctrl/End-mode data-boundary jumps, Home, Ctrl+End and paging are not. Ready-mode Enter honours
+    /// the "After pressing Enter, move selection" option and direction (Shift reverses it), and does
+    /// not move when the option is off, exactly like the in-edit commit path
+    /// (<see cref="ExcelEditKeyPlanner.GetEnterTarget"/>; R82-app-keyboard-nav-5-1).
+    /// Hosts keep selection cycling, protected-sheet skipping and the actual selection/scroll update
+    /// because those depend on live selection state.
+    /// </summary>
+    public static ExcelWorksheetNavigationResolution? ResolveTarget(
+        Sheet? sheet,
+        SheetId sheetId,
+        CellAddress current,
+        ExcelWorksheetNavigationKey key,
+        ExcelWorksheetNavigationRequest request)
+    {
+        var modifiers = request.Modifiers;
+        if (!ShouldHandleWorksheetNavigationKey(key, request.SystemKey, modifiers, request.EndMode))
+            return null;
+
+        var effectiveKey = key is ExcelWorksheetNavigationKey.None or ExcelWorksheetNavigationKey.System
+            ? request.SystemKey
+            : key;
+        var shiftHeld = (modifiers & ExcelWorksheetNavigationModifiers.Shift) != 0;
+        var ctrlHeld = (modifiers & ExcelWorksheetNavigationModifiers.Control) != 0;
+        var useDataBoundary = ShouldUseDataBoundary(effectiveKey, modifiers, request.EndMode);
+        var pageRows = Math.Max(1, request.PageRows);
+
+        // Alt+PageUp/PageDown is a horizontal screen-page move; it wins over the vertical paging below.
+        var target = GetHorizontalPageTarget(key, request.SystemKey, modifiers, current, request.PageColumns);
+
+        target ??= effectiveKey switch
+        {
+            ExcelWorksheetNavigationKey.Up => useDataBoundary
+                ? FindVerticalDataBoundary(sheet, current, -1)
+                : AdjustTargetPastMerge(sheet, current, StepAddress(sheetId, current, -1, 0)),
+            ExcelWorksheetNavigationKey.Down => useDataBoundary
+                ? FindVerticalDataBoundary(sheet, current, +1)
+                : AdjustTargetPastMerge(sheet, current, StepAddress(sheetId, current, 1, 0)),
+            ExcelWorksheetNavigationKey.Left => useDataBoundary
+                ? FindHorizontalDataBoundary(sheet, current, -1)
+                : AdjustTargetPastMerge(sheet, current, StepAddress(sheetId, current, 0, -1)),
+            ExcelWorksheetNavigationKey.Right => useDataBoundary
+                ? FindHorizontalDataBoundary(sheet, current, +1)
+                : AdjustTargetPastMerge(sheet, current, StepAddress(sheetId, current, 0, 1)),
+            ExcelWorksheetNavigationKey.PageUp => StepAddress(sheetId, current, -pageRows, 0),
+            ExcelWorksheetNavigationKey.PageDown => StepAddress(sheetId, current, pageRows, 0),
+            // Includes the "End, Home" -> Ctrl+End jump and the frozen-pane origin for Ctrl+Home.
+            ExcelWorksheetNavigationKey.Home => GetHomeTarget(sheet, sheetId, current, ctrlHeld, request.EndMode),
+            ExcelWorksheetNavigationKey.End => ctrlHeld ? GetCtrlEndCell(sheet, sheetId) : null,
+            ExcelWorksheetNavigationKey.Enter => request.MoveSelectionAfterEnter
+                ? AdjustTargetPastMerge(
+                    sheet,
+                    current,
+                    ExcelEditKeyPlanner.GetEnterTarget(current, shiftHeld, request.EnterDirection))
+                : current,
+            ExcelWorksheetNavigationKey.Tab => AdjustTargetPastMerge(
+                sheet,
+                current,
+                shiftHeld ? StepAddress(sheetId, current, 0, -1) : StepAddress(sheetId, current, 0, 1)),
+            _ => null
+        };
+
+        if (target is not { } resolved)
+            return null;
+
+        GridSelectionCycleKey? cycleKey = effectiveKey switch
+        {
+            ExcelWorksheetNavigationKey.Enter => GridSelectionCycleKey.Enter,
+            ExcelWorksheetNavigationKey.Tab => GridSelectionCycleKey.Tab,
+            _ => null
+        };
+        return new ExcelWorksheetNavigationResolution(resolved, cycleKey);
+    }
+
+    private static CellAddress StepAddress(SheetId sheetId, CellAddress current, int rowDelta, int colDelta) =>
+        new(
+            sheetId,
+            (uint)Math.Clamp((long)current.Row + rowDelta, 1, CellAddress.MaxRow),
+            (uint)Math.Clamp((long)current.Col + colDelta, 1, CellAddress.MaxCol));
+
     public static bool TryToggleEndMode(
         ExcelWorksheetNavigationKey key,
         ExcelWorksheetNavigationModifiers modifiers,
