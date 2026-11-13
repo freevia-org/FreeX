@@ -102,6 +102,21 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
     private readonly HashSet<PageBox> _editedSinceRepagination = new();
     private readonly Dictionary<PageBox, double> _contentBottoms = new();
 
+    // ── W9: incremental re-flow ───────────────────────────────────────────────────────────────────
+    // The layout session re-paginates from what changed. Each body page box knows which model blocks
+    // it shows (PageBox.ModelStart/ModelBlocks) and the page facts it was built from (PageBox.ModelKey),
+    // so a commit replaces only the edited pages' blocks and a re-flow rebuilds only the pages whose
+    // blocks or page facts changed. _boxRangesValid is false while that is unknown.
+    private readonly PagedLayoutSession _layout;
+    private bool _boxRangesValid;
+    private readonly HashSet<PageBox> _editedSinceCommit = new();
+
+    /// <summary>The incremental layout session (diagnostics for tests and the probe).</summary>
+    internal PagedLayoutSession LayoutSession => _layout;
+
+    /// <summary>Page boxes the last re-flow kept rather than rebuilt (diagnostics).</summary>
+    internal int LastRebuildKeptBoxes { get; private set; }
+
     // ── Phase 3b-2: cross-page selection and undo ─────────────────────────────────────────────────
     private readonly CrossPageSelection _crossPageSelection = new();
     private readonly CrossPageUndoCoordinator _undoCoordinator = new();
@@ -125,8 +140,10 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         DocumentView sourceEditor,
         List<PageBox> boxes,
         PaginatedPageLayoutMode layoutMode,
-        IPlatformClipboard? platformClipboard)
+        IPlatformClipboard? platformClipboard,
+        PagedLayoutSession layout)
     {
+        _layout = layout;
         _sourceEditor = sourceEditor;
         _sourceModel = sourceEditor.Model;
         _pageBoxes = boxes;
@@ -188,26 +205,20 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         List<PaginationEngine.SegmentPagination>? segmentPaginations = null)
     {
         var model = sourceEditor.Model;
+        var layout = new PagedLayoutSession(sourceEditor);
 
-        // ── Step 1: render the model into a scratch editor to obtain Tag-bearing WPF blocks ──────
-        var scratch = new DocumentView();
-        scratch.LoadModel(model);
-
-        var allBlocks = scratch.Document.Blocks.ToList();
-        scratch.Document.Blocks.Clear(); // detach so they can be re-parented
-
-        // ── Step 2: engine-driven page assignment ─────────────────────────────────────────────────
-        // PaginationEngine.ComputeBlockPageAssignment walks the WPF paginator's scratch clone and
-        // returns a per-block page index array. Explicit breaks, overflow, and footnote-reference
-        // positions are honoured; the page count comes from the authoritative print paginator.
+        // ── Step 1: engine-driven page assignment ─────────────────────────────────────────────────
+        // Explicit breaks, overflow, and footnote-reference positions are honoured; the page count
+        // comes from the authoritative paginator. The editing surface only needs each block's page, so
+        // it uses the incremental layout session (identical to the layout-only full computation);
+        // printing (segmentPaginations requested) keeps the print clone it draws from.
         int[] assignment;
         int pageCount;
         try
         {
-            // The editing surface only needs each block's page, so it lays out a direct render of the
-            // model; printing (segmentPaginations requested) keeps the print clone it draws from.
-            assignment = PaginationEngine.ComputeBlockPageAssignment(
-                sourceEditor, out var totalPageCount, segmentPaginations, layoutOnly: segmentPaginations is null);
+            assignment = segmentPaginations is null
+                ? layout.ComputeAssignment(out var totalPageCount)
+                : PaginationEngine.ComputeBlockPageAssignment(sourceEditor, out totalPageCount, segmentPaginations);
             pageCount = assignment.Length > 0 ? assignment.Max() + 1 : 1;
             // A final block that runs on past the page it starts on still owns those physical pages.
             pageCount = Math.Max(1, Math.Max(pageCount, totalPageCount));
@@ -215,12 +226,27 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         catch
         {
             // Fall back: all blocks on page 0.
-            assignment = new int[allBlocks.Count];
+            assignment = new int[model.Blocks.Count];
             pageCount = 1;
         }
 
-        // ── Step 3: shard blocks by assignment ────────────────────────────────────────────────────
-        var shards = ShardByPageAssignment(allBlocks, assignment, pageCount);
+        // ── Step 2: render Tag-bearing WPF blocks and shard them by page ──────────────────────────
+        // The editing surface shards by render unit (a list run is one WPF List), so every page knows
+        // exactly which model blocks it holds; printing keeps its established sharding.
+        IReadOnlyList<IReadOnlyList<System.Windows.Documents.Block>> shards;
+        PagePlan? pagePlan = segmentPaginations is null ? PlanPages(model, assignment, pageCount) : null;
+        if (pagePlan is not null)
+        {
+            shards = RenderPages(model, pagePlan, _ => true);
+        }
+        else
+        {
+            var scratch = new DocumentView();
+            scratch.LoadModel(model);
+            var allBlocks = scratch.Document.Blocks.ToList();
+            scratch.Document.Blocks.Clear(); // detach so they can be re-parented
+            shards = ShardByPageAssignment(allBlocks, assignment, pageCount);
+        }
 
         // ── Step 3b: collect footnote IDs per page shard ─────────────────────────────────────────
         // Scan each page's body blocks for FootnoteMarker / EndnoteMarker tags (via DocumentView
@@ -266,9 +292,17 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
             ? physicalBodyPageCount + 1
             : physicalBodyPageCount;
         var boxes = new List<PageBox>(totalBoxCount);
+        var boxRanges = pagePlan is null ? null : new List<(int Start, int Count)>(totalBoxCount);
+        var nextModelStart = 0;
         foreach (var physicalPage in physicalPages)
         {
             var pageSection = physicalPage.PageSection;
+            if (pagePlan is not null)
+            {
+                var range = physicalPage.IsParityBlank ? (nextModelStart, 0) : pagePlan.Ranges[physicalPage.BodyPageIndex!.Value];
+                boxRanges!.Add(range);
+                nextModelStart = range.Item1 + range.Item2;
+            }
             if (physicalPage.IsParityBlank)
             {
                 boxes.Add(new PageBox(
@@ -306,6 +340,13 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
                 endnoteIds: hasEndnotes && !requiresDedicatedEndnotePage && bodyPageIndex == pageCount - 1
                     ? endnoteIds
                     : null);
+            if (pagePlan is not null)
+            {
+                box.ModelKey = BoxKey(
+                    physicalPage.PhysicalPageIndex, pageSection, slots, pageNumberDisplay[physicalPage.PhysicalPageIndex].Text,
+                    totalBoxCount, pageSection.SectionPageCount, model, pagePlan.Ranges[bodyPageIndex],
+                    hasEndnotes && !requiresDedicatedEndnotePage && bodyPageIndex == pageCount - 1);
+            }
             // freew-cc-3: wire the content-control lock probe so this box's plain RichTextBox can refuse
             // to mutate a locked control (see PageBox.ContentControlLockProbe's doc comment).
             box.ContentControlLockProbe = sourceEditor.TryEvaluateContentControlLock;
@@ -324,9 +365,12 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         // Word's behaviour. It has no body blocks but retains the final section's header/footer.
         // Use the final section's page settings for the endnotes page.
         if (requiresDedicatedEndnotePage)
+        {
             boxes.Add(BuildDedicatedEndnotePage(
                 model, physicalBodyPageCount, physicalAssignments, physicalPageSections,
                 differentOddEvenPages, endnoteIds));
+            boxRanges?.Add((model.Blocks.Count, 0));
+        }
 
         // Wire neighbour links for cross-page caret routing.
         for (var i = 0; i < boxes.Count; i++)
@@ -335,7 +379,12 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
             boxes[i].NextBox = i < boxes.Count - 1 ? boxes[i + 1] : null;
         }
 
-        return new PaginatedEditorPanel(sourceEditor, boxes, layoutMode, platformClipboard);
+        var panel = new PaginatedEditorPanel(sourceEditor, boxes, layoutMode, platformClipboard, layout);
+        // Only the plain vertical/horizontal page stack is rebuilt page by page; the parity-blank
+        // (Multiple Pages) plan keeps whole rebuilds.
+        if (boxRanges is not null && !includeParityBlankPages)
+            panel.SetBoxModelRanges(boxRanges, model);
+        return panel;
     }
 
     private static Panel BuildPageHost(PaginatedPageLayoutMode layoutMode)
@@ -444,6 +493,12 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         {
             _lastCaretBox = box;
             _editedSinceRepagination.Add(box);
+            _editedSinceCommit.Add(box);
+        }
+        else
+        {
+            // An edit this panel cannot place on a page: the next commit reads every page.
+            _boxRangesValid = false;
         }
         Edited?.Invoke();
         ScheduleRepaginate();
@@ -452,8 +507,14 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
     private void OnHeaderFooterTextChanged(object? sender, System.Windows.Controls.TextChangedEventArgs e)
     {
         if (!_rebuilding)
+        {
+            // Other pages show the same header/footer: the next re-flow rebuilds every page.
+            _headerFooterEditedSinceRebuild = true;
             Edited?.Invoke();
+        }
     }
+
+    private bool _headerFooterEditedSinceRebuild;
 
     private void OnAnyPageBodySelectionChanged(object? sender, RoutedEventArgs e)
     {
@@ -522,6 +583,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
             return;
         _attachedAsSurface = true;
         _sourceEditor.ExternalEditingSurface = this;
+        // The hidden source editor then refreshes only the blocks a page commit replaced.
+        _sourceEditor.TrackBodyUnits = true;
         _sourceEditor.EditingSessionChanged += OnSourceEditingSessionChanged;
     }
 
@@ -536,7 +599,10 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
             return;
         _attachedAsSurface = false;
         if (ReferenceEquals(_sourceEditor.ExternalEditingSurface, this))
+        {
             _sourceEditor.ExternalEditingSurface = null;
+            _sourceEditor.TrackBodyUnits = false;
+        }
         _sourceEditor.EditingSessionChanged -= OnSourceEditingSessionChanged;
     }
 
@@ -1281,7 +1347,9 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         // ── Commit current page boxes into the model ──────────────────────────────────────────────
         PaginatedCommitCoordinator.Commit(this, _sourceEditor);
 
-        RebuildBoxesFromModel();
+        // Only this panel changed the model since the last layout (whole-block replacements), so the
+        // layout session re-paginates from the edit and unchanged pages keep their boxes.
+        RebuildBoxesFromModel(reuseUnchangedPages: true);
         RestoreCaret(caret);
     }
 
@@ -1310,7 +1378,11 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
     {
         _repaginateTimer?.Stop();
         _hasPendingBodyEdits = false;
-        RebuildBoxesFromModel();
+        _editedSinceCommit.Clear();
+        // The model may have changed in ways the layout session cannot see (an undo of another
+        // command, a ribbon command, a reload): lay out and build everything afresh.
+        _layout.Invalidate();
+        RebuildBoxesFromModel(reuseUnchangedPages: false);
         if (caret is not null)
             RestoreCaret(caret);
         else if (_pageBoxes.Count > 0)
@@ -1320,8 +1392,195 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         }
     }
 
-    private void RebuildBoxesFromModel()
+    private void RebuildBoxesFromModel(bool reuseUnchangedPages)
     {
+        var model = _sourceEditor.Model;
+        int[] assignment;
+        int pageCount;
+        try
+        {
+            assignment = _layout.ComputeAssignment(out var totalPageCount);
+            pageCount = assignment.Length > 0 ? assignment.Max() + 1 : 1;
+            pageCount = Math.Max(1, Math.Max(pageCount, totalPageCount));
+        }
+        catch
+        {
+            assignment = new int[model.Blocks.Count];
+            pageCount = 1;
+        }
+
+        if (PlanPages(model, assignment, pageCount) is not { } plan || _layoutMode == PaginatedPageLayoutMode.TwoColumnGrid)
+        {
+            RebuildBoxesFromModelFull(assignment, pageCount);
+            return;
+        }
+
+        _rebuilding = true;
+        try
+        {
+            _undoCoordinator.OnRepaginationStarting();
+            _crossPageSelection.Clear(_pageBoxes);
+            _dragPending = false;
+            _dragActive = false;
+            _dragSourceBox = null;
+            _lastCaretBox = null;
+            _sourceModel = model;
+
+            var hasEndnotes = model.Endnotes.Count > 0;
+            var endnoteIds = model.Endnotes.Keys.OrderBy(k => k).ToList();
+            var requiresDedicatedEndnotePage = hasEndnotes && RequiresDedicatedEndnotePage(_sourceEditor);
+            var totalBoxCount = requiresDedicatedEndnotePage ? pageCount + 1 : pageCount;
+            var pageToSection = HeaderFooterPagePlanner.MapPagesToSections(model, assignment, pageCount);
+            var pageNumberDisplay = PageNumberFormatDialogPlanner.BuildDisplayPlans(pageToSection, model, assignment);
+            var differentOddEvenPages = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(model);
+
+            var slots = new HeaderFooterSlotPlan[pageCount];
+            var keys = new string[pageCount];
+            for (var i = 0; i < pageCount; i++)
+            {
+                var pageSection = pageToSection[i];
+                slots[i] = HeaderFooterPagePlanner.ResolveSlots(
+                    pageSection.HeadersFooters,
+                    pageSection.SectionRelativePageNumber,
+                    pageSection.PageSettings,
+                    differentOddEvenPages,
+                    pageNumberDisplay[i].LogicalPageNumber);
+                var sectionPageCount = pageSection.SectionPageCount
+                    + (requiresDedicatedEndnotePage && pageSection.SectionIndex == pageToSection[^1].SectionIndex ? 1 : 0);
+                keys[i] = BoxKey(
+                    i, pageSection, slots[i], pageNumberDisplay[i].Text, totalBoxCount, sectionPageCount, model,
+                    plan.Ranges[i], hasEndnotes && !requiresDedicatedEndnotePage && i == pageCount - 1);
+            }
+
+            var oldBoxes = _pageBoxes.ToList();
+            bool CanKeep(int page)
+            {
+                if (!reuseUnchangedPages || !_boxRangesValid || _headerFooterEditedSinceRebuild || page >= oldBoxes.Count)
+                    return false;
+                var old = oldBoxes[page];
+                var range = plan.Ranges[page];
+                if (old.ModelKey != keys[page] || old.ModelStart != range.Start
+                    || old.ModelBlocks is not { } shown || shown.Length != range.Count)
+                    return false;
+                for (var k = 0; k < shown.Length; k++)
+                {
+                    if (!ReferenceEquals(shown[k], model.Blocks[range.Start + k]))
+                        return false;
+                }
+                return true;
+            }
+
+            var keep = new bool[pageCount];
+            for (var i = 0; i < pageCount; i++)
+                keep[i] = CanKeep(i);
+
+            var shards = RenderPages(model, plan, page => !keep[page]);
+            var newBoxes = new List<PageBox>(totalBoxCount);
+            for (var i = 0; i < pageCount; i++)
+            {
+                if (keep[i])
+                {
+                    newBoxes.Add(oldBoxes[i]);
+                    continue;
+                }
+
+                var pageSection = pageToSection[i];
+                var (fnIds, _) = DocumentView.CollectNoteIds(shards[i]);
+                var box = new PageBox(i + 1, pageSection.PageSettings, shards[i],
+                    sourceModel: model,
+                    headerSlot: slots[i].Header, headerSlotKind: slots[i].HeaderSlot,
+                    footerSlot: slots[i].Footer, footerSlotKind: slots[i].FooterSlot,
+                    pageCount: totalBoxCount,
+                    pageNumberText: pageNumberDisplay[i].Text,
+                    sectionOrdinal: pageSection.SectionIndex + 1,
+                    sectionPageCount: pageSection.SectionPageCount
+                        + (requiresDedicatedEndnotePage
+                            && pageSection.SectionIndex == pageToSection[^1].SectionIndex ? 1 : 0),
+                    footnoteIds: fnIds,
+                    endnoteIds: hasEndnotes && !requiresDedicatedEndnotePage && i == pageCount - 1
+                        ? endnoteIds
+                        : null)
+                {
+                    ModelKey = keys[i],
+                    ModelStart = plan.Ranges[i].Start,
+                    ModelBlocks = model.Blocks.Skip(plan.Ranges[i].Start).Take(plan.Ranges[i].Count).ToArray(),
+                };
+                box.ContentControlLockProbe = _sourceEditor.TryEvaluateContentControlLock;
+                box.OwnerSectionHf = ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots[i].HeaderSlot);
+                box.FooterOwnerSectionHf = ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots[i].FooterSlot);
+                newBoxes.Add(box);
+            }
+
+            if (requiresDedicatedEndnotePage)
+            {
+                var endnotePage = BuildDedicatedEndnotePage(
+                    model, pageCount, assignment, pageToSection, differentOddEvenPages, endnoteIds);
+                endnotePage.ModelStart = model.Blocks.Count;
+                endnotePage.ModelBlocks = [];
+                newBoxes.Add(endnotePage);
+            }
+
+            // Retire the boxes that were replaced; keep the others where they are in the page host.
+            foreach (var old in oldBoxes)
+            {
+                if (newBoxes.Contains(old))
+                    continue;
+                UnhookTextChanged(old);
+                _undoCoordinator.UnhookBox(old);
+                UnhookShiftArrow(old);
+                UnhookDragDrop(old);
+                _contentBottoms.Remove(old);
+            }
+
+            var children = _pageHost.Children;
+            for (var i = 0; i < newBoxes.Count; i++)
+            {
+                if (i < children.Count && ReferenceEquals(children[i], newBoxes[i]))
+                    continue;
+                if (i < children.Count)
+                    children.RemoveAt(i);
+                children.Insert(i, newBoxes[i]);
+            }
+            while (children.Count > newBoxes.Count)
+                children.RemoveAt(children.Count - 1);
+
+            _pageBoxes.Clear();
+            _pageBoxes.AddRange(newBoxes);
+            var kept = 0;
+            foreach (var box in newBoxes)
+            {
+                if (oldBoxes.Contains(box))
+                {
+                    kept++;
+                    continue;
+                }
+                HookTextChanged(box);
+                HookShiftArrow(box);
+                HookDragDrop(box);
+                _undoCoordinator.HookBox(box);
+            }
+            LastRebuildKeptBoxes = kept;
+
+            for (var i = 0; i < _pageBoxes.Count; i++)
+            {
+                _pageBoxes[i].PreviousBox = i > 0 ? _pageBoxes[i - 1] : null;
+                _pageBoxes[i].NextBox = i < _pageBoxes.Count - 1 ? _pageBoxes[i + 1] : null;
+            }
+
+            _boxRangesValid = true;
+            _headerFooterEditedSinceRebuild = false;
+            _editedSinceRepagination.Clear();
+            ScheduleContentBottomCapture();
+        }
+        finally
+        {
+            _rebuilding = false;
+        }
+    }
+
+    private void RebuildBoxesFromModelFull(int[] assignment, int pageCount)
+    {
+        _boxRangesValid = false;
         _rebuilding = true;
         try
         {
@@ -1348,28 +1607,20 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
             var model = _sourceEditor.Model;
             _sourceModel = model;
 
-            var scratch = new DocumentView();
-            scratch.LoadModel(model);
-            var allBlocks = scratch.Document.Blocks.ToList();
-            scratch.Document.Blocks.Clear();
-
-            int[] assignment;
-            int pageCount;
-            try
+            var plan = PlanPages(model, assignment, pageCount);
+            IReadOnlyList<IReadOnlyList<System.Windows.Documents.Block>> shards;
+            if (plan is not null)
             {
-                assignment = PaginationEngine.ComputeBlockPageAssignment(
-                    _sourceEditor, out var totalPageCount, null, layoutOnly: true);
-                pageCount = assignment.Length > 0 ? assignment.Max() + 1 : 1;
-                // Same rule as Build: a final block that runs past its first page owns those pages too.
-                pageCount = Math.Max(1, Math.Max(pageCount, totalPageCount));
+                shards = RenderPages(model, plan, _ => true);
             }
-            catch
+            else
             {
-                assignment = new int[allBlocks.Count];
-                pageCount = 1;
+                var scratch = new DocumentView();
+                scratch.LoadModel(model);
+                var allBlocks = scratch.Document.Blocks.ToList();
+                scratch.Document.Blocks.Clear();
+                shards = ShardByPageAssignment(allBlocks, assignment, pageCount);
             }
-
-            var shards = ShardByPageAssignment(allBlocks, assignment, pageCount);
 
             var pageFootnoteIds = new IReadOnlyList<int>[pageCount];
             for (var i = 0; i < pageCount; i++)
@@ -1433,6 +1684,13 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
 
             _undoCoordinator.ReAttach(_pageBoxes);
             _editedSinceRepagination.Clear();
+            if (plan is not null)
+            {
+                var ranges = plan.Ranges.ToList();
+                if (requiresDedicatedEndnotePage)
+                    ranges.Add((model.Blocks.Count, 0));
+                SetBoxModelRanges(ranges, model);
+            }
             ScheduleContentBottomCapture();
         }
         finally
@@ -2015,6 +2273,274 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
             return box.Body.GetPositionFromPoint(point, snapToText: true);
         }
         catch { return null; }
+    }
+
+    // ── W9: page plans by render unit ─────────────────────────────────────────────────────────────
+
+    /// <summary>Which render units (and so which model blocks) each body page shows.</summary>
+    internal sealed record PagePlan(
+        PagedLayoutSession.UnitPlan[] Units,
+        int[] UnitPage,
+        IReadOnlyList<(int Start, int Count)> Ranges);
+
+    /// <summary>
+    /// Plans the body pages by render unit: a unit (one block, or a run of list paragraphs rendered as one
+    /// WPF List) goes to the page of its first model block. Null when the model cannot be planned this
+    /// way (the caller shards a full render instead).
+    /// </summary>
+    internal static PagePlan? PlanPages(TextDocument model, int[] assignment, int pageCount)
+    {
+        PagedLayoutSession.UnitPlan[] units;
+        try
+        {
+            units = PagedLayoutSession.BuildUnitPlans(model);
+        }
+        catch (PagedLayoutSession.UnsupportedException)
+        {
+            return null;
+        }
+
+        pageCount = Math.Max(1, pageCount);
+        var unitPage = new int[units.Length];
+        for (var u = 0; u < units.Length; u++)
+        {
+            unitPage[u] = Math.Clamp(units[u].Start < assignment.Length ? assignment[units[u].Start] : 0, 0, pageCount - 1);
+            if (u > 0 && unitPage[u] < unitPage[u - 1])
+                return null;
+        }
+
+        var ranges = new (int Start, int Count)[pageCount];
+        var next = 0;
+        var unit = 0;
+        for (var page = 0; page < pageCount; page++)
+        {
+            var start = next;
+            while (unit < units.Length && unitPage[unit] == page)
+            {
+                next = units[unit].End;
+                unit++;
+            }
+            ranges[page] = (start, next - start);
+        }
+
+        return new PagePlan(units, unitPage, ranges);
+    }
+
+    /// <summary>
+    /// Renders the editable (Tag-bearing) blocks of the pages <paramref name="renderPage"/> selects, with
+    /// the same context and contextual spacing a full render gives them; other pages get no blocks.
+    /// </summary>
+    internal static IReadOnlyList<IReadOnlyList<System.Windows.Documents.Block>> RenderPages(
+        TextDocument model,
+        PagePlan plan,
+        Func<int, bool> renderPage)
+    {
+        var shards = new List<List<System.Windows.Documents.Block>>(plan.Ranges.Count);
+        for (var i = 0; i < plan.Ranges.Count; i++)
+            shards.Add([]);
+
+        var units = plan.Units;
+        DocumentView? scratch = null;
+        var u = 0;
+        while (u < units.Length)
+        {
+            if (!renderPage(plan.UnitPage[u]))
+            {
+                u++;
+                continue;
+            }
+
+            var end = u + 1;
+            while (end < units.Length && renderPage(plan.UnitPage[end]))
+                end++;
+
+            if (scratch is null)
+            {
+                scratch = new DocumentView();
+                scratch.BindModelForRangeRender(model);
+            }
+            var rendered = scratch.RenderBodyUnitRange(units[u].Start, units[end - 1].End);
+            for (var k = 0; k < rendered.Count && u + k < end; k++)
+            {
+                var renderedUnit = rendered[k];
+                var unitIndex = u + k;
+                if (renderedUnit.Kind == DocumentView.BodyRenderUnitKind.BodyParagraph
+                    && renderedUnit.Blocks[0] is System.Windows.Documents.Paragraph paragraph)
+                {
+                    var margin = paragraph.Margin;
+                    var top = PreviousBodyParagraph(units, unitIndex) is { } before
+                        && DocumentView.SuppressesContextualSpacingForLayout(before, renderedUnit.BodyParagraph!, model)
+                        ? 0
+                        : margin.Top;
+                    var bottom = NextBodyParagraph(units, unitIndex) is { } after
+                        && DocumentView.SuppressesContextualSpacingForLayout(renderedUnit.BodyParagraph!, after, model)
+                        ? 0
+                        : margin.Bottom;
+                    paragraph.Margin = new Thickness(margin.Left, top, margin.Right, bottom);
+                }
+                shards[plan.UnitPage[unitIndex]].AddRange(renderedUnit.Blocks);
+            }
+            u = end;
+        }
+
+        return shards;
+    }
+
+    private static FreeW.Core.Model.Paragraph? PreviousBodyParagraph(PagedLayoutSession.UnitPlan[] units, int index)
+    {
+        for (var u = index - 1; u >= 0; u--)
+        {
+            switch (units[u].Kind)
+            {
+                case DocumentView.BodyRenderUnitKind.Transparent:
+                    continue;
+                case DocumentView.BodyRenderUnitKind.BodyParagraph:
+                    return (FreeW.Core.Model.Paragraph)units[u].Blocks[0];
+                default:
+                    return null;
+            }
+        }
+        return null;
+    }
+
+    private static FreeW.Core.Model.Paragraph? NextBodyParagraph(PagedLayoutSession.UnitPlan[] units, int index)
+    {
+        for (var u = index + 1; u < units.Length; u++)
+        {
+            switch (units[u].Kind)
+            {
+                case DocumentView.BodyRenderUnitKind.Transparent:
+                    continue;
+                case DocumentView.BodyRenderUnitKind.BodyParagraph:
+                    return (FreeW.Core.Model.Paragraph)units[u].Blocks[0];
+                default:
+                    return null;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>The page facts a body page box is built from; equal keys and blocks mean the box can stay.</summary>
+    private static string BoxKey(
+        int physicalPageIndex,
+        HeaderFooterPageSectionPlan pageSection,
+        HeaderFooterSlotPlan slots,
+        string? pageNumberText,
+        int totalBoxCount,
+        int sectionPageCount,
+        TextDocument model,
+        (int Start, int Count) range,
+        bool carriesEndnotes)
+    {
+        var footnoteIds = new List<int>();
+        for (var m = range.Start; m < range.Start + range.Count && m < model.Blocks.Count; m++)
+        {
+            foreach (var id in PaginationEngine.FootnoteIdsInModelBlock(model.Blocks[m]))
+            {
+                if (!footnoteIds.Contains(id))
+                    footnoteIds.Add(id);
+            }
+        }
+
+        return string.Join(
+            "|",
+            physicalPageIndex,
+            pageSection.SectionIndex,
+            pageSection.SectionRelativePageNumber,
+            // Page settings and header/footer content only change through commands the panel rebuilds
+            // everything for (or through an in-page header/footer edit, which also disables reuse).
+            slots.Header is null,
+            slots.HeaderSlot,
+            slots.Footer is null,
+            slots.FooterSlot,
+            pageNumberText,
+            totalBoxCount,
+            sectionPageCount,
+            string.Join(",", footnoteIds),
+            carriesEndnotes);
+    }
+
+    /// <summary>Records which model blocks each box shows (aligned with <see cref="PageBoxes"/>).</summary>
+    private void SetBoxModelRanges(IReadOnlyList<(int Start, int Count)> ranges, TextDocument model)
+    {
+        if (ranges.Count != _pageBoxes.Count)
+        {
+            _boxRangesValid = false;
+            return;
+        }
+
+        for (var i = 0; i < ranges.Count; i++)
+        {
+            _pageBoxes[i].ModelStart = ranges[i].Start;
+            _pageBoxes[i].ModelBlocks = model.Blocks.Skip(ranges[i].Start).Take(ranges[i].Count).ToArray();
+        }
+        _boxRangesValid = true;
+    }
+
+    /// <summary>
+    /// The contiguous run of page boxes edited since the last commit and the model blocks they show, when
+    /// that is known exactly: a commit then replaces only those blocks.
+    /// </summary>
+    internal bool TryGetEditedSpan(out int firstBox, out int lastBox)
+    {
+        firstBox = lastBox = -1;
+        if (!_boxRangesValid || _editedSinceCommit.Count == 0 || !ReferenceEquals(_sourceModel, _sourceEditor.Model))
+            return false;
+
+        for (var i = 0; i < _pageBoxes.Count; i++)
+        {
+            if (!_editedSinceCommit.Contains(_pageBoxes[i]))
+                continue;
+            if (firstBox < 0)
+                firstBox = i;
+            lastBox = i;
+        }
+        if (firstBox < 0 || _editedSinceCommit.Any(box => !_pageBoxes.Contains(box)))
+            return false;
+
+        // The model must still hold exactly what the boxes were built from.
+        var blocks = _sourceEditor.Model.Blocks;
+        var expectedStart = 0;
+        foreach (var box in _pageBoxes)
+        {
+            if (box.ModelBlocks is null || box.ModelStart != expectedStart)
+                return false;
+            expectedStart += box.ModelBlocks.Length;
+        }
+        if (expectedStart != blocks.Count)
+            return false;
+        for (var i = firstBox; i <= lastBox; i++)
+        {
+            var box = _pageBoxes[i];
+            for (var k = 0; k < box.ModelBlocks!.Length; k++)
+            {
+                if (!ReferenceEquals(blocks[box.ModelStart + k], box.ModelBlocks[k]))
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>After a span commit: the span's boxes now show <paramref name="perBox"/>; later boxes shift.</summary>
+    internal void OnSpanCommitted(int firstBox, int lastBox, IReadOnlyList<FreeW.Core.Model.Block[]> perBox)
+    {
+        var position = _pageBoxes[firstBox].ModelStart;
+        for (var i = firstBox; i < _pageBoxes.Count; i++)
+        {
+            var box = _pageBoxes[i];
+            box.ModelStart = position;
+            if (i <= lastBox)
+                box.ModelBlocks = perBox[i - firstBox];
+            position += box.ModelBlocks!.Length;
+        }
+        _editedSinceCommit.Clear();
+    }
+
+    /// <summary>A whole-document commit replaced every block: what the boxes show is no longer known.</summary>
+    internal void OnWholeBodyCommitted()
+    {
+        _editedSinceCommit.Clear();
+        _boxRangesValid = false;
     }
 
     // ── sharding ──────────────────────────────────────────────────────────────────────────────────

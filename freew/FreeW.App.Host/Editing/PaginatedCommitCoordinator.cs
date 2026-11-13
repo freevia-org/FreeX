@@ -70,6 +70,51 @@ internal static class PaginatedCommitCoordinator
         if (!panel.HasPendingBodyEdits)
             return;
 
+        // W9: when the panel knows which model blocks each page shows, only the pages edited since the
+        // last commit are read back, and only their blocks are replaced (the source editor refreshes
+        // just those blocks too). Untouched blocks keep their instances, which is what lets the layout
+        // session reuse their render and their pages.
+        if (panel.TryGetEditedSpan(out var firstBox, out var lastBox))
+        {
+            var perBox = new List<ModelBlock[]>();
+            var spanBlocks = new List<ModelBlock>();
+            for (var i = firstBox; i <= lastBox; i++)
+            {
+                var read = new List<ModelBlock>();
+                targetEditor.ReadBlocksInto(panel.PageBoxes[i].Body.Document, read);
+                perBox.Add(read.ToArray());
+                spanBlocks.AddRange(read);
+            }
+
+            var spanStart = panel.PageBoxes[firstBox].ModelStart;
+            var spanCount = 0;
+            for (var i = firstBox; i <= lastBox; i++)
+                spanCount += panel.PageBoxes[i].ModelBlocks!.Length;
+
+            // Never leave an empty document; the whole-body path below adds the empty paragraph.
+            if (spanBlocks.Count > 0 || spanCount < model.Blocks.Count)
+            {
+                panel.MarkBodyCommitted();
+                try
+                {
+                    targetEditor.HintNextBodyReplacement(spanStart, spanCount, spanBlocks.Count);
+                    panel.RunOwnModelMutation(() =>
+                        targetEditor.Commands.Execute(new ReplaceBlocksCommand(spanStart, spanCount, spanBlocks)));
+                }
+                catch
+                {
+                    panel.MarkBodyPending();
+                    throw;
+                }
+                finally
+                {
+                    targetEditor.ClearBodyReplacementHint();
+                }
+                panel.OnSpanCommitted(firstBox, lastBox, perBox);
+                return;
+            }
+        }
+
         var collected = new List<ModelBlock>();
 
         foreach (var box in panel.PageBoxes)
@@ -95,5 +140,6 @@ internal static class PaginatedCommitCoordinator
             panel.MarkBodyPending();
             throw;
         }
+        panel.OnWholeBodyCommitted();
     }
 }

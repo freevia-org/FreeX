@@ -187,6 +187,16 @@ internal sealed class PageBox : Border
     /// </summary>
     internal SectionHeadersFooters? OwnerSectionHf { get; set; }
 
+    // ── W9: what this page shows of the model (set by the paged editor) ──────────────────────────
+    /// <summary>Index of the first top-level model block on this page.</summary>
+    internal int ModelStart { get; set; }
+
+    /// <summary>The top-level model blocks this page shows, as committed (null while unknown).</summary>
+    internal FreeW.Core.Model.Block[]? ModelBlocks { get; set; }
+
+    /// <summary>The page facts this box was built from (number, section, slots, notes); null: never reused.</summary>
+    internal string? ModelKey { get; set; }
+
     /// <summary>
     /// The <see cref="SectionHeadersFooters"/> that this page box's FOOTER sub-editor should commit
     /// back to. Resolved independently of <see cref="OwnerSectionHf"/> because the header and footer

@@ -344,7 +344,7 @@ public sealed partial class DocumentView : RichTextBox
             }
         };
 
-        _editingSession.Changed += Render;
+        _editingSession.Changed += OnEditingSessionChangedRender;
 
         // Clear the floating-image selection when the user clicks within the text body so the inline
         // selection takes priority and the floating selection does not persist unexpectedly.
@@ -442,7 +442,24 @@ public sealed partial class DocumentView : RichTextBox
     /// page-break markers, field context and, when the model needs inline page/column-break fragments,
     /// the same fragment render the print path builds. Null while outline levels are collapsed.
     /// </summary>
-    internal DocumentView? CreateLayoutRenderTwin()
+    internal DocumentView? CreateLayoutRenderTwin() => CreateLayoutRenderTwin(renderBody: true);
+
+    /// <summary>True while outline levels are collapsed (a range render cannot represent hidden blocks).</summary>
+    internal bool HasHiddenOutlineBlocks => _outlineCollapse.BuildHiddenBlockIndices(_model.Blocks).Count > 0;
+
+    /// <summary>
+    /// True when a page-anchored floating image reserves wrap space in a later paragraph: that context
+    /// is placed by estimated page position, so a block's render can change with edits far before it.
+    /// </summary>
+    internal bool HasLeadingWrapReservations() =>
+        BuildLeadingWrapReservations(_model, out var suppressed).Count > 0 || suppressed.Count > 0;
+
+    /// <summary>
+    /// <see cref="CreateLayoutRenderTwin()"/>; with <paramref name="renderBody"/> false the twin is only
+    /// bound to the model (nothing rendered yet) and renders block ranges on demand through
+    /// <see cref="RenderBodyUnitRange"/>.
+    /// </summary>
+    internal DocumentView? CreateLayoutRenderTwin(bool renderBody)
     {
         if (_outlineCollapse.BuildHiddenBlockIndices(_model.Blocks).Count > 0)
             return null;
@@ -476,7 +493,10 @@ public sealed partial class DocumentView : RichTextBox
             };
         }
 
-        twin.LoadModel(_model);
+        if (renderBody)
+            twin.LoadModel(_model);
+        else
+            twin.BindModelForRangeRender(_model);
         return twin;
     }
 
@@ -5730,11 +5750,11 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void RefreshFromModel() => Render();
 
-    private void Render()
+    // Expose the current file name and Review display policy to the static run builders for one render
+    // pass. Same [ThreadStatic] pattern as _renderFileName: set here, read in BuildRun, never persisted
+    // beyond the pass (the caller resets _renderJoinSlashes when it ends).
+    private void BeginRenderPass()
     {
-        // Expose the current file name and Review display policy to the static
-        // run builders for this render pass. Same [ThreadStatic] pattern as _renderFileName: set here,
-        // read in BuildRun, never persisted beyond the Render() call.
         _renderFileName = CurrentFileName;
         _renderFieldEvaluationDocument = FieldEvaluationDocument;
         _renderFieldEvaluationFileName = FieldEvaluationFileName;
@@ -5743,6 +5763,159 @@ public sealed partial class DocumentView : RichTextBox
         _renderJoinSlashes = !RenderPageBreakMarkers;
         _renderViewMode = ViewMode;
         _renderImageDiagnostics = new List<string>();
+    }
+
+    /// <summary>How a rendered body unit takes part in contextual spacing with its neighbours.</summary>
+    internal enum BodyRenderUnitKind
+    {
+        /// <summary>Ends the contextual-spacing chain (a list, a table, a multi-block paragraph).</summary>
+        Reset,
+
+        /// <summary>A body paragraph rendered as exactly one WPF paragraph: takes part in the chain.</summary>
+        BodyParagraph,
+
+        /// <summary>Leaves the chain as it was (a single-paragraph MultiLevel Heading1 list run).</summary>
+        Transparent
+    }
+
+    /// <summary>
+    /// One unit of a body render: the model blocks <see cref="Start"/>..<see cref="End"/> (exclusive) and
+    /// the top-level WPF blocks they render to. A run of same-kind list paragraphs is one unit (one WPF
+    /// List); every other block is a unit of its own.
+    /// </summary>
+    internal sealed record BodyRenderUnit(
+        int Start,
+        int End,
+        IReadOnlyList<System.Windows.Documents.Block> Blocks,
+        BodyRenderUnitKind Kind,
+        ModelParagraph? BodyParagraph);
+
+    /// <summary>Whole-document render context a body render pass needs before its first block.</summary>
+    private sealed record BodyRenderContext(
+        IReadOnlyDictionary<int, IReadOnlyList<LeadingWrapReservation>> LeadingWrapReservations,
+        IReadOnlySet<ModelRun> SuppressedFloatingWrapRuns,
+        IReadOnlyDictionary<int, PreservedNumberingMarkerPlan> PreservedNumberingMarkers,
+        DocumentListMarkerSequencePlanner ListMarkerSequence);
+
+    private BodyRenderContext CreateBodyRenderContext(TextDocument model, int replayListNumberingTo)
+    {
+        var leadingWrapReservations = BuildLeadingWrapReservations(model, out var suppressedFloatingWrapRuns);
+        var sequence = new DocumentListMarkerSequencePlanner(
+            model.MultiLevelList.NumberFormats, model.MultiLevelList.LevelTexts);
+        // The list numbering state at a block is what the blocks before it advanced it to: every list
+        // paragraph advances it and a table replays its cells' list paragraphs (see the render loop).
+        for (var index = 0; index < replayListNumberingTo && index < model.Blocks.Count; index++)
+        {
+            switch (model.Blocks[index])
+            {
+                case ModelParagraph { Formatting.ListKind: not ListKind.None } listParagraph:
+                    sequence.Advance(listParagraph);
+                    break;
+                case ModelTable table:
+                    TableCellListMarkerPlanner.AdvanceThroughTable(table, sequence);
+                    break;
+            }
+        }
+
+        return new BodyRenderContext(
+            leadingWrapReservations,
+            suppressedFloatingWrapRuns,
+            PreservedNumberingMarkerPlanner.Build(model),
+            sequence);
+    }
+
+    /// <summary>
+    /// Renders the model blocks <paramref name="from"/>..<paramref name="to"/> (exclusive) of this editor's
+    /// model, unit by unit, with the context they need: list numbering continues from the blocks before
+    /// <paramref name="from"/>, and wrap reservations, preserved numbering markers, note numbers and field
+    /// values come from the whole document exactly as a full render resolves them. Both bounds must be
+    /// unit boundaries (never inside a run of list paragraphs). Contextual spacing between units is NOT
+    /// applied -- every unit keeps its own margins -- so the caller can assemble units rendered at
+    /// different times and apply it across them (see <see cref="ApplyContextualSpacingAcrossUnits"/>).
+    /// Outline collapse is ignored (callers do not use this while levels are collapsed).
+    /// </summary>
+    internal IReadOnlyList<BodyRenderUnit> RenderBodyUnitRange(int from, int to)
+    {
+        var units = new List<BodyRenderUnit>();
+        BeginRenderPass();
+        try
+        {
+            var context = CreateBodyRenderContext(_model, from);
+            RenderBodyUnits(
+                from,
+                Math.Min(to, _model.Blocks.Count),
+                hidden: new HashSet<int>(),
+                context,
+                applyBodyContextualSpacing: false,
+                units.Add,
+                onHidden: null);
+        }
+        finally
+        {
+            _renderJoinSlashes = false;
+        }
+        return units;
+    }
+
+    /// <summary>
+    /// Applies contextual spacing between consecutive units exactly as a full render does inside its
+    /// loop: two adjacent body paragraphs that suppress it lose the bottom margin of the first and the top
+    /// margin of the second. <paramref name="naturalMargins"/> gives each body paragraph unit's own margins
+    /// (as rendered, before any suppression) so a previously suppressed margin is restored when the
+    /// neighbour no longer suppresses it.
+    /// </summary>
+    internal static void ApplyContextualSpacingAcrossUnits(
+        TextDocument model,
+        IReadOnlyList<BodyRenderUnit> units,
+        Func<BodyRenderUnit, Thickness> naturalMargin)
+    {
+        BodyRenderUnit? previous = null;
+        foreach (var unit in units)
+        {
+            switch (unit.Kind)
+            {
+                case BodyRenderUnitKind.Transparent:
+                    continue;
+                case BodyRenderUnitKind.Reset:
+                    previous = null;
+                    continue;
+            }
+
+            var current = (WpfParagraph)unit.Blocks[0];
+            var margin = naturalMargin(unit);
+            current.Margin = margin;
+            if (previous is not null
+                && SuppressesContextualSpacing(previous.BodyParagraph!, unit.BodyParagraph!, model))
+            {
+                var previousParagraph = (WpfParagraph)previous.Blocks[0];
+                previousParagraph.Margin = new Thickness(
+                    previousParagraph.Margin.Left,
+                    previousParagraph.Margin.Top,
+                    previousParagraph.Margin.Right,
+                    0);
+                current.Margin = new Thickness(margin.Left, 0, margin.Right, margin.Bottom);
+            }
+            previous = unit;
+        }
+    }
+
+    /// <summary>Whether two adjacent body paragraphs suppress contextual spacing between them (render rule).</summary>
+    internal static bool SuppressesContextualSpacingForLayout(ModelParagraph previous, ModelParagraph current, TextDocument model) =>
+        SuppressesContextualSpacing(previous, current, model);
+
+    /// <summary>
+    /// Binds <paramref name="document"/> to this (never shown) editor for <see cref="RenderBodyUnitRange"/>
+    /// without rendering the whole body.
+    /// </summary>
+    internal void BindModelForRangeRender(TextDocument document)
+    {
+        _editingSession.LoadDocument(document);
+        _outlineCollapse.Clear();
+    }
+
+    private void Render()
+    {
+        BeginRenderPass();
         var flow = new FlowDocument { PagePadding = new Thickness(0) };
         // Word's default is no pair kerning (see RunKerningPlanner); runs that request it opt back in.
         Typography.SetKerning(flow, false);
@@ -5754,17 +5927,355 @@ public sealed partial class DocumentView : RichTextBox
         // skip building them, and remember them (with their preceding-visible-block count) so
         // CommitToModel can restore them. With nothing collapsed both collections are empty and this is
         // a no-op, leaving the original rendering path unchanged.
-        var blocks = _model.Blocks;
         var hidden = _outlineCollapse.BuildHiddenBlockIndices(_model.Blocks);
         _hiddenBlocks.Clear();
+        var renderedUnits = TrackBodyUnits ? new List<RenderedBodyUnit>() : null;
+        RenderBodyUnits(
+            0,
+            _model.Blocks.Count,
+            hidden,
+            CreateBodyRenderContext(_model, replayListNumberingTo: 0),
+            applyBodyContextualSpacing: true,
+            unit =>
+            {
+                foreach (var block in unit.Blocks)
+                    flow.Blocks.Add(block);
+                renderedUnits?.Add(new RenderedBodyUnit(unit, unit.Blocks[0].Margin));
+            },
+            (visibleOffset, block) => _hiddenBlocks.Add((visibleOffset, block)));
+        _bodyUnits = renderedUnits is not null && hidden.Count == 0 && !RenderInlineFlowBreakFragmentsForPagination
+            ? SignBodyUnits(renderedUnits)
+            : null;
+        _bodyRenderInProgress = true;
+
+        // Snapshot this pass's image-decode losses onto the instance so ImageDecodeDiagnostics reflects
+        // what is actually showing in the document right now (see the field's doc comment).
+        _imageDecodeDiagnostics = (IReadOnlyList<string>?)_renderImageDiagnostics ?? Array.Empty<string>();
+        _renderJoinSlashes = false;
+
+        // See SpellCheckDocumentAssignmentGate: serialize the Document swap (and the WPF spell-checker
+        // initialization it can trigger) across all DocumentView instances to avoid a native COM race
+        // under parallel construction/rendering.
+        try
+        {
+            lock (SpellCheckDocumentAssignmentGate)
+            {
+                Document = flow;
+            }
+        }
+        finally
+        {
+            _bodyRenderInProgress = false;
+        }
+        ApplyPageChrome();
+        ApplyProtection();
+        SyncBodyOverlays();
+    }
+
+    private void SyncBodyOverlays()
+    {
+        SyncFormattingMarksAdorner();
+        SyncPageBreakAdorner();
+        SyncColumnRuleAdorner();
+        SyncPageBorderAdorner();
+        SyncLineNumberAdorner();
+        SyncChangeBarAdorner();
+        SyncTextEffectsAdorner();
+        SyncPageGridlinesAdorner();
+        SyncShapeEditPointsAdorner();
+        SyncFloatingObjectsCanvas();
+    }
+
+    // ── incremental body refresh (W9) ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// When set, every full render records its units so a later whole-block replacement made through
+    /// the command bus (see <see cref="HintNextBodyReplacement"/>) re-renders only the units it changed.
+    /// The paged editor sets it on the hidden source editor while it is the editing surface.
+    /// </summary>
+    internal bool TrackBodyUnits { get; set; }
+
+    /// <summary>One unit of the current body render with what decides whether it can be kept.</summary>
+    private sealed class RenderedBodyUnit(BodyRenderUnit unit, Thickness naturalMargin)
+    {
+        public BodyRenderUnit Unit { get; set; } = unit;
+        public Thickness NaturalMargin { get; } = naturalMargin;
+        public ModelBlock[] Blocks { get; set; } = [];
+        public string? Signature { get; set; }
+    }
+
+    private List<RenderedBodyUnit>? _bodyUnits;
+    private bool _bodyRenderInProgress;
+    private (int Start, int OldCount, int NewCount)? _bodyReplacementHint;
+
+    /// <summary>Full renders and incremental refreshes so far (diagnostics for tests and the probe).</summary>
+    internal int FullBodyRenderCount { get; private set; }
+
+    internal int IncrementalBodyRefreshCount { get; private set; }
+
+    /// <summary>
+    /// Announces that the next model change notification is the replacement of model blocks
+    /// <paramref name="start"/>..<paramref name="start"/>+<paramref name="oldCount"/> by
+    /// <paramref name="newCount"/> new blocks (and nothing else), so the body can be refreshed in place.
+    /// The caller clears it with <see cref="ClearBodyReplacementHint"/> once the command has run.
+    /// </summary>
+    internal void HintNextBodyReplacement(int start, int oldCount, int newCount) =>
+        _bodyReplacementHint = (start, oldCount, newCount);
+
+    internal void ClearBodyReplacementHint() => _bodyReplacementHint = null;
+
+    private void OnEditingSessionChangedRender()
+    {
+        if (_bodyReplacementHint is { } hint)
+        {
+            _bodyReplacementHint = null;
+            if (TryRefreshBodyAfterReplacement(hint))
+                return;
+        }
+
+        Render();
+    }
+
+    protected override void OnTextChanged(System.Windows.Controls.TextChangedEventArgs e)
+    {
+        // Any change that did not come from a render makes the recorded units stale.
+        if (!_bodyRenderInProgress)
+            _bodyUnits = null;
+        base.OnTextChanged(e);
+    }
+
+    private List<RenderedBodyUnit>? SignBodyUnits(List<RenderedBodyUnit> units)
+    {
+        FullBodyRenderCount++;
+        PagedLayoutSession.UnitPlan[] plans;
+        try
+        {
+            plans = PagedLayoutSession.BuildUnitPlans(_model, signTableIndex: true);
+        }
+        catch (PagedLayoutSession.UnsupportedException)
+        {
+            return null;
+        }
+
+        if (plans.Length != units.Count)
+            return null;
+        for (var i = 0; i < units.Count; i++)
+        {
+            if (plans[i].Start != units[i].Unit.Start || plans[i].End != units[i].Unit.End)
+                return null;
+            units[i].Blocks = plans[i].Blocks;
+            units[i].Signature = plans[i].Signature;
+        }
+        return units;
+    }
+
+    /// <summary>
+    /// Re-renders only the body units a whole-block replacement changed (plus any unit whose rendering
+    /// context changed with it: list numbering, note numbers, field results, table estimates) and swaps
+    /// them into the live flow document. False when the replacement cannot be applied in place; the
+    /// caller then renders everything.
+    /// </summary>
+    private bool TryRefreshBodyAfterReplacement((int Start, int OldCount, int NewCount) hint)
+    {
+        if (_bodyUnits is not { Count: > 0 } old
+            || Document is not { } document
+            || RenderInlineFlowBreakFragmentsForPagination
+            || HasHiddenOutlineBlocks
+            || HasRendererInlineFlowBreakFragments(_model)
+            || HasLeadingWrapReservations())
+        {
+            return false;
+        }
+
+        PagedLayoutSession.UnitPlan[] plans;
+        try
+        {
+            plans = PagedLayoutSession.BuildUnitPlans(_model, signTableIndex: true);
+        }
+        catch (PagedLayoutSession.UnsupportedException)
+        {
+            return false;
+        }
+
+        var delta = hint.NewCount - hint.OldCount;
+        if (old[^1].Unit.End + delta != _model.Blocks.Count)
+            return false;
+
+        static bool Same(RenderedBodyUnit unit, PagedLayoutSession.UnitPlan plan, int shift) =>
+            unit.Signature is not null
+            && plan.Signature is not null
+            && unit.Signature == plan.Signature
+            && unit.Unit.Start + shift == plan.Start
+            && unit.Unit.End + shift == plan.End
+            && unit.Blocks.AsSpan().SequenceEqual(plan.Blocks);
+
+        var prefix = 0;
+        while (prefix < old.Count && prefix < plans.Length
+            && old[prefix].Unit.End <= hint.Start
+            && Same(old[prefix], plans[prefix], 0))
+        {
+            prefix++;
+        }
+
+        var suffix = 0;
+        while (suffix < old.Count - prefix && suffix < plans.Length - prefix
+            && old[^(suffix + 1)].Unit.Start >= hint.Start + hint.OldCount
+            && Same(old[^(suffix + 1)], plans[^(suffix + 1)], delta))
+        {
+            suffix++;
+        }
+
+        var newMiddle = plans.Length - suffix - prefix;
+        var oldMiddle = old.Count - suffix - prefix;
+        // Re-rendering most of the body costs no less than a full render.
+        if (newMiddle > Math.Max(8, plans.Length / 2))
+            return false;
+
+        // Every block of the old middle must still be where the last render put it.
+        foreach (var unit in old.Skip(prefix).Take(oldMiddle))
+        {
+            if (unit.Unit.Blocks.Any(block => !ReferenceEquals(block.Parent, document)))
+                return false;
+        }
+        var anchor = prefix > 0 ? old[prefix - 1].Unit.Blocks[^1] : null;
+        if (anchor is not null && !ReferenceEquals(anchor.Parent, document))
+            return false;
+
+        var fresh = newMiddle > 0
+            ? RenderBodyUnitRange(plans[prefix].Start, plans[prefix + newMiddle - 1].End)
+            : [];
+        if (fresh.Count != newMiddle)
+            return false;
+        for (var k = 0; k < newMiddle; k++)
+        {
+            if (fresh[k].Start != plans[prefix + k].Start || fresh[k].End != plans[prefix + k].End)
+                return false;
+        }
+
+        _bodyRenderInProgress = true;
+        try
+        {
+            foreach (var unit in old.Skip(prefix).Take(oldMiddle))
+            {
+                foreach (var block in unit.Unit.Blocks)
+                    document.Blocks.Remove(block);
+            }
+
+            var previous = anchor;
+            foreach (var unit in fresh)
+            {
+                foreach (var block in unit.Blocks)
+                {
+                    if (previous is not null)
+                        document.Blocks.InsertAfter(previous, block);
+                    else if (document.Blocks.FirstBlock is { } first)
+                        document.Blocks.InsertBefore(first, block);
+                    else
+                        document.Blocks.Add(block);
+                    previous = block;
+                }
+            }
+
+            var updated = new List<RenderedBodyUnit>(plans.Length);
+            updated.AddRange(old.Take(prefix));
+            for (var k = 0; k < newMiddle; k++)
+            {
+                updated.Add(new RenderedBodyUnit(fresh[k], fresh[k].Blocks[0].Margin)
+                {
+                    Blocks = plans[prefix + k].Blocks,
+                    Signature = plans[prefix + k].Signature
+                });
+            }
+            foreach (var unit in old.Skip(prefix + oldMiddle))
+            {
+                unit.Unit = unit.Unit with { Start = unit.Unit.Start + delta, End = unit.Unit.End + delta };
+                updated.Add(unit);
+            }
+
+            // Contextual spacing across the seams, from each unit's own margins and its real neighbours.
+            ApplyContextualSpacingAround(
+                updated,
+                Math.Max(0, prefix - 2),
+                Math.Min(updated.Count, prefix + newMiddle + 2));
+            _bodyUnits = updated;
+        }
+        finally
+        {
+            _bodyRenderInProgress = false;
+            _renderJoinSlashes = false;
+        }
+
+        IncrementalBodyRefreshCount++;
+        SyncBodyOverlays();
+        return true;
+    }
+
+    /// <summary>
+    /// Sets the margins of body-paragraph units <paramref name="from"/>..<paramref name="to"/> (exclusive)
+    /// from their own margins and the contextual-spacing rule with their real neighbours.
+    /// </summary>
+    private void ApplyContextualSpacingAround(List<RenderedBodyUnit> units, int from, int to)
+    {
+        static RenderedBodyUnit? Neighbour(List<RenderedBodyUnit> list, int index, int step)
+        {
+            for (var i = index + step; i >= 0 && i < list.Count; i += step)
+            {
+                switch (list[i].Unit.Kind)
+                {
+                    case BodyRenderUnitKind.Transparent:
+                        continue;
+                    case BodyRenderUnitKind.BodyParagraph:
+                        return list[i];
+                    default:
+                        return null;
+                }
+            }
+            return null;
+        }
+
+        void Fix(int index)
+        {
+            if (index < 0 || index >= units.Count || units[index].Unit.Kind != BodyRenderUnitKind.BodyParagraph)
+                return;
+            var unit = units[index];
+            var paragraph = (WpfParagraph)unit.Unit.Blocks[0];
+            var model = unit.Unit.BodyParagraph!;
+            var natural = unit.NaturalMargin;
+            var top = Neighbour(units, index, -1) is { } before
+                && SuppressesContextualSpacing(before.Unit.BodyParagraph!, model, _model) ? 0 : natural.Top;
+            var bottom = Neighbour(units, index, +1) is { } after
+                && SuppressesContextualSpacing(model, after.Unit.BodyParagraph!, _model) ? 0 : natural.Bottom;
+            paragraph.Margin = new Thickness(natural.Left, top, natural.Right, bottom);
+        }
+
+        for (var i = from; i < to; i++)
+            Fix(i);
+    }
+
+    /// <summary>
+    /// The body render loop: renders model blocks <paramref name="from"/>..<paramref name="to"/>
+    /// (exclusive) unit by unit (see <see cref="BodyRenderUnit"/>) and hands each unit to
+    /// <paramref name="emit"/> in order. With <paramref name="applyBodyContextualSpacing"/> two adjacent
+    /// body paragraphs that suppress contextual spacing get their facing margins zeroed here (a full
+    /// render); without it every unit keeps its own margins (a range render, assembled by the caller).
+    /// </summary>
+    private void RenderBodyUnits(
+        int from,
+        int to,
+        IReadOnlySet<int> hidden,
+        BodyRenderContext context,
+        bool applyBodyContextualSpacing,
+        Action<BodyRenderUnit> emit,
+        Action<int, ModelBlock>? onHidden)
+    {
+        var blocks = _model.Blocks;
         var visibleCount = 0;
 
         // Coalesce consecutive list paragraphs of the same kind into one WPF List so they render with
         // shared bullet/number decoration; everything else maps one-to-one via BuildBlock.
-        var leadingWrapReservations = BuildLeadingWrapReservations(
-            _model,
-            out var suppressedFloatingWrapRuns);
-        var preservedNumberingMarkers = PreservedNumberingMarkerPlanner.Build(_model);
+        var leadingWrapReservations = context.LeadingWrapReservations;
+        var suppressedFloatingWrapRuns = context.SuppressedFloatingWrapRuns;
+        var preservedNumberingMarkers = context.PreservedNumberingMarkers;
         ModelParagraph? previousBodyParagraph = null;
         WpfParagraph? previousBodyWpfParagraph = null;
         // R132 remediation: these persist across the WHOLE render pass (not per collected run) so a
@@ -5772,16 +6283,15 @@ public sealed partial class DocumentView : RichTextBox
         // across intervening body text/preserved-numbering chrome unless a later Number/MultiLevel
         // paragraph carries an explicit w:lvlOverride/startOverride restart (ListStartOverride). Mirrors
         // the Avalonia renderer's use of the same portable sequence planner.
-        var listMarkerSequence = new DocumentListMarkerSequencePlanner(
-            _model.MultiLevelList.NumberFormats, _model.MultiLevelList.LevelTexts);
-        var i = 0;
-        while (i < blocks.Count)
+        var listMarkerSequence = context.ListMarkerSequence;
+        var i = from;
+        while (i < to)
         {
             if (hidden.Contains(i))
             {
                 // Skip the hidden block but retain it (anchored to the visible blocks rendered so far)
                 // so the model is reconstructed faithfully on the next commit.
-                _hiddenBlocks.Add((visibleCount, blocks[i]));
+                onHidden?.Invoke(visibleCount, blocks[i]);
                 previousBodyParagraph = null;
                 previousBodyWpfParagraph = null;
                 i++;
@@ -5803,8 +6313,9 @@ public sealed partial class DocumentView : RichTextBox
                 // applied via List.StartIndex (a single WpfList only supports one auto-numbering start).
                 // MultiLevel doesn't need this split: its markers are computed text (below), so a restart
                 // override mid-run is handled by the shared sequence planner without a new List.
+                var unitStart = i;
                 var listParagraphs = new List<(ModelParagraph Paragraph, int BlockIndex)>();
-                while (i < blocks.Count
+                while (i < to
                     && !hidden.Contains(i)
                     && blocks[i] is ModelParagraph { Formatting.ListKind: var k } listParagraph
                     && k == kind
@@ -5864,8 +6375,7 @@ public sealed partial class DocumentView : RichTextBox
                                 wpfParagraph,
                                 listParagraph.Paragraph.Formatting.PageBreakBefore)
                             : [wpfParagraph];
-                    foreach (var renderedBlock in renderedBlocks)
-                        flow.Blocks.Add(renderedBlock);
+                    emit(new BodyRenderUnit(unitStart, i, renderedBlocks, BodyRenderUnitKind.Transparent, null));
                     continue;
                 }
                 ModelParagraph? previousListParagraph = null;
@@ -5912,7 +6422,7 @@ public sealed partial class DocumentView : RichTextBox
                     previousListParagraph = listParagraphs[p].Paragraph;
                     previousListWpfParagraph = itemParagraphs[^1];
                 }
-                flow.Blocks.Add(list);
+                emit(new BodyRenderUnit(unitStart, i, [list], BodyRenderUnitKind.Reset, null));
                 previousBodyParagraph = null;
                 previousBodyWpfParagraph = null;
             }
@@ -5937,14 +6447,22 @@ public sealed partial class DocumentView : RichTextBox
                         ? numberingMarker
                         : null,
                     RenderInlineFlowBreakFragmentsForPagination).ToList();
-                foreach (var block in renderedBlocks)
-                    flow.Blocks.Add(block);
+                var isBodyParagraph = blocks[i] is ModelParagraph
+                    && renderedBlocks.Count == 1
+                    && renderedBlocks[0] is WpfParagraph;
+                emit(new BodyRenderUnit(
+                    i,
+                    i + 1,
+                    renderedBlocks,
+                    isBodyParagraph ? BodyRenderUnitKind.BodyParagraph : BodyRenderUnitKind.Reset,
+                    isBodyParagraph ? (ModelParagraph)blocks[i] : null));
 
                 if (blocks[i] is ModelParagraph currentBodyParagraph
                     && renderedBlocks.Count == 1
                     && renderedBlocks[0] is WpfParagraph currentBodyWpfParagraph)
                 {
-                    if (previousBodyParagraph is not null
+                    if (applyBodyContextualSpacing
+                        && previousBodyParagraph is not null
                         && previousBodyWpfParagraph is not null
                         && SuppressesContextualSpacing(previousBodyParagraph, currentBodyParagraph, _model))
                     {
@@ -5972,31 +6490,6 @@ public sealed partial class DocumentView : RichTextBox
                 i++;
             }
         }
-
-        // Snapshot this pass's image-decode losses onto the instance so ImageDecodeDiagnostics reflects
-        // what is actually showing in the document right now (see the field's doc comment).
-        _imageDecodeDiagnostics = (IReadOnlyList<string>?)_renderImageDiagnostics ?? Array.Empty<string>();
-        _renderJoinSlashes = false;
-
-        // See SpellCheckDocumentAssignmentGate: serialize the Document swap (and the WPF spell-checker
-        // initialization it can trigger) across all DocumentView instances to avoid a native COM race
-        // under parallel construction/rendering.
-        lock (SpellCheckDocumentAssignmentGate)
-        {
-            Document = flow;
-        }
-        ApplyPageChrome();
-        ApplyProtection();
-        SyncFormattingMarksAdorner();
-        SyncPageBreakAdorner();
-        SyncColumnRuleAdorner();
-        SyncPageBorderAdorner();
-        SyncLineNumberAdorner();
-        SyncChangeBarAdorner();
-        SyncTextEffectsAdorner();
-        SyncPageGridlinesAdorner();
-        SyncShapeEditPointsAdorner();
-        SyncFloatingObjectsCanvas();
     }
 
     /// <summary>

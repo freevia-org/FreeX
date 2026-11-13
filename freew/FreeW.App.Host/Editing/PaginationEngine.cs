@@ -477,7 +477,7 @@ internal static class PaginationEngine
         return flow;
     }
 
-    private static void ClearTags(DependencyObject node)
+    internal static void ClearTags(DependencyObject node)
     {
         switch (node)
         {
@@ -520,7 +520,7 @@ internal static class PaginationEngine
     /// The default running header and footer in effect for the section that owns
     /// <paramref name="page"/>, honouring "link to previous" (nearest earlier section defining the slot).
     /// </summary>
-    private static (HeaderFooter? Header, HeaderFooter? Footer) ResolveRunningHeaderFooter(
+    internal static (HeaderFooter? Header, HeaderFooter? Footer) ResolveRunningHeaderFooter(
         TextDocument document,
         PageSettings page)
     {
@@ -1113,7 +1113,7 @@ internal static class PaginationEngine
     /// page -- page numbers never decrease along the text, so a binary search over the paragraph's
     /// symbol offsets finds it. Null when the whole paragraph is on the first page.
     /// </summary>
-    private static TextPointer? FindFirstPositionOnLaterPage(
+    internal static TextPointer? FindFirstPositionOnLaterPage(
         DynamicDocumentPaginator paginator,
         System.Windows.Documents.Paragraph paragraph)
     {
@@ -1135,14 +1135,14 @@ internal static class PaginationEngine
         return paragraph.ContentStart.GetPositionAtOffset(high, LogicalDirection.Forward);
     }
 
-    private static bool HasText(TextPointer start, TextPointer end) =>
+    internal static bool HasText(TextPointer start, TextPointer end) =>
         new TextRange(start, end).Text.Any(character => !char.IsWhiteSpace(character));
     /// <summary>
     /// Splits <paramref name="paragraph"/> at <paramref name="position"/> and returns the new paragraph
     /// holding the remainder, formatted as a continuation: no first-line indent and no space between
     /// the two halves. Null when the position cannot be split (it is not inside this paragraph's text).
     /// </summary>
-    private static System.Windows.Documents.Paragraph? SplitParagraphAt(
+    internal static System.Windows.Documents.Paragraph? SplitParagraphAt(
         System.Windows.Documents.Paragraph paragraph,
         TextPointer position)
     {
@@ -1357,7 +1357,7 @@ internal static class PaginationEngine
         return result.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<int>)kv.Value);
     }
 
-    private static IEnumerable<int> FootnoteIdsInModelBlock(FreeW.Core.Model.Block block)
+    internal static IEnumerable<int> FootnoteIdsInModelBlock(FreeW.Core.Model.Block block)
     {
         switch (block)
         {
@@ -1426,7 +1426,7 @@ internal static class PaginationEngine
     /// match its neighbour's, because it must force a fresh physical page regardless.
     /// </para>
     /// </summary>
-    private static List<PageSegment> BuildPageSegments(
+    internal static List<PageSegment> BuildPageSegments(
         IReadOnlyList<FreeW.Core.Model.Block> modelBlocks,
         PageSettings finalPage)
     {
@@ -1506,7 +1506,7 @@ internal static class PaginationEngine
         return true;
     }
 
-    private readonly record struct PageSegment(int Start, int End, PageSettings Page);
+    internal readonly record struct PageSegment(int Start, int End, PageSettings Page);
 
     internal static void ApplySectionBreakFlags(DocumentView editor, FlowDocument flow)
     {
@@ -1639,7 +1639,7 @@ internal static class PaginationEngine
         }
     }
 
-    private static int RenderedTopLevelBlockCount(
+    internal static int RenderedTopLevelBlockCount(
         TextDocument document,
         FreeW.Core.Model.Table table,
         int sourceBlockIndex)
@@ -1659,7 +1659,7 @@ internal static class PaginationEngine
             : 1;
     }
 
-    private static bool IsPageTypeSectionBreak(FreeW.Core.Model.Section? section) =>
+    internal static bool IsPageTypeSectionBreak(FreeW.Core.Model.Section? section) =>
         section?.BreakKind is SectionBreakKind.NextPage
                             or SectionBreakKind.EvenPage
                             or SectionBreakKind.OddPage;
