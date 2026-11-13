@@ -190,11 +190,26 @@ public sealed partial class MainWindow
                 navigation.TooltipTitleKey,
                 UiText.Get,
                 StripDisplayMnemonic),
-            TooltipDescription = FreeXBackstageTextValue.ResolveOptionalKey(
-                navigation.TooltipDescriptionKey,
-                UiText.Get,
-                StripDisplayMnemonic),
+            TooltipDescription = ResolveLiveBackstageTooltipDescription(navigation),
         };
+    }
+
+    // The shared Share description names the Windows share UI; this shell opens the platform share
+    // sheet (macOS Share Sheet), so the rail tooltip names that instead of "Windows Share".
+    private string? ResolveLiveBackstageTooltipDescription(FreeXBackstageNavigationEntry navigation)
+    {
+        var description = FreeXBackstageTextValue.ResolveOptionalKey(
+            navigation.TooltipDescriptionKey,
+            UiText.Get,
+            StripDisplayMnemonic);
+        if (navigation.Command == FreeXBackstageCommandId.Share
+            && description is not null
+            && _workbookShareSheetService?.Capability.ShareSheetLabel is { Length: > 0 } shareSheetLabel)
+        {
+            return description.Replace("Windows Share", shareSheetLabel, StringComparison.Ordinal);
+        }
+
+        return description;
     }
 
     private static FreeXBackstagePaneFlowPlan RequireLiveBackstagePaneFlow(

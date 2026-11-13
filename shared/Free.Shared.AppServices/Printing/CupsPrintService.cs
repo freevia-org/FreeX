@@ -110,6 +110,18 @@ public sealed class CupsPrintService : IPlatformPrintService
         {
             var listPrinters = CupsPrintCommandPlanner.ListPrinters(_discoveryMode);
             var printersResult = await RunAsync(listPrinters, cancellationToken).ConfigureAwait(false);
+            // lpstat exits non-zero with "No destinations added." when the machine has no print queue
+            // at all. That is the ordinary "no printers" state, not an unavailable spooler, so it must
+            // reach the no-printers path rather than be reported as a failed CUPS command.
+            if (IsNoDestinationsResult(printersResult))
+            {
+                return new(
+                    PrinterDiscoveryStatus.NoPrinters,
+                    [],
+                    null,
+                    "No printers are installed or available.");
+            }
+
             if (!printersResult.Succeeded)
             {
                 return new(
@@ -306,6 +318,12 @@ public sealed class CupsPrintService : IPlatformPrintService
                 $"{invocation.FileName} did not exit within {_commandTimeout.TotalSeconds:n0} seconds.");
         }
     }
+
+    private static bool IsNoDestinationsResult(ProcessResult result) =>
+        !result.Succeeded &&
+        !result.TimedOut &&
+        (result.StandardError.Contains("No destinations added", StringComparison.OrdinalIgnoreCase) ||
+         result.StandardOutput.Contains("No destinations added", StringComparison.OrdinalIgnoreCase));
 
     private static string? ParseDefaultPrinter(string output)
     {

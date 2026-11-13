@@ -393,6 +393,59 @@ public sealed class SharedCupsPrintServiceTests
     }
 
     [Fact]
+    public async Task DiscoverAsync_AgainstTheRealSpoolerNeverThrowsAndReportsADefinedStatus()
+    {
+        if (!OperatingSystem.IsMacOS() && !OperatingSystem.IsLinux())
+            return;
+
+        // Real lpstat on whatever queues this machine has (installed, none, or no CUPS at all): the
+        // discovery contract is a defined status, never an exception into the File > Print flow.
+        var result = await new CupsPrintService(
+                new SystemProcessRunner(),
+                discoveryMode: CupsPrinterDiscoveryMode.DestinationNames)
+            .DiscoverAsync();
+
+        result.Status.Should().BeOneOf(
+            PrinterDiscoveryStatus.Available,
+            PrinterDiscoveryStatus.NoPrinters,
+            PrinterDiscoveryStatus.Unavailable,
+            PrinterDiscoveryStatus.Failed);
+        if (result.Status == PrinterDiscoveryStatus.Available)
+            result.Printers.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task DiscoverAsync_NoDestinationsAddedIsReportedAsNoPrintersNotAFailure()
+    {
+        var runner = new FakeProcessRunner(new ProcessResult(1, "", "lpstat: No destinations added."));
+
+        var result = await FreeXCups(runner).DiscoverAsync();
+
+        result.Status.Should().Be(PrinterDiscoveryStatus.NoPrinters);
+        result.Printers.Should().BeEmpty();
+        runner.Invocations.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task SubmitAsync_NoDestinationsAddedReturnsNoPrintersWithoutCallingLp()
+    {
+        var pdfPath = await CreatePdfStubAsync();
+        try
+        {
+            var runner = new FakeProcessRunner(new ProcessResult(1, "", "lpstat: No destinations added."));
+
+            var result = await FreeXCups(runner).SubmitAsync(pdfPath, new PrintSelection());
+
+            result.Status.Should().Be(PrintSubmissionStatus.NoPrinters);
+            runner.Invocations.Should().HaveCount(1);
+        }
+        finally
+        {
+            File.Delete(pdfPath);
+        }
+    }
+
+    [Fact]
     public async Task SubmitAsync_LpFailureIsReportedWithoutClaimingSuccess()
     {
         var pdfPath = await CreatePdfStubAsync();
