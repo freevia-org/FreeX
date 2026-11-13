@@ -24,6 +24,20 @@ public sealed class PagedEditW7PerformanceProbe(ITestOutputHelper output)
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
             return;
 
+        // The probe is the one place the paged editor's timing diagnostics are switched on.
+        PagedEditDiagnostics.Enabled = true;
+        try
+        {
+            Measure(path);
+        }
+        finally
+        {
+            PagedEditDiagnostics.Enabled = false;
+        }
+    }
+
+    private void Measure(string path)
+    {
         var clock = Stopwatch.StartNew();
         var doc = DocxReader.Read(path);
         var read = clock.Elapsed;

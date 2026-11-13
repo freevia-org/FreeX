@@ -27,7 +27,7 @@ namespace FreeW.App.Host.Editing;
 /// </summary>
 internal static class PaginatedCommitCoordinator
 {
-    /// <summary>Where the last span commit spent its time (diagnostics for the probe).</summary>
+    /// <summary>Where the last span commit spent its time (with <see cref="PagedEditDiagnostics.Enabled"/>).</summary>
     internal static string LastTiming { get; private set; } = "";
 
     /// <summary>
@@ -77,17 +77,22 @@ internal static class PaginatedCommitCoordinator
         // last commit are read back, and only their blocks are replaced (the source editor refreshes
         // just those blocks too). Untouched blocks keep their instances, which is what lets the layout
         // session reuse their render and their pages.
-        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var clock = PagedEditDiagnostics.StartClock();
         if (panel.TryGetEditedSpan(out var firstBox, out var lastBox))
         {
-            var perBox = new List<ModelBlock[]>();
+            // The span's pages are read in one pass, so a block split across two of them is rejoined;
+            // each block belongs to the page it starts on.
             var spanBlocks = new List<ModelBlock>();
-            for (var i = firstBox; i <= lastBox; i++)
+            var pageStarts = new int[lastBox - firstBox + 1];
+            targetEditor.ReadPagesInto(
+                panel.PageBoxes.Skip(firstBox).Take(lastBox - firstBox + 1).Select(box => box.Body.Document).ToList(),
+                spanBlocks,
+                pageStarts);
+            var perBox = new List<ModelBlock[]>();
+            for (var i = 0; i < pageStarts.Length; i++)
             {
-                var read = new List<ModelBlock>();
-                targetEditor.ReadBlocksInto(panel.PageBoxes[i].Body.Document, read);
-                perBox.Add(read.ToArray());
-                spanBlocks.AddRange(read);
+                var end = i + 1 < pageStarts.Length ? pageStarts[i + 1] : spanBlocks.Count;
+                perBox.Add(spanBlocks.Skip(pageStarts[i]).Take(end - pageStarts[i]).ToArray());
             }
 
             var spanStart = panel.PageBoxes[firstBox].ModelStart;
@@ -98,7 +103,7 @@ internal static class PaginatedCommitCoordinator
             // Never leave an empty document; the whole-body path below adds the empty paragraph.
             if (spanBlocks.Count > 0 || spanCount < model.Blocks.Count)
             {
-                var read = clock.Elapsed.TotalMilliseconds;
+                var read = clock?.Elapsed.TotalMilliseconds ?? 0;
                 panel.MarkBodyCommitted();
                 try
                 {
@@ -116,15 +121,17 @@ internal static class PaginatedCommitCoordinator
                     targetEditor.ClearBodyReplacementHint();
                 }
                 panel.OnSpanCommitted(firstBox, lastBox, perBox);
-                LastTiming = $"span read {read:F0} ms, execute {clock.Elapsed.TotalMilliseconds - read:F0} ms";
+                if (clock is not null)
+                    LastTiming = $"span read {read:F0} ms, execute {clock.Elapsed.TotalMilliseconds - read:F0} ms";
                 return;
             }
         }
 
         var collected = new List<ModelBlock>();
-
-        foreach (var box in panel.PageBoxes)
-            targetEditor.ReadBlocksInto(box.Body.Document, collected);
+        targetEditor.ReadPagesInto(
+            panel.PageBoxes.Select(box => box.Body.Document).ToList(),
+            collected,
+            new int[panel.PageBoxes.Count]);
 
         // W10: blocks the background pagination has not put on a page yet are not on any page box; they
         // were not edited, so they follow the pages unchanged (the same instances).

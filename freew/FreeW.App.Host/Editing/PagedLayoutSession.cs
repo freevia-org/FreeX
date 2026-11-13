@@ -111,10 +111,17 @@ internal sealed class PagedLayoutSession
     /// </summary>
     internal int[] ComputeAssignment(out int totalPageCount)
     {
-        var run = BeginRun();
-        run.RunToEnd();
+        var run = ComputeRun();
         totalPageCount = run.TotalPageCount;
         return run.Assignment;
+    }
+
+    /// <summary>A complete pagination of the current model (its assignment, rendered pages and cuts).</summary>
+    internal LayoutRun ComputeRun()
+    {
+        var run = BeginRun();
+        run.RunToEnd();
+        return run;
     }
 
     /// <summary>
@@ -148,6 +155,9 @@ internal sealed class PagedLayoutSession
         LastStatistics = new LayoutStatistics(false, reason, 0, 0, 0, 0);
         run.Assignment = PaginationEngine.ComputeBlockPageAssignment(_source, out var total, null, layoutOnly: true);
         run.TotalPageCount = total;
+        // The full computation reports pages per model block only: no rendered pages, no cuts.
+        run.RenderedPages = [];
+        run.Cuts = [];
     }
 
     /// <summary>
@@ -182,7 +192,7 @@ internal sealed class PagedLayoutSession
         internal SegmentResult? CurrentSegment;
         internal int CurrentSegmentOffset;
 
-        /// <summary>The longest single step so far (diagnostics).</summary>
+        /// <summary>The longest single step so far (with <see cref="PagedEditDiagnostics.Enabled"/>).</summary>
         internal double LongestStepMs { get; private set; }
 
         /// <summary>Pages whose set of starting blocks is final.</summary>
@@ -231,7 +241,52 @@ internal sealed class PagedLayoutSession
                 Array.Resize(ref _completedGlobalPage, RenderedCount);
             for (var r = segment.RenderedStart; r < segment.RenderedEnd; r++)
                 _completedGlobalPage[r] = offset + segment.LocalPage[r - segment.RenderedStart];
+            _completedCuts.AddRange(ShiftCuts(segment.Cuts, 0, offset));
             CurrentSegment = null;
+        }
+
+        private readonly List<RenderedCut> _completedCuts = [];
+
+        /// <summary>
+        /// Once complete: the page each top-level rendered block starts on (empty when the run fell back
+        /// to the full computation, which reports model blocks only).
+        /// </summary>
+        internal int[] RenderedPages { get; set; } = [];
+
+        /// <summary>Once complete: every page that starts inside a rendered block (global pages, in order).</summary>
+        internal List<RenderedCut> Cuts { get; set; } = [];
+
+        /// <summary>The start page of every rendered block before <see cref="FrontierRendered"/> (-1 after it).</summary>
+        internal int[] PartialRenderedPages()
+        {
+            if (IsComplete)
+                return RenderedPages;
+            var result = new int[RenderedCount];
+            for (var r = 0; r < result.Length; r++)
+            {
+                if (r >= FrontierRendered)
+                {
+                    result[r] = -1;
+                    continue;
+                }
+                var segment = CurrentSegment;
+                result[r] = segment is not null && r >= segment.RenderedStart
+                    ? CurrentSegmentOffset + segment.LocalPage[r - segment.RenderedStart]
+                    : r < _completedGlobalPage.Length ? _completedGlobalPage[r] : 0;
+            }
+            return result;
+        }
+
+        /// <summary>The cuts of the final pages and of the page the frontier starts (global pages).</summary>
+        internal List<RenderedCut> PartialCuts()
+        {
+            if (IsComplete)
+                return Cuts;
+            var result = new List<RenderedCut>(_completedCuts);
+            if (CurrentSegment is { } segment)
+                result.AddRange(ShiftCuts(segment.Cuts, 0, CurrentSegmentOffset));
+            result.RemoveAll(cut => cut.Page > FinalPageCount);
+            return result;
         }
 
         /// <summary>Lays out about one more page. Returns true once the run is complete.</summary>
@@ -239,12 +294,13 @@ internal sealed class PagedLayoutSession
         {
             if (IsComplete || IsCancelled)
                 return IsComplete;
-            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var clock = PagedEditDiagnostics.StartClock();
             try
             {
                 if (!_steps!.MoveNext())
                     Finish();
-                LongestStepMs = Math.Max(LongestStepMs, clock.Elapsed.TotalMilliseconds);
+                if (clock is not null)
+                    LongestStepMs = Math.Max(LongestStepMs, clock.Elapsed.TotalMilliseconds);
             }
             catch (Exception ex)
             {
@@ -773,6 +829,7 @@ internal sealed class PagedLayoutSession
         public List<PassRecord> Passes = [];
         public bool UsesFootnotePath;
         public int DecisionFrontier;         // rendered index (exclusive) the footnote-path decision read
+        public List<RenderedCut> Cuts = [];   // pages (segment-local) that start inside a rendered block
     }
 
     private sealed class RunResult
@@ -963,11 +1020,21 @@ internal sealed class PagedLayoutSession
                 : Math.Max(0, totalPageCount - 1);
         }
 
+        var cuts = new List<RenderedCut>();
+        offset = 0;
+        foreach (var result in run.Segments)
+        {
+            cuts.AddRange(ShiftCuts(result.Cuts, 0, offset));
+            offset += result.PageCount;
+        }
+
         _last = run;
         LastStatistics = new LayoutStatistics(
             last is not null, null, _unitsRendered, _unitsReused, _pagesLaidOut, _pagesReused);
         runState.Assignment = assignment;
         runState.TotalPageCount = totalPageCount;
+        runState.RenderedPages = segmentAssignment;
+        runState.Cuts = cuts;
     }
 
     private static SegmentResult Shift(SegmentResult source, int renderedDelta, int pageDelta) => new()
@@ -984,8 +1051,39 @@ internal sealed class PagedLayoutSession
             LocalPageStart = pass.LocalPageStart + pageDelta
         }).ToList(),
         UsesFootnotePath = source.UsesFootnotePath,
-        DecisionFrontier = source.DecisionFrontier + renderedDelta
+        DecisionFrontier = source.DecisionFrontier + renderedDelta,
+        Cuts = ShiftCuts(source.Cuts, renderedDelta, pageDelta).ToList()
     };
+
+    private static IEnumerable<RenderedCut> ShiftCuts(IEnumerable<RenderedCut> cuts, int renderedDelta, int pageDelta) =>
+        cuts.Select(cut => cut with { Page = cut.Page + pageDelta, Rendered = cut.Rendered + renderedDelta });
+
+    /// <summary>
+    /// The cut of a page that starts inside <paramref name="block"/>: the first position the paginator
+    /// places on <paramref name="page"/>, as a render-independent locator. Null when the block cannot be
+    /// split there (the page then shows nothing of it, as before).
+    /// </summary>
+    private static RenderedCut? CutFor(
+        DynamicDocumentPaginator paginator,
+        WpfBlock block,
+        int rendered,
+        int page,
+        int recordedPage,
+        int contentBase = 0)
+    {
+        if (!SplitBlocksAcrossPages)
+            return null;
+        var position = PageSplitter.FirstPositionOnPage(paginator, block, page);
+        return position is not null && PageSplitter.Locate(block, position, contentBase) is { } locator
+            ? new RenderedCut(recordedPage, rendered, locator)
+            : null;
+    }
+
+    /// <summary>
+    /// Records where pages start inside a block (the paged editor then splits paragraphs, lists and tables
+    /// across pages as print does). Test switch; on by default.
+    /// </summary>
+    internal static bool SplitBlocksAcrossPages { get; set; } = true;
 
     // ── one segment ─────────────────────────────────────────────────────────────────────────────────
 
@@ -1251,6 +1349,7 @@ internal sealed class PagedLayoutSession
             for (var r = segment.Start; r < startRendered; r++)
                 result.LocalPage[r - segment.Start] = previous!.LocalPage[r - segment.Start];
             result.Passes.AddRange(previous!.Passes.TakeWhile(pass => pass.StartRendered < startRendered));
+            result.Cuts.AddRange(previous.Cuts.Where(cut => cut.Page < pageBase));
             _pagesReused += pageBase;
         }
 
@@ -1280,6 +1379,19 @@ internal sealed class PagedLayoutSession
                     // A new page starts at r. Clean when the block before it ended on an earlier page.
                     var clean = r == startRendered
                         || window.PageOf(window[r - 1].ContentEnd) < page;
+
+                    // Every page from the one after the previous block's start up to this one that the
+                    // previous block reaches starts inside it.
+                    if (r > startRendered)
+                    {
+                        for (var q = Math.Max(0, currentLocal) + 1; q <= page; q++)
+                        {
+                            if (q == page && clean)
+                                break;
+                            if (CutFor(window.Paginator, window[r - 1], r - 1, q, pageBase + q) is { } cut)
+                                result.Cuts.Add(cut);
+                        }
+                    }
                     var record = new PassRecord(r, !clean, 0, [], pageBase + page);
                     if (clean && r >= changedEnd && previous is not null && r > startRendered
                         && oldCleanStarts!.TryGetValue(r - renderedDelta, out var old))
@@ -1295,6 +1407,8 @@ internal sealed class PagedLayoutSession
                                 StartRendered = pass.StartRendered + renderedDelta,
                                 LocalPageStart = pass.LocalPageStart + pageDelta
                             }));
+                        result.Cuts.AddRange(ShiftCuts(
+                            previous.Cuts.Where(cut => cut.Page >= old.LocalPageStart), renderedDelta, pageDelta));
                         result.PageCount = previous.PageCount + pageDelta;
                         _pagesReused += previous.PageCount - old.LocalPageStart;
                         yield break;
@@ -1314,7 +1428,16 @@ internal sealed class PagedLayoutSession
             // The last block may run on past the page it starts on.
             window.EnsurePagesFinal(int.MaxValue / 4);
             window.Paginator.ComputePageCount();
-            result.PageCount = pageBase + Math.Max(1, window.Paginator.PageCount);
+            var localPageCount = Math.Max(1, window.Paginator.PageCount);
+            if (end > startRendered)
+            {
+                for (var q = Math.Max(0, currentLocal) + 1; q < localPageCount; q++)
+                {
+                    if (CutFor(window.Paginator, window[end - 1], end - 1, q, pageBase + q) is { } cut)
+                        result.Cuts.Add(cut);
+                }
+            }
+            result.PageCount = pageBase + localPageCount;
         }
         finally
         {
@@ -1370,7 +1493,7 @@ internal sealed class PagedLayoutSession
         workPaginator.PageSize = pageSize;
         var dynamicWork = (DynamicDocumentPaginator)workPaginator;
 
-        var pending = new List<(WpfBlock Block, int Rendered, bool IsContinuation)>();
+        var pending = new List<(WpfBlock Block, int Rendered, bool IsContinuation, int ContentBase)>();
         var nextRendered = segment.Start;
         var carriedNoteDip = 0.0;
         var carryChain = new List<(IReadOnlyList<int> FootnoteIds, double BandHeightDip, int PageNumber)>();
@@ -1405,6 +1528,7 @@ internal sealed class PagedLayoutSession
                 for (var r = segment.Start; r < restart.StartRendered; r++)
                     result.LocalPage[r - segment.Start] = previous.LocalPage[r - segment.Start];
                 result.Passes.AddRange(previous.Passes.Take(restartIndex));
+                result.Cuts.AddRange(previous.Cuts.Where(cut => cut.Page < restart.LocalPageStart));
                 nextRendered = restart.StartRendered;
                 carriedNoteDip = restart.CarriedNoteDip;
                 carryChain.AddRange(restart.CarryChain.Select(link =>
@@ -1423,7 +1547,7 @@ internal sealed class PagedLayoutSession
             while (pending.Count < count && nextRendered < end)
             {
                 var block = RenderedBlock(nextRendered);
-                pending.Add((block, nextRendered, false));
+                pending.Add((block, nextRendered, false, 0));
                 work.Blocks.Add(block);
                 nextRendered++;
             }
@@ -1567,12 +1691,17 @@ internal sealed class PagedLayoutSession
                             StartRendered = pass.StartRendered + renderedDelta,
                             LocalPageStart = pass.LocalPageStart + pageDelta
                         }));
+                    result.Cuts.AddRange(ShiftCuts(
+                        previous.Cuts.Where(cut => cut.Page >= old.LocalPageStart), renderedDelta, pageDelta));
                     result.PageCount = previous.PageCount + pageDelta;
                     _pagesReused += previous.PageCount - old.LocalPageStart;
                     yield break;
                 }
                 result.Passes.Add(state);
                 passesThisRun++;
+                // A pass that starts with the rest of a paragraph split on the page before starts its page there.
+                if (head.IsContinuation && head.ContentBase > 0 && SplitBlocksAcrossPages)
+                    result.Cuts.Add(new RenderedCut(localPage, head.Rendered, CutLocator.AtParagraph(0, head.ContentBase)));
 
                 // Blocks before the head (and a split head, whose start page is already known) are final.
                 run.FrontierRendered = head.IsContinuation ? head.Rendered + 1 : head.Rendered;
@@ -1635,8 +1764,9 @@ internal sealed class PagedLayoutSession
                         if (!PaginationEngine.HasText(splitAt, paragraph.ContentEnd))
                             break;
                         EvictRendered(pending[index].Rendered);
+                        var remainderBase = pending[index].ContentBase + PageSplitter.ContentOffset(paragraph.ContentStart, splitAt);
                         if (PaginationEngine.SplitParagraphAt(paragraph, splitAt) is { } remainder)
-                            pending.Insert(index + 1, (remainder, pending[index].Rendered, true));
+                            pending.Insert(index + 1, (remainder, pending[index].Rendered, true, remainderBase));
                     }
                     else if (block is WpfParagraph && index > 0)
                     {
@@ -1672,6 +1802,33 @@ internal sealed class PagedLayoutSession
                     result.LocalPage[pending[i].Rendered - segment.Start] = localPage + page;
                 }
 
+                // A block the chunk runs over onto further pages (a table, a list) starts each of them.
+                if (chunkPages > 1 && dynamicChunk is not null)
+                {
+                    for (var q = 1; q < chunkPages; q++)
+                    {
+                        var startsClean = false;
+                        var straddler = -1;
+                        for (var i = 0; i < take; i++)
+                        {
+                            var startPage = pending[i].IsContinuation ? 0 : dynamicChunk.GetPageNumber(pending[i].Block.ContentStart);
+                            if (startPage == q)
+                            {
+                                startsClean = true;
+                                break;
+                            }
+                            if (startPage < q && dynamicChunk.GetPageNumber(pending[i].Block.ContentEnd) >= q)
+                                straddler = i;
+                        }
+                        if (!startsClean && straddler >= 0
+                            && CutFor(dynamicChunk, pending[straddler].Block, pending[straddler].Rendered, q, localPage + q,
+                                pending[straddler].ContentBase) is { } cut)
+                        {
+                            result.Cuts.Add(cut);
+                        }
+                    }
+                }
+
                 chunk.Blocks.Clear();
                 localPage += chunkPages;
                 _pagesLaidOut += chunkPages;
@@ -1697,8 +1854,8 @@ internal sealed class PagedLayoutSession
         }
     }
 
-    private static (WpfBlock Block, int Rendered, bool IsContinuation) SetBreakBefore(
-        (WpfBlock Block, int Rendered, bool IsContinuation) entry,
+    private static (WpfBlock Block, int Rendered, bool IsContinuation, int ContentBase) SetBreakBefore(
+        (WpfBlock Block, int Rendered, bool IsContinuation, int ContentBase) entry,
         bool value)
     {
         entry.Block.BreakPageBefore = value;

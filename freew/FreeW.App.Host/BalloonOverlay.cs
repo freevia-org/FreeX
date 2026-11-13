@@ -107,17 +107,31 @@ internal sealed class BalloonOverlay
             canvasHeight);
 
         foreach (var layout in layouts)
-        {
-            var item = new BalloonItem(
-                layout.Source.Kind,
-                layout.Source.KindLabel,
-                layout.Source.HeaderText,
-                layout.Source.MetadataText,
-                ReviewBalloonLayoutPlanner.TruncatePreview(layout.Source.BodyText, 68, "\u2026"),
-                layout.Source.Resolved,
-                layout.Ordinal);
-            DrawBalloon(item, layout.BalloonX, layout.BalloonY, layout.LeaderStartY);
-        }
+            Draw(_canvas, layout.Source, leaderStartX: 0, layout.BalloonX, layout.BalloonY, layout.LeaderStartY);
+    }
+
+    /// <summary>A balloon's height (also used by the paged editor's per-page balloons).</summary>
+    internal static double BalloonBoxHeight => BalloonHeight;
+
+    /// <summary>The space a balloon strip takes beside the text.</summary>
+    internal static double StripBoxWidth => StripWidth;
+
+    /// <summary>
+    /// Draws one balloon for <paramref name="source"/> into <paramref name="canvas"/> at
+    /// (<paramref name="x"/>, <paramref name="y"/>), with a dashed leader from
+    /// (<paramref name="leaderStartX"/>, <paramref name="anchorY"/>).
+    /// </summary>
+    internal static void Draw(Canvas canvas, ReviewBalloonSource source, double leaderStartX, double x, double y, double anchorY)
+    {
+        var item = new BalloonItem(
+            source.Kind,
+            source.KindLabel,
+            source.HeaderText,
+            source.MetadataText,
+            ReviewBalloonLayoutPlanner.TruncatePreview(source.BodyText, 68, "\u2026"),
+            source.Resolved,
+            0);
+        DrawBalloon(canvas, item, leaderStartX, x, y, anchorY);
     }
 
     private sealed record BalloonItem(
@@ -131,8 +145,9 @@ internal sealed class BalloonOverlay
 
     // ── Drawing ──────────────────────────────────────────────────────────────────────────────────
 
-    private void DrawBalloon(BalloonItem item, double x, double y, double anchorY)
+    private static void DrawBalloon(Canvas canvas, BalloonItem item, double leaderStartX, double x, double y, double anchorY)
     {
+        var _canvas = canvas;
         var style = ReviewBalloonStyleCatalog.Resolve(item.Kind, item.Resolved);
         var fill = ToBrush(style.Fill);
         var stroke = ToBrush(style.Stroke);
@@ -141,7 +156,7 @@ internal sealed class BalloonOverlay
         var balloonMidY = y + BalloonHeight / 2;
         var leader = new Line
         {
-            X1 = 0,           Y1 = anchorY,
+            X1 = leaderStartX, Y1 = anchorY,
             X2 = x,           Y2 = balloonMidY,
             Stroke = LeaderBrush,
             StrokeThickness = LeaderThickness,

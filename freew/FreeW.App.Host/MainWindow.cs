@@ -2121,6 +2121,8 @@ public sealed partial class MainWindow : Window
         // printed page reserves and draws the same balloon strip shown on screen (Word's behaviour).
         _editor.ShowMarkupBalloons = _balloonOverlay.BalloonsEnabled;
         _stateStore.SetChecked("freew.show-markup-balloons", _balloonOverlay.BalloonsEnabled);
+        // Print Layout on pages shows the balloons beside each page.
+        _pagedEditPanel?.RefreshPageMarkup();
     }
 
     // ── Notes Pane (Feature 1A-1C) ──────────────────────────────────────────────────────────────────
@@ -4101,6 +4103,7 @@ public sealed partial class MainWindow : Window
         RefreshReviewPane();
         RefreshNotesPane();
         _balloonOverlay?.Rebuild();
+        _pagedEditPanel?.ScheduleMarkupRefresh();
     }
 
     private DocumentView ResolveActiveDocumentEditor()

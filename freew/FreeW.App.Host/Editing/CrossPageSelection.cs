@@ -151,7 +151,11 @@ internal sealed class CrossPageSelection
             try
             {
                 var range = new TextRange(from, to);
-                sb.Append(range.Text);
+                var text = range.Text;
+                // A paragraph split across this page and the next is one paragraph: no break at the seam.
+                if (i < endBox && boxes[i + 1].StartsWithTextSeam && text.EndsWith("\r\n", StringComparison.Ordinal))
+                    text = text[..^2];
+                sb.Append(text);
             }
             catch { /* ignore position validity issues */ }
         }

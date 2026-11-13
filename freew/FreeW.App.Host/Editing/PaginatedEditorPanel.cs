@@ -64,7 +64,7 @@ internal enum PaginatedPageLayoutMode
 /// </summary>
 internal sealed record PagedCaretPosition(int BlockIndex, int Offset);
 
-internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurface
+internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurface
 {
     // ── workspace background (same grey "desk" as the main editor) ────────────────────────────────
     // Frozen: a static brush is shared by every UI thread that builds a panel (each test, each window).
@@ -279,11 +279,20 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         // printing (segmentPaginations requested) keeps the print clone it draws from.
         int[] assignment;
         int pageCount;
+        PagedLayoutSession.LayoutRun? layoutRun = null;
         try
         {
-            assignment = segmentPaginations is null
-                ? layout.ComputeAssignment(out var totalPageCount)
-                : PaginationEngine.ComputeBlockPageAssignment(sourceEditor, out totalPageCount, segmentPaginations);
+            int totalPageCount;
+            if (segmentPaginations is null)
+            {
+                layoutRun = layout.ComputeRun();
+                assignment = layoutRun.Assignment;
+                totalPageCount = layoutRun.TotalPageCount;
+            }
+            else
+            {
+                assignment = PaginationEngine.ComputeBlockPageAssignment(sourceEditor, out totalPageCount, segmentPaginations);
+            }
             pageCount = assignment.Length > 0 ? assignment.Max() + 1 : 1;
             // A final block that runs on past the page it starts on still owns those physical pages.
             pageCount = Math.Max(1, Math.Max(pageCount, totalPageCount));
@@ -299,8 +308,21 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         // The editing surface shards by render unit (a list run is one WPF List), so every page knows
         // exactly which model blocks it holds; printing keeps its established sharding.
         IReadOnlyList<IReadOnlyList<System.Windows.Documents.Block>> shards;
-        PagePlan? pagePlan = segmentPaginations is null ? PlanPages(model, assignment, pageCount) : null;
-        if (pagePlan is not null)
+        IReadOnlyList<PageContent>? contents = null;
+        PagePlan? pagePlan = null;
+        if (segmentPaginations is null && !includeParityBlankPages && layoutRun is not null
+            && PlanFor(model, layoutRun, pageCount) is { } splitPlan
+            && RenderSplitPages(model, splitPlan, _ => true) is { } splitContents)
+        {
+            pagePlan = splitPlan;
+            contents = splitContents;
+        }
+        pagePlan ??= segmentPaginations is null ? PlanPages(model, assignment, pageCount) : null;
+        if (contents is not null)
+        {
+            shards = contents.Select(content => (IReadOnlyList<System.Windows.Documents.Block>)content.Blocks).ToList();
+        }
+        else if (pagePlan is not null)
         {
             shards = RenderPages(model, pagePlan, _ => true);
         }
@@ -410,7 +432,9 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
                 box.ModelKey = BoxKey(
                     physicalPage.PhysicalPageIndex, pageSection, slots, pageNumberDisplay[physicalPage.PhysicalPageIndex].Text,
                     totalBoxCount, pageSection.SectionPageCount, model, pagePlan.Ranges[bodyPageIndex],
-                    hasEndnotes && !requiresDedicatedEndnotePage && bodyPageIndex == pageCount - 1);
+                    hasEndnotes && !requiresDedicatedEndnotePage && bodyPageIndex == pageCount - 1)
+                    + "|" + pagePlan.CutKey(bodyPageIndex);
+                ApplySplitState(box, pagePlan, contents?[bodyPageIndex], bodyPageIndex, model);
             }
             // freew-cc-3: wire the content-control lock probe so this box's plain RichTextBox can refuse
             // to mutate a locked control (see PageBox.ContentControlLockProbe's doc comment).
@@ -525,6 +549,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         box.BoundaryEditRequested += OnBoundaryEditRequested;
         box.DocumentNavigationRequested += OnDocumentNavigationRequested;
         HookHeaderFooter(box);
+        HookMarkup(box);
         if (box.IsRealized)
             ApplySpellCheck(box);
     }
@@ -548,6 +573,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         box.BoundaryEditRequested -= OnBoundaryEditRequested;
         box.DocumentNavigationRequested -= OnDocumentNavigationRequested;
         UnhookHeaderFooter(box);
+        UnhookMarkup(box);
     }
 
     private void HookHeaderFooter(PageBox box)
@@ -585,6 +611,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         if (sender is RichTextBox body && _pageBoxes.FirstOrDefault(b => ReferenceEquals(b.Body, body)) is { } box)
         {
             _lastCaretBox = box;
+            box.ContentEditedSinceBuild = true;
             _editedSinceRepagination.Add(box);
             _editedSinceCommit.Add(box);
         }
@@ -696,7 +723,9 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         _sourceEditor.TrackBodyUnits = true;
         _sourceEditor.EditingSessionChanged += OnSourceEditingSessionChanged;
         _sourceEditor.SelectionChanged += OnSourceSelectionChanged;
+        _sourceEditor.GrammarSquigglesRefreshed += ScheduleMarkupRefresh;
         MirrorSelectionToSource();
+        ScheduleMarkupRefresh();
     }
 
     /// <summary>
@@ -718,6 +747,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         }
         _sourceEditor.EditingSessionChanged -= OnSourceEditingSessionChanged;
         _sourceEditor.SelectionChanged -= OnSourceSelectionChanged;
+        _sourceEditor.GrammarSquigglesRefreshed -= ScheduleMarkupRefresh;
+        _markupTimer?.Stop();
     }
 
     private void OnSourceEditingSessionChanged()
@@ -756,6 +787,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         _repaginateTimer?.Stop();
         _backgroundLayoutInterrupted = false;
         PaginatedCommitCoordinator.Commit(this, _sourceEditor);
+        if (_attachedAsSurface)
+            ScheduleMarkupRefresh();
         // The re-pagination the burst already scheduled still has to happen, for the layout; so does the
         // background pagination the commit interrupted.
         if (_backgroundLayoutInterrupted && _attachedAsSurface && _pageBoxes.Count > 0)
@@ -801,8 +834,9 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
     }
 
     /// <summary>
-    /// <paramref name="pointer"/> in <paramref name="box"/> as a document position: the top-level block
-    /// (counted across every page in order) and the symbol offset in it. A null pointer is the page start.
+    /// <paramref name="pointer"/> in <paramref name="box"/> as a document position: the top-level block of
+    /// the continuous document (counted across every page in order, the pieces of a block split across
+    /// pages counting once) and the symbol offset in it. A null pointer is the page start.
     /// </summary>
     internal PagedCaretPosition? ToGlobal(PageBox box, TextPointer? pointer)
     {
@@ -812,51 +846,155 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
             var blocks = candidate.Body.Document.Blocks;
             if (!ReferenceEquals(candidate, box))
             {
-                blockBase += blocks.Count;
+                blockBase += LogicalBlockCount(candidate);
                 continue;
             }
 
+            pointer ??= blocks.FirstBlock?.ContentStart;
             if (pointer is null)
                 return new PagedCaretPosition(blockBase, 0);
-            var index = 0;
+            var index = -1;
             foreach (var block in blocks)
             {
+                if (box.PieceOf(block) is not { ContinuesPrevious: true })
+                    index++;
                 if (pointer.CompareTo(block.ContentEnd) <= 0)
-                    return new PagedCaretPosition(blockBase + index, Math.Max(0, block.ContentStart.GetOffsetToPosition(pointer)));
-                index++;
+                {
+                    var local = Math.Max(0, block.ContentStart.GetOffsetToPosition(pointer));
+                    return new PagedCaretPosition(
+                        Math.Max(0, blockBase + index),
+                        box.PieceOf(block) is { } piece
+                            ? PieceBase(box, block) + Math.Clamp(local - piece.Open, 0, piece.Span)
+                            : local);
+                }
             }
 
-            return new PagedCaretPosition(blockBase + Math.Max(0, blocks.Count - 1), int.MaxValue);
+            return new PagedCaretPosition(Math.Max(0, blockBase + Math.Max(0, index)), int.MaxValue);
         }
 
         return null;
     }
 
+    /// <summary>Top-level blocks of the continuous document that start on <paramref name="box"/>.</summary>
+    private static int LogicalBlockCount(PageBox box)
+    {
+        var count = 0;
+        foreach (var block in box.Body.Document.Blocks)
+        {
+            if (box.PieceOf(block) is not { ContinuesPrevious: true })
+                count++;
+        }
+        return count;
+    }
+
+    /// <summary>The block before <paramref name="block"/> in page order (across pages).</summary>
+    private bool TryPreviousBlock(PageBox box, System.Windows.Documents.Block block, out PageBox previousBox, out System.Windows.Documents.Block previous)
+    {
+        if (block.PreviousBlock is { } sibling)
+        {
+            (previousBox, previous) = (box, sibling);
+            return true;
+        }
+        for (var i = _pageBoxes.IndexOf(box) - 1; i >= 0; i--)
+        {
+            if (_pageBoxes[i].Body.Document.Blocks.LastBlock is { } last)
+            {
+                (previousBox, previous) = (_pageBoxes[i], last);
+                return true;
+            }
+        }
+        (previousBox, previous) = (box, block);
+        return false;
+    }
+
+    /// <summary>The offset in the whole (continuous) block at which piece <paramref name="block"/> starts.</summary>
+    private int PieceBase(PageBox box, System.Windows.Documents.Block block)
+    {
+        var offset = 0;
+        var (currentBox, current) = (box, block);
+        for (var guard = 0; guard < 10_000 && currentBox.PieceOf(current) is { ContinuesPrevious: true } piece; guard++)
+        {
+            offset += piece.Gap;
+            if (!TryPreviousBlock(currentBox, current, out var previousBox, out var previous))
+                break;
+            offset += previousBox.PieceOf(previous)?.Span ?? PageSplitter.SymbolLength(previous);
+            (currentBox, current) = (previousBox, previous);
+        }
+        return offset;
+    }
+
     /// <summary>The page and position a document position falls on (finishing pagination when it lies past the pages shown).</summary>
-    internal (PageBox Box, TextPointer Pointer)? FromGlobal(PagedCaretPosition position)
+    internal (PageBox Box, TextPointer Pointer)? FromGlobal(PagedCaretPosition position) =>
+        ResolveGlobal(position) is { } resolved
+            ? (resolved.Box, resolved.Pointer.GetInsertionPosition(LogicalDirection.Forward) ?? resolved.Pointer)
+            : null;
+
+    /// <summary>
+    /// The page and raw position of <paramref name="position"/>: within a block split across pages, the
+    /// piece whose share of the block holds the offset (a position on a seam belongs to the later piece).
+    /// Past the end: the end of the last page with any text.
+    /// </summary>
+    private (PageBox Box, TextPointer Pointer)? ResolveGlobal(PagedCaretPosition position)
     {
         if (_pageBoxes.Count == 0)
             return null;
-        var total = _pageBoxes.Sum(box => box.Body.Document.Blocks.Count);
+        var total = _pageBoxes.Sum(LogicalBlockCount);
         if (position.BlockIndex >= total && !IsLayoutComplete)
             FinishLayoutNow();
 
-        var remaining = position.BlockIndex;
+        var logical = -1;
+        PageBox? chosenBox = null;
+        System.Windows.Documents.Block? chosen = null;
+        PagePiece? chosenPiece = null;
+        var chosenBase = 0;
+        var pieceBase = 0;
+        var previousSpan = 0;
         foreach (var box in _pageBoxes)
         {
-            var count = box.Body.Document.Blocks.Count;
-            if (remaining < count)
+            foreach (var block in box.Body.Document.Blocks)
             {
-                var block = box.Body.Document.Blocks.ElementAt(remaining);
-                var length = block.ContentStart.GetOffsetToPosition(block.ContentEnd);
-                var pointer = block.ContentStart.GetPositionAtOffset(Math.Min(position.Offset, length)) ?? block.ContentEnd;
-                return (box, pointer.GetInsertionPosition(LogicalDirection.Forward) ?? pointer);
+                var piece = box.PieceOf(block);
+                if (piece is not { ContinuesPrevious: true })
+                {
+                    logical++;
+                    if (logical > position.BlockIndex)
+                        goto Resolved;
+                    pieceBase = 0;
+                }
+                else
+                {
+                    pieceBase += previousSpan + piece.Gap;
+                }
+                previousSpan = piece?.Span ?? PageSplitter.SymbolLength(block);
+                if (logical != position.BlockIndex)
+                    continue;
+                if (chosen is null || position.Offset >= pieceBase)
+                {
+                    (chosenBox, chosen, chosenPiece, chosenBase) = (box, block, piece, pieceBase);
+                }
             }
-            remaining -= count;
         }
 
-        var last = _pageBoxes.LastOrDefault(b => b.Body.Document.Blocks.Count > 0) ?? _pageBoxes[^1];
-        return (last, last.Body.Document.ContentEnd.GetInsertionPosition(LogicalDirection.Backward) ?? last.Body.Document.ContentEnd);
+    Resolved:
+        if (chosenBox is null || chosen is null)
+        {
+            var last = _pageBoxes.LastOrDefault(b => b.Body.Document.Blocks.Count > 0) ?? _pageBoxes[^1];
+            return (last, last.Body.Document.ContentEnd.GetInsertionPosition(LogicalDirection.Backward) ?? last.Body.Document.ContentEnd);
+        }
+
+        var length = PageSplitter.SymbolLength(chosen);
+        int local;
+        if (chosenPiece is null)
+        {
+            local = Math.Min(position.Offset, length);
+        }
+        else
+        {
+            var within = (long)position.Offset - chosenBase;
+            local = chosenPiece.Open + (int)Math.Clamp(within, 0, chosenPiece.Span);
+        }
+        var pointer = chosen.ContentStart.GetPositionAtOffset(Math.Clamp(local, 0, length)) ?? chosen.ContentEnd;
+        return (chosenBox, pointer);
     }
 
     // ── W10: the page selection and the hidden source editor's selection ──────────────────────────
@@ -980,7 +1118,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
     {
         if (!ReferenceEquals(_sourceModel, _sourceEditor.Model) || _hasPendingBodyEdits)
             return false;
-        var shown = _pageBoxes.Sum(box => box.Body.Document.Blocks.Count);
+        var shown = _pageBoxes.Sum(LogicalBlockCount);
         var source = _sourceEditor.Document.Blocks.Count;
         return IsLayoutComplete ? source == shown : source >= shown;
     }
@@ -1066,43 +1204,15 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         if (caret is null || _pageBoxes.Count == 0)
             return;
 
-        var remaining = caret.BlockIndex;
-        PageBox? target = null;
-        System.Windows.Documents.Block? targetBlock = null;
-        foreach (var box in _pageBoxes)
-        {
-            var count = box.Body.Document.Blocks.Count;
-            if (remaining < count)
-            {
-                target = box;
-                targetBlock = box.Body.Document.Blocks.ElementAt(remaining);
-                break;
-            }
-            remaining -= count;
-        }
-
-        if (target is null)
-        {
-            // Past the end (blocks were deleted): the end of the last page that has any text.
-            target = _pageBoxes.LastOrDefault(b => b.Body.Document.Blocks.Count > 0) ?? _pageBoxes[^1];
-            targetBlock = target.Body.Document.Blocks.LastBlock;
-        }
-
+        if (ResolveGlobal(caret) is not { } resolved)
+            return;
+        var target = resolved.Box;
         RealizeBox(target);
         target.Body.Focus();
         _lastCaretBox = target;
         try
         {
-            TextPointer? position = null;
-            if (targetBlock is not null)
-            {
-                var length = targetBlock.ContentStart.GetOffsetToPosition(targetBlock.ContentEnd);
-                position = targetBlock.ContentStart.GetPositionAtOffset(Math.Min(caret.Offset, length))
-                    ?? targetBlock.ContentEnd;
-                position = position.GetInsertionPosition(LogicalDirection.Backward) ?? position;
-            }
-            if (position is not null)
-                target.Body.CaretPosition = position;
+            target.Body.CaretPosition = resolved.Pointer.GetInsertionPosition(LogicalDirection.Backward) ?? resolved.Pointer;
             target.BringIntoView();
         }
         catch
@@ -1116,9 +1226,19 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
     private void OnBoundaryEditRequested(PageBox source, bool backward)
     {
         if (backward)
-            MergeAcrossBoundary(source.PreviousBox, source);
+        {
+            if (source.PreviousBox is { } upper && source.StartsWithTextSeam)
+                EditAcrossSeam(upper, source, backward: true);
+            else
+                MergeAcrossBoundary(source.PreviousBox, source);
+        }
         else
-            MergeAcrossBoundary(source, source.NextBox);
+        {
+            if (source.NextBox is { } lower && lower.StartsWithTextSeam)
+                EditAcrossSeam(source, lower, backward: false);
+            else
+                MergeAcrossBoundary(source, source.NextBox);
+        }
     }
 
     /// <summary>
@@ -1133,6 +1253,11 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         if (upper is null || lower is null)
             return false;
         if (upper.IsParitySyntheticPage || lower.IsParitySyntheticPage)
+            return false;
+
+        // The two pages show one paragraph split across them: there is nothing to join (see
+        // OnBoundaryEditRequested, which deletes across the seam instead).
+        if (lower.StartsWithTextSeam)
             return false;
 
         if (upper.Body.Document.Blocks.LastBlock is not System.Windows.Documents.Paragraph upperParagraph
@@ -1168,6 +1293,49 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
 
         // Both TextChanged events already flagged the edit; re-flow now rather than after the
         // debounce, so the text pulled up from the next page is laid out where the user looks.
+        ScheduleRepaginate();
+        return true;
+    }
+
+    /// <summary>
+    /// Deletes the character before (<paramref name="backward"/>) or after the seam between a paragraph's
+    /// piece ending <paramref name="upper"/> and its continuation starting <paramref name="lower"/>; the
+    /// caret stays at the seam. False when there is no such character or it is locked.
+    /// </summary>
+    internal bool EditAcrossSeam(PageBox upper, PageBox lower, bool backward)
+    {
+        try
+        {
+            if (backward)
+            {
+                var end = upper.Body.Document.ContentEnd.GetInsertionPosition(LogicalDirection.Backward);
+                var before = end?.GetNextInsertionPosition(LogicalDirection.Backward);
+                if (end is null || before is null || RangeTouchesLockedContentControl(upper, before, end))
+                    return false;
+                new TextRange(before, end).Text = string.Empty;
+                lower.Body.Focus();
+                _lastCaretBox = lower;
+                if (lower.Body.Document.ContentStart.GetInsertionPosition(LogicalDirection.Forward) is { } start)
+                    lower.Body.CaretPosition = start;
+            }
+            else
+            {
+                var start = lower.Body.Document.ContentStart.GetInsertionPosition(LogicalDirection.Forward);
+                var after = start?.GetNextInsertionPosition(LogicalDirection.Forward);
+                if (start is null || after is null || RangeTouchesLockedContentControl(lower, start, after))
+                    return false;
+                new TextRange(start, after).Text = string.Empty;
+                upper.Body.Focus();
+                _lastCaretBox = upper;
+                if (upper.Body.Document.ContentEnd.GetInsertionPosition(LogicalDirection.Backward) is { } end)
+                    upper.Body.CaretPosition = end;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+
         ScheduleRepaginate();
         return true;
     }
@@ -1653,7 +1821,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
     {
         // A commit during background pagination interrupts it, so the re-flow has to run anyway.
         if (IsLayoutComplete
-            && _editedSinceRepagination.Count > 0 && _editedSinceRepagination.All(ContentBottomUnchanged))
+            && _editedSinceRepagination.Count > 0
+            && _editedSinceRepagination.All(box => box.Pieces.Count == 0 && ContentBottomUnchanged(box)))
         {
             _repaginateTimer?.Stop();
             _editedSinceRepagination.Clear();
@@ -1714,26 +1883,29 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         _repaginateTimer?.Stop();
         _editedSinceRepagination.Clear();
         RepaginationCount++;
-        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var clock = PagedEditDiagnostics.StartClock();
         var caret = CaptureCaret();
 
         // ── Commit current page boxes into the model ──────────────────────────────────────────────
         PaginatedCommitCoordinator.Commit(this, _sourceEditor);
-        var commit = clock.Elapsed;
+        var commit = clock?.Elapsed ?? TimeSpan.Zero;
 
         // Only this panel changed the model since the last layout (whole-block replacements), so the
         // layout session re-paginates from the edit and unchanged pages keep their boxes.
         RebuildBoxesFromModel(reuseUnchangedPages: true);
-        var rebuild = clock.Elapsed - commit;
+        var rebuild = (clock?.Elapsed ?? TimeSpan.Zero) - commit;
         RestoreCaret(caret);
-        LastReflowTiming = $"commit {commit.TotalMilliseconds:F0} ms, layout+boxes {rebuild.TotalMilliseconds:F0} ms "
-            + $"(layout {_lastLayoutMs:F0} ms, boxes {_lastApplyMs:F0} ms), caret {(clock.Elapsed - commit - rebuild).TotalMilliseconds:F0} ms";
+        if (clock is not null)
+        {
+            LastReflowTiming = $"commit {commit.TotalMilliseconds:F0} ms, layout+boxes {rebuild.TotalMilliseconds:F0} ms "
+                + $"(layout {_lastLayoutMs:F0} ms, boxes {_lastApplyMs:F0} ms), caret {(clock.Elapsed - commit - rebuild).TotalMilliseconds:F0} ms";
+        }
     }
 
     /// <summary>Re-flows run so far (diagnostics for tests).</summary>
     internal int RepaginationCount { get; private set; }
 
-    /// <summary>Where the last <see cref="Repaginate"/> spent its time (diagnostics for the probe).</summary>
+    /// <summary>Where the last <see cref="Repaginate"/> spent its time (with <see cref="PagedEditDiagnostics.Enabled"/>).</summary>
     internal string LastReflowTiming { get; private set; } = "";
 
     private double _lastLayoutMs;
@@ -1793,26 +1965,26 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
             PagedLayoutSession.LayoutRun? run = null;
             try
             {
-                var layoutClock = System.Diagnostics.Stopwatch.StartNew();
+                var layoutClock = PagedEditDiagnostics.StartClock();
                 run = _layout.BeginRun();
                 if (model.Blocks.Count > SmallDocumentBlocks)
                     run.RunUntil(r => r.FinalPageCount > targetPage && r.FrontierModelBlock > targetBlock);
-                _lastLayoutMs = layoutClock.Elapsed.TotalMilliseconds;
-                layoutClock.Restart();
+                _lastLayoutMs = layoutClock?.Elapsed.TotalMilliseconds ?? 0;
+                layoutClock?.Restart();
                 if (!run.IsComplete && TryApplyRun(run, reuseUnchangedPages, background: false))
                 {
-                    _lastApplyMs = layoutClock.Elapsed.TotalMilliseconds;
+                    _lastApplyMs = layoutClock?.Elapsed.TotalMilliseconds ?? 0;
                     _backgroundRun = run;
                     ScheduleBackgroundLayout();
                     return;
                 }
-                layoutClock.Restart();
+                layoutClock?.Restart();
                 run.RunToEnd();
-                _lastLayoutMs += layoutClock.Elapsed.TotalMilliseconds;
-                layoutClock.Restart();
+                _lastLayoutMs += layoutClock?.Elapsed.TotalMilliseconds ?? 0;
+                layoutClock?.Restart();
                 if (run.IsComplete && TryApplyRun(run, reuseUnchangedPages, background: false))
                 {
-                    _lastApplyMs = layoutClock.Elapsed.TotalMilliseconds;
+                    _lastApplyMs = layoutClock?.Elapsed.TotalMilliseconds ?? 0;
                     return;
                 }
             }
@@ -1830,10 +2002,12 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
             return;
         }
 
+        PagedLayoutSession.LayoutRun? completeRun = null;
         try
         {
-            assignment = _layout.ComputeAssignment(out var totalPageCount);
-            pageCount = CompletePageCount(assignment, totalPageCount);
+            completeRun = _layout.ComputeRun();
+            assignment = completeRun.Assignment;
+            pageCount = CompletePageCount(assignment, completeRun.TotalPageCount);
         }
         catch
         {
@@ -1841,13 +2015,43 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
             pageCount = 1;
         }
 
-        if (PlanPages(model, assignment, pageCount) is not { } plan || _layoutMode == PaginatedPageLayoutMode.TwoColumnGrid)
+        if (_layoutMode == PaginatedPageLayoutMode.TwoColumnGrid)
         {
             RebuildBoxesFromModelFull(assignment, pageCount);
             return;
         }
 
-        ApplyBodyPlan(model, assignment, pageCount, plan, pageCount, complete: true, reuseUnchangedPages, background: false);
+        if (completeRun is not null && PlanFor(model, completeRun, pageCount) is { } splitPlan
+            && ApplyBodyPlan(model, assignment, pageCount, splitPlan, pageCount, complete: true, reuseUnchangedPages, background: false))
+        {
+            return;
+        }
+
+        if (PlanPages(model, assignment, pageCount) is not { } plan
+            || !ApplyBodyPlan(model, assignment, pageCount, plan, pageCount, complete: true, reuseUnchangedPages, background: false))
+        {
+            RebuildBoxesFromModelFull(assignment, pageCount);
+        }
+    }
+
+    /// <summary>The split plan of a complete run (null when the run reports no rendered pages: a fallback).</summary>
+    private static PagePlan? PlanFor(TextDocument model, PagedLayoutSession.LayoutRun run, int pageCount) =>
+        run.RenderedPages.Length > 0 ? PlanSplitPages(model, run.RenderedPages, run.Cuts, pageCount) : null;
+
+    /// <summary>Records on <paramref name="box"/> which of its blocks are pieces of split blocks and what it continues.</summary>
+    private static void ApplySplitState(PageBox box, PagePlan plan, PageContent? content, int page, TextDocument model)
+    {
+        box.Pieces.Clear();
+        if (content is not null)
+        {
+            foreach (var piece in content.Pieces)
+                box.Pieces[piece.Block] = piece;
+        }
+        var start = plan.Starts?[page];
+        box.ContinuesPrevious = start is { IsMid: true };
+        box.LeadingModelBlock = start is { IsMid: true } && start.ModelBlock < model.Blocks.Count
+            ? model.Blocks[start.ModelBlock]
+            : null;
     }
 
     private static int CompletePageCount(int[] assignment, int totalPageCount)
@@ -1868,10 +2072,14 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         if (run.IsComplete)
         {
             var pageCount = CompletePageCount(run.Assignment, run.TotalPageCount);
+            if (PlanFor(model, run, pageCount) is { } splitPlan
+                && ApplyBodyPlan(model, run.Assignment, pageCount, splitPlan, pageCount, complete: true, reuseUnchangedPages, background))
+            {
+                return true;
+            }
             if (PlanPages(model, run.Assignment, pageCount) is not { } plan)
                 return false;
-            ApplyBodyPlan(model, run.Assignment, pageCount, plan, pageCount, complete: true, reuseUnchangedPages, background);
-            return true;
+            return ApplyBodyPlan(model, run.Assignment, pageCount, plan, pageCount, complete: true, reuseUnchangedPages, background);
         }
 
         var known = run.FinalPageCount;
@@ -1882,12 +2090,31 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         // The blocks whose page is not final yet go on one provisional page after the final ones; that
         // page is shown as a placeholder, not built.
         var partial = run.PartialAssignment();
+
+        // Split plan: show the final pages up to the last one followed by a page that starts on a whole
+        // model block (a block running on into pages not laid out yet stays off the shown pages).
+        if (run.PartialRenderedPages() is { Length: > 0 } renderedPages
+            && PlanSplitPages(model, renderedPages, run.PartialCuts(), known + 1, run.FrontierRendered) is { Starts: { } starts } splitPartial)
+        {
+            var shown = known;
+            while (shown >= 1 && starts[shown] is not { IsMid: false })
+                shown--;
+            if (shown >= 1)
+            {
+                var tail = splitPartial.Ranges[shown].Start;
+                for (var m = tail; m < partial.Length; m++)
+                    partial[m] = shown;
+                if (ApplyBodyPlan(model, partial, shown + 1, splitPartial, shown, complete: false, reuseUnchangedPages, background))
+                    return true;
+                partial = run.PartialAssignment();
+            }
+        }
+
         for (var m = frontier; m < partial.Length; m++)
             partial[m] = known;
         if (PlanPages(model, partial, known + 1) is not { } partialPlan)
             return false;
-        ApplyBodyPlan(model, partial, known + 1, partialPlan, known, complete: false, reuseUnchangedPages, background);
-        return true;
+        return ApplyBodyPlan(model, partial, known + 1, partialPlan, known, complete: false, reuseUnchangedPages, background);
     }
 
     /// <summary>
@@ -1896,7 +2123,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
     /// blocks not yet paginated, shown as a placeholder. A <paramref name="background"/> apply (background
     /// pagination progress) keeps the caret, the selection and every page already shown.
     /// </summary>
-    private void ApplyBodyPlan(
+    private bool ApplyBodyPlan(
         TextDocument model,
         int[] assignment,
         int pageCount,
@@ -1951,7 +2178,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
                     _progressive ? -1 : totalBoxCount,
                     _progressive ? -1 : sectionPageCounts[i],
                     model,
-                    plan.Ranges[i], complete && hasEndnotes && !requiresDedicatedEndnotePage && i == pageCount - 1);
+                    plan.Ranges[i], complete && hasEndnotes && !requiresDedicatedEndnotePage && i == pageCount - 1)
+                    + "|" + plan.CutKey(i);
             }
 
             var oldBoxes = _pageBoxes.ToList();
@@ -1981,6 +2209,16 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
                     if (!ReferenceEquals(shown[k], model.Blocks[range.Start + k]))
                         return false;
                 }
+                // A page showing part of a split block is rebuilt once edited (the cut moves with the
+                // text), and a page continuing a block only while that block is unchanged.
+                if (old.Pieces.Count > 0 && old.ContentEditedSinceBuild)
+                    return false;
+                var start = plan.Starts?[page];
+                if (old.ContinuesPrevious != (start is { IsMid: true }))
+                    return false;
+                if (start is { IsMid: true }
+                    && (start.ModelBlock >= model.Blocks.Count || !ReferenceEquals(old.LeadingModelBlock, model.Blocks[start.ModelBlock])))
+                    return false;
                 return true;
             }
 
@@ -1988,7 +2226,19 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
             for (var i = 0; i < bodyPages; i++)
                 keep[i] = CanKeep(i);
 
-            var shards = RenderPages(model, plan, page => page < bodyPages && !keep[page]);
+            IReadOnlyList<PageContent>? contents = null;
+            IReadOnlyList<IReadOnlyList<System.Windows.Documents.Block>> shards;
+            if (plan.Starts is not null)
+            {
+                contents = RenderSplitPages(model, plan, page => page < bodyPages && !keep[page]);
+                if (contents is null)
+                    return false;
+                shards = contents.Select(content => (IReadOnlyList<System.Windows.Documents.Block>)content.Blocks).ToList();
+            }
+            else
+            {
+                shards = RenderPages(model, plan, page => page < bodyPages && !keep[page]);
+            }
             var newBoxes = new List<PageBox>(totalBoxCount);
             for (var i = 0; i < bodyPages; i++)
             {
@@ -2028,6 +2278,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
                     ModelStart = plan.Ranges[i].Start,
                     ModelBlocks = model.Blocks.Skip(plan.Ranges[i].Start).Take(plan.Ranges[i].Count).ToArray(),
                 };
+                ApplySplitState(box, plan, contents?[i], i, model);
                 box.ContentControlLockProbe = _sourceEditor.TryEvaluateContentControlLock;
                 box.OwnerSectionHf = ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots[i].HeaderSlot);
                 box.FooterOwnerSectionHf = ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots[i].FooterSlot);
@@ -2134,7 +2385,10 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
                 ScheduleContentBottomCapture();
             }
             ScheduleRealization();
+            if (_attachedAsSurface)
+                ScheduleMarkupRefresh();
             LayoutProgressChanged?.Invoke();
+            return true;
         }
         finally
         {
@@ -2224,9 +2478,9 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         }
 
         var before = run.FinalPageCount;
-        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var clock = PagedEditDiagnostics.StartClock();
         run.RunUntil(_ => false, budget);
-        var layout = clock.Elapsed.TotalMilliseconds;
+        var layout = clock?.Elapsed.TotalMilliseconds ?? 0;
         if (run.IsComplete)
         {
             _backgroundRun = null;
@@ -2237,6 +2491,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         {
             TryApplyRun(run, reuseUnchangedPages: true, background: true);
         }
+        if (clock is null)
+            return;
         var total = clock.Elapsed.TotalMilliseconds;
         if (total > _longestSliceMs)
         {
@@ -2248,7 +2504,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
 
     private double _longestSliceMs;
 
-    /// <summary>The longest background slice so far and where it went (diagnostics for the probe).</summary>
+    /// <summary>The longest background slice so far and where it went (with <see cref="PagedEditDiagnostics.Enabled"/>).</summary>
     internal string LongestSliceTiming { get; private set; } = "";
 
     // The panel paginates in the background whether or not it is attached as the editing surface (a
@@ -2387,6 +2643,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
             box.Realize();
             HookHeaderFooter(box);
             ApplySpellCheck(box);
+            if (_attachedAsSurface)
+                ScheduleMarkupRefresh();
         }
         finally
         {
@@ -3131,7 +3389,468 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
     internal sealed record PagePlan(
         PagedLayoutSession.UnitPlan[] Units,
         int[] UnitPage,
-        IReadOnlyList<(int Start, int Count)> Ranges);
+        IReadOnlyList<(int Start, int Count)> Ranges)
+    {
+        /// <summary>
+        /// Where each page starts (null for a page nothing starts on) when the plan splits blocks across
+        /// pages; null for a plan by whole render unit.
+        /// </summary>
+        internal PageStart?[]? Starts { get; init; }
+
+        /// <summary>The page each top-level rendered block starts on (-1: not on a planned page).</summary>
+        internal int[]? RenderedPages { get; init; }
+
+        /// <summary>What identifies page <paramref name="page"/>'s cut-out of the document (its start and end).</summary>
+        internal string CutKey(int page) =>
+            Starts is null
+                ? ""
+                : $"{Starts[page]?.Key}>{(page + 1 < Starts.Length ? Starts[page + 1]?.Key : null)}";
+    }
+
+    /// <summary>
+    /// Where a page starts: top-level rendered block <see cref="Rendered"/> (unit <see cref="Unit"/>, its
+    /// block <see cref="BlockInUnit"/>), from its start or at <see cref="Locator"/> inside it.
+    /// <see cref="ModelBlock"/> is the model block the start lies in; <see cref="IsMid"/> when the page
+    /// starts after that block's start (it began on the page before).
+    /// </summary>
+    internal sealed record PageStart(int Rendered, CutLocator? Locator, int Unit, int BlockInUnit, int ModelBlock, bool IsMid)
+    {
+        internal string Key => Locator is { } locator ? $"{ModelBlock}/{BlockInUnit}/{locator}" : $"{ModelBlock}/{BlockInUnit}";
+    }
+
+    /// <summary>The blocks one page shows and which of them are pieces of a block split across pages.</summary>
+    internal sealed class PageContent
+    {
+        internal List<System.Windows.Documents.Block> Blocks { get; } = [];
+
+        internal List<PagePiece> Pieces { get; } = [];
+    }
+
+    /// <summary>
+    /// Plans the body pages from where every top-level rendered block starts and where pages start inside
+    /// one (the layout session's cuts): each page shows the document from its start to the next page's,
+    /// so a paragraph, list or table runs on across pages exactly as the paginator places it. Null when
+    /// the model's render units do not match <paramref name="renderedPages"/>.
+    /// <paramref name="frontierRendered"/> (a partial run) is where the last planned page starts when no
+    /// cut says otherwise.
+    /// </summary>
+    internal static PagePlan? PlanSplitPages(
+        TextDocument model,
+        int[] renderedPages,
+        IReadOnlyList<RenderedCut> cuts,
+        int pageCount,
+        int frontierRendered = -1)
+    {
+        PagedLayoutSession.UnitPlan[] units;
+        try
+        {
+            units = PagedLayoutSession.BuildUnitPlans(model);
+        }
+        catch (PagedLayoutSession.UnsupportedException)
+        {
+            return null;
+        }
+
+        var renderedCount = units.Length == 0 ? 0 : units[^1].RenderedStart + units[^1].PredictedRenderedCount;
+        if (renderedPages.Length != renderedCount || renderedCount == 0)
+            return null;
+        var unitOf = new int[renderedCount];
+        for (var u = 0; u < units.Length; u++)
+        {
+            for (var b = 0; b < units[u].PredictedRenderedCount; b++)
+                unitOf[units[u].RenderedStart + b] = u;
+        }
+
+        pageCount = Math.Max(1, pageCount);
+        var starts = new PageStart?[pageCount];
+        foreach (var cut in cuts)
+        {
+            if (cut.Page <= 0 || cut.Page >= pageCount)
+                continue;
+            if (cut.Rendered < 0 || cut.Rendered >= renderedCount)
+                return null;
+            var u = unitOf[cut.Rendered];
+            var b = cut.Rendered - units[u].RenderedStart;
+            int modelBlock;
+            bool mid;
+            if (cut.Locator.IsRow)
+            {
+                modelBlock = units[u].Start;
+                mid = true;
+            }
+            else
+            {
+                if (cut.Locator.Paragraph >= units[u].Blocks.Length && units[u].Blocks.Length > 1)
+                    return null;
+                modelBlock = units[u].Start + Math.Min(cut.Locator.Paragraph, units[u].Blocks.Length - 1);
+                mid = cut.Locator.Offset > 0;
+            }
+            starts[cut.Page] = new PageStart(cut.Rendered, cut.Locator, u, b, modelBlock, mid);
+        }
+
+        PageStart CleanStart(int r)
+        {
+            var u = unitOf[r];
+            var b = r - units[u].RenderedStart;
+            return new PageStart(r, null, u, b, units[u].Start, IsMid: b > 0);
+        }
+
+        for (var r = 0; r < renderedCount; r++)
+        {
+            var page = renderedPages[r];
+            if (page >= 0 && page < pageCount && starts[page] is null)
+                starts[page] = CleanStart(r);
+        }
+        if (frontierRendered >= 0 && frontierRendered < renderedCount && starts[pageCount - 1] is null)
+            starts[pageCount - 1] = CleanStart(frontierRendered);
+
+        if (starts[0] is not { Rendered: 0, Locator: null })
+            return null;
+
+        // Starts must advance through the document.
+        PageStart? previous = null;
+        foreach (var start in starts)
+        {
+            if (start is null)
+                continue;
+            if (previous is not null && CompareStarts(previous, start) >= 0)
+                return null;
+            previous = start;
+        }
+
+        var bound = new int[pageCount + 1];
+        bound[pageCount] = model.Blocks.Count;
+        for (var page = pageCount - 1; page >= 0; page--)
+            bound[page] = starts[page] is { } start ? start.ModelBlock + (start.IsMid ? 1 : 0) : bound[page + 1];
+        var ranges = new (int Start, int Count)[pageCount];
+        for (var page = 0; page < pageCount; page++)
+        {
+            if (bound[page + 1] < bound[page])
+                return null;
+            ranges[page] = (bound[page], bound[page + 1] - bound[page]);
+        }
+
+        var unitPage = new int[units.Length];
+        for (var u = 0; u < units.Length; u++)
+            unitPage[u] = renderedPages[units[u].RenderedStart];
+
+        return new PagePlan(units, unitPage, ranges) { Starts = starts, RenderedPages = renderedPages };
+    }
+
+    private static int CompareStarts(PageStart a, PageStart b)
+    {
+        if (a.Rendered != b.Rendered)
+            return a.Rendered.CompareTo(b.Rendered);
+        if (a.Locator is not { } la)
+            return b.Locator is null ? 0 : -1;
+        if (b.Locator is not { } lb)
+            return 1;
+        if (la.IsRow != lb.IsRow)
+            return 0; // never both on one block
+        return la.IsRow
+            ? la.Row.CompareTo(lb.Row)
+            : la.Paragraph != lb.Paragraph ? la.Paragraph.CompareTo(lb.Paragraph) : la.Offset.CompareTo(lb.Offset);
+    }
+
+    /// <summary>
+    /// Renders the editable blocks of the pages <paramref name="renderPage"/> selects for a split plan:
+    /// every block is rendered once, in contiguous ranges, and goes to the page it starts on -- cut short
+    /// where the next page starts inside it -- while every later page it reaches gets a separately
+    /// rendered copy cut to its share. Null when a render does not produce the predicted blocks.
+    /// </summary>
+    internal static IReadOnlyList<PageContent>? RenderSplitPages(
+        TextDocument model,
+        PagePlan plan,
+        Func<int, bool> renderPage)
+    {
+        var starts = plan.Starts!;
+        var renderedPages = plan.RenderedPages!;
+        var units = plan.Units;
+        var pageCount = starts.Length;
+        var contents = new PageContent[pageCount];
+        for (var page = 0; page < pageCount; page++)
+            contents[page] = new PageContent();
+
+        var cutsOf = new Dictionary<int, List<(int Page, CutLocator Locator)>>();
+        for (var page = 0; page < pageCount; page++)
+        {
+            if (starts[page] is { Locator: { } locator } start)
+            {
+                if (!cutsOf.TryGetValue(start.Rendered, out var list))
+                    cutsOf[start.Rendered] = list = [];
+                list.Add((page, locator));
+            }
+        }
+
+        bool Shown(int rendered)
+        {
+            var page = rendered < renderedPages.Length ? renderedPages[rendered] : -1;
+            return page >= 0 && page < pageCount && renderPage(page);
+        }
+
+        DocumentView? scratch = null;
+        DocumentView Scratch()
+        {
+            if (scratch is null)
+            {
+                scratch = new DocumentView();
+                scratch.BindModelForRangeRender(model);
+            }
+            return scratch;
+        }
+
+        // The page each rendered block starts on gets the batch render of it (cut after its first cut).
+        var u = 0;
+        while (u < units.Length)
+        {
+            bool Needed(int unit)
+            {
+                for (var b = 0; b < units[unit].PredictedRenderedCount; b++)
+                {
+                    if (Shown(units[unit].RenderedStart + b))
+                        return true;
+                }
+                return false;
+            }
+
+            if (!Needed(u))
+            {
+                u++;
+                continue;
+            }
+            var end = u + 1;
+            while (end < units.Length && Needed(end))
+                end++;
+
+            var rendered = Scratch().RenderBodyUnitRange(units[u].Start, units[end - 1].End);
+            if (rendered.Count != end - u)
+                return null;
+            for (var k = 0; k < rendered.Count; k++)
+            {
+                var unitIndex = u + k;
+                var renderedUnit = rendered[k];
+                if (renderedUnit.Blocks.Count != units[unitIndex].PredictedRenderedCount)
+                    return null;
+                ApplyUnitContextualSpacing(model, units, unitIndex, renderedUnit);
+                for (var b = 0; b < renderedUnit.Blocks.Count; b++)
+                {
+                    var r = units[unitIndex].RenderedStart + b;
+                    if (!Shown(r))
+                        continue;
+                    var block = renderedUnit.Blocks[b];
+                    var page = renderedPages[r];
+                    if (cutsOf.TryGetValue(r, out var cuts)
+                        && PageSplitter.Resolve(block, cuts[0].Locator, forward: false) is { } cutAt)
+                    {
+                        var close = PageSplitter.Depth(block, cutAt);
+                        PageSplitter.TrimAfter(block, cutAt);
+                        contents[page].Pieces.Add(new PagePiece { Block = block, Close = close, ContinuesNext = true });
+                    }
+                    contents[page].Blocks.Add(block);
+                }
+            }
+            u = end;
+        }
+
+        // Every later page a block reaches shows its own copy, cut to what lies between its two cuts.
+        foreach (var (r, cuts) in cutsOf)
+        {
+            for (var i = 0; i < cuts.Count; i++)
+            {
+                var (page, locator) = cuts[i];
+                if (page >= pageCount || !renderPage(page))
+                    continue;
+                var start = starts[page]!;
+                var unit = units[start.Unit];
+                var rendered = Scratch().RenderBodyUnitRange(unit.Start, unit.End);
+                if (rendered.Count != 1 || rendered[0].Blocks.Count != unit.PredictedRenderedCount)
+                    return null;
+                ApplyUnitContextualSpacing(model, units, start.Unit, rendered[0]);
+                var copy = rendered[0].Blocks[start.BlockInUnit];
+                if (CutPiece(copy, locator, i + 1 < cuts.Count ? cuts[i + 1].Locator : null) is not { } pieces)
+                    continue;
+                contents[page].Blocks.InsertRange(0, pieces.Select(piece => piece.Block));
+                contents[page].Pieces.AddRange(pieces);
+            }
+        }
+
+        return contents;
+    }
+
+    /// <summary>
+    /// Cuts a fresh render of a split block to the piece a page shows: from <paramref name="from"/> to
+    /// <paramref name="to"/> (or its end). Text continuing mid-line loses its first-line indent and space
+    /// before, and a list item continuing on the page is shown without its marker (in a list of its own,
+    /// when more items follow). Null when the block does not have the content the locator names.
+    /// </summary>
+    private static List<PagePiece>? CutPiece(System.Windows.Documents.Block copy, CutLocator from, CutLocator? to)
+    {
+        if (PageSplitter.Resolve(copy, from, forward: true) is not { } tailAt
+            || PageSplitter.Resolve(copy, from, forward: false) is not { } headAt)
+        {
+            return null;
+        }
+
+        var gap = PageSplitter.SymbolOffset(copy, tailAt) - PageSplitter.SymbolOffset(copy, headAt);
+        var open = PageSplitter.Depth(copy, tailAt);
+        var itemIndex = copy is System.Windows.Documents.List topList ? TopLevelItemIndex(topList, tailAt) : 0;
+        var close = 0;
+        var continuesNext = false;
+        if (to is { } next && PageSplitter.Resolve(copy, next, forward: false) is { } endAt)
+        {
+            close = PageSplitter.Depth(copy, endAt);
+            PageSplitter.TrimAfter(copy, endAt);
+            continuesNext = true;
+        }
+        if (PageSplitter.Resolve(copy, from, forward: true) is not { } trimAt)
+            return null;
+        PageSplitter.TrimBefore(copy, trimAt);
+        copy.BreakPageBefore = false;
+
+        var textSeam = !from.IsRow && from.Offset > 0;
+        static void AsContinuationLine(System.Windows.Documents.Paragraph paragraph)
+        {
+            paragraph.TextIndent = 0;
+            paragraph.Margin = new Thickness(paragraph.Margin.Left, 0, paragraph.Margin.Right, paragraph.Margin.Bottom);
+            paragraph.BreakPageBefore = false;
+        }
+
+        switch (copy)
+        {
+            case System.Windows.Documents.Paragraph paragraph:
+                AsContinuationLine(paragraph);
+                DocumentView.MarkReadContinuation(paragraph);
+                return
+                [
+                    new PagePiece
+                    {
+                        Block = paragraph, Open = open, Close = close, Gap = gap,
+                        ContinuesPrevious = true, ContinuesNext = continuesNext, IsTextSeam = true
+                    }
+                ];
+
+            case System.Windows.Documents.List list:
+            {
+                if (list.MarkerStyle != TextMarkerStyle.None)
+                    list.StartIndex += itemIndex;
+                if (!textSeam)
+                {
+                    return
+                    [
+                        new PagePiece
+                        {
+                            Block = list, Open = open, Close = close, Gap = gap,
+                            ContinuesPrevious = true, ContinuesNext = continuesNext
+                        }
+                    ];
+                }
+
+                if (PageSplitter.ListParagraphs(list).FirstOrDefault() is { } firstParagraph)
+                    AsContinuationLine(firstParagraph);
+                if (list.ListItems.Count <= 1)
+                {
+                    list.MarkerStyle = TextMarkerStyle.None;
+                    DocumentView.MarkReadContinuation(list);
+                    return
+                    [
+                        new PagePiece
+                        {
+                            Block = list, Open = open, Close = close, Gap = gap,
+                            ContinuesPrevious = true, ContinuesNext = continuesNext, IsTextSeam = true
+                        }
+                    ];
+                }
+
+                // The continuing item goes in a marker-less list of its own; the items after it keep theirs.
+                var item = list.ListItems.FirstListItem!;
+                list.ListItems.Remove(item);
+                var continuing = new System.Windows.Documents.List
+                {
+                    MarkerStyle = TextMarkerStyle.None,
+                    Tag = list.Tag,
+                    Margin = list.Margin,
+                    Padding = list.Padding,
+                    MarkerOffset = list.MarkerOffset,
+                    FlowDirection = list.FlowDirection,
+                };
+                continuing.ListItems.Add(item);
+                if (list.MarkerStyle != TextMarkerStyle.None)
+                    list.StartIndex += 1;
+                DocumentView.MarkReadContinuation(continuing);
+                return
+                [
+                    new PagePiece
+                    {
+                        Block = continuing, Open = open, Close = 0, Gap = gap,
+                        ContinuesPrevious = true, IsTextSeam = true
+                    },
+                    new PagePiece
+                    {
+                        Block = list, Open = 0, Close = close, Gap = 0,
+                        ContinuesPrevious = true, ContinuesNext = continuesNext
+                    }
+                ];
+            }
+
+            case var _ when PageSplitter.SingleTable(copy) is { } table:
+                DocumentView.MarkReadContinuation(table);
+                return
+                [
+                    new PagePiece
+                    {
+                        Block = copy, Open = open, Close = close, Gap = gap,
+                        ContinuesPrevious = true, ContinuesNext = continuesNext
+                    }
+                ];
+
+            default:
+                return null;
+        }
+    }
+
+    private static int TopLevelItemIndex(System.Windows.Documents.List list, TextPointer position)
+    {
+        // A cut before an item sits in the list itself, right before that item.
+        DependencyObject? node = ReferenceEquals(position.Parent, list)
+            ? position.GetAdjacentElement(LogicalDirection.Forward)
+            : position.Parent;
+        while (node is TextElement element && !ReferenceEquals(element.Parent, list))
+            node = element.Parent;
+        if (node is not ListItem item)
+            return 0;
+        var index = 0;
+        foreach (var candidate in list.ListItems)
+        {
+            if (ReferenceEquals(candidate, item))
+                return index;
+            index++;
+        }
+        return 0;
+    }
+
+    /// <summary>A body paragraph unit gets the contextual spacing a full render gives it (see <see cref="RenderPages"/>).</summary>
+    private static void ApplyUnitContextualSpacing(
+        TextDocument model,
+        PagedLayoutSession.UnitPlan[] units,
+        int unitIndex,
+        DocumentView.BodyRenderUnit renderedUnit)
+    {
+        if (renderedUnit.Kind != DocumentView.BodyRenderUnitKind.BodyParagraph
+            || renderedUnit.Blocks[0] is not System.Windows.Documents.Paragraph paragraph)
+        {
+            return;
+        }
+        var margin = paragraph.Margin;
+        var top = PreviousBodyParagraph(units, unitIndex) is { } before
+            && DocumentView.SuppressesContextualSpacingForLayout(before, renderedUnit.BodyParagraph!, model)
+            ? 0
+            : margin.Top;
+        var bottom = NextBodyParagraph(units, unitIndex) is { } after
+            && DocumentView.SuppressesContextualSpacingForLayout(renderedUnit.BodyParagraph!, after, model)
+            ? 0
+            : margin.Bottom;
+        paragraph.Margin = new Thickness(margin.Left, top, margin.Right, bottom);
+    }
 
     /// <summary>
     /// Plans the body pages by render unit: a unit (one block, or a run of list paragraphs rendered as one
@@ -3348,6 +4067,14 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
         if (firstBox < 0 || _editedSinceCommit.Any(box => !_pageBoxes.Contains(box)))
             return false;
 
+        // A block split across pages is read back whole: the span covers every page it is on.
+        while (firstBox > 0 && _pageBoxes[firstBox].ContinuesPrevious)
+            firstBox--;
+        while (lastBox + 1 < _pageBoxes.Count && _pageBoxes[lastBox + 1].ContinuesPrevious)
+            lastBox++;
+        if (_pageBoxes[firstBox].ContinuesPrevious)
+            return false;
+
         // The model must still hold exactly what the boxes were built from.
         var blocks = _sourceEditor.Model.Blocks;
         var expectedStart = 0;
@@ -3381,7 +4108,19 @@ internal sealed class PaginatedEditorPanel : ScrollViewer, IExternalEditingSurfa
             var box = _pageBoxes[i];
             box.ModelStart = position;
             if (i <= lastBox)
+            {
                 box.ModelBlocks = perBox[i - firstBox];
+                if (box.ContinuesPrevious)
+                {
+                    // The block it continues is the last one that started on an earlier page of the span.
+                    box.LeadingModelBlock = null;
+                    for (var k = i - firstBox - 1; k >= 0 && box.LeadingModelBlock is null; k--)
+                    {
+                        if (perBox[k].Length > 0)
+                            box.LeadingModelBlock = perBox[k][^1];
+                    }
+                }
+            }
             position += box.ModelBlocks!.Length;
         }
         if (_tailStart >= 0)

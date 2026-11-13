@@ -5849,12 +5849,13 @@ public sealed partial class DocumentView : RichTextBox
     internal IReadOnlyList<BodyRenderUnit> RenderBodyUnitRange(int from, int to)
     {
         var units = new List<BodyRenderUnit>();
-        var rangeClock = System.Diagnostics.Stopwatch.StartNew();
+        var rangeClock = PagedEditDiagnostics.StartClock();
         BeginRenderPass();
         try
         {
             var context = CreateBodyRenderContext(_model, from);
-            LastRangeRenderContextMs = rangeClock.Elapsed.TotalMilliseconds;
+            if (rangeClock is not null)
+                LastRangeRenderContextMs = rangeClock.Elapsed.TotalMilliseconds;
             RenderBodyUnits(
                 from,
                 Math.Min(to, _model.Blocks.Count),
@@ -6115,7 +6116,7 @@ public sealed partial class DocumentView : RichTextBox
 
     private bool TryRefreshBodyAfterReplacement((int Start, int OldCount, int NewCount) hint)
     {
-        var refreshClock = System.Diagnostics.Stopwatch.StartNew();
+        var refreshClock = PagedEditDiagnostics.StartClock();
         if (_bodyUnits is not { Count: > 0 } old
             || Document is not { } document
             || RenderInlineFlowBreakFragmentsForPagination
@@ -6210,7 +6211,7 @@ public sealed partial class DocumentView : RichTextBox
         if (anchor is not null && !ReferenceEquals(anchor.Parent, document))
             return false;
 
-        var planned = refreshClock.Elapsed.TotalMilliseconds;
+        var planned = refreshClock?.Elapsed.TotalMilliseconds ?? 0;
         var fresh = new BodyRenderUnit?[newMiddle];
         for (var k = 0; k < newMiddle;)
         {
@@ -6234,7 +6235,7 @@ public sealed partial class DocumentView : RichTextBox
             }
             k = end;
         }
-        var rendered = refreshClock.Elapsed.TotalMilliseconds;
+        var rendered = refreshClock?.Elapsed.TotalMilliseconds ?? 0;
 
         _bodyRenderInProgress = true;
         try
@@ -6298,11 +6299,14 @@ public sealed partial class DocumentView : RichTextBox
             _renderJoinSlashes = false;
         }
 
-        var swapped = refreshClock.Elapsed.TotalMilliseconds;
+        var swapped = refreshClock?.Elapsed.TotalMilliseconds ?? 0;
         IncrementalBodyRefreshCount++;
         SyncBodyOverlays();
-        LastBodyRefreshTiming = $"plan {planned:F0} ms, render {rendered - planned:F0} ms (context {LastRangeRenderContextMs:F0} ms, {toRender} of {newMiddle} units), swap {swapped - rendered:F0} ms, "
-            + $"overlays {refreshClock.Elapsed.TotalMilliseconds - swapped:F0} ms";
+        if (refreshClock is not null)
+        {
+            LastBodyRefreshTiming = $"plan {planned:F0} ms, render {rendered - planned:F0} ms (context {LastRangeRenderContextMs:F0} ms, {toRender} of {newMiddle} units), swap {swapped - rendered:F0} ms, "
+                + $"overlays {refreshClock.Elapsed.TotalMilliseconds - swapped:F0} ms";
+        }
         return true;
     }
 
@@ -9744,9 +9748,24 @@ public sealed partial class DocumentView : RichTextBox
     private static void ReadRenderedBlocksInto(
         BlockCollection blocks,
         IList<ModelBlock> target,
-        TextDocument document)
+        TextDocument document) =>
+        ReadRenderedPagesInto([blocks], target, document, pageStarts: null);
+
+    /// <summary>
+    /// Reads the top-level blocks of consecutive pages (or of one document) into model blocks, in one
+    /// pass: a table split into pagination segments is reassembled across pages, and a block a page
+    /// continues from the page before (see <see cref="MarkReadContinuation"/>) is merged into the block
+    /// it continues. <paramref name="pageStarts"/> (when given, one entry per page) receives the number of
+    /// model blocks read before each page's first block, so <c>target[pageStarts[i]..pageStarts[i + 1])</c>
+    /// are the blocks that start on page <c>i</c>.
+    /// </summary>
+    private static void ReadRenderedPagesInto(
+        IReadOnlyList<BlockCollection> pages,
+        IList<ModelBlock> target,
+        TextDocument document,
+        int[]? pageStarts)
     {
-        static IEnumerable<System.Windows.Documents.Block> FlattenSections(BlockCollection source)
+        static IEnumerable<System.Windows.Documents.Block> FlattenSections(IEnumerable<System.Windows.Documents.Block> source)
         {
             foreach (var block in source)
             {
@@ -9762,68 +9781,76 @@ public sealed partial class DocumentView : RichTextBox
             }
         }
 
+        // A segment table is added to the target when its first segment is read; later segments append
+        // their rows to it while they follow in order.
         ModelTable? pendingSegmentTable = null;
         WpfTableTag? pendingSegmentTag = null;
 
         void FlushPendingSegment()
         {
-            if (pendingSegmentTable is null)
-                return;
-
-            target.Add(pendingSegmentTable);
             pendingSegmentTable = null;
             pendingSegmentTag = null;
         }
 
-        foreach (var block in FlattenSections(blocks))
+        for (var page = 0; page < pages.Count; page++)
         {
-            switch (block)
+            if (pageStarts is not null)
+                pageStarts[page] = target.Count;
+
+            foreach (var block in FlattenSections(pages[page]))
             {
-                case WpfList wpfList:
-                    FlushPendingSegment();
-                    ReadList(target, wpfList, document);
-                    break;
-                case WpfParagraph wpfParagraph when TryReadFloatingTable(wpfParagraph, document, out var floatingTable):
-                    FlushPendingSegment();
-                    target.Add(floatingTable);
-                    break;
-                case WpfParagraph wpfParagraph:
-                    FlushPendingSegment();
-                    target.Add(ReadParagraph(wpfParagraph, document));
-                    break;
-                case WpfTable wpfTable:
-                    var table = ReadTable(wpfTable, document);
-                    if (wpfTable.Tag is WpfTableTag { IsPaginationSegment: true, SegmentCount: > 1 } tag)
-                    {
-                        if (pendingSegmentTable is not null
-                            && pendingSegmentTag is not null
-                            && pendingSegmentTag.SourceBlockIndex == tag.SourceBlockIndex
-                            && pendingSegmentTag.SegmentCount == tag.SegmentCount
-                            && tag.SegmentIndex == pendingSegmentTag.SegmentIndex + 1)
+                if (IsReadContinuation(block) && TryReadContinuation(block, target, document, pendingSegmentTable))
+                    continue;
+
+                switch (block)
+                {
+                    case WpfList wpfList:
+                        FlushPendingSegment();
+                        ReadList(target, wpfList, document);
+                        break;
+                    case WpfParagraph wpfParagraph when TryReadFloatingTable(wpfParagraph, document, out var floatingTable):
+                        FlushPendingSegment();
+                        target.Add(floatingTable);
+                        break;
+                    case WpfParagraph wpfParagraph:
+                        FlushPendingSegment();
+                        target.Add(ReadParagraph(wpfParagraph, document));
+                        break;
+                    case WpfTable wpfTable:
+                        var table = ReadTable(wpfTable, document);
+                        if (wpfTable.Tag is WpfTableTag { IsPaginationSegment: true, SegmentCount: > 1 } tag)
                         {
-                            foreach (var row in table.Rows)
-                                pendingSegmentTable.Rows.Add(row);
-                            pendingSegmentTag = tag;
+                            if (pendingSegmentTable is not null
+                                && pendingSegmentTag is not null
+                                && pendingSegmentTag.SourceBlockIndex == tag.SourceBlockIndex
+                                && pendingSegmentTag.SegmentCount == tag.SegmentCount
+                                && tag.SegmentIndex == pendingSegmentTag.SegmentIndex + 1)
+                            {
+                                foreach (var row in table.Rows)
+                                    pendingSegmentTable.Rows.Add(row);
+                                pendingSegmentTag = tag;
+                            }
+                            else
+                            {
+                                FlushPendingSegment();
+                                target.Add(table);
+                                pendingSegmentTable = table;
+                                pendingSegmentTag = tag;
+                            }
+
+                            if (tag.SegmentIndex >= tag.SegmentCount - 1)
+                                FlushPendingSegment();
                         }
                         else
                         {
                             FlushPendingSegment();
-                            pendingSegmentTable = table;
-                            pendingSegmentTag = tag;
+                            target.Add(table);
                         }
-
-                        if (tag.SegmentIndex >= tag.SegmentCount - 1)
-                            FlushPendingSegment();
-                    }
-                    else
-                    {
+                        break;
+                    default:
                         FlushPendingSegment();
-                        target.Add(table);
-                    }
-                    break;
-                default:
-                    FlushPendingSegment();
-                    break;
+                        break;
+                }
             }
         }
 

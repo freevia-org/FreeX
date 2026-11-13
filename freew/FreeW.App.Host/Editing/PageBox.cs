@@ -197,6 +197,30 @@ internal sealed class PageBox : Border
     /// <summary>The page facts this box was built from (number, section, slots, notes); null: never reused.</summary>
     internal string? ModelKey { get; set; }
 
+    // ── split blocks: a paragraph, list or table that continues from or onto a neighbouring page ─────
+    /// <summary>The top-level blocks of this page that are pieces of a block split across pages.</summary>
+    internal Dictionary<System.Windows.Documents.Block, PagePiece> Pieces { get; } = new();
+
+    /// <summary>
+    /// The page starts inside a model block that started on the page before (its text, list item or table
+    /// rows continue here): a commit reads the two pages together.
+    /// </summary>
+    internal bool ContinuesPrevious { get; set; }
+
+    /// <summary>The model block this page continues (when <see cref="ContinuesPrevious"/>), as committed.</summary>
+    internal FreeW.Core.Model.Block? LeadingModelBlock { get; set; }
+
+    /// <summary>Set when this page's body was edited since it was built.</summary>
+    internal bool ContentEditedSinceBuild { get; set; }
+
+    /// <summary>The piece <paramref name="block"/> is on this page, if it is one.</summary>
+    internal PagePiece? PieceOf(System.Windows.Documents.Block? block) =>
+        block is not null && Pieces.TryGetValue(block, out var piece) ? piece : null;
+
+    /// <summary>The page's first line continues the text of the page before (a paragraph or list item split mid-text).</summary>
+    internal bool StartsWithTextSeam =>
+        PieceOf(Body.Document.Blocks.FirstBlock) is { ContinuesPrevious: true, IsTextSeam: true };
+
     /// <summary>
     /// The <see cref="SectionHeadersFooters"/> that this page box's FOOTER sub-editor should commit
     /// back to. Resolved independently of <see cref="OwnerSectionHf"/> because the header and footer
@@ -314,6 +338,14 @@ internal sealed class PageBox : Border
         var bodyFlow = new FlowDocument { PagePadding = new Thickness(0) };
         if (contentWidth > 0)
             bodyFlow.PageWidth = contentWidth;
+        // The document's default font, as the continuous editor's flow and the paginator's flows carry it:
+        // text that inherits it (empty paragraphs, list markers, line heights) lays out as it is paginated.
+        if (sourceModel is not null)
+        {
+            bodyFlow.FontFamily = new FontFamily(sourceModel.DefaultRun.FontFamily ?? "Calibri");
+            bodyFlow.FontSize = (sourceModel.DefaultRun.FontSizePt ?? 11) * FreeW.Core.Model.PageLayout.PointsToDip(1);
+            Typography.SetKerning(bodyFlow, false);
+        }
 
         // W18: Apply multi-column layout to the body FlowDocument so that pages using
         // PageSettings.ColumnCount > 1 render columns inside the page box correctly.
@@ -372,6 +404,8 @@ internal sealed class PageBox : Border
         CommandManager.AddPreviewCanExecuteHandler(Body, OnBodyPreviewCanExecuteClipboardMutation);
         CommandManager.AddPreviewExecutedHandler(Body, OnBodyPreviewExecutedClipboardMutation);
         _bodyMinHeight = Body.MinHeight;
+        _bodyHost = new PageBodyHost { BottomOverhang = marginBottom };
+        _bodyHost.Children.Add(Body);
 
         if (deferChrome)
             Child = BuildPlaceholder(NominalHeight(page));
@@ -392,6 +426,7 @@ internal sealed class PageBox : Border
     private readonly TextDocument? _sourceModel;
     private readonly string? _hfPageNumberText;
     private readonly double _bodyMinHeight;
+    private readonly PageBodyHost _bodyHost;
     private Grid? _chrome;
 
     /// <summary>
@@ -533,8 +568,12 @@ internal sealed class PageBox : Border
             stack.Children.Add(headerStrip);
         }
 
-        Grid.SetRow(Body, 1);
-        stack.Children.Add(Body);
+        if (VisualTreeHelper.GetParent(Body) is Panel bodyParent && !ReferenceEquals(bodyParent, _bodyHost))
+            bodyParent.Children.Remove(Body);
+        if (Body.Parent is null)
+            _bodyHost.Children.Add(Body);
+        Grid.SetRow(_bodyHost, 1);
+        stack.Children.Add(_bodyHost);
 
         // ── Footnote / endnote region (row 2) ─────────────────────────────────────────────────────
         // Rendered as a read-only StackPanel: separator rule + one TextBlock per note entry.
@@ -960,6 +999,10 @@ internal sealed class PageBox : Border
                     else
                     {
                         MoveCaretToBoxStart(NextBox);
+                        // The end of this page and the start of a page that continues its line are one
+                        // position: Right moves past the next character, as within a line.
+                        if (e.Key == Key.Right && NextBox.StartsWithTextSeam)
+                            StepCaret(NextBox, LogicalDirection.Forward);
                         e.Handled = true;
                     }
                 }
@@ -978,6 +1021,8 @@ internal sealed class PageBox : Border
                     else
                     {
                         MoveCaretToBoxEnd(PreviousBox);
+                        if (e.Key == Key.Left && StartsWithTextSeam)
+                            StepCaret(PreviousBox, LogicalDirection.Backward);
                         e.Handled = true;
                     }
                 }
@@ -1069,6 +1114,16 @@ internal sealed class PageBox : Border
                 target.Body.CaretPosition = start;
         }
         catch { /* caret at default location */ }
+    }
+
+    private static void StepCaret(PageBox target, LogicalDirection direction)
+    {
+        try
+        {
+            if (target.Body.CaretPosition.GetNextInsertionPosition(direction) is { } next)
+                target.Body.CaretPosition = next;
+        }
+        catch { /* caret stays at the page edge */ }
     }
 
     /// <summary>
@@ -1237,5 +1292,40 @@ internal sealed class PageBox : Border
         tb.Inlines.Add(new System.Windows.Documents.Run(text));
 
         return tb;
+    }
+}
+
+/// <summary>
+/// Hosts a page body. The paginator lets a page's last line overhang its content box into the bottom
+/// margin (print draws it there); the body then measures that much taller than the page, and this host
+/// lets it overhang into its own bottom margin instead of making the page taller. Only text running
+/// past the bottom margin (content the paginator could not place elsewhere) still grows the page.
+/// </summary>
+internal sealed class PageBodyHost : Panel
+{
+    /// <summary>How far the body may run past the page's content area without growing the page.</summary>
+    internal double BottomOverhang { get; set; }
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        var width = 0.0;
+        var height = 0.0;
+        foreach (UIElement child in InternalChildren)
+        {
+            child.Measure(availableSize);
+            var desired = child.DesiredSize;
+            var minimum = child is FrameworkElement element ? element.MinHeight : 0;
+            var overhang = Math.Min(BottomOverhang, Math.Max(0, desired.Height - minimum));
+            width = Math.Max(width, desired.Width);
+            height = Math.Max(height, desired.Height - overhang);
+        }
+        return new Size(width, height);
+    }
+
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        foreach (UIElement child in InternalChildren)
+            child.Arrange(new Rect(0, 0, finalSize.Width, Math.Max(finalSize.Height, child.DesiredSize.Height)));
+        return finalSize;
     }
 }
