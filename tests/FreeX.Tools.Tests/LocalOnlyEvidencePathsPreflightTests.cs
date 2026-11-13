@@ -71,9 +71,10 @@ public sealed class LocalOnlyEvidencePathsPreflightTests
     {
         var script = WorkspaceFileLocator.ReadAllText("tools", "Test-LocalOnlyEvidencePaths.ps1");
 
-        script.Should().Contain("$preRewriteCommit = \"ed45d43fe7486bebeaa78dbfc286b43d6cd5d267\"");
+        script.Should().Contain("\"ed45d43fe7486bebeaa78dbfc286b43d6cd5d267\"");
+        script.Should().Contain("\"e17caa8ebd567874eb5872de1fdf6ba2ff508873\"");
         script.Should().Contain("merge-base --is-ancestor $preRewriteCommit HEAD");
-        script.Should().Contain("HEAD still carries the history from before the 2026-11-12 rewrite");
+        script.Should().Contain("HEAD still carries history from before the 2026-11 rewrites");
     }
 
     private static void AddGitIndexEntry(string repositoryPath, string fileName)

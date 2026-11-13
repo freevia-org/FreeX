@@ -275,6 +275,18 @@ public sealed partial class MainWindow
             errorRulesPanel);
         // Every row above carries its own WPF margin, so the generic category gap must not add to it.
         formulasPanel.Spacing = 0;
+        // The WPF page's 12 px text lines and toggle rows each stand a pixel taller than the
+        // Avalonia ones, so its rows ran 1 px further apart per row (14 px by the first error
+        // rule). Measured against the WPF capture, each row gets the pixels it is short of WPF:
+        // the page header, its subheading and the background-checks caption, which sits 3 px
+        // lower under its heading in WPF, gain the most.
+        double[] formulasWpfRowLead = [2, 2, 1, 0, 1, 1, 0, 1, 1, 0, 1, 3, 1];
+        for (var index = 0; index < formulasPanel.Children.Count && index < formulasWpfRowLead.Length; index++)
+        {
+            var row = formulasPanel.Children[index];
+            var margin = row.Margin;
+            row.Margin = new Thickness(margin.Left, margin.Top + formulasWpfRowLead[index], margin.Right, margin.Bottom);
+        }
 
         // ── Proofing ────────────────────────────────────────────────────────────
         var proofingWordsList = new ListBox
@@ -1404,11 +1416,7 @@ public sealed partial class MainWindow
 
         var formulaBarVisible = !_isFormulaBarHidden;
         if (formulaBarVisible != input.ShowFormulaBar)
-        {
-            _isFormulaBarHidden = !input.ShowFormulaBar;
-            _formulaBox.IsVisible = input.ShowFormulaBar;
-            _cellAddressText.IsVisible = input.ShowFormulaBar;
-        }
+            ApplyFormulaBarVisibility(input.ShowFormulaBar);
 
         RefreshShell(UiText.Get("Options_Saved"));
     }

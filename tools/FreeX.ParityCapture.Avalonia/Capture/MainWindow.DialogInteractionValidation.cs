@@ -29,21 +29,9 @@ internal sealed record DialogInteractionContractEvidence(
 
 public sealed partial class MainWindow
 {
-    private sealed class OwnedDialogKeyboardFocusState(
-        MainWindow owner,
-        IInputElement? ownerFocusBeforeOpen)
-    {
-        public MainWindow Owner { get; } = owner;
-        public IInputElement? OwnerFocusBeforeOpen { get; } = ownerFocusBeforeOpen;
-
-        /// <summary>How many times the last-resort focus fallback has looked at this dialog.</summary>
-        public int FallbackChecks { get; set; }
-    }
-
-    private static readonly ConditionalWeakTable<Window, OwnedDialogKeyboardFocusState>
-        ConfiguredOwnedDialogKeyboardFocus = new();
-    private static readonly bool OwnedDialogKeyboardFocusRegistered =
-        RegisterOwnedDialogKeyboardFocus();
+    // The owned-dialog keyboard behaviour (Tab cycle, Escape, initial focus, owner focus restore)
+    // is the production implementation, installed here for hosts that do not run App.
+    private static readonly bool OwnedDialogKeyboardRegistered = RegisterOwnedDialogKeyboard();
     internal static Func<Window, Key, RawInputModifiers, string?>? DialogKeySenderOverride { get; set; }
     private readonly Dictionary<string, DialogInteractionContractEvidence> _dialogInteractionContracts =
         new(StringComparer.Ordinal);
@@ -51,149 +39,10 @@ public sealed partial class MainWindow
     internal IReadOnlyDictionary<string, DialogInteractionContractEvidence> DialogInteractionContracts =>
         _dialogInteractionContracts;
 
-    private static bool RegisterOwnedDialogKeyboardFocus()
+    private static bool RegisterOwnedDialogKeyboard()
     {
-        Window.OwnerProperty.Changed.AddClassHandler<Window>(ConfigureOwnedDialogKeyboardFocus);
+        OwnedDialogKeyboard.Install();
         return true;
-    }
-
-    private static void ConfigureOwnedDialogKeyboardFocus(
-        Window dialog,
-        AvaloniaPropertyChangedEventArgs _)
-    {
-        if (dialog.Owner is not MainWindow owner ||
-            !ConfiguredOwnedDialogKeyboardFocus.TryAdd(
-                dialog,
-                new OwnedDialogKeyboardFocusState(owner, owner.FocusManager?.GetFocusedElement())))
-        {
-            return;
-        }
-
-        KeyboardNavigation.SetTabNavigation(dialog, KeyboardNavigationMode.Cycle);
-        dialog.Opened += OwnedDialogOpened;
-        dialog.Activated += OwnedDialogActivated;
-        dialog.LayoutUpdated += OwnedDialogLayoutUpdated;
-        dialog.KeyDown += OwnedDialogEscapeKeyDown;
-        dialog.Closed += OwnedDialogClosed;
-    }
-
-    private static void OwnedDialogOpened(object? sender, EventArgs _)
-    {
-        if (sender is not Window dialog)
-            return;
-
-        QueueOwnedDialogInitialFocus(dialog);
-    }
-
-    private static void OwnedDialogActivated(object? sender, EventArgs _)
-    {
-        if (sender is Window dialog)
-            QueueOwnedDialogInitialFocus(dialog);
-    }
-
-    private static void OwnedDialogLayoutUpdated(object? sender, EventArgs _)
-    {
-        if (sender is Window dialog)
-            FocusFirstOwnedDialogControl(dialog);
-    }
-
-    private static void QueueOwnedDialogInitialFocus(Window dialog)
-    {
-        Dispatcher.UIThread.Post(
-            () => FocusFirstOwnedDialogControl(dialog),
-            DispatcherPriority.Background);
-    }
-
-    private static void FocusFirstOwnedDialogControl(Window dialog)
-    {
-        if (!dialog.IsVisible)
-            return;
-
-        var focused = dialog.FocusManager?.GetFocusedElement();
-        if (IsFocusInside(dialog, focused))
-        {
-            dialog.LayoutUpdated -= OwnedDialogLayoutUpdated;
-            return;
-        }
-
-        // Last resort, and only after the dialog has had a pass to focus its own target. A
-        // dialog that picks a specific initial control can fail on its first attempt -- the
-        // control is not always ready that early -- and retries on the next layout. Grabbing the
-        // first focusable control on the very first check beat that retry under load and recorded
-        // the wrong initial focus (typically a button), which also broke the tab cycle when the
-        // winner sat outside it. Dialogs that never focus anything still get the fallback, one
-        // pass later.
-        if (ConfiguredOwnedDialogKeyboardFocus.TryGetValue(dialog, out var state) &&
-            ++state.FallbackChecks < 2)
-        {
-            return;
-        }
-
-        var firstControl = dialog.GetVisualDescendants()
-            .OfType<Control>()
-            .FirstOrDefault(control =>
-                control.Focusable && control.IsVisible && control.IsEffectivelyEnabled);
-        firstControl?.Focus();
-        if (IsFocusInside(dialog, dialog.FocusManager?.GetFocusedElement()))
-            dialog.LayoutUpdated -= OwnedDialogLayoutUpdated;
-    }
-
-    private static void OwnedDialogEscapeKeyDown(object? sender, KeyEventArgs args)
-    {
-        if (sender is not Window dialog ||
-            !ConfiguredOwnedDialogKeyboardFocus.TryGetValue(dialog, out _) ||
-            args.Handled ||
-            args.Key != Key.Escape ||
-            args.KeyModifiers != KeyModifiers.None)
-        {
-            return;
-        }
-
-        var cancelButton = dialog.GetVisualDescendants()
-            .OfType<Button>()
-            .FirstOrDefault(button =>
-                button.IsCancel && button.IsVisible && button.IsEffectivelyEnabled);
-        cancelButton?.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, cancelButton));
-        if (dialog.IsVisible)
-            dialog.Close();
-        args.Handled = true;
-    }
-
-    private static void OwnedDialogClosed(object? sender, EventArgs _)
-    {
-        if (sender is not Window dialog ||
-            !ConfiguredOwnedDialogKeyboardFocus.TryGetValue(dialog, out var state))
-        {
-            return;
-        }
-
-        dialog.Opened -= OwnedDialogOpened;
-        dialog.Activated -= OwnedDialogActivated;
-        dialog.LayoutUpdated -= OwnedDialogLayoutUpdated;
-        dialog.KeyDown -= OwnedDialogEscapeKeyDown;
-        dialog.Closed -= OwnedDialogClosed;
-
-        Dispatcher.UIThread.Post(
-            () => RestoreOwnedDialogOwnerFocus(state),
-            DispatcherPriority.Input);
-    }
-
-    private static void RestoreOwnedDialogOwnerFocus(OwnedDialogKeyboardFocusState state)
-    {
-        var owner = state.Owner;
-        if (!owner.IsVisible)
-            return;
-
-        owner.Activate();
-        if (state.OwnerFocusBeforeOpen is InputElement priorFocus &&
-            priorFocus.Focusable && priorFocus.IsEffectivelyEnabled &&
-            IsFocusInside(owner, priorFocus))
-        {
-            priorFocus.Focus();
-            return;
-        }
-
-        owner._sheetGridHost.Focus();
     }
 
     private void ResetDialogInteractionContracts()
@@ -335,6 +184,7 @@ public sealed partial class MainWindow
 
         var initial = NormalizeDialogTabStop(initialFocus);
         var visited = new List<IInputElement?> { initial };
+        var sequence = new List<IInputElement?> { initial };
         var maximumSteps = Math.Max(2, tabStops + 2);
         for (var step = 1; step <= maximumSteps; step++)
         {
@@ -353,6 +203,7 @@ public sealed partial class MainWindow
                 return "failed:focus-left-dialog:step=" + step;
 
             var after = NormalizeDialogTabStop(afterFocus);
+            sequence.Add(after);
 
             if (ReferenceEquals(initial, after))
             {
@@ -366,7 +217,10 @@ public sealed partial class MainWindow
                 visited.Add(after);
         }
 
-        return $"failed:focus-cycle-did-not-wrap:steps={maximumSteps},stops={visited.Count}";
+        // Name the stops so a failure says where the cycle went instead of only how far.
+        var path = string.Join(">", sequence.Take(4).Select(DescribeInputElement)) + ">...>" +
+            string.Join(">", sequence.TakeLast(8).Select(DescribeInputElement));
+        return $"failed:focus-cycle-did-not-wrap:steps={maximumSteps},stops={visited.Count},path={path}";
     }
 
     private static async Task<string> ExerciseEscapeAsync(Window dialog)

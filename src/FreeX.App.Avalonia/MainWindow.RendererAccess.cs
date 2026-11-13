@@ -41,13 +41,14 @@ public sealed partial class MainWindow
     private const int TextToColumnsDialogWidth = (int)TextToColumnsDialogMetrics.WindowWidth - WpfResizableFrameWidth;
     private const int TextToColumnsDialogHeight = (int)TextToColumnsDialogMetrics.WindowHeight - WpfResizableFrameHeight;
 
-    private static TextBlock CreateExportOptionsSectionLabel(string resourceKey, double topMargin = 0) =>
+    private static TextBlock CreateExportOptionsSectionLabel(string resourceKey, double topMargin = 0, double? bottomMargin = null) =>
         new()
         {
             Text = StripDisplayMnemonic(UiText.Get(resourceKey)),
             FontWeight = FontWeight.SemiBold,
-            // WPF: the first section caption sits 6px above its options, the later ones 4px.
-            Margin = new Thickness(0, topMargin, 0, topMargin == 0 ? 6 : 4),
+            // WPF: the first section caption sits 6px above its options, the later ones 4px; the WPF
+            // semi-bold caption line is 3px taller than here, so the capture shows 9 and 7.
+            Margin = new Thickness(0, topMargin, 0, bottomMargin ?? (topMargin == 0 ? 9 : 7)),
         };
 
     // WPF ExportOptionsDialog: each labelled row is a horizontal StackPanel whose default-template

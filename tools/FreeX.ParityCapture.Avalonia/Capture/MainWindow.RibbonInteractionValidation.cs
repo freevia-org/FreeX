@@ -234,9 +234,12 @@ public sealed partial class MainWindow
         _ribbonContextSource.OnPivotActive(false);
         HideBackstageOverlay();
         _pivotFieldPaneHost.IsVisible = false;
+        // Reset the formula bar through the production helpers: clearing only the flags left the
+        // input hidden after a View > Formula Bar probe and still multi-line (AcceptsReturn) after
+        // a Ctrl+Shift+U probe, which leaked into later editing probes in this reusable window.
         _formulaBarExpanded = false;
-        _isFormulaBarHidden = false;
-        _formulaBarHost.IsVisible = true;
+        ApplyFormulaBarExpansion();
+        ApplyFormulaBarVisibility(true);
         WindowState = global::Avalonia.Controls.WindowState.Normal;
         _statusText.Text = "Ribbon validation fixture ready";
     }

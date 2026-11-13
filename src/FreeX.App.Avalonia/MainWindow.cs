@@ -264,6 +264,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         new("Segoe UI, Arial, Helvetica Neue, Helvetica, sans-serif");
     // Subtotal is a compact WPF data dialog: its inputs and buttons are shorter than the generic
     // 24px compact-dialog family. Keep the shared chrome and only override the measured WPF metrics.
+    private const double SubtotalWpfPushButtonHeight = 20;
     private static readonly AvaloniaCompactDialogChromeStyle SubtotalDialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
@@ -3595,6 +3596,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaBox.BorderThickness = new Thickness(1);
         _formulaBox.GotFocus += FormulaBox_GotFocus;
         _formulaBox.KeyDown += FormulaBox_KeyDown;
+        _formulaBox.AddHandler(InputElement.KeyDownEvent, FormulaBox_ExpandedEnterKeyDown, RoutingStrategies.Tunnel);
         _formulaBox.PropertyChanged += (_, args) =>
         {
             if (_isApplyingFormulaBoxText ||
@@ -4535,6 +4537,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             ApplyWorksheetScrollAxis(_verticalWorksheetScrollBar, state.Vertical);
             ApplyWorksheetScrollAxis(_horizontalWorksheetScrollBar, state.Horizontal);
+            // A chartsheet has no scrollable cell grid (WPF hides the grid and scroll chrome with it).
+            var showScrollBars = !IsChartsheet(_session.ActiveSheet);
+            _verticalWorksheetScrollBar.IsVisible = showScrollBars;
+            _horizontalWorksheetScrollBar.IsVisible = showScrollBars;
         }
         finally
         {
@@ -5048,6 +5054,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private Control BuildSheetGrid()
     {
         RecordSheetGridBuilt();
+        if (IsChartsheet(_session.ActiveSheet))
+            return BuildChartsheetView();
         _formulaReferenceGridOverlay = null;
         _cellAffordanceOverlay = null;
         _formulaReferenceGridHighlightVisuals.Clear();
@@ -16878,6 +16886,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "FormatCellsCompactDialog");
+        // WPF lays its 12px Segoe UI text out on 16px line boxes; the capture font's are about 14.5px,
+        // which pulled every label and heading stack of the tabs up by 1-2px each.
+        dialog.Styles.Add(new Style(x => x.OfType<TextBlock>())
+        {
+            Setters = { new Setter(TextBlock.LineHeightProperty, 16d) },
+        });
 
         // The number-format catalog + format-code composition is the shared, portable
         // FormatCellsNumberFormatPlanner (same source the WPF dialog uses), so the Avalonia
@@ -16907,6 +16921,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetAutomationId(numberCategoryList, "FormatCellsNumberCategoryList");
         numberCategoryList.FontSize = 12;
         numberCategoryList.FontFamily = FormulaBarFontFamily;
+        // WPF FormatCellsDialog.xaml: item padding 2,0 (16 px rows) and a solid system-highlight selection.
+        DialogWindowDefaults.ApplyWpfSolidHighlightRows(numberCategoryList, 16);
 
         var numberFormatBox = new ComboBox
         {
@@ -18481,7 +18497,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                         Background = Brushes.Black,
                         BorderBrush = Brushes.Gray,
                         BorderThickness = new Thickness(1),
-                        Margin = new Thickness(0, 20, 0, 0),
+                        // WPF: a two-row UniformGrid of 18.5 px swatch cells (37 px) plus the 6 px
+                        // margin above the colour preview; the swatch row here is 20 px.
+                        Margin = new Thickness(0, 23, 0, 0),
                     },
                 },
             });
@@ -19469,6 +19487,26 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ClearFormulaRangeEntryState();
         _session.BeginFormulaEdit(_session.ActiveCell);
         _formulaBoxEditOriginalText = _formulaBox.Text ?? "";
+    }
+
+    /// <summary>
+    /// WPF wires FormulaBar_KeyDown as PreviewKeyDown, so Enter commits even while the expanded bar
+    /// accepts returns. Here FormulaBox_KeyDown bubbles, and once the bar is expanded
+    /// (AcceptsReturn) Avalonia's TextBox consumed Enter first and typed a line break: Enter,
+    /// Shift+Enter and Ctrl+Enter no longer committed the edit. Alt+Enter keeps inserting the line
+    /// break through the focused-editor shortcut route.
+    /// </summary>
+    private void FormulaBox_ExpandedEnterKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Handled ||
+            e.Key != Key.Enter ||
+            !_formulaBox.AcceptsReturn ||
+            e.KeyModifiers.HasFlag(KeyModifiers.Alt))
+        {
+            return;
+        }
+
+        FormulaBox_KeyDown(sender, e);
     }
 
     private void FormulaBox_KeyDown(object? sender, KeyEventArgs e)
@@ -22636,6 +22674,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             },
         };
         Grid.SetColumn(actionButtons, 2);
+        // WPF CreateSubtotalButtonRow uses default push buttons (TextToColumnsDialog.CreateButtonRow:
+        // no Height), which are 20 px at the 12 px dialog font; the row is as tall as its buttons.
+        foreach (var subtotalButton in new[] { okButton, removeAllButton, cancelButton })
+        {
+            subtotalButton.Height = SubtotalWpfPushButtonHeight;
+            subtotalButton.MinHeight = SubtotalWpfPushButtonHeight;
+            subtotalButton.MaxHeight = SubtotalWpfPushButtonHeight;
+        }
+        buttonRow.Height = SubtotalWpfPushButtonHeight;
 
         // WPF SubtotalDialog: new GroupBox { Content = _subtotalColumnList } with no header. The WPF
         // frame is a 99px rounded rectangle 1px inside the 12px root margin, with the rows inset 14px
@@ -22669,6 +22716,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return groupFrame;
         });
 
+        // WPF stacks the three option check boxes at a 15px pitch (the default CheckBox height at the
+        // 12px dialog font), the first starting 3px below the group frame; the compact check box is 18.
+        void ApplySubtotalOptionBoxHeights()
+        {
+            foreach (var optionBox in new[] { replaceBox, pageBreakBox, summaryBelowBox })
+            {
+                optionBox.Height = 15;
+                optionBox.MinHeight = 15;
+                optionBox.MaxHeight = 15;
+            }
+
+            replaceBox.Margin = new Thickness(0, 3, 0, 0);
+        }
+
+        ApplySubtotalOptionBoxHeights();
+
         // WPF SubtotalDialog: root StackPanel { Margin = 12 } -- the fields, the options and then the
         // button row, so the fields also precede Remove All / OK / Cancel in the tab order.
         dialog.Content = new StackPanel
@@ -22699,6 +22762,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // The generic list pass gives every list a 1px frame; inside this group box that drew a
             // second frame nested in the group border.
             columnsList.BorderThickness = new Thickness(0);
+            ApplySubtotalOptionBoxHeights();
             groupColumnBox.Focus();
         };
 

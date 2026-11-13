@@ -550,9 +550,12 @@ public sealed partial class MainWindow
         ResetRibbonKeyTipSequence();
         HideBackstageOverlay();
         WindowState = global::Avalonia.Controls.WindowState.Normal;
+        // Reset the formula bar through the production helpers: clearing only the flags left the
+        // input hidden after a View > Formula Bar probe and still multi-line (AcceptsReturn) after
+        // a Ctrl+Shift+U probe, which leaked into later editing probes in this reusable window.
         _formulaBarExpanded = false;
-        _isFormulaBarHidden = false;
-        _formulaBarHost.IsVisible = true;
+        ApplyFormulaBarExpansion();
+        ApplyFormulaBarVisibility(true);
         _cellAddressBoxHasPendingEdit = false;
         _cellAddressText.Text = FormatCellReference(_session.ActiveCell);
         _isApplyingFormulaBoxText = true;

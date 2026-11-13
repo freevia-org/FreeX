@@ -1,3 +1,5 @@
+using System.Reflection;
+
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -6,6 +8,7 @@ using Avalonia.Media;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.DrawingInteraction;
 using FreeX.App.Presentation.QuickAnalysis;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 using AvaloniaCanvas = Avalonia.Controls.Canvas;
@@ -41,14 +44,14 @@ public sealed partial class MainWindow
                     QuickAnalysisShellCapabilities.DialogBacked);
                 var item = request.ShellPlan.AllItems().Single(candidate => candidate.Id == "format.databars");
                 var beforeRules = sheet.ConditionalFormats.Count;
-                var beforeUndo = _session.GetUndoHistory(100).Count;
+                var beforeUndo = CaptureValidationUndoState();
                 await ApplyQuickAnalysisItemAsync(item);
                 var afterRules = sheet.ConditionalFormats.Count;
-                var afterUndo = _session.GetUndoHistory(100).Count;
+                var afterUndo = CaptureValidationUndoState();
                 var rule = sheet.ConditionalFormats.LastOrDefault();
                 var appliedToSelection = rule?.AppliesTo == range;
                 var passed = request.CanOpen && afterRules == beforeRules + 1 &&
-                    afterUndo == beforeUndo + 1 && appliedToSelection;
+                    afterUndo.AddedOneCommandSince(beforeUndo) && appliedToSelection;
                 return ValidationEvidence(
                     passed,
                     $"selection={FormatRangeReference(range)}; rules={beforeRules}->{afterRules}; " +
@@ -64,7 +67,7 @@ public sealed partial class MainWindow
                 _session.SelectRange(range);
                 var targetColumn = range.End.Col + 1;
                 var beforeFormulas = CountFormulas(sheet, range.Start.Row, range.End.Row, targetColumn);
-                var beforeUndo = _session.GetUndoHistory(100).Count;
+                var beforeUndo = CaptureValidationUndoState();
                 var request = QuickAnalysisShellRequestPlanner.Build(
                     sheet,
                     range,
@@ -79,11 +82,11 @@ public sealed partial class MainWindow
                     : [];
                 await ApplyQuickAnalysisItemAsync(item);
                 var afterFormulas = CountFormulas(sheet, range.Start.Row, range.End.Row, targetColumn);
-                var afterUndo = _session.GetUndoHistory(100).Count;
+                var afterUndo = CaptureValidationUndoState();
                 var exactFormulas = expectedEdits.Count > 0 && expectedEdits.All(edit =>
                     sheet.GetCell(edit.Address)?.FormulaText == edit.NewCell.FormulaText);
                 var passed = request.CanOpen && afterFormulas == expectedEdits.Count && exactFormulas &&
-                    afterUndo == beforeUndo + 1;
+                    afterUndo.AddedOneCommandSince(beforeUndo);
                 return ValidationEvidence(
                     passed,
                     $"selection={FormatRangeReference(range)}; formulaCells={beforeFormulas}->{afterFormulas}; " +
@@ -126,7 +129,7 @@ public sealed partial class MainWindow
         await AddValidationResult(results, id, "drawing-pointer", () =>
         {
             var before = ShapeGeometrySnapshot.From(shape);
-            var beforeUndo = _session.GetUndoHistory(100).Count;
+            var beforeUndo = CaptureValidationUndoState();
             var (container, surface, adorner, _, renderPlan) = CreateValidationShapeSurface(shape);
             var objectRect = new LayoutRect(
                 DrawingObjectSelectionHorizontalPadding,
@@ -167,7 +170,7 @@ public sealed partial class MainWindow
             _drawingObjectDragSession = null;
             CommitDrawingObjectDrag(session);
             var after = ShapeGeometrySnapshot.From(shape);
-            var afterUndo = _session.GetUndoHistory(100).Count;
+            var afterUndo = CaptureValidationUndoState();
             var changed = kind switch
             {
                 ObjectDragKind.Move => after.Anchor != before.Anchor,
@@ -176,7 +179,7 @@ public sealed partial class MainWindow
                 _ => Math.Abs(after.Width - before.Width) > 0.1 || Math.Abs(after.Height - before.Height) > 0.1,
             };
             return ValidationEvidence(
-                previewChanged && changed && afterUndo == beforeUndo + 1,
+                previewChanged && changed && afterUndo.AddedOneCommandSince(beforeUndo),
                 $"kind={kind}; modelBefore={before}; modelAfter={after}; previewChanged={previewChanged}; " +
                 $"expectedRotation={expectedRotation}; undo={beforeUndo}->{afterUndo}",
                 "The production pointer gesture state machine previewed geometry, committed its real drawing command, and refreshed from model state.");
@@ -190,7 +193,7 @@ public sealed partial class MainWindow
         await AddValidationResult(results, "drawing.shape.capture-loss-no-op", "drawing-pointer", () =>
         {
             var before = ShapeGeometrySnapshot.From(shape);
-            var beforeUndo = _session.GetUndoHistory(100).Count;
+            var beforeUndo = CaptureValidationUndoState();
             var (container, surface, adorner, _, renderPlan) = CreateValidationShapeSurface(shape);
             var objectRect = new LayoutRect(
                 DrawingObjectSelectionHorizontalPadding,
@@ -220,7 +223,7 @@ public sealed partial class MainWindow
                 Math.Abs(session.CurrentCanvasRect.Width - session.StartCanvasRect.Width) > 0.1;
             CancelDrawingObjectDrag(container);
             var after = ShapeGeometrySnapshot.From(shape);
-            var afterUndo = _session.GetUndoHistory(100).Count;
+            var afterUndo = CaptureValidationUndoState();
             var restored = after == before && _drawingObjectDragSession is null;
             return ValidationEvidence(
                 previewChanged && restored && afterUndo == beforeUndo,
@@ -380,6 +383,48 @@ public sealed partial class MainWindow
         string Level,
         string Text,
         string Note);
+
+    // The command bus keeps at most 100 undo entries (Excel's undo depth), and the full validation
+    // run reaches that cap long before these probes execute, so an undo *count* stops moving even
+    // though the probed command was committed. Pair the count with the undo stack's monotonic
+    // top-of-stack version token: every push stamps a new version, so "one command added" is a
+    // version change plus a count of +1, or an unchanged count once the stack is saturated.
+    private ValidationUndoState CaptureValidationUndoState()
+    {
+        var count = _session.GetUndoHistory(int.MaxValue).Count;
+        long? version = null;
+        try
+        {
+            var service = typeof(WorkbookSession)
+                .GetField("_cellEditService", BindingFlags.NonPublic | BindingFlags.Instance)
+                ?.GetValue(_session);
+            if (service?.GetType().GetMethod("GetUndoStackVersion", [typeof(WorkbookId)]) is { } getVersion)
+                version = (long?)getVersion.Invoke(service, [_session.Workbook.Id]);
+        }
+        catch
+        {
+            // Fall back to count-only evidence when the private undo service is unavailable.
+        }
+
+        return new ValidationUndoState(count, version);
+    }
+
+    private readonly record struct ValidationUndoState(int Count, long? Version)
+    {
+        private const int CommandBusMaxUndoDepth = 100;
+
+        public bool AddedOneCommandSince(ValidationUndoState before)
+        {
+            if (Version is null || before.Version is null)
+                return Count == before.Count + 1;
+
+            return Version != before.Version &&
+                (Count == before.Count + 1 ||
+                    (Count == before.Count && Count >= CommandBusMaxUndoDepth));
+        }
+
+        public override string ToString() => Version is { } version ? $"{Count}@v{version}" : Count.ToString();
+    }
 
     private readonly record struct ShapeGeometrySnapshot(
         CellAddress Anchor,

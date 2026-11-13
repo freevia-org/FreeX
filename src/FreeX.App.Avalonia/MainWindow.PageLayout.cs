@@ -648,11 +648,17 @@ public sealed partial class MainWindow
     // A Margins-tab row: the 18px box and its 8px bottom margin.
     private const double PageSetupMarginRowHeight = PageSetupMarginBoxHeight + 8;
 
+    private static readonly Thickness PageSetupRaisedTabGridMargin = new(10, 8, 10, 10);
+
     private static RowDefinitions PageSetupFixedRows(params double[] heights)
     {
         var rows = new RowDefinitions();
         foreach (var height in heights)
             rows.Add(new RowDefinition(height, GridUnitType.Pixel));
+        // The tab's scroll viewer arranges the grid at the full page height. With only fixed rows,
+        // the layout-rounding pass hands that surplus out a pixel per row (26 px rows became 27,
+        // which rounded to an alternating 28/26 pitch); a trailing star row takes it instead.
+        rows.Add(new RowDefinition(1, GridUnitType.Star));
         return rows;
     }
 
@@ -1280,6 +1286,9 @@ public sealed partial class MainWindow
         Grid.SetColumn(centerVerticallyCheck, 1);
         marginsGrid.Children.Add(centerHorizontallyCheck);
         marginsGrid.Children.Add(centerVerticallyCheck);
+        // The Avalonia tab strip stands 4 px taller than WPF's; WPF's 2 px tab-content padding makes
+        // up half of it, so the first row sits 2 px higher to land where the WPF row does.
+        marginsGrid.Margin = PageSetupRaisedTabGridMargin;
 
         var marginsTab = new TabItem
         {
@@ -1412,6 +1421,7 @@ public sealed partial class MainWindow
         };
         // The WPF Auto rows above resolve to fixed heights; pin them so a taller Avalonia line box
         // or check-box template cannot add a pixel or two per row.
+        sheetGrid.Margin = PageSetupRaisedTabGridMargin;
         sheetGrid.RowDefinitions = PageSetupFixedRows(
                 PageSetupFieldRowHeight + 8,
                 PageSetupFieldRowHeight + 8,
