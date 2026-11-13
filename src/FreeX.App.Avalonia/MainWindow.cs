@@ -16038,18 +16038,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 ? choice.Value
                 : HyperlinkTargetKind.ExistingFileOrWebPage;
 
+        // Set once the panes below exist: show the selected link type's pane, and build its target.
+        Action<HyperlinkTargetKind>? showPane = null;
+        Func<string> composeTarget = () => targetBox.Text ?? string.Empty;
+
         void RefreshTargetField()
         {
             var linkType = CurrentLinkType();
             targetLabel.Text = GetHyperlinkTargetLabel(linkType);
             AutomationProperties.SetName(targetBox, targetLabel.Text);
             AutomationProperties.SetHelpText(targetBox, GetHyperlinkTargetHelpText(linkType));
+            showPane?.Invoke(linkType);
         }
 
         void Accept()
         {
             if (!HyperlinkDialogPlanner.TryPlan(
-                    targetBox.Text,
+                    composeTarget(),
                     displayBox.Text,
                     CurrentLinkType(),
                     screenTipBox.Text,
@@ -16176,14 +16181,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             },
         };
 
-        // WPF shows the workbook's folder in a read-only look-in box with a browse button in the
-        // trailing column and a list naming the current folder, the current file and a browse hint.
+        // Excel's panes, one per "Link to" choice (HyperlinkDialogPanePlanner); WPF HyperlinkDialog
+        // builds the same four. The pane's main field is always targetBox, relabelled per pane.
         var currentFilePath = _session.CurrentFilePath;
-        var currentFolder = string.IsNullOrWhiteSpace(currentFilePath) ? null : System.IO.Path.GetDirectoryName(currentFilePath);
-        var currentFileName = string.IsNullOrWhiteSpace(currentFilePath) ? null : System.IO.Path.GetFileName(currentFilePath);
+        var currentFolder = HyperlinkDialogPanePlanner.DefaultFolder(currentFilePath);
+        var newDocumentFolder = currentFolder;
         var folderBox = new TextBox
         {
-            Text = string.IsNullOrWhiteSpace(currentFolder) ? UiText.Get("Hyperlink_CurrentFolder") : currentFolder,
+            Text = currentFolder,
             IsReadOnly = true,
             IsTabStop = false,
             Focusable = false,
@@ -16212,24 +16217,55 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
             ApplyHyperlinkBrowseResult(targetBox, file.TryGetLocalPath() ?? file.Name);
         });
+        var folderEntries = new ListBox();
+        AvaloniaCompactDialogChrome.ApplyListBox(folderEntries, AvaloniaCompactDialogChrome.WindowsStyle with { ListBoxItemPadding = new Thickness(4, 0) });
+        AutomationProperties.SetName(folderEntries, UiText.Get("Hyperlink_CurrentFolder"));
+        AutomationProperties.SetAutomationId(folderEntries, "HyperlinkFolderEntries");
+        void ShowFolder(string folder)
+        {
+            currentFolder = folder;
+            folderBox.Text = folder;
+            folderEntries.ItemsSource = HyperlinkDialogPanePlanner.ListFolder(folder)
+                .Select(entry => new ListBoxItem { Content = (entry.IsFolder ? "📁 " : "    ") + entry.Name, Tag = entry })
+                .ToArray();
+        }
+
+        folderEntries.SelectionChanged += (_, _) =>
+        {
+            if ((folderEntries.SelectedItem as ListBoxItem)?.Tag is HyperlinkFolderEntry { IsFolder: false } file)
+                targetBox.Text = file.FullPath;
+        };
+        folderEntries.DoubleTapped += (_, _) =>
+        {
+            if ((folderEntries.SelectedItem as ListBoxItem)?.Tag is HyperlinkFolderEntry { IsFolder: true } folder)
+                ShowFolder(folder.FullPath);
+        };
+        var upButton = new Button { Content = "↑", Width = 26, Margin = new Thickness(4, 0, 0, 0) };
+        ApplyDialogButtonChrome(upButton);
+        ToolTip.SetTip(upButton, "Up One Folder");
+        AutomationProperties.SetAutomationId(upButton, "HyperlinkUpFolderButton");
+        upButton.Click += (_, _) =>
+        {
+            if (System.IO.Directory.GetParent(currentFolder) is { } parent)
+                ShowFolder(parent.FullName);
+        };
+        var folderRow = new DockPanel();
+        DockPanel.SetDock(upButton, Dock.Right);
+        folderRow.Children.Add(upButton);
+        folderRow.Children.Add(folderBox);
         var lookInRow = CreateHyperlinkFieldRow(
             new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Hyperlink_LookIn")) },
-            folderBox,
+            folderRow,
             browseButton,
             new Thickness(0, 0, 0, 4));
 
-        // The WPF list ends with a browse hint line whose text is not a localized resource there;
-        // the browse button's localized help text carries the same guidance here.
-        var currentFolderItems = new List<string> { UiText.Get("Hyperlink_CurrentFolder") };
-        if (!string.IsNullOrWhiteSpace(currentFileName))
-            currentFolderItems.Add(currentFileName);
-        currentFolderItems.Add(UiText.Get("Hyperlink_ChooseALocalFileForThisHyperlink"));
+        // Excel's in-pane switcher: Current Folder / Recent Files.
         var currentFolderList = new ListBox
         {
-            ItemsSource = currentFolderItems,
+            ItemsSource = new[] { UiText.Get("Hyperlink_CurrentFolder"), "Recent Files" },
             SelectedIndex = 0,
-            IsTabStop = false,
-            Focusable = false,
+            Width = 92,
+            Margin = new Thickness(0, 0, 6, 0),
         };
         AvaloniaCompactDialogChrome.ApplyListBox(
             currentFolderList,
@@ -16239,14 +16275,167 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             });
         AutomationProperties.SetName(currentFolderList, UiText.Get("Hyperlink_CurrentFolderLinkLocation"));
         AutomationProperties.SetAutomationId(currentFolderList, "HyperlinkCurrentFolderContext");
-
-        var detailArea = new AvaloniaGrid
+        currentFolderList.SelectionChanged += (_, _) =>
         {
-            RowDefinitions = new RowDefinitions("Auto,*"),
+            if (currentFolderList.SelectedIndex != 1)
+            {
+                ShowFolder(currentFolder);
+                return;
+            }
+
+            folderEntries.ItemsSource = RecentFilesStore.Load().Snapshot()
+                .Select(entry => entry.Path)
+                .Where(System.IO.File.Exists)
+                .Select(path => new ListBoxItem
+                {
+                    Content = "    " + path,
+                    Tag = new HyperlinkFolderEntry(System.IO.Path.GetFileName(path), path, IsFolder: false),
+                })
+                .ToArray();
         };
-        detailArea.Children.Add(lookInRow);
-        AvaloniaGrid.SetRow(currentFolderList, 1);
-        detailArea.Children.Add(currentFolderList);
+        ShowFolder(currentFolder);
+        var existingList = new DockPanel();
+        DockPanel.SetDock(currentFolderList, Dock.Left);
+        existingList.Children.Add(currentFolderList);
+        existingList.Children.Add(folderEntries);
+        var existingPane = new AvaloniaGrid { RowDefinitions = new RowDefinitions("Auto,*") };
+        existingPane.Children.Add(lookInRow);
+        AvaloniaGrid.SetRow(existingList, 1);
+        existingPane.Children.Add(existingList);
+
+        // Place in This Document: worksheets then defined names; targetBox holds the cell reference.
+        var documentPlaces = new ListBox
+        {
+            ItemsSource = HyperlinkDialogPanePlanner.DocumentPlaces(_session.Workbook)
+                .Select(place => new ListBoxItem { Content = place.IsDefinedName ? "  " + place.Name : place.Name, Tag = place })
+                .ToArray(),
+        };
+        AvaloniaCompactDialogChrome.ApplyListBox(documentPlaces, AvaloniaCompactDialogChrome.WindowsStyle with { ListBoxItemPadding = new Thickness(4, 0) });
+        AutomationProperties.SetName(documentPlaces, UiText.Get("Hyperlink_SelectPlaceInDocument"));
+        AutomationProperties.SetAutomationId(documentPlaces, "HyperlinkDocumentPlaces");
+        HyperlinkDocumentPlace? SelectedPlace() => (documentPlaces.SelectedItem as ListBoxItem)?.Tag as HyperlinkDocumentPlace;
+        documentPlaces.SelectionChanged += (_, _) =>
+        {
+            if (SelectedPlace() is { IsDefinedName: true })
+                targetBox.Text = string.Empty;
+            else if (string.IsNullOrWhiteSpace(targetBox.Text) && CurrentLinkType() == HyperlinkTargetKind.PlaceInThisDocument)
+                targetBox.Text = HyperlinkDialogPanePlanner.DefaultCellReference;
+        };
+        var placePane = new AvaloniaGrid { RowDefinitions = new RowDefinitions("Auto,*") };
+        placePane.Children.Add(new TextBlock { Text = "Or select a place in this document:", Margin = new Thickness(0, 0, 0, 4) });
+        AvaloniaGrid.SetRow(documentPlaces, 1);
+        placePane.Children.Add(documentPlaces);
+
+        // Create New Document: targetBox holds the name; the full path and Change... sit here.
+        var fullPathText = new TextBlock { TextWrapping = TextWrapping.Wrap };
+        AutomationProperties.SetAutomationId(fullPathText, "HyperlinkNewDocumentFullPath");
+        void UpdateFullPath() =>
+            fullPathText.Text = HyperlinkDialogPanePlanner.ComposeNewDocumentPath(newDocumentFolder, targetBox.Text) is { Length: > 0 } path
+                ? path
+                : newDocumentFolder;
+        targetBox.TextChanged += (_, _) => UpdateFullPath();
+        var changePathButton = new Button { Content = "Change..." };
+        ApplyDialogButtonChrome(changePathButton, width: HyperlinkDialogPlanner.SecondaryButtonWidth);
+        AutomationProperties.SetAutomationId(changePathButton, "HyperlinkChangePathButton");
+        changePathButton.Click += (_, _) => RunGuarded(async () =>
+        {
+            var folders = await dialog.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+            {
+                Title = "Create New Document",
+                AllowMultiple = false,
+            });
+            if (folders.Count > 0 && folders[0].TryGetLocalPath() is { } folder)
+            {
+                newDocumentFolder = folder;
+                UpdateFullPath();
+            }
+        });
+        var newDocumentPane = CreateHyperlinkFieldRow(new TextBlock { Text = "Full path:" }, fullPathText, changePathButton, new Thickness(0));
+        newDocumentPane.VerticalAlignment = AvaloniaVerticalAlignment.Top;
+
+        // E-mail Address: targetBox holds the address; subject and recently used addresses here.
+        var subjectBox = new TextBox { Height = HyperlinkDialogPlanner.FieldHeight, HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch };
+        ApplyDialogTextBoxChrome(subjectBox);
+        AutomationProperties.SetName(subjectBox, "Subject");
+        AutomationProperties.SetAutomationId(subjectBox, "HyperlinkEmailSubjectTextBox");
+        var recentEmails = new ListBox
+        {
+            ItemsSource = _session.Workbook.Sheets
+                .SelectMany(sheet => sheet.Hyperlinks.Values)
+                .Where(target => target.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(10)
+                .ToArray(),
+        };
+        AvaloniaCompactDialogChrome.ApplyListBox(recentEmails, AvaloniaCompactDialogChrome.WindowsStyle with { ListBoxItemPadding = new Thickness(4, 0) });
+        AutomationProperties.SetName(recentEmails, "Recently used e-mail addresses");
+        AutomationProperties.SetAutomationId(recentEmails, "HyperlinkRecentEmailAddresses");
+        recentEmails.SelectionChanged += (_, _) =>
+        {
+            if (recentEmails.SelectedItem is string recent)
+            {
+                var (address, subject) = HyperlinkDialogPanePlanner.SplitEmailTarget(recent);
+                targetBox.Text = address;
+                subjectBox.Text = subject;
+            }
+        };
+        var emailPane = new AvaloniaGrid { RowDefinitions = new RowDefinitions("Auto,Auto,*") };
+        emailPane.Children.Add(CreateHyperlinkFieldRow(new TextBlock { Text = "Subject:" }, subjectBox, null, new Thickness(0, 0, 0, 8)));
+        var recentCaption = new TextBlock { Text = "Recently used e-mail addresses:", Margin = new Thickness(0, 0, 0, 4) };
+        AvaloniaGrid.SetRow(recentCaption, 1);
+        emailPane.Children.Add(recentCaption);
+        AvaloniaGrid.SetRow(recentEmails, 2);
+        emailPane.Children.Add(recentEmails);
+
+        // Open an existing link on its own pane, split back into that pane's fields.
+        switch (prefill.LinkType)
+        {
+            case HyperlinkTargetKind.PlaceInThisDocument:
+                var (placeName, reference) = HyperlinkDialogPanePlanner.SplitDocumentLocation(prefill.Target);
+                documentPlaces.SelectedItem = documentPlaces.Items.OfType<ListBoxItem>()
+                    .FirstOrDefault(item => item.Tag is HyperlinkDocumentPlace place &&
+                        string.Equals(place.Name, placeName, StringComparison.OrdinalIgnoreCase));
+                targetBox.Text = SelectedPlace() is { IsDefinedName: true } ? string.Empty : reference;
+                break;
+            case HyperlinkTargetKind.EmailAddress:
+                var (emailAddress, emailSubject) = HyperlinkDialogPanePlanner.SplitEmailTarget(prefill.Target);
+                targetBox.Text = emailAddress;
+                subjectBox.Text = emailSubject;
+                break;
+            case HyperlinkTargetKind.CreateNewDocument when System.IO.Path.IsPathRooted(prefill.Target):
+                newDocumentFolder = System.IO.Path.GetDirectoryName(prefill.Target) ?? newDocumentFolder;
+                targetBox.Text = System.IO.Path.GetFileName(prefill.Target);
+                break;
+        }
+
+        if (documentPlaces.SelectedItem is null && documentPlaces.ItemCount > 0)
+            documentPlaces.SelectedIndex = 0;
+        UpdateFullPath();
+
+        var detailArea = new AvaloniaGrid();
+        detailArea.Children.Add(existingPane);
+        detailArea.Children.Add(placePane);
+        detailArea.Children.Add(newDocumentPane);
+        detailArea.Children.Add(emailPane);
+        showPane = linkType =>
+        {
+            existingPane.IsVisible = linkType == HyperlinkTargetKind.ExistingFileOrWebPage;
+            placePane.IsVisible = linkType == HyperlinkTargetKind.PlaceInThisDocument;
+            newDocumentPane.IsVisible = linkType == HyperlinkTargetKind.CreateNewDocument;
+            emailPane.IsVisible = linkType == HyperlinkTargetKind.EmailAddress;
+            bookmarkButton.IsVisible = linkType == HyperlinkTargetKind.ExistingFileOrWebPage;
+            UpdateFullPath();
+        };
+        composeTarget = () => CurrentLinkType() switch
+        {
+            HyperlinkTargetKind.PlaceInThisDocument => SelectedPlace() is { } place
+                ? HyperlinkDialogPanePlanner.ComposeDocumentLocation(place, targetBox.Text)
+                : targetBox.Text ?? string.Empty,
+            HyperlinkTargetKind.CreateNewDocument => HyperlinkDialogPanePlanner.ComposeNewDocumentPath(newDocumentFolder, targetBox.Text),
+            HyperlinkTargetKind.EmailAddress => HyperlinkDialogPanePlanner.ComposeEmailTarget(targetBox.Text, subjectBox.Text),
+            _ => targetBox.Text ?? string.Empty,
+        };
+        RefreshTargetField();
 
         var bodyGrid = new AvaloniaGrid
         {
@@ -16389,13 +16578,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return result;
     }
 
+    // Excel's "Link to" order (HyperlinkDialogPanePlanner.LinkTypeOrder).
     private static SortDialogComboItem<HyperlinkTargetKind>[] CreateHyperlinkTypeChoices() =>
-    [
-        new(UiText.Get("Hyperlink_LinkTypeExistingFileOrWebPage"), HyperlinkTargetKind.ExistingFileOrWebPage),
-        new(UiText.Get("Hyperlink_LinkTypeCreateNewDocument"), HyperlinkTargetKind.CreateNewDocument),
-        new(UiText.Get("Hyperlink_LinkTypePlaceInThisDocument"), HyperlinkTargetKind.PlaceInThisDocument),
-        new(UiText.Get("Hyperlink_LinkTypeEmailAddress"), HyperlinkTargetKind.EmailAddress),
-    ];
+        HyperlinkDialogPanePlanner.LinkTypeOrder
+            .Select(kind => new SortDialogComboItem<HyperlinkTargetKind>(HyperlinkLinkTypeLabel(kind), kind))
+            .ToArray();
+
+    private static string HyperlinkLinkTypeLabel(HyperlinkTargetKind kind) => kind switch
+    {
+        HyperlinkTargetKind.PlaceInThisDocument => UiText.Get("Hyperlink_LinkTypePlaceInThisDocument"),
+        HyperlinkTargetKind.CreateNewDocument => UiText.Get("Hyperlink_LinkTypeCreateNewDocument"),
+        HyperlinkTargetKind.EmailAddress => UiText.Get("Hyperlink_LinkTypeEmailAddress"),
+        _ => UiText.Get("Hyperlink_LinkTypeExistingFileOrWebPage"),
+    };
 
     private static string StripDisplayMnemonic(string text) =>
         (text ?? string.Empty).Replace("_", string.Empty, StringComparison.Ordinal);
