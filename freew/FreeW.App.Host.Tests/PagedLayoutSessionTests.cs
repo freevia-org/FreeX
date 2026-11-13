@@ -52,6 +52,53 @@ public sealed class PagedLayoutSessionTests(ITestOutputHelper output)
             Xaml(assembled[i]).Should().Be(Xaml(full[i]), $"block {i}");
     }
 
+    /// <summary>
+    /// Opt-in (<c>FREEW_PAGED_CORPUS_DIR</c> + <c>FREEW_PAGED_CORPUS_ONLY</c>): the layout twin's range render
+    /// of a corpus document, unit by unit, equals its whole render block for block.
+    /// </summary>
+    [StaFact]
+    public void RangeRender_OnCorpusDocuments_MatchesFullRender()
+    {
+        var directory = Environment.GetEnvironmentVariable("FREEW_PAGED_CORPUS_DIR");
+        var only = Environment.GetEnvironmentVariable("FREEW_PAGED_CORPUS_ONLY");
+        if (string.IsNullOrWhiteSpace(directory) || string.IsNullOrWhiteSpace(only))
+            return;
+
+        foreach (var name in only.Split(';'))
+        {
+            var document = DocxReader.Read(Path.Combine(directory, name));
+            var editor = new DocumentView();
+            editor.LoadModel(document);
+            var fullFlow = editor.CreateLayoutRenderTwin(renderBody: true)!.Document;
+            var full = fullFlow.Blocks.ToList();
+            var twin = editor.CreateLayoutRenderTwin(renderBody: false)!;
+            var units = twin.RenderBodyUnitRange(0, document.Blocks.Count).ToList();
+            var natural = units.ToDictionary(unit => unit, unit => unit.Blocks[0].Margin);
+            DocumentView.ApplyContextualSpacingAcrossUnits(document, units, unit => natural[unit]);
+            var assembled = units.SelectMany(unit => unit.Blocks).ToList();
+            // Inherited properties as the layout flow gives them.
+            var assembledFlow = new System.Windows.Documents.FlowDocument { FontFamily = fullFlow.FontFamily, FontSize = fullFlow.FontSize };
+            System.Windows.Documents.Typography.SetKerning(assembledFlow, System.Windows.Documents.Typography.GetKerning(fullFlow));
+            foreach (var block in assembled)
+                assembledFlow.Blocks.Add(block);
+            assembled.Should().HaveCount(full.Count, name);
+            for (var i = 0; i < full.Count; i++)
+            {
+                var a = Describe(assembled[i]);
+                var b = Describe(full[i]);
+                if (a != b)
+                {
+                    var at = 0;
+                    while (at < a.Length && at < b.Length && a[at] == b[at])
+                        at++;
+                    output.WriteLine($"{name} block {i}: range …{a[Math.Max(0, at - 200)..Math.Min(a.Length, at + 200)]}…");
+                    output.WriteLine($"{name} block {i}: full  …{b[Math.Max(0, at - 200)..Math.Min(b.Length, at + 200)]}…");
+                }
+                a.Should().Be(b, $"{name} block {i}");
+            }
+        }
+    }
+
     [StaTheory]
     [InlineData(1, true)]
     [InlineData(2, true)]
@@ -84,11 +131,11 @@ public sealed class PagedLayoutSessionTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// A document the session cannot pair exactly (a Number list restarted by an override renders as a
-    /// second List the full computation's prediction does not expect) falls back to the full computation.
+    /// W12: a Number list restarted by an override renders as a second List; the full computation now
+    /// predicts that pairing too, so the session lays it out itself (no fallback) with the same result.
     /// </summary>
     [StaFact]
-    public void Session_FallsBack_WhenRenderedPairingIsNotPredictable()
+    public void Session_PairsARestartedNumberList_WithoutFallingBack()
     {
         var document = TextDocument.CreateEmpty();
         document.Blocks.Clear();
@@ -103,7 +150,9 @@ public sealed class PagedLayoutSessionTests(ITestOutputHelper output)
         var session = new PagedLayoutSession(editor);
 
         AssertSessionMatches(editor, session, "override restart");
-        session.LastStatistics.FallbackReason.Should().NotBeNull();
+        session.LastStatistics.FallbackReason.Should().BeNull();
+        PaginationEngine.MapModelBlocksToRenderedBlocks(document, 3).Should().Equal([0, 1, 2],
+            "the restarted paragraph starts a second rendered List");
     }
 
     /// <summary>Opt-in corpus sweep: set <c>FREEW_PAGED_CORPUS_DIR</c> to a folder of .docx files.</summary>
@@ -114,8 +163,11 @@ public sealed class PagedLayoutSessionTests(ITestOutputHelper output)
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
             return;
 
+        var only = Environment.GetEnvironmentVariable("FREEW_PAGED_CORPUS_ONLY");
         foreach (var path in Directory.GetFiles(directory, "*.docx").OrderBy(file => new FileInfo(file).Length))
         {
+            if (!string.IsNullOrEmpty(only) && !only.Split(';').Contains(Path.GetFileName(path)))
+                continue;
             TextDocument document;
             try
             {
@@ -192,6 +244,45 @@ public sealed class PagedLayoutSessionTests(ITestOutputHelper output)
 
         incremental.Should().Equal(full, $"{label}: assignment");
         incrementalPages.Should().Be(fullPages, $"{label}: page count");
+    }
+
+    /// <summary>A layout-relevant structural description (XAML cannot serialise decoded images).</summary>
+    private static string Describe(System.Windows.DependencyObject node)
+    {
+        var builder = new System.Text.StringBuilder();
+        void Walk(object item, int depth)
+        {
+            switch (item)
+            {
+                case System.Windows.Documents.Run run:
+                    builder.Append('[').Append(run.Text).Append('|').Append(run.FontSize).Append('|').Append(run.FontFamily).Append(']');
+                    return;
+                case System.Windows.Documents.Block block:
+                    builder.Append('<').Append(block.GetType().Name)
+                        .Append(" m=").Append(block.Margin).Append(" p=").Append(block.Padding)
+                        .Append(" bpb=").Append(block.BreakPageBefore).Append(" bcb=").Append(block.BreakColumnBefore)
+                        .Append(" lh=").Append(block.LineHeight).Append(" fs=").Append(block.FontSize)
+                        .Append(" bt=").Append(block.BorderThickness);
+                    if (block is System.Windows.Documents.Paragraph paragraph)
+                        builder.Append(" ti=").Append(paragraph.TextIndent).Append(" kwn=").Append(paragraph.KeepWithNext).Append(" kt=").Append(paragraph.KeepTogether);
+                    builder.Append('>');
+                    break;
+                case System.Windows.FrameworkContentElement element:
+                    builder.Append('<').Append(element.GetType().Name).Append('>');
+                    break;
+                case string text:
+                    builder.Append(text);
+                    return;
+            }
+            if (item is System.Windows.DependencyObject dependency)
+            {
+                foreach (var child in System.Windows.LogicalTreeHelper.GetChildren(dependency))
+                    Walk(child, depth + 1);
+            }
+            builder.Append("</>");
+        }
+        Walk(node, 0);
+        return builder.ToString();
     }
 
     private static string Xaml(System.Windows.Documents.Block block)

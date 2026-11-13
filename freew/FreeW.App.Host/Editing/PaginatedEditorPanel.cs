@@ -328,7 +328,7 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
         }
         else
         {
-            var scratch = new DocumentView();
+            var scratch = NewPageRenderScratch(model);
             scratch.LoadModel(model);
             var allBlocks = scratch.Document.Blocks.ToList();
             scratch.Document.Blocks.Clear(); // detach so they can be re-parented
@@ -2709,7 +2709,7 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
             }
             else
             {
-                var scratch = new DocumentView();
+                var scratch = NewPageRenderScratch(model);
                 scratch.LoadModel(model);
                 var allBlocks = scratch.Document.Blocks.ToList();
                 scratch.Document.Blocks.Clear();
@@ -3454,6 +3454,7 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
         var renderedCount = units.Length == 0 ? 0 : units[^1].RenderedStart + units[^1].PredictedRenderedCount;
         if (renderedPages.Length != renderedCount || renderedCount == 0)
             return null;
+        var renderedPagesInput = renderedPages;
         var unitOf = new int[renderedCount];
         for (var u = 0; u < units.Length; u++)
         {
@@ -3463,9 +3464,29 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
 
         pageCount = Math.Max(1, pageCount);
         var starts = new PageStart?[pageCount];
+
+        // A block whose text all lies on a later page than its start (a paragraph opening with a manual
+        // page break: print leaves only its empty first fragment behind) is shown from that page.
+        static bool MovesWholeBlock(CutLocator locator) =>
+            locator is { IsRow: false, Paragraph: 0, Offset: 0 } || locator is { IsRow: true, Row: 0 };
+
+        foreach (var cut in cuts)
+        {
+            if (MovesWholeBlock(cut.Locator)
+                && cut.Rendered >= 0 && cut.Rendered < renderedCount
+                && cut.Page > renderedPages[cut.Rendered] && cut.Page < pageCount)
+            {
+                if (ReferenceEquals(renderedPages, renderedPagesInput))
+                    renderedPages = (int[])renderedPages.Clone();
+                renderedPages[cut.Rendered] = cut.Page;
+            }
+        }
+
         foreach (var cut in cuts)
         {
             if (cut.Page <= 0 || cut.Page >= pageCount)
+                continue;
+            if (MovesWholeBlock(cut.Locator))
                 continue;
             if (cut.Rendered < 0 || cut.Rendered >= renderedCount)
                 return null;
@@ -3537,6 +3558,18 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
         return new PagePlan(units, unitPage, ranges) { Starts = starts, RenderedPages = renderedPages };
     }
 
+    /// <summary>
+    /// A scratch editor that renders page content as print lays it out: a document with inline
+    /// page/column breaks prints from a render without the editor-only page-break marker (its border and
+    /// minimum top spacing), so its pages do too. The pages are edited, so they never get print's
+    /// display-only slash joiners (positions on a page must map one to one onto the hidden editor).
+    /// </summary>
+    private static DocumentView NewPageRenderScratch(TextDocument model) => new()
+    {
+        RenderPageBreakMarkers = !DocumentView.HasRendererInlineFlowBreakFragments(model),
+        JoinSlashesForDisplay = false,
+    };
+
     private static int CompareStarts(PageStart a, PageStart b)
     {
         if (a.Rendered != b.Rendered)
@@ -3594,7 +3627,7 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
         {
             if (scratch is null)
             {
-                scratch = new DocumentView();
+                scratch = NewPageRenderScratch(model);
                 scratch.BindModelForRangeRender(model);
                 batch = scratch.BeginRangeRenderBatch();
             }
@@ -3844,7 +3877,10 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
         int unitIndex,
         DocumentView.BodyRenderUnit renderedUnit)
     {
+        // The plan's kind decides (a paragraph print splits at inline breaks is outside contextual spacing
+        // there, though the editable render shows it as one body paragraph).
         if (renderedUnit.Kind != DocumentView.BodyRenderUnitKind.BodyParagraph
+            || units[unitIndex].Kind != DocumentView.BodyRenderUnitKind.BodyParagraph
             || renderedUnit.Blocks[0] is not System.Windows.Documents.Paragraph paragraph)
         {
             return;
@@ -3934,7 +3970,7 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
 
             if (scratch is null)
             {
-                scratch = new DocumentView();
+                scratch = NewPageRenderScratch(model);
                 scratch.BindModelForRangeRender(model);
             }
             var rendered = scratch.RenderBodyUnitRange(units[u].Start, units[end - 1].End);

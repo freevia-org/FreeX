@@ -319,6 +319,147 @@ public sealed class PagedEditSplitTests(Xunit.Abstractions.ITestOutputHelper out
         panel.Detach();
     }
 
+    // ── W12: documents the layout session used to hand to the whole-page computation ─────────────────
+
+    [StaFact]
+    public void ManualPageBreakInsideAParagraph_ContinuesItOnTheNextPage_AsPrinted_AndTheBreakSurvivesACommit()
+    {
+        var paragraph = new ModelParagraph();
+        paragraph.Runs.Add(new Run("Before the break " + Words[..300]));
+        paragraph.Runs.Add(Run.PageBreak());
+        paragraph.Runs.Add(new Run("after the break " + Words[..200]));
+        var editor = Editor(Doc(new ModelParagraph("Opening."), paragraph, new ModelParagraph("Closing.")));
+
+        var panel = PaginatedEditorPanel.Build(editor);
+
+        panel.LayoutSession.LastStatistics.FallbackReason.Should().BeNull("the session lays out inline-break fragments itself");
+        ScreenPageTexts(panel).Should().Equal(PrintPageTexts(editor));
+        var continuation = panel.PageBoxes.First(box => box.ContinuesPrevious);
+        ParagraphText(continuation.Body.Document.Blocks, continuation.Body.Document.ContentStart, continuation.Body.Document.ContentEnd)
+            .Should().StartWith("afterthebreak", "the text after the manual break opens the next page");
+
+        panel.AttachAsActiveSurface();
+        var before = editor.Model.Blocks.ToList();
+        InsertAt(continuation.Body.Document.ContentStart.GetInsertionPosition(LogicalDirection.Forward)!, "X");
+        panel.CommitPendingEdits();
+
+        editor.Model.Blocks.Should().HaveCount(3);
+        var merged = (ModelParagraph)editor.Model.Blocks[1];
+        merged.Runs.Count(run => run.IsPageBreak).Should().Be(1, "the break mark stays in the paragraph");
+        merged.PlainText.Should().Be(paragraph.PlainText.Replace("after the break", "Xafter the break", StringComparison.Ordinal));
+        var breakIndex = merged.Runs.FindIndex(run => run.IsPageBreak);
+        string.Concat(merged.Runs.Take(breakIndex).Select(run => run.Text)).Should().EndWith(Words[..300],
+            "the break still follows the text before it");
+
+        editor.Undo();
+        editor.Model.Blocks.Should().Equal(before, "undo restores the exact block instances");
+        panel.Detach();
+    }
+
+    [StaFact]
+    public void ParagraphsOpeningAndEndingWithManualBreaks_ShowTheirTextOnThePagePrintPutsItOn()
+    {
+        var opening = new ModelParagraph();
+        opening.Runs.Add(Run.PageBreak());
+        opening.Runs.Add(new Run("Opened by a break " + Words[..120]));
+        var ending = new ModelParagraph();
+        ending.Runs.Add(new Run("Ended by a break " + Words[..80]));
+        ending.Runs.Add(Run.PageBreak());
+        var editor = Editor(Doc(
+            new ModelParagraph("First page."), opening, ending, new ModelParagraph("After the ending break."),
+            new ModelParagraph("Closing.")));
+
+        var panel = PaginatedEditorPanel.Build(editor);
+
+        panel.LayoutSession.LastStatistics.FallbackReason.Should().BeNull();
+        ScreenPageTexts(panel).Should().Equal(PrintPageTexts(editor));
+        ScreenPageTexts(panel)[1].Should().StartWith("Openedbyabreak", "a paragraph opening with a break is shown from the next page");
+
+        // Nothing is lost reading the pages back, breaks included.
+        var read = new List<FreeW.Core.Model.Block>();
+        editor.ReadPagesInto(panel.PageBoxes.Select(box => box.Body.Document).ToList(), read, new int[panel.PageBoxes.Count]);
+        read.Select(BlockText).Should().Equal(editor.Model.Blocks.Select(BlockText));
+        read.OfType<ModelParagraph>().Sum(paragraph => paragraph.Runs.Count(run => run.IsPageBreak)).Should().Be(2);
+    }
+
+    [StaFact]
+    public void TableAfterANextPageSectionBreak_IsLaidOutByTheSession_AndSplitsAsPrinted()
+    {
+        var doc = Doc(
+            new ModelParagraph("Intro"),
+            new ModelParagraph(string.Empty)
+            {
+                SectionBreak = new FreeW.Core.Model.Section(new PageSettings { HeightPt = 360 }, SectionBreakKind.NextPage)
+            },
+            Table(rows: 60, repeatHeader: true),
+            new ModelParagraph("End"));
+        var editor = Editor(doc);
+
+        var panel = PaginatedEditorPanel.Build(editor);
+
+        panel.LayoutSession.LastStatistics.FallbackReason.Should().BeNull();
+        SessionMatchesFullComputation(editor);
+        ScreenPageTexts(panel).Should().Equal(PrintPageTexts(editor));
+        panel.PageBoxes.Count(box => Tables(box.Body.Document.Blocks).Any()).Should().BeGreaterThan(1);
+    }
+
+    [StaFact]
+    public void MultiColumnFootnotedSection_IsLaidOutByTheSession_UnderTheSameUniformReserve()
+    {
+        var doc = Doc(new ModelParagraph("Start"));
+        doc.Page.ColumnCount = 2;
+        for (var i = 1; i <= 12; i++)
+        {
+            var paragraph = new ModelParagraph(Words[..(200 + 40 * i)]);
+            paragraph.Runs.Add(Run.FootnoteReference(i));
+            doc.Blocks.Add(paragraph);
+            doc.Footnotes[i] = new Footnote(i, $"Note {i}: " + Words[..(30 * i)]);
+        }
+        var editor = Editor(doc);
+
+        var panel = PaginatedEditorPanel.Build(editor);
+
+        panel.LayoutSession.LastStatistics.FallbackReason.Should().BeNull();
+        SessionMatchesFullComputation(editor);
+        ScreenPageTexts(panel).Should().Equal(PrintPageTexts(editor));
+    }
+
+    /// <summary>
+    /// Known limit (documented in the readiness note): print splits a table row taller than the space
+    /// left mid-row; the editor keeps the row whole on the page it starts on. That page grows, the page
+    /// count still equals print's, and nothing is lost: all the text is on screen and reads back.
+    /// </summary>
+    [StaFact]
+    public void RowTallerThanThePage_StaysWhole_WithNoTextLost()
+    {
+        var table = new ModelTable { Formatting = TableFormatting.Default with { Borders = true } };
+        var row = new ModelTableRow();
+        var cell = new ModelTableCell();
+        cell.Paragraphs.Add(new ModelParagraph(Words));
+        cell.Paragraphs.Add(new ModelParagraph(Words[..1200]));
+        row.Cells.Add(cell);
+        table.Rows.Add(row);
+        var editor = Editor(Doc(new ModelParagraph("Before"), table, new ModelParagraph("After")));
+
+        var panel = PaginatedEditorPanel.Build(editor);
+
+        var print = PrintPageTexts(editor);
+        var screen = ScreenPageTexts(panel);
+        screen.Count.Should().Be(print.Count, "the page count still follows print");
+        string.Concat(screen).Should().Be(string.Concat(print), "every character is on screen, in order");
+        var read = new List<FreeW.Core.Model.Block>();
+        editor.ReadPagesInto(panel.PageBoxes.Select(box => box.Body.Document).ToList(), read, new int[panel.PageBoxes.Count]);
+        read.Select(BlockText).Should().Equal(editor.Model.Blocks.Select(BlockText));
+    }
+
+    private static void SessionMatchesFullComputation(DocumentView editor)
+    {
+        var full = PaginationEngine.ComputeBlockPageAssignment(editor, out var fullPages, null, layoutOnly: true);
+        var run = new PagedLayoutSession(editor).ComputeRun();
+        run.Assignment.Should().Equal(full);
+        run.TotalPageCount.Should().Be(fullPages);
+    }
+
     /// <summary>
     /// Opt-in corpus sweep (<c>FREEW_PAGED_CORPUS_DIR</c>): every page the editor shows holds exactly the
     /// text print puts on that page, and a commit of every page reads the document back unchanged in text.
@@ -368,18 +509,33 @@ public sealed class PagedEditSplitTests(Xunit.Abstractions.ITestOutputHelper out
             output.WriteLine($"{name}: {screen.Count} screen pages, {print.Count} printed, {splitPages} with split blocks, "
                 + $"fallback={panel.LayoutSession.LastStatistics.FallbackReason ?? "none"}, differing pages [{string.Join(",", differing.Take(10))}]");
             // Known limit: a table row taller than the space left (drawing.docx's one-row layout table) is
-            // split mid-row by print; the editor splits tables between rows only, so that row stays whole.
-            if (differing.Count > 0 && panel.LayoutSession.LastStatistics.FallbackReason is null && name != "drawing.docx")
+            // split mid-row by print; the editor splits tables between rows only, so that row stays whole
+            // on its first page (the page grows; nothing is lost -- the read-back below still holds).
+            if (differing.Count > 0 && name != "drawing.docx")
                 mismatches.Add($"{name}: pages {string.Join(",", differing.Take(10))}");
+            if (panel.LayoutSession.LastStatistics.FallbackReason is { } fallback)
+                mismatches.Add($"{name}: layout fell back ({fallback})");
             if (!string.IsNullOrEmpty(only))
             {
                 foreach (var i in differing.Take(4))
                 {
-                    string Ends(List<string> pages) => i < pages.Count
-                        ? $"[{pages[i].Length}] {pages[i][..Math.Min(70, pages[i].Length)]} ... {pages[i][Math.Max(0, pages[i].Length - 70)..]}"
-                        : "(none)";
-                    output.WriteLine($"  page {i} screen: {Ends(screen)}");
-                    output.WriteLine($"  page {i} print : {Ends(print)}");
+                    var a = i < screen.Count ? screen[i] : "";
+                    var b = i < print.Count ? print[i] : "";
+                    var at = 0;
+                    while (at < a.Length && at < b.Length && a[at] == b[at])
+                        at++;
+                    string Around(string text) => $"[{text.Length}] @{at}: …{text[Math.Max(0, at - 40)..Math.Min(text.Length, at + 40)]}…";
+                    output.WriteLine($"  page {i} screen: {Around(a)}");
+                    output.WriteLine($"  page {i} print : {Around(b)}");
+                    if (i < panel.PageBoxes.Count)
+                    {
+                        var box = panel.PageBoxes[i];
+                        output.WriteLine($"    box: model {box.ModelStart}+{box.ModelBlocks?.Length}, continues={box.ContinuesPrevious}, pieces={box.Pieces.Count}, "
+                            + $"blocks [{string.Join(",", box.Body.Document.Blocks.Select(block => block.GetType().Name))}], "
+                            + $"model kinds [{string.Join(",", (box.ModelBlocks ?? []).Select(block => block switch { ModelTable => "T", ModelParagraph p when p.Runs.Any(r => r.IsPageBreak || r.IsColumnBreak) => "B", ModelParagraph { Formatting.ListKind: not ListKind.None } => "L", _ => "p" }))}]");
+                    }
+                    output.WriteLine($"    session cuts near: {string.Join("; ", sessionRun.Cuts.Where(cut => Math.Abs(cut.Page - i) <= 1).Select(cut => $"p{cut.Page} r{cut.Rendered} {cut.Locator}"))}; "
+                        + $"rendered starting pages {i - 1}..{i + 1}: [{string.Join(",", Enumerable.Range(0, sessionRun.RenderedPages.Length).Where(r => Math.Abs(sessionRun.RenderedPages[r] - i) <= 1).Select(r => $"r{r}@{sessionRun.RenderedPages[r]}"))}]");
                 }
             }
 
@@ -472,7 +628,10 @@ public sealed class PagedEditSplitTests(Xunit.Abstractions.ITestOutputHelper out
             if (pointer.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.Text)
             {
                 var length = Math.Min(pointer.GetTextRunLength(LogicalDirection.Forward), pointer.GetOffsetToPosition(to));
-                if (!InsideAnchoredBlock(pointer))
+                // Known difference, not a page split: with footnote numbering restarted on every page the
+                // pages renumber their reference marks per page (as Word shows them); print keeps the
+                // numbers the render baked in. The mark digits are left out on both sides.
+                if (!InsideAnchoredBlock(pointer) && !IsNoteReferenceMark(pointer))
                     builder.Append(pointer.GetTextInRun(LogicalDirection.Forward), 0, length);
                 pointer = pointer.GetPositionAtOffset(length, LogicalDirection.Forward);
             }
@@ -483,6 +642,12 @@ public sealed class PagedEditSplitTests(Xunit.Abstractions.ITestOutputHelper out
         }
         return builder.ToString();
     }
+
+    // A footnote/endnote reference mark: a run raised by a negative translate effect (see
+    // DocumentView.ApplyNoteReferencePresentation).
+    private static bool IsNoteReferenceMark(TextPointer pointer) =>
+        pointer.Parent is System.Windows.Documents.Run { TextEffects: { Count: > 0 } effects }
+        && effects.Any(effect => effect.Transform is System.Windows.Media.TranslateTransform { Y: < 0 });
 
     private static bool InsideAnchoredBlock(TextPointer pointer)
     {
@@ -526,7 +691,8 @@ public sealed class PagedEditSplitTests(Xunit.Abstractions.ITestOutputHelper out
         var builder = new StringBuilder(text.Length);
         foreach (var c in text)
         {
-            if (!char.IsWhiteSpace(c))
+            // Print's display-only slash joiner is not text (the editable pages never carry it).
+            if (!char.IsWhiteSpace(c) && c != FreeW.App.Presentation.DocumentView.SlashLineBreakDisplayPlanner.WordJoiner)
                 builder.Append(c);
         }
         return builder.ToString();

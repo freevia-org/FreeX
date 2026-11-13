@@ -37,9 +37,11 @@ namespace FreeW.App.Host.Editing;
 /// </list>
 /// The cache is valid only while the model changes by whole-block replacement (the paged editor's own
 /// commits, and undo/redo of them); <see cref="Invalidate"/> must be called on any other model change.
-/// Documents this cannot represent exactly (outline collapse, inline page/column-break fragments,
-/// page-anchored wrap reservations, multi-column footnoted sections, page-type section breaks together
-/// with tables, non-paragraph/table blocks) fall back to the full computation.
+/// W12: inline page/column-break fragments (a fragment group is one rendered block; its cuts are located
+/// in the model paragraph), page-type section breaks next to tables, Number lists restarted by an override,
+/// page-anchored wrap reservations (part of each unit's signature) and multi-column footnoted sections
+/// (one uniform reserve, as the full computation sizes it) are laid out here too. Only outline collapse
+/// and non-paragraph/table blocks still fall back to the full computation.
 /// </summary>
 internal sealed class PagedLayoutSession
 {
@@ -377,6 +379,7 @@ internal sealed class PagedLayoutSession
         public int PredictedRenderedCount;
         public int RenderedStart;
         public bool[] SectionFlags = [];        // per model paragraph of the unit: break page before
+        public string? WrapSignature;           // page-anchored wrap reservations the unit's render reads
     }
 
     /// <summary>A cached render of one unit, exactly as the range render produced it.</summary>
@@ -486,10 +489,14 @@ internal sealed class PagedLayoutSession
         return true;
     }
 
-    internal static UnitPlan[] BuildUnitPlans(TextDocument model, bool signTableIndex = false)
+    internal static UnitPlan[] BuildUnitPlans(
+        TextDocument model,
+        bool signTableIndex = false,
+        IReadOnlyDictionary<int, string>? wrapSignatures = null)
     {
         var blocks = model.Blocks;
         var plans = new List<UnitPlan>();
+        var inlineFragments = DocumentView.HasRendererInlineFlowBreakFragments(model);
         var sequence = new DocumentListMarkerSequencePlanner(
             model.MultiLevelList.NumberFormats, model.MultiLevelList.LevelTexts);
         var preserved = PreservedNumberingMarkerPlanner.Build(model);
@@ -538,9 +545,13 @@ internal sealed class PagedLayoutSession
                 plan.PredictedRenderedCount = PaginationEngine.RenderedTopLevelBlockCount(model, table, i);
                 i++;
             }
-            else if (blocks[i] is ModelParagraph)
+            else if (blocks[i] is ModelParagraph bodyParagraph)
             {
-                plan.Kind = DocumentView.BodyRenderUnitKind.BodyParagraph;
+                // A paragraph the pagination render splits at inline page/column breaks renders as one
+                // group of fragments, outside contextual spacing (DocumentView.RenderBodyUnits).
+                plan.Kind = inlineFragments && bodyParagraph.Runs.Any(run => run.IsPageBreak || run.IsColumnBreak)
+                    ? DocumentView.BodyRenderUnitKind.Reset
+                    : DocumentView.BodyRenderUnitKind.BodyParagraph;
                 plan.PredictedRenderedCount = 1;
                 i++;
             }
@@ -567,6 +578,21 @@ internal sealed class PagedLayoutSession
 
             plan.Signature = UnitSignatureContext(
                 model, plan.Start, plan.End, listPlans, preserved, footnoteSequence, endnoteSequence, signTableIndex);
+            if (wrapSignatures is not null)
+            {
+                var wraps = new StringBuilder();
+                for (var b = plan.Start; b < plan.End; b++)
+                {
+                    if (wrapSignatures.TryGetValue(b, out var wrap))
+                        wraps.Append(b - plan.Start).Append('=').Append(wrap).Append(';');
+                }
+                if (wraps.Length > 0)
+                {
+                    plan.WrapSignature = wraps.ToString();
+                    if (plan.Signature is not null)
+                        plan.Signature += "|W:" + plan.WrapSignature;
+                }
+            }
             renderedIndex += plan.PredictedRenderedCount;
             plans.Add(plan);
         }
@@ -640,18 +666,18 @@ internal sealed class PagedLayoutSession
             {
                 PaginationEngine.ClearTags(block);
                 cached.NaturalBreaks.Add((block, block.BreakPageBefore));
-                if (block is WpfList list)
-                {
-                    foreach (var paragraph in EnumerateListParagraphs(list))
-                        cached.NaturalBreaks.Add((paragraph, paragraph.BreakPageBefore));
-                }
+                foreach (var paragraph in NestedParagraphs(block))
+                    cached.NaturalBreaks.Add((paragraph, paragraph.BreakPageBefore));
             }
             foreach (var block in cached.TopBlocks)
             {
+                // One rendered paragraph per model paragraph: the fragments after the first of a paragraph
+                // split at inline breaks continue it.
                 if (block is WpfParagraph paragraph)
                     cached.RenderedParagraphs.Add(paragraph);
-                else if (block is WpfList list)
-                    cached.RenderedParagraphs.AddRange(EnumerateListParagraphs(list));
+                else
+                    cached.RenderedParagraphs.AddRange(NestedParagraphs(block)
+                        .Where(nested => !DocumentView.IsInlineBreakContinuationFragment(nested)));
             }
             if (cached.RenderedParagraphs.Count != plan.SectionFlags.Length)
                 throw new UnsupportedException("rendered paragraphs do not pair with model paragraphs");
@@ -660,6 +686,28 @@ internal sealed class PagedLayoutSession
             // because their (null) signature never matches.
             _cache[plan.Blocks[0]] = cached;
             _unitsRendered++;
+        }
+    }
+
+    /// <summary>The paragraphs inside a top-level list or section (an inline-break fragment group); never a table's.</summary>
+    private static IEnumerable<WpfParagraph> NestedParagraphs(WpfBlock block)
+    {
+        switch (block)
+        {
+            case WpfList list:
+                foreach (var paragraph in EnumerateListParagraphs(list))
+                    yield return paragraph;
+                break;
+            case WpfSection section:
+                foreach (var child in section.Blocks)
+                {
+                    if (child is WpfParagraph paragraph)
+                        yield return paragraph;
+                    else
+                        foreach (var nested in NestedParagraphs(child))
+                            yield return nested;
+                }
+                break;
         }
     }
 
@@ -829,6 +877,7 @@ internal sealed class PagedLayoutSession
         public List<PassRecord> Passes = [];
         public bool UsesFootnotePath;
         public int DecisionFrontier;         // rendered index (exclusive) the footnote-path decision read
+        public double UniformReserveDip;     // a multi-column footnoted section's uniform note reserve
         public List<RenderedCut> Cuts = [];   // pages (segment-local) that start inside a rendered block
     }
 
@@ -858,14 +907,6 @@ internal sealed class PagedLayoutSession
             throw new UnsupportedException("reference pagination requested");
         if (_source.HasHiddenOutlineBlocks)
             throw new UnsupportedException("outline levels collapsed");
-        if (DocumentView.HasRendererInlineFlowBreakFragments(model))
-            throw new UnsupportedException("inline page/column-break fragments");
-        if (_source.HasLeadingWrapReservations())
-            throw new UnsupportedException("page-anchored wrap reservations");
-        if (model.Blocks.Any(block => block is ModelTable)
-            && model.Blocks.OfType<ModelParagraph>().Any(paragraph => PaginationEngine.IsPageTypeSectionBreak(paragraph.SectionBreak)))
-            throw new UnsupportedException("page-type section breaks with tables");
-
         if (!ReferenceEquals(_boundModel, model) || _twin is null)
         {
             ClearCaches();
@@ -874,7 +915,9 @@ internal sealed class PagedLayoutSession
             _boundModel = model;
         }
 
-        _plans = BuildUnitPlans(model);
+        // Page-anchored wrap reservations are placed by estimated page position, so a block's render can
+        // change with edits far before it: the reservations each unit reads are part of its signature.
+        _plans = BuildUnitPlans(model, wrapSignatures: _twin.BuildLeadingWrapSignatures());
         _placed = new PlacedUnit?[_plans.Length];
         var renderedCount = _plans.Length == 0 ? 0 : _plans[^1].RenderedStart + _plans[^1].PredictedRenderedCount;
         _unitOfRendered = new int[renderedCount];
@@ -897,6 +940,8 @@ internal sealed class PagedLayoutSession
             var text = new StringBuilder("V:");
             foreach (var block in _placed[u]!.TopBlocks)
                 text.Append(new TextRange(block.ContentStart, block.ContentEnd).Text).Append('\u0001');
+            if (_plans[u].WrapSignature is { } wrapSignature)
+                text.Append("|W:").Append(wrapSignature);
             _plans[u].Signature = text.ToString();
             _cache[_plans[u].Blocks[0]].Signature = _plans[u].Signature!;
         }
@@ -1052,6 +1097,7 @@ internal sealed class PagedLayoutSession
         }).ToList(),
         UsesFootnotePath = source.UsesFootnotePath,
         DecisionFrontier = source.DecisionFrontier + renderedDelta,
+        UniformReserveDip = source.UniformReserveDip,
         Cuts = ShiftCuts(source.Cuts, renderedDelta, pageDelta).ToList()
     };
 
@@ -1074,9 +1120,69 @@ internal sealed class PagedLayoutSession
         if (!SplitBlocksAcrossPages)
             return null;
         var position = PageSplitter.FirstPositionOnPage(paginator, block, page);
-        return position is not null && PageSplitter.Locate(block, position, contentBase) is { } locator
-            ? new RenderedCut(recordedPage, rendered, locator)
-            : null;
+        if (position is null)
+            return null;
+        if (PageSplitter.Locate(block, position, contentBase) is { } locator)
+            return new RenderedCut(recordedPage, rendered, locator);
+
+        // A table whose first row the paginator moved whole to this page (only the table's own edge stays
+        // on the page before): all of it is on this page, AtRow(0). A first row merely continuing here
+        // (taller than the space left, split mid-row) is not.
+        if (PageSplitter.SingleTable(block) is { } table
+            && PageSplitter.TableRows(table) is { Count: > 0 } rows
+            && position.CompareTo(rows[0].ContentEnd) <= 0)
+        {
+            try
+            {
+                if (paginator.GetPageNumber(rows[0].ContentStart) >= page)
+                    return new RenderedCut(recordedPage, rendered, CutLocator.AtRow(0));
+            }
+            catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or ArgumentException)
+            {
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// A table the paginator starts on <paramref name="page"/> (its own top edge) whose rows it moved whole
+    /// to a later page: a cut <c>AtRow(0)</c> on that page, so the editor shows the table where its text is.
+    /// </summary>
+    private static RenderedCut? TableMoveCut(
+        DynamicDocumentPaginator paginator,
+        WpfBlock block,
+        int rendered,
+        int page,
+        int pageBase)
+    {
+        if (!SplitBlocksAcrossPages
+            || PageSplitter.SingleTable(block) is not { } table
+            || PageSplitter.TableRows(table) is not { Count: > 0 } rows
+            || FirstContent(rows[0]) is not { } first)
+        {
+            return null;
+        }
+        try
+        {
+            var textPage = paginator.GetPageNumber(first);
+            return textPage > page ? new RenderedCut(pageBase + textPage, rendered, CutLocator.AtRow(0)) : null;
+        }
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or ArgumentException)
+        {
+            return null;
+        }
+
+        // The first text (or embedded object) of the row.
+        static TextPointer? FirstContent(System.Windows.Documents.TableRow row)
+        {
+            for (var pointer = row.ContentStart; pointer is not null && pointer.CompareTo(row.ContentEnd) < 0;
+                 pointer = pointer.GetNextContextPosition(LogicalDirection.Forward))
+            {
+                if (pointer.GetPointerContext(LogicalDirection.Forward) is TextPointerContext.Text or TextPointerContext.EmbeddedElement)
+                    return pointer;
+            }
+            return null;
+        }
     }
 
     /// <summary>
@@ -1150,6 +1256,7 @@ internal sealed class PagedLayoutSession
         // footnote reserve (PaginationEngine.HasPositivePerPageFootnoteReserve), else one plain flow.
         var usesFootnotePath = false;
         var decisionFrontier = end;
+        var uniformReserveDip = 0.0;
         if (document.Footnotes.Count > 0)
         {
             var anyReference = false;
@@ -1158,8 +1265,15 @@ internal sealed class PagedLayoutSession
 
             if (segment.Page.ColumnCount > 1)
             {
+                // A multi-column section reserves one uniform footnote band, sized from a layout of the
+                // whole section (PaginationEngine.ComputeSegmentPageAssignment); the section is then laid
+                // out plainly under it.
                 if (anyReference)
-                    throw new UnsupportedException("multi-column footnoted section");
+                {
+                    var (contentWidthDip, _) = PageLayout.ContentAreaDip(segment.Page);
+                    uniformReserveDip = UniformFootnoteReserve(document, segment, end, NewFlow(0), contentWidthDip);
+                    decisionFrontier = end;
+                }
             }
             else if (anyReference)
             {
@@ -1179,15 +1293,61 @@ internal sealed class PagedLayoutSession
 
         result.UsesFootnotePath = usesFootnotePath;
         result.DecisionFrontier = decisionFrontier;
-        if (previous is not null && previous.UsesFootnotePath != usesFootnotePath)
+        result.UniformReserveDip = uniformReserveDip;
+        if (previous is not null
+            && (previous.UsesFootnotePath != usesFootnotePath || !previous.UniformReserveDip.Equals(uniformReserveDip)))
             previous = null;
 
         var steps = usesFootnotePath
             ? PaginateFootnotePath(document, segment, end, result, previous, changedStart, changedEnd, renderedDelta, NewFlow, run, pageOffset)
-            : PaginatePlain(segment, end, result, previous, changedStart, changedEnd, renderedDelta, () => NewFlow(0), run, pageOffset);
+            : PaginatePlain(segment, end, result, previous, changedStart, changedEnd, renderedDelta, () => NewFlow(uniformReserveDip), run, pageOffset);
         result.Mode = usesFootnotePath ? SegmentMode.Footnote : SegmentMode.Plain;
         foreach (var step in steps)
             yield return step;
+    }
+
+    /// <summary>
+    /// The uniform footnote reserve of a multi-column segment, exactly as
+    /// PaginationEngine.ComputeSegmentPageAssignment sizes it: the tallest page's notes in a reserve-free
+    /// layout of the whole segment, then refined under that reserve.
+    /// </summary>
+    private double UniformFootnoteReserve(
+        TextDocument document,
+        PaginationEngine.PageSegment segment,
+        int end,
+        FlowDocument flow,
+        double contentWidthDip)
+    {
+        var owners = new List<ModelBlock>(end - segment.Start);
+        for (var r = segment.Start; r < end; r++)
+        {
+            flow.Blocks.Add(RenderedBlock(r));
+            owners.Add(OwnerOf(r));
+        }
+
+        try
+        {
+            var bottom = flow.PagePadding.Bottom;
+            var reserveDip = PaginationEngine.ComputeMaxPerPageFootnoteReserveDip(flow, owners, document, segment.Page, contentWidthDip);
+            if (reserveDip > 0)
+            {
+                double NeedUnder(double candidateDip)
+                {
+                    var padding = flow.PagePadding;
+                    flow.PagePadding = new Thickness(padding.Left, padding.Top, padding.Right, bottom + candidateDip);
+                    return PaginationEngine.ComputeMaxPerPageFootnoteReserveDip(flow, owners, document, segment.Page, contentWidthDip);
+                }
+
+                var needUnderFirst = NeedUnder(reserveDip);
+                if (needUnderFirst > 0 && needUnderFirst < reserveDip && NeedUnder(needUnderFirst) <= needUnderFirst)
+                    reserveDip = needUnderFirst;
+            }
+            return reserveDip;
+        }
+        finally
+        {
+            flow.Blocks.Clear();
+        }
     }
 
     /// <summary>
@@ -1423,6 +1583,8 @@ internal sealed class PagedLayoutSession
                     yield return false;
                 }
                 result.LocalPage[r - segment.Start] = pageBase + page;
+                if (TableMoveCut(window.Paginator, window[r], r, page, pageBase) is { } moved)
+                    result.Cuts.Add(moved);
             }
 
             // The last block may run on past the page it starts on.
@@ -1547,6 +1709,44 @@ internal sealed class PagedLayoutSession
             while (pending.Count < count && nextRendered < end)
             {
                 var block = RenderedBlock(nextRendered);
+                if (block is WpfSection section
+                    && section.Blocks.Count > 0
+                    && section.Blocks.All(child => child is WpfParagraph))
+                {
+                    // As PaginationEngine.PaginateWithPerPageFootnoteReserve: a paragraph split at inline
+                    // breaks is laid out as its fragments (the later ones continue it), and a break that
+                    // ends the paragraph moves to the next block, its empty remainder taking no height.
+                    // The unit's render is taken apart here, so it is rendered afresh next time.
+                    var children = section.Blocks.Cast<WpfParagraph>().ToList();
+                    var bases = new int[children.Count];
+                    for (var c = 1; c < children.Count; c++)
+                        bases[c] = bases[c - 1] + PageSplitter.ContentOffset(children[c - 1].ContentStart, children[c - 1].ContentEnd);
+                    section.Blocks.Clear();
+                    EvictRendered(nextRendered);
+
+                    if (children.Count > 1
+                        && children[^1] is { BreakPageBefore: true } remainder
+                        && !PaginationEngine.HasText(remainder.ContentStart, remainder.ContentEnd)
+                        && !remainder.Inlines.OfType<InlineUIContainer>().Any()
+                        && nextRendered + 1 < end
+                        && RenderedBlock(nextRendered + 1) is not WpfSection)
+                    {
+                        remainder.BreakPageBefore = false;
+                        remainder.Margin = new Thickness(remainder.Margin.Left, 0, remainder.Margin.Right, 0);
+                        remainder.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+                        remainder.LineHeight = 0.01;
+                        RenderedBlock(nextRendered + 1).BreakPageBefore = true;
+                    }
+
+                    for (var c = 0; c < children.Count; c++)
+                    {
+                        pending.Add((children[c], nextRendered, c > 0, bases[c]));
+                        work.Blocks.Add(children[c]);
+                    }
+                    nextRendered++;
+                    continue;
+                }
+
                 pending.Add((block, nextRendered, false, 0));
                 work.Blocks.Add(block);
                 nextRendered++;
@@ -1699,8 +1899,10 @@ internal sealed class PagedLayoutSession
                 }
                 result.Passes.Add(state);
                 passesThisRun++;
-                // A pass that starts with the rest of a paragraph split on the page before starts its page there.
-                if (head.IsContinuation && head.ContentBase > 0 && SplitBlocksAcrossPages)
+                // A pass that starts with the rest of a paragraph split on the page before starts its page there
+                // (at the paragraph's start when only empty inline-break fragments of it came before: all of
+                // its text is on this page).
+                if (head.IsContinuation && SplitBlocksAcrossPages)
                     result.Cuts.Add(new RenderedCut(localPage, head.Rendered, CutLocator.AtParagraph(0, head.ContentBase)));
 
                 // Blocks before the head (and a split head, whose start page is already known) are final.
@@ -1800,6 +2002,9 @@ internal sealed class PagedLayoutSession
                         ? Math.Clamp(dynamicChunk.GetPageNumber(pending[i].Block.ContentStart), 0, chunkPages - 1)
                         : 0;
                     result.LocalPage[pending[i].Rendered - segment.Start] = localPage + page;
+                    if (chunkPages > 1 && dynamicChunk is not null
+                        && TableMoveCut(dynamicChunk, pending[i].Block, pending[i].Rendered, page, localPage) is { } moved)
+                        result.Cuts.Add(moved);
                 }
 
                 // A block the chunk runs over onto further pages (a table, a list) starts each of them.

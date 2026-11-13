@@ -416,6 +416,13 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public bool RenderPageBreakMarkers { get; set; } = true;
 
+    /// <summary>
+    /// Whether runs get the display-only word joiner after a solidus (see SlashLineBreakDisplayPlanner);
+    /// null: only when <see cref="RenderPageBreakMarkers"/> is off (non-interactive renders). The paged
+    /// editor's pages render like print but are edited, so they set it to false.
+    /// </summary>
+    internal bool? JoinSlashesForDisplay { get; set; }
+
     // Print/PDF/fidelity-only mode. WPF has no inline page/column-break primitive, so the consuming
     // paginator can request renderer fragments while the editable FlowDocument remains one model
     // paragraph and keeps its established commit semantics.
@@ -444,6 +451,48 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     internal DocumentView? CreateLayoutRenderTwin() => CreateLayoutRenderTwin(renderBody: true);
 
+    /// <summary>
+    /// The selection as document positions (top-level block, symbol offset in it): what survives a
+    /// re-render of the same model and maps onto the paged editor's pages.
+    /// </summary>
+    internal PaginatedEditorPanel.PagedSelection? CaptureBlockSelection()
+    {
+        if (Document is null || BlockPositionOf(Selection.Start) is not { } start || BlockPositionOf(Selection.End) is not { } end)
+            return null;
+        return new PaginatedEditorPanel.PagedSelection(start, end);
+    }
+
+    /// <summary>Selects <paramref name="selection"/> (clamped to the blocks this editor shows).</summary>
+    internal void RestoreBlockSelection(PaginatedEditorPanel.PagedSelection selection)
+    {
+        if (PointerAtBlockPosition(selection.Anchor) is not { } anchor || PointerAtBlockPosition(selection.Active) is not { } active)
+            return;
+        Selection.Select(anchor, active);
+    }
+
+    private PagedCaretPosition? BlockPositionOf(TextPointer pointer)
+    {
+        var index = 0;
+        foreach (var block in Document.Blocks)
+        {
+            if (pointer.CompareTo(block.ContentEnd) <= 0)
+                return new PagedCaretPosition(index, Math.Max(0, block.ContentStart.GetOffsetToPosition(pointer)));
+            index++;
+        }
+        return index > 0 ? new PagedCaretPosition(index - 1, int.MaxValue) : null;
+    }
+
+    private TextPointer? PointerAtBlockPosition(PagedCaretPosition position)
+    {
+        var blocks = Document.Blocks;
+        if (blocks.Count == 0)
+            return null;
+        var block = blocks.ElementAtOrDefault(Math.Clamp(position.BlockIndex, 0, blocks.Count - 1))!;
+        var length = block.ContentStart.GetOffsetToPosition(block.ContentEnd);
+        var pointer = block.ContentStart.GetPositionAtOffset(Math.Clamp(position.Offset, 0, length)) ?? block.ContentEnd;
+        return pointer.GetInsertionPosition(LogicalDirection.Forward) ?? pointer;
+    }
+
     /// <summary>True while outline levels are collapsed (a range render cannot represent hidden blocks).</summary>
     internal bool HasHiddenOutlineBlocks => _outlineCollapse.BuildHiddenBlockIndices(_model.Blocks).Count > 0;
 
@@ -453,6 +502,39 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     internal bool HasLeadingWrapReservations() =>
         BuildLeadingWrapReservations(_model, out var suppressed).Count > 0 || suppressed.Count > 0;
+
+    /// <summary>
+    /// Per model block, what its render reads from page-anchored wrap reservations (the reservations it
+    /// receives and the floating runs whose own wrap it suppresses), so a cached render can be keyed by
+    /// it; null when the model has none.
+    /// </summary>
+    internal Dictionary<int, string>? BuildLeadingWrapSignatures()
+    {
+        var reservations = BuildLeadingWrapReservations(_model, out var suppressed);
+        if (reservations.Count == 0 && suppressed.Count == 0)
+            return null;
+
+        var result = new Dictionary<int, string>();
+        foreach (var (index, list) in reservations)
+        {
+            result[index] = string.Join(";", list.Select(reservation =>
+                $"{System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(reservation.Run)}:{reservation.Plan}:{reservation.Rect}"));
+        }
+        if (suppressed.Count > 0)
+        {
+            for (var index = 0; index < _model.Blocks.Count; index++)
+            {
+                if (_model.Blocks[index] is not ModelParagraph paragraph)
+                    continue;
+                for (var k = 0; k < paragraph.Runs.Count; k++)
+                {
+                    if (suppressed.Contains(paragraph.Runs[k]))
+                        result[index] = (result.TryGetValue(index, out var existing) ? existing : "") + $"|S{k}";
+                }
+            }
+        }
+        return result;
+    }
 
     /// <summary>
     /// <see cref="CreateLayoutRenderTwin()"/>; with <paramref name="renderBody"/> false the twin is only
@@ -5769,7 +5851,7 @@ public sealed partial class DocumentView : RichTextBox
         _renderFieldEvaluationFileName = FieldEvaluationFileName;
         _renderReviewDisplayPolicy = CurrentReviewDisplayPolicy;
         _renderPageBreakMarkers = RenderPageBreakMarkers;
-        _renderJoinSlashes = !RenderPageBreakMarkers;
+        _renderJoinSlashes = JoinSlashesForDisplay ?? !RenderPageBreakMarkers;
         _renderViewMode = ViewMode;
         _renderImageDiagnostics = new List<string>();
     }
@@ -10711,6 +10793,8 @@ public sealed partial class DocumentView : RichTextBox
         for (var index = 0; index < plan.Segments.Count; index++)
         {
             var fragment = index == 0 ? paragraph : CloneParagraphShell(paragraph);
+            if (index > 0)
+                InlineBreakContinuationFragments.AddOrUpdate(fragment, BoxedTrue);
             var segment = plan.Segments[index];
             fragment.BreakPageBefore = segment.BreakBefore == InlineFlowBreakKind.Page;
             fragment.BreakColumnBefore = segment.BreakBefore == InlineFlowBreakKind.Column;
@@ -10741,6 +10825,18 @@ public sealed partial class DocumentView : RichTextBox
 
         return fragments;
     }
+
+    // Fragments after the first of a paragraph split at inline page/column breaks (a pagination-only
+    // render): they continue the same model paragraph. Kept outside Tag, which layout renders clear.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<WpfParagraph, object> InlineBreakContinuationFragments = new();
+    private static readonly object BoxedTrue = true;
+
+    /// <summary>
+    /// True for a fragment (other than the first) of a paragraph a pagination render split at inline
+    /// page/column breaks: it continues the model paragraph the fragment before it renders.
+    /// </summary>
+    internal static bool IsInlineBreakContinuationFragment(WpfParagraph paragraph) =>
+        InlineBreakContinuationFragments.TryGetValue(paragraph, out _);
 
     private static WpfParagraph CloneParagraphShell(WpfParagraph source) => new()
     {

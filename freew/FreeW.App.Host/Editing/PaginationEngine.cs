@@ -1571,12 +1571,15 @@ internal static class PaginationEngine
             {
                 var kind = firstListParagraph.Formatting.ListKind;
                 renderedStart[modelIndex] = renderedIndex;
+                // As the body renderer: a Number paragraph restarted by an override (other than the
+                // run's first) starts a new WPF List, since one List has only one StartIndex.
                 while (modelIndex + 1 < blocks.Count
                        && blocks[modelIndex + 1] is FreeW.Core.Model.Paragraph
                        {
                            Formatting.ListKind: var nextKind
-                       }
-                       && nextKind == kind)
+                       } nextParagraph
+                       && nextKind == kind
+                       && (kind != ListKind.Number || !nextParagraph.Formatting.ListStartOverride.HasValue))
                 {
                     modelIndex++;
                     renderedStart[modelIndex] = renderedIndex;

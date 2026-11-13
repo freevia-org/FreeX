@@ -54,6 +54,14 @@ internal static class PageSplitter
                 case TextPointerContext.Text:
                     var length = Math.Min(pointer.GetTextRunLength(LogicalDirection.Forward), pointer.GetOffsetToPosition(to));
                     count += length;
+                    // A print-like layout render joins "a/b" with a display-only word joiner the model (and
+                    // the editable pages) do not have: it is not content.
+                    var text = pointer.GetTextInRun(LogicalDirection.Forward);
+                    for (var i = 0; i < length && i < text.Length; i++)
+                    {
+                        if (text[i] == FreeW.App.Presentation.DocumentView.SlashLineBreakDisplayPlanner.WordJoiner)
+                            count--;
+                    }
                     pointer = pointer.GetPositionAtOffset(length, LogicalDirection.Forward);
                     break;
                 case TextPointerContext.EmbeddedElement:
@@ -106,6 +114,40 @@ internal static class PageSplitter
             }
         }
         return element.ContentEnd;
+    }
+
+    /// <summary>
+    /// A paragraph cut <paramref name="offset"/> content characters in. The side before the cut keeps the
+    /// empty runs that sit right at it (a manual page/column-break mark, which ends the text before the
+    /// page it starts, or another zero-width marker): otherwise neither side would hold them and a commit
+    /// of the pages would drop them.
+    /// </summary>
+    private static TextPointer CutPosition(TextElement paragraph, int offset, bool forward)
+    {
+        var position = PositionAtContentOffset(paragraph, offset, forward);
+        if (forward)
+            return position;
+
+        var pointer = position;
+        var result = position;
+        while (pointer.CompareTo(paragraph.ContentEnd) < 0)
+        {
+            var context = pointer.GetPointerContext(LogicalDirection.Forward);
+            if (context == TextPointerContext.ElementEnd)
+            {
+                pointer = pointer.GetNextContextPosition(LogicalDirection.Forward)!;
+                continue;
+            }
+            if (context == TextPointerContext.ElementStart
+                && pointer.GetAdjacentElement(LogicalDirection.Forward) is System.Windows.Documents.Run { Text.Length: 0 } empty)
+            {
+                pointer = empty.ElementEnd;
+                result = pointer;
+                continue;
+            }
+            break;
+        }
+        return result;
     }
 
     // ── finding the cut a paginator made ───────────────────────────────────────────────────────────
@@ -178,30 +220,59 @@ internal static class PageSplitter
     {
         switch (block)
         {
-            case WpfParagraph paragraph:
+            case WpfParagraph or WpfList:
+            case Section when SingleTable(block) is null:
             {
-                var offset = ContentOffset(paragraph.ContentStart, position);
-                if (offset <= 0 || !PaginationEngine.HasText(position, paragraph.ContentEnd))
+                // The layout paragraphs of the block, each with the model paragraph it renders (its ordinal
+                // in the block) and where in that paragraph it starts: a pagination render splits a paragraph
+                // at inline page/column breaks into fragments that continue it.
+                var paragraphs = LayoutParagraphs(block);
+                if (paragraphs.Count == 0)
                     return null;
-                return CutLocator.AtParagraph(0, contentBase + offset);
-            }
-            case WpfList list:
-            {
-                var paragraphs = ListParagraphs(list);
+                var bases = new int[paragraphs.Count];
                 for (var j = 0; j < paragraphs.Count; j++)
                 {
-                    var paragraph = paragraphs[j];
+                    bases[j] = paragraphs[j].Continues && j > 0
+                        ? bases[j - 1] + ContentOffset(paragraphs[j - 1].Paragraph.ContentStart, paragraphs[j - 1].Paragraph.ContentEnd)
+                        : 0;
+                }
+                if (block is WpfParagraph)
+                    bases[0] = contentBase;
+
+                // The cut of a page that starts at layout paragraph j's start.
+                CutLocator? StartOf(int j)
+                {
+                    if (j >= paragraphs.Count)
+                        return null;
+                    if (!paragraphs[j].Continues)
+                        return paragraphs[j].Ordinal == 0 ? null : CutLocator.AtParagraph(paragraphs[j].Ordinal, 0);
+                    // A fragment continuing a paragraph: a cut inside it, when text of that paragraph follows.
+                    // After only empty fragments (a paragraph opening with a manual break) the cut is at the
+                    // paragraph's start: all of its text is on this page (AtParagraph(ordinal, 0)).
+                    var last = j;
+                    while (last + 1 < paragraphs.Count && paragraphs[last + 1].Continues)
+                        last++;
+                    // Only empty fragments left (a paragraph ending with a manual break): the page really
+                    // starts with the next paragraph of the block, if any.
+                    return PaginationEngine.HasText(paragraphs[j].Paragraph.ContentStart, paragraphs[last].Paragraph.ContentEnd)
+                        ? CutLocator.AtParagraph(paragraphs[j].Ordinal, bases[j])
+                        : StartOf(last + 1);
+                }
+
+                for (var j = 0; j < paragraphs.Count; j++)
+                {
+                    var paragraph = paragraphs[j].Paragraph;
                     if (position.CompareTo(paragraph.ContentStart) <= 0)
-                        return j == 0 ? null : CutLocator.AtParagraph(j, 0);
+                        return StartOf(j);
                     if (position.CompareTo(paragraph.ContentEnd) <= 0)
                     {
                         var offset = ContentOffset(paragraph.ContentStart, position);
                         if (offset > 0 && PaginationEngine.HasText(position, paragraph.ContentEnd))
-                            return CutLocator.AtParagraph(j, offset);
+                            return CutLocator.AtParagraph(paragraphs[j].Ordinal, bases[j] + offset);
                         if (offset <= 0)
-                            return j == 0 ? null : CutLocator.AtParagraph(j, 0);
+                            return StartOf(j);
                         // Only the paragraph mark spills over: the next paragraph starts the page.
-                        return j + 1 < paragraphs.Count ? CutLocator.AtParagraph(j + 1, 0) : null;
+                        return StartOf(j + 1);
                     }
                 }
                 return null;
@@ -221,6 +292,45 @@ internal static class PageSplitter
             default:
                 return null;
         }
+    }
+
+    /// <summary>
+    /// The paragraphs of a top-level paragraph, list or inline-break fragment group, each with its model
+    /// paragraph's ordinal in the block and whether it continues the paragraph before it (an inline-break
+    /// fragment of a pagination render).
+    /// </summary>
+    private static List<(WpfParagraph Paragraph, int Ordinal, bool Continues)> LayoutParagraphs(WpfBlock block)
+    {
+        var flat = new List<WpfParagraph>();
+        switch (block)
+        {
+            case WpfParagraph paragraph:
+                flat.Add(paragraph);
+                break;
+            case WpfList list:
+                flat.AddRange(ListParagraphs(list));
+                break;
+            case Section section:
+                foreach (var child in section.Blocks)
+                {
+                    if (child is WpfParagraph paragraph)
+                        flat.Add(paragraph);
+                    else
+                        return [];
+                }
+                break;
+        }
+
+        var result = new List<(WpfParagraph, int, bool)>(flat.Count);
+        var ordinal = -1;
+        foreach (var paragraph in flat)
+        {
+            var continues = ordinal >= 0 && DocumentView.IsInlineBreakContinuationFragment(paragraph);
+            if (!continues)
+                ordinal++;
+            result.Add((paragraph, ordinal, continues));
+        }
+        return result;
     }
 
     internal static List<WpfParagraph> ListParagraphs(WpfList list)
@@ -267,14 +377,14 @@ internal static class PageSplitter
         switch (block)
         {
             case WpfParagraph paragraph when !locator.IsRow && locator.Paragraph == 0:
-                return locator.Offset <= 0 ? null : PositionAtContentOffset(paragraph, locator.Offset, forward);
+                return locator.Offset <= 0 ? null : CutPosition(paragraph, locator.Offset, forward);
             case WpfList list when !locator.IsRow:
             {
                 var paragraphs = ListParagraphs(list);
                 if (locator.Paragraph >= paragraphs.Count)
                     return null;
                 if (locator.Offset > 0)
-                    return PositionAtContentOffset(paragraphs[locator.Paragraph], locator.Offset, forward);
+                    return CutPosition(paragraphs[locator.Paragraph], locator.Offset, forward);
                 startingElement = paragraphs[locator.Paragraph];
                 break;
             }
