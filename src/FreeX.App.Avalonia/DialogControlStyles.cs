@@ -535,6 +535,9 @@ internal static class DialogWindowDefaults
         // after the dialog has been built, so this is the one point that sees all of them.
         Window.OwnerProperty.Changed.AddClassHandler<Window>(OnOwnerChanged);
 
+        // Tab cycle, Escape, initial focus and owner focus restore for every owned dialog.
+        OwnedDialogKeyboard.Install();
+
         // Combo boxes no chrome helper touched (raw dialogs, and rows a dialog adds after it opened,
         // such as the per-level combos of a sort list) still carry Fluent's white face and large
         // chevron. Each one gets the shared compact combo once it is loaded inside a dialog.
