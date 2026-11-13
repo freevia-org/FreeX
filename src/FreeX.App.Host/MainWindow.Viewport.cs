@@ -769,6 +769,7 @@ public partial class MainWindow
         // for the shape/textbox inline editor.
         RefreshInlineEditorPosition();
         RefreshErrorSmartTag();
+        RefreshPasteOptionsButton();
         UpdateChartsheetPresentation(sheet);
     }
 
