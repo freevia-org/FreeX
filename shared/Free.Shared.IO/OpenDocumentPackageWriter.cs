@@ -24,12 +24,28 @@ public static class OpenDocumentPackageWriter
 {
     public const string ManifestNamespace = "urn:oasis:names:tc:opendocument:xmlns:manifest:1.0";
 
+    /// <summary>
+    /// The modification time stamped on every package entry. ZIP stores it at two-second resolution
+    /// from the clock, so two saves of the same document straddling a boundary produced different
+    /// bytes; a fixed time makes a package a pure function of its content.
+    /// </summary>
+    public static readonly DateTimeOffset EntryTimestamp = new(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+    /// <summary>Creates a package entry with the deterministic <see cref="EntryTimestamp"/>.</summary>
+    public static ZipArchiveEntry CreateEntry(ZipArchive archive, string name, CompressionLevel compressionLevel)
+    {
+        ArgumentNullException.ThrowIfNull(archive);
+        var entry = archive.CreateEntry(name, compressionLevel);
+        entry.LastWriteTime = EntryTimestamp;
+        return entry;
+    }
+
     public static void WriteMimeType(ZipArchive archive, string mediaType)
     {
         ArgumentNullException.ThrowIfNull(archive);
         ArgumentException.ThrowIfNullOrWhiteSpace(mediaType);
 
-        var entry = archive.CreateEntry("mimetype", CompressionLevel.NoCompression);
+        var entry = CreateEntry(archive, "mimetype", CompressionLevel.NoCompression);
         using var stream = entry.Open();
         var bytes = Encoding.ASCII.GetBytes(mediaType);
         stream.Write(bytes, 0, bytes.Length);
@@ -54,7 +70,7 @@ public static class OpenDocumentPackageWriter
         // reintroduce that crash by adding a part or a text-bearing element.
         XmlTextSanitizer.SanitizeInPlace(document);
 
-        var entry = archive.CreateEntry(name, CompressionLevel.Optimal);
+        var entry = CreateEntry(archive, name, CompressionLevel.Optimal);
         using var stream = entry.Open();
         using var writer = XmlWriter.Create(stream, new XmlWriterSettings
         {
