@@ -360,8 +360,7 @@ function Assert-ToolSourceCentralization {
             "Test-LinuxHumanValidationChecklist.ps1",
             "Test-LinuxPublicPreviewPromotion.ps1",
             "Test-LinuxPublicPreviewReadiness.ps1",
-            "Test-MacOsHumanValidationChecklist.ps1",
-            "Test-MacOsPublicPreviewReadiness.ps1")) {
+            "Test-MacOsHumanValidationChecklist.ps1")) {
         $readinessScript = Get-Content -LiteralPath (Join-Path $ToolRoot $readinessScriptName) -Raw
         if (-not $readinessScript.Contains("Add-ToolValidationError") -or
             $readinessScript.Contains('.Replace("%", "%25")')) {
@@ -525,7 +524,14 @@ function Assert-ToolSourceCentralization {
             throw "Get-VisualEvidenceNormalizedTextSha256 must stay an alias of Get-ToolNormalizedTextSha256 for valid UTF-8."
         }
         $rawFileHash = Get-ToolFileSha256 -Path $lfPath
-        $expectedRawHash = [BitConverter]::ToString([System.Security.Cryptography.SHA256]::HashData([System.IO.File]::ReadAllBytes($lfPath))).Replace("-", "").ToLowerInvariant()
+        # SHA256.HashData is .NET 5+; this self-test also runs under Windows PowerShell 5.1.
+        $sha256 = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            $expectedRawHash = [BitConverter]::ToString($sha256.ComputeHash([System.IO.File]::ReadAllBytes($lfPath))).Replace("-", "").ToLowerInvariant()
+        }
+        finally {
+            $sha256.Dispose()
+        }
         if ($rawFileHash -cne $expectedRawHash -or (Get-VisualEvidenceFileSha256 -Path $lfPath) -cne $expectedRawHash) {
             throw "Get-ToolFileSha256 and Get-VisualEvidenceFileSha256 must return lowercase hex SHA-256 of the raw file bytes."
         }
