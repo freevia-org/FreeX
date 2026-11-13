@@ -24,6 +24,11 @@ public sealed partial class MainWindow
     private static readonly IBrush AccessibilityCheckerStatusInk =
         new global::Avalonia.Media.Immutable.ImmutableSolidColorBrush(Color.FromRgb(0x4B, 0x55, 0x63));
 
+    // WPF lays the dialog's Segoe UI text out on 1.33 line boxes (12px body = 16px, 16px title = 21px);
+    // the capture font is about 14.5 / 19.4, which compressed the wrapped text stack by 2-3px per line.
+    private const double AccessibilityCheckerBodyLineHeight = 16;
+    private const double AccessibilityCheckerTitleLineHeight = 21;
+
     private async Task ShowAccessibilityCheckerDialogAsync()
     {
         if (_isOpening || _isSaving)
@@ -65,6 +70,7 @@ public sealed partial class MainWindow
             Text = plan.Title,
             FontSize = AccessibilityCheckerDialogMetrics.TitleFontSize,
             FontWeight = FontWeight.SemiBold,
+            LineHeight = AccessibilityCheckerTitleLineHeight,
             Margin = new Thickness(0, 0, 0, 8),
         };
 
@@ -89,6 +95,7 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 8, 0, 0),
             // The WPF status line renders in the dialog's secondary grey ink, not the body black.
             Foreground = AccessibilityCheckerStatusInk,
+            LineHeight = AccessibilityCheckerBodyLineHeight,
         };
 
         var closeButton = new Button
@@ -205,8 +212,17 @@ public sealed partial class MainWindow
         foreach (var node in plan.TreeNodes)
             resultsTree.Items.Add(CreateAccessibilityCheckerTreeNode(node, ref firstLeaf));
 
-        var whyFixText = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) };
-        var howToFixText = new TextBlock { TextWrapping = TextWrapping.Wrap };
+        var whyFixText = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            LineHeight = AccessibilityCheckerBodyLineHeight,
+            Margin = new Thickness(0, 0, 0, 8),
+        };
+        var howToFixText = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            LineHeight = AccessibilityCheckerBodyLineHeight,
+        };
         var additionalInfoPanel = new StackPanel
         {
             Margin = new Thickness(0, 12, 0, 0),
@@ -216,11 +232,12 @@ public sealed partial class MainWindow
                 {
                     Text = plan.AdditionalInformationHeader,
                     FontWeight = FontWeight.SemiBold,
+                    LineHeight = AccessibilityCheckerBodyLineHeight,
                     Margin = new Thickness(0, 0, 0, 6),
                 },
-                new TextBlock { Text = plan.WhyFixHeader, FontWeight = FontWeight.SemiBold },
+                new TextBlock { Text = plan.WhyFixHeader, FontWeight = FontWeight.SemiBold, LineHeight = AccessibilityCheckerBodyLineHeight },
                 whyFixText,
-                new TextBlock { Text = plan.HowToFixHeader, FontWeight = FontWeight.SemiBold },
+                new TextBlock { Text = plan.HowToFixHeader, FontWeight = FontWeight.SemiBold, LineHeight = AccessibilityCheckerBodyLineHeight },
                 howToFixText,
             },
         };
@@ -231,6 +248,7 @@ public sealed partial class MainWindow
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 8, 0, 0),
             Foreground = AccessibilityCheckerStatusInk,
+            LineHeight = AccessibilityCheckerBodyLineHeight,
         };
 
         var goToButton = new Button
@@ -317,6 +335,7 @@ public sealed partial class MainWindow
             Text = plan.Title,
             FontSize = AccessibilityCheckerDialogMetrics.TitleFontSize,
             FontWeight = FontWeight.SemiBold,
+            LineHeight = AccessibilityCheckerTitleLineHeight,
             Margin = new Thickness(0, 0, 0, 8),
         };
 
@@ -324,6 +343,7 @@ public sealed partial class MainWindow
         {
             Text = plan.InspectionResultsHeader,
             FontWeight = FontWeight.SemiBold,
+            LineHeight = AccessibilityCheckerBodyLineHeight,
             Margin = new Thickness(0, 0, 0, 4),
         };
 

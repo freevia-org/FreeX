@@ -16880,6 +16880,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "FormatCellsCompactDialog");
+        // WPF lays its 12px Segoe UI text out on 16px line boxes; the capture font's are about 14.5px,
+        // which pulled every label and heading stack of the tabs up by 1-2px each.
+        dialog.Styles.Add(new Style(x => x.OfType<TextBlock>())
+        {
+            Setters = { new Setter(TextBlock.LineHeightProperty, 16d) },
+        });
 
         // The number-format catalog + format-code composition is the shared, portable
         // FormatCellsNumberFormatPlanner (same source the WPF dialog uses), so the Avalonia
@@ -16909,6 +16915,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetAutomationId(numberCategoryList, "FormatCellsNumberCategoryList");
         numberCategoryList.FontSize = 12;
         numberCategoryList.FontFamily = FormulaBarFontFamily;
+        // WPF FormatCellsDialog.xaml: item padding 2,0 (16 px rows) and a solid system-highlight selection.
+        DialogWindowDefaults.ApplyWpfSolidHighlightRows(numberCategoryList, 16);
 
         var numberFormatBox = new ComboBox
         {
@@ -18483,7 +18491,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                         Background = Brushes.Black,
                         BorderBrush = Brushes.Gray,
                         BorderThickness = new Thickness(1),
-                        Margin = new Thickness(0, 20, 0, 0),
+                        // WPF: a two-row UniformGrid of 18.5 px swatch cells (37 px) plus the 6 px
+                        // margin above the colour preview; the swatch row here is 20 px.
+                        Margin = new Thickness(0, 23, 0, 0),
                     },
                 },
             });

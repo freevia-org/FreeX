@@ -1121,6 +1121,58 @@ internal static class DialogWindowDefaults
             dialog.Styles.Insert(index, styles[index]);
     }
 
+    /// <summary>
+    /// A list whose WPF item template paints the selected row with the solid system highlight
+    /// (#0078D7, white ink) whether or not the list has focus, on rows the height of one text line
+    /// (padding 2,0) instead of the 18 px default row.
+    /// </summary>
+    internal static void ApplyWpfSolidHighlightRows(ListBox listBox, double rowHeight)
+    {
+        ArgumentNullException.ThrowIfNull(listBox);
+
+        // The dialog chrome pass (AvaloniaCompactDialogChrome.ApplyWindow) appends its own list
+        // styles to every list once the dialog is up, so these have to come after it to win.
+        void Apply(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            listBox.Loaded -= Apply;
+            listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
+            {
+                Setters =
+                {
+                    new Setter(Layoutable.MinHeightProperty, rowHeight),
+                    new Setter(TemplatedControl.PaddingProperty, new Thickness(2, 0)),
+                },
+            });
+            listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>().Class(":selected"))
+            {
+                Setters =
+                {
+                    new Setter(TemplatedControl.BackgroundProperty, WpfHighlightFace),
+                    new Setter(TemplatedControl.BorderBrushProperty, WpfHighlightFace),
+                    new Setter(TemplatedControl.ForegroundProperty, DialogControlStyles.SelectionForegroundBrush),
+                },
+            });
+            listBox.Styles.Add(new Style(x => x
+                .OfType<ListBoxItem>()
+                .Class(":selected")
+                .Template()
+                .OfType<global::Avalonia.Controls.Presenters.ContentPresenter>()
+                .Name("PART_ContentPresenter"))
+            {
+                Setters =
+                {
+                    new Setter(global::Avalonia.Controls.Presenters.ContentPresenter.BackgroundProperty, WpfHighlightFace),
+                    new Setter(global::Avalonia.Controls.Presenters.ContentPresenter.BorderBrushProperty, WpfHighlightFace),
+                    new Setter(global::Avalonia.Controls.Presenters.ContentPresenter.ForegroundProperty, new ImmutableSolidColorBrush(Colors.White)),
+                },
+            });
+        }
+
+        listBox.Loaded += Apply;
+    }
+
+    private static readonly IBrush WpfHighlightFace = new ImmutableSolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD7));
+
     // A list that does not hold the keyboard focus shows WPF's inactive selection.
     private static Selector? InactiveList(Selector? selector) =>
         selector.Is<ListBox>().Not(x => x.Class(":focus-within")).Descendant();

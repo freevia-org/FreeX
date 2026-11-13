@@ -370,10 +370,10 @@ public sealed partial class MainWindow
             {
                 Height = ErrorCheckingWpfRowHeight,
                 Background = selected
-                    ? (active ? DialogWindowDefaults.SelectedRowFace : DialogWindowDefaults.InactiveRowFace)
+                    ? (active ? ErrorCheckingActiveRowGradient : DialogWindowDefaults.InactiveRowFace)
                     : Brushes.White,
                 BorderBrush = selected
-                    ? (active ? DialogWindowDefaults.SelectedRowFrame : DialogWindowDefaults.InactiveRowFrame)
+                    ? (active ? ErrorCheckingActiveRowFrame : DialogWindowDefaults.InactiveRowFrame)
                     : Brushes.Transparent,
                 BorderThickness = new Thickness(1),
                 // WPF ListViewItem rows start 1 px inside the list frame, and their GridView columns
@@ -398,6 +398,24 @@ public sealed partial class MainWindow
     // WPF ListViewItem rows at the 12px dialog font are 22px apart (frame included); the GridView
     // column header row is 24px.
     private const double ErrorCheckingWpfRowHeight = 22;
+
+    // WPF ListViewItem, selected and focused: a #98DDFB frame around a glassy two-segment gradient
+    // (#EBFAFF down to #CCEFFE over the upper half, #B8E8FD down to #A0DFFB over the lower half).
+    private static readonly IBrush ErrorCheckingActiveRowFrame =
+        new ImmutableSolidColorBrush(Color.FromRgb(0x98, 0xDD, 0xFB));
+
+    private static readonly IBrush ErrorCheckingActiveRowGradient = new LinearGradientBrush
+    {
+        StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+        EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+        GradientStops =
+        {
+            new GradientStop(Color.FromRgb(0xEB, 0xFA, 0xFF), 0),
+            new GradientStop(Color.FromRgb(0xCC, 0xEF, 0xFE), 0.5),
+            new GradientStop(Color.FromRgb(0xB8, 0xE8, 0xFD), 0.5),
+            new GradientStop(Color.FromRgb(0xA0, 0xDF, 0xFB), 1),
+        },
+    }.ToImmutable();
     private const double ErrorCheckingWpfHeaderHeight = 24;
     // WPF Aero2 GridViewColumnHeader at the 12 px dialog font: a 20 px white-to-grey face over a
     // 1 px #D5D5D5 line, each column closed by a 1 px grey gripper line.
