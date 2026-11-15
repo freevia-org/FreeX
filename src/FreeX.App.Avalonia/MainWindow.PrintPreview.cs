@@ -1,14 +1,19 @@
-using Free.Shared.AppServices.Printing;
 using System.Globalization;
+
 using Avalonia;
 using Avalonia.Automation;
+using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 
+using Free.Shared.AppServices;
+using Free.Shared.AppServices.Printing;
 using FreeX.App.Avalonia.Charts;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
@@ -198,6 +203,13 @@ public sealed partial class MainWindow
         var lastButton = CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[3]);
         var chrome = PrintPreviewSurfacePlanner.DocumentToolbarChrome;
         var printIcon = CreateDocumentToolbarIcon(RibbonCommandIconKind.Print, StripDisplayMnemonic(topToolbarPlan.PrintButtonText), chrome);
+        var copyIcon = CreateDocumentToolbarIcon(RibbonCommandIconKind.Copy, UiText.Get("MainWindow_TooltipTitle_Copy"), chrome);
+        AutomationProperties.SetAutomationId(copyIcon, "PrintPreviewCopyButton");
+        copyIcon.IsEnabled = false;
+        var (findBar, findBox, findPrevious, findNext, findStatus) =
+            CreatePrintPreviewFindBar(PrintPreviewSurfacePlanner.CreateFindBarPlan(PrintPreviewSettingsTextResolver));
+        PrintPreviewTextCanvas? textCanvas = null;
+        PrintPreviewTextMatch? lastMatch = null;
         var zoomOutButton = CreateDocumentToolbarIcon(RibbonCommandIconKind.MinusSign, UiText.Get("MainWindow_AutomationName_ZoomOut"), chrome);
         var zoomInButton = CreateDocumentToolbarIcon(RibbonCommandIconKind.PlusSign, UiText.Get("MainWindow_AutomationName_ZoomIn"), chrome);
         var fitPageText = UiText.Get("PrintPreview_FitToOnePage");
@@ -242,6 +254,30 @@ public sealed partial class MainWindow
             () => dialog.Close(),
             out var toolbarControls);
         printerBoxes.Add(toolbarControls.Printer);
+
+        void UpdateCopyState(object? sender, EventArgs e) => copyIcon.IsEnabled = textCanvas?.HasSelection == true;
+
+        void UpdateFindState()
+        {
+            findBox.IsEnabled = !hasExternalPageSource && pageCount > 0;
+            findPrevious.IsEnabled = findNext.IsEnabled = findBox.IsEnabled && !string.IsNullOrWhiteSpace(findBox.Text);
+        }
+
+        void CopySelection()
+        {
+            if (textCanvas?.HasSelection != true)
+                return;
+
+            var text = textCanvas.GetSelectedText();
+            RunGuarded(async () =>
+            {
+                var write = await _platformClipboard.WriteAsync(new PlatformClipboardContent(Text: text));
+                if (write.Status == PlatformClipboardWriteStatus.Unavailable)
+                    findStatus.Text = UiText.Get("Clipboard_UnavailableOnPlatform");
+                else if (!write.IsSuccess)
+                    throw new InvalidOperationException(write.ErrorMessage);
+            });
+        }
 
         int FindSteppedZoomIndex(bool increase)
         {
@@ -290,8 +326,18 @@ public sealed partial class MainWindow
 
         void Render()
         {
+            if (textCanvas is not null)
+                textCanvas.SelectionChanged -= UpdateCopyState;
             var pageIndex = navigator.CurrentIndex;
-            zoomedPage.Child = externalPageViewFactory?.Invoke(pageIndex) ?? BuildPreviewPageView(context, pageIndex);
+            var page = externalPageViewFactory?.Invoke(pageIndex) ?? BuildPreviewPageView(context, pageIndex);
+            zoomedPage.Child = page;
+            textCanvas = (page as Border)?.Child as PrintPreviewTextCanvas;
+            if (textCanvas is not null)
+                textCanvas.SelectionChanged += UpdateCopyState;
+            lastMatch = null;
+            copyIcon.IsEnabled = false;
+            findStatus.Text = "";
+            UpdateFindState();
             zoomedPage.LayoutTransform = zoomScale;
             pageScroll.Offset = default;
             ApplyDocumentZoom();
@@ -307,6 +353,41 @@ public sealed partial class MainWindow
             {
                 toolbarControls.Status.Text = PrintPreviewToolbarStatePlanner.CreateStatusText(
                     currentSettings.PrinterName ?? printerName, currentSettings.Copies, pageCount);
+            }
+        }
+
+        void FindText(bool backward)
+        {
+            if (!findNext.IsEnabled || findBox.Text is not { } query)
+                return;
+
+            var match = PrintPreviewTextSearch.Find(
+                pageCount, navigator.CurrentIndex, context.BuildPainting, query, lastMatch, backward);
+            if (match is not { } found)
+            {
+                findStatus.Text = UiText.Get("MainLoc_NoMatchesFound");
+                return;
+            }
+
+            if (found.PageIndex != navigator.CurrentIndex)
+            {
+                navigator = navigator.JumpTo(found.PageIndex);
+                Render();
+            }
+
+            findStatus.Text = "";
+            lastMatch = found;
+            if (textCanvas?.SelectMatch(found) is { } run)
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (lastMatch != found || !run.IsAttachedToVisualTree())
+                        return;
+
+                    var rectangles = run.TextLayout.HitTestTextRange(found.Start, found.Length).ToArray();
+                    if (rectangles.Length > 0)
+                        run.BringIntoView(rectangles.Aggregate((bounds, rectangle) => bounds.Union(rectangle)));
+                }, DispatcherPriority.Loaded);
             }
         }
 
@@ -347,6 +428,24 @@ public sealed partial class MainWindow
         zoomOutButton.Click += (_, _) => zoomBox.SelectedIndex = FindSteppedZoomIndex(increase: false);
         fitPageButton.Click += (_, _) => zoomBox.SelectedIndex = fitPageIndex;
         fitWidthButton.Click += (_, _) => zoomBox.SelectedIndex = fitWidthIndex;
+        copyIcon.Click += (_, _) => CopySelection();
+        findPrevious.Click += (_, _) => FindText(backward: true);
+        findNext.Click += (_, _) => FindText(backward: false);
+        findBox.TextChanged += (_, _) =>
+        {
+            if (lastMatch is not null)
+                textCanvas?.ClearSelection();
+            lastMatch = null;
+            findStatus.Text = "";
+            UpdateFindState();
+        };
+        findBox.KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Enter)
+                return;
+            FindText(e.KeyModifiers.HasFlag(KeyModifiers.Shift));
+            e.Handled = true;
+        };
         prevButton.Click += (_, _) =>
         {
             navigator = navigator.Previous();
@@ -377,18 +476,38 @@ public sealed partial class MainWindow
         };
         dialog.KeyDown += (_, e) =>
         {
+            if (e.KeyModifiers is KeyModifiers.Control or KeyModifiers.Meta)
+            {
+                if (e.Key == Key.F && findBox.IsEnabled)
+                {
+                    findBox.Focus();
+                    findBox.SelectAll();
+                    e.Handled = true;
+                }
+                else if (e.Key == Key.C && e.Source is not TextBox && copyIcon.IsEnabled)
+                {
+                    CopySelection();
+                    e.Handled = true;
+                }
+                return;
+            }
+
             switch (e.Key)
             {
                 case Key.Escape:
                     dialog.Close();
                     e.Handled = true;
                     break;
-                case Key.Left or Key.PageUp:
+                case Key.F3:
+                    FindText(e.KeyModifiers.HasFlag(KeyModifiers.Shift));
+                    e.Handled = true;
+                    break;
+                case Key.Left or Key.PageUp when e.Source is not TextBox:
                     navigator = navigator.Previous();
                     Render();
                     e.Handled = true;
                     break;
-                case Key.Right or Key.PageDown:
+                case Key.Right or Key.PageDown when e.Source is not TextBox:
                     navigator = navigator.Next();
                     Render();
                     e.Handled = true;
@@ -410,7 +529,7 @@ public sealed partial class MainWindow
 
         var documentToolbar = CreatePreviewDocumentToolbar(
         [
-            printIcon,
+            printIcon, copyIcon,
             CreateDocumentToolbarSeparator(chrome),
             firstButton, prevButton, nextButton, lastButton,
             new TextBlock { Text = documentToolbarPlan.PageLabelText, VerticalAlignment = AvaloniaVerticalAlignment.Center },
@@ -420,10 +539,7 @@ public sealed partial class MainWindow
             CreateDocumentToolbarSeparator(chrome),
             marginsButton, pageSetupButton,
         ]);
-        var previewPane = CreatePrintPreviewPane(
-            documentToolbar,
-            pageHost,
-            PrintPreviewSurfacePlanner.CreateFindBarPlan(PrintPreviewSettingsTextResolver));
+        var previewPane = CreatePrintPreviewPane(documentToolbar, pageHost, findBar);
         // An externally supplied static page source has no live sheet/session behind it, so its rail
         // stays read-only. A real preview is backed by the live active sheet and its settings rail is
         // fully interactive (R118-print-preview-settings-rail-wiring) --
@@ -1137,10 +1253,8 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 4, 0, -4),
         };
 
-    private static Border CreatePrintPreviewPane(
-        Control documentToolbar,
-        Border pageHost,
-        PrintPreviewFindBarPlan plan)
+    private static (Grid Bar, TextBox Query, Button Previous, Button Next, TextBlock Status)
+        CreatePrintPreviewFindBar(PrintPreviewFindBarPlan plan)
     {
         var findBar = new Grid
         {
@@ -1161,13 +1275,34 @@ public sealed partial class MainWindow
         };
         var previous = CreateFindNavigationButton(plan.PreviousButtonText, isPrevious: true);
         var next = CreateFindNavigationButton(plan.NextButtonText, isPrevious: false);
+        var status = new TextBlock
+        {
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(6, 0),
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        AutomationProperties.SetAutomationId(findBox, "PrintPreviewFindBox");
+        AutomationProperties.SetName(findBox, plan.PlaceholderText);
+        AutomationProperties.SetAutomationId(previous, "PrintPreviewFindPreviousButton");
+        AutomationProperties.SetName(previous, StripDisplayMnemonic(UiText.Get("ErrorChecking_PreviousButton")));
+        AutomationProperties.SetAutomationId(next, "PrintPreviewFindNextButton");
+        AutomationProperties.SetName(next, StripDisplayMnemonic(UiText.Get("FindReplace_FindNext")));
+        AutomationProperties.SetAutomationId(status, "PrintPreviewFindStatus");
+        AutomationProperties.SetLiveSetting(status, AutomationLiveSetting.Polite);
         Grid.SetColumn(findBox, 0);
         Grid.SetColumn(previous, 1);
         Grid.SetColumn(next, 2);
+        Grid.SetColumn(status, 3);
         findBar.Children.Add(findBox);
         findBar.Children.Add(previous);
         findBar.Children.Add(next);
+        findBar.Children.Add(status);
+        return (findBar, findBox, previous, next, status);
+    }
 
+    private static Border CreatePrintPreviewPane(Control documentToolbar, Border pageHost, Grid findBar)
+    {
         var pane = new DockPanel();
         DockPanel.SetDock(documentToolbar, Dock.Top);
         DockPanel.SetDock(findBar, Dock.Bottom);
@@ -1421,7 +1556,7 @@ public sealed partial class MainWindow
             };
         }
 
-        var canvas = new Canvas
+        var canvas = new PrintPreviewTextCanvas
         {
             Width = painting.PageBounds.Width,
             Height = painting.PageBounds.Height,
@@ -1455,11 +1590,12 @@ public sealed partial class MainWindow
     }
 
     private static void RenderPreviewInstructions(
-        Canvas canvas,
+        PrintPreviewTextCanvas canvas,
         IReadOnlyList<PrintPreviewPaintInstruction> instructions)
     {
-        foreach (var instruction in instructions)
+        for (var index = 0; index < instructions.Count; index++)
         {
+            var instruction = instructions[index];
             switch (instruction.Kind)
             {
                 case PrintPreviewPaintKind.Rectangle:
@@ -1469,7 +1605,7 @@ public sealed partial class MainWindow
                     AddPreviewLine(canvas, instruction);
                     break;
                 case PrintPreviewPaintKind.Text:
-                    AddPreviewText(canvas, instruction);
+                    AddPreviewText(canvas, index, instruction);
                     break;
                 case PrintPreviewPaintKind.Ellipse:
                     AddPreviewEllipse(canvas, instruction);
@@ -1599,13 +1735,13 @@ public sealed partial class MainWindow
         canvas.Children.Add(line);
     }
 
-    private static void AddPreviewText(Canvas canvas, PrintPreviewPaintInstruction instruction)
+    private static void AddPreviewText(PrintPreviewTextCanvas canvas, int instructionIndex, PrintPreviewPaintInstruction instruction)
     {
         if (string.IsNullOrEmpty(instruction.Text))
             return;
 
         var font = instruction.Font;
-        var text = new TextBlock
+        var text = new SelectableTextBlock
         {
             Text = instruction.Text,
             FontFamily = new FontFamily(string.IsNullOrWhiteSpace(font.FontFamily)
@@ -1623,6 +1759,7 @@ public sealed partial class MainWindow
 
         Canvas.SetLeft(text, instruction.Left);
         Canvas.SetTop(text, instruction.Top);
+        canvas.RegisterText(instructionIndex, text);
         canvas.Children.Add(text);
     }
 

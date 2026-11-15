@@ -73,6 +73,6 @@ public sealed class PrintPreviewDisplayedCommentsTests
         PrintPreviewPaginationContext.TryCreate(workbook, sheet, new AvaloniaTextMeasurer(), out var context)
             .Should().BeTrue();
         var page = MainWindow.BuildPreviewPageView(context, pageIndex: 0).Should().BeOfType<Border>().Subject;
-        return page.Child.Should().BeOfType<Canvas>().Subject;
+        return page.Child.Should().BeAssignableTo<Canvas>().Which;
     }
 }
