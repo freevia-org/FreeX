@@ -87,7 +87,8 @@ public sealed partial class MainWindow
     private System.Threading.Tasks.Task<ColorPickerChoice?> ShowColorPickerDialogAsync(
         string title,
         CellColor? initial,
-        bool allowNoColor)
+        bool allowNoColor,
+        Window? owner = null)
     {
         CellColor? selected = initial;
         // WPF _customSpectrumBaseColor: the colour the luminosity slider scales.
@@ -631,7 +632,7 @@ public sealed partial class MainWindow
         // WPF FocusInitialKeyboardTarget: the first palette swatch owns initial keyboard focus.
         dialog.Opened += (_, _) => firstSwatchButton?.Focus();
 
-        return dialog.ShowDialog<ColorPickerChoice?>(this);
+        return dialog.ShowDialog<ColorPickerChoice?>(owner ?? this);
     }
 
     // Hex formatting/parsing is single-sourced in CellColorPalettePlanner so the WPF,

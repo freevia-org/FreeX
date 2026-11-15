@@ -48,6 +48,7 @@ using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Presentation.SparklineUI;
 using FreeX.App.Presentation.Sparklines;
+using FreeX.App.Presentation.ThemeUI;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.App.Services.Updates;
@@ -1544,22 +1545,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // ─────────────────────────────────────────────────────────────────────────────
 
                     // Page Layout ▸ Themes preset submenu ids + customize entries.
-                    [FreeXRibbonCommandIds.PageLayoutThemeOffice] = () => RunGuarded(ShowThemesGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeColorsOffice] = () => RunGuarded(ShowThemeColorsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeFontsOffice] = () => RunGuarded(ShowThemeFontsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsOffice] = () => RunGuarded(ShowThemeEffectsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeGrayscale] = () => RunGuarded(ShowThemesGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeColorsGrayscale] = () => RunGuarded(ShowThemeColorsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeColorful] = () => RunGuarded(ShowThemesGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeColorsColorful] = () => RunGuarded(ShowThemeColorsGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeOffice] = () => ApplyWorkbookTheme(WorkbookThemeCatalog.OfficeThemePreset.CreateTheme()),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorful] = () => ApplyWorkbookTheme(WorkbookThemeCatalog.FreeXColorfulThemePreset.CreateTheme()),
+                    [FreeXRibbonCommandIds.PageLayoutThemeGrayscale] = () => ApplyWorkbookTheme(WorkbookThemeCatalog.GrayscaleThemePreset.CreateTheme()),
                     [FreeXRibbonCommandIds.PageLayoutThemeCustomize] = () => RunGuarded(ShowThemesGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeColorsCustomize] = () => RunGuarded(ShowThemeColorsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeFontsCustomize] = () => RunGuarded(ShowThemeFontsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsCustomize] = () => RunGuarded(ShowThemeEffectsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeFontsArial] = () => RunGuarded(ShowThemeFontsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeFontsTimesNewRoman] = () => RunGuarded(ShowThemeFontsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsSubtle] = () => RunGuarded(ShowThemeEffectsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsRefined] = () => RunGuarded(ShowThemeEffectsGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsOffice] = () => ApplyWorkbookThemeColorPreset(WorkbookThemeCatalog.OfficeColorPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsColorful] = () => ApplyWorkbookThemeColorPreset(WorkbookThemeCatalog.FreeXColorfulColorPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsGrayscale] = () => ApplyWorkbookThemeColorPreset(WorkbookThemeCatalog.GrayscaleColorPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsCustomize] = () => RunGuarded(() => CustomizeWorkbookThemeAsync(WorkbookThemeEditorMode.Colors)),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsOffice] = () => ApplyWorkbookThemeFontPreset(WorkbookThemeCatalog.OfficeFontPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsArial] = () => ApplyWorkbookThemeFontPreset(WorkbookThemeCatalog.ArialFontPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsTimesNewRoman] = () => ApplyWorkbookThemeFontPreset(WorkbookThemeCatalog.TimesNewRomanFontPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsCustomize] = () => RunGuarded(ShowThemesGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsOffice] = () => ApplyWorkbookThemeEffectPreset(WorkbookThemeCatalog.OfficeEffectPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsSubtle] = () => ApplyWorkbookThemeEffectPreset(WorkbookThemeCatalog.SubtleEffectPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsRefined] = () => ApplyWorkbookThemeEffectPreset(WorkbookThemeCatalog.RefinedEffectPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsCustomize] = () => RunGuarded(() => CustomizeWorkbookThemeAsync(WorkbookThemeEditorMode.Effects)),
 
                     // Shape Format ▸ Shape Effects submenu items (also wired via BuildPictureShapeTabCommands;
                     // declared here so the hygiene guard finds them in this file's ExtraCommands block).

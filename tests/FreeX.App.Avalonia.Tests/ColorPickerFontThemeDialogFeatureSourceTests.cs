@@ -21,7 +21,8 @@ public sealed class ColorPickerFontThemeDialogFeatureSourceTests
             "private System.Threading.Tasks.Task<ColorPickerChoice?> ShowColorPickerDialogAsync(\n" +
             "        string title,\n" +
             "        CellColor? initial,\n" +
-            "        bool allowNoColor)");
+            "        bool allowNoColor,\n" +
+            "        Window? owner = null)");
         source.Should().Contain("if (allowNoColor)");
         source.Should().Contain("UiText.Get(\"ColorPicker_NoColor\")");
         source.Should().Contain("\"NoColorButton\"");
@@ -102,13 +103,13 @@ public sealed class ColorPickerFontThemeDialogFeatureSourceTests
         var gallerySource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Themes.cs"));
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ThemeCustomize.cs"));
 
-        gallerySource.Should().Contain("var picked = await ShowWorkbookThemeDialogAsync(_session.Workbook.Theme);");
-        gallerySource.Should().Contain("WorkbookThemeCommandPlanner.PlanApply(chosen)");
+        gallerySource.Should().Contain("var picked = await ShowWorkbookThemeDialogAsync(_session.Workbook.Theme, mode);");
+        gallerySource.Should().Contain("WorkbookThemeCommandPlanner.PlanApply(theme)");
 
-        source.Should().Contain("private async Task<WorkbookTheme?> ShowWorkbookThemeDialogAsync(WorkbookTheme initialTheme)");
-        source.Should().Contain("Title = UiText.Get(\"WorkbookTheme_CustomizeTheme\")");
+        source.Should().Contain("private async Task<WorkbookTheme?> ShowWorkbookThemeDialogAsync(");
+        source.Should().Contain("Title = title");
         source.Should().Contain("Width = 760 - WpfNoResizeFrameWidth,");
-        source.Should().Contain("Height = 600 - WpfNoResizeClientFrameHeight,");
+        source.Should().Contain("(mode == WorkbookThemeEditorMode.Effects ? 360 : 600) - WpfNoResizeClientFrameHeight");
         source.Should().Contain("WorkbookThemeDialogPlanner.TryCreateTheme(");
         source.Should().Contain("WorkbookThemeDialogPlanner.PreviewColorOrBlack(");
         source.Should().Contain("WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(field.Slot))");
