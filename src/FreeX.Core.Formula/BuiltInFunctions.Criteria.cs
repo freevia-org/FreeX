@@ -171,20 +171,11 @@ public static partial class BuiltInFunctions
 
         private bool MatchesNumericComparison(ScalarValue cellValue)
         {
-            // Excel rule: when the criterion is a number, text cells are treated as
-            // "not equal to" (i.e. they are a different type and do not equal any number).
-            // Only blank cells are excluded (blank coerces to 0 for equality, but for
-            // *IF(S) matching, blank cells never match "<>0" — Excel treats blank as 0).
-            // Concretely:
-            //   "<>0"  → text cells count   (text ≠ 0),  blank cells don't (blank = 0)
-            //   "=0"   → text cells don't   (text ≠ 0),  blank cells do    (blank = 0)
-            //   ">5"   → text cells don't   (ordering across types is undefined)
-            //   "<=5"  → text cells don't
+            // Excel's conditional aggregations treat a physical blank as distinct from
+            // a numeric criterion: it matches numeric "<>" but not equality or ordering.
+            // Text, booleans and errors are likewise unequal to a numeric criterion.
             if (!TryCellNumber(cellValue, out double value))
             {
-                // Non-numeric, non-blank cell: only "<>" (NotEqual) matches.
-                // Blank is excluded entirely (returns false for all ops including "<>").
-                if (cellValue is BlankValue) return false;
                 return _op == CriteriaComparisonOp.NotEqual;
             }
             // Round the cell's numeric value to 15 significant digits before comparing,
@@ -206,28 +197,17 @@ public static partial class BuiltInFunctions
 
         private bool MatchesTextComparison(ScalarValue cellValue)
         {
+            // Excel's bare "=" and "<>" distinguish a physical blank from a
+            // formula returning empty text. The plain "" criterion matches both.
+            if (_text.Length == 0 && _op is CriteriaComparisonOp.Equal or CriteriaComparisonOp.NotEqual)
+                return _op == CriteriaComparisonOp.Equal ? cellValue is BlankValue : cellValue is not BlankValue;
+
             // Excel rule: ordering ("<", "<=", ">", ">=") against a text-valued criterion is only
             // ever satisfied by an actual text cell — a number, boolean, date, or blank cell never
             // compares as greater/less than a text threshold (ordering across types is undefined,
             // mirroring MatchesNumericComparison's cross-type exclusion for numeric criteria).
             if (cellValue is not TextValue tv)
             {
-                // Excel special-cases a blank cell against an empty-string threshold: a blank
-                // cell coerces to "" for text equality (mirroring the engine's own equality
-                // operator, FormulaEvaluator.Operators.cs, and the plain "" / "<>" criteria
-                // paths which route through CriteriaComparableText/TextEquals). So bare "="
-                // must match blanks and bare "<>" must NOT match blanks, even though every
-                // other non-text cell (number/bool/date) still only satisfies NotEqual.
-                if (cellValue is BlankValue && _text.Length == 0)
-                {
-                    return _op switch
-                    {
-                        CriteriaComparisonOp.Equal => true,
-                        CriteriaComparisonOp.NotEqual => false,
-                        _ => false
-                    };
-                }
-
                 return _op switch
                 {
                     CriteriaComparisonOp.NotEqual => true,

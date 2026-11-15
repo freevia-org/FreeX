@@ -49,9 +49,9 @@ public sealed class CountifsNamedRangeRecalcTests
     }
 
     [Fact]
-    public void RecalcEngine_CountifsNamedRange_BlankCellsNotCounted()
+    public void RecalcEngine_CountifsNamedRange_BlankCellsCounted()
     {
-        // Blank cells should NOT match "<>0" (Excel treats blank as 0 for this purpose)
+        // Excel counts physical blanks as not equal to numeric zero for COUNTIFS.
         var workbook = new Workbook("Test");
         var sheet = workbook.AddSheet("Calc (2)");
 
@@ -69,9 +69,9 @@ public sealed class CountifsNamedRangeRecalcTests
 
         Engine().RecalculateAllFormulas(workbook);
 
-        // 6 text + 4 blanks → only 6 text match "<>0"
-        sheet.GetValue(1, 1).Should().Be(new NumberValue(6),
-            "blank cells are excluded from '<>0' matching");
+        // Six text cells and four blanks all match "<>0".
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(10),
+            "physical blanks match Excel's not-equal numeric criteria");
     }
 
     // ── Full C6 scenario: COUNTIFS(...) <> SUMPRODUCT(1/COUNTIFS(...)) ────────

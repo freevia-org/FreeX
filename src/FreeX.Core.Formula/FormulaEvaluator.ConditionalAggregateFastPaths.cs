@@ -31,6 +31,9 @@ public sealed partial class FormulaEvaluator
         if (node.Arguments.Count != 2)
             return false;
 
+        if (TryEvaluateSparseFullAxisCount(node, context, out result))
+            return true;
+
         var rangeState = TryCreateConditionalRangeArgument(node.Arguments[0], context, out var range, out result);
         if (rangeState == DirectRangeFastPathState.Unsupported)
             return false;
@@ -68,6 +71,9 @@ public sealed partial class FormulaEvaluator
         result = BlankValue.Instance;
         if (node.Arguments.Count is < 2 or > 3)
             return false;
+
+        if (TryEvaluateSparseFullAxisSumAverage(node, context, average, multipleCriteria: false, out result))
+            return true;
 
         var criteriaRangeState = TryCreateConditionalRangeArgument(node.Arguments[0], context, out var criteriaRange, out result);
         if (criteriaRangeState == DirectRangeFastPathState.Unsupported)
@@ -131,6 +137,9 @@ public sealed partial class FormulaEvaluator
         if (node.Arguments.Count < 2 || node.Arguments.Count % 2 != 0)
             return false;
 
+        if (TryEvaluateSparseFullAxisCount(node, context, out result))
+            return true;
+
         var pairCount = node.Arguments.Count / 2;
         var pairState = TryCreateDirectConditionalCriteriaPairs(
             node.Arguments,
@@ -171,6 +180,9 @@ public sealed partial class FormulaEvaluator
         result = BlankValue.Instance;
         if (node.Arguments.Count < 3 || (node.Arguments.Count - 1) % 2 != 0)
             return false;
+
+        if (TryEvaluateSparseFullAxisSumAverage(node, context, average, multipleCriteria: true, out result))
+            return true;
 
         var valueRangeState = TryCreateConditionalRangeArgument(node.Arguments[0], context, out var valueRange, out result);
         if (valueRangeState == DirectRangeFastPathState.Unsupported)
