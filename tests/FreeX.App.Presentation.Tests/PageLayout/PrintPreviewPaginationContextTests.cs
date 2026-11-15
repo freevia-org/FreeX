@@ -17,11 +17,20 @@ public sealed class PrintPreviewPaginationContextTests
     }
 
     [Fact]
-    public void TryCreate_EmptySheetReturnsFalse()
+    public void TryCreate_EmptySheetUsesPaperOrientationAndFooter()
     {
         var (workbook, sheet) = CreateBook();
+        sheet.PageOrientation = WorksheetPageOrientation.Landscape;
+        sheet.PageFooter = new WorksheetHeaderFooter("", "Page &P of &N", "");
 
-        PrintPreviewPaginationContext.TryCreate(workbook, sheet, Measurer, out _).Should().BeFalse();
+        PrintPreviewPaginationContext.TryCreate(workbook, sheet, Measurer, out var context).Should().BeTrue();
+
+        context.PageCount.Should().Be(1);
+        var layout = context.BuildPage(0)!;
+        layout.Cells.Should().NotContain(cell => cell.Text.Length > 0);
+        layout.FooterRuns.Select(run => run.Text).Should().ContainSingle("Page 1 of 1");
+        var painting = context.BuildPainting(0)!;
+        painting.PageBounds.Width.Should().BeGreaterThan(painting.PageBounds.Height);
     }
 
     [Fact]

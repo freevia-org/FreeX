@@ -150,12 +150,12 @@ public sealed class PrintWorkflowPrinterAvailabilityTests
                 collated.IsChecked = false;
                 await SettleAsync();
 
-                var printButton = Find<Button>(dialog, PrintPreviewDialogPlanner.ExportPdfButtonAutomationId);
+                var printButton = Find<Button>(dialog, PrintPreviewDialogPlanner.PrintButtonAutomationId);
                 printButton.IsEnabled.Should().BeTrue();
                 printButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                await SettleAsync();
 
-                service.Submission.Should().Match<PrintSelection>(selection =>
+                var submission = await service.WaitForSubmissionAsync();
+                submission.Should().Match<PrintSelection>(selection =>
                     selection.PrinterName == SecondQueueName && selection.Copies == 3 &&
                     selection.Sides == PrintSides.TwoSidedShortEdge && !selection.Collate);
             });
@@ -192,11 +192,10 @@ public sealed class PrintWorkflowPrinterAvailabilityTests
                 rangeMode.SelectedIndex = (int)mode;
                 Find<Button>(dialog, PrintPreviewDialogPlanner.ExportPdfButtonAutomationId)
                     .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                await SettleAsync();
 
-                service.Submission.Should().NotBeNull();
-                service.Submission!.EffectivePageRange.FirstPage.Should().Be(expectedFrom);
-                service.Submission.EffectivePageRange.LastPage.Should().Be(expectedTo);
+                var submission = await service.WaitForSubmissionAsync();
+                submission.EffectivePageRange.FirstPage.Should().Be(expectedFrom);
+                submission.EffectivePageRange.LastPage.Should().Be(expectedTo);
             });
 
             return true;
@@ -308,11 +307,10 @@ public sealed class PrintWorkflowPrinterAvailabilityTests
                 var submit = Find<Button>(root, submitId);
                 submit.IsEnabled.Should().BeTrue();
                 submit.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                await SettleAsync();
 
-                service.Submission.Should().NotBeNull();
-                service.Submission!.EffectivePageRange.FirstPage.Should().Be(1);
-                service.Submission.EffectivePageRange.LastPage.Should().Be(2);
+                var submission = await service.WaitForSubmissionAsync();
+                submission.EffectivePageRange.FirstPage.Should().Be(1);
+                submission.EffectivePageRange.LastPage.Should().Be(2);
             });
 
             return true;
@@ -422,8 +420,14 @@ public sealed class PrintWorkflowPrinterAvailabilityTests
 
     private sealed class FakePrintService(string shape) : IPlatformPrintService
     {
+        private readonly TaskCompletionSource<PrintSelection> _submissionReceived =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public int DiscoverCalls { get; private set; }
         public PrintSelection? Submission { get; private set; }
+
+        public Task<PrintSelection> WaitForSubmissionAsync() =>
+            _submissionReceived.Task.WaitAsync(TimeSpan.FromSeconds(15));
 
         public bool IsSupported => shape != "unsupported";
 
@@ -453,6 +457,7 @@ public sealed class PrintWorkflowPrinterAvailabilityTests
             CancellationToken cancellationToken = default)
         {
             Submission = selection;
+            _submissionReceived.TrySetResult(selection);
             return Task.FromResult(new PrintSubmissionResult(PrintSubmissionStatus.Submitted, selection.PrinterName));
         }
     }

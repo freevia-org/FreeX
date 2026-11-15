@@ -38,14 +38,14 @@ namespace FreeX.App.Avalonia;
 /// rectangles, lines, and text blocks positioned from the layout's device-independent points.
 ///
 /// The window shows Prev / Next buttons with a "Page X of N" caption (navigation math lives in the
-/// pure <see cref="PrintPreviewPageNavigator"/>), and a <see cref="Viewbox"/> zooms each rendered page
-/// to fit the available area. The flattening of a page layout into ordered paint primitives lives in
+/// pure <see cref="PrintPreviewPageNavigator"/>), and document zoom scales the page within the scroll
+/// area. The flattening of a page layout into ordered paint primitives lives in
 /// the unit-tested <see cref="PrintPreviewInstructionBuilder"/>; this file only turns each primitive
 /// into an Avalonia control.
 ///
-/// Deferred: the OS print dialog (no system print is invoked yet — this is a preview/export surface)
-/// and richer drawing-object families. The shared page-content model supplies visible text boxes and
-/// embedded chart object blocks, including selectable chart-text overlay primitives.
+/// The Print button uses the shared print workflow to submit to the chosen printer or save a PDF.
+/// The shared page-content model supplies visible text boxes and embedded chart object blocks,
+/// including selectable chart-text overlay primitives.
 /// </summary>
 public sealed partial class MainWindow
 {
@@ -55,6 +55,8 @@ public sealed partial class MainWindow
     // WPF DocumentViewer uses its light neutral control surface around the white paper.
     private static readonly IBrush PrintPreviewSurfaceBackground = Brush(240, 240, 240);
     private static readonly IBrush PrintPreviewChromeBackground = Brush(238, 245, 253);
+    private static readonly Thickness PrintPreviewPaperPadding =
+        new(PrintPreviewSurfacePlanner.PreviewPageLeftPadding, 5, 84, 8);
     private static AvaloniaCompactDialogChromeStyle PrintPreviewChromeStyle =>
         new(FormulaBarFontFamily) { ButtonPadding = new Thickness(6, 1) };
     private static readonly PrintSettingsTextResolver PrintPreviewSettingsTextResolver = new(
@@ -150,6 +152,14 @@ public sealed partial class MainWindow
             ClipToBounds = true,
         };
         AutomationProperties.SetAutomationId(pageHost, PrintPreviewDialogPlanner.PageHostAutomationId);
+        var zoomScale = new ScaleTransform(1, 1);
+        var zoomedPage = new LayoutTransformControl
+        {
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+        };
+        var pageScroll = BuildPreviewDocumentViewerSurface(zoomedPage);
+        pageHost.Child = pageScroll;
 
         var pageNumberBox = new TextBox
         {
@@ -178,11 +188,34 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(pageNumberBox, PrintPreviewDialogPlanner.PageNumberBoxAutomationId);
         AutomationProperties.SetAutomationId(pageStatusText, PrintPreviewDialogPlanner.PageStatusTextAutomationId);
+        AutomationProperties.SetName(pageNumberBox, UiText.Get("PrintPreview_PageNumberAutomationName"));
+        AutomationProperties.SetHelpText(pageNumberBox, UiText.Get("PrintPreview_PageNumberHelpText"));
+        AutomationProperties.SetName(pageStatusText, UiText.Get("PrintPreview_PageStatusAutomationName"));
 
         var firstButton = CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[0]);
         var prevButton = CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[1]);
         var nextButton = CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[2]);
         var lastButton = CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[3]);
+        var chrome = PrintPreviewSurfacePlanner.DocumentToolbarChrome;
+        var printIcon = CreateDocumentToolbarIcon(RibbonCommandIconKind.Print, StripDisplayMnemonic(topToolbarPlan.PrintButtonText), chrome);
+        var zoomOutButton = CreateDocumentToolbarIcon(RibbonCommandIconKind.MinusSign, UiText.Get("MainWindow_AutomationName_ZoomOut"), chrome);
+        var zoomInButton = CreateDocumentToolbarIcon(RibbonCommandIconKind.PlusSign, UiText.Get("MainWindow_AutomationName_ZoomIn"), chrome);
+        var fitPageText = UiText.Get("PrintPreview_FitToOnePage");
+        var fitPageButton = CreateDocumentToolbarIcon(RibbonCommandIconKind.Page, fitPageText, chrome);
+        var fitWidthButton = CreateDocumentToolbarIcon(RibbonCommandIconKind.View, UiText.Get("PrintPreview_ZoomPageWidth"), chrome);
+        AutomationProperties.SetAutomationId(printIcon, PrintPreviewDialogPlanner.PrintButtonAutomationId);
+        AutomationProperties.SetAutomationId(zoomOutButton, "PrintPreviewZoomOutButton");
+        AutomationProperties.SetAutomationId(zoomInButton, "PrintPreviewZoomInButton");
+        AutomationProperties.SetAutomationId(fitPageButton, "PrintPreviewFitPageButton");
+        AutomationProperties.SetAutomationId(fitWidthButton, "PrintPreviewFitWidthButton");
+        var zoomOptions = documentToolbarPlan.ZoomOptions;
+        var fitWidthIndex = zoomOptions.ToList().FindIndex(option => option.FitToWidth);
+        var fitPageIndex = zoomOptions.Count;
+        var zoomBox = CreatePreviewComboBox(documentToolbarPlan.ZoomComboWidth,
+            zoomOptions.Select(option => option.Text).Append(fitPageText).ToArray(), documentToolbarPlan.ZoomSelectedIndex);
+        AutomationProperties.SetAutomationId(zoomBox, PrintPreviewDialogPlanner.ZoomBoxAutomationId);
+        AutomationProperties.SetName(zoomBox, UiText.Get("PrintPreview_ZoomAutomationName"));
+        AutomationProperties.SetHelpText(zoomBox, UiText.Get("PrintPreview_ZoomHelpText"));
 
         var exportButton = new Button
         {
@@ -210,18 +243,66 @@ public sealed partial class MainWindow
             out var toolbarControls);
         printerBoxes.Add(toolbarControls.Printer);
 
+        int FindSteppedZoomIndex(bool increase)
+        {
+            var currentPercent = zoomScale.ScaleX * 100;
+            var bestIndex = -1;
+            for (var index = 0; index < zoomOptions.Count; index++)
+            {
+                if (zoomOptions[index].Percent is not { } percent)
+                    continue;
+                if (increase && percent > currentPercent + 0.01)
+                    return index;
+                if (!increase && percent < currentPercent - 0.01)
+                    bestIndex = index;
+            }
+            return bestIndex;
+        }
+
+        void ApplyDocumentZoom()
+        {
+            var scale = 1.0;
+            var zoomIndex = zoomBox.SelectedIndex;
+            if (zoomIndex >= 0 && zoomIndex < zoomOptions.Count && zoomOptions[zoomIndex].Percent is { } percent)
+            {
+                scale = percent / 100;
+            }
+            else if (zoomedPage.Child is Control page)
+            {
+                page.Measure(Size.Infinity);
+                // Allow room for a vertical scrollbar when a width-fitted page is taller than the viewport.
+                var width = pageHost.Bounds.Width - PrintPreviewPaperPadding.Left - PrintPreviewPaperPadding.Right - 16;
+                var height = pageHost.Bounds.Height - PrintPreviewPaperPadding.Top - PrintPreviewPaperPadding.Bottom;
+                if (page.DesiredSize.Width > 0 && page.DesiredSize.Height > 0 && width > 0 && height > 0)
+                {
+                    scale = width / page.DesiredSize.Width;
+                    if (zoomIndex == fitPageIndex)
+                        scale = Math.Min(scale, height / page.DesiredSize.Height);
+                }
+            }
+
+            zoomScale.ScaleX = scale;
+            zoomScale.ScaleY = scale;
+            zoomOutButton.IsEnabled = pageCount > 0 && FindSteppedZoomIndex(increase: false) >= 0;
+            zoomInButton.IsEnabled = pageCount > 0 && FindSteppedZoomIndex(increase: true) >= 0;
+            zoomBox.IsEnabled = fitPageButton.IsEnabled = fitWidthButton.IsEnabled = pageCount > 0;
+        }
+
         void Render()
         {
-            pageHost.Child = BuildPreviewDocumentViewerSurface(
-                context,
-                navigator.CurrentIndex,
-                externalPageViewFactory);
+            var pageIndex = navigator.CurrentIndex;
+            zoomedPage.Child = externalPageViewFactory?.Invoke(pageIndex) ?? BuildPreviewPageView(context, pageIndex);
+            zoomedPage.LayoutTransform = zoomScale;
+            pageScroll.Offset = default;
+            ApplyDocumentZoom();
             pageNumberBox.Text = (navigator.CurrentIndex + 1).ToString(CultureInfo.InvariantCulture);
+            pageNumberBox.IsEnabled = pageCount > 0;
             pageStatusText.Text = PrintPreviewNavigationState.Create(navigator.CurrentIndex + 1, pageCount).StatusText;
             firstButton.IsEnabled = navigator.CanGoPrevious;
             prevButton.IsEnabled = navigator.CanGoPrevious;
             nextButton.IsEnabled = navigator.CanGoNext;
             lastButton.IsEnabled = navigator.CanGoNext;
+            exportButton.IsEnabled = pageCount > 0 && (canSpool || StorageProvider.CanSave);
             if (!hasExternalPageSource)
             {
                 toolbarControls.Status.Text = PrintPreviewToolbarStatePlanner.CreateStatusText(
@@ -260,6 +341,12 @@ public sealed partial class MainWindow
             navigator = navigator.JumpTo(0);
             Render();
         };
+        zoomBox.SelectionChanged += (_, _) => ApplyDocumentZoom();
+        pageHost.SizeChanged += (_, _) => ApplyDocumentZoom();
+        zoomInButton.Click += (_, _) => zoomBox.SelectedIndex = FindSteppedZoomIndex(increase: true);
+        zoomOutButton.Click += (_, _) => zoomBox.SelectedIndex = FindSteppedZoomIndex(increase: false);
+        fitPageButton.Click += (_, _) => zoomBox.SelectedIndex = fitPageIndex;
+        fitWidthButton.Click += (_, _) => zoomBox.SelectedIndex = fitWidthIndex;
         prevButton.Click += (_, _) =>
         {
             navigator = navigator.Previous();
@@ -309,14 +396,30 @@ public sealed partial class MainWindow
             }
         };
 
+        var marginsButton = CreatePreviewToolbarButton(documentToolbarPlan.MarginsButtonText);
+        var pageSetupButton = CreatePreviewToolbarButton(documentToolbarPlan.PageSetupButtonText);
+        AutomationProperties.SetAutomationId(marginsButton, PrintPreviewDialogPlanner.MarginsButtonAutomationId);
+        AutomationProperties.SetAutomationId(pageSetupButton, PrintPreviewDialogPlanner.PageSetupButtonAutomationId);
+        marginsButton.IsEnabled = pageSetupButton.IsEnabled = !hasExternalPageSource;
+        marginsButton.Click += (_, _) => RunGuarded(() =>
+            ShowPrintPreviewPageSetupAsync(PageLayoutPageSetupOpenSource.CustomMargins, RepaginateAndRender));
+        pageSetupButton.Click += (_, _) => RunGuarded(() =>
+            ShowPrintPreviewPageSetupAsync(PageLayoutPageSetupOpenSource.DialogButton, RepaginateAndRender));
+        printIcon.Click += (_, _) => exportButton.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        printIcon.Bind(IsEnabledProperty, new Binding(nameof(IsEnabled)) { Source = exportButton });
+
         var documentToolbar = CreatePreviewDocumentToolbar(
-            documentToolbarPlan,
-            firstButton,
-            prevButton,
-            nextButton,
-            lastButton,
-            pageNumberBox,
-            pageStatusText);
+        [
+            printIcon,
+            CreateDocumentToolbarSeparator(chrome),
+            firstButton, prevButton, nextButton, lastButton,
+            new TextBlock { Text = documentToolbarPlan.PageLabelText, VerticalAlignment = AvaloniaVerticalAlignment.Center },
+            pageNumberBox, pageStatusText,
+            CreateDocumentToolbarSeparator(chrome),
+            zoomOutButton, zoomBox, zoomInButton, fitPageButton, fitWidthButton,
+            CreateDocumentToolbarSeparator(chrome),
+            marginsButton, pageSetupButton,
+        ]);
         var previewPane = CreatePrintPreviewPane(
             documentToolbar,
             pageHost,
@@ -395,13 +498,12 @@ public sealed partial class MainWindow
 
         var layout = new Grid
         {
-            // Match the WPF capture's client rectangle inside the same 1120x700 outer window. The
-            // explicit top-left alignment is intentional: WPF leaves the outer right/bottom bands
-            // unoccupied when its native frame is included in the evidence PNG.
-            Width = PrintPreviewSurfacePlanner.ParityClientWidth,
-            Height = PrintPreviewSurfacePlanner.ParityClientHeight,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
-            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            // Keep the capture fixture calibrated to the WPF frame. Live preview uses the available
+            // client area so fit-to-page and fit-to-width respond to resizing.
+            Width = hasExternalPageSource ? PrintPreviewSurfacePlanner.ParityClientWidth : double.NaN,
+            Height = hasExternalPageSource ? PrintPreviewSurfacePlanner.ParityClientHeight : double.NaN,
+            HorizontalAlignment = hasExternalPageSource ? AvaloniaHorizontalAlignment.Left : AvaloniaHorizontalAlignment.Stretch,
+            VerticalAlignment = hasExternalPageSource ? AvaloniaVerticalAlignment.Top : AvaloniaVerticalAlignment.Stretch,
             RowDefinitions = new RowDefinitions("Auto,*"),
             ColumnDefinitions = new ColumnDefinitions($"{PrintPreviewSurfacePlanner.SettingsRailWidth},*"),
         };
@@ -436,7 +538,7 @@ public sealed partial class MainWindow
                         name => string.Equals(name, discovery.DefaultPrinter, StringComparison.Ordinal))
                     ?? printerNames[0];
                 canSpool = true;
-                exportButton.IsEnabled = true;
+                exportButton.IsEnabled = pageCount > 0;
                 foreach (var printerBox in printerBoxes)
                 {
                     printerBox.ItemsSource = printerNames;
@@ -1108,14 +1210,7 @@ public sealed partial class MainWindow
         return button;
     }
 
-    private static Border CreatePreviewDocumentToolbar(
-        PrintPreviewDocumentToolbarPlan plan,
-        Button firstButton,
-        Button prevButton,
-        Button nextButton,
-        Button lastButton,
-        TextBox pageNumberBox,
-        TextBlock pageStatusText)
+    private static Border CreatePreviewDocumentToolbar(IReadOnlyList<Control> controls)
     {
         var chrome = PrintPreviewSurfacePlanner.DocumentToolbarChrome;
         var toolbar = new StackPanel
@@ -1123,58 +1218,21 @@ public sealed partial class MainWindow
             Orientation = Orientation.Horizontal,
             Spacing = chrome.ButtonSpacing,
             Margin = new Thickness(chrome.LeftPadding, 4, 0, 4),
-            Children =
-            {
-                CreateDocumentToolbarIcon(RibbonCommandIconKind.Print, "Print preview", chrome),
-                CreateDocumentToolbarIcon(RibbonCommandIconKind.Copy, "Copy", chrome),
-                CreateDocumentToolbarSeparator(chrome),
-                CreateDocumentToolbarIcon(RibbonCommandIconKind.Zoom, "Zoom in", chrome),
-                CreateDocumentToolbarIcon(RibbonCommandIconKind.Zoom, "Zoom out", chrome),
-                CreateDocumentToolbarSeparator(chrome),
-                CreateDocumentToolbarIcon(RibbonCommandIconKind.Page, "Fit page", chrome),
-                CreateDocumentToolbarIcon(RibbonCommandIconKind.View, "Fit width", chrome),
-            },
         };
-
-        // Keep the planner-backed controls in the visual tree for keyboard navigation and automation.
-        // WPF's native DocumentViewer places these commands in its command surface rather than showing
-        // the textual controls here; the compact icon row above is the faithful Avalonia equivalent.
-        var functionalControls = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            IsVisible = false,
-            Children =
-            {
-                firstButton,
-                prevButton,
-                nextButton,
-                lastButton,
-                new TextBlock { Text = plan.PageLabelText },
-                pageNumberBox,
-                pageStatusText,
-                CreatePreviewZoomComboBox(plan),
-                CreatePreviewToolbarButton(plan.MarginsButtonText),
-                CreatePreviewToolbarButton(plan.PageSetupButtonText),
-            },
-        };
-
-        var content = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,0"),
-        };
-        content.Children.Add(toolbar);
-        Grid.SetColumn(functionalControls, 1);
-        content.Children.Add(functionalControls);
+        toolbar.Children.AddRange(controls);
 
         return new Border
         {
-            Height = chrome.Height,
             MinHeight = chrome.Height,
-            MaxHeight = chrome.Height,
             Background = Brush(245, 245, 245),
             BorderBrush = Brush(208, 208, 208),
             BorderThickness = new Thickness(0, 0, 0, 1),
-            Child = content,
+            Child = new ScrollViewer
+            {
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Content = toolbar,
+            },
         };
     }
 
@@ -1209,6 +1267,7 @@ public sealed partial class MainWindow
             Content = AvaloniaRibbonIcons.BuildMonochrome(kind, chrome.IconSize, null, Brush(92, 92, 92)),
         };
         ToolTip.SetTip(button, toolTip);
+        AutomationProperties.SetName(button, toolTip);
         return button;
     }
 
@@ -1220,6 +1279,10 @@ public sealed partial class MainWindow
         var button = CreatePreviewToolbarButton(plan.Text);
         button.Content = CreatePreviewNavigationGlyph(plan.Command);
         AutomationProperties.SetAutomationId(button, plan.AutomationId);
+        var commandPlan = PrintPreviewDialogPlanner.CreateToolbarCommandPlan(plan.Command);
+        var name = UiText.Get(commandPlan.AutomationNameResourceKey);
+        AutomationProperties.SetName(button, name);
+        ToolTip.SetTip(button, name);
         return button;
     }
 
@@ -1291,12 +1354,6 @@ public sealed partial class MainWindow
             selected);
     }
 
-    private static ComboBox CreatePreviewZoomComboBox(PrintPreviewDocumentToolbarPlan plan) =>
-        CreatePreviewComboBox(
-            plan.ZoomComboWidth,
-            plan.ZoomOptions.Select(option => option.Text).ToArray(),
-            plan.ZoomSelectedIndex);
-
     private static ComboBox CreatePreviewComboBox(double width, IReadOnlyList<object> items, int selectedIndex) =>
         ApplyPreviewComboBoxChrome(new()
         {
@@ -1324,17 +1381,13 @@ public sealed partial class MainWindow
         return comboBox;
     }
 
-    private static Control BuildPreviewDocumentViewerSurface(
-        AvaloniaPrintPreviewPaginationContext context,
-        int pageIndex,
-        Func<int, Control>? externalPageViewFactory = null)
+    private static ScrollViewer BuildPreviewDocumentViewerSurface(Control page)
     {
         var surface = new Border
         {
             Background = PrintPreviewSurfaceBackground,
-            Padding = new Thickness(PrintPreviewSurfacePlanner.PreviewPageLeftPadding, 5, 84, 8),
-            Child = externalPageViewFactory?.Invoke(pageIndex)
-                ?? BuildPreviewPageView(context, pageIndex),
+            Padding = PrintPreviewPaperPadding,
+            Child = page,
         };
 
         return new ScrollViewer
@@ -1347,8 +1400,7 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// Builds the zoom-to-fit view for one preview page: a <see cref="Viewbox"/> wrapping a Canvas the
-    /// size of the page rectangle, onto which the page's flattened paint primitives are rendered.
+    /// Builds one preview page at its natural paper size and paints the flattened print instructions.
     /// </summary>
     internal static Control BuildPreviewPageView(PrintPreviewPaginationContext context, int pageIndex) =>
         BuildPreviewPageViewCore(context.BuildPainting(pageIndex));

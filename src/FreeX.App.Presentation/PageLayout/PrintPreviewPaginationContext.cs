@@ -51,34 +51,13 @@ public sealed class PrintPreviewPaginationContext
         out PrintPreviewPaginationContext context,
         string workbookDirectory,
         bool ignorePrintArea,
-        GridRange? printRangeOverride) =>
-        TryCreate(workbook, sheet, textMeasurer, out context, workbookDirectory, ignorePrintArea,
-            printRangeOverride, includeEmptySheet: false);
-
-    internal static bool TryCreate(
-        Workbook workbook,
-        Sheet sheet,
-        ITextMeasurer textMeasurer,
-        out PrintPreviewPaginationContext context,
-        string workbookDirectory,
-        bool ignorePrintArea,
-        GridRange? printRangeOverride,
-        bool includeEmptySheet)
+        GridRange? printRangeOverride)
     {
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(sheet);
         ArgumentNullException.ThrowIfNull(textMeasurer);
 
         if (printRangeOverride is { } selection && (selection.Start.Sheet != sheet.Id || selection.End.Sheet != sheet.Id))
-        {
-            context = null!;
-            return false;
-        }
-
-        // A selection can explicitly include blank cells. Without a selection or configured print
-        // area, keep the interactive preview empty when there is no used range.
-        if (!includeEmptySheet && printRangeOverride is null && sheet.GetUsedRange() is null
-            && (ignorePrintArea || sheet.PrintAreas.Count == 0))
         {
             context = null!;
             return false;

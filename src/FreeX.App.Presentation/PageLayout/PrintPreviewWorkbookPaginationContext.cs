@@ -75,9 +75,7 @@ public sealed class PrintPreviewWorkbookPaginationContext
                     textMeasurer,
                     out var sheetContext,
                     workbookDirectory,
-                    ignorePrintArea,
-                    printRangeOverride: null,
-                    includeEmptySheet: sheetFilter is not null))
+                    ignorePrintArea))
             {
                 continue;
             }

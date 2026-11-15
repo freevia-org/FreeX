@@ -49,7 +49,7 @@ public sealed class AvaloniaPrintPreviewSourceTests
         source.Should().Contain("ScrollBarVisibility.Auto");
         source.Should().Contain("CreateFindNavigationButton");
         source.Should().Contain("new MenuFlyout { Items = { overflowItem } }");
-        source.Should().Contain("IsVisible = false");
+        source.Should().Contain("toolbar.Children.AddRange(controls)");
 
         source.Should().NotContain("PrintPreviewText(\"PrintPreview_PrintWhatActiveSheets\"");
         source.Should().NotContain("PrintPreviewText(\"PrintPreview_SidesOneSided\"");

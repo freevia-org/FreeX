@@ -5,6 +5,56 @@ namespace FreeX.App.Services.Tests;
 
 public sealed class WorkbookExportPrintPlannerTests
 {
+    [Theory]
+    [InlineData(WorkbookExportPrintScope.ActiveSheet)]
+    [InlineData(WorkbookExportPrintScope.VisibleWorkbook)]
+    public void CreatePlanFromPageSetup_UsesA1ForBlankWorksheets(WorkbookExportPrintScope scope)
+    {
+        var workbook = new Workbook("Budget");
+        var sheet = workbook.AddSheet("Blank");
+        var printArea = GridRange.Parse("B2:C3", sheet.Id);
+        sheet.PrintArea = printArea;
+        var intent = new WorkbookExportPrintIntent(scope, WorkbookExportPrintOutputKind.Pdf);
+
+        var configuredArea = WorkbookExportPrintPlanner.CreatePlanFromPageSetup(workbook, intent);
+        var explicitPlan = configuredArea.SheetPlans.Should().ContainSingle().Which;
+        explicitPlan.PrintRange.Should().Be(printArea);
+        explicitPlan.RangeSource.Should().Be(WorkbookExportPrintRangeSource.PrintArea);
+
+        intent = intent with { IgnorePrintAreas = true };
+        var plan = WorkbookExportPrintPlanner.CreatePlanFromPageSetup(workbook, intent);
+        plan.IsReady.Should().BeTrue();
+        plan.TotalPageCount.Should().Be(1);
+        var sheetPlan = plan.SheetPlans.Should().ContainSingle().Which;
+        sheetPlan.PrintRange.Should().Be(GridRange.Parse("A1:A1", sheet.Id));
+        sheetPlan.RangeSource.Should().Be(WorkbookExportPrintRangeSource.UsedRange);
+
+        var fixedCapacityPlan = WorkbookExportPrintPlanner.CreatePlan(
+            workbook, intent, new WorkbookExportPrintPageCapacity(RowsPerPage: 20, ColumnsPerPage: 5));
+        fixedCapacityPlan.ValidationStatus.Should().Be(WorkbookExportPrintValidationStatus.NoPrintableRanges);
+    }
+
+    [Fact]
+    public void CreatePlanFromPageSetup_IncludesOnlyPrintableVisibleWorksheetsInWorkbookOrder()
+    {
+        var workbook = new Workbook("Budget");
+        var cover = workbook.AddSheet("Cover");
+        cover.SetCell(CellAddress.Parse("A1", cover.Id), new TextValue("Overview"));
+        workbook.AddSheet("Hidden").IsHidden = true;
+        workbook.AddSheet("Blank");
+        workbook.AddSheet("Very hidden").IsVeryHidden = true;
+        var hiddenArea = workbook.AddSheet("Hidden print area");
+        hiddenArea.PrintArea = GridRange.Parse("B2:C2", hiddenArea.Id);
+        hiddenArea.HiddenRows.Add(2);
+        workbook.AddSheet("Blank appendix");
+
+        var plan = WorkbookExportPrintPlanner.CreatePlanFromPageSetup(
+            workbook, new WorkbookExportPrintIntent(WorkbookExportPrintScope.VisibleWorkbook, WorkbookExportPrintOutputKind.Pdf));
+
+        plan.SheetPlans.Select(sheet => sheet.SheetName).Should().Equal("Cover", "Blank", "Blank appendix");
+        plan.TotalPageCount.Should().Be(3);
+    }
+
     [Fact]
     public void CreatePlan_RejectsXpsOnMacOsAndReportsPdfAsSupported()
     {

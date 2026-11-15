@@ -156,6 +156,44 @@ public sealed class WorkbookPrintWorkflowTests
         pdf.Should().Contain("A1: Printed first-area note").And.Contain("D4: Printed second-area note");
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CreatePlan_PrintsTheSelectedBlankPageWithItsPageSetup(bool hasPrinter)
+    {
+        var workbook = PrintableWorkbook();
+        var blank = workbook.AddSheet("Blank");
+        blank.PaperSize = WorksheetPaperSize.Letter;
+        blank.PageOrientation = WorksheetPageOrientation.Landscape;
+        blank.PageFooter = new WorksheetHeaderFooter("", "Page &P of &N", "");
+        var appendix = workbook.AddSheet("Appendix");
+        appendix.SetCell(CellAddress.Parse("A1", appendix.Id), new TextValue("Appendix content"));
+
+        var plan = WorkbookPrintWorkflow.CreatePlan(
+            workbook,
+            hasSelection: false,
+            new PrintJobRequest(
+                WorkbookExportPrintScope.VisibleWorkbook,
+                PageRangeKind: PrintJobPageRangeKind.PageRange,
+                FromPage: 2,
+                ToPage: 2),
+            PrintExportHostCapabilities.AvaloniaPortable(
+                canSubmitToPlatformPrinter: hasPrinter,
+                hasPrinterDestination: hasPrinter));
+
+        var job = plan.Readiness.NativePrintPlan.JobPlan;
+        job.IsReady.Should().BeTrue();
+        job.TotalPageCount.Should().Be(3);
+        job.FirstPage.Should().Be(2);
+        job.LastPage.Should().Be(2);
+        var document = WorkbookPdfContentBuilder.BuildWithPageSetup(workbook, plan.PortablePdfPlan!);
+        document.Pages.Should().HaveCount(hasPrinter ? 3 : 1);
+        var page = document.Pages[hasPrinter ? 1 : 0];
+        page.WidthPoints.Should().Be(792);
+        page.HeightPoints.Should().Be(612);
+        page.Ops.OfType<PdfText>().Select(run => run.Text).Should().Equal("Page 2 of 3");
+    }
+
     [Fact]
     public void CreatePlan_MatchesWindowsCommentAppendixPagination()
     {
