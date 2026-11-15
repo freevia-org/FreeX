@@ -138,6 +138,59 @@ public sealed class AvaloniaChartsheetDisplayTests
         }, CancellationToken.None);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ChartsheetReadsFormattedSourceCellsBeyondTheViewportSample(bool showHiddenData)
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var workbook = window.Session.Workbook;
+                var source = window.Session.ActiveSheet;
+                var formattedCategory = new CellAddress(source.Id, 5_002, 1);
+                source.SetCell(formattedCategory, new NumberValue(27));
+                source.GetCell(formattedCategory)!.StyleId = workbook.RegisterStyle(new CellStyle
+                {
+                    NumberFormat = "\"Q\"00",
+                });
+                source.SetCell(new CellAddress(source.Id, 5_002, 2), new NumberValue(19));
+                source.SetCell(new CellAddress(source.Id, 5_001, 1), new TextValue("Hidden sample"));
+                source.SetCell(new CellAddress(source.Id, 5_001, 2), new NumberValue(22));
+                source.HiddenRows.Add(5_001);
+                var chart = new ChartModel
+                {
+                    Type = ChartType.Pie,
+                    DataRange = new GridRange(new CellAddress(source.Id, 1, 1), new CellAddress(source.Id, 5_002, 2)),
+                    ShowDataInHiddenRowsAndColumns = showHiddenData,
+                    ShowLegend = false,
+                    ShowDataLabels = true,
+                    ShowDataLabelValue = false,
+                    ShowDataLabelCategoryName = true,
+                };
+                source.Charts.Add(chart);
+
+                window.Session.ExecuteReviewCommand(
+                    new MoveChartToNewSheetCommand(source.Id, chart.Id, "Large Source Chart")).Success.Should().BeTrue();
+                var chartsheet = workbook.Sheets.Single(sheet => sheet.Name == "Large Source Chart");
+                window.Session.SelectSheet(chartsheet.Id);
+                Invoke(window, "RefreshShell", "test");
+
+                window.Session.Viewport.ChartDataCells.Should().NotContain(cell => cell.Row >= 5_001);
+                var renderedLabels = ChartLabels(FindChartsheetHost(window)!).ToArray();
+                renderedLabels.Should().Contain("Q27");
+                renderedLabels.Contains("Hidden sample").Should().Be(showHiddenData);
+            }
+            finally
+            {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     private static ChartModel AddPieChart(Sheet sheet, string categoryPrefix)
     {
         for (uint row = 1; row <= 4; row++)
