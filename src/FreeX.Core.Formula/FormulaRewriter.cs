@@ -60,7 +60,7 @@ public sealed record RenameSheetOp(string OldSheetName, string NewSheetName)    
 // exist anywhere in the workbook). Optional/defaulted so existing callers that only rewrite
 // cell/range refs keep compiling unchanged; callers that also own the deleted sheet's
 // StructuredTables can populate it to get the matching Table[...] #REF! behavior below.
-public sealed record DeleteSheetOp(string SheetName, IReadOnlyList<string>? DeletedTableNames = null) : RewriteOperation;
+public sealed record DeleteSheetOp(string SheetName, IReadOnlyList<string>? DeletedTableNames = null, IReadOnlyList<string>? SheetOrder = null) : RewriteOperation;
 public sealed record RenameTableOp(string OldTableName, string NewTableName)    : RewriteOperation;
 
 // ── Partial-range (Insert/Delete Cells) operations ────────────────────────────
@@ -430,6 +430,42 @@ public static class FormulaRewriter
             // adjustment. A paste offset applies uniformly across the span.
             if (op is PasteOffsetOp or PasteTransposeOp)
             {
+                if (rr.SpanKind != SpanReferenceKind.CellRange)
+                {
+                    FormulaNode rewritten;
+                    if (rr.SpanKind == SpanReferenceKind.FullColumn)
+                    {
+                        var full = new FullColumnRangeRefNode(rr.Start.ColumnName, rr.End.ColumnName,
+                            rr.Start.IsColAbsolute, rr.End.IsColAbsolute);
+                        rewritten = op is PasteOffsetOp offset
+                            ? RewriteFullColumnRangePaste(full, offset, ref changed)
+                            : RewriteFullColumnRangeTranspose(full, (PasteTransposeOp)op, ref changed);
+                    }
+                    else
+                    {
+                        var full = new FullRowRangeRefNode(rr.Start.Row, rr.End.Row,
+                            rr.Start.IsRowAbsolute, rr.End.IsRowAbsolute);
+                        rewritten = op is PasteOffsetOp offset
+                            ? RewriteFullRowRangePaste(full, offset, ref changed)
+                            : RewriteFullRowRangeTranspose(full, (PasteTransposeOp)op, ref changed);
+                    }
+                    return rewritten switch
+                    {
+                        FullColumnRangeRefNode columns => rr with
+                        {
+                            Start = new CellRefNode(columns.StartColumnName, 1, columns.IsStartAbsolute, SheetName: rr.SheetName),
+                            End = new CellRefNode(columns.EndColumnName, CellAddress.MaxRow, columns.IsEndAbsolute),
+                            SpanKind = SpanReferenceKind.FullColumn
+                        },
+                        FullRowRangeRefNode rows => rr with
+                        {
+                            Start = new CellRefNode("A", rows.StartRow, IsRowAbsolute: rows.IsStartAbsolute, SheetName: rr.SheetName),
+                            End = new CellRefNode(CellAddress.NumberToColumnName(CellAddress.MaxCol), rows.EndRow, IsRowAbsolute: rows.IsEndAbsolute),
+                            SpanKind = SpanReferenceKind.FullRow
+                        },
+                        _ => rewritten
+                    };
+                }
                 var pasteStart = RewriteCellRef(rr.Start, op, hostSheetName, ref changed);
                 var pasteEnd = RewriteCellRef(rr.End, op, hostSheetName, ref changed);
 
@@ -468,20 +504,43 @@ public static class FormulaRewriter
                 }
             }
 
-            // Deleting either endpoint sheet of the span permanently collapses the whole span to
-            // #REF!, mirroring RewriteSheetQualifiedRefDeleteSheet's treatment of an ordinary
-            // sheet-qualified reference. This is deliberate; the sheet
-            // named by rr.SheetName/rr.EndSheetName is simply gone. Freezing the text to #REF!
-            // (instead of leaving the original sheet name in place) matches Excel and prevents the
-            // span from silently re-resolving against an unrelated future sheet that happens to
-            // reuse the same name (TryExpandSheetSpanAggregateRange re-resolves both endpoints by
-            // NAME on every recalculation, so a stale name is a live landmine, not an inert one).
             if (op is DeleteSheetOp deleteSpanSheet &&
-                ((rr.SheetName is not null &&
-                  string.Equals(rr.SheetName, deleteSpanSheet.SheetName, StringComparison.OrdinalIgnoreCase)) ||
+                !(rr.SheetName?.StartsWith("[", StringComparison.Ordinal) ?? false) &&
+                (string.Equals(rr.SheetName, deleteSpanSheet.SheetName, StringComparison.OrdinalIgnoreCase) ||
                  string.Equals(rr.EndSheetName, deleteSpanSheet.SheetName, StringComparison.OrdinalIgnoreCase)))
             {
                 changed = true;
+                var order = deleteSpanSheet.SheetOrder;
+                if (order is not null && rr.SheetName is not null)
+                {
+                    int startIndex = -1, endIndex = -1;
+                    for (int i = 0; i < order.Count; i++)
+                    {
+                        if (string.Equals(order[i], rr.SheetName, StringComparison.OrdinalIgnoreCase)) startIndex = i;
+                        if (string.Equals(order[i], rr.EndSheetName, StringComparison.OrdinalIgnoreCase)) endIndex = i;
+                    }
+                    if (startIndex >= 0 && endIndex >= 0 && startIndex != endIndex)
+                    {
+                        int low = Math.Min(startIndex, endIndex), high = Math.Max(startIndex, endIndex);
+                        if (string.Equals(order[low], deleteSpanSheet.SheetName, StringComparison.OrdinalIgnoreCase)) low++;
+                        else high--;
+                        if (low == high)
+                        {
+                            if (rr.SpanKind == SpanReferenceKind.FullColumn)
+                                return new FullColumnRangeRefNode(rr.Start.ColumnName, rr.End.ColumnName,
+                                    rr.Start.IsColAbsolute, rr.End.IsColAbsolute, order[low]);
+                            if (rr.SpanKind == SpanReferenceKind.FullRow)
+                                return new FullRowRangeRefNode(rr.Start.Row, rr.End.Row,
+                                    rr.Start.IsRowAbsolute, rr.End.IsRowAbsolute, order[low]);
+                            if (rr.IsSingleCellSpan)
+                                return rr.Start with { SheetName = order[low] };
+                            return rr with { SheetName = order[low], EndSheetName = null,
+                                Start = rr.Start with { SheetName = order[low] } };
+                        }
+                        return rr with { SheetName = order[low], EndSheetName = order[high] };
+                    }
+                }
+                // Without the original sheet order, retain the conservative deleted-reference fallback.
                 return new ErrorNode(ErrorValue.Ref);
             }
 

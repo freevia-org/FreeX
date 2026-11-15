@@ -44,12 +44,15 @@ public sealed record CellRefNode(
 /// dependency collector, rewriter) only cares about Start/End/SheetName/EndSheetName and can
 /// ignore this flag.
 /// </summary>
+public enum SpanReferenceKind { CellRange, FullColumn, FullRow }
+
 public sealed record RangeRefNode(
     CellRefNode Start,
     CellRefNode End,
     string? SheetName = null,
     string? EndSheetName = null,
-    bool IsSingleCellSpan = false) : FormulaNode;
+    bool IsSingleCellSpan = false,
+    SpanReferenceKind SpanKind = SpanReferenceKind.CellRange) : FormulaNode;
 
 /// <summary>A whole-column range reference (e.g. A:A, Sheet2!A:B).</summary>
 public sealed record FullColumnRangeRefNode(
