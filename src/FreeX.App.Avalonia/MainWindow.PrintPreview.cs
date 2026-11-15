@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -211,6 +212,13 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(exportButton, PrintPreviewDialogPlanner.ExportPdfButtonAutomationId);
         exportButton.IsEnabled = canSpool || StorageProvider.CanSave;
 
+        var topToolbar = CreatePrintPreviewTopToolbar(
+            topToolbarPlan,
+            exportButton,
+            () => dialog.Close(),
+            out var toolbarControls);
+        printerBoxes.Add(toolbarControls.Printer);
+
         void Render()
         {
             pageHost.Child = BuildPreviewDocumentViewerSurface(
@@ -223,6 +231,11 @@ public sealed partial class MainWindow
             prevButton.IsEnabled = navigator.CanGoPrevious;
             nextButton.IsEnabled = navigator.CanGoNext;
             lastButton.IsEnabled = navigator.CanGoNext;
+            if (!hasExternalPageSource)
+            {
+                toolbarControls.Status.Text = PrintPreviewToolbarStatePlanner.CreateStatusText(
+                    currentSettings.PrinterName ?? printerName, currentSettings.Copies, pageCount);
+            }
         }
 
         // Re-resolves the active sheet's pagination (honoring the current Ignore Print Area
@@ -346,12 +359,8 @@ public sealed partial class MainWindow
                     () => currentSettings,
                     updated => currentSettings = updated,
                     RepaginateAndRender),
-            printerBoxes.Add);
-        var topToolbar = CreatePrintPreviewTopToolbar(
-            topToolbarPlan,
-            exportButton,
-            () => dialog.Close(),
-            printerBoxes.Add);
+            printerBoxes.Add,
+            hasExternalPageSource ? null : toolbarControls);
 
         var layout = new Grid
         {
@@ -475,14 +484,62 @@ public sealed partial class MainWindow
         await ExecutePrintJobAsync(request, targetPrinter, canSpool);
     }
 
+    private sealed record PrintPreviewToolbarJobControls(
+        ComboBox Printer,
+        TextBox Copies,
+        CheckBox Collated,
+        ComboBox Sides,
+        TextBlock Status);
+
     private static Border CreatePrintPreviewTopToolbar(
         PrintPreviewTopToolbarPlan plan,
         Button printButton,
         Action close,
-        Action<ComboBox>? registerPrinterBox = null)
+        out PrintPreviewToolbarJobControls jobControls)
     {
-        var toolbarPrinterBox = CreatePreviewComboBox(plan.PrinterComboWidth, plan.PrinterName);
-        registerPrinterBox?.Invoke(toolbarPrinterBox);
+        var printerBox = CreatePreviewComboBox(plan.PrinterComboWidth, plan.PrinterName);
+        var copiesBox = new TextBox
+        {
+            Text = plan.CopiesText,
+            Width = plan.CopiesBoxWidth,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            BorderBrush = Brush(130, 130, 130),
+            BorderThickness = new Thickness(1),
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        var collatedBox = new CheckBox
+        {
+            Content = plan.CollatedText,
+            IsChecked = true,
+            MinHeight = 20,
+            MaxHeight = 20,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        var sidesBox = CreatePreviewChoiceComboBox(plan.SidesComboWidth, plan.SidesOptions, plan.SidesSelectedIndex);
+        var status = new TextBlock
+        {
+            Text = plan.StatusText,
+            MaxWidth = 280,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        jobControls = new PrintPreviewToolbarJobControls(printerBox, copiesBox, collatedBox, sidesBox, status);
+
+        AutomationProperties.SetAutomationId(printerBox, "PrintPreviewToolbarPrinter");
+        AutomationProperties.SetAutomationId(copiesBox, "PrintPreviewToolbarCopies");
+        AutomationProperties.SetAutomationId(collatedBox, "PrintPreviewToolbarCollated");
+        AutomationProperties.SetAutomationId(sidesBox, "PrintPreviewToolbarSides");
+        AutomationProperties.SetName(printerBox, plan.PrinterLabelText);
+        AutomationProperties.SetName(copiesBox, plan.CopiesLabelText);
+        AutomationProperties.SetName(sidesBox, plan.SidesLabelText);
+
         var toolbar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -493,44 +550,13 @@ public sealed partial class MainWindow
             {
                 printButton,
                 new TextBlock { Text = plan.PrinterLabelText, FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
-                toolbarPrinterBox,
+                printerBox,
                 new TextBlock { Text = plan.CopiesLabelText, FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
-                new TextBox
-                {
-                    Text = plan.CopiesText,
-                    Width = plan.CopiesBoxWidth,
-                    Height = 24,
-                    MinHeight = 24,
-                    MaxHeight = 24,
-                    Padding = new Thickness(4, 1),
-                    FontSize = 12,
-                    FontFamily = FormulaBarFontFamily,
-                    BorderBrush = Brush(130, 130, 130),
-                    BorderThickness = new Thickness(1),
-                    VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
-                },
-                new CheckBox
-                {
-                    Content = plan.CollatedText,
-                    IsChecked = true,
-                    MinHeight = 20,
-                    MaxHeight = 20,
-                    FontSize = 12,
-                    FontFamily = FormulaBarFontFamily,
-                    VerticalAlignment = AvaloniaVerticalAlignment.Center,
-                },
+                copiesBox,
+                collatedBox,
                 new TextBlock { Text = plan.SidesLabelText, FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
-                CreatePreviewChoiceComboBox(
-                    plan.SidesComboWidth,
-                    plan.SidesOptions,
-                    plan.SidesSelectedIndex),
-                new TextBlock
-                {
-                    Text = plan.StatusText,
-                    MaxWidth = 280,
-                    TextWrapping = TextWrapping.Wrap,
-                    VerticalAlignment = AvaloniaVerticalAlignment.Center,
-                },
+                sidesBox,
+                status,
                 CreatePreviewComboBox(plan.PageRangeComboWidth, plan.PageRangeText),
             },
         };
@@ -614,7 +640,8 @@ public sealed partial class MainWindow
     private ScrollViewer CreatePrintPreviewSettingsRail(
         PrintPreviewSettingsRailPlan plan,
         PrintPreviewSettingsRailInteraction? interaction,
-        Action<ComboBox>? registerPrinterBox = null)
+        Action<ComboBox> registerPrinterBox,
+        PrintPreviewToolbarJobControls? toolbarControls = null)
     {
         void ApplyAction(PrintPreviewSettingsPanelActionPlan action)
         {
@@ -676,7 +703,8 @@ public sealed partial class MainWindow
         }
 
         var printerBox = CreatePreviewComboBox(plan.PrinterComboWidth, plan.PrinterName);
-        registerPrinterBox?.Invoke(printerBox);
+        AutomationProperties.SetAutomationId(printerBox, "PrintPreviewSettingsPrinter");
+        registerPrinterBox(printerBox);
 
         if (interaction is not null)
         {
@@ -731,10 +759,45 @@ public sealed partial class MainWindow
         }
 
         var collationBox = CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.CollationOptions, plan.Settings.CollationSelectedIndex);
+        AutomationProperties.SetAutomationId(collationBox, "PrintPreviewSettingsCollation");
         if (interaction is not null)
         {
             collationBox.SelectionChanged += (_, _) => ApplyAction(
                 PrintPreviewSettingsPanelPlanner.CreateCollationAction(plan.Settings, interaction.GetSettings(), collationBox.SelectedIndex));
+        }
+
+        if (toolbarControls is not null)
+        {
+            toolbarControls.Copies.Bind(TextBox.TextProperty, new Binding(nameof(TextBox.Text))
+            {
+                Source = copiesBox,
+                Mode = BindingMode.TwoWay,
+            });
+            toolbarControls.Sides.Bind(ComboBox.SelectedIndexProperty, new Binding(nameof(ComboBox.SelectedIndex))
+            {
+                Source = sidesBox,
+                Mode = BindingMode.TwoWay,
+            });
+
+            // Discovery populates the two selectors separately. Ignore transient empty selections
+            // and only copy a printer after that printer is present in the other selector.
+            toolbarControls.Printer.SelectionChanged += (_, _) =>
+            {
+                if (toolbarControls.Printer.SelectedItem is string name && printerBox.Items.Contains(name))
+                    printerBox.SelectedItem = name;
+            };
+            printerBox.SelectionChanged += (_, _) =>
+            {
+                if (printerBox.SelectedItem is string name && toolbarControls.Printer.Items.Contains(name))
+                    toolbarControls.Printer.SelectedItem = name;
+            };
+            toolbarControls.Collated.IsCheckedChanged += (_, _) =>
+                collationBox.SelectedIndex = toolbarControls.Collated.IsChecked == true ? 0 : 1;
+            collationBox.SelectionChanged += (_, _) =>
+            {
+                if (collationBox.SelectedItem is not null)
+                    toolbarControls.Collated.IsChecked = collationBox.SelectedIndex == 0;
+            };
         }
 
         var orientationBox = CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.OrientationOptions, plan.Settings.OrientationSelectedIndex);

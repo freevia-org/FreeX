@@ -3,6 +3,7 @@ using System.Reflection;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 
@@ -13,6 +14,7 @@ using Free.Shared.AppServices.Printing;
 using Free.Shared.Shell.Avalonia;
 
 using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -32,6 +34,7 @@ public sealed class PrintWorkflowPrinterAvailabilityTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 
     private const string QueueName = "FreeX_Test_PDF";
+    private const string SecondQueueName = "FreeX_Office";
 
     public static TheoryData<string> Shapes => new()
     {
@@ -113,6 +116,48 @@ public sealed class PrintWorkflowPrinterAvailabilityTests
 
                 dialog.Close();
                 await SettleAsync();
+            });
+            return true;
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task PrintPreview_SubmitsToolbarSettingsAndKeepsTheRailInSync() =>
+        Session.Dispatch(async () =>
+        {
+            var service = new FakePrintService("two-printers");
+            await WithWindowAsync(service, async window =>
+            {
+                var dialog = await OpenModalAsync(window, "ShowPrintPreviewDialogAsync", [null, null, null]);
+                var toolbarPrinter = Find<ComboBox>(dialog, "PrintPreviewToolbarPrinter");
+                var railPrinter = Find<ComboBox>(dialog, "PrintPreviewSettingsPrinter");
+                var collated = Find<CheckBox>(dialog, "PrintPreviewToolbarCollated");
+                var railCollation = Find<ComboBox>(dialog, "PrintPreviewSettingsCollation");
+
+                railPrinter.SelectedItem = SecondQueueName;
+                toolbarPrinter.SelectedItem.Should().Be(SecondQueueName);
+                railCollation.SelectedIndex = 1;
+                collated.IsChecked.Should().BeFalse();
+
+                toolbarPrinter.SelectedItem = QueueName;
+                railPrinter.SelectedItem.Should().Be(QueueName);
+                collated.IsChecked = true;
+                railCollation.SelectedIndex.Should().Be(0);
+
+                // Submit the non-default printer with the toolbar's copy, collation and duplex settings.
+                toolbarPrinter.SelectedItem = SecondQueueName;
+                Find<TextBox>(dialog, "PrintPreviewToolbarCopies").SetCurrentValue(TextBox.TextProperty, "3");
+                Find<ComboBox>(dialog, "PrintPreviewToolbarSides").SetCurrentValue(ComboBox.SelectedIndexProperty, 2);
+                collated.IsChecked = false;
+                await SettleAsync();
+
+                var printButton = Find<Button>(dialog, PrintPreviewDialogPlanner.ExportPdfButtonAutomationId);
+                printButton.IsEnabled.Should().BeTrue();
+                printButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await SettleAsync();
+
+                service.Submission.Should().Match<PrintSelection>(selection =>
+                    selection.PrinterName == SecondQueueName && selection.Copies == 3 &&
+                    selection.Sides == PrintSides.TwoSidedShortEdge && !selection.Collate);
             });
             return true;
         }, CancellationToken.None);
@@ -208,6 +253,7 @@ public sealed class PrintWorkflowPrinterAvailabilityTests
     private sealed class FakePrintService(string shape) : IPlatformPrintService
     {
         public int DiscoverCalls { get; private set; }
+        public PrintSelection? Submission { get; private set; }
 
         public bool IsSupported => shape != "unsupported";
 
@@ -220,6 +266,10 @@ public sealed class PrintWorkflowPrinterAvailabilityTests
                     PrinterDiscoveryStatus.NoPrinters, [], null, "No printers are installed or available.")),
                 "one-printer" => Task.FromResult(new PrinterDiscoveryResult(
                     PrinterDiscoveryStatus.Available, [new PrinterInfo(QueueName, IsDefault: true)], QueueName)),
+                "two-printers" => Task.FromResult(new PrinterDiscoveryResult(
+                    PrinterDiscoveryStatus.Available,
+                    [new PrinterInfo(QueueName, IsDefault: true), new PrinterInfo(SecondQueueName)],
+                    QueueName)),
                 "cancelled" => Task.FromResult(new PrinterDiscoveryResult(
                     PrinterDiscoveryStatus.Cancelled, [], null, "Printer discovery was cancelled.")),
                 "throws" => throw new InvalidOperationException("spooler exploded"),
@@ -230,7 +280,10 @@ public sealed class PrintWorkflowPrinterAvailabilityTests
         public Task<PrintSubmissionResult> SubmitAsync(
             string pdfPath,
             PrintSelection selection,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(new PrintSubmissionResult(PrintSubmissionStatus.Failed, selection.PrinterName, Message: "test"));
+            CancellationToken cancellationToken = default)
+        {
+            Submission = selection;
+            return Task.FromResult(new PrintSubmissionResult(PrintSubmissionStatus.Submitted, selection.PrinterName));
+        }
     }
 }
