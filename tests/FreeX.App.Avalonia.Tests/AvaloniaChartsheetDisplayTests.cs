@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Threading;
 
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.VisualTree;
@@ -93,6 +94,69 @@ public sealed class AvaloniaChartsheetDisplayTests
             }
         }, CancellationToken.None);
     }
+
+    [Fact]
+    public async Task MovingChartsheetChartToAnotherWorksheet_KeepsItsOriginalSourceData()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var source = window.Session.ActiveSheet;
+                var destination = window.Session.Workbook.AddSheet("Destination");
+                var movedChart = AddPieChart(source, "Source");
+                var localChart = AddPieChart(destination, "Local");
+                source.HiddenRows.Add(3);
+
+                window.Session.ExecuteReviewCommand(
+                    new MoveChartToNewSheetCommand(source.Id, movedChart.Id, "Sales Chart")).Success.Should().BeTrue();
+                var chartsheet = window.Session.Workbook.Sheets.Single(sheet => sheet.Name == "Sales Chart");
+                window.Session.SelectSheet(chartsheet.Id);
+                Invoke(window, "RefreshShell", "test");
+                ChartLabels(FindChartsheetHost(window)!).Should().Contain("Source2").And.NotContain("Source3");
+
+                window.Session.ExecuteReviewCommand(
+                    new MoveChartCommand(chartsheet.Id, movedChart.Id, destination.Id)).Success.Should().BeTrue();
+                window.Session.SelectSheet(destination.Id);
+                Invoke(window, "RefreshShell", "test");
+
+                var grid = window.GetField<ContentControl>("_sheetGridHost").Content.Should().BeAssignableTo<Control>().Subject;
+                var movedVisual = grid.GetVisualDescendants().OfType<Grid>().Single(
+                    control => AutomationProperties.GetAutomationId(control) == $"Chart{movedChart.Id:N}");
+                var localVisual = grid.GetVisualDescendants().OfType<Grid>().Single(
+                    control => AutomationProperties.GetAutomationId(control) == $"Chart{localChart.Id:N}");
+                ChartLabels(movedVisual).Should().Contain("Source2").And.Contain("Source4")
+                    .And.NotContain("Source3").And.NotContain("Local3");
+                ChartLabels(localVisual).Should().Contain("Local2").And.Contain("Local3").And.Contain("Local4");
+            }
+            finally
+            {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    private static ChartModel AddPieChart(Sheet sheet, string categoryPrefix)
+    {
+        for (uint row = 1; row <= 4; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue(categoryPrefix + row));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(row * 10));
+        }
+
+        var chart = new ChartModel
+        {
+            Type = ChartType.Pie,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 2)),
+        };
+        sheet.Charts.Add(chart);
+        return chart;
+    }
+
+    private static IEnumerable<string?> ChartLabels(Control chart) =>
+        chart.GetVisualDescendants().OfType<TextBlock>().Select(label => label.Text);
 
     private static Grid? FindChartsheetHost(MainWindow window) =>
         window.GetField<ContentControl>("_sheetGridHost").Content as Grid is { } grid &&

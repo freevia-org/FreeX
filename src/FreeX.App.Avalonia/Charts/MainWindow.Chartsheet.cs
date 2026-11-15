@@ -72,10 +72,7 @@ public sealed partial class MainWindow
         if (!ChartLayoutEngine.IsSupported(chart.Type))
             return null;
 
-        // The chart's data usually lives on a worksheet; the session viewport carries the active
-        // sheet's chart data cells (ChartDataCells span other sheets), keyed by data sheet id.
-        var dataSheetId = chart.DataRange.Start.Sheet;
-        var accessor = ChartViewportCellAccessorBuilder.BuildValueAccessor(_session.Viewport, dataSheetId);
+        var accessor = BuildChartSourceAccessor(_session.Viewport, _session.ActiveSheet.Id, chart.DataRange.Start.Sheet);
 
         width = Math.Max(1, width);
         height = Math.Max(1, height);
