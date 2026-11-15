@@ -1359,13 +1359,10 @@ public sealed partial class MainWindow
     /// size of the page rectangle, onto which the page's flattened paint primitives are rendered.
     /// </summary>
     internal static Control BuildPreviewPageView(PrintPreviewPaginationContext context, int pageIndex) =>
-        BuildPreviewPageViewCore(context.BuildPage(pageIndex));
+        BuildPreviewPageViewCore(context.BuildPainting(pageIndex));
 
     internal static Control BuildPreviewPageView(AvaloniaPrintPreviewPaginationContext context, int pageIndex) =>
         BuildPreviewPageViewCore(context.BuildPainting(pageIndex));
-
-    private static Control BuildPreviewPageViewCore(PageContentLayout? layout)
-        => BuildPreviewPageViewCore(layout is null ? null : PrintPreviewInstructionBuilder.Build(layout));
 
     private static Control BuildPreviewPageViewCore(PrintPreviewPagePainting? painting)
     {

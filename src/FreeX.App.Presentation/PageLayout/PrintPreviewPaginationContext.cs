@@ -12,6 +12,7 @@ public sealed class PrintPreviewPaginationContext
     private readonly Workbook _workbook;
     private readonly Sheet _sheet;
     private readonly WorksheetPrintRenderPlan _renderPlan;
+    private readonly IReadOnlyList<PrintCommentSummaryPagePlan> _commentPages;
     private readonly ITextMeasurer _textMeasurer;
     private readonly string _workbookDirectory;
 
@@ -25,11 +26,14 @@ public sealed class PrintPreviewPaginationContext
         _workbook = workbook;
         _sheet = sheet;
         _renderPlan = renderPlan;
+        _commentPages = WorksheetPrintPageContentPlanner.BuildCommentSummaryPages(sheet, renderPlan);
         _textMeasurer = textMeasurer;
         _workbookDirectory = workbookDirectory;
     }
 
-    public int PageCount => _renderPlan.GridPageCount;
+    public int PageCount => GridPageCount + _commentPages.Count;
+
+    internal int GridPageCount => _renderPlan.GridPageCount;
 
     public static bool TryCreate(
         Workbook workbook,
@@ -37,15 +41,31 @@ public sealed class PrintPreviewPaginationContext
         ITextMeasurer textMeasurer,
         out PrintPreviewPaginationContext context,
         string workbookDirectory = "",
-        bool ignorePrintArea = false)
+        bool ignorePrintArea = false) =>
+        TryCreate(workbook, sheet, textMeasurer, out context, workbookDirectory, ignorePrintArea, printRangeOverride: null);
+
+    public static bool TryCreate(
+        Workbook workbook,
+        Sheet sheet,
+        ITextMeasurer textMeasurer,
+        out PrintPreviewPaginationContext context,
+        string workbookDirectory,
+        bool ignorePrintArea,
+        GridRange? printRangeOverride)
     {
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(sheet);
         ArgumentNullException.ThrowIfNull(textMeasurer);
 
-        // Direct print/export intentionally emits one blank page. The interactive preview has
-        // historically shown no page for a completely empty sheet without an explicit print area.
-        if (sheet.GetUsedRange() is null && (ignorePrintArea || sheet.PrintAreas.Count == 0))
+        if (printRangeOverride is { } selection && (selection.Start.Sheet != sheet.Id || selection.End.Sheet != sheet.Id))
+        {
+            context = null!;
+            return false;
+        }
+
+        // A selection can explicitly include blank cells. Without a selection or configured print
+        // area, keep the interactive preview empty when there is no used range.
+        if (printRangeOverride is null && sheet.GetUsedRange() is null && (ignorePrintArea || sheet.PrintAreas.Count == 0))
         {
             context = null!;
             return false;
@@ -53,7 +73,7 @@ public sealed class PrintPreviewPaginationContext
 
         if (!WorksheetPrintRenderPlanner.TryBuild(
                 sheet,
-                printRangeOverride: null,
+                printRangeOverride,
                 ignorePrintArea,
                 out var renderPlan))
         {
@@ -70,6 +90,7 @@ public sealed class PrintPreviewPaginationContext
         return true;
     }
 
+    /// <summary>Gets the worksheet layout for a grid page. Use <see cref="BuildPainting"/> for appendix pages.</summary>
     public PageContentLayout? BuildPage(int pageIndex) =>
         BuildContentPlan(pageIndex)?.PortableLayout;
 
@@ -78,6 +99,31 @@ public sealed class PrintPreviewPaginationContext
         int? overridePageNumber,
         int? overrideTotalPages) =>
         BuildContentPlan(pageIndex, overridePageNumber, overrideTotalPages)?.PortableLayout;
+
+    public PrintPreviewPagePainting? BuildPainting(
+        int pageIndex,
+        int? overridePageNumber = null,
+        int? overrideTotalPages = null)
+    {
+        if (pageIndex < 0 || pageIndex >= PageCount)
+            return null;
+
+        if (pageIndex < GridPageCount)
+        {
+            var content = BuildContentPlan(pageIndex, overridePageNumber, overrideTotalPages);
+            return content is null ? null : PrintPreviewInstructionBuilder.Build(content);
+        }
+
+        var metrics = _renderPlan.Metrics;
+        return PrintPreviewCommentSummaryInstructionBuilder.Build(
+            new PrintPreviewCommentSummaryPage(
+                overridePageNumber ?? (_renderPlan.FirstPageNumber + pageIndex),
+                new LayoutRect(0, 0, metrics.PageWidth, metrics.PageHeight),
+                metrics.MarginLeft,
+                metrics.MarginTop,
+                _commentPages[pageIndex - GridPageCount].Entries),
+            _textMeasurer);
+    }
 
     public WorksheetPrintPageContentPlan? BuildContentPlan(
         int pageIndex,

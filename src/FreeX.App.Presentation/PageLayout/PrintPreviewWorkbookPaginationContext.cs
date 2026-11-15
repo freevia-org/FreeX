@@ -19,29 +19,22 @@ public sealed record PrintPreviewWorkbookPageInfo(
     int PrintedPageNumber);
 
 /// <summary>
-/// Shared workbook-level print-preview pagination. The order and numbering mirror WPF's
-/// <c>PrintRenderer.RenderWorkbook</c>: visible sheets only, each sheet's grid pages followed by its
-/// optional comments-at-end appendix, with a running page offset and one grand total. Rendering of
-/// worksheet pages remains delegated to <see cref="PrintPreviewPaginationContext"/> so Selection and
-/// Active Sheets keep their established path.
+/// Shared workbook-level print-preview pagination. Visible sheets are visited in workbook order,
+/// with a running page offset and one grand total. Each sheet context supplies its grid pages
+/// followed by its comments-at-end appendix.
 /// </summary>
 public sealed class PrintPreviewWorkbookPaginationContext
 {
     private sealed record PageEntry(
         PrintPreviewWorkbookPageInfo Info,
-        PrintPreviewPaginationContext? SheetContext,
-        PrintCommentSummaryPagePlan? CommentPage,
-        WorksheetPrintRenderMetrics? Metrics);
+        PrintPreviewPaginationContext SheetContext,
+        int LocalPageIndex);
 
     private readonly IReadOnlyList<PageEntry> _entries;
-    private readonly ITextMeasurer _textMeasurer;
 
-    private PrintPreviewWorkbookPaginationContext(
-        IReadOnlyList<PageEntry> entries,
-        ITextMeasurer textMeasurer)
+    private PrintPreviewWorkbookPaginationContext(IReadOnlyList<PageEntry> entries)
     {
         _entries = entries;
-        _textMeasurer = textMeasurer;
     }
 
     public int PageCount => _entries.Count;
@@ -67,11 +60,6 @@ public sealed class PrintPreviewWorkbookPaginationContext
             if (sheet.IsHidden || sheet.IsVeryHidden)
                 continue;
 
-            // Use the same neutral worksheet plan that WPF uses to derive both printable grid pages
-            // and the comment appendix count. An empty sheet contributes no pages and is skipped.
-            if (!WorksheetPrintRenderPlanner.TryBuild(sheet, printRangeOverride: null, ignorePrintArea, out var printPlan))
-                continue;
-
             if (!PrintPreviewPaginationContext.TryCreate(
                     workbook,
                     sheet,
@@ -83,49 +71,23 @@ public sealed class PrintPreviewWorkbookPaginationContext
                 continue;
             }
 
-            var printedComments = PrintCommentSummaryPlanner.FilterToPrintedCells(sheet, printPlan);
-            var commentPages = sheet.PrintComments == WorksheetPrintComments.AtEnd
-                ? PrintCommentSummaryPlanner.BuildPages(
-                    printedComments.Comments,
-                    printedComments.ThreadedComments,
-                    printPlan.Metrics.PageHeight,
-                    printPlan.Metrics.MarginTop)
-                : (IReadOnlyList<PrintCommentSummaryPagePlan>)[];
-
-            var sheetPageCount = sheetContext.PageCount + commentPages.Count;
             var firstPageNumber = sheet.FirstPageNumber ?? 1;
-
             for (var localPageIndex = 0; localPageIndex < sheetContext.PageCount; localPageIndex++)
             {
+                var isGridPage = localPageIndex < sheetContext.GridPageCount;
                 entries.Add(new PageEntry(
                     new PrintPreviewWorkbookPageInfo(
                         entries.Count,
                         sheet.Id,
                         sheet.Name,
-                        PrintPreviewWorkbookPageKind.Worksheet,
-                        localPageIndex,
+                        isGridPage ? PrintPreviewWorkbookPageKind.Worksheet : PrintPreviewWorkbookPageKind.CommentSummary,
+                        isGridPage ? localPageIndex : localPageIndex - sheetContext.GridPageCount,
                         firstPageNumber + pageNumberOffset + localPageIndex),
                     sheetContext,
-                    CommentPage: null,
-                    Metrics: null));
+                    localPageIndex));
             }
 
-            for (var commentPageIndex = 0; commentPageIndex < commentPages.Count; commentPageIndex++)
-            {
-                entries.Add(new PageEntry(
-                    new PrintPreviewWorkbookPageInfo(
-                        entries.Count,
-                        sheet.Id,
-                        sheet.Name,
-                        PrintPreviewWorkbookPageKind.CommentSummary,
-                        commentPageIndex,
-                        firstPageNumber + pageNumberOffset + sheetContext.PageCount + commentPageIndex),
-                    SheetContext: null,
-                    commentPages[commentPageIndex],
-                    printPlan.Metrics));
-            }
-
-            pageNumberOffset += sheetPageCount;
+            pageNumberOffset += sheetContext.PageCount;
         }
 
         if (entries.Count == 0)
@@ -134,7 +96,7 @@ public sealed class PrintPreviewWorkbookPaginationContext
             return false;
         }
 
-        context = new PrintPreviewWorkbookPaginationContext(entries, textMeasurer);
+        context = new PrintPreviewWorkbookPaginationContext(entries);
         return true;
     }
 
@@ -144,13 +106,7 @@ public sealed class PrintPreviewWorkbookPaginationContext
             return null;
 
         var entry = _entries[pageIndex];
-        if (entry.Info.Kind != PrintPreviewWorkbookPageKind.Worksheet)
-            return null;
-
-        return entry.SheetContext?.BuildPage(
-            entry.Info.SheetPageIndex,
-            entry.Info.PrintedPageNumber,
-            PageCount);
+        return entry.SheetContext.BuildPage(entry.LocalPageIndex, entry.Info.PrintedPageNumber, PageCount);
     }
 
     public PrintPreviewPagePainting? BuildPainting(int pageIndex)
@@ -159,24 +115,6 @@ public sealed class PrintPreviewWorkbookPaginationContext
             return null;
 
         var entry = _entries[pageIndex];
-        if (entry.Info.Kind == PrintPreviewWorkbookPageKind.Worksheet)
-        {
-            var plan = entry.SheetContext?.BuildContentPlan(
-                entry.Info.SheetPageIndex,
-                entry.Info.PrintedPageNumber,
-                PageCount);
-            return plan is null ? null : PrintPreviewInstructionBuilder.Build(plan);
-        }
-
-        var metrics = entry.Metrics ?? throw new InvalidOperationException("Comment page metrics are missing.");
-        var commentPage = entry.CommentPage ?? throw new InvalidOperationException("Comment page data is missing.");
-        return PrintPreviewCommentSummaryInstructionBuilder.Build(
-            new PrintPreviewCommentSummaryPage(
-                entry.Info.PrintedPageNumber,
-                new LayoutRect(0, 0, metrics.PageWidth, metrics.PageHeight),
-                metrics.MarginLeft,
-                metrics.MarginTop,
-                commentPage.Entries),
-            _textMeasurer);
+        return entry.SheetContext.BuildPainting(entry.LocalPageIndex, entry.Info.PrintedPageNumber, PageCount);
     }
 }

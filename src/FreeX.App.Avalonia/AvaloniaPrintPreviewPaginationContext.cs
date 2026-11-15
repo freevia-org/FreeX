@@ -5,57 +5,22 @@ using FreeX.Core.Model;
 namespace FreeX.App.Avalonia;
 
 /// <summary>
-/// Avalonia's host-side print-preview scope adapter. Normal previews keep using the shared
-/// multi-area context; WPF's selection override is projected locally because the shared context
-/// intentionally models configured sheet print areas, not transient UI selections.
+/// Avalonia's host-side adapter for the shared print-preview scopes.
 /// </summary>
 internal sealed class AvaloniaPrintPreviewPaginationContext
 {
-    private readonly bool _isEmpty;
     private readonly PrintPreviewPaginationContext? _sheetContext;
     private readonly PrintPreviewWorkbookPaginationContext? _workbookContext;
-    private readonly Workbook? _workbook;
-    private readonly Sheet? _sheet;
-    private readonly WorksheetPrintRenderPlan? _selectionPlan;
-    private readonly ITextMeasurer? _textMeasurer;
-    private readonly string _workbookDirectory;
-
-    private AvaloniaPrintPreviewPaginationContext(PrintPreviewPaginationContext sheetContext)
-    {
-        _sheetContext = sheetContext;
-        _workbookDirectory = "";
-    }
-
-    private AvaloniaPrintPreviewPaginationContext(PrintPreviewWorkbookPaginationContext workbookContext)
-    {
-        _workbookContext = workbookContext;
-        _workbookDirectory = "";
-    }
-
-    private AvaloniaPrintPreviewPaginationContext(bool isEmpty)
-    {
-        _isEmpty = isEmpty;
-        _workbookDirectory = "";
-    }
 
     private AvaloniaPrintPreviewPaginationContext(
-        Workbook workbook,
-        Sheet sheet,
-        WorksheetPrintRenderPlan selectionPlan,
-        ITextMeasurer textMeasurer,
-        string workbookDirectory)
+        PrintPreviewPaginationContext? sheetContext = null,
+        PrintPreviewWorkbookPaginationContext? workbookContext = null)
     {
-        _workbook = workbook;
-        _sheet = sheet;
-        _selectionPlan = selectionPlan;
-        _textMeasurer = textMeasurer;
-        _workbookDirectory = workbookDirectory;
+        _sheetContext = sheetContext;
+        _workbookContext = workbookContext;
     }
 
-    public int PageCount =>
-        _isEmpty
-            ? 0
-            : _workbookContext?.PageCount ?? _sheetContext?.PageCount ?? _selectionPlan!.GridPageCount;
+    public int PageCount => _workbookContext?.PageCount ?? _sheetContext?.PageCount ?? 0;
 
     internal static AvaloniaPrintPreviewPaginationContext FromSheetContext(
         PrintPreviewPaginationContext sheetContext) =>
@@ -63,9 +28,9 @@ internal sealed class AvaloniaPrintPreviewPaginationContext
 
     internal static AvaloniaPrintPreviewPaginationContext FromWorkbookContext(
         PrintPreviewWorkbookPaginationContext workbookContext) =>
-        new(workbookContext ?? throw new ArgumentNullException(nameof(workbookContext)));
+        new(workbookContext: workbookContext ?? throw new ArgumentNullException(nameof(workbookContext)));
 
-    internal static AvaloniaPrintPreviewPaginationContext Empty() => new(isEmpty: true);
+    internal static AvaloniaPrintPreviewPaginationContext Empty() => new();
 
     internal static bool TryCreate(
         Workbook workbook,
@@ -76,50 +41,20 @@ internal sealed class AvaloniaPrintPreviewPaginationContext
         string workbookDirectory = "",
         bool ignorePrintArea = false)
     {
-        ArgumentNullException.ThrowIfNull(workbook);
-        ArgumentNullException.ThrowIfNull(sheet);
-        ArgumentNullException.ThrowIfNull(textMeasurer);
-
-        if (printRangeOverride is not { } selection)
-        {
-            if (!PrintPreviewPaginationContext.TryCreate(
-                    workbook,
-                    sheet,
-                    textMeasurer,
-                    out var sheetContext,
-                    workbookDirectory,
-                    ignorePrintArea))
-            {
-                context = null!;
-                return false;
-            }
-
-            context = FromSheetContext(sheetContext);
-            return true;
-        }
-
-        if (selection.Start.Sheet != sheet.Id || selection.End.Sheet != sheet.Id)
-        {
-            context = null!;
-            return false;
-        }
-
-        if (!WorksheetPrintRenderPlanner.TryBuild(
+        if (!PrintPreviewPaginationContext.TryCreate(
+                workbook,
                 sheet,
-                selection,
+                textMeasurer,
+                out var sheetContext,
+                workbookDirectory,
                 ignorePrintArea,
-                out var selectionPlan))
+                printRangeOverride))
         {
             context = null!;
             return false;
         }
 
-        context = new AvaloniaPrintPreviewPaginationContext(
-            workbook,
-            sheet,
-            selectionPlan,
-            textMeasurer,
-            workbookDirectory);
+        context = FromSheetContext(sheetContext);
         return true;
     }
 
@@ -145,59 +80,9 @@ internal sealed class AvaloniaPrintPreviewPaginationContext
         return true;
     }
 
-    public PageContentLayout? BuildPage(int pageIndex)
-    {
-        if (_isEmpty)
-            return null;
+    public PageContentLayout? BuildPage(int pageIndex) =>
+        _workbookContext is not null ? _workbookContext.BuildPage(pageIndex) : _sheetContext?.BuildPage(pageIndex);
 
-        if (_workbookContext is not null)
-            return _workbookContext.BuildPage(pageIndex);
-
-        if (_sheetContext is not null)
-            return _sheetContext.BuildPage(pageIndex);
-
-        if (pageIndex < 0 || pageIndex >= _selectionPlan!.GridPageCount)
-            return null;
-
-        var page = _selectionPlan.Pages[pageIndex];
-        return WorksheetPrintPageContentPlanner.Build(
-            _workbook!,
-            _sheet!,
-            _selectionPlan,
-            page,
-            _textMeasurer!,
-            WorksheetPrintMaterializationProfile.AvaloniaPreview,
-            workbookDirectory: _workbookDirectory,
-            totalPageCountOverride: _selectionPlan.GridPageCount)?.PortableLayout;
-    }
-
-    public PrintPreviewPagePainting? BuildPainting(int pageIndex)
-    {
-        if (_isEmpty)
-            return null;
-
-        if (_workbookContext is not null)
-            return _workbookContext.BuildPainting(pageIndex);
-
-        if (_sheetContext is not null)
-        {
-            var plan = _sheetContext.BuildContentPlan(pageIndex);
-            return plan is null ? null : PrintPreviewInstructionBuilder.Build(plan);
-        }
-
-        if (pageIndex < 0 || pageIndex >= _selectionPlan!.GridPageCount)
-            return null;
-
-        var page = _selectionPlan.Pages[pageIndex];
-        var selectionPlan = WorksheetPrintPageContentPlanner.Build(
-            _workbook!,
-            _sheet!,
-            _selectionPlan,
-            page,
-            _textMeasurer!,
-            WorksheetPrintMaterializationProfile.AvaloniaPreview,
-            workbookDirectory: _workbookDirectory,
-            totalPageCountOverride: _selectionPlan.GridPageCount);
-        return selectionPlan is null ? null : PrintPreviewInstructionBuilder.Build(selectionPlan);
-    }
+    public PrintPreviewPagePainting? BuildPainting(int pageIndex) =>
+        _workbookContext is not null ? _workbookContext.BuildPainting(pageIndex) : _sheetContext?.BuildPainting(pageIndex);
 }

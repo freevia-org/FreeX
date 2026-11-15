@@ -49,6 +49,33 @@ public sealed class PrintPreviewPaginationContextTests
     }
 
     [Fact]
+    public void ActiveSheetCommentAppendixCountsTowardFooterTotalAndUsesPrintedCells()
+    {
+        var (workbook, sheet) = CreateBook();
+        var printedCell = new CellAddress(sheet.Id, 1, 1);
+        var excludedCell = new CellAddress(sheet.Id, 10, 2);
+        sheet.SetCell(printedCell, new TextValue("Printed value"));
+        sheet.PrintArea = new GridRange(printedCell, printedCell);
+        sheet.FirstPageNumber = 4;
+        sheet.PageFooter = new WorksheetHeaderFooter("", "Page &P of &N", "");
+        sheet.PrintComments = WorksheetPrintComments.AtEnd;
+        sheet.Comments[printedCell] = "Printed note";
+        sheet.Comments[excludedCell] = "Excluded note";
+
+        PrintPreviewPaginationContext.TryCreate(workbook, sheet, Measurer, out var context).Should().BeTrue();
+
+        context.PageCount.Should().Be(2);
+        context.BuildPage(0)!.FooterRuns.Select(run => run.Text).Should().ContainSingle("Page 4 of 2");
+        var appendix = context.BuildPainting(1)!;
+        appendix.PageNumber.Should().Be(5);
+        appendix.Instructions.Select(instruction => instruction.Text)
+            .Should().Contain("Comments")
+            .And.Contain("A1: Printed note")
+            .And.NotContain("B10: Excluded note");
+        context.BuildPainting(2).Should().BeNull();
+    }
+
+    [Fact]
     public void BuildPage_OutOfRangeIndexReturnsNull()
     {
         var (workbook, sheet) = CreateBook();

@@ -100,6 +100,51 @@ public sealed class Wave150PrintPreviewSelectionParityTests
     }
 
     [Fact]
+    public async Task CommentsAtEndRemainNavigableAndFollowTheSelectedScope()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                window.Show();
+                SeedWorkbook(window);
+                var sheet = window.Session.ActiveSheet;
+                var selected = new CellAddress(sheet.Id, 2, 2);
+                sheet.PrintComments = WorksheetPrintComments.AtEnd;
+                sheet.Comments[new CellAddress(sheet.Id, 1, 1)] = "Outside selection";
+                sheet.Comments[selected] = "Selected note";
+                sheet.Comments[new CellAddress(sheet.Id, 8, 8)] = "Outside print area";
+                window.Session.SelectRange(new GridRange(selected, selected));
+
+                var preview = await OpenPrintPreviewDialogAsync(window);
+                FindButton(preview, PrintPreviewDialogPlanner.LastPageButtonAutomationId).RaiseEvent(
+                    new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                await DrainInputAsync();
+
+                CanvasText(preview).Should().Contain("Comments")
+                    .And.Contain("A1: Outside selection")
+                    .And.Contain("B2: Selected note")
+                    .And.NotContain("H8: Outside print area");
+
+                var printWhat = FindComboBox(preview, "PrintPreviewSettingsPrintWhatBox");
+                printWhat.SelectedIndex = (int)PrintWhat.Selection;
+                await DrainInputAsync();
+
+                CanvasText(preview).Should().Contain("Comments")
+                    .And.Contain("B2: Selected note")
+                    .And.NotContain("A1: Outside selection");
+            }
+            finally
+            {
+                CloseOwnedWindows(window);
+            }
+
+            return true;
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task NestedPageSetupRefreshKeepsSelectionScopeAndRepaginates()
     {
         await Session.Dispatch(async () =>
