@@ -82,8 +82,10 @@ internal static class XlsxCustomViewMapper
                     FooterMargin: ParseNullableDouble(pageMargins, "footer"),
                     PrintGridlines: printOptions is null ? null : XlsxXmlAttributeReader.ReadBoolAttribute(printOptions, "gridLines"),
                     PrintHeadings: printOptions is null ? null : XlsxXmlAttributeReader.ReadBoolAttribute(printOptions, "headings"),
-                    ScaleToFit: ParseScaleToFit(pageSetup, fitToPage),
-                    PrintSettings: ReadPrintSettings(customSheetView, worksheetNs, fitToPage))));
+                    ScaleToFit: ParseScaleToFit(pageSetup, fitToPage))
+                {
+                    PrintSettings = ReadPrintSettings(customSheetView, worksheetNs, fitToPage)
+                }));
         }
 
         return customViews;

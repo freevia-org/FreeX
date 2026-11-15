@@ -13,14 +13,30 @@ public class CustomViewSheetRenameTests
         var sheet = workbook.AddSheet("Data");
         workbook.AddSheet("Other");
         var ctx = new TestCommandContext(workbook);
-        var state = new WorksheetCustomViewState("Data", WorksheetViewMode.Normal, 0, 0, null, null,
-            ZoomPercent: 125,
-            PrintSettings: new WorksheetCustomViewPrintSettings(),
-            OpaquePrintAreaExpression: "Data!$A$1:$B$2,OFFSET(Data!$C$1,0,0,2,1)",
-            OpaquePrintTitlesExpression: "=OFFSET(Data!$A$1,0,0,2,1)");
-        var otherState = new WorksheetCustomViewState("Other", WorksheetViewMode.Normal, 0, 0, null, null,
-            OpaquePrintAreaExpression: "OFFSET('[1]Data'!$A$1,0,0,2,1),Data!$A$1",
-            OpaquePrintTitlesExpression: "OFFSET(Data!$A$1,");
+        var state = new WorksheetCustomViewState(
+            "Data",
+            WorksheetViewMode.Normal,
+            0,
+            0,
+            null,
+            null,
+            ZoomPercent: 125)
+        {
+            PrintSettings = new WorksheetCustomViewPrintSettings(),
+            OpaquePrintAreaExpression = "Data!$A$1:$B$2,OFFSET(Data!$C$1,0,0,2,1)",
+            OpaquePrintTitlesExpression = "=OFFSET(Data!$A$1,0,0,2,1)"
+        };
+        var otherState = new WorksheetCustomViewState(
+            "Other",
+            WorksheetViewMode.Normal,
+            0,
+            0,
+            null,
+            null)
+        {
+            OpaquePrintAreaExpression = "OFFSET('[1]Data'!$A$1,0,0,2,1),Data!$A$1",
+            OpaquePrintTitlesExpression = "OFFSET(Data!$A$1,"
+        };
         workbook.CustomViews.Add(new WorkbookCustomView("View", [state, otherState]));
         var command = new RenameSheetCommand(sheet.Id, "New Data");
         command.Apply(ctx).Success.Should().BeTrue();
@@ -46,8 +62,16 @@ public class CustomViewSheetRenameTests
         var sheet = workbook.AddSheet("Data");
         var ctx = new TestCommandContext(workbook);
         const string original = "=SUM(Data!A1,'[1]First:Data'!B2,\"[literal]\",TABLE1[Column])";
-        var state = new WorksheetCustomViewState("Data", WorksheetViewMode.Normal, 0, 0, null, null,
-            OpaquePrintAreaExpression: original);
+        var state = new WorksheetCustomViewState(
+            "Data",
+            WorksheetViewMode.Normal,
+            0,
+            0,
+            null,
+            null)
+        {
+            OpaquePrintAreaExpression = original
+        };
         workbook.CustomViews.Add(new WorkbookCustomView("View", [state]));
         var command = new RenameSheetCommand(sheet.Id, "New Data");
         command.Apply(ctx).Success.Should().BeTrue();

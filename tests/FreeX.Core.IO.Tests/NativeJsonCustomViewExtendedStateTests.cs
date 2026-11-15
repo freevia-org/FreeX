@@ -183,7 +183,16 @@ public sealed class NativeJsonCustomViewExtendedStateTests
             PrintOptionsMetadata = Bag("printOptions")
         };
         workbook.CustomViews.Add(new WorkbookCustomView("Captured",
-            [new WorksheetCustomViewState("Data", WorksheetViewMode.Normal, 0, 0, null, null, PrintSettings: print)]));
+            [new WorksheetCustomViewState(
+                "Data",
+                WorksheetViewMode.Normal,
+                0,
+                0,
+                null,
+                null)
+            {
+                PrintSettings = print
+            }]));
         workbook.CustomViews.Add(new WorkbookCustomView("Omitted",
             [new WorksheetCustomViewState("Data", WorksheetViewMode.Normal, 0, 0, null, null)], IncludePrintSettings: false));
 
@@ -242,15 +251,23 @@ public sealed class NativeJsonCustomViewExtendedStateTests
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Data");
         var area = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, CellAddress.MaxRow, 2));
-        var state = new WorksheetCustomViewState(sheet.Name, WorksheetViewMode.Normal, 0, 0, null, null,
-            PrintAreas: [area],
-            PrintSettings: new WorksheetCustomViewPrintSettings
+        var state = new WorksheetCustomViewState(
+            sheet.Name,
+            WorksheetViewMode.Normal,
+            0,
+            0,
+            null,
+            null,
+            PrintAreas: [area])
+        {
+            PrintSettings = new WorksheetCustomViewPrintSettings
             {
                 AutoPageBreaksCaptured = true, AutoPageBreaks = null,
                 LegacyPrintSizeCaptured = true, LegacyPrintSize = null,
                 PageSetupMetadataCaptured = true, PageSetupMetadata = null
             },
-            PrintAreaReferenceForms: [new WorksheetCustomViewPrintAreaForm(area, WorksheetCustomViewPrintAreaKind.FullColumn)]);
+            PrintAreaReferenceForms = [new WorksheetCustomViewPrintAreaForm(area, WorksheetCustomViewPrintAreaKind.FullColumn)]
+        };
         workbook.CustomViews.Add(new WorkbookCustomView("View", [state]));
         workbook.CustomViews.Add(new WorkbookCustomView("Opaque", [state with
         {

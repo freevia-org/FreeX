@@ -95,9 +95,17 @@ public class CustomViewPrintSettingsTests
         sheet.PrintTitleRows = originalRows;
         sheet.PrintTitleColumns = originalColumns;
         sheet.PageHeader = new("", "Live", "");
-        var state = new WorksheetCustomViewState(sheet.Name, WorksheetViewMode.Normal, 0, 0, null, null,
-            PrintSettings: new WorksheetCustomViewPrintSettings { PageHeader = new("", "Saved", "") },
-            OpaquePrintTitlesExpression: "OFFSET(Data!$A$1,0,0,2,1)");
+        var state = new WorksheetCustomViewState(
+            sheet.Name,
+            WorksheetViewMode.Normal,
+            0,
+            0,
+            null,
+            null)
+        {
+            PrintSettings = new WorksheetCustomViewPrintSettings { PageHeader = new("", "Saved", "") },
+            OpaquePrintTitlesExpression = "OFFSET(Data!$A$1,0,0,2,1)"
+        };
         workbook.CustomViews.Add(new WorkbookCustomView("View", [state]));
         var command = new ApplyCustomViewCommand("View");
         command.Apply(ctx).Success.Should().BeTrue();
@@ -143,9 +151,18 @@ public class CustomViewPrintSettingsTests
         var ctx = new TestCommandContext(workbook);
         sheet.PageHeader = new("", "Live", "");
         sheet.PrintGridlines = true;
-        var state = new WorksheetCustomViewState("Sheet1", WorksheetViewMode.Normal, 0, 0, null, null,
-            HiddenRows: [5], PrintGridlines: false,
-            PrintSettings: new WorksheetCustomViewPrintSettings { PageHeader = new("", "Saved", "") });
+        var state = new WorksheetCustomViewState(
+            "Sheet1",
+            WorksheetViewMode.Normal,
+            0,
+            0,
+            null,
+            null,
+            HiddenRows: [5],
+            PrintGridlines: false)
+        {
+            PrintSettings = new WorksheetCustomViewPrintSettings { PageHeader = new("", "Saved", "") }
+        };
         workbook.CustomViews.Add(new WorkbookCustomView("View", [state], IncludePrintSettings: false));
         new ApplyCustomViewCommand("View").Apply(ctx).Success.Should().BeTrue();
         sheet.HiddenRows.Should().Contain(5);
@@ -174,8 +191,16 @@ public class CustomViewPrintSettingsTests
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
         sheet.PageHeaderPictures = new(new WorksheetHeaderFooterPicture([1, 2, 3], "image/png"), null, null);
-        var state = new WorksheetCustomViewState("Sheet1", WorksheetViewMode.Normal, 0, 0, null, null,
-            PrintSettings: new WorksheetCustomViewPrintSettings { PageHeader = new("", "Saved", "") });
+        var state = new WorksheetCustomViewState(
+            "Sheet1",
+            WorksheetViewMode.Normal,
+            0,
+            0,
+            null,
+            null)
+        {
+            PrintSettings = new WorksheetCustomViewPrintSettings { PageHeader = new("", "Saved", "") }
+        };
         workbook.CustomViews.Add(new WorkbookCustomView("View", [state]));
         new ApplyCustomViewCommand("View").Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
         sheet.PageHeader.Center.Should().Be("Saved");

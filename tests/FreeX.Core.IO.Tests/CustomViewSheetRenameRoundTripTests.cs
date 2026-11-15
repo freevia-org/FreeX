@@ -11,9 +11,18 @@ public class CustomViewSheetRenameRoundTripTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Data");
-        var state = new WorksheetCustomViewState("Data", WorksheetViewMode.Normal, 0, 0, null, null,
-            ZoomPercent: 125, PrintSettings: new WorksheetCustomViewPrintSettings(),
-            OpaquePrintAreaExpression: "Data!$A$1:$B$2,OFFSET(Data!$C$1,0,0,2,1)");
+        var state = new WorksheetCustomViewState(
+            "Data",
+            WorksheetViewMode.Normal,
+            0,
+            0,
+            null,
+            null,
+            ZoomPercent: 125)
+        {
+            PrintSettings = new WorksheetCustomViewPrintSettings(),
+            OpaquePrintAreaExpression = "Data!$A$1:$B$2,OFFSET(Data!$C$1,0,0,2,1)"
+        };
         workbook.CustomViews.Add(new WorkbookCustomView("View", [state], "{11111111-1111-1111-1111-111111111111}"));
         new RenameSheetCommand(sheet.Id, "New Data").Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
         using var file = new MemoryStream();
@@ -35,8 +44,17 @@ public class CustomViewSheetRenameRoundTripTests
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Data");
         const string formula = "=SUM(Data!A1,'[1]First:Data'!B2,\"[literal]\",TABLE1[Column])";
-        var state = new WorksheetCustomViewState("Data", WorksheetViewMode.Normal, 0, 0, null, null,
-            PrintSettings: new WorksheetCustomViewPrintSettings(), OpaquePrintAreaExpression: formula);
+        var state = new WorksheetCustomViewState(
+            "Data",
+            WorksheetViewMode.Normal,
+            0,
+            0,
+            null,
+            null)
+        {
+            PrintSettings = new WorksheetCustomViewPrintSettings(),
+            OpaquePrintAreaExpression = formula
+        };
         workbook.CustomViews.Add(new WorkbookCustomView("View", [state], "{11111111-1111-1111-1111-111111111111}"));
         new RenameSheetCommand(sheet.Id, "New Data").Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
         using var stream = new MemoryStream();

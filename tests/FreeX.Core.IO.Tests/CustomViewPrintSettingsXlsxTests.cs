@@ -20,8 +20,16 @@ public sealed class CustomViewPrintSettingsXlsxTests
         var workbook = new Workbook("Book");
         var sheet = workbook.AddSheet("O'Brien, Data");
         var area = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 9, 4));
-        var state = new WorksheetCustomViewState(sheet.Name, WorksheetViewMode.Normal, 0, 0, null, null,
-            PrintAreas: [area], PrintSettings: new WorksheetCustomViewPrintSettings
+        var state = new WorksheetCustomViewState(
+            sheet.Name,
+            WorksheetViewMode.Normal,
+            0,
+            0,
+            null,
+            null,
+            PrintAreas: [area])
+        {
+            PrintSettings = new WorksheetCustomViewPrintSettings
             {
                 PageHeader = new("Left", "Center &[Page]", "Right"),
                 FirstPageFooter = new("", "First footer", ""),
@@ -40,7 +48,8 @@ public sealed class CustomViewPrintSettingsXlsxTests
                 ColumnPageBreaks = [3],
                 PrintTitleRows = new(1, 2),
                 PrintTitleColumns = new(1, 1)
-            });
+            }
+        };
         workbook.CustomViews.Add(new WorkbookCustomView("Review", [state], Id));
 
         using var stream = new MemoryStream();
@@ -100,8 +109,17 @@ public sealed class CustomViewPrintSettingsXlsxTests
     {
         var workbook = new Workbook("Book");
         var sheet = workbook.AddSheet("Data");
-        var state = new WorksheetCustomViewState(sheet.Name, WorksheetViewMode.Normal, 0, 0, null, null,
-            PrintAreas: [], PrintSettings: new WorksheetCustomViewPrintSettings());
+        var state = new WorksheetCustomViewState(
+            sheet.Name,
+            WorksheetViewMode.Normal,
+            0,
+            0,
+            null,
+            null,
+            PrintAreas: [])
+        {
+            PrintSettings = new WorksheetCustomViewPrintSettings()
+        };
         workbook.CustomViews.Add(new WorkbookCustomView("Review", [state], Id));
         using var stream = new MemoryStream();
         var adapter = new XlsxFileAdapter();
@@ -120,8 +138,17 @@ public sealed class CustomViewPrintSettingsXlsxTests
         var workbook = new Workbook("Book");
         var sheet = workbook.AddSheet("Data");
         var area = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 2));
-        var state = new WorksheetCustomViewState(sheet.Name, WorksheetViewMode.Normal, 0, 0, null, null,
-            PrintAreas: [area], PrintSettings: new WorksheetCustomViewPrintSettings { PrintTitleRows = new(1, 2) });
+        var state = new WorksheetCustomViewState(
+            sheet.Name,
+            WorksheetViewMode.Normal,
+            0,
+            0,
+            null,
+            null,
+            PrintAreas: [area])
+        {
+            PrintSettings = new WorksheetCustomViewPrintSettings { PrintTitleRows = new(1, 2) }
+        };
         workbook.CustomViews.Add(new WorkbookCustomView("Review", [state], Id));
         using var first = new MemoryStream();
         var adapter = new XlsxFileAdapter();
@@ -143,9 +170,17 @@ public sealed class CustomViewPrintSettingsXlsxTests
     {
         var workbook = new Workbook("Book");
         var sheet = workbook.AddSheet("Data");
-        var state = new WorksheetCustomViewState(sheet.Name, WorksheetViewMode.Normal, 0, 0, null, null,
-            PrintAreas: [new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 2))],
-            PrintSettings: new WorksheetCustomViewPrintSettings { PrintTitleRows = new(1, 2) });
+        var state = new WorksheetCustomViewState(
+            sheet.Name,
+            WorksheetViewMode.Normal,
+            0,
+            0,
+            null,
+            null,
+            PrintAreas: [new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 2))])
+        {
+            PrintSettings = new WorksheetCustomViewPrintSettings { PrintTitleRows = new(1, 2) }
+        };
         workbook.CustomViews.Add(new WorkbookCustomView("First", [state], Id));
         workbook.CustomViews.Add(new WorkbookCustomView("Second", [state], "{22222222-2222-2222-2222-222222222222}"));
         using var first = new MemoryStream();
@@ -199,9 +234,16 @@ public sealed class CustomViewPrintSettingsXlsxTests
         {
             ["min"] = "2", ["max"] = "20", ["pt"] = "1", ["unsupported"] = "bad"
         };
-        var state = new WorksheetCustomViewState(sheet.Name, WorksheetViewMode.Normal, 0, 0, null, null,
-            PageMargins: WorksheetPageMargins.Normal,
-            PrintSettings: new WorksheetCustomViewPrintSettings
+        var state = new WorksheetCustomViewState(
+            sheet.Name,
+            WorksheetViewMode.Normal,
+            0,
+            0,
+            null,
+            null,
+            PageMargins: WorksheetPageMargins.Normal)
+        {
+            PrintSettings = new WorksheetCustomViewPrintSettings
             {
                 RowPageBreaks = [5],
                 RowPageBreaksMetadata = breakMetadata,
@@ -209,7 +251,8 @@ public sealed class CustomViewPrintSettingsXlsxTests
                 PageMarginsMetadata = Bag("pageMargins", "<e unsupported=\"bad\"/>"),
                 PageSetupMetadata = Bag("pageSetup", "<e unsupported=\"bad\"/>"),
                 HeaderFooterMetadata = Bag("headerFooter", "<e unsupported=\"bad\"/>")
-            });
+            }
+        };
         workbook.CustomViews.Add(new WorkbookCustomView("Review", [state], Id));
         using var stream = new MemoryStream();
         var adapter = new XlsxFileAdapter();
@@ -246,8 +289,17 @@ public sealed class CustomViewPrintSettingsXlsxTests
     {
         var workbook = new Workbook("Book");
         var sheet = workbook.AddSheet("Data");
-        var state = new WorksheetCustomViewState(sheet.Name, WorksheetViewMode.Normal, 0, 0, null, null,
-            PrintAreas: [], PrintSettings: new WorksheetCustomViewPrintSettings());
+        var state = new WorksheetCustomViewState(
+            sheet.Name,
+            WorksheetViewMode.Normal,
+            0,
+            0,
+            null,
+            null,
+            PrintAreas: [])
+        {
+            PrintSettings = new WorksheetCustomViewPrintSettings()
+        };
         workbook.CustomViews.Add(new WorkbookCustomView("Review", [state], Id));
         using var stream = new MemoryStream();
         var adapter = new XlsxFileAdapter();
@@ -304,9 +356,18 @@ public sealed class CustomViewPrintSettingsXlsxTests
             new CellAddress(sheet.Id, CellAddress.MaxRow, 2));
         var edited = new GridRange(new CellAddress(sheet.Id, 1, 3),
             new CellAddress(sheet.Id, CellAddress.MaxRow, 4));
-        var state = new WorksheetCustomViewState(sheet.Name, WorksheetViewMode.Normal, 0, 0, null, null,
-            PrintAreas: [edited], PrintSettings: new WorksheetCustomViewPrintSettings(),
-            PrintAreaReferenceForms: [new WorksheetCustomViewPrintAreaForm(original, WorksheetCustomViewPrintAreaKind.FullColumn)]);
+        var state = new WorksheetCustomViewState(
+            sheet.Name,
+            WorksheetViewMode.Normal,
+            0,
+            0,
+            null,
+            null,
+            PrintAreas: [edited])
+        {
+            PrintSettings = new WorksheetCustomViewPrintSettings(),
+            PrintAreaReferenceForms = [new WorksheetCustomViewPrintAreaForm(original, WorksheetCustomViewPrintAreaKind.FullColumn)]
+        };
         workbook.CustomViews.Add(new WorkbookCustomView("Review", [state], Id));
         using var stream = new MemoryStream();
         new XlsxFileAdapter().Save(workbook, stream);
@@ -468,8 +529,17 @@ public sealed class CustomViewPrintSettingsXlsxTests
         const string titlesExpression = "Data!$1:$2,OFFSET(Data!$A$1,0,0,1,1)";
         var workbook = new Workbook("Book");
         var sheet = workbook.AddSheet("Data");
-        var state = new WorksheetCustomViewState(sheet.Name, WorksheetViewMode.Normal, 0, 0, null, null,
-            PrintAreas: [], PrintSettings: new WorksheetCustomViewPrintSettings());
+        var state = new WorksheetCustomViewState(
+            sheet.Name,
+            WorksheetViewMode.Normal,
+            0,
+            0,
+            null,
+            null,
+            PrintAreas: [])
+        {
+            PrintSettings = new WorksheetCustomViewPrintSettings()
+        };
         workbook.CustomViews.Add(new WorkbookCustomView("Review", [state], Id));
         using var source = new MemoryStream();
         var adapter = new XlsxFileAdapter();

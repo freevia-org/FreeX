@@ -48,11 +48,13 @@ public sealed partial class NativeJsonAdapter
             sheetDto.PrintGridlines,
             sheetDto.PrintHeadings,
             scaleToFit,
-            sheetDto.FitToPage,
-            PrintSettings: ToCustomViewPrintSettings(sheetDto.PrintSettings),
-            PrintAreaReferenceForms: ParsePrintAreaForms(sheetDto.PrintAreaReferenceForms, sheetId),
-            OpaquePrintAreaExpression: sheetDto.OpaquePrintAreaExpression,
-            OpaquePrintTitlesExpression: sheetDto.OpaquePrintTitlesExpression);
+            sheetDto.FitToPage)
+        {
+            PrintSettings = ToCustomViewPrintSettings(sheetDto.PrintSettings),
+            PrintAreaReferenceForms = ParsePrintAreaForms(sheetDto.PrintAreaReferenceForms, sheetId),
+            OpaquePrintAreaExpression = sheetDto.OpaquePrintAreaExpression,
+            OpaquePrintTitlesExpression = sheetDto.OpaquePrintTitlesExpression
+        };
     }
 
     private static WorksheetCustomViewState? ToWorksheetCustomViewState(

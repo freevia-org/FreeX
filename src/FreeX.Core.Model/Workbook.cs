@@ -1080,11 +1080,13 @@ public sealed record WorksheetCustomViewState(
     /// <summary>Print scaling (Sheet.ScaleToFit) at capture time. See <see cref="PrintAreas"/>.</summary>
     WorksheetScaleToFit? ScaleToFit = null,
     /// <summary>Fit-to-page flag (Sheet.FitToPage) at capture time. See <see cref="PrintAreas"/>.</summary>
-    bool? FitToPage = null,
-    WorksheetCustomViewPrintSettings? PrintSettings = null,
-    IReadOnlyList<WorksheetCustomViewPrintAreaForm>? PrintAreaReferenceForms = null,
-    string? OpaquePrintAreaExpression = null,
-    string? OpaquePrintTitlesExpression = null);
+    bool? FitToPage = null)
+{
+    public WorksheetCustomViewPrintSettings? PrintSettings { get; init; }
+    public IReadOnlyList<WorksheetCustomViewPrintAreaForm>? PrintAreaReferenceForms { get; init; }
+    public string? OpaquePrintAreaExpression { get; init; }
+    public string? OpaquePrintTitlesExpression { get; init; }
+}
 
 /// <summary>Original print-area syntax and its resolved bounds, used only while those bounds remain unchanged.</summary>
 public sealed record WorksheetCustomViewPrintAreaForm(GridRange Range, WorksheetCustomViewPrintAreaKind Kind);
