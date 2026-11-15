@@ -1,4 +1,5 @@
 using FreeX.Core.Model;
+using FreeX.Core.Formula;
 
 namespace FreeX.Core.Commands;
 
@@ -359,6 +360,8 @@ public sealed class ApplyCustomViewCommand : IWorkbookCommand
             var sheet = ctx.Workbook.GetSheet(state.SheetName);
             if (sheet is null) continue;
             ApplyState(sheet, state, view);
+            if (view.IncludePrintSettings)
+                ApplyOpaquePrintReferences(ctx.Workbook, sheet, state);
         }
         if (CustomViewStatePlanner.SanitizeActiveSheetIndex(ctx.Workbook, view.ActiveSheetIndex) is { } activeSheetIndex)
             ctx.Workbook.ActiveSheetIndex = activeSheetIndex;
@@ -406,6 +409,49 @@ public sealed class ApplyCustomViewCommand : IWorkbookCommand
             SaveCustomViewCommand.ApplyExtendedState(sheet, state);
         }
         ctx.Workbook.ActiveSheetIndex = CustomViewStatePlanner.SanitizeActiveSheetIndex(ctx.Workbook, _previousActiveSheetIndex);
+    }
+
+    // Excel resolves these saved defined-name expressions afresh each time a view is shown.
+    // Apply only fully resolved results to the live sheet; the saved formulas stay unchanged.
+    private static void ApplyOpaquePrintReferences(Workbook workbook, Sheet sheet, WorksheetCustomViewState state)
+    {
+        var hasArea = state.PrintAreas is null && !string.IsNullOrWhiteSpace(state.OpaquePrintAreaExpression);
+        var hasTitles = !string.IsNullOrWhiteSpace(state.OpaquePrintTitlesExpression) &&
+            state.PrintSettings?.PrintTitleRows is null && state.PrintSettings?.PrintTitleColumns is null;
+        if (!hasArea && !hasTitles) return;
+        var evaluator = new FormulaEvaluator();
+
+        if (hasArea)
+        {
+            var result = evaluator.ResolveReferenceGeometry(state.OpaquePrintAreaExpression!, sheet, workbook);
+            if (result.Status == ReferenceGeometryStatus.Error ||
+                result.Status == ReferenceGeometryStatus.Success && result.Areas.Any(area => area.Start.Sheet != sheet.Id))
+                sheet.SetPrintAreas([]);
+            else if (result.Status == ReferenceGeometryStatus.Success)
+                sheet.SetPrintAreas(result.Areas);
+        }
+
+        if (hasTitles)
+        {
+            var result = evaluator.ResolveReferenceGeometry(state.OpaquePrintTitlesExpression!, sheet, workbook);
+            if (result.Status == ReferenceGeometryStatus.Unsupported) return;
+            if (result.Status == ReferenceGeometryStatus.Error || result.Areas.Any(area => area.Start.Sheet != sheet.Id))
+            {
+                sheet.PrintTitleRows = null;
+                sheet.PrintTitleColumns = null;
+                return;
+            }
+            WorksheetRepeatRange? rows = null, columns = null;
+            foreach (var area in result.Areas)
+            {
+                if (area.Start.Col == 1 && area.End.Col == CellAddress.MaxCol)
+                    rows = new WorksheetRepeatRange(area.Start.Row, area.End.Row);
+                if (area.Start.Row == 1 && area.End.Row == CellAddress.MaxRow)
+                    columns = new WorksheetRepeatRange(area.Start.Col, area.End.Col);
+            }
+            sheet.PrintTitleRows = rows;
+            sheet.PrintTitleColumns = columns;
+        }
     }
 
     private static void ApplyState(Sheet sheet, WorksheetCustomViewState state, WorkbookCustomView view)

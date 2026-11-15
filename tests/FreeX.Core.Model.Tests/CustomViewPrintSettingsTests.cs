@@ -104,7 +104,7 @@ public class CustomViewPrintSettingsTests
             null)
         {
             PrintSettings = new WorksheetCustomViewPrintSettings { PageHeader = new("", "Saved", "") },
-            OpaquePrintTitlesExpression = "OFFSET(Data!$A$1,0,0,2,1)"
+            OpaquePrintTitlesExpression = "FILTER(Data!$A$1:$A$2,Data!$B$1:$B$2)"
         };
         workbook.CustomViews.Add(new WorkbookCustomView("View", [state]));
         var command = new ApplyCustomViewCommand("View");

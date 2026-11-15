@@ -580,8 +580,9 @@ public sealed class CustomViewPrintSettingsXlsxTests
         var context = new TestCommandContext(loaded);
         var apply = new ApplyCustomViewCommand("Review");
         apply.Apply(context).Success.Should().BeTrue();
-        live.PrintTitleRows.Should().Be(new WorksheetRepeatRange(5, 6));
-        live.PrintTitleColumns.Should().Be(new WorksheetRepeatRange(2, 3));
+        // Excel applies the valid whole-row component and ignores the rectangle returned by OFFSET.
+        live.PrintTitleRows.Should().Be(new WorksheetRepeatRange(1, 2));
+        live.PrintTitleColumns.Should().BeNull();
         apply.Revert(context);
         live.PrintTitleRows.Should().Be(new WorksheetRepeatRange(5, 6));
         live.PrintTitleColumns.Should().Be(new WorksheetRepeatRange(2, 3));
