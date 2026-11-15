@@ -31,7 +31,9 @@ public sealed class AvaloniaPrintSelectionParityTests
         var printSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Print.cs"));
         var backstageSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Backstage.cs"));
 
-        printSource.Should().Contain("var hasSelection = HasPrintSelection(_session.SelectedRange);");
+        printSource.Should().Contain("var scopePlan = WorkbookExportScopePlanner.Build(");
+        printSource.Should().Contain(
+            "_session.Workbook, HasPrintSelection(_session.SelectedRange), WorkbookExportPrintSurface.MacOs);");
         backstageSource.Should().Contain("WorkbookExportInteractionPlanner.CreateCommandPlan(");
         backstageSource.Should().Contain("_session.SelectedRange");
         backstageSource.Should().NotContain("HasPrintSelection(");
