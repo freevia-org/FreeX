@@ -297,11 +297,6 @@ public sealed partial class MainWindow
 
             e.Handled = true;
         };
-        exportButton.Click += (_, _) => RunGuarded(async () =>
-        {
-            dialog.Close();
-            await PrintWithPreviewSettingsAsync(currentSettings, canSpool, printerNames, defaultPrinterName);
-        });
         dialog.KeyDown += (_, e) =>
         {
             switch (e.Key)
@@ -360,7 +355,52 @@ public sealed partial class MainWindow
                     updated => currentSettings = updated,
                     RepaginateAndRender),
             printerBoxes.Add,
+            out var rangeFields,
             hasExternalPageSource ? null : toolbarControls);
+
+        exportButton.Click += (_, _) => RunGuarded(async () =>
+        {
+            var rangeIndex = toolbarControls.PageRangeMode.SelectedIndex;
+            var rangeMode = rangeIndex >= 0
+                ? topToolbarPlan.PageRangeChoices[rangeIndex].Mode
+                : PrintPreviewPageRangeMode.AllPages;
+            var currentPage = navigator.CurrentIndex + 1;
+            if (rangeMode == PrintPreviewPageRangeMode.CurrentPage &&
+                !PrintPreviewDialogPlanner.TryParsePageNumber(pageNumberBox.Text, pageCount, out currentPage))
+            {
+                var validation = PrintPreviewDialogPlanner.DescribeInvalidPageNumber(pageCount);
+                await ShowPrintPreviewWarningAsync(dialog, validation.Message.Resolve(UiText.Get, UiText.Format), pageNumberBox);
+                return;
+            }
+
+            ExportPageRange? pageRange = null;
+            if (rangeMode == PrintPreviewPageRangeMode.Pages)
+            {
+                // A blank end of the rail range extends to the corresponding document edge.
+                var fromText = string.IsNullOrWhiteSpace(rangeFields.From.Text) ? "1" : rangeFields.From.Text;
+                var toText = string.IsNullOrWhiteSpace(rangeFields.To.Text)
+                    ? pageCount.ToString(CultureInfo.InvariantCulture)
+                    : rangeFields.To.Text;
+                if (!ExportPlanner.TryCreatePageRange(
+                        fromText, toText, out pageRange, out var error, AvaloniaExportPlannerTextResolver) ||
+                    !ExportPlanner.TryValidatePageRange(pageRange, pageCount, out error, AvaloniaExportPlannerTextResolver))
+                {
+                    var focusTarget = ExportOptionsDialogSurfacePlanner.ResolveInvalidPageRangeFocusTarget(
+                        error, fromText, UiText.Get("Export_PageRangeFromLessThanToError"));
+                    var target = focusTarget == ExportOptionsDialogFocusTarget.ToPage ? rangeFields.To : rangeFields.From;
+                    await ShowPrintPreviewWarningAsync(
+                        dialog, error ?? UiText.Get("PrintPreview_InvalidPageRangeMessage"), target);
+                    return;
+                }
+            }
+
+            var range = PrintPreviewToolbarStatePlanner.ResolvePageRange(
+                rangeMode, currentPage, pageRange?.FromPage, pageRange?.ToPage);
+            dialog.Close();
+            await PrintWithPreviewSettingsAsync(
+                currentSettings with { PageFrom = range?.FromPage, PageTo = range?.ToPage },
+                canSpool, printerNames, defaultPrinterName);
+        });
 
         var layout = new Grid
         {
@@ -484,12 +524,19 @@ public sealed partial class MainWindow
         await ExecutePrintJobAsync(request, targetPrinter, canSpool);
     }
 
+    private static async Task ShowPrintPreviewWarningAsync(Window owner, string message, TextBox target)
+    {
+        await AvaloniaUserMessageDialog.ShowWarningAsync(owner, message, owner.Title ?? string.Empty);
+        AvaloniaCompactDialogChrome.FocusAndSelect(target);
+    }
+
     private sealed record PrintPreviewToolbarJobControls(
         ComboBox Printer,
         TextBox Copies,
         CheckBox Collated,
         ComboBox Sides,
-        TextBlock Status);
+        TextBlock Status,
+        ComboBox PageRangeMode);
 
     private static Border CreatePrintPreviewTopToolbar(
         PrintPreviewTopToolbarPlan plan,
@@ -530,8 +577,12 @@ public sealed partial class MainWindow
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
         };
-        jobControls = new PrintPreviewToolbarJobControls(printerBox, copiesBox, collatedBox, sidesBox, status);
+        var pageRange = CreatePreviewComboBox(plan.PageRangeComboWidth, plan.PageRangeChoices
+            .Select(choice => choice.Text).ToArray(), (int)PrintPreviewPageRangeMode.AllPages);
+        jobControls = new PrintPreviewToolbarJobControls(printerBox, copiesBox, collatedBox, sidesBox, status, pageRange);
 
+        AutomationProperties.SetAutomationId(pageRange, "PrintPreviewToolbarPageRange");
+        AutomationProperties.SetName(pageRange, UiText.Get("PrintPreview_PagesAutomationName"));
         AutomationProperties.SetAutomationId(printerBox, "PrintPreviewToolbarPrinter");
         AutomationProperties.SetAutomationId(copiesBox, "PrintPreviewToolbarCopies");
         AutomationProperties.SetAutomationId(collatedBox, "PrintPreviewToolbarCollated");
@@ -557,7 +608,7 @@ public sealed partial class MainWindow
                 new TextBlock { Text = plan.SidesLabelText, FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
                 sidesBox,
                 status,
-                CreatePreviewComboBox(plan.PageRangeComboWidth, plan.PageRangeText),
+                pageRange,
             },
         };
 
@@ -641,6 +692,7 @@ public sealed partial class MainWindow
         PrintPreviewSettingsRailPlan plan,
         PrintPreviewSettingsRailInteraction? interaction,
         Action<ComboBox> registerPrinterBox,
+        out (TextBox From, TextBox To) rangeFields,
         PrintPreviewToolbarJobControls? toolbarControls = null)
     {
         void ApplyAction(PrintPreviewSettingsPanelActionPlan action)
@@ -746,10 +798,22 @@ public sealed partial class MainWindow
 
         var pageRangeRow = CreatePageRangeRow(
             plan.PageRange,
-            interaction is null
-                ? null
-                : (fromText, toText) => ApplyAction(
-                    PrintPreviewSettingsPanelPlanner.CreatePageRangeAction(interaction.GetSettings(), fromText, toText)));
+            out rangeFields,
+            interaction is null ? null : (fromText, toText) =>
+            {
+                if (toolbarControls is not null)
+                {
+                    var mode = string.IsNullOrWhiteSpace(fromText) && string.IsNullOrWhiteSpace(toText)
+                        ? PrintPreviewPageRangeMode.AllPages
+                        : PrintPreviewPageRangeMode.Pages;
+                    toolbarControls.PageRangeMode.SelectedIndex = (int)mode;
+                }
+                else
+                {
+                    ApplyAction(PrintPreviewSettingsPanelPlanner.CreatePageRangeAction(
+                        interaction.GetSettings(), fromText, toText));
+                }
+            });
 
         var sidesBox = CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.SidesOptions, plan.Settings.SidesSelectedIndex);
         if (interaction is not null)
@@ -911,7 +975,8 @@ public sealed partial class MainWindow
 
     private static Grid CreatePageRangeRow(
         PrintPreviewPageRangeFieldsPlan plan,
-        Action<string, string>? onChanged = null)
+        out (TextBox From, TextBox To) rangeFields,
+        Action<string, string>? onChanged)
     {
         var row = new Grid
         {
@@ -946,6 +1011,11 @@ public sealed partial class MainWindow
             BorderThickness = new Thickness(1),
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        rangeFields = (fromBox, toBox);
+        AutomationProperties.SetAutomationId(fromBox, "PrintPreviewSettingsFromPage");
+        AutomationProperties.SetAutomationId(toBox, "PrintPreviewSettingsToPage");
+        AutomationProperties.SetName(fromBox, UiText.Get("PrintPreview_FromPageAutomationName"));
+        AutomationProperties.SetName(toBox, UiText.Get("PrintPreview_ToPageAutomationName"));
         if (onChanged is not null)
         {
             fromBox.TextChanged += (_, _) => onChanged(fromBox.Text ?? "", toBox.Text ?? "");

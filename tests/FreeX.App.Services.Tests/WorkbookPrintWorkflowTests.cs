@@ -69,6 +69,39 @@ public sealed class WorkbookPrintWorkflowTests
         result.Fallback!.Path.Should().Be("print.pdf");
     }
 
+    [Theory]
+    [InlineData(false, 1)]
+    [InlineData(true, 3)]
+    public void CreatePlan_KeepsOnlyTheSelectedPagesInThePdfFallback(bool hasPrinter, int expectedPdfPages)
+    {
+        var workbook = PrintableWorkbook();
+        var sheet = workbook.Sheets[0];
+        sheet.RowPageBreaks.Add(2);
+        sheet.RowPageBreaks.Add(3);
+
+        var plan = WorkbookPrintWorkflow.CreatePlan(
+            workbook,
+            hasSelection: false,
+            new PrintJobRequest(
+                WorkbookExportPrintScope.ActiveSheet,
+                PageRangeKind: PrintJobPageRangeKind.PageRange,
+                FromPage: 2,
+                ToPage: 2),
+            PrintExportHostCapabilities.AvaloniaPortable(
+                canSubmitToPlatformPrinter: hasPrinter,
+                hasPrinterDestination: hasPrinter));
+
+        plan.Readiness.NativePrintPlan.JobPlan.Should().Match<PrintJobPlan>(job =>
+            job.IsReady && job.TotalPageCount == 3 && job.FirstPage == 2 && job.LastPage == 2);
+        plan.PortablePdfPlan!.TotalPageCount.Should().Be(expectedPdfPages);
+        if (!hasPrinter)
+        {
+            var outputPage = plan.PortablePdfPlan.PageRequests.Should().ContainSingle().Which;
+            outputPage.ExportPageNumber.Should().Be(1);
+            outputPage.SheetPageNumber.Should().Be(2);
+        }
+    }
+
     [Fact]
     public async Task ExecutePortableAsync_InvalidRequestStopsBeforeRendering()
     {

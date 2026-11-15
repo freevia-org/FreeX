@@ -65,10 +65,22 @@ public static class WorkbookPrintWorkflow
         PrintExportHostCapabilities host)
     {
         var readiness = PrintExportHostReadinessPlanner.Create(workbook, hasSelection, request, host);
-        var portablePlan = readiness.NativePrintPlan.JobPlan.IsReady &&
-            readiness.NativePrintPlan.RouteKind != PrintExportNativePrintRouteKind.NativePrintDialog
-                ? PortablePdfExportPlanner.CreatePlan(readiness.NativePrintPlan.JobPlan.ExportPrintPlan)
-                : null;
+        var nativePlan = readiness.NativePrintPlan;
+        var job = nativePlan.JobPlan;
+        var portablePlan = job.IsReady && nativePlan.RouteKind != PrintExportNativePrintRouteKind.NativePrintDialog
+            ? PortablePdfExportPlanner.CreatePlan(job.ExportPrintPlan)
+            : null;
+
+        // A printer receives the full document and a separate page-range ticket. The saved PDF
+        // has no ticket, so apply the selected pages to the document itself on that route.
+        if (nativePlan.RouteKind == PrintExportNativePrintRouteKind.PrintReadyPdfFallback &&
+            portablePlan is { IsReady: true } &&
+            (job.FirstPage > 1 || job.LastPage < portablePlan.TotalPageCount))
+        {
+            portablePlan = PortablePdfExportPlanner.ApplyPageRange(
+                portablePlan, new ExportPageRange(job.FirstPage, job.LastPage));
+        }
+
         return new WorkbookPrintWorkflowPlan(readiness, portablePlan);
     }
 

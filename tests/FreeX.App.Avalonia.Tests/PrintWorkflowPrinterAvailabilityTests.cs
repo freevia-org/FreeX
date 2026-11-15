@@ -162,6 +162,89 @@ public sealed class PrintWorkflowPrinterAvailabilityTests
             return true;
         }, CancellationToken.None);
 
+    [Theory]
+    [InlineData(PrintPreviewPageRangeMode.AllPages, "2", "2", 1, 3)]
+    [InlineData(PrintPreviewPageRangeMode.CurrentPage, "1", "1", 2, 2)]
+    [InlineData(PrintPreviewPageRangeMode.Pages, "2", "3", 2, 3)]
+    [InlineData(PrintPreviewPageRangeMode.Pages, "2", "", 2, 3)]
+    [InlineData(PrintPreviewPageRangeMode.Pages, "", "2", 1, 2)]
+    public Task PrintPreview_SubmitsChosenToolbarPageRange(
+        PrintPreviewPageRangeMode mode, string fromPage, string toPage, int expectedFrom, int expectedTo) =>
+        Session.Dispatch(async () =>
+        {
+            var service = new FakePrintService("one-printer");
+            await WithWindowAsync(service, async window =>
+            {
+                ConfigureThreePrintPages(window.Session.ActiveSheet);
+                var dialog = await OpenModalAsync(window, "ShowPrintPreviewDialogAsync", [null, null, null]);
+                var rangeMode = Find<ComboBox>(dialog, "PrintPreviewToolbarPageRange");
+                rangeMode.SelectedIndex.Should().Be((int)PrintPreviewPageRangeMode.AllPages);
+
+                Find<Button>(dialog, PrintPreviewDialogPlanner.NextPageButtonAutomationId)
+                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Find<TextBox>(dialog, PrintPreviewDialogPlanner.PageNumberBoxAutomationId).Text.Should().Be("2");
+
+                Find<TextBox>(dialog, "PrintPreviewSettingsFromPage").Text = fromPage;
+                Find<TextBox>(dialog, "PrintPreviewSettingsToPage").Text = toPage;
+                await SettleAsync();
+                rangeMode.SelectedIndex.Should().Be((int)PrintPreviewPageRangeMode.Pages);
+
+                rangeMode.SelectedIndex = (int)mode;
+                Find<Button>(dialog, PrintPreviewDialogPlanner.ExportPdfButtonAutomationId)
+                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await SettleAsync();
+
+                service.Submission.Should().NotBeNull();
+                service.Submission!.EffectivePageRange.FirstPage.Should().Be(expectedFrom);
+                service.Submission.EffectivePageRange.LastPage.Should().Be(expectedTo);
+            });
+
+            return true;
+        }, CancellationToken.None);
+
+    [Theory]
+    [InlineData("wrong", "2", "Export_PageRangeWholeNumbersError")]
+    [InlineData("3", "2", "Export_PageRangeFromLessThanToError")]
+    [InlineData("2", "4", "Export_PageRangeEndsAfterLastPage")]
+    public Task PrintPreview_RejectsInvalidRailRangeWithoutClosingOrSubmitting(
+        string fromPage, string toPage, string messageKey) =>
+        Session.Dispatch(async () =>
+        {
+            var service = new FakePrintService("one-printer");
+            await WithWindowAsync(service, async window =>
+            {
+                ConfigureThreePrintPages(window.Session.ActiveSheet);
+                var dialog = await OpenModalAsync(window, "ShowPrintPreviewDialogAsync", [null, null, null]);
+                Find<TextBox>(dialog, "PrintPreviewSettingsFromPage").Text = fromPage;
+                Find<TextBox>(dialog, "PrintPreviewSettingsToPage").Text = toPage;
+                await SettleAsync();
+
+                Find<Button>(dialog, PrintPreviewDialogPlanner.ExportPdfButtonAutomationId)
+                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await SettleAsync();
+
+                service.Submission.Should().BeNull();
+                dialog.IsVisible.Should().BeTrue();
+                var warning = dialog.OwnedWindows.Should().ContainSingle().Which;
+                warning.GetVisualDescendants().OfType<TextBlock>().Select(block => block.Text)
+                    .Should().Contain(messageKey == "Export_PageRangeEndsAfterLastPage"
+                        ? UiText.Format(messageKey, 3)
+                        : UiText.Get(messageKey));
+                warning.Close();
+            });
+
+            return true;
+        }, CancellationToken.None);
+
+    private static void ConfigureThreePrintPages(Sheet sheet)
+    {
+        sheet.PrintArea = GridRange.Parse("A1:A3", sheet.Id);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("second page"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("third page"));
+        sheet.RowPageBreaks.Add(2);
+        sheet.RowPageBreaks.Add(3);
+    }
+
     [Fact]
     public Task FaultingDiscovery_FromPrintPreview_IsContainedAndTheWindowStaysUsable() =>
         Session.Dispatch(async () =>
