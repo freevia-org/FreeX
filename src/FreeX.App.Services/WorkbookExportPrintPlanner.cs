@@ -91,6 +91,12 @@ public sealed record WorkbookExportPrintIntent(
     bool IgnorePrintAreas = false)
 {
     public IReadOnlySet<SheetId>? GroupedSheetIds { get; init; }
+
+    /// <summary>
+    /// Resolves header and footer page numbers and totals independently for each worksheet.
+    /// Windows PDF export of grouped active sheets uses this numbering.
+    /// </summary>
+    public bool UseSheetPageNumbering { get; init; }
 }
 
 public sealed record WorkbookExportPrintPageCapacity(

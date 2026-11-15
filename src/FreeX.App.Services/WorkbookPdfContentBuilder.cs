@@ -2410,7 +2410,9 @@ public static class WorkbookPdfContentBuilder
         Sheet sheet)
     {
         var firstPageNumber = sheet.FirstPageNumber ?? 1;
-        if (exportPlan.ExportPrintPlan.Intent.Scope is WorkbookExportPrintScope.VisibleWorkbook or WorkbookExportPrintScope.GroupedSheets)
+        var intent = exportPlan.ExportPrintPlan.Intent;
+        if (!intent.UseSheetPageNumbering &&
+            intent.Scope is WorkbookExportPrintScope.VisibleWorkbook or WorkbookExportPrintScope.GroupedSheets)
         {
             // WPF applies the document offset to the sheet's configured starting number. The
             // total includes every page in the original job, including comment appendices.

@@ -341,7 +341,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("WorkbookExportInteractionPlanner.CreateSelectionPlan(");
         source.Should().Contain("var exportOptions = await ShowExportOptionsDialogAsync(selectionPlan.ContentScope, format.Format);");
         source.Should().Contain("WorkbookExportWorkflow.ExecuteBooleanAsync(");
-        source.Should().Contain("CreatePortablePdfPrintPlan(effectiveRequest.Options, outputKind)");
+        source.Should().Contain("CreatePortablePdfExportPlan(effectiveRequest.Options, outputKind)");
         source.Should().Contain("PortablePdfExportPlanner.TryApplyOptions(");
         source.Should().Contain("effectiveRequest.Options,");
         source.Should().Contain("WorkbookExportInteractionPlanner.CreateResultPlan(");
@@ -368,12 +368,12 @@ public sealed class AvaloniaShellSourceTests
          source.Contains("WorkbookExportPrintPlanner.CreatePlanFromPageSetup("))
             .Should().BeTrue("MainWindow must call WorkbookExportPrintPlanner to build the export-print plan");
         source.Should().Contain("WorkbookExportPrintSurface.MacOs");
-        source.Should().Contain("PortablePdfExportPlanner.CreatePlan(exportPrintPlan)");
+        source.Should().Contain("PortablePdfExportPlanner.CreatePlan(exportPrintPlan, workbook)");
         // The menu handler routes through a single PDF export seam; the Skia-vs-portable decision lives there.
         // The real saved-file directory is threaded through so &Z/&[Path] header/footer tokens resolve
         // (R15-header-footer-print-titles-2) instead of always expanding to "".
-        source.Should().Contain("var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(");
-        source.Should().Contain("workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter())");
+        source.Should().Contain("return ValueTask.FromResult(Pdf.AvaloniaPdfDocumentExporter.Save(");
+        source.Should().Contain("workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter()));");
         var pdfRouterSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Pdf", "AvaloniaPdfDocumentExporter.cs"));
         // Unicode-capable export goes through Skia (auto font embedding); portable WinAnsi is the fallback.
         pdfRouterSource.Should().Contain("target => SkiaPdfDocumentExporter.Save(");

@@ -29460,8 +29460,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                             _statusText.Text = UiText.Get("Progress_ExportingPdf");
                             _statusText.Foreground = Brush(67, 113, 83);
 
-                            var exportPrintPlan = CreatePortablePdfPrintPlan(effectiveRequest.Options, outputKind);
-                            var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
+                            var exportPlan = CreatePortablePdfExportPlan(effectiveRequest.Options, outputKind);
                             if (!exportPlan.IsReady)
                             {
                                 adapterFailureMessage = exportPlan.StatusText;
@@ -29540,24 +29539,35 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
     }
 
-    private WorkbookExportPrintPlan CreatePortablePdfPrintPlan(
+    private PortablePdfExportPlan CreatePortablePdfExportPlan(
         ExportOptions options,
         WorkbookExportPrintOutputKind outputKind)
     {
+        var workbook = _session.Workbook;
         var scope = ExportFormatCatalog.ToPrintScope(options.Scope);
         var selectedRange = scope == WorkbookExportPrintScope.SelectedRange
             ? _session.SelectedRange
             : (GridRange?)null;
+        var activeSheetIds = scope == WorkbookExportPrintScope.ActiveSheet
+            ? WorkbookExportSheetSelectionPlanner.ResolveSheetIds(
+                workbook, options, _session.ActiveSheet.Id, _session.GetCurrentGroupedStructureSheetIds())
+            : [];
+        var groupedSheetIds = activeSheetIds.Count > 1 ? activeSheetIds.ToHashSet() : null;
 
-        return WorkbookExportPrintPlanner.CreatePlanFromPageSetup(
-            _session.Workbook,
+        var exportPrintPlan = WorkbookExportPrintPlanner.CreatePlanFromPageSetup(
+            workbook,
             new WorkbookExportPrintIntent(
-                scope,
+                groupedSheetIds is null ? scope : WorkbookExportPrintScope.GroupedSheets,
                 outputKind,
                 ActiveSheetIndex: ResolveActiveSheetIndex(),
                 SelectedRange: selectedRange,
-                IgnorePrintAreas: options.IgnorePrintAreas),
+                IgnorePrintAreas: options.IgnorePrintAreas)
+            {
+                GroupedSheetIds = groupedSheetIds,
+                UseSheetPageNumbering = groupedSheetIds is not null
+            },
             WorkbookExportPrintSurface.MacOs);
+        return PortablePdfExportPlanner.CreatePlan(exportPrintPlan, workbook);
     }
 
     private int ResolveActiveSheetIndex()
