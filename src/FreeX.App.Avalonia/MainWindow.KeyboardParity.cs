@@ -130,9 +130,6 @@ public sealed partial class MainWindow
             return true;
         }
 
-        if (TryHandleStickySelectionNavigation(args))
-            return true;
-
         // Route the shared workbook catalog before the worksheet-navigation fallback. This is what
         // lets non-command-modifier aliases such as Shift+F12, Shift+Insert, and Alt+Backspace reach
         // the same production handlers as Ctrl+S, Ctrl+V, and Ctrl+Z.
@@ -392,46 +389,36 @@ public sealed partial class MainWindow
         }
 
         _keyboardSelectionMode = next;
+        if (next != ExcelSelectionMode.Normal)
+            _endMode = false;
         RefreshShell(UiText.Get(ExcelSelectionModePlanner.StatusBarModeResourceKey(next)));
     }
 
-    private bool TryHandleStickySelectionNavigation(KeyEventArgs args)
+    private void AddOrExtendKeyboardSelection(CellAddress target, bool extendSelection)
     {
-        if (_keyboardSelectionMode == ExcelSelectionMode.Normal ||
-            args.Key is not (
-                Key.Up or Key.Down or Key.Left or Key.Right or Key.Home or Key.End or Key.PageUp or Key.PageDown) ||
-            args.KeyModifiers.HasFlag(KeyModifiers.Alt))
-        {
-            return false;
-        }
+        var sheet = _session.ActiveSheet;
+        var primaryRange = _session.SelectedRange;
+        var merge = !extendSelection && sheet.MergedRegions.Count > 0
+            ? sheet.GetMergeRegion(target)
+            : null;
+        var anchor = _session.ActiveCell;
+        if (!extendSelection)
+            anchor = merge?.Start ?? target;
+        else if (_selectionExtensionAnchor is { } existingAnchor && primaryRange.Contains(existingAnchor))
+            anchor = existingAnchor;
 
-        var previousRanges = _keyboardSelectionMode == ExcelSelectionMode.Add
-            ? _session.SelectedRanges.ToArray()
-            : [];
-        var navigationArgs = new KeyEventArgs
-        {
-            Key = args.Key,
-            KeyModifiers = _keyboardSelectionMode == ExcelSelectionMode.Extend
-                ? args.KeyModifiers | KeyModifiers.Shift
-                : args.KeyModifiers,
-        };
-        NavigateActiveCell(navigationArgs);
-        if (!navigationArgs.Handled)
-            return false;
+        var cursor = merge?.End ?? target;
 
-        if (_keyboardSelectionMode == ExcelSelectionMode.Add)
-        {
-            var addedRange = _session.SelectedRange;
-            var ranges = previousRanges
-                .Append(addedRange)
-                .Distinct()
-                .ToArray();
-            _session.SelectRanges(addedRange, ranges);
-        }
-
-        args.Handled = true;
-        RefreshShell(UiText.Get(ExcelSelectionModePlanner.StatusBarModeResourceKey(_keyboardSelectionMode)));
-        return true;
+        _selectionExtensionAnchor = anchor;
+        _selectionExtensionCursor = cursor;
+        var activeRange = MergedSelectionRangePlanner.ExpandToFullyContainMerges(sheet, new GridRange(anchor, cursor));
+        var areas = GridSelectionNavigationPlanner.UpdateDisjointSelectionAreas(
+            _session.SelectedRanges,
+            primaryRange,
+            activeRange,
+            startNewArea: !extendSelection);
+        _session.SelectRanges(activeRange, areas, anchor);
+        _session.RevealCellInViewport(target);
     }
 
     private void InsertCurrentDateOrTime(bool insertTime)

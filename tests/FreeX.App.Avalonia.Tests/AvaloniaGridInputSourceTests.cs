@@ -365,7 +365,7 @@ public sealed class AvaloniaGridInputSourceTests
         // the anchor, using a persisted extension anchor/cursor).
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
-        source.Should().Contain("var extendSelection = e.KeyModifiers.HasFlag(KeyModifiers.Shift);");
+        source.Should().Contain("ExcelSelectionModePlanner.ShouldExtendSelection(_keyboardSelectionMode, navigationModifiers)");
         source.Should().Contain("private CellAddress? _selectionExtensionAnchor;");
         source.Should().Contain("private CellAddress? _selectionExtensionCursor;");
         source.Should().Contain("var anchor = _selectionExtensionAnchor ?? _session.ActiveCell;");

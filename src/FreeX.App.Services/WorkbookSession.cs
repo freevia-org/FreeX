@@ -8048,6 +8048,15 @@ public sealed class WorkbookSession : IDisposable
 
     private void EnsureActiveCellVisible() => EnsureCellVisible(ActiveCell);
 
+    /// <summary>Scrolls to reveal a cell on the active sheet while preserving the selection and active cell.</summary>
+    public void RevealCellInViewport(CellAddress address)
+    {
+        if (address.Sheet != ActiveSheet.Id || !IsValidAddress(address))
+            throw new ArgumentOutOfRangeException(nameof(address), "The cell must be inside the active worksheet.");
+
+        EnsureCellVisible(address);
+    }
+
     /// <summary>
     /// Scrolls the minimum amount needed to bring <paramref name="cell"/> into the scrollable viewport.
     /// Callers pass the cell the user is navigating toward: the active cell for a plain move, but the

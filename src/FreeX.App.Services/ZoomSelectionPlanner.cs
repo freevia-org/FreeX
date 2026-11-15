@@ -1,3 +1,4 @@
+using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -144,6 +145,45 @@ public static class ZoomSelectionPlanner
         IReadOnlyList<double> selectedColumnWidths,
         IReadOnlyList<double> selectedRowHeights) =>
         (int)Math.Round(CalculateFitPercent(gridWidth, gridHeight, selectedColumnWidths, selectedRowHeights));
+
+    public static int CalculateFitWholePercent(double gridWidth, double gridHeight, Sheet sheet, GridRange selection)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+
+        const int minimumZoom = (int)ZoomLevelMapper.MinZoomPercent;
+        var maximumWidthAtMinimumZoom = gridWidth * PercentScale / minimumZoom;
+        var maximumHeightAtMinimumZoom = gridHeight * PercentScale / minimumZoom;
+
+        // Once an axis forces minimum zoom, the rest of the selection cannot change the result.
+        double width = 0;
+        for (var col = selection.Start.Col; col <= selection.End.Col; col++)
+        {
+            if (sheet.IsColEffectivelyHidden(col))
+                continue;
+
+            var size = ColumnWidthPixelMapper.ColumnWidthToPixels(
+                sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth));
+            width += size > 0 ? size : DefaultColumnWidthPixels;
+            if (width >= maximumWidthAtMinimumZoom)
+                return minimumZoom;
+        }
+
+        double height = 0;
+        for (var row = selection.Start.Row; row <= selection.End.Row; row++)
+        {
+            if (sheet.IsRowEffectivelyHidden(row))
+                continue;
+
+            var size = sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight);
+            height += size > 0 ? size : DefaultRowHeightPixels;
+            if (height >= maximumHeightAtMinimumZoom)
+                return minimumZoom;
+        }
+
+        var widthFit = CalculateAxisFitPercent(gridWidth, width > 0 ? width : DefaultColumnWidthPixels);
+        var heightFit = CalculateAxisFitPercent(gridHeight, height > 0 ? height : DefaultRowHeightPixels);
+        return (int)Math.Round(Math.Clamp(Math.Min(widthFit, heightFit), minimumZoom, ZoomLevelMapper.MaxZoomPercent));
+    }
 
     private static double CalculateAxisFitPercent(double viewportPixels, uint selectedCount, double defaultCellPixels)
     {
